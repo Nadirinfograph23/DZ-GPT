@@ -35,6 +35,7 @@ export default async function handler(req, res) {
     'qwen': 'qwen/qwen3-32b',
     'compound': 'groq/compound',
     'compound-mini': 'groq/compound-mini',
+    'deepseek-pdf': 'deepseek-r1-distill-llama-70b',
   };
 
   const actualModel = groqModelMap[model] || model;

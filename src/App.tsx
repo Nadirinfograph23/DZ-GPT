@@ -316,7 +316,10 @@ function App() {
         <div className="sidebar-header">
           <div className="logo">
             <Sparkles size={22} className="logo-icon" />
-            <span className="logo-text">DZ GPT</span>
+            <div className="logo-text-group">
+              <span className="logo-text">DZ GPT</span>
+              <span className="logo-subtitle">BY NADIR INFOGRAPH</span>
+            </div>
           </div>
           <button className="icon-btn" onClick={() => setSidebarOpen(false)}>
             <X size={20} />
@@ -367,7 +370,10 @@ function App() {
             </button>
             <div className="logo mobile-logo">
               <Sparkles size={20} className="logo-icon" />
-              <span className="logo-text">DZ GPT</span>
+              <div className="logo-text-group">
+                <span className="logo-text">DZ GPT</span>
+                <span className="logo-subtitle">BY NADIR INFOGRAPH</span>
+              </div>
             </div>
           </div>
 

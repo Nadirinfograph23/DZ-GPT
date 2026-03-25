@@ -103,6 +103,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -383,6 +384,36 @@ function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Mobile model dropdown */}
+          <div className="mobile-model-dropdown">
+            <button
+              className="mobile-model-toggle"
+              onClick={() => setShowMobileModelMenu(!showMobileModelMenu)}
+              style={{ borderColor: currentModel.color }}
+            >
+              <span className="mobile-model-dot" style={{ background: currentModel.color }} />
+              <span>{currentModel.name}</span>
+              <ChevronDown size={14} className={`dropdown-chevron ${showMobileModelMenu ? 'open' : ''}`} />
+            </button>
+            {showMobileModelMenu && (
+              <div className="mobile-model-menu">
+                {AI_MODELS.map(model => (
+                  <button
+                    key={model.id}
+                    className={`mobile-model-option ${selectedModel === model.id ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedModel(model.id)
+                      setShowMobileModelMenu(false)
+                    }}
+                  >
+                    <span className="input-model-dot" style={{ background: model.color }} />
+                    <span>{model.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
         </header>

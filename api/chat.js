@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     'qwen': 'qwen/qwen3-32b',
     'compound': 'groq/compound',
     'compound-mini': 'groq/compound-mini',
-    'deepseek-pdf': 'deepseek-r1-distill-llama-70b',
+    'deepseek-pdf': 'llama-3.3-70b-versatile',
   };
 
   const actualModel = groqModelMap[model] || model;
@@ -64,7 +64,16 @@ export default async function handler(req, res) {
       });
     }
 
-    const content = data.choices?.[0]?.message?.content || 'No response generated.';
+    let content = data.choices?.[0]?.message?.content || 'No response generated.';
+
+    // Strip any <think>...</think> reasoning tags that some models may produce,
+    // so the user only sees the final answer.
+    if (content) {
+      const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      if (cleaned) {
+        content = cleaned;
+      }
+    }
 
     return res.status(200).json({ content });
   } catch (error) {

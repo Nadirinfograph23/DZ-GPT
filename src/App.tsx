@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import * as pdfjsLib from 'pdfjs-dist'
 import './App.css'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString()
 
 // ===== FACEBOOK ICON =====
 function FacebookIcon({ size = 20 }: { size?: number }) {
@@ -120,11 +126,16 @@ function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
+  const [pdfText, setPdfText] = useState<string | null>(null)
+  const [pdfFileName, setPdfFileName] = useState<string | null>(null)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const activeChat = chats.find(c => c.id === activeChatId) || null
+  const isPdfModel = selectedModel === 'deepseek-pdf'
 
   // Persist to localStorage
   useEffect(() => {
@@ -149,6 +160,49 @@ function App() {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 180) + 'px'
     }
   }, [input])
+
+  // PDF extraction
+  const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.name.toLowerCase().endsWith('.pdf')) return
+
+    setPdfLoading(true)
+    setPdfFileName(file.name)
+
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+      const textParts: string[] = []
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const content = await page.getTextContent()
+        const pageText = content.items
+          .map((item) => ('str' in item ? item.str : ''))
+          .join(' ')
+        if (pageText.trim()) {
+          textParts.push(pageText)
+        }
+      }
+
+      const extracted = textParts.join('\n\n')
+      setPdfText(extracted || null)
+      if (!extracted) {
+        setPdfFileName(null)
+      }
+    } catch {
+      setPdfText(null)
+      setPdfFileName(null)
+    } finally {
+      setPdfLoading(false)
+      if (pdfInputRef.current) pdfInputRef.current.value = ''
+    }
+  }, [])
+
+  const removePdf = useCallback(() => {
+    setPdfText(null)
+    setPdfFileName(null)
+  }, [])
 
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
@@ -218,8 +272,15 @@ function App() {
 
     const chat = updatedChats.find(c => c.id === currentChatId)!
     const modelName = AI_MODELS.find(m => m.id === selectedModel)?.name || 'AI'
+
+    let systemPrompt = `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.`
+    if (isPdfModel && pdfText) {
+      const truncated = pdfText.substring(0, 12000)
+      systemPrompt = `You are DeepSeek PDF, an AI assistant specialized in answering questions about uploaded PDF documents. Answer questions based on the document content below. If the question is unrelated to the document, politely explain that you can only answer questions about the uploaded document.\n\nDocument Content:\n${truncated}`
+    }
+
     const apiMessages = [
-      { role: 'system', content: `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.` },
+      { role: 'system', content: systemPrompt },
       ...chat.messages.map(m => ({ role: m.role, content: m.content })),
     ]
 
@@ -256,7 +317,7 @@ function App() {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, activeChatId, chats, selectedModel])
+  }, [input, isLoading, activeChatId, chats, selectedModel, isPdfModel, pdfText])
 
   const regenerate = useCallback(async () => {
     if (!activeChat || activeChat.messages.length < 2 || isLoading) return
@@ -271,8 +332,15 @@ function App() {
 
     setIsLoading(true)
     const modelName = AI_MODELS.find(m => m.id === selectedModel)?.name || 'AI'
+
+    let systemPrompt = `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.`
+    if (isPdfModel && pdfText) {
+      const truncated = pdfText.substring(0, 12000)
+      systemPrompt = `You are DeepSeek PDF, an AI assistant specialized in answering questions about uploaded PDF documents. Answer questions based on the document content below. If the question is unrelated to the document, politely explain that you can only answer questions about the uploaded document.\n\nDocument Content:\n${truncated}`
+    }
+
     const apiMessages = [
-      { role: 'system', content: `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.` },
+      { role: 'system', content: systemPrompt },
       ...messagesWithoutLast.map(m => ({ role: m.role, content: m.content })),
     ]
 
@@ -309,7 +377,7 @@ function App() {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [activeChat, activeChatId, isLoading, selectedModel])
+  }, [activeChat, activeChatId, isLoading, selectedModel, isPdfModel, pdfText])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -471,6 +539,44 @@ function App() {
               <p className="welcome-subtitle">
                 AI Chat powered by {currentModel.name}
               </p>
+
+              {isPdfModel && (
+                <div className="pdf-upload-section">
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfUpload}
+                    style={{ display: 'none' }}
+                    id="pdf-upload"
+                  />
+                  {pdfFileName ? (
+                    <div className="pdf-file-badge">
+                      <FileText size={18} />
+                      <span className="pdf-file-name">{pdfFileName}</span>
+                      <button className="pdf-remove-btn" onClick={removePdf}>
+                        <XIcon size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="pdf-upload" className="pdf-upload-btn">
+                      {pdfLoading ? (
+                        <>
+                          <div className="pdf-spinner" />
+                          <span>Extracting text...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} />
+                          <span>Upload PDF</span>
+                          <span className="pdf-upload-hint">Upload a PDF document to ask questions about it</span>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
+              )}
+
               <div className="suggestions">
                 {[
                   'Write me a short story about space exploration',
@@ -575,6 +681,15 @@ function App() {
 
         {/* Input Area */}
         <div className="input-area">
+          {isPdfModel && pdfFileName && activeChat && activeChat.messages.length > 0 && (
+            <div className="pdf-active-badge">
+              <FileText size={14} />
+              <span>{pdfFileName}</span>
+              <button className="pdf-remove-btn-small" onClick={removePdf}>
+                <XIcon size={12} />
+              </button>
+            </div>
+          )}
           <div className="input-model-row">
             <div className="input-model-dropdown">
               <button

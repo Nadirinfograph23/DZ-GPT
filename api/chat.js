@@ -26,6 +26,7 @@ export default async function handler(req, res) {
 
   // Model mapping for Groq
   const groqModelMap = {
+    'chatgpt': 'llama-3.3-70b-versatile',
     'llama-70b': 'llama-3.3-70b-versatile',
     'llama-8b': 'llama-3.1-8b-instant',
     'gemma': 'gemma2-9b-it',

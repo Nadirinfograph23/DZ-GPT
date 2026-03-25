@@ -29,12 +29,12 @@ export default async function handler(req, res) {
     'chatgpt': 'llama-3.3-70b-versatile',
     'llama-70b': 'llama-3.3-70b-versatile',
     'llama-8b': 'llama-3.1-8b-instant',
-    'gemma': 'gemma2-9b-it',
-    'deepseek': 'deepseek-r1-distill-llama-70b',
-    'mixtral': 'mixtral-8x7b-32768',
-    'qwen': 'qwen-qwq-32b',
-    'compound': 'compound-beta',
-    'compound-mini': 'compound-beta-mini',
+    'gpt-oss-120b': 'openai/gpt-oss-120b',
+    'gpt-oss-20b': 'openai/gpt-oss-20b',
+    'llama-4-scout': 'meta-llama/llama-4-scout-17b-16e-instruct',
+    'qwen': 'qwen/qwen3-32b',
+    'compound': 'groq/compound',
+    'compound-mini': 'groq/compound-mini',
   };
 
   const actualModel = groqModelMap[model] || model;

@@ -22,11 +22,11 @@ const AI_MODELS = [
   { id: 'chatgpt', name: 'ChatGPT', color: '#10a37f' },
   { id: 'llama-70b', name: 'LLaMA 3.3 70B', color: '#0668E1' },
   { id: 'llama-8b', name: 'LLaMA 3.1 8B', color: '#3b82f6' },
-  { id: 'deepseek', name: 'DeepSeek R1', color: '#00d4aa' },
-  { id: 'gemma', name: 'Gemma 2 9B', color: '#4285f4' },
-  { id: 'mixtral', name: 'Mixtral 8x7B', color: '#8b5cf6' },
-  { id: 'qwen', name: 'Qwen QwQ 32B', color: '#7c3aed' },
-  { id: 'compound', name: 'Compound Beta', color: '#10a37f' },
+  { id: 'gpt-oss-120b', name: 'GPT-OSS 120B', color: '#00d4aa' },
+  { id: 'gpt-oss-20b', name: 'GPT-OSS 20B', color: '#4285f4' },
+  { id: 'llama-4-scout', name: 'LLaMA 4 Scout', color: '#8b5cf6' },
+  { id: 'qwen', name: 'Qwen3 32B', color: '#7c3aed' },
+  { id: 'compound', name: 'Compound', color: '#10a37f' },
   { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
 ]
 

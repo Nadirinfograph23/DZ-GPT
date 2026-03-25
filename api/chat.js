@@ -39,6 +39,19 @@ export default async function handler(req, res) {
   };
 
   const actualModel = groqModelMap[model] || model;
+  const isDeepSeekR1 = model === 'deepseek-pdf';
+
+  // DeepSeek R1 models don't support system role well.
+  // Convert system messages to user messages for better compatibility.
+  let apiMessages = messages;
+  if (isDeepSeekR1 && messages && messages.length > 0) {
+    apiMessages = messages.map(msg => {
+      if (msg.role === 'system') {
+        return { role: 'user', content: msg.content };
+      }
+      return msg;
+    });
+  }
 
   try {
     const response = await fetch(apiUrl, {
@@ -49,9 +62,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: actualModel,
-        messages,
+        messages: apiMessages,
         max_tokens: 4096,
-        temperature: 0.7,
+        temperature: isDeepSeekR1 ? 0.6 : 0.7,
         stream: false,
       }),
     });
@@ -64,7 +77,16 @@ export default async function handler(req, res) {
       });
     }
 
-    const content = data.choices?.[0]?.message?.content || 'No response generated.';
+    let content = data.choices?.[0]?.message?.content || 'No response generated.';
+
+    // DeepSeek R1 models output <think>...</think> reasoning tags.
+    // Strip them so the user only sees the final answer.
+    if (isDeepSeekR1 && content) {
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+      if (!content) {
+        content = 'No response generated.';
+      }
+    }
 
     return res.status(200).json({ content });
   } catch (error) {

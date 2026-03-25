@@ -276,7 +276,19 @@ function App() {
     let systemPrompt = `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.`
     if (isPdfModel && pdfText) {
       const truncated = pdfText.substring(0, 12000)
-      systemPrompt = `You are DeepSeek PDF, an AI assistant specialized in answering questions about uploaded PDF documents. Answer questions based on the document content below. If the question is unrelated to the document, politely explain that you can only answer questions about the uploaded document.\n\nDocument Content:\n${truncated}`
+      systemPrompt = [
+        'You are a helpful AI assistant that answers questions about documents.',
+        '',
+        'Instructions:',
+        '- If the user greets you (hi, hello), respond warmly and invite them to ask about the document.',
+        '- If the user thanks you, acknowledge it briefly and offer further help.',
+        '- If the user asks a question related to the document, answer it thoroughly using the provided context.',
+        '- If the user asks something unrelated to the document, politely explain you can only answer questions about the document content.',
+        '',
+        'IMPORTANT: Respond naturally and conversationally. Do NOT include labels like "Classification:", "Intent:", or "Category:" in your response. Just provide the answer directly.',
+        '',
+        `Document Content:\n${truncated}`,
+      ].join('\n')
     }
 
     const apiMessages = [
@@ -336,7 +348,19 @@ function App() {
     let systemPrompt = `You are ${modelName}, a helpful and knowledgeable AI assistant. Provide clear, accurate, and well-formatted responses. Use markdown formatting when appropriate.`
     if (isPdfModel && pdfText) {
       const truncated = pdfText.substring(0, 12000)
-      systemPrompt = `You are DeepSeek PDF, an AI assistant specialized in answering questions about uploaded PDF documents. Answer questions based on the document content below. If the question is unrelated to the document, politely explain that you can only answer questions about the uploaded document.\n\nDocument Content:\n${truncated}`
+      systemPrompt = [
+        'You are a helpful AI assistant that answers questions about documents.',
+        '',
+        'Instructions:',
+        '- If the user greets you (hi, hello), respond warmly and invite them to ask about the document.',
+        '- If the user thanks you, acknowledge it briefly and offer further help.',
+        '- If the user asks a question related to the document, answer it thoroughly using the provided context.',
+        '- If the user asks something unrelated to the document, politely explain you can only answer questions about the document content.',
+        '',
+        'IMPORTANT: Respond naturally and conversationally. Do NOT include labels like "Classification:", "Intent:", or "Category:" in your response. Just provide the answer directly.',
+        '',
+        `Document Content:\n${truncated}`,
+      ].join('\n')
     }
 
     const apiMessages = [

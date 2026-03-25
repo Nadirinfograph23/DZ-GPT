@@ -135,6 +135,7 @@ function App() {
   const abortRef = useRef<AbortController | null>(null)
 
   const activeChat = chats.find(c => c.id === activeChatId) || null
+  const filteredChats = chats.filter(c => c.modelId === selectedModel)
   const isPdfModel = selectedModel === 'deepseek-pdf'
 
   // Persist to localStorage
@@ -261,7 +262,6 @@ function App() {
           ...c,
           messages: [...c.messages, userMessage],
           title: c.messages.length === 0 ? input.trim().substring(0, 60) : c.title,
-          modelId: selectedModel,
         }
       }
       return c
@@ -426,7 +426,7 @@ function App() {
             <Sparkles size={22} className="logo-icon" />
             <div className="logo-text-group">
               <span className="logo-text">DZ GPT</span>
-              <span className="logo-subtitle">BY NADIR INFOGRAPH</span>
+              <span className="logo-subtitle">BY NADIR HOUAMRIA</span>
             </div>
           </div>
           <button className="icon-btn" onClick={() => setSidebarOpen(false)}>
@@ -440,13 +440,12 @@ function App() {
         </button>
 
         <div className="chat-list">
-          {chats.map(chat => (
+          {filteredChats.map(chat => (
             <div
               key={chat.id}
               className={`chat-item ${chat.id === activeChatId ? 'active' : ''}`}
               onClick={() => {
                 setActiveChatId(chat.id)
-                setSelectedModel(chat.modelId)
                 setSidebarOpen(false)
               }}
             >
@@ -460,7 +459,7 @@ function App() {
               </button>
             </div>
           ))}
-          {chats.length === 0 && (
+          {filteredChats.length === 0 && (
             <div style={{ padding: '20px 12px', color: '#444', fontSize: '13px', textAlign: 'center' }}>
               No conversations yet
             </div>
@@ -480,7 +479,7 @@ function App() {
               <Sparkles size={20} className="logo-icon" />
               <div className="logo-text-group">
                 <span className="logo-text">DZ GPT</span>
-                <span className="logo-subtitle">BY NADIR INFOGRAPH</span>
+                <span className="logo-subtitle">BY NADIR HOUAMRIA</span>
               </div>
             </div>
           </div>
@@ -491,7 +490,15 @@ function App() {
                 <button
                   key={model.id}
                   className={`model-tab ${selectedModel === model.id ? 'active' : ''}`}
-                  onClick={() => setSelectedModel(model.id)}
+                  onClick={() => {
+                    setSelectedModel(model.id)
+                    const modelChats = chats.filter(c => c.modelId === model.id)
+                    if (modelChats.length > 0) {
+                      setActiveChatId(modelChats[0].id)
+                    } else {
+                      setActiveChatId(null)
+                    }
+                  }}
                   style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
                 >
                   {model.name}
@@ -540,6 +547,12 @@ function App() {
                     onClick={() => {
                       setSelectedModel(model.id)
                       setShowMobileModelMenu(false)
+                      const modelChats = chats.filter(c => c.modelId === model.id)
+                      if (modelChats.length > 0) {
+                        setActiveChatId(modelChats[0].id)
+                      } else {
+                        setActiveChatId(null)
+                      }
                     }}
                   >
                     <span className="input-model-dot" style={{ background: model.color }} />
@@ -744,6 +757,12 @@ function App() {
                       onClick={() => {
                         setSelectedModel(model.id)
                         setShowModelDropdown(false)
+                        const modelChats = chats.filter(c => c.modelId === model.id)
+                        if (modelChats.length > 0) {
+                          setActiveChatId(modelChats[0].id)
+                        } else {
+                          setActiveChatId(null)
+                        }
                       }}
                     >
                       <span className="input-model-dot" style={{ background: model.color }} />

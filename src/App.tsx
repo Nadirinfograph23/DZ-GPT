@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, Settings, ExternalLink } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import './App.css'
 
@@ -17,35 +17,17 @@ interface Chat {
   modelId: string
 }
 
-interface ApiConfig {
-  apiKey: string
-  apiUrl: string
-  provider: string
-}
-
 // ===== AI MODELS =====
 const AI_MODELS = [
-  { id: 'openai', name: 'ChatGPT 4o Mini', color: '#10a37f' },
-  { id: 'openai-large', name: 'ChatGPT 5 Nano', color: '#6366f1' },
-  { id: 'gemini', name: 'Gemini', color: '#4285f4' },
-  { id: 'deepseek', name: 'DeepSeek', color: '#00d4aa' },
-  { id: 'claude', name: 'Claude', color: '#d97706' },
-  { id: 'mistral', name: 'xAI: Grok', color: '#8b5cf6' },
-  { id: 'llama', name: 'Meta AI', color: '#0668E1' },
-  { id: 'qwen', name: 'Qwen', color: '#7c3aed' },
+  { id: 'llama-70b', name: 'LLaMA 3.3 70B', color: '#0668E1' },
+  { id: 'llama-8b', name: 'LLaMA 3.1 8B', color: '#3b82f6' },
+  { id: 'deepseek', name: 'DeepSeek R1', color: '#00d4aa' },
+  { id: 'gemma', name: 'Gemma 2 9B', color: '#4285f4' },
+  { id: 'mixtral', name: 'Mixtral 8x7B', color: '#8b5cf6' },
+  { id: 'qwen', name: 'Qwen QwQ 32B', color: '#7c3aed' },
+  { id: 'compound', name: 'Compound Beta', color: '#10a37f' },
+  { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
 ]
-
-// Model mapping for different providers
-const GROQ_MODEL_MAP: Record<string, string> = {
-  'openai': 'llama-3.3-70b-versatile',
-  'openai-large': 'llama-3.1-8b-instant',
-  'gemini': 'gemma2-9b-it',
-  'deepseek': 'deepseek-r1-distill-llama-70b',
-  'claude': 'llama-3.3-70b-versatile',
-  'mistral': 'mixtral-8x7b-32768',
-  'llama': 'llama-3.3-70b-versatile',
-  'qwen': 'qwen-qwq-32b',
-}
 
 // ===== HELPERS =====
 function generateId(): string {
@@ -56,66 +38,22 @@ function generateId(): string {
 async function fetchAIResponse(
   messages: { role: string; content: string }[],
   modelId: string,
-  config: ApiConfig | null,
   signal?: AbortSignal
 ): Promise<string> {
-  // Try server-side API route first (works on Vercel with env vars)
-  try {
-    const serverResponse = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, model: modelId }),
-      signal,
-    })
-
-    if (serverResponse.ok) {
-      const data = await serverResponse.json()
-      return data.content
-    }
-
-    // If server returns 500 with "not configured" message, fall through to client-side
-    const errorData = await serverResponse.json().catch(() => null)
-    if (errorData?.error?.includes('not configured')) {
-      // Fall through to client-side API
-    } else if (serverResponse.status !== 404) {
-      throw new Error(errorData?.error || `Server error: ${serverResponse.status}`)
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'AbortError') throw err
-    // Server route not available, try client-side
-  }
-
-  // Client-side API call with user-provided key
-  if (!config?.apiKey) {
-    throw new Error('NO_API_KEY')
-  }
-
-  const actualModel = config.provider === 'groq'
-    ? (GROQ_MODEL_MAP[modelId] || modelId)
-    : modelId
-
-  const response = await fetch(config.apiUrl, {
+  const response = await fetch('/api/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: actualModel,
-      messages,
-      max_tokens: 4096,
-      temperature: 0.7,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, model: modelId }),
     signal,
   })
 
   if (!response.ok) {
     const errData = await response.json().catch(() => null)
-    throw new Error(errData?.error?.message || `API error: ${response.status}`)
+    throw new Error(errData?.error || `Server error: ${response.status}`)
   }
 
   const data = await response.json()
-  return data.choices?.[0]?.message?.content || 'No response generated.'
+  return data.content || 'No response generated.'
 }
 
 // ===== COMPONENT =====
@@ -135,15 +73,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [apiConfig, setApiConfig] = useState<ApiConfig>(() => {
-    const saved = localStorage.getItem('dz-gpt-api-config')
-    if (saved) {
-      try { return JSON.parse(saved) } catch { /* ignore */ }
-    }
-    return { apiKey: '', apiUrl: 'https://api.groq.com/openai/v1/chat/completions', provider: 'groq' }
-  })
-
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -160,11 +89,6 @@ function App() {
       localStorage.setItem('dz-gpt-active-chat', activeChatId)
     }
   }, [activeChatId])
-
-  // Persist API config
-  useEffect(() => {
-    localStorage.setItem('dz-gpt-api-config', JSON.stringify(apiConfig))
-  }, [apiConfig])
 
   // Auto-scroll
   useEffect(() => {
@@ -254,7 +178,7 @@ function App() {
 
     try {
       abortRef.current = new AbortController()
-      const response = await fetchAIResponse(apiMessages, selectedModel, apiConfig, abortRef.current.signal)
+      const response = await fetchAIResponse(apiMessages, selectedModel, abortRef.current.signal)
 
       const assistantMessage: Message = {
         id: generateId(),
@@ -270,11 +194,6 @@ function App() {
       }))
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') return
-      if (error instanceof Error && error.message === 'NO_API_KEY') {
-        setShowSettings(true)
-        setIsLoading(false)
-        return
-      }
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
@@ -290,7 +209,7 @@ function App() {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, activeChatId, chats, selectedModel, apiConfig])
+  }, [input, isLoading, activeChatId, chats, selectedModel])
 
   const regenerate = useCallback(async () => {
     if (!activeChat || activeChat.messages.length < 2 || isLoading) return
@@ -312,7 +231,7 @@ function App() {
 
     try {
       abortRef.current = new AbortController()
-      const response = await fetchAIResponse(apiMessages, selectedModel, apiConfig, abortRef.current.signal)
+      const response = await fetchAIResponse(apiMessages, selectedModel, abortRef.current.signal)
 
       const assistantMessage: Message = {
         id: generateId(),
@@ -328,11 +247,6 @@ function App() {
       }))
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') return
-      if (error instanceof Error && error.message === 'NO_API_KEY') {
-        setShowSettings(true)
-        setIsLoading(false)
-        return
-      }
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
@@ -348,7 +262,7 @@ function App() {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [activeChat, activeChatId, isLoading, selectedModel, apiConfig])
+  }, [activeChat, activeChatId, isLoading, selectedModel])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -441,9 +355,6 @@ function App() {
             </div>
           </div>
 
-          <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings">
-            <Settings size={18} />
-          </button>
         </header>
 
         {/* Chat Area */}
@@ -584,86 +495,6 @@ function App() {
       {/* Overlay */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <>
-          <div className="overlay" onClick={() => setShowSettings(false)} />
-          <div className="settings-modal">
-            <div className="settings-header">
-              <h2>API Settings</h2>
-              <button className="icon-btn" onClick={() => setShowSettings(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="settings-body">
-              <p className="settings-info">
-                Configure your AI API key to start chatting. Get a free API key from one of these providers:
-              </p>
-              <div className="provider-links">
-                <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="provider-link">
-                  <span>Groq (Free)</span>
-                  <ExternalLink size={14} />
-                </a>
-                <a href="https://enter.pollinations.ai" target="_blank" rel="noopener noreferrer" className="provider-link">
-                  <span>Pollinations</span>
-                  <ExternalLink size={14} />
-                </a>
-                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="provider-link">
-                  <span>OpenRouter</span>
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-
-              <label className="settings-label">Provider</label>
-              <select
-                className="settings-select"
-                value={apiConfig.provider}
-                onChange={(e) => {
-                  const provider = e.target.value
-                  const urls: Record<string, string> = {
-                    'groq': 'https://api.groq.com/openai/v1/chat/completions',
-                    'pollinations': 'https://gen.pollinations.ai/v1/chat/completions',
-                    'openrouter': 'https://openrouter.ai/api/v1/chat/completions',
-                  }
-                  setApiConfig(prev => ({ ...prev, provider, apiUrl: urls[provider] || prev.apiUrl }))
-                }}
-              >
-                <option value="groq">Groq (Recommended - Free)</option>
-                <option value="pollinations">Pollinations</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-
-              <label className="settings-label">API Key</label>
-              <input
-                type="password"
-                className="settings-input"
-                placeholder="Enter your API key..."
-                value={apiConfig.apiKey}
-                onChange={(e) => setApiConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-              />
-
-              <label className="settings-label">API URL</label>
-              <input
-                type="text"
-                className="settings-input"
-                value={apiConfig.apiUrl}
-                onChange={(e) => setApiConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
-              />
-
-              <button
-                className="settings-save-btn"
-                onClick={() => setShowSettings(false)}
-              >
-                Save & Close
-              </button>
-
-              <p className="settings-note">
-                For production deployment on Vercel, set the <code>AI_API_KEY</code> environment variable instead.
-              </p>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }

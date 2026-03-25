@@ -17,28 +17,26 @@ export default async function handler(req, res) {
   // Get API configuration from environment
   const apiKey = process.env.AI_API_KEY;
   const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
-  const provider = process.env.AI_PROVIDER || 'groq';
 
   if (!apiKey) {
     return res.status(500).json({
-      error: 'API key not configured. Set AI_API_KEY environment variable in Vercel.',
+      error: 'API key not configured.',
     });
   }
 
   // Model mapping for Groq
   const groqModelMap = {
-    'openai': 'llama-3.3-70b-versatile',
-    'openai-large': 'llama-3.1-8b-instant',
-    'gemini': 'gemma2-9b-it',
+    'llama-70b': 'llama-3.3-70b-versatile',
+    'llama-8b': 'llama-3.1-8b-instant',
+    'gemma': 'gemma2-9b-it',
     'deepseek': 'deepseek-r1-distill-llama-70b',
-    'claude': 'llama-3.3-70b-versatile',
-    'mistral': 'mixtral-8x7b-32768',
-    'llama': 'llama-3.3-70b-versatile',
+    'mixtral': 'mixtral-8x7b-32768',
     'qwen': 'qwen-qwq-32b',
+    'compound': 'compound-beta',
+    'compound-mini': 'compound-beta-mini',
   };
 
-  // For Groq, map model names; for other providers, pass through
-  const actualModel = provider === 'groq' ? (groqModelMap[model] || model) : model;
+  const actualModel = groqModelMap[model] || model;
 
   try {
     const response = await fetch(apiUrl, {

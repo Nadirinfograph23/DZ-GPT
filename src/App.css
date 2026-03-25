@@ -517,7 +517,7 @@ body {
 
 /* ===== INPUT ===== */
 .input-area {
-  padding: 12px 20px 16px;
+  padding: 12px 20px 28px;
   background: #0a0a0a;
   flex-shrink: 0;
 }

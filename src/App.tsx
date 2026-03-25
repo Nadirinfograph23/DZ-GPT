@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
 import './App.css'
@@ -551,12 +551,22 @@ function App() {
                     id="pdf-upload"
                   />
                   {pdfFileName ? (
-                    <div className="pdf-file-badge">
-                      <FileText size={18} />
-                      <span className="pdf-file-name">{pdfFileName}</span>
-                      <button className="pdf-remove-btn" onClick={removePdf}>
-                        <XIcon size={14} />
-                      </button>
+                    <div className="pdf-upload-success">
+                      <div className="pdf-success-icon">
+                        <CheckCircle size={32} />
+                      </div>
+                      <div className="pdf-success-text">تم رفع الملف بنجاح</div>
+                      <div className="pdf-file-badge">
+                        <FileText size={18} />
+                        <span className="pdf-file-name">{pdfFileName}</span>
+                        <button className="pdf-remove-btn" onClick={removePdf}>
+                          <XIcon size={14} />
+                        </button>
+                      </div>
+                      <div className="pdf-search-hint">
+                        <Search size={16} />
+                        <span>يمكنك الآن طرح أسئلة أو البحث عن معلومات في هذا الملف</span>
+                      </div>
                     </div>
                   ) : (
                     <label htmlFor="pdf-upload" className="pdf-upload-btn">

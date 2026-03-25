@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import './App.css'
 
@@ -19,6 +19,7 @@ interface Chat {
 
 // ===== AI MODELS =====
 const AI_MODELS = [
+  { id: 'chatgpt', name: 'ChatGPT', color: '#10a37f' },
   { id: 'llama-70b', name: 'LLaMA 3.3 70B', color: '#0668E1' },
   { id: 'llama-8b', name: 'LLaMA 3.1 8B', color: '#3b82f6' },
   { id: 'deepseek', name: 'DeepSeek R1', color: '#00d4aa' },
@@ -56,6 +57,34 @@ async function fetchAIResponse(
   return data.content || 'No response generated.'
 }
 
+// ===== CODE BLOCK =====
+function CodeBlock({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [copied, setCopied] = useState(false)
+  const language = className?.replace('language-', '') || ''
+  const codeText = String(children).replace(/\n$/, '')
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="code-block">
+      <div className="code-block-header">
+        <span className="code-block-lang">{language || 'code'}</span>
+        <button className="code-copy-btn" onClick={handleCopy}>
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre>
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  )
+}
+
 // ===== COMPONENT =====
 function App() {
   const [chats, setChats] = useState<Chat[]>(() => {
@@ -73,6 +102,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -406,7 +436,20 @@ function App() {
                     </div>
                     <div className="message-text">
                       {message.role === 'assistant' ? (
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                        <ReactMarkdown
+                          components={{
+                            code({ className, children, ...props }) {
+                              const isBlock = className?.startsWith('language-')
+                              if (isBlock) {
+                                return <CodeBlock className={className}>{children}</CodeBlock>
+                              }
+                              return <code className={className} {...props}>{children}</code>
+                            },
+                            pre({ children }) {
+                              return <>{children}</>
+                            },
+                          }}
+                        >{message.content}</ReactMarkdown>
                       ) : (
                         message.content
                       )}
@@ -459,6 +502,36 @@ function App() {
 
         {/* Input Area */}
         <div className="input-area">
+          <div className="input-model-row">
+            <div className="input-model-dropdown">
+              <button
+                className="input-model-btn"
+                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                style={{ borderColor: currentModel.color }}
+              >
+                <span className="input-model-dot" style={{ background: currentModel.color }} />
+                <span>{currentModel.name}</span>
+                <ChevronDown size={14} className={`dropdown-chevron ${showModelDropdown ? 'open' : ''}`} />
+              </button>
+              {showModelDropdown && (
+                <div className="input-model-menu">
+                  {AI_MODELS.map(model => (
+                    <button
+                      key={model.id}
+                      className={`input-model-option ${selectedModel === model.id ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedModel(model.id)
+                        setShowModelDropdown(false)
+                      }}
+                    >
+                      <span className="input-model-dot" style={{ background: model.color }} />
+                      <span>{model.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="input-container">
             <textarea
               ref={textareaRef}

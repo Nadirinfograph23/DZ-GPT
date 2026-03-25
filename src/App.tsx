@@ -19,6 +19,7 @@ interface Chat {
 
 // ===== AI MODELS =====
 const AI_MODELS = [
+  { id: 'chatgpt', name: 'ChatGPT', color: '#10a37f' },
   { id: 'llama-70b', name: 'LLaMA 3.3 70B', color: '#0668E1' },
   { id: 'llama-8b', name: 'LLaMA 3.1 8B', color: '#3b82f6' },
   { id: 'deepseek', name: 'DeepSeek R1', color: '#00d4aa' },

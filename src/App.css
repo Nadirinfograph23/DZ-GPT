@@ -1382,6 +1382,11 @@ body {
 
 .pwa-install-btn:hover { background: #16a34a; }
 
+.pwa-install-btn--ios {
+  background: #1d4ed8;
+}
+.pwa-install-btn--ios:hover { background: #1e40af; }
+
 .pwa-dismiss-btn {
   background: none;
   border: none;

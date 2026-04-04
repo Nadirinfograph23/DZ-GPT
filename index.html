@@ -27,16 +27,53 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Capture beforeinstallprompt ASAP before React mounts
+      // ── Capture PWA install prompt before React mounts ──────────
       window.__pwaPrompt = null;
       window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         window.__pwaPrompt = e;
       });
+
+      // ── Service Worker registration + auto-update ────────────────
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js')
-        })
+          navigator.serviceWorker.register('/sw.js').then(function(reg) {
+
+            // Poll for updates every 60 s while the page is open
+            setInterval(function() { reg.update(); }, 60000);
+
+            // When a NEW SW finishes installing, reload all tabs
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener('statechange', function() {
+                // 'activated' means skipWaiting + clients.claim() ran
+                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                  window.location.reload();
+                }
+              });
+            });
+          });
+
+          // Guard: avoid infinite reload loop
+          var reloading = false;
+          // controllerchange fires when the SW that controls this page changes
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (reloading) return;
+            reloading = true;
+            window.location.reload();
+          });
+
+          // Also listen for direct message from SW after activation
+          navigator.serviceWorker.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'SW_UPDATED') {
+              if (!reloading) {
+                reloading = true;
+                window.location.reload();
+              }
+            }
+          });
+        });
       }
     </script>
   </body>

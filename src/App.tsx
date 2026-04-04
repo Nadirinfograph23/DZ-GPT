@@ -161,6 +161,7 @@ function App() {
   const [pdfText, setPdfText] = useState<string | null>(null)
   const [pdfFileName, setPdfFileName] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfImageOnly, setPdfImageOnly] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -201,6 +202,7 @@ function App() {
 
     setPdfLoading(true)
     setPdfFileName(file.name)
+    setPdfImageOnly(false)
 
     try {
       const arrayBuffer = await file.arrayBuffer()
@@ -222,6 +224,7 @@ function App() {
       setPdfText(extracted || null)
       if (!extracted) {
         setPdfFileName(null)
+        setPdfImageOnly(true)
       }
     } catch {
       setPdfText(null)
@@ -235,6 +238,7 @@ function App() {
   const removePdf = useCallback(() => {
     setPdfText(null)
     setPdfFileName(null)
+    setPdfImageOnly(false)
   }, [])
 
   const createNewChat = useCallback(() => {
@@ -638,20 +642,30 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <label htmlFor="pdf-upload" className="pdf-upload-btn">
-                      {pdfLoading ? (
-                        <>
-                          <div className="pdf-spinner" />
-                          <span>Extracting text...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={20} />
-                          <span>Upload PDF</span>
-                          <span className="pdf-upload-hint">Upload a PDF document to ask questions about it</span>
-                        </>
+                    <>
+                      <label htmlFor="pdf-upload" className="pdf-upload-btn">
+                        {pdfLoading ? (
+                          <>
+                            <div className="pdf-spinner" />
+                            <span>Extracting text...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={20} />
+                            <span>Upload PDF</span>
+                            <span className="pdf-upload-hint">Upload a PDF document to ask questions about it</span>
+                          </>
+                        )}
+                      </label>
+                      {pdfImageOnly && !pdfLoading && (
+                        <div className="pdf-image-only-warning">
+                          <div className="pdf-warning-line">⚠️ الملف غير مدعوم</div>
+                          <div className="pdf-warning-line">هذا النوع من الملفات عبارة عن صور فقط</div>
+                          <div className="pdf-warning-line pdf-warning-tip">✔ جرّب: تحديد النص داخل الملف</div>
+                          <div className="pdf-warning-line pdf-warning-error">❌ إذا لم تستطع، استخدم OCR</div>
+                        </div>
                       )}
-                    </label>
+                    </>
                   )}
                 </div>
               )}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
 import PwaInstallBanner from './PwaInstallBanner'
@@ -104,6 +104,37 @@ function CodeBlock({ children, className }: { children: React.ReactNode; classNa
       <pre>
         <code className={className}>{children}</code>
       </pre>
+    </div>
+  )
+}
+
+// ===== PRIVACY TOAST =====
+function PrivacyToast() {
+  const [visible, setVisible] = useState(false)
+  const [hiding, setHiding] = useState(false)
+
+  useEffect(() => {
+    const show = setTimeout(() => setVisible(true), 2200)
+    const hide = setTimeout(() => startHide(), 8000)
+    return () => { clearTimeout(show); clearTimeout(hide) }
+  }, [])
+
+  const startHide = () => {
+    setHiding(true)
+    setTimeout(() => setVisible(false), 400)
+  }
+
+  if (!visible) return null
+
+  return (
+    <div className={`privacy-toast${hiding ? ' privacy-toast--hiding' : ''}`}>
+      <ShieldCheck size={18} className="privacy-toast-icon" />
+      <p className="privacy-toast-text">
+        محادثاتك محفوظة <strong>محليًا على جهازك فقط</strong> — لا يتم رفعها إلى أي خادم. يمكنك حذفها في أي وقت.
+      </p>
+      <button className="privacy-toast-close" onClick={startHide} aria-label="إغلاق">
+        <X size={14} />
+      </button>
     </div>
   )
 }
@@ -812,6 +843,9 @@ function App() {
 
       {/* PWA Install Banner */}
       <PwaInstallBanner />
+
+      {/* Privacy Toast */}
+      <PrivacyToast />
 
     </div>
   )

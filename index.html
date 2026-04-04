@@ -27,6 +27,12 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Capture beforeinstallprompt ASAP before React mounts
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+      });
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
           navigator.serviceWorker.register('/sw.js')

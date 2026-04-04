@@ -6,10 +6,18 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+declare global {
+  interface Window {
+    __pwaPrompt: BeforeInstallPromptEvent | null
+  }
+}
+
 function isInstalled(): boolean {
   try {
-    return window.matchMedia('(display-mode: standalone)').matches ||
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as any).standalone === true
+    )
   } catch {
     return false
   }
@@ -21,20 +29,42 @@ function isIos(): boolean {
 
 export default function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const [installed, setInstalled] = useState(false)
 
   useEffect(() => {
+    // Already installed → never show
+    if (isInstalled()) return
+
+    // Pick up prompt captured before React mounted
+    if (window.__pwaPrompt) {
+      setDeferredPrompt(window.__pwaPrompt)
+    }
+
+    // Also listen for any future prompt (e.g. if page loads slowly)
     const handler = (e: Event) => {
       e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
+      const prompt = e as BeforeInstallPromptEvent
+      window.__pwaPrompt = prompt
+      setDeferredPrompt(prompt)
     }
     window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', () => setDismissed(true))
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+
+    // Hide when user installs from outside
+    const onInstalled = () => setInstalled(true)
+    window.addEventListener('appinstalled', onInstalled)
+
+    // Show banner after short delay so it doesn't clash with page load
+    const timer = setTimeout(() => setVisible(true), 1200)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', onInstalled)
+      clearTimeout(timer)
+    }
   }, [])
 
-  // Hide if already installed OR user dismissed this session
-  if (isInstalled() || dismissed) return null
+  if (installed || !visible) return null
 
   const ios = isIos()
 
@@ -42,9 +72,14 @@ export default function PwaInstallBanner() {
     if (!deferredPrompt) return
     await deferredPrompt.prompt()
     const { outcome } = await deferredPrompt.userChoice
-    if (outcome === 'accepted') setDismissed(true)
+    if (outcome === 'accepted') {
+      setInstalled(true)
+    }
     setDeferredPrompt(null)
+    window.__pwaPrompt = null
   }
+
+  const handleDismiss = () => setVisible(false)
 
   return (
     <div className="pwa-banner">
@@ -56,23 +91,23 @@ export default function PwaInstallBanner() {
         <span className="pwa-banner-title">تثبيت DZ GPT</span>
         <span className="pwa-banner-sub">
           {ios
-            ? '🍎 افتح في Safari ← اضغط مشاركة ← أضف للشاشة'
+            ? '🍎 Safari ← مشاركة ← أضف للشاشة'
             : 'أضف التطبيق إلى شاشتك الرئيسية'}
         </span>
       </div>
 
-      {deferredPrompt ? (
+      {deferredPrompt && !ios ? (
         <button className="pwa-install-btn" onClick={handleInstall}>
           <Download size={15} />
           <span>تثبيت</span>
         </button>
       ) : (
-        <button className="pwa-install-btn" onClick={() => setDismissed(true)}>
+        <button className={`pwa-install-btn${ios ? ' pwa-install-btn--ios' : ''}`} onClick={handleDismiss}>
           <span>موافق</span>
         </button>
       )}
 
-      <button className="pwa-dismiss-btn" onClick={() => setDismissed(true)} aria-label="إغلاق">
+      <button className="pwa-dismiss-btn" onClick={handleDismiss} aria-label="إغلاق">
         <X size={18} />
       </button>
     </div>

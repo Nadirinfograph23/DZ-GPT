@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
+import PwaInstallBanner from './PwaInstallBanner'
 import './App.css'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -808,6 +809,9 @@ function App() {
 
       {/* Overlay */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* PWA Install Banner */}
+      <PwaInstallBanner />
 
     </div>
   )

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1a1a1a"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+
+  <!-- Glow -->
+  <ellipse cx="256" cy="230" rx="160" ry="140" fill="url(#glow)"/>
+
+  <!-- Green pill/badge shape (like logo) -->
+  <rect x="136" y="148" width="240" height="110" rx="55" fill="#22c55e"/>
+
+  <!-- Sparkle star - center large -->
+  <path d="M256 172 L262 198 L288 204 L262 210 L256 236 L250 210 L224 204 L250 198 Z" fill="#0d0d0d" opacity="0.9"/>
+
+  <!-- Sparkle - top left small -->
+  <path d="M196 186 L199 198 L211 201 L199 204 L196 216 L193 204 L181 201 L193 198 Z" fill="#0d0d0d" opacity="0.7"/>
+
+  <!-- Sparkle - top right small -->
+  <path d="M316 186 L319 198 L331 201 L319 204 L316 216 L313 204 L301 201 L313 198 Z" fill="#0d0d0d" opacity="0.7"/>
+
+  <!-- DZ GPT text -->
+  <text x="256" y="360" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="800" fill="white" text-anchor="middle" letter-spacing="-2">DZ GPT</text>
+</svg>

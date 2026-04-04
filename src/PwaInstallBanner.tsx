@@ -22,7 +22,6 @@ export default function PwaInstallBanner() {
 
   useEffect(() => {
     if (isInStandaloneMode()) return
-    if (localStorage.getItem('pwa-banner-dismissed')) return
 
     const iosDevice = isIos()
     setIos(iosDevice)
@@ -55,7 +54,6 @@ export default function PwaInstallBanner() {
 
   const handleDismiss = () => {
     setVisible(false)
-    localStorage.setItem('pwa-banner-dismissed', '1')
   }
 
   if (!visible) return null

@@ -704,17 +704,44 @@ function App() {
                         ) : (
                           <>
                             <Upload size={20} />
-                            <span>Upload PDF</span>
-                            <span className="pdf-upload-hint">Upload a PDF document to ask questions about it</span>
+                            <span>{selectedModel === 'ocr-dz' ? 'رفع ملف PDF' : 'Upload PDF'}</span>
+                            <span className="pdf-upload-hint">
+                              {selectedModel === 'ocr-dz'
+                                ? 'ارفع ملف PDF لمعالجته واستخراج محتواه'
+                                : 'Upload a PDF document to ask questions about it'}
+                            </span>
                           </>
                         )}
                       </label>
                       {pdfImageOnly && !pdfLoading && (
                         <div className="pdf-image-only-warning">
-                          <div className="pdf-warning-line">⚠️ الملف غير مدعوم</div>
-                          <div className="pdf-warning-line">هذا النوع من الملفات عبارة عن صور فقط</div>
-                          <div className="pdf-warning-line pdf-warning-tip">✔ جرّب: تحديد النص داخل الملف</div>
-                          <div className="pdf-warning-line pdf-warning-error">❌ إذا لم تستطع، استخدم OCR</div>
+                          {selectedModel === 'ocr-dz' ? (
+                            <>
+                              <div className="pdf-warning-line">⚠️ الملف يحتوي على صور فقط</div>
+                              <div className="pdf-warning-line pdf-warning-tip">✔ اكتب أو الصق النص الذي استخرجته من الملف في مربع الدردشة</div>
+                              <div className="pdf-warning-line" style={{ color: '#00b050' }}>📄 يمكنك أيضاً وصف محتوى الصورة وسيساعدك النموذج</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="pdf-warning-line">⚠️ الملف غير مدعوم</div>
+                              <div className="pdf-warning-line">هذا النوع من الملفات عبارة عن صور فقط</div>
+                              <div className="pdf-warning-line pdf-warning-tip">✔ جرّب: تحديد النص داخل الملف</div>
+                              <div className="pdf-warning-line pdf-warning-error">
+                                ❌ إذا لم تستطع، استخدم{' '}
+                                <button
+                                  className="ocr-switch-btn"
+                                  onClick={() => {
+                                    setSelectedModel('ocr-dz')
+                                    const modelChats = chats.filter(c => c.modelId === 'ocr-dz')
+                                    setActiveChatId(modelChats.length > 0 ? modelChats[0].id : null)
+                                    setPdfImageOnly(false)
+                                  }}
+                                >
+                                  OCR DZ ←
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </>

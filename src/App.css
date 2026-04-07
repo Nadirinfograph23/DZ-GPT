@@ -1718,3 +1718,18 @@ body {
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
+
+/* ===== OCR SWITCH BUTTON ===== */
+.ocr-switch-btn {
+  display: inline;
+  background: none;
+  border: none;
+  color: #00b050;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 2px;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+.ocr-switch-btn:hover { color: #22c55e; }

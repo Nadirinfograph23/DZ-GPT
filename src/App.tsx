@@ -51,7 +51,37 @@ const AI_MODELS = [
   { id: 'compound', name: 'Compound', color: '#10a37f' },
   { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
+  { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
 ]
+
+// ===== LANGUAGE CONFIG =====
+type Lang = 'ar' | 'en' | 'fr'
+const LANGUAGES: { id: Lang; label: string; flag: string }[] = [
+  { id: 'ar', label: 'العربية', flag: '🇩🇿' },
+  { id: 'en', label: 'English', flag: '🇬🇧' },
+  { id: 'fr', label: 'Français', flag: '🇫🇷' },
+]
+
+const SUGGESTIONS: Record<Lang, string[]> = {
+  ar: [
+    'اكتب لي قصة قصيرة عن استكشاف الفضاء',
+    'اشرح لي الحوسبة الكمية بمصطلحات بسيطة',
+    'ساعدني في كتابة دالة Python لفرز قائمة',
+    'ما هي أفضل ممارسات تطوير الويب؟',
+  ],
+  en: [
+    'Write me a short story about space exploration',
+    'Explain quantum computing in simple terms',
+    'Help me write a Python function to sort a list',
+    'What are the best practices for web development?',
+  ],
+  fr: [
+    'Écris-moi une courte histoire sur l\'exploration spatiale',
+    'Explique l\'informatique quantique en termes simples',
+    'Aide-moi à écrire une fonction Python pour trier une liste',
+    'Quelles sont les meilleures pratiques pour le développement web ?',
+  ],
+}
 
 // ===== HELPERS =====
 function generateId(): string {
@@ -158,6 +188,9 @@ function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
+  const [language, setLanguage] = useState<Lang>(() => {
+    return (localStorage.getItem('dz-gpt-lang') as Lang) || 'ar'
+  })
   const [pdfText, setPdfText] = useState<string | null>(null)
   const [pdfFileName, setPdfFileName] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -169,12 +202,16 @@ function App() {
 
   const activeChat = chats.find(c => c.id === activeChatId) || null
   const filteredChats = chats.filter(c => c.modelId === selectedModel)
-  const isPdfModel = selectedModel === 'deepseek-pdf'
+  const isPdfModel = selectedModel === 'deepseek-pdf' || selectedModel === 'ocr-dz'
 
   // Persist to localStorage
   useEffect(() => {
     localStorage.setItem('dz-gpt-chats', JSON.stringify(chats))
   }, [chats])
+
+  useEffect(() => {
+    localStorage.setItem('dz-gpt-lang', language)
+  }, [language])
 
   useEffect(() => {
     if (activeChatId) {
@@ -470,6 +507,21 @@ function App() {
           </button>
         </div>
 
+        {/* Language Selector */}
+        <div className="lang-selector">
+          {LANGUAGES.map(lang => (
+            <button
+              key={lang.id}
+              className={`lang-btn ${language === lang.id ? 'active' : ''}`}
+              onClick={() => setLanguage(lang.id)}
+              title={lang.label}
+            >
+              <span className="lang-flag">{lang.flag}</span>
+              <span className="lang-label">{lang.label}</span>
+            </button>
+          ))}
+        </div>
+
         <button className="new-chat-btn" onClick={createNewChat}>
           <Plus size={18} />
           <span>New Chat</span>
@@ -671,12 +723,7 @@ function App() {
               )}
 
               <div className="suggestions">
-                {[
-                  'Write me a short story about space exploration',
-                  'Explain quantum computing in simple terms',
-                  'Help me write a Python function to sort a list',
-                  'What are the best practices for web development?',
-                ].map((suggestion, i) => (
+                {SUGGESTIONS[language].map((suggestion, i) => (
                   <button
                     key={i}
                     className="suggestion-btn"

@@ -1670,3 +1670,51 @@ body {
 }
 
 .privacy-toast-close:hover { color: #9ca3af; }
+
+/* ===== LANGUAGE SELECTOR ===== */
+.lang-selector {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.lang-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 4px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #888;
+  transition: all 0.18s;
+  font-size: 11px;
+}
+
+.lang-btn:hover {
+  background: #222;
+  border-color: #3a3a3a;
+  color: #ccc;
+}
+
+.lang-btn.active {
+  background: #1a2a1a;
+  border-color: #00b050;
+  color: #00b050;
+}
+
+.lang-flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.lang-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}

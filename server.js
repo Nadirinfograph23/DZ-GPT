@@ -32,6 +32,7 @@ app.post('/api/chat', async (req, res) => {
     'compound': 'groq/compound',
     'compound-mini': 'groq/compound-mini',
     'deepseek-pdf': 'llama-3.3-70b-versatile',
+    'ocr-dz': 'llama-3.3-70b-versatile',
   }
 
   const actualModel = groqModelMap[model] || model

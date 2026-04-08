@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
-  CheckCircle2, XCircle, Eye, GitCommit, GitPullRequest,
+  CheckCircle2, XCircle, GitCommit, GitPullRequest,
   Key, Trash2, RefreshCw, Terminal, Zap, BookOpen, List,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -160,10 +160,10 @@ function ReposList({ repos, onSelect }: { repos: RepoItem[]; onSelect: (repo: Re
 // ===== FILES LIST =====
 function FilesList({
   files,
-  repo,
   currentPath,
   onSelectFile,
   onSelectDir,
+  repo: repoName,
 }: {
   files: FileItem[]
   repo: string
@@ -175,7 +175,7 @@ function FilesList({
     <div className="gh-files-list">
       <div className="gh-section-title">
         <FolderOpen size={14} />
-        <span>{repo}{currentPath ? ` / ${currentPath}` : ''}</span>
+        <span>{repoName}{currentPath ? ` / ${currentPath}` : ''}</span>
       </div>
       {files.map(file => (
         <button
@@ -202,7 +202,7 @@ function FilesList({
 function FileContentView({
   path,
   content,
-  repo,
+  repo: _repo,
   onAnalyze,
   onEdit,
 }: {

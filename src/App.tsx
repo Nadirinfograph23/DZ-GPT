@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
 import PwaInstallBanner from './PwaInstallBanner'
 import './App.css'
+import './styles/dz-agent.css'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -171,6 +173,7 @@ function PrivacyToast() {
 
 // ===== COMPONENT =====
 function App() {
+  const navigate = useNavigate()
   const [chats, setChats] = useState<Chat[]>(() => {
     const saved = localStorage.getItem('dz-gpt-chats')
     if (saved) {
@@ -594,6 +597,16 @@ function App() {
               ))}
             </div>
           </div>
+
+          {/* DZ Agent link */}
+          <button
+            className="dz-agent-nav-btn"
+            onClick={() => navigate('/dz-agent')}
+            title="DZ Agent - AI Assistant"
+          >
+            <Bot size={14} />
+            DZ Agent
+          </button>
 
           {/* Facebook link */}
           <a

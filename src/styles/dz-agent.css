@@ -531,6 +531,467 @@
   border-color: rgba(200, 255, 0, 0.45);
 }
 
+/* ===== GITHUB BAR ===== */
+.dz-gh-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #111;
+  background: #0c0c0c;
+  flex-wrap: wrap;
+}
+
+/* ===== GITHUB TOKEN PANEL ===== */
+.gh-token-set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  border-radius: 20px;
+  color: #00ff88;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gh-token-clear {
+  background: none;
+  border: none;
+  color: #00ff88;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.gh-token-clear:hover { opacity: 1; }
+
+.gh-token-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-token-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 10px;
+  transition: all 0.2s;
+}
+.gh-token-toggle:hover { border-color: #333; color: #888; }
+.gh-token-toggle .rotated { transform: rotate(180deg); }
+
+.gh-token-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.gh-token-input {
+  flex: 1;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  color: #e5e5e5;
+  font-size: 12px;
+  padding: 5px 8px;
+  outline: none;
+  min-width: 180px;
+}
+.gh-token-input:focus { border-color: rgba(200, 255, 0, 0.3); }
+
+.gh-token-save {
+  background: linear-gradient(135deg, rgba(200, 255, 0, 0.15), rgba(0, 255, 136, 0.1));
+  border: 1px solid rgba(200, 255, 0, 0.3);
+  border-radius: 6px;
+  color: #c8ff00;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  transition: all 0.2s;
+}
+.gh-token-save:hover { background: rgba(200, 255, 0, 0.2); }
+
+.gh-token-hint {
+  font-size: 10px;
+  color: #333;
+  margin: 0;
+}
+
+/* ===== LOG TOGGLE ===== */
+.gh-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  color: #555;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 10px;
+  margin-left: auto;
+  transition: all 0.2s;
+}
+.gh-log-toggle:hover, .gh-log-toggle.active { border-color: #333; color: #888; }
+
+/* ===== QUICK COMMANDS ===== */
+.dz-quick-commands {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 16px 0 8px;
+}
+
+.dz-quick-cmd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  color: #777;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 12px;
+  transition: all 0.2s;
+}
+.dz-quick-cmd:hover {
+  background: #151515;
+  border-color: rgba(200, 255, 0, 0.2);
+  color: #c8ff00;
+}
+
+/* ===== SECTION TITLE ===== */
+.gh-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid #111;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ===== REPOS LIST ===== */
+.gh-repos-list {
+  margin-top: 8px;
+}
+
+.gh-repo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  background: #0f0f0f;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+.gh-repo-item:hover { background: #141414; border-color: rgba(200, 255, 0, 0.15); }
+
+.gh-repo-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-repo-icon { color: #666; flex-shrink: 0; }
+.gh-repo-name { font-size: 14px; font-weight: 600; color: #ddd; }
+
+.gh-repo-desc {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  padding-left: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gh-repo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 20px;
+}
+
+.gh-lang {
+  font-size: 11px;
+  color: #c8ff00;
+  background: rgba(200, 255, 0, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.gh-branch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: #444;
+}
+
+/* ===== BADGES ===== */
+.gh-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.gh-badge--private {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ===== FILES LIST ===== */
+.gh-files-list { margin-top: 8px; }
+
+.gh-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+.gh-file-item:hover { background: #111; }
+.gh-file-item--dir .gh-file-name { color: #c8ff00; }
+
+.gh-file-icon { color: #555; flex-shrink: 0; }
+.gh-file-name { flex: 1; font-size: 13px; color: #ccc; }
+.gh-file-size { font-size: 11px; color: #444; }
+
+/* ===== FILE CONTENT ===== */
+.gh-file-content { margin-top: 8px; }
+
+.gh-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gh-file-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #888;
+}
+
+.gh-file-path {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccc;
+  font-family: monospace;
+}
+
+.gh-file-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gh-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #1a1a1a;
+  border: 1px solid #222;
+  border-radius: 6px;
+  color: #777;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  transition: all 0.2s;
+}
+.gh-action-btn:hover { background: #222; color: #c8ff00; border-color: rgba(200, 255, 0, 0.2); }
+
+.gh-file-code {
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 0 0 8px 8px;
+  overflow: auto;
+  max-height: 400px;
+}
+.gh-file-code pre {
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  color: #ccc;
+  overflow-x: auto;
+}
+
+/* ===== APPROVAL DIALOG ===== */
+.gh-approval {
+  background: #0f0f0f;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.gh-approval-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(251, 191, 36, 0.08);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.15);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.gh-approval-icon { flex-shrink: 0; }
+
+.gh-approval-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+.gh-approval-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+}
+.gh-approval-label { color: #555; width: 70px; flex-shrink: 0; }
+.gh-approval-value {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #ccc;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.gh-approval-preview { margin-top: 6px; }
+.gh-approval-preview-title { font-size: 11px; color: #555; margin-bottom: 4px; }
+.gh-approval-code {
+  background: #111;
+  border: 1px solid #1a1a1a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #aaa;
+  font-family: monospace;
+  overflow-x: auto;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.gh-approval-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #1a1a1a;
+}
+
+.gh-approve-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 200, 100, 0.1));
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 8px;
+  color: #00ff88;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  transition: all 0.2s;
+}
+.gh-approve-btn:hover { background: rgba(0, 255, 136, 0.2); }
+
+.gh-cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 8px 16px;
+  transition: all 0.2s;
+}
+.gh-cancel-btn:hover { background: rgba(239, 68, 68, 0.15); }
+
+/* ===== ACTION LOG ===== */
+.gh-action-log {
+  padding: 12px 16px;
+  border-bottom: 1px solid #111;
+  background: #080808;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.gh-log-empty { font-size: 12px; color: #333; text-align: center; padding: 16px 0; margin: 0; }
+
+.gh-log-entry {
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  border-left: 3px solid transparent;
+}
+.gh-log-entry--success { background: rgba(0, 255, 136, 0.04); border-color: #00ff88; }
+.gh-log-entry--error { background: rgba(239, 68, 68, 0.04); border-color: #ef4444; }
+.gh-log-entry--pending { background: rgba(251, 191, 36, 0.04); border-color: #fbbf24; }
+
+.gh-log-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.gh-log-entry--success .gh-log-top { color: #00ff88; }
+.gh-log-entry--error .gh-log-top { color: #ef4444; }
+.gh-log-entry--pending .gh-log-top { color: #fbbf24; }
+
+.gh-log-type { font-size: 11px; font-weight: 600; font-family: monospace; }
+.gh-log-time { font-size: 10px; color: #333; margin-left: auto; }
+.gh-log-desc { font-size: 12px; color: #666; margin: 0; }
+.gh-log-repo { font-size: 10px; color: #333; font-family: monospace; }
+
+/* ===== ERROR STATE ===== */
+.dz-avatar--error { background: rgba(239, 68, 68, 0.15) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #ef4444 !important; }
+.dz-message-text--error { color: #ef4444 !important; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .dz-suggestions {

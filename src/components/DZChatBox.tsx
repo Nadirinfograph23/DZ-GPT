@@ -1,17 +1,81 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Bot, Copy, Check, RotateCcw, Sparkles } from 'lucide-react'
+import {
+  Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
+  FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
+  CheckCircle2, XCircle, Eye, GitCommit, GitPullRequest,
+  Key, Trash2, RefreshCw, Terminal, Zap, BookOpen, List,
+} from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 // ===== TYPES =====
+type RichType =
+  | 'text'
+  | 'repos'
+  | 'files'
+  | 'file-content'
+  | 'approval'
+  | 'action-log'
+  | 'code-analysis'
+
+interface RepoItem {
+  name: string
+  full_name: string
+  description: string | null
+  language: string | null
+  private: boolean
+  default_branch: string
+  html_url: string
+}
+
+interface FileItem {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  size?: number
+}
+
+interface PendingAction {
+  type: 'commit' | 'pr'
+  repo: string
+  path?: string
+  content?: string
+  message?: string
+  branch?: string
+  title?: string
+  body?: string
+  base?: string
+}
+
 interface DZMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  richType?: RichType
+  repos?: RepoItem[]
+  files?: FileItem[]
+  fileContent?: { path: string; content: string; repo: string }
+  pendingAction?: PendingAction
+  actionLog?: ActionLogEntry[]
+  isError?: boolean
+}
+
+interface ActionLogEntry {
+  timestamp: string
+  type: string
+  description: string
+  status: 'success' | 'error' | 'pending'
+  repo?: string
 }
 
 // ===== HELPERS =====
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
 // ===== CODE BLOCK =====
@@ -55,12 +119,320 @@ function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
         clearInterval(interval)
         onDone()
       }
-    }, 8)
+    }, 6)
     return () => clearInterval(interval)
   }, [text, onDone])
 
   return <span>{displayed}</span>
 }
+
+// ===== REPOS LIST =====
+function ReposList({ repos, onSelect }: { repos: RepoItem[]; onSelect: (repo: RepoItem) => void }) {
+  return (
+    <div className="gh-repos-list">
+      <div className="gh-section-title">
+        <Github size={14} />
+        <span>Repositories ({repos.length})</span>
+      </div>
+      {repos.map(repo => (
+        <button key={repo.full_name} className="gh-repo-item" onClick={() => onSelect(repo)}>
+          <div className="gh-repo-main">
+            <FolderOpen size={14} className="gh-repo-icon" />
+            <span className="gh-repo-name">{repo.name}</span>
+            {repo.private && <span className="gh-badge gh-badge--private">Private</span>}
+          </div>
+          {repo.description && (
+            <p className="gh-repo-desc">{repo.description}</p>
+          )}
+          <div className="gh-repo-meta">
+            {repo.language && <span className="gh-lang">{repo.language}</span>}
+            <span className="gh-branch">
+              <ChevronRight size={10} />
+              {repo.default_branch}
+            </span>
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ===== FILES LIST =====
+function FilesList({
+  files,
+  repo,
+  currentPath,
+  onSelectFile,
+  onSelectDir,
+}: {
+  files: FileItem[]
+  repo: string
+  currentPath: string
+  onSelectFile: (file: FileItem) => void
+  onSelectDir: (dir: FileItem) => void
+}) {
+  return (
+    <div className="gh-files-list">
+      <div className="gh-section-title">
+        <FolderOpen size={14} />
+        <span>{repo}{currentPath ? ` / ${currentPath}` : ''}</span>
+      </div>
+      {files.map(file => (
+        <button
+          key={file.path}
+          className={`gh-file-item ${file.type === 'dir' ? 'gh-file-item--dir' : ''}`}
+          onClick={() => file.type === 'dir' ? onSelectDir(file) : onSelectFile(file)}
+        >
+          {file.type === 'dir' ? (
+            <ChevronDown size={13} className="gh-file-icon" />
+          ) : (
+            <FileText size={13} className="gh-file-icon" />
+          )}
+          <span className="gh-file-name">{file.name}</span>
+          {file.size !== undefined && file.type === 'file' && (
+            <span className="gh-file-size">{formatSize(file.size)}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ===== FILE CONTENT VIEW =====
+function FileContentView({
+  path,
+  content,
+  repo,
+  onAnalyze,
+  onEdit,
+}: {
+  path: string
+  content: string
+  repo: string
+  onAnalyze: () => void
+  onEdit: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const lines = content.split('\n').length
+  const ext = path.split('.').pop() || ''
+
+  return (
+    <div className="gh-file-content">
+      <div className="gh-file-header">
+        <div className="gh-file-header-left">
+          <FileText size={14} />
+          <span className="gh-file-path">{path}</span>
+          <span className="gh-badge">{lines} lines</span>
+        </div>
+        <div className="gh-file-header-right">
+          <button className="gh-action-btn" onClick={onAnalyze}>
+            <Zap size={13} />
+            Analyze
+          </button>
+          <button className="gh-action-btn" onClick={onEdit}>
+            <GitCommit size={13} />
+            Edit & Commit
+          </button>
+          <button
+            className="gh-action-btn"
+            onClick={() => {
+              navigator.clipboard.writeText(content)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+      </div>
+      <div className="gh-file-code">
+        <pre><code className={`language-${ext}`}>{content}</code></pre>
+      </div>
+    </div>
+  )
+}
+
+// ===== APPROVAL DIALOG =====
+function ApprovalDialog({
+  action,
+  onApprove,
+  onCancel,
+}: {
+  action: PendingAction
+  onApprove: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="gh-approval">
+      <div className="gh-approval-header">
+        <AlertCircle size={16} className="gh-approval-icon" />
+        <span>Approval Required</span>
+      </div>
+      <div className="gh-approval-body">
+        {action.type === 'commit' ? (
+          <>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Action:</span>
+              <span className="gh-approval-value">
+                <GitCommit size={13} /> Commit to repository
+              </span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Repo:</span>
+              <span className="gh-approval-value">{action.repo}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">File:</span>
+              <span className="gh-approval-value">{action.path}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Branch:</span>
+              <span className="gh-approval-value">{action.branch}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Message:</span>
+              <span className="gh-approval-value">{action.message}</span>
+            </div>
+            {action.content && (
+              <div className="gh-approval-preview">
+                <div className="gh-approval-preview-title">New content preview:</div>
+                <pre className="gh-approval-code">{action.content.slice(0, 500)}{action.content.length > 500 ? '\n...(truncated)' : ''}</pre>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Action:</span>
+              <span className="gh-approval-value">
+                <GitPullRequest size={13} /> Create Pull Request
+              </span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Repo:</span>
+              <span className="gh-approval-value">{action.repo}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Title:</span>
+              <span className="gh-approval-value">{action.title}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">Branch:</span>
+              <span className="gh-approval-value">{action.branch} → {action.base}</span>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="gh-approval-actions">
+        <button className="gh-approve-btn" onClick={onApprove}>
+          <CheckCircle2 size={15} />
+          Approve & Execute
+        </button>
+        <button className="gh-cancel-btn" onClick={onCancel}>
+          <XCircle size={15} />
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ===== ACTION LOG =====
+function ActionLogPanel({ entries }: { entries: ActionLogEntry[] }) {
+  return (
+    <div className="gh-action-log">
+      <div className="gh-section-title">
+        <Terminal size={14} />
+        <span>Action Log</span>
+      </div>
+      {entries.length === 0 ? (
+        <p className="gh-log-empty">No actions yet.</p>
+      ) : (
+        entries.map((e, i) => (
+          <div key={i} className={`gh-log-entry gh-log-entry--${e.status}`}>
+            <div className="gh-log-top">
+              {e.status === 'success' ? <CheckCircle2 size={12} /> : e.status === 'error' ? <XCircle size={12} /> : <RefreshCw size={12} />}
+              <span className="gh-log-type">{e.type}</span>
+              <span className="gh-log-time">{e.timestamp}</span>
+            </div>
+            <p className="gh-log-desc">{e.description}</p>
+            {e.repo && <span className="gh-log-repo">{e.repo}</span>}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+// ===== GITHUB TOKEN PANEL =====
+function GitHubTokenPanel({
+  token,
+  onSave,
+  onClear,
+}: {
+  token: string
+  onSave: (t: string) => void
+  onClear: () => void
+}) {
+  const [input, setInput] = useState('')
+  const [show, setShow] = useState(false)
+
+  const handleSave = () => {
+    if (input.trim()) {
+      onSave(input.trim())
+      setInput('')
+    }
+  }
+
+  if (token) {
+    return (
+      <div className="gh-token-set">
+        <Key size={13} />
+        <span>GitHub Connected</span>
+        <button className="gh-token-clear" onClick={onClear}>
+          <Trash2 size={12} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="gh-token-panel">
+      <button className="gh-token-toggle" onClick={() => setShow(!show)}>
+        <Github size={14} />
+        Connect GitHub Token
+        <ChevronDown size={13} className={show ? 'rotated' : ''} />
+      </button>
+      {show && (
+        <div className="gh-token-input-row">
+          <input
+            type="password"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="ghp_xxxxxxxxxxxxxxxx"
+            className="gh-token-input"
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+          />
+          <button className="gh-token-save" onClick={handleSave}>
+            Connect
+          </button>
+        </div>
+      )}
+      <p className="gh-token-hint">
+        Token stored locally only. Never sent to third parties.
+      </p>
+    </div>
+  )
+}
+
+// ===== QUICK COMMANDS =====
+const QUICK_COMMANDS = [
+  { label: 'My Repos', icon: List, command: 'Show my repositories' },
+  { label: 'Generate Code', icon: Zap, command: 'Generate a Python hello world script' },
+  { label: 'Analyze Code', icon: BookOpen, command: 'Analyze the code in my repository' },
+  { label: 'Create PR', icon: GitPullRequest, command: 'Create a pull request' },
+]
 
 // ===== MAIN COMPONENT =====
 export default function DZChatBox() {
@@ -69,6 +441,14 @@ export default function DZChatBox() {
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
+  const [githubToken, setGithubToken] = useState<string>(() =>
+    localStorage.getItem('dz-agent-gh-token') || ''
+  )
+  const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
+  const [showLog, setShowLog] = useState(false)
+  const [currentRepo, setCurrentRepo] = useState<string>('')
+  const [currentPath, setCurrentPath] = useState<string>('')
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -86,116 +466,274 @@ export default function DZChatBox() {
     }
   }, [input])
 
+  const addToLog = useCallback((entry: Omit<ActionLogEntry, 'timestamp'>) => {
+    setActionLog(prev => [{
+      ...entry,
+      timestamp: new Date().toLocaleTimeString(),
+    }, ...prev])
+  }, [])
+
+  const saveToken = useCallback((t: string) => {
+    setGithubToken(t)
+    localStorage.setItem('dz-agent-gh-token', t)
+  }, [])
+
+  const clearToken = useCallback(() => {
+    setGithubToken('')
+    localStorage.removeItem('dz-agent-gh-token')
+  }, [])
+
   const copyMessage = useCallback((id: string, content: string) => {
     navigator.clipboard.writeText(content)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }, [])
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading) return
+  const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
+    const id = generateId()
+    setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
+    if (msg.richType === 'text' || !msg.richType) setTypingId(id)
+    return id
+  }, [])
 
-    const userMessage: DZMessage = {
-      id: generateId(),
-      role: 'user',
-      content: input.trim(),
+  // ===== GITHUB ACTIONS =====
+  const fetchRepos = useCallback(async () => {
+    if (!githubToken) {
+      addAssistantMessage({ content: 'Please connect your GitHub token first to list repositories.', richType: 'text' })
+      return
+    }
+    setIsLoading(true)
+    addToLog({ type: 'list-repos', description: 'Listing GitHub repositories', status: 'pending' })
+    try {
+      const res = await fetch('/api/dz-agent/github/repos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch repos')
+      addAssistantMessage({ content: `Found ${data.repos.length} repositories:`, richType: 'repos', repos: data.repos })
+      addToLog({ type: 'list-repos', description: `Listed ${data.repos.length} repositories`, status: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `Failed to fetch repositories: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'list-repos', description: `Error: ${msg}`, status: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const fetchFiles = useCallback(async (repo: string, path = '') => {
+    if (!githubToken) return
+    setIsLoading(true)
+    addToLog({ type: 'list-files', description: `Browsing ${repo}${path ? '/' + path : ''}`, status: 'pending', repo })
+    try {
+      const res = await fetch('/api/dz-agent/github/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo, path }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch files')
+      setCurrentRepo(repo)
+      setCurrentPath(path)
+      addAssistantMessage({ content: `Files in ${repo}${path ? '/' + path : ''}:`, richType: 'files', files: data.files })
+      addToLog({ type: 'list-files', description: `Listed ${data.files.length} files in ${repo}`, status: 'success', repo })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `Failed to list files: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'list-files', description: `Error: ${msg}`, status: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const fetchFileContent = useCallback(async (repo: string, path: string) => {
+    if (!githubToken) return
+    setIsLoading(true)
+    addToLog({ type: 'read-file', description: `Reading ${path} from ${repo}`, status: 'pending', repo })
+    try {
+      const res = await fetch('/api/dz-agent/github/file-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo, path }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to read file')
+      addAssistantMessage({ content: `Content of ${path}:`, richType: 'file-content', fileContent: { path, content: data.content, repo } })
+      addToLog({ type: 'read-file', description: `Read ${path} (${data.content.split('\n').length} lines)`, status: 'success', repo })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `Failed to read file: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'read-file', description: `Error reading ${path}: ${msg}`, status: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const analyzeCode = useCallback(async (repo: string, path: string, content: string) => {
+    setIsLoading(true)
+    addToLog({ type: 'analyze-code', description: `Analyzing ${path}`, status: 'pending', repo })
+    try {
+      const res = await fetch('/api/dz-agent/github/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo, path, content }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Analysis failed')
+      addAssistantMessage({ content: data.analysis, richType: 'text' })
+      addToLog({ type: 'analyze-code', description: `Analysis complete for ${path}`, status: 'success', repo })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `Analysis failed: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'analyze-code', description: `Error: ${msg}`, status: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [addToLog, addAssistantMessage])
+
+  const prepareEdit = useCallback((fileContent: { path: string; content: string; repo: string }) => {
+    setInput(`Edit file "${fileContent.path}" in ${fileContent.repo} and fix any issues or improve the code.`)
+    textareaRef.current?.focus()
+  }, [])
+
+  const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
+    setIsLoading(true)
+
+    if (action.type === 'commit') {
+      addToLog({ type: 'commit', description: `Committing ${action.path} to ${action.repo}`, status: 'pending', repo: action.repo })
+      try {
+        const res = await fetch('/api/dz-agent/github/commit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: githubToken, ...action }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Commit failed')
+        addAssistantMessage({ content: `Commit successful!\n\n**File:** ${action.path}\n**Repo:** ${action.repo}\n**Branch:** ${action.branch}\n**Message:** ${action.message}\n\n[View on GitHub](${data.html_url})`, richType: 'text' })
+        addToLog({ type: 'commit', description: `Committed ${action.path} — "${action.message}"`, status: 'success', repo: action.repo })
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        addAssistantMessage({ content: `Commit failed: ${msg}`, richType: 'text', isError: true })
+        addToLog({ type: 'commit', description: `Commit error: ${msg}`, status: 'error', repo: action.repo })
+      }
+    } else if (action.type === 'pr') {
+      addToLog({ type: 'create-pr', description: `Creating PR in ${action.repo}`, status: 'pending', repo: action.repo })
+      try {
+        const res = await fetch('/api/dz-agent/github/pr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: githubToken, ...action }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'PR creation failed')
+        addAssistantMessage({ content: `Pull Request created!\n\n**Title:** ${action.title}\n**Repo:** ${action.repo}\n**Branch:** ${action.branch} → ${action.base}\n\n[View PR](${data.html_url})`, richType: 'text' })
+        addToLog({ type: 'create-pr', description: `Created PR: "${action.title}"`, status: 'success', repo: action.repo })
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        addAssistantMessage({ content: `PR creation failed: ${msg}`, richType: 'text', isError: true })
+        addToLog({ type: 'create-pr', description: `PR error: ${msg}`, status: 'error', repo: action.repo })
+      }
     }
 
+    setIsLoading(false)
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  // ===== SEND MESSAGE =====
+  const sendMessage = useCallback(async (overrideInput?: string) => {
+    const text = (overrideInput ?? input).trim()
+    if (!text || isLoading) return
+
+    const userMessage: DZMessage = { id: generateId(), role: 'user', content: text, richType: 'text' }
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
 
     try {
       abortRef.current = new AbortController()
-      const response = await fetch('/api/dz-agent-chat', {
+      const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          githubToken: githubToken || undefined,
+          currentRepo: currentRepo || undefined,
         }),
         signal: abortRef.current.signal,
       })
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => null)
-        throw new Error(err?.error || `Server error: ${response.status}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.error || `Server error: ${res.status}`)
       }
 
-      const data = await response.json()
-      const assistantId = generateId()
-      const assistantMessage: DZMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: data.content || 'No response generated.',
+      const data = await res.json()
+
+      if (data.action === 'list-repos') {
+        await fetchRepos()
+        return
       }
-      setMessages(prev => [...prev, assistantMessage])
-      setTypingId(assistantId)
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') return
-      const errMsg: DZMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: 'Sorry, an error occurred. Please try again.',
+      if (data.action === 'list-files' && data.repo) {
+        await fetchFiles(data.repo, data.path || '')
+        return
       }
-      setMessages(prev => [...prev, errMsg])
+      if (data.action === 'read-file' && data.repo && data.path) {
+        await fetchFileContent(data.repo, data.path)
+        return
+      }
+
+      if (data.pendingAction) {
+        addAssistantMessage({
+          content: data.content || 'Please review and approve this action:',
+          richType: 'approval',
+          pendingAction: data.pendingAction,
+        })
+      } else {
+        addAssistantMessage({ content: data.content || 'No response generated.', richType: 'text' })
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      addAssistantMessage({ content: 'Sorry, an error occurred. Please try again.', richType: 'text', isError: true })
     } finally {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, messages])
+  }, [input, isLoading, messages, githubToken, currentRepo, fetchRepos, fetchFiles, fetchFileContent, addAssistantMessage])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
-
-    const messagesWithoutLast = messages.slice(0, -1)
-    setMessages(messagesWithoutLast)
+    const withoutLast = messages.slice(0, -1)
+    setMessages(withoutLast)
     setIsLoading(true)
-
     try {
       abortRef.current = new AbortController()
-      const response = await fetch('/api/dz-agent-chat', {
+      const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: messagesWithoutLast.map(m => ({ role: m.role, content: m.content })),
+          messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
+          githubToken: githubToken || undefined,
         }),
         signal: abortRef.current.signal,
       })
-
-      if (!response.ok) throw new Error('Server error')
-
-      const data = await response.json()
-      const assistantId = generateId()
-      const assistantMessage: DZMessage = {
-        id: assistantId,
-        role: 'assistant',
-        content: data.content || 'No response generated.',
-      }
-      setMessages([...messagesWithoutLast, assistantMessage])
-      setTypingId(assistantId)
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') return
-      setMessages([...messagesWithoutLast, {
-        id: generateId(),
-        role: 'assistant',
-        content: 'Sorry, an error occurred. Please try again.',
-      }])
+      const data = await res.json()
+      addAssistantMessage({ content: data.content || 'No response.', richType: 'text' })
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      addAssistantMessage({ content: 'Error. Please try again.', richType: 'text', isError: true })
     } finally {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [messages, isLoading])
+  }, [messages, isLoading, githubToken, addAssistantMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
     }
-  }
-
-  const stopGeneration = () => {
-    abortRef.current?.abort()
-    setIsLoading(false)
   }
 
   const clearChat = () => {
@@ -205,39 +743,69 @@ export default function DZChatBox() {
     setTypingId(null)
   }
 
+  // ===== RENDER =====
   return (
     <div className="dz-chatbox">
+      {/* GitHub Token Panel */}
+      <div className="dz-gh-bar">
+        <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
+        <button
+          className={`gh-log-toggle ${showLog ? 'active' : ''}`}
+          onClick={() => setShowLog(!showLog)}
+          title="Action Log"
+        >
+          <Terminal size={13} />
+          Log ({actionLog.length})
+        </button>
+      </div>
+
+      {/* Action Log Panel */}
+      {showLog && <ActionLogPanel entries={actionLog} />}
+
+      {/* Quick Commands */}
+      {messages.length === 0 && !showLog && (
+        <div className="dz-welcome">
+          <div className="dz-welcome-icon">
+            <Bot size={40} />
+          </div>
+          <h2 className="dz-welcome-title">DZ Agent</h2>
+          <p className="dz-welcome-sub">مساعد ذكاء اصطناعي متعدد اللغات · Multilingual AI & GitHub Agent</p>
+
+          <div className="dz-quick-commands">
+            {QUICK_COMMANDS.map((cmd, i) => (
+              <button key={i} className="dz-quick-cmd" onClick={() => sendMessage(cmd.command)}>
+                <cmd.icon size={15} />
+                <span>{cmd.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="dz-suggestions">
+            {[
+              'من هو مطورك؟',
+              'Who is your developer?',
+              'Show my repositories',
+              'Generate a Python script to sort a list',
+              'Analyze code in my repo',
+              'Qui est votre développeur?',
+            ].map((s, i) => (
+              <button key={i} className="dz-suggestion-btn" onClick={() => sendMessage(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="dz-messages">
-        {messages.length === 0 && (
-          <div className="dz-welcome">
-            <div className="dz-welcome-icon">
-              <Bot size={40} />
-            </div>
-            <h2 className="dz-welcome-title">DZ Agent</h2>
-            <p className="dz-welcome-sub">مساعد ذكاء اصطناعي متعدد اللغات · Multilingual AI Assistant</p>
-            <div className="dz-suggestions">
-              {[
-                'من هو مطورك؟',
-                'Who is your developer?',
-                'Qui est votre développeur?',
-                'What can you help me with?',
-              ].map((s, i) => (
-                <button key={i} className="dz-suggestion-btn" onClick={() => setInput(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
             <div className="dz-message-avatar">
               {msg.role === 'user' ? (
                 <div className="dz-avatar dz-avatar--user">U</div>
               ) : (
-                <div className="dz-avatar dz-avatar--bot">
+                <div className={`dz-avatar dz-avatar--bot ${msg.isError ? 'dz-avatar--error' : ''}`}>
                   <Sparkles size={15} />
                 </div>
               )}
@@ -246,33 +814,75 @@ export default function DZChatBox() {
               <div className="dz-message-sender">
                 {msg.role === 'user' ? 'You' : 'DZ Agent'}
               </div>
-              <div className="dz-message-text">
+              <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`}>
                 {msg.role === 'assistant' ? (
-                  typingId === msg.id ? (
+                  typingId === msg.id && msg.richType === 'text' ? (
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />
                   ) : (
-                    <ReactMarkdown
-                      components={{
-                        code({ className, children, ...props }) {
-                          const isBlock = className?.startsWith('language-')
-                          if (isBlock) return <DZCodeBlock className={className}>{children}</DZCodeBlock>
-                          return <code className={className} {...props}>{children}</code>
-                        },
-                        pre({ children }) { return <>{children}</> },
-                      }}
-                    >{msg.content}</ReactMarkdown>
+                    <>
+                      {msg.content && (
+                        <ReactMarkdown
+                          components={{
+                            code({ className, children, ...props }) {
+                              const isBlock = className?.startsWith('language-')
+                              if (isBlock) return <DZCodeBlock className={className}>{children}</DZCodeBlock>
+                              return <code className={className} {...props}>{children}</code>
+                            },
+                            pre({ children }) { return <>{children}</> },
+                          }}
+                        >{msg.content}</ReactMarkdown>
+                      )}
+                      {msg.richType === 'repos' && msg.repos && (
+                        <ReposList
+                          repos={msg.repos}
+                          onSelect={(repo) => fetchFiles(repo.full_name)}
+                        />
+                      )}
+                      {msg.richType === 'files' && msg.files && (
+                        <FilesList
+                          files={msg.files}
+                          repo={currentRepo}
+                          currentPath={currentPath}
+                          onSelectFile={(f) => fetchFileContent(currentRepo, f.path)}
+                          onSelectDir={(d) => fetchFiles(currentRepo, d.path)}
+                        />
+                      )}
+                      {msg.richType === 'file-content' && msg.fileContent && (
+                        <FileContentView
+                          path={msg.fileContent.path}
+                          content={msg.fileContent.content}
+                          repo={msg.fileContent.repo}
+                          onAnalyze={() => analyzeCode(msg.fileContent!.repo, msg.fileContent!.path, msg.fileContent!.content)}
+                          onEdit={() => prepareEdit(msg.fileContent!)}
+                        />
+                      )}
+                      {msg.richType === 'approval' && msg.pendingAction && (
+                        <ApprovalDialog
+                          action={msg.pendingAction}
+                          onApprove={() => executeApprovedAction(msg.pendingAction!, msg.id)}
+                          onCancel={() => {
+                            setMessages(prev => prev.map(m =>
+                              m.id === msg.id ? { ...m, pendingAction: undefined, content: 'Action cancelled by user.' } : m
+                            ))
+                            addToLog({ type: msg.pendingAction!.type, description: 'Action cancelled by user', status: 'error', repo: msg.pendingAction!.repo })
+                          }}
+                        />
+                      )}
+                    </>
                   )
                 ) : (
                   msg.content
                 )}
               </div>
-              {msg.role === 'assistant' && (
+              {msg.role === 'assistant' && !msg.pendingAction && (
                 <div className="dz-message-actions">
-                  <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
-                    {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
-                    {copiedId === msg.id ? 'Copied' : 'Copy'}
-                  </button>
-                  {msg.id === messages[messages.length - 1]?.id && (
+                  {msg.content && (
+                    <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
+                      {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
+                      {copiedId === msg.id ? 'Copied' : 'Copy'}
+                    </button>
+                  )}
+                  {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (
                     <button className="dz-action-btn" onClick={regenerate}>
                       <RotateCcw size={13} />
                       Regenerate
@@ -306,9 +916,7 @@ export default function DZChatBox() {
       {/* Input */}
       <div className="dz-input-area">
         {messages.length > 0 && (
-          <button className="dz-clear-btn" onClick={clearChat} title="Clear chat">
-            Clear chat
-          </button>
+          <button className="dz-clear-btn" onClick={clearChat}>Clear chat</button>
         )}
         <div className="dz-input-container">
           <textarea
@@ -316,25 +924,21 @@ export default function DZChatBox() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Message DZ Agent..."
+            placeholder={githubToken ? 'Message DZ Agent... (GitHub connected)' : 'Message DZ Agent...'}
             rows={1}
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
             {isLoading ? (
-              <button className="dz-stop-btn" onClick={stopGeneration}>Stop</button>
+              <button className="dz-stop-btn" onClick={() => { abortRef.current?.abort(); setIsLoading(false) }}>Stop</button>
             ) : (
-              <button
-                className="dz-send-btn"
-                onClick={sendMessage}
-                disabled={!input.trim()}
-              >
+              <button className="dz-send-btn" onClick={() => sendMessage()} disabled={!input.trim()}>
                 <Send size={18} />
               </button>
             )}
           </div>
         </div>
-        <p className="dz-disclaimer">DZ Agent can make mistakes. Check important info.</p>
+        <p className="dz-disclaimer">DZ Agent can make mistakes. Always review before approving GitHub actions.</p>
       </div>
     </div>
   )

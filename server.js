@@ -2,6 +2,7 @@ import express from 'express'
 import { createServer as createViteServer } from 'vite'
 import { fileURLToPath } from 'url'
 import path from 'path'
+import crypto from 'crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -664,7 +665,18 @@ async function ghFetch(endpoint, token, options = {}) {
 }
 
 // ===== GITHUB OAUTH =====
+// In-memory CSRF state store (auto-expires after 10 minutes)
+const oauthStates = new Map()
+
+function cleanOldStates() {
+  const now = Date.now()
+  for (const [key, val] of oauthStates) {
+    if (now - val.ts > 10 * 60 * 1000) oauthStates.delete(key)
+  }
+}
+
 function getBaseUrl(req) {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL
   if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`
   const proto = req.headers['x-forwarded-proto'] || req.protocol
   return `${proto}://${req.get('host')}`
@@ -675,20 +687,30 @@ app.get('/api/auth/github', (req, res) => {
   if (!clientId) {
     return res.status(500).send('GitHub OAuth غير مُهيَّأ. أضف GITHUB_CLIENT_ID إلى الأسرار.')
   }
+  cleanOldStates()
+  const state = crypto.randomUUID()
+  oauthStates.set(state, { ts: Date.now() })
   const redirectUri = `${getBaseUrl(req)}/api/auth/github/callback`
   const scope = 'repo user read:user'
-  const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`
   res.redirect(authUrl)
 })
 
 app.get('/api/auth/github/callback', async (req, res) => {
-  const { code } = req.query
+  const { code, state } = req.query
   const clientId = process.env.GITHUB_CLIENT_ID
   const clientSecret = process.env.GITHUB_CLIENT_SECRET
 
   if (!code || !clientId || !clientSecret) {
     return res.redirect('/dz-agent?auth_error=config')
   }
+
+  // CSRF validation
+  if (!state || !oauthStates.has(state)) {
+    console.warn('GitHub OAuth: invalid or missing state (possible CSRF)')
+    return res.redirect('/dz-agent?auth_error=csrf')
+  }
+  oauthStates.delete(state)
 
   try {
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {

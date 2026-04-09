@@ -128,31 +128,74 @@ function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
 }
 
 // ===== REPOS LIST =====
-function ReposList({ repos, onSelect }: { repos: RepoItem[]; onSelect: (repo: RepoItem) => void }) {
+function ReposList({
+  repos,
+  onSelect,
+  onExport,
+}: {
+  repos: RepoItem[]
+  onSelect: (repo: RepoItem) => void
+  onExport: (selected: RepoItem[]) => void
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  const toggleRepo = (fullName: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(fullName)) next.delete(fullName)
+      else next.add(fullName)
+      return next
+    })
+  }
+
+  const selectedRepos = repos.filter(r => selected.has(r.full_name))
+
   return (
     <div className="gh-repos-list">
       <div className="gh-section-title">
         <Github size={14} />
         <span>Repositories ({repos.length})</span>
+        {selected.size > 0 && (
+          <button
+            className="gh-export-btn"
+            onClick={() => onExport(selectedRepos)}
+          >
+            <FolderOpen size={12} />
+            تصدير ({selected.size}) إلى DZ Agent
+          </button>
+        )}
       </div>
       {repos.map(repo => (
-        <button key={repo.full_name} className="gh-repo-item" onClick={() => onSelect(repo)}>
-          <div className="gh-repo-main">
-            <FolderOpen size={14} className="gh-repo-icon" />
-            <span className="gh-repo-name">{repo.name}</span>
-            {repo.private && <span className="gh-badge gh-badge--private">Private</span>}
-          </div>
-          {repo.description && (
-            <p className="gh-repo-desc">{repo.description}</p>
-          )}
-          <div className="gh-repo-meta">
-            {repo.language && <span className="gh-lang">{repo.language}</span>}
-            <span className="gh-branch">
-              <ChevronRight size={10} />
-              {repo.default_branch}
-            </span>
-          </div>
-        </button>
+        <div
+          key={repo.full_name}
+          className={`gh-repo-item gh-repo-item--selectable ${selected.has(repo.full_name) ? 'gh-repo-item--selected' : ''}`}
+        >
+          <label className="gh-repo-checkbox-label">
+            <input
+              type="checkbox"
+              className="gh-repo-checkbox"
+              checked={selected.has(repo.full_name)}
+              onChange={() => toggleRepo(repo.full_name)}
+            />
+            <div className="gh-repo-info" onClick={() => onSelect(repo)}>
+              <div className="gh-repo-main">
+                <FolderOpen size={14} className="gh-repo-icon" />
+                <span className="gh-repo-name">{repo.name}</span>
+                {repo.private && <span className="gh-badge gh-badge--private">Private</span>}
+              </div>
+              {repo.description && (
+                <p className="gh-repo-desc">{repo.description}</p>
+              )}
+              <div className="gh-repo-meta">
+                {repo.language && <span className="gh-lang">{repo.language}</span>}
+                <span className="gh-branch">
+                  <ChevronRight size={10} />
+                  {repo.default_branch}
+                </span>
+              </div>
+            </div>
+          </label>
+        </div>
       ))}
     </div>
   )
@@ -466,6 +509,32 @@ const SUGGESTION_CARDS: SuggestionCard[] = [
     ],
   },
   {
+    id: 'code',
+    icon: '💻',
+    category: 'برمجة',
+    color: '#a78bfa',
+    glow: 'rgba(167,139,250,0.12)',
+    border: 'rgba(167,139,250,0.2)',
+    suggestions: [
+      { label: 'دالة Python لترتيب قائمة', command: 'اكتب دالة Python لترتيب قائمة أرقام تنازلياً مع شرح الكود' },
+      { label: 'شرح async/await', command: 'اشرح مفهوم async/await في JavaScript بأمثلة عملية' },
+      { label: 'إصلاح خطأ TypeError', command: 'كيف أصلح خطأ TypeError في Python؟ أعطني الأسباب الشائعة والحلول' },
+    ],
+  },
+  {
+    id: 'github',
+    icon: '🐙',
+    category: 'GitHub & كود',
+    color: '#f97316',
+    glow: 'rgba(249,115,22,0.12)',
+    border: 'rgba(249,115,22,0.2)',
+    suggestions: [
+      { label: 'عرض مستودعاتي', command: 'اعرض مستودعاتي على GitHub' },
+      { label: 'تحليل الكود', command: 'حلل الكود في مستودعي وأعطني تقريراً عن الأخطاء والتحسينات' },
+      { label: 'إنشاء مشروع جديد', command: 'ساعدني في إنشاء مشروع Python جديد على GitHub مع ملف README' },
+    ],
+  },
+  {
     id: 'weather',
     icon: '🌦',
     category: 'طقس',
@@ -479,16 +548,16 @@ const SUGGESTION_CARDS: SuggestionCard[] = [
     ],
   },
   {
-    id: 'code',
-    icon: '💻',
-    category: 'GitHub & كود',
-    color: '#a78bfa',
-    glow: 'rgba(167,139,250,0.12)',
-    border: 'rgba(167,139,250,0.2)',
+    id: 'debug',
+    icon: '🔧',
+    category: 'تحليل وتصحيح',
+    color: '#fb7185',
+    glow: 'rgba(251,113,133,0.12)',
+    border: 'rgba(251,113,133,0.2)',
     suggestions: [
-      { label: 'عرض مستودعاتي', command: 'اعرض مستودعاتي على GitHub' },
-      { label: 'تحليل الكود', command: 'حلل الكود في مستودعي وأعطني تقريراً' },
-      { label: 'إنشاء مشروع جديد', command: 'ساعدني في إنشاء مشروع Python جديد على GitHub' },
+      { label: 'مراجعة كود React', command: 'راجع هذا الكود واقترح تحسينات:\n```jsx\nfunction App() { return <div>Hello</div> }\n```' },
+      { label: 'أفضل ممارسات API', command: 'ما هي أفضل ممارسات تصميم REST API؟ مع أمثلة عملية' },
+      { label: 'هيكل مشروع Node.js', command: 'أعطني هيكل مشروع Node.js + Express احترافي مع شرح كل مجلد' },
     ],
   },
 ]
@@ -565,7 +634,14 @@ export default function DZChatBox() {
     const params = new URLSearchParams(window.location.search)
     const err = params.get('auth_error')
     if (err) {
-      setAuthError(err === 'denied' ? 'رفضت الإذن على GitHub.' : 'فشل الاتصال بـ GitHub. حاول مجدداً.')
+      const errMsg = err === 'denied'
+        ? 'رفضت الإذن على GitHub.'
+        : err === 'csrf'
+        ? 'فشل التحقق الأمني (CSRF). حاول مجدداً.'
+        : err === 'config'
+        ? 'GitHub OAuth غير مُهيَّأ على الخادم.'
+        : 'فشل الاتصال بـ GitHub. حاول مجدداً.'
+      setAuthError(errMsg)
       window.history.replaceState(null, '', '/dz-agent')
     }
   }, [])
@@ -727,6 +803,17 @@ export default function DZChatBox() {
     setInput(`Edit file "${fileContent.path}" in ${fileContent.repo} and fix any issues or improve the code.`)
     textareaRef.current?.focus()
   }, [])
+
+  const handleExportRepos = useCallback((repos: RepoItem[]) => {
+    if (repos.length === 0) return
+    const firstRepo = repos[0]
+    setCurrentRepo(firstRepo.full_name)
+    const repoNames = repos.map(r => r.name).join('، ')
+    addAssistantMessage({
+      content: `✅ تم تصدير ${repos.length > 1 ? 'المستودعات' : 'المستودع'} **${repoNames}** إلى DZ Agent.\n\nالمستودع النشط الآن: \`${firstRepo.full_name}\`\n\nيمكنك الآن:\n- 📂 طلب قراءة الملفات\n- 🔍 تحليل الكود\n- ✏️ تعديل وإنشاء Commits\n- 🔀 فتح Pull Requests`,
+      richType: 'text',
+    })
+  }, [addAssistantMessage])
 
   const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
@@ -1005,6 +1092,7 @@ export default function DZChatBox() {
                         <ReposList
                           repos={msg.repos}
                           onSelect={(repo) => fetchFiles(repo.full_name)}
+                          onExport={handleExportRepos}
                         />
                       )}
                       {msg.richType === 'files' && msg.files && (

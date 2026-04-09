@@ -260,6 +260,18 @@ async function fetchMultipleFeeds(feeds) {
   return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
 }
 
+function detectLFPQuery(msg) {
+  const lower = msg.toLowerCase()
+  const lfpKw = [
+    'الدوري الجزائري', 'الرابطة المحترفة', 'رابطة كرة القدم', 'lfp', 'lp1', 'ligue pro',
+    'dz league', 'الجولة', 'نتائج الدوري', 'ترتيب الدوري', 'نتائج المباريات الجزائرية',
+    'مباريات اليوم الجزائر', 'الفريق الجزائري', 'شباب الجزائر', 'مولودية الجزائر',
+    'مولودية وهران', 'شبيبة القبائل', 'اتحاد العاصمة', 'نصر حسين داي', 'بلوزداد',
+    'وفاق سطيف', 'شباب بلوزداد', 'جمعية الشلف', 'أهلي برج', 'أهلي شلف',
+  ]
+  return lfpKw.some(k => lower.includes(k))
+}
+
 function detectNewsQuery(msg) {
   const lower = msg.toLowerCase()
   const sportsKw = [
@@ -359,10 +371,11 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     return res.json(DASHBOARD_CACHE.data)
   }
 
-  const [newsFeeds, sportsFeeds, weather] = await Promise.allSettled([
+  const [newsFeeds, sportsFeeds, weather, lfpResult] = await Promise.allSettled([
     fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
     fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
     fetchWeatherAlgiers(),
+    fetchLFPData(),
   ])
 
   const allNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
@@ -373,12 +386,40 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
     .slice(0, 6)
 
+  // Prepend LFP matches/articles to sports
+  const lfpData = lfpResult.status === 'fulfilled' ? lfpResult.value : null
+  const lfpSportsItems = []
+  if (lfpData) {
+    const played = lfpData.matches.filter(m => m.played)
+    for (const m of played) {
+      lfpSportsItems.push({
+        title: `${m.home} ${m.homeScore} - ${m.awayScore} ${m.away}`,
+        description: m.round || '',
+        link: m.link || 'https://lfp.dz',
+        pubDate: '',
+        source: 'lfp.dz',
+        feedName: '🏆 الدوري الجزائري',
+      })
+    }
+    for (const a of (lfpData.articles || []).slice(0, 3)) {
+      lfpSportsItems.push({
+        title: a.title,
+        description: '',
+        link: a.link || 'https://lfp.dz',
+        pubDate: a.date || '',
+        source: 'lfp.dz',
+        feedName: '🏆 رابطة LFP',
+      })
+    }
+  }
+
   const weatherData = weather.status === 'fulfilled' ? weather.value : []
 
   const data = {
     news: allNews,
-    sports: allSports,
+    sports: [...lfpSportsItems, ...allSports].slice(0, 12),
     weather: weatherData,
+    lfp: lfpData || null,
     fetchedAt: new Date().toISOString(),
   }
 
@@ -454,6 +495,133 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
   const data = await fetchPrayerTimesAladhan(city)
   if (!data) return res.status(503).json({ error: 'تعذّر جلب مواقيت الصلاة' })
   return res.json(data)
+})
+
+// ===== LFP.DZ SCRAPING =====
+const LFP_CACHE = { data: null, ts: 0 }
+const LFP_CACHE_TTL = 15 * 60 * 1000 // 15 min
+
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#x([0-9A-Fa-f]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+}
+
+function decodeUnicodeEscapes(str) {
+  return str.replace(/\\u([0-9A-Fa-f]{4})/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+}
+
+function parseLFPMatches(html) {
+  const matches = []
+  const galleryRe = /gallery-data="([^"]+)"/g
+  const roundRe = /<h5[^>]*match-card-round[^>]*>([\s\S]*?)<\/h5>/g
+  const dateRe = /<div[^>]*match-date[^>]*>([\s\S]*?)<\/div>/g
+  const timeRe = /<div[^>]*match-time[^>]*>([\s\S]*?)<\/div>/g
+  const locationRe = /<div[^>]*match-location[^>]*>([\s\S]*?)<\/div>/g
+  const btnRe = /window\.location\.href='\/ar\/match\/(\d+)'/g
+
+  let roundMatches = [...html.matchAll(/<h5[^>]*match-card-round[^>]*>([\s\S]*?)<\/h5>/g)].map(m => m[1].trim())
+  let dateMatches = [...html.matchAll(/<div[^>]*match-date[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1].replace(/<[^>]+>/g, '').trim())
+  let timeMatches = [...html.matchAll(/<div[^>]*match-time[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1].replace(/<[^>]+>/g, '').trim())
+  let matchIds = [...html.matchAll(/window\.location\.href='\/ar\/match\/(\d+)'/g)].map(m => m[1])
+
+  let idx = 0
+  let galleryMatch
+  while ((galleryMatch = galleryRe.exec(html)) !== null) {
+    try {
+      const raw = decodeHtmlEntities(galleryMatch[1])
+      const decoded = decodeUnicodeEscapes(raw)
+      const data = JSON.parse(decoded)
+      const home = data.clubHome?.name?.replace(/\\/g, '') || ''
+      const away = data.clubAway?.name?.replace(/\\/g, '') || ''
+      const homeScore = data.clubHome?.score
+      const awayScore = data.clubAway?.score
+      const matchId = matchIds[idx] || data.id
+      matches.push({
+        id: data.id,
+        round: roundMatches[idx] || '',
+        home,
+        away,
+        homeScore: homeScore === '-' ? null : homeScore,
+        awayScore: awayScore === '-' ? null : awayScore,
+        played: homeScore !== '-' && homeScore !== null && homeScore !== undefined,
+        date: dateMatches[idx] || '',
+        time: timeMatches[idx] || '',
+        link: matchId ? `https://lfp.dz/ar/match/${matchId}` : '',
+      })
+    } catch {}
+    idx++
+  }
+  return matches
+}
+
+function parseLFPArticles(html) {
+  const articles = []
+  const seen = new Set()
+
+  // Split by recent-article blocks
+  const blocks = html.split('<div class="recent-article">')
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i]
+    const altMatch = /alt="([^"]+)"/.exec(block)
+    const hrefMatch = /href="(\/ar\/article\/(\d+))"/.exec(block)
+    if (!altMatch || !hrefMatch) continue
+    const title = altMatch[1].trim()
+    const articleId = hrefMatch[2]
+    if (title.length < 10 || title === 'LFP' || seen.has(articleId)) continue
+    seen.add(articleId)
+    articles.push({
+      title,
+      link: `https://lfp.dz${hrefMatch[1]}`,
+      date: '',
+    })
+  }
+
+  return articles
+}
+
+async function fetchLFPData() {
+  if (LFP_CACHE.data && Date.now() - LFP_CACHE.ts < LFP_CACHE_TTL) return LFP_CACHE.data
+
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  const headers = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ar,fr;q=0.9' }
+
+  try {
+    const [homeRes, articlesRes] = await Promise.allSettled([
+      fetch('https://lfp.dz/ar', { headers, signal: AbortSignal.timeout(10000) }),
+      fetch('https://lfp.dz/ar/articles', { headers, signal: AbortSignal.timeout(10000) }),
+    ])
+
+    const homeHtml = homeRes.status === 'fulfilled' && homeRes.value.ok ? await homeRes.value.text() : ''
+    const articlesHtml = articlesRes.status === 'fulfilled' && articlesRes.value.ok ? await articlesRes.value.text() : ''
+
+    const matches = homeHtml ? parseLFPMatches(homeHtml) : []
+    const articles = articlesHtml ? parseLFPArticles(articlesHtml) : []
+
+    const data = {
+      matches,
+      articles: articles.slice(0, 10),
+      fetchedAt: new Date().toISOString(),
+      source: 'lfp.dz',
+    }
+
+    LFP_CACHE.data = data
+    LFP_CACHE.ts = Date.now()
+    console.log(`[LFP] Scraped ${matches.length} matches, ${articles.length} articles`)
+    return data
+  } catch (err) {
+    console.error('[LFP] Scraping error:', err.message)
+    return LFP_CACHE.data || { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
+  }
+}
+
+app.get('/api/dz-agent/lfp', async (_req, res) => {
+  const data = await fetchLFPData()
+  res.json(data)
 })
 
 // ===== SEARCH ENDPOINT =====
@@ -680,6 +848,52 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── LFP (الدوري الجزائري المحترف) detection ──────────────────────────────
+  let lfpContext = ''
+  const isLFPQuery = detectLFPQuery(lastUserMessage)
+  if (isLFPQuery) {
+    console.log('[DZ Agent] LFP query detected — fetching from lfp.dz')
+    const lfpData = await fetchLFPData()
+    if (lfpData && (lfpData.matches.length > 0 || lfpData.articles.length > 0)) {
+      const fetchDate = lfpData.fetchedAt ? new Date(lfpData.fetchedAt).toLocaleString('ar-DZ') : ''
+      lfpContext = `\n\n--- ⚽ الرابطة الجزائرية المحترفة (LFP) — المصدر: lfp.dz — ${fetchDate} ---\n`
+
+      const played = lfpData.matches.filter(m => m.played)
+      const upcoming = lfpData.matches.filter(m => !m.played)
+
+      if (played.length > 0) {
+        lfpContext += `\n**نتائج المباريات:**\n`
+        for (const m of played) {
+          lfpContext += `• ${m.round}: ${m.home} **${m.homeScore} - ${m.awayScore}** ${m.away}`
+          if (m.date) lfpContext += ` (${m.date})`
+          if (m.link) lfpContext += ` — ${m.link}`
+          lfpContext += '\n'
+        }
+      }
+
+      if (upcoming.length > 0) {
+        lfpContext += `\n**مباريات قادمة:**\n`
+        for (const m of upcoming.slice(0, 6)) {
+          lfpContext += `• ${m.round}: ${m.home} vs ${m.away}`
+          if (m.date) lfpContext += ` — ${m.date}`
+          if (m.time) lfpContext += ` ${m.time}`
+          lfpContext += '\n'
+        }
+      }
+
+      if (lfpData.articles.length > 0) {
+        lfpContext += `\n**أخبار رابطة LFP:**\n`
+        for (const a of lfpData.articles.slice(0, 5)) {
+          lfpContext += `• ${a.title}`
+          if (a.link) lfpContext += ` — ${a.link}`
+          lfpContext += '\n'
+        }
+      }
+
+      lfpContext += '\n---'
+    }
+  }
+
   // ── RSS News/Sports detection and fetch ───────────────────────────────────
   let rssContext = ''
   const newsQueryType = detectNewsQuery(lastUserMessage)
@@ -706,6 +920,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
 ## Your Capabilities
 - **Algerian & Sports News**: Real-time RSS feeds (APS, النهار, البلاد, الحياة, كووورة, FIFA)
+- **🏆 الدوري الجزائري المحترف**: Live data scraped directly from lfp.dz — matches, results, news
 - **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
 - **Code Intelligence**: Analyze, debug, generate, and improve code in any language
 - **AI-Powered Answers**: Always respond using the most capable AI model available on this platform
@@ -714,11 +929,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 ## Key Rules
 1. **ALWAYS use AI reasoning** to formulate every response — never dump raw data without explanation
 2. When RSS data is available, interpret and summarize it meaningfully with context
-3. For code requests: include comments, follow best practices, use proper error handling, format in markdown code blocks
-4. For GitHub actions (commit, PR): clearly describe what you will do and ask for confirmation
-5. Be concise, structured, and helpful. Use markdown formatting
+3. For LFP data: present match results in a clear table or list format with scores highlighted
+4. For code requests: include comments, follow best practices, use proper error handling, format in markdown code blocks
+5. For GitHub actions (commit, PR): clearly describe what you will do and ask for confirmation
+6. Be concise, structured, and helpful. Use markdown formatting
 
 ${prayerContext ? `## Prayer Times Data (real-time from aladhan.com)\n${prayerContext}\n\nPresent these prayer times clearly and beautifully. NEVER generate or guess prayer times — always use the data above.` : ''}
+
+${lfpContext ? `## 🏆 الدوري الجزائري المحترف — بيانات مباشرة من lfp.dz\n${lfpContext}\n\nاعرض هذه النتائج بتنسيق جميل وواضح. لا تختلق نتائج أو أرقام من عندك — استخدم فقط البيانات أعلاه.` : ''}
 
 ${rssContext ? `## Live News/Sports Data (fetched now)\n${rssContext}\n\nSummarize and explain this data in a helpful way. Include source links when available.` : ''}
 

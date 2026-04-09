@@ -177,6 +177,126 @@ app.post('/api/dz-agent-search', async (req, res) => {
   return res.status(200).json({ results })
 })
 
+// ===== RSS FEED SYSTEM FOR DZ AGENT =====
+const RSS_CACHE = new Map()
+const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+
+const RSS_FEEDS = {
+  national: [
+    { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/rss' },
+    { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+    { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
+    { name: 'الحياة', url: 'https://www.elhayat-dz.com/feed/' },
+    { name: 'جزايرس', url: 'https://www.djazairess.com/fr/feed' },
+  ],
+  sports: [
+    { name: 'كووورة', url: 'https://www.kooora.com/rss' },
+    { name: 'FIFA', url: 'https://www.fifa.com/rss-feeds' },
+    { name: 'جزايرس رياضة', url: 'https://www.djazairess.com/fr/feed' },
+  ],
+}
+
+function parseRSS(xml, sourceName) {
+  const items = []
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
+  let match
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const block = match[1]
+    const getTag = (tag) => {
+      const r = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'))
+      if (!r) return ''
+      return r[1].replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&#\d+;/g,'').trim()
+    }
+    const rawLink = block.match(/<link>\s*(https?:\/\/[^\s<]+)/i)?.[1] || getTag('link') || ''
+    const title = getTag('title')
+    if (!title) continue
+    items.push({
+      title,
+      link: rawLink,
+      description: getTag('description').slice(0, 250),
+      pubDate: getTag('pubDate') || getTag('dc:date') || '',
+      source: sourceName,
+    })
+  }
+  return items.slice(0, 8)
+}
+
+async function fetchRSSFeed(feed) {
+  const cached = RSS_CACHE.get(feed.url)
+  if (cached && Date.now() - cached.ts < RSS_CACHE_TTL) return cached.data
+
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
+    const resp = await fetch(feed.url, {
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!resp.ok) return null
+    const xml = await resp.text()
+    const items = parseRSS(xml, feed.name)
+    const result = { name: feed.name, items, fetchedAt: new Date().toISOString() }
+    RSS_CACHE.set(feed.url, { data: result, ts: Date.now() })
+    return result
+  } catch (err) {
+    console.error(`[RSS] ${feed.name} fetch failed:`, err.message)
+    return null
+  }
+}
+
+async function fetchMultipleFeeds(feeds) {
+  const results = await Promise.allSettled(feeds.map(f => fetchRSSFeed(f)))
+  return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean)
+}
+
+function detectNewsQuery(msg) {
+  const lower = msg.toLowerCase()
+  const sportsKw = [
+    'كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','مونديال',
+    'ملعب','لاعب','تصفيات','رياضة','رياضي','المنتخب','الرابطة','football','soccer','sport','sports',
+    'match','score','goal','team','league','cup','fifa','kooora','كووورة',
+  ]
+  const newsKw = [
+    'أخبار','خبر','اليوم','الآن','آخر','جديد','تقرير','حدث','أحداث','عاجل','بيان',
+    'news','latest','today','breaking','recent','actualité','nouvelles','aujourd','حوادث',
+    'الجزائر','سياسة','اقتصاد','صحة','تعليم','برلمان','حكومة','وزير',
+  ]
+  const isSports = sportsKw.some(k => lower.includes(k))
+  const isNews = newsKw.some(k => lower.includes(k))
+  if (isSports && isNews) return 'both'
+  if (isSports) return 'sports'
+  if (isNews) return 'news'
+  return null
+}
+
+function buildRSSContext(feedResults, queryType) {
+  if (!feedResults.length) return ''
+  const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const label = queryType === 'sports' ? '⚽ نتائج وأخبار رياضية' : '📰 أخبار'
+  let ctx = `\n\n--- ${label} — ${date} ---\n`
+  for (const feed of feedResults) {
+    if (!feed.items?.length) continue
+    ctx += `\n**${feed.name}:**\n`
+    for (const item of feed.items.slice(0, 4)) {
+      ctx += `• ${item.title}`
+      if (item.link) ctx += ` — ${item.link}`
+      if (item.description) ctx += `\n  ${item.description}`
+      ctx += '\n'
+    }
+  }
+  ctx += '\n---\n'
+  return ctx
+}
+
+// Endpoint: manual RSS fetch (for direct use)
+app.get('/api/dz-agent/rss/:type', async (req, res) => {
+  const type = req.params.type === 'sports' ? 'sports' : 'national'
+  const feeds = RSS_FEEDS[type]
+  const results = await fetchMultipleFeeds(feeds)
+  res.json({ type, results, count: results.reduce((s, r) => s + (r?.items?.length || 0), 0) })
+})
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const { messages } = req.body
@@ -258,19 +378,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // Let AI handle it but inject code generation context
   }
 
+  // ── RSS News/Sports detection and fetch ───────────────────────────────────
+  let rssContext = ''
+  const newsQueryType = detectNewsQuery(lastUserMessage)
+  if (newsQueryType) {
+    console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
+    let feedsToFetch = []
+    if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
+    else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
+    else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
+
+    const feedResults = await fetchMultipleFeeds(feedsToFetch)
+    if (feedResults.length > 0) {
+      rssContext = buildRSSContext(feedResults, newsQueryType)
+      console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+    }
+  }
+
   // ── AI response with GitHub-aware system prompt ───────────────────────────
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
   const groqKey = process.env.AI_API_KEY
 
-  const systemPrompt = `You are DZ Agent, an advanced multilingual AI assistant and code agent created by Nadir Houamria (Nadir Infograph).
+  const systemPrompt = `You are DZ Agent, an advanced multilingual AI assistant, news aggregator, and code agent created by Nadir Houamria (Nadir Infograph).
 
 You can:
+- Provide real-time news from Algerian and international sources (RSS feeds)
+- Show sports results, match scores, football news (local & international)
 - Help with GitHub repositories: reading, creating, and editing files
 - Analyze and improve code in any language (Python, JavaScript, TypeScript, HTML/CSS, etc.)
 - Generate clean, well-documented code from descriptions
 - Suggest fixes, improvements, and unit tests
 - Respond in Arabic, English, or French based on the user's language
+
+${rssContext ? `You have access to the following LIVE news/sports data fetched right now:\n${rssContext}\n\nWhen answering, use this data to give accurate, up-to-date answers. Always include source links when available.` : ''}
 
 ${githubToken ? `GitHub is connected. Current repo context: ${currentRepo || 'none selected'}.` : 'GitHub is not connected. If the user asks about GitHub, remind them to connect their token.'}
 
@@ -347,8 +488,15 @@ Be concise, accurate, and helpful. Use markdown formatting.`
     if (content) return res.status(200).json({ content, fallbackModel: model })
   }
 
+  // If RSS context available, return it directly even without AI
+  if (rssContext) {
+    return res.status(200).json({
+      content: `${rssContext}\n\n_لتلخيص الأخبار بشكل أفضل، يرجى إضافة مفتاح AI_API_KEY._\n_To get AI-summarized results, add AI_API_KEY (Groq) to your configuration._`,
+    })
+  }
+
   return res.status(200).json({
-    content: 'مرحباً! أنا DZ Agent — مساعدك الذكي متعدد اللغات.\n\nHello! I\'m DZ Agent — your multilingual AI & GitHub assistant.\n\nI can help you:\n- Browse GitHub repositories\n- Read and analyze code files\n- Generate and edit code\n- Create commits and pull requests\n\n_No AI API key configured — add AI_API_KEY (Groq) or DEEPSEEK_API_KEY for full responses._',
+    content: 'مرحباً! أنا DZ Agent — مساعدك الذكي متعدد اللغات 🇩🇿\n\nيمكنني مساعدتك في:\n- 📰 أخبار الجزائر الوطنية (APS، النهار، البلاد، الحياة)\n- ⚽ أخبار ونتائج كرة القدم (كووورة، FIFA)\n- 🗂️ استعراض مستودعات GitHub\n- 💻 تحليل وإنشاء الأكواد البرمجية\n\nجرب: "أخبار الجزائر اليوم" أو "نتائج مباريات كرة القدم"\n\n_No AI API key configured — add AI_API_KEY (Groq) or DEEPSEEK_API_KEY for AI summarization._',
   })
 })
 

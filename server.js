@@ -10,14 +10,52 @@ const PORT = 5000
 const app = express()
 app.use(express.json())
 
+// ===== GROQ MULTI-KEY FALLBACK =====
+function getGroqKeys() {
+  const keys = []
+  for (let i = 1; i <= 10; i++) {
+    const k = i === 1 ? process.env.AI_API_KEY : process.env[`AI_API_KEY_${i}`]
+    if (k) keys.push(k)
+  }
+  return keys
+}
+
+async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
+  const keys = getGroqKeys()
+  if (keys.length === 0) return { content: null, error: 'API key not configured.' }
+
+  for (const key of keys) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
+      })
+      const data = await r.json()
+      if (r.status === 429 || (data.error?.code === 'rate_limit_exceeded')) {
+        console.warn(`[Groq] Key rate-limited, trying next key...`)
+        continue
+      }
+      if (!r.ok) return { content: null, error: data.error?.message || `Groq error ${r.status}` }
+      let content = data.choices?.[0]?.message?.content || null
+      if (content) {
+        const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+        if (cleaned) content = cleaned
+      }
+      return { content }
+    } catch (err) {
+      console.error(`[Groq] Key error: ${err.message}, trying next...`)
+      continue
+    }
+  }
+  return { content: null, error: 'All API keys exhausted or rate-limited. Please try again later.' }
+}
+
 // ===== API ROUTE =====
 app.post('/api/chat', async (req, res) => {
   const { messages, model } = req.body
 
-  const apiKey = process.env.AI_API_KEY
-  const apiUrl = process.env.AI_API_URL || 'https://api.groq.com/openai/v1/chat/completions'
-
-  if (!apiKey) {
+  if (getGroqKeys().length === 0) {
     return res.status(500).json({ error: 'API key not configured.' })
   }
 
@@ -38,36 +76,8 @@ app.post('/api/chat', async (req, res) => {
   const actualModel = groqModelMap[model] || model
 
   try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: actualModel,
-        messages,
-        max_tokens: 4096,
-        temperature: 0.7,
-        stream: false,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.error?.message || 'API provider returned an error',
-      })
-    }
-
-    let content = data.choices?.[0]?.message?.content || 'No response generated.'
-
-    if (content) {
-      const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      if (cleaned) content = cleaned
-    }
-
+    const { content, error } = await callGroqWithFallback({ model: actualModel, messages })
+    if (!content) return res.status(500).json({ error: error || 'No response generated.' })
     return res.status(200).json({ content })
   } catch (error) {
     console.error('Chat API error:', error)
@@ -914,7 +924,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── AI response with GitHub-aware system prompt ───────────────────────────
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
-  const groqKey = process.env.AI_API_KEY
 
   const systemPrompt = `You are DZ Agent — a powerful multilingual AI assistant, Algerian news aggregator, and GitHub code agent created by **Nadir Houamria (Nadir Infograph)**, an expert in Artificial Intelligence.
 
@@ -947,29 +956,7 @@ ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${curr
     ...messages,
   ]
 
-  const callGroqModel = async (model) => {
-    if (!groqKey) return null
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({ model, messages: apiMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
-      })
-      if (!r.ok) return null
-      const d = await r.json()
-      let content = d.choices?.[0]?.message?.content || null
-      if (content) {
-        const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-        if (cleaned) content = cleaned
-      }
-      return content
-    } catch (err) {
-      console.error(`Groq ${model} error:`, err.message)
-      return null
-    }
-  }
-
-  // ── Fallback chain: DeepSeek → Ollama → Groq models (auto-fallback) ──────
+  // ── Fallback chain: DeepSeek → Ollama → Groq (multi-key auto-fallback) ───
   if (deepseekKey) {
     try {
       const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -995,7 +982,7 @@ ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${curr
     } catch (err) { console.error('Ollama error:', err.message) }
   }
 
-  // Auto-fallback to Groq models (most powerful first)
+  // Auto-fallback across all Groq keys + models
   const fallbackModels = [
     'llama-3.3-70b-versatile',
     'meta-llama/llama-4-scout-17b-16e-instruct',
@@ -1003,7 +990,7 @@ ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${curr
     'llama-3.1-8b-instant',
   ]
   for (const model of fallbackModels) {
-    const content = await callGroqModel(model)
+    const { content } = await callGroqWithFallback({ model, messages: apiMessages, max_tokens: 3000 })
     if (content) return res.status(200).json({ content, fallbackModel: model })
   }
 
@@ -1203,7 +1190,6 @@ app.post('/api/dz-agent/github/analyze', async (req, res) => {
   const { repo, path, content } = req.body
   if (!content) return res.status(400).json({ error: 'Content required for analysis.' })
 
-  const groqKey = process.env.AI_API_KEY
   const deepseekKey = process.env.DEEPSEEK_API_KEY
 
   const prompt = `Analyze the following code from ${path || 'unknown file'} in repository ${repo || 'unknown repo'}.
@@ -1222,30 +1208,25 @@ ${content.slice(0, 8000)}
 
   const apiMessages = [{ role: 'user', content: prompt }]
 
-  const tryAPI = async (url, key, model, extra = {}) => {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model, messages: apiMessages, max_tokens: 3000, temperature: 0.3, stream: false, ...extra }),
-    })
-    return r
-  }
-
   try {
     let analysis = null
 
     if (deepseekKey) {
-      const r = await tryAPI('https://api.deepseek.com/v1/chat/completions', deepseekKey, 'deepseek-chat')
-      if (r.ok) { const d = await r.json(); analysis = d.choices?.[0]?.message?.content }
-    }
-
-    if (!analysis && groqKey) {
-      const r = await tryAPI('https://api.groq.com/openai/v1/chat/completions', groqKey, 'llama-3.3-70b-versatile')
+      const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 3000, temperature: 0.3, stream: false }),
+      })
       if (r.ok) { const d = await r.json(); analysis = d.choices?.[0]?.message?.content }
     }
 
     if (!analysis) {
-      analysis = `## Code Analysis: ${path}\n\n**File:** ${path}\n**Repo:** ${repo}\n\n> No AI API key configured. Connect a DEEPSEEK_API_KEY or AI_API_KEY (Groq) in your environment variables for full analysis.\n\n**Basic check:** The file contains ${content.split('\n').length} lines of code.`
+      const result = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 3000, temperature: 0.3 })
+      analysis = result.content
+    }
+
+    if (!analysis) {
+      analysis = `## Code Analysis: ${path}\n\n**File:** ${path}\n**Repo:** ${repo}\n\n> All API keys exhausted. Please add more keys (AI_API_KEY_2, AI_API_KEY_3...) or wait for the daily limit to reset.\n\n**Basic check:** The file contains ${content.split('\n').length} lines of code.`
     }
 
     if (analysis) {
@@ -1265,7 +1246,6 @@ app.post('/api/dz-agent/github/generate', async (req, res) => {
   const { description, language = 'python' } = req.body
   if (!description) return res.status(400).json({ error: 'Description required.' })
 
-  const groqKey = process.env.AI_API_KEY
   const deepseekKey = process.env.DEEPSEEK_API_KEY
 
   const prompt = `Generate clean, well-commented ${language} code based on this description:\n\n${description}\n\nRequirements:\n- Add helpful comments\n- Follow best practices for ${language}\n- Include error handling where appropriate\n- Keep the code production-ready`
@@ -1283,15 +1263,12 @@ app.post('/api/dz-agent/github/generate', async (req, res) => {
       if (r.ok) { const d = await r.json(); code = d.choices?.[0]?.message?.content }
     }
 
-    if (!code && groqKey) {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 3000, temperature: 0.2 }),
-      })
-      if (r.ok) { const d = await r.json(); code = d.choices?.[0]?.message?.content }
+    if (!code) {
+      const result = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 3000, temperature: 0.2 })
+      code = result.content
     }
 
-    if (!code) code = `# Generated code (mock — no API key configured)\n# Description: ${description}\n\nprint("Hello, World!")`
+    if (!code) code = `# All API keys exhausted — please add AI_API_KEY_2, AI_API_KEY_3...\n# Description: ${description}\n\nprint("Hello, World!")`
 
     if (code) {
       const cleaned = code.replace(/<think>[\s\S]*?<\/think>/g, '').trim()

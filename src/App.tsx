@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -179,6 +180,7 @@ function PrivacyToast() {
 
 // ===== COMPONENT =====
 function App() {
+  const navigate = useNavigate()
   const [chats, setChats] = useState<Chat[]>(() => {
     const saved = localStorage.getItem('dz-gpt-chats')
     if (saved) {
@@ -589,6 +591,10 @@ function App() {
                     key={model.id}
                     className={`model-tab ${selectedModel === model.id ? 'active' : ''} ${isDZAgent ? 'dz-agent-model-tab' : ''}`}
                     onClick={() => {
+                      if (model.id === 'dz-agent') {
+                        navigate('/dz-agent')
+                        return
+                      }
                       setSelectedModel(model.id)
                       const modelChats = chats.filter(c => c.modelId === model.id)
                       if (modelChats.length > 0) {
@@ -645,6 +651,11 @@ function App() {
                     key={model.id}
                     className={`mobile-model-option ${selectedModel === model.id ? 'active' : ''} ${model.id === 'dz-agent' ? 'dz-agent-mobile-option' : ''}`}
                     onClick={() => {
+                      if (model.id === 'dz-agent') {
+                        setShowMobileModelMenu(false)
+                        navigate('/dz-agent')
+                        return
+                      }
                       setSelectedModel(model.id)
                       setShowMobileModelMenu(false)
                       const modelChats = chats.filter(c => c.modelId === model.id)
@@ -890,6 +901,11 @@ function App() {
                       key={model.id}
                       className={`input-model-option ${selectedModel === model.id ? 'active' : ''} ${model.id === 'dz-agent' ? 'dz-agent-input-option' : ''}`}
                       onClick={() => {
+                        if (model.id === 'dz-agent') {
+                          setShowModelDropdown(false)
+                          navigate('/dz-agent')
+                          return
+                        }
                         setSelectedModel(model.id)
                         setShowModelDropdown(false)
                         const modelChats = chats.filter(c => c.modelId === model.id)

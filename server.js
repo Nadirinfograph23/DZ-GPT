@@ -297,6 +297,114 @@ app.get('/api/dz-agent/rss/:type', async (req, res) => {
   res.json({ type, results, count: results.reduce((s, r) => s + (r?.items?.length || 0), 0) })
 })
 
+// ===== DZ AGENT DASHBOARD — Live Cards =====
+const DASHBOARD_CACHE = { data: null, ts: 0 }
+const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
+
+const NEWS_FEEDS_DASHBOARD = [
+  { name: 'APS', url: 'https://www.aps.dz/ar/feed' },
+  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
+  { name: 'العربية', url: 'https://www.alarabiya.net/.mrss/ar.xml' },
+]
+const SPORTS_FEEDS_DASHBOARD = [
+  { name: 'كووورة', url: 'https://www.kooora.com/rss' },
+  { name: 'جزايرس', url: 'https://www.djazairess.com/fr/feed' },
+]
+
+async function fetchWeatherAlgiers() {
+  const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine']
+  const apiKey = process.env.OPENWEATHER_API_KEY
+  if (!apiKey) {
+    return WEATHER_CITIES.map(city => ({ city, temp: null, condition: null, icon: null, error: 'No API key' }))
+  }
+  const results = await Promise.allSettled(
+    WEATHER_CITIES.map(async (city) => {
+      const r = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=ar`,
+        { signal: AbortSignal.timeout(6000) }
+      )
+      if (!r.ok) return { city, temp: null, condition: null, icon: null }
+      const d = await r.json()
+      return {
+        city,
+        temp: Math.round(d.main?.temp ?? null),
+        condition: d.weather?.[0]?.description || null,
+        icon: d.weather?.[0]?.icon || null,
+        humidity: d.main?.humidity,
+        wind: Math.round(d.wind?.speed ?? 0),
+      }
+    })
+  )
+  return results.map((r, i) =>
+    r.status === 'fulfilled' ? r.value : { city: WEATHER_CITIES[i], temp: null, condition: null, icon: null }
+  )
+}
+
+app.get('/api/dz-agent/dashboard', async (_req, res) => {
+  if (DASHBOARD_CACHE.data && Date.now() - DASHBOARD_CACHE.ts < DASHBOARD_TTL) {
+    return res.json(DASHBOARD_CACHE.data)
+  }
+
+  const [newsFeeds, sportsFeeds, weather] = await Promise.allSettled([
+    fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
+    fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
+    fetchWeatherAlgiers(),
+  ])
+
+  const allNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
+    .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+    .slice(0, 12)
+
+  const allSports = (sportsFeeds.status === 'fulfilled' ? sportsFeeds.value : [])
+    .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+    .slice(0, 6)
+
+  const weatherData = weather.status === 'fulfilled' ? weather.value : []
+
+  const data = {
+    news: allNews,
+    sports: allSports,
+    weather: weatherData,
+    fetchedAt: new Date().toISOString(),
+  }
+
+  DASHBOARD_CACHE.data = data
+  DASHBOARD_CACHE.ts = Date.now()
+  return res.json(data)
+})
+
+// ===== VERCEL DEPLOY TRIGGER =====
+const VERCEL_PROJECT_ID = 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+
+app.post('/api/dz-agent/deploy', async (req, res) => {
+  const vercelToken = process.env.VERCEL_TOKEN
+  if (!vercelToken) return res.status(500).json({ error: 'VERCEL_TOKEN not configured.' })
+
+  try {
+    // Get latest deployment to redeploy
+    const listRes = await fetch(`https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1`, {
+      headers: { Authorization: `Bearer ${vercelToken}` },
+    })
+    const listData = await listRes.json()
+    const latestDeploy = listData.deployments?.[0]
+
+    if (!latestDeploy) return res.status(404).json({ error: 'No deployment found to redeploy.' })
+
+    const r = await fetch(`https://api.vercel.com/v13/deployments/${latestDeploy.uid}/redeploy`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'production' }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) return res.status(r.status).json({ error: d.error?.message || 'Deploy failed.', detail: d })
+    return res.json({ success: true, message: 'Vercel deploy triggered.', url: `https://${d.url || 'dz-gpt.vercel.app'}` })
+  } catch (err) {
+    console.error('Vercel deploy error:', err)
+    return res.status(500).json({ error: 'Failed to trigger deploy.' })
+  }
+})
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const { messages } = req.body

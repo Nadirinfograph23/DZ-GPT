@@ -108,7 +108,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
   }
 
   const weatherCityAr: Record<string, string> = {
-    Algiers: 'الجزائر العاصمة', Oran: 'وهران', Constantine: 'قسنطينة',
+    Algiers: 'الجزائر العاصمة', Oran: 'وهران', Constantine: 'قسنطينة', Annaba: 'عنابة',
   }
 
   return (

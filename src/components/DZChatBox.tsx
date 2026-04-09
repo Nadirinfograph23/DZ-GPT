@@ -540,6 +540,7 @@ export default function DZChatBox() {
   )
   const [serverGithubConnected, setServerGithubConnected] = useState(false)
   const [oauthEnabled, setOauthEnabled] = useState(false)
+  const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
@@ -576,6 +577,7 @@ export default function DZChatBox() {
       .then(d => {
         if (d.connected) setServerGithubConnected(true)
         if (d.oauthEnabled) setOauthEnabled(true)
+        if (d.user) setGithubUser(d.user)
       })
       .catch(() => {})
   }, [])
@@ -880,8 +882,18 @@ export default function DZChatBox() {
       <div className="dz-gh-bar">
         {isGithubConnected ? (
           <div className="gh-token-set">
-            <Github size={13} />
-            <span>{serverGithubConnected && !githubToken ? 'GitHub متصل (الخادم)' : 'GitHub متصل ✓'}</span>
+            {githubUser?.avatar ? (
+              <a href={githubUser.url} target="_blank" rel="noreferrer" className="gh-user-link">
+                <img src={githubUser.avatar} alt={githubUser.login} className="gh-user-avatar" />
+                <span className="gh-user-name">{githubUser.name}</span>
+                <span className="gh-user-repos">({githubUser.repos} repos)</span>
+              </a>
+            ) : (
+              <>
+                <Github size={13} />
+                <span>{serverGithubConnected && !githubToken ? 'GitHub متصل (الخادم)' : 'GitHub متصل ✓'}</span>
+              </>
+            )}
             {githubToken && (
               <button className="gh-token-clear" onClick={clearToken} title="قطع الاتصال">
                 <Trash2 size={12} />

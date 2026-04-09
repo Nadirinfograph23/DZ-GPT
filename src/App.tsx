@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
 import PwaInstallBanner from './PwaInstallBanner'
@@ -180,7 +179,6 @@ function PrivacyToast() {
 
 // ===== COMPONENT =====
 function App() {
-  const navigate = useNavigate()
   const [chats, setChats] = useState<Chat[]>(() => {
     const saved = localStorage.getItem('dz-gpt-chats')
     if (saved) {

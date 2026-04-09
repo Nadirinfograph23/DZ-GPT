@@ -75,6 +75,108 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
+// ===== DZ AGENT SEARCH ROUTE =====
+app.post('/api/dz-agent-search', async (req, res) => {
+  const { query } = req.body
+  if (!query) return res.status(400).json({ error: 'Query required.' })
+
+  console.log(`[DZ Search] Query: ${query}`)
+  const results = []
+
+  // ── DuckDuckGo Instant Answer ──────────────────────────────────────────────
+  try {
+    const ddgRes = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      { headers: { 'Accept': 'application/json' } }
+    )
+    if (ddgRes.ok) {
+      const ddg = await ddgRes.json()
+      if (ddg.AbstractText) {
+        results.push({
+          source: 'DuckDuckGo',
+          title: ddg.Heading || query,
+          snippet: ddg.AbstractText.slice(0, 400),
+          url: ddg.AbstractURL || undefined,
+        })
+      } else if (ddg.RelatedTopics?.length > 0) {
+        for (const topic of ddg.RelatedTopics.slice(0, 2)) {
+          if (topic.Text) {
+            results.push({
+              source: 'DuckDuckGo',
+              title: topic.Text.split(' - ')[0] || query,
+              snippet: topic.Text.slice(0, 300),
+              url: topic.FirstURL || undefined,
+            })
+          }
+        }
+      }
+    }
+  } catch (e) { console.error('[DZ Search] DDG error:', e) }
+
+  // ── Wikipedia Search ───────────────────────────────────────────────────────
+  try {
+    const wikiSearchRes = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2&origin=*`
+    )
+    if (wikiSearchRes.ok) {
+      const wikiSearch = await wikiSearchRes.json()
+      const pages = wikiSearch?.query?.search || []
+      for (const page of pages.slice(0, 1)) {
+        const snippet = page.snippet.replace(/<[^>]*>/g, '')
+        results.push({
+          source: 'Wikipedia',
+          title: page.title,
+          snippet: snippet.slice(0, 400),
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title)}`,
+        })
+      }
+    }
+  } catch (e) { console.error('[DZ Search] Wikipedia error:', e) }
+
+  // ── Wikidata ───────────────────────────────────────────────────────────────
+  try {
+    const wdRes = await fetch(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=ar&format=json&limit=2&origin=*`
+    )
+    if (wdRes.ok) {
+      const wd = await wdRes.json()
+      const entities = wd?.search || []
+      for (const entity of entities.slice(0, 1)) {
+        if (entity.description) {
+          results.push({
+            source: 'Wikidata',
+            title: entity.label || query,
+            snippet: entity.description,
+            url: entity.concepturi || `https://www.wikidata.org/wiki/${entity.id}`,
+          })
+        }
+      }
+    }
+  } catch (e) { console.error('[DZ Search] Wikidata error:', e) }
+
+  // ── StackOverflow ──────────────────────────────────────────────────────────
+  try {
+    const soRes = await fetch(
+      `https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=${encodeURIComponent(query)}&site=stackoverflow&pagesize=2&filter=withbody`
+    )
+    if (soRes.ok) {
+      const so = await soRes.json()
+      const items = so?.items || []
+      for (const item of items.slice(0, 1)) {
+        results.push({
+          source: 'StackOverflow',
+          title: item.title,
+          snippet: `${item.answer_count} إجابة · ${item.score} نقطة`,
+          url: item.link,
+        })
+      }
+    }
+  } catch (e) { console.error('[DZ Search] SO error:', e) }
+
+  console.log(`[DZ Search] Returning ${results.length} results`)
+  return res.status(200).json({ results })
+})
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const { messages } = req.body
@@ -83,7 +185,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
   }
 
-  const { githubToken, currentRepo } = req.body
+  const { currentRepo } = req.body
+  const githubToken = req.body.githubToken || process.env.GITHUB_TOKEN || ''
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
   const lowerMsg = lastUserMessage.toLowerCase()
 
@@ -160,7 +263,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
   const groqKey = process.env.AI_API_KEY
 
-  const systemPrompt = `You are DZ Agent, an advanced multilingual AI assistant and GitHub code agent created by Nadir Houamria (Nadir Infograph). 
+  const systemPrompt = `You are DZ Agent, an advanced multilingual AI assistant and code agent created by Nadir Houamria (Nadir Infograph).
 
 You can:
 - Help with GitHub repositories: reading, creating, and editing files
@@ -177,8 +280,6 @@ When generating code, always:
 3. Use proper error handling
 4. Format code in markdown code blocks
 
-When suggesting code edits that require committing, describe the changes clearly and mention they can approve the commit action.
-
 Be concise, accurate, and helpful. Use markdown formatting.`
 
   const apiMessages = [
@@ -186,28 +287,42 @@ Be concise, accurate, and helpful. Use markdown formatting.`
     ...messages,
   ]
 
-  const callAI = async (url, key, model, extra = {}) => {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model, messages: apiMessages, max_tokens: 3000, temperature: 0.7, stream: false, ...extra }),
-    })
-    if (!r.ok) return null
-    const d = await r.json()
-    let content = d.choices?.[0]?.message?.content || null
-    if (content) {
-      const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      if (cleaned) content = cleaned
+  const callGroqModel = async (model) => {
+    if (!groqKey) return null
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify({ model, messages: apiMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
+      })
+      if (!r.ok) return null
+      const d = await r.json()
+      let content = d.choices?.[0]?.message?.content || null
+      if (content) {
+        const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+        if (cleaned) content = cleaned
+      }
+      return content
+    } catch (err) {
+      console.error(`Groq ${model} error:`, err.message)
+      return null
     }
-    return content
   }
 
-  // Try DeepSeek → Ollama → Groq → mock
+  // ── Fallback chain: DeepSeek → Ollama → Groq models (auto-fallback) ──────
   if (deepseekKey) {
     try {
-      const content = await callAI('https://api.deepseek.com/v1/chat/completions', deepseekKey, 'deepseek-chat')
-      if (content) return res.status(200).json({ content })
-    } catch (err) { console.error('DeepSeek error:', err) }
+      const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        const content = d.choices?.[0]?.message?.content
+        if (content) return res.status(200).json({ content })
+      }
+    } catch (err) { console.error('DeepSeek error:', err.message) }
   }
 
   if (ollamaUrl) {
@@ -216,19 +331,24 @@ Be concise, accurate, and helpful. Use markdown formatting.`
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'llama3', messages: apiMessages, stream: false }),
       })
-      if (r.ok) { const d = await r.json(); return res.status(200).json({ content: d.message?.content || 'No response.' }) }
-    } catch (err) { console.error('Ollama error:', err) }
+      if (r.ok) { const d = await r.json(); const c = d.message?.content; if (c) return res.status(200).json({ content: c }) }
+    } catch (err) { console.error('Ollama error:', err.message) }
   }
 
-  if (groqKey) {
-    try {
-      const content = await callAI('https://api.groq.com/openai/v1/chat/completions', groqKey, 'llama-3.3-70b-versatile')
-      if (content) return res.status(200).json({ content })
-    } catch (err) { console.error('Groq error:', err) }
+  // Auto-fallback to Groq models (most powerful first)
+  const fallbackModels = [
+    'llama-3.3-70b-versatile',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'qwen/qwen3-32b',
+    'llama-3.1-8b-instant',
+  ]
+  for (const model of fallbackModels) {
+    const content = await callGroqModel(model)
+    if (content) return res.status(200).json({ content, fallbackModel: model })
   }
 
   return res.status(200).json({
-    content: 'مرحباً! أنا DZ Agent.\n\nHello! I\'m DZ Agent — your multilingual AI & GitHub assistant.\n\nI can help you:\n- 🗂️ Browse GitHub repositories\n- 📄 Read and analyze code files\n- ✏️ Generate and edit code\n- 🔀 Create commits and pull requests\n\nConnect your GitHub token above to get started!\n\n_No AI API key configured — add DEEPSEEK_API_KEY or AI_API_KEY for full AI responses._',
+    content: 'مرحباً! أنا DZ Agent — مساعدك الذكي متعدد اللغات.\n\nHello! I\'m DZ Agent — your multilingual AI & GitHub assistant.\n\nI can help you:\n- Browse GitHub repositories\n- Read and analyze code files\n- Generate and edit code\n- Create commits and pull requests\n\n_No AI API key configured — add AI_API_KEY (Groq) or DEEPSEEK_API_KEY for full responses._',
   })
 })
 
@@ -250,7 +370,7 @@ async function ghFetch(endpoint, token, options = {}) {
 
 // List repositories
 app.post('/api/dz-agent/github/repos', async (req, res) => {
-  const { token } = req.body
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
   if (!token) return res.status(400).json({ error: 'GitHub token required.' })
 
   try {
@@ -277,7 +397,8 @@ app.post('/api/dz-agent/github/repos', async (req, res) => {
 
 // List files in repo/path
 app.post('/api/dz-agent/github/files', async (req, res) => {
-  const { token, repo, path = '' } = req.body
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, path = '' } = req.body
   if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
 
   try {
@@ -302,7 +423,8 @@ app.post('/api/dz-agent/github/files', async (req, res) => {
 
 // Read file content
 app.post('/api/dz-agent/github/file-content', async (req, res) => {
-  const { token, repo, path } = req.body
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, path } = req.body
   if (!token || !repo || !path) return res.status(400).json({ error: 'Token, repo, and path required.' })
 
   try {
@@ -429,7 +551,8 @@ app.post('/api/dz-agent/github/generate', async (req, res) => {
 
 // Commit a file to GitHub
 app.post('/api/dz-agent/github/commit', async (req, res) => {
-  const { token, repo, path, content, message, branch } = req.body
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, path, content, message, branch } = req.body
   if (!token || !repo || !path || !content || !message) {
     return res.status(400).json({ error: 'Token, repo, path, content, and message are required.' })
   }
@@ -473,7 +596,8 @@ app.post('/api/dz-agent/github/commit', async (req, res) => {
 
 // Create Pull Request
 app.post('/api/dz-agent/github/pr', async (req, res) => {
-  const { token, repo, title, body, branch, base } = req.body
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, title, body, branch, base } = req.body
   if (!token || !repo || !title || !branch || !base) {
     return res.status(400).json({ error: 'Token, repo, title, branch, and base are required.' })
   }

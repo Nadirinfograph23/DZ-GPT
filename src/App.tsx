@@ -54,6 +54,7 @@ const AI_MODELS = [
   { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
+  { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
 ]
 
 // ===== LANGUAGE CONFIG =====
@@ -96,10 +97,16 @@ async function fetchAIResponse(
   modelId: string,
   signal?: AbortSignal
 ): Promise<string> {
-  const response = await fetch('/api/chat', {
+  const isDZAgent = modelId === 'dz-agent'
+  const endpoint = isDZAgent ? '/api/dz-agent-chat' : '/api/chat'
+  const body = isDZAgent
+    ? JSON.stringify({ messages: messages.filter(m => m.role !== 'system') })
+    : JSON.stringify({ messages, model: modelId })
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, model: modelId }),
+    body,
     signal,
   })
 
@@ -577,36 +584,30 @@ function App() {
 
           <div className="model-tabs-wrapper">
             <div className="model-tabs">
-              {AI_MODELS.map(model => (
-                <button
-                  key={model.id}
-                  className={`model-tab ${selectedModel === model.id ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedModel(model.id)
-                    const modelChats = chats.filter(c => c.modelId === model.id)
-                    if (modelChats.length > 0) {
-                      setActiveChatId(modelChats[0].id)
-                    } else {
-                      setActiveChatId(null)
-                    }
-                  }}
-                  style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
-                >
-                  {model.name}
-                </button>
-              ))}
+              {AI_MODELS.map(model => {
+                const isDZAgent = model.id === 'dz-agent'
+                return (
+                  <button
+                    key={model.id}
+                    className={`model-tab ${selectedModel === model.id ? 'active' : ''} ${isDZAgent ? 'dz-agent-model-tab' : ''}`}
+                    onClick={() => {
+                      setSelectedModel(model.id)
+                      const modelChats = chats.filter(c => c.modelId === model.id)
+                      if (modelChats.length > 0) {
+                        setActiveChatId(modelChats[0].id)
+                      } else {
+                        setActiveChatId(null)
+                      }
+                    }}
+                    style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
+                  >
+                    {isDZAgent && <span className="dz-free-blink">Free</span>}
+                    {model.name}
+                  </button>
+                )
+              })}
             </div>
           </div>
-
-          {/* DZ Agent link */}
-          <button
-            className="dz-agent-nav-btn"
-            onClick={() => navigate('/dz-agent')}
-            title="DZ Agent - AI Assistant"
-          >
-            <Bot size={14} />
-            DZ Agent
-          </button>
 
           {/* Facebook link */}
           <a
@@ -644,7 +645,7 @@ function App() {
                 {AI_MODELS.map(model => (
                   <button
                     key={model.id}
-                    className={`mobile-model-option ${selectedModel === model.id ? 'active' : ''}`}
+                    className={`mobile-model-option ${selectedModel === model.id ? 'active' : ''} ${model.id === 'dz-agent' ? 'dz-agent-mobile-option' : ''}`}
                     onClick={() => {
                       setSelectedModel(model.id)
                       setShowMobileModelMenu(false)
@@ -656,7 +657,10 @@ function App() {
                       }
                     }}
                   >
-                    <span className="input-model-dot" style={{ background: model.color }} />
+                    {model.id === 'dz-agent'
+                      ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
+                      : <span className="input-model-dot" style={{ background: model.color }} />
+                    }
                     <span>{model.name}</span>
                   </button>
                 ))}
@@ -886,7 +890,7 @@ function App() {
                   {AI_MODELS.map(model => (
                     <button
                       key={model.id}
-                      className={`input-model-option ${selectedModel === model.id ? 'active' : ''}`}
+                      className={`input-model-option ${selectedModel === model.id ? 'active' : ''} ${model.id === 'dz-agent' ? 'dz-agent-input-option' : ''}`}
                       onClick={() => {
                         setSelectedModel(model.id)
                         setShowModelDropdown(false)
@@ -898,7 +902,10 @@ function App() {
                         }
                       }}
                     >
-                      <span className="input-model-dot" style={{ background: model.color }} />
+                      {model.id === 'dz-agent'
+                        ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
+                        : <span className="input-model-dot" style={{ background: model.color }} />
+                      }
                       <span>{model.name}</span>
                     </button>
                   ))}

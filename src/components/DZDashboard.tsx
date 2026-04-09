@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Newspaper, Trophy, Cloud, Wind, Droplets, ExternalLink, RefreshCw, AlertCircle, Moon } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Newspaper, Trophy, Cloud, Wind, Droplets, ExternalLink, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
 interface NewsItem {
@@ -48,288 +48,214 @@ const PRAYER_ICONS: Record<string, string> = {
   'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤', 'المغرب': '🌇', 'العشاء': '🌙'
 }
 
-function PrayerCard({ data }: { data: PrayerData }) {
-  return (
-    <div className="dzd-prayer-card">
-      <div className="dzd-prayer-header">
-        <span className="dzd-prayer-city">🕌 {data.city}</span>
-        <span className="dzd-prayer-date">{data.date}</span>
-      </div>
-      <div className="dzd-prayer-grid">
-        {Object.entries(data.times).map(([name, time]) => (
-          <div key={name} className="dzd-prayer-item">
-            <span className="dzd-prayer-icon">{PRAYER_ICONS[name] || '🕐'}</span>
-            <span className="dzd-prayer-name">{name}</span>
-            <span className="dzd-prayer-time">{time}</span>
-          </div>
-        ))}
-      </div>
-      <div className="dzd-prayer-source">المصدر: {data.source}</div>
-    </div>
-  )
-}
-
-function WeatherCard({ item }: { item: WeatherItem }) {
-  const cityAr: Record<string, string> = {
-    Algiers: 'الجزائر العاصمة',
-    Oran: 'وهران',
-    Constantine: 'قسنطينة',
-  }
-  const displayCity = cityAr[item.city] || item.city
-
-  return (
-    <div className="dzd-weather-card">
-      <div className="dzd-weather-city">{displayCity}</div>
-      {item.temp !== null ? (
-        <>
-          <div className="dzd-weather-temp">
-            {item.icon && (
-              <img
-                src={`https://openweathermap.org/img/wn/${item.icon}.png`}
-                alt={item.condition || ''}
-                className="dzd-weather-icon"
-              />
-            )}
-            <span className="dzd-weather-deg">{item.temp}°C</span>
-          </div>
-          <div className="dzd-weather-cond">{item.condition}</div>
-          <div className="dzd-weather-meta">
-            {item.humidity !== undefined && (
-              <span><Droplets size={11} /> {item.humidity}%</span>
-            )}
-            {item.wind !== undefined && (
-              <span><Wind size={11} /> {item.wind} km/h</span>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="dzd-weather-unavail">—</div>
-      )}
-    </div>
-  )
-}
-
-function NewsCard({ item, onClick }: { item: NewsItem; onClick: (q: string) => void }) {
-  return (
-    <div className="dzd-news-card" onClick={() => onClick(`اخبار: ${item.title}`)}>
-      <div className="dzd-news-source">{item.feedName}</div>
-      <div className="dzd-news-title">{item.title}</div>
-      {item.description && (
-        <div className="dzd-news-desc">{item.description.slice(0, 100)}{item.description.length > 100 ? '…' : ''}</div>
-      )}
-      <div className="dzd-news-footer">
-        {item.pubDate && <span className="dzd-news-date">{new Date(item.pubDate).toLocaleDateString('ar-DZ')}</span>}
-        {item.link && (
-          <a
-            href={item.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="dzd-news-link"
-            onClick={e => e.stopPropagation()}
-          >
-            <ExternalLink size={11} />
-          </a>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SportCard({ item, onClick }: { item: SportItem; onClick: (q: string) => void }) {
-  return (
-    <div className="dzd-sport-card" onClick={() => onClick(`رياضة: ${item.title}`)}>
-      <div className="dzd-sport-source">{item.feedName}</div>
-      <div className="dzd-sport-title">{item.title}</div>
-      {item.description && (
-        <div className="dzd-sport-desc">{item.description.slice(0, 90)}{item.description.length > 90 ? '…' : ''}</div>
-      )}
-      <div className="dzd-sport-footer">
-        {item.pubDate && <span className="dzd-sport-date">{new Date(item.pubDate).toLocaleDateString('ar-DZ')}</span>}
-        {item.link && (
-          <a
-            href={item.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="dzd-sport-link"
-            onClick={e => e.stopPropagation()}
-          >
-            <ExternalLink size={11} />
-          </a>
-        )}
-      </div>
-    </div>
-  )
+const CITY_AR: Record<string, string> = {
+  Algiers: 'الجزائر', Oran: 'وهران', Constantine: 'قسنطينة',
+  Annaba: 'عنابة', Bejaia: 'بجاية', Setif: 'سطيف', Tlemcen: 'تلمسان',
 }
 
 export default function DZDashboard({ onSend }: { onSend: (q: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'news' | 'sports' | 'weather' | 'prayer'>('news')
   const [prayerData, setPrayerData] = useState<PrayerData | null>(null)
-  const [prayerLoading, setPrayerLoading] = useState(false)
+  const [prayerLoading, setPrayerLoading] = useState(true)
+  const [prayerCity, setPrayerCity] = useState('Algiers')
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
 
-  const load = async () => {
+  const loadDashboard = async () => {
     setLoading(true)
-    setError(null)
     try {
       const r = await fetch('/api/dz-agent/dashboard')
-      if (!r.ok) throw new Error('فشل تحميل البيانات')
-      const d = await r.json()
-      setData(d)
-    } catch {
-      setError('تعذّر تحميل البيانات الحية. تحقق من الاتصال.')
-    } finally {
-      setLoading(false)
-    }
+      if (r.ok) setData(await r.json())
+    } catch { /* silent */ }
+    finally { setLoading(false) }
   }
 
   const loadPrayer = async (city = 'Algiers') => {
     setPrayerLoading(true)
+    setPrayerCity(city)
     try {
       const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
-      if (!r.ok) throw new Error('فشل جلب مواقيت الصلاة')
-      const d = await r.json()
-      setPrayerData(d)
-    } catch {
-      setPrayerData(null)
-    } finally {
-      setPrayerLoading(false)
-    }
+      if (r.ok) setPrayerData(await r.json())
+      else setPrayerData(null)
+    } catch { setPrayerData(null) }
+    finally { setPrayerLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    loadDashboard()
+    loadPrayer('Algiers')
+  }, [])
 
-  const fetchedTime = data?.fetchedAt
-    ? new Date(data.fetchedAt).toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })
-    : null
+  const checkScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 10)
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10)
+  }
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    checkScroll()
+    return () => el.removeEventListener('scroll', checkScroll)
+  }, [data, prayerData])
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' })
+  }
+
+  const weatherCityAr: Record<string, string> = {
+    Algiers: 'الجزائر العاصمة', Oran: 'وهران', Constantine: 'قسنطينة',
+  }
 
   return (
-    <div className="dzd-root" dir="rtl">
-      <div className="dzd-header">
-        <div className="dzd-tabs">
-          <button
-            className={`dzd-tab ${tab === 'news' ? 'dzd-tab--active' : ''}`}
-            onClick={() => setTab('news')}
-          >
-            <Newspaper size={14} />
-            أخبار
-            {data?.news?.length ? <span className="dzd-tab-count">{data.news.length}</span> : null}
+    <div className="dzd-strip-root" dir="rtl">
+      {/* Header row */}
+      <div className="dzd-strip-header">
+        <span className="dzd-strip-title">📡 البث المباشر</span>
+        <div className="dzd-strip-controls">
+          <button className="dzd-nav-btn" onClick={() => { loadDashboard(); loadPrayer(prayerCity) }} title="تحديث">
+            <RefreshCw size={13} className={loading || prayerLoading ? 'dzd-spin' : ''} />
           </button>
-          <button
-            className={`dzd-tab ${tab === 'sports' ? 'dzd-tab--active' : ''}`}
-            onClick={() => setTab('sports')}
-          >
-            <Trophy size={14} />
-            رياضة
-            {data?.sports?.length ? <span className="dzd-tab-count">{data.sports.length}</span> : null}
+          <button className="dzd-nav-btn" onClick={() => scroll('right')} disabled={!canScrollRight}>
+            <ChevronLeft size={16} />
           </button>
-          <button
-            className={`dzd-tab ${tab === 'weather' ? 'dzd-tab--active' : ''}`}
-            onClick={() => setTab('weather')}
-          >
-            <Cloud size={14} />
-            طقس
-          </button>
-          <button
-            className={`dzd-tab ${tab === 'prayer' ? 'dzd-tab--active' : ''}`}
-            onClick={() => { setTab('prayer'); if (!prayerData) loadPrayer() }}
-          >
-            <Moon size={14} />
-            صلاة
+          <button className="dzd-nav-btn" onClick={() => scroll('left')} disabled={!canScrollLeft}>
+            <ChevronRight size={16} />
           </button>
         </div>
-        <button className={`dzd-refresh ${loading ? 'dzd-refresh--spin' : ''}`} onClick={load} title="تحديث">
-          <RefreshCw size={13} />
-        </button>
-        {fetchedTime && <span className="dzd-fetched">آخر تحديث {fetchedTime}</span>}
       </div>
 
-      <div className="dzd-body">
-        {loading && (
-          <div className="dzd-loading">
-            <div className="dzd-loading-dots"><span /><span /><span /></div>
-            <p>جارٍ تحميل البيانات الحية...</p>
-          </div>
-        )}
+      {/* Scrollable strip */}
+      <div className="dzd-strip-scroll" ref={scrollRef}>
 
-        {error && !loading && (
-          <div className="dzd-error">
-            <AlertCircle size={16} />
-            <span>{error}</span>
-            <button onClick={load}>إعادة المحاولة</button>
-          </div>
-        )}
-
-        {!loading && !error && data && (
-          <>
-            {tab === 'news' && (
-              <div className="dzd-grid">
-                {data.news.length === 0 ? (
-                  <div className="dzd-empty">لا توجد أخبار حالياً</div>
-                ) : (
-                  data.news.map((item, i) => (
-                    <NewsCard key={i} item={item} onClick={onSend} />
-                  ))
-                )}
-              </div>
-            )}
-
-            {tab === 'sports' && (
-              <div className="dzd-grid">
-                {data.sports.length === 0 ? (
-                  <div className="dzd-empty">لا توجد نتائج رياضية حالياً</div>
-                ) : (
-                  data.sports.map((item, i) => (
-                    <SportCard key={i} item={item} onClick={onSend} />
-                  ))
-                )}
-              </div>
-            )}
-
-            {tab === 'weather' && (
-              <div className="dzd-weather-grid">
-                {data.weather.map((item, i) => (
-                  <WeatherCard key={i} item={item} />
-                ))}
-                {data.weather.every(w => w.temp === null) && (
-                  <div className="dzd-weather-note">
-                    أضف مفتاح <code>OPENWEATHER_API_KEY</code> في إعدادات المشروع لتفعيل بيانات الطقس الحية
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === 'prayer' && (
-          <div className="dzd-prayer-wrapper">
-            {prayerLoading && (
-              <div className="dzd-loading">
-                <div className="dzd-loading-dots"><span /><span /><span /></div>
-                <p>جارٍ تحميل مواقيت الصلاة...</p>
-              </div>
-            )}
-            {!prayerLoading && prayerData && (
-              <>
-                <PrayerCard data={prayerData} />
-                <div className="dzd-prayer-cities">
-                  {['Algiers','Oran','Constantine','Annaba','Bejaia','Setif','Tlemcen'].map(city => (
-                    <button key={city} className="dzd-prayer-city-btn" onClick={() => loadPrayer(city)}>
-                      {city}
+        {/* ===== PRAYER TIMES SECTION ===== */}
+        <div className="dzd-section">
+          <div className="dzd-section-label">🕌 مواقيت الصلاة</div>
+          {prayerLoading ? (
+            <div className="dzd-card dzd-card--loading">
+              <div className="dzd-loading-dots"><span /><span /><span /></div>
+            </div>
+          ) : prayerData ? (
+            <>
+              <div className="dzd-prayer-main-card">
+                <div className="dzd-prayer-location">
+                  📍 {CITY_AR[prayerData.city] || prayerData.city} — {prayerData.date}
+                </div>
+                <div className="dzd-prayer-row">
+                  {Object.entries(prayerData.times).map(([name, time]) => (
+                    <div key={name} className="dzd-prayer-slot">
+                      <span className="dzd-prayer-slot-icon">{PRAYER_ICONS[name] || '🕐'}</span>
+                      <span className="dzd-prayer-slot-name">{name}</span>
+                      <span className="dzd-prayer-slot-time">{time}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="dzd-prayer-cities-row">
+                  {Object.entries(CITY_AR).map(([en, ar]) => (
+                    <button
+                      key={en}
+                      className={`dzd-city-chip ${prayerCity === en ? 'dzd-city-chip--active' : ''}`}
+                      onClick={() => loadPrayer(en)}
+                    >
+                      {ar}
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-            {!prayerLoading && !prayerData && (
-              <div className="dzd-empty">
-                تعذّر تحميل مواقيت الصلاة
-                <button onClick={() => loadPrayer()} style={{ marginRight: 8 }}>إعادة المحاولة</button>
               </div>
-            )}
-          </div>
-        )}
+            </>
+          ) : (
+            <div className="dzd-card dzd-card--error">
+              <span>تعذّر تحميل مواقيت الصلاة</span>
+              <button onClick={() => loadPrayer(prayerCity)}>إعادة المحاولة</button>
+            </div>
+          )}
+        </div>
+
+        {/* ===== WEATHER SECTION ===== */}
+        <div className="dzd-section">
+          <div className="dzd-section-label"><Cloud size={13} /> الطقس</div>
+          {loading ? (
+            <div className="dzd-card dzd-card--loading">
+              <div className="dzd-loading-dots"><span /><span /><span /></div>
+            </div>
+          ) : (data?.weather || []).map((item, i) => (
+            <div key={i} className="dzd-weather-mini-card">
+              <div className="dzd-wm-city">{weatherCityAr[item.city] || item.city}</div>
+              {item.temp !== null ? (
+                <>
+                  <div className="dzd-wm-temp">
+                    {item.icon && (
+                      <img src={`https://openweathermap.org/img/wn/${item.icon}.png`} alt="" className="dzd-wm-icon" />
+                    )}
+                    <span>{item.temp}°C</span>
+                  </div>
+                  <div className="dzd-wm-cond">{item.condition}</div>
+                  <div className="dzd-wm-meta">
+                    {item.humidity !== undefined && <span><Droplets size={10} /> {item.humidity}%</span>}
+                    {item.wind !== undefined && <span><Wind size={10} /> {item.wind} km/h</span>}
+                  </div>
+                </>
+              ) : (
+                <div className="dzd-wm-no-key">أضف OPENWEATHER_API_KEY</div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* ===== NEWS SECTION ===== */}
+        <div className="dzd-section">
+          <div className="dzd-section-label"><Newspaper size={13} /> أخبار</div>
+          {loading ? (
+            <div className="dzd-card dzd-card--loading">
+              <div className="dzd-loading-dots"><span /><span /><span /></div>
+            </div>
+          ) : (data?.news?.length === 0) ? (
+            <div className="dzd-card dzd-card--empty">لا توجد أخبار</div>
+          ) : (
+            (data?.news || []).map((item, i) => (
+              <div key={i} className="dzd-news-mini-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
+                <div className="dzd-nm-source">{item.feedName}</div>
+                <div className="dzd-nm-title">{item.title}</div>
+                {item.link && (
+                  <a href={item.link} target="_blank" rel="noopener noreferrer"
+                    className="dzd-nm-link" onClick={e => e.stopPropagation()}>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ===== SPORTS SECTION ===== */}
+        <div className="dzd-section">
+          <div className="dzd-section-label"><Trophy size={13} /> رياضة</div>
+          {loading ? (
+            <div className="dzd-card dzd-card--loading">
+              <div className="dzd-loading-dots"><span /><span /><span /></div>
+            </div>
+          ) : (data?.sports?.length === 0) ? (
+            <div className="dzd-card dzd-card--empty">لا توجد أخبار رياضية</div>
+          ) : (
+            (data?.sports || []).map((item, i) => (
+              <div key={i} className="dzd-news-mini-card dzd-news-mini-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
+                <div className="dzd-nm-source">{item.feedName}</div>
+                <div className="dzd-nm-title">{item.title}</div>
+                {item.link && (
+                  <a href={item.link} target="_blank" rel="noopener noreferrer"
+                    className="dzd-nm-link" onClick={e => e.stopPropagation()}>
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
       </div>
     </div>
   )

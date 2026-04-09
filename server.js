@@ -710,11 +710,25 @@ app.get('/api/auth/github/callback', async (req, res) => {
   }
 })
 
-// Check if server has GitHub token configured
-app.get('/api/dz-agent/github/status', (_req, res) => {
-  const hasToken = !!process.env.GITHUB_TOKEN
+// Check if server has GitHub token configured (also fetches authenticated user info)
+app.get('/api/dz-agent/github/status', async (_req, res) => {
+  const token = process.env.GITHUB_TOKEN
   const hasOAuth = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
-  res.status(200).json({ connected: hasToken, oauthEnabled: hasOAuth })
+  if (!token) return res.status(200).json({ connected: false, oauthEnabled: hasOAuth })
+  try {
+    const r = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0' }
+    })
+    if (!r.ok) return res.status(200).json({ connected: true, oauthEnabled: hasOAuth })
+    const u = await r.json()
+    res.status(200).json({
+      connected: true,
+      oauthEnabled: hasOAuth,
+      user: { login: u.login, name: u.name || u.login, avatar: u.avatar_url, url: u.html_url, repos: u.public_repos }
+    })
+  } catch (_) {
+    res.status(200).json({ connected: true, oauthEnabled: hasOAuth })
+  }
 })
 
 // List repositories

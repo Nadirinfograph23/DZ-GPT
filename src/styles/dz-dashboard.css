@@ -406,3 +406,106 @@
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   }
 }
+
+/* ===== PRAYER TIMES ===== */
+.dzd-prayer-wrapper {
+  padding: 8px 4px;
+}
+
+.dzd-prayer-card {
+  background: rgba(167, 139, 250, 0.06);
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.dzd-prayer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dzd-prayer-city {
+  font-size: 14px;
+  font-weight: 700;
+  color: #c4b5fd;
+}
+
+.dzd-prayer-date {
+  font-size: 11px;
+  color: #555;
+}
+
+.dzd-prayer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.dzd-prayer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(167, 139, 250, 0.06);
+  border: 1px solid rgba(167, 139, 250, 0.1);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.dzd-prayer-icon {
+  font-size: 18px;
+}
+
+.dzd-prayer-name {
+  font-size: 11px;
+  color: #888;
+  font-weight: 600;
+}
+
+.dzd-prayer-time {
+  font-size: 13px;
+  font-weight: 800;
+  color: #c4b5fd;
+  direction: ltr;
+}
+
+.dzd-prayer-source {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #444;
+  text-align: center;
+}
+
+.dzd-prayer-cities {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.dzd-prayer-city-btn {
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  border-radius: 6px;
+  color: #a78bfa;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  transition: all 0.2s;
+}
+.dzd-prayer-city-btn:hover {
+  background: rgba(167, 139, 250, 0.16);
+  border-color: rgba(167, 139, 250, 0.35);
+}
+
+@media (max-width: 480px) {
+  .dzd-prayer-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

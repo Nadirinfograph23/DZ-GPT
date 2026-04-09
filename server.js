@@ -192,13 +192,17 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 const RSS_FEEDS = {
   national: [
     { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/ar/feed' },
+    { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
     { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+    { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
     { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
     { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
+    { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
   ],
   sports: [
     { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
     { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
+    { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
   ],
 }
 
@@ -309,13 +313,16 @@ const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
 
 const NEWS_FEEDS_DASHBOARD = [
   { name: 'APS', url: 'https://www.aps.dz/ar/feed' },
+  { name: 'الشروق', url: 'https://www.echoroukonline.com/feed' },
   { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
   { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
-  { name: 'العربية', url: 'https://www.alarabiya.net/.mrss/ar.xml' },
+  { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
 ]
 const SPORTS_FEEDS_DASHBOARD = [
   { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
   { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
+  { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
 ]
 
 async function fetchWeatherAlgiers() {
@@ -377,6 +384,134 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
 
   DASHBOARD_CACHE.data = data
   DASHBOARD_CACHE.ts = Date.now()
+  return res.json(data)
+})
+
+// ===== PRAYER TIMES =====
+const PRAYER_CACHE = new Map()
+const PRAYER_CACHE_TTL = 12 * 60 * 1000 // 12 minutes
+
+const ALGERIAN_CITIES = {
+  'الجزائر': 'Algiers', 'الجزائر العاصمة': 'Algiers', 'algiers': 'Algiers',
+  'وهران': 'Oran', 'oran': 'Oran',
+  'قسنطينة': 'Constantine', 'constantine': 'Constantine',
+  'عنابة': 'Annaba', 'annaba': 'Annaba',
+  'بجاية': 'Bejaia', 'bejaia': 'Bejaia', 'béjaïa': 'Bejaia',
+  'تلمسان': 'Tlemcen', 'tlemcen': 'Tlemcen',
+  'سطيف': 'Setif', 'setif': 'Setif', 'sétif': 'Setif',
+  'بسكرة': 'Biskra', 'biskra': 'Biskra',
+  'تيزي وزو': 'Tizi Ouzou', 'tizi ouzou': 'Tizi Ouzou',
+  'باتنة': 'Batna', 'batna': 'Batna',
+  'البليدة': 'Blida', 'blida': 'Blida',
+  'سكيكدة': 'Skikda', 'skikda': 'Skikda',
+  'غرداية': 'Ghardaia', 'ghardaia': 'Ghardaia',
+}
+
+function detectCityFromQuery(text) {
+  const lower = text.toLowerCase()
+  for (const [ar, en] of Object.entries(ALGERIAN_CITIES)) {
+    if (lower.includes(ar.toLowerCase())) return en
+  }
+  return 'Algiers'
+}
+
+async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
+  const cacheKey = `${city}-${country}`
+  const cached = PRAYER_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < PRAYER_CACHE_TTL) return cached.data
+
+  try {
+    const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=2`
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error(`aladhan API error: ${r.status}`)
+    const d = await r.json()
+    if (d.code !== 200) throw new Error('aladhan returned non-200')
+    const t = d.data?.timings
+    const result = {
+      city,
+      country,
+      source: 'aladhan.com',
+      date: d.data?.date?.readable || new Date().toLocaleDateString('ar-DZ'),
+      times: {
+        'الفجر': t?.Fajr || '--',
+        'الشروق': t?.Sunrise || '--',
+        'الظهر': t?.Dhuhr || '--',
+        'العصر': t?.Asr || '--',
+        'المغرب': t?.Maghrib || '--',
+        'العشاء': t?.Isha || '--',
+      },
+    }
+    PRAYER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
+    return result
+  } catch (err) {
+    console.error('[Prayer] aladhan error:', err.message)
+    return null
+  }
+}
+
+app.get('/api/dz-agent/prayer', async (req, res) => {
+  const city = req.query.city || 'Algiers'
+  const data = await fetchPrayerTimesAladhan(city)
+  if (!data) return res.status(503).json({ error: 'تعذّر جلب مواقيت الصلاة' })
+  return res.json(data)
+})
+
+// ===== SEARCH ENDPOINT =====
+async function searchWeb(query) {
+  const encodedQ = encodeURIComponent(query)
+
+  // Try SearXNG public instance
+  const searxInstances = [
+    `https://searx.be/search?q=${encodedQ}&format=json&language=ar`,
+    `https://search.mdosch.de/search?q=${encodedQ}&format=json`,
+  ]
+
+  for (const url of searxInstances) {
+    try {
+      const r = await fetch(url, {
+        headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!r.ok) continue
+      const d = await r.json()
+      const results = (d.results || []).slice(0, 5).map(item => ({
+        title: item.title,
+        url: item.url,
+        snippet: item.content?.slice(0, 200) || '',
+      }))
+      if (results.length > 0) return { source: 'searxng', results }
+    } catch { continue }
+  }
+
+  // Fallback: DuckDuckGo HTML scraping
+  try {
+    const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQ}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0)' },
+      signal: AbortSignal.timeout(7000),
+    })
+    if (r.ok) {
+      const html = await r.text()
+      const results = []
+      const linkRe = /<a class="result__a" href="([^"]+)"[^>]*>([^<]+)<\/a>/g
+      const snippetRe = /<a class="result__snippet"[^>]*>([^<]+)<\/a>/g
+      let lm, sm
+      const links = [], snippets = []
+      while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], title: lm[2] })
+      while ((sm = snippetRe.exec(html)) !== null) snippets.push(sm[1])
+      for (let i = 0; i < Math.min(links.length, 4); i++) {
+        results.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] || '' })
+      }
+      if (results.length > 0) return { source: 'duckduckgo', results }
+    }
+  } catch (err) { console.error('[Search] DDG error:', err.message) }
+
+  return { source: 'none', results: [] }
+}
+
+app.post('/api/dz-agent/search', async (req, res) => {
+  const { query } = req.body
+  if (!query) return res.status(400).json({ error: 'query required' })
+  const data = await searchWeb(query)
   return res.json(data)
 })
 
@@ -528,10 +663,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // Let AI handle it but inject code generation context
   }
 
+  // ── Prayer times detection ────────────────────────────────────────────────
+  const prayerKeywords = [
+    'مواقيت الصلاة', 'وقت الصلاة', 'أوقات الصلاة', 'موعد الصلاة', 'الآذان',
+    'الفجر','الظهر','العصر','المغرب','العشاء',
+    'prayer times', 'prayer time', 'salat', 'salah times', 'azan', 'adhan',
+  ]
+  const isPrayerQuery = prayerKeywords.some(k => lowerMsg.includes(k))
+  let prayerContext = ''
+  if (isPrayerQuery) {
+    const city = detectCityFromQuery(lastUserMessage)
+    const prayerData = await fetchPrayerTimesAladhan(city)
+    if (prayerData) {
+      const times = Object.entries(prayerData.times).map(([name, time]) => `• ${name}: ${time}`).join('\n')
+      prayerContext = `\n\n--- 🕌 مواقيت الصلاة في ${city} — ${prayerData.date} ---\n${times}\n(المصدر: ${prayerData.source})\n---`
+    }
+  }
+
   // ── RSS News/Sports detection and fetch ───────────────────────────────────
   let rssContext = ''
   const newsQueryType = detectNewsQuery(lastUserMessage)
-  if (newsQueryType) {
+  if (newsQueryType && !isPrayerQuery) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
     let feedsToFetch = []
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
@@ -565,6 +717,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 3. For code requests: include comments, follow best practices, use proper error handling, format in markdown code blocks
 4. For GitHub actions (commit, PR): clearly describe what you will do and ask for confirmation
 5. Be concise, structured, and helpful. Use markdown formatting
+
+${prayerContext ? `## Prayer Times Data (real-time from aladhan.com)\n${prayerContext}\n\nPresent these prayer times clearly and beautifully. NEVER generate or guess prayer times — always use the data above.` : ''}
 
 ${rssContext ? `## Live News/Sports Data (fetched now)\n${rssContext}\n\nSummarize and explain this data in a helpful way. Include source links when available.` : ''}
 

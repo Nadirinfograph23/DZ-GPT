@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Newspaper, Trophy, Cloud, Wind, Droplets, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react'
+import { Newspaper, Trophy, Cloud, Wind, Droplets, ExternalLink, RefreshCw, AlertCircle, Moon } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
 interface NewsItem {
@@ -30,11 +30,43 @@ interface WeatherItem {
   error?: string
 }
 
+interface PrayerData {
+  city: string
+  date: string
+  source: string
+  times: Record<string, string>
+}
+
 interface DashboardData {
   news: NewsItem[]
   sports: SportItem[]
   weather: WeatherItem[]
   fetchedAt: string
+}
+
+const PRAYER_ICONS: Record<string, string> = {
+  'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤', 'المغرب': '🌇', 'العشاء': '🌙'
+}
+
+function PrayerCard({ data }: { data: PrayerData }) {
+  return (
+    <div className="dzd-prayer-card">
+      <div className="dzd-prayer-header">
+        <span className="dzd-prayer-city">🕌 {data.city}</span>
+        <span className="dzd-prayer-date">{data.date}</span>
+      </div>
+      <div className="dzd-prayer-grid">
+        {Object.entries(data.times).map(([name, time]) => (
+          <div key={name} className="dzd-prayer-item">
+            <span className="dzd-prayer-icon">{PRAYER_ICONS[name] || '🕐'}</span>
+            <span className="dzd-prayer-name">{name}</span>
+            <span className="dzd-prayer-time">{time}</span>
+          </div>
+        ))}
+      </div>
+      <div className="dzd-prayer-source">المصدر: {data.source}</div>
+    </div>
+  )
 }
 
 function WeatherCard({ item }: { item: WeatherItem }) {
@@ -133,7 +165,9 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'news' | 'sports' | 'weather'>('news')
+  const [tab, setTab] = useState<'news' | 'sports' | 'weather' | 'prayer'>('news')
+  const [prayerData, setPrayerData] = useState<PrayerData | null>(null)
+  const [prayerLoading, setPrayerLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -147,6 +181,20 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
       setError('تعذّر تحميل البيانات الحية. تحقق من الاتصال.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPrayer = async (city = 'Algiers') => {
+    setPrayerLoading(true)
+    try {
+      const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+      if (!r.ok) throw new Error('فشل جلب مواقيت الصلاة')
+      const d = await r.json()
+      setPrayerData(d)
+    } catch {
+      setPrayerData(null)
+    } finally {
+      setPrayerLoading(false)
     }
   }
 
@@ -182,6 +230,13 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
           >
             <Cloud size={14} />
             طقس
+          </button>
+          <button
+            className={`dzd-tab ${tab === 'prayer' ? 'dzd-tab--active' : ''}`}
+            onClick={() => { setTab('prayer'); if (!prayerData) loadPrayer() }}
+          >
+            <Moon size={14} />
+            صلاة
           </button>
         </div>
         <button className={`dzd-refresh ${loading ? 'dzd-refresh--spin' : ''}`} onClick={load} title="تحديث">
@@ -245,6 +300,35 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
               </div>
             )}
           </>
+        )}
+
+        {tab === 'prayer' && (
+          <div className="dzd-prayer-wrapper">
+            {prayerLoading && (
+              <div className="dzd-loading">
+                <div className="dzd-loading-dots"><span /><span /><span /></div>
+                <p>جارٍ تحميل مواقيت الصلاة...</p>
+              </div>
+            )}
+            {!prayerLoading && prayerData && (
+              <>
+                <PrayerCard data={prayerData} />
+                <div className="dzd-prayer-cities">
+                  {['Algiers','Oran','Constantine','Annaba','Bejaia','Setif','Tlemcen'].map(city => (
+                    <button key={city} className="dzd-prayer-city-btn" onClick={() => loadPrayer(city)}>
+                      {city}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {!prayerLoading && !prayerData && (
+              <div className="dzd-empty">
+                تعذّر تحميل مواقيت الصلاة
+                <button onClick={() => loadPrayer()} style={{ marginRight: 8 }}>إعادة المحاولة</button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

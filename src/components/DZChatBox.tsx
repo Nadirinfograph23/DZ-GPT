@@ -611,6 +611,7 @@ export default function DZChatBox() {
   const [oauthEnabled, setOauthEnabled] = useState(false)
   const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [showGhMenu, setShowGhMenu] = useState(false)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
@@ -629,6 +630,12 @@ export default function DZChatBox() {
         setGithubToken(token)
         localStorage.setItem('dz-agent-gh-token', token)
         window.history.replaceState(null, '', '/dz-agent')
+        // Auto-fetch user info and repos after OAuth connect
+        fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0' }
+        }).then(r => r.json()).then(u => {
+          setGithubUser({ login: u.login, name: u.name || u.login, avatar: u.avatar_url, url: u.html_url, repos: u.public_repos })
+        }).catch(() => {})
       }
     }
     const params = new URLSearchParams(window.location.search)
@@ -686,6 +693,9 @@ export default function DZChatBox() {
 
   const clearToken = useCallback(() => {
     setGithubToken('')
+    setGithubUser(null)
+    setServerGithubConnected(false)
+    setShowGhMenu(false)
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
@@ -968,23 +978,43 @@ export default function DZChatBox() {
       {/* GitHub Bar */}
       <div className="dz-gh-bar">
         {isGithubConnected ? (
-          <div className="gh-token-set">
-            {githubUser?.avatar ? (
-              <a href={githubUser.url} target="_blank" rel="noreferrer" className="gh-user-link">
-                <img src={githubUser.avatar} alt={githubUser.login} className="gh-user-avatar" />
-                <span className="gh-user-name">{githubUser.name}</span>
-                <span className="gh-user-repos">({githubUser.repos} repos)</span>
-              </a>
-            ) : (
-              <>
-                <Github size={13} />
-                <span>{serverGithubConnected && !githubToken ? 'GitHub متصل (الخادم)' : 'GitHub متصل ✓'}</span>
-              </>
-            )}
-            {githubToken && (
-              <button className="gh-token-clear" onClick={clearToken} title="قطع الاتصال">
-                <Trash2 size={12} />
-              </button>
+          <div className="gh-connected-wrapper" style={{ position: 'relative' }}>
+            <button
+              className="gh-token-set gh-connected-btn"
+              onClick={() => setShowGhMenu(v => !v)}
+              title="خيارات GitHub"
+            >
+              {githubUser?.avatar ? (
+                <>
+                  <img src={githubUser.avatar} alt={githubUser.login} className="gh-user-avatar" />
+                  <span className="gh-user-name">{githubUser.name || githubUser.login}</span>
+                  <span className="gh-user-repos">({githubUser.repos} repos)</span>
+                </>
+              ) : (
+                <>
+                  <Github size={13} />
+                  <span>GitHub متصل ✓</span>
+                </>
+              )}
+              <ChevronDown size={12} className={showGhMenu ? 'rotated' : ''} />
+            </button>
+            {showGhMenu && (
+              <div className="gh-dropdown-menu">
+                <button className="gh-dropdown-item" onClick={() => { setShowGhMenu(false); fetchRepos() }}>
+                  <FolderOpen size={13} />
+                  عرض مستودعاتي
+                </button>
+                {githubUser?.url && (
+                  <a href={githubUser.url} target="_blank" rel="noreferrer" className="gh-dropdown-item">
+                    <Github size={13} />
+                    فتح الملف الشخصي
+                  </a>
+                )}
+                <button className="gh-dropdown-item gh-dropdown-item--danger" onClick={clearToken}>
+                  <Trash2 size={13} />
+                  تسجيل الخروج
+                </button>
+              </div>
             )}
           </div>
         ) : oauthEnabled ? (

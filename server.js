@@ -312,13 +312,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Local knowledge base ──────────────────────────────────────────────────
   const developerQuestions = [
-    'من هو مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك',
-    'who is your developer', 'who made you', 'who created you', 'who built you', 'who programmed you',
-    'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui vous a fait',
+    'من هو مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك', 'من طور dz agent', 'من صمم',
+    'who is your developer', 'who made you', 'who created you', 'who built you', 'who programmed you', 'who designed you',
+    'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui vous a fait', 'qui a développé',
+    'who is dz agent developer', 'من هو مطور', 'مطور dz', 'مطور الوكيل',
   ]
   if (developerQuestions.some(q => lowerMsg.includes(q))) {
     return res.status(200).json({
-      content: 'نذير حوامرية | Nadir Infograph, خبير في مجال الذكاء الاصطناعي 🇩🇿',
+      content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
     })
   }
 
@@ -368,6 +369,41 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // Detect: create PR / commit intent
+  const isPRIntent = [
+    'أنشئ pull request', 'انشئ pull request', 'إنشاء pull request',
+    'أنشئ pr', 'انشئ pr', 'إنشاء pr', 'اعمل pr', 'اعمل pull request',
+    'create pull request', 'create a pr', 'open a pr', 'create pr',
+    'créer une pull request', 'créer un pr',
+  ].some(p => lowerMsg.includes(p))
+
+  const isCommitIntent = [
+    'commit هذا', 'كوميت', 'احفظ التعديلات', 'احفظ الملف', 'commit this',
+    'commit changes', 'commit the file', 'save to github', 'push commit',
+    'commit and push', 'اعمل commit', 'ارفع التعديلات',
+  ].some(p => lowerMsg.includes(p))
+
+  if (isPRIntent && currentRepo && githubToken) {
+    const branch = `dz-agent/${Date.now()}`
+    return res.status(200).json({
+      content: `سأقوم بإنشاء Pull Request في المستودع **${currentRepo}**.\n\nالفرع: \`${branch}\` ← \`main\`\n\nهل تريد المتابعة؟`,
+      pendingAction: {
+        type: 'pr',
+        repo: currentRepo,
+        title: `DZ Agent: تحسينات تلقائية`,
+        body: `Pull Request تلقائي من DZ Agent\n\nطُلب بواسطة: ${lastUserMessage}`,
+        branch,
+        base: 'main',
+      },
+    })
+  }
+
+  if (isCommitIntent && currentRepo && githubToken) {
+    return res.status(200).json({
+      content: `لإتمام الـ Commit، حدد الملف الذي تريد حفظ تعديلاته في مستودع **${currentRepo}**.\n\nيمكنك فتح الملف أولاً باستخدام FileViewer ثم طلب الـ Commit.`,
+    })
+  }
+
   // Detect: generate code request
   const isGenerateCode = [
     'generate', 'write a', 'create a script', 'create a function', 'write code',
@@ -400,28 +436,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
   const groqKey = process.env.AI_API_KEY
 
-  const systemPrompt = `You are DZ Agent, an advanced multilingual AI assistant, news aggregator, and code agent created by Nadir Houamria (Nadir Infograph).
+  const systemPrompt = `You are DZ Agent — a powerful multilingual AI assistant, Algerian news aggregator, and GitHub code agent created by **Nadir Houamria (Nadir Infograph)**, an expert in Artificial Intelligence.
 
-You can:
-- Provide real-time news from Algerian and international sources (RSS feeds)
-- Show sports results, match scores, football news (local & international)
-- Help with GitHub repositories: reading, creating, and editing files
-- Analyze and improve code in any language (Python, JavaScript, TypeScript, HTML/CSS, etc.)
-- Generate clean, well-documented code from descriptions
-- Suggest fixes, improvements, and unit tests
-- Respond in Arabic, English, or French based on the user's language
+## Your Capabilities
+- **Algerian & Sports News**: Real-time RSS feeds (APS, النهار, البلاد, الحياة, كووورة, FIFA)
+- **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
+- **Code Intelligence**: Analyze, debug, generate, and improve code in any language
+- **AI-Powered Answers**: Always respond using the most capable AI model available on this platform
+- **Multilingual**: Respond in Arabic, English, or French — matching the user's language
 
-${rssContext ? `You have access to the following LIVE news/sports data fetched right now:\n${rssContext}\n\nWhen answering, use this data to give accurate, up-to-date answers. Always include source links when available.` : ''}
+## Key Rules
+1. **ALWAYS use AI reasoning** to formulate every response — never dump raw data without explanation
+2. When RSS data is available, interpret and summarize it meaningfully with context
+3. For code requests: include comments, follow best practices, use proper error handling, format in markdown code blocks
+4. For GitHub actions (commit, PR): clearly describe what you will do and ask for confirmation
+5. Be concise, structured, and helpful. Use markdown formatting
 
-${githubToken ? `GitHub is connected. Current repo context: ${currentRepo || 'none selected'}.` : 'GitHub is not connected. If the user asks about GitHub, remind them to connect their token.'}
+${rssContext ? `## Live News/Sports Data (fetched now)\n${rssContext}\n\nSummarize and explain this data in a helpful way. Include source links when available.` : ''}
 
-When generating code, always:
-1. Include helpful comments
-2. Follow best practices
-3. Use proper error handling
-4. Format code in markdown code blocks
-
-Be concise, accurate, and helpful. Use markdown formatting.`
+${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${currentRepo || 'none selected'}.\nYou can: list files, read code, create commits, and open Pull Requests.` : '## GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.'}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },
@@ -491,12 +524,12 @@ Be concise, accurate, and helpful. Use markdown formatting.`
   // If RSS context available, return it directly even without AI
   if (rssContext) {
     return res.status(200).json({
-      content: `${rssContext}\n\n_لتلخيص الأخبار بشكل أفضل، يرجى إضافة مفتاح AI_API_KEY._\n_To get AI-summarized results, add AI_API_KEY (Groq) to your configuration._`,
+      content: `${rssContext}\n\n---\n> **ملاحظة:** لتلقي إجابات أكثر ذكاءً وتلخيصاً للأخبار، يمكن إضافة مفتاح \`AI_API_KEY\` (Groq) في إعدادات المشروع.`,
     })
   }
 
   return res.status(200).json({
-    content: 'مرحباً! أنا DZ Agent — مساعدك الذكي متعدد اللغات 🇩🇿\n\nيمكنني مساعدتك في:\n- 📰 أخبار الجزائر الوطنية (APS، النهار، البلاد، الحياة)\n- ⚽ أخبار ونتائج كرة القدم (كووورة، FIFA)\n- 🗂️ استعراض مستودعات GitHub\n- 💻 تحليل وإنشاء الأكواد البرمجية\n\nجرب: "أخبار الجزائر اليوم" أو "نتائج مباريات كرة القدم"\n\n_No AI API key configured — add AI_API_KEY (Groq) or DEEPSEEK_API_KEY for AI summarization._',
+    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**أستطيع مساعدتك في:**\n- 📰 أخبار الجزائر الوطنية (APS، النهار، البلاد)\n- ⚽ نتائج مباريات كرة القدم (كووورة، FIFA)\n- 🗂️ إدارة مستودعات GitHub (قراءة، تعديل، Commit، PR)\n- 💻 تحليل وإنشاء الأكواد البرمجية\n- 🤖 الإجابة على أسئلتك بالعربية أو الإنجليزية أو الفرنسية\n\nجرّب: **"أخبار اليوم"** أو **"اعرض مستودعاتي"** أو **"اكتب لي دالة Python"**',
   })
 })
 
@@ -515,6 +548,60 @@ async function ghFetch(endpoint, token, options = {}) {
   })
   return res
 }
+
+// ===== GITHUB OAUTH =====
+function getBaseUrl(req) {
+  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`
+  const proto = req.headers['x-forwarded-proto'] || req.protocol
+  return `${proto}://${req.get('host')}`
+}
+
+app.get('/api/auth/github', (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID
+  if (!clientId) {
+    return res.status(500).send('GitHub OAuth غير مُهيَّأ. أضف GITHUB_CLIENT_ID إلى الأسرار.')
+  }
+  const redirectUri = `${getBaseUrl(req)}/api/auth/github/callback`
+  const scope = 'repo user read:user'
+  const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
+  res.redirect(authUrl)
+})
+
+app.get('/api/auth/github/callback', async (req, res) => {
+  const { code } = req.query
+  const clientId = process.env.GITHUB_CLIENT_ID
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET
+
+  if (!code || !clientId || !clientSecret) {
+    return res.redirect('/dz-agent?auth_error=config')
+  }
+
+  try {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+    })
+    const data = await tokenRes.json()
+
+    if (data.access_token) {
+      return res.redirect(`/dz-agent#gh_oauth=${data.access_token}`)
+    } else {
+      console.error('GitHub OAuth error:', data.error_description || data.error)
+      return res.redirect('/dz-agent?auth_error=denied')
+    }
+  } catch (err) {
+    console.error('GitHub OAuth callback error:', err)
+    return res.redirect('/dz-agent?auth_error=server')
+  }
+})
+
+// Check if server has GitHub token configured
+app.get('/api/dz-agent/github/status', (_req, res) => {
+  const hasToken = !!process.env.GITHUB_TOKEN
+  const hasOAuth = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+  res.status(200).json({ connected: hasToken, oauthEnabled: hasOAuth })
+})
 
 // List repositories
 app.post('/api/dz-agent/github/repos', async (req, res) => {

@@ -3,7 +3,7 @@ import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
   CheckCircle2, XCircle, GitCommit, GitPullRequest,
-  Key, Trash2, RefreshCw, Terminal, Zap, BookOpen, List,
+  Key, Trash2, RefreshCw, Terminal, Zap,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
@@ -427,15 +427,106 @@ function GitHubTokenPanel({
   )
 }
 
-// ===== QUICK COMMANDS (Arabic) =====
-const QUICK_COMMANDS = [
-  { label: 'مستودعاتي', icon: List, command: 'اعرض مستودعاتي' },
-  { label: 'توليد كود', icon: Zap, command: 'اكتب سكريبت Python بسيط' },
-  { label: 'تحليل الكود', icon: BookOpen, command: 'حلل الكود في مستودعي' },
-  { label: 'أخبار اليوم', icon: BookOpen, command: 'أخبار الجزائر اليوم' },
-  { label: 'نتائج الكرة', icon: Zap, command: 'نتائج مباريات كرة القدم' },
-  { label: 'إنشاء PR', icon: GitPullRequest, command: 'أنشئ Pull Request' },
+// ===== SUGGESTION CARDS =====
+interface SuggestionCard {
+  id: string
+  icon: string
+  category: string
+  color: string
+  glow: string
+  border: string
+  suggestions: { label: string; command: string }[]
+}
+
+const SUGGESTION_CARDS: SuggestionCard[] = [
+  {
+    id: 'news',
+    icon: '📰',
+    category: 'أخبار',
+    color: '#c8ff00',
+    glow: 'rgba(200,255,0,0.12)',
+    border: 'rgba(200,255,0,0.2)',
+    suggestions: [
+      { label: 'أخبار الجزائر الآن', command: 'أخبار الجزائر اليوم' },
+      { label: 'آخر الأحداث العربية', command: 'آخر الأحداث العربية والدولية اليوم' },
+      { label: 'أبرز عناوين الصحف', command: 'أبرز عناوين الصحف الجزائرية اليوم' },
+    ],
+  },
+  {
+    id: 'sports',
+    icon: '⚽',
+    category: 'رياضة',
+    color: '#00ff88',
+    glow: 'rgba(0,255,136,0.12)',
+    border: 'rgba(0,255,136,0.2)',
+    suggestions: [
+      { label: 'نتائج مباريات اليوم', command: 'نتائج مباريات كرة القدم اليوم' },
+      { label: 'جدول الدوري الجزائري', command: 'جدول وترتيب الدوري الجزائري المحترف' },
+      { label: 'أخبار المنتخب الوطني', command: 'أخبار المنتخب الجزائري لكرة القدم' },
+    ],
+  },
+  {
+    id: 'weather',
+    icon: '🌦',
+    category: 'طقس',
+    color: '#38bdf8',
+    glow: 'rgba(56,189,248,0.12)',
+    border: 'rgba(56,189,248,0.2)',
+    suggestions: [
+      { label: 'طقس الجزائر العاصمة', command: 'حالة الطقس في الجزائر العاصمة اليوم' },
+      { label: 'طقس وهران وقسنطينة', command: 'حالة الطقس في وهران وقسنطينة' },
+      { label: 'توقعات الأسبوع', command: 'توقعات الطقس في الجزائر هذا الأسبوع' },
+    ],
+  },
+  {
+    id: 'code',
+    icon: '💻',
+    category: 'GitHub & كود',
+    color: '#a78bfa',
+    glow: 'rgba(167,139,250,0.12)',
+    border: 'rgba(167,139,250,0.2)',
+    suggestions: [
+      { label: 'عرض مستودعاتي', command: 'اعرض مستودعاتي على GitHub' },
+      { label: 'تحليل الكود', command: 'حلل الكود في مستودعي وأعطني تقريراً' },
+      { label: 'إنشاء مشروع جديد', command: 'ساعدني في إنشاء مشروع Python جديد على GitHub' },
+    ],
+  },
 ]
+
+function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
+  return (
+    <div className="dz-cards-grid">
+      {SUGGESTION_CARDS.map(card => (
+        <div
+          key={card.id}
+          className="dz-scard"
+          style={{
+            '--card-glow': card.glow,
+            '--card-border': card.border,
+            '--card-color': card.color,
+          } as React.CSSProperties}
+        >
+          <div className="dz-scard-header">
+            <span className="dz-scard-icon">{card.icon}</span>
+            <span className="dz-scard-category" style={{ color: card.color }}>{card.category}</span>
+          </div>
+          <div className="dz-scard-suggestions">
+            {card.suggestions.map((s, i) => (
+              <button
+                key={i}
+                className="dz-scard-chip"
+                onClick={() => onSend(s.command)}
+              >
+                <span className="dz-scard-chip-arrow">›</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // ===== MAIN COMPONENT =====
 export default function DZChatBox() {
@@ -859,14 +950,7 @@ export default function DZChatBox() {
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
 
-          <div className="dz-quick-commands">
-            {QUICK_COMMANDS.map((cmd, i) => (
-              <button key={i} className="dz-quick-cmd" onClick={() => sendMessage(cmd.command)}>
-                <cmd.icon size={15} />
-                <span>{cmd.label}</span>
-              </button>
-            ))}
-          </div>
+          <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
         </div>
       )}
 

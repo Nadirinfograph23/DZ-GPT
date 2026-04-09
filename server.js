@@ -81,97 +81,105 @@ app.post('/api/dz-agent-search', async (req, res) => {
   if (!query) return res.status(400).json({ error: 'Query required.' })
 
   console.log(`[DZ Search] Query: ${query}`)
-  const results = []
 
-  // ── DuckDuckGo Instant Answer ──────────────────────────────────────────────
-  try {
-    const ddgRes = await fetch(
-      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-      { headers: { 'Accept': 'application/json' } }
-    )
-    if (ddgRes.ok) {
-      const ddg = await ddgRes.json()
+  const signal = AbortSignal.timeout(8000)
+
+  // Run all sources in parallel for speed
+  const [ddgResult, wikiResult, wikidataResult, soResult] = await Promise.allSettled([
+
+    // ── DuckDuckGo Instant Answer ─────────────────────────────────────────────
+    (async () => {
+      const r = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+        { headers: { 'Accept': 'application/json' }, signal }
+      )
+      if (!r.ok) return []
+      const ddg = await r.json()
       if (ddg.AbstractText) {
-        results.push({
-          source: 'DuckDuckGo',
-          title: ddg.Heading || query,
-          snippet: ddg.AbstractText.slice(0, 400),
-          url: ddg.AbstractURL || undefined,
-        })
-      } else if (ddg.RelatedTopics?.length > 0) {
-        for (const topic of ddg.RelatedTopics.slice(0, 2)) {
-          if (topic.Text) {
-            results.push({
-              source: 'DuckDuckGo',
-              title: topic.Text.split(' - ')[0] || query,
-              snippet: topic.Text.slice(0, 300),
-              url: topic.FirstURL || undefined,
-            })
+        return [{ source: 'DuckDuckGo', title: ddg.Heading || query, snippet: ddg.AbstractText.slice(0, 400), url: ddg.AbstractURL || undefined }]
+      }
+      if (ddg.RelatedTopics?.length > 0) {
+        return ddg.RelatedTopics.slice(0, 2)
+          .filter(t => t.Text)
+          .map(t => ({ source: 'DuckDuckGo', title: t.Text.split(' - ')[0] || query, snippet: t.Text.slice(0, 300), url: t.FirstURL || undefined }))
+      }
+      return []
+    })(),
+
+    // ── Wikipedia (REST summary + search — proper server-side headers) ────────
+    (async () => {
+      const isArabic = /[\u0600-\u06FF]/.test(query)
+      const lang = isArabic ? 'ar' : 'en'
+      const wikiHeaders = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
+
+      // Try REST summary first (fastest)
+      try {
+        const summaryR = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.split(' ').slice(0, 3).join('_'))}`,
+          { headers: wikiHeaders, signal }
+        )
+        if (summaryR.ok) {
+          const s = await summaryR.json()
+          if (s.extract) {
+            return [{ source: 'Wikipedia', title: s.title, snippet: s.extract.slice(0, 400), url: s.content_urls?.desktop?.page }]
           }
         }
-      }
-    }
-  } catch (e) { console.error('[DZ Search] DDG error:', e) }
+      } catch (_) {}
 
-  // ── Wikipedia Search ───────────────────────────────────────────────────────
-  try {
-    const wikiSearchRes = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2&origin=*`
-    )
-    if (wikiSearchRes.ok) {
-      const wikiSearch = await wikiSearchRes.json()
-      const pages = wikiSearch?.query?.search || []
-      for (const page of pages.slice(0, 1)) {
-        const snippet = page.snippet.replace(/<[^>]*>/g, '')
-        results.push({
-          source: 'Wikipedia',
-          title: page.title,
-          snippet: snippet.slice(0, 400),
-          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title)}`,
-        })
-      }
-    }
-  } catch (e) { console.error('[DZ Search] Wikipedia error:', e) }
+      // Fallback: search API (no origin param for server-side)
+      const r = await fetch(
+        `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2`,
+        { headers: wikiHeaders, signal }
+      )
+      if (!r.ok) return []
+      const d = await r.json()
+      return (d?.query?.search || []).slice(0, 1).map(p => ({
+        source: 'Wikipedia',
+        title: p.title,
+        snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
+        url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
+      }))
+    })(),
 
-  // ── Wikidata ───────────────────────────────────────────────────────────────
-  try {
-    const wdRes = await fetch(
-      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=ar&format=json&limit=2&origin=*`
-    )
-    if (wdRes.ok) {
-      const wd = await wdRes.json()
-      const entities = wd?.search || []
-      for (const entity of entities.slice(0, 1)) {
-        if (entity.description) {
-          results.push({
-            source: 'Wikidata',
-            title: entity.label || query,
-            snippet: entity.description,
-            url: entity.concepturi || `https://www.wikidata.org/wiki/${entity.id}`,
-          })
-        }
-      }
-    }
-  } catch (e) { console.error('[DZ Search] Wikidata error:', e) }
+    // ── Wikidata ──────────────────────────────────────────────────────────────
+    (async () => {
+      const lang = /[\u0600-\u06FF]/.test(query) ? 'ar' : 'en'
+      const r = await fetch(
+        `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=${lang}&format=json&limit=2`,
+        { headers: { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }, signal }
+      )
+      if (!r.ok) return []
+      const d = await r.json()
+      return (d?.search || []).slice(0, 1)
+        .filter(e => e.description)
+        .map(e => ({ source: 'Wikidata', title: e.label || query, snippet: e.description, url: e.concepturi || `https://www.wikidata.org/wiki/${e.id}` }))
+    })(),
 
-  // ── StackOverflow ──────────────────────────────────────────────────────────
-  try {
-    const soRes = await fetch(
-      `https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=${encodeURIComponent(query)}&site=stackoverflow&pagesize=2&filter=withbody`
-    )
-    if (soRes.ok) {
-      const so = await soRes.json()
-      const items = so?.items || []
-      for (const item of items.slice(0, 1)) {
-        results.push({
-          source: 'StackOverflow',
-          title: item.title,
-          snippet: `${item.answer_count} إجابة · ${item.score} نقطة`,
-          url: item.link,
-        })
-      }
-    }
-  } catch (e) { console.error('[DZ Search] SO error:', e) }
+    // ── StackOverflow (code queries only) ────────────────────────────────────
+    (async () => {
+      const isCode = /\b(code|function|error|bug|api|python|javascript|js|react|node)\b/i.test(query)
+      if (!isCode) return []
+      const r = await fetch(
+        `https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=${encodeURIComponent(query)}&site=stackoverflow&pagesize=2`,
+        { signal }
+      )
+      if (!r.ok) return []
+      const d = await r.json()
+      return (d?.items || []).slice(0, 1).map(item => ({
+        source: 'StackOverflow',
+        title: item.title,
+        snippet: `${item.answer_count} إجابة · ${item.score} نقطة`,
+        url: item.link,
+      }))
+    })(),
+  ])
+
+  const results = [
+    ...(ddgResult.status === 'fulfilled' ? ddgResult.value : []),
+    ...(wikiResult.status === 'fulfilled' ? wikiResult.value : []),
+    ...(wikidataResult.status === 'fulfilled' ? wikidataResult.value : []),
+    ...(soResult.status === 'fulfilled' ? soResult.value : []),
+  ]
 
   console.log(`[DZ Search] Returning ${results.length} results`)
   return res.status(200).json({ results })
@@ -183,16 +191,14 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 const RSS_FEEDS = {
   national: [
-    { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/rss' },
+    { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/ar/feed' },
     { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
     { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
-    { name: 'الحياة', url: 'https://www.elhayat-dz.com/feed/' },
-    { name: 'جزايرس', url: 'https://www.djazairess.com/fr/feed' },
+    { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
   ],
   sports: [
-    { name: 'كووورة', url: 'https://www.kooora.com/rss' },
-    { name: 'FIFA', url: 'https://www.fifa.com/rss-feeds' },
-    { name: 'جزايرس رياضة', url: 'https://www.djazairess.com/fr/feed' },
+    { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
+    { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
   ],
 }
 
@@ -308,8 +314,8 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'العربية', url: 'https://www.alarabiya.net/.mrss/ar.xml' },
 ]
 const SPORTS_FEEDS_DASHBOARD = [
-  { name: 'كووورة', url: 'https://www.kooora.com/rss' },
-  { name: 'جزايرس', url: 'https://www.djazairess.com/fr/feed' },
+  { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
+  { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
 ]
 
 async function fetchWeatherAlgiers() {

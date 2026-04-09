@@ -6,6 +6,7 @@ import {
   Key, Trash2, RefreshCw, Terminal, Zap, BookOpen, List,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import DZDashboard from './DZDashboard'
 
 // ===== TYPES =====
 type RichType =
@@ -835,7 +836,7 @@ export default function DZChatBox() {
           </div>
           <h2 className="dz-welcome-title">DZ Agent</h2>
           <p className="dz-welcome-sub">
-            مساعدك الذكي للأخبار · GitHub · توليد الكود
+            مساعدك الذكي للأخبار · الرياضة · الطقس · GitHub
             {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
           </p>
 
@@ -853,26 +854,16 @@ export default function DZChatBox() {
             </div>
           )}
 
+          {/* Live Dashboard Cards — unique to DZ Agent */}
+          <div className="dz-dashboard-wrapper">
+            <DZDashboard onSend={(q) => sendMessage(q)} />
+          </div>
+
           <div className="dz-quick-commands">
             {QUICK_COMMANDS.map((cmd, i) => (
               <button key={i} className="dz-quick-cmd" onClick={() => sendMessage(cmd.command)}>
                 <cmd.icon size={15} />
                 <span>{cmd.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="dz-suggestions">
-            {[
-              'أخبار الجزائر اليوم',
-              'نتائج مباريات كرة القدم',
-              'اعرض مستودعاتي على GitHub',
-              'اكتب لي دالة Python لفرز قائمة',
-              'ابحث عن حل في StackOverflow لخطأ NullPointerException',
-              'من هو مطورك؟',
-            ].map((s, i) => (
-              <button key={i} className="dz-suggestion-btn" onClick={() => sendMessage(s)}>
-                {s}
               </button>
             ))}
           </div>

@@ -580,8 +580,9 @@ export default function DZChatBox() {
       .catch(() => {})
   }, [])
 
-  // Auto-scroll
+  // Auto-scroll — only when there are messages or loading, not on empty state
   useEffect(() => {
+    if (messages.length === 0 && !isLoading) return
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
@@ -919,8 +920,8 @@ export default function DZChatBox() {
       {/* Action Log Panel */}
       {showLog && <ActionLogPanel entries={actionLog} />}
 
-      {/* Welcome Screen */}
-      {messages.length === 0 && !showLog && (
+      {/* Welcome Screen OR Messages — mutually exclusive to avoid flex space split */}
+      {messages.length === 0 && !isLoading && !showLog ? (
         <div className="dz-welcome">
           <div className="dz-welcome-icon">
             <Bot size={40} />
@@ -952,9 +953,8 @@ export default function DZChatBox() {
 
           <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
         </div>
-      )}
-
-      {/* Messages */}
+      ) : (
+      /* Messages */
       <div className="dz-messages">
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
@@ -1069,6 +1069,7 @@ export default function DZChatBox() {
 
         <div ref={messagesEndRef} />
       </div>
+      )}
 
       {/* Input */}
       <div className="dz-input-area">

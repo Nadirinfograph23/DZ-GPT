@@ -32,6 +32,8 @@ The following secrets must be configured in Replit's Secrets tab:
 
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
+- `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
+- `POST /api/dz-agent/deploy` — Trigger Vercel production redeploy
 - Various GitHub API proxy routes
 
 ## Key Files

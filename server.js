@@ -338,7 +338,7 @@ const SPORTS_FEEDS_DASHBOARD = [
 ]
 
 async function fetchWeatherAlgiers() {
-  const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine']
+  const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine', 'Annaba']
   const apiKey = process.env.OPENWEATHER_API_KEY
   if (!apiKey) {
     return WEATHER_CITIES.map(city => ({ city, temp: null, condition: null, icon: null, error: 'No API key' }))

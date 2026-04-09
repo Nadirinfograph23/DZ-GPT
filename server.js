@@ -1,5 +1,4 @@
 import express from 'express'
-import { createServer as createViteServer } from 'vite'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import crypto from 'crypto'
@@ -1022,6 +1021,7 @@ if (isMain) {
     })
   } else {
     // Dev: embed Vite as middleware so both API and frontend run on port 5000
+    const { createServer: createViteServer } = await import('vite')
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

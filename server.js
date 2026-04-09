@@ -1005,23 +1005,30 @@ app.post('/api/dz-agent/github/pr', async (req, res) => {
   }
 })
 
-// ===== SERVE FRONTEND =====
-if (isProd) {
-  app.use(express.static(path.join(__dirname, 'dist')))
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'))
-  })
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`)
-  })
-} else {
-  // Dev: embed Vite as middleware so both API and frontend run on port 5000
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  })
-  app.use(vite.middlewares)
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Dev server running on http://0.0.0.0:${PORT}`)
-  })
+// ===== EXPORT APP (for Vercel serverless) =====
+export { app }
+
+// ===== SERVE FRONTEND + START SERVER (only when run directly) =====
+const isMain = process.argv[1] === fileURLToPath(import.meta.url)
+
+if (isMain) {
+  if (isProd) {
+    app.use(express.static(path.join(__dirname, 'dist')))
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+    })
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`)
+    })
+  } else {
+    // Dev: embed Vite as middleware so both API and frontend run on port 5000
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    })
+    app.use(vite.middlewares)
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Dev server running on http://0.0.0.0:${PORT}`)
+    })
+  }
 }

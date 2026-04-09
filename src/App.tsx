@@ -314,8 +314,9 @@ function App() {
     setTimeout(() => setCopiedId(null), 2000)
   }, [])
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading) return
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
+    if (!text || isLoading) return
 
     let currentChatId = activeChatId
     let currentChats = chats
@@ -323,7 +324,7 @@ function App() {
     if (!currentChatId) {
       const newChat: Chat = {
         id: generateId(),
-        title: input.trim().substring(0, 60),
+        title: text.substring(0, 60),
         messages: [],
         modelId: selectedModel,
       }
@@ -336,7 +337,7 @@ function App() {
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
-      content: input.trim(),
+      content: text,
     }
 
     const updatedChats = currentChats.map(c => {
@@ -344,7 +345,7 @@ function App() {
         return {
           ...c,
           messages: [...c.messages, userMessage],
-          title: c.messages.length === 0 ? input.trim().substring(0, 60) : c.title,
+          title: c.messages.length === 0 ? text.substring(0, 60) : c.title,
         }
       }
       return c
@@ -412,7 +413,7 @@ function App() {
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, activeChatId, chats, selectedModel, isPdfModel, pdfText])
+  }, [input, isLoading, activeChatId, chats, selectedModel, isPdfModel, pdfText, setInput])
 
   const regenerate = useCallback(async () => {
     if (!activeChat || activeChat.messages.length < 2 || isLoading) return
@@ -780,7 +781,7 @@ function App() {
                   <button
                     key={i}
                     className="suggestion-btn"
-                    onClick={() => setInput(suggestion)}
+                    onClick={() => sendMessage(suggestion)}
                   >
                     {suggestion}
                   </button>
@@ -945,7 +946,7 @@ function App() {
               ) : (
                 <button
                   className="send-btn"
-                  onClick={sendMessage}
+                  onClick={() => sendMessage()}
                   disabled={!input.trim()}
                   style={input.trim() ? { background: currentModel.color } : undefined}
                 >

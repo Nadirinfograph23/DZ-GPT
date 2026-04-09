@@ -426,12 +426,14 @@ function GitHubTokenPanel({
   )
 }
 
-// ===== QUICK COMMANDS =====
+// ===== QUICK COMMANDS (Arabic) =====
 const QUICK_COMMANDS = [
-  { label: 'My Repos', icon: List, command: 'Show my repositories' },
-  { label: 'Generate Code', icon: Zap, command: 'Generate a Python hello world script' },
-  { label: 'Analyze Code', icon: BookOpen, command: 'Analyze the code in my repository' },
-  { label: 'Create PR', icon: GitPullRequest, command: 'Create a pull request' },
+  { label: 'مستودعاتي', icon: List, command: 'اعرض مستودعاتي' },
+  { label: 'توليد كود', icon: Zap, command: 'اكتب سكريبت Python بسيط' },
+  { label: 'تحليل الكود', icon: BookOpen, command: 'حلل الكود في مستودعي' },
+  { label: 'أخبار اليوم', icon: BookOpen, command: 'أخبار الجزائر اليوم' },
+  { label: 'نتائج الكرة', icon: Zap, command: 'نتائج مباريات كرة القدم' },
+  { label: 'إنشاء PR', icon: GitPullRequest, command: 'أنشئ Pull Request' },
 ]
 
 // ===== MAIN COMPONENT =====
@@ -444,6 +446,9 @@ export default function DZChatBox() {
   const [githubToken, setGithubToken] = useState<string>(() =>
     localStorage.getItem('dz-agent-gh-token') || ''
   )
+  const [serverGithubConnected, setServerGithubConnected] = useState(false)
+  const [oauthEnabled, setOauthEnabled] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
@@ -452,6 +457,36 @@ export default function DZChatBox() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Handle OAuth callback from URL hash & auth errors from URL params
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.startsWith('#gh_oauth=')) {
+      const token = hash.replace('#gh_oauth=', '')
+      if (token) {
+        setGithubToken(token)
+        localStorage.setItem('dz-agent-gh-token', token)
+        window.history.replaceState(null, '', '/dz-agent')
+      }
+    }
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('auth_error')
+    if (err) {
+      setAuthError(err === 'denied' ? 'رفضت الإذن على GitHub.' : 'فشل الاتصال بـ GitHub. حاول مجدداً.')
+      window.history.replaceState(null, '', '/dz-agent')
+    }
+  }, [])
+
+  // Check server GitHub connection on mount
+  useEffect(() => {
+    fetch('/api/dz-agent/github/status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.connected) setServerGithubConnected(true)
+        if (d.oauthEnabled) setOauthEnabled(true)
+      })
+      .catch(() => {})
+  }, [])
 
   // Auto-scroll
   useEffect(() => {
@@ -498,8 +533,8 @@ export default function DZChatBox() {
 
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
-    if (!githubToken) {
-      addAssistantMessage({ content: 'Please connect your GitHub token first to list repositories.', richType: 'text' })
+    if (!githubToken && !serverGithubConnected) {
+      addAssistantMessage({ content: 'يرجى ربط توكن GitHub أولاً لعرض المستودعات. انقر على "ربط GitHub" في الأعلى.', richType: 'text' })
       return
     }
     setIsLoading(true)
@@ -524,7 +559,7 @@ export default function DZChatBox() {
   }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFiles = useCallback(async (repo: string, path = '') => {
-    if (!githubToken) return
+    if (!githubToken && !serverGithubConnected) return
     setIsLoading(true)
     addToLog({ type: 'list-files', description: `Browsing ${repo}${path ? '/' + path : ''}`, status: 'pending', repo })
     try {
@@ -549,7 +584,7 @@ export default function DZChatBox() {
   }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFileContent = useCallback(async (repo: string, path: string) => {
-    if (!githubToken) return
+    if (!githubToken && !serverGithubConnected) return
     setIsLoading(true)
     addToLog({ type: 'read-file', description: `Reading ${path} from ${repo}`, status: 'pending', repo })
     try {
@@ -743,33 +778,80 @@ export default function DZChatBox() {
     setTypingId(null)
   }
 
+  const isGithubConnected = serverGithubConnected || !!githubToken
+
   // ===== RENDER =====
   return (
-    <div className="dz-chatbox">
-      {/* GitHub Token Panel */}
+    <div className="dz-chatbox" dir="rtl">
+      {/* GitHub Bar */}
       <div className="dz-gh-bar">
-        <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
+        {isGithubConnected ? (
+          <div className="gh-token-set">
+            <Github size={13} />
+            <span>{serverGithubConnected && !githubToken ? 'GitHub متصل (الخادم)' : 'GitHub متصل ✓'}</span>
+            {githubToken && (
+              <button className="gh-token-clear" onClick={clearToken} title="قطع الاتصال">
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
+        ) : oauthEnabled ? (
+          <div className="gh-oauth-section">
+            <a href="/api/auth/github" className="gh-oauth-connect-btn">
+              <Github size={14} />
+              الاتصال بـ GitHub
+            </a>
+            <span className="gh-oauth-optional">اختياري · للمشاريع والكود</span>
+          </div>
+        ) : (
+          <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
+        )}
         <button
           className={`gh-log-toggle ${showLog ? 'active' : ''}`}
           onClick={() => setShowLog(!showLog)}
-          title="Action Log"
+          title="سجل الإجراءات"
         >
           <Terminal size={13} />
-          Log ({actionLog.length})
+          السجل ({actionLog.length})
         </button>
       </div>
+
+      {/* Auth error */}
+      {authError && (
+        <div className="dz-auth-error">
+          <span>⚠️ {authError}</span>
+          <button onClick={() => setAuthError(null)}>×</button>
+        </div>
+      )}
 
       {/* Action Log Panel */}
       {showLog && <ActionLogPanel entries={actionLog} />}
 
-      {/* Quick Commands */}
+      {/* Welcome Screen */}
       {messages.length === 0 && !showLog && (
         <div className="dz-welcome">
           <div className="dz-welcome-icon">
             <Bot size={40} />
           </div>
           <h2 className="dz-welcome-title">DZ Agent</h2>
-          <p className="dz-welcome-sub">مساعد ذكاء اصطناعي متعدد اللغات · Multilingual AI & GitHub Agent</p>
+          <p className="dz-welcome-sub">
+            مساعدك الذكي للأخبار · GitHub · توليد الكود
+            {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
+          </p>
+
+          {!isGithubConnected && (
+            <div className="dz-github-note">
+              <Github size={14} className="dz-github-note-icon" />
+              <span>
+                ربط GitHub <strong>اختياري</strong> — مطلوب فقط إذا أردت تصحيح كود في مشروعك، إنشاء مشروع جديد، أو الحصول على مساعدة في بناء مشروع.
+              </span>
+              {oauthEnabled && (
+                <a href="/api/auth/github" className="dz-github-note-btn">
+                  <Github size={12} /> ربط الآن
+                </a>
+              )}
+            </div>
+          )}
 
           <div className="dz-quick-commands">
             {QUICK_COMMANDS.map((cmd, i) => (
@@ -782,12 +864,12 @@ export default function DZChatBox() {
 
           <div className="dz-suggestions">
             {[
+              'أخبار الجزائر اليوم',
+              'نتائج مباريات كرة القدم',
+              'اعرض مستودعاتي على GitHub',
+              'اكتب لي دالة Python لفرز قائمة',
+              'ابحث عن حل في StackOverflow لخطأ NullPointerException',
               'من هو مطورك؟',
-              'Who is your developer?',
-              'Show my repositories',
-              'Generate a Python script to sort a list',
-              'Analyze code in my repo',
-              'Qui est votre développeur?',
             ].map((s, i) => (
               <button key={i} className="dz-suggestion-btn" onClick={() => sendMessage(s)}>
                 {s}
@@ -862,9 +944,9 @@ export default function DZChatBox() {
                           onApprove={() => executeApprovedAction(msg.pendingAction!, msg.id)}
                           onCancel={() => {
                             setMessages(prev => prev.map(m =>
-                              m.id === msg.id ? { ...m, pendingAction: undefined, content: 'Action cancelled by user.' } : m
+                              m.id === msg.id ? { ...m, pendingAction: undefined, content: 'تم إلغاء الإجراء من قِبل المستخدم.' } : m
                             ))
-                            addToLog({ type: msg.pendingAction!.type, description: 'Action cancelled by user', status: 'error', repo: msg.pendingAction!.repo })
+                            addToLog({ type: msg.pendingAction!.type, description: 'تم الإلغاء', status: 'error', repo: msg.pendingAction!.repo })
                           }}
                         />
                       )}
@@ -879,13 +961,13 @@ export default function DZChatBox() {
                   {msg.content && (
                     <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
                       {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
-                      {copiedId === msg.id ? 'Copied' : 'Copy'}
+                      {copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (
                     <button className="dz-action-btn" onClick={regenerate}>
                       <RotateCcw size={13} />
-                      Regenerate
+                      إعادة المحاولة
                     </button>
                   )}
                 </div>
@@ -916,7 +998,7 @@ export default function DZChatBox() {
       {/* Input */}
       <div className="dz-input-area">
         {messages.length > 0 && (
-          <button className="dz-clear-btn" onClick={clearChat}>Clear chat</button>
+          <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
         )}
         <div className="dz-input-container">
           <textarea
@@ -924,13 +1006,13 @@ export default function DZChatBox() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={githubToken ? 'Message DZ Agent... (GitHub connected)' : 'Message DZ Agent...'}
+            placeholder={isGithubConnected ? 'أكتب رسالتك... (GitHub متصل ✓)' : 'أكتب رسالتك لـ DZ Agent...'}
             rows={1}
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
             {isLoading ? (
-              <button className="dz-stop-btn" onClick={() => { abortRef.current?.abort(); setIsLoading(false) }}>Stop</button>
+              <button className="dz-stop-btn" onClick={() => { abortRef.current?.abort(); setIsLoading(false) }}>إيقاف</button>
             ) : (
               <button className="dz-send-btn" onClick={() => sendMessage()} disabled={!input.trim()}>
                 <Send size={18} />
@@ -938,7 +1020,7 @@ export default function DZChatBox() {
             )}
           </div>
         </div>
-        <p className="dz-disclaimer">DZ Agent can make mistakes. Always review before approving GitHub actions.</p>
+        <p className="dz-disclaimer">قد يُخطئ DZ Agent. راجع دائماً قبل الموافقة على إجراءات GitHub.</p>
       </div>
     </div>
   )

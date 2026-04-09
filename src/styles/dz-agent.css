@@ -716,6 +716,30 @@
 }
 .gh-token-clear:hover { opacity: 1; }
 
+.gh-user-link {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  color: #00ff88;
+}
+.gh-user-link:hover { opacity: 0.85; }
+.gh-user-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  object-fit: cover;
+}
+.gh-user-name {
+  font-weight: 700;
+  font-size: 12px;
+}
+.gh-user-repos {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
 .gh-token-panel {
   display: flex;
   flex-direction: column;

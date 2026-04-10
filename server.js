@@ -107,7 +107,13 @@ function isValidGithubRepo(repo) {
   return /^[a-zA-Z0-9._\-]+\/[a-zA-Z0-9._\-]+$/.test(repo)
 }
 
-// ===== GROQ MULTI-KEY FALLBACK =====
+// ===== GROQ SMART KEY ROTATION SYSTEM =====
+const KEY_COOLDOWN_MS = 60 * 1000        // 60s cooldown after rate-limit
+const KEY_ERROR_COOLDOWN_MS = 30 * 1000  // 30s cooldown after generic error
+const KEY_MAX_ERRORS = 3                  // disable key after 3 consecutive errors
+
+const keyStats = new Map() // key -> { requests, errors, lastError, cooldownUntil, totalMs, avgMs }
+
 function getGroqKeys() {
   const keys = []
   for (let i = 1; i <= 10; i++) {
@@ -117,11 +123,83 @@ function getGroqKeys() {
   return keys
 }
 
-async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
-  const keys = getGroqKeys()
-  if (keys.length === 0) return { content: null, error: 'API key not configured.' }
+function getKeyStats(key) {
+  if (!keyStats.has(key)) {
+    keyStats.set(key, { requests: 0, errors: 0, consecutiveErrors: 0, lastError: 0, cooldownUntil: 0, totalMs: 0, avgMs: 0 })
+  }
+  return keyStats.get(key)
+}
 
-  for (const key of keys) {
+function isKeyCoolingDown(key) {
+  const s = getKeyStats(key)
+  return Date.now() < s.cooldownUntil
+}
+
+function setCooldown(key, ms, reason) {
+  const s = getKeyStats(key)
+  s.cooldownUntil = Date.now() + ms
+  s.lastError = Date.now()
+  console.warn(`[Groq:Rotation] Key #${getGroqKeys().indexOf(key) + 1} cooled down for ${ms / 1000}s — ${reason}`)
+}
+
+function recordSuccess(key, elapsedMs) {
+  const s = getKeyStats(key)
+  s.requests++
+  s.consecutiveErrors = 0
+  s.totalMs += elapsedMs
+  s.avgMs = Math.round(s.totalMs / s.requests)
+}
+
+function recordError(key, reason) {
+  const s = getKeyStats(key)
+  s.errors++
+  s.consecutiveErrors++
+}
+
+// Smart key selector: skip cooled-down keys, prefer least-used + fastest
+function getOrderedKeys() {
+  const all = getGroqKeys()
+  const now = Date.now()
+  const available = all.filter(k => !isKeyCoolingDown(k))
+  if (available.length === 0) {
+    // All cooled down — pick the one whose cooldown expires soonest
+    const sorted = [...all].sort((a, b) => getKeyStats(a).cooldownUntil - getKeyStats(b).cooldownUntil)
+    console.warn('[Groq:Rotation] All keys cooled down — using soonest-available key')
+    return sorted
+  }
+  // Sort available keys: least requests first, then fastest avg response
+  available.sort((a, b) => {
+    const sa = getKeyStats(a), sb = getKeyStats(b)
+    if (sa.requests !== sb.requests) return sa.requests - sb.requests
+    if (sa.avgMs && sb.avgMs) return sa.avgMs - sb.avgMs
+    return 0
+  })
+  // Append cooled-down keys as last resort
+  const cooled = all.filter(k => isKeyCoolingDown(k))
+    .sort((a, b) => getKeyStats(a).cooldownUntil - getKeyStats(b).cooldownUntil)
+  return [...available, ...cooled]
+}
+
+function logKeyStats() {
+  const all = getGroqKeys()
+  const now = Date.now()
+  const stats = all.map((k, i) => {
+    const s = getKeyStats(k)
+    const cd = s.cooldownUntil > now ? `CD:${Math.ceil((s.cooldownUntil - now) / 1000)}s` : 'OK'
+    return `K${i + 1}[${cd} req:${s.requests} err:${s.errors} avg:${s.avgMs}ms]`
+  }).join(' ')
+  console.log(`[Groq:Stats] ${stats}`)
+}
+
+async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
+  const allKeys = getGroqKeys()
+  if (allKeys.length === 0) return { content: null, error: 'API key not configured.' }
+
+  const orderedKeys = getOrderedKeys()
+
+  for (const key of orderedKeys) {
+    const keyIndex = allKeys.indexOf(key) + 1
+    const t0 = Date.now()
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -129,24 +207,83 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
         body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
       })
       const data = await r.json()
-      if (r.status === 429 || (data.error?.code === 'rate_limit_exceeded')) {
-        console.warn(`[Groq] Key rate-limited, trying next key...`)
+
+      // Rate limit → cooldown + try next
+      if (r.status === 429 || data.error?.code === 'rate_limit_exceeded') {
+        recordError(key, 'rate_limit')
+        setCooldown(key, KEY_COOLDOWN_MS, 'rate limit')
         continue
       }
-      if (!r.ok) return { content: null, error: data.error?.message || `Groq error ${r.status}` }
+
+      // Invalid / expired key → long cooldown
+      if (r.status === 401 || data.error?.code === 'invalid_api_key') {
+        recordError(key, 'invalid_key')
+        setCooldown(key, 24 * 60 * 60 * 1000, 'invalid key')
+        continue
+      }
+
+      // Quota exceeded → long cooldown
+      if (data.error?.code === 'insufficient_quota' || r.status === 402) {
+        recordError(key, 'quota_exceeded')
+        setCooldown(key, 6 * 60 * 60 * 1000, 'quota exceeded')
+        continue
+      }
+
+      // Other server error → short cooldown
+      if (!r.ok) {
+        recordError(key, `http_${r.status}`)
+        const s = getKeyStats(key)
+        if (s.consecutiveErrors >= KEY_MAX_ERRORS) {
+          setCooldown(key, KEY_ERROR_COOLDOWN_MS * s.consecutiveErrors, `${s.consecutiveErrors} consecutive errors`)
+        }
+        return { content: null, error: data.error?.message || `Groq error ${r.status}` }
+      }
+
+      // Success
       let content = data.choices?.[0]?.message?.content || null
       if (content) {
         const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
         if (cleaned) content = cleaned
       }
+      const elapsed = Date.now() - t0
+      recordSuccess(key, elapsed)
+      console.log(`[Groq:Rotation] K${keyIndex} ✓ ${elapsed}ms | model:${model}`)
+      if (Math.random() < 0.1) logKeyStats() // log stats 10% of the time
       return { content }
+
     } catch (err) {
-      console.error(`[Groq] Key error: ${err.message}, trying next...`)
+      recordError(key, 'network')
+      const s = getKeyStats(key)
+      if (s.consecutiveErrors >= KEY_MAX_ERRORS) {
+        setCooldown(key, KEY_ERROR_COOLDOWN_MS, `network error: ${err.message}`)
+      } else {
+        console.warn(`[Groq:Rotation] K${keyIndex} network error, trying next: ${err.message}`)
+      }
       continue
     }
   }
+
+  logKeyStats()
   return { content: null, error: 'All API keys exhausted or rate-limited. Please try again later.' }
 }
+
+// ===== KEY STATS API =====
+app.get('/api/groq-key-stats', (_req, res) => {
+  const all = getGroqKeys()
+  const now = Date.now()
+  const stats = all.map((k, i) => {
+    const s = getKeyStats(k)
+    return {
+      index: i + 1,
+      status: s.cooldownUntil > now ? 'cooldown' : 'active',
+      cooldownSecondsLeft: s.cooldownUntil > now ? Math.ceil((s.cooldownUntil - now) / 1000) : 0,
+      requests: s.requests,
+      errors: s.errors,
+      avgResponseMs: s.avgMs,
+    }
+  })
+  res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
+})
 
 // ===== API ROUTE =====
 app.post('/api/chat', async (req, res) => {

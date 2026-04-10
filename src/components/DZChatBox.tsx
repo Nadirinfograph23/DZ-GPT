@@ -1074,6 +1074,11 @@ export default function DZChatBox() {
             {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
           </p>
 
+          {/* Live Dashboard Cards — top position, under logo */}
+          <div className="dz-dashboard-wrapper">
+            <DZDashboard onSend={(q) => sendMessage(q)} />
+          </div>
+
           {!isGithubConnected && (
             <div className="dz-github-note">
               <Github size={14} className="dz-github-note-icon" />
@@ -1089,11 +1094,6 @@ export default function DZChatBox() {
           )}
 
           <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
-
-          {/* Live Dashboard Cards — unique to DZ Agent */}
-          <div className="dz-dashboard-wrapper">
-            <DZDashboard onSend={(q) => sendMessage(q)} />
-          </div>
         </div>
       ) : (
       /* Messages */

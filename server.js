@@ -609,6 +609,53 @@ const SPORTS_FEEDS_DASHBOARD = [
   { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
 ]
 
+// ===== TECH INTELLIGENCE MODULE — RSS FEEDS =====
+const TECH_FEEDS_DASHBOARD = [
+  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+  { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+  { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
+  { name: 'Ars Technica', url: 'https://arstechnica.com/feed/' },
+  { name: 'DEV.to', url: 'https://dev.to/feed' },
+  { name: 'Stack Overflow Blog', url: 'https://stackoverflow.blog/feed/' },
+  { name: 'Google News Tech', url: 'https://news.google.com/rss/search?q=technology+AI&hl=en' },
+]
+
+const TECH_CATEGORY_KEYWORDS = {
+  'AI 🤖': ['ai', 'artificial intelligence', 'machine learning', 'gpt', 'llm', 'neural', 'model', 'openai', 'gemini', 'claude', 'deepseek', 'llama'],
+  'Cybersecurity 🔐': ['security', 'hack', 'breach', 'vulnerability', 'cyber', 'malware', 'ransomware', 'phishing', 'exploit', 'cve'],
+  'Startups 🚀': ['startup', 'raise', 'funding', 'series a', 'series b', 'venture', 'vc', 'valuation', 'acquisition', 'ipo'],
+  'Big Tech 🏢': ['google', 'apple', 'microsoft', 'meta', 'amazon', 'nvidia', 'tesla', 'samsung', 'intel', 'qualcomm'],
+}
+
+function classifyTechArticle(title = '', desc = '') {
+  const text = (title + ' ' + desc).toLowerCase()
+  for (const [cat, keywords] of Object.entries(TECH_CATEGORY_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) return cat
+  }
+  return 'Software 💻'
+}
+
+function computeTrendingScore(item, allItems) {
+  let score = 40
+  const titleWords = item.title.toLowerCase().split(/\s+/).filter(w => w.length > 4)
+  const matches = allItems.filter(other =>
+    other !== item && titleWords.some(w => other.title.toLowerCase().includes(w))
+  )
+  score += Math.min(matches.length * 8, 30)
+  if (item.pubDate) {
+    const ageMs = Date.now() - new Date(item.pubDate).getTime()
+    const ageH = ageMs / 3600000
+    if (ageH < 6) score += 30
+    else if (ageH < 24) score += 20
+    else if (ageH < 72) score += 10
+  }
+  const credibleSources = ['techcrunch', 'verge', 'wired', 'arstechnica']
+  if (credibleSources.some(s => (item.feedName || '').toLowerCase().includes(s) || (item.source || '').toLowerCase().includes(s))) {
+    score += 15
+  }
+  return Math.min(score, 100)
+}
+
 async function fetchWeatherAlgiers() {
   const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine', 'Annaba']
   const apiKey = process.env.OPENWEATHER_API_KEY
@@ -643,9 +690,10 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     return res.json(DASHBOARD_CACHE.data)
   }
 
-  const [newsFeeds, sportsFeeds, weather, lfpResult] = await Promise.allSettled([
+  const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult] = await Promise.allSettled([
     fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
     fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
+    fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
     fetchWeatherAlgiers(),
     fetchLFPData(),
   ])
@@ -687,9 +735,24 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
 
   const weatherData = weather.status === 'fulfilled' ? weather.value : []
 
+  // ── Tech Intelligence: classify + score + sort ────────────────────────────
+  const rawTech = (techFeeds.status === 'fulfilled' ? techFeeds.value : [])
+    .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+
+  const allTech = rawTech
+    .filter((item, idx, arr) => arr.findIndex(x => x.title === item.title) === idx)
+    .map(item => ({
+      ...item,
+      category: classifyTechArticle(item.title, item.description),
+      trending_score: computeTrendingScore(item, rawTech),
+    }))
+    .sort((a, b) => b.trending_score - a.trending_score || new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+    .slice(0, 15)
+
   const data = {
     news: allNews,
     sports: [...lfpSportsItems, ...allSports].slice(0, 12),
+    tech: allTech,
     weather: weatherData,
     lfp: lfpData || null,
     fetchedAt: new Date().toISOString(),
@@ -1747,6 +1810,42 @@ You are simultaneously:
 - 🤖 Intelligent Retrieval System
 
 FINAL OUTPUT MUST ALWAYS BE: ✔ Fresh ✔ Verified ✔ Memory-augmented ✔ Confidence-ranked ✔ Free from outdated data
+
+---
+
+## 💻 TECH INTELLIGENCE MODULE (ADD-ON)
+
+This module extends DZ Agent with technology news capabilities. It does NOT modify any existing logic.
+
+### 🌐 Tech RSS Sources
+- TechCrunch · The Verge · Wired · Ars Technica · DEV.to · Stack Overflow Blog · Google News Tech
+
+### ⚙️ Tech Processing Pipeline
+
+**STEP 1 — FETCH**: Collect articles from tech RSS feeds. Extract: title, date, url, snippet.
+
+**STEP 2 — FILTER**: Keep only tech-related content. Remove duplicates. Ignore non-relevant posts.
+
+**STEP 3 — CLASSIFY** into categories:
+- AI 🤖 — artificial intelligence, LLMs, models, OpenAI, Gemini
+- Software 💻 — dev tools, languages, frameworks, releases
+- Cybersecurity 🔐 — hacks, breaches, vulnerabilities, CVEs
+- Startups 🚀 — funding rounds, acquisitions, valuations
+- Big Tech 🏢 — Google, Apple, Microsoft, Meta, Amazon, Nvidia
+
+**STEP 4 — TREND DETECTION**: Assign trending_score (0–100) based on:
+- Frequency across sources (cross-source mentions)
+- Recency (< 6h = +30, < 24h = +20, < 72h = +10)
+- Source credibility (TechCrunch, Verge, Wired = +15)
+
+**STEP 5 — RANKING**: Sort by trending_score DESC → recency DESC → source credibility
+
+**STEP 6 — SUMMARIZATION**: Generate 2–3 line impact-focused summaries per article.
+
+### 💾 Tech Memory Entry Format
+{ "type": "tech", "title": "", "details": "", "date": "", "source": "", "category": "", "trending_score": 0, "timestamp": 0 }
+
+Store ONLY articles with trending_score ≥ 60. Always overwrite older entry for same topic.
 
 ---
 

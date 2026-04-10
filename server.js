@@ -988,6 +988,54 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
   return res.json(data)
 })
 
+// ===== WEATHER BY CITY (single-city endpoint for user location) =====
+const CITY_WEATHER_CACHE = new Map()
+const CITY_WEATHER_TTL = 15 * 60 * 1000 // 15 min
+
+app.get('/api/dz-agent/weather', async (req, res) => {
+  const city = String(req.query.city || 'Algiers').slice(0, 80)
+  const cacheKey = city.toLowerCase()
+  const cached = CITY_WEATHER_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < CITY_WEATHER_TTL) return res.json(cached.data)
+
+  const apiKey = process.env.OPENWEATHER_API_KEY
+  if (!apiKey) return res.status(503).json({ error: 'OPENWEATHER_API_KEY not configured' })
+
+  const tryFetch = async (q) => {
+    const r = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&appid=${apiKey}&units=metric&lang=ar`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!r.ok) return null
+    return r.json()
+  }
+
+  try {
+    let d = await tryFetch(`${city},Algeria`)
+    if (!d) d = await tryFetch(city)
+    if (!d) return res.status(404).json({ error: `No weather data for: ${city}` })
+
+    const result = {
+      city,
+      temp: Math.round(d.main?.temp ?? 0),
+      feels_like: Math.round(d.main?.feels_like ?? 0),
+      temp_min: Math.round(d.main?.temp_min ?? 0),
+      temp_max: Math.round(d.main?.temp_max ?? 0),
+      condition: d.weather?.[0]?.description || '',
+      icon: d.weather?.[0]?.icon || null,
+      humidity: d.main?.humidity,
+      wind: Math.round(d.wind?.speed ?? 0),
+      visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
+      fetchedAt: new Date().toISOString(),
+    }
+    CITY_WEATHER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
+    return res.json(result)
+  } catch (err) {
+    console.error('[Weather] Error:', err.message)
+    return res.status(503).json({ error: 'Weather fetch failed' })
+  }
+})
+
 // ===== LFP.DZ SCRAPING =====
 const LFP_CACHE = { data: null, ts: 0 }
 const LFP_CACHE_TTL = 15 * 60 * 1000 // 15 min

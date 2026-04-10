@@ -4,6 +4,7 @@ import {
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
   CheckCircle2, XCircle, GitCommit, GitPullRequest,
   Key, Trash2, RefreshCw, Terminal, Zap,
+  ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
@@ -17,6 +18,38 @@ type RichType =
   | 'approval'
   | 'action-log'
   | 'code-analysis'
+
+type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
+
+interface CodeIssue {
+  id: string
+  line: number | null
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  category: string
+  issue: string
+  root_cause: string
+  fix: string
+  fix_code: string | null
+  actions: CodeActionType[]
+}
+
+interface CodeImprovement {
+  id: string
+  title: string
+  description: string
+  actions: CodeActionType[]
+}
+
+interface CodeAnalysisData {
+  summary: string
+  language: string
+  lines: number
+  score: number
+  issues: CodeIssue[]
+  improvements: CodeImprovement[]
+  test_suggestions: string[]
+  has_repo: boolean
+}
 
 interface RepoItem {
   name: string
@@ -55,6 +88,7 @@ interface DZMessage {
   repos?: RepoItem[]
   files?: FileItem[]
   fileContent?: { path: string; content: string; repo: string }
+  codeAnalysis?: { data: CodeAnalysisData; filePath: string; fileContent: string; repo: string }
   pendingAction?: PendingAction
   actionLog?: ActionLogEntry[]
   isError?: boolean
@@ -77,6 +111,182 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+// ===== CODE ANALYSIS PANEL =====
+const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: React.ReactNode }> = {
+  critical: { color: '#f87171', bg: 'rgba(248,113,113,0.07)', border: 'rgba(248,113,113,0.25)', label: 'حرج', icon: <ShieldAlert size={12} /> },
+  high:     { color: '#fb923c', bg: 'rgba(251,146,60,0.07)',  border: 'rgba(251,146,60,0.25)',  label: 'عالي', icon: <Bug size={12} /> },
+  medium:   { color: '#facc15', bg: 'rgba(250,204,21,0.07)',  border: 'rgba(250,204,21,0.25)',  label: 'متوسط', icon: <AlertCircle size={12} /> },
+  low:      { color: '#60a5fa', bg: 'rgba(96,165,250,0.07)',  border: 'rgba(96,165,250,0.25)',  label: 'منخفض', icon: <Gauge size={12} /> },
+  info:     { color: '#a78bfa', bg: 'rgba(167,139,250,0.07)', border: 'rgba(167,139,250,0.25)', label: 'معلومة', icon: <Info size={12} /> },
+}
+
+const ACTION_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
+  fix_code:       { label: 'إصلاح', icon: <Wrench size={11} />, cls: 'ca-btn ca-btn--fix' },
+  explain_error:  { label: 'شرح', icon: <Info size={11} />, cls: 'ca-btn ca-btn--explain' },
+  improve_code:   { label: 'تحسين', icon: <Lightbulb size={11} />, cls: 'ca-btn ca-btn--improve' },
+  apply_repo_fix: { label: 'Diff', icon: <GitBranch size={11} />, cls: 'ca-btn ca-btn--diff' },
+  rescan_repo:    { label: 'إعادة الفحص', icon: <ScanSearch size={11} />, cls: 'ca-btn ca-btn--rescan' },
+}
+
+function ScoreRing({ score }: { score: number }) {
+  const color = score >= 80 ? '#4ade80' : score >= 60 ? '#facc15' : score >= 40 ? '#fb923c' : '#f87171'
+  const r = 22, circ = 2 * Math.PI * r
+  const offset = circ - (score / 100) * circ
+  return (
+    <div className="ca-score-ring">
+      <svg width="56" height="56" viewBox="0 0 56 56">
+        <circle cx="28" cy="28" r={r} fill="none" stroke="#1a1a1a" strokeWidth="4" />
+        <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4"
+          strokeDasharray={circ} strokeDashoffset={offset}
+          strokeLinecap="round" transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
+      </svg>
+      <span className="ca-score-num" style={{ color }}>{score}</span>
+    </div>
+  )
+}
+
+function CodeAnalysisPanel({
+  data, filePath, fileContent, repo, onAction
+}: {
+  data: CodeAnalysisData
+  filePath: string
+  fileContent: string
+  repo: string
+  onAction: (action: CodeActionType, issue?: CodeIssue | CodeImprovement) => void
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const toggle = (id: string) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const critCount = data.issues.filter(i => i.severity === 'critical' || i.severity === 'high').length
+  const medCount  = data.issues.filter(i => i.severity === 'medium').length
+
+  return (
+    <div className="ca-root">
+      {/* Header */}
+      <div className="ca-header">
+        <div className="ca-header-left">
+          <span className="ca-file-name">{filePath.split('/').pop()}</span>
+          <span className="ca-lang-badge">{data.language}</span>
+          <span className="ca-lines">{data.lines} سطر</span>
+        </div>
+        <ScoreRing score={data.score} />
+      </div>
+
+      {/* Summary */}
+      <p className="ca-summary">{data.summary}</p>
+
+      {/* Stats */}
+      <div className="ca-stats">
+        <div className="ca-stat ca-stat--red">
+          <ShieldAlert size={13} /><span>{critCount} حرج/عالي</span>
+        </div>
+        <div className="ca-stat ca-stat--yellow">
+          <Bug size={13} /><span>{medCount} متوسط</span>
+        </div>
+        <div className="ca-stat ca-stat--blue">
+          <Lightbulb size={13} /><span>{data.improvements.length} تحسينات</span>
+        </div>
+        <button className="ca-stat ca-stat--rescan" onClick={() => onAction('rescan_repo')}>
+          <ScanSearch size={12} /> إعادة الفحص
+        </button>
+      </div>
+
+      {/* Issues */}
+      {data.issues.length > 0 && (
+        <div className="ca-section">
+          <div className="ca-section-title"><Bug size={13} /> المشاكل المكتشفة ({data.issues.length})</div>
+          <div className="ca-issues-list">
+            {data.issues.map(issue => {
+              const sev = SEVERITY_CONFIG[issue.severity] || SEVERITY_CONFIG.info
+              const isOpen = expanded.has(issue.id)
+              return (
+                <div key={issue.id} className="ca-issue" style={{ '--sev-color': sev.color, '--sev-bg': sev.bg, '--sev-border': sev.border } as React.CSSProperties}>
+                  <button className="ca-issue-header" onClick={() => toggle(issue.id)}>
+                    <span className="ca-sev-badge" style={{ color: sev.color, background: sev.bg, border: `1px solid ${sev.border}` }}>
+                      {sev.icon} {sev.label}
+                    </span>
+                    {issue.line && <span className="ca-line-num">L{issue.line}</span>}
+                    <span className="ca-issue-title">{issue.issue}</span>
+                    <ChevronDown size={13} className={`ca-chevron ${isOpen ? 'ca-chevron--open' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="ca-issue-body">
+                      <div className="ca-detail"><span className="ca-detail-label">السبب:</span> {issue.root_cause}</div>
+                      <div className="ca-detail"><span className="ca-detail-label">الإصلاح:</span> {issue.fix}</div>
+                      {issue.fix_code && (
+                        <pre className="ca-code-snippet"><code>{issue.fix_code}</code></pre>
+                      )}
+                      <div className="ca-action-row">
+                        {(issue.actions || []).map(act => {
+                          const cfg = ACTION_CONFIG[act]
+                          if (!cfg) return null
+                          return (
+                            <button key={act} className={cfg.cls} onClick={() => onAction(act, issue)}>
+                              {cfg.icon} {cfg.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Improvements */}
+      {data.improvements.length > 0 && (
+        <div className="ca-section">
+          <div className="ca-section-title"><Lightbulb size={13} /> اقتراحات التحسين</div>
+          <div className="ca-issues-list">
+            {data.improvements.map(imp => (
+              <div key={imp.id} className="ca-issue ca-issue--improve">
+                <button className="ca-issue-header" onClick={() => toggle(imp.id)}>
+                  <span className="ca-sev-badge ca-sev-badge--green"><Lightbulb size={11} /> تحسين</span>
+                  <span className="ca-issue-title">{imp.title}</span>
+                  <ChevronDown size={13} className={`ca-chevron ${expanded.has(imp.id) ? 'ca-chevron--open' : ''}`} />
+                </button>
+                {expanded.has(imp.id) && (
+                  <div className="ca-issue-body">
+                    <div className="ca-detail">{imp.description}</div>
+                    <div className="ca-action-row">
+                      {(imp.actions || []).map(act => {
+                        const cfg = ACTION_CONFIG[act]
+                        if (!cfg) return null
+                        return (
+                          <button key={act} className={cfg.cls} onClick={() => onAction(act, imp)}>
+                            {cfg.icon} {cfg.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tests */}
+      {data.test_suggestions.length > 0 && (
+        <div className="ca-section">
+          <div className="ca-section-title"><Terminal size={13} /> اقتراحات الاختبار</div>
+          <ul className="ca-tests-list">
+            {data.test_suggestions.map((t, i) => <li key={i}>{t}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {data.issues.length === 0 && data.improvements.length === 0 && (
+        <div className="ca-clean"><CheckCircle2 size={18} /> الكود نظيف — لا مشاكل مكتشفة</div>
+      )}
+    </div>
+  )
 }
 
 // ===== CODE BLOCK =====
@@ -811,12 +1021,72 @@ export default function DZChatBox() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Analysis failed')
-      addAssistantMessage({ content: data.analysis, richType: 'text' })
+
+      if (data.structured && data.analysis && typeof data.analysis === 'object') {
+        addAssistantMessage({
+          content: `تحليل: ${path}`,
+          richType: 'code-analysis',
+          codeAnalysis: { data: data.analysis as CodeAnalysisData, filePath: path, fileContent: content, repo },
+        })
+      } else {
+        addAssistantMessage({ content: typeof data.analysis === 'string' ? data.analysis : JSON.stringify(data.analysis, null, 2), richType: 'text' })
+      }
       addToLog({ type: 'analyze-code', description: `Analysis complete for ${path}`, status: 'success', repo })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       addAssistantMessage({ content: `Analysis failed: ${msg}`, richType: 'text', isError: true })
       addToLog({ type: 'analyze-code', description: `Error: ${msg}`, status: 'error' })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [addToLog, addAssistantMessage])
+
+  const executeCodeAction = useCallback(async (
+    action: CodeActionType,
+    filePath: string,
+    fileContent: string,
+    repo: string,
+    issue?: CodeIssue | CodeImprovement
+  ) => {
+    setIsLoading(true)
+    const actionLabels: Record<string, string> = {
+      fix_code: `إصلاح: ${(issue as CodeIssue)?.issue || ''}`,
+      explain_error: `شرح الخطأ: ${(issue as CodeIssue)?.issue || ''}`,
+      improve_code: `تحسين: ${(issue as CodeImprovement)?.title || (issue as CodeIssue)?.issue || filePath}`,
+      apply_repo_fix: `Git Diff لـ: ${(issue as CodeIssue)?.issue || ''}`,
+      rescan_repo: `إعادة فحص: ${filePath}`,
+    }
+    addToLog({ type: 'code-action', description: actionLabels[action] || action, status: 'pending', repo })
+    try {
+      const res = await fetch('/api/dz-agent/github/code-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, issue, filePath, fileContent, repo, language: '' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Action failed')
+
+      if (data.structured && data.action === 'rescan_repo' && typeof data.content === 'object') {
+        addAssistantMessage({
+          content: `إعادة فحص: ${filePath}`,
+          richType: 'code-analysis',
+          codeAnalysis: { data: data.content as CodeAnalysisData, filePath, fileContent, repo },
+        })
+      } else {
+        const prefix: Record<string, string> = {
+          fix_code: '🔧 **الكود المُصلح:**\n\n',
+          explain_error: '📖 **شرح الخطأ:**\n\n',
+          improve_code: '✨ **الكود المُحسّن:**\n\n',
+          apply_repo_fix: '📋 **Git Diff:**\n\n',
+          rescan_repo: '🔄 **نتائج الفحص المحدّثة:**\n\n',
+        }
+        addAssistantMessage({ content: (prefix[action] || '') + data.content, richType: 'text' })
+      }
+      addToLog({ type: 'code-action', description: actionLabels[action], status: 'success', repo })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل الإجراء: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'code-action', description: `Error: ${msg}`, status: 'error', repo })
     } finally {
       setIsLoading(false)
     }
@@ -1154,6 +1424,21 @@ export default function DZChatBox() {
                           repo={msg.fileContent.repo}
                           onAnalyze={() => analyzeCode(msg.fileContent!.repo, msg.fileContent!.path, msg.fileContent!.content)}
                           onEdit={() => prepareEdit(msg.fileContent!)}
+                        />
+                      )}
+                      {msg.richType === 'code-analysis' && msg.codeAnalysis && (
+                        <CodeAnalysisPanel
+                          data={msg.codeAnalysis.data}
+                          filePath={msg.codeAnalysis.filePath}
+                          fileContent={msg.codeAnalysis.fileContent}
+                          repo={msg.codeAnalysis.repo}
+                          onAction={(action, issue) => executeCodeAction(
+                            action,
+                            msg.codeAnalysis!.filePath,
+                            msg.codeAnalysis!.fileContent,
+                            msg.codeAnalysis!.repo,
+                            issue
+                          )}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (

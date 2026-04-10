@@ -426,3 +426,64 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
+
+/* ===== TECH INTELLIGENCE MODULE — Cards ===== */
+.dzd-news-card--tech {
+  border-left: 2px solid rgba(139, 92, 246, 0.4);
+}
+.dzd-news-card--tech:hover {
+  border-left-color: rgba(139, 92, 246, 0.8);
+  background: rgba(139, 92, 246, 0.04);
+}
+
+.dzd-news-source--tech {
+  color: #a78bfa !important;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dzd-news-link--tech {
+  color: #a78bfa;
+}
+.dzd-news-link--tech:hover {
+  color: #c4b5fd;
+}
+
+.dzd-tech-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.dzd-tech-category {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  white-space: nowrap;
+}
+
+.dzd-tech-trending {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+/* Tech tab accent */
+.dzd-tab[data-tab="tech"].dzd-tab--active {
+  color: #a78bfa;
+  border-bottom-color: #a78bfa;
+}

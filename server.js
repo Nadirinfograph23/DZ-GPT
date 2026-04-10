@@ -294,7 +294,169 @@ const RSS_FEEDS = {
     { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
     { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
     { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
+    { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+    { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+    { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
   ],
+}
+
+// ===== FOOTBALL INTELLIGENCE SYSTEM =====
+const FOOTBALL_CACHE = new Map()
+const FOOTBALL_CACHE_TTL = 5 * 60 * 1000 // 5 min for live match data
+
+const INTL_FOOTBALL_FEEDS = [
+  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+  { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
+  { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
+  { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
+  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+]
+
+async function fetchSofaScoreFootball(dateStr) {
+  const today = dateStr || new Date().toISOString().split('T')[0]
+  const cacheKey = `sofascore_${today}`
+  const cached = FOOTBALL_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < FOOTBALL_CACHE_TTL) return cached.data
+
+  const sfHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7',
+    'Referer': 'https://www.sofascore.com/',
+    'Origin': 'https://www.sofascore.com',
+    'Cache-Control': 'no-cache',
+  }
+
+  const endpoints = [
+    `https://api.sofascore.com/api/v1/sport/football/scheduled-events/${today}`,
+    `https://api.sofascore.com/api/v1/sport/football/events/live`,
+  ]
+
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, { headers: sfHeaders, signal: AbortSignal.timeout(10000) })
+      if (!r.ok) { console.log(`[SofaScore] ${url} → ${r.status}`); continue }
+      const d = await r.json()
+      const events = d.events || []
+      if (!events.length) continue
+
+      const matches = events.slice(0, 30).map(e => {
+        const isLive = e.status?.type === 'inprogress'
+        const isFinished = e.status?.type === 'finished'
+        const startTs = e.startTimestamp ? new Date(e.startTimestamp * 1000) : null
+        return {
+          homeTeam: e.homeTeam?.name || '',
+          awayTeam: e.awayTeam?.name || '',
+          homeScore: (isLive || isFinished) ? (e.homeScore?.current ?? null) : null,
+          awayScore: (isLive || isFinished) ? (e.awayScore?.current ?? null) : null,
+          status: e.status?.description || '',
+          statusType: e.status?.type || '',
+          competition: e.tournament?.name || '',
+          country: e.tournament?.category?.country?.name || e.tournament?.category?.name || '',
+          startTime: startTs ? startTs.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers' }) : '',
+          date: startTs ? startTs.toLocaleDateString('ar-DZ', { timeZone: 'Africa/Algiers' }) : today,
+          id: e.id,
+          source: 'SofaScore',
+          link: e.id ? `https://www.sofascore.com/event/${e.id}` : 'https://www.sofascore.com',
+        }
+      })
+
+      const data = { matches, fetchedAt: Date.now(), date: today, apiSource: url }
+      FOOTBALL_CACHE.set(cacheKey, { data, ts: Date.now() })
+      console.log(`[SofaScore] Fetched ${matches.length} matches from ${url}`)
+      return data
+    } catch (err) {
+      console.error('[SofaScore] Error:', err.message)
+    }
+  }
+  return null
+}
+
+function detectFootballQuery(msg) {
+  const lower = msg.toLowerCase()
+  const keywords = [
+    // Arabic — general
+    'مباراة', 'مباريات', 'نتيجة', 'نتائج', 'هدف', 'أهداف', 'بطولة', 'ملعب', 'تصفيات',
+    'كرة القدم', 'الكرة', 'لاعب', 'مدرب', 'فريق', 'فرق', 'كأس', 'رياضة كرة',
+    // Arabic — competitions
+    'دوري أبطال', 'دوري الأبطال', 'تشامبيونز ليغ', 'يورو', 'كأس العالم', 'مونديال',
+    'الدوري الإسباني', 'الليغا', 'الدوري الإنجليزي', 'البريميرليغ', 'بريميرليق',
+    'الدوري الألماني', 'البوندسليغا', 'الدوري الإيطالي', 'السيريا', 'الدوري الفرنسي',
+    'أمم أفريقيا', 'كان', 'أمم أوروبا', 'كاف', 'فيفا', 'يويفا',
+    // Arabic — teams
+    'ريال مدريد', 'برشلونة', 'بايرن', 'ليفربول', 'مانشستر', 'باريس سان جيرمان', 'يوفنتوس',
+    'المنتخب الجزائري', 'منتخب الجزائر', 'الخضر', 'المنتخب الوطني', 'الفنك',
+    // English
+    'football', 'soccer', 'match result', 'match score', 'goal', 'league table', 'standings',
+    'champions league', 'premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1',
+    'world cup', 'euros', 'euro 2024', 'afcon', 'copa america', 'nations league',
+    'real madrid', 'barcelona', 'liverpool', 'manchester', 'arsenal', 'chelsea', 'psg',
+    'algeria', 'fennecs', 'sofascore', 'flashscore', 'live score', 'livescore',
+    // French
+    'résultat', 'ligue des champions', 'équipe nationale', 'coupe du monde', 'les verts',
+  ]
+  return keywords.some(k => lower.includes(k))
+}
+
+function buildFootballContext(sfData, rssFeeds, dateStr) {
+  const date = dateStr || new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  let ctx = `\n\n--- ⚽ بيانات كرة القدم المباشرة — ${date} ---\n`
+
+  if (sfData?.matches?.length) {
+    const live = sfData.matches.filter(m => m.statusType === 'inprogress')
+    const finished = sfData.matches.filter(m => m.statusType === 'finished')
+    const upcoming = sfData.matches.filter(m => m.statusType === 'notstarted')
+
+    if (live.length > 0) {
+      ctx += `\n🔴 **مباريات جارية الآن (SofaScore):**\n`
+      for (const m of live.slice(0, 10)) {
+        ctx += `• ${m.homeTeam} **${m.homeScore ?? 0} - ${m.awayScore ?? 0}** ${m.awayTeam}`
+        if (m.competition) ctx += ` | ${m.competition}`
+        if (m.country) ctx += ` (${m.country})`
+        ctx += ` — ${m.link}\n`
+      }
+    }
+
+    if (finished.length > 0) {
+      ctx += `\n✅ **نتائج المباريات (SofaScore):**\n`
+      for (const m of finished.slice(0, 15)) {
+        ctx += `• ${m.homeTeam} **${m.homeScore} - ${m.awayScore}** ${m.awayTeam}`
+        if (m.competition) ctx += ` | ${m.competition}`
+        if (m.country) ctx += ` (${m.country})`
+        ctx += ` — ${m.link}\n`
+      }
+    }
+
+    if (upcoming.length > 0) {
+      ctx += `\n📅 **مباريات قادمة (SofaScore):**\n`
+      for (const m of upcoming.slice(0, 10)) {
+        ctx += `• ${m.homeTeam} vs ${m.awayTeam}`
+        if (m.startTime) ctx += ` — ${m.startTime}`
+        if (m.competition) ctx += ` | ${m.competition}`
+        if (m.country) ctx += ` (${m.country})`
+        ctx += ` — ${m.link}\n`
+      }
+    }
+    ctx += `*(المصدر: SofaScore — ${new Date(sfData.fetchedAt).toLocaleTimeString('ar-DZ')})*\n`
+  }
+
+  if (rssFeeds?.length) {
+    ctx += `\n📰 **أخبار كرة القدم (RSS):**\n`
+    for (const feed of rssFeeds) {
+      if (!feed?.items?.length) continue
+      ctx += `\n**${feed.name}:**\n`
+      for (const item of feed.items.slice(0, 3)) {
+        ctx += `• ${item.title}`
+        if (item.link) ctx += ` — ${item.link}`
+        ctx += '\n'
+      }
+    }
+  }
+
+  ctx += '\n---\n'
+  ctx += '> ⚠️ دائماً تحقق من المصدر الرسمي للنتائج الدقيقة.\n'
+  return ctx
 }
 
 function parseRSS(xml, sourceName) {
@@ -426,6 +588,8 @@ const SPORTS_FEEDS_DASHBOARD = [
   { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
   { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
   { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
+  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
 ]
 
 async function fetchWeatherAlgiers() {
@@ -715,6 +879,23 @@ app.get('/api/dz-agent/lfp', async (_req, res) => {
   res.json(data)
 })
 
+// ===== FOOTBALL INTELLIGENCE ENDPOINT =====
+app.get('/api/dz-agent/football', async (req, res) => {
+  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  const [sfResult, rssResult, lfpResult] = await Promise.allSettled([
+    fetchSofaScoreFootball(dateStr),
+    fetchMultipleFeeds(INTL_FOOTBALL_FEEDS),
+    fetchLFPData(),
+  ])
+  return res.json({
+    sofascore: sfResult.status === 'fulfilled' ? sfResult.value : null,
+    rss: rssResult.status === 'fulfilled' ? rssResult.value : [],
+    lfp: lfpResult.status === 'fulfilled' ? lfpResult.value : null,
+    date: dateStr,
+    fetchedAt: new Date().toISOString(),
+  })
+})
+
 // ===== SEARCH ENDPOINT =====
 async function searchWeb(query) {
   const encodedQ = encodeURIComponent(query)
@@ -985,10 +1166,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Football Intelligence (international + Algeria) ───────────────────────
+  let footballContext = ''
+  const isFootballQuery = detectFootballQuery(lastUserMessage)
+  if (isFootballQuery && !isLFPQuery) {
+    console.log('[DZ Agent] Football query detected — fetching SofaScore + RSS')
+    const today = new Date().toISOString().split('T')[0]
+    const [sfResult, rssResult] = await Promise.allSettled([
+      fetchSofaScoreFootball(today),
+      fetchMultipleFeeds(INTL_FOOTBALL_FEEDS),
+    ])
+    const sfData = sfResult.status === 'fulfilled' ? sfResult.value : null
+    const rssData = rssResult.status === 'fulfilled' ? rssResult.value : []
+    if (sfData || rssData.length > 0) {
+      footballContext = buildFootballContext(sfData, rssData, today)
+      console.log(`[DZ Agent] Football context built: SofaScore=${!!sfData}, RSS=${rssData.length} feeds`)
+    }
+  }
+
   // ── RSS News/Sports detection and fetch ───────────────────────────────────
   let rssContext = ''
   const newsQueryType = detectNewsQuery(lastUserMessage)
-  if (newsQueryType && !isPrayerQuery) {
+  if (newsQueryType && !isPrayerQuery && !isFootballQuery) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
     let feedsToFetch = []
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
@@ -1006,29 +1205,43 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
 
-  const systemPrompt = `You are DZ Agent — a powerful multilingual AI assistant, Algerian news aggregator, and GitHub code agent created by **Nadir Houamria (Nadir Infograph)**, an expert in Artificial Intelligence.
+  const systemPrompt = `You are DZ Agent — a powerful multilingual AI assistant, Algerian news aggregator, real-time football intelligence system, and GitHub code agent created by **Nadir Houamria (Nadir Infograph)**, an expert in Artificial Intelligence.
 
 ## Your Capabilities
-- **Algerian & Sports News**: Real-time RSS feeds (APS, النهار, البلاد, الحياة, كووورة, FIFA)
-- **🏆 الدوري الجزائري المحترف**: Live data scraped directly from lfp.dz — matches, results, news
+- **🇩🇿 Algerian Football**: Real-time LFP (Ligue Professionnelle 1) data from lfp.dz — Algerian league, national team matches, Algeria friendlies
+- **🌍 International Football**: Live match data from SofaScore — all major European leagues (La Liga, Premier League, Bundesliga, Serie A, Ligue 1), Champions League, World Cup, AFCON, Euro, Nations League
+- **📰 Football News**: RSS from BBC Sport, ESPN, Sport360, Kooora, APS, Al Jazeera Sport — transfers, match summaries, analysis
+- **📰 Algerian & World News**: Real-time RSS feeds (APS, الشروق, النهار, BBC عربي, الجزيرة)
 - **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
 - **Code Intelligence**: Analyze, debug, generate, and improve code in any language
-- **AI-Powered Answers**: Always respond using the most capable AI model available on this platform
-- **Multilingual**: Respond in Arabic, English, or French — matching the user's language
+- **Multilingual**: Respond in Arabic, English, or French — always match the user's language
 
-## Key Rules
-1. **ALWAYS use AI reasoning** to formulate every response — never dump raw data without explanation
-2. When RSS data is available, interpret and summarize it meaningfully with context
-3. For LFP data: present match results in a clear table or list format with scores highlighted
-4. For code requests: include comments, follow best practices, use proper error handling, format in markdown code blocks
-5. For GitHub actions (commit, PR): clearly describe what you will do and ask for confirmation
-6. Be concise, structured, and helpful. Use markdown formatting
+## ⚽ Football Intelligence Rules (STRICT)
+1. **NEVER invent, guess, or hallucinate match scores, results, or fixtures** — only use data provided in the context below
+2. **Source hierarchy**: SofaScore (primary) → FlashScore (backup) → RSS feeds (news only) → FAF/UEFA official sites
+3. Always display matches in this format:
+   - 🔴 LIVE: **Team A [score] - [score] Team B** | Competition | Source link
+   - ✅ RESULT: **Team A [score] - [score] Team B** | Competition | Date | Source link  
+   - 📅 UPCOMING: Team A vs Team B | Time | Competition | Source link
+4. Always include the **source link** and **competition name** with every match
+5. If SofaScore data is unavailable, clearly state: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
+6. For Algerian national team queries, also check LFP data for context
+7. For transfers: only report from verified BBC Sport / ESPN / APS sources in the RSS data
 
-${prayerContext ? `## Prayer Times Data (real-time from aladhan.com)\n${prayerContext}\n\nPresent these prayer times clearly and beautifully. NEVER generate or guess prayer times — always use the data above.` : ''}
+## General Rules
+- **ALWAYS use AI reasoning** — never dump raw data without interpretation
+- For LFP data: present results in clear table or list with scores highlighted  
+- For code requests: include comments, best practices, error handling, markdown code blocks
+- For GitHub actions (commit, PR): describe what you will do and ask for confirmation
+- Be concise, structured, and helpful. Use markdown formatting
 
-${lfpContext ? `## 🏆 الدوري الجزائري المحترف — بيانات مباشرة من lfp.dz\n${lfpContext}\n\nاعرض هذه النتائج بتنسيق جميل وواضح. لا تختلق نتائج أو أرقام من عندك — استخدم فقط البيانات أعلاه.` : ''}
+${prayerContext ? `## 🕌 Prayer Times (real-time from aladhan.com)\n${prayerContext}\n\nPresent these prayer times clearly. NEVER guess prayer times — use ONLY the data above.` : ''}
 
-${rssContext ? `## Live News/Sports Data (fetched now)\n${rssContext}\n\nSummarize and explain this data in a helpful way. Include source links when available.` : ''}
+${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\nاعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
+
+${footballContext ? `## ⚽ Football Intelligence — SofaScore + International RSS\n${footballContext}\n\nPresent ALL available match data clearly. Use the format specified in Football Rules above. NEVER invent scores — only use data provided here.` : ''}
+
+${rssContext ? `## 📰 Live News/Sports Data (RSS)\n${rssContext}\n\nSummarize helpfully. Include source links. Do not invent content.` : ''}
 
 ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${currentRepo || 'none selected'}.\nYou can: list files, read code, create commits, and open Pull Requests.` : '## GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.'}`
 
@@ -1083,7 +1296,7 @@ ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${curr
   }
 
   return res.status(200).json({
-    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**أستطيع مساعدتك في:**\n- 📰 أخبار الجزائر الوطنية (APS، النهار، البلاد)\n- ⚽ نتائج مباريات كرة القدم (كووورة، FIFA)\n- 🗂️ إدارة مستودعات GitHub (قراءة، تعديل، Commit، PR)\n- 💻 تحليل وإنشاء الأكواد البرمجية\n- 🤖 الإجابة على أسئلتك بالعربية أو الإنجليزية أو الفرنسية\n\nجرّب: **"أخبار اليوم"** أو **"اعرض مستودعاتي"** أو **"اكتب لي دالة Python"**',
+    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿⚽\n\n**نظام ذكاء كرة القدم:**\n- 🇩🇿 **الجزائر**: الدوري الجزائري المحترف (LFP)، المنتخب الوطني، المباريات الودية\n- 🌍 **دوليًا**: دوري أبطال أوروبا، الليغا، البريميرليغ، البوندسليغا، السيريا، ليغ 1، كأس العالم، كأس أمم أفريقيا\n- 📡 **مصادر حية**: SofaScore، BBC Sport، ESPN، Sport360، كووورة، الجزيرة الرياضة\n\n**قدراتي الأخرى:**\n- 📰 أخبار الجزائر الوطنية والعالمية\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وإنشاء الأكواد البرمجية\n- 🕌 مواقيت الصلاة في كل مدن الجزائر\n\nجرّب: **"مباريات اليوم"** أو **"نتائج دوري أبطال أوروبا"** أو **"آخر أخبار المنتخب الجزائري"**',
   })
 })
 

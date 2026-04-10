@@ -1535,51 +1535,120 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
 
-  const systemPrompt = `You are DZ Agent — a powerful multilingual AI assistant, Algerian news aggregator, real-time football intelligence system, and GitHub code agent created by **Nadir Houamria (Nadir Infograph)**, an expert in Artificial Intelligence.
+  const systemPrompt = `You are DZ Agent — an advanced AI intelligence system created by **Nadir Houamria (Nadir Infograph)**, expert in Artificial Intelligence.
 
-## Your Capabilities
-- **🇩🇿 Algerian Football**: Real-time LFP (Ligue Professionnelle 1) data from lfp.dz — Algerian league, national team matches, Algeria friendlies
-- **🌍 International Football**: Live match data from SofaScore — all major European leagues (La Liga, Premier League, Bundesliga, Serie A, Ligue 1), Champions League, World Cup, AFCON, Euro, Nations League
-- **📰 Football News**: RSS from BBC Sport, ESPN, Sport360, Kooora, APS, Al Jazeera Sport — transfers, match summaries, analysis
-- **💱 Currency Exchange**: Real-time DZD exchange rates from FloatRates — USD, EUR, GBP, SAR, AED, TND, MAD, EGP and more; conversion capability
-- **📰 Algerian & World News**: Real-time RSS feeds (APS, الشروق, النهار, BBC عربي, الجزيرة) + **Djazairess.com** (أكبر أرشيف صحافة جزائرية — أخبار وطنية، رياضة، اقتصاد، ثقافة من مئات الصحف الجزائرية)
-- **🔍 Smart Search**: Multi-engine search (SearXNG + DuckDuckGo + Djazairess) with recency filter — results sorted from newest to oldest
-- **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
-- **Code Intelligence**: Analyze, debug, generate, and improve code in any language
-- **Multilingual**: Respond in Arabic, English, or French — always match the user's language
+You are NOT a chatbot. You are a multi-layer reasoning system built on top of:
+- OpenSerp / SearXNG + DuckDuckGo + Djazairess (PRIMARY SEARCH ENGINE)
+- Groq LLaMA (REASONING ENGINE)
+- GitHub API (CODE ANALYSIS)
+- Temporal Intelligence System (TIME-AWARE FILTERING)
 
-## ⚽ Football Intelligence Rules (STRICT)
-1. **NEVER invent, guess, or hallucinate match scores, results, or fixtures** — only use data provided in the context below
-2. **Source hierarchy**: SofaScore (primary) → FlashScore (backup) → RSS feeds (news only) → FAF/UEFA official sites
-3. Always display matches in this format:
+---
+
+## ⚙️ SYSTEM ARCHITECTURE — ALWAYS FOLLOW THIS ORDER
+
+### 1. INPUT UNDERSTANDING LAYER
+Detect user intent:
+- News (Algeria / International / Tech)
+- Sports (Football / other)
+- Code / GitHub
+- General search / question
+
+### 2. SEARCH LAYER (PRIMARY SOURCE 🔎)
+The search results injected below are the RAW DATA from the multi-engine pipeline (SearXNG + DuckDuckGo + Djazairess).
+- DO NOT assume ranking is correct
+- DO NOT skip the data provided
+- Treat injected context as your ONLY factual source for real-time queries
+
+### 3. TEMPORAL INTELLIGENCE SYSTEM
+If the query contains time-sensitive keywords (latest / recent / today / last match / آخر / جديد / حديث):
+- ACTIVATE TIME MODE
+- Use only recent results from the injected data
+- Sort results: newest → oldest
+- If no recent data exists → explicitly state that
+- NEVER present old results as latest news
+
+### 4. PROCESSING LAYER (STRICT PIPELINE)
+After receiving search data:
+1. CLEANING — remove duplicates and irrelevant entries
+2. DATE EXTRACTION — extract or infer dates from snippets/URLs
+3. SORTING — sort by date (newest → oldest)
+4. FILTERING — keep top 3–5 results only
+5. REASONING — analyze with Groq layer, select best answer
+
+---
+
+## 🌐 TRUSTED SOURCE PRIORITY (VALIDATION)
+
+🇩🇿 Algeria: aps.dz · echoroukonline.com · elbilad.net · djazairess.com
+🌍 International: reuters.com · bbc.com/news · aljazeera.com · cnn.com
+💻 Technology: techcrunch.com · theverge.com · wired.com · arstechnica.com
+⚽ Sports: fifa.com · cafonline.com · espn.com · bbc.com/sport · sofascore.com · lfp.dz
+
+---
+
+## ⚽ SPORTS MODULE (STRICT RULES)
+1. **NEVER invent, guess, or hallucinate match scores, results, or fixtures**
+2. Source hierarchy: SofaScore (primary) → LFP.dz (Algerian league) → FlashScore → RSS feeds → Official sites
+3. Match display format:
    - 🔴 LIVE: **Team A [score] - [score] Team B** | Competition | Source link
-   - ✅ RESULT: **Team A [score] - [score] Team B** | Competition | Date | Source link  
+   - ✅ RESULT: **Team A [score] - [score] Team B** | Competition | Date | Source link
    - 📅 UPCOMING: Team A vs Team B | Time | Competition | Source link
-4. Always include the **source link** and **competition name** with every match
-5. If SofaScore data is unavailable, clearly state: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
-6. For Algerian national team queries, also check LFP data for context
-7. For transfers: only report from verified BBC Sport / ESPN / APS sources in the RSS data
+4. Always include source link and competition name
+5. If data is unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
 
-## General Rules
-- **ALWAYS use AI reasoning** — never dump raw data without interpretation
-- For LFP data: present results in clear table or list with scores highlighted  
-- For code requests: include comments, best practices, error handling, markdown code blocks
-- For GitHub actions (commit, PR): describe what you will do and ask for confirmation
-- Be concise, structured, and helpful. Use markdown formatting
+---
 
-${prayerContext ? `## 🕌 Prayer Times (real-time from aladhan.com)\n${prayerContext}\n\nPresent these prayer times clearly. NEVER guess prayer times — use ONLY the data above.` : ''}
+## 📰 NEWS MODULE
+- Classify: Algeria News 🇩🇿 / International News 🌍 / Technology News 💻
+- Always include date with every news item
+- Always prioritize newest articles
+- Always cite source URL
 
-${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\nاعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
+---
 
-${footballContext ? `## ⚽ Football Intelligence — SofaScore + International RSS\n${footballContext}\n\nPresent ALL available match data clearly. Use the format specified in Football Rules above. NEVER invent scores — only use data provided here.` : ''}
+## 💻 CODE / GITHUB MODULE
+If code is provided:
+- Analyze structure, detect bugs: syntax / logic / performance / security
+- Provide fixes with markdown code blocks, comments, best practices
 
-${currencyContext ? `## 💱 Currency Exchange Data (real-time from ${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**Currency Rules:**\n1. NEVER guess or invent exchange rates — use ONLY the data above\n2. Present rates in a clear table format with both directions (1 DZD = X currency AND 1 currency = Y DZD)\n3. If user asks to convert: use the provided rates to calculate and show the result\n4. Mention the source and update time. Highlight if data is stale.\n5. Note: rates reflect official/bank rates — parallel market rates may differ` : ''}
+If GitHub repo is provided:
+- Process file-by-file
+- Do NOT modify directly
+- Output git diff suggestions and structured analysis
 
-${rssContext ? `## 📰 Live News/Sports Data (RSS)\n${rssContext}\n\nSummarize helpfully. Include source links. Do not invent content.` : ''}
+---
 
-${webSearchContext ? `## 🔍 نتائج البحث الحية (مرتبة من الأحدث إلى الأقدم)\n${webSearchContext}\n\n**قواعد البحث:**\n1. استخدم هذه النتائج كمرجع أساسي للإجابة — اذكر المصادر والروابط\n2. النتائج من Djazairess تغطي الصحافة الجزائرية بشكل موسّع\n3. رتّب إجابتك من الأحدث إلى الأقدم\n4. لا تخترع معلومات — استخدم فقط ما هو موجود في النتائج أعلاه` : ''}
+## 🌍 MULTILINGUAL RULES
+- Respond in Arabic, English, or French — **always match the user's language**
+- Arabic queries → Arabic response (RTL formatting)
+- English queries → English response
+- French queries → French response
 
-${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${currentRepo || 'none selected'}.\nYou can: list files, read code, create commits, and open Pull Requests.` : '## GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.'}`
+---
+
+## ⚠️ STRICT ANTI-HALLUCINATION RULES
+- NEVER invent facts, news, scores, or exchange rates
+- NEVER present data not found in the injected context below
+- NEVER skip date sorting for time-sensitive queries
+- NEVER show outdated info as "latest"
+- ALWAYS use markdown formatting for structure
+
+---
+
+${prayerContext ? `## 🕌 Prayer Times — Real-Time Data (aladhan.com)\n${prayerContext}\n\n> Present these prayer times clearly in a table. NEVER guess prayer times — use ONLY the data above.` : ''}
+
+${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\n> اعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
+
+${footballContext ? `## ⚽ Football Intelligence — SofaScore + International RSS\n${footballContext}\n\n> Present ALL available match data clearly using the format in the Sports Module above. NEVER invent scores.` : ''}
+
+${currencyContext ? `## 💱 Currency Exchange Data — Real-Time (${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**Currency Rules:**\n1. NEVER guess or invent exchange rates — use ONLY the data above\n2. Present rates in a clear table with both directions (1 DZD = X AND 1 X = Y DZD)\n3. For conversions: calculate using the provided rates and show the result\n4. Mention the source and update time. Flag stale data.\n5. Note: rates reflect official/bank rates — parallel market rates may differ` : ''}
+
+${rssContext ? `## 📰 Live News & Sports Data (RSS Feeds)\n${rssContext}\n\n> Summarize helpfully with source links. Apply TIME MODE sorting. Do not invent content.` : ''}
+
+${webSearchContext ? `## 🔍 نتائج البحث الحية — OpenSerp Pipeline (مرتبة من الأحدث إلى الأقدم)\nمصادر: SearXNG + DuckDuckGo + Djazairess\n\n${webSearchContext}\n\n**قواعد معالجة البحث:**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. نتائج Djazairess تغطي الصحافة الجزائرية بشكل موسّع (أكثر من 500 صحيفة ومجلة)\n3. رتّب إجابتك من الأحدث إلى الأقدم (TIME MODE مفعّل تلقائياً للأخبار)\n4. لا تخترع معلومات — استخدم فقط ما هو موجود في النتائج أعلاه\n5. أشر بوضوح إذا لم تجد نتائج حديثة كافية` : ''}
+
+${githubToken ? `## 🐙 GitHub Status\nGitHub is connected ✓ | Current repo: ${currentRepo || 'none selected'}\nCapabilities: list files · read code · analyze · create commits · open Pull Requests` : `## 🐙 GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.`}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },
@@ -1819,59 +1888,255 @@ app.post('/api/dz-agent/github/file-content', async (req, res) => {
   }
 })
 
-// Analyze code with AI
+// Analyze code with AI — returns structured JSON with issues + action buttons
 app.post('/api/dz-agent/github/analyze', async (req, res) => {
   const { repo, path, content } = req.body
   if (!content) return res.status(400).json({ error: 'Content required for analysis.' })
 
   const deepseekKey = process.env.DEEPSEEK_API_KEY
+  const lines = content.split('\n').length
+  const langMap = { js: 'JavaScript', ts: 'TypeScript', tsx: 'TypeScript/React', jsx: 'JavaScript/React', py: 'Python', rs: 'Rust', go: 'Go', java: 'Java', cs: 'C#', cpp: 'C++', php: 'PHP', rb: 'Ruby', swift: 'Swift', kt: 'Kotlin' }
+  const ext = (path || '').split('.').pop()?.toLowerCase() || ''
+  const language = langMap[ext] || ext.toUpperCase() || 'Unknown'
 
-  const prompt = `Analyze the following code from ${path || 'unknown file'} in repository ${repo || 'unknown repo'}.
+  const prompt = `You are an expert code analyzer. Analyze the following ${language} code from file "${path || 'unknown'}" in repo "${repo || 'unknown'}".
 
-Provide a comprehensive analysis including:
-1. **Summary** — what the code does
-2. **Issues** — bugs, anti-patterns, security vulnerabilities
-3. **Improvements** — specific suggestions with code examples where appropriate
-4. **Best Practices** — recommend any missing patterns or standards
-5. **Unit Tests** — suggest 2-3 key test cases
+CRITICAL: You MUST return ONLY a valid JSON object. No markdown, no explanation outside JSON.
 
-Code:
-\`\`\`
+JSON structure:
+{
+  "summary": "1-2 sentence description of what this code does",
+  "language": "${language}",
+  "lines": ${lines},
+  "score": <integer 0-100 representing code quality>,
+  "issues": [
+    {
+      "id": "issue_<n>",
+      "line": <line number or null>,
+      "severity": "<critical|high|medium|low|info>",
+      "category": "<syntax|logic|security|performance|style|edge_case>",
+      "issue": "<concise issue title>",
+      "root_cause": "<why this is a problem>",
+      "fix": "<specific fix description>",
+      "fix_code": "<actual fixed code snippet or null>",
+      "actions": ["fix_code", "explain_error", "improve_code"]
+    }
+  ],
+  "improvements": [
+    {
+      "id": "imp_<n>",
+      "title": "<improvement title>",
+      "description": "<what to improve and why>",
+      "actions": ["improve_code"]
+    }
+  ],
+  "test_suggestions": ["<test case 1>", "<test case 2>"],
+  "has_repo": ${repo ? 'true' : 'false'}
+}
+
+Severity guide:
+- critical: data loss, crashes, injection attacks
+- high: serious bugs, security holes
+- medium: logic errors, missing error handling
+- low: performance, style issues
+- info: suggestions
+
+If no issues found: return empty arrays. Score 90+ if excellent.
+
+Code to analyze:
+\`\`\`${ext}
 ${content.slice(0, 8000)}
-\`\`\``
+\`\`\`
+
+Return ONLY the JSON object:`
 
   const apiMessages = [{ role: 'user', content: prompt }]
 
   try {
-    let analysis = null
+    let rawContent = null
 
     if (deepseekKey) {
       const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
-        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 3000, temperature: 0.3, stream: false }),
+        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 4000, temperature: 0.1, stream: false }),
       })
-      if (r.ok) { const d = await r.json(); analysis = d.choices?.[0]?.message?.content }
+      if (r.ok) { const d = await r.json(); rawContent = d.choices?.[0]?.message?.content }
     }
 
-    if (!analysis) {
-      const result = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 3000, temperature: 0.3 })
-      analysis = result.content
+    if (!rawContent) {
+      const result = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 4000, temperature: 0.1 })
+      rawContent = result.content
     }
 
-    if (!analysis) {
-      analysis = `## Code Analysis: ${path}\n\n**File:** ${path}\n**Repo:** ${repo}\n\n> All API keys exhausted. Please add more keys (AI_API_KEY_2, AI_API_KEY_3...) or wait for the daily limit to reset.\n\n**Basic check:** The file contains ${content.split('\n').length} lines of code.`
+    if (!rawContent) {
+      return res.status(200).json({
+        analysis: { summary: `File: ${path} (${lines} lines, ${language})`, language, lines, score: 50, issues: [], improvements: [], test_suggestions: [], has_repo: !!repo },
+        structured: true,
+      })
     }
 
-    if (analysis) {
-      const cleaned = analysis.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      if (cleaned) analysis = cleaned
+    // Clean think tags
+    rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
+    // Try to parse as JSON
+    let parsed = null
+    try {
+      // Extract JSON if wrapped in markdown code blocks
+      const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || rawContent.match(/(\{[\s\S]*\})/)
+      const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : rawContent
+      parsed = JSON.parse(jsonStr)
+    } catch {
+      // Fallback: return as plain text analysis
+      return res.status(200).json({ analysis: rawContent, structured: false })
     }
 
-    return res.status(200).json({ analysis })
+    // Add apply_repo_fix to issues if repo is provided
+    if (repo && parsed.issues) {
+      parsed.issues = parsed.issues.map(issue => ({
+        ...issue,
+        actions: [...new Set([...(issue.actions || ['fix_code', 'explain_error']), ...(repo ? ['apply_repo_fix'] : [])])]
+      }))
+    }
+    // Add rescan to all
+    parsed.rescan_action = 'rescan_repo'
+
+    return res.status(200).json({ analysis: parsed, structured: true })
   } catch (err) {
     console.error('Analyze error:', err)
     return res.status(500).json({ error: 'Analysis failed.' })
+  }
+})
+
+// Code action handler — handles button clicks from UI
+app.post('/api/dz-agent/github/code-action', async (req, res) => {
+  const { action, issue, filePath, fileContent, repo, language } = req.body
+  if (!action) return res.status(400).json({ error: 'action required' })
+
+  const deepseekKey = process.env.DEEPSEEK_API_KEY
+
+  let prompt = ''
+
+  if (action === 'fix_code') {
+    prompt = `Fix ONLY this specific issue in the ${language || ''} code:
+
+Issue: ${issue?.issue || ''}
+Root cause: ${issue?.root_cause || ''}
+Suggested fix: ${issue?.fix || ''}
+Line: ${issue?.line || 'unknown'}
+
+Original code (file: ${filePath || 'unknown'}):
+\`\`\`
+${(fileContent || '').slice(0, 6000)}
+\`\`\`
+
+Return ONLY the fixed code. No explanation. Clean and optimized. Preserve all unrelated code exactly as-is.`
+
+  } else if (action === 'explain_error') {
+    prompt = `Explain this code issue in detail (in the same language the user is using — Arabic/English/French):
+
+Issue: ${issue?.issue || ''}
+Root cause: ${issue?.root_cause || ''}
+Category: ${issue?.category || ''}
+Line: ${issue?.line || 'unknown'}
+File: ${filePath || 'unknown'}
+
+Provide:
+1. What the problem is
+2. Why it causes errors or risks
+3. A concrete example showing the problem
+4. The correct approach with a code example
+Be thorough but concise.`
+
+  } else if (action === 'improve_code') {
+    prompt = `Improve the following ${language || ''} code for better readability, performance, and best practices:
+
+File: ${filePath || 'unknown'}
+Focus: ${issue?.title || issue?.issue || 'general improvements'}
+
+Code:
+\`\`\`
+${(fileContent || '').slice(0, 6000)}
+\`\`\`
+
+Return the improved version with brief inline comments explaining key changes. Focus on: ${issue?.description || 'readability and performance'}`
+
+  } else if (action === 'apply_repo_fix') {
+    prompt = `Generate a minimal git diff (unified diff format) to fix this issue:
+
+Issue: ${issue?.issue || ''}
+Fix: ${issue?.fix || ''}
+Line: ${issue?.line || 'unknown'}
+File: ${filePath || 'unknown'}
+
+Code:
+\`\`\`
+${(fileContent || '').slice(0, 6000)}
+\`\`\`
+
+Return ONLY the git diff in unified diff format. Example:
+--- a/${filePath || 'file'}
++++ b/${filePath || 'file'}
+@@ -N,M +N,M @@
+ context line
+-removed line
++added line
+ context line
+
+Generate only the minimal necessary diff.`
+
+  } else if (action === 'rescan_repo') {
+    prompt = `Re-analyze this ${language || ''} code thoroughly. Look for ALL issues including subtle ones:
+
+File: ${filePath || 'unknown'}
+Code:
+\`\`\`
+${(fileContent || '').slice(0, 6000)}
+\`\`\`
+
+Return a fresh analysis as a JSON object with the same structure as before (summary, language, lines, score, issues, improvements, test_suggestions).`
+
+  } else {
+    return res.status(400).json({ error: 'Unknown action' })
+  }
+
+  const apiMessages = [{ role: 'user', content: prompt }]
+
+  try {
+    let result = null
+
+    if (deepseekKey) {
+      const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 4000, temperature: 0.1, stream: false }),
+      })
+      if (r.ok) { const d = await r.json(); result = d.choices?.[0]?.message?.content }
+    }
+
+    if (!result) {
+      const groqResult = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: apiMessages, max_tokens: 4000, temperature: 0.1 })
+      result = groqResult.content
+    }
+
+    if (!result) return res.status(500).json({ error: 'No response from AI.' })
+
+    result = result.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
+    // For rescan, try to parse JSON
+    if (action === 'rescan_repo') {
+      try {
+        const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || result.match(/(\{[\s\S]*\})/)
+        const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : result
+        const parsed = JSON.parse(jsonStr)
+        return res.status(200).json({ content: parsed, structured: true, action })
+      } catch { /* fall through to text */ }
+    }
+
+    return res.status(200).json({ content: result, structured: false, action })
+  } catch (err) {
+    console.error('Code action error:', err)
+    return res.status(500).json({ error: 'Action failed.' })
   }
 })
 

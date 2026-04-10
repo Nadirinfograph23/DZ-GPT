@@ -1088,12 +1088,12 @@ export default function DZChatBox() {
             </div>
           )}
 
+          <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
+
           {/* Live Dashboard Cards — unique to DZ Agent */}
           <div className="dz-dashboard-wrapper">
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
-
-          <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
         </div>
       ) : (
       /* Messages */

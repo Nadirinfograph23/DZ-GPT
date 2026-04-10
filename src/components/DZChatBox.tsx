@@ -148,7 +148,7 @@ function ScoreRing({ score }: { score: number }) {
 }
 
 function CodeAnalysisPanel({
-  data, filePath, fileContent, repo, onAction
+  data, filePath, onAction
 }: {
   data: CodeAnalysisData
   filePath: string

@@ -2,13 +2,94 @@ import express from 'express'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import crypto from 'crypto'
+import helmet from 'helmet'
+import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
 const PORT = 5000
 
 const app = express()
-app.use(express.json())
+
+// ===== SECURITY HEADERS =====
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}))
+
+// ===== CORS =====
+const allowedOrigins = isProd
+  ? ['https://dz-gpt.vercel.app', process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ''].filter(Boolean)
+  : true
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false,
+}))
+
+// ===== BODY SIZE LIMIT =====
+app.use(express.json({ limit: '1mb' }))
+
+// ===== RATE LIMITERS =====
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'طلبات كثيرة جداً. يرجى الانتظار دقيقة ثم المحاولة مجدداً.' },
+})
+
+const githubLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded. Please wait a minute.' },
+})
+
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait.' },
+})
+
+app.use('/api/chat', aiLimiter)
+app.use('/api/dz-agent-chat', aiLimiter)
+app.use('/api/dz-agent/github', githubLimiter)
+app.use('/api/dz-agent-search', searchLimiter)
+app.use('/api/dz-agent/search', searchLimiter)
+
+// ===== INPUT SANITIZER =====
+function sanitizeString(str, maxLen = 10000) {
+  if (typeof str !== 'string') return ''
+  return str.slice(0, maxLen).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+}
+
+function isValidGithubPath(p) {
+  if (typeof p !== 'string') return false
+  if (p.includes('..') || p.includes('//') || p.startsWith('/')) return false
+  return /^[a-zA-Z0-9._\-/\s]+$/.test(p)
+}
+
+function isValidGithubRepo(repo) {
+  if (typeof repo !== 'string') return false
+  return /^[a-zA-Z0-9._\-]+\/[a-zA-Z0-9._\-]+$/.test(repo)
+}
 
 // ===== GROQ MULTI-KEY FALLBACK =====
 function getGroqKeys() {
@@ -1143,6 +1224,8 @@ app.post('/api/dz-agent/github/files', async (req, res) => {
   const token = req.body.token || process.env.GITHUB_TOKEN || ''
   const { repo, path = '' } = req.body
   if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  if (path && !isValidGithubPath(path)) return res.status(400).json({ error: 'Invalid path.' })
 
   try {
     const endpoint = `/repos/${repo}/contents/${path}`
@@ -1169,6 +1252,8 @@ app.post('/api/dz-agent/github/file-content', async (req, res) => {
   const token = req.body.token || process.env.GITHUB_TOKEN || ''
   const { repo, path } = req.body
   if (!token || !repo || !path) return res.status(400).json({ error: 'Token, repo, and path required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  if (!isValidGithubPath(path)) return res.status(400).json({ error: 'Invalid file path.' })
 
   try {
     const response = await ghFetch(`/repos/${repo}/contents/${path}`, token)
@@ -1289,6 +1374,10 @@ app.post('/api/dz-agent/github/commit', async (req, res) => {
   if (!token || !repo || !path || !content || !message) {
     return res.status(400).json({ error: 'Token, repo, path, content, and message are required.' })
   }
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  if (!isValidGithubPath(path)) return res.status(400).json({ error: 'Invalid file path.' })
+  if (typeof message !== 'string' || message.length > 500) return res.status(400).json({ error: 'Invalid commit message.' })
+  if (typeof content !== 'string' || content.length > 500000) return res.status(400).json({ error: 'File content too large.' })
 
   try {
     // Get current file SHA (if exists, for update)

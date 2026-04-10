@@ -1583,6 +1583,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
+  // ── GitHub URL detection (Smart Dev Mode trigger) ─────────────────────────
+  const githubUrlMatch = lastUserMessage.match(/github\.com\/([a-zA-Z0-9._\-]+\/[a-zA-Z0-9._\-]+)/i)
+  if (githubUrlMatch && githubToken) {
+    const detectedRepo = githubUrlMatch[1].replace(/\.git$/, '').replace(/\/$/, '')
+    return res.status(200).json({
+      action: 'list-files',
+      repo: detectedRepo,
+      content: `🚀 **GitHub Smart Dev Mode** مُفعَّل!\n\nتم اكتشاف المستودع: \`${detectedRepo}\`\n\nجاري تحليل هيكل المشروع...`,
+    })
+  }
+  if (githubUrlMatch && !githubToken) {
+    return res.status(200).json({
+      content: '⚠️ تم اكتشاف رابط GitHub. يرجى ربط GitHub Token أولاً بالضغط على زر GitHub في أعلى المحادثة.',
+    })
+  }
+
   // ── GitHub command detection ──────────────────────────────────────────────
   const isListRepos = [
     'show my repos', 'list repos', 'my repositories', 'show repositories',
@@ -1950,14 +1966,63 @@ News: Always keep newest version of same event.
 
 ---
 
-## 💻 TECH / CODE / GITHUB MODULE
-If code provided:
-- Analyze structure, detect bugs (syntax / logic / performance / security)
-- Provide fixes with markdown code blocks + best practices
+## 💻 GITHUB SMART DEVELOPMENT MODE (DZ Agent Dev Assistant)
 
-If GitHub repo provided:
-- Process file-by-file
-- Output git diff suggestions and structured analysis
+When a user links a GitHub repository or asks about code, you enter **GitHub Smart Dev Mode** automatically.
+
+### 🧠 1. PROJECT UNDERSTANDING ENGINE
+When a GitHub repo is provided:
+1. Fetch: project tree, README, package.json/requirements.txt, languages used, frameworks
+2. Analyze: project type (Web/API/Mobile/AI/Script), architecture (MVC/Monolith/Microservices), organization quality
+3. If project is unclear: make an intelligent guess + ask for clarification + provide approximate analysis
+
+### 🔍 2. SMART SCAN MODE — Interactive Buttons
+Offer these analysis options to the user (present as labeled actions):
+- 🔎 البحث عن الأخطاء — Find bugs (syntax, logic, performance, security)
+- ⚡ تحسين الأداء — Performance optimization
+- 🧠 اقتراحات ذكية — Smart suggestions
+- 📦 تحليل Dependencies — Dependencies analysis
+- 🛡️ فحص الأمان — Security scan
+- 📐 تحسين Structure — Structure improvement
+- ➕ اقتراح ميزات جديدة — Feature suggestions
+- 🧪 اقتراح Tests — Test suggestions
+
+Each action returns:
+- ❌ المشكلة (The issue)
+- 📍 مكانها (Location in code)
+- 💡 الحل (Solution)
+- 🧾 كود مقترح (Ready-to-use code)
+
+### 💡 3. AI SUGGESTIONS ENGINE
+Provide:
+- Code refactoring suggestions
+- Logic simplification
+- Duplicate code removal
+- Better naming conventions
+- Design pattern recommendations
+
+### 🛠️ 4. ACTION MODE — Direct Commands
+Offer these actions:
+- ✍️ إنشاء Commit — Create commit with professional message + diff + explanation
+- 🔀 إنشاء Pull Request — Create PR
+- 🧩 إصلاح تلقائي — Auto-fix: fix bugs, improve code, rewrite weak sections with explanation
+- 📄 إنشاء README — Generate professional README
+- 📊 إنشاء Documentation — Generate full documentation
+
+### 📊 5. PROJECT SCORING
+Always provide a project score when analyzing:
+- Code Quality: /10
+- Structure: /10
+- Security: /10
+- Performance: /10
+With detailed explanation.
+
+### ⚠️ GITHUB DEV MODE RULES
+- NEVER say "I can't"
+- For large projects: analyze progressively
+- Always provide practical, actionable results — not theory
+- Code suggestions must ALWAYS be ready-to-use
+- Analyze file-by-file if needed, output structured git diff suggestions
 
 Memory: store APIs, bug fixes, solutions, code patterns for future reuse.
 
@@ -2113,7 +2178,7 @@ ${rssContext ? `## 📰 Live News & Sports Data (RSS Feeds)\n${rssContext}\n\n> 
 
 ${webSearchContext ? `## 🔍 نتائج البحث الحية — OpenSerp Pipeline (مرتبة من الأحدث إلى الأقدم)\nمصادر: SearXNG + DuckDuckGo + Djazairess\n\n${webSearchContext}\n\n**قواعد معالجة البحث:**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. نتائج Djazairess تغطي الصحافة الجزائرية بشكل موسّع (أكثر من 500 صحيفة ومجلة)\n3. رتّب إجابتك من الأحدث إلى الأقدم (TIME MODE مفعّل تلقائياً للأخبار)\n4. لا تخترع معلومات — استخدم فقط ما هو موجود في النتائج أعلاه\n5. أشر بوضوح إذا لم تجد نتائج حديثة كافية` : ''}
 
-${githubToken ? `## 🐙 GitHub Status\nGitHub is connected ✓ | Current repo: ${currentRepo || 'none selected'}\nCapabilities: list files · read code · analyze · create commits · open Pull Requests` : `## 🐙 GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.`}`
+${githubToken ? `## 🐙 GitHub Status\nGitHub is connected ✓ | Current repo: ${currentRepo || 'none selected'}\nCapabilities: list files · read code · analyze · create commits · open Pull Requests\n\nWhen user shares a GitHub repo URL (e.g. https://github.com/user/repo), automatically:\n1. Acknowledge receipt of the repo\n2. Activate GitHub Smart Dev Mode\n3. Offer to scan/analyze the project with the interactive buttons described above\n4. Fetch the repo structure using list-files action` : `## 🐙 GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.\n\nWhen user shares a GitHub URL, tell them to connect their GitHub token first (click the GitHub button at the top of the chat).`}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },

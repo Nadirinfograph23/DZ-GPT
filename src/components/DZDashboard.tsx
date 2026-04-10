@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Newspaper, Trophy, Cloud, Wind, Droplets, ExternalLink, RefreshCw, MapPin, Thermometer } from 'lucide-react'
+import { Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw, MapPin, Thermometer } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
 interface NewsItem {

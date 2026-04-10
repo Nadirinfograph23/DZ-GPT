@@ -656,6 +656,154 @@ function computeTrendingScore(item, allItems) {
   return Math.min(score, 100)
 }
 
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  GN-RSS MODULE — Google News RSS Intelligence Layer             ║
+// ║  ADD-ON ONLY — Does NOT modify any existing system             ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+const GN_RSS_CACHE = new Map()
+const GN_RSS_TTL = 10 * 60 * 1000 // 10 minutes (Hybrid Mode default)
+
+// ── Multilingual feed registry ──────────────────────────────────────────────
+const GN_RSS_FEEDS = {
+  ar: [
+    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google رياضة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  ],
+  fr: [
+    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
+    { name: 'Google Algérie actualités', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie+actualit%C3%A9s&hl=fr&gl=DZ&ceid=DZ:fr' },
+  ],
+  en: [
+    { name: 'Google Algeria News', url: 'https://news.google.com/rss/search?q=Algeria&hl=en&gl=DZ&ceid=DZ:en' },
+    { name: 'Google World News', url: 'https://news.google.com/rss/search?q=world+news&hl=en&gl=US&ceid=US:en' },
+    { name: 'Google Economy', url: 'https://news.google.com/rss/search?q=economy&hl=en&gl=US&ceid=US:en' },
+    { name: 'Google Technology AI', url: 'https://news.google.com/rss/search?q=technology+AI&hl=en&gl=US&ceid=US:en' },
+  ],
+}
+
+// ── GN-RSS category keywords ─────────────────────────────────────────────────
+const GN_CATEGORIES = {
+  'سياسة 🏛️':   ['سياسة', 'حكومة', 'وزير', 'برلمان', 'رئيس', 'انتخاب', 'دبلوماسية', 'politics', 'government', 'minister', 'parliament', 'president', 'election', 'politique', 'gouvernement'],
+  'اقتصاد 💰':  ['اقتصاد', 'مالية', 'استثمار', 'تضخم', 'نمو', 'ميزانية', 'بورصة', 'economy', 'finance', 'investment', 'inflation', 'gdp', 'budget', 'économie', 'investissement'],
+  'رياضة ⚽':   ['رياضة', 'مباراة', 'كرة', 'دوري', 'بطولة', 'لاعب', 'sport', 'football', 'match', 'league', 'tournament', 'player', 'score', 'goal', 'sport', 'foot'],
+  'تكنولوجيا 💻': ['تكنولوجيا', 'تقنية', 'ذكاء اصطناعي', 'برمجة', 'tech', 'technology', 'ai', 'software', 'cybersecurity', 'startup', 'digital', 'technologie', 'numérique'],
+  'صحة 🏥':    ['صحة', 'طب', 'مرض', 'علاج', 'مستشفى', 'لقاح', 'health', 'medical', 'disease', 'treatment', 'hospital', 'vaccine', 'santé', 'médecine'],
+  'دولي 🌍':   ['دولي', 'عالمي', 'أمم متحدة', 'international', 'world', 'global', 'united nations', 'nato', 'international', 'mondial'],
+}
+
+// ── Detect query language ─────────────────────────────────────────────────────
+function detectQueryLanguage(text) {
+  if (/[\u0600-\u06FF]/.test(text)) return 'ar'
+  if (/[àâçéèêëîïôùûüœæ]/i.test(text) || /\b(algérie|actualités|économie|politique)\b/i.test(text)) return 'fr'
+  return 'en'
+}
+
+// ── Classify GN article into category ────────────────────────────────────────
+function classifyGNArticle(title = '', source = '') {
+  const text = (title + ' ' + source).toLowerCase()
+  for (const [cat, kws] of Object.entries(GN_CATEGORIES)) {
+    if (kws.some(k => text.includes(k))) return cat
+  }
+  return 'محلي 🇩🇿'
+}
+
+// ── Fetch + parse GN-RSS feeds (uses shared fetchRSSFeed with GN cache key) ──
+async function fetchGNRSSArticles(feeds) {
+  const cacheKey = feeds.map(f => f.url).join('|')
+  const cached = GN_RSS_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < GN_RSS_TTL) {
+    console.log(`[GN-RSS] Cache hit: ${cached.data.length} articles`)
+    return cached.data
+  }
+
+  // Parallel fetch (LIVE mode for fresh data)
+  const settled = await Promise.allSettled(
+    feeds.map(async (feed) => {
+      try {
+        const r = await fetch(feed.url, {
+          headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,application/xml,text/xml,*/*' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!r.ok) return []
+        const xml = await r.text()
+        const items = parseRSS(xml, feed.name)
+        return items.map(item => ({ ...item, gnSource: feed.name, language: feed.url.includes('hl=ar') ? 'ar' : feed.url.includes('hl=fr') ? 'fr' : 'en' }))
+      } catch { return [] }
+    })
+  )
+
+  const raw = settled.flatMap(s => s.status === 'fulfilled' ? s.value : [])
+  const articles = deduplicateGNArticles(raw)
+    .map(item => ({ ...item, category: classifyGNArticle(item.title, item.source) }))
+    .sort((a, b) => new Date(b.pubDate || 0).getTime() - new Date(a.pubDate || 0).getTime())
+    .slice(0, 30)
+
+  GN_RSS_CACHE.set(cacheKey, { data: articles, ts: Date.now() })
+  console.log(`[GN-RSS] Fetched ${articles.length} articles from ${feeds.length} feeds`)
+  return articles
+}
+
+// ── Deduplication (title similarity + URL match) ──────────────────────────────
+function deduplicateGNArticles(articles) {
+  const seen = new Set()
+  const result = []
+  for (const art of articles) {
+    if (!art.title) continue
+    // Normalize: lowercase, strip punctuation, keep first 60 chars as fingerprint
+    const fingerprint = art.title.toLowerCase().replace(/[^\u0600-\u06FFa-z0-9\s]/g, '').trim().slice(0, 60)
+    const urlKey = art.link ? art.link.split('?')[0] : ''
+    if (seen.has(fingerprint) || (urlKey && seen.has(urlKey))) continue
+    seen.add(fingerprint)
+    if (urlKey) seen.add(urlKey)
+    result.push(art)
+  }
+  return result
+}
+
+// ── Build GN-RSS context string for AI system prompt ─────────────────────────
+function buildGNRSSContext(articles, label = '🌐 Google News RSS') {
+  if (!articles.length) return ''
+  const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  let ctx = `\n\n--- ${label} — ${date} ---\n`
+
+  // Group by category
+  const byCategory = {}
+  for (const art of articles) {
+    const cat = art.category || 'عام'
+    if (!byCategory[cat]) byCategory[cat] = []
+    byCategory[cat].push(art)
+  }
+
+  for (const [cat, items] of Object.entries(byCategory)) {
+    ctx += `\n**${cat}:**\n`
+    for (const item of items.slice(0, 4)) {
+      ctx += `• ${item.title}`
+      if (item.source) ctx += ` [${item.source}]`
+      if (item.link) ctx += ` — ${item.link}`
+      if (item.pubDate) {
+        try { ctx += ` (${new Date(item.pubDate).toLocaleDateString('ar-DZ')})` } catch {}
+      }
+      ctx += '\n'
+    }
+  }
+  ctx += '\n---\n'
+  ctx += '> مصدر: Google News RSS — بيانات آنية مصنّفة تلقائياً.\n'
+  return ctx
+}
+
+// ── Background refresh helper (for Hybrid Mode) ───────────────────────────────
+function refreshGNRSSInBackground(feeds) {
+  const cacheKey = feeds.map(f => f.url).join('|')
+  const cached = GN_RSS_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts > GN_RSS_TTL * 0.7) {
+    // Refresh silently if cache is 70%+ expired
+    fetchGNRSSArticles(feeds).catch(() => {})
+  }
+}
+
 async function fetchWeatherAlgiers() {
   const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine', 'Annaba']
   const apiKey = process.env.OPENWEATHER_API_KEY
@@ -690,17 +838,25 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     return res.json(DASHBOARD_CACHE.data)
   }
 
-  const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult] = await Promise.allSettled([
+  const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult, gnRssResult] = await Promise.allSettled([
     fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
     fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
     fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
     fetchWeatherAlgiers(),
     fetchLFPData(),
+    // GN-RSS: fetch Arabic Algeria feeds for dashboard augmentation
+    fetchGNRSSArticles(GN_RSS_FEEDS.ar),
   ])
 
-  const allNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
+  const existingNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
     .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
-    .slice(0, 12)
+
+  // Merge GN-RSS articles with existing news (GN-RSS first for freshness, then deduplicate)
+  const gnDashboardArticles = (gnRssResult.status === 'fulfilled' ? gnRssResult.value : [])
+    .map(item => ({ ...item, feedName: item.gnSource || 'Google News' }))
+
+  const allNews = deduplicateGNArticles([...gnDashboardArticles, ...existingNews])
+    .slice(0, 18)
 
   const allSports = (sportsFeeds.status === 'fulfilled' ? sportsFeeds.value : [])
     .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
@@ -1575,6 +1731,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       rssContext = buildRSSContext(feedResults, newsQueryType)
       console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
     }
+
+    // ── GN-RSS ADD-ON: augment news context with Google News RSS ─────────────
+    if (newsQueryType === 'news' || newsQueryType === 'both') {
+      try {
+        const queryLang = detectQueryLanguage(lastUserMessage)
+        const gnFeeds = GN_RSS_FEEDS[queryLang] || GN_RSS_FEEDS.ar
+        // Hybrid Mode: serve from cache immediately, refresh in background if stale
+        refreshGNRSSInBackground(gnFeeds)
+        const gnArticles = await fetchGNRSSArticles(gnFeeds)
+        if (gnArticles.length > 0) {
+          const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
+          rssContext = rssContext ? rssContext + gnCtx : gnCtx
+          console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${queryLang})`)
+        }
+      } catch (err) {
+        console.error('[GN-RSS] Chat augmentation failed:', err.message)
+      }
+    }
   }
 
   // ── Web search for general factual queries (newest first via Djazairess + SearXNG) ─
@@ -1810,6 +1984,36 @@ You are simultaneously:
 - 🤖 Intelligent Retrieval System
 
 FINAL OUTPUT MUST ALWAYS BE: ✔ Fresh ✔ Verified ✔ Memory-augmented ✔ Confidence-ranked ✔ Free from outdated data
+
+---
+
+## 🌐 GN-RSS MODULE — Google News RSS Intelligence Layer (ADD-ON)
+
+This module augments the news pipeline with real-time Google News RSS feeds. It does NOT replace existing sources.
+
+### Sources
+- 🇩🇿 Algeria AR: الجزائر · سياسة · اقتصاد · رياضة
+- 🇩🇿 Algeria FR: Algérie · actualités
+- 🌍 International EN: world news · economy · technology · AI
+
+### Pipeline
+1. **FETCH** — parallel fetch of all relevant Google News RSS feeds
+2. **PARSE** — extract title, link, date, source
+3. **DEDUPLICATE** — title fingerprint (first 60 chars) + URL match
+4. **CLASSIFY** — auto-detect: سياسة 🏛️ / اقتصاد 💰 / رياضة ⚽ / تكنولوجيا 💻 / صحة 🏥 / دولي 🌍 / محلي 🇩🇿
+5. **RANK** — sort by recency (newest first)
+6. **MERGE** — augment existing RSS results without duplication
+
+### Modes
+- 🟢 LIVE: real-time fetch on every news request
+- 🟡 CACHE: serve cached results if TTL valid (10 min)
+- 🔵 HYBRID (active): serve cache → refresh in background if 70% expired
+
+### Rules
+- ALWAYS present GN-RSS articles with their source link
+- ALWAYS mention category per article group
+- NEVER mix GN-RSS data with football/sports live scores
+- ALWAYS prefer newest articles at the top
 
 ---
 

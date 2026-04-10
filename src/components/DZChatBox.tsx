@@ -92,6 +92,7 @@ interface DZMessage {
   pendingAction?: PendingAction
   actionLog?: ActionLogEntry[]
   isError?: boolean
+  showDevCard?: boolean
 }
 
 interface ActionLogEntry {
@@ -615,6 +616,42 @@ function ActionLogPanel({ entries }: { entries: ActionLogEntry[] }) {
           </div>
         ))
       )}
+    </div>
+  )
+}
+
+// ===== DEVELOPER CARD =====
+const DEVELOPER = {
+  name: 'Nadir Infograph',
+  avatar: 'https://scontent.faae2-3.fna.fbcdn.net/v/t39.30808-1/630605385_122261453930187313_3239606922711619823_n.jpg',
+  facebook: 'https://facebook.com/nadir.infograph23',
+}
+
+function DeveloperCard() {
+  return (
+    <div className="dev-card">
+      <img
+        className="dev-card-avatar"
+        src={DEVELOPER.avatar}
+        alt={DEVELOPER.name}
+      />
+      <div className="dev-card-info">
+        <span className="dev-card-label">عن المطور</span>
+        <span className="dev-card-name">{DEVELOPER.name}</span>
+        <span className="dev-card-role">خبير في الذكاء الاصطناعي 🇩🇿</span>
+      </div>
+      <a
+        className="dev-card-fb"
+        href={DEVELOPER.facebook}
+        target="_blank"
+        rel="noreferrer"
+        title="Facebook"
+        aria-label="Facebook"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.235 2.686.235v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.27h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+        </svg>
+      </a>
     </div>
   )
 }
@@ -1201,7 +1238,7 @@ export default function DZChatBox() {
           pendingAction: data.pendingAction,
         })
       } else {
-        addAssistantMessage({ content: data.content || 'No response generated.', richType: 'text' })
+        addAssistantMessage({ content: data.content || 'No response generated.', richType: 'text', showDevCard: !!data.showDevCard })
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
@@ -1401,6 +1438,7 @@ export default function DZChatBox() {
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}
+                      {msg.showDevCard && <DeveloperCard />}
                       {msg.richType === 'repos' && msg.repos && (
                         <ReposList
                           repos={msg.repos}

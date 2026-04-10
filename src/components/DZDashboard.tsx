@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw, MapPin, Thermometer } from 'lucide-react'
+import { Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw, MapPin, Thermometer, Cpu, TrendingUp } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
 interface NewsItem {
@@ -9,6 +9,11 @@ interface NewsItem {
   pubDate: string
   source: string
   feedName: string
+}
+
+interface TechItem extends NewsItem {
+  category: string
+  trending_score: number
 }
 
 interface WeatherItem {
@@ -31,6 +36,7 @@ interface PrayerData {
 interface DashboardData {
   news: NewsItem[]
   sports: NewsItem[]
+  tech: TechItem[]
   weather: WeatherItem[]
   fetchedAt: string
 }
@@ -84,7 +90,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
   const [prayerData, setPrayerData] = useState<PrayerData | null>(null)
   const [prayerLoading, setPrayerLoading] = useState(true)
   const [prayerCity, setPrayerCity] = useState('Algiers')
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech'>('prayer')
 
   const loadDashboard = async () => {
     setLoading(true)
@@ -116,6 +122,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
     { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
     { key: 'news' as const, label: 'الأخبار', icon: '📰' },
     { key: 'sports' as const, label: 'الرياضة', icon: '⚽' },
+    { key: 'tech' as const, label: 'تقنية', icon: '💻' },
   ]
 
   return (
@@ -323,6 +330,58 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
                         target="_blank"
                         rel="noopener noreferrer"
                         className="dzd-news-link"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== TECH ===== */}
+        {activeSection === 'tech' && (
+          <div className="dzd-news-panel">
+            {loading ? (
+              <div className="dzd-news-list">
+                {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
+              </div>
+            ) : (!data?.tech || data.tech.length === 0) ? (
+              <div className="dzd-empty-state">لا توجد أخبار تقنية</div>
+            ) : (
+              <div className="dzd-news-list">
+                {(data.tech).map((item, i) => (
+                  <div
+                    key={i}
+                    className="dzd-news-card dzd-news-card--tech"
+                    onClick={() => onSend(`تقنية: ${item.title}`)}
+                  >
+                    <div className="dzd-news-card-left">
+                      <span className="dzd-news-source dzd-news-source--tech">
+                        <Cpu size={9} /> {item.feedName}
+                      </span>
+                      <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
+                    </div>
+                    <div className="dzd-news-card-body">
+                      <div className="dzd-tech-badges">
+                        <span className="dzd-tech-category">{item.category}</span>
+                        {item.trending_score >= 70 && (
+                          <span className="dzd-tech-trending">
+                            <TrendingUp size={9} /> {item.trending_score}
+                          </span>
+                        )}
+                      </div>
+                      <p className="dzd-news-title">{item.title}</p>
+                    </div>
+                    {item.link && (
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="dzd-news-link dzd-news-link--tech"
                         onClick={e => e.stopPropagation()}
                       >
                         <ExternalLink size={11} />

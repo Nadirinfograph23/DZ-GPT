@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw, MapPin, Thermometer, Cpu, TrendingUp } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
+  MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
+} from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
 interface NewsItem {
@@ -16,13 +19,17 @@ interface TechItem extends NewsItem {
   trending_score: number
 }
 
-interface WeatherItem {
+interface WeatherData {
   city: string
   temp: number | null
+  feels_like?: number
+  temp_min?: number
+  temp_max?: number
   condition: string | null
   icon: string | null
   humidity?: number
   wind?: number
+  visibility?: number | null
   error?: string
 }
 
@@ -37,34 +44,83 @@ interface DashboardData {
   news: NewsItem[]
   sports: NewsItem[]
   tech: TechItem[]
-  weather: WeatherItem[]
+  weather: WeatherData[]
   fetchedAt: string
 }
 
 const PRAYER_ICONS: Record<string, string> = {
   'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤️', 'المغرب': '🌇', 'العشاء': '🌙',
 }
-
 const PRAYER_COLORS: Record<string, string> = {
   'الفجر': '#818cf8', 'الشروق': '#fb923c', 'الظهر': '#facc15', 'العصر': '#34d399', 'المغرب': '#f472b6', 'العشاء': '#a78bfa',
 }
 
-const CITIES: { en: string; ar: string }[] = [
-  { en: 'Algiers', ar: 'الجزائر' },
-  { en: 'Oran', ar: 'وهران' },
-  { en: 'Constantine', ar: 'قسنطينة' },
-  { en: 'Annaba', ar: 'عنابة' },
+// 58 Wilayas of Algeria — { en: API name, ar: display name }
+const WILAYAS = [
+  { en: 'Adrar', ar: 'أدرار' },
+  { en: 'Chlef', ar: 'الشلف' },
+  { en: 'Laghouat', ar: 'الأغواط' },
+  { en: 'Oum el Bouaghi', ar: 'أم البواقي' },
+  { en: 'Batna', ar: 'باتنة' },
   { en: 'Bejaia', ar: 'بجاية' },
-  { en: 'Setif', ar: 'سطيف' },
+  { en: 'Biskra', ar: 'بسكرة' },
+  { en: 'Bechar', ar: 'بشار' },
+  { en: 'Blida', ar: 'البليدة' },
+  { en: 'Bouira', ar: 'البويرة' },
+  { en: 'Tamanrasset', ar: 'تمنراست' },
+  { en: 'Tebessa', ar: 'تبسة' },
   { en: 'Tlemcen', ar: 'تلمسان' },
+  { en: 'Tiaret', ar: 'تيارت' },
+  { en: 'Tizi Ouzou', ar: 'تيزي وزو' },
+  { en: 'Algiers', ar: 'الجزائر' },
+  { en: 'Djelfa', ar: 'الجلفة' },
+  { en: 'Jijel', ar: 'جيجل' },
+  { en: 'Setif', ar: 'سطيف' },
+  { en: 'Saida', ar: 'سعيدة' },
+  { en: 'Skikda', ar: 'سكيكدة' },
+  { en: 'Sidi bel Abbes', ar: 'سيدي بلعباس' },
+  { en: 'Annaba', ar: 'عنابة' },
+  { en: 'Guelma', ar: 'قالمة' },
+  { en: 'Constantine', ar: 'قسنطينة' },
+  { en: 'Medea', ar: 'المدية' },
+  { en: 'Mostaganem', ar: 'مستغانم' },
+  { en: 'Msila', ar: 'المسيلة' },
+  { en: 'Mascara', ar: 'معسكر' },
+  { en: 'Ouargla', ar: 'ورقلة' },
+  { en: 'Oran', ar: 'وهران' },
+  { en: 'El Bayadh', ar: 'البيض' },
+  { en: 'Illizi', ar: 'إليزي' },
+  { en: 'Bordj Bou Arreridj', ar: 'برج بوعريريج' },
+  { en: 'Boumerdes', ar: 'بومرداس' },
+  { en: 'El Tarf', ar: 'الطارف' },
+  { en: 'Tindouf', ar: 'تندوف' },
+  { en: 'Tissemsilt', ar: 'تيسمسيلت' },
+  { en: 'El Oued', ar: 'الوادي' },
+  { en: 'Khenchela', ar: 'خنشلة' },
+  { en: 'Souk Ahras', ar: 'سوق أهراس' },
+  { en: 'Tipaza', ar: 'تيبازة' },
+  { en: 'Mila', ar: 'ميلة' },
+  { en: 'Ain Defla', ar: 'عين الدفلى' },
+  { en: 'Naama', ar: 'النعامة' },
+  { en: 'Ain Temouchent', ar: 'عين تموشنت' },
+  { en: 'Ghardaia', ar: 'غرداية' },
+  { en: 'Relizane', ar: 'غليزان' },
+  { en: 'Timimoun', ar: 'تيميمون' },
+  { en: 'Bordj Badji Mokhtar', ar: 'برج باجي مختار' },
+  { en: 'Ouled Djellal', ar: 'أولاد جلال' },
+  { en: 'Beni Abbes', ar: 'بني عباس' },
+  { en: 'In Salah', ar: 'عين صالح' },
+  { en: 'In Guezzam', ar: 'عين قزام' },
+  { en: 'Touggourt', ar: 'تقرت' },
+  { en: 'Djanet', ar: 'جانت' },
+  { en: 'El Meghaier', ar: 'المغير' },
+  { en: 'El Meniaa', ar: 'المنيعة' },
 ]
 
-const WEATHER_CITIES: Record<string, string> = {
-  Algiers: 'الجزائر العاصمة', Oran: 'وهران', Constantine: 'قسنطينة', Annaba: 'عنابة',
-}
+const STORAGE_KEY = 'dz-agent-selected-city'
 
 function getWeatherBg(icon: string | null) {
-  if (!icon) return 'from-slate-800 to-slate-900'
+  if (!icon) return 'weather-default'
   if (icon.startsWith('01')) return 'weather-sunny'
   if (icon.startsWith('02') || icon.startsWith('03') || icon.startsWith('04')) return 'weather-cloudy'
   if (icon.startsWith('09') || icon.startsWith('10')) return 'weather-rainy'
@@ -84,13 +140,40 @@ function formatPubDate(dateStr: string) {
   } catch { return '' }
 }
 
+function getArName(enName: string) {
+  return WILAYAS.find(w => w.en === enName)?.ar || enName
+}
+
 export default function DZDashboard({ onSend }: { onSend: (q: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Shared city (persisted)
+  const [selectedCity, setSelectedCity] = useState<string>(() => {
+    try { return localStorage.getItem(STORAGE_KEY) || 'Algiers' } catch { return 'Algiers' }
+  })
+
+  // Per-city weather
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+
+  // Prayer
   const [prayerData, setPrayerData] = useState<PrayerData | null>(null)
   const [prayerLoading, setPrayerLoading] = useState(true)
-  const [prayerCity, setPrayerCity] = useState('Algiers')
+
+  // Geolocation
+  const [geoLoading, setGeoLoading] = useState(false)
+  const [geoError, setGeoError] = useState<string | null>(null)
+
+  // Wilaya picker visibility
+  const [showPicker, setShowPicker] = useState(false)
+
   const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech'>('prayer')
+
+  const saveCity = useCallback((city: string) => {
+    try { localStorage.setItem(STORAGE_KEY, city) } catch {}
+    setSelectedCity(city)
+  }, [])
 
   const loadDashboard = async () => {
     setLoading(true)
@@ -101,20 +184,74 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
     finally { setLoading(false) }
   }
 
-  const loadPrayer = async (city = 'Algiers') => {
+  const loadWeather = useCallback(async (city: string) => {
+    setWeatherLoading(true)
+    try {
+      const r = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+      if (r.ok) setWeatherData(await r.json())
+      else setWeatherData(null)
+    } catch { setWeatherData(null) }
+    finally { setWeatherLoading(false) }
+  }, [])
+
+  const loadPrayer = useCallback(async (city: string) => {
     setPrayerLoading(true)
-    setPrayerCity(city)
     try {
       const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
       if (r.ok) setPrayerData(await r.json())
       else setPrayerData(null)
     } catch { setPrayerData(null) }
     finally { setPrayerLoading(false) }
-  }
+  }, [])
+
+  const changeCity = useCallback((city: string) => {
+    saveCity(city)
+    setShowPicker(false)
+    loadWeather(city)
+    loadPrayer(city)
+  }, [saveCity, loadWeather, loadPrayer])
+
+  // Detect location via browser Geolocation API → Nominatim reverse geocode
+  const detectLocation = useCallback(async () => {
+    setGeoLoading(true)
+    setGeoError(null)
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+      )
+      const { latitude, longitude } = position.coords
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
+        { headers: { 'User-Agent': 'DZ-GPT/1.0' } }
+      )
+      if (!r.ok) throw new Error('Nominatim error')
+      const geo = await r.json()
+      const stateName = geo.address?.state || geo.address?.county || geo.address?.city || ''
+
+      // Match to closest wilaya
+      const lower = stateName.toLowerCase()
+      const match = WILAYAS.find(w =>
+        lower.includes(w.en.toLowerCase().split(' ')[0]) ||
+        (w.ar && stateName.includes(w.ar.split(' ')[0]))
+      ) || WILAYAS.find(w => w.en === 'Algiers')
+
+      if (match) changeCity(match.en)
+      else setGeoError('لم يتم التعرف على ولايتك — اختر يدوياً')
+    } catch (err: unknown) {
+      if (err instanceof GeolocationPositionError && err.code === 1) {
+        setGeoError('لم يتم السماح بالوصول للموقع')
+      } else {
+        setGeoError('تعذّر تحديد الموقع')
+      }
+    } finally {
+      setGeoLoading(false)
+    }
+  }, [changeCity])
 
   useEffect(() => {
     loadDashboard()
-    loadPrayer('Algiers')
+    loadPrayer(selectedCity)
+    loadWeather(selectedCity)
   }, [])
 
   const tabs = [
@@ -124,6 +261,44 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
     { key: 'sports' as const, label: 'الرياضة', icon: '⚽' },
     { key: 'tech' as const, label: 'تقنية', icon: '💻' },
   ]
+
+  // City selector bar (shared between prayer & weather)
+  const CityBar = () => (
+    <div className="dzd-city-bar">
+      <div className="dzd-city-bar-top">
+        <button
+          className={`dzd-geo-btn ${geoLoading ? 'dzd-geo-btn--loading' : ''}`}
+          onClick={detectLocation}
+          disabled={geoLoading}
+          title="تحديد موقعي تلقائياً"
+        >
+          <Navigation size={11} className={geoLoading ? 'dzd-spin' : ''} />
+          {geoLoading ? 'جاري...' : 'موقعي'}
+        </button>
+        <button
+          className="dzd-picker-toggle"
+          onClick={() => setShowPicker(p => !p)}
+        >
+          <MapPin size={10} /> {getArName(selectedCity)}
+          <span className="dzd-picker-arrow">{showPicker ? '▲' : '▼'}</span>
+        </button>
+      </div>
+      {geoError && <div className="dzd-geo-error">{geoError}</div>}
+      {showPicker && (
+        <div className="dzd-wilaya-grid">
+          {WILAYAS.map(w => (
+            <button
+              key={w.en}
+              className={`dzd-wilaya-btn ${selectedCity === w.en ? 'dzd-wilaya-btn--active' : ''}`}
+              onClick={() => changeCity(w.en)}
+            >
+              {w.ar}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="dzd-root" dir="rtl">
@@ -143,10 +318,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard(); loadPrayer(prayerCity) }}
+          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity) }}
           title="تحديث"
         >
-          <RefreshCw size={13} className={(loading || prayerLoading) ? 'dzd-spin' : ''} />
+          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading) ? 'dzd-spin' : ''} />
         </button>
       </div>
 
@@ -156,6 +331,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
         {/* ===== PRAYER ===== */}
         {activeSection === 'prayer' && (
           <div className="dzd-prayer-panel">
+            <CityBar />
             {prayerLoading ? (
               <div className="dzd-skeleton-grid">
                 {[...Array(6)].map((_, i) => <div key={i} className="dzd-skeleton" />)}
@@ -164,7 +340,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
               <>
                 <div className="dzd-prayer-header">
                   <span className="dzd-prayer-date">
-                    <MapPin size={11} /> {CITIES.find(c => c.en === prayerCity)?.ar || prayerCity} — {prayerData.date}
+                    <MapPin size={11} /> {getArName(selectedCity)} — {prayerData.date}
                   </span>
                 </div>
                 <div className="dzd-prayer-grid">
@@ -180,22 +356,11 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
                     </div>
                   ))}
                 </div>
-                <div className="dzd-city-row">
-                  {CITIES.map(c => (
-                    <button
-                      key={c.en}
-                      className={`dzd-city-btn ${prayerCity === c.en ? 'dzd-city-btn--active' : ''}`}
-                      onClick={() => loadPrayer(c.en)}
-                    >
-                      {c.ar}
-                    </button>
-                  ))}
-                </div>
               </>
             ) : (
               <div className="dzd-error-state">
                 <span>⚠️ تعذّر تحميل مواقيت الصلاة</span>
-                <button className="dzd-retry-btn" onClick={() => loadPrayer(prayerCity)}>إعادة المحاولة</button>
+                <button className="dzd-retry-btn" onClick={() => loadPrayer(selectedCity)}>إعادة المحاولة</button>
               </div>
             )}
           </div>
@@ -204,51 +369,61 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
         {/* ===== WEATHER ===== */}
         {activeSection === 'weather' && (
           <div className="dzd-weather-panel">
-            {loading ? (
+            <CityBar />
+            {weatherLoading ? (
               <div className="dzd-skeleton-grid">
-                {[...Array(4)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--tall" />)}
+                <div className="dzd-skeleton dzd-skeleton--weather-main" />
+              </div>
+            ) : weatherData && weatherData.temp !== null ? (
+              <div className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}>
+                <div className="dzd-wmc-header">
+                  <div className="dzd-wmc-city">
+                    <MapPin size={12} /> {getArName(selectedCity)}
+                  </div>
+                  {weatherData.icon && (
+                    <img
+                      src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`}
+                      alt=""
+                      className="dzd-wmc-icon"
+                    />
+                  )}
+                </div>
+                <div className="dzd-wmc-temp-row">
+                  <span className="dzd-wmc-temp">{weatherData.temp}°</span>
+                  <div className="dzd-wmc-temp-range">
+                    <span className="dzd-wmc-temp-max">▲ {weatherData.temp_max}°</span>
+                    <span className="dzd-wmc-temp-min">▼ {weatherData.temp_min}°</span>
+                  </div>
+                </div>
+                <div className="dzd-wmc-cond">{weatherData.condition}</div>
+                <div className="dzd-wmc-feels">يبدو كـ {weatherData.feels_like}°</div>
+                <div className="dzd-wmc-meta">
+                  {weatherData.humidity !== undefined && (
+                    <span className="dzd-wmc-meta-item">
+                      <Droplets size={11} /> {weatherData.humidity}%
+                    </span>
+                  )}
+                  {weatherData.wind !== undefined && (
+                    <span className="dzd-wmc-meta-item">
+                      <Wind size={11} /> {weatherData.wind} km/h
+                    </span>
+                  )}
+                  {weatherData.visibility !== null && weatherData.visibility !== undefined && (
+                    <span className="dzd-wmc-meta-item">
+                      <Eye size={11} /> {weatherData.visibility} km
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : weatherData?.error?.includes('OPENWEATHER_API_KEY') ? (
+              <div className="dzd-wc-nokey">
+                <Thermometer size={20} />
+                <span>أضف OPENWEATHER_API_KEY لعرض الطقس</span>
               </div>
             ) : (
-              <div className="dzd-weather-grid">
-                {(data?.weather || []).map((item, i) => (
-                  <div key={i} className={`dzd-weather-card ${getWeatherBg(item.icon)}`}>
-                    <div className="dzd-wc-city">
-                      <MapPin size={10} />
-                      {WEATHER_CITIES[item.city] || item.city}
-                    </div>
-                    {item.temp !== null ? (
-                      <>
-                        <div className="dzd-wc-main">
-                          {item.icon && (
-                            <img
-                              src={`https://openweathermap.org/img/wn/${item.icon}@2x.png`}
-                              alt=""
-                              className="dzd-wc-icon"
-                            />
-                          )}
-                          <span className="dzd-wc-temp">{item.temp}°</span>
-                        </div>
-                        <div className="dzd-wc-cond">{item.condition}</div>
-                        <div className="dzd-wc-meta">
-                          {item.humidity !== undefined && (
-                            <span><Droplets size={10} /> {item.humidity}%</span>
-                          )}
-                          {item.wind !== undefined && (
-                            <span><Wind size={10} /> {item.wind} km/h</span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="dzd-wc-nokey">
-                        <Thermometer size={18} />
-                        <span>أضف OPENWEATHER_API_KEY</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {(data?.weather || []).length === 0 && !loading && (
-                  <div className="dzd-empty-state">لا تتوفر بيانات الطقس</div>
-                )}
+              <div className="dzd-error-state">
+                <span>⚠️ تعذّر تحميل بيانات الطقس</span>
+                <button className="dzd-retry-btn" onClick={() => loadWeather(selectedCity)}>إعادة المحاولة</button>
               </div>
             )}
           </div>
@@ -266,28 +441,16 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
             ) : (
               <div className="dzd-news-list">
                 {(data?.news || []).map((item, i) => (
-                  <div
-                    key={i}
-                    className="dzd-news-card"
-                    onClick={() => onSend(`اخبار: ${item.title}`)}
-                  >
+                  <div key={i} className="dzd-news-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
                     <div className="dzd-news-card-left">
-                      <span className="dzd-news-source">
-                        <Newspaper size={9} /> {item.feedName}
-                      </span>
+                      <span className="dzd-news-source"><Newspaper size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
                     </div>
                     <div className="dzd-news-card-body">
                       <p className="dzd-news-title">{item.title}</p>
                     </div>
                     {item.link && (
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="dzd-news-link"
-                        onClick={e => e.stopPropagation()}
-                      >
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
                         <ExternalLink size={11} />
                       </a>
                     )}
@@ -310,28 +473,16 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
             ) : (
               <div className="dzd-news-list">
                 {(data?.sports || []).map((item, i) => (
-                  <div
-                    key={i}
-                    className="dzd-news-card dzd-news-card--sport"
-                    onClick={() => onSend(`رياضة: ${item.title}`)}
-                  >
+                  <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
                     <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--sport">
-                        <Trophy size={9} /> {item.feedName}
-                      </span>
+                      <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
                     </div>
                     <div className="dzd-news-card-body">
                       <p className="dzd-news-title">{item.title}</p>
                     </div>
                     {item.link && (
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="dzd-news-link"
-                        onClick={e => e.stopPropagation()}
-                      >
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
                         <ExternalLink size={11} />
                       </a>
                     )}
@@ -354,36 +505,22 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
             ) : (
               <div className="dzd-news-list">
                 {(data.tech).map((item, i) => (
-                  <div
-                    key={i}
-                    className="dzd-news-card dzd-news-card--tech"
-                    onClick={() => onSend(`تقنية: ${item.title}`)}
-                  >
+                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`تقنية: ${item.title}`)}>
                     <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--tech">
-                        <Cpu size={9} /> {item.feedName}
-                      </span>
+                      <span className="dzd-news-source dzd-news-source--tech"><Cpu size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
                     </div>
                     <div className="dzd-news-card-body">
                       <div className="dzd-tech-badges">
                         <span className="dzd-tech-category">{item.category}</span>
                         {item.trending_score >= 70 && (
-                          <span className="dzd-tech-trending">
-                            <TrendingUp size={9} /> {item.trending_score}
-                          </span>
+                          <span className="dzd-tech-trending"><TrendingUp size={9} /> {item.trending_score}</span>
                         )}
                       </div>
                       <p className="dzd-news-title">{item.title}</p>
                     </div>
                     {item.link && (
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="dzd-news-link dzd-news-link--tech"
-                        onClick={e => e.stopPropagation()}
-                      >
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link dzd-news-link--tech" onClick={e => e.stopPropagation()}>
                         <ExternalLink size={11} />
                       </a>
                     )}

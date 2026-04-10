@@ -896,6 +896,198 @@ app.get('/api/dz-agent/football', async (req, res) => {
   })
 })
 
+// ===== CURRENCY EXCHANGE MODULE (DZD Base) =====
+const CURRENCY_CACHE = { data: null, ts: 0, status: 'empty' }
+const CURRENCY_TTL = 20 * 60 * 1000 // 20 minutes
+
+const CURRENCY_SYMBOLS = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'TND', 'MAD', 'EGP', 'QAR', 'KWD', 'CAD', 'CHF', 'CNY', 'TRY', 'JPY']
+
+function parseCurrencyXML(xml) {
+  const rates = {}
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi
+  let match
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const block = match[1]
+    const code = block.match(/<targetCurrency>(.*?)<\/targetCurrency>/i)?.[1]?.trim().toUpperCase()
+    const rate = block.match(/<exchangeRate>(.*?)<\/exchangeRate>/i)?.[1]?.trim()
+    if (code && rate && CURRENCY_SYMBOLS.includes(code)) {
+      const val = parseFloat(rate)
+      if (!isNaN(val) && val > 0) rates[code] = +val.toFixed(6)
+    }
+  }
+  return rates
+}
+
+async function fetchCurrencyFloatRates() {
+  try {
+    const r = await fetch('https://www.floatrates.com/daily/dzd.xml', {
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0', 'Accept': 'application/xml,text/xml,*/*' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) throw new Error(`FloatRates HTTP ${r.status}`)
+    const xml = await r.text()
+    const rates = parseCurrencyXML(xml)
+    if (Object.keys(rates).length === 0) throw new Error('No rates parsed from XML')
+    return { base: 'DZD', provider: 'floatrates.com', rates, status: 'live', last_update: new Date().toISOString() }
+  } catch (err) {
+    console.error('[Currency] FloatRates failed:', err.message)
+    return null
+  }
+}
+
+async function fetchCurrencyFallback() {
+  try {
+    const r = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=DZD,EUR,GBP,SAR,AED,TND,MAD,EGP,QAR,KWD,CAD,CHF,CNY,TRY,JPY', {
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) throw new Error(`exchangerate.host HTTP ${r.status}`)
+    const d = await r.json()
+    if (!d.rates?.DZD) throw new Error('No DZD rate found in response')
+    const dzdPerUsd = d.rates.DZD
+    const rates = {}
+    for (const sym of CURRENCY_SYMBOLS) {
+      if (sym === 'USD') { rates.USD = +(1 / dzdPerUsd).toFixed(6); continue }
+      if (d.rates[sym]) rates[sym] = +(d.rates[sym] / dzdPerUsd).toFixed(6)
+    }
+    return { base: 'DZD', provider: 'exchangerate.host', rates, status: 'live', last_update: new Date().toISOString() }
+  } catch (err) {
+    console.error('[Currency] Fallback failed:', err.message)
+    return null
+  }
+}
+
+async function fetchCurrencyData(forceRefresh = false) {
+  if (!forceRefresh && CURRENCY_CACHE.data && Date.now() - CURRENCY_CACHE.ts < CURRENCY_TTL) {
+    return CURRENCY_CACHE.data
+  }
+  let data = await fetchCurrencyFloatRates()
+  if (!data) data = await fetchCurrencyFallback()
+  if (data) {
+    CURRENCY_CACHE.data = data
+    CURRENCY_CACHE.ts = Date.now()
+    CURRENCY_CACHE.status = 'live'
+    console.log(`[Currency] Refreshed from ${data.provider} — ${Object.keys(data.rates).length} currencies`)
+    return data
+  }
+  if (CURRENCY_CACHE.data) {
+    const stale = { ...CURRENCY_CACHE.data, status: 'stale', stale_since: new Date(CURRENCY_CACHE.ts).toISOString() }
+    console.warn('[Currency] All sources failed — returning stale cache')
+    return stale
+  }
+  return null
+}
+
+function detectCurrencyQuery(msg) {
+  const lower = msg.toLowerCase()
+  const kw = [
+    'سعر الصرف', 'سعر الدولار', 'سعر اليورو', 'سعر الجنيه', 'سعر الريال',
+    'الدينار الجزائري', 'دينار جزائري', 'دزد', 'dzd', 'صرف العملة', 'صرف العملات',
+    'سعر العملة', 'سعر العملات', 'تحويل العملة', 'تحويل العملات', 'السوق السوداء',
+    'دولار مقابل دينار', 'يورو مقابل دينار', 'كم الدولار', 'كم اليورو', 'كم الريال',
+    'exchange rate', 'currency rate', 'dollar rate', 'euro rate', 'dzd rate', 'dinar rate',
+    'usd to dzd', 'eur to dzd', 'convert currency', 'currency convert',
+    'taux de change', 'euro en dinar', 'dollar en dinar', 'convertir devise',
+  ]
+  return kw.some(k => lower.includes(k))
+}
+
+function buildCurrencyContext(data) {
+  if (!data) return ''
+  const statusLabel = data.status === 'live' ? '🟢 محدّث' : '🟡 بيانات مؤقتة (stale)'
+  const updated = data.last_update ? new Date(data.last_update).toLocaleString('ar-DZ') : ''
+  const symbols = { USD: 'دولار أمريكي', EUR: 'يورو', GBP: 'جنيه إسترليني', SAR: 'ريال سعودي', AED: 'درهم إماراتي', TND: 'دينار تونسي', MAD: 'درهم مغربي', EGP: 'جنيه مصري', QAR: 'ريال قطري', KWD: 'دينار كويتي', CAD: 'دولار كندي', CHF: 'فرنك سويسري', CNY: 'يوان صيني', TRY: 'ليرة تركية', JPY: 'ين ياباني' }
+
+  let ctx = `\n\n--- 💱 أسعار الصرف — ${statusLabel} — ${updated} (المصدر: ${data.provider}) ---\n`
+  ctx += `\n**قيمة 1 دينار جزائري (DZD):**\n`
+  for (const [code, rate] of Object.entries(data.rates)) {
+    const name = symbols[code] || code
+    const dzdPer = rate > 0 ? (1 / rate).toFixed(2) : '?'
+    ctx += `• 1 DZD = **${rate}** ${code} (${name}) | 1 ${code} = **${dzdPer} DZD**\n`
+  }
+  if (data.status === 'stale') ctx += `\n⚠️ *البيانات المحفوظة — آخر تحديث: ${data.stale_since}*\n`
+  ctx += '\n---\n'
+  return ctx
+}
+
+// ─── Currency REST endpoint ────────────────────────────────────────────────
+app.get('/api/currency/latest', async (req, res) => {
+  const force = req.query.refresh === '1'
+  const data = await fetchCurrencyData(force)
+  if (!data) return res.status(503).json({ error: 'Currency data unavailable', status: 'unavailable' })
+  return res.json(data)
+})
+
+// ─── Currency Conversion endpoint ─────────────────────────────────────────
+app.get('/api/currency/convert', async (req, res) => {
+  const { from = 'USD', to = 'DZD', amount = '1' } = req.query
+  const fromCode = String(from).toUpperCase().slice(0, 5)
+  const toCode = String(to).toUpperCase().slice(0, 5)
+  const amt = parseFloat(amount)
+  if (isNaN(amt) || amt < 0) return res.status(400).json({ error: 'Invalid amount' })
+
+  const data = await fetchCurrencyData()
+  if (!data) return res.status(503).json({ error: 'Currency data unavailable' })
+
+  let result
+  if (fromCode === 'DZD' && data.rates[toCode]) {
+    result = +(amt * data.rates[toCode]).toFixed(4)
+  } else if (toCode === 'DZD' && data.rates[fromCode]) {
+    result = +(amt / data.rates[fromCode]).toFixed(4)
+  } else if (data.rates[fromCode] && data.rates[toCode]) {
+    const dzdAmt = amt / data.rates[fromCode]
+    result = +(dzdAmt * data.rates[toCode]).toFixed(4)
+  } else {
+    return res.status(400).json({ error: `Unsupported currency pair: ${fromCode}/${toCode}` })
+  }
+
+  return res.json({
+    from: fromCode, to: toCode, amount: amt, result,
+    rate: +(result / amt).toFixed(6),
+    provider: data.provider, status: data.status, last_update: data.last_update,
+  })
+})
+
+// ─── Currency RSS feed ─────────────────────────────────────────────────────
+app.get('/rss/currency/dzd', async (_req, res) => {
+  const data = await fetchCurrencyData()
+  const symbols = { USD: 'US Dollar', EUR: 'Euro', GBP: 'British Pound', SAR: 'Saudi Riyal', AED: 'UAE Dirham', TND: 'Tunisian Dinar', MAD: 'Moroccan Dirham', EGP: 'Egyptian Pound', QAR: 'Qatari Riyal', KWD: 'Kuwaiti Dinar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', CNY: 'Chinese Yuan', TRY: 'Turkish Lira', JPY: 'Japanese Yen' }
+  const updated = data?.last_update ? new Date(data.last_update).toUTCString() : new Date().toUTCString()
+
+  let items = ''
+  if (data?.rates) {
+    for (const [code, rate] of Object.entries(data.rates)) {
+      const name = symbols[code] || code
+      const dzdPer = rate > 0 ? (1 / rate).toFixed(2) : '?'
+      items += `    <item>
+      <title>${code} to DZD</title>
+      <description>1 ${code} (${name}) = ${dzdPer} DZD | 1 DZD = ${rate} ${code}</description>
+      <pubDate>${updated}</pubDate>
+      <guid isPermaLink="false">dzd-rate-${code}-${Date.now()}</guid>
+    </item>\n`
+    }
+  }
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>DZD Currency Rates — Algerian Dinar Exchange Rates</title>
+    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ${data?.provider || 'N/A'}. Status: ${data?.status || 'unavailable'}.</description>
+    <link>https://dz-gpt.vercel.app</link>
+    <language>ar</language>
+    <lastBuildDate>${updated}</lastBuildDate>
+${items}  </channel>
+</rss>`
+
+  res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8')
+  return res.send(xml)
+})
+
+// ─── Scheduled currency refresh (every 20 min) ────────────────────────────
+setInterval(() => {
+  fetchCurrencyData(true).catch(err => console.error('[Currency] Scheduled refresh failed:', err.message))
+}, 20 * 60 * 1000)
+
 // ===== SEARCH ENDPOINT =====
 async function searchWeb(query) {
   const encodedQ = encodeURIComponent(query)
@@ -1166,6 +1358,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Currency Exchange detection ────────────────────────────────────────────
+  let currencyContext = ''
+  const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
+  if (isCurrencyQuery) {
+    console.log('[DZ Agent] Currency query detected — fetching rates')
+    const currData = await fetchCurrencyData()
+    if (currData) currencyContext = buildCurrencyContext(currData)
+  }
+
   // ── Football Intelligence (international + Algeria) ───────────────────────
   let footballContext = ''
   const isFootballQuery = detectFootballQuery(lastUserMessage)
@@ -1211,6 +1412,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 - **🇩🇿 Algerian Football**: Real-time LFP (Ligue Professionnelle 1) data from lfp.dz — Algerian league, national team matches, Algeria friendlies
 - **🌍 International Football**: Live match data from SofaScore — all major European leagues (La Liga, Premier League, Bundesliga, Serie A, Ligue 1), Champions League, World Cup, AFCON, Euro, Nations League
 - **📰 Football News**: RSS from BBC Sport, ESPN, Sport360, Kooora, APS, Al Jazeera Sport — transfers, match summaries, analysis
+- **💱 Currency Exchange**: Real-time DZD exchange rates from FloatRates — USD, EUR, GBP, SAR, AED, TND, MAD, EGP and more; conversion capability
 - **📰 Algerian & World News**: Real-time RSS feeds (APS, الشروق, النهار, BBC عربي, الجزيرة)
 - **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
 - **Code Intelligence**: Analyze, debug, generate, and improve code in any language
@@ -1240,6 +1442,8 @@ ${prayerContext ? `## 🕌 Prayer Times (real-time from aladhan.com)\n${prayerCo
 ${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\nاعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
 
 ${footballContext ? `## ⚽ Football Intelligence — SofaScore + International RSS\n${footballContext}\n\nPresent ALL available match data clearly. Use the format specified in Football Rules above. NEVER invent scores — only use data provided here.` : ''}
+
+${currencyContext ? `## 💱 Currency Exchange Data (real-time from ${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**Currency Rules:**\n1. NEVER guess or invent exchange rates — use ONLY the data above\n2. Present rates in a clear table format with both directions (1 DZD = X currency AND 1 currency = Y DZD)\n3. If user asks to convert: use the provided rates to calculate and show the result\n4. Mention the source and update time. Highlight if data is stale.\n5. Note: rates reflect official/bank rates — parallel market rates may differ` : ''}
 
 ${rssContext ? `## 📰 Live News/Sports Data (RSS)\n${rssContext}\n\nSummarize helpfully. Include source links. Do not invent content.` : ''}
 
@@ -1296,7 +1500,7 @@ ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${curr
   }
 
   return res.status(200).json({
-    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿⚽\n\n**نظام ذكاء كرة القدم:**\n- 🇩🇿 **الجزائر**: الدوري الجزائري المحترف (LFP)، المنتخب الوطني، المباريات الودية\n- 🌍 **دوليًا**: دوري أبطال أوروبا، الليغا، البريميرليغ، البوندسليغا، السيريا، ليغ 1، كأس العالم، كأس أمم أفريقيا\n- 📡 **مصادر حية**: SofaScore، BBC Sport، ESPN، Sport360، كووورة، الجزيرة الرياضة\n\n**قدراتي الأخرى:**\n- 📰 أخبار الجزائر الوطنية والعالمية\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وإنشاء الأكواد البرمجية\n- 🕌 مواقيت الصلاة في كل مدن الجزائر\n\nجرّب: **"مباريات اليوم"** أو **"نتائج دوري أبطال أوروبا"** أو **"آخر أخبار المنتخب الجزائري"**',
+    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**⚽ ذكاء كرة القدم:**\n- 🇩🇿 الدوري الجزائري (LFP)، المنتخب الوطني\n- 🌍 البريميرليغ، الليغا، البوندسليغا، السيريا، دوري الأبطال، كأس العالم، كأس أمم أفريقيا\n- 📡 SofaScore (مباشر)، BBC Sport، ESPN، كووورة\n\n**💱 أسعار الصرف (DZD):**\n- سعر الدولار، اليورو، الجنيه الإسترليني، الريال السعودي، الدرهم وغيرها\n- تحويل العملات مباشر (FloatRates)\n\n**📰 أخبار وخدمات:**\n- أخبار الجزائر والعالم (APS، الشروق، BBC)\n- 🕌 مواقيت الصلاة لكل المدن\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وكتابة الأكواد\n\nجرّب: **"سعر الدولار اليوم"** أو **"مباريات اليوم"** أو **"اعرض مستودعاتي"**',
   })
 })
 

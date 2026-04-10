@@ -623,7 +623,7 @@ function ActionLogPanel({ entries }: { entries: ActionLogEntry[] }) {
 // ===== DEVELOPER CARD =====
 const DEVELOPER = {
   name: 'Nadir Infograph',
-  avatar: 'https://scontent.faae2-3.fna.fbcdn.net/v/t39.30808-1/630605385_122261453930187313_3239606922711619823_n.jpg',
+  avatar: 'https://i.postimg.cc/Y0zgGHqt/FB-IMG-1775858111445.jpg',
   facebook: 'https://facebook.com/nadir.infograph23',
 }
 

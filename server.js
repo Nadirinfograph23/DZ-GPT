@@ -31,7 +31,11 @@ app.use(helmet({
 
 // ===== CORS =====
 const allowedOrigins = isProd
-  ? ['https://dz-gpt.vercel.app', process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : ''].filter(Boolean)
+  ? [
+      'https://dz-gpt.vercel.app',
+      process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '',
+      process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0].trim()}` : '',
+    ].filter(Boolean)
   : true
 app.use(cors({
   origin: allowedOrigins,
@@ -301,6 +305,7 @@ const RSS_FEEDS = {
     { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
     { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
     { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
+    { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
   ],
   sports: [
     { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
@@ -1100,56 +1105,150 @@ setInterval(() => {
   fetchCurrencyData(true).catch(err => console.error('[Currency] Scheduled refresh failed:', err.message))
 }, 20 * 60 * 1000)
 
-// ===== SEARCH ENDPOINT =====
+// ===== SEARCH ENGINE: DJAZAIRESS SCRAPER + SEARXNG + DDG =====
+async function searchDjazairess(query) {
+  try {
+    const encodedQ = encodeURIComponent(query)
+    const url = `https://www.djazairess.com/search?q=${encodedQ}&sort=date`
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ar,fr;q=0.9,en;q=0.8',
+        'Referer': 'https://www.djazairess.com/',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return []
+    const html = await r.text()
+    const results = []
+
+    // Extract article titles and links from djazairess search results
+    const articleRe = /<h2[^>]*class="[^"]*title[^"]*"[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/gi
+    const dateRe = /<span[^>]*class="[^"]*date[^"]*"[^>]*>([^<]+)<\/span>/gi
+    const snippetRe = /<p[^>]*class="[^"]*description[^"]*"[^>]*>([^<]+)<\/p>/gi
+
+    let m
+    const titles = []
+    while ((m = articleRe.exec(html)) !== null && titles.length < 5) {
+      titles.push({ url: m[1].startsWith('http') ? m[1] : `https://www.djazairess.com${m[1]}`, title: m[2].trim() })
+    }
+
+    const dates = []
+    while ((m = dateRe.exec(html)) !== null) dates.push(m[1].trim())
+    const snippets = []
+    while ((m = snippetRe.exec(html)) !== null) snippets.push(m[1].trim())
+
+    for (let i = 0; i < titles.length; i++) {
+      results.push({
+        title: titles[i].title,
+        url: titles[i].url,
+        snippet: snippets[i] || '',
+        date: dates[i] || '',
+        source: 'djazairess',
+      })
+    }
+    return results
+  } catch (err) {
+    console.error('[Djazairess] error:', err.message)
+    return []
+  }
+}
+
+// ===== PARSE DATE FOR SORTING =====
+function parseResultDate(item) {
+  const raw = item.publishedDate || item.date || item.pubDate || ''
+  if (!raw) return 0
+  try { return new Date(raw).getTime() } catch { return 0 }
+}
+
 async function searchWeb(query) {
   const encodedQ = encodeURIComponent(query)
+  // Add recency hint: prefer recent results
+  const recentQ = encodeURIComponent(query + ' 2024 2025')
 
-  // Try SearXNG public instance
-  const searxInstances = [
-    `https://searx.be/search?q=${encodedQ}&format=json&language=ar`,
-    `https://search.mdosch.de/search?q=${encodedQ}&format=json`,
+  // --- Run all engines in parallel ---
+  const [searxResult, ddgResult, djazairessResult] = await Promise.allSettled([
+    // SearXNG with recency sort
+    (async () => {
+      const searxInstances = [
+        `https://searx.be/search?q=${encodedQ}&format=json&time_range=month&language=ar`,
+        `https://search.mdosch.de/search?q=${encodedQ}&format=json&time_range=month`,
+        `https://searx.be/search?q=${recentQ}&format=json&language=ar`,
+      ]
+      for (const url of searxInstances) {
+        try {
+          const r = await fetch(url, {
+            headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
+            signal: AbortSignal.timeout(6000),
+          })
+          if (!r.ok) continue
+          const d = await r.json()
+          const results = (d.results || []).map(item => ({
+            title: item.title,
+            url: item.url,
+            snippet: item.content?.slice(0, 300) || '',
+            publishedDate: item.publishedDate || '',
+            source: 'searxng',
+          }))
+          if (results.length > 0) return results
+        } catch { continue }
+      }
+      return []
+    })(),
+    // DuckDuckGo HTML scraping
+    (async () => {
+      try {
+        const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQ}&df=m`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0)' },
+          signal: AbortSignal.timeout(7000),
+        })
+        if (!r.ok) return []
+        const html = await r.text()
+        const results = []
+        const linkRe = /<a class="result__a" href="([^"]+)"[^>]*>([^<]+)<\/a>/g
+        const snippetRe = /<a class="result__snippet"[^>]*>([^<]+)<\/a>/g
+        let lm, sm
+        const links = [], snippets = []
+        while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], title: lm[2] })
+        while ((sm = snippetRe.exec(html)) !== null) snippets.push(sm[1])
+        for (let i = 0; i < Math.min(links.length, 4); i++) {
+          results.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] || '', source: 'duckduckgo' })
+        }
+        return results
+      } catch { return [] }
+    })(),
+    // Djazairess — for Algeria-related queries
+    searchDjazairess(query),
+  ])
+
+  const allResults = [
+    ...(searxResult.status === 'fulfilled' ? searxResult.value : []),
+    ...(djazairessResult.status === 'fulfilled' ? djazairessResult.value : []),
+    ...(ddgResult.status === 'fulfilled' ? ddgResult.value : []),
   ]
 
-  for (const url of searxInstances) {
-    try {
-      const r = await fetch(url, {
-        headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
-        signal: AbortSignal.timeout(6000),
-      })
-      if (!r.ok) continue
-      const d = await r.json()
-      const results = (d.results || []).slice(0, 5).map(item => ({
-        title: item.title,
-        url: item.url,
-        snippet: item.content?.slice(0, 200) || '',
-      }))
-      if (results.length > 0) return { source: 'searxng', results }
-    } catch { continue }
-  }
+  if (allResults.length === 0) return { source: 'none', results: [] }
 
-  // Fallback: DuckDuckGo HTML scraping
-  try {
-    const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQ}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0)' },
-      signal: AbortSignal.timeout(7000),
-    })
-    if (r.ok) {
-      const html = await r.text()
-      const results = []
-      const linkRe = /<a class="result__a" href="([^"]+)"[^>]*>([^<]+)<\/a>/g
-      const snippetRe = /<a class="result__snippet"[^>]*>([^<]+)<\/a>/g
-      let lm, sm
-      const links = [], snippets = []
-      while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], title: lm[2] })
-      while ((sm = snippetRe.exec(html)) !== null) snippets.push(sm[1])
-      for (let i = 0; i < Math.min(links.length, 4); i++) {
-        results.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] || '' })
-      }
-      if (results.length > 0) return { source: 'duckduckgo', results }
-    }
-  } catch (err) { console.error('[Search] DDG error:', err.message) }
+  // Deduplicate by URL
+  const seen = new Set()
+  const deduped = allResults.filter(r => {
+    if (seen.has(r.url)) return false
+    seen.add(r.url)
+    return true
+  })
 
-  return { source: 'none', results: [] }
+  // Sort: results with a date go first (newest first), undated results follow
+  const withDate = deduped.filter(r => parseResultDate(r) > 0)
+    .sort((a, b) => parseResultDate(b) - parseResultDate(a))
+  const withoutDate = deduped.filter(r => parseResultDate(r) === 0)
+
+  const sorted = [...withDate, ...withoutDate].slice(0, 8)
+
+  const primary = sorted.find(r => r.source === 'djazairess') ? 'djazairess+searxng' :
+    sorted.find(r => r.source === 'searxng') ? 'searxng' : 'duckduckgo'
+
+  return { source: primary, results: sorted }
 }
 
 app.post('/api/dz-agent/search', async (req, res) => {
@@ -1414,6 +1513,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Web search for general factual queries (newest first via Djazairess + SearXNG) ─
+  let webSearchContext = ''
+  const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
+  const skipSearch = isPrayerQuery || isFootballQuery || newsQueryType || isSimpleGreeting || lastUserMessage.length < 6
+  if (!skipSearch) {
+    try {
+      const searchData = await searchWeb(lastUserMessage)
+      if (searchData.results.length > 0) {
+        const lines = searchData.results.map((r, i) => {
+          const dateStr = r.publishedDate || r.date ? ` [${r.publishedDate || r.date}]` : ''
+          return `${i + 1}. **${r.title}**${dateStr}\n   ${r.snippet || ''}\n   🔗 ${r.url}`
+        }).join('\n\n')
+        webSearchContext = `المصدر: ${searchData.source} | مرتبة من الأحدث إلى الأقدم\n\n${lines}`
+        console.log(`[DZ Agent] Web search: ${searchData.results.length} results from ${searchData.source}`)
+      }
+    } catch (err) { console.error('[DZ Agent] Web search error:', err.message) }
+  }
+
   // ── AI response with GitHub-aware system prompt ───────────────────────────
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
@@ -1425,7 +1542,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 - **🌍 International Football**: Live match data from SofaScore — all major European leagues (La Liga, Premier League, Bundesliga, Serie A, Ligue 1), Champions League, World Cup, AFCON, Euro, Nations League
 - **📰 Football News**: RSS from BBC Sport, ESPN, Sport360, Kooora, APS, Al Jazeera Sport — transfers, match summaries, analysis
 - **💱 Currency Exchange**: Real-time DZD exchange rates from FloatRates — USD, EUR, GBP, SAR, AED, TND, MAD, EGP and more; conversion capability
-- **📰 Algerian & World News**: Real-time RSS feeds (APS, الشروق, النهار, BBC عربي, الجزيرة)
+- **📰 Algerian & World News**: Real-time RSS feeds (APS, الشروق, النهار, BBC عربي, الجزيرة) + **Djazairess.com** (أكبر أرشيف صحافة جزائرية — أخبار وطنية، رياضة، اقتصاد، ثقافة من مئات الصحف الجزائرية)
+- **🔍 Smart Search**: Multi-engine search (SearXNG + DuckDuckGo + Djazairess) with recency filter — results sorted from newest to oldest
 - **GitHub Integration**: Browse, read, create, edit files; create commits; open Pull Requests
 - **Code Intelligence**: Analyze, debug, generate, and improve code in any language
 - **Multilingual**: Respond in Arabic, English, or French — always match the user's language
@@ -1458,6 +1576,8 @@ ${footballContext ? `## ⚽ Football Intelligence — SofaScore + International 
 ${currencyContext ? `## 💱 Currency Exchange Data (real-time from ${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**Currency Rules:**\n1. NEVER guess or invent exchange rates — use ONLY the data above\n2. Present rates in a clear table format with both directions (1 DZD = X currency AND 1 currency = Y DZD)\n3. If user asks to convert: use the provided rates to calculate and show the result\n4. Mention the source and update time. Highlight if data is stale.\n5. Note: rates reflect official/bank rates — parallel market rates may differ` : ''}
 
 ${rssContext ? `## 📰 Live News/Sports Data (RSS)\n${rssContext}\n\nSummarize helpfully. Include source links. Do not invent content.` : ''}
+
+${webSearchContext ? `## 🔍 نتائج البحث الحية (مرتبة من الأحدث إلى الأقدم)\n${webSearchContext}\n\n**قواعد البحث:**\n1. استخدم هذه النتائج كمرجع أساسي للإجابة — اذكر المصادر والروابط\n2. النتائج من Djazairess تغطي الصحافة الجزائرية بشكل موسّع\n3. رتّب إجابتك من الأحدث إلى الأقدم\n4. لا تخترع معلومات — استخدم فقط ما هو موجود في النتائج أعلاه` : ''}
 
 ${githubToken ? `## GitHub Status\nGitHub is connected ✓. Current repo: ${currentRepo || 'none selected'}.\nYou can: list files, read code, create commits, and open Pull Requests.` : '## GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.'}`
 

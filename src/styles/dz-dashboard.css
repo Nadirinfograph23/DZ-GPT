@@ -78,6 +78,105 @@
   padding: 14px;
 }
 
+/* ===== CITY BAR (shared — prayer & weather) ===== */
+.dzd-city-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dzd-city-bar-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dzd-geo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: rgba(200, 255, 0, 0.06);
+  border: 1px solid rgba(200, 255, 0, 0.18);
+  border-radius: 20px;
+  color: #c8ff00;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dzd-geo-btn:hover { background: rgba(200, 255, 0, 0.12); }
+.dzd-geo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dzd-geo-btn--loading { opacity: 0.7; }
+
+.dzd-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 20px;
+  color: #ccc;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex: 1;
+  min-width: 0;
+}
+.dzd-picker-toggle:hover { background: #161616; border-color: #2e2e2e; color: #fff; }
+.dzd-picker-arrow { margin-right: auto; color: #555; font-size: 9px; }
+
+.dzd-geo-error {
+  font-size: 10.5px;
+  color: #f87171;
+  padding: 4px 8px;
+  background: rgba(248, 113, 113, 0.07);
+  border: 1px solid rgba(248, 113, 113, 0.15);
+  border-radius: 8px;
+}
+
+/* Wilaya grid (all 58) */
+.dzd-wilaya-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #222 transparent;
+}
+.dzd-wilaya-grid::-webkit-scrollbar { width: 4px; }
+.dzd-wilaya-grid::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
+
+.dzd-wilaya-btn {
+  padding: 3px 10px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 5px;
+  color: #666;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.13s;
+  white-space: nowrap;
+}
+.dzd-wilaya-btn:hover { background: #161616; color: #bbb; border-color: #2a2a2a; }
+.dzd-wilaya-btn--active {
+  background: rgba(200, 255, 0, 0.08);
+  border-color: rgba(200, 255, 0, 0.3);
+  color: #c8ff00;
+}
+
 /* ===== PRAYER PANEL ===== */
 .dzd-prayer-panel {
   display: flex;
@@ -175,8 +274,114 @@
 }
 
 /* ===== WEATHER PANEL ===== */
-.dzd-weather-panel { }
+.dzd-weather-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
+/* New: single-city main weather card */
+.dzd-weather-main-card {
+  border-radius: 16px;
+  padding: 20px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.dzd-wmc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dzd-wmc-city {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+}
+
+.dzd-wmc-icon {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.15));
+}
+
+.dzd-wmc-temp-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.dzd-wmc-temp {
+  font-size: 54px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+
+.dzd-wmc-temp-range {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+.dzd-wmc-temp-max {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(251,146,60,0.9);
+}
+
+.dzd-wmc-temp-min {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(147,197,253,0.9);
+}
+
+.dzd-wmc-cond {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  text-transform: capitalize;
+}
+
+.dzd-wmc-feels {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+}
+
+.dzd-wmc-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.dzd-wmc-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+}
+
+.dzd-skeleton--weather-main {
+  height: 180px;
+  border-radius: 16px;
+}
+
+/* ─── keep old grid for backward compat ─── */
 .dzd-weather-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

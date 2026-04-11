@@ -27,6 +27,11 @@ The following secrets must be configured in Replit's Secrets tab:
 | `DEEPSEEK_API_KEY` | DeepSeek API key (for DeepSeek model support) |
 | `GITHUB_TOKEN` | GitHub personal access token (for GitHub integration routes) |
 | `OLLAMA_PROXY_URL` | URL for Ollama proxy (for local model support) |
+| `GOOGLE_API_KEY` | Google Custom Search Engine API key (for DZ Agent search) |
+| `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, has built-in default |
+| `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
 
 ## API Routes
 

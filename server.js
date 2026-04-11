@@ -441,7 +441,7 @@ function buildOptimizedQueries(query, intent) {
 // ── Google Custom Search Engine (PRIMARY) ────────────────────────────────────
 async function searchGoogleCSE(query) {
   const apiKey = process.env.GOOGLE_API_KEY
-  const cx     = '12e6f922595f64d35'
+  const cx     = process.env.GOOGLE_CSE_ID || '12e6f922595f64d35'
   if (!apiKey) return []
 
   try {
@@ -2955,6 +2955,104 @@ app.post('/api/dz-agent/github/pr', async (req, res) => {
   } catch (err) {
     console.error('PR error:', err)
     return res.status(500).json({ error: 'PR creation failed.' })
+  }
+})
+
+// ===== REPO FULL SCAN (AI analysis of entire repository) =====
+app.post('/api/dz-agent/github/repo-scan', async (req, res) => {
+  const { token, repo, focus } = req.body
+  const authToken = token || process.env.GITHUB_TOKEN || ''
+  if (!authToken || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+
+  try {
+    const repoRes = await ghFetch(`/repos/${repo}`, authToken)
+    const repoData = await repoRes.json()
+    if (!repoRes.ok) throw new Error(repoData.message || 'Cannot access repo')
+    const defaultBranch = repoData.default_branch || 'main'
+
+    const rootRes = await ghFetch(`/repos/${repo}/contents`, authToken)
+    const rootFiles = await rootRes.json()
+    if (!Array.isArray(rootFiles)) throw new Error('Cannot list repo contents')
+
+    const PRIORITY = ['README.md','package.json','requirements.txt','pyproject.toml','Cargo.toml','go.mod','index.js','index.ts','main.py','app.py','server.js','main.js','index.html']
+    const CODE_EXTS = ['.js','.ts','.tsx','.jsx','.py','.java','.go','.rs','.php','.rb','.cpp','.c','.cs','.swift','.kt']
+
+    const sorted = [...rootFiles]
+      .filter(f => f.type === 'file' && (f.size || 0) < 80000)
+      .sort((a, b) => {
+        const ai = PRIORITY.indexOf(a.name), bi = PRIORITY.indexOf(b.name)
+        if (ai !== -1 && bi !== -1) return ai - bi
+        if (ai !== -1) return -1
+        if (bi !== -1) return 1
+        const ac = CODE_EXTS.some(e => a.name.endsWith(e))
+        const bc = CODE_EXTS.some(e => b.name.endsWith(e))
+        return ac === bc ? 0 : ac ? -1 : 1
+      })
+      .slice(0, 7)
+
+    const fileContents = await Promise.allSettled(
+      sorted.map(async f => {
+        const r = await ghFetch(`/repos/${repo}/contents/${f.path}`, authToken)
+        const d = await r.json()
+        if (!d.content) return null
+        const content = Buffer.from(d.content, 'base64').toString('utf-8').slice(0, 4000)
+        return { name: f.name, path: f.path, content }
+      })
+    )
+
+    const files = fileContents.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+
+    const focusMap = {
+      bugs: 'ركّز على: إيجاد الأخطاء والثغرات الأمنية وتقديم إصلاحات جاهزة للتطبيق.',
+      suggest: 'ركّز على: اقتراحات التحسين، أفضل الممارسات، وتحسين الأداء.',
+      fix: 'ركّز على: الأخطاء القابلة للإصلاح الفوري مع الكود المُصلح جاهزاً للـ Commit.',
+      report: 'أعطِ تقريراً شاملاً ومفصلاً يغطي كل الجوانب.',
+    }
+    const focusInstruction = focusMap[focus] || 'أعطِ تحليلاً شاملاً.'
+
+    const filesSummary = files.map(f => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join('\n\n')
+
+    const prompt = `أنت خبير مراجعة كود متخصص. حلّل هذا المستودع وأعطني تقريراً دقيقاً وعملياً باللغة العربية.
+
+المستودع: ${repo}
+اللغة الرئيسية: ${repoData.language || 'غير محدد'}
+النجوم: ${repoData.stargazers_count} | الفروع: ${repoData.forks_count}
+${focusInstruction}
+
+الملفات (${files.length} ملف):
+${filesSummary}
+
+قدِّم:
+1. **ملخص المشروع** (3-4 جمل)
+2. **المشاكل والأخطاء** (مع رقم السطر إن أمكن، مرتبة حسب الأولوية: 🔴 حرج / 🟠 عالي / 🟡 متوسط)
+3. **اقتراحات التحسين** (عملية وقابلة للتطبيق)
+4. **تقييم جودة الكود** (x/100) مع تبرير موجز
+5. **الخطوات التالية الموصى بها**
+
+كن دقيقاً ومباشراً.`
+
+    const result = await callGroqWithFallback({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2500,
+      temperature: 0.2,
+    })
+
+    if (!result?.content) throw new Error('AI service unavailable')
+
+    return res.status(200).json({
+      success: true,
+      repo,
+      language: repoData.language,
+      defaultBranch,
+      filesScanned: files.map(f => f.path),
+      analysis: result.content,
+      stars: repoData.stargazers_count,
+      forks: repoData.forks_count,
+    })
+  } catch (err) {
+    console.error('[repo-scan]', err)
+    return res.status(500).json({ error: err.message || 'Scan failed.' })
   }
 })
 

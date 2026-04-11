@@ -18,6 +18,7 @@ type RichType =
   | 'approval'
   | 'action-log'
   | 'code-analysis'
+  | 'repo-selected'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -93,6 +94,7 @@ interface DZMessage {
   actionLog?: ActionLogEntry[]
   isError?: boolean
   showDevCard?: boolean
+  selectedRepo?: RepoItem
 }
 
 interface ActionLogEntry {
@@ -656,6 +658,57 @@ function DeveloperCard() {
   )
 }
 
+// ===== REPO ACTION PANEL =====
+const REPO_ACTIONS = [
+  { id: 'scan',    emoji: '🔍', label: 'فحص الكود الكامل',   desc: 'تحليل شامل للمستودع',         color: '#60a5fa' },
+  { id: 'bugs',    emoji: '🐛', label: 'إيجاد الأخطاء',       desc: 'كشف الأخطاء والثغرات',        color: '#f87171' },
+  { id: 'suggest', emoji: '💡', label: 'اقتراحات التحسين',   desc: 'تحسينات الكود والأداء',        color: '#fbbf24' },
+  { id: 'fix',     emoji: '🔧', label: 'إصلاح تلقائي',        desc: 'إصلاح وCommit مباشر',          color: '#4ade80' },
+  { id: 'report',  emoji: '📋', label: 'تقرير شامل',          desc: 'تقرير مفصل بكل العمليات',     color: '#c084fc' },
+  { id: 'files',   emoji: '📂', label: 'تصفح الملفات',        desc: 'عرض ملفات المستودع',           color: '#94a3b8' },
+  { id: 'pr',      emoji: '🔀', label: 'إنشاء PR',             desc: 'Pull Request جديد',             color: '#f97316' },
+  { id: 'commit',  emoji: '✅', label: 'Commit',              desc: 'حفظ تعديل في المستودع',       color: '#06b6d4' },
+]
+
+function RepoActionPanel({
+  repo,
+  onAction,
+}: {
+  repo: RepoItem
+  onAction: (action: string, repo: RepoItem) => void
+}) {
+  return (
+    <div className="rap-root">
+      <div className="rap-header">
+        <div className="rap-repo-info">
+          <FolderOpen size={15} />
+          <span className="rap-repo-name">{repo.name}</span>
+          {repo.private && <span className="gh-badge gh-badge--private">Private</span>}
+          {repo.language && <span className="rap-lang">{repo.language}</span>}
+        </div>
+        <a href={repo.html_url} target="_blank" rel="noreferrer" className="rap-gh-link">
+          <Github size={13} /> GitHub
+        </a>
+      </div>
+      {repo.description && <p className="rap-desc">{repo.description}</p>}
+      <div className="rap-grid">
+        {REPO_ACTIONS.map(a => (
+          <button
+            key={a.id}
+            className="rap-btn"
+            style={{ '--rap-color': a.color } as React.CSSProperties}
+            onClick={() => onAction(a.id, repo)}
+          >
+            <span className="rap-btn-emoji">{a.emoji}</span>
+            <span className="rap-btn-label">{a.label}</span>
+            <span className="rap-btn-desc">{a.desc}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ===== GITHUB TOKEN PANEL =====
 function GitHubTokenPanel({
   token,
@@ -1145,6 +1198,73 @@ export default function DZChatBox() {
     })
   }, [addAssistantMessage])
 
+  const selectRepo = useCallback((repo: RepoItem) => {
+    setCurrentRepo(repo.full_name)
+    addAssistantMessage({
+      content: `تم اختيار المستودع **${repo.name}** — اختر إجراءً:`,
+      richType: 'repo-selected',
+      selectedRepo: repo,
+    })
+  }, [addAssistantMessage])
+
+  const scanRepo = useCallback(async (repo: RepoItem, focus?: string) => {
+    setIsLoading(true)
+    addToLog({ type: 'repo-scan', description: `Scanning ${repo.name}${focus ? ` (${focus})` : ''}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/repo-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name, focus }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Scan failed')
+      const scannedList = data.filesScanned?.map((f: string) => `\`${f}\``).join(' · ') || ''
+      addAssistantMessage({
+        content: `## 🔍 تقرير المستودع: \`${repo.name}\`\n**الملفات المفحوصة:** ${scannedList}\n\n${data.analysis}`,
+        richType: 'text',
+      })
+      addToLog({ type: 'repo-scan', description: `Scan complete — ${data.filesScanned?.length || 0} files`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل الفحص: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'repo-scan', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const handleRepoAction = useCallback(async (action: string, repo: RepoItem) => {
+    setCurrentRepo(repo.full_name)
+    switch (action) {
+      case 'scan':
+        await scanRepo(repo)
+        break
+      case 'bugs':
+        await scanRepo(repo, 'bugs')
+        break
+      case 'suggest':
+        await scanRepo(repo, 'suggest')
+        break
+      case 'fix':
+        await scanRepo(repo, 'fix')
+        break
+      case 'report':
+        await scanRepo(repo, 'report')
+        break
+      case 'files':
+        await fetchFiles(repo.full_name)
+        break
+      case 'pr':
+        setInput(`أنشئ Pull Request لمستودع ${repo.name} — صف التغييرات المطلوبة`)
+        textareaRef.current?.focus()
+        break
+      case 'commit':
+        setInput(`قم بعمل Commit في مستودع ${repo.name} — صف التعديل الذي تريد حفظه`)
+        textareaRef.current?.focus()
+        break
+    }
+  }, [scanRepo, fetchFiles])
+
   const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
     setIsLoading(true)
@@ -1442,8 +1562,14 @@ export default function DZChatBox() {
                       {msg.richType === 'repos' && msg.repos && (
                         <ReposList
                           repos={msg.repos}
-                          onSelect={(repo) => fetchFiles(repo.full_name)}
+                          onSelect={selectRepo}
                           onExport={handleExportRepos}
+                        />
+                      )}
+                      {msg.richType === 'repo-selected' && msg.selectedRepo && (
+                        <RepoActionPanel
+                          repo={msg.selectedRepo}
+                          onAction={handleRepoAction}
                         />
                       )}
                       {msg.richType === 'files' && msg.files && (

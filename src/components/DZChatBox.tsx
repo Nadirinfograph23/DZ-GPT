@@ -1229,9 +1229,13 @@ export default function DZChatBox() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
-  const [githubToken, setGithubToken] = useState<string>(() =>
-    localStorage.getItem('dz-agent-gh-token') || ''
-  )
+  const [githubToken, setGithubToken] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('dz-agent-gh-token') || ''
+    } catch {
+      return ''
+    }
+  })
   const [serverGithubConnected, setServerGithubConnected] = useState(false)
   const [oauthEnabled, setOauthEnabled] = useState(false)
   const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
@@ -1256,7 +1260,8 @@ export default function DZChatBox() {
       const token = hash.replace('#gh_oauth=', '')
       if (token) {
         setGithubToken(token)
-        localStorage.setItem('dz-agent-gh-token', token)
+        sessionStorage.setItem('dz-agent-gh-token', token)
+        localStorage.removeItem('dz-agent-gh-token')
         window.history.replaceState(null, '', '/dz-agent')
         // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
@@ -1279,6 +1284,7 @@ export default function DZChatBox() {
       setAuthError(errMsg)
       window.history.replaceState(null, '', '/dz-agent')
     }
+    localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
   // Check server GitHub connection on mount
@@ -1316,7 +1322,8 @@ export default function DZChatBox() {
 
   const saveToken = useCallback((t: string) => {
     setGithubToken(t)
-    localStorage.setItem('dz-agent-gh-token', t)
+    sessionStorage.setItem('dz-agent-gh-token', t)
+    localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
   const clearToken = useCallback(() => {
@@ -1324,6 +1331,7 @@ export default function DZChatBox() {
     setGithubUser(null)
     setServerGithubConnected(false)
     setShowGhMenu(false)
+    sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
 

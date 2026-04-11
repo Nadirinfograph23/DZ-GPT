@@ -5,19 +5,22 @@ import crypto from 'crypto'
 import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
+import { readFile } from 'fs/promises'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
 const PORT = 5000
 
 const app = express()
+const distDir = path.resolve(__dirname, 'dist')
+const indexHtmlPath = path.resolve(distDir, 'index.html')
 
 // ===== SECURITY HEADERS =====
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com'],
       connectSrc: isProd ? ["'self'"] : ["'self'", 'ws:', 'wss:'],
@@ -86,11 +89,21 @@ const searchLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait.' },
 })
 
+const deployLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Deploy rate limit exceeded. Please wait.' },
+})
+
 app.use('/api/chat', aiLimiter)
 app.use('/api/dz-agent-chat', aiLimiter)
 app.use('/api/dz-agent/github', githubLimiter)
 app.use('/api/dz-agent-search', searchLimiter)
 app.use('/api/dz-agent/search', searchLimiter)
+app.use('/api/dz-agent/education/search', searchLimiter)
+app.use('/api/dz-agent/deploy', deployLimiter)
 
 // ===== INPUT SANITIZER =====
 function sanitizeString(str, maxLen = 10000) {
@@ -107,6 +120,29 @@ function isValidGithubPath(p) {
 function isValidGithubRepo(repo) {
   if (typeof repo !== 'string') return false
   return /^[a-zA-Z0-9._\-]+\/[a-zA-Z0-9._\-]+$/.test(repo)
+}
+
+function normalizeChatMessages(messages) {
+  if (!Array.isArray(messages)) return null
+  return messages
+    .slice(-24)
+    .map(message => {
+      const role = message?.role === 'assistant' ? 'assistant' : 'user'
+      const content = sanitizeString(message?.content || '', 6000).trim()
+      return content ? { role, content } : null
+    })
+    .filter(Boolean)
+}
+
+function hasDeployAuthorization(req) {
+  const expected = process.env.DEPLOY_ADMIN_TOKEN
+  if (!expected) return false
+  const headerToken = req.get('x-deploy-token') || ''
+  const bearerToken = (req.get('authorization') || '').replace(/^Bearer\s+/i, '')
+  const provided = headerToken || bearerToken
+  const providedBuffer = Buffer.from(provided)
+  const expectedBuffer = Buffer.from(expected)
+  return providedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(providedBuffer, expectedBuffer)
 }
 
 // ===== GROQ SMART KEY ROTATION SYSTEM =====
@@ -334,6 +370,10 @@ const TRUSTED_DOMAINS = {
   'wikipedia.org': 70, 'wikidata.org': 65,
   'google.com': 80, 'news.google.com': 80,
   'eddirasa.com': 92,
+  'owasp.org': 96, 'developer.mozilla.org': 94, 'nodejs.org': 93,
+  'react.dev': 92, 'vite.dev': 90, 'expressjs.com': 90,
+  'docs.github.com': 92, 'npmjs.com': 82, 'github.com': 78,
+  'vercel.com': 90, 'cloudflare.com': 88,
 }
 
 function getTrustScore(url = '') {
@@ -982,7 +1022,7 @@ async function fetchRSSFeed(feed) {
     RSS_CACHE.set(feed.url, { data: result, ts: Date.now() })
     return result
   } catch (err) {
-    console.error(`[RSS] ${feed.name} fetch failed:`, err.message)
+    console.error('[RSS] feed fetch failed:', feed.name, err.message)
     return null
   }
 }
@@ -1810,32 +1850,37 @@ app.get('/rss/currency/dzd', async (_req, res) => {
   const symbols = { USD: 'US Dollar', EUR: 'Euro', GBP: 'British Pound', SAR: 'Saudi Riyal', AED: 'UAE Dirham', TND: 'Tunisian Dinar', MAD: 'Moroccan Dirham', EGP: 'Egyptian Pound', QAR: 'Qatari Riyal', KWD: 'Kuwaiti Dinar', CAD: 'Canadian Dollar', CHF: 'Swiss Franc', CNY: 'Chinese Yuan', TRY: 'Turkish Lira', JPY: 'Japanese Yen' }
   const updated = data?.last_update ? new Date(data.last_update).toUTCString() : new Date().toUTCString()
 
-  let items = ''
+  const items = []
   if (data?.rates) {
     for (const [code, rate] of Object.entries(data.rates)) {
       const name = escapeXml(symbols[code] || code)
-      const safeCode = escapeXml(code)
+      const safeCode = escapeXml(String(code).replace(/[^A-Z]/g, '').slice(0, 5))
       const dzdPer = rate > 0 ? (1 / rate).toFixed(2) : '?'
       const safeRate = escapeXml(String(rate))
-      items += `    <item>
-      <title>${safeCode} to DZD</title>
-      <description>1 ${safeCode} (${name}) = ${escapeXml(dzdPer)} DZD | 1 DZD = ${safeRate} ${safeCode}</description>
-      <pubDate>${escapeXml(updated)}</pubDate>
-      <guid isPermaLink="false">dzd-rate-${safeCode}-${Date.now()}</guid>
-    </item>\n`
+      items.push([
+        '    <item>',
+        '      <title>' + safeCode + ' to DZD</title>',
+        '      <description>1 ' + safeCode + ' (' + name + ') = ' + escapeXml(dzdPer) + ' DZD | 1 DZD = ' + safeRate + ' ' + safeCode + '</description>',
+        '      <pubDate>' + escapeXml(updated) + '</pubDate>',
+        '      <guid isPermaLink="false">dzd-rate-' + safeCode + '-' + Date.now() + '</guid>',
+        '    </item>',
+      ].join('\n'))
     }
   }
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>DZD Currency Rates — Algerian Dinar Exchange Rates</title>
-    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ${escapeXml(data?.provider || 'N/A')}. Status: ${escapeXml(data?.status || 'unavailable')}.</description>
-    <link>https://dz-gpt.vercel.app</link>
-    <language>ar</language>
-    <lastBuildDate>${escapeXml(updated)}</lastBuildDate>
-${items}  </channel>
-</rss>`
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss version="2.0">',
+    '  <channel>',
+    '    <title>DZD Currency Rates — Algerian Dinar Exchange Rates</title>',
+    '    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ' + escapeXml(data?.provider || 'N/A') + '. Status: ' + escapeXml(data?.status || 'unavailable') + '.</description>',
+    '    <link>https://dz-gpt.vercel.app</link>',
+    '    <language>ar</language>',
+    '    <lastBuildDate>' + escapeXml(updated) + '</lastBuildDate>',
+    items.join('\n'),
+    '  </channel>',
+    '</rss>',
+  ].join('\n')
 
   res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8')
   return res.send(xml)
@@ -1993,10 +2038,15 @@ async function searchWeb(query) {
 }
 
 app.post('/api/dz-agent/search', async (req, res) => {
-  const { query } = req.body
+  const query = sanitizeString(req.body.query || '', 500)
   if (!query) return res.status(400).json({ error: 'query required' })
-  const data = await searchWeb(query)
-  return res.json(data)
+  try {
+    const data = await searchWeb(query)
+    return res.json(data)
+  } catch (err) {
+    console.error('[DZ Search] error:', err.message)
+    return res.status(500).json({ error: 'Search failed.' })
+  }
 })
 
 // ===== VERCEL DEPLOY TRIGGER =====
@@ -2005,6 +2055,9 @@ const VERCEL_GITHUB_REPO = 'Nadirinfograph23/DZ-GPT'
 const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'devin/1774405518-init-dz-gpt'
 
 app.post('/api/dz-agent/deploy', async (req, res) => {
+  if (!hasDeployAuthorization(req)) {
+    return res.status(403).json({ error: 'Deploy endpoint is restricted.' })
+  }
   const vercelToken = process.env.VERCEL_TOKEN
   const githubToken = process.env.GITHUB_TOKEN
   if (!vercelToken) return res.status(500).json({ error: 'VERCEL_TOKEN not configured.' })
@@ -2060,14 +2113,15 @@ app.post('/api/dz-agent/deploy', async (req, res) => {
 
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
-  const { messages } = req.body
+  const messages = normalizeChatMessages(req.body.messages)
 
-  if (!messages || !Array.isArray(messages)) {
+  if (!messages?.length) {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
   }
 
-  const { currentRepo } = req.body
-  const githubToken = req.body.githubToken || process.env.GITHUB_TOKEN || ''
+  const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
+  const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
+  const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
   const lowerMsg = lastUserMessage.toLowerCase()
   const educationSubject = detectEducationSubject(lastUserMessage)
@@ -2455,6 +2509,21 @@ Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88
 🌍 دولي: reuters.com · bbc.com · aljazeera.net · cnn.com
 💻 تقنية: techcrunch.com · theverge.com · wired.com
 ⚽ رياضة: fifa.com · sofascore.com · lfp.dz · goal.com · kooora.com
+🛡️ برمجة وأمان: owasp.org · developer.mozilla.org · nodejs.org · react.dev · vite.dev · expressjs.com · docs.github.com · vercel.com · npmjs.com
+
+━━━━━━━━━━━━━━━━━━━━━━
+🧠 PROFESSIONAL PROGRAMMING EXPERTISE MODE
+━━━━━━━━━━━━━━━━━━━━━━
+
+عندما يسأل المستخدم عن برمجة أو أمان أو بنية مشروع:
+1. ابدأ بتشخيص عملي مختصر: الهدف، المخاطر، الملفات/الأجزاء المتأثرة
+2. قدّم حلولاً قابلة للتنفيذ، لا تنظيراً عاماً
+3. للأمان اتبع ترتيب OWASP: التحقق من الإدخال، المصادقة، الصلاحيات، الأسرار، XSS/CSRF، SSRF، Rate limiting، السجلات
+4. لا تقترح تخزين tokens في المتصفح إلا كحل مؤقت؛ فضّل OAuth أو أسرار الخادم أو sessionStorage قصير العمر
+5. إذا كان السؤال حديثاً أو عن مكتبة/إصدار/API: استعمل البحث الحي واذكر الرابط والتاريخ عندما يتوفران
+6. في مراجعة الكود اكتب: المشكلة → الأثر → الإصلاح → مثال كود صغير → طريقة التحقق
+7. لا تعدّل أو تقترح عمليات مدمرة بدون موافقة صريحة
+8. رتّب المصادر والنتائج التقنية الحديثة من الأحدث إلى الأقدم عندما تحمل تواريخ
 
 ━━━━━━━━━━━━━━━━━━━━━━
 📚 EDUCATION MODE — EDDIRASA FIRST
@@ -3436,9 +3505,14 @@ const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
   if (isProd) {
-    app.use(express.static(path.join(__dirname, 'dist')))
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+    app.use(express.static(distDir, { index: false, fallthrough: true }))
+    app.get('*', async (_req, res) => {
+      try {
+        const html = await readFile(indexHtmlPath, 'utf8')
+        res.type('html').send(html)
+      } catch {
+        res.status(500).send('Frontend not available.')
+      }
     })
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`)

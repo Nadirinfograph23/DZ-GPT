@@ -33,6 +33,7 @@ The following secrets must be configured in Replit's Secrets tab:
 | `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
 | `VERCEL_TOKEN` | Vercel token for deployment trigger route |
+| `DEPLOY_ADMIN_TOKEN` | Required admin token for the restricted `/api/dz-agent/deploy` route |
 
 ## API Routes
 
@@ -40,6 +41,7 @@ The following secrets must be configured in Replit's Secrets tab:
 - `POST /api/dz-agent-search` — DZ Agent search
 - `POST /api/dz-agent/education/search` — eddirasa.com educational search for DZ Agent study mode
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
+- `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
 - Various GitHub API proxy routes:
   - `POST /api/dz-agent/github/repos` — List user repos
   - `POST /api/dz-agent/github/files` — Browse repo files
@@ -63,6 +65,14 @@ DZ Agent has an added education layer that keeps existing behavior intact while 
 - Academic level detection for Primary 1–5, Middle 1–4/BEM, and Secondary 1–3/Baccalaureate.
 - Step-by-step exercise solving and simplified lesson explanations.
 - A Study Level Selector Card in `src/components/DZChatBox.tsx` with level, subject, search input, Search eddirasa, Solve with AI, and Explain Lesson actions.
+
+## DZ Agent Security and Expertise
+
+- API chat messages are normalized server-side, limited to the last 24 messages, stripped of control characters, and capped per message before reaching AI providers.
+- The public deploy route is restricted with `DEPLOY_ADMIN_TOKEN` and rate limited to reduce abuse risk.
+- GitHub tokens entered in the UI are stored in `sessionStorage` only; legacy `localStorage` token copies are removed on load.
+- Production CSP no longer enables `unsafe-eval`; development keeps it only for Vite tooling.
+- DZ Agent's trusted source list now includes OWASP, MDN, Node.js, React, Vite, Express, GitHub Docs, Vercel, npm, and Cloudflare for programming/security answers, with instructions to prioritize recent sourced information and avoid unsupported claims.
 
 ## Key Files
 

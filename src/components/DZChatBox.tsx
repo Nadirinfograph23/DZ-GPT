@@ -5,7 +5,7 @@ import {
   CheckCircle2, XCircle, GitCommit, GitPullRequest,
   Key, Trash2, RefreshCw, Terminal, Zap,
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
-  BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock, Unlock,
+  BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'

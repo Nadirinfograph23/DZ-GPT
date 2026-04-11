@@ -41,6 +41,9 @@ The following secrets must be configured in Replit's Secrets tab:
 - `POST /api/dz-agent-search` — DZ Agent search
 - `POST /api/dz-agent/education/search` — eddirasa.com educational search for DZ Agent study mode
 - `POST /api/dz-agent/education/index` — Auto-fetch educational index from eddirasa.com by level+subject (used by SmartStudyCard)
+- `POST /api/update-index` — Refreshes the RSS-first eddirasa.com lesson index into `data/eddirasa_index.json`
+- `GET /api/lessons` — Returns the full eddirasa lesson index, or filters by `level`, `year`, and `subject`
+- `GET /api/lesson?title=` — Returns one lesson with details and PDFs, with AI fallback if no source data is found
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
 - Various GitHub API proxy routes:
@@ -75,6 +78,8 @@ Key files: `src/pages/DZAgent.tsx` (layout + sidebar state), `src/styles/dz-agen
 DZ Agent has an added education layer that keeps existing behavior intact while adding:
 
 - eddirasa.com-first retrieval for study questions.
+- RSS-first ingestion through `eddirasa_rss_crawler.js`, with HTML scraping fallback and AI fallback as a final safety net.
+- A structured local index stored in `data/eddirasa_index.json`, refreshed manually by `POST /api/update-index` and scheduled every 24 hours while the Node server is running.
 - Subject detection for Math, Physics, Arabic, French, English, Science, and History / Geography.
 - Academic level detection for Primary 1–5, Middle 1–4/BEM, and Secondary 1–3/Baccalaureate.
 - Step-by-step exercise solving and simplified lesson explanations.

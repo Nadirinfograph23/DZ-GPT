@@ -6,6 +6,14 @@ import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { readFile } from 'fs/promises'
+import {
+  createStaticEducationalFallback,
+  filterLessons,
+  findLessonByTitle,
+  lessonsToSearchResults,
+  readEddirasaIndex,
+  updateEddirasaIndex,
+} from './eddirasa_rss_crawler.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -104,6 +112,9 @@ app.use('/api/dz-agent-search', searchLimiter)
 app.use('/api/dz-agent/search', searchLimiter)
 app.use('/api/dz-agent/education/search', searchLimiter)
 app.use('/api/dz-agent/education/index', searchLimiter)
+app.use('/api/update-index', searchLimiter)
+app.use('/api/lessons', searchLimiter)
+app.use('/api/lesson', searchLimiter)
 app.use('/api/dz-agent/deploy', deployLimiter)
 
 // ===== INPUT SANITIZER =====
@@ -642,6 +653,21 @@ app.post('/api/dz-agent/education/search', async (req, res) => {
   const level = sanitizeString(req.body.level || '', 80)
   if (!query) return res.status(400).json({ error: 'Query required.' })
   try {
+    const index = await readEddirasaIndex()
+    let indexedLessons = filterLessons(index, { subject, level, query }).slice(0, 8)
+    if (indexedLessons.length === 0 && (subject || level)) {
+      indexedLessons = filterLessons(index, { subject, level }).slice(0, 8)
+    }
+    if (indexedLessons.length > 0) {
+      const results = lessonsToSearchResults(indexedLessons)
+      const content = buildEducationContext({
+        query,
+        subject,
+        level,
+        search: { query: `eddirasa_rss_crawler:${query}`, results },
+      })
+      return res.status(200).json({ content, results, query: `eddirasa_rss_crawler:${query}` })
+    }
     const search = await searchEddirasaEducation({ query, subject, level })
     const content = buildEducationContext({ query, subject, level, search })
     return res.status(200).json({ content, results: search.results, query: search.query })
@@ -656,6 +682,18 @@ app.post('/api/dz-agent/education/index', async (req, res) => {
   const level = sanitizeString(req.body.level || '', 80)
   if (!subject || !level) return res.status(400).json({ error: 'Subject and level required.' })
   try {
+    const index = await readEddirasaIndex()
+    const indexedLessons = filterLessons(index, { subject, level }).slice(0, 20)
+    if (indexedLessons.length > 0) {
+      const items = indexedLessons.map(lesson => ({
+        title: lesson.title || 'محتوى من eddirasa.com',
+        url: lesson.url || '',
+        snippet: (lesson.description || lesson.paragraphs?.join(' ') || '').slice(0, 200).trim(),
+        isPdf: lesson.type === 'pdf' || (lesson.pdfs || []).length > 0 || /\.pdf($|\?|#)/i.test(lesson.url || ''),
+        pdfs: lesson.pdfs || [],
+      })).filter(r => r.url)
+      return res.status(200).json({ items, level, subject, total: items.length, source: 'eddirasa_rss_crawler' })
+    }
     const genericQuery = 'دروس تمارين فروض ملخص'
     const search = await searchEddirasaEducation({ query: genericQuery, subject, level })
     const items = (search.results || []).map(r => ({
@@ -668,6 +706,84 @@ app.post('/api/dz-agent/education/index', async (req, res) => {
   } catch (err) {
     console.error('[Eddirasa] Index endpoint error:', err.message)
     return res.status(500).json({ error: 'فشل في جلب الفهرس من eddirasa.com' })
+  }
+})
+
+async function buildAiEducationalFallback({ title = '', level = '', year = '', subject = '' }) {
+  const fallback = createStaticEducationalFallback({ title, level, year, subject })
+  if (getGroqKeys().length === 0) return fallback
+  const prompt = `أنشئ محتوى تعليمياً منظماً باللغة العربية حول: ${title || subject || 'درس تعليمي'}.
+المستوى: ${level || 'غير محدد'}
+السنة: ${year || 'غير محددة'}
+المادة: ${subject || 'غير محددة'}
+
+أرجع شرح الدرس، أمثلة، 3 تمارين، واختباراً قصيراً.`
+  try {
+    const { content } = await callGroqWithFallback({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+    })
+    if (content) {
+      fallback.description = content.slice(0, 1200)
+      fallback.paragraphs = content.split(/\n{2,}/).map(p => p.trim()).filter(Boolean).slice(0, 20)
+      fallback.source = 'ai-fallback'
+      fallback.updated_at = new Date().toISOString()
+    }
+  } catch (error) {
+    console.warn('[Eddirasa] AI fallback failed:', error.message)
+  }
+  return fallback
+}
+
+app.post('/api/update-index', async (_req, res) => {
+  try {
+    const index = await updateEddirasaIndex()
+    return res.status(200).json({ ok: true, total: index.lessons.length, index })
+  } catch (err) {
+    console.error('[Eddirasa] Update index endpoint error:', err.message)
+    const fallback = createStaticEducationalFallback({ title: 'فهرس تعليمي احتياطي من DZ Agent' })
+    return res.status(200).json({
+      ok: false,
+      warning: 'RSS/scraping sources were unavailable; returned usable fallback content.',
+      index: { level: '', year: '', subject: '', lessons: [fallback], source: 'ai-fallback', updated_at: fallback.updated_at },
+    })
+  }
+})
+
+app.get('/api/lessons', async (req, res) => {
+  const level = sanitizeString(req.query.level || '', 80)
+  const year = sanitizeString(req.query.year || '', 20)
+  const subject = sanitizeString(req.query.subject || '', 80)
+  try {
+    const index = await readEddirasaIndex()
+    const lessons = filterLessons(index, { level, year, subject })
+    if (lessons.length > 0 || (!level && !year && !subject)) {
+      return res.status(200).json({ ...index, lessons })
+    }
+    const fallback = await buildAiEducationalFallback({ title: `${subject} ${level} ${year}`.trim(), level, year, subject })
+    return res.status(200).json({ level, year, subject, lessons: [fallback], source: 'ai-fallback', updated_at: fallback.updated_at })
+  } catch (err) {
+    console.error('[Eddirasa] Lessons endpoint error:', err.message)
+    const fallback = await buildAiEducationalFallback({ title: `${subject} ${level} ${year}`.trim(), level, year, subject })
+    return res.status(200).json({ level, year, subject, lessons: [fallback], source: 'ai-fallback', updated_at: fallback.updated_at })
+  }
+})
+
+app.get('/api/lesson', async (req, res) => {
+  const title = sanitizeString(req.query.title || '', 300)
+  const level = sanitizeString(req.query.level || '', 80)
+  const year = sanitizeString(req.query.year || '', 20)
+  const subject = sanitizeString(req.query.subject || '', 80)
+  try {
+    const index = await readEddirasaIndex()
+    const lesson = findLessonByTitle(index, title)
+    if (lesson) return res.status(200).json(lesson)
+    const fallback = await buildAiEducationalFallback({ title, level, year, subject })
+    return res.status(200).json(fallback)
+  } catch (err) {
+    console.error('[Eddirasa] Lesson endpoint error:', err.message)
+    const fallback = await buildAiEducationalFallback({ title, level, year, subject })
+    return res.status(200).json(fallback)
   }
 })
 
@@ -2273,15 +2389,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   if (isEducationQuery) {
     try {
-      const search = await searchEddirasaEducation({
+      const educationSubjectLabel = educationSubject?.label || ''
+      const educationLevelLabel = educationLevel || ''
+      const rssIndex = await readEddirasaIndex()
+      const indexedLessons = filterLessons(rssIndex, {
         query: lastUserMessage,
-        subject: educationSubject?.label || '',
-        level: educationLevel || '',
-      })
+        subject: educationSubjectLabel,
+        level: educationLevelLabel,
+      }).slice(0, 8)
+      const search = indexedLessons.length > 0
+        ? {
+            query: `eddirasa_rss_crawler:${lastUserMessage}`,
+            results: lessonsToSearchResults(indexedLessons),
+          }
+        : await searchEddirasaEducation({
+            query: lastUserMessage,
+            subject: educationSubjectLabel,
+            level: educationLevelLabel,
+          })
       educationalContext = buildEducationContext({
         query: lastUserMessage,
-        subject: educationSubject?.label || '',
-        level: educationLevel || '',
+        subject: educationSubjectLabel,
+        level: educationLevelLabel,
         search,
       })
       console.log(`[DZ Education] eddirasa results=${search.results.length}`)
@@ -3525,6 +3654,12 @@ export { app }
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
+  setInterval(() => {
+    updateEddirasaIndex()
+      .then(index => console.log(`[Eddirasa] Scheduled index update complete: ${index.lessons.length} lessons`))
+      .catch(err => console.warn('[Eddirasa] Scheduled index update failed:', err.message))
+  }, 24 * 60 * 60 * 1000)
+
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))
     app.get('*', async (_req, res) => {

@@ -28,15 +28,17 @@ The following secrets must be configured in Replit's Secrets tab:
 | `GITHUB_TOKEN` | GitHub personal access token (for GitHub integration routes) |
 | `OLLAMA_PROXY_URL` | URL for Ollama proxy (for local model support) |
 | `GOOGLE_API_KEY` | Google Custom Search Engine API key (for DZ Agent search) |
-| `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, has built-in default |
+| `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, defaults to `12e6f922595f64d35` |
 | `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard) |
 | `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
+| `VERCEL_TOKEN` | Vercel token for deployment trigger route |
 
 ## API Routes
 
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
+- `POST /api/dz-agent/education/search` — eddirasa.com educational search for DZ Agent study mode
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
 - Various GitHub API proxy routes:
   - `POST /api/dz-agent/github/repos` — List user repos
@@ -52,6 +54,16 @@ The following secrets must be configured in Replit's Secrets tab:
   - `POST /api/dz-agent/github/pulls` — List Pull Requests
   - `POST /api/dz-agent/github/stats` — Repo statistics & contributors
 
+## DZ Agent Education Mode
+
+DZ Agent has an added education layer that keeps existing behavior intact while adding:
+
+- eddirasa.com-first retrieval for study questions.
+- Subject detection for Math, Physics, Arabic, French, English, Science, and History / Geography.
+- Academic level detection for Primary 1–5, Middle 1–4/BEM, and Secondary 1–3/Baccalaureate.
+- Step-by-step exercise solving and simplified lesson explanations.
+- A Study Level Selector Card in `src/components/DZChatBox.tsx` with level, subject, search input, Search eddirasa, Solve with AI, and Explain Lesson actions.
+
 ## Key Files
 
 - `server.js` — Express server with all API routes + Vite integration
@@ -59,8 +71,11 @@ The following secrets must be configured in Replit's Secrets tab:
 - `src/` — React frontend
 - `src/pages/` — Page components
 - `src/components/` — UI components
+- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub tools, and study selector
+- `src/styles/dz-agent.css` — DZ Agent styles including study card styles
 
 ## Notes
 
 - The server already correctly binds to `0.0.0.0:5000` for Replit compatibility.
 - `allowedHosts: true` is set in vite.config.ts for proxied preview support.
+- DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search uses `site:eddirasa.com` with that CSE when `GOOGLE_API_KEY` is available and falls back to web search when needed.

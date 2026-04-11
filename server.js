@@ -333,6 +333,7 @@ const TRUSTED_DOMAINS = {
   'sport360.com': 78, 'kooora.com': 75,
   'wikipedia.org': 70, 'wikidata.org': 65,
   'google.com': 80, 'news.google.com': 80,
+  'eddirasa.com': 92,
 }
 
 function getTrustScore(url = '') {
@@ -460,6 +461,154 @@ async function searchGoogleCSE(query) {
     }))
   } catch (err) { console.warn('[CSE] Fetch error:', err.message); return [] }
 }
+
+function stripHtml(html = '') {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function detectEducationIntent(msg = '') {
+  const lower = msg.toLowerCase()
+  const keywords = [
+    'درس','دروس','تمرين','تمارين','حل','حلول','تعلم','اشرح','شرح','مراجعة','اختبار','فرض','واجب','بكالوريا','بيام','ابتدائي','متوسط','ثانوي',
+    'math','physics','arabic','french','english','science','history','geography','lesson','exercise','learn','explain','homework','bem','bac',
+    'mathématiques','physique','arabe','français','anglais','sciences','histoire','géographie','exercice','cours'
+  ]
+  return keywords.some(k => lower.includes(k))
+}
+
+function detectEducationSubject(msg = '') {
+  const lower = msg.toLowerCase()
+  const subjects = [
+    { id: 'math', label: 'Math', patterns: ['رياضيات','رياضة','جبر','هندسة','دالة','معادلة','math','mathematique','mathématique'] },
+    { id: 'physics', label: 'Physics', patterns: ['فيزياء','كهرباء','ميكانيك','ضوء','physics','physique'] },
+    { id: 'arabic', label: 'Arabic', patterns: ['عربية','لغة عربية','نحو','إعراب','بلاغة','arabic','arabe'] },
+    { id: 'french', label: 'French', patterns: ['فرنسية','فرنسي','french','français','francais'] },
+    { id: 'english', label: 'English', patterns: ['انجليزية','إنجليزية','english','anglais'] },
+    { id: 'science', label: 'Science', patterns: ['علوم','طبيعة','حياة','biology','science','svt'] },
+    { id: 'history-geography', label: 'History / Geography', patterns: ['تاريخ','جغرافيا','history','geography','histoire','géographie'] },
+  ]
+  return subjects.find(s => s.patterns.some(p => lower.includes(p))) || null
+}
+
+function detectAcademicLevel(msg = '') {
+  const lower = msg.toLowerCase()
+  const rules = [
+    { level: 'Primary 1', patterns: ['أولى ابتدائي','سنة أولى ابتدائي','1 ابتدائي','primary 1'] },
+    { level: 'Primary 2', patterns: ['ثانية ابتدائي','سنة ثانية ابتدائي','2 ابتدائي','primary 2'] },
+    { level: 'Primary 3', patterns: ['ثالثة ابتدائي','سنة ثالثة ابتدائي','3 ابتدائي','primary 3'] },
+    { level: 'Primary 4', patterns: ['رابعة ابتدائي','سنة رابعة ابتدائي','4 ابتدائي','primary 4'] },
+    { level: 'Primary 5', patterns: ['خامسة ابتدائي','سنة خامسة ابتدائي','5 ابتدائي','primary 5'] },
+    { level: 'Middle 1', patterns: ['أولى متوسط','سنة أولى متوسط','1 متوسط','middle 1'] },
+    { level: 'Middle 2', patterns: ['ثانية متوسط','سنة ثانية متوسط','2 متوسط','middle 2'] },
+    { level: 'Middle 3', patterns: ['ثالثة متوسط','سنة ثالثة متوسط','3 متوسط','middle 3'] },
+    { level: 'Middle 4 (BEM)', patterns: ['رابعة متوسط','سنة رابعة متوسط','4 متوسط','بيام','bem','middle 4'] },
+    { level: 'Secondary 1', patterns: ['أولى ثانوي','سنة أولى ثانوي','1 ثانوي','secondary 1'] },
+    { level: 'Secondary 2', patterns: ['ثانية ثانوي','سنة ثانية ثانوي','2 ثانوي','secondary 2'] },
+    { level: 'Secondary 3 (Baccalaureate)', patterns: ['ثالثة ثانوي','سنة ثالثة ثانوي','3 ثانوي','بكالوريا','bac','baccalaureate','secondary 3'] },
+  ]
+  return rules.find(r => r.patterns.some(p => lower.includes(p)))?.level || null
+}
+
+function buildEddirasaQuery({ query, subject, level }) {
+  const parts = [query, subject, level, 'site:eddirasa.com'].filter(Boolean)
+  return parts.join(' ')
+}
+
+async function fetchEddirasaPage(url) {
+  if (!url || !/^https?:\/\/([^/]+\.)?eddirasa\.com\//i.test(url)) return ''
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'text/html,*/*' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return ''
+    const html = await r.text()
+    return stripHtml(html).slice(0, 2200)
+  } catch (err) {
+    console.warn('[Eddirasa] Fetch error:', err.message)
+    return ''
+  }
+}
+
+async function searchEddirasaEducation({ query, subject, level }) {
+  const searchQuery = buildEddirasaQuery({ query, subject, level })
+  let results = await searchGoogleCSE(searchQuery)
+  results = results
+    .filter(r => {
+      try {
+        return /(^|\.)eddirasa\.com/i.test(new URL(r.url || 'https://eddirasa.com').hostname.replace('www.', ''))
+      } catch {
+        return false
+      }
+    })
+    .slice(0, 5)
+
+  if (results.length === 0) {
+    try {
+      const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`
+      const r = await fetch(url, { headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' }, signal: AbortSignal.timeout(7000) })
+      if (r.ok) {
+        const html = await r.text()
+        const linkMatches = [...html.matchAll(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+        results = linkMatches.map(m => {
+          const raw = m[1].replace(/&amp;/g, '&')
+          let finalUrl = raw
+          try {
+            const parsed = new URL(raw, 'https://duckduckgo.com')
+            finalUrl = parsed.searchParams.get('uddg') || raw
+          } catch {}
+          return { source: 'Eddirasa', title: stripHtml(m[2]), snippet: '', url: finalUrl, date: '' }
+        }).filter(r => /^https?:\/\/([^/]+\.)?eddirasa\.com\//i.test(r.url)).slice(0, 5)
+      }
+    } catch (err) {
+      console.warn('[Eddirasa] Fallback search error:', err.message)
+    }
+  }
+
+  const enriched = []
+  for (const result of results) {
+    const extracted = await fetchEddirasaPage(result.url)
+    enriched.push({ ...result, extracted })
+  }
+  return { query: searchQuery, results: enriched }
+}
+
+function buildEducationContext({ query, subject, level, search }) {
+  const subjectLine = subject || detectEducationSubject(query)?.label || 'غير محددة'
+  const levelLine = level || detectAcademicLevel(query) || 'غير محدد'
+  if (!search?.results?.length) {
+    return `السؤال التعليمي: ${query}\nالمادة: ${subjectLine}\nالمستوى: ${levelLine}\nالمصدر الأول: eddirasa.com\nالحالة: لم يتم العثور على نتيجة مطابقة من eddirasa.com في البحث المتاح. استخدم المعرفة التعليمية كخطة بديلة مع توضيح أن المصدر غير متوفر.`
+  }
+  const lines = search.results.map((r, i) => {
+    const body = r.extracted || r.snippet || ''
+    return `${i + 1}. ${r.title}\nالرابط: ${r.url}\nالمقتطف المستخرج: ${body.slice(0, 1200)}`
+  }).join('\n\n')
+  return `السؤال التعليمي: ${query}\nالمادة: ${subjectLine}\nالمستوى: ${levelLine}\nالمصدر الأول: eddirasa.com\nاستعلام البحث: ${search.query}\n\n${lines}`
+}
+
+app.post('/api/dz-agent/education/search', async (req, res) => {
+  const query = sanitizeString(req.body.query || '', 500)
+  const subject = sanitizeString(req.body.subject || '', 80)
+  const level = sanitizeString(req.body.level || '', 80)
+  if (!query) return res.status(400).json({ error: 'Query required.' })
+  try {
+    const search = await searchEddirasaEducation({ query, subject, level })
+    const content = buildEducationContext({ query, subject, level, search })
+    return res.status(200).json({ content, results: search.results, query: search.query })
+  } catch (err) {
+    console.error('[Eddirasa] Search endpoint error:', err.message)
+    return res.status(500).json({ error: 'Failed to search eddirasa.' })
+  }
+})
 
 // ── Google News RSS targeted search (SECONDARY) ──────────────────────────────
 async function searchGoogleNewsRSS(rssUrl) {
@@ -1921,6 +2070,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const githubToken = req.body.githubToken || process.env.GITHUB_TOKEN || ''
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
   const lowerMsg = lastUserMessage.toLowerCase()
+  const educationSubject = detectEducationSubject(lastUserMessage)
+  const educationLevel = detectAcademicLevel(lastUserMessage)
+  const isEducationQuery = detectEducationIntent(lastUserMessage)
+  let educationalContext = ''
 
   // ── Local knowledge base ──────────────────────────────────────────────────
   const developerQuestions = [
@@ -2041,6 +2194,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   if (isGenerateCode) {
     // Let AI handle it but inject code generation context
+  }
+
+  if (isEducationQuery) {
+    try {
+      const search = await searchEddirasaEducation({
+        query: lastUserMessage,
+        subject: educationSubject?.label || '',
+        level: educationLevel || '',
+      })
+      educationalContext = buildEducationContext({
+        query: lastUserMessage,
+        subject: educationSubject?.label || '',
+        level: educationLevel || '',
+        search,
+      })
+      console.log(`[DZ Education] eddirasa results=${search.results.length}`)
+    } catch (err) {
+      console.error('[DZ Education] Context error:', err.message)
+      educationalContext = buildEducationContext({
+        query: lastUserMessage,
+        subject: educationSubject?.label || '',
+        level: educationLevel || '',
+        search: { results: [] },
+      })
+    }
   }
 
   // ── Prayer times detection ────────────────────────────────────────────────
@@ -2279,6 +2457,19 @@ Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88
 ⚽ رياضة: fifa.com · sofascore.com · lfp.dz · goal.com · kooora.com
 
 ━━━━━━━━━━━━━━━━━━━━━━
+📚 EDUCATION MODE — EDDIRASA FIRST
+━━━━━━━━━━━━━━━━━━━━━━
+
+عند أي سؤال دراسي أو تمرين أو طلب شرح:
+1. حدّد المادة: Math · Physics · Arabic · French · English · Science · History / Geography
+2. حدّد المستوى: Primary 1-5 · Middle 1-4/BEM · Secondary 1-3/Baccalaureate
+3. ابحث أولاً في eddirasa.com واستخدم النتائج المستخرجة إن توفرت
+4. إذا لم توجد نتائج من eddirasa.com، انتقل إلى المعرفة التعليمية العامة مع التصريح بأن المصدر غير متوفر
+5. عند حل التمارين اتبع دائماً: فهم السؤال → تحديد الموضوع → ربطه بالمصدر → حل خطوة بخطوة → شرح مبسط
+6. إذا قال المستخدم learn أو explain أو اشرح أو تعلم: لخّص الدرس، أعط أمثلة، أنشئ 3 تمارين تدريبية، ثم اختباراً صغيراً
+7. اجعل الشرح بسيطاً ومناسباً لتلميذ في المنهاج الجزائري
+
+━━━━━━━━━━━━━━━━━━━━━━
 ⚽ SPORTS MODULE (STRICT)
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -2403,6 +2594,8 @@ ${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext
 
 ${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
 
+${educationalContext ? `## 📚 سياق تعليمي من eddirasa.com أولاً\n${educationalContext}\n\n**قواعد التعليم:**\n1. ابدأ بتحديد المادة والمستوى\n2. إذا وجدت نتيجة من eddirasa.com: لخّصها وفسّرها بلغة بسيطة واذكر الرابط\n3. إذا لم تجد نتيجة: قل إن eddirasa.com لم يرجع نتيجة مطابقة، ثم استخدم المعرفة التعليمية العامة\n4. للتمارين: افهم السؤال، حدّد الموضوع، حل خطوة بخطوة، ثم أعط طريقة تحقق\n5. للتعلم والشرح: ملخص + أمثلة + 3 تمارين تدريبية + اختبار صغير` : ''}
+
 ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}`
 
   const apiMessages = [
@@ -2446,6 +2639,12 @@ ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع
   for (const model of fallbackModels) {
     const { content } = await callGroqWithFallback({ model, messages: apiMessages, max_tokens: 3000 })
     if (content) return res.status(200).json({ content, fallbackModel: model })
+  }
+
+  if (educationalContext) {
+    return res.status(200).json({
+      content: `${educationalContext}\n\n---\n> لم يتم العثور على مفتاح AI فعّال لإنتاج شرح موسع الآن، لكن هذه هي نتائج eddirasa/الخطة التعليمية المتاحة.`,
+    })
   }
 
   // If RSS context available, return it directly even without AI

@@ -179,6 +179,85 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+const STUDY_LEVELS = [
+  'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5',
+  'Middle 1', 'Middle 2', 'Middle 3', 'Middle 4 (BEM)',
+  'Secondary 1', 'Secondary 2', 'Secondary 3 (Baccalaureate)',
+]
+
+const STUDY_SUBJECTS = [
+  'Math',
+  'Physics',
+  'Arabic',
+  'French',
+  'English',
+  'Science',
+  'History / Geography',
+]
+
+function StudyLevelSelectorCard({
+  level,
+  subject,
+  query,
+  disabled,
+  onLevelChange,
+  onSubjectChange,
+  onQueryChange,
+  onSearch,
+  onSolve,
+  onExplain,
+}: {
+  level: string
+  subject: string
+  query: string
+  disabled: boolean
+  onLevelChange: (value: string) => void
+  onSubjectChange: (value: string) => void
+  onQueryChange: (value: string) => void
+  onSearch: () => void
+  onSolve: () => void
+  onExplain: () => void
+}) {
+  return (
+    <div className="dz-study-card">
+      <div className="dz-study-card-head">
+        <div className="dz-study-card-icon"><BookOpen size={18} /></div>
+        <div>
+          <h3>Study Level Selector Card</h3>
+          <p>دروس وتمارين من eddirasa.com مع شرح مبسط للمنهاج الجزائري</p>
+        </div>
+      </div>
+      <div className="dz-study-grid">
+        <label className="dz-study-field">
+          <span>المستوى</span>
+          <select value={level} onChange={(e) => onLevelChange(e.target.value)}>
+            {STUDY_LEVELS.map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className="dz-study-field">
+          <span>المادة</span>
+          <select value={subject} onChange={(e) => onSubjectChange(e.target.value)}>
+            {STUDY_SUBJECTS.map(item => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+      </div>
+      <label className="dz-study-field dz-study-field--full">
+        <span>بحث أو تمرين</span>
+        <input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="مثال: اشرح درس المعادلات أو حل تمرين في الطاقة"
+        />
+      </label>
+      <div className="dz-study-actions">
+        <button onClick={onSearch} disabled={disabled}><Search size={13} /> Search eddirasa</button>
+        <button onClick={onSolve} disabled={disabled}>Solve with AI</button>
+        <button onClick={onExplain} disabled={disabled}>Explain Lesson</button>
+      </div>
+    </div>
+  )
+}
+
 // ===== CODE ANALYSIS PANEL =====
 const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: React.ReactNode }> = {
   critical: { color: '#f87171', bg: 'rgba(248,113,113,0.07)', border: 'rgba(248,113,113,0.25)', label: 'حرج', icon: <ShieldAlert size={12} /> },
@@ -1162,6 +1241,9 @@ export default function DZChatBox() {
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
+  const [studyLevel, setStudyLevel] = useState('Middle 4 (BEM)')
+  const [studySubject, setStudySubject] = useState('Math')
+  const [studyQuery, setStudyQuery] = useState('')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -1257,6 +1339,38 @@ export default function DZChatBox() {
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
     return id
   }, [])
+
+  const searchEddirasa = useCallback(async () => {
+    const query = studyQuery.trim()
+    if (!query) {
+      addAssistantMessage({ content: 'اكتب درساً أو تمريناً في خانة البحث أولاً.', richType: 'text', isError: true })
+      return
+    }
+    setIsLoading(true)
+    setThinkingStep({ type: 'search', label: 'البحث في eddirasa.com...' })
+    try {
+      const res = await fetch('/api/dz-agent/education/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, subject: studySubject, level: studyLevel }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Eddirasa search failed')
+      const links = Array.isArray(data.results) && data.results.length > 0
+        ? data.results.map((item: { title: string; url: string }, index: number) => `${index + 1}. [${item.title}](${item.url})`).join('\n')
+        : 'لم يتم العثور على روابط مطابقة من eddirasa.com.'
+      addAssistantMessage({
+        content: `📚 **بحث eddirasa**\n\n**المستوى:** ${studyLevel}\n**المادة:** ${studySubject}\n**السؤال:** ${query}\n\n${links}`,
+        richType: 'text',
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل البحث في eddirasa: ${msg}`, richType: 'text', isError: true })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [studyQuery, studySubject, studyLevel, addAssistantMessage])
 
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
@@ -1871,6 +1985,19 @@ export default function DZChatBox() {
           <div className="dz-dashboard-wrapper">
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
+
+          <StudyLevelSelectorCard
+            level={studyLevel}
+            subject={studySubject}
+            query={studyQuery}
+            disabled={isLoading}
+            onLevelChange={setStudyLevel}
+            onSubjectChange={setStudySubject}
+            onQueryChange={setStudyQuery}
+            onSearch={searchEddirasa}
+            onSolve={() => sendMessage(`حل هذا التمرين خطوة بخطوة. المستوى: ${studyLevel}. المادة: ${studySubject}. التمرين: ${studyQuery}`)}
+            onExplain={() => sendMessage(`اشرح هذا الدرس ببساطة مع أمثلة و3 تمارين تدريبية واختبار صغير. المستوى: ${studyLevel}. المادة: ${studySubject}. الدرس: ${studyQuery}`)}
+          />
 
           {!isGithubConnected && (
             <div className="dz-github-note">

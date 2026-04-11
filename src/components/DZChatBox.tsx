@@ -1222,8 +1222,20 @@ function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
 }
 
 // ===== MAIN COMPONENT =====
-export default function DZChatBox() {
-  const [messages, setMessages] = useState<DZMessage[]>([])
+interface DZChatBoxProps {
+  chatId?: string | null
+  language?: 'ar' | 'en' | 'fr'
+  onTitleChange?: (title: string) => void
+}
+
+export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
+  const [messages, setMessages] = useState<DZMessage[]>(() => {
+    if (!chatId) return []
+    try {
+      const saved = localStorage.getItem(`dz-agent-msgs-${chatId}`)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -1298,6 +1310,20 @@ export default function DZChatBox() {
       })
       .catch(() => {})
   }, [])
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (!chatId) return
+    try {
+      localStorage.setItem(`dz-agent-msgs-${chatId}`, JSON.stringify(messages))
+    } catch {}
+    // Update chat title from first user message
+    const firstUser = messages.find(m => m.role === 'user')
+    if (firstUser && onTitleChange) {
+      const title = firstUser.content.slice(0, 50) + (firstUser.content.length > 50 ? '...' : '')
+      onTitleChange(title)
+    }
+  }, [messages, chatId, onTitleChange])
 
   // Auto-scroll — only when there are messages or loading, not on empty state
   useEffect(() => {
@@ -2204,7 +2230,10 @@ export default function DZChatBox() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isGithubConnected ? 'أكتب رسالتك... (GitHub متصل ✓)' : 'أكتب رسالتك لـ DZ Agent...'}
+            placeholder={isGithubConnected
+              ? (language === 'fr' ? 'Écrivez votre message... (GitHub connecté ✓)' : language === 'en' ? 'Type your message... (GitHub connected ✓)' : 'أكتب رسالتك... (GitHub متصل ✓)')
+              : (language === 'fr' ? 'Écrivez votre message à DZ Agent...' : language === 'en' ? 'Type your message to DZ Agent...' : 'أكتب رسالتك لـ DZ Agent...')
+            }
             rows={1}
             className="dz-chat-input"
           />

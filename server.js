@@ -776,6 +776,15 @@ function buildFootballContext(sfData, rssFeeds, dateStr) {
   return ctx
 }
 
+// Hardcoded tag regexes — avoids dynamic RegExp (ReDoS risk)
+const RSS_TAG_REGEXES = {
+  title:       /<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i,
+  description: /<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i,
+  link:        /<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i,
+  pubDate:     /<pubDate[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/i,
+  'dc:date':   /<dc:date[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/dc:date>/i,
+}
+
 function parseRSS(xml, sourceName) {
   const items = []
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
@@ -783,7 +792,9 @@ function parseRSS(xml, sourceName) {
   while ((match = itemRegex.exec(xml)) !== null) {
     const block = match[1]
     const getTag = (tag) => {
-      const r = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'))
+      const rx = RSS_TAG_REGEXES[tag]
+      if (!rx) return ''
+      const r = block.match(rx)
       if (!r) return ''
       return r[1].replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&#\d+;/g,'').trim()
     }
@@ -1632,6 +1643,16 @@ app.get('/api/currency/convert', async (req, res) => {
   })
 })
 
+// XML escape helper — prevents XSS/injection in RSS feeds
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
 // ─── Currency RSS feed ─────────────────────────────────────────────────────
 app.get('/rss/currency/dzd', async (_req, res) => {
   const data = await fetchCurrencyData()
@@ -1641,13 +1662,15 @@ app.get('/rss/currency/dzd', async (_req, res) => {
   let items = ''
   if (data?.rates) {
     for (const [code, rate] of Object.entries(data.rates)) {
-      const name = symbols[code] || code
+      const name = escapeXml(symbols[code] || code)
+      const safeCode = escapeXml(code)
       const dzdPer = rate > 0 ? (1 / rate).toFixed(2) : '?'
+      const safeRate = escapeXml(String(rate))
       items += `    <item>
-      <title>${code} to DZD</title>
-      <description>1 ${code} (${name}) = ${dzdPer} DZD | 1 DZD = ${rate} ${code}</description>
-      <pubDate>${updated}</pubDate>
-      <guid isPermaLink="false">dzd-rate-${code}-${Date.now()}</guid>
+      <title>${safeCode} to DZD</title>
+      <description>1 ${safeCode} (${name}) = ${escapeXml(dzdPer)} DZD | 1 DZD = ${safeRate} ${safeCode}</description>
+      <pubDate>${escapeXml(updated)}</pubDate>
+      <guid isPermaLink="false">dzd-rate-${safeCode}-${Date.now()}</guid>
     </item>\n`
     }
   }
@@ -1656,10 +1679,10 @@ app.get('/rss/currency/dzd', async (_req, res) => {
 <rss version="2.0">
   <channel>
     <title>DZD Currency Rates — Algerian Dinar Exchange Rates</title>
-    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ${data?.provider || 'N/A'}. Status: ${data?.status || 'unavailable'}.</description>
+    <description>Live exchange rates against the Algerian Dinar (DZD). Source: ${escapeXml(data?.provider || 'N/A')}. Status: ${escapeXml(data?.status || 'unavailable')}.</description>
     <link>https://dz-gpt.vercel.app</link>
     <language>ar</language>
-    <lastBuildDate>${updated}</lastBuildDate>
+    <lastBuildDate>${escapeXml(updated)}</lastBuildDate>
 ${items}  </channel>
 </rss>`
 

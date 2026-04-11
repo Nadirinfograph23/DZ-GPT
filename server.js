@@ -32,10 +32,12 @@ app.use(helmet({
 // ===== CORS =====
 const allowedOrigins = isProd
   ? [
-      'https://dz-gpt.vercel.app',
       process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '',
-      process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0].trim()}` : '',
-    ].filter(Boolean)
+      process.env.REPLIT_DOMAINS
+        ? process.env.REPLIT_DOMAINS.split(',').map(d => `https://${d.trim()}`).filter(Boolean)
+        : [],
+      process.env.ALLOWED_ORIGIN || '',
+    ].flat().filter(Boolean)
   : true
 app.use(cors({
   origin: allowedOrigins,
@@ -3104,6 +3106,126 @@ ${filesSummary}
   } catch (err) {
     console.error('[repo-scan]', err)
     return res.status(500).json({ error: err.message || 'Scan failed.' })
+  }
+})
+
+// ===== LIST BRANCHES =====
+app.post('/api/dz-agent/github/branches', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo } = req.body
+  if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  try {
+    const response = await ghFetch(`/repos/${repo}/branches?per_page=30`, token)
+    const data = await response.json()
+    if (!response.ok) return res.status(response.status).json({ error: data.message || 'Failed to fetch branches' })
+    const branches = data.map(b => ({
+      name: b.name,
+      protected: b.protected,
+      sha: b.commit?.sha?.slice(0, 7) || '',
+    }))
+    return res.status(200).json({ branches })
+  } catch (err) {
+    console.error('[branches]', err)
+    return res.status(500).json({ error: 'Failed to fetch branches.' })
+  }
+})
+
+// ===== LIST ISSUES =====
+app.post('/api/dz-agent/github/issues', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, state = 'open' } = req.body
+  if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  const safeState = ['open', 'closed', 'all'].includes(state) ? state : 'open'
+  try {
+    const response = await ghFetch(`/repos/${repo}/issues?state=${safeState}&per_page=20&sort=updated`, token)
+    const data = await response.json()
+    if (!response.ok) return res.status(response.status).json({ error: data.message || 'Failed to fetch issues' })
+    const issues = data
+      .filter(i => !i.pull_request)
+      .map(i => ({
+        number: i.number,
+        title: sanitizeString(i.title, 200),
+        state: i.state,
+        user: i.user?.login || '',
+        labels: (i.labels || []).map(l => l.name).slice(0, 5),
+        created_at: i.created_at,
+        updated_at: i.updated_at,
+        html_url: i.html_url,
+        comments: i.comments || 0,
+      }))
+    return res.status(200).json({ issues })
+  } catch (err) {
+    console.error('[issues]', err)
+    return res.status(500).json({ error: 'Failed to fetch issues.' })
+  }
+})
+
+// ===== LIST PULL REQUESTS =====
+app.post('/api/dz-agent/github/pulls', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, state = 'open' } = req.body
+  if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  const safeState = ['open', 'closed', 'all'].includes(state) ? state : 'open'
+  try {
+    const response = await ghFetch(`/repos/${repo}/pulls?state=${safeState}&per_page=20&sort=updated`, token)
+    const data = await response.json()
+    if (!response.ok) return res.status(response.status).json({ error: data.message || 'Failed to fetch PRs' })
+    const pulls = data.map(p => ({
+      number: p.number,
+      title: sanitizeString(p.title, 200),
+      state: p.state,
+      user: p.user?.login || '',
+      head: p.head?.ref || '',
+      base: p.base?.ref || '',
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      html_url: p.html_url,
+      draft: !!p.draft,
+    }))
+    return res.status(200).json({ pulls })
+  } catch (err) {
+    console.error('[pulls]', err)
+    return res.status(500).json({ error: 'Failed to fetch pull requests.' })
+  }
+})
+
+// ===== REPO STATS =====
+app.post('/api/dz-agent/github/stats', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo } = req.body
+  if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  try {
+    const [repoRes, contribRes, langsRes] = await Promise.allSettled([
+      ghFetch(`/repos/${repo}`, token),
+      ghFetch(`/repos/${repo}/contributors?per_page=5`, token),
+      ghFetch(`/repos/${repo}/languages`, token),
+    ])
+    const repoData = repoRes.status === 'fulfilled' ? await repoRes.value.json() : {}
+    const contribData = contribRes.status === 'fulfilled' && contribRes.value.ok ? await contribRes.value.json() : []
+    const langsData = langsRes.status === 'fulfilled' && langsRes.value.ok ? await langsRes.value.json() : {}
+    return res.status(200).json({
+      name: repoData.name || repo.split('/')[1],
+      stars: repoData.stargazers_count || 0,
+      forks: repoData.forks_count || 0,
+      watchers: repoData.watchers_count || 0,
+      open_issues: repoData.open_issues_count || 0,
+      size: repoData.size || 0,
+      language: repoData.language || null,
+      languages: langsData,
+      contributors: Array.isArray(contribData)
+        ? contribData.map(c => ({ login: c.login || '', contributions: c.contributions || 0 }))
+        : [],
+      created_at: repoData.created_at || null,
+      updated_at: repoData.updated_at || null,
+      default_branch: repoData.default_branch || 'main',
+    })
+  } catch (err) {
+    console.error('[stats]', err)
+    return res.status(500).json({ error: 'Failed to fetch repo stats.' })
   }
 })
 

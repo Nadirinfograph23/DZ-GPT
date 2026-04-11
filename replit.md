@@ -38,8 +38,19 @@ The following secrets must be configured in Replit's Secrets tab:
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
-- `POST /api/dz-agent/deploy` — Trigger Vercel production redeploy
-- Various GitHub API proxy routes
+- Various GitHub API proxy routes:
+  - `POST /api/dz-agent/github/repos` — List user repos
+  - `POST /api/dz-agent/github/files` — Browse repo files
+  - `POST /api/dz-agent/github/file-content` — Read file
+  - `POST /api/dz-agent/github/analyze` — AI code analysis
+  - `POST /api/dz-agent/github/code-action` — Code actions (fix, explain, improve)
+  - `POST /api/dz-agent/github/commit` — Commit changes
+  - `POST /api/dz-agent/github/pr` — Create Pull Request
+  - `POST /api/dz-agent/github/repo-scan` — Full repo AI scan
+  - `POST /api/dz-agent/github/branches` — List branches
+  - `POST /api/dz-agent/github/issues` — List open issues
+  - `POST /api/dz-agent/github/pulls` — List Pull Requests
+  - `POST /api/dz-agent/github/stats` — Repo statistics & contributors
 
 ## Key Files
 

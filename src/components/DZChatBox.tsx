@@ -5,6 +5,8 @@ import {
   CheckCircle2, XCircle, GitCommit, GitPullRequest,
   Key, Trash2, RefreshCw, Terminal, Zap,
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
+  BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock, Unlock,
+  BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
@@ -19,8 +21,65 @@ type RichType =
   | 'action-log'
   | 'code-analysis'
   | 'repo-selected'
+  | 'branches'
+  | 'issues'
+  | 'pulls'
+  | 'stats'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
+
+type ThinkingStepType = 'read' | 'analyze' | 'write' | 'scan' | 'list' | 'search' | 'commit' | 'pr'
+
+interface ThinkingStep {
+  type: ThinkingStepType
+  label: string
+}
+
+interface BranchItem {
+  name: string
+  protected: boolean
+  sha: string
+}
+
+interface IssueItem {
+  number: number
+  title: string
+  state: string
+  user: string
+  labels: string[]
+  created_at: string
+  updated_at: string
+  html_url: string
+  comments: number
+}
+
+interface PullItem {
+  number: number
+  title: string
+  state: string
+  user: string
+  head: string
+  base: string
+  created_at: string
+  updated_at: string
+  html_url: string
+  draft: boolean
+}
+
+interface RepoStats {
+  name: string
+  stars: number
+  forks: number
+  watchers: number
+  open_issues: number
+  size: number
+  language: string
+  languages: Record<string, number>
+  contributors: { login: string; contributions: number }[]
+  created_at: string
+  updated_at: string
+  default_branch: string
+}
 
 interface CodeIssue {
   id: string
@@ -95,6 +154,10 @@ interface DZMessage {
   isError?: boolean
   showDevCard?: boolean
   selectedRepo?: RepoItem
+  branches?: BranchItem[]
+  issues?: IssueItem[]
+  pulls?: PullItem[]
+  stats?: RepoStats
 }
 
 interface ActionLogEntry {
@@ -659,15 +722,19 @@ function DeveloperCard() {
 }
 
 // ===== REPO ACTION PANEL =====
-const REPO_ACTIONS = [
-  { id: 'scan',    emoji: '🔍', label: 'فحص الكود الكامل',   desc: 'تحليل شامل للمستودع',         color: '#60a5fa' },
-  { id: 'bugs',    emoji: '🐛', label: 'إيجاد الأخطاء',       desc: 'كشف الأخطاء والثغرات',        color: '#f87171' },
-  { id: 'suggest', emoji: '💡', label: 'اقتراحات التحسين',   desc: 'تحسينات الكود والأداء',        color: '#fbbf24' },
-  { id: 'fix',     emoji: '🔧', label: 'إصلاح تلقائي',        desc: 'إصلاح وCommit مباشر',          color: '#4ade80' },
-  { id: 'report',  emoji: '📋', label: 'تقرير شامل',          desc: 'تقرير مفصل بكل العمليات',     color: '#c084fc' },
-  { id: 'files',   emoji: '📂', label: 'تصفح الملفات',        desc: 'عرض ملفات المستودع',           color: '#94a3b8' },
-  { id: 'pr',      emoji: '🔀', label: 'إنشاء PR',             desc: 'Pull Request جديد',             color: '#f97316' },
-  { id: 'commit',  emoji: '✅', label: 'Commit',              desc: 'حفظ تعديل في المستودع',       color: '#06b6d4' },
+const REPO_ACTIONS: { id: string; Icon: React.ElementType; label: string; desc: string; color: string }[] = [
+  { id: 'scan',     Icon: ScanSearch,     label: 'فحص شامل',       desc: 'تحليل شامل للمستودع',     color: '#60a5fa' },
+  { id: 'bugs',     Icon: Bug,            label: 'إيجاد الأخطاء',   desc: 'كشف الأخطاء والثغرات',    color: '#f87171' },
+  { id: 'security', Icon: ShieldAlert,    label: 'فحص أمني',        desc: 'ثغرات أمنية وحماية',      color: '#fb923c' },
+  { id: 'suggest',  Icon: Lightbulb,      label: 'اقتراحات',        desc: 'تحسينات الكود والأداء',   color: '#fbbf24' },
+  { id: 'fix',      Icon: Wrench,         label: 'إصلاح تلقائي',    desc: 'إصلاح وCommit مباشر',     color: '#4ade80' },
+  { id: 'files',    Icon: FolderOpen,     label: 'الملفات',         desc: 'تصفح ملفات المستودع',     color: '#94a3b8' },
+  { id: 'branches', Icon: GitBranch,      label: 'الفروع',          desc: 'إدارة فروع المستودع',     color: '#c084fc' },
+  { id: 'issues',   Icon: AlertCircle,    label: 'المشاكل',         desc: 'Issues المفتوحة',          color: '#fb923c' },
+  { id: 'pulls',    Icon: GitPullRequest, label: 'Pull Requests',   desc: 'طلبات الدمج النشطة',      color: '#38bdf8' },
+  { id: 'commit',   Icon: GitCommit,      label: 'Commit',          desc: 'حفظ تعديل مباشر',         color: '#06b6d4' },
+  { id: 'pr',       Icon: GitMerge,       label: 'إنشاء PR',        desc: 'Pull Request جديد',        color: '#f97316' },
+  { id: 'stats',    Icon: BarChart2,      label: 'إحصائيات',        desc: 'إحصائيات ومساهمون',       color: '#a78bfa' },
 ]
 
 function RepoActionPanel({
@@ -699,11 +766,176 @@ function RepoActionPanel({
             style={{ '--rap-color': a.color } as React.CSSProperties}
             onClick={() => onAction(a.id, repo)}
           >
-            <span className="rap-btn-emoji">{a.emoji}</span>
+            <span className="rap-btn-icon" style={{ color: a.color }}>
+              <a.Icon size={18} />
+            </span>
             <span className="rap-btn-label">{a.label}</span>
             <span className="rap-btn-desc">{a.desc}</span>
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ===== BRANCHES PANEL =====
+function BranchesPanel({ branches, repo }: { branches: BranchItem[]; repo: string }) {
+  return (
+    <div className="gh-list-panel">
+      <div className="gh-list-header">
+        <GitBranch size={14} />
+        <span>الفروع ({branches.length}) — {repo.split('/')[1]}</span>
+      </div>
+      {branches.map(b => (
+        <div key={b.name} className="gh-branch-item">
+          <div className="gh-branch-left">
+            <GitBranch size={12} className="gh-branch-icon" />
+            <span className="gh-branch-name">{b.name}</span>
+            {b.protected && (
+              <span className="gh-badge gh-badge--protected"><Lock size={9} /> محمي</span>
+            )}
+          </div>
+          <span className="gh-branch-sha">{b.sha}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ===== ISSUES PANEL =====
+function IssuesPanel({ issues, repo }: { issues: IssueItem[]; repo: string }) {
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-DZ', { month: 'short', day: 'numeric' })
+  return (
+    <div className="gh-list-panel">
+      <div className="gh-list-header">
+        <AlertCircle size={14} />
+        <span>المشاكل المفتوحة ({issues.length}) — {repo.split('/')[1]}</span>
+      </div>
+      {issues.length === 0 ? (
+        <div className="gh-list-empty"><CheckCircle2 size={14} /> لا توجد مشاكل مفتوحة</div>
+      ) : issues.map(issue => (
+        <div key={issue.number} className="gh-issue-item">
+          <div className="gh-issue-top">
+            <span className="gh-issue-num">#{issue.number}</span>
+            <span className="gh-issue-title">{issue.title}</span>
+            <a href={issue.html_url} target="_blank" rel="noreferrer" className="gh-item-link">
+              <ExternalLink size={11} />
+            </a>
+          </div>
+          <div className="gh-issue-meta">
+            <span className="gh-issue-user"><Users size={10} /> {issue.user}</span>
+            <span className="gh-issue-date"><Clock size={10} /> {formatDate(issue.updated_at)}</span>
+            {issue.comments > 0 && <span className="gh-issue-comments"><MessageSquare size={10} /> {issue.comments}</span>}
+            {issue.labels.map(l => <span key={l} className="gh-label"><Tag size={9} /> {l}</span>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ===== PULLS PANEL =====
+function PullsPanel({ pulls, repo }: { pulls: PullItem[]; repo: string }) {
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-DZ', { month: 'short', day: 'numeric' })
+  return (
+    <div className="gh-list-panel">
+      <div className="gh-list-header">
+        <GitPullRequest size={14} />
+        <span>Pull Requests ({pulls.length}) — {repo.split('/')[1]}</span>
+      </div>
+      {pulls.length === 0 ? (
+        <div className="gh-list-empty"><CheckCircle2 size={14} /> لا توجد Pull Requests مفتوحة</div>
+      ) : pulls.map(pr => (
+        <div key={pr.number} className={`gh-pr-item ${pr.draft ? 'gh-pr-item--draft' : ''}`}>
+          <div className="gh-issue-top">
+            <span className="gh-issue-num">#{pr.number}</span>
+            {pr.draft && <span className="gh-badge gh-badge--draft">Draft</span>}
+            <span className="gh-issue-title">{pr.title}</span>
+            <a href={pr.html_url} target="_blank" rel="noreferrer" className="gh-item-link">
+              <ExternalLink size={11} />
+            </a>
+          </div>
+          <div className="gh-issue-meta">
+            <span className="gh-issue-user"><Users size={10} /> {pr.user}</span>
+            <span className="gh-pr-branch"><GitBranch size={10} /> {pr.head} → {pr.base}</span>
+            <span className="gh-issue-date"><Clock size={10} /> {formatDate(pr.updated_at)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ===== STATS PANEL =====
+function StatsPanel({ stats }: { stats: RepoStats }) {
+  const totalBytes = Object.values(stats.languages).reduce((a, b) => a + b, 0) || 1
+  const formatSize = (kb: number) => kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('ar-DZ', { year: 'numeric', month: 'short', day: 'numeric' })
+  return (
+    <div className="gh-stats-panel">
+      <div className="gh-list-header">
+        <BarChart2 size={14} />
+        <span>إحصائيات — {stats.name}</span>
+      </div>
+      <div className="gh-stats-grid">
+        <div className="gh-stat-card">
+          <Star size={14} className="gh-stat-icon" style={{ color: '#fbbf24' }} />
+          <span className="gh-stat-value">{stats.stars?.toLocaleString()}</span>
+          <span className="gh-stat-label">نجمة</span>
+        </div>
+        <div className="gh-stat-card">
+          <GitBranch size={14} className="gh-stat-icon" style={{ color: '#c084fc' }} />
+          <span className="gh-stat-value">{stats.forks?.toLocaleString()}</span>
+          <span className="gh-stat-label">Fork</span>
+        </div>
+        <div className="gh-stat-card">
+          <AlertCircle size={14} className="gh-stat-icon" style={{ color: '#fb923c' }} />
+          <span className="gh-stat-value">{stats.open_issues?.toLocaleString()}</span>
+          <span className="gh-stat-label">مشكلة</span>
+        </div>
+        <div className="gh-stat-card">
+          <Activity size={14} className="gh-stat-icon" style={{ color: '#4ade80' }} />
+          <span className="gh-stat-value">{formatSize(stats.size)}</span>
+          <span className="gh-stat-label">الحجم</span>
+        </div>
+      </div>
+      {Object.keys(stats.languages).length > 0 && (
+        <div className="gh-stats-langs">
+          <div className="gh-stats-section-title"><Search size={12} /> اللغات</div>
+          <div className="gh-langs-bar">
+            {Object.entries(stats.languages).slice(0, 6).map(([lang, bytes]) => (
+              <div
+                key={lang}
+                className="gh-lang-segment"
+                style={{ width: `${(bytes / totalBytes) * 100}%` }}
+                title={`${lang}: ${((bytes / totalBytes) * 100).toFixed(1)}%`}
+              />
+            ))}
+          </div>
+          <div className="gh-langs-legend">
+            {Object.entries(stats.languages).slice(0, 6).map(([lang, bytes]) => (
+              <span key={lang} className="gh-lang-item">
+                {lang} <span className="gh-lang-pct">{((bytes / totalBytes) * 100).toFixed(1)}%</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {stats.contributors?.length > 0 && (
+        <div className="gh-stats-contribs">
+          <div className="gh-stats-section-title"><Users size={12} /> المساهمون</div>
+          {stats.contributors.map(c => (
+            <div key={c.login} className="gh-contrib-item">
+              <span className="gh-contrib-name">{c.login}</span>
+              <span className="gh-contrib-count">{c.contributions} مساهمة</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="gh-stats-dates">
+        <span><Clock size={10} /> أُنشئ: {formatDate(stats.created_at)}</span>
+        <span><RefreshCw size={10} /> آخر تحديث: {formatDate(stats.updated_at)}</span>
+        <span><GitBranch size={10} /> الفرع الرئيسي: {stats.default_branch}</span>
       </div>
     </div>
   )
@@ -917,6 +1149,7 @@ export default function DZChatBox() {
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
+  const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [githubToken, setGithubToken] = useState<string>(() =>
     localStorage.getItem('dz-agent-gh-token') || ''
   )
@@ -1032,6 +1265,7 @@ export default function DZChatBox() {
       return
     }
     setIsLoading(true)
+    setThinkingStep({ type: 'list', label: 'جلب المستودعات من GitHub...' })
     addToLog({ type: 'list-repos', description: 'Listing GitHub repositories', status: 'pending' })
     try {
       const res = await fetch('/api/dz-agent/github/repos', {
@@ -1049,12 +1283,14 @@ export default function DZChatBox() {
       addToLog({ type: 'list-repos', description: `Error: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFiles = useCallback(async (repo: string, path = '') => {
     if (!githubToken && !serverGithubConnected) return
     setIsLoading(true)
+    setThinkingStep({ type: 'read', label: `قراءة الملفات في ${repo.split('/')[1] || repo}...` })
     addToLog({ type: 'list-files', description: `Browsing ${repo}${path ? '/' + path : ''}`, status: 'pending', repo })
     try {
       const res = await fetch('/api/dz-agent/github/files', {
@@ -1074,12 +1310,14 @@ export default function DZChatBox() {
       addToLog({ type: 'list-files', description: `Error: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFileContent = useCallback(async (repo: string, path: string) => {
     if (!githubToken && !serverGithubConnected) return
     setIsLoading(true)
+    setThinkingStep({ type: 'read', label: `قراءة الملف: ${path.split('/').pop()}...` })
     addToLog({ type: 'read-file', description: `Reading ${path} from ${repo}`, status: 'pending', repo })
     try {
       const res = await fetch('/api/dz-agent/github/file-content', {
@@ -1097,11 +1335,13 @@ export default function DZChatBox() {
       addToLog({ type: 'read-file', description: `Error reading ${path}: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
   const analyzeCode = useCallback(async (repo: string, path: string, content: string) => {
     setIsLoading(true)
+    setThinkingStep({ type: 'analyze', label: `تحليل الكود في ${path.split('/').pop()}...` })
     addToLog({ type: 'analyze-code', description: `Analyzing ${path}`, status: 'pending', repo })
     try {
       const res = await fetch('/api/dz-agent/github/analyze', {
@@ -1128,6 +1368,7 @@ export default function DZChatBox() {
       addToLog({ type: 'analyze-code', description: `Error: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [addToLog, addAssistantMessage])
 
@@ -1139,6 +1380,14 @@ export default function DZChatBox() {
     issue?: CodeIssue | CodeImprovement
   ) => {
     setIsLoading(true)
+    const stepMap: Record<string, ThinkingStep> = {
+      fix_code:       { type: 'write', label: 'إصلاح الكود...' },
+      explain_error:  { type: 'analyze', label: 'شرح الخطأ...' },
+      improve_code:   { type: 'write', label: 'تحسين الكود...' },
+      apply_repo_fix: { type: 'analyze', label: 'إعداد Git Diff...' },
+      rescan_repo:    { type: 'scan', label: 'إعادة الفحص...' },
+    }
+    setThinkingStep(stepMap[action] || { type: 'analyze', label: 'معالجة...' })
     const actionLabels: Record<string, string> = {
       fix_code: `إصلاح: ${(issue as CodeIssue)?.issue || ''}`,
       explain_error: `شرح الخطأ: ${(issue as CodeIssue)?.issue || ''}`,
@@ -1179,6 +1428,7 @@ export default function DZChatBox() {
       addToLog({ type: 'code-action', description: `Error: ${msg}`, status: 'error', repo })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [addToLog, addAssistantMessage])
 
@@ -1191,24 +1441,124 @@ export default function DZChatBox() {
     if (repos.length === 0) return
     const firstRepo = repos[0]
     setCurrentRepo(firstRepo.full_name)
-    const repoNames = repos.map(r => r.name).join('، ')
     addAssistantMessage({
-      content: `✅ تم تصدير ${repos.length > 1 ? 'المستودعات' : 'المستودع'} **${repoNames}** إلى DZ Agent.\n\nالمستودع النشط الآن: \`${firstRepo.full_name}\`\n\nيمكنك الآن:\n- 📂 طلب قراءة الملفات\n- 🔍 تحليل الكود\n- ✏️ تعديل وإنشاء Commits\n- 🔀 فتح Pull Requests`,
-      richType: 'text',
+      content: repos.length > 1
+        ? `✅ تم اختيار **${repos.length}** مستودعات — النشط الآن: **${firstRepo.name}** — اختر إجراءً:`
+        : `✅ تم اختيار **${firstRepo.name}** — اختر إجراءً:`,
+      richType: 'repo-selected',
+      selectedRepo: firstRepo,
     })
   }, [addAssistantMessage])
 
   const selectRepo = useCallback((repo: RepoItem) => {
     setCurrentRepo(repo.full_name)
     addAssistantMessage({
-      content: `تم اختيار المستودع **${repo.name}** — اختر إجراءً:`,
+      content: `تم اختيار **${repo.name}** — اختر إجراءً:`,
       richType: 'repo-selected',
       selectedRepo: repo,
     })
   }, [addAssistantMessage])
 
+  const fetchBranches = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'list', label: `جلب فروع ${repo.name}...` })
+    addToLog({ type: 'list-branches', description: `Listing branches for ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch branches')
+      addAssistantMessage({ content: `الفروع في ${repo.name}:`, richType: 'branches', branches: data.branches, selectedRepo: repo })
+      addToLog({ type: 'list-branches', description: `Listed ${data.branches.length} branches`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل جلب الفروع: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'list-branches', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const fetchIssues = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'list', label: `جلب مشاكل ${repo.name}...` })
+    addToLog({ type: 'list-issues', description: `Listing issues for ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch issues')
+      addAssistantMessage({ content: `المشاكل في ${repo.name}:`, richType: 'issues', issues: data.issues, selectedRepo: repo })
+      addToLog({ type: 'list-issues', description: `Listed ${data.issues.length} issues`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل جلب المشاكل: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'list-issues', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const fetchPulls = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'list', label: `جلب Pull Requests لـ ${repo.name}...` })
+    addToLog({ type: 'list-pulls', description: `Listing PRs for ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/pulls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch PRs')
+      addAssistantMessage({ content: `Pull Requests في ${repo.name}:`, richType: 'pulls', pulls: data.pulls, selectedRepo: repo })
+      addToLog({ type: 'list-pulls', description: `Listed ${data.pulls.length} PRs`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل جلب PRs: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'list-pulls', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  const fetchStats = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'analyze', label: `جلب إحصائيات ${repo.name}...` })
+    addToLog({ type: 'repo-stats', description: `Fetching stats for ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch stats')
+      addAssistantMessage({ content: `إحصائيات ${repo.name}:`, richType: 'stats', stats: data, selectedRepo: repo })
+      addToLog({ type: 'repo-stats', description: `Stats fetched for ${repo.name}`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `فشل جلب الإحصائيات: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'repo-stats', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
   const scanRepo = useCallback(async (repo: RepoItem, focus?: string) => {
     setIsLoading(true)
+    const stepLabel = focus === 'bugs' ? 'البحث عن الأخطاء...' : focus === 'security' ? 'الفحص الأمني...' : focus === 'suggest' ? 'توليد الاقتراحات...' : focus === 'fix' ? 'إعداد الإصلاحات...' : 'الفحص الشامل...'
+    setThinkingStep({ type: focus === 'security' ? 'scan' : focus === 'fix' ? 'write' : 'analyze', label: stepLabel })
     addToLog({ type: 'repo-scan', description: `Scanning ${repo.name}${focus ? ` (${focus})` : ''}`, status: 'pending', repo: repo.full_name })
     try {
       const res = await fetch('/api/dz-agent/github/repo-scan', {
@@ -1230,6 +1580,7 @@ export default function DZChatBox() {
       addToLog({ type: 'repo-scan', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
     } finally {
       setIsLoading(false)
+      setThinkingStep(null)
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
@@ -1241,6 +1592,9 @@ export default function DZChatBox() {
         break
       case 'bugs':
         await scanRepo(repo, 'bugs')
+        break
+      case 'security':
+        await scanRepo(repo, 'security')
         break
       case 'suggest':
         await scanRepo(repo, 'suggest')
@@ -1254,8 +1608,20 @@ export default function DZChatBox() {
       case 'files':
         await fetchFiles(repo.full_name)
         break
+      case 'branches':
+        await fetchBranches(repo)
+        break
+      case 'issues':
+        await fetchIssues(repo)
+        break
+      case 'pulls':
+        await fetchPulls(repo)
+        break
+      case 'stats':
+        await fetchStats(repo)
+        break
       case 'pr':
-        setInput(`أنشئ Pull Request لمستودع ${repo.name} — صف التغييرات المطلوبة`)
+        setInput(`أنشئ Pull Request جديد في مستودع ${repo.name} — صف التغييرات المطلوبة والفرع المصدر`)
         textareaRef.current?.focus()
         break
       case 'commit':
@@ -1263,7 +1629,7 @@ export default function DZChatBox() {
         textareaRef.current?.focus()
         break
     }
-  }, [scanRepo, fetchFiles])
+  }, [scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
 
   const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
@@ -1605,6 +1971,18 @@ export default function DZChatBox() {
                           )}
                         />
                       )}
+                      {msg.richType === 'branches' && msg.branches && msg.selectedRepo && (
+                        <BranchesPanel branches={msg.branches} repo={msg.selectedRepo.full_name} />
+                      )}
+                      {msg.richType === 'issues' && msg.issues && msg.selectedRepo && (
+                        <IssuesPanel issues={msg.issues} repo={msg.selectedRepo.full_name} />
+                      )}
+                      {msg.richType === 'pulls' && msg.pulls && msg.selectedRepo && (
+                        <PullsPanel pulls={msg.pulls} repo={msg.selectedRepo.full_name} />
+                      )}
+                      {msg.richType === 'stats' && msg.stats && (
+                        <StatsPanel stats={msg.stats} />
+                      )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog
                           action={msg.pendingAction}
@@ -1646,15 +2024,32 @@ export default function DZChatBox() {
         {isLoading && (
           <div className="dz-message dz-message--assistant">
             <div className="dz-message-avatar">
-              <div className="dz-avatar dz-avatar--bot">
-                <Sparkles size={15} />
+              <div className="dz-avatar dz-avatar--bot dz-avatar--thinking">
+                {thinkingStep?.type === 'read'    ? <BookOpen size={15} /> :
+                 thinkingStep?.type === 'analyze' ? <Zap size={15} /> :
+                 thinkingStep?.type === 'write'   ? <Pencil size={15} /> :
+                 thinkingStep?.type === 'scan'    ? <ShieldAlert size={15} /> :
+                 thinkingStep?.type === 'commit'  ? <GitCommit size={15} /> :
+                 thinkingStep?.type === 'pr'      ? <GitPullRequest size={15} /> :
+                 thinkingStep?.type === 'search'  ? <Search size={15} /> :
+                 thinkingStep?.type === 'list'    ? <FolderOpen size={15} /> :
+                 <Sparkles size={15} />}
               </div>
             </div>
             <div className="dz-message-body">
               <div className="dz-message-sender">DZ Agent</div>
-              <div className="dz-typing-indicator">
-                <span /><span /><span />
-              </div>
+              {thinkingStep ? (
+                <div className="dz-thinking-step">
+                  <span className="dz-thinking-label">{thinkingStep.label}</span>
+                  <div className="dz-typing-indicator">
+                    <span /><span /><span />
+                  </div>
+                </div>
+              ) : (
+                <div className="dz-typing-indicator">
+                  <span /><span /><span />
+                </div>
+              )}
             </div>
           </div>
         )}

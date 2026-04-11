@@ -319,114 +319,277 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
-// ===== DZ AGENT SEARCH ROUTE =====
+// ===== DZ AGENT — RETRIEVAL ENGINE (Google-First) =====
+
+// ── Trust domains scoring ────────────────────────────────────────────────────
+const TRUSTED_DOMAINS = {
+  'reuters.com': 95, 'bbc.com': 92, 'bbc.co.uk': 92,
+  'aljazeera.net': 88, 'aljazeera.com': 88,
+  'aps.dz': 90, 'echoroukonline.com': 80, 'ennaharonline.com': 78,
+  'elbilad.net': 75, 'elkhabar.com': 78, 'djazairess.com': 80,
+  'goal.com': 82, 'sofascore.com': 85, 'lfp.dz': 88,
+  'sport360.com': 78, 'kooora.com': 75,
+  'wikipedia.org': 70, 'wikidata.org': 65,
+  'google.com': 80, 'news.google.com': 80,
+}
+
+function getTrustScore(url = '') {
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '')
+    for (const [domain, score] of Object.entries(TRUSTED_DOMAINS)) {
+      if (hostname.endsWith(domain)) return score
+    }
+  } catch {}
+  return 50
+}
+
+function getRecencyScore(dateStr) {
+  if (!dateStr) return 0
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return 0
+    const ageMs = Date.now() - date.getTime()
+    const ageH = ageMs / 3600000
+    if (ageH < 6) return 100
+    if (ageH < 24) return 90
+    if (ageH < 48) return 80
+    if (ageH < 168) return 65
+    if (ageH < 720) return 45
+    if (ageH < 8760) return 25
+    return 10
+  } catch { return 0 }
+}
+
+function getRelevanceScore(result, query) {
+  const q = query.toLowerCase()
+  const words = q.split(/\s+/).filter(w => w.length > 2)
+  const text = ((result.title || '') + ' ' + (result.snippet || '')).toLowerCase()
+  const matches = words.filter(w => text.includes(w)).length
+  return words.length > 0 ? Math.round((matches / words.length) * 100) : 50
+}
+
+function getSnippetScore(snippet = '', query = '') {
+  if (!snippet) return 0
+  const q = query.toLowerCase()
+  const words = q.split(/\s+/).filter(w => w.length > 2)
+  const snip = snippet.toLowerCase()
+  const matches = words.filter(w => snip.includes(w)).length
+  return words.length > 0 ? Math.round((matches / words.length) * 100) : 30
+}
+
+function scoreResult(result, query) {
+  const freshness  = getRecencyScore(result.date || result.pubDate || result.publishedDate)
+  const trust      = getTrustScore(result.url || result.link || '')
+  const relevance  = getRelevanceScore(result, query)
+  const snippetS   = getSnippetScore(result.snippet || result.description || '', query)
+  return Math.round(freshness * 0.45 + trust * 0.25 + relevance * 0.20 + snippetS * 0.10)
+}
+
+// ── Detect query intent ───────────────────────────────────────────────────────
+function detectQueryIntent(msg) {
+  const lower = msg.toLowerCase()
+  const isArabic = /[\u0600-\u06FF]/.test(msg)
+
+  const INTENTS = {
+    sports:   ['كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','منتخب','رياضة','football','soccer','sport','match','score','goal','team','league','cup','fifa','ligue'],
+    economy:  ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
+    politics: ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
+    tech:     ['تقنية','تكنولوجيا','ذكاء','برمجة','تطبيق','هاكر','أمن','tech','technology','ai','software','app','cyber','security','startup','code','programming'],
+    news:     ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','news','latest','today','breaking','recent','actualité'],
+  }
+
+  const detected = []
+  for (const [intent, kws] of Object.entries(INTENTS)) {
+    if (kws.some(k => lower.includes(k))) detected.push(intent)
+  }
+
+  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant']
+  const isTemporal = temporalMarkers.some(m => lower.includes(m)) || /\b(20[2-9]\d)\b/.test(msg)
+
+  return { primary: detected[0] || 'general', all: detected, isTemporal, isArabic }
+}
+
+// ── Build 3 optimized queries (CSE · RSS · Global fallback) ──────────────────
+function buildOptimizedQueries(query, intent) {
+  const year = new Date().getFullYear()
+  const isArabic = /[\u0600-\u06FF]/.test(query)
+
+  const suffixMap = {
+    sports:   isArabic ? `كرة القدم نتائج ${year}` : `football results ${year}`,
+    economy:  isArabic ? `اقتصاد ${year}` : `economy ${year}`,
+    politics: isArabic ? `سياسة ${year}` : `politics ${year}`,
+    tech:     isArabic ? `تكنولوجيا ${year}` : `technology ${year}`,
+    news:     isArabic ? `أخبار ${year}` : `news ${year}`,
+    general:  `${year}`,
+  }
+
+  const suffix = suffixMap[intent.primary] || suffixMap.general
+  const cseQuery  = `${query} ${suffix}`
+
+  const rssLang = isArabic ? 'ar' : 'en'
+  const rssHL   = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
+  const rssQuery = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' ' + year)}&hl=${rssHL}`
+
+  const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', general: '' }
+  const enSuffix = enMap[intent.primary] || ''
+  const isAlgeria = /جزائر|algérie|algeria/i.test(query)
+  const enQuery = isAlgeria ? `Algeria ${enSuffix} ${year}`.trim() : `${query} ${enSuffix} ${year}`.trim()
+
+  return { cseQuery, rssQuery, enQuery, lang: rssLang }
+}
+
+// ── Google Custom Search Engine (PRIMARY) ────────────────────────────────────
+async function searchGoogleCSE(query) {
+  const apiKey = process.env.GOOGLE_API_KEY
+  const cx     = '12e6f922595f64d35'
+  if (!apiKey) return []
+
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=8&dateRestrict=m6&sort=date`
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) { console.warn('[CSE] Error:', r.status); return [] }
+    const data = await r.json()
+    return (data.items || []).map(item => ({
+      source: 'Google CSE',
+      title: item.title || '',
+      snippet: item.snippet || '',
+      url: item.link || '',
+      date: item.pagemap?.metatags?.[0]?.['article:published_time'] || item.pagemap?.metatags?.[0]?.['og:updated_time'] || '',
+    }))
+  } catch (err) { console.warn('[CSE] Fetch error:', err.message); return [] }
+}
+
+// ── Google News RSS targeted search (SECONDARY) ──────────────────────────────
+async function searchGoogleNewsRSS(rssUrl) {
+  try {
+    const r = await fetch(rssUrl, {
+      headers: { 'User-Agent': 'DZ-GPT-Agent/1.0 (+https://dz-gpt.vercel.app)', 'Accept': 'application/rss+xml,*/*' },
+      signal: AbortSignal.timeout(9000),
+    })
+    if (!r.ok) return []
+    const xml = await r.text()
+    const items = parseRSS(xml, 'Google News RSS')
+    return items.slice(0, 12).map(item => ({
+      source: item.source || 'Google News',
+      title: item.title || '',
+      snippet: item.description || '',
+      url: item.link || '',
+      date: item.pubDate || '',
+    }))
+  } catch (err) { console.warn('[GN-RSS Search] Error:', err.message); return [] }
+}
+
+// ── Fallback: DuckDuckGo Instant Answer ──────────────────────────────────────
+async function searchDDGInstant(query) {
+  try {
+    const r = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+      { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) }
+    )
+    if (!r.ok) return []
+    const ddg = await r.json()
+    if (ddg.AbstractText) {
+      return [{ source: 'DuckDuckGo', title: ddg.Heading || query, snippet: ddg.AbstractText.slice(0, 400), url: ddg.AbstractURL || '' }]
+    }
+    if (ddg.RelatedTopics?.length > 0) {
+      return ddg.RelatedTopics.slice(0, 3).filter(t => t.Text).map(t => ({
+        source: 'DuckDuckGo', title: t.Text.split(' - ')[0] || query, snippet: t.Text.slice(0, 300), url: t.FirstURL || ''
+      }))
+    }
+    return []
+  } catch { return [] }
+}
+
+// ── Wikipedia fallback for factual/general queries ────────────────────────────
+async function searchWikipedia(query) {
+  const isArabic = /[\u0600-\u06FF]/.test(query)
+  const lang = isArabic ? 'ar' : 'en'
+  const headers = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
+  try {
+    const r = await fetch(
+      `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2`,
+      { headers, signal: AbortSignal.timeout(5000) }
+    )
+    if (!r.ok) return []
+    const d = await r.json()
+    return (d?.query?.search || []).slice(0, 2).map(p => ({
+      source: 'Wikipedia',
+      title: p.title,
+      snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
+      url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
+      date: '',
+    }))
+  } catch { return [] }
+}
+
+// ── Main retrieval API endpoint ───────────────────────────────────────────────
 app.post('/api/dz-agent-search', async (req, res) => {
   const { query } = req.body
   if (!query) return res.status(400).json({ error: 'Query required.' })
 
-  console.log(`[DZ Search] Query: ${query}`)
+  const startTime = Date.now()
+  const intent = detectQueryIntent(query)
+  const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(query, intent)
 
-  const signal = AbortSignal.timeout(8000)
+  console.log(`[DZ Retrieval] query="${query}" intent=${intent.primary} temporal=${intent.isTemporal}`)
 
-  // Run all sources in parallel for speed
-  const [ddgResult, wikiResult, wikidataResult, soResult] = await Promise.allSettled([
+  // Step 1: Google CSE (primary)
+  const cseResults = await searchGoogleCSE(cseQuery)
 
-    // ── DuckDuckGo Instant Answer ─────────────────────────────────────────────
-    (async () => {
-      const r = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-        { headers: { 'Accept': 'application/json' }, signal }
-      )
-      if (!r.ok) return []
-      const ddg = await r.json()
-      if (ddg.AbstractText) {
-        return [{ source: 'DuckDuckGo', title: ddg.Heading || query, snippet: ddg.AbstractText.slice(0, 400), url: ddg.AbstractURL || undefined }]
-      }
-      if (ddg.RelatedTopics?.length > 0) {
-        return ddg.RelatedTopics.slice(0, 2)
-          .filter(t => t.Text)
-          .map(t => ({ source: 'DuckDuckGo', title: t.Text.split(' - ')[0] || query, snippet: t.Text.slice(0, 300), url: t.FirstURL || undefined }))
-      }
-      return []
-    })(),
+  // Step 2: Google News RSS (real-time)
+  const rssResults = await searchGoogleNewsRSS(rssQuery)
 
-    // ── Wikipedia (REST summary + search — proper server-side headers) ────────
-    (async () => {
-      const isArabic = /[\u0600-\u06FF]/.test(query)
-      const lang = isArabic ? 'ar' : 'en'
-      const wikiHeaders = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
+  // Step 3: Fallback if CSE+RSS insufficient
+  let fallbackResults = []
+  if (cseResults.length + rssResults.length < 4) {
+    const [ddg, wiki] = await Promise.allSettled([
+      searchDDGInstant(enQuery),
+      intent.primary === 'general' ? searchWikipedia(query) : Promise.resolve([]),
+    ])
+    fallbackResults = [
+      ...(ddg.status === 'fulfilled' ? ddg.value : []),
+      ...(wiki.status === 'fulfilled' ? wiki.value : []),
+    ]
+  }
 
-      // Try REST summary first (fastest)
-      try {
-        const summaryR = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.split(' ').slice(0, 3).join('_'))}`,
-          { headers: wikiHeaders, signal }
-        )
-        if (summaryR.ok) {
-          const s = await summaryR.json()
-          if (s.extract) {
-            return [{ source: 'Wikipedia', title: s.title, snippet: s.extract.slice(0, 400), url: s.content_urls?.desktop?.page }]
-          }
-        }
-      } catch (_) {}
+  // Merge + deduplicate by URL
+  const all = [...cseResults, ...rssResults, ...fallbackResults]
+  const seen = new Set()
+  const deduped = all.filter(r => {
+    const key = (r.url || r.link || '').split('?')[0]
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 
-      // Fallback: search API (no origin param for server-side)
-      const r = await fetch(
-        `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2`,
-        { headers: wikiHeaders, signal }
-      )
-      if (!r.ok) return []
-      const d = await r.json()
-      return (d?.query?.search || []).slice(0, 1).map(p => ({
-        source: 'Wikipedia',
-        title: p.title,
-        snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
-        url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
-      }))
-    })(),
+  // Score every result
+  const scored = deduped.map(r => ({
+    ...r,
+    _score: scoreResult(r, query),
+    _trust: getTrustScore(r.url || r.link || ''),
+    _fresh: getRecencyScore(r.date || r.pubDate || ''),
+  })).sort((a, b) => b._score - a._score).slice(0, 10)
 
-    // ── Wikidata ──────────────────────────────────────────────────────────────
-    (async () => {
-      const lang = /[\u0600-\u06FF]/.test(query) ? 'ar' : 'en'
-      const r = await fetch(
-        `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=${lang}&format=json&limit=2`,
-        { headers: { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }, signal }
-      )
-      if (!r.ok) return []
-      const d = await r.json()
-      return (d?.search || []).slice(0, 1)
-        .filter(e => e.description)
-        .map(e => ({ source: 'Wikidata', title: e.label || query, snippet: e.description, url: e.concepturi || `https://www.wikidata.org/wiki/${e.id}` }))
-    })(),
+  const hasMandatorySearch = intent.isTemporal || ['news','sports','economy','politics'].includes(intent.primary)
+  const noResults = scored.length === 0
 
-    // ── StackOverflow (code queries only) ────────────────────────────────────
-    (async () => {
-      const isCode = /\b(code|function|error|bug|api|python|javascript|js|react|node)\b/i.test(query)
-      if (!isCode) return []
-      const r = await fetch(
-        `https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=${encodeURIComponent(query)}&site=stackoverflow&pagesize=2`,
-        { signal }
-      )
-      if (!r.ok) return []
-      const d = await r.json()
-      return (d?.items || []).slice(0, 1).map(item => ({
-        source: 'StackOverflow',
-        title: item.title,
-        snippet: `${item.answer_count} إجابة · ${item.score} نقطة`,
-        url: item.link,
-      }))
-    })(),
-  ])
+  console.log(`[DZ Retrieval] ${scored.length} results | CSE=${cseResults.length} RSS=${rssResults.length} FB=${fallbackResults.length} | ${Date.now()-startTime}ms`)
 
-  const results = [
-    ...(ddgResult.status === 'fulfilled' ? ddgResult.value : []),
-    ...(wikiResult.status === 'fulfilled' ? wikiResult.value : []),
-    ...(wikidataResult.status === 'fulfilled' ? wikidataResult.value : []),
-    ...(soResult.status === 'fulfilled' ? soResult.value : []),
-  ]
-
-  console.log(`[DZ Search] Returning ${results.length} results`)
-  return res.status(200).json({ results })
+  return res.status(200).json({
+    results: scored,
+    meta: {
+      intent: intent.primary,
+      isTemporal: intent.isTemporal,
+      mandatorySearch: hasMandatorySearch,
+      noResults,
+      sources: {
+        cse: cseResults.length,
+        rss: rssResults.length,
+        fallback: fallbackResults.length,
+      },
+      queries: { cseQuery, rssQuery, enQuery },
+    },
+  })
 })
 
 // ===== RSS FEED SYSTEM FOR DZ AGENT =====
@@ -1952,154 +2115,160 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Web search for general factual queries (newest first via Djazairess + SearXNG) ─
+  // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
   let webSearchContext = ''
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
-  const skipSearch = isPrayerQuery || isFootballQuery || newsQueryType || isSimpleGreeting || lastUserMessage.length < 6
+  const msgIntent = detectQueryIntent(lastUserMessage)
+  const skipSearch = isPrayerQuery || isFootballQuery || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
+
   if (!skipSearch) {
     try {
-      const searchData = await searchWeb(lastUserMessage)
-      if (searchData.results.length > 0) {
-        const lines = searchData.results.map((r, i) => {
-          const dateStr = r.publishedDate || r.date ? ` [${r.publishedDate || r.date}]` : ''
-          return `${i + 1}. **${r.title}**${dateStr}\n   ${r.snippet || ''}\n   🔗 ${r.url}`
+      const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(lastUserMessage, msgIntent)
+      const mustSearch = msgIntent.isTemporal || ['news','sports','economy','politics','tech'].includes(msgIntent.primary) || !!newsQueryType
+
+      // Parallel: Google CSE + Google News RSS (always for temporal/news) + legacy web fallback
+      const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
+        searchGoogleCSE(cseQuery),
+        (mustSearch || newsQueryType) ? searchGoogleNewsRSS(rssQuery) : Promise.resolve([]),
+        (!newsQueryType || msgIntent.primary === 'general') ? searchWeb(lastUserMessage) : Promise.resolve({ results: [] }),
+      ])
+
+      const cseResults  = cseRes.status === 'fulfilled' ? cseRes.value : []
+      const gnResults   = gnRssRes.status === 'fulfilled' ? gnRssRes.value : []
+      const legacyData  = legacyRes.status === 'fulfilled' ? legacyRes.value : { results: [] }
+
+      // Merge + score + deduplicate
+      const allSearchResults = [...cseResults, ...gnResults, ...(legacyData.results || [])]
+      const seenUrls = new Set()
+      const uniqueResults = allSearchResults.filter(r => {
+        const key = (r.url || r.link || '').split('?')[0]
+        if (!key || seenUrls.has(key)) return false
+        seenUrls.add(key)
+        return true
+      })
+
+      const scoredResults = uniqueResults.map(r => ({
+        ...r, _score: scoreResult(r, lastUserMessage)
+      })).sort((a, b) => b._score - a._score).slice(0, 8)
+
+      if (scoredResults.length > 0) {
+        const sourceTag = cseResults.length > 0 ? '🔍 Google CSE' : gnResults.length > 0 ? '📡 Google News RSS' : '🌐 Web'
+        const lines = scoredResults.map((r, i) => {
+          const dateStr = r.date || r.pubDate || r.publishedDate ? ` [${(r.date || r.pubDate || r.publishedDate).slice(0,10)}]` : ''
+          const src = r.source || ''
+          return `${i + 1}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
         }).join('\n\n')
-        webSearchContext = `المصدر: ${searchData.source} | مرتبة من الأحدث إلى الأقدم\n\n${lines}`
-        console.log(`[DZ Agent] Web search: ${searchData.results.length} results from ${searchData.source}`)
+        webSearchContext = `${sourceTag} | مرتبة بالنقاط (حداثة 45% · ثقة 25% · صلة 20% · مقتطف 10%)\n\n${lines}`
+        console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length}`)
+      } else if (mustSearch) {
+        webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
+        console.log('[DZ Retrieval] No results found for mandatory search')
       }
-    } catch (err) { console.error('[DZ Agent] Web search error:', err.message) }
+    } catch (err) { console.error('[DZ Agent] Retrieval error:', err.message) }
   }
 
   // ── AI response with GitHub-aware system prompt ───────────────────────────
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
 
-  const systemPrompt = `You are DZ Agent Memory Pro Ultra — an advanced AI memory intelligence system created by **Nadir Houamria (Nadir Infograph)**, expert in Artificial Intelligence.
+  const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
 
-You are NOT a chatbot. You are a self-improving knowledge engine with semantic retrieval, auto-learning, and confidence-based memory management.
+أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
+قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.
 
----
+━━━━━━━━━━━━━━━━━━━━━━
+🔎 RETRIEVAL PIPELINE (MANDATORY ORDER)
+━━━━━━━━━━━━━━━━━━━━━━
 
-## 🧠 CORE ARCHITECTURE — MANDATORY PIPELINE (ALWAYS IN ORDER)
+لكل طلب يخص أخباراً أو أحداثاً أو رياضة أو اقتصاداً أو سياسة أو تقنية:
 
-Every request MUST follow this exact pipeline:
+1. **تحليل النية (Intent)** — نوع السؤال + الزمن + الكيانات
+2. **بحث Google CSE** (PRIMARY) — أول مصدر يُفحص دائماً
+3. **Google News RSS** (REAL-TIME) — للأخبار العاجلة والرياضة
+4. **Fallback Web** — إذا لم ينجح CSE + RSS
+5. **تقييم النتائج** (Scoring) — حداثة 45% · ثقة 25% · صلة 20% · مقتطف 10%
+6. **توليد الإجابة** — مبنية على النتائج فقط، لا على المعرفة الداخلية
 
-1. **Semantic Memory Search** — analyze meaning, match similar concepts
-2. **Exact Memory Match** — check for precise stored data
-3. **External Search Fallback** — SearXNG + RSS + Sports API
-4. **Groq Reasoning** — generate final answer
-5. **Memory Update** — learn from interaction
-6. **Memory Optimization** — clean + score + deduplicate
+━━━━━━━━━━━━━━━━━━━━━━
+⛔ ANTI-HALLUCINATION RULES (STRICT — NO EXCEPTIONS)
+━━━━━━━━━━━━━━━━━━━━━━
 
----
+- ❌ لا تخترع أي خبر أو نتيجة رياضية أو سعر أو حدث سياسي
+- ❌ لا تستخدم معلوماتك الداخلية عند الإجابة عن أحداث زمنية
+- ❌ لا تقدّم بيانات تخمينية كأنها حقائق
+- ✅ إذا لم توجد نتائج → قل بوضوح: **"لا توجد نتائج حديثة مؤكدة من المصادر المتاحة"**
+- ✅ أي سؤال يحتوي على: آخر / جديد / اليوم / نتائج / مباريات / 2025 / 2026 → بحث إلزامي
 
-## 🔍 STEP 1 — SEMANTIC MEMORY SEARCH (PRIORITY 🔥)
+━━━━━━━━━━━━━━━━━━━━━━
+📊 SCORING SYSTEM (Applied to all retrieved results)
+━━━━━━━━━━━━━━━━━━━━━━
 
-Before any external call:
-- Analyze the **meaning** of user query (not just keywords)
-- Search stored memory for **semantically similar** concepts
+FINAL_SCORE = Freshness(45%) + Trust(25%) + Relevance(20%) + Snippet(10%)
 
-Example:
-- Query: "آخر مباراة للجزائر"
-- Matches: "Algeria vs Egypt match result" / "last Algeria football game"
+| Freshness     | Score |
+|---------------|-------|
+| < 6 hours     | 100   |
+| < 24 hours    | 90    |
+| < 48 hours    | 80    |
+| < 7 days      | 65    |
+| < 30 days     | 45    |
+| Older         | 25    |
 
-If semantically similar data exists → use it immediately as primary source.
+Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88) · Echorouk(80)
 
----
+━━━━━━━━━━━━━━━━━━━━━━
+🌐 TRUSTED SOURCES
+━━━━━━━━━━━━━━━━━━━━━━
 
-## 📚 STEP 2 — MEMORY RETRIEVAL PRIORITY
+🇩🇿 الجزائر: aps.dz · echoroukonline.com · elbilad.net · ennaharonline.com · elkhabar.com · djazairess.com
+🌍 دولي: reuters.com · bbc.com · aljazeera.net · cnn.com
+💻 تقنية: techcrunch.com · theverge.com · wired.com
+⚽ رياضة: fifa.com · sofascore.com · lfp.dz · goal.com · kooora.com
 
-1. Semantic match (highest priority)
-2. Exact match
-3. Partial match
-4. External search (last resort)
+━━━━━━━━━━━━━━━━━━━━━━
+⚽ SPORTS MODULE (STRICT)
+━━━━━━━━━━━━━━━━━━━━━━
 
----
-
-## 🌐 STEP 3 — EXTERNAL SEARCH FALLBACK
-
-If memory fails, use in this order:
-
-**IF SPORTS** → Sports API FIRST → fallback: RSS + SearXNG
-**IF NEWS** → RSS FIRST → then SearXNG
-**IF GENERAL** → SearXNG ONLY
-**IF FACTUAL** → Wikipedia + SearXNG
-
-Multi-language query expansion (EN / FR / AR):
-Example: "Algeria match result" / "نتيجة مباراة الجزائر" / "résultat match Algérie"
-
----
-
-## 💾 STEP 4 — MEMORY TRAINING (AUTO-LEARNING)
-
-After every response, if data is useful:
-- Convert into structured memory entry
-- Store with confidence score + timestamp + source
-- Avoid duplicates — merge instead
-
-**Memory Entry Format:**
-\`\`\`json
-{
-  "id": "unique_id",
-  "type": "news | sports | tech | fact",
-  "title": "",
-  "details": "",
-  "date": "",
-  "source": "",
-  "query": "",
-  "timestamp": 0,
-  "confidence": 0,
-  "embedding": "semantic_vector_placeholder"
-}
-\`\`\`
-
----
-
-## 📊 STEP 5 — CONFIDENCE SCORING SYSTEM
-
-Every stored memory MUST have a confidence score:
-
-| Score | Source Type |
-|-------|------------|
-| 90–100 | Official sources (FIFA, APS, Reuters, BBC) |
-| 70–89 | Trusted news & sports sites |
-| 50–69 | User-provided data |
-| < 50 | Temporary / unverified data |
-
-Low confidence (< 40) → flagged for auto-deletion.
-
----
-
-## 🧹 STEP 6 — AUTO-CLEANING SYSTEM
-
-Periodically apply:
-- ❌ Remove entries with confidence < 40
-- ❌ Remove outdated "latest" entries (replaced by newer)
-- 🔀 Merge similar entries — keep newest version
-- ✅ Keep only latest version of same recurring event
-
-Sports: Always overwrite old match with new result.
-News: Always keep newest version of same event.
-
----
-
-## ⚽ SPORTS MODULE (STRICT RULES)
 1. **NEVER invent, guess, or hallucinate match scores, results, or fixtures**
-2. Source hierarchy: Sports API → SofaScore → LFP.dz → FlashScore → RSS → Official sites
-3. Memory rule: Store ONLY latest match per team. Always overwrite old match data.
-4. Match display format:
+2. Source hierarchy: SofaScore → LFP.dz → FlashScore → RSS → Official sites
+3. Match display format:
    - 🔴 LIVE: **Team A [score] - [score] Team B** | Competition | Source
    - ✅ RESULT: **Team A [score] - [score] Team B** | Competition | Date | Source
    - 📅 UPCOMING: Team A vs Team B | Time | Competition | Source
-5. If data unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
+4. If data unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
 
----
+━━━━━━━━━━━━━━━━━━━━━━
+📰 NEWS MODULE
+━━━━━━━━━━━━━━━━━━━━━━
 
-## 📰 NEWS MODULE
-- Classify: Algeria News 🇩🇿 / International 🌍 / Technology 💻
-- Always include date + source URL per item
-- Prioritize newest articles — apply recency ranking
-- Memory: store only significant events, latest version only
+- صنّف: أخبار الجزائر 🇩🇿 / دولية 🌍 / تقنية 💻 / اقتصاد 💰 / رياضة ⚽
+- أدرج دائماً: التاريخ + رابط المصدر لكل خبر
+- رتّب من الأحدث إلى الأقدم
+- لا تدمج بيانات الملاعب مع أخبار الوكالات
+
+━━━━━━━━━━━━━━━━━━━━━━
+🧾 OUTPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━
+
+الإجابة يجب أن تكون:
+
+✔ **ملخص البحث** — جملتان تلخصان ما وجدته
+✔ **النتيجة الرئيسية 1** — بمصدر + تاريخ
+✔ **النتيجة الرئيسية 2** — بمصدر + تاريخ
+✔ **مصادر المرجع** — روابط المصادر المستخدمة
+
+استخدم Markdown دائماً. اقرأ لغة المستخدم وأجب بنفس اللغة (العربية RTL، الفرنسية، الإنجليزية).
+
+━━━━━━━━━━━━━━━━━━━━━━
+💻 GITHUB SMART DEVELOPMENT MODE
+━━━━━━━━━━━━━━━━━━━━━━
+
+عندما يشارك المستخدم رابط GitHub:
+1. تفعيل Smart Dev Mode تلقائياً
+2. تحليل: هيكل المشروع · README · المكتبات · اللغة · النمط المعماري
+3. عرض 8 خيارات فحص: أخطاء · أداء · أمان · dependencies · structure · اقتراحات · features · اختبارات
+4. لكل مشكلة: ❌ المشكلة + 📍 الموقع + 💡 الحل + 🧾 كود جاهز
+5. تقييم المشروع: كودة /10 · structure /10 · أمان /10 · أداء /10
 
 ---
 
@@ -2161,161 +2330,27 @@ With detailed explanation.
 - Code suggestions must ALWAYS be ready-to-use
 - Analyze file-by-file if needed, output structured git diff suggestions
 
-Memory: store APIs, bug fixes, solutions, code patterns for future reuse.
+---
+
+## 🌍 قواعد متعددة اللغات
+- أجب دائماً بلغة المستخدم (العربية → RTL، الفرنسية، الإنجليزية)
+- وسّع استعلامات البحث بالثلاث لغات للحصول على نتائج أفضل
 
 ---
 
-## 🌐 URL LEARNING RULE
-
-If user provides a URL:
-1. Extract + summarize key content
-2. Convert to structured memory entry
-3. Assign confidence score
-4. Store in memory — no duplicates
-
----
-
-## 🔁 DUPLICATION HANDLING
-
-If similar entry exists in memory:
-- **Merge** information (do NOT duplicate)
-- Keep newest data
-- Update confidence score upward if source is authoritative
-
----
-
-## 📊 FRESHNESS RANKING
-
-FINAL_SCORE = 50% RECENCY + 30% RELEVANCE + 20% SOURCE AUTHORITY
-
-| Recency | Score |
-|---------|-------|
-| Today | 1.0 |
-| Last 7 days | 0.8 |
-| Last 30 days | 0.6 |
-| Older | Discard for news/sports |
-
----
-
-## 🌐 TRUSTED SOURCES
-
-🇩🇿 Algeria: aps.dz · echoroukonline.com · elbilad.net · djazairess.com
-🌍 International: reuters.com · bbc.com · aljazeera.com · cnn.com
-💻 Technology: techcrunch.com · theverge.com · wired.com · arstechnica.com
-⚽ Sports: fifa.com · cafonline.com · espn.com · sofascore.com · lfp.dz · api.sportsrc.org
-
----
-
-## 🌍 MULTILINGUAL RULES
-- Always respond in the user's language (Arabic → RTL, English, French)
-- Always expand queries in all three languages for better retrieval
-
----
-
-## 🚫 STRICT PROHIBITIONS
-- NEVER duplicate memory entries
-- NEVER keep outdated "latest" data
-- NEVER guess or hallucinate scores, news, or facts
-- NEVER show outdated data as "latest"
-- ALWAYS prefer semantic memory match first
-- ALWAYS update instead of blindly overwriting
-- ALWAYS maintain JSON memory integrity
-- ALWAYS use markdown formatting
-
----
-
-## 🎯 SYSTEM IDENTITY
-
-You are simultaneously:
-- 🔍 Semantic Memory Engine
-- 📚 Auto-Learning Knowledge Base
-- 🧹 Self-Cleaning Database
-- 🌐 Real-Time Search Engine
-- 🤖 Intelligent Retrieval System
-
-FINAL OUTPUT MUST ALWAYS BE: ✔ Fresh ✔ Verified ✔ Memory-augmented ✔ Confidence-ranked ✔ Free from outdated data
-
----
-
-## 🌐 GN-RSS MODULE — Google News RSS Intelligence Layer (ADD-ON)
-
-This module augments the news pipeline with real-time Google News RSS feeds. It does NOT replace existing sources.
-
-### Sources
-- 🇩🇿 Algeria AR: الجزائر · سياسة · اقتصاد · رياضة
-- 🇩🇿 Algeria FR: Algérie · actualités
-- 🌍 International EN: world news · economy · technology · AI
-
-### Pipeline
-1. **FETCH** — parallel fetch of all relevant Google News RSS feeds
-2. **PARSE** — extract title, link, date, source
-3. **DEDUPLICATE** — title fingerprint (first 60 chars) + URL match
-4. **CLASSIFY** — auto-detect: سياسة 🏛️ / اقتصاد 💰 / رياضة ⚽ / تكنولوجيا 💻 / صحة 🏥 / دولي 🌍 / محلي 🇩🇿
-5. **RANK** — sort by recency (newest first)
-6. **MERGE** — augment existing RSS results without duplication
-
-### Modes
-- 🟢 LIVE: real-time fetch on every news request
-- 🟡 CACHE: serve cached results if TTL valid (10 min)
-- 🔵 HYBRID (active): serve cache → refresh in background if 70% expired
-
-### Rules
-- ALWAYS present GN-RSS articles with their source link
-- ALWAYS mention category per article group
-- NEVER mix GN-RSS data with football/sports live scores
-- ALWAYS prefer newest articles at the top
-
----
-
-## 💻 TECH INTELLIGENCE MODULE (ADD-ON)
-
-This module extends DZ Agent with technology news capabilities. It does NOT modify any existing logic.
-
-### 🌐 Tech RSS Sources
-- TechCrunch · The Verge · Wired · Ars Technica · DEV.to · Stack Overflow Blog · Google News Tech
-
-### ⚙️ Tech Processing Pipeline
-
-**STEP 1 — FETCH**: Collect articles from tech RSS feeds. Extract: title, date, url, snippet.
-
-**STEP 2 — FILTER**: Keep only tech-related content. Remove duplicates. Ignore non-relevant posts.
-
-**STEP 3 — CLASSIFY** into categories:
-- AI 🤖 — artificial intelligence, LLMs, models, OpenAI, Gemini
-- Software 💻 — dev tools, languages, frameworks, releases
-- Cybersecurity 🔐 — hacks, breaches, vulnerabilities, CVEs
-- Startups 🚀 — funding rounds, acquisitions, valuations
-- Big Tech 🏢 — Google, Apple, Microsoft, Meta, Amazon, Nvidia
-
-**STEP 4 — TREND DETECTION**: Assign trending_score (0–100) based on:
-- Frequency across sources (cross-source mentions)
-- Recency (< 6h = +30, < 24h = +20, < 72h = +10)
-- Source credibility (TechCrunch, Verge, Wired = +15)
-
-**STEP 5 — RANKING**: Sort by trending_score DESC → recency DESC → source credibility
-
-**STEP 6 — SUMMARIZATION**: Generate 2–3 line impact-focused summaries per article.
-
-### 💾 Tech Memory Entry Format
-{ "type": "tech", "title": "", "details": "", "date": "", "source": "", "category": "", "trending_score": 0, "timestamp": 0 }
-
-Store ONLY articles with trending_score ≥ 60. Always overwrite older entry for same topic.
-
----
-
-${prayerContext ? `## 🕌 Prayer Times — Real-Time Data (aladhan.com)\n${prayerContext}\n\n> Present these prayer times clearly in a table. NEVER guess prayer times — use ONLY the data above.` : ''}
+${prayerContext ? `## 🕌 مواقيت الصلاة — بيانات فعلية (aladhan.com)\n${prayerContext}\n\n> اعرض مواقيت الصلاة في جدول. لا تخمّن المواقيت — استخدم البيانات أعلاه فقط.` : ''}
 
 ${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\n> اعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
 
-${footballContext ? `## ⚽ Football Intelligence — SofaScore + International RSS\n${footballContext}\n\n> Present ALL available match data clearly using the format in the Sports Module above. NEVER invent scores.` : ''}
+${footballContext ? `## ⚽ ذكاء كرة القدم — SofaScore + RSS دولية\n${footballContext}\n\n> اعرض جميع بيانات المباريات المتاحة بوضوح. لا تخترع نتائج أبداً.` : ''}
 
-${currencyContext ? `## 💱 Currency Exchange Data — Real-Time (${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**Currency Rules:**\n1. NEVER guess or invent exchange rates — use ONLY the data above\n2. Present rates in a clear table with both directions (1 DZD = X AND 1 X = Y DZD)\n3. For conversions: calculate using the provided rates and show the result\n4. Mention the source and update time. Flag stale data.\n5. Note: rates reflect official/bank rates — parallel market rates may differ` : ''}
+${currencyContext ? `## 💱 أسعار الصرف — بيانات فعلية (${CURRENCY_CACHE.data?.provider || 'FloatRates'})\n${currencyContext}\n\n**قواعد العملة:**\n1. لا تخترع أسعار الصرف — استخدم البيانات أعلاه فقط\n2. اعرض الأسعار في جدول بالاتجاهين\n3. للتحويل: احسب باستخدام الأسعار المقدمة\n4. اذكر المصدر ووقت التحديث\n5. ملاحظة: الأسعار رسمية — قد تختلف أسعار السوق الموازي` : ''}
 
-${rssContext ? `## 📰 Live News & Sports Data (RSS Feeds)\n${rssContext}\n\n> Summarize helpfully with source links. Apply TIME MODE sorting. Do not invent content.` : ''}
+${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.` : ''}
 
-${webSearchContext ? `## 🔍 نتائج البحث الحية — OpenSerp Pipeline (مرتبة من الأحدث إلى الأقدم)\nمصادر: SearXNG + DuckDuckGo + Djazairess\n\n${webSearchContext}\n\n**قواعد معالجة البحث:**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. نتائج Djazairess تغطي الصحافة الجزائرية بشكل موسّع (أكثر من 500 صحيفة ومجلة)\n3. رتّب إجابتك من الأحدث إلى الأقدم (TIME MODE مفعّل تلقائياً للأخبار)\n4. لا تخترع معلومات — استخدم فقط ما هو موجود في النتائج أعلاه\n5. أشر بوضوح إذا لم تجد نتائج حديثة كافية` : ''}
+${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
 
-${githubToken ? `## 🐙 GitHub Status\nGitHub is connected ✓ | Current repo: ${currentRepo || 'none selected'}\nCapabilities: list files · read code · analyze · create commits · open Pull Requests\n\nWhen user shares a GitHub repo URL (e.g. https://github.com/user/repo), automatically:\n1. Acknowledge receipt of the repo\n2. Activate GitHub Smart Dev Mode\n3. Offer to scan/analyze the project with the interactive buttons described above\n4. Fetch the repo structure using list-files action` : `## 🐙 GitHub Status\nGitHub is not connected. Remind the user to connect GitHub if they ask about repos or code editing.\n\nWhen user shares a GitHub URL, tell them to connect their GitHub token first (click the GitHub button at the top of the chat).`}`
+${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },

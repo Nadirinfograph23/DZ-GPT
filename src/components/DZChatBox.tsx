@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
@@ -7,6 +8,7 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
+  Download, ArrowRight, Loader2, FileDown, Brain,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
@@ -179,80 +181,222 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
-const STUDY_LEVELS = [
-  'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5',
-  'Middle 1', 'Middle 2', 'Middle 3', 'Middle 4 (BEM)',
-  'Secondary 1', 'Secondary 2', 'Secondary 3 (Baccalaureate)',
+// ===== SMART STUDY CARD (Auto-index from eddirasa.com) =====
+
+interface EddirasaIndexItem {
+  title: string
+  url: string
+  snippet: string
+  isPdf: boolean
+}
+
+const STUDY_CYCLES = [
+  { id: 'primary',   label: 'ابتدائي', years: ['Primary 1','Primary 2','Primary 3','Primary 4','Primary 5'] },
+  { id: 'middle',    label: 'متوسط',   years: ['Middle 1','Middle 2','Middle 3','Middle 4 (BEM)'] },
+  { id: 'secondary', label: 'ثانوي',   years: ['Secondary 1','Secondary 2','Secondary 3 (Baccalaureate)'] },
 ]
 
-const STUDY_SUBJECTS = [
-  'Math',
-  'Physics',
-  'Arabic',
-  'French',
-  'English',
-  'Science',
-  'History / Geography',
+const CYCLE_YEAR_LABELS: Record<string, string[]> = {
+  primary:   ['1 ابتدائي','2 ابتدائي','3 ابتدائي','4 ابتدائي','5 ابتدائي'],
+  middle:    ['1 متوسط','2 متوسط','3 متوسط','4 متوسط (BEM)'],
+  secondary: ['1 ثانوي','2 ثانوي','3 ثانوي (بكالوريا)'],
+}
+
+const STUDY_SUBJECTS_AR = [
+  { id: 'Math',               label: 'رياضيات' },
+  { id: 'Physics',            label: 'فيزياء' },
+  { id: 'Arabic',             label: 'عربية' },
+  { id: 'French',             label: 'فرنسية' },
+  { id: 'English',            label: 'إنجليزية' },
+  { id: 'Science',            label: 'علوم' },
+  { id: 'History / Geography',label: 'تاريخ/جغرافيا' },
+  { id: 'Islamic',            label: 'إسلامية' },
+  { id: 'Philosophy',         label: 'فلسفة' },
 ]
 
-function StudyLevelSelectorCard({
-  level,
-  subject,
-  query,
+function SmartStudyCard({
+  onSend,
   disabled,
-  onLevelChange,
-  onSubjectChange,
-  onQueryChange,
-  onSearch,
-  onSolve,
-  onExplain,
 }: {
-  level: string
-  subject: string
-  query: string
+  onSend: (text: string) => void
   disabled: boolean
-  onLevelChange: (value: string) => void
-  onSubjectChange: (value: string) => void
-  onQueryChange: (value: string) => void
-  onSearch: () => void
-  onSolve: () => void
-  onExplain: () => void
 }) {
+  const navigate = useNavigate()
+  const [cycle, setCycle] = useState('middle')
+  const [yearIndex, setYearIndex] = useState(3)
+  const [subject, setSubject] = useState('Math')
+  const [indexItems, setIndexItems] = useState<EddirasaIndexItem[]>([])
+  const [indexLoading, setIndexLoading] = useState(false)
+  const [indexError, setIndexError] = useState<string | null>(null)
+  const [hasFetched, setHasFetched] = useState(false)
+  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const currentCycle = STUDY_CYCLES.find(c => c.id === cycle)!
+  const currentLevel = currentCycle.years[Math.min(yearIndex, currentCycle.years.length - 1)]
+
+  const fetchIndex = useCallback(async (level: string, subj: string) => {
+    setIndexLoading(true)
+    setIndexError(null)
+    setHasFetched(false)
+    try {
+      const res = await fetch('/api/dz-agent/education/index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level, subject: subj }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'فشل في جلب الفهرس')
+      setIndexItems(Array.isArray(data.items) ? data.items : [])
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      setIndexError(msg)
+      setIndexItems([])
+    } finally {
+      setIndexLoading(false)
+      setHasFetched(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current)
+    fetchTimerRef.current = setTimeout(() => fetchIndex(currentLevel, subject), 700)
+    return () => { if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current) }
+  }, [currentLevel, subject, fetchIndex])
+
+  const handleSolve = (item: EddirasaIndexItem) => {
+    onSend(`حل هذا التمرين خطوة بخطوة.\n📚 المستوى: ${currentLevel} — المادة: ${subject}\n📌 العنوان: ${item.title}\n🔗 المصدر: ${item.url}${item.snippet ? `\n\nالمحتوى: ${item.snippet}` : ''}`)
+  }
+
+  const handleExplain = (item: EddirasaIndexItem) => {
+    onSend(`اشرح هذا الدرس ببساطة مع أمثلة وتمارين تدريبية.\n📚 المستوى: ${currentLevel} — المادة: ${subject}\n📌 العنوان: ${item.title}\n🔗 المصدر: ${item.url}${item.snippet ? `\n\nالمحتوى: ${item.snippet}` : ''}`)
+  }
+
+  const handleDeepSeekPdf = (item: EddirasaIndexItem) => {
+    try { sessionStorage.setItem('dz-transfer-deepseek', JSON.stringify({ url: item.url, title: item.title })) } catch {}
+    navigate('/?model=deepseek-pdf')
+  }
+
+  const changeCycle = (id: string) => { setCycle(id); setYearIndex(0); setIndexItems([]); setHasFetched(false) }
+
   return (
-    <div className="dz-study-card">
-      <div className="dz-study-card-head">
-        <div className="dz-study-card-icon"><BookOpen size={18} /></div>
+    <div className="dz-smart-study">
+      <div className="dz-smart-study-head">
+        <div className="dz-smart-study-icon"><BookOpen size={18} /></div>
         <div>
-          <h3>Study Level Selector Card</h3>
-          <p>دروس وتمارين من eddirasa.com مع شرح مبسط للمنهاج الجزائري</p>
+          <div className="dz-smart-study-title">المركز التعليمي — eddirasa.com</div>
+          <div className="dz-smart-study-sub">اختر الطور والمادة لعرض الفهرس تلقائياً</div>
         </div>
       </div>
-      <div className="dz-study-grid">
-        <label className="dz-study-field">
-          <span>المستوى</span>
-          <select value={level} onChange={(e) => onLevelChange(e.target.value)}>
-            {STUDY_LEVELS.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
-        <label className="dz-study-field">
-          <span>المادة</span>
-          <select value={subject} onChange={(e) => onSubjectChange(e.target.value)}>
-            {STUDY_SUBJECTS.map(item => <option key={item} value={item}>{item}</option>)}
-          </select>
-        </label>
+
+      {/* Cycle (طور) tabs */}
+      <div className="dz-cycle-tabs">
+        {STUDY_CYCLES.map(c => (
+          <button
+            key={c.id}
+            className={`dz-cycle-tab ${cycle === c.id ? 'dz-cycle-tab--active' : ''}`}
+            onClick={() => changeCycle(c.id)}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
-      <label className="dz-study-field dz-study-field--full">
-        <span>بحث أو تمرين</span>
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="مثال: اشرح درس المعادلات أو حل تمرين في الطاقة"
-        />
-      </label>
-      <div className="dz-study-actions">
-        <button onClick={onSearch} disabled={disabled}><Search size={13} /> Search eddirasa</button>
-        <button onClick={onSolve} disabled={disabled}>Solve with AI</button>
-        <button onClick={onExplain} disabled={disabled}>Explain Lesson</button>
+
+      {/* Year (سنة) pills */}
+      <div className="dz-smart-section-label">السنة الدراسية</div>
+      <div className="dz-year-pills">
+        {currentCycle.years.map((y, i) => (
+          <button
+            key={y}
+            className={`dz-year-pill ${yearIndex === i ? 'dz-year-pill--active' : ''}`}
+            onClick={() => setYearIndex(i)}
+          >
+            {CYCLE_YEAR_LABELS[cycle]?.[i] || y}
+          </button>
+        ))}
+      </div>
+
+      {/* Subject (مادة) pills */}
+      <div className="dz-smart-section-label">المادة</div>
+      <div className="dz-subject-pills">
+        {STUDY_SUBJECTS_AR.map(s => (
+          <button
+            key={s.id}
+            className={`dz-subject-pill ${subject === s.id ? 'dz-subject-pill--active' : ''}`}
+            onClick={() => setSubject(s.id)}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Index results */}
+      <div className="dz-index-section">
+        {indexLoading && (
+          <div className="dz-index-loading">
+            <Loader2 size={15} className="dz-spin" />
+            <span>جلب الفهرس من eddirasa.com...</span>
+          </div>
+        )}
+        {indexError && !indexLoading && (
+          <div className="dz-index-error">
+            <AlertCircle size={13} />
+            <span>{indexError}</span>
+          </div>
+        )}
+        {!indexLoading && !indexError && hasFetched && indexItems.length === 0 && (
+          <div className="dz-index-empty">
+            <p>لم يتم العثور على محتوى لهذا الاختيار من eddirasa.com.</p>
+            <span>يمكنك الكتابة مباشرةً في خانة الدردشة أدناه.</span>
+          </div>
+        )}
+        {!indexLoading && indexItems.length > 0 && (
+          <div className="dz-index-list">
+            <div className="dz-index-list-header">
+              <BookOpen size={12} />
+              <span>{indexItems.length} نتيجة — {currentLevel} · {STUDY_SUBJECTS_AR.find(s=>s.id===subject)?.label || subject}</span>
+            </div>
+            {indexItems.map((item, i) => (
+              <div key={i} className={`dz-index-item ${item.isPdf ? 'dz-index-item--pdf' : ''}`}>
+                <a
+                  className="dz-index-item-title"
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {item.isPdf && <span className="dz-pdf-tag">PDF</span>}
+                  <span>{item.title}</span>
+                  <ExternalLink size={10} className="dz-ext-icon" />
+                </a>
+                {item.snippet && <p className="dz-index-item-snippet">{item.snippet}</p>}
+                <div className="dz-idx-actions">
+                  <button className="dz-idx-btn dz-idx-btn--solve" onClick={() => handleSolve(item)} disabled={disabled}>
+                    <Brain size={11} /> حل مع AI
+                  </button>
+                  <button className="dz-idx-btn dz-idx-btn--explain" onClick={() => handleExplain(item)} disabled={disabled}>
+                    <BookOpen size={11} /> شرح
+                  </button>
+                  <button className="dz-idx-btn dz-idx-btn--open" onClick={() => window.open(item.url,'_blank','noopener,noreferrer')}>
+                    <ExternalLink size={11} /> فتح
+                  </button>
+                  {item.isPdf && (
+                    <>
+                      <button className="dz-idx-btn dz-idx-btn--pdf" onClick={() => window.open(item.url,'_blank','noopener,noreferrer')}>
+                        <Download size={11} /> تحميل PDF
+                      </button>
+                      <button className="dz-idx-btn dz-idx-btn--deepseek" onClick={() => handleDeepSeekPdf(item)}>
+                        <ArrowRight size={11} /> DeepSeek PDF
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="dz-smart-hint">
+        💬 يمكنك أيضاً الكتابة مباشرةً في خانة الدردشة دون الحاجة لاختيار مستوى
       </div>
     </div>
   )
@@ -2020,17 +2164,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
 
-          <StudyLevelSelectorCard
-            level={studyLevel}
-            subject={studySubject}
-            query={studyQuery}
+          <SmartStudyCard
+            onSend={(text) => sendMessage(text)}
             disabled={isLoading}
-            onLevelChange={setStudyLevel}
-            onSubjectChange={setStudySubject}
-            onQueryChange={setStudyQuery}
-            onSearch={searchEddirasa}
-            onSolve={() => sendMessage(`حل هذا التمرين خطوة بخطوة. المستوى: ${studyLevel}. المادة: ${studySubject}. التمرين: ${studyQuery}`)}
-            onExplain={() => sendMessage(`اشرح هذا الدرس ببساطة مع أمثلة و3 تمارين تدريبية واختبار صغير. المستوى: ${studyLevel}. المادة: ${studySubject}. الدرس: ${studyQuery}`)}
           />
 
           {!isGithubConnected && (

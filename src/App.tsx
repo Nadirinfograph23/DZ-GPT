@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -181,6 +181,7 @@ function PrivacyToast() {
 // ===== COMPONENT =====
 function App() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [chats, setChats] = useState<Chat[]>(() => {
     const saved = localStorage.getItem('dz-gpt-chats')
     if (saved) {
@@ -241,6 +242,25 @@ function App() {
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 180) + 'px'
     }
   }, [input])
+
+  // Handle DeepSeek PDF transfer from DZ Agent
+  useEffect(() => {
+    const modelParam = searchParams.get('model')
+    if (modelParam === 'deepseek-pdf') {
+      setSelectedModel('deepseek-pdf')
+      try {
+        const raw = sessionStorage.getItem('dz-transfer-deepseek')
+        if (raw) {
+          const { url, title } = JSON.parse(raw)
+          sessionStorage.removeItem('dz-transfer-deepseek')
+          if (url) {
+            setInput(`أرجو تحليل هذا الملف:\n📄 ${title || url}\n🔗 ${url}`)
+          }
+        }
+      } catch {}
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   // PDF extraction
   const handlePdfUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -103,6 +103,7 @@ app.use('/api/dz-agent/github', githubLimiter)
 app.use('/api/dz-agent-search', searchLimiter)
 app.use('/api/dz-agent/search', searchLimiter)
 app.use('/api/dz-agent/education/search', searchLimiter)
+app.use('/api/dz-agent/education/index', searchLimiter)
 app.use('/api/dz-agent/deploy', deployLimiter)
 
 // ===== INPUT SANITIZER =====
@@ -647,6 +648,26 @@ app.post('/api/dz-agent/education/search', async (req, res) => {
   } catch (err) {
     console.error('[Eddirasa] Search endpoint error:', err.message)
     return res.status(500).json({ error: 'Failed to search eddirasa.' })
+  }
+})
+
+app.post('/api/dz-agent/education/index', async (req, res) => {
+  const subject = sanitizeString(req.body.subject || '', 80)
+  const level = sanitizeString(req.body.level || '', 80)
+  if (!subject || !level) return res.status(400).json({ error: 'Subject and level required.' })
+  try {
+    const genericQuery = 'دروس تمارين فروض ملخص'
+    const search = await searchEddirasaEducation({ query: genericQuery, subject, level })
+    const items = (search.results || []).map(r => ({
+      title: r.title || 'محتوى من eddirasa.com',
+      url: r.url || '',
+      snippet: (r.snippet || r.extracted || '').slice(0, 200).trim(),
+      isPdf: /\.pdf($|\?|#)/i.test(r.url || ''),
+    })).filter(r => r.url)
+    return res.status(200).json({ items, level, subject, total: items.length })
+  } catch (err) {
+    console.error('[Eddirasa] Index endpoint error:', err.message)
+    return res.status(500).json({ error: 'فشل في جلب الفهرس من eddirasa.com' })
   }
 })
 

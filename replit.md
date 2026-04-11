@@ -40,6 +40,7 @@ The following secrets must be configured in Replit's Secrets tab:
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
 - `POST /api/dz-agent/education/search` — eddirasa.com educational search for DZ Agent study mode
+- `POST /api/dz-agent/education/index` — Auto-fetch educational index from eddirasa.com by level+subject (used by SmartStudyCard)
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
 - Various GitHub API proxy routes:
@@ -55,6 +56,19 @@ The following secrets must be configured in Replit's Secrets tab:
   - `POST /api/dz-agent/github/issues` — List open issues
   - `POST /api/dz-agent/github/pulls` — List Pull Requests
   - `POST /api/dz-agent/github/stats` — Repo statistics & contributors
+
+## DZ Agent Sidebar & Chat History
+
+DZ Agent now features a sidebar identical in style to the main DZ GPT models, including:
+
+- **Chat history**: Each conversation is stored per-chat in `localStorage` under `dz-agent-msgs-{chatId}`. Chat list is stored under `dz-agent-chats`.
+- **New chat button**: Creates a fresh conversation and saves it to the list.
+- **Delete chat**: Removes the conversation and its messages from `localStorage`.
+- **Language selector**: Three languages with flags — 🇩🇿 العربية (Arabic), 🇬🇧 English, 🇫🇷 Français. Language preference is persisted in `localStorage` under `dz-agent-lang`.
+- **Mobile responsive**: Sidebar slides in/out on mobile (width < 769px); always visible on desktop.
+- **DZChatBox** now accepts `chatId`, `language`, and `onTitleChange` props for external chat management.
+
+Key files: `src/pages/DZAgent.tsx` (layout + sidebar state), `src/styles/dz-agent.css` (`.dza-*` classes).
 
 ## DZ Agent Education Mode
 

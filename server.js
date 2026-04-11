@@ -1826,30 +1826,58 @@ app.post('/api/dz-agent/search', async (req, res) => {
 })
 
 // ===== VERCEL DEPLOY TRIGGER =====
-const VERCEL_PROJECT_ID = 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+const VERCEL_GITHUB_REPO = 'Nadirinfograph23/DZ-GPT'
+const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'devin/1774405518-init-dz-gpt'
 
 app.post('/api/dz-agent/deploy', async (req, res) => {
   const vercelToken = process.env.VERCEL_TOKEN
+  const githubToken = process.env.GITHUB_TOKEN
   if (!vercelToken) return res.status(500).json({ error: 'VERCEL_TOKEN not configured.' })
 
   try {
-    // Get latest deployment to redeploy
-    const listRes = await fetch(`https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1`, {
-      headers: { Authorization: `Bearer ${vercelToken}` },
-    })
-    const listData = await listRes.json()
-    const latestDeploy = listData.deployments?.[0]
+    // Get latest commit SHA on the deploy branch
+    let sha = null
+    if (githubToken) {
+      const branchRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}/git/ref/heads/${encodeURIComponent(VERCEL_DEPLOY_BRANCH)}`, {
+        headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+      })
+      const branchData = await branchRes.json()
+      sha = branchData?.object?.sha || null
+    }
 
-    if (!latestDeploy) return res.status(404).json({ error: 'No deployment found to redeploy.' })
+    // Get GitHub repo ID
+    let repoId = null
+    if (githubToken) {
+      const repoRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}`, {
+        headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+      })
+      const repoData = await repoRes.json()
+      repoId = String(repoData.id)
+    }
 
-    const r = await fetch(`https://api.vercel.com/v13/deployments/${latestDeploy.uid}/redeploy`, {
+    // Create new production deployment from GitHub
+    const deployBody = {
+      name: 'dz-gpt',
+      project: VERCEL_PROJECT_ID,
+      target: 'production',
+      ...(repoId && { gitSource: { type: 'github', repoId, ref: VERCEL_DEPLOY_BRANCH, ...(sha && { sha }) } }),
+    }
+
+    const r = await fetch('https://api.vercel.com/v13/deployments', {
       method: 'POST',
       headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'production' }),
+      body: JSON.stringify(deployBody),
     })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) return res.status(r.status).json({ error: d.error?.message || 'Deploy failed.', detail: d })
-    return res.json({ success: true, message: 'Vercel deploy triggered.', url: `https://${d.url || 'dz-gpt.vercel.app'}` })
+    return res.json({
+      success: true,
+      message: 'Vercel deploy triggered successfully.',
+      url: `https://${d.url || 'dz-gpt.vercel.app'}`,
+      production: 'https://dz-gpt.vercel.app',
+      deploymentId: d.id,
+    })
   } catch (err) {
     console.error('Vercel deploy error:', err)
     return res.status(500).json({ error: 'Failed to trigger deploy.' })

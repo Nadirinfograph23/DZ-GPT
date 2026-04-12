@@ -2164,11 +2164,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
 
-          <SmartStudyCard
-            onSend={(text) => sendMessage(text)}
-            disabled={isLoading}
-          />
-
           {!isGithubConnected && (
             <div className="dz-github-note">
               <Github size={14} className="dz-github-note-icon" />

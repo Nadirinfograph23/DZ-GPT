@@ -1143,6 +1143,32 @@ function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
   )
 }
 
+function DZInvocationGuide({ onSend }: { onSend: (cmd: string) => void }) {
+  const examples = [
+    { code: '@dz-agent', label: 'استدعاء DZ Agent للأخبار، البحث، GitHub، الطقس والرياضة', prompt: '@dz-agent أعطني أخبار الجزائر اليوم مع المصادر' },
+    { code: '@dz-gpt', label: 'استدعاء DZ GPT للأسئلة العامة والشرح والكتابة', prompt: '@dz-gpt اشرح لي الحوسبة الكمية ببساطة' },
+    { code: '/github', label: 'أوامر GitHub: عرض المستودعات، تحليل كود، ملفات، PR', prompt: '/github اعرض مستودعاتي' },
+  ]
+
+  return (
+    <div className="dz-invoke-guide">
+      <div className="dz-invoke-guide-head">
+        <MessageSquare size={14} />
+        <span>أكواد الاستدعاء داخل المحادثة</span>
+      </div>
+      <div className="dz-invoke-grid">
+        {examples.map(item => (
+          <button key={item.code} className="dz-invoke-chip" onClick={() => onSend(item.prompt)}>
+            <code>{item.code}</code>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
+      <p>يمكنك كتابة الكود في بداية الرسالة، مثال: <code>@dz-agent حلل هذا المستودع</code> أو <code>@dz-gpt اكتب خطة مشروع</code>.</p>
+    </div>
+  )
+}
+
 // ===== MAIN COMPONENT =====
 interface DZChatBoxProps {
   chatId?: string | null
@@ -1893,7 +1919,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       {messages.length === 0 && !isLoading && !showLog ? (
         <div className="dz-welcome">
           <div className="dz-welcome-icon">
-            <Bot size={40} />
+            <Bot size={30} />
           </div>
           <h2 className="dz-welcome-title">DZ Agent</h2>
           <p className="dz-welcome-sub">
@@ -1901,10 +1927,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
           </p>
 
-          {/* Live Dashboard Cards — top position, under logo */}
-          <div className="dz-dashboard-wrapper">
-            <DZDashboard onSend={(q) => sendMessage(q)} />
-          </div>
+          <DZInvocationGuide onSend={(cmd) => sendMessage(cmd)} />
 
           {!isGithubConnected && (
             <div className="dz-github-note">

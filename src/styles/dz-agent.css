@@ -282,8 +282,8 @@
 .dz-agent-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 8px 14px;
   border-bottom: 1px solid #1a1a1a;
   background: rgba(10, 10, 10, 0.95);
   backdrop-filter: blur(10px);
@@ -310,6 +310,21 @@
   color: #c8ff00;
 }
 
+.dza-top-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dz-back-btn--labeled {
+  gap: 6px;
+  border: 1px solid #202020;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #777;
+}
+
 .dz-agent-logo {
   display: flex;
   align-items: center;
@@ -319,8 +334,8 @@
 
 .dz-agent-logo-icon {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #1a2a00, #002a18);
   border: 1px solid rgba(200, 255, 0, 0.3);
   border-radius: 10px;
@@ -345,7 +360,7 @@
 }
 
 .dz-agent-name {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.5px;
   background: linear-gradient(135deg, #c8ff00, #00ff88);
@@ -411,9 +426,9 @@
   flex-direction: column;
   align-items: center;
   flex: 1;
-  padding: 24px 20px 20px;
+  padding: 14px 16px 16px;
   text-align: center;
-  gap: 12px;
+  gap: 9px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #1a1a1a transparent;
@@ -422,20 +437,20 @@
 .dz-welcome::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 2px; }
 
 .dz-welcome-icon {
-  width: 72px;
-  height: 72px;
+  width: 54px;
+  height: 54px;
   background: linear-gradient(135deg, rgba(200, 255, 0, 0.15), rgba(0, 255, 136, 0.08));
   border: 1px solid rgba(200, 255, 0, 0.25);
-  border-radius: 20px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #c8ff00;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 
 .dz-welcome-title {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 800;
   background: linear-gradient(135deg, #c8ff00, #00ff88);
   -webkit-background-clip: text;
@@ -1153,6 +1168,83 @@
 .dz-gh-connected-badge {
   color: #00ff88;
   font-weight: 600;
+}
+
+.dz-invoke-guide {
+  width: 100%;
+  max-width: 760px;
+  background: linear-gradient(135deg, rgba(200,255,0,0.055), rgba(0,255,136,0.025));
+  border: 1px solid rgba(200,255,0,0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: right;
+  direction: rtl;
+}
+
+.dz-invoke-guide-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #c8ff00;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.dz-invoke-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.dz-invoke-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #0f0f0f;
+  border: 1px solid #1f1f1f;
+  border-radius: 10px;
+  color: #888;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 8px 10px;
+  text-align: right;
+  transition: all 0.18s;
+}
+
+.dz-invoke-chip:hover {
+  border-color: rgba(200,255,0,0.28);
+  color: #ddd;
+  background: #121212;
+}
+
+.dz-invoke-chip code,
+.dz-invoke-guide p code {
+  color: #c8ff00;
+  background: rgba(200,255,0,0.08);
+  border: 1px solid rgba(200,255,0,0.16);
+  border-radius: 6px;
+  padding: 2px 6px;
+  direction: ltr;
+  display: inline-block;
+}
+
+.dz-invoke-chip code {
+  width: fit-content;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dz-invoke-chip span {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.dz-invoke-guide p {
+  color: #5d5d5d;
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
 }
 
 /* ===== DASHBOARD WRAPPER ===== */
@@ -1889,21 +1981,21 @@
 /* ===== SUGGESTION CARDS GRID ===== */
 .dz-cards-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
   width: 100%;
-  max-width: 900px;
-  margin: 12px 0 8px;
+  max-width: 920px;
+  margin: 6px 0 4px;
 }
 
 .dz-scard {
   background: linear-gradient(145deg, #0e0e0e, #111);
   border: 1px solid var(--card-border, rgba(200,255,0,0.18));
-  border-radius: 14px;
-  padding: 14px 14px 12px;
+  border-radius: 12px;
+  padding: 9px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   transition: box-shadow 0.25s, border-color 0.25s, transform 0.2s;
   cursor: default;
   position: relative;
@@ -1938,12 +2030,12 @@
 }
 
 .dz-scard-icon {
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
 }
 
 .dz-scard-category {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.3px;
 }
@@ -1951,7 +2043,7 @@
 .dz-scard-suggestions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .dz-scard-chip {
@@ -1963,9 +2055,9 @@
   border-radius: 8px;
   color: #999;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 7px 10px;
+  padding: 6px 8px;
   text-align: right;
   transition: all 0.2s;
   width: 100%;
@@ -1999,6 +2091,10 @@
   .dz-cards-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .dz-invoke-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
@@ -2008,6 +2104,20 @@
 
   .dz-cards-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .dz-agent-header {
+    gap: 6px;
+    padding: 7px 9px;
+  }
+
+  .dz-agent-logo-text,
+  .dza-header-user {
+    display: none;
+  }
+
+  .dz-welcome {
+    padding: 10px;
   }
 
   .dz-message {
@@ -3373,6 +3483,94 @@
   background: rgba(200, 255, 0, 0.05);
 }
 
+.dza-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dza-page-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #101010;
+  border: 1px solid #252525;
+  border-radius: 9px;
+  color: #888;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 12px;
+  transition: all 0.16s;
+}
+
+.dza-page-action-btn:hover {
+  border-color: rgba(200,255,0,0.34);
+  color: #c8ff00;
+}
+
+.dza-page-action-btn--primary,
+.dza-chat-cta-btn {
+  color: #0b0b0b;
+  border-color: transparent;
+  background: linear-gradient(135deg, #c8ff00, #00ff88);
+}
+
+.dza-page-action-btn--primary:hover,
+.dza-chat-cta-btn:hover {
+  color: #000;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0,255,136,0.12);
+}
+
+.dza-chat-cta {
+  width: min(920px, calc(100% - 32px));
+  margin: 18px auto 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: radial-gradient(circle at top right, rgba(200,255,0,0.12), transparent 38%), #0f0f0f;
+  border: 1px solid rgba(200,255,0,0.14);
+  border-radius: 18px;
+  padding: 18px;
+  direction: rtl;
+}
+
+.dza-chat-cta-kicker {
+  color: #c8ff00;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dza-chat-cta h1 {
+  color: #f4f4f4;
+  font-size: clamp(22px, 4vw, 38px);
+  margin: 4px 0 6px;
+}
+
+.dza-chat-cta p {
+  color: #777;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.dza-chat-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 12px 18px;
+}
+
 .dza-page-dashboard {
   padding: 20px 20px 0;
   max-width: 860px;
@@ -3398,4 +3596,13 @@
   .dza-page-header { padding: 12px 16px; }
   .dza-page-dashboard { padding: 12px 12px 0; }
   .dza-entry-section { padding: 16px 12px 32px; }
+  .dza-page-actions { gap: 5px; }
+  .dza-page-action-btn { padding: 7px 9px; font-size: 11px; }
+  .dza-chat-cta {
+    width: calc(100% - 24px);
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px;
+  }
+  .dza-chat-cta-btn { width: 100%; }
 }

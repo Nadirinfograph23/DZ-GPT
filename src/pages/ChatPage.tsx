@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X } from 'lucide-react'
+import { Bot, Home, Plus, Trash2, MessageSquare, Menu, Sparkles, X } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 
@@ -192,14 +192,16 @@ export default function ChatPage() {
           <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
             <Menu size={18} />
           </button>
-          <button
-            className="dz-back-btn dz-back-btn--labeled"
-            onClick={() => navigate('/')}
-            title="العودة إلى DZ GPT"
-          >
-            <ArrowLeft size={16} />
-            <span className="dz-back-btn-label">العودة إلى DZ GPT</span>
-          </button>
+          <div className="dza-top-nav">
+            <button className="dz-back-btn dz-back-btn--labeled" onClick={() => navigate('/')} title="HOME">
+              <Home size={16} />
+              <span className="dz-back-btn-label">HOME</span>
+            </button>
+            <button className="dz-back-btn dz-back-btn--labeled" onClick={() => navigate('/dz-agent')} title="DZ Agent">
+              <Bot size={16} />
+              <span className="dz-back-btn-label">DZ Agent</span>
+            </button>
+          </div>
           <div className="dz-agent-logo">
             <div className="dz-agent-logo-icon">
               <Bot size={20} />

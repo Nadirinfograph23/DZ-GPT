@@ -103,8 +103,16 @@ DZ Agent has an added education layer that keeps existing behavior intact while 
 - `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub tools, and study selector
 - `src/styles/dz-agent.css` — DZ Agent styles including study card styles
 
+## DZ Agent Chat Navigation Update
+
+- `/dz-agent` now acts as the DZ Agent landing page with a prominent AI-DZ CHAT entry button plus HOME navigation.
+- `/chat` is the dedicated AI-DZ CHAT page with HOME and DZ Agent navigation buttons in the header.
+- The chat supports visible invocation codes at the top of the welcome state: `@dz-agent`, `@dz-gpt`, and `/github`.
+- The welcome cards were compacted so the DZ Agent chat box remains visible and usable on smaller screens.
+
 ## Notes
 
 - The server already correctly binds to `0.0.0.0:5000` for Replit compatibility.
 - `allowedHosts: true` is set in vite.config.ts for proxied preview support.
+- In development, the CSP `frame-ancestors` directive allows Replit preview iframe origins; production keeps iframe embedding disabled with `frame-ancestors 'none'`.
 - DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search uses `site:eddirasa.com` with that CSE when `GOOGLE_API_KEY` is available and falls back to web search when needed.

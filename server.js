@@ -34,7 +34,9 @@ app.use(helmet({
       connectSrc: isProd ? ["'self'"] : ["'self'", 'ws:', 'wss:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
+      frameAncestors: isProd
+        ? ["'none'"]
+        : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev'],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -2259,7 +2261,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
-  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+  let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+  const invocationMatch = lastUserMessage.match(/^(@dz-agent|@dz-gpt|\/github)\b\s*/i)
+  const invocationMode = invocationMatch?.[1]?.toLowerCase() || '@dz-agent'
+  if (invocationMatch) {
+    lastUserMessage = lastUserMessage.replace(invocationMatch[0], '').trim() || lastUserMessage
+    const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
+    if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
+  }
   const lowerMsg = lastUserMessage.toLowerCase()
   const educationSubject = detectEducationSubject(lastUserMessage)
   const educationLevel = detectAcademicLevel(lastUserMessage)
@@ -2606,7 +2615,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const deepseekKey = process.env.DEEPSEEK_API_KEY
   const ollamaUrl = process.env.OLLAMA_PROXY_URL
 
+  const invocationInstruction = invocationMode === '@dz-gpt'
+    ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ GPT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
+    : invocationMode === '/github'
+      ? 'وضع الاستدعاء الحالي: /github — ركّز على GitHub والكود والمستودعات والإجراءات البرمجية.'
+      : 'وضع الاستدعاء الحالي: @dz-agent — ركّز على البحث الحي والخدمات الجزائرية وGitHub عند الحاجة.'
+
   const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
+
+${invocationInstruction}
+
+أكواد الاستدعاء المدعومة داخل الشات:
+- @dz-agent: DZ Agent للأخبار والبحث والطقس والرياضة وGitHub.
+- @dz-gpt: DZ GPT للأسئلة العامة والشرح والكتابة.
+- /github: أوامر GitHub والمستودعات والكود.
 
 أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
 قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.

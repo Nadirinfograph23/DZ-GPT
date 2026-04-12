@@ -19,9 +19,9 @@ const LANGUAGES: { id: Lang; label: string; flag: string }[] = [
 ]
 
 const LABELS: Record<Lang, { newChat: string; noChats: string; title: string }> = {
-  ar: { newChat: 'محادثة جديدة', noChats: 'لا توجد محادثات بعد', title: 'DZ Agent' },
-  en: { newChat: 'New Chat', noChats: 'No conversations yet', title: 'DZ Agent' },
-  fr: { newChat: 'Nouvelle conversation', noChats: 'Aucune conversation', title: 'DZ Agent' },
+  ar: { newChat: 'محادثة جديدة', noChats: 'لا توجد محادثات بعد', title: 'AI-DZ CHAT' },
+  en: { newChat: 'New Chat', noChats: 'No conversations yet', title: 'AI-DZ CHAT' },
+  fr: { newChat: 'Nouvelle conversation', noChats: 'Aucune conversation', title: 'AI-DZ CHAT' },
 }
 
 function generateId(): string {
@@ -40,6 +40,7 @@ export default function ChatPage() {
   const [gender, setGender] = useState<string>('')
 
   useEffect(() => {
+    document.title = 'AI-DZ CHAT'
     const storedName = localStorage.getItem('username')
     const storedId = localStorage.getItem('userId')
     if (!storedName || !storedId) {
@@ -48,6 +49,7 @@ export default function ChatPage() {
     }
     setUsername(storedName)
     setGender(localStorage.getItem('gender') || '')
+    return () => { document.title = 'DZ GPT' }
   }, [navigate])
 
   const [chats, setChats] = useState<DZChat[]>(() => {
@@ -111,7 +113,7 @@ export default function ChatPage() {
               <Sparkles size={10} className="dza-sidebar-spark" />
             </div>
             <div>
-              <div className="dza-sidebar-logo-name">DZ Agent</div>
+              <div className="dza-sidebar-logo-name">AI-DZ CHAT</div>
               <div className="dza-sidebar-logo-sub">BY NADIR HOUAMRIA</div>
             </div>
           </div>
@@ -204,7 +206,7 @@ export default function ChatPage() {
               <Sparkles size={12} className="dz-agent-logo-spark" />
             </div>
             <div className="dz-agent-logo-text">
-              <span className="dz-agent-name">DZ Agent</span>
+              <span className="dz-agent-name">AI-DZ CHAT</span>
               <span className="dz-agent-tagline">BY NADIR HOUAMRIA</span>
             </div>
           </div>

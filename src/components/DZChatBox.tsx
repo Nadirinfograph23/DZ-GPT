@@ -9,7 +9,6 @@ import {
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import DZDashboard from './DZDashboard'
 
 // ===== TYPES =====
 type RichType =

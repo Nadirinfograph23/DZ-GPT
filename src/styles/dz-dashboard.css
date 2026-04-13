@@ -882,3 +882,53 @@
   color: #a78bfa;
   border-bottom-color: #a78bfa;
 }
+
+/* ===== WELCOME TOAST ===== */
+.dzd-welcome-toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: linear-gradient(135deg, #0d1a00, #001a0d);
+  border: 1px solid rgba(200, 255, 0, 0.4);
+  border-radius: 40px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(200, 255, 0, 0.15);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  white-space: nowrap;
+}
+
+.dzd-welcome-toast--show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.dzd-welcome-toast--hide {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
+.dzd-welcome-toast-avatar {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.dzd-welcome-toast-text {
+  font-size: 14px;
+  color: #e2e8e0;
+  direction: rtl;
+}
+
+.dzd-welcome-toast-text strong {
+  background: linear-gradient(135deg, #c8ff00, #00ff88);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-left: 4px;
+}

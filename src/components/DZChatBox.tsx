@@ -9,6 +9,7 @@ import {
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import DZDashboard from './DZDashboard'
 
 // ===== TYPES =====
 type RichType =
@@ -177,7 +178,6 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
-
 
 // ===== CODE ANALYSIS PANEL =====
 const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string; icon: React.ReactNode }> = {
@@ -1142,69 +1142,27 @@ function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
   )
 }
 
-function DZInvocationGuide({ onSend }: { onSend: (cmd: string) => void }) {
-  const examples = [
-    { code: '@dz-agent', label: 'استدعاء DZ Agent للأخبار، البحث، GitHub، الطقس والرياضة', prompt: '@dz-agent أعطني أخبار الجزائر اليوم مع المصادر' },
-    { code: '@dz-gpt', label: 'استدعاء DZ GPT للأسئلة العامة والشرح والكتابة', prompt: '@dz-gpt اشرح لي الحوسبة الكمية ببساطة' },
-    { code: '/github', label: 'أوامر GitHub: عرض المستودعات، تحليل كود، ملفات، PR', prompt: '/github اعرض مستودعاتي' },
-  ]
-
-  return (
-    <div className="dz-invoke-guide">
-      <div className="dz-invoke-guide-head">
-        <MessageSquare size={14} />
-        <span>أكواد الاستدعاء داخل المحادثة</span>
-      </div>
-      <div className="dz-invoke-grid">
-        {examples.map(item => (
-          <button key={item.code} className="dz-invoke-chip" onClick={() => onSend(item.prompt)}>
-            <code>{item.code}</code>
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-      <p>يمكنك كتابة الكود في بداية الرسالة، مثال: <code>@dz-agent حلل هذا المستودع</code> أو <code>@dz-gpt اكتب خطة مشروع</code>.</p>
-    </div>
-  )
-}
-
 // ===== MAIN COMPONENT =====
-interface DZChatBoxProps {
-  chatId?: string | null
-  language?: 'ar' | 'en' | 'fr'
-  onTitleChange?: (title: string) => void
-}
-
-export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
-  const [messages, setMessages] = useState<DZMessage[]>(() => {
-    if (!chatId) return []
-    try {
-      const saved = localStorage.getItem(`dz-agent-msgs-${chatId}`)
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
+export default function DZChatBox() {
+  const [messages, setMessages] = useState<DZMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
-  const [githubToken, setGithubToken] = useState<string>(() => {
-    try {
-      return sessionStorage.getItem('dz-agent-gh-token') || ''
-    } catch {
-      return ''
-    }
-  })
+  const [githubToken, setGithubToken] = useState<string>(() =>
+    localStorage.getItem('dz-agent-gh-token') || ''
+  )
   const [serverGithubConnected, setServerGithubConnected] = useState(false)
   const [oauthEnabled, setOauthEnabled] = useState(false)
   const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [showGhMenu, setShowGhMenu] = useState(false)
-  const [autoShowRepos, setAutoShowRepos] = useState(false)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -1216,15 +1174,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       const token = hash.replace('#gh_oauth=', '')
       if (token) {
         setGithubToken(token)
-        sessionStorage.setItem('dz-agent-gh-token', token)
-        localStorage.removeItem('dz-agent-gh-token')
+        localStorage.setItem('dz-agent-gh-token', token)
         window.history.replaceState(null, '', '/dz-agent')
+        // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
           headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0' }
         }).then(r => r.json()).then(u => {
           setGithubUser({ login: u.login, name: u.name || u.login, avatar: u.avatar_url, url: u.html_url, repos: u.public_repos })
         }).catch(() => {})
-        setAutoShowRepos(true)
       }
     }
     const params = new URLSearchParams(window.location.search)
@@ -1240,7 +1197,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setAuthError(errMsg)
       window.history.replaceState(null, '', '/dz-agent')
     }
-    localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
   // Check server GitHub connection on mount
@@ -1254,20 +1210,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       })
       .catch(() => {})
   }, [])
-
-  // Save messages to localStorage when they change
-  useEffect(() => {
-    if (!chatId) return
-    try {
-      localStorage.setItem(`dz-agent-msgs-${chatId}`, JSON.stringify(messages))
-    } catch {}
-    // Update chat title from first user message
-    const firstUser = messages.find(m => m.role === 'user')
-    if (firstUser && onTitleChange) {
-      const title = firstUser.content.slice(0, 50) + (firstUser.content.length > 50 ? '...' : '')
-      onTitleChange(title)
-    }
-  }, [messages, chatId, onTitleChange])
 
   // Auto-scroll — only when there are messages or loading, not on empty state
   useEffect(() => {
@@ -1292,8 +1234,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
   const saveToken = useCallback((t: string) => {
     setGithubToken(t)
-    sessionStorage.setItem('dz-agent-gh-token', t)
-    localStorage.removeItem('dz-agent-gh-token')
+    localStorage.setItem('dz-agent-gh-token', t)
   }, [])
 
   const clearToken = useCallback(() => {
@@ -1301,7 +1242,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setGithubUser(null)
     setServerGithubConnected(false)
     setShowGhMenu(false)
-    sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
@@ -1345,13 +1285,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
-
-  useEffect(() => {
-    if (!autoShowRepos || (!githubToken && !serverGithubConnected)) return
-    setAutoShowRepos(false)
-    fetchRepos()
-  }, [autoShowRepos, githubToken, serverGithubConnected, fetchRepos])
+  }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFiles = useCallback(async (repo: string, path = '') => {
     if (!githubToken && !serverGithubConnected) return
@@ -1378,7 +1312,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
+  }, [githubToken, addToLog, addAssistantMessage])
 
   const fetchFileContent = useCallback(async (repo: string, path: string) => {
     if (!githubToken && !serverGithubConnected) return
@@ -1403,7 +1337,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
+  }, [githubToken, addToLog, addAssistantMessage])
 
   const analyzeCode = useCallback(async (repo: string, path: string, content: string) => {
     setIsLoading(true)
@@ -1925,7 +1859,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       {messages.length === 0 && !isLoading && !showLog ? (
         <div className="dz-welcome">
           <div className="dz-welcome-icon">
-            <Bot size={30} />
+            <Bot size={40} />
           </div>
           <h2 className="dz-welcome-title">DZ Agent</h2>
           <p className="dz-welcome-sub">
@@ -1933,36 +1867,22 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
           </p>
 
-          <div className="dz-github-workspace-card">
-            <div className="dz-github-workspace-copy">
-              <span className="dz-github-workspace-kicker">GitHub Workspace</span>
-              <strong>اختر مستودعاً ثم استخدم أدوات التعديل والفحص مباشرة.</strong>
-              <small>إصلاح الأخطاء، فحص الأمان، اقتراحات، تصفح الملفات، Commit و Pull Request.</small>
-            </div>
-            {isGithubConnected ? (
-              <button className="dz-github-workspace-btn" onClick={fetchRepos}>
-                <FolderOpen size={14} />
-                عرض المستودعات
-              </button>
-            ) : (
-              <a href="/api/auth/github" className="dz-github-workspace-btn">
-                <Github size={14} />
-                الاتصال بـ GitHub
-              </a>
-            )}
+          {/* Live Dashboard Cards — top position, under logo */}
+          <div className="dz-dashboard-wrapper">
+            <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
-
-          <DZInvocationGuide onSend={(cmd) => sendMessage(cmd)} />
 
           {!isGithubConnected && (
             <div className="dz-github-note">
               <Github size={14} className="dz-github-note-icon" />
               <span>
-                ربط GitHub مطلوب لعرض المستودعات وتنفيذ أدوات الكود بأمان. يمكنك أيضاً استخدام توكن يدوي إذا لم يكن OAuth متاحاً.
+                ربط GitHub <strong>اختياري</strong> — مطلوب فقط إذا أردت تصحيح كود في مشروعك، إنشاء مشروع جديد، أو الحصول على مساعدة في بناء مشروع.
               </span>
-              <a href="/api/auth/github" className="dz-github-note-btn">
-                <Github size={12} /> ربط الآن
-              </a>
+              {oauthEnabled && (
+                <a href="/api/auth/github" className="dz-github-note-btn">
+                  <Github size={12} /> ربط الآن
+                </a>
+              )}
             </div>
           )}
 
@@ -2149,10 +2069,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isGithubConnected
-              ? (language === 'fr' ? 'Écrivez votre message... (GitHub connecté ✓)' : language === 'en' ? 'Type your message... (GitHub connected ✓)' : 'أكتب رسالتك... (GitHub متصل ✓)')
-              : (language === 'fr' ? 'Écrivez votre message à DZ Agent...' : language === 'en' ? 'Type your message to DZ Agent...' : 'أكتب رسالتك لـ DZ Agent...')
-            }
+            placeholder={isGithubConnected ? 'أكتب رسالتك... (GitHub متصل ✓)' : 'أكتب رسالتك لـ DZ Agent...'}
             rows={1}
             className="dz-chat-input"
           />
@@ -2171,3 +2088,4 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     </div>
   )
 }
+

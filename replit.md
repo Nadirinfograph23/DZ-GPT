@@ -41,6 +41,7 @@ The following secrets must be configured in Replit's Secrets tab and Vercel proj
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
+- `GET /api/currency/latest` — Live exchange rates against the Algerian dinar
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
 - `GET /api/auth/github` — Starts GitHub OAuth
 - `GET /api/auth/github/callback` — Handles GitHub OAuth callback
@@ -80,6 +81,12 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - Selecting a repository shows a repository action card with scan, bug finding, security scan, suggestions, files, branches, issues, Pull Requests, Commit, PR creation, and stats actions.
 - The previous education center/study selector UI has been removed from the DZ Agent interface.
 - GitHub OAuth state validation is cookie-backed so it works reliably on serverless production hosts such as Vercel.
+
+## DZ Agent Live Cards
+
+- The DZ Agent landing dashboard includes prayer times, weather, news, sports calendar/LFP results, tech news, and currency exchange rates.
+- Weather and prayer times share the selected Algerian wilaya.
+- Currency rates are loaded from `/api/currency/latest`; sports calendar data comes through the dashboard LFP payload.
 
 ## DZ Agent Security and Expertise
 

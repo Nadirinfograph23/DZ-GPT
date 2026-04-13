@@ -45,7 +45,33 @@ interface DashboardData {
   sports: NewsItem[]
   tech: TechItem[]
   weather: WeatherData[]
+  lfp?: {
+    matches: MatchItem[]
+    articles: { title: string; link: string; date?: string }[]
+    fetchedAt?: number
+    source?: string
+  } | null
   fetchedAt: string
+}
+
+interface MatchItem {
+  round?: string
+  home: string
+  away: string
+  homeScore?: string | number
+  awayScore?: string | number
+  played?: boolean
+  date?: string
+  time?: string
+  link?: string
+}
+
+interface CurrencyData {
+  base: string
+  provider: string
+  rates: Record<string, number>
+  status: 'live' | 'stale' | string
+  last_update?: string
 }
 
 const PRAYER_ICONS: Record<string, string> = {
@@ -119,6 +145,24 @@ const WILAYAS = [
 
 const STORAGE_KEY = 'dz-agent-selected-city'
 
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: 'دولار أمريكي',
+  EUR: 'يورو',
+  GBP: 'جنيه إسترليني',
+  SAR: 'ريال سعودي',
+  AED: 'درهم إماراتي',
+  TND: 'دينار تونسي',
+  MAD: 'درهم مغربي',
+  EGP: 'جنيه مصري',
+  QAR: 'ريال قطري',
+  KWD: 'دينار كويتي',
+  CAD: 'دولار كندي',
+  CHF: 'فرنك سويسري',
+  CNY: 'يوان صيني',
+  TRY: 'ليرة تركية',
+  JPY: 'ين ياباني',
+}
+
 function getWeatherBg(icon: string | null) {
   if (!icon) return 'weather-default'
   if (icon.startsWith('01')) return 'weather-sunny'
@@ -168,7 +212,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
   // Wilaya picker visibility
   const [showPicker, setShowPicker] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech'>('prayer')
+  const [currencyData, setCurrencyData] = useState<CurrencyData | null>(null)
+  const [currencyLoading, setCurrencyLoading] = useState(false)
+
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech' | 'currency'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -202,6 +249,16 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
       else setPrayerData(null)
     } catch { setPrayerData(null) }
     finally { setPrayerLoading(false) }
+  }, [])
+
+  const loadCurrency = useCallback(async () => {
+    setCurrencyLoading(true)
+    try {
+      const r = await fetch('/api/currency/latest')
+      if (r.ok) setCurrencyData(await r.json())
+      else setCurrencyData(null)
+    } catch { setCurrencyData(null) }
+    finally { setCurrencyLoading(false) }
   }, [])
 
   const changeCity = useCallback((city: string) => {
@@ -252,15 +309,23 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
     loadDashboard()
     loadPrayer(selectedCity)
     loadWeather(selectedCity)
+    loadCurrency()
   }, [])
 
   const tabs = [
     { key: 'prayer' as const, label: 'مواقيت الصلاة', icon: '🕌' },
     { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
     { key: 'news' as const, label: 'الأخبار', icon: '📰' },
-    { key: 'sports' as const, label: 'الرياضة', icon: '⚽' },
-    { key: 'tech' as const, label: 'تقنية', icon: '💻' },
+    { key: 'sports' as const, label: 'الرزنامة الرياضية', icon: '⚽' },
+    { key: 'tech' as const, label: 'الأخبار التقنية', icon: '💻' },
+    { key: 'currency' as const, label: 'أسعار الصرف', icon: '💱' },
   ]
+
+  const matches = data?.lfp?.matches || []
+  const upcomingMatches = matches.filter(match => !match.played).slice(0, 8)
+  const playedMatches = matches.filter(match => match.played).slice(0, 8)
+  const visibleMatches = [...upcomingMatches, ...playedMatches].slice(0, 10)
+  const priorityCurrencies = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'TND', 'MAD', 'CAD']
 
   // City selector bar (shared between prayer & weather)
   const CityBar = () => (
@@ -318,10 +383,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity) }}
+          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency() }}
           title="تحديث"
         >
-          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading) ? 'dzd-spin' : ''} />
+          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading) ? 'dzd-spin' : ''} />
         </button>
       </div>
 
@@ -463,31 +528,107 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
 
         {/* ===== SPORTS ===== */}
         {activeSection === 'sports' && (
-          <div className="dzd-news-panel">
+          <div className="dzd-sports-panel">
             {loading ? (
-              <div className="dzd-news-list">
-                {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
+              <div className="dzd-match-list">
+                {[...Array(4)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--match" />)}
               </div>
-            ) : (data?.sports?.length === 0) ? (
-              <div className="dzd-empty-state">لا توجد أخبار رياضية</div>
+            ) : (visibleMatches.length === 0 && data?.sports?.length === 0) ? (
+              <div className="dzd-empty-state">لا توجد رزنامة رياضية حالياً</div>
             ) : (
-              <div className="dzd-news-list">
-                {(data?.sports || []).map((item, i) => (
-                  <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
-                    <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
-                      <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
-                    </div>
-                    <div className="dzd-news-card-body">
-                      <p className="dzd-news-title">{item.title}</p>
-                    </div>
-                    {item.link && (
-                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
-                        <ExternalLink size={11} />
-                      </a>
-                    )}
+              <>
+                {visibleMatches.length > 0 && (
+                  <div className="dzd-match-list">
+                    {visibleMatches.map((match, i) => (
+                      <div key={`${match.home}-${match.away}-${i}`} className={`dzd-match-card ${match.played ? 'dzd-match-card--played' : ''}`} onClick={() => onSend(`الرزنامة الرياضية: ${match.home} ضد ${match.away}`)}>
+                        <div className="dzd-match-meta">
+                          <span><Trophy size={10} /> {match.round || 'الرابطة المحترفة'}</span>
+                          <span>{match.played ? 'نتيجة' : 'قادمة'}</span>
+                        </div>
+                        <div className="dzd-match-teams">
+                          <span>{match.home}</span>
+                          <strong>
+                            {match.played
+                              ? `${match.homeScore ?? '-'} - ${match.awayScore ?? '-'}`
+                              : 'VS'}
+                          </strong>
+                          <span>{match.away}</span>
+                        </div>
+                        {(match.date || match.time || match.link) && (
+                          <div className="dzd-match-footer">
+                            <span>{[match.date, match.time].filter(Boolean).join(' · ') || 'LFP'}</span>
+                            {match.link && (
+                              <a href={match.link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                                <ExternalLink size={11} />
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {(data?.sports || []).length > 0 && (
+                  <div className="dzd-news-list dzd-sports-news-list">
+                    {(data?.sports || []).slice(0, 5).map((item, i) => (
+                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
+                        <div className="dzd-news-card-left">
+                          <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
+                          <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
+                        </div>
+                        <div className="dzd-news-card-body">
+                          <p className="dzd-news-title">{item.title}</p>
+                        </div>
+                        {item.link && (
+                          <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeSection === 'currency' && (
+          <div className="dzd-currency-panel">
+            {currencyLoading ? (
+              <div className="dzd-currency-grid">
+                {[...Array(8)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--currency" />)}
+              </div>
+            ) : currencyData?.rates ? (
+              <>
+                <div className="dzd-currency-head">
+                  <span>{currencyData.status === 'live' ? 'مباشر' : 'بيانات محفوظة'}</span>
+                  <small>{currencyData.provider}</small>
+                </div>
+                <div className="dzd-currency-grid">
+                  {priorityCurrencies.filter(code => currencyData.rates[code]).map(code => {
+                    const rate = currencyData.rates[code]
+                    const dzdPerCurrency = rate > 0 ? (1 / rate).toFixed(2) : '-'
+                    return (
+                      <div key={code} className="dzd-currency-card" onClick={() => onSend(`سعر ${code} مقابل الدينار الجزائري`)}>
+                        <div className="dzd-currency-code">{code}</div>
+                        <div className="dzd-currency-name">{CURRENCY_NAMES[code] || code}</div>
+                        <div className="dzd-currency-rate">1 {code} = {dzdPerCurrency} دج</div>
+                        <div className="dzd-currency-sub">1 دج = {rate} {code}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {currencyData.last_update && (
+                  <div className="dzd-currency-updated">
+                    آخر تحديث: {new Date(currencyData.last_update).toLocaleString('ar-DZ')}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="dzd-error-state">
+                <span>⚠️ تعذّر تحميل أسعار الصرف</span>
+                <button className="dzd-retry-btn" onClick={loadCurrency}>إعادة المحاولة</button>
               </div>
             )}
           </div>

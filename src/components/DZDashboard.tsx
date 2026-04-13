@@ -215,6 +215,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
   const [currencyData, setCurrencyData] = useState<CurrencyData | null>(null)
   const [currencyLoading, setCurrencyLoading] = useState(false)
 
+  // Welcome toast
+  const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
+  const [welcomeVisible, setWelcomeVisible] = useState(false)
+
   const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech' | 'currency'>('prayer')
 
   const saveCity = useCallback((city: string) => {
@@ -266,6 +270,11 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
     setShowPicker(false)
     loadWeather(city)
     loadPrayer(city)
+    // Show welcome toast
+    const arName = WILAYAS.find(w => w.en === city)?.ar || city
+    setWelcomeCity(arName)
+    setWelcomeVisible(true)
+    setTimeout(() => setWelcomeVisible(false), 4000)
   }, [saveCity, loadWeather, loadPrayer])
 
   // Detect location via browser Geolocation API → Nominatim reverse geocode
@@ -367,6 +376,16 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
 
   return (
     <div className="dzd-root" dir="rtl">
+      {/* Welcome toast */}
+      {welcomeCity && (
+        <div className={`dzd-welcome-toast ${welcomeVisible ? 'dzd-welcome-toast--show' : 'dzd-welcome-toast--hide'}`}>
+          <span className="dzd-welcome-toast-avatar">🤖</span>
+          <span className="dzd-welcome-toast-text">
+            <strong>DZ Agent:</strong> أهلا بناس {welcomeCity} 🇩🇿
+          </span>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="dzd-topbar">
         <div className="dzd-topbar-tabs">

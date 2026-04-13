@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
@@ -7,6 +8,7 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
+  Download, ArrowRight, Loader2, Brain,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
@@ -177,6 +179,310 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+// ===== SMART STUDY CARD (Auto-index from eddirasa.com) =====
+
+interface EddirasaIndexItem {
+  title: string
+  url: string
+  snippet: string
+  isPdf: boolean
+  term?: string
+}
+
+const STUDY_CYCLES = [
+  { id: 'primary',   label: 'ابتدائي', years: ['Primary 1','Primary 2','Primary 3','Primary 4','Primary 5'] },
+  { id: 'middle',    label: 'متوسط',   years: ['Middle 1','Middle 2','Middle 3','Middle 4 (BEM)'] },
+  { id: 'secondary', label: 'ثانوي',   years: ['Secondary 1','Secondary 2','Secondary 3 (Baccalaureate)'] },
+]
+
+const CYCLE_YEAR_LABELS: Record<string, string[]> = {
+  primary:   ['1 ابتدائي','2 ابتدائي','3 ابتدائي','4 ابتدائي','5 ابتدائي'],
+  middle:    ['1 متوسط','2 متوسط','3 متوسط','4 متوسط (BEM)'],
+  secondary: ['1 ثانوي','2 ثانوي','3 ثانوي (بكالوريا)'],
+}
+
+const STUDY_SUBJECTS_AR = [
+  { id: 'Math',               label: 'رياضيات' },
+  { id: 'Physics',            label: 'فيزياء' },
+  { id: 'Arabic',             label: 'عربية' },
+  { id: 'French',             label: 'فرنسية' },
+  { id: 'English',            label: 'إنجليزية' },
+  { id: 'Science',            label: 'علوم' },
+  { id: 'History / Geography',label: 'تاريخ/جغرافيا' },
+  { id: 'Islamic',            label: 'إسلامية' },
+  { id: 'Philosophy',         label: 'فلسفة' },
+]
+
+const CYCLE_ID_TO_LEVEL: Record<string, string> = {
+  primary: 'Primary',
+  middle: 'Middle',
+  secondary: 'Secondary',
+}
+
+const TERM_LABELS: Record<string, string> = {
+  '': 'كل الفصول',
+  '1': 'الفصل 1',
+  '2': 'الفصل 2',
+  '3': 'الفصل 3',
+}
+
+function SmartStudyCard({
+  onSend,
+  disabled,
+}: {
+  onSend: (text: string) => void
+  disabled: boolean
+}) {
+  const navigate = useNavigate()
+  const [cycle, setCycle] = useState('middle')
+  const [yearIndex, setYearIndex] = useState(3)
+  const [subject, setSubject] = useState('Math')
+  const [term, setTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalResults, setTotalResults] = useState(0)
+  const [indexItems, setIndexItems] = useState<EddirasaIndexItem[]>([])
+  const [indexLoading, setIndexLoading] = useState(false)
+  const [indexError, setIndexError] = useState<string | null>(null)
+  const [hasFetched, setHasFetched] = useState(false)
+  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const currentCycle = STUDY_CYCLES.find(c => c.id === cycle)!
+  const currentLevel = currentCycle.years[Math.min(yearIndex, currentCycle.years.length - 1)]
+  const levelBase = CYCLE_ID_TO_LEVEL[cycle] || cycle
+  const yearNum = String(yearIndex + 1)
+  const subjectLabel = STUDY_SUBJECTS_AR.find(s => s.id === subject)?.label || subject
+
+  const fetchIndex = useCallback(async (
+    lvl: string, yr: string, subj: string, trm: string, pg: number
+  ) => {
+    setIndexLoading(true)
+    setIndexError(null)
+    setHasFetched(false)
+    try {
+      const res = await fetch('/api/dz-agent/education/index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: lvl, year: yr, subject: subj, term: trm, page: pg }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'فشل في جلب الفهرس')
+      setIndexItems(Array.isArray(data.items) ? data.items : [])
+      setTotalResults(data.total ?? 0)
+      setTotalPages(data.totalPages ?? 1)
+      setCurrentPage(data.page ?? 1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      setIndexError(msg)
+      setIndexItems([])
+      setTotalResults(0)
+      setTotalPages(1)
+    } finally {
+      setIndexLoading(false)
+      setHasFetched(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current)
+    fetchTimerRef.current = setTimeout(() => fetchIndex(levelBase, yearNum, subject, term, 1), 700)
+    return () => { if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current) }
+  }, [cycle, yearIndex, subject, term, fetchIndex])
+
+  const goToPage = (pg: number) => {
+    setCurrentPage(pg)
+    fetchIndex(levelBase, yearNum, subject, term, pg)
+  }
+
+  const handleSolve = (item: EddirasaIndexItem) => {
+    const termInfo = item.term ? ` — الفصل ${item.term}` : ''
+    onSend(`حل هذا التمرين خطوة بخطوة.\n📚 المستوى: ${currentLevel}${termInfo} — المادة: ${subjectLabel}\n📌 العنوان: ${item.title}\n🔗 المصدر: ${item.url}${item.snippet ? `\n\nالمحتوى: ${item.snippet}` : ''}`)
+  }
+
+  const handleExplain = (item: EddirasaIndexItem) => {
+    const termInfo = item.term ? ` — الفصل ${item.term}` : ''
+    onSend(`اشرح هذا الدرس ببساطة مع أمثلة وتمارين تدريبية.\n📚 المستوى: ${currentLevel}${termInfo} — المادة: ${subjectLabel}\n📌 العنوان: ${item.title}\n🔗 المصدر: ${item.url}${item.snippet ? `\n\nالمحتوى: ${item.snippet}` : ''}`)
+  }
+
+  const handleDeepSeekPdf = (item: EddirasaIndexItem) => {
+    try { sessionStorage.setItem('dz-transfer-deepseek', JSON.stringify({ url: item.url, title: item.title })) } catch {}
+    navigate('/?model=deepseek-pdf')
+  }
+
+  const changeCycle = (id: string) => {
+    setCycle(id)
+    setYearIndex(0)
+    setTerm('')
+    setCurrentPage(1)
+    setIndexItems([])
+    setHasFetched(false)
+  }
+
+  return (
+    <div className="dz-smart-study">
+      <div className="dz-smart-study-head">
+        <div className="dz-smart-study-icon"><BookOpen size={18} /></div>
+        <div>
+          <div className="dz-smart-study-title">المركز التعليمي — eddirasa.com</div>
+          <div className="dz-smart-study-sub">اختر الطور والسنة والمادة لعرض المحتوى المطابق فقط</div>
+        </div>
+      </div>
+
+      {/* Cycle (طور) tabs */}
+      <div className="dz-cycle-tabs">
+        {STUDY_CYCLES.map(c => (
+          <button
+            key={c.id}
+            className={`dz-cycle-tab ${cycle === c.id ? 'dz-cycle-tab--active' : ''}`}
+            onClick={() => changeCycle(c.id)}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Year (سنة) pills */}
+      <div className="dz-smart-section-label">السنة الدراسية</div>
+      <div className="dz-year-pills">
+        {currentCycle.years.map((y, i) => (
+          <button
+            key={y}
+            className={`dz-year-pill ${yearIndex === i ? 'dz-year-pill--active' : ''}`}
+            onClick={() => { setYearIndex(i); setCurrentPage(1) }}
+          >
+            {CYCLE_YEAR_LABELS[cycle]?.[i] || y}
+          </button>
+        ))}
+      </div>
+
+      {/* Subject (مادة) pills */}
+      <div className="dz-smart-section-label">المادة</div>
+      <div className="dz-subject-pills">
+        {STUDY_SUBJECTS_AR.map(s => (
+          <button
+            key={s.id}
+            className={`dz-subject-pill ${subject === s.id ? 'dz-subject-pill--active' : ''}`}
+            onClick={() => { setSubject(s.id); setCurrentPage(1) }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Term (فصل) pills */}
+      <div className="dz-smart-section-label">الفصل الدراسي</div>
+      <div className="dz-term-pills">
+        {Object.entries(TERM_LABELS).map(([key, label]) => (
+          <button
+            key={key}
+            className={`dz-term-pill ${term === key ? 'dz-term-pill--active' : ''}`}
+            onClick={() => { setTerm(key); setCurrentPage(1) }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Index results */}
+      <div className="dz-index-section">
+        {indexLoading && (
+          <div className="dz-index-loading">
+            <Loader2 size={15} className="dz-spin" />
+            <span>جلب النتائج المطابقة من eddirasa.com...</span>
+          </div>
+        )}
+        {indexError && !indexLoading && (
+          <div className="dz-index-error">
+            <AlertCircle size={13} />
+            <span>{indexError}</span>
+          </div>
+        )}
+        {!indexLoading && !indexError && hasFetched && indexItems.length === 0 && (
+          <div className="dz-index-empty">
+            <p>لم يتم العثور على محتوى مطابق لهذا الاختيار من eddirasa.com.</p>
+            <span>يمكنك الكتابة مباشرةً في خانة الدردشة أدناه.</span>
+          </div>
+        )}
+        {!indexLoading && indexItems.length > 0 && (
+          <div className="dz-index-list">
+            <div className="dz-index-list-header">
+              <BookOpen size={12} />
+              <span>
+                {totalResults} نتيجة — {currentLevel} · {subjectLabel}
+                {term ? ` · الفصل ${term}` : ''}
+                {totalPages > 1 ? ` (صفحة ${currentPage} من ${totalPages})` : ''}
+              </span>
+            </div>
+            {indexItems.map((item, i) => (
+              <div key={i} className={`dz-index-item ${item.isPdf ? 'dz-index-item--pdf' : ''}`}>
+                <a
+                  className="dz-index-item-title"
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {item.isPdf && <span className="dz-pdf-tag">PDF</span>}
+                  {item.term && <span className="dz-term-tag">ف{item.term}</span>}
+                  <span>{item.title}</span>
+                  <ExternalLink size={10} className="dz-ext-icon" />
+                </a>
+                {item.snippet && <p className="dz-index-item-snippet">{item.snippet}</p>}
+                <div className="dz-idx-actions">
+                  <button className="dz-idx-btn dz-idx-btn--solve" onClick={() => handleSolve(item)} disabled={disabled}>
+                    <Brain size={11} /> حل مع AI
+                  </button>
+                  <button className="dz-idx-btn dz-idx-btn--explain" onClick={() => handleExplain(item)} disabled={disabled}>
+                    <BookOpen size={11} /> شرح
+                  </button>
+                  <button className="dz-idx-btn dz-idx-btn--open" onClick={() => window.open(item.url,'_blank','noopener,noreferrer')}>
+                    <ExternalLink size={11} /> فتح
+                  </button>
+                  {item.isPdf && (
+                    <>
+                      <button className="dz-idx-btn dz-idx-btn--pdf" onClick={() => window.open(item.url,'_blank','noopener,noreferrer')}>
+                        <Download size={11} /> تحميل PDF
+                      </button>
+                      <button className="dz-idx-btn dz-idx-btn--deepseek" onClick={() => handleDeepSeekPdf(item)}>
+                        <ArrowRight size={11} /> DeepSeek PDF
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="dz-pagination">
+                <button
+                  className="dz-page-btn"
+                  disabled={currentPage <= 1 || indexLoading}
+                  onClick={() => goToPage(currentPage - 1)}
+                >
+                  ‹ السابق
+                </button>
+                <span className="dz-page-info">{currentPage} / {totalPages}</span>
+                <button
+                  className="dz-page-btn"
+                  disabled={currentPage >= totalPages || indexLoading}
+                  onClick={() => goToPage(currentPage + 1)}
+                >
+                  التالي ›
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="dz-smart-hint">
+        💬 يمكنك أيضاً الكتابة مباشرةً في خانة الدردشة دون الحاجة لاختيار مستوى
+      </div>
+    </div>
+  )
 }
 
 // ===== CODE ANALYSIS PANEL =====
@@ -1143,16 +1449,32 @@ function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
 }
 
 // ===== MAIN COMPONENT =====
-export default function DZChatBox() {
-  const [messages, setMessages] = useState<DZMessage[]>([])
+interface DZChatBoxProps {
+  chatId?: string | null
+  language?: 'ar' | 'en' | 'fr'
+  onTitleChange?: (title: string) => void
+}
+
+export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
+  const [messages, setMessages] = useState<DZMessage[]>(() => {
+    if (!chatId) return []
+    try {
+      const saved = localStorage.getItem(`dz-agent-msgs-${chatId}`)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
-  const [githubToken, setGithubToken] = useState<string>(() =>
-    localStorage.getItem('dz-agent-gh-token') || ''
-  )
+  const [githubToken, setGithubToken] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('dz-agent-gh-token') || ''
+    } catch {
+      return ''
+    }
+  })
   const [serverGithubConnected, setServerGithubConnected] = useState(false)
   const [oauthEnabled, setOauthEnabled] = useState(false)
   const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
@@ -1162,7 +1484,6 @@ export default function DZChatBox() {
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
-
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -1174,7 +1495,8 @@ export default function DZChatBox() {
       const token = hash.replace('#gh_oauth=', '')
       if (token) {
         setGithubToken(token)
-        localStorage.setItem('dz-agent-gh-token', token)
+        sessionStorage.setItem('dz-agent-gh-token', token)
+        localStorage.removeItem('dz-agent-gh-token')
         window.history.replaceState(null, '', '/dz-agent')
         // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
@@ -1197,6 +1519,7 @@ export default function DZChatBox() {
       setAuthError(errMsg)
       window.history.replaceState(null, '', '/dz-agent')
     }
+    localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
   // Check server GitHub connection on mount
@@ -1210,6 +1533,20 @@ export default function DZChatBox() {
       })
       .catch(() => {})
   }, [])
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (!chatId) return
+    try {
+      localStorage.setItem(`dz-agent-msgs-${chatId}`, JSON.stringify(messages))
+    } catch {}
+    // Update chat title from first user message
+    const firstUser = messages.find(m => m.role === 'user')
+    if (firstUser && onTitleChange) {
+      const title = firstUser.content.slice(0, 50) + (firstUser.content.length > 50 ? '...' : '')
+      onTitleChange(title)
+    }
+  }, [messages, chatId, onTitleChange])
 
   // Auto-scroll — only when there are messages or loading, not on empty state
   useEffect(() => {
@@ -1234,7 +1571,8 @@ export default function DZChatBox() {
 
   const saveToken = useCallback((t: string) => {
     setGithubToken(t)
-    localStorage.setItem('dz-agent-gh-token', t)
+    sessionStorage.setItem('dz-agent-gh-token', t)
+    localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
   const clearToken = useCallback(() => {
@@ -1242,6 +1580,7 @@ export default function DZChatBox() {
     setGithubUser(null)
     setServerGithubConnected(false)
     setShowGhMenu(false)
+    sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
@@ -1872,6 +2211,11 @@ export default function DZChatBox() {
             <DZDashboard onSend={(q) => sendMessage(q)} />
           </div>
 
+          <SmartStudyCard
+            onSend={(text) => sendMessage(text)}
+            disabled={isLoading}
+          />
+
           {!isGithubConnected && (
             <div className="dz-github-note">
               <Github size={14} className="dz-github-note-icon" />
@@ -2069,7 +2413,10 @@ export default function DZChatBox() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isGithubConnected ? 'أكتب رسالتك... (GitHub متصل ✓)' : 'أكتب رسالتك لـ DZ Agent...'}
+            placeholder={isGithubConnected
+              ? (language === 'fr' ? 'Écrivez votre message... (GitHub connecté ✓)' : language === 'en' ? 'Type your message... (GitHub connected ✓)' : 'أكتب رسالتك... (GitHub متصل ✓)')
+              : (language === 'fr' ? 'Écrivez votre message à DZ Agent...' : language === 'en' ? 'Type your message to DZ Agent...' : 'أكتب رسالتك لـ DZ Agent...')
+            }
             rows={1}
             className="dz-chat-input"
           />
@@ -2088,4 +2435,3 @@ export default function DZChatBox() {
     </div>
   )
 }
-

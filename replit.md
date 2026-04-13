@@ -18,20 +18,21 @@ npm run start    # Production (serves dist/ + Express API)
 
 ## Environment Variables / Secrets
 
-The following secrets must be configured in Replit's Secrets tab:
+The following secrets must be configured in Replit's Secrets tab and Vercel project environment:
 
 | Key | Purpose |
 |-----|---------|
 | `AI_API_KEY` | Primary AI provider API key (Groq by default) |
 | `AI_API_URL` | AI API endpoint (default: Groq's completions URL) |
 | `DEEPSEEK_API_KEY` | DeepSeek API key (for DeepSeek model support) |
-| `GITHUB_TOKEN` | GitHub personal access token (for GitHub integration routes) |
+| `GITHUB_TOKEN` | GitHub personal access token (for server-side GitHub integration routes) |
 | `OLLAMA_PROXY_URL` | URL for Ollama proxy (for local model support) |
 | `GOOGLE_API_KEY` | Google Custom Search Engine API key (for DZ Agent search) |
 | `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, defaults to `12e6f922595f64d35` |
 | `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard) |
 | `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
+| `APP_BASE_URL` | Public app base URL, e.g. `https://dz-gpt.vercel.app` |
 | `VERCEL_TOKEN` | Vercel token for deployment trigger route |
 | `DEPLOY_ADMIN_TOKEN` | Required admin token for the restricted `/api/dz-agent/deploy` route |
 
@@ -39,13 +40,10 @@ The following secrets must be configured in Replit's Secrets tab:
 
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
 - `POST /api/dz-agent-search` — DZ Agent search
-- `POST /api/dz-agent/education/search` — eddirasa.com educational search for DZ Agent study mode
-- `POST /api/dz-agent/education/index` — Auto-fetch educational index from eddirasa.com by level+subject (used by SmartStudyCard)
-- `POST /api/update-index` — Refreshes the RSS-first eddirasa.com lesson index into `data/eddirasa_index.json`
-- `GET /api/lessons` — Returns the full eddirasa lesson index, or filters by `level`, `year`, and `subject`
-- `GET /api/lesson?title=` — Returns one lesson with details and PDFs, with AI fallback if no source data is found
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
+- `GET /api/auth/github` — Starts GitHub OAuth
+- `GET /api/auth/github/callback` — Handles GitHub OAuth callback
 - Various GitHub API proxy routes:
   - `POST /api/dz-agent/github/repos` — List user repos
   - `POST /api/dz-agent/github/files` — Browse repo files
@@ -62,28 +60,26 @@ The following secrets must be configured in Replit's Secrets tab:
 
 ## DZ Agent Sidebar & Chat History
 
-DZ Agent now features a sidebar identical in style to the main DZ GPT models, including:
+DZ Agent features a sidebar identical in style to the main DZ GPT models, including:
 
 - **Chat history**: Each conversation is stored per-chat in `localStorage` under `dz-agent-msgs-{chatId}`. Chat list is stored under `dz-agent-chats`.
 - **New chat button**: Creates a fresh conversation and saves it to the list.
 - **Delete chat**: Removes the conversation and its messages from `localStorage`.
 - **Language selector**: Three languages with flags — 🇩🇿 العربية (Arabic), 🇬🇧 English, 🇫🇷 Français. Language preference is persisted in `localStorage` under `dz-agent-lang`.
 - **Mobile responsive**: Sidebar slides in/out on mobile (width < 769px); always visible on desktop.
-- **DZChatBox** now accepts `chatId`, `language`, and `onTitleChange` props for external chat management.
+- **DZChatBox** accepts `chatId`, `language`, and `onTitleChange` props for external chat management.
 
 Key files: `src/pages/DZAgent.tsx` (layout + sidebar state), `src/styles/dz-agent.css` (`.dza-*` classes).
 
-## DZ Agent Education Mode
+## DZ Agent GitHub Workspace
 
-DZ Agent has an added education layer that keeps existing behavior intact while adding:
+DZ Agent prioritizes the GitHub workflow on the welcome screen:
 
-- eddirasa.com-first retrieval for study questions.
-- RSS-first ingestion through `eddirasa_rss_crawler.js`, with HTML scraping fallback and AI fallback as a final safety net.
-- A structured local index stored in `data/eddirasa_index.json`, refreshed manually by `POST /api/update-index` and scheduled every 24 hours while the Node server is running.
-- Subject detection for Math, Physics, Arabic, French, English, Science, and History / Geography.
-- Academic level detection for Primary 1–5, Middle 1–4/BEM, and Secondary 1–3/Baccalaureate.
-- Step-by-step exercise solving and simplified lesson explanations.
-- A Study Level Selector Card in `src/components/DZChatBox.tsx` with level, subject, search input, Search eddirasa, Solve with AI, and Explain Lesson actions.
+- GitHub OAuth is available from the main workspace card and the top GitHub bar.
+- After OAuth completes, the app automatically fetches the user's repositories.
+- Selecting a repository shows a repository action card with scan, bug finding, security scan, suggestions, files, branches, issues, Pull Requests, Commit, PR creation, and stats actions.
+- The previous education center/study selector UI has been removed from the DZ Agent interface.
+- GitHub OAuth state validation is cookie-backed so it works reliably on serverless production hosts such as Vercel.
 
 ## DZ Agent Security and Expertise
 
@@ -91,7 +87,7 @@ DZ Agent has an added education layer that keeps existing behavior intact while 
 - The public deploy route is restricted with `DEPLOY_ADMIN_TOKEN` and rate limited to reduce abuse risk.
 - GitHub tokens entered in the UI are stored in `sessionStorage` only; legacy `localStorage` token copies are removed on load.
 - Production CSP no longer enables `unsafe-eval`; development keeps it only for Vite tooling.
-- DZ Agent's trusted source list now includes OWASP, MDN, Node.js, React, Vite, Express, GitHub Docs, Vercel, npm, and Cloudflare for programming/security answers, with instructions to prioritize recent sourced information and avoid unsupported claims.
+- DZ Agent's trusted source list includes OWASP, MDN, Node.js, React, Vite, Express, GitHub Docs, Vercel, npm, and Cloudflare for programming/security answers.
 
 ## Key Files
 
@@ -100,8 +96,8 @@ DZ Agent has an added education layer that keeps existing behavior intact while 
 - `src/` — React frontend
 - `src/pages/` — Page components
 - `src/components/` — UI components
-- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub tools, and study selector
-- `src/styles/dz-agent.css` — DZ Agent styles including study card styles
+- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub OAuth, repository selection, and repository action panels
+- `src/styles/dz-agent.css` — DZ Agent styles including GitHub workspace and repository action panel styles
 
 ## DZ Agent Chat Navigation Update
 
@@ -112,7 +108,7 @@ DZ Agent has an added education layer that keeps existing behavior intact while 
 
 ## Notes
 
-- The server already correctly binds to `0.0.0.0:5000` for Replit compatibility.
+- The server correctly binds to `0.0.0.0:5000` for Replit compatibility.
 - `allowedHosts: true` is set in vite.config.ts for proxied preview support.
 - In development, the CSP `frame-ancestors` directive allows Replit preview iframe origins; production keeps iframe embedding disabled with `frame-ancestors 'none'`.
-- DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search uses `site:eddirasa.com` with that CSE when `GOOGLE_API_KEY` is available and falls back to web search when needed.
+- DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search backend endpoints may remain available but the education center UI is not exposed in DZ Agent.

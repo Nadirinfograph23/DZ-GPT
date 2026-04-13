@@ -1200,6 +1200,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [githubUser, setGithubUser] = useState<{ login: string; name: string; avatar: string; url: string; repos: number } | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [showGhMenu, setShowGhMenu] = useState(false)
+  const [autoShowRepos, setAutoShowRepos] = useState(false)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
@@ -1218,12 +1219,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         sessionStorage.setItem('dz-agent-gh-token', token)
         localStorage.removeItem('dz-agent-gh-token')
         window.history.replaceState(null, '', '/dz-agent')
-        // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
           headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0' }
         }).then(r => r.json()).then(u => {
           setGithubUser({ login: u.login, name: u.name || u.login, avatar: u.avatar_url, url: u.html_url, repos: u.public_repos })
         }).catch(() => {})
+        setAutoShowRepos(true)
       }
     }
     const params = new URLSearchParams(window.location.search)
@@ -1344,7 +1345,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, addToLog, addAssistantMessage])
+  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
+
+  useEffect(() => {
+    if (!autoShowRepos || (!githubToken && !serverGithubConnected)) return
+    setAutoShowRepos(false)
+    fetchRepos()
+  }, [autoShowRepos, githubToken, serverGithubConnected, fetchRepos])
 
   const fetchFiles = useCallback(async (repo: string, path = '') => {
     if (!githubToken && !serverGithubConnected) return
@@ -1371,7 +1378,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, addToLog, addAssistantMessage])
+  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
 
   const fetchFileContent = useCallback(async (repo: string, path: string) => {
     if (!githubToken && !serverGithubConnected) return
@@ -1396,7 +1403,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, addToLog, addAssistantMessage])
+  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
 
   const analyzeCode = useCallback(async (repo: string, path: string, content: string) => {
     setIsLoading(true)
@@ -1926,19 +1933,36 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             {isGithubConnected && <span className="dz-gh-connected-badge"> · GitHub متصل ✓</span>}
           </p>
 
+          <div className="dz-github-workspace-card">
+            <div className="dz-github-workspace-copy">
+              <span className="dz-github-workspace-kicker">GitHub Workspace</span>
+              <strong>اختر مستودعاً ثم استخدم أدوات التعديل والفحص مباشرة.</strong>
+              <small>إصلاح الأخطاء، فحص الأمان، اقتراحات، تصفح الملفات، Commit و Pull Request.</small>
+            </div>
+            {isGithubConnected ? (
+              <button className="dz-github-workspace-btn" onClick={fetchRepos}>
+                <FolderOpen size={14} />
+                عرض المستودعات
+              </button>
+            ) : (
+              <a href="/api/auth/github" className="dz-github-workspace-btn">
+                <Github size={14} />
+                الاتصال بـ GitHub
+              </a>
+            )}
+          </div>
+
           <DZInvocationGuide onSend={(cmd) => sendMessage(cmd)} />
 
           {!isGithubConnected && (
             <div className="dz-github-note">
               <Github size={14} className="dz-github-note-icon" />
               <span>
-                ربط GitHub <strong>اختياري</strong> — مطلوب فقط إذا أردت تصحيح كود في مشروعك، إنشاء مشروع جديد، أو الحصول على مساعدة في بناء مشروع.
+                ربط GitHub مطلوب لعرض المستودعات وتنفيذ أدوات الكود بأمان. يمكنك أيضاً استخدام توكن يدوي إذا لم يكن OAuth متاحاً.
               </span>
-              {oauthEnabled && (
-                <a href="/api/auth/github" className="dz-github-note-btn">
-                  <Github size={12} /> ربط الآن
-                </a>
-              )}
+              <a href="/api/auth/github" className="dz-github-note-btn">
+                <Github size={12} /> ربط الآن
+              </a>
             </div>
           )}
 

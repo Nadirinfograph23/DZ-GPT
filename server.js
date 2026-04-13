@@ -2930,8 +2930,32 @@ function cleanOldStates() {
 function getBaseUrl(req) {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL
   if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`
+  const forwardedHost = req.headers['x-forwarded-host']
+  const forwardedProto = req.headers['x-forwarded-proto']
+  if (forwardedHost) {
+    const host = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost.split(',')[0].trim()
+    const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : (forwardedProto || 'https').split(',')[0].trim()
+    return `${proto}://${host}`
+  }
   const proto = req.headers['x-forwarded-proto'] || req.protocol
   return `${proto}://${req.get('host')}`
+}
+
+function parseCookies(req) {
+  return Object.fromEntries((req.headers.cookie || '').split(';').map(cookie => {
+    const [key, ...value] = cookie.trim().split('=')
+    return [key, decodeURIComponent(value.join('='))]
+  }).filter(([key]) => key))
+}
+
+function setOAuthStateCookie(res, state) {
+  const secure = isProd ? '; Secure' : ''
+  res.setHeader('Set-Cookie', `dz_github_oauth_state=${encodeURIComponent(state)}; HttpOnly; SameSite=Lax; Path=/api/auth/github; Max-Age=600${secure}`)
+}
+
+function clearOAuthStateCookie(res) {
+  const secure = isProd ? '; Secure' : ''
+  res.setHeader('Set-Cookie', `dz_github_oauth_state=; HttpOnly; SameSite=Lax; Path=/api/auth/github; Max-Age=0${secure}`)
 }
 
 app.get('/api/auth/github', (req, res) => {
@@ -2942,6 +2966,7 @@ app.get('/api/auth/github', (req, res) => {
   cleanOldStates()
   const state = crypto.randomUUID()
   oauthStates.set(state, { ts: Date.now() })
+  setOAuthStateCookie(res, state)
   const redirectUri = `${getBaseUrl(req)}/api/auth/github/callback`
   const scope = 'repo user read:user'
   const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`
@@ -2949,26 +2974,35 @@ app.get('/api/auth/github', (req, res) => {
 })
 
 app.get('/api/auth/github/callback', async (req, res) => {
-  const { code, state } = req.query
+  const { code, state, error } = req.query
   const clientId = process.env.GITHUB_CLIENT_ID
   const clientSecret = process.env.GITHUB_CLIENT_SECRET
+  const redirectUri = `${getBaseUrl(req)}/api/auth/github/callback`
+
+  if (error) {
+    clearOAuthStateCookie(res)
+    return res.redirect('/dz-agent?auth_error=denied')
+  }
 
   if (!code || !clientId || !clientSecret) {
+    clearOAuthStateCookie(res)
     return res.redirect('/dz-agent?auth_error=config')
   }
 
-  // CSRF validation
-  if (!state || !oauthStates.has(state)) {
+  const cookieState = parseCookies(req).dz_github_oauth_state
+  if (!state || (!oauthStates.has(state) && cookieState !== state)) {
     console.warn('GitHub OAuth: invalid or missing state (possible CSRF)')
+    clearOAuthStateCookie(res)
     return res.redirect('/dz-agent?auth_error=csrf')
   }
   oauthStates.delete(state)
+  clearOAuthStateCookie(res)
 
   try {
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
     })
     const data = await tokenRes.json()
 

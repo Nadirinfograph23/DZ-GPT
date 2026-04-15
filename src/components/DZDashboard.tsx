@@ -188,7 +188,9 @@ function getArName(enName: string) {
   return WILAYAS.find(w => w.en === enName)?.ar || enName
 }
 
-export default function DZDashboard({ onSend }: { onSend: (q: string) => void }) {
+type DashboardContext = { priority: 'weather'; city: string }
+
+export default function DZDashboard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -459,7 +461,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string) => void })
                 <div className="dzd-skeleton dzd-skeleton--weather-main" />
               </div>
             ) : weatherData && weatherData.temp !== null ? (
-              <div className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}>
+              <div
+                className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}
+                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity })}
+              >
                 <div className="dzd-wmc-header">
                   <div className="dzd-wmc-city">
                     <MapPin size={12} /> {getArName(selectedCity)}

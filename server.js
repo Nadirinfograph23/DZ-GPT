@@ -1633,47 +1633,53 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
 const CITY_WEATHER_CACHE = new Map()
 const CITY_WEATHER_TTL = 15 * 60 * 1000 // 15 min
 
-app.get('/api/dz-agent/weather', async (req, res) => {
-  const city = String(req.query.city || 'Algiers').slice(0, 80)
-  const cacheKey = city.toLowerCase()
+async function fetchCityWeather(city) {
+  const safeCity = String(city || 'Algiers').slice(0, 80)
+  const cacheKey = safeCity.toLowerCase()
   const cached = CITY_WEATHER_CACHE.get(cacheKey)
-  if (cached && Date.now() - cached.ts < CITY_WEATHER_TTL) return res.json(cached.data)
+  if (cached && Date.now() - cached.ts < CITY_WEATHER_TTL) return cached.data
 
   const apiKey = process.env.OPENWEATHER_API_KEY
-  if (!apiKey) return res.status(503).json({ error: 'OPENWEATHER_API_KEY not configured' })
+  if (!apiKey) throw new Error('OPENWEATHER_API_KEY not configured')
 
   const tryFetch = async (q) => {
     const r = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&appid=${apiKey}&units=metric&lang=ar`,
-      { signal: AbortSignal.timeout(8000) }
+      { signal: AbortSignal.timeout(6000) }
     )
     if (!r.ok) return null
     return r.json()
   }
 
-  try {
-    let d = await tryFetch(`${city},Algeria`)
-    if (!d) d = await tryFetch(city)
-    if (!d) return res.status(404).json({ error: `No weather data for: ${city}` })
+  let d = await tryFetch(`${safeCity},Algeria`)
+  if (!d) d = await tryFetch(safeCity)
+  if (!d) throw new Error(`No weather data for: ${safeCity}`)
 
-    const result = {
-      city,
-      temp: Math.round(d.main?.temp ?? 0),
-      feels_like: Math.round(d.main?.feels_like ?? 0),
-      temp_min: Math.round(d.main?.temp_min ?? 0),
-      temp_max: Math.round(d.main?.temp_max ?? 0),
-      condition: d.weather?.[0]?.description || '',
-      icon: d.weather?.[0]?.icon || null,
-      humidity: d.main?.humidity,
-      wind: Math.round(d.wind?.speed ?? 0),
-      visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
-      fetchedAt: new Date().toISOString(),
-    }
-    CITY_WEATHER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
-    return res.json(result)
+  const result = {
+    city: safeCity,
+    temp: Math.round(d.main?.temp ?? 0),
+    feels_like: Math.round(d.main?.feels_like ?? 0),
+    temp_min: Math.round(d.main?.temp_min ?? 0),
+    temp_max: Math.round(d.main?.temp_max ?? 0),
+    condition: d.weather?.[0]?.description || '',
+    icon: d.weather?.[0]?.icon || null,
+    humidity: d.main?.humidity,
+    wind: Math.round(d.wind?.speed ?? 0),
+    visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
+    fetchedAt: new Date().toISOString(),
+  }
+  CITY_WEATHER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
+  return result
+}
+
+app.get('/api/dz-agent/weather', async (req, res) => {
+  const city = String(req.query.city || 'Algiers').slice(0, 80)
+  try {
+    return res.json(await fetchCityWeather(city))
   } catch (err) {
     console.error('[Weather] Error:', err.message)
-    return res.status(503).json({ error: 'Weather fetch failed' })
+    const status = err.message.includes('OPENWEATHER_API_KEY') ? 503 : 404
+    return res.status(status).json({ error: err.message || 'Weather fetch failed' })
   }
 })
 
@@ -2261,6 +2267,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
+  const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
   const invocationMatch = lastUserMessage.match(/^(@dz-agent|@dz-gpt|\/github)\b\s*/i)
   const invocationMode = invocationMatch?.[1]?.toLowerCase() || '@dz-agent'
@@ -2274,6 +2281,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const educationLevel = detectAcademicLevel(lastUserMessage)
   const isEducationQuery = detectEducationIntent(lastUserMessage)
   let educationalContext = ''
+  let weatherPriorityContext = ''
 
   // ── Local knowledge base ──────────────────────────────────────────────────
   const developerQuestions = [
@@ -2431,6 +2439,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         level: educationLevel || '',
         search: { results: [] },
       })
+    }
+  }
+
+  const hasWeatherPriority = dashboardContext?.priority === 'weather' || lowerMsg.includes('context: weather_priority')
+  if (hasWeatherPriority) {
+    const weatherCity = sanitizeString(dashboardContext?.city || detectCityFromQuery(lastUserMessage), 80)
+    try {
+      const weather = await fetchCityWeather(weatherCity)
+      weatherPriorityContext = [
+        `context: weather_priority`,
+        `city: ${weather.city}`,
+        `temperature: ${weather.temp}°C`,
+        `feels_like: ${weather.feels_like}°C`,
+        `min_max: ${weather.temp_min}°C / ${weather.temp_max}°C`,
+        `condition: ${weather.condition}`,
+        `humidity: ${weather.humidity}%`,
+        `wind: ${weather.wind} km/h`,
+        `visibility: ${weather.visibility ?? 'غير متوفر'} km`,
+        `source: OpenWeather API`,
+        `fetched_at: ${weather.fetchedAt}`,
+      ].join('\n')
+    } catch (err) {
+      weatherPriorityContext = `context: weather_priority\nsource: OpenWeather API\nfallback: تعذّر جلب بيانات الطقس الآن (${err.message}). أخبر المستخدم أن البيانات الحية غير متاحة مؤقتاً ولا تخمّن الطقس.`
     }
   }
 
@@ -2928,6 +2959,8 @@ ${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext
 
 ${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
 
+${weatherPriorityContext ? `## 🌤️ أولوية الطقس — OpenWeather API\n${weatherPriorityContext}\n\n**قواعد أولوية الطقس:**\n1. ابدأ الإجابة ببيانات الطقس أعلاه\n2. اذكر المصدر OpenWeather API\n3. لا تخمّن أي قيمة غير موجودة\n4. إذا فشل الجلب، أعط رسالة fallback واضحة ومختصرة` : ''}
+
 ${educationalContext ? `## 📚 سياق تعليمي من eddirasa.com أولاً\n${educationalContext}\n\n**قواعد التعليم:**\n1. ابدأ بتحديد المادة والمستوى\n2. إذا وجدت نتيجة من eddirasa.com: لخّصها وفسّرها بلغة بسيطة واذكر الرابط\n3. إذا لم تجد نتيجة: قل إن eddirasa.com لم يرجع نتيجة مطابقة، ثم استخدم المعرفة التعليمية العامة\n4. للتمارين: افهم السؤال، حدّد الموضوع، حل خطوة بخطوة، ثم أعط طريقة تحقق\n5. للتعلم والشرح: ملخص + أمثلة + 3 تمارين تدريبية + اختبار صغير` : ''}
 
 ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}`
@@ -2978,6 +3011,12 @@ ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع
   if (educationalContext) {
     return res.status(200).json({
       content: `${educationalContext}\n\n---\n> لم يتم العثور على مفتاح AI فعّال لإنتاج شرح موسع الآن، لكن هذه هي نتائج eddirasa/الخطة التعليمية المتاحة.`,
+    })
+  }
+
+  if (weatherPriorityContext) {
+    return res.status(200).json({
+      content: `## 🌤️ الطقس الآن\n${weatherPriorityContext}\n\n---\n> تم استخدام OpenWeather API. إذا ظهرت رسالة fallback أعلاه فهذا يعني أن الجلب الحي غير متاح مؤقتاً.`,
     })
   }
 

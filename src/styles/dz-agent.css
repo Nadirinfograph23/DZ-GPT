@@ -291,6 +291,13 @@
   z-index: 20;
 }
 
+.dz-agent-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .dz-back-btn {
   background: none;
   border: none;
@@ -307,6 +314,38 @@
 
 .dz-back-btn:hover {
   background: #1a1a1a;
+  color: #c8ff00;
+}
+
+.dz-home-btn,
+.dz-refresh-chat-btn {
+  background: #111;
+  border: 1px solid #222;
+  color: #888;
+  cursor: pointer;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.dz-home-btn {
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.dz-refresh-chat-btn {
+  width: 36px;
+}
+
+.dz-home-btn:hover,
+.dz-refresh-chat-btn:hover {
+  background: #1a1a1a;
+  border-color: rgba(200, 255, 0, 0.35);
   color: #c8ff00;
 }
 

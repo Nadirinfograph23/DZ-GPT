@@ -1455,6 +1455,8 @@ interface DZChatBoxProps {
   onTitleChange?: (title: string) => void
 }
 
+type DashboardContext = { priority: 'weather'; city: string }
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
   const [messages, setMessages] = useState<DZMessage[]>(() => {
     if (!chatId) return []
@@ -2014,11 +2016,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   }, [githubToken, addToLog, addAssistantMessage])
 
   // ===== SEND MESSAGE =====
-  const sendMessage = useCallback(async (overrideInput?: string) => {
+  const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
     if (!text || isLoading) return
 
     const userMessage: DZMessage = { id: generateId(), role: 'user', content: text, richType: 'text' }
+    const outboundMessages = [...messages, userMessage].map((m, index, arr) => ({
+      role: m.role,
+      content: dashboardContext?.priority === 'weather' && index === arr.length - 1
+        ? `${m.content}\ncontext: weather_priority`
+        : m.content,
+    }))
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
@@ -2029,9 +2037,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          messages: outboundMessages,
           githubToken: githubToken || undefined,
           currentRepo: currentRepo || undefined,
+          dashboardContext,
         }),
         signal: abortRef.current.signal,
       })
@@ -2208,7 +2217,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
           {/* Live Dashboard Cards — top position, under logo */}
           <div className="dz-dashboard-wrapper">
-            <DZDashboard onSend={(q) => sendMessage(q)} />
+            <DZDashboard onSend={(q, context) => sendMessage(q, context)} />
           </div>
 
           <SmartStudyCard

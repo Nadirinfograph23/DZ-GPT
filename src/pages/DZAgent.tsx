@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 
@@ -150,12 +150,17 @@ export default function DZAgent() {
       {/* ===== MAIN CONTENT ===== */}
       <div className="dza-main">
         <header className="dz-agent-header">
-          <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
-            <Menu size={18} />
-          </button>
-          <button className="dz-back-btn" onClick={() => navigate('/')} title="Back to DZ GPT">
-            <ArrowLeft size={18} />
-          </button>
+          <div className="dz-agent-header-left">
+            <button className="dz-home-btn" onClick={() => navigate('/')} title="Home">
+              HOME
+            </button>
+            <button className="dz-refresh-chat-btn" onClick={createNewChat} title={labels.newChat}>
+              <RefreshCw size={18} />
+            </button>
+            <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
+              <Menu size={18} />
+            </button>
+          </div>
           <div className="dz-agent-logo">
             <div className="dz-agent-logo-icon">
               <Bot size={20} />

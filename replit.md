@@ -25,22 +25,24 @@ The following secrets must be configured in Replit's Secrets tab and Vercel proj
 | `AI_API_KEY` | Primary AI provider API key (Groq by default) |
 | `AI_API_URL` | AI API endpoint (default: Groq's completions URL) |
 | `DEEPSEEK_API_KEY` | DeepSeek API key (for DeepSeek model support) |
-| `GITHUB_TOKEN` | GitHub personal access token (for server-side GitHub integration routes) |
+| `GITHUB_TOKEN` | GitHub personal access token (for server-side GitHub integration routes and deployment push automation) |
 | `OLLAMA_PROXY_URL` | URL for Ollama proxy (for local model support) |
 | `GOOGLE_API_KEY` | Google Custom Search Engine API key (for DZ Agent search) |
 | `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, defaults to `12e6f922595f64d35` |
-| `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard) |
+| `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard and weather-priority chat answers) |
 | `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
 | `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
 | `APP_BASE_URL` | Public app base URL, e.g. `https://dz-gpt.vercel.app` |
-| `VERCEL_TOKEN` | Vercel token for deployment trigger route |
+| `VERCEL_TOKEN` | Vercel token for deployment trigger route and deployment automation |
 | `DEPLOY_ADMIN_TOKEN` | Required admin token for the restricted `/api/dz-agent/deploy` route |
 
 ## API Routes
 
 - `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
+- `POST /api/dz-agent-chat` — DZ Agent chat with live retrieval, GitHub context, and weather-priority support
 - `POST /api/dz-agent-search` — DZ Agent search
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
+- `GET /api/dz-agent/weather` — Per-city weather via OpenWeather API with server-side caching
 - `GET /api/currency/latest` — Live exchange rates against the Algerian dinar
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
 - `GET /api/auth/github` — Starts GitHub OAuth
@@ -87,6 +89,18 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - The DZ Agent landing dashboard includes prayer times, weather, news, sports calendar/LFP results, tech news, and currency exchange rates.
 - Weather and prayer times share the selected Algerian wilaya.
 - Currency rates are loaded from `/api/currency/latest`; sports calendar data comes through the dashboard LFP payload.
+- Clicking the weather dashboard card sends a clean chat prompt while injecting `context: weather_priority` only into the server request. The server fetches OpenWeather data before the AI response and falls back safely if the API key or API response is unavailable.
+
+## DZ Agent Header Update
+
+- `/dz-agent` header now places the HOME button at the far-left side of the main header and keeps SPA navigation to `/`.
+- The refresh icon button creates a new DZ Agent chat session with the same state reset behavior as the sidebar New Chat button.
+- The refresh action is SPA-only and does not reload the page.
+
+## Homepage Suggestion Interaction
+
+- Homepage suggestion chips now force a fresh chat session, inject the clicked suggestion as the first user message, and auto-send it immediately.
+- The action is guarded by the existing loading state to avoid duplicate sessions from repeated clicks.
 
 ## DZ Agent Security and Expertise
 
@@ -103,8 +117,9 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - `src/` — React frontend
 - `src/pages/` — Page components
 - `src/components/` — UI components
-- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub OAuth, repository selection, and repository action panels
-- `src/styles/dz-agent.css` — DZ Agent styles including GitHub workspace and repository action panel styles
+- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub OAuth, repository selection, dashboard prompt handling, and repository action panels
+- `src/components/DZDashboard.tsx` — Live dashboard cards and weather-priority prompt trigger
+- `src/styles/dz-agent.css` — DZ Agent styles including GitHub workspace, header controls, and repository action panel styles
 
 ## DZ Agent Chat Navigation Update
 

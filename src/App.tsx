@@ -334,14 +334,14 @@ function App() {
     setTimeout(() => setCopiedId(null), 2000)
   }, [])
 
-  const sendMessage = useCallback(async (overrideText?: string) => {
+  const sendMessage = useCallback(async (overrideText?: string, options?: { forceNewChat?: boolean }) => {
     const text = (overrideText ?? input).trim()
     if (!text || isLoading) return
 
     let currentChatId = activeChatId
     let currentChats = chats
 
-    if (!currentChatId) {
+    if (options?.forceNewChat || !currentChatId) {
       const newChat: Chat = {
         id: generateId(),
         title: text.substring(0, 60),
@@ -801,7 +801,7 @@ function App() {
                   <button
                     key={i}
                     className="suggestion-btn"
-                    onClick={() => sendMessage(suggestion)}
+                    onClick={() => sendMessage(suggestion, { forceNewChat: true })}
                   >
                     {suggestion}
                   </button>

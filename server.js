@@ -31,7 +31,10 @@ app.use(helmet({
       scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com'],
-      connectSrc: isProd ? ["'self'"] : ["'self'", 'ws:', 'wss:'],
+      connectSrc: isProd
+        ? ["'self'", 'https://api.quran.com']
+        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com'],
+      mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: isProd

@@ -1668,19 +1668,50 @@ const PRAYER_CACHE = new Map()
 const PRAYER_CACHE_TTL = 12 * 60 * 1000 // 12 minutes
 
 const ALGERIAN_CITIES = {
-  'الجزائر': 'Algiers', 'الجزائر العاصمة': 'Algiers', 'algiers': 'Algiers',
-  'وهران': 'Oran', 'oran': 'Oran',
-  'قسنطينة': 'Constantine', 'constantine': 'Constantine',
+  'الجزائر': 'Algiers', 'الجزائر العاصمة': 'Algiers', 'الجزائر الوسطى': 'Algiers',
+  'dzair': 'Algiers', 'algiers': 'Algiers', 'alger': 'Algiers',
+  'وهران': 'Oran', 'وهرا': 'Oran', 'oran': 'Oran',
+  'قسنطينة': 'Constantine', 'قسنطينا': 'Constantine', 'constantine': 'Constantine',
   'عنابة': 'Annaba', 'annaba': 'Annaba',
-  'بجاية': 'Bejaia', 'bejaia': 'Bejaia', 'béjaïa': 'Bejaia',
-  'تلمسان': 'Tlemcen', 'tlemcen': 'Tlemcen',
+  'بجاية': 'Bejaia', 'bgayet': 'Bejaia', 'bejaia': 'Bejaia', 'béjaïa': 'Bejaia',
+  'تلمسان': 'Tlemcen', 'تلمسا': 'Tlemcen', 'tlemcen': 'Tlemcen',
   'سطيف': 'Setif', 'setif': 'Setif', 'sétif': 'Setif',
   'بسكرة': 'Biskra', 'biskra': 'Biskra',
-  'تيزي وزو': 'Tizi Ouzou', 'tizi ouzou': 'Tizi Ouzou',
+  'تيزي وزو': 'Tizi Ouzou', 'تيزي': 'Tizi Ouzou', 'tizi ouzou': 'Tizi Ouzou', 'tizi-ouzou': 'Tizi Ouzou',
   'باتنة': 'Batna', 'batna': 'Batna',
-  'البليدة': 'Blida', 'blida': 'Blida',
+  'البليدة': 'Blida', 'بليدة': 'Blida', 'blida': 'Blida',
   'سكيكدة': 'Skikda', 'skikda': 'Skikda',
-  'غرداية': 'Ghardaia', 'ghardaia': 'Ghardaia',
+  'غرداية': 'Ghardaia', 'غرداي': 'Ghardaia', 'ghardaia': 'Ghardaia', 'ghardaïa': 'Ghardaia',
+  'المدية': 'Medea', 'مديا': 'Medea', 'medea': 'Medea',
+  'مستغانم': 'Mostaganem', 'mostaganem': 'Mostaganem',
+  'المسيلة': 'M\'sila', 'مسيلة': 'M\'sila', 'msila': 'M\'sila',
+  'معسكر': 'Mascara', 'mascara': 'Mascara',
+  'تبسة': 'Tebessa', 'tebessa': 'Tebessa',
+  'بشار': 'Bechar', 'bechar': 'Bechar', 'béchar': 'Bechar',
+  'الأغواط': 'Laghouat', 'الاغواط': 'Laghouat', 'laghouat': 'Laghouat',
+  'الوادي': 'El Oued', 'واد سوف': 'El Oued', 'el oued': 'El Oued',
+  'خنشلة': 'Khenchela', 'khenchela': 'Khenchela',
+  'سوق أهراس': 'Souk Ahras', 'souk ahras': 'Souk Ahras',
+  'تيبازة': 'Tipaza', 'tipaza': 'Tipaza',
+  'ميلة': 'Mila', 'mila': 'Mila',
+  'عين الدفلى': 'Ain Defla', 'ain defla': 'Ain Defla',
+  'النعامة': 'Naama', 'naama': 'Naama',
+  'عين تيموشنت': 'Ain Temouchent', 'ain temouchent': 'Ain Temouchent',
+  'جيجل': 'Jijel', 'jijel': 'Jijel',
+  'بومرداس': 'Boumerdes', 'boumerdes': 'Boumerdes',
+  'الطارف': 'El Tarf', 'el tarf': 'El Tarf',
+  'تيندوف': 'Tindouf', 'tindouf': 'Tindouf',
+  'تيسمسيلت': 'Tissemsilt', 'tissemsilt': 'Tissemsilt',
+  'الجلفة': 'Djelfa', 'جلفة': 'Djelfa', 'djelfa': 'Djelfa',
+  'برج بوعريريج': 'Bordj Bou Arreridj', 'bordj bou arreridj': 'Bordj Bou Arreridj', 'bba': 'Bordj Bou Arreridj',
+  'بومرداس': 'Boumerdes', 'بومرداس': 'Boumerdes',
+  'سيدي بلعباس': 'Sidi Bel Abbes', 'sidi bel abbes': 'Sidi Bel Abbes',
+  'أدرار': 'Adrar', 'adrar': 'Adrar',
+  'تمنراست': 'Tamanrasset', 'tamanrasset': 'Tamanrasset', 'tam': 'Tamanrasset',
+  'إليزي': 'Illizi', 'illizi': 'Illizi',
+  'شلف': 'Chlef', 'chlef': 'Chlef', 'الشلف': 'Chlef',
+  'عين بسام': 'Ain Bessam', 'ain bessam': 'Ain Bessam',
+  'برج منايل': 'Bordj Menaiel', 'bordj menaiel': 'Bordj Menaiel',
 }
 
 function detectCityFromQuery(text) {
@@ -2545,7 +2576,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  const hasWeatherPriority = dashboardContext?.priority === 'weather' || lowerMsg.includes('context: weather_priority')
+  const weatherKeywords = [
+    'الطقس', 'حالة الجو', 'الجو', 'درجة الحرارة', 'الحرارة', 'البرودة', 'الحر',
+    'ممطر', 'مطر', 'عواصف', 'رياح', 'ضباب', 'سحاب', 'غيوم', 'شمس', 'مشمس',
+    'weather', 'météo', 'température', 'temp', 'forecast', 'humidity',
+    'كيف الطقس', 'ما طقس', 'طقس اليوم', 'الطقس اليوم', 'طقس', 'الجو اليوم',
+  ]
+  const isWeatherQuery = weatherKeywords.some(k => lowerMsg.includes(k))
+  const hasWeatherPriority = dashboardContext?.priority === 'weather' || lowerMsg.includes('context: weather_priority') || isWeatherQuery
   if (hasWeatherPriority) {
     const weatherCity = sanitizeString(dashboardContext?.city || detectCityFromQuery(lastUserMessage), 80)
     try {
@@ -3118,9 +3156,35 @@ ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع
   }
 
   if (weatherPriorityContext) {
-    return res.status(200).json({
-      content: `## 🌤️ الطقس الآن\n${weatherPriorityContext}\n\n---\n> تم استخدام OpenWeather API. إذا ظهرت رسالة fallback أعلاه فهذا يعني أن الجلب الحي غير متاح مؤقتاً.`,
-    })
+    const wLines = weatherPriorityContext.split('\n')
+    const city = (wLines.find(l => l.startsWith('city:')) || '').replace('city:', '').trim()
+    const temp = (wLines.find(l => l.startsWith('temperature:')) || '').replace('temperature:', '').trim()
+    const feelsLike = (wLines.find(l => l.startsWith('feels_like:')) || '').replace('feels_like:', '').trim()
+    const minMax = (wLines.find(l => l.startsWith('min_max:')) || '').replace('min_max:', '').trim()
+    const condition = (wLines.find(l => l.startsWith('condition:')) || '').replace('condition:', '').trim()
+    const humidity = (wLines.find(l => l.startsWith('humidity:')) || '').replace('humidity:', '').trim()
+    const wind = (wLines.find(l => l.startsWith('wind:')) || '').replace('wind:', '').trim()
+    const visibility = (wLines.find(l => l.startsWith('visibility:')) || '').replace('visibility:', '').trim()
+    const isFallback = weatherPriorityContext.includes('fallback:')
+    const fallbackMsg = isFallback
+      ? weatherPriorityContext.replace(/.*fallback:\s*/s, '').split('\n')[0].trim()
+      : null
+
+    const formattedContent = isFallback
+      ? `## 🌤️ الطقس\n\n> ⚠️ ${fallbackMsg || 'تعذّر جلب بيانات الطقس مؤقتاً. يرجى المحاولة لاحقاً.'}`
+      : `## 🌤️ حالة الطقس في ${city} الآن\n\n` +
+        `| المعلومة | القيمة |\n` +
+        `|---|---|\n` +
+        `| 🌡️ درجة الحرارة | **${temp}** |\n` +
+        `| 🤔 تشعر كـ | ${feelsLike} |\n` +
+        `| 📊 الحد الأدنى / الأقصى | ${minMax} |\n` +
+        `| ☁️ الحالة | ${condition} |\n` +
+        `| 💧 الرطوبة | ${humidity} |\n` +
+        `| 💨 الرياح | ${wind} |\n` +
+        (visibility && visibility !== 'غير متوفر' ? `| 👁️ الرؤية | ${visibility} |\n` : '') +
+        `\n> 📡 المصدر: **OpenWeather API**`
+
+    return res.status(200).json({ content: formattedContent })
   }
 
   // If RSS context available, return it directly even without AI

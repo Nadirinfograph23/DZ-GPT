@@ -135,8 +135,28 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 ## AI Quran
 
 - `/aiquran` is available as a dedicated Quran page using Quran.com API v4 for chapters, verses, translations, recitations, and audio.
-- The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, search within verses, highlighted word matches, and a prompt to ask the assistant for tafsir of found matches.
+- The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search with highlighted word matches.
 - CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
+
+### Ayah Interaction System
+- Each verse card has a ⋮ menu button that opens a context menu with three actions:
+  1. **حفظ العلامة (Bookmark)** — saves the ayah to localStorage, shows in bookmarks panel
+  2. **استماع (Listen)** — plays audio for that specific ayah via Quran API verse-level recitation
+  3. **المساعد الذكي (Smart Assistant)** — opens the AI chat with the ayah pre-loaded for tafsir
+- A bookmarks panel (toggle button in header) shows all saved ayat with listen, ask AI, and delete options
+- Individual verse audio plays via a floating mini-player bar at the bottom of the screen
+- The verse audio uses `GET /api/v4/recitations/{recitation_id}/by_ayah/{ayah_key}` from the Quran API
+
+### Mobile Responsiveness
+- Fully responsive layout: sidebar collapses to a slide-in panel on mobile
+- AI assistant panel is hidden on mobile (accessible via the toggle button)
+- Surah index modal is usable on mobile with proper sizing
+- Header elements collapse gracefully on small screens
+
+### DZ Agent Dashboard — Quran Card
+- "القرآن الكريم" is the first tab in the DZ Agent dashboard, with a 📖 icon
+- Clicking it redirects to `/aiquran` (navigation card, not a data panel)
+- The Quran button was removed from the DZ Agent header
 
 ## Notes
 

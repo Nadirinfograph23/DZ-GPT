@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
-  GitBranch, Cloud,
+  GitBranch, Cloud, BookOpen,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 
@@ -211,6 +212,7 @@ function getArName(enName: string) {
 type DashboardContext = { priority: 'weather'; city: string }
 
 export default function DZDashboard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
+  const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -243,7 +245,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
   const [welcomeVisible, setWelcomeVisible] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech' | 'currency' | 'sync'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech' | 'currency' | 'sync' | 'quran'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -357,6 +359,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   }, [])
 
   const tabs = [
+    { key: 'quran' as const, label: 'القرآن الكريم', icon: '📖', isNav: true },
     { key: 'prayer' as const, label: 'مواقيت الصلاة', icon: '🕌' },
     { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
     { key: 'news' as const, label: 'الأخبار', icon: '📰' },
@@ -428,11 +431,18 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
           {tabs.map(tab => (
             <button
               key={tab.key}
-              className={`dzd-tab ${activeSection === tab.key ? 'dzd-tab--active' : ''}`}
-              onClick={() => setActiveSection(tab.key)}
+              className={`dzd-tab ${activeSection === tab.key ? 'dzd-tab--active' : ''} ${tab.key === 'quran' ? 'dzd-tab--quran' : ''}`}
+              onClick={() => {
+                if (tab.key === 'quran') {
+                  navigate('/aiquran')
+                  return
+                }
+                setActiveSection(tab.key)
+              }}
             >
               <span className="dzd-tab-icon">{tab.icon}</span>
               <span className="dzd-tab-label">{tab.label}</span>
+              {tab.key === 'quran' && <BookOpen size={10} className="dzd-tab-quran-icon" />}
             </button>
           ))}
         </div>

@@ -4,6 +4,7 @@ import {
   Search, Play, Pause, Volume2, Bot, Send,
   Menu, X, ChevronDown, ChevronUp, Loader2, BookOpen, Headphones,
   ScrollText, Home, Bot as BotIcon, List,
+  Bookmark, BookmarkCheck, Trash2, MoreVertical,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import '../styles/ai-quran.css'
@@ -37,6 +38,23 @@ interface AiMessage {
   content: string
 }
 
+interface BookmarkedAyah {
+  id: string
+  verse_key: string
+  text_uthmani: string
+  chapter_name: string
+  chapter_id: number
+  savedAt: number
+}
+
+interface AyahMenu {
+  verse: Verse
+  chapterName: string
+  chapterId: number
+  x: number
+  y: number
+}
+
 const normalizeQuranSearch = (value: string) =>
   value
     .normalize('NFKD')
@@ -63,6 +81,19 @@ const renderHighlightedVerseText = (text: string, query: string) => {
   })
 }
 
+const BOOKMARKS_KEY = 'aq-bookmarks'
+
+function loadBookmarks(): BookmarkedAyah[] {
+  try {
+    const raw = localStorage.getItem(BOOKMARKS_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveBookmarks(bm: BookmarkedAyah[]) {
+  try { localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(bm)) } catch {}
+}
+
 export default function AIQuran() {
   const navigate = useNavigate()
 
@@ -87,6 +118,12 @@ export default function AIQuran() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  const [verseAudioUrl, setVerseAudioUrl] = useState<string | null>(null)
+  const [verseAudioKey, setVerseAudioKey] = useState<string | null>(null)
+  const [verseAudioLoading, setVerseAudioLoading] = useState(false)
+  const [verseAudioPlaying, setVerseAudioPlaying] = useState(false)
+  const verseAudioRef = useRef<HTMLAudioElement | null>(null)
+
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -98,15 +135,17 @@ export default function AIQuran() {
   const [wordSearchLoading, setWordSearchLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const [ayahMenu, setAyahMenu] = useState<AyahMenu | null>(null)
+  const [bookmarks, setBookmarks] = useState<BookmarkedAyah[]>(loadBookmarks)
+  const [bookmarksPanelOpen, setBookmarksPanelOpen] = useState(false)
+
   useEffect(() => {
     fetch(`${QURAN_API}/chapters?language=ar`)
       .then(r => r.json())
       .then(d => {
         setChapters(d.chapters || [])
         const fatiha = (d.chapters || [])[0]
-        if (fatiha) {
-          setSelectedChapter(fatiha)
-        }
+        if (fatiha) setSelectedChapter(fatiha)
       })
       .catch(() => {})
       .finally(() => setChaptersLoading(false))
@@ -187,11 +226,114 @@ export default function AIQuran() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [aiMessages])
 
+  useEffect(() => {
+    saveBookmarks(bookmarks)
+  }, [bookmarks])
+
+  useEffect(() => {
+    const va = verseAudioRef.current
+    if (!va || !verseAudioUrl) return
+    va.src = verseAudioUrl
+    va.play().catch(() => setVerseAudioPlaying(false))
+    setVerseAudioPlaying(true)
+  }, [verseAudioUrl])
+
+  useEffect(() => {
+    const va = verseAudioRef.current
+    if (!va) return
+    if (verseAudioPlaying) va.play().catch(() => setVerseAudioPlaying(false))
+    else va.pause()
+  }, [verseAudioPlaying])
+
   const handleSelectChapter = (ch: Chapter) => {
     setSelectedChapter(ch)
     setMobileSidebarOpen(false)
     setIsPlaying(false)
     setAudioUrl(null)
+    stopVerseAudio()
+    setAyahMenu(null)
+  }
+
+  const stopVerseAudio = () => {
+    verseAudioRef.current?.pause()
+    setVerseAudioPlaying(false)
+    setVerseAudioUrl(null)
+    setVerseAudioKey(null)
+  }
+
+  const playVerseAudio = useCallback(async (verseKey: string) => {
+    if (!selectedReciter) return
+    if (verseAudioKey === verseKey) {
+      setVerseAudioPlaying(p => !p)
+      return
+    }
+    stopVerseAudio()
+    setVerseAudioLoading(true)
+    setVerseAudioKey(verseKey)
+    try {
+      const r = await fetch(`${QURAN_API}/recitations/${selectedReciter.id}/by_ayah/${verseKey}`)
+      const d = await r.json()
+      const audioFile = d.audio_files?.[0]
+      if (audioFile?.url) {
+        const url = audioFile.url.startsWith('http') ? audioFile.url : `https://${audioFile.url}`
+        setVerseAudioUrl(url)
+      } else if (audioFile?.audio_url) {
+        const url = audioFile.audio_url.startsWith('http') ? audioFile.audio_url : `https://${audioFile.audio_url}`
+        setVerseAudioUrl(url)
+      }
+    } catch {}
+    finally { setVerseAudioLoading(false) }
+  }, [selectedReciter, verseAudioKey])
+
+  const isBookmarked = (verseKey: string) => bookmarks.some(b => b.verse_key === verseKey)
+
+  const toggleBookmark = (verse: Verse, chapterName: string, chapterId: number) => {
+    const existing = bookmarks.find(b => b.verse_key === verse.verse_key)
+    if (existing) {
+      setBookmarks(prev => prev.filter(b => b.verse_key !== verse.verse_key))
+    } else {
+      const newBm: BookmarkedAyah = {
+        id: verse.verse_key,
+        verse_key: verse.verse_key,
+        text_uthmani: verse.text_uthmani,
+        chapter_name: chapterName,
+        chapter_id: chapterId,
+        savedAt: Date.now(),
+      }
+      setBookmarks(prev => [newBm, ...prev])
+    }
+  }
+
+  const openAyahMenu = (e: React.MouseEvent, verse: Verse) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!selectedChapter) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setAyahMenu({
+      verse,
+      chapterName: selectedChapter.name_arabic,
+      chapterId: selectedChapter.id,
+      x: rect.left,
+      y: rect.bottom + 4,
+    })
+  }
+
+  const closeAyahMenu = () => setAyahMenu(null)
+
+  const handleAyahAction = (action: 'bookmark' | 'listen' | 'assistant') => {
+    if (!ayahMenu) return
+    const { verse, chapterName, chapterId } = ayahMenu
+    if (action === 'bookmark') {
+      toggleBookmark(verse, chapterName, chapterId)
+    } else if (action === 'listen') {
+      playVerseAudio(verse.verse_key)
+    } else if (action === 'assistant') {
+      setAiOpen(true)
+      const ayahText = verse.text_uthmani.substring(0, 100)
+      setAiInput(`فسّر لي الآية الكريمة: ${ayahText}... (${verse.verse_key})`)
+      setBookmarksPanelOpen(false)
+    }
+    closeAyahMenu()
   }
 
   const sendAiMessage = async () => {
@@ -261,12 +403,6 @@ ${wordCtx ? `${wordCtx}` : ''}
     : verses
   const matchingVersesCount = normalizedVerseSearch ? displayedVerses.length : 0
 
-  const prepareTafsirPrompt = () => {
-    if (!selectedChapter || !normalizedVerseSearch || matchingVersesCount === 0) return
-    setAiOpen(true)
-    setAiInput(`فسّر لي كلمة أو عبارة "${verseSearch.trim()}" في سورة ${selectedChapter.name_arabic}، واذكر معنى الآيات التي وردت فيها.`)
-  }
-
   const handleWordClick = useCallback(async (word: string) => {
     const cleaned = word.replace(/[^\u0600-\u06FF\u0750-\u077F]/g, '').trim()
     if (!cleaned || cleaned.length < 2) return
@@ -298,7 +434,7 @@ ${wordCtx ? `${wordCtx}` : ''}
     : 'اختر سورة'
 
   return (
-    <div className="aq-root" dir="rtl">
+    <div className="aq-root" dir="rtl" onClick={() => ayahMenu && closeAyahMenu()}>
       <audio
         ref={audioRef}
         onTimeUpdate={() => {
@@ -311,15 +447,57 @@ ${wordCtx ? `${wordCtx}` : ''}
         }}
         onEnded={() => setIsPlaying(false)}
       />
+      <audio
+        ref={verseAudioRef}
+        onEnded={() => { setVerseAudioPlaying(false); setVerseAudioKey(null) }}
+      />
+
+      {/* ===== AYAH CONTEXT MENU ===== */}
+      {ayahMenu && (
+        <div
+          className="aq-ayah-menu"
+          style={{ top: Math.min(ayahMenu.y, window.innerHeight - 200), left: Math.max(8, Math.min(ayahMenu.x, window.innerWidth - 220)) }}
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            className="aq-ayah-menu-item"
+            onClick={() => handleAyahAction('bookmark')}
+          >
+            {isBookmarked(ayahMenu.verse.verse_key)
+              ? <><BookmarkCheck size={14} className="aq-ayah-menu-icon aq-ayah-menu-icon--saved" /> إزالة العلامة</>
+              : <><Bookmark size={14} className="aq-ayah-menu-icon" /> حفظ العلامة</>
+            }
+          </button>
+          <button className="aq-ayah-menu-item" onClick={() => handleAyahAction('listen')}>
+            <Volume2 size={14} className="aq-ayah-menu-icon" /> استماع للآية
+          </button>
+          <button className="aq-ayah-menu-item" onClick={() => handleAyahAction('assistant')}>
+            <Bot size={14} className="aq-ayah-menu-icon" /> المساعد الذكي
+          </button>
+        </div>
+      )}
+
+      {/* Verse Audio Mini Player */}
+      {verseAudioKey && (
+        <div className="aq-verse-audio-player" dir="rtl">
+          <span className="aq-verse-audio-key">الآية {verseAudioKey}</span>
+          {verseAudioLoading
+            ? <Loader2 size={14} className="aq-spin" />
+            : (
+              <button className="aq-verse-audio-btn" onClick={() => setVerseAudioPlaying(p => !p)}>
+                {verseAudioPlaying ? <Pause size={14} /> : <Play size={14} />}
+              </button>
+            )
+          }
+          <button className="aq-verse-audio-close" onClick={stopVerseAudio}><X size={12} /></button>
+        </div>
+      )}
 
       {/* ===== HEADER ===== */}
       <header className="aq-header">
         <div className="aq-header-left">
           <button className="aq-nav-btn" onClick={() => navigate('/')} title="Home">
             <Home size={15} /> الرئيسية
-          </button>
-          <button className="aq-nav-btn" onClick={() => navigate('/dz-agent')} title="DZ Agent">
-            <BotIcon size={15} /> DZ Agent
           </button>
           <button className="aq-nav-btn aq-nav-btn--active" title="AI Quran">
             <BookOpen size={15} /> AI QURAN
@@ -331,6 +509,14 @@ ${wordCtx ? `${wordCtx}` : ''}
           <span className="aq-header-logo-sub">القرآن الكريم</span>
         </div>
         <div className="aq-header-right">
+          <button
+            className={`aq-bookmarks-btn ${bookmarksPanelOpen ? 'aq-bookmarks-btn--active' : ''}`}
+            onClick={() => setBookmarksPanelOpen(p => !p)}
+            title={`العلامات المرجعية (${bookmarks.length})`}
+          >
+            <BookmarkCheck size={15} />
+            {bookmarks.length > 0 && <span className="aq-bookmarks-count">{bookmarks.length}</span>}
+          </button>
           <button className="aq-index-btn" onClick={() => setSurahIndexOpen(true)} title="فهرس السور الـ 114">
             <List size={16} />
             <span>فهرس السور</span>
@@ -340,6 +526,68 @@ ${wordCtx ? `${wordCtx}` : ''}
           </button>
         </div>
       </header>
+
+      {/* ===== BOOKMARKS PANEL ===== */}
+      {bookmarksPanelOpen && (
+        <div className="aq-bookmarks-panel" dir="rtl">
+          <div className="aq-bookmarks-header">
+            <span className="aq-bookmarks-title"><BookmarkCheck size={15} /> علاماتي المرجعية</span>
+            <button className="aq-bookmarks-close-btn" onClick={() => setBookmarksPanelOpen(false)}><X size={16} /></button>
+          </div>
+          {bookmarks.length === 0 ? (
+            <div className="aq-bookmarks-empty">لا توجد علامات محفوظة بعد.<br />انقر على أي آية وحدد «حفظ العلامة».</div>
+          ) : (
+            <div className="aq-bookmarks-list">
+              {bookmarks.map(bm => (
+                <div key={bm.id} className="aq-bookmark-card">
+                  <div className="aq-bookmark-meta">
+                    <span className="aq-bookmark-surah">{bm.chapter_name} — {bm.verse_key}</span>
+                    <div className="aq-bookmark-actions">
+                      <button
+                        className="aq-bookmark-action-btn"
+                        title="استماع"
+                        onClick={() => {
+                          playVerseAudio(bm.verse_key)
+                          setBookmarksPanelOpen(false)
+                        }}
+                      >
+                        <Volume2 size={12} />
+                      </button>
+                      <button
+                        className="aq-bookmark-action-btn"
+                        title="المساعد"
+                        onClick={() => {
+                          setAiOpen(true)
+                          setAiInput(`فسّر لي الآية الكريمة: ${bm.text_uthmani.substring(0, 80)}... (${bm.verse_key})`)
+                          setBookmarksPanelOpen(false)
+                        }}
+                      >
+                        <Bot size={12} />
+                      </button>
+                      <button
+                        className="aq-bookmark-action-btn aq-bookmark-action-btn--del"
+                        title="حذف"
+                        onClick={() => setBookmarks(prev => prev.filter(b => b.id !== bm.id))}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    className="aq-bookmark-text"
+                    onClick={() => {
+                      const ch = chapters.find(c => c.id === bm.chapter_id)
+                      if (ch) { handleSelectChapter(ch); setBookmarksPanelOpen(false) }
+                    }}
+                  >
+                    {bm.text_uthmani.substring(0, 120)}{bm.text_uthmani.length > 120 ? '...' : ''}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ===== SURAH INDEX MODAL ===== */}
       {surahIndexOpen && (
@@ -490,13 +738,8 @@ ${wordCtx ? `${wordCtx}` : ''}
             {normalizedVerseSearch && (
               <div className={`aq-search-result ${matchingVersesCount > 0 ? 'aq-search-result--found' : 'aq-search-result--empty'}`}>
                 {matchingVersesCount > 0
-                  ? `تم العثور على ${matchingVersesCount} آية تحتوي على "${verseSearch.trim()}". هل تريد تفسيرها؟`
+                  ? `تم العثور على ${matchingVersesCount} آية تحتوي على "${verseSearch.trim()}"`
                   : `لا توجد نتائج داخل هذه السورة لكلمة "${verseSearch.trim()}".`}
-                {matchingVersesCount > 0 && (
-                  <button className="aq-tafsir-prompt-btn" onClick={prepareTafsirPrompt}>
-                    اسأل المساعد عن التفسير
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -552,8 +795,30 @@ ${wordCtx ? `${wordCtx}` : ''}
                   </div>
                 ) : (
                   displayedVerses.map(v => (
-                    <div key={v.id} className="aq-verse-card">
-                      <span className="aq-verse-num">{v.verse_key}</span>
+                    <div key={v.id} className={`aq-verse-card ${verseAudioKey === v.verse_key ? 'aq-verse-card--playing' : ''}`}>
+                      <div className="aq-verse-card-top">
+                        <span className="aq-verse-num">{v.verse_key}</span>
+                        <div className="aq-verse-card-actions">
+                          {isBookmarked(v.verse_key) && (
+                            <BookmarkCheck size={13} className="aq-verse-bookmarked-icon" />
+                          )}
+                          {verseAudioKey === v.verse_key && (
+                            <button
+                              className="aq-verse-play-inline"
+                              onClick={() => setVerseAudioPlaying(p => !p)}
+                            >
+                              {verseAudioLoading ? <Loader2 size={12} className="aq-spin" /> : verseAudioPlaying ? <Pause size={12} /> : <Play size={12} />}
+                            </button>
+                          )}
+                          <button
+                            className="aq-verse-menu-btn"
+                            onClick={e => openAyahMenu(e, v)}
+                            title="خيارات الآية"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+                        </div>
+                      </div>
                       <p className="aq-verse-text aq-verse-text--clickable">
                         {v.text_uthmani.split(/(\s+)/).map((part, idx) => {
                           if (!part.trim()) return part
@@ -588,7 +853,16 @@ ${wordCtx ? `${wordCtx}` : ''}
                 ) : (
                   displayedVerses.map(v => (
                     <div key={v.id} className="aq-tafsir-card">
-                      <span className="aq-verse-num">{v.verse_key}</span>
+                      <div className="aq-verse-card-top">
+                        <span className="aq-verse-num">{v.verse_key}</span>
+                        <button
+                          className="aq-verse-menu-btn"
+                          onClick={e => openAyahMenu(e, v)}
+                          title="خيارات الآية"
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+                      </div>
                       <p className="aq-verse-text">{renderHighlightedVerseText(v.text_uthmani, verseSearch)}</p>
                       {v.translations && v.translations[0] && (
                         <div className="aq-tafsir-text">
@@ -695,7 +969,7 @@ ${wordCtx ? `${wordCtx}` : ''}
         {/* ===== RIGHT SIDEBAR — AI QURAN ASSISTANT ===== */}
         <aside className="aq-ai-panel">
           <button className="aq-ai-toggle" onClick={() => setAiOpen(p => !p)}>
-            <Bot size={15} />
+            <BotIcon size={15} />
             <span>مساعد القرآن</span>
             {aiOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>

@@ -53,6 +53,16 @@
 }
 .dzd-tab-icon { font-size: 13px; }
 .dzd-tab-label { font-size: 11.5px; }
+.dzd-tab-quran-icon { color: #c8a96e; flex-shrink: 0; }
+.dzd-tab--quran {
+  color: #c8a96e99;
+  border-bottom-color: transparent;
+}
+.dzd-tab--quran:hover {
+  color: #c8a96e;
+  background: rgba(200,169,110,0.06);
+  border-radius: 6px 6px 0 0;
+}
 
 .dzd-refresh-btn {
   display: flex;

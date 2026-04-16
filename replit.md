@@ -42,6 +42,7 @@ The following secrets must be configured in Replit's Secrets tab and Vercel proj
 - `POST /api/dz-agent-chat` — DZ Agent chat with live retrieval, GitHub context, and weather-priority support
 - `POST /api/dz-agent-search` — DZ Agent search
 - `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
+- `GET /api/dz-agent/sync-status` — Compares the production GitHub branch head with the Vercel-deployed commit for DZ Agent sync visibility
 - `GET /api/dz-agent/weather` — Per-city weather via OpenWeather API with server-side caching
 - `GET /api/currency/latest` — Live exchange rates against the Algerian dinar
 - `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
@@ -89,6 +90,7 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - The DZ Agent landing dashboard includes prayer times, weather, news, sports calendar/LFP results, tech news, and currency exchange rates.
 - Weather and prayer times share the selected Algerian wilaya.
 - Currency rates are loaded from `/api/currency/latest`; sports calendar data comes through the dashboard LFP payload.
+- A sync tab compares the GitHub production branch with the Vercel-deployed commit and shows whether both are on the same version.
 - Clicking the weather dashboard card sends a clean chat prompt while injecting `context: weather_priority` only into the server request. The server fetches OpenWeather data before the AI response and falls back safely if the API key or API response is unavailable.
 
 ## DZ Agent Header Update
@@ -119,6 +121,8 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - `src/components/` — UI components
 - `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub OAuth, repository selection, dashboard prompt handling, and repository action panels
 - `src/components/DZDashboard.tsx` — Live dashboard cards and weather-priority prompt trigger
+- `src/pages/AIQuran.tsx` — AI Quran page
+- `src/styles/ai-quran.css` — AI Quran page styles
 - `src/styles/dz-agent.css` — DZ Agent styles including GitHub workspace, header controls, and repository action panel styles
 
 ## DZ Agent Chat Navigation Update
@@ -127,6 +131,12 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - `/chat` is the dedicated AI-DZ CHAT page with HOME and DZ Agent navigation buttons in the header.
 - The chat supports visible invocation codes at the top of the welcome state: `@dz-agent`, `@dz-gpt`, and `/github`.
 - The welcome cards were compacted so the DZ Agent chat box remains visible and usable on smaller screens.
+
+## AI Quran
+
+- `/aiquran` is available as a dedicated Quran page using Quran.com API v4 for chapters, verses, translations, recitations, and audio.
+- The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, search within verses, highlighted word matches, and a prompt to ask the assistant for tafsir of found matches.
+- CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
 
 ## Notes
 

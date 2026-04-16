@@ -1563,6 +1563,109 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
   return res.json(data)
 })
 
+const SYNC_STATUS_CACHE = { data: null, ts: 0 }
+const SYNC_STATUS_TTL = 2 * 60 * 1000
+const PRODUCTION_BRANCH = process.env.PRODUCTION_BRANCH || 'devin/1774405518-init-dz-gpt'
+const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'Nadirinfograph23'
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'DZ-GPT'
+const SYNC_VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+
+async function fetchGitHubBranchHead(branch) {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'DZ-GPT',
+  }
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  const r = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/git/ref/heads/${encodeURIComponent(branch)}`,
+    { headers, signal: AbortSignal.timeout(7000) }
+  )
+  if (!r.ok) throw new Error(`GitHub sync check failed: ${r.status}`)
+  const d = await r.json()
+  return d.object?.sha || null
+}
+
+async function fetchLatestVercelCommit() {
+  const runtimeSha = process.env.VERCEL_GIT_COMMIT_SHA || ''
+  if (runtimeSha) {
+    return {
+      commitSha: runtimeSha,
+      deploymentUrl: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+      source: 'runtime',
+      state: 'READY',
+    }
+  }
+
+  if (!process.env.VERCEL_TOKEN) {
+    return {
+      commitSha: null,
+      deploymentUrl: null,
+      source: 'unavailable',
+      state: 'UNKNOWN',
+    }
+  }
+
+  const r = await fetch(
+    `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(SYNC_VERCEL_PROJECT_ID)}&target=production&limit=1`,
+    { headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` }, signal: AbortSignal.timeout(7000) }
+  )
+  if (!r.ok) throw new Error(`Vercel sync check failed: ${r.status}`)
+  const d = await r.json()
+  const deployment = d.deployments?.[0] || null
+  return {
+    commitSha: deployment?.meta?.githubCommitSha || null,
+    deploymentUrl: deployment?.url ? `https://${deployment.url}` : null,
+    source: 'api',
+    state: deployment?.state || deployment?.readyState || 'UNKNOWN',
+  }
+}
+
+app.get('/api/dz-agent/sync-status', async (_req, res) => {
+  if (SYNC_STATUS_CACHE.data && Date.now() - SYNC_STATUS_CACHE.ts < SYNC_STATUS_TTL) {
+    return res.json(SYNC_STATUS_CACHE.data)
+  }
+
+  try {
+    const [githubSha, vercel] = await Promise.all([
+      fetchGitHubBranchHead(PRODUCTION_BRANCH),
+      fetchLatestVercelCommit(),
+    ])
+    const vercelSha = vercel.commitSha
+    const status = githubSha && vercelSha
+      ? (githubSha === vercelSha ? 'synced' : 'out_of_sync')
+      : 'unknown'
+    const data = {
+      status,
+      branch: PRODUCTION_BRANCH,
+      repository: `${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
+      github: {
+        commitSha: githubSha,
+        shortSha: githubSha ? githubSha.slice(0, 8) : null,
+      },
+      vercel: {
+        commitSha: vercelSha,
+        shortSha: vercelSha ? vercelSha.slice(0, 8) : null,
+        deploymentUrl: vercel.deploymentUrl,
+        state: vercel.state,
+        source: vercel.source,
+      },
+      checkedAt: new Date().toISOString(),
+    }
+    SYNC_STATUS_CACHE.data = data
+    SYNC_STATUS_CACHE.ts = Date.now()
+    return res.json(data)
+  } catch (err) {
+    console.error('[Sync Status] Error:', err.message)
+    return res.status(503).json({
+      status: 'unknown',
+      branch: PRODUCTION_BRANCH,
+      repository: `${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
+      error: 'تعذّر فحص التزامن حالياً',
+      checkedAt: new Date().toISOString(),
+    })
+  }
+})
+
 // ===== PRAYER TIMES =====
 const PRAYER_CACHE = new Map()
 const PRAYER_CACHE_TTL = 12 * 60 * 1000 // 12 minutes

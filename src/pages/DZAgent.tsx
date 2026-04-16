@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, BookOpen } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 
@@ -153,6 +153,9 @@ export default function DZAgent() {
           <div className="dz-agent-header-left">
             <button className="dz-home-btn" onClick={() => navigate('/')} title="Home">
               HOME
+            </button>
+            <button className="dz-home-btn" onClick={() => navigate('/aiquran')} title="AI Quran" style={{ color: '#c8a96e', borderColor: 'rgba(200,169,110,0.4)' }}>
+              <BookOpen size={14} style={{ marginLeft: 4 }} /> القرآن
             </button>
             <button className="dz-refresh-chat-btn" onClick={createNewChat} title={labels.newChat}>
               <RefreshCw size={18} />

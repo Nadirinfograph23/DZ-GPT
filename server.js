@@ -1625,45 +1625,42 @@ app.get('/api/dz-agent/sync-status', async (_req, res) => {
     return res.json(SYNC_STATUS_CACHE.data)
   }
 
-  try {
-    const [githubSha, vercel] = await Promise.all([
-      fetchGitHubBranchHead(PRODUCTION_BRANCH),
-      fetchLatestVercelCommit(),
-    ])
-    const vercelSha = vercel.commitSha
-    const status = githubSha && vercelSha
-      ? (githubSha === vercelSha ? 'synced' : 'out_of_sync')
-      : 'unknown'
-    const data = {
-      status,
-      branch: PRODUCTION_BRANCH,
-      repository: `${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
-      github: {
-        commitSha: githubSha,
-        shortSha: githubSha ? githubSha.slice(0, 8) : null,
-      },
-      vercel: {
-        commitSha: vercelSha,
-        shortSha: vercelSha ? vercelSha.slice(0, 8) : null,
-        deploymentUrl: vercel.deploymentUrl,
-        state: vercel.state,
-        source: vercel.source,
-      },
-      checkedAt: new Date().toISOString(),
-    }
-    SYNC_STATUS_CACHE.data = data
-    SYNC_STATUS_CACHE.ts = Date.now()
-    return res.json(data)
-  } catch (err) {
-    console.error('[Sync Status] Error:', err.message)
-    return res.status(503).json({
-      status: 'unknown',
-      branch: PRODUCTION_BRANCH,
-      repository: `${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
-      error: 'تعذّر فحص التزامن حالياً',
-      checkedAt: new Date().toISOString(),
-    })
+  const [githubResult, vercelResult] = await Promise.allSettled([
+    fetchGitHubBranchHead(PRODUCTION_BRANCH),
+    fetchLatestVercelCommit(),
+  ])
+  if (githubResult.status === 'rejected') console.error('[Sync Status] GitHub:', githubResult.reason?.message || githubResult.reason)
+  if (vercelResult.status === 'rejected') console.error('[Sync Status] Vercel:', vercelResult.reason?.message || vercelResult.reason)
+
+  const githubSha = githubResult.status === 'fulfilled' ? githubResult.value : null
+  const vercel = vercelResult.status === 'fulfilled'
+    ? vercelResult.value
+    : { commitSha: null, deploymentUrl: null, state: 'UNKNOWN', source: 'unavailable' }
+  const vercelSha = vercel.commitSha
+  const status = githubSha && vercelSha
+    ? (githubSha === vercelSha ? 'synced' : 'out_of_sync')
+    : 'unknown'
+  const data = {
+    status,
+    branch: PRODUCTION_BRANCH,
+    repository: `${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
+    github: {
+      commitSha: githubSha,
+      shortSha: githubSha ? githubSha.slice(0, 8) : null,
+    },
+    vercel: {
+      commitSha: vercelSha,
+      shortSha: vercelSha ? vercelSha.slice(0, 8) : null,
+      deploymentUrl: vercel.deploymentUrl,
+      state: vercel.state,
+      source: vercel.source,
+    },
+    error: status === 'unknown' ? 'تعذّر تأكيد التزامن بالكامل حالياً' : null,
+    checkedAt: new Date().toISOString(),
   }
+  SYNC_STATUS_CACHE.data = data
+  SYNC_STATUS_CACHE.ts = Date.now()
+  return res.json(data)
 })
 
 // ===== PRAYER TIMES =====

@@ -93,6 +93,7 @@ export default function AIQuran() {
   const [aiOpen, setAiOpen] = useState(true)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [surahIndexOpen, setSurahIndexOpen] = useState(false)
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
   const [wordSearchLoading, setWordSearchLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -330,15 +331,62 @@ ${wordCtx ? `${wordCtx}` : ''}
           <span className="aq-header-logo-sub">القرآن الكريم</span>
         </div>
         <div className="aq-header-right">
-          <button className="aq-index-btn" onClick={() => setMobileSidebarOpen(true)} title="فهرس السور">
+          <button className="aq-index-btn" onClick={() => setSurahIndexOpen(true)} title="فهرس السور الـ 114">
             <List size={16} />
-            <span>فهرس</span>
+            <span>فهرس السور</span>
           </button>
           <button className="aq-mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}>
             <Menu size={20} />
           </button>
         </div>
       </header>
+
+      {/* ===== SURAH INDEX MODAL ===== */}
+      {surahIndexOpen && (
+        <div className="aq-surah-index-overlay" onClick={() => setSurahIndexOpen(false)}>
+          <div className="aq-surah-index-modal" onClick={e => e.stopPropagation()}>
+            <div className="aq-surah-index-header">
+              <div className="aq-surah-index-title">
+                <List size={18} />
+                <span>فهرس سور القرآن الكريم</span>
+                <span className="aq-surah-index-count">١١٤ سورة</span>
+              </div>
+              <button className="aq-surah-index-close" onClick={() => setSurahIndexOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="aq-surah-index-search">
+              <Search size={14} />
+              <input
+                placeholder="ابحث عن سورة..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                autoFocus
+                className="aq-surah-index-input"
+              />
+            </div>
+            <div className="aq-surah-index-grid">
+              {filteredChapters.map(ch => (
+                <button
+                  key={ch.id}
+                  className={`aq-surah-index-card ${selectedChapter?.id === ch.id ? 'aq-surah-index-card--active' : ''}`}
+                  onClick={() => { handleSelectChapter(ch); setSurahIndexOpen(false) }}
+                >
+                  <div className="aq-surah-index-card-num">{ch.id}</div>
+                  <div className="aq-surah-index-card-arabic">{ch.name_arabic}</div>
+                  <div className="aq-surah-index-card-en">{ch.name_simple}</div>
+                  <div className="aq-surah-index-card-meta">
+                    <span>{ch.verses_count} آية</span>
+                    <span className={`aq-surah-index-card-type aq-surah-index-card-type--${ch.revelation_place}`}>
+                      {ch.revelation_place === 'makkah' ? 'مكية' : 'مدنية'}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== LAYOUT ===== */}
       <div className="aq-layout">

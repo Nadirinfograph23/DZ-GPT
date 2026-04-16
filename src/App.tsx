@@ -609,7 +609,6 @@ function App() {
               {AI_MODELS.map(model => {
                 const isDZAgent = model.id === 'dz-agent'
                 const isAIQuran = model.id === 'aiquran'
-                const isExternalNav = isDZAgent || isAIQuran
                 return (
                   <button
                     key={model.id}

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import {
   Search, Play, Pause, Volume2, Bot, Send,
   Menu, X, ChevronDown, ChevronUp, Loader2, BookOpen, Headphones,
-  ScrollText, Home, Bot as BotIcon,
+  ScrollText, Home, Bot as BotIcon, List,
 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import '../styles/ai-quran.css'
 
 const QURAN_API = 'https://api.quran.com/api/v4'
@@ -92,6 +93,8 @@ export default function AIQuran() {
   const [aiOpen, setAiOpen] = useState(true)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
+  const [wordSearchLoading, setWordSearchLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -200,15 +203,32 @@ export default function AIQuran() {
     setAiLoading(true)
     try {
       const context = selectedChapter
-        ? `السورة الحالية: ${selectedChapter.name_arabic} (${selectedChapter.name_simple}) - عدد الآيات: ${selectedChapter.verses_count} - نوع السورة: ${selectedChapter.revelation_place === 'makkah' ? 'مكية' : 'مدنية'}`
+        ? `السورة الحالية: ${selectedChapter.name_arabic} (${selectedChapter.name_simple}) - رقمها: ${selectedChapter.id} - عدد الآيات: ${selectedChapter.verses_count} - نوع السورة: ${selectedChapter.revelation_place === 'makkah' ? 'مكية' : 'مدنية'}`
         : ''
-      const systemPrompt = `أنت مساعد قرآني متخصص. مهمتك فقط الإجابة على ما يتعلق بالقرآن الكريم: التفسير، معاني الآيات، أسباب النزول، الأحكام الشرعية، وملخصات السور.
-${context ? `\n${context}` : ''}
+      const wordCtx = wordOccurrences
+        ? `الكلمة المُحللة: «${wordOccurrences.word}» — وردت ${wordOccurrences.count} مرة`
+        : ''
+      const systemPrompt = `أنت مساعد قرآني ذكي متخصص اسمه AI QURAN. تعمل داخل تطبيق DZ-GPT.
+
+مجالات تخصصك:
+1. **التفسير**: تفسير الآيات الكريمة (ابن كثير، الطبري، السعدي، وغيرهم)
+2. **معاني الكلمات**: شرح مفردات القرآن وإحصاءاتها عبر السور
+3. **أسباب النزول**: متى ولماذا نزلت الآيات
+4. **تصنيف السور**: مكية أو مدنية مع الشرح
+5. **إحصاءات القرآن**: كم مرة وردت كلمة، في كم سورة، أبرز مواضعها
+6. **الأحكام الشرعية**: ما تضمنته الآيات من أحكام
+7. **الجزء والحزب والصفحة**: معلومات التنظيم
+8. **الملخصات**: ملخص موضوعات أي سورة
+
+${context ? `السياق الحالي: ${context}` : ''}
+${wordCtx ? `${wordCtx}` : ''}
+
 قواعد مهمة:
-- أجب باللغة العربية دائماً
-- لا تجب على أسئلة خارج نطاق القرآن الكريم
-- إذا سُئلت عن شيء خارج القرآن، قل: "أنا مخصص للإجابة عن القرآن الكريم فقط"
-- استشهد بالآيات عند الإجابة`
+- أجب دائماً باللغة العربية
+- استشهد بالآيات بشكل دقيق (السورة: الآية)
+- إذا سُئلت عن شيء ليس في القرآن أو علومه، أجب باختصار ومهنية
+- لا تخترع آيات أو تفسيرات
+- إذا لم تعرف، قل ذلك بوضوح واقترح المصادر المناسبة`
 
       const messages = [
         { role: 'system', content: systemPrompt },
@@ -245,6 +265,32 @@ ${context ? `\n${context}` : ''}
     setAiOpen(true)
     setAiInput(`فسّر لي كلمة أو عبارة "${verseSearch.trim()}" في سورة ${selectedChapter.name_arabic}، واذكر معنى الآيات التي وردت فيها.`)
   }
+
+  const handleWordClick = useCallback(async (word: string) => {
+    const cleaned = word.replace(/[^\u0600-\u06FF\u0750-\u077F]/g, '').trim()
+    if (!cleaned || cleaned.length < 2) return
+    setVerseSearch(cleaned)
+    setWordOccurrences(null)
+    setWordSearchLoading(true)
+    try {
+      const r = await fetch(`${QURAN_API}/search?q=${encodeURIComponent(cleaned)}&size=100&language=ar`)
+      const d = await r.json()
+      const results = d.search?.results || []
+      const surahSet = new Set<string>()
+      for (const res of results) {
+        const surahNum = res.verse_key?.split(':')[0]
+        if (surahNum) surahSet.add(surahNum)
+      }
+      const surahNames = chapters
+        .filter(ch => surahSet.has(String(ch.id)))
+        .map(ch => `${ch.id}. ${ch.name_arabic}`)
+      setWordOccurrences({ word: cleaned, count: results.length, surahs: surahNames.slice(0, 15) })
+    } catch {
+      setWordOccurrences({ word: cleaned, count: 0, surahs: [] })
+    } finally {
+      setWordSearchLoading(false)
+    }
+  }, [chapters])
 
   const chapterLabel = selectedChapter
     ? `${selectedChapter.id}. ${selectedChapter.name_arabic} — ${selectedChapter.name_simple}`
@@ -283,9 +329,15 @@ ${context ? `\n${context}` : ''}
           <span className="aq-header-logo-text">AI QURAN</span>
           <span className="aq-header-logo-sub">القرآن الكريم</span>
         </div>
-        <button className="aq-mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}>
-          <Menu size={20} />
-        </button>
+        <div className="aq-header-right">
+          <button className="aq-index-btn" onClick={() => setMobileSidebarOpen(true)} title="فهرس السور">
+            <List size={16} />
+            <span>فهرس</span>
+          </button>
+          <button className="aq-mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}>
+            <Menu size={20} />
+          </button>
+        </div>
       </header>
 
       {/* ===== LAYOUT ===== */}
@@ -407,6 +459,41 @@ ${context ? `\n${context}` : ''}
             {/* ===== READING TAB ===== */}
             {activeTab === 'reading' && (
               <div className="aq-verses">
+                {/* Word occurrence stats panel */}
+                {(wordSearchLoading || wordOccurrences) && (
+                  <div className="aq-word-stats">
+                    {wordSearchLoading ? (
+                      <div className="aq-word-stats-loading"><Loader2 size={13} className="aq-spin" /> جاري البحث عن الكلمة في القرآن...</div>
+                    ) : wordOccurrences && (
+                      <>
+                        <div className="aq-word-stats-header">
+                          <span className="aq-word-stats-word">«{wordOccurrences.word}»</span>
+                          <span className="aq-word-stats-count">وردت {wordOccurrences.count} مرة في القرآن</span>
+                          <button className="aq-word-stats-close" onClick={() => { setWordOccurrences(null); setVerseSearch('') }}>×</button>
+                        </div>
+                        {wordOccurrences.surahs.length > 0 && (
+                          <div className="aq-word-stats-surahs">
+                            <span className="aq-word-stats-label">السور:</span>
+                            {wordOccurrences.surahs.map((s, i) => (
+                              <button
+                                key={i}
+                                className="aq-word-stats-surah"
+                                onClick={() => {
+                                  const ch = chapters.find(c => String(c.id) === s.split('.')[0].trim())
+                                  if (ch) handleSelectChapter(ch)
+                                }}
+                              >{s}</button>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          className="aq-tafsir-prompt-btn"
+                          onClick={() => { setAiOpen(true); setAiInput(`ما إحصائيات كلمة "${wordOccurrences.word}" في القرآن الكريم؟ وما معناها وأبرز الآيات التي وردت فيها؟`) }}
+                        >اسأل المساعد عن هذه الكلمة</button>
+                      </>
+                    )}
+                  </div>
+                )}
                 {versesLoading ? (
                   Array.from({ length: 7 }).map((_, i) => (
                     <div key={i} className="aq-skeleton aq-skeleton--verse" />
@@ -419,7 +506,20 @@ ${context ? `\n${context}` : ''}
                   displayedVerses.map(v => (
                     <div key={v.id} className="aq-verse-card">
                       <span className="aq-verse-num">{v.verse_key}</span>
-                      <p className="aq-verse-text">{renderHighlightedVerseText(v.text_uthmani, verseSearch)}</p>
+                      <p className="aq-verse-text aq-verse-text--clickable">
+                        {v.text_uthmani.split(/(\s+)/).map((part, idx) => {
+                          if (!part.trim()) return part
+                          const isHighlighted = normalizedVerseSearch && normalizeQuranSearch(part).includes(normalizedVerseSearch)
+                          return (
+                            <span
+                              key={idx}
+                              className={`aq-word${isHighlighted ? ' aq-word--highlight' : ''}`}
+                              onClick={() => handleWordClick(part)}
+                              title="انقر للبحث عن هذه الكلمة في القرآن"
+                            >{part}</span>
+                          )
+                        })}
+                      </p>
                     </div>
                   ))
                 )}
@@ -558,12 +658,27 @@ ${context ? `\n${context}` : ''}
                 {aiMessages.length === 0 && (
                   <div className="aq-ai-welcome">
                     <Bot size={22} />
-                    <p>اسألني عن تفسير الآيات، معاني السور، أو أي سؤال قرآني</p>
+                    <p>مساعدك القرآني الذكي — اسألني عن:</p>
+                    <div className="aq-ai-suggestions">
+                      {[
+                        selectedChapter ? `ملخص سورة ${selectedChapter.name_arabic}` : 'ملخص سورة البقرة',
+                        selectedChapter ? `تصنيف سورة ${selectedChapter.name_arabic} مكية أم مدنية؟` : 'كم عدد السور المكية؟',
+                        'ما معنى كلمة الرحمن في القرآن؟',
+                        'ما أسباب نزول آية الكرسي؟',
+                      ].map((s, i) => (
+                        <button key={i} className="aq-ai-suggestion-btn" onClick={() => { setAiInput(s) }}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {aiMessages.map((m, i) => (
                   <div key={i} className={`aq-ai-msg aq-ai-msg--${m.role}`}>
-                    {m.content}
+                    {m.role === 'assistant'
+                      ? <ReactMarkdown>{m.content}</ReactMarkdown>
+                      : m.content
+                    }
                   </div>
                 ))}
                 {aiLoading && (

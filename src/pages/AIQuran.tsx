@@ -5,6 +5,7 @@ import {
   Menu, X, Headphones, Loader2, BookOpen,
   Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
+  ChevronRight, ChevronLeft, SkipBack, SkipForward,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import '../styles/ai-quran.css'
@@ -126,6 +127,8 @@ export default function AIQuran() {
   const [bookmarks, setBookmarks] = useState<BookmarkedAyah[]>(loadBookmarks)
   const [bookmarksPanelOpen, setBookmarksPanelOpen] = useState(false)
 
+  const touchStartXRef = useRef<number | null>(null)
+
   useEffect(() => {
     fetch(`${QURAN_API}/chapters?language=ar`)
       .then(r => r.json())
@@ -239,6 +242,31 @@ export default function AIQuran() {
     setAudioUrl(null)
     stopVerseAudio()
     setAyahMenu(null)
+  }
+
+  const goToPrevChapter = useCallback(() => {
+    if (!selectedChapter || selectedChapter.id <= 1) return
+    const prev = chapters.find(c => c.id === selectedChapter.id - 1)
+    if (prev) handleSelectChapter(prev)
+  }, [selectedChapter, chapters])
+
+  const goToNextChapter = useCallback(() => {
+    if (!selectedChapter || selectedChapter.id >= 114) return
+    const next = chapters.find(c => c.id === selectedChapter.id + 1)
+    if (next) handleSelectChapter(next)
+  }, [selectedChapter, chapters])
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current
+    touchStartXRef.current = null
+    if (Math.abs(deltaX) < 70) return
+    if (deltaX > 0) goToNextChapter()
+    else goToPrevChapter()
   }
 
   const stopVerseAudio = () => {
@@ -489,14 +517,6 @@ ${wordCtx ? wordCtx : ''}
           <button className="aq-nav-btn" onClick={() => navigate('/')} title="Home">
             <Home size={15} /> الرئيسية
           </button>
-          <button className="aq-nav-btn aq-nav-btn--active" title="AI Quran">
-            <BookOpen size={15} /> القرآن الكريم
-          </button>
-        </div>
-        <div className="aq-header-logo">
-          <BookOpen size={20} className="aq-header-logo-icon" />
-          <span className="aq-header-logo-text">AI QURAN</span>
-          <span className="aq-header-logo-sub">القرآن الكريم</span>
         </div>
         <div className="aq-header-right">
           <button
@@ -630,7 +650,11 @@ ${wordCtx ? wordCtx : ''}
         </aside>
 
         {/* ===== CENTER — MAIN CONTENT ===== */}
-        <main className="aq-center">
+        <main
+          className="aq-center"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {/* Surah Title Banner */}
           {selectedChapter && (
             <div className="aq-surah-banner">
@@ -782,21 +806,45 @@ ${wordCtx ? wordCtx : ''}
             {/* ===== AUDIO TAB ===== */}
             {activeTab === 'audio' && (
               <div className="aq-audio-panel">
-                {/* Reciter selector */}
-                <div className="aq-reciter-section">
-                  <div className="aq-reciter-label">اختر القارئ</div>
-                  <div className="aq-reciter-list">
-                    {reciters.slice(0, 20).map(r => (
-                      <button
-                        key={r.id}
-                        className={`aq-reciter-btn ${selectedReciter?.id === r.id ? 'aq-reciter-btn--active' : ''}`}
-                        onClick={() => setSelectedReciter(r)}
-                      >
-                        <Volume2 size={12} />
-                        {r.reciter_name}
-                        {r.style && <span className="aq-reciter-style">{r.style.name}</span>}
-                      </button>
-                    ))}
+
+                {/* ── Dropdowns row ── */}
+                <div className="aq-audio-selectors">
+                  {/* Surah dropdown */}
+                  <div className="aq-audio-select-wrap">
+                    <label className="aq-audio-select-label">السورة</label>
+                    <select
+                      className="aq-audio-select"
+                      value={selectedChapter?.id ?? ''}
+                      onChange={e => {
+                        const ch = chapters.find(c => c.id === Number(e.target.value))
+                        if (ch) handleSelectChapter(ch)
+                      }}
+                    >
+                      {chapters.map(ch => (
+                        <option key={ch.id} value={ch.id}>
+                          {ch.id}. {ch.name_arabic} — {ch.name_simple}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Reciter dropdown */}
+                  <div className="aq-audio-select-wrap">
+                    <label className="aq-audio-select-label">القارئ</label>
+                    <select
+                      className="aq-audio-select"
+                      value={selectedReciter?.id ?? ''}
+                      onChange={e => {
+                        const rec = reciters.find(r => r.id === Number(e.target.value))
+                        if (rec) setSelectedReciter(rec)
+                      }}
+                    >
+                      {reciters.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.reciter_name}{r.style ? ` — ${r.style.name}` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -809,15 +857,32 @@ ${wordCtx ? wordCtx : ''}
                     </div>
                   ) : audioUrl ? (
                     <>
-                      <div className="aq-player-surah">{chapterLabel}</div>
+                      <div className="aq-player-surah">{selectedChapter?.name_arabic}</div>
                       <div className="aq-player-reciter">{selectedReciter?.reciter_name}</div>
 
+                      {/* Controls: prev · play · next  (RTL: next=left, prev=right) */}
                       <div className="aq-player-controls">
+                        <button
+                          className="aq-skip-btn"
+                          onClick={goToNextChapter}
+                          title="السورة التالية"
+                          disabled={!selectedChapter || selectedChapter.id >= 114}
+                        >
+                          <SkipBack size={20} />
+                        </button>
                         <button
                           className="aq-play-btn"
                           onClick={() => setIsPlaying(p => !p)}
                         >
                           {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                        </button>
+                        <button
+                          className="aq-skip-btn"
+                          onClick={goToPrevChapter}
+                          title="السورة السابقة"
+                          disabled={!selectedChapter || selectedChapter.id <= 1}
+                        >
+                          <SkipForward size={20} />
                         </button>
                       </div>
 

@@ -864,7 +864,7 @@ ${wordCtx ? wordCtx : ''}
                           title="السورة التالية"
                           disabled={!selectedChapter || selectedChapter.id >= 114}
                         >
-                          <SkipBack size={20} />
+                          <SkipForward size={20} />
                         </button>
                         <button
                           className="aq-play-btn"
@@ -878,7 +878,7 @@ ${wordCtx ? wordCtx : ''}
                           title="السورة السابقة"
                           disabled={!selectedChapter || selectedChapter.id <= 1}
                         >
-                          <SkipForward size={20} />
+                          <SkipBack size={20} />
                         </button>
                       </div>
 

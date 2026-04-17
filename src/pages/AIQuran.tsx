@@ -860,9 +860,9 @@ ${wordCtx ? wordCtx : ''}
                       <div className="aq-player-controls">
                         <button
                           className="aq-skip-btn"
-                          onClick={goToNextChapter}
-                          title="السورة التالية"
-                          disabled={!selectedChapter || selectedChapter.id >= 114}
+                          onClick={goToPrevChapter}
+                          title="السورة السابقة"
+                          disabled={!selectedChapter || selectedChapter.id <= 1}
                         >
                           <SkipForward size={20} />
                         </button>
@@ -874,9 +874,9 @@ ${wordCtx ? wordCtx : ''}
                         </button>
                         <button
                           className="aq-skip-btn"
-                          onClick={goToPrevChapter}
-                          title="السورة السابقة"
-                          disabled={!selectedChapter || selectedChapter.id <= 1}
+                          onClick={goToNextChapter}
+                          title="السورة التالية"
+                          disabled={!selectedChapter || selectedChapter.id >= 114}
                         >
                           <SkipBack size={20} />
                         </button>

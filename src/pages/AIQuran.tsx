@@ -5,7 +5,7 @@ import {
   Menu, X, Headphones, Loader2, BookOpen,
   Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
-  ChevronRight, ChevronLeft, SkipBack, SkipForward,
+  SkipBack, SkipForward,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import '../styles/ai-quran.css'
@@ -446,10 +446,6 @@ ${wordCtx ? wordCtx : ''}
       setWordSearchLoading(false)
     }
   }, [chapters])
-
-  const chapterLabel = selectedChapter
-    ? `${selectedChapter.id}. ${selectedChapter.name_arabic} — ${selectedChapter.name_simple}`
-    : 'اختر سورة'
 
   return (
     <div className="aq-root" dir="rtl" onClick={() => ayahMenu && closeAyahMenu()}>

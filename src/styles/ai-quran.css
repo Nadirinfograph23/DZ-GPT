@@ -654,28 +654,77 @@
 
 /* ===== RIGHT — AI PANEL ===== */
 .aq-ai-panel {
-  width: 280px;
+  width: 300px;
   flex-shrink: 0;
   background: #111111;
   display: flex;
   flex-direction: column;
   border-right: 1px solid #1a1a1a;
 }
-.aq-ai-toggle {
+.aq-ai-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+.aq-ai-panel-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 12px 14px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid #1a1a1a;
   color: #c8a96e;
   font-size: 13px;
-  cursor: pointer;
-  width: 100%;
-  text-align: right;
+  font-weight: 600;
 }
-.aq-ai-toggle:hover { background: #151515; }
+.aq-ai-panel-close {
+  background: none;
+  border: 1px solid #222;
+  border-radius: 5px;
+  color: #555;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: all 0.12s;
+}
+.aq-ai-panel-close:hover { color: #aaa; border-color: #444; }
+
+/* ===== AI TOGGLE IN HEADER ===== */
+.aq-ai-toggle-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #222;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.aq-ai-toggle-header:hover {
+  background: rgba(200,169,110,0.08);
+  border-color: rgba(200,169,110,0.4);
+  color: #c8a96e;
+}
+.aq-ai-toggle-header--active {
+  border-color: rgba(200,169,110,0.5);
+  color: #c8a96e;
+  background: rgba(200,169,110,0.1);
+}
+
+/* ===== ASSISTANT ACTION IN AYAH MENU ===== */
+.aq-ayah-menu-item--assistant {
+  color: #c8a96e;
+}
+.aq-ayah-menu-item--assistant:hover {
+  background: rgba(200,169,110,0.15);
+  color: #e0c07a;
+}
 .aq-ai-body {
   flex: 1;
   display: flex;
@@ -1284,8 +1333,8 @@
   .aq-mobile-menu-btn { display: block; }
   .aq-nav-btn span { display: none; }
   .aq-nav-btn { padding: 5px 8px; }
-  .aq-index-btn span { display: none; }
-  .aq-index-btn { padding: 6px 8px; }
+  .aq-ai-toggle-header span { display: none; }
+  .aq-ai-toggle-header { padding: 6px 8px; }
 
   .aq-sidebar {
     position: fixed;
@@ -1303,7 +1352,15 @@
   .aq-sidebar-close { display: block; }
 
   .aq-ai-panel {
-    display: none;
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 45;
+    border-right: none;
+    border-top: 1px solid #222;
   }
 
   .aq-layout {

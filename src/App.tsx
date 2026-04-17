@@ -55,7 +55,6 @@ const AI_MODELS = [
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
   { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
-  { id: 'aiquran', name: 'AI Quran', color: '#c8a96e', free: true },
 ]
 
 // ===== LANGUAGE CONFIG =====
@@ -608,18 +607,13 @@ function App() {
             <div className="model-tabs">
               {AI_MODELS.map(model => {
                 const isDZAgent = model.id === 'dz-agent'
-                const isAIQuran = model.id === 'aiquran'
                 return (
                   <button
                     key={model.id}
-                    className={`model-tab ${selectedModel === model.id ? 'active' : ''} ${isDZAgent ? 'dz-agent-model-tab' : ''} ${isAIQuran ? 'aiquran-model-tab' : ''}`}
+                    className={`model-tab ${selectedModel === model.id ? 'active' : ''} ${isDZAgent ? 'dz-agent-model-tab' : ''}`}
                     onClick={() => {
                       if (model.id === 'dz-agent') {
                         navigate('/dz-agent')
-                        return
-                      }
-                      if (model.id === 'aiquran') {
-                        navigate('/aiquran')
                         return
                       }
                       setSelectedModel(model.id)
@@ -632,11 +626,18 @@ function App() {
                     }}
                     style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
                   >
-                    {(isDZAgent || isAIQuran) && <span className="dz-free-blink" style={isAIQuran ? { background: '#c8a96e', color: '#0d1117' } : {}}>Free</span>}
+                    {isDZAgent && <span className="dz-free-blink">Free</span>}
                     {model.name}
                   </button>
                 )
               })}
+              <button
+                className="model-tab quran-nav-tab"
+                onClick={() => navigate('/quran')}
+                title="القرآن الكريم"
+              >
+                📖 القرآن
+              </button>
             </div>
           </div>
 
@@ -700,6 +701,13 @@ function App() {
                     <span>{model.name}</span>
                   </button>
                 ))}
+                <button
+                  className="mobile-model-option"
+                  onClick={() => { setShowMobileModelMenu(false); navigate('/quran') }}
+                >
+                  <span>📖</span>
+                  <span>القرآن الكريم</span>
+                </button>
               </div>
             )}
           </div>
@@ -950,6 +958,13 @@ function App() {
                       <span>{model.name}</span>
                     </button>
                   ))}
+                  <button
+                    className="input-model-option"
+                    onClick={() => { setShowModelDropdown(false); navigate('/quran') }}
+                  >
+                    <span>📖</span>
+                    <span>القرآن الكريم</span>
+                  </button>
                 </div>
               )}
             </div>

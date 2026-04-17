@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, Play, Pause, Volume2, Bot, Send,
-  Menu, X, ChevronDown, ChevronUp, Loader2, BookOpen, Headphones,
-  ScrollText, Home, Bot as BotIcon, List,
+  Menu, X, Headphones, Loader2, BookOpen,
+  Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -69,18 +69,6 @@ const verseIncludesQuery = (text: string, query: string) => {
   return normalizeQuranSearch(text).includes(normalizedQuery)
 }
 
-const renderHighlightedVerseText = (text: string, query: string) => {
-  const normalizedQuery = normalizeQuranSearch(query)
-  if (!normalizedQuery) return text
-
-  return text.split(/(\s+)/).map((part, index) => {
-    if (!part.trim()) return part
-    return normalizeQuranSearch(part).includes(normalizedQuery) ? (
-      <mark key={`${part}-${index}`} className="aq-word-highlight">{part}</mark>
-    ) : part
-  })
-}
-
 const BOOKMARKS_KEY = 'aq-bookmarks'
 
 function loadBookmarks(): BookmarkedAyah[] {
@@ -103,7 +91,7 @@ export default function AIQuran() {
   const [verseSearch, setVerseSearch] = useState('')
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'reading' | 'tafsir' | 'audio'>('reading')
+  const [activeTab, setActiveTab] = useState<'reading' | 'audio'>('reading')
 
   const [verses, setVerses] = useState<Verse[]>([])
   const [versesLoading, setVersesLoading] = useState(false)
@@ -127,10 +115,9 @@ export default function AIQuran() {
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
-  const [aiOpen, setAiOpen] = useState(true)
+  const [aiOpen, setAiOpen] = useState(false)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [surahIndexOpen, setSurahIndexOpen] = useState(false)
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
   const [wordSearchLoading, setWordSearchLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -160,7 +147,7 @@ export default function AIQuran() {
       .catch(() => {})
   }, [])
 
-  const loadVerses = useCallback(async (chapterId: number, withTafsir: boolean) => {
+  const loadVerses = useCallback(async (chapterId: number) => {
     setVersesLoading(true)
     setVerses([])
     try {
@@ -168,8 +155,8 @@ export default function AIQuran() {
         language: 'ar',
         per_page: '300',
         fields: 'text_uthmani',
+        translations: '169',
       })
-      if (withTafsir) params.set('translations', '169')
       const r = await fetch(`${QURAN_API}/verses/by_chapter/${chapterId}?${params}`)
       const d = await r.json()
       setVerses(d.verses || [])
@@ -179,8 +166,8 @@ export default function AIQuran() {
 
   useEffect(() => {
     if (!selectedChapter) return
-    loadVerses(selectedChapter.id, activeTab === 'tafsir')
-  }, [selectedChapter, activeTab, loadVerses])
+    loadVerses(selectedChapter.id)
+  }, [selectedChapter, loadVerses])
 
   const loadAudio = useCallback(async (reciterId: number, chapterId: number) => {
     setAudioLoading(true)
@@ -329,8 +316,7 @@ export default function AIQuran() {
       playVerseAudio(verse.verse_key)
     } else if (action === 'assistant') {
       setAiOpen(true)
-      const ayahText = verse.text_uthmani.substring(0, 100)
-      setAiInput(`فسّر لي الآية الكريمة: ${ayahText}... (${verse.verse_key})`)
+      setAiInput(`فسّر لي هذه الآية الكريمة كاملةً وبيّن معناها وأسباب نزولها إن وجدت:\n\n${verse.text_uthmani}\n\n(${verse.verse_key})`)
       setBookmarksPanelOpen(false)
     }
     closeAyahMenu()
@@ -354,17 +340,21 @@ export default function AIQuran() {
       const systemPrompt = `أنت مساعد قرآني ذكي متخصص اسمه AI QURAN. تعمل داخل تطبيق DZ-GPT.
 
 مجالات تخصصك:
-1. **التفسير**: تفسير الآيات الكريمة (ابن كثير، الطبري، السعدي، وغيرهم)
-2. **معاني الكلمات**: شرح مفردات القرآن وإحصاءاتها عبر السور
-3. **أسباب النزول**: متى ولماذا نزلت الآيات
+1. **التفسير**: تفسير الآيات الكريمة بناءً على التفاسير المعتمدة (ابن كثير، الطبري، السعدي، القرطبي)
+2. **المعنى**: شرح مفردات القرآن ومعاني الآيات بشكل دقيق
+3. **أسباب النزول**: متى ولماذا نزلت الآيات إن توفرت روايات
 4. **تصنيف السور**: مكية أو مدنية مع الشرح
 5. **إحصاءات القرآن**: كم مرة وردت كلمة، في كم سورة، أبرز مواضعها
 6. **الأحكام الشرعية**: ما تضمنته الآيات من أحكام
-7. **الجزء والحزب والصفحة**: معلومات التنظيم
-8. **الملخصات**: ملخص موضوعات أي سورة
+7. **الملخصات**: ملخص موضوعات أي سورة
+
+تعليمات الذكاء السياقي:
+- حلّل الكلمات المفتاحية في سؤال المستخدم لتحديد نوع الطلب (تفسير، معنى، سبب نزول، إلخ)
+- استخدم السياق الحالي (السورة المختارة) لتعزيز دقة إجابتك
+- إذا كان السؤال عن آية محددة، اشرحها شرحاً وافياً
 
 ${context ? `السياق الحالي: ${context}` : ''}
-${wordCtx ? `${wordCtx}` : ''}
+${wordCtx ? wordCtx : ''}
 
 قواعد مهمة:
 - أجب دائماً باللغة العربية
@@ -471,8 +461,8 @@ ${wordCtx ? `${wordCtx}` : ''}
           <button className="aq-ayah-menu-item" onClick={() => handleAyahAction('listen')}>
             <Volume2 size={14} className="aq-ayah-menu-icon" /> استماع للآية
           </button>
-          <button className="aq-ayah-menu-item" onClick={() => handleAyahAction('assistant')}>
-            <Bot size={14} className="aq-ayah-menu-icon" /> المساعد الذكي
+          <button className="aq-ayah-menu-item aq-ayah-menu-item--assistant" onClick={() => handleAyahAction('assistant')}>
+            <Bot size={14} className="aq-ayah-menu-icon" /> اسأل المساعد الذكي
           </button>
         </div>
       )}
@@ -500,7 +490,7 @@ ${wordCtx ? `${wordCtx}` : ''}
             <Home size={15} /> الرئيسية
           </button>
           <button className="aq-nav-btn aq-nav-btn--active" title="AI Quran">
-            <BookOpen size={15} /> AI QURAN
+            <BookOpen size={15} /> القرآن الكريم
           </button>
         </div>
         <div className="aq-header-logo">
@@ -517,9 +507,13 @@ ${wordCtx ? `${wordCtx}` : ''}
             <BookmarkCheck size={15} />
             {bookmarks.length > 0 && <span className="aq-bookmarks-count">{bookmarks.length}</span>}
           </button>
-          <button className="aq-index-btn" onClick={() => setSurahIndexOpen(true)} title="فهرس السور الـ 114">
-            <List size={16} />
-            <span>فهرس السور</span>
+          <button
+            className={`aq-ai-toggle-header ${aiOpen ? 'aq-ai-toggle-header--active' : ''}`}
+            onClick={() => setAiOpen(p => !p)}
+            title="المساعد الذكي"
+          >
+            <BotIcon size={15} />
+            <span>المساعد الذكي</span>
           </button>
           <button className="aq-mobile-menu-btn" onClick={() => setMobileSidebarOpen(true)}>
             <Menu size={20} />
@@ -558,7 +552,7 @@ ${wordCtx ? `${wordCtx}` : ''}
                         title="المساعد"
                         onClick={() => {
                           setAiOpen(true)
-                          setAiInput(`فسّر لي الآية الكريمة: ${bm.text_uthmani.substring(0, 80)}... (${bm.verse_key})`)
+                          setAiInput(`فسّر لي هذه الآية الكريمة كاملةً وبيّن معناها وأسباب نزولها إن وجدت:\n\n${bm.text_uthmani}\n\n(${bm.verse_key})`)
                           setBookmarksPanelOpen(false)
                         }}
                       >
@@ -589,57 +583,10 @@ ${wordCtx ? `${wordCtx}` : ''}
         </div>
       )}
 
-      {/* ===== SURAH INDEX MODAL ===== */}
-      {surahIndexOpen && (
-        <div className="aq-surah-index-overlay" onClick={() => setSurahIndexOpen(false)}>
-          <div className="aq-surah-index-modal" onClick={e => e.stopPropagation()}>
-            <div className="aq-surah-index-header">
-              <div className="aq-surah-index-title">
-                <List size={18} />
-                <span>فهرس سور القرآن الكريم</span>
-                <span className="aq-surah-index-count">١١٤ سورة</span>
-              </div>
-              <button className="aq-surah-index-close" onClick={() => setSurahIndexOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="aq-surah-index-search">
-              <Search size={14} />
-              <input
-                placeholder="ابحث عن سورة..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                autoFocus
-                className="aq-surah-index-input"
-              />
-            </div>
-            <div className="aq-surah-index-grid">
-              {filteredChapters.map(ch => (
-                <button
-                  key={ch.id}
-                  className={`aq-surah-index-card ${selectedChapter?.id === ch.id ? 'aq-surah-index-card--active' : ''}`}
-                  onClick={() => { handleSelectChapter(ch); setSurahIndexOpen(false) }}
-                >
-                  <div className="aq-surah-index-card-num">{ch.id}</div>
-                  <div className="aq-surah-index-card-arabic">{ch.name_arabic}</div>
-                  <div className="aq-surah-index-card-en">{ch.name_simple}</div>
-                  <div className="aq-surah-index-card-meta">
-                    <span>{ch.verses_count} آية</span>
-                    <span className={`aq-surah-index-card-type aq-surah-index-card-type--${ch.revelation_place}`}>
-                      {ch.revelation_place === 'makkah' ? 'مكية' : 'مدنية'}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ===== LAYOUT ===== */}
       <div className="aq-layout">
 
-        {/* ===== LEFT SIDEBAR — SURAH LIST ===== */}
+        {/* ===== RIGHT SIDEBAR — SURAH INDEX (first in DOM = rightmost in RTL) ===== */}
         <aside className={`aq-sidebar ${mobileSidebarOpen ? 'aq-sidebar--open' : ''}`}>
           <div className="aq-sidebar-header">
             <span className="aq-sidebar-title">فهرس السور</span>
@@ -682,10 +629,6 @@ ${wordCtx ? `${wordCtx}` : ''}
           </div>
         </aside>
 
-        {mobileSidebarOpen && (
-          <div className="aq-overlay" onClick={() => setMobileSidebarOpen(false)} />
-        )}
-
         {/* ===== CENTER — MAIN CONTENT ===== */}
         <main className="aq-center">
           {/* Surah Title Banner */}
@@ -709,13 +652,7 @@ ${wordCtx ? `${wordCtx}` : ''}
               className={`aq-tab ${activeTab === 'reading' ? 'aq-tab--active' : ''}`}
               onClick={() => setActiveTab('reading')}
             >
-              <ScrollText size={14} /> قراءة
-            </button>
-            <button
-              className={`aq-tab ${activeTab === 'tafsir' ? 'aq-tab--active' : ''}`}
-              onClick={() => setActiveTab('tafsir')}
-            >
-              <BookOpen size={14} /> تفسير
+              <BookOpen size={14} /> قراءة
             </button>
             <button
               className={`aq-tab ${activeTab === 'audio' ? 'aq-tab--active' : ''}`}
@@ -779,8 +716,11 @@ ${wordCtx ? `${wordCtx}` : ''}
                         )}
                         <button
                           className="aq-tafsir-prompt-btn"
-                          onClick={() => { setAiOpen(true); setAiInput(`ما إحصائيات كلمة "${wordOccurrences.word}" في القرآن الكريم؟ وما معناها وأبرز الآيات التي وردت فيها؟`) }}
-                        >اسأل المساعد عن هذه الكلمة</button>
+                          onClick={() => {
+                            setAiOpen(true)
+                            setAiInput(`ما إحصائيات كلمة "${wordOccurrences.word}" في القرآن الكريم؟ وما معناها وأبرز الآيات التي وردت فيها؟`)
+                          }}
+                        >اسأل المساعد الذكي عن هذه الكلمة</button>
                       </>
                     )}
                   </div>
@@ -833,45 +773,6 @@ ${wordCtx ? `${wordCtx}` : ''}
                           )
                         })}
                       </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* ===== TAFSIR TAB ===== */}
-            {activeTab === 'tafsir' && (
-              <div className="aq-verses">
-                {versesLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="aq-skeleton aq-skeleton--tafsir" />
-                  ))
-                ) : displayedVerses.length === 0 ? (
-                  <div className="aq-empty">
-                    {normalizedVerseSearch ? 'لا توجد آيات مطابقة للبحث داخل هذه السورة' : 'اختر سورة من القائمة'}
-                  </div>
-                ) : (
-                  displayedVerses.map(v => (
-                    <div key={v.id} className="aq-tafsir-card">
-                      <div className="aq-verse-card-top">
-                        <span className="aq-verse-num">{v.verse_key}</span>
-                        <button
-                          className="aq-verse-menu-btn"
-                          onClick={e => openAyahMenu(e, v)}
-                          title="خيارات الآية"
-                        >
-                          <MoreVertical size={14} />
-                        </button>
-                      </div>
-                      <p className="aq-verse-text">{renderHighlightedVerseText(v.text_uthmani, verseSearch)}</p>
-                      {v.translations && v.translations[0] && (
-                        <div className="aq-tafsir-text">
-                          <span className="aq-tafsir-label">التفسير (ابن كثير):</span>
-                          <p dangerouslySetInnerHTML={{
-                            __html: v.translations[0].text.replace(/<\/?[^>]+(>|$)/g, ' ')
-                          }} />
-                        </div>
-                      )}
                     </div>
                   ))
                 )}
@@ -966,15 +867,21 @@ ${wordCtx ? `${wordCtx}` : ''}
           </div>
         </main>
 
-        {/* ===== RIGHT SIDEBAR — AI QURAN ASSISTANT ===== */}
-        <aside className="aq-ai-panel">
-          <button className="aq-ai-toggle" onClick={() => setAiOpen(p => !p)}>
-            <BotIcon size={15} />
-            <span>مساعد القرآن</span>
-            {aiOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
+        {mobileSidebarOpen && (
+          <div className="aq-overlay" onClick={() => setMobileSidebarOpen(false)} />
+        )}
 
-          {aiOpen && (
+        {/* ===== AI ASSISTANT PANEL ===== */}
+        {aiOpen && (
+          <aside className="aq-ai-panel">
+            <div className="aq-ai-panel-header">
+              <span className="aq-ai-panel-title">
+                <BotIcon size={15} /> المساعد القرآني الذكي
+              </span>
+              <button className="aq-ai-panel-close" onClick={() => setAiOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
             <div className="aq-ai-body">
               <div className="aq-ai-messages">
                 {aiMessages.length === 0 && (
@@ -1018,6 +925,7 @@ ${wordCtx ? `${wordCtx}` : ''}
                   onChange={e => setAiInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') sendAiMessage() }}
                   disabled={aiLoading}
+                  autoFocus
                 />
                 <button
                   className="aq-ai-send-btn"
@@ -1028,8 +936,8 @@ ${wordCtx ? `${wordCtx}` : ''}
                 </button>
               </div>
             </div>
-          )}
-        </aside>
+          </aside>
+        )}
 
       </div>
     </div>

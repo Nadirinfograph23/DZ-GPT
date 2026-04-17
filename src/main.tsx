@@ -12,7 +12,8 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/dz-agent" element={<DZAgent />} />
-        <Route path="/aiquran" element={<AIQuran />} />
+        <Route path="/quran" element={<AIQuran />} />
+        <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

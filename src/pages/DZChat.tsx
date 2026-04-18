@@ -363,6 +363,7 @@ export default function DZChat() {
     setInputText('')
     setAtDropdown(false)
     try {
+      const isDmSend = !!dmTarget
       if (wsRef.current?.readyState === 1) {
         wsRef.current.send(JSON.stringify({
           type: 'message',
@@ -370,6 +371,7 @@ export default function DZChat() {
           dmTo: dmTarget?.id || null,
           dmToName: dmTarget?.name || null,
         }))
+        if (isDmSend) setDmTarget(null)
       } else {
         const lower = text.toLowerCase()
         const isAiCall = lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')
@@ -388,7 +390,7 @@ export default function DZChat() {
             gender: localUser!.gender,
             text,
             timestamp: Date.now(),
-            isDM: !!dmTarget,
+            isDM: isDmSend,
             dmTo: dmTarget?.id,
             dmToName: dmTarget?.name,
           }
@@ -398,6 +400,7 @@ export default function DZChat() {
             setAiTyping(false)
           }
           addMessages(toAdd)
+          if (isDmSend) setDmTarget(null)
         } else if (isAiCall) {
           setAiTyping(false)
         }

@@ -85,7 +85,6 @@ export default function DZChat() {
 
   // @ mention suggestion state
   const [atDropdown, setAtDropdown] = useState(false)
-  const [atQuery, setAtQuery] = useState('')
   const [atSuggestions, setAtSuggestions] = useState<string[]>([])
 
   // Copy feedback state per message
@@ -315,13 +314,12 @@ export default function DZChat() {
     const atMatch = textBefore.match(/@(\w*)$/)
     if (atMatch) {
       const query = atMatch[1].toLowerCase()
-      setAtQuery(query)
       const filtered = AT_SUGGESTIONS.filter(s => s.slice(1).startsWith(query))
       setAtSuggestions(filtered)
       setAtDropdown(filtered.length > 0)
     } else {
       setAtDropdown(false)
-      setAtQuery('')
+      setAtSuggestions([])
     }
   }
 

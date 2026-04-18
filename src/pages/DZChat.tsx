@@ -268,6 +268,8 @@ export default function DZChat() {
         timestamp: Date.now(),
         isSystem: true,
       }
+      // Add messages immediately so the UI is never blank
+      addMessages([...history, welcomeMsg])
       connectWebSocket(user, [...history, welcomeMsg])
       startPolling()
     } catch {
@@ -455,6 +457,10 @@ export default function DZChat() {
       <div className="dzc-root" onClick={handleRootClick}>
         <div className="dzc-entry-overlay">
           <div className="dzc-entry-modal">
+            <button className="dzc-entry-close" onClick={() => navigate('/')} title="العودة للرئيسية">
+              <Home size={14} />
+              <span>الرئيسية</span>
+            </button>
             <div className="dzc-entry-logo">
               <MessageCircle size={32} className="dzc-entry-logo-icon" />
               <span className="dzc-entry-logo-text">DZ Chat</span>

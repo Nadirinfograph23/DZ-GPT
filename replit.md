@@ -7,6 +7,23 @@ A Vite + React + Express AI chat application with multi-model support.
 - **Frontend**: React + TypeScript, built with Vite. Located in `src/`.
 - **Backend**: Express.js server in `server.js` — serves API routes and in development acts as a Vite middleware host.
 - **Port**: Both dev and production run on port `5000` at `0.0.0.0`.
+- **Intelligence Layer**: `src/utils/dzMemory.ts` — localStorage-based user behavior memory (intent detection, query tracking, smart suggestions, behavior context injection).
+
+## User Intelligence System (dzMemory)
+
+`src/utils/dzMemory.ts` provides a zero-dependency, privacy-first behavior layer:
+- **Intent Detection**: classifies queries into 10 categories (coding, quran, ocr, news, sports, weather, github, currency, education, general)
+- **Query Tracking**: stores last 30 queries with intent + timestamp in localStorage (`dza-memory-queries`)
+- **Feature Usage Tracking**: tracks GitHub feature usage frequency
+- **Behavior Context**: `buildBehaviorContext()` generates Arabic context hints injected into AI requests (server strips & uses them as BEHAVIOR INTELLIGENCE in system prompt)
+- **Smart Suggestions**: `getSmartSuggestions()` returns ranked suggestions based on user history
+- **Retry Utility**: `withRetry(fn, retries, delayMs)` — exponential retry used by all API loaders
+
+## Performance & Reliability
+
+- **DZDashboard**: all 5 API loaders wrapped with `withRetry(1 retry, 800ms delay)` — no more silent failures
+- **DZChatBox**: 400ms debounce on sendMessage (ref-based, no state overhead), `withRetry(1 retry)` on fetch
+- **server.js**: behavior context extraction — client-injected `[سياق المستخدم: ...]` is stripped from user message and injected into system prompt as `BEHAVIOR INTELLIGENCE` section
 
 ## Running the App
 
@@ -132,9 +149,19 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - The chat supports visible invocation codes at the top of the welcome state: `@dz-agent`, `@dz-gpt`, and `/github`.
 - The welcome cards were compacted so the DZ Agent chat box remains visible and usable on smaller screens.
 
+## OCR DZ (نموذج استخراج النصوص)
+
+- النموذج `ocr-dz` يدعم رفع الصور (jpg, png, bmp, webp, tiff) وملفات PDF في نفس الوقت
+- يستخدم `tesseract.js` لاستخراج النص بدقة (عربي + إنجليزي + فرنسي)
+- بعد رفع الملف يظهر زر "Extract Text" لبدء المعالجة
+- **Pipeline ذكي**: استخراج النص → تصحيح AI (إملاء + صياغة + تنظيف) → وضع chat للتحليل
+- ملفات PDF المحتوية على صور تُحوَّل إلى canvas ثم OCR (دعم حتى 15 صفحة)
+- النص المستخرج والمصحح يُمرَّر كـ context للمحادثة للإجابة على الأسئلة
+
 ## AI Quran
 
 - `/aiquran` is available as a dedicated Quran page using Quran.com API v4 for chapters, verses, translations, recitations, and audio.
+- **Theme colors**: Updated from golden yellow (`#c8a96e`) to yellow-green (`#9acd32`) to match DZ GPT branding.
 - The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search with highlighted word matches.
 - CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
 

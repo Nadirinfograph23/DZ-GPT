@@ -371,6 +371,9 @@ export default function DZChat() {
           dmToName: dmTarget?.name || null,
         }))
       } else {
+        const lower = text.toLowerCase()
+        const isAiCall = lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')
+        if (isAiCall) setAiTyping(true)
         const r = await fetch('/api/chat-room/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -389,11 +392,18 @@ export default function DZChat() {
             dmTo: dmTarget?.id,
             dmToName: dmTarget?.name,
           }
-          addMessages([myMsg])
+          const toAdd: ChatMessage[] = [myMsg]
+          if (d.botMsg) {
+            toAdd.push(d.botMsg as ChatMessage)
+            setAiTyping(false)
+          }
+          addMessages(toAdd)
+        } else if (isAiCall) {
+          setAiTyping(false)
         }
       }
-      const lower = text.toLowerCase()
-      if (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')) setAiTyping(true)
+      const lower2 = text.toLowerCase()
+      if ((lower2.startsWith('@dzgpt') || lower2.startsWith('@dzagent')) && wsRef.current?.readyState === 1) setAiTyping(true)
     } catch {}
     finally { setSending(false); inputRef.current?.focus() }
   }, [inputText, sending, dmTarget, localUser, addMessages])

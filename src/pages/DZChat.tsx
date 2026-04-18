@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Highlighter,
+  MoreVertical, Highlighter, Copy, Check,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -30,6 +30,7 @@ interface ChatMessage {
   dmToName?: string | null
   isDeleted?: boolean
   triggeredBy?: string
+  localDeleted?: boolean
 }
 
 interface LocalUser {
@@ -42,6 +43,7 @@ interface LocalUser {
 const MALE_ICON = '♂'
 const FEMALE_ICON = '♀'
 const ADMIN_NAME = 'Nadir Infograph | نذير حوامرية'
+const AT_SUGGESTIONS = ['@dzagent', '@dzgpt']
 
 function genderIcon(gender: string) {
   if (gender === 'female') return <span className="dzc-gender dzc-gender--female">{FEMALE_ICON}</span>
@@ -80,6 +82,14 @@ export default function DZChat() {
   const [msgMenu, setMsgMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
   const [userMenu, setUserMenu] = useState<{ user: ChatUser; x: number; y: number } | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
+
+  // @ mention suggestion state
+  const [atDropdown, setAtDropdown] = useState(false)
+  const [atQuery, setAtQuery] = useState('')
+  const [atSuggestions, setAtSuggestions] = useState<string[]>([])
+
+  // Copy feedback state per message
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const wsConnectedRef = useRef(false)
@@ -216,7 +226,6 @@ export default function DZChat() {
 
     wsRef.current = ws
 
-    // Heartbeat every 20 seconds
     const heartbeat = setInterval(() => {
       if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }))
     }, 20000)
@@ -295,11 +304,64 @@ export default function DZChat() {
     }
   }, [stopPolling])
 
+  // Handle @ mention input logic
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setInputText(val)
+
+    // Detect @ mention
+    const cursor = e.target.selectionStart ?? val.length
+    const textBefore = val.slice(0, cursor)
+    const atMatch = textBefore.match(/@(\w*)$/)
+    if (atMatch) {
+      const query = atMatch[1].toLowerCase()
+      setAtQuery(query)
+      const filtered = AT_SUGGESTIONS.filter(s => s.slice(1).startsWith(query))
+      setAtSuggestions(filtered)
+      setAtDropdown(filtered.length > 0)
+    } else {
+      setAtDropdown(false)
+      setAtQuery('')
+    }
+  }
+
+  const handleAtSelect = (suggestion: string) => {
+    const input = inputRef.current
+    if (!input) return
+    const cursor = input.selectionStart ?? inputText.length
+    const before = inputText.slice(0, cursor)
+    const after = inputText.slice(cursor)
+    const replaced = before.replace(/@\w*$/, suggestion + ' ')
+    setInputText(replaced + after)
+    setAtDropdown(false)
+    setTimeout(() => {
+      input.focus()
+      const pos = replaced.length
+      input.setSelectionRange(pos, pos)
+    }, 0)
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (atDropdown) {
+      if (e.key === 'Escape') { e.preventDefault(); setAtDropdown(false); return }
+      if (e.key === 'Enter' && atSuggestions.length > 0) {
+        e.preventDefault()
+        handleAtSelect(atSuggestions[0])
+        return
+      }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
   const sendMessage = useCallback(async () => {
     const text = inputText.trim()
     if (!text || !sessionIdRef.current || sending) return
     setSending(true)
     setInputText('')
+    setAtDropdown(false)
     try {
       if (wsRef.current?.readyState === 1) {
         wsRef.current.send(JSON.stringify({
@@ -355,15 +417,44 @@ export default function DZChat() {
     setUserMenu(null)
   }
 
+  // Copy bot message to clipboard
+  const handleCopyMsg = async (msg: ChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(msg.text)
+      setCopiedId(msg.id)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch {}
+  }
+
+  // Delete bot message locally
+  const handleDeleteBotMsg = (msgId: string) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, localDeleted: true } : m))
+  }
+
+  // Open DM from a message sender click
+  const handleMsgSenderClick = (e: React.MouseEvent, msg: ChatMessage) => {
+    if (msg.isBot || msg.isSystem || msg.fromId === sessionIdRef.current) return
+    e.stopPropagation()
+    const user: ChatUser = { id: msg.fromId, name: msg.from, gender: msg.gender as 'male' | 'female' }
+    setUserMenu({ user, x: e.clientX, y: e.clientY })
+  }
+
   useEffect(() => {
     if (messages.length) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])
 
+  // Close dropdown when clicking outside
+  const handleRootClick = () => {
+    setMsgMenu(null)
+    setUserMenu(null)
+    setAtDropdown(false)
+  }
+
   if (!localUser) {
     return (
-      <div className="dzc-root" onClick={() => { setMsgMenu(null); setUserMenu(null) }}>
+      <div className="dzc-root" onClick={handleRootClick}>
         <div className="dzc-entry-overlay">
           <div className="dzc-entry-modal">
             <div className="dzc-entry-logo">
@@ -428,12 +519,13 @@ export default function DZChat() {
   }
 
   const visibleMessages = messages.filter(m => {
+    if (m.localDeleted) return false
     if (m.isDM) return m.fromId === sessionIdRef.current || m.dmTo === sessionIdRef.current
     return true
   })
 
   return (
-    <div className="dzc-root" dir="rtl" onClick={() => { setMsgMenu(null); setUserMenu(null) }}>
+    <div className="dzc-root" dir="rtl" onClick={handleRootClick}>
 
       {/* ===== TOP NAV ===== */}
       <header className="dzc-nav">
@@ -544,13 +636,36 @@ export default function DZChat() {
                 >
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
-                    <span className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''}`}>
+                    <span
+                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
+                      onClick={(e) => handleMsgSenderClick(e, msg)}
+                      title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
+                    >
                       {msg.isHighlighted ? ADMIN_NAME : msg.from}
                     </span>
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}
                     {msg.triggeredBy && <span className="dzc-msg-triggered">↩ {msg.triggeredBy}</span>}
                     <span className="dzc-msg-time">{formatTime(msg.timestamp)}</span>
+                    {/* Bot message actions: copy + delete */}
+                    {msg.isBot && (
+                      <div className="dzc-bot-actions">
+                        <button
+                          className="dzc-bot-action-btn"
+                          title="نسخ الرسالة"
+                          onClick={(e) => { e.stopPropagation(); handleCopyMsg(msg) }}
+                        >
+                          {copiedId === msg.id ? <Check size={11} /> : <Copy size={11} />}
+                        </button>
+                        <button
+                          className="dzc-bot-action-btn dzc-bot-action-btn--danger"
+                          title="حذف الرسالة"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteBotMsg(msg.id) }}
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    )}
                     {localUser.isAdmin && !msg.isBot && !msg.isSystem && (
                       <button className="dzc-msg-admin-btn" onClick={(e) => { e.stopPropagation(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }) }}>
                         <MoreVertical size={12} />
@@ -576,24 +691,43 @@ export default function DZChat() {
           </div>
 
           {/* ===== INPUT AREA ===== */}
-          <div className="dzc-input-bar">
-            <input
-              ref={inputRef}
-              className="dzc-input"
-              placeholder={dmTarget ? `رسالة خاصة لـ ${dmTarget.name}...` : 'اكتب رسالتك... أو @dzgpt / @dzagent لاستدعاء الذكاء الاصطناعي'}
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-              disabled={sending}
-              maxLength={1000}
-            />
-            <button
-              className="dzc-send-btn"
-              onClick={sendMessage}
-              disabled={sending || !inputText.trim()}
-            >
-              {sending ? <Loader2 size={16} className="dzc-spin" /> : <Send size={16} />}
-            </button>
+          <div className="dzc-input-wrap">
+            {/* @ mention dropdown */}
+            {atDropdown && atSuggestions.length > 0 && (
+              <div className="dzc-at-dropdown" onClick={e => e.stopPropagation()}>
+                {atSuggestions.map(s => (
+                  <button
+                    key={s}
+                    className="dzc-at-item"
+                    onMouseDown={(e) => { e.preventDefault(); handleAtSelect(s) }}
+                  >
+                    <Bot size={13} className="dzc-at-icon" />
+                    <span className="dzc-at-name">{s}</span>
+                    <span className="dzc-at-desc">{s === '@dzagent' ? 'وكيل ذكي مع بحث مباشر' : 'نموذج دردشة سريع'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="dzc-input-bar">
+              <input
+                ref={inputRef}
+                className="dzc-input"
+                placeholder={dmTarget ? `رسالة خاصة لـ ${dmTarget.name}...` : 'اكتب رسالتك... أو @dzgpt / @dzagent لاستدعاء الذكاء الاصطناعي'}
+                value={inputText}
+                onChange={handleInputChange}
+                onKeyDown={handleInputKeyDown}
+                disabled={sending}
+                maxLength={1000}
+                autoComplete="off"
+              />
+              <button
+                className="dzc-send-btn"
+                onClick={sendMessage}
+                disabled={sending || !inputText.trim()}
+              >
+                {sending ? <Loader2 size={16} className="dzc-spin" /> : <Send size={16} />}
+              </button>
+            </div>
           </div>
         </main>
       </div>
@@ -609,7 +743,7 @@ export default function DZChat() {
           onClick={e => e.stopPropagation()}
         >
           <button className="dzc-context-item" onClick={() => { setDmTarget(userMenu.user); setSidebarOpen(false); setUserMenu(null); inputRef.current?.focus() }}>
-            <MessageCircle size={13} /> رسالة خاصة
+            <MessageCircle size={13} /> إرسال رسالة خاصة
           </button>
           {localUser.isAdmin && (
             <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', userMenu.user.id)}>

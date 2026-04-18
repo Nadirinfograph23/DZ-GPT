@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import DZDashboard from './DZDashboard'
+import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== TYPES =====
 type RichType =
@@ -1489,6 +1490,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -2020,6 +2022,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const text = (overrideInput ?? input).trim()
     if (!text || isLoading) return
 
+    // Debounce: prevent duplicate sends within 400ms
+    const now = Date.now()
+    if (now - lastSendRef.current < 400) return
+    lastSendRef.current = now
+
+    // Track user behavior (intent + query)
+    trackQuery(text)
+
+    // Build behavior context hint to inject into the request
+    const behaviorCtx = buildBehaviorContext(3)
+
     const userMessage: DZMessage = { id: generateId(), role: 'user', content: text, richType: 'text' }
     const outboundMessages = [...messages, userMessage].map((m, index, arr) => ({
       role: m.role,
@@ -2027,56 +2040,81 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         ? `${m.content}\ncontext: weather_priority`
         : m.content,
     }))
+
+    // Inject behavior context into the last user message (server reads it for smarter responses)
+    if (behaviorCtx && outboundMessages.length > 0) {
+      const last = outboundMessages[outboundMessages.length - 1]
+      if (last.role === 'user') {
+        outboundMessages[outboundMessages.length - 1] = {
+          ...last,
+          content: last.content + behaviorCtx,
+        }
+      }
+    }
+
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
 
     try {
       abortRef.current = new AbortController()
-      const res = await fetch('/api/dz-agent-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: outboundMessages,
-          githubToken: githubToken || undefined,
-          currentRepo: currentRepo || undefined,
-          dashboardContext,
-        }),
-        signal: abortRef.current.signal,
-      })
+      const signal = abortRef.current.signal
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.error || `Server error: ${res.status}`)
-      }
+      // Retry once on network/server failure (not on user abort)
+      const res = await withRetry(async () => {
+        const r = await fetch('/api/dz-agent-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: outboundMessages,
+            githubToken: githubToken || undefined,
+            currentRepo: currentRepo || undefined,
+            dashboardContext,
+          }),
+          signal,
+        })
+        if (!r.ok) {
+          const errData = await r.json().catch(() => null)
+          throw new Error(errData?.error || `Server error: ${r.status}`)
+        }
+        return r
+      }, 1, 1000)
 
       const data = await res.json()
 
       if (data.action === 'list-repos') {
+        trackFeatureUsage('github-repos')
         await fetchRepos()
         return
       }
       if (data.action === 'list-files' && data.repo) {
+        trackFeatureUsage('github-files')
         await fetchFiles(data.repo, data.path || '')
         return
       }
       if (data.action === 'read-file' && data.repo && data.path) {
+        trackFeatureUsage('github-read-file')
         await fetchFileContent(data.repo, data.path)
         return
       }
 
       if (data.pendingAction) {
         addAssistantMessage({
-          content: data.content || 'Please review and approve this action:',
+          content: data.content || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
           richType: 'approval',
           pendingAction: data.pendingAction,
         })
       } else {
-        addAssistantMessage({ content: data.content || 'No response generated.', richType: 'text', showDevCard: !!data.showDevCard })
+        addAssistantMessage({
+          content: data.content || 'تعذر تنفيذ الطلب، حاول مرة أخرى.',
+          richType: 'text',
+          showDevCard: !!data.showDevCard,
+        })
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
-      addAssistantMessage({ content: 'Sorry, an error occurred. Please try again.', richType: 'text', isError: true })
+      console.error('[DZChatBox] sendMessage error:', err)
+      addAssistantMessage({ content: 'تعذر تنفيذ الطلب، حاول مرة أخرى.', richType: 'text', isError: true })
     } finally {
       setIsLoading(false)
       abortRef.current = null

@@ -2403,6 +2403,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
   const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // Extract and strip client-injected behavior context tag from the last user message
+  const behaviorContextMatch = lastUserMessage.match(/\n?\[سياق المستخدم:([^\]]+)\]$/)
+  const clientBehaviorContext = behaviorContextMatch ? behaviorContextMatch[1].trim() : ''
+  if (behaviorContextMatch) {
+    lastUserMessage = lastUserMessage.replace(behaviorContextMatch[0], '').trim()
+    const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
+    if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
+  }
+
   const invocationMatch = lastUserMessage.match(/^(@dz-agent|@dz-gpt|\/github)\b\s*/i)
   const invocationMode = invocationMatch?.[1]?.toLowerCase() || '@dz-agent'
   if (invocationMatch) {
@@ -3104,7 +3114,9 @@ ${weatherPriorityContext ? `## 🌤️ أولوية الطقس — OpenWeather A
 
 ${educationalContext ? `## 📚 سياق تعليمي من eddirasa.com أولاً\n${educationalContext}\n\n**قواعد التعليم:**\n1. ابدأ بتحديد المادة والمستوى\n2. إذا وجدت نتيجة من eddirasa.com: لخّصها وفسّرها بلغة بسيطة واذكر الرابط\n3. إذا لم تجد نتيجة: قل إن eddirasa.com لم يرجع نتيجة مطابقة، ثم استخدم المعرفة التعليمية العامة\n4. للتمارين: افهم السؤال، حدّد الموضوع، حل خطوة بخطوة، ثم أعط طريقة تحقق\n5. للتعلم والشرح: ملخص + أمثلة + 3 تمارين تدريبية + اختبار صغير` : ''}
 
-${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}`
+${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}
+
+${clientBehaviorContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🧠 BEHAVIOR INTELLIGENCE (استخبارات المستخدم)\n━━━━━━━━━━━━━━━━━━━━━━\n${clientBehaviorContext}\n> استخدم هذا السياق لتكييف أسلوبك وترتيب أولويات إجابتك دون الإشارة إليه صراحةً.` : ''}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },

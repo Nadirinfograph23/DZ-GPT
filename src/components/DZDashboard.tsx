@@ -6,6 +6,7 @@ import {
   GitBranch, Cloud, BookOpen,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
+import { withRetry } from '../utils/dzMemory'
 
 interface NewsItem {
   title: string
@@ -255,50 +256,85 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const loadDashboard = async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/dz-agent/dashboard')
-      if (r.ok) setData(await r.json())
-    } catch { /* silent */ }
-    finally { setLoading(false) }
+      const result = await withRetry(async () => {
+        const r = await fetch('/api/dz-agent/dashboard')
+        if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
+        return r.json()
+      }, 1)
+      setData(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadDashboard failed:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const loadWeather = useCallback(async (city: string) => {
     setWeatherLoading(true)
     try {
-      const r = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
-      if (r.ok) setWeatherData(await r.json())
-      else setWeatherData(null)
-    } catch { setWeatherData(null) }
-    finally { setWeatherLoading(false) }
+      const result = await withRetry(async () => {
+        const r = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+        if (!r.ok) throw new Error(`Weather API error: ${r.status}`)
+        return r.json()
+      }, 1)
+      setWeatherData(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadWeather failed:', err)
+      setWeatherData(null)
+    } finally {
+      setWeatherLoading(false)
+    }
   }, [])
 
   const loadPrayer = useCallback(async (city: string) => {
     setPrayerLoading(true)
     try {
-      const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
-      if (r.ok) setPrayerData(await r.json())
-      else setPrayerData(null)
-    } catch { setPrayerData(null) }
-    finally { setPrayerLoading(false) }
+      const result = await withRetry(async () => {
+        const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+        if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
+        return r.json()
+      }, 1)
+      setPrayerData(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadPrayer failed:', err)
+      setPrayerData(null)
+    } finally {
+      setPrayerLoading(false)
+    }
   }, [])
 
   const loadCurrency = useCallback(async () => {
     setCurrencyLoading(true)
     try {
-      const r = await fetch('/api/currency/latest')
-      if (r.ok) setCurrencyData(await r.json())
-      else setCurrencyData(null)
-    } catch { setCurrencyData(null) }
-    finally { setCurrencyLoading(false) }
+      const result = await withRetry(async () => {
+        const r = await fetch('/api/currency/latest')
+        if (!r.ok) throw new Error(`Currency API error: ${r.status}`)
+        return r.json()
+      }, 1)
+      setCurrencyData(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadCurrency failed:', err)
+      setCurrencyData(null)
+    } finally {
+      setCurrencyLoading(false)
+    }
   }, [])
 
   const loadSyncStatus = useCallback(async () => {
     setSyncLoading(true)
     try {
-      const r = await fetch('/api/dz-agent/sync-status')
-      if (r.ok) setSyncStatus(await r.json())
-      else setSyncStatus(null)
-    } catch { setSyncStatus(null) }
-    finally { setSyncLoading(false) }
+      const result = await withRetry(async () => {
+        const r = await fetch('/api/dz-agent/sync-status')
+        if (!r.ok) throw new Error(`Sync API error: ${r.status}`)
+        return r.json()
+      }, 1)
+      setSyncStatus(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadSyncStatus failed:', err)
+      setSyncStatus(null)
+    } finally {
+      setSyncLoading(false)
+    }
   }, [])
 
   const changeCity = useCallback((city: string) => {

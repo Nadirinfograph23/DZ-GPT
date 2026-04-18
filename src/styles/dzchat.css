@@ -1,6 +1,7 @@
 /* ===== DZ CHAT ROOT ===== */
 .dzc-root {
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #0a0a0a;
   color: #c8d8e8;
@@ -26,7 +27,7 @@
   background: #111111;
   border: 1px solid #1e1e1e;
   border-radius: 16px;
-  padding: 36px 32px;
+  padding: 28px 32px 36px;
   width: 100%;
   max-width: 380px;
   display: flex;
@@ -34,6 +35,30 @@
   gap: 16px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(200, 255, 0, 0.06);
   animation: dzc-modal-in 0.25s ease;
+  position: relative;
+}
+
+/* Close / home button on entry modal */
+.dzc-entry-close {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  color: #556677;
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  align-self: flex-start;
+  direction: rtl;
+  transition: all 0.18s;
+  margin-bottom: -4px;
+}
+.dzc-entry-close:hover {
+  background: #161616;
+  border-color: #c8ff00;
+  color: #c8ff00;
 }
 
 @keyframes dzc-modal-in {
@@ -548,6 +573,8 @@
   position: relative;
   background: #0d0d0d;
   border-top: 1px solid #1e1e1e;
+  min-height: 66px;
+  z-index: 10;
 }
 
 /* ===== @ MENTION DROPDOWN ===== */
@@ -709,6 +736,10 @@
 
 /* ===== MOBILE ===== */
 @media (max-width: 700px) {
+  .dzc-root {
+    height: 100vh;
+    height: 100dvh;
+  }
   .dzc-sidebar {
     position: fixed;
     top: 52px;
@@ -725,5 +756,6 @@
   .dzc-nav-label      { display: none; }
   .dzc-msg            { max-width: 90%; }
   .dzc-msg--bot       { max-width: 95%; }
-  .dzc-entry-modal    { padding: 28px 20px; margin: 16px; }
+  .dzc-entry-modal    { padding: 24px 18px 28px; margin: 16px; max-height: 90dvh; overflow-y: auto; }
+  .dzc-input-wrap     { position: sticky; bottom: 0; }
 }

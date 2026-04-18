@@ -1753,3 +1753,126 @@ body {
   transition: color 0.2s;
 }
 .ocr-switch-btn:hover { color: #22c55e; }
+
+/* ===== OCR DZ STYLES ===== */
+.ocr-dz-section {
+  border: 1px solid rgba(0, 176, 80, 0.3) !important;
+  background: rgba(0, 176, 80, 0.04) !important;
+}
+
+.ocr-upload-btn {
+  border-color: rgba(0, 176, 80, 0.4) !important;
+  background: rgba(0, 176, 80, 0.06) !important;
+  color: #00b050 !important;
+}
+.ocr-upload-btn:hover {
+  border-color: rgba(0, 176, 80, 0.7) !important;
+  background: rgba(0, 176, 80, 0.12) !important;
+}
+.ocr-features-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #4a9c6a;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ocr-features-row span {
+  background: rgba(0, 176, 80, 0.08);
+  border: 1px solid rgba(0, 176, 80, 0.2);
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.ocr-file-ready {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  animation: fadeIn 0.3s ease;
+}
+.ocr-file-icon { color: #00b050; }
+.ocr-file-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ccc;
+  text-align: center;
+  word-break: break-all;
+}
+.ocr-file-size { font-size: 11px; color: #555; }
+
+.ocr-extract-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #00b050, #007d38);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+.ocr-extract-btn:hover {
+  background: linear-gradient(135deg, #00c85a, #009945);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,176,80,0.35);
+}
+
+.ocr-cancel-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ocr-cancel-btn:hover { color: #aaa; border-color: #555; }
+
+.ocr-progress-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px;
+}
+.ocr-spin-icon {
+  color: #00b050;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ocr-progress-label {
+  font-size: 13px;
+  color: #aaa;
+  text-align: center;
+  direction: rtl;
+}
+.ocr-progress-bar-wrap {
+  width: 200px;
+  height: 4px;
+  background: #222;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ocr-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00b050, #00d060);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+.ocr-progress-pct {
+  font-size: 12px;
+  color: #555;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

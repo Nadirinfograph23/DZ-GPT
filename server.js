@@ -6,6 +6,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { readFile } from 'fs/promises'
+import { WebSocketServer } from 'ws'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -4014,6 +4015,245 @@ app.post('/api/dz-agent/github/stats', async (req, res) => {
   }
 })
 
+// ===== CHAT ROOM — IN-MEMORY STATE =====
+const chatMessages = []
+const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
+const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
+const MAX_CHAT_MSGS = 200
+
+function chatId() {
+  return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
+}
+
+function getOnlineUsers() {
+  const now = Date.now()
+  return [...chatSessions.values()]
+    .filter(s => now - s.lastSeen < 40000)
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin }))
+}
+
+function broadcastChat(data, exceptWs = null) {
+  const json = JSON.stringify(data)
+  for (const s of chatSessions.values()) {
+    if (s.ws && s.ws !== exceptWs && s.ws.readyState === 1) {
+      try { s.ws.send(json) } catch {}
+    }
+  }
+}
+
+function pushChatMsg(msg) {
+  chatMessages.push(msg)
+  if (chatMessages.length > MAX_CHAT_MSGS) chatMessages.splice(0, chatMessages.length - MAX_CHAT_MSGS)
+  return msg
+}
+
+async function handleAiChatTrigger(rawText, isAgent, authorSession) {
+  const trigger = isAgent ? '@dzagent' : '@dzgpt'
+  const question = rawText.slice(trigger.length).trim()
+  if (!question) return
+  const systemPrompt = isAgent
+    ? 'أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، تعليم). أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
+    : 'أنت DZ GPT، مساعد ذكي عام ومفيد. أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
+  try {
+    const result = await callGroqWithFallback({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: question },
+      ],
+      max_tokens: 512,
+      temperature: 0.7,
+    })
+    const botMsg = pushChatMsg({
+      id: chatId(),
+      from: isAgent ? 'DZ Agent' : 'DZ GPT',
+      fromId: 'bot',
+      gender: 'bot',
+      text: result.content || 'حدث خطأ.',
+      timestamp: Date.now(),
+      isBot: true,
+      botType: isAgent ? 'agent' : 'gpt',
+      triggeredBy: authorSession.name,
+    })
+    broadcastChat({ type: 'message', msg: botMsg })
+  } catch (err) {
+    console.error('[ChatAI]', err.message)
+  }
+}
+
+// ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====
+app.post('/api/chat-room/join', (req, res) => {
+  const { name, gender, adminSecret } = req.body || {}
+  if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
+  const id = chatId()
+  const isAdmin = adminSecret === CHAT_ADMIN_SECRET
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null }
+  chatSessions.set(id, session)
+  const joinMsg = pushChatMsg({
+    id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
+    text: `${session.name} joined the chat.`, timestamp: Date.now(), isSystem: true,
+  })
+  broadcastChat({ type: 'message', msg: joinMsg })
+  broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  res.json({ sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() })
+})
+
+app.post('/api/chat-room/leave', (req, res) => {
+  const { sessionId } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (session) {
+    chatSessions.delete(sessionId)
+    const leaveMsg = pushChatMsg({
+      id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
+      text: `${session.name} left the chat.`, timestamp: Date.now(), isSystem: true,
+    })
+    broadcastChat({ type: 'message', msg: leaveMsg })
+    broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  }
+  res.json({ ok: true })
+})
+
+app.post('/api/chat-room/send', async (req, res) => {
+  const { sessionId, text, dmTo, dmToName } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session) return res.status(401).json({ error: 'Invalid session' })
+  const cleanText = sanitizeString(text, 1000).trim()
+  if (!cleanText) return res.status(400).json({ error: 'Empty message' })
+  session.lastSeen = Date.now()
+  const msg = pushChatMsg({
+    id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
+    text: cleanText, timestamp: Date.now(),
+    isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
+  })
+  if (dmTo) {
+    const recip = [...chatSessions.values()].find(s => s.id === dmTo)
+    const json = JSON.stringify({ type: 'message', msg })
+    if (session.ws?.readyState === 1) session.ws.send(json)
+    if (recip?.ws?.readyState === 1) recip.ws.send(json)
+  } else {
+    broadcastChat({ type: 'message', msg })
+  }
+  const lower = cleanText.toLowerCase()
+  if (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')) {
+    handleAiChatTrigger(cleanText, lower.startsWith('@dzagent'), session)
+  }
+  res.json({ ok: true, msgId: msg.id })
+})
+
+app.get('/api/chat-room/messages', (req, res) => {
+  const since = Number(req.query.since) || 0
+  const sessionId = req.query.sessionId
+  const session = chatSessions.get(sessionId)
+  if (session) session.lastSeen = Date.now()
+  const msgs = chatMessages.filter(m => !m.isDM && m.timestamp > since)
+  res.json({ messages: msgs, users: getOnlineUsers(), count: chatSessions.size })
+})
+
+app.post('/api/chat-room/admin', (req, res) => {
+  const { sessionId, action, targetId, msgId } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session?.isAdmin) return res.status(403).json({ error: 'Unauthorized' })
+  if (action === 'delete' && msgId) {
+    const m = chatMessages.find(m => m.id === msgId)
+    if (m) m.isDeleted = true
+    broadcastChat({ type: 'delete', msgId })
+  } else if (action === 'block' && targetId) {
+    const target = chatSessions.get(targetId)
+    if (target?.ws?.readyState === 1) target.ws.close()
+    chatSessions.delete(targetId)
+    broadcastChat({ type: 'blocked', userId: targetId })
+    broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  } else if (action === 'highlight' && msgId) {
+    const m = chatMessages.find(m => m.id === msgId)
+    if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+  }
+  res.json({ ok: true })
+})
+
+// ===== WEBSOCKET CHAT SERVER =====
+function setupChatWebSocket(httpServer) {
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws/chat' })
+  wss.on('connection', (ws) => {
+    let sid = null
+    ws.on('message', async (raw) => {
+      try {
+        const data = JSON.parse(raw.toString())
+        if (data.type === 'join') {
+          const { name, gender, adminSecret } = data
+          if (!name?.trim() || !gender) return ws.close()
+          const id = chatId()
+          sid = id
+          const isAdmin = adminSecret === CHAT_ADMIN_SECRET
+          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws })
+          const session = chatSessions.get(id)
+          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() }))
+          const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} joined the chat.`, timestamp: Date.now(), isSystem: true })
+          broadcastChat({ type: 'message', msg: joinMsg }, ws)
+          ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
+          broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+        } else if (data.type === 'message') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session) return
+          session.lastSeen = Date.now()
+          const cleanText = sanitizeString(data.text, 1000).trim()
+          if (!cleanText) return
+          const msg = pushChatMsg({
+            id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
+            text: cleanText, timestamp: Date.now(),
+            isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
+          })
+          if (data.dmTo) {
+            const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
+            const json = JSON.stringify({ type: 'message', msg })
+            ws.send(json)
+            if (recip?.ws?.readyState === 1) recip.ws.send(json)
+          } else {
+            broadcastChat({ type: 'message', msg })
+          }
+          const lower = cleanText.toLowerCase()
+          if (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')) {
+            handleAiChatTrigger(cleanText, lower.startsWith('@dzagent'), session)
+          }
+        } else if (data.type === 'ping') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }
+        } else if (data.type === 'admin') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session?.isAdmin) return
+          if (data.action === 'delete' && data.msgId) {
+            const m = chatMessages.find(m => m.id === data.msgId)
+            if (m) m.isDeleted = true
+            broadcastChat({ type: 'delete', msgId: data.msgId })
+          } else if (data.action === 'block' && data.targetId) {
+            const target = chatSessions.get(data.targetId)
+            if (target?.ws?.readyState === 1) target.ws.close()
+            chatSessions.delete(data.targetId)
+            broadcastChat({ type: 'blocked', userId: data.targetId })
+            broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+          } else if (data.action === 'highlight' && data.msgId) {
+            const m = chatMessages.find(m => m.id === data.msgId)
+            if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+          }
+        }
+      } catch (err) { console.error('[WS:Chat]', err.message) }
+    })
+    ws.on('close', () => {
+      if (sid) {
+        const session = chatSessions.get(sid)
+        if (session) {
+          chatSessions.delete(sid)
+          const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} left the chat.`, timestamp: Date.now(), isSystem: true })
+          broadcastChat({ type: 'message', msg: leaveMsg })
+          broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+        }
+        sid = null
+      }
+    })
+    ws.on('error', () => {})
+  })
+  console.log('[WS:Chat] Chat WebSocket server ready on /ws/chat')
+}
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -4037,9 +4277,10 @@ if (isMain) {
         res.status(500).send('Frontend not available.')
       }
     })
-    app.listen(PORT, '0.0.0.0', () => {
+    const httpServer = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`)
     })
+    setupChatWebSocket(httpServer)
   } else {
     // Dev: embed Vite as middleware so both API and frontend run on port 5000
     const { createServer: createViteServer } = await import('vite')
@@ -4048,8 +4289,9 @@ if (isMain) {
       appType: 'spa',
     })
     app.use(vite.middlewares)
-    app.listen(PORT, '0.0.0.0', () => {
+    const httpServer = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Dev server running on http://0.0.0.0:${PORT}`)
     })
+    setupChatWebSocket(httpServer)
   }
 }

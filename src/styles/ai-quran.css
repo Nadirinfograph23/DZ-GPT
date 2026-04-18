@@ -5,7 +5,7 @@
   height: 100dvh;
   background: #0a0a0a;
   color: #e8e8e8;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Noto Naskh Arabic', 'Tahoma', 'Arial', system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -67,7 +67,7 @@
 .aq-header-logo-sub {
   font-size: 11px;
   color: #6b7280;
-  font-family: 'Amiri', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
 }
 
 .aq-header-right {
@@ -216,7 +216,7 @@
   align-items: flex-start;
 }
 .aq-chapter-arabic {
-  font-family: 'Amiri', 'Traditional Arabic', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 15px;
   line-height: 1.3;
 }
@@ -252,7 +252,7 @@
   flex-shrink: 0;
 }
 .aq-surah-banner-name {
-  font-family: 'Amiri', 'Traditional Arabic', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 28px;
   color: #9acd32;
   line-height: 1.3;
@@ -263,7 +263,7 @@
   margin-top: 4px;
 }
 .aq-basmala {
-  font-family: 'Amiri', 'Traditional Arabic', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 20px;
   color: #b0d840;
   margin-top: 10px;
@@ -402,7 +402,7 @@
   font-weight: 600;
 }
 .aq-verse-text {
-  font-family: 'Amiri', 'Traditional Arabic', 'KFGQPC Uthmanic Script', serif;
+  font-family: 'KFGQPC Uthmanic Script', 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 22px;
   line-height: 2;
   color: #f0e6d3;
@@ -452,7 +452,7 @@
   margin-bottom: 8px;
 }
 .aq-word-stats-word {
-  font-family: 'Amiri', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 18px;
   color: #9acd32;
   font-weight: 700;
@@ -496,7 +496,7 @@
   padding: 2px 7px;
   cursor: pointer;
   transition: all 0.12s;
-  font-family: 'Amiri', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
 }
 .aq-word-stats-surah:hover {
   background: rgba(154, 205, 50, 0.12);
@@ -599,7 +599,7 @@
   font-size: 13px;
 }
 .aq-player-surah {
-  font-family: 'Amiri', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 18px;
   color: #9acd32;
 }
@@ -689,7 +689,7 @@
   background-repeat: no-repeat;
   background-position: left 10px center;
   padding-left: 28px;
-  font-family: 'Amiri', 'Traditional Arabic', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
 }
 .aq-audio-select:focus { border-color: #9acd3255; }
 .aq-audio-select option {
@@ -702,6 +702,41 @@
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.aq-player-mode-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.aq-player-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid #2a2a2a;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: #8899aa;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.aq-player-mode-btn:hover {
+  border-color: rgba(154,205,50,0.45);
+  color: #c8ef70;
+  background: rgba(154,205,50,0.08);
+}
+
+.aq-player-mode-btn--active {
+  border-color: rgba(154,205,50,0.72);
+  color: #9acd32;
+  background: rgba(154,205,50,0.14);
 }
 .aq-skip-btn {
   width: 38px;
@@ -985,7 +1020,7 @@
 }
 .aq-surah-index-title svg { color: #9acd32; }
 .aq-surah-index-count {
-  font-family: 'Amiri', serif;
+  font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 13px;
   color: #555;
   font-weight: normal;
@@ -1159,6 +1194,12 @@
 .aq-verse-card--playing {
   border-color: rgba(154,205,50,0.35) !important;
   background: rgba(154,205,50,0.05) !important;
+}
+
+.aq-verse-card--highlighted {
+  border-color: rgba(250, 204, 21, 0.85) !important;
+  background: rgba(250, 204, 21, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.28), 0 0 24px rgba(250, 204, 21, 0.12);
 }
 
 /* ===== AYAH CONTEXT MENU ===== */

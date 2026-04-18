@@ -967,17 +967,23 @@ function App() {
                 </div>
               )}
 
-              <div className="suggestions">
-                {SUGGESTIONS[language].map((suggestion, i) => (
-                  <button
-                    key={i}
-                    className="suggestion-btn"
-                    onClick={() => sendMessage(suggestion, { forceNewChat: true })}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+              {selectedModel === 'ocr-dz' ? (
+                <div className="ocr-description-card">
+                  OCR DZ هي أداة ذكية تقوم بالتعرف على النصوص من الصور وملفات PDF، ثم استخراجها، تحليلها، تصحيحها، وإتاحة إمكانية مناقشتها بشكل تفاعلي.
+                </div>
+              ) : (
+                <div className="suggestions">
+                  {SUGGESTIONS[language].map((suggestion, i) => (
+                    <button
+                      key={i}
+                      className="suggestion-btn"
+                      onClick={() => sendMessage(suggestion, { forceNewChat: true })}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div className="messages">

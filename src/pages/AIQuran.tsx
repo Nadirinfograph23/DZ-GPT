@@ -5,7 +5,7 @@ import {
   Menu, X, Headphones, Loader2, BookOpen,
   Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
-  SkipBack, SkipForward,
+  SkipBack, SkipForward, Repeat, RotateCcw,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import '../styles/ai-quran.css'
@@ -105,6 +105,8 @@ export default function AIQuran() {
   const [audioProgress, setAudioProgress] = useState(0)
   const [audioDuration, setAudioDuration] = useState(0)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [autoPlayNext, setAutoPlayNext] = useState(false)
+  const [repeatChapter, setRepeatChapter] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const [verseAudioUrl, setVerseAudioUrl] = useState<string | null>(null)
@@ -128,6 +130,8 @@ export default function AIQuran() {
   const [bookmarksPanelOpen, setBookmarksPanelOpen] = useState(false)
 
   const touchStartXRef = useRef<number | null>(null)
+  const verseRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [highlightedVerseKey, setHighlightedVerseKey] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`${QURAN_API}/chapters?language=ar`)
@@ -276,6 +280,41 @@ export default function AIQuran() {
     setVerseAudioKey(null)
   }
 
+  const playCurrentChapter = useCallback(() => {
+    if (!selectedChapter || !selectedReciter) return
+    stopVerseAudio()
+    setActiveTab('audio')
+    setAyahMenu(null)
+    if (audioUrl) {
+      setIsPlaying(true)
+      return
+    }
+    loadAudio(selectedReciter.id, selectedChapter.id)
+    setIsPlaying(true)
+  }, [selectedChapter, selectedReciter, audioUrl, loadAudio])
+
+  const handleAudioEnded = useCallback(() => {
+    const audio = audioRef.current
+    if (repeatChapter && audio) {
+      audio.currentTime = 0
+      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+      return
+    }
+    if (autoPlayNext && selectedChapter && selectedChapter.id < 114) {
+      const next = chapters.find(c => c.id === selectedChapter.id + 1)
+      if (next) {
+        setSelectedChapter(next)
+        setAudioUrl(null)
+        setAudioProgress(0)
+        stopVerseAudio()
+        setAyahMenu(null)
+        setIsPlaying(true)
+        return
+      }
+    }
+    setIsPlaying(false)
+  }, [repeatChapter, autoPlayNext, selectedChapter, chapters])
+
   const playVerseAudio = useCallback(async (verseKey: string) => {
     if (!selectedReciter) return
     if (verseAudioKey === verseKey) {
@@ -341,7 +380,7 @@ export default function AIQuran() {
     if (action === 'bookmark') {
       toggleBookmark(verse, chapterName, chapterId)
     } else if (action === 'listen') {
-      playVerseAudio(verse.verse_key)
+      playCurrentChapter()
     } else if (action === 'assistant') {
       setAiOpen(true)
       setAiInput(`فسّر لي هذه الآية الكريمة كاملةً وبيّن معناها وأسباب نزولها إن وجدت:\n\n${verse.text_uthmani}\n\n(${verse.verse_key})`)
@@ -415,11 +454,34 @@ ${wordCtx ? wordCtx : ''}
     String(ch.id).includes(search)
   )
 
-  const normalizedVerseSearch = normalizeQuranSearch(verseSearch)
-  const displayedVerses = normalizedVerseSearch
+  const trimmedVerseSearch = verseSearch.trim()
+  const isVerseNumberSearch = /^\d+$/.test(trimmedVerseSearch)
+  const requestedVerseKey = isVerseNumberSearch && selectedChapter
+    ? `${selectedChapter.id}:${Number(trimmedVerseSearch)}`
+    : ''
+  const targetVerseByNumber = requestedVerseKey
+    ? verses.find(v => v.verse_key === requestedVerseKey)
+    : undefined
+  const normalizedVerseSearch = isVerseNumberSearch ? '' : normalizeQuranSearch(verseSearch)
+  const displayedVerses = isVerseNumberSearch
+    ? verses
+    : normalizedVerseSearch
     ? verses.filter(v => verseIncludesQuery(v.text_uthmani, verseSearch))
     : verses
-  const matchingVersesCount = normalizedVerseSearch ? displayedVerses.length : 0
+  const matchingVersesCount = isVerseNumberSearch
+    ? (targetVerseByNumber ? 1 : 0)
+    : normalizedVerseSearch ? displayedVerses.length : 0
+
+  useEffect(() => {
+    if (!isVerseNumberSearch || !targetVerseByNumber) return
+    const key = targetVerseByNumber.verse_key
+    setHighlightedVerseKey(key)
+    requestAnimationFrame(() => {
+      verseRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    const timer = window.setTimeout(() => setHighlightedVerseKey(current => current === key ? null : current), 5000)
+    return () => window.clearTimeout(timer)
+  }, [isVerseNumberSearch, targetVerseByNumber?.verse_key])
 
   const handleWordClick = useCallback(async (word: string) => {
     const cleaned = word.replace(/[^\u0600-\u06FF\u0750-\u077F]/g, '').trim()
@@ -459,7 +521,7 @@ ${wordCtx ? wordCtx : ''}
           const a = audioRef.current
           if (a) setAudioDuration(a.duration)
         }}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={handleAudioEnded}
       />
       <audio
         ref={verseAudioRef}
@@ -483,7 +545,7 @@ ${wordCtx ? wordCtx : ''}
             }
           </button>
           <button className="aq-ayah-menu-item" onClick={() => handleAyahAction('listen')}>
-            <Volume2 size={14} className="aq-ayah-menu-icon" /> استماع للآية
+            <Volume2 size={14} className="aq-ayah-menu-icon" /> استماع
           </button>
           <button className="aq-ayah-menu-item aq-ayah-menu-item--assistant" onClick={() => handleAyahAction('assistant')}>
             <Bot size={14} className="aq-ayah-menu-icon" /> اسأل المساعد الذكي
@@ -687,16 +749,20 @@ ${wordCtx ? wordCtx : ''}
               <Search size={14} className="aq-search-icon" />
               <input
                 className="aq-verse-search-input"
-                placeholder="ابحث داخل آيات السورة..."
+                placeholder="ابحث داخل آيات السورة أو أدخل رقم الآية..."
                 value={verseSearch}
                 onChange={e => setVerseSearch(e.target.value)}
               />
             </div>
-            {normalizedVerseSearch && (
+            {(normalizedVerseSearch || isVerseNumberSearch) && (
               <div className={`aq-search-result ${matchingVersesCount > 0 ? 'aq-search-result--found' : 'aq-search-result--empty'}`}>
-                {matchingVersesCount > 0
-                  ? `تم العثور على ${matchingVersesCount} آية تحتوي على "${verseSearch.trim()}"`
-                  : `لا توجد نتائج داخل هذه السورة لكلمة "${verseSearch.trim()}".`}
+                {isVerseNumberSearch
+                  ? matchingVersesCount > 0
+                    ? `تم الانتقال إلى الآية رقم ${Number(trimmedVerseSearch)} داخل السورة الحالية.`
+                    : `لا توجد آية برقم ${Number(trimmedVerseSearch)} داخل هذه السورة.`
+                  : matchingVersesCount > 0
+                    ? `تم العثور على ${matchingVersesCount} آية تحتوي على "${verseSearch.trim()}"`
+                    : `لا توجد نتائج داخل هذه السورة لكلمة "${verseSearch.trim()}".`}
               </div>
             )}
           </div>
@@ -755,7 +821,11 @@ ${wordCtx ? wordCtx : ''}
                   </div>
                 ) : (
                   displayedVerses.map(v => (
-                    <div key={v.id} className={`aq-verse-card ${verseAudioKey === v.verse_key ? 'aq-verse-card--playing' : ''}`}>
+                    <div
+                      key={v.id}
+                      ref={el => { verseRefs.current[v.verse_key] = el }}
+                      className={`aq-verse-card ${verseAudioKey === v.verse_key ? 'aq-verse-card--playing' : ''} ${highlightedVerseKey === v.verse_key ? 'aq-verse-card--highlighted' : ''}`}
+                    >
                       <div className="aq-verse-card-top">
                         <span className="aq-verse-num">{v.verse_key}</span>
                         <div className="aq-verse-card-actions">
@@ -879,6 +949,25 @@ ${wordCtx ? wordCtx : ''}
                           disabled={!selectedChapter || selectedChapter.id >= 114}
                         >
                           <SkipBack size={20} />
+                        </button>
+                      </div>
+
+                      <div className="aq-player-mode-controls">
+                        <button
+                          className={`aq-player-mode-btn ${autoPlayNext ? 'aq-player-mode-btn--active' : ''}`}
+                          onClick={() => setAutoPlayNext(p => !p)}
+                          title="السورة التالية تلقائياً"
+                        >
+                          <Repeat size={15} />
+                          <span>السورة التالية تلقائياً</span>
+                        </button>
+                        <button
+                          className={`aq-player-mode-btn ${repeatChapter ? 'aq-player-mode-btn--active' : ''}`}
+                          onClick={() => setRepeatChapter(p => !p)}
+                          title="إعادة السورة"
+                        >
+                          <RotateCcw size={15} />
+                          <span>إعادة السورة</span>
                         </button>
                       </div>
 

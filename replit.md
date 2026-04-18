@@ -163,6 +163,8 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - `/aiquran` is available as a dedicated Quran page using Quran.com API v4 for chapters, verses, translations, recitations, and audio.
 - **Theme colors**: Updated from golden yellow (`#c8a96e`) to yellow-green (`#9acd32`) to match DZ GPT branding.
 - The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search with highlighted word matches.
+- The Quran audio player supports full-surah listening from the ayah menu, repeat-current-surah mode, and automatic next-surah playback.
+- Quran verse search accepts an ayah number for the currently open surah, scrolls directly to it, and highlights it.
 - CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
 
 ### Ayah Interaction System

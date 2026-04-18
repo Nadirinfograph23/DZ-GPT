@@ -1785,6 +1785,21 @@ body {
   padding: 2px 10px;
 }
 
+.ocr-description-card {
+  max-width: 680px;
+  margin: 18px auto 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(0, 176, 80, 0.28);
+  border-radius: 14px;
+  background: rgba(0, 176, 80, 0.07);
+  color: #d9fce8;
+  font-size: 15px;
+  line-height: 1.9;
+  text-align: center;
+  direction: rtl;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
 .ocr-file-ready {
   display: flex;
   flex-direction: column;

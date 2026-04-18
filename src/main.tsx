@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import DZAgent from './pages/DZAgent.tsx'
 import AIQuran from './pages/AIQuran.tsx'
+import DZChat from './pages/DZChat.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<App />} />
         <Route path="/dz-agent" element={<DZAgent />} />
         <Route path="/quran" element={<AIQuran />} />
+        <Route path="/dzchat" element={<DZChat />} />
         <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,4 +1,12 @@
 @font-face {
+  font-family: 'Amiri Quran';
+  src: url('/fonts/amiri-quran.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'Noto Naskh Arabic';
   src: url('/fonts/noto-naskh-arabic-400.ttf') format('truetype');
   font-weight: 400;
@@ -426,7 +434,7 @@
   font-weight: 600;
 }
 .aq-verse-text {
-  font-family: 'KFGQPC Uthmanic Script', 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
+  font-family: 'Amiri Quran', 'Noto Naskh Arabic', 'Traditional Arabic', 'Tahoma', serif;
   font-size: 22px;
   line-height: 2;
   color: #f0e6d3;

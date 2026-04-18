@@ -107,7 +107,10 @@ export default function AIQuran() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [autoPlayNext, setAutoPlayNext] = useState(false)
   const [repeatChapter, setRepeatChapter] = useState(false)
+  const [failedReciters, setFailedReciters] = useState<Set<number>>(new Set())
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const autoPlayAfterLoadRef = useRef(false)
+  const isPlayingRef = useRef(false)
 
   const [verseAudioUrl, setVerseAudioUrl] = useState<string | null>(null)
   const [verseAudioKey, setVerseAudioKey] = useState<string | null>(null)
@@ -124,6 +127,8 @@ export default function AIQuran() {
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
   const [wordSearchLoading, setWordSearchLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const [fontSize, setFontSize] = useState(24)
 
   const [ayahMenu, setAyahMenu] = useState<AyahMenu | null>(null)
   const [bookmarks, setBookmarks] = useState<BookmarkedAyah[]>(loadBookmarks)
@@ -179,13 +184,25 @@ export default function AIQuran() {
   const loadAudio = useCallback(async (reciterId: number, chapterId: number) => {
     setAudioLoading(true)
     setAudioUrl(null)
-    setIsPlaying(false)
+    if (audioRef.current) audioRef.current.pause()
     try {
       const r = await fetch(`${QURAN_API}/chapter_recitations/${reciterId}/${chapterId}`)
       const d = await r.json()
       const url = d.audio_file?.audio_url
-      if (url) setAudioUrl(url.startsWith('http') ? url : `https://${url}`)
-    } catch {}
+      if (url) {
+        setAudioUrl(url.startsWith('http') ? url : `https://${url}`)
+        if (autoPlayAfterLoadRef.current) {
+          autoPlayAfterLoadRef.current = false
+          setIsPlaying(true)
+        }
+      } else {
+        autoPlayAfterLoadRef.current = false
+        setIsPlaying(false)
+      }
+    } catch {
+      autoPlayAfterLoadRef.current = false
+      setIsPlaying(false)
+    }
     finally { setAudioLoading(false) }
   }, [])
 
@@ -195,12 +212,14 @@ export default function AIQuran() {
     }
   }, [activeTab, selectedChapter, selectedReciter, loadAudio])
 
+  useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !audioUrl) return
     audio.src = audioUrl
     audio.playbackRate = playbackRate
-    if (isPlaying) audio.play().catch(() => setIsPlaying(false))
+    if (isPlayingRef.current) audio.play().catch(() => setIsPlaying(false))
   }, [audioUrl])
 
   useEffect(() => {
@@ -303,17 +322,31 @@ export default function AIQuran() {
     if (autoPlayNext && selectedChapter && selectedChapter.id < 114) {
       const next = chapters.find(c => c.id === selectedChapter.id + 1)
       if (next) {
+        autoPlayAfterLoadRef.current = true
         setSelectedChapter(next)
         setAudioUrl(null)
         setAudioProgress(0)
         stopVerseAudio()
         setAyahMenu(null)
-        setIsPlaying(true)
         return
       }
     }
     setIsPlaying(false)
   }, [repeatChapter, autoPlayNext, selectedChapter, chapters])
+
+  const handleAudioError = useCallback(() => {
+    if (!selectedReciter) return
+    const brokenId = selectedReciter.id
+    setFailedReciters(prev => {
+      const next = new Set(prev)
+      next.add(brokenId)
+      return next
+    })
+    setIsPlaying(false)
+    setAudioUrl(null)
+    const nextWorking = reciters.find(r => r.id !== brokenId && !failedReciters.has(r.id))
+    if (nextWorking) setSelectedReciter(nextWorking)
+  }, [selectedReciter, reciters, failedReciters])
 
   const playVerseAudio = useCallback(async (verseKey: string) => {
     if (!selectedReciter) return
@@ -522,6 +555,7 @@ ${wordCtx ? wordCtx : ''}
           if (a) setAudioDuration(a.duration)
         }}
         onEnded={handleAudioEnded}
+        onError={handleAudioError}
       />
       <audio
         ref={verseAudioRef}
@@ -773,6 +807,20 @@ ${wordCtx ? wordCtx : ''}
             {/* ===== READING TAB ===== */}
             {activeTab === 'reading' && (
               <div className="aq-verses">
+                {/* Font size controls */}
+                <div className="aq-font-size-bar">
+                  <button
+                    className="aq-font-size-btn"
+                    onClick={() => setFontSize(s => Math.max(16, s - 2))}
+                    title="تصغير الخط"
+                  >−</button>
+                  <span className="aq-font-size-label">{fontSize}px</span>
+                  <button
+                    className="aq-font-size-btn"
+                    onClick={() => setFontSize(s => Math.min(42, s + 2))}
+                    title="تكبير الخط"
+                  >+</button>
+                </div>
                 {/* Word occurrence stats panel */}
                 {(wordSearchLoading || wordOccurrences) && (
                   <div className="aq-word-stats">
@@ -849,7 +897,7 @@ ${wordCtx ? wordCtx : ''}
                           </button>
                         </div>
                       </div>
-                      <p className="aq-verse-text aq-verse-text--clickable">
+                      <p className="aq-verse-text aq-verse-text--clickable" style={{ fontSize: fontSize + 'px' }}>
                         {v.text_uthmani.split(/(\s+)/).map((part, idx) => {
                           if (!part.trim()) return part
                           const isHighlighted = normalizedVerseSearch && normalizeQuranSearch(part).includes(normalizedVerseSearch)
@@ -905,7 +953,7 @@ ${wordCtx ? wordCtx : ''}
                         if (rec) setSelectedReciter(rec)
                       }}
                     >
-                      {reciters.map(r => (
+                      {reciters.filter(r => !failedReciters.has(r.id)).map(r => (
                         <option key={r.id} value={r.id}>
                           {r.reciter_name}{r.style ? ` — ${r.style.name}` : ''}
                         </option>

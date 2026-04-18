@@ -193,4 +193,5 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - The server correctly binds to `0.0.0.0:5000` for Replit compatibility.
 - `allowedHosts: true` is set in vite.config.ts for proxied preview support.
 - In development, the CSP `frame-ancestors` directive allows Replit preview iframe origins; production keeps iframe embedding disabled with `frame-ancestors 'none'`.
+- The production service worker uses network-first/no-store fetching for app assets to prevent old cached UI bundles from mixing with newly deployed versions.
 - DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search backend endpoints may remain available but the education center UI is not exposed in DZ Agent.

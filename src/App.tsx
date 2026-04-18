@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
+import Tesseract from 'tesseract.js'
 import PwaInstallBanner from './PwaInstallBanner'
 import './App.css'
 import './styles/dz-agent.css'
@@ -207,6 +208,12 @@ function App() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfImageOnly, setPdfImageOnly] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+
+  const [ocrFile, setOcrFile] = useState<File | null>(null)
+  const [ocrRunning, setOcrRunning] = useState(false)
+  const [ocrCorrecting, setOcrCorrecting] = useState(false)
+  const [ocrProgress, setOcrProgress] = useState(0)
+  const ocrInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -307,6 +314,99 @@ function App() {
     setPdfFileName(null)
     setPdfImageOnly(false)
   }, [])
+
+  const handleOCRFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setOcrFile(file)
+    setPdfText(null)
+    setPdfFileName(null)
+    if (ocrInputRef.current) ocrInputRef.current.value = ''
+  }, [])
+
+  const runOCR = useCallback(async () => {
+    if (!ocrFile) return
+    setOcrRunning(true)
+    setOcrProgress(0)
+    try {
+      let rawText = ''
+      const isPDF = ocrFile.type === 'application/pdf' || ocrFile.name.toLowerCase().endsWith('.pdf')
+
+      if (isPDF) {
+        const arrayBuffer = await ocrFile.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+        const pageCount = Math.min(pdf.numPages, 15)
+        const texts: string[] = []
+        for (let i = 1; i <= pageCount; i++) {
+          setOcrProgress(Math.round(((i - 1) / pageCount) * 70))
+          const page = await pdf.getPage(i)
+          const viewport = page.getViewport({ scale: 2.0 })
+          const canvas = document.createElement('canvas')
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          const ctx = canvas.getContext('2d')!
+          await page.render({ canvasContext: ctx, viewport }).promise
+          const result = await Tesseract.recognize(canvas, 'ara+eng+fra', { logger: () => {} })
+          if (result.data.text.trim()) texts.push(result.data.text.trim())
+          canvas.remove()
+        }
+        rawText = texts.join('\n\n---\n\n')
+      } else {
+        setOcrProgress(30)
+        const result = await Tesseract.recognize(ocrFile, 'ara+eng+fra', { logger: () => {} })
+        rawText = result.data.text
+        setOcrProgress(70)
+      }
+
+      setOcrRunning(false)
+      setOcrCorrecting(true)
+      setOcrProgress(80)
+
+      const correctionMessages = [
+        {
+          role: 'system',
+          content: `أنت متخصص في تنظيف النصوص المستخرجة عبر OCR. مهامك:
+1. تصحيح الأخطاء الإملائية الناجمة عن OCR
+2. تحسين الصياغة وتنظيف النص
+3. الحفاظ على المعنى الأصلي بدقة
+4. إزالة الأحرف الغريبة والرموز غير المنطقية
+5. ترتيب الفقرات بشكل منطقي
+أرجع النص المصحح فقط بدون أي تعليقات إضافية.`
+        },
+        {
+          role: 'user',
+          content: `صحّح وحسّن النص التالي المستخرج بواسطة OCR:\n\n${rawText.substring(0, 8000)}`
+        }
+      ]
+
+      let correctedText = rawText
+      try {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: correctionMessages, model: 'llama-70b' })
+        })
+        if (r.ok) {
+          const d = await r.json()
+          if (d.content) correctedText = d.content
+        }
+      } catch (err) {
+        console.warn('[OCR] AI correction failed, using raw text:', err)
+      }
+
+      setOcrProgress(100)
+      setPdfText(correctedText)
+      setPdfFileName(ocrFile.name)
+      setOcrFile(null)
+      console.log('[OCR] Done. Characters extracted:', correctedText.length)
+    } catch (err) {
+      console.error('[OCR] Error:', err)
+    } finally {
+      setOcrRunning(false)
+      setOcrCorrecting(false)
+      setOcrProgress(0)
+    }
+  }, [ocrFile])
 
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
@@ -726,7 +826,78 @@ function App() {
                 AI Chat powered by {currentModel.name}
               </p>
 
-              {isPdfModel && (
+              {selectedModel === 'ocr-dz' && (
+                <div className="pdf-upload-section ocr-dz-section">
+                  <input
+                    ref={ocrInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleOCRFileSelect}
+                    style={{ display: 'none' }}
+                    id="ocr-upload"
+                  />
+                  {pdfFileName ? (
+                    <div className="pdf-upload-success">
+                      <div className="pdf-success-icon" style={{ color: '#00b050' }}>
+                        <CheckCircle size={32} />
+                      </div>
+                      <div className="pdf-success-text">✨ تم استخراج النص وتصحيحه بالذكاء الاصطناعي</div>
+                      <div className="pdf-file-badge">
+                        <FileText size={18} />
+                        <span className="pdf-file-name">{pdfFileName}</span>
+                        <button className="pdf-remove-btn" onClick={removePdf}>
+                          <XIcon size={14} />
+                        </button>
+                      </div>
+                      <div className="pdf-search-hint">
+                        <MessageCircle size={16} />
+                        <span>يمكنك الآن طرح أسئلة حول النص المستخرج أو تحليله</span>
+                      </div>
+                    </div>
+                  ) : ocrRunning || ocrCorrecting ? (
+                    <div className="ocr-progress-box">
+                      <Loader2 size={28} className="ocr-spin-icon" />
+                      <div className="ocr-progress-label">
+                        {ocrRunning ? '🔍 جاري استخراج النص بـ Tesseract OCR...' : '✨ جاري تصحيح النص بالذكاء الاصطناعي...'}
+                      </div>
+                      <div className="ocr-progress-bar-wrap">
+                        <div className="ocr-progress-bar" style={{ width: `${ocrProgress}%` }} />
+                      </div>
+                      <div className="ocr-progress-pct">{ocrProgress}%</div>
+                    </div>
+                  ) : ocrFile ? (
+                    <div className="ocr-file-ready">
+                      <div className="ocr-file-icon">
+                        {ocrFile.type.startsWith('image/') ? <ImageIcon size={28} /> : <FileText size={28} />}
+                      </div>
+                      <div className="ocr-file-name">{ocrFile.name}</div>
+                      <div className="ocr-file-size">{(ocrFile.size / 1024).toFixed(0)} KB</div>
+                      <button className="ocr-extract-btn" onClick={runOCR}>
+                        <Wand2 size={16} />
+                        <span>Extract Text</span>
+                      </button>
+                      <button className="ocr-cancel-btn" onClick={() => setOcrFile(null)}>
+                        <XIcon size={14} /> إلغاء
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="ocr-upload" className="pdf-upload-btn ocr-upload-btn">
+                      <Upload size={20} />
+                      <span>رفع صورة أو ملف PDF</span>
+                      <span className="pdf-upload-hint">
+                        يدعم: jpg, png, bmp, webp, tiff, pdf
+                      </span>
+                      <span className="ocr-features-row">
+                        <span>🔍 OCR</span>
+                        <span>✨ AI تصحيح</span>
+                        <span>💬 تحليل ذكي</span>
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {selectedModel === 'deepseek-pdf' && (
                 <div className="pdf-upload-section">
                   <input
                     ref={pdfInputRef}
@@ -765,44 +936,30 @@ function App() {
                         ) : (
                           <>
                             <Upload size={20} />
-                            <span>{selectedModel === 'ocr-dz' ? 'رفع ملف PDF' : 'Upload PDF'}</span>
-                            <span className="pdf-upload-hint">
-                              {selectedModel === 'ocr-dz'
-                                ? 'ارفع ملف PDF لمعالجته واستخراج محتواه'
-                                : 'Upload a PDF document to ask questions about it'}
-                            </span>
+                            <span>Upload PDF</span>
+                            <span className="pdf-upload-hint">Upload a PDF document to ask questions about it</span>
                           </>
                         )}
                       </label>
                       {pdfImageOnly && !pdfLoading && (
                         <div className="pdf-image-only-warning">
-                          {selectedModel === 'ocr-dz' ? (
-                            <>
-                              <div className="pdf-warning-line">⚠️ الملف يحتوي على صور فقط</div>
-                              <div className="pdf-warning-line pdf-warning-tip">✔ اكتب أو الصق النص الذي استخرجته من الملف في مربع الدردشة</div>
-                              <div className="pdf-warning-line" style={{ color: '#00b050' }}>📄 يمكنك أيضاً وصف محتوى الصورة وسيساعدك النموذج</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="pdf-warning-line">⚠️ الملف غير مدعوم</div>
-                              <div className="pdf-warning-line">هذا النوع من الملفات عبارة عن صور فقط</div>
-                              <div className="pdf-warning-line pdf-warning-tip">✔ جرّب: تحديد النص داخل الملف</div>
-                              <div className="pdf-warning-line pdf-warning-error">
-                                ❌ إذا لم تستطع، استخدم{' '}
-                                <button
-                                  className="ocr-switch-btn"
-                                  onClick={() => {
-                                    setSelectedModel('ocr-dz')
-                                    const modelChats = chats.filter(c => c.modelId === 'ocr-dz')
-                                    setActiveChatId(modelChats.length > 0 ? modelChats[0].id : null)
-                                    setPdfImageOnly(false)
-                                  }}
-                                >
-                                  OCR DZ ←
-                                </button>
-                              </div>
-                            </>
-                          )}
+                          <div className="pdf-warning-line">⚠️ الملف غير مدعوم</div>
+                          <div className="pdf-warning-line">هذا النوع من الملفات عبارة عن صور فقط</div>
+                          <div className="pdf-warning-line pdf-warning-tip">✔ جرّب: تحديد النص داخل الملف</div>
+                          <div className="pdf-warning-line pdf-warning-error">
+                            ❌ إذا لم تستطع، استخدم{' '}
+                            <button
+                              className="ocr-switch-btn"
+                              onClick={() => {
+                                setSelectedModel('ocr-dz')
+                                const modelChats = chats.filter(c => c.modelId === 'ocr-dz')
+                                setActiveChatId(modelChats.length > 0 ? modelChats[0].id : null)
+                                setPdfImageOnly(false)
+                              }}
+                            >
+                              OCR DZ ←
+                            </button>
+                          </div>
                         </div>
                       )}
                     </>

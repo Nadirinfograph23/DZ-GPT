@@ -8,8 +8,7 @@ const STORAGE_KEYS = {
   FEATURES:    'dza-memory-features',
 } as const
 
-const MAX_QUERIES   = 30  // last 30 queries stored
-const MAX_INTENTS   = 50  // intent event log
+const MAX_QUERIES = 30  // last 30 queries stored
 
 // ── Intent detection ──────────────────────────────────────────────────────────
 export type UserIntent = 'coding' | 'quran' | 'ocr' | 'news' | 'sports' | 'weather' | 'github' | 'currency' | 'education' | 'general'

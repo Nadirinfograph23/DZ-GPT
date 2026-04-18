@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
-  Bot, Shield, UserCircle, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Mic, Highlighter,
+  Bot, Shield, ChevronRight, Loader2, AlertCircle,
+  MoreVertical, Highlighter,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 

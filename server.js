@@ -4050,7 +4050,7 @@ function pushChatMsg(msg) {
 async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   const trigger = isAgent ? '@dzagent' : '@dzgpt'
   const question = rawText.slice(trigger.length).trim()
-  if (!question) return
+  if (!question) return null
   const systemPrompt = isAgent
     ? 'أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، تعليم). أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
     : 'أنت DZ GPT، مساعد ذكي عام ومفيد. أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
@@ -4069,15 +4069,17 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
       from: isAgent ? 'DZ Agent' : 'DZ GPT',
       fromId: 'bot',
       gender: 'bot',
-      text: result.content || 'حدث خطأ.',
+      text: result.content || 'عذراً، حدث خطأ في المعالجة.',
       timestamp: Date.now(),
       isBot: true,
       botType: isAgent ? 'agent' : 'gpt',
       triggeredBy: authorSession.name,
     })
     broadcastChat({ type: 'message', msg: botMsg })
+    return botMsg
   } catch (err) {
     console.error('[ChatAI]', err.message)
+    return null
   }
 }
 
@@ -4135,7 +4137,8 @@ app.post('/api/chat-room/send', async (req, res) => {
   }
   const lower = cleanText.toLowerCase()
   if (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')) {
-    handleAiChatTrigger(cleanText, lower.startsWith('@dzagent'), session)
+    const botMsg = await handleAiChatTrigger(cleanText, lower.startsWith('@dzagent'), session)
+    return res.json({ ok: true, msgId: msg.id, botMsg: botMsg || null })
   }
   res.json({ ok: true, msgId: msg.id })
 })

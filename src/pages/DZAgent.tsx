@@ -154,9 +154,6 @@ export default function DZAgent() {
             <button className="dz-home-btn" onClick={() => navigate('/')} title="Home">
               HOME
             </button>
-            <button className="dz-home-btn" onClick={() => navigate('/quran')} title="القرآن الكريم" style={{ color: '#c8a96e', borderColor: 'rgba(200,169,110,0.4)' }}>
-              📖 القرآن
-            </button>
             <button className="dz-refresh-chat-btn" onClick={createNewChat} title={labels.newChat}>
               <RefreshCw size={18} />
             </button>

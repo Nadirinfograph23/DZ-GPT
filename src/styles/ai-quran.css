@@ -1,3 +1,27 @@
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: url('/fonts/noto-naskh-arabic-400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: url('/fonts/noto-naskh-arabic-600.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: url('/fonts/noto-naskh-arabic-700.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ===== AI QURAN — ROOT ===== */
 .aq-root {
   display: flex;

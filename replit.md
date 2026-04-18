@@ -165,6 +165,7 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search with highlighted word matches.
 - The Quran audio player supports full-surah listening from the ayah menu, repeat-current-surah mode, and automatic next-surah playback.
 - Quran verse search accepts an ayah number for the currently open surah, scrolls directly to it, and highlights it.
+- Quran text uses bundled Noto Naskh Arabic font files from `public/fonts/` to avoid missing Arabic glyphs in production browsers.
 - CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
 
 ### Ayah Interaction System

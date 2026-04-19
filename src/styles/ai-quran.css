@@ -130,14 +130,17 @@
 }
 
 .aq-mobile-menu-btn {
-  display: none;
+  display: flex;
+  align-items: center;
   background: none;
   border: 1px solid #222222;
   border-radius: 6px;
   color: #aaa;
   padding: 6px;
   cursor: pointer;
+  transition: all 0.15s;
 }
+.aq-mobile-menu-btn:hover { background: #1a1a1a; color: #9acd32; border-color: #9acd3244; }
 
 /* ===== LAYOUT ===== */
 .aq-layout {
@@ -146,15 +149,26 @@
   overflow: hidden;
 }
 
-/* ===== LEFT SIDEBAR ===== */
+/* ===== LEFT SIDEBAR — overlay only on all screens ===== */
 .aq-sidebar {
-  width: 240px;
-  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  right: -260px;
+  height: 100%;
+  width: 260px;
+  max-width: 80vw;
+  z-index: 50;
   background: #111111;
   border-left: 1px solid #1a1a1a;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: right 0.25s ease;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+}
+
+.aq-sidebar--open {
+  right: 0;
 }
 
 .aq-sidebar-header {
@@ -169,7 +183,7 @@
   color: #9acd32;
 }
 .aq-sidebar-close {
-  display: none;
+  display: block;
   background: none;
   border: none;
   color: #666;
@@ -1477,26 +1491,10 @@
 /* ===== MOBILE RESPONSIVE ===== */
 @media (max-width: 900px) {
   .aq-header-logo { position: static; transform: none; }
-  .aq-mobile-menu-btn { display: block; }
   .aq-nav-btn span { display: none; }
   .aq-nav-btn { padding: 5px 8px; }
   .aq-ai-toggle-header span { display: none; }
   .aq-ai-toggle-header { padding: 6px 8px; }
-
-  .aq-sidebar {
-    position: fixed;
-    top: 0;
-    right: -260px;
-    height: 100%;
-    width: 80vw;
-    max-width: 280px;
-    z-index: 50;
-    transition: right 0.25s ease;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.4);
-    border-left: 1px solid #222;
-  }
-  .aq-sidebar--open { right: 0; }
-  .aq-sidebar-close { display: block; }
 
   .aq-ai-panel {
     position: fixed;

@@ -759,3 +759,49 @@
   .dzc-entry-modal    { padding: 24px 18px 28px; margin: 16px; max-height: 90dvh; overflow-y: auto; }
   .dzc-input-wrap     { position: sticky; bottom: 0; }
 }
+
+/* ===== BREAKING NEWS MESSAGE ===== */
+.dzc-msg--breaking {
+  background: #b91c1c !important;
+  border: 1px solid #ef4444 !important;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff !important;
+  max-width: 90%;
+  animation: dzc-blink 1.2s step-start 4;
+}
+
+.dzc-msg--breaking .dzc-msg-header {
+  color: #fff;
+}
+
+.dzc-msg--breaking .dzc-msg-from {
+  color: #fca5a5 !important;
+  font-weight: 700;
+}
+
+.dzc-msg--breaking .dzc-msg-text {
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dzc-msg--breaking .dzc-msg-time {
+  color: rgba(255,255,255,0.6) !important;
+}
+
+.dzc-msg--breaking .dzc-bot-action-btn {
+  border-color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.8);
+}
+
+.dzc-msg--breaking .dzc-bot-action-btn:hover {
+  border-color: #fff;
+  color: #fff;
+}
+
+@keyframes dzc-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

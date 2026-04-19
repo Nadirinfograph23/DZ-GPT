@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
@@ -200,6 +200,7 @@ function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
+  const [navDropdownOpen, setNavDropdownOpen] = useState(false)
   const [language, setLanguage] = useState<Lang>(() => {
     return (localStorage.getItem('dz-gpt-lang') as Lang) || 'ar'
   })
@@ -651,6 +652,33 @@ function App() {
               <span className="lang-label">{lang.label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Navigation Dropdown */}
+        <div className="sidebar-nav-dropdown">
+          <button
+            className="sidebar-nav-trigger"
+            onClick={() => setNavDropdownOpen(p => !p)}
+          >
+            <span>التنقل</span>
+            <ChevronDown size={14} className={`sidebar-nav-chevron ${navDropdownOpen ? 'sidebar-nav-chevron--open' : ''}`} />
+          </button>
+          {navDropdownOpen && (
+            <div className="sidebar-nav-menu">
+              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-agent'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <Bot size={14} />
+                <span>DZ Agent</span>
+              </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/quran'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <BookOpen size={14} />
+                <span>القرآن الكريم</span>
+              </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-chat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <MessageCircle size={14} />
+                <span>DZ CHAT</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <button className="new-chat-btn" onClick={createNewChat}>

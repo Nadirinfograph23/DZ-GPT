@@ -31,6 +31,7 @@ interface ChatMessage {
   isDeleted?: boolean
   triggeredBy?: string
   localDeleted?: boolean
+  isBreaking?: boolean
 }
 
 interface LocalUser {
@@ -643,7 +644,7 @@ export default function DZChat() {
               return (
                 <div
                   key={msg.id}
-                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''}`}
+                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
                   onContextMenu={(e) => {
                     if (!localUser.isAdmin) return
                     e.preventDefault()

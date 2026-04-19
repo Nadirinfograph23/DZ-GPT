@@ -4047,22 +4047,74 @@ function pushChatMsg(msg) {
   return msg
 }
 
+function getBreakingNewsFromCache() {
+  const breaking = []
+  for (const [, cached] of GN_RSS_CACHE.entries()) {
+    if (!cached?.data) continue
+    for (const article of cached.data) {
+      if (article.title && article.title.includes('عاجل')) {
+        breaking.push(article)
+      }
+    }
+  }
+  return breaking.slice(0, 3)
+}
+
 async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   const trigger = isAgent ? '@dzagent' : '@dzgpt'
   const question = rawText.slice(trigger.length).trim()
   if (!question) return null
+
   const systemPrompt = isAgent
-    ? 'أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، تعليم). أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
-    : 'أنت DZ GPT، مساعد ذكي عام ومفيد. أجب بإيجاز واضح داخل غرفة دردشة جماعية.'
+    ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، تعليم، طقس).
+
+قواعد الاستجابة:
+1. إذا كان السؤال ناقصاً أو غامضاً (مثل "ما هو الطقس؟" بدون تحديد المدينة، أو "ما نتيجة المباراة؟" بدون تحديد الفريق)، اطرح سؤالاً توضيحياً مختصراً وذكياً قبل الإجابة.
+2. إذا كان السؤال واضحاً، أجب مباشرة بإيجاز وبدون مقدمات.
+3. أجب بنفس لغة السؤال (عربية/فرنسية/إنجليزية).
+4. الإجابة لا تتجاوز 3-4 جمل داخل غرفة الدردشة.
+
+أمثلة على الأسئلة الغامضة التي تحتاج توضيحاً:
+- "ما هو الطقس اليوم؟" → "في أي مدينة تقصد؟"
+- "ما نتيجة المباراة؟" → "مباراة أي فريقين؟"
+- "أين يمكنني الذهاب؟" → "تقصد أماكن سياحية أم مطاعم؟ وفي أي ولاية؟"`
+    : `أنت DZ GPT، مساعد ذكي عام ومفيد.
+
+قواعد الاستجابة:
+1. إذا كان السؤال غامضاً أو ناقصاً، اطرح سؤالاً توضيحياً مختصراً بدلاً من الإجابة بتخمين.
+2. إذا كان السؤال واضحاً، أجب مباشرة وبإيجاز.
+3. أجب بنفس لغة السؤال (عربية/فرنسية/إنجليزية).
+4. الإجابة لا تتجاوز 3-4 جمل داخل غرفة الدردشة.`
+
   try {
+    if (isAgent) {
+      const breakingArticles = getBreakingNewsFromCache()
+      if (breakingArticles.length > 0) {
+        const breakingText = '🔴 عاجل: ' + breakingArticles.map(a => a.title).join(' | ')
+        const breakingMsg = pushChatMsg({
+          id: chatId(),
+          from: 'DZ Agent',
+          fromId: 'bot',
+          gender: 'bot',
+          text: breakingText,
+          timestamp: Date.now(),
+          isBot: true,
+          botType: 'agent',
+          isBreaking: true,
+          triggeredBy: authorSession.name,
+        })
+        broadcastChat({ type: 'message', msg: breakingMsg })
+      }
+    }
+
     const result = await callGroqWithFallback({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: question },
       ],
-      max_tokens: 512,
-      temperature: 0.7,
+      max_tokens: 400,
+      temperature: 0.5,
     })
     const botMsg = pushChatMsg({
       id: chatId(),

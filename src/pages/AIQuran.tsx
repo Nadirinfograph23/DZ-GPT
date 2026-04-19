@@ -8,6 +8,7 @@ import {
   SkipBack, SkipForward, Repeat, RotateCcw,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import '../styles/ai-quran.css'
 
 const QURAN_API = 'https://api.quran.com/api/v4'
@@ -1103,7 +1104,7 @@ ${wordCtx ? wordCtx : ''}
                 {aiMessages.map((m, i) => (
                   <div key={i} className={`aq-ai-msg aq-ai-msg--${m.role}`}>
                     {m.role === 'assistant'
-                      ? <ReactMarkdown>{m.content}</ReactMarkdown>
+                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                       : m.content
                     }
                   </div>

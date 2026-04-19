@@ -1965,3 +1965,49 @@ body {
   background: #1a1a1a;
   color: #00b050;
 }
+
+/* ===== MARKDOWN TABLES (all pages) ===== */
+.message-text table,
+.dz-message-text table,
+.aq-ai-msg table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 13px;
+  overflow-x: auto;
+  display: block;
+}
+
+.message-text th,
+.dz-message-text th,
+.aq-ai-msg th {
+  background: #1a2a1a;
+  color: #00b050;
+  font-weight: 600;
+  padding: 8px 12px;
+  border: 1px solid #2a3a2a;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.message-text td,
+.dz-message-text td,
+.aq-ai-msg td {
+  padding: 7px 12px;
+  border: 1px solid #222;
+  color: #ccc;
+  text-align: right;
+  vertical-align: top;
+}
+
+.message-text tr:nth-child(even) td,
+.dz-message-text tr:nth-child(even) td,
+.aq-ai-msg tr:nth-child(even) td {
+  background: #111;
+}
+
+.message-text tr:hover td,
+.dz-message-text tr:hover td,
+.aq-ai-msg tr:hover td {
+  background: #161e16;
+}

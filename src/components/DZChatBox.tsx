@@ -11,6 +11,7 @@ import {
   Download, ArrowRight, Loader2, Brain,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import DZDashboard from './DZDashboard'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
@@ -2307,6 +2308,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                     <>
                       {msg.content && (
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                             code({ className, children, ...props }) {
                               const isBlock = className?.startsWith('language-')

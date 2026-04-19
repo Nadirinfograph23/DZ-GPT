@@ -673,7 +673,7 @@ function App() {
                 <BookOpen size={14} />
                 <span>القرآن الكريم</span>
               </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-chat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/dzchat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
                 <MessageCircle size={14} />
                 <span>DZ CHAT</span>
               </button>

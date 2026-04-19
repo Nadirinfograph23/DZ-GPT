@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 
@@ -47,6 +47,7 @@ export default function DZAgent() {
   })
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [navDropdownOpen, setNavDropdownOpen] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('dz-agent-chats', JSON.stringify(chats))
@@ -113,6 +114,29 @@ export default function DZAgent() {
               <span className="dza-lang-code">{lang.code}</span>
             </button>
           ))}
+        </div>
+
+        {/* Navigation Dropdown — excludes current page (DZ Agent) */}
+        <div className="sidebar-nav-dropdown">
+          <button
+            className="sidebar-nav-trigger"
+            onClick={() => setNavDropdownOpen(p => !p)}
+          >
+            <span>التنقل</span>
+            <ChevronDown size={14} className={`sidebar-nav-chevron ${navDropdownOpen ? 'sidebar-nav-chevron--open' : ''}`} />
+          </button>
+          {navDropdownOpen && (
+            <div className="sidebar-nav-menu">
+              <button className="sidebar-nav-item" onClick={() => { navigate('/quran'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <BookOpen size={14} />
+                <span>القرآن الكريم</span>
+              </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-chat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <MessageCircle size={14} />
+                <span>DZ CHAT</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <button className="dza-new-chat-btn" onClick={createNewChat}>

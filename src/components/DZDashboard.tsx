@@ -660,13 +660,26 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
+                <div className="dzd-news-loading-hint">
+                  <span className="dzd-spin-icon">⏳</span> جاري تحميل أبرز عناوين الصحف...
+                </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
-            ) : (data?.news?.length === 0) ? (
-              <div className="dzd-empty-state">لا توجد أخبار متاحة</div>
+            ) : (!data?.news || data.news.length === 0) ? (
+              <div className="dzd-empty-state-news">
+                <span className="dzd-empty-icon">📰</span>
+                <p>تعذّر تحميل عناوين الصحف حالياً</p>
+                <p className="dzd-empty-sub">تحقق من اتصالك أو حاول مجدداً</p>
+                <button
+                  className="dzd-retry-btn"
+                  onClick={() => { loadDashboard() }}
+                >
+                  <RefreshCw size={12} /> إعادة المحاولة
+                </button>
+              </div>
             ) : (
               <div className="dzd-news-list">
-                {(data?.news || []).map((item, i) => (
+                {(data.news).map((item, i) => (
                   <div key={i} className="dzd-news-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source"><Newspaper size={9} /> {item.feedName}</span>

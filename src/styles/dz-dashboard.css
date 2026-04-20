@@ -756,6 +756,33 @@
   font-size: 13px;
 }
 
+.dzd-empty-state-news {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+  color: #555;
+  font-size: 13px;
+}
+.dzd-empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.dzd-empty-sub {
+  font-size: 11px;
+  color: #444;
+  margin: 0;
+}
+.dzd-news-loading-hint {
+  text-align: center;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 6px;
+}
+
 /* ===== SKELETONS ===== */
 @keyframes dzd-shimmer {
   0% { background-position: -400px 0; }

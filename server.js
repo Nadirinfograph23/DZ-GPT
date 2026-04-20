@@ -1121,6 +1121,13 @@ const RSS_TAG_REGEXES = {
 
 function parseRSS(xml, sourceName) {
   const items = []
+  const decode = (s) => s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
+    .replace(/&quot;/g,'"').replace(/&#\d+;/g,'').trim()
+
+  // Try RSS <item> blocks first
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
   let match
   while ((match = itemRegex.exec(xml)) !== null) {
@@ -1130,9 +1137,11 @@ function parseRSS(xml, sourceName) {
       if (!rx) return ''
       const r = block.match(rx)
       if (!r) return ''
-      return r[1].replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&#\d+;/g,'').trim()
+      return decode(r[1])
     }
-    const rawLink = block.match(/<link>\s*(https?:\/\/[^\s<]+)/i)?.[1] || getTag('link') || ''
+    const rawLink = block.match(/<link>\s*(https?:\/\/[^\s<]+)/i)?.[1]
+      || block.match(/<link[^>]+href=["'](https?:\/\/[^"']+)["']/i)?.[1]
+      || getTag('link') || ''
     const title = getTag('title')
     if (!title) continue
     items.push({
@@ -1143,6 +1152,28 @@ function parseRSS(xml, sourceName) {
       source: sourceName,
     })
   }
+
+  // Fallback: try Atom <entry> blocks
+  if (items.length === 0) {
+    const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi
+    while ((match = entryRegex.exec(xml)) !== null) {
+      const block = match[1]
+      const titleMatch = block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+      const title = titleMatch ? decode(titleMatch[1]) : ''
+      if (!title) continue
+      const linkMatch = block.match(/<link[^>]+href=["'](https?:\/\/[^"']+)["']/i)
+        || block.match(/<link>(https?:\/\/[^\s<]+)<\/link>/i)
+      const link = linkMatch ? linkMatch[1] : ''
+      const summaryMatch = block.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i)
+        || block.match(/<content[^>]*>([\s\S]*?)<\/content>/i)
+      const desc = summaryMatch ? decode(summaryMatch[1]).slice(0, 250) : ''
+      const pubMatch = block.match(/<published>([\s\S]*?)<\/published>/i)
+        || block.match(/<updated>([\s\S]*?)<\/updated>/i)
+      const pubDate = pubMatch ? decode(pubMatch[1]) : ''
+      items.push({ title, link, description: desc, pubDate, source: sourceName })
+    }
+  }
+
   return items.slice(0, 8)
 }
 
@@ -1243,8 +1274,13 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'الشروق', url: 'https://www.echoroukonline.com/feed' },
   { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
   { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
+  { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
   { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
-  { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
+  { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 const SPORTS_FEEDS_DASHBOARD = [
   { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
@@ -1559,8 +1595,13 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     fetchedAt: new Date().toISOString(),
   }
 
-  DASHBOARD_CACHE.data = data
-  DASHBOARD_CACHE.ts = Date.now()
+  if (data.news.length > 0) {
+    DASHBOARD_CACHE.data = data
+    DASHBOARD_CACHE.ts = Date.now()
+  } else {
+    DASHBOARD_CACHE.data = data
+    DASHBOARD_CACHE.ts = Date.now() - DASHBOARD_TTL + 60000
+  }
   return res.json(data)
 })
 

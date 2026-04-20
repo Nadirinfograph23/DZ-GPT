@@ -577,6 +577,23 @@
   z-index: 10;
 }
 
+/* ===== @ MENTION HINT BANNER ===== */
+.dzc-at-hint-bar {
+  direction: rtl;
+  text-align: right;
+  padding: 6px 16px;
+  font-size: 11px;
+  color: #3a5068;
+  background: rgba(200, 255, 0, 0.03);
+  border-bottom: 1px solid rgba(200, 255, 0, 0.05);
+  line-height: 1.6;
+  user-select: none;
+}
+.dzc-at-hint-bar strong {
+  color: #c8ff00;
+  font-weight: 600;
+}
+
 /* ===== @ MENTION DROPDOWN ===== */
 .dzc-at-dropdown {
   position: absolute;

@@ -962,34 +962,46 @@
 }
 .aq-ai-input-row {
   display: flex;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 10px 12px;
   border-top: 1px solid #1a1a1a;
+  align-items: center;
+  flex-shrink: 0;
 }
 .aq-ai-input {
   flex: 1;
-  padding: 8px 10px;
-  background: #0a0a0a;
-  border: 1px solid #222222;
-  border-radius: 6px;
+  padding: 9px 12px;
+  background: #0f0f0f;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
   color: #e8e8e8;
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   direction: rtl;
+  min-width: 0;
 }
-.aq-ai-input:focus { border-color: #9acd3255; }
-.aq-ai-input::placeholder { color: #4a5568; }
+.aq-ai-input:focus { border-color: rgba(154,205,50,0.4); }
+.aq-ai-input::placeholder { color: #3a4a3a; }
 .aq-ai-send-btn {
-  padding: 8px 10px;
-  background: rgba(154,205,50,0.15);
-  border: 1px solid #9acd3255;
-  border-radius: 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(154,205,50,0.2);
+  border: 1px solid rgba(154,205,50,0.4);
+  border-radius: 8px;
   color: #9acd32;
   cursor: pointer;
   transition: all 0.15s;
 }
-.aq-ai-send-btn:hover:not(:disabled) { background: rgba(154,205,50,0.25); }
-.aq-ai-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.aq-ai-send-btn:hover:not(:disabled) {
+  background: rgba(154,205,50,0.35);
+  border-color: rgba(154,205,50,0.6);
+  transform: scale(1.05);
+}
+.aq-ai-send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
 
 /* ===== SKELETONS ===== */
 .aq-skeleton {

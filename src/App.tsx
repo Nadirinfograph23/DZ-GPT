@@ -1033,7 +1033,11 @@ function App() {
                         {message.role === 'user' ? 'You' : currentModel.name}
                       </span>
                     </div>
-                    <div className="message-text">
+                    <div
+                      className="message-text"
+                      dir={/[\u0600-\u06FF]/.test(message.content) && (message.content.match(/[\u0600-\u06FF]/g) || []).length / message.content.replace(/\s/g,'').length > 0.3 ? 'rtl' : 'ltr'}
+                      style={/[\u0600-\u06FF]/.test(message.content) && (message.content.match(/[\u0600-\u06FF]/g) || []).length / message.content.replace(/\s/g,'').length > 0.3 ? { textAlign: 'right' } : {}}
+                    >
                       {message.role === 'assistant' ? (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}

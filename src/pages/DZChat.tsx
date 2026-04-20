@@ -710,6 +710,10 @@ export default function DZChat() {
 
           {/* ===== INPUT AREA ===== */}
           <div className="dzc-input-wrap">
+            {/* @ mention hint banner */}
+            <div className="dzc-at-hint-bar">
+              💡 اكتب <strong>@dzagent</strong> للبحث الذكي المباشر أو <strong>@dzgpt</strong> للدردشة مع الذكاء الاصطناعي
+            </div>
             {/* @ mention dropdown */}
             {atDropdown && atSuggestions.length > 0 && (
               <div className="dzc-at-dropdown" onClick={e => e.stopPropagation()}>

@@ -212,6 +212,80 @@ function getArName(enName: string) {
 
 type DashboardContext = { priority: 'weather'; city: string }
 
+function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string>('')
+
+  const handleClick = async () => {
+    if (busy) return
+    if (!('geolocation' in navigator)) {
+      onSend('أريد طبيب')
+      return
+    }
+    setBusy(true)
+    setStatus('جاري طلب تفعيل GPS...')
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5 * 60 * 1000,
+        })
+      })
+      const { latitude, longitude } = pos.coords
+      setStatus('جاري تحديد الولاية...')
+      let city = ''
+      try {
+        const r = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
+          { headers: { 'Accept': 'application/json' } }
+        )
+        if (r.ok) {
+          const j = await r.json()
+          const a = j.address || {}
+          city = a.city || a.town || a.village || a.municipality || a.county || a.state || ''
+        }
+      } catch { /* ignore reverse-geocode failure */ }
+
+      if (city) {
+        onSend(`أريد طبيب في ${city}`)
+      } else {
+        onSend('أريد طبيب')
+      }
+    } catch (err: any) {
+      const denied = err && (err.code === 1 || /denied|permission/i.test(String(err.message || '')))
+      if (denied) {
+        setStatus('لم يتم تفعيل GPS — سنكمل بدون موقعك')
+      }
+      onSend('أريد طبيب')
+    } finally {
+      setBusy(false)
+      setTimeout(() => setStatus(''), 2500)
+    }
+  }
+
+  return (
+    <div className="dzd-section dzd-section--doctor">
+      <button
+        type="button"
+        className="dzd-doctor-card"
+        onClick={handleClick}
+        disabled={busy}
+        aria-label="ابحث عن طبيب قريب منك"
+      >
+        <span className="dzd-doctor-icon">{busy ? '📡' : '🔎'}</span>
+        <span className="dzd-doctor-text">
+          <span className="dzd-doctor-title">نحوس على طبيب؟</span>
+          <span className="dzd-doctor-sub">
+            {status || 'فعّل GPS للبحث قرب موقعك'}
+          </span>
+        </span>
+        <span className="dzd-doctor-arrow">›</span>
+      </button>
+    </div>
+  )
+}
+
 export default function DZDashboard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
@@ -847,21 +921,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         )}
 
         {/* DOCTOR SEARCH ENTRY ── pinned at bottom of dashboard */}
-        <div className="dzd-section dzd-section--doctor">
-          <button
-            type="button"
-            className="dzd-doctor-card"
-            onClick={() => onSend('أريد طبيب')}
-            aria-label="ابحث عن طبيب"
-          >
-            <span className="dzd-doctor-icon">🔎</span>
-            <span className="dzd-doctor-text">
-              <span className="dzd-doctor-title">نحوس على طبيب؟</span>
-              <span className="dzd-doctor-sub">ابحث حسب التخصص والولاية</span>
-            </span>
-            <span className="dzd-doctor-arrow">›</span>
-          </button>
-        </div>
+        <DoctorSearchCard onSend={onSend} />
 
       </div>
     </div>

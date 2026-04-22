@@ -140,6 +140,48 @@ function isValidGithubRepo(repo) {
   return /^[a-zA-Z0-9._\-]+\/[a-zA-Z0-9._\-]+$/.test(repo)
 }
 
+// ===== UNIFIED DEVELOPER / OWNER QUESTION DETECTION =====
+const DEVELOPER_RESPONSE = Object.freeze({
+  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
+  showDevCard: true,
+})
+
+const DEVELOPER_QUESTION_PATTERNS = [
+  // Arabic — developer
+  'من هو مطورك', 'من مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك',
+  'من طور dz', 'من صمم', 'من هو مطور', 'مطور dz', 'مطور الوكيل', 'مطور الموقع',
+  'من برمج هذا', 'من صنع هذا', 'من طور هذا',
+  // Arabic dialect (Algerian/Maghrebi) — شكون
+  'شكون خدمك', 'شكون برمجك', 'شكون صنعك', 'شكون عملك', 'شكون درك',
+  'شكون صاوبك', 'شكون مطورك', 'شكون دار', 'شكون هو مطور', 'شكون صاحب',
+  'شكون مالك', 'شكون خدم', 'شكون برمج',
+  // Arabic — owner
+  'من صاحب الموقع', 'من صاحب هذا الموقع', 'من مالك الموقع', 'من مالك هذا الموقع',
+  'صاحب الموقع', 'مالك الموقع', 'صاحب هذا الموقع', 'مالك هذا الموقع',
+  'من يملك الموقع', 'من يملك هذا الموقع',
+  // English
+  'who is your developer', 'who made you', 'who created you', 'who built you',
+  'who programmed you', 'who designed you', 'who is dz agent developer',
+  'who owns this site', 'who is the owner', 'owner of this site', 'owner of this website',
+  'who developed this', 'who built this site',
+  // French
+  'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui ta crée',
+  'qui vous a fait', 'qui a développé', 'qui est le propriétaire',
+  'propriétaire du site', 'qui a fait ce site',
+]
+
+function isDeveloperOrOwnerQuestion(message) {
+  if (typeof message !== 'string' || !message) return false
+  // Normalize: lowercase + strip Arabic diacritics + collapse punctuation/whitespace
+  const normalized = message
+    .toLowerCase()
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    .replace(/[؟?!.,،:;()\[\]{}"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return DEVELOPER_QUESTION_PATTERNS.some(p => normalized.includes(p))
+}
+
 function normalizeChatMessages(messages) {
   if (!Array.isArray(messages)) return null
   return messages
@@ -343,7 +385,19 @@ app.get('/api/groq-key-stats', (_req, res) => {
 
 // ===== API ROUTE =====
 app.post('/api/chat', async (req, res) => {
-  const { messages, model } = req.body
+  const { model } = req.body
+
+  // Sanitize and normalize incoming messages (XSS/control-char protection)
+  const messages = normalizeChatMessages(req.body?.messages)
+  if (!messages || messages.length === 0) {
+    return res.status(400).json({ error: 'Invalid messages payload.' })
+  }
+
+  // Unified developer/owner intent — same canonical answer as DZ Agent
+  const lastUserMsg = [...messages].reverse().find(m => m?.role === 'user')?.content || ''
+  if (isDeveloperOrOwnerQuestion(lastUserMsg)) {
+    return res.status(200).json(DEVELOPER_RESPONSE)
+  }
 
   if (getGroqKeys().length === 0) {
     return res.status(500).json({ error: 'API key not configured.' })
@@ -2469,18 +2523,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
-  // ── Local knowledge base ──────────────────────────────────────────────────
-  const developerQuestions = [
-    'من هو مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك', 'من طور dz agent', 'من صمم',
-    'who is your developer', 'who made you', 'who created you', 'who built you', 'who programmed you', 'who designed you',
-    'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui vous a fait', 'qui a développé',
-    'who is dz agent developer', 'من هو مطور', 'مطور dz', 'مطور الوكيل',
-  ]
-  if (developerQuestions.some(q => lowerMsg.includes(q))) {
-    return res.status(200).json({
-      content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
-      showDevCard: true,
-    })
+  // ── Local knowledge base — unified developer/owner intent ────────────────
+  if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
+    return res.status(200).json(DEVELOPER_RESPONSE)
   }
 
   // ── GitHub URL detection (Smart Dev Mode trigger) ─────────────────────────

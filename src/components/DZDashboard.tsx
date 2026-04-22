@@ -846,6 +846,23 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
           </div>
         )}
 
+        {/* DOCTOR SEARCH ENTRY ── pinned at bottom of dashboard */}
+        <div className="dzd-section dzd-section--doctor">
+          <button
+            type="button"
+            className="dzd-doctor-card"
+            onClick={() => onSend('أريد طبيب')}
+            aria-label="ابحث عن طبيب"
+          >
+            <span className="dzd-doctor-icon">🔎</span>
+            <span className="dzd-doctor-text">
+              <span className="dzd-doctor-title">نحوس على طبيب؟</span>
+              <span className="dzd-doctor-sub">ابحث حسب التخصص والولاية</span>
+            </span>
+            <span className="dzd-doctor-arrow">›</span>
+          </button>
+        </div>
+
       </div>
     </div>
   )

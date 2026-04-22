@@ -1105,3 +1105,63 @@
   background-clip: text;
   margin-left: 4px;
 }
+
+/* ===== DOCTOR SEARCH ENTRY CARD ===== */
+.dzd-section--doctor {
+  margin-top: 8px;
+}
+
+.dzd-doctor-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(0, 200, 150, 0.10), rgba(0, 150, 255, 0.08));
+  border: 1px solid rgba(0, 220, 170, 0.28);
+  border-radius: 12px;
+  color: #d8f5ea;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: right;
+  direction: rtl;
+  transition: all 0.2s ease;
+}
+
+.dzd-doctor-card:hover {
+  background: linear-gradient(135deg, rgba(0, 200, 150, 0.18), rgba(0, 150, 255, 0.14));
+  border-color: rgba(0, 220, 170, 0.55);
+  transform: translateY(-1px);
+}
+
+.dzd-doctor-icon {
+  font-size: 26px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dzd-doctor-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.dzd-doctor-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #c8ffe6;
+}
+
+.dzd-doctor-sub {
+  font-size: 12.5px;
+  color: #8fd5b8;
+  opacity: 0.85;
+}
+
+.dzd-doctor-arrow {
+  font-size: 22px;
+  color: #00dca6;
+  flex-shrink: 0;
+  transform: scaleX(-1);
+}

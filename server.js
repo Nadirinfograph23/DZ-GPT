@@ -122,6 +122,7 @@ app.use('/api/update-index', searchLimiter)
 app.use('/api/lessons', searchLimiter)
 app.use('/api/lesson', searchLimiter)
 app.use('/api/dz-agent/deploy', deployLimiter)
+app.use('/api/dz-agent/doctor-search', searchLimiter)
 
 // ===== INPUT SANITIZER =====
 function sanitizeString(str, maxLen = 10000) {
@@ -231,6 +232,176 @@ const CAPABILITIES_QUESTION_PATTERNS = [
   'que sais-tu faire', 'tes fonctionnalités', 'vos fonctionnalités',
   'à quoi sers-tu', 'a quoi sers tu',
 ]
+
+// ===== DOCTOR SEARCH INTENT DETECTION =====
+const DOCTOR_TRIGGER_PATTERNS = [
+  // Arabic / Darija
+  'طبيب', 'دكتور', 'دكاترة', 'أطباء', 'طبيبة', 'نحوس على طبيب', 'نقلب على طبيب',
+  'حاب طبيب', 'ابغي طبيب', 'أبحث عن طبيب', 'بحث عن طبيب', 'عيادة', 'كشف طبي',
+  'موعد طبيب', 'موعد عند طبيب',
+  // French
+  'médecin', 'medecin', 'docteur', 'cabinet médical', 'cherche médecin', 'cherche docteur',
+  'rendez-vous médecin',
+  // Specialty keywords (act as triggers too)
+  'cardiologue', 'dentiste', 'pédiatre', 'pediatre', 'gynécologue', 'gynecologue',
+  'ophtalmologue', 'dermatologue', 'généraliste', 'generaliste', 'orl', 'psychiatre',
+  'rhumatologue', 'urologue', 'neurologue', 'chirurgien',
+]
+
+const SPECIALITIES = [
+  // [canonical_ar, canonical_fr, ...aliases]
+  { ar: 'عظام',     fr: 'orthopédiste',  search: 'orthopédiste',   aliases: ['عظام', 'العظام', 'orthopédiste', 'orthopediste', 'orthopedic'] },
+  { ar: 'قلب',      fr: 'cardiologue',   search: 'cardiologue',    aliases: ['قلب', 'القلب', 'أمراض القلب', 'cardiologue', 'cardio'] },
+  { ar: 'أسنان',    fr: 'dentiste',      search: 'dentiste',       aliases: ['أسنان', 'الأسنان', 'سنان', 'dentiste', 'dentist'] },
+  { ar: 'عيون',     fr: 'ophtalmologue', search: 'ophtalmologue',  aliases: ['عيون', 'العيون', 'بصر', 'ophtalmologue', 'ophtalmo'] },
+  { ar: 'جلدية',    fr: 'dermatologue',  search: 'dermatologue',   aliases: ['جلدية', 'الجلدية', 'جلد', 'dermatologue', 'dermato'] },
+  { ar: 'نساء وتوليد', fr: 'gynécologue', search: 'gynécologue',    aliases: ['نساء', 'توليد', 'نسائية', 'gynécologue', 'gynecologue', 'gyneco'] },
+  { ar: 'أطفال',    fr: 'pédiatre',      search: 'pédiatre',       aliases: ['أطفال', 'الأطفال', 'طب الأطفال', 'pédiatre', 'pediatre'] },
+  { ar: 'أنف وأذن وحنجرة', fr: 'ORL',    search: 'ORL',            aliases: ['أنف', 'أذن', 'حنجرة', 'orl'] },
+  { ar: 'نفسي',     fr: 'psychiatre',    search: 'psychiatre',     aliases: ['نفسي', 'النفسي', 'نفسية', 'psychiatre', 'psy'] },
+  { ar: 'باطني',    fr: 'généraliste',   search: 'généraliste',    aliases: ['باطني', 'الباطني', 'باطنية', 'généraliste', 'generaliste'] },
+  { ar: 'عام',      fr: 'généraliste',   search: 'médecin généraliste', aliases: ['عام', 'طبيب عام', 'généraliste', 'generaliste', 'medecin generaliste'] },
+  { ar: 'مفاصل',    fr: 'rhumatologue',  search: 'rhumatologue',   aliases: ['مفاصل', 'روماتيزم', 'rhumatologue'] },
+  { ar: 'مسالك',    fr: 'urologue',      search: 'urologue',       aliases: ['مسالك', 'بولية', 'urologue'] },
+  { ar: 'أعصاب',    fr: 'neurologue',    search: 'neurologue',     aliases: ['أعصاب', 'الأعصاب', 'neurologue', 'neuro'] },
+  { ar: 'جراحة',    fr: 'chirurgien',    search: 'chirurgien',     aliases: ['جراحة', 'جراح', 'chirurgien'] },
+]
+
+const DOCTOR_CITIES = [
+  { ar: 'أدرار', fr: 'Adrar' }, { ar: 'الشلف', fr: 'Chlef' }, { ar: 'الأغواط', fr: 'Laghouat' },
+  { ar: 'أم البواقي', fr: 'Oum El Bouaghi' }, { ar: 'باتنة', fr: 'Batna' }, { ar: 'بجاية', fr: 'Bejaia' },
+  { ar: 'بسكرة', fr: 'Biskra' }, { ar: 'بشار', fr: 'Bechar' }, { ar: 'البليدة', fr: 'Blida' },
+  { ar: 'البويرة', fr: 'Bouira' }, { ar: 'تمنراست', fr: 'Tamanrasset' }, { ar: 'تبسة', fr: 'Tebessa' },
+  { ar: 'تلمسان', fr: 'Tlemcen' }, { ar: 'تيارت', fr: 'Tiaret' }, { ar: 'تيزي وزو', fr: 'Tizi Ouzou' },
+  { ar: 'الجزائر', fr: 'Alger' }, { ar: 'الجلفة', fr: 'Djelfa' }, { ar: 'جيجل', fr: 'Jijel' },
+  { ar: 'سطيف', fr: 'Setif' }, { ar: 'سعيدة', fr: 'Saida' }, { ar: 'سكيكدة', fr: 'Skikda' },
+  { ar: 'سيدي بلعباس', fr: 'Sidi Bel Abbes' }, { ar: 'عنابة', fr: 'Annaba' }, { ar: 'قالمة', fr: 'Guelma' },
+  { ar: 'قسنطينة', fr: 'Constantine' }, { ar: 'المدية', fr: 'Medea' }, { ar: 'مستغانم', fr: 'Mostaganem' },
+  { ar: 'المسيلة', fr: 'Msila' }, { ar: 'معسكر', fr: 'Mascara' }, { ar: 'ورقلة', fr: 'Ouargla' },
+  { ar: 'وهران', fr: 'Oran' }, { ar: 'البيض', fr: 'El Bayadh' }, { ar: 'إليزي', fr: 'Illizi' },
+  { ar: 'برج بوعريريج', fr: 'Bordj Bou Arreridj' }, { ar: 'بومرداس', fr: 'Boumerdes' },
+  { ar: 'الطارف', fr: 'El Tarf' }, { ar: 'تندوف', fr: 'Tindouf' }, { ar: 'تيسمسيلت', fr: 'Tissemsilt' },
+  { ar: 'الوادي', fr: 'El Oued' }, { ar: 'خنشلة', fr: 'Khenchela' }, { ar: 'سوق أهراس', fr: 'Souk Ahras' },
+  { ar: 'تيبازة', fr: 'Tipaza' }, { ar: 'ميلة', fr: 'Mila' }, { ar: 'عين الدفلى', fr: 'Ain Defla' },
+  { ar: 'النعامة', fr: 'Naama' }, { ar: 'عين تموشنت', fr: 'Ain Temouchent' }, { ar: 'غرداية', fr: 'Ghardaia' },
+  { ar: 'غليزان', fr: 'Relizane' },
+]
+
+function detectDoctorIntent(message) {
+  if (!message || typeof message !== 'string') return { isDoctorQuery: false }
+  const norm = normalizeQuery(message)
+  const isDoctorQuery = DOCTOR_TRIGGER_PATTERNS.some(p => norm.includes(p.toLowerCase()))
+  if (!isDoctorQuery) return { isDoctorQuery: false }
+
+  let speciality = null
+  for (const sp of SPECIALITIES) {
+    if (sp.aliases.some(a => norm.includes(a.toLowerCase()))) { speciality = sp; break }
+  }
+  let city = null
+  for (const c of DOCTOR_CITIES) {
+    if (norm.includes(c.ar.toLowerCase()) || norm.includes(c.fr.toLowerCase())) { city = c; break }
+  }
+  return { isDoctorQuery: true, speciality, city }
+}
+
+// ===== DOCTOR SEARCH — Sahadoc fallback + 24h cache =====
+const doctorCache = new Map() // key -> { ts, results }
+const DOCTOR_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+let lastSahadocFetchAt = 0
+const SAHADOC_MIN_DELAY_MS = 1500
+
+function getCachedDoctors(key) {
+  const entry = doctorCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > DOCTOR_CACHE_TTL_MS) { doctorCache.delete(key); return null }
+  return entry.results
+}
+
+function setCachedDoctors(key, results) {
+  doctorCache.set(key, { ts: Date.now(), results })
+  if (doctorCache.size > 200) {
+    const oldest = [...doctorCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]
+    if (oldest) doctorCache.delete(oldest[0])
+  }
+}
+
+async function fetchSahadocDoctors(speciality, city) {
+  const sinceLast = Date.now() - lastSahadocFetchAt
+  if (sinceLast < SAHADOC_MIN_DELAY_MS) {
+    await new Promise(r => setTimeout(r, SAHADOC_MIN_DELAY_MS - sinceLast))
+  }
+  lastSahadocFetchAt = Date.now()
+
+  const queryParts = [speciality, city].filter(Boolean).join(' ')
+  const url = `https://www.sahadoc.net/ar/recherche?q=${encodeURIComponent(queryParts)}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0; +https://dz-gpt.vercel.app)',
+        'Accept-Language': 'ar,fr;q=0.8,en;q=0.6',
+      },
+    })
+    clearTimeout(timeout)
+    if (!res.ok) return { results: [], source: 'sahadoc', error: `HTTP ${res.status}` }
+    const html = await res.text()
+    const cheerio = await import('cheerio')
+    const $ = cheerio.load(html)
+
+    const results = []
+    // Resilient: try multiple selectors commonly used on doctor directories
+    const candidates = [
+      '.doctor-card', '.search-result-item', '.result-item', '.doctor-item',
+      'article.doctor', '.profile-card', '[itemtype*="Physician"]',
+    ]
+    for (const sel of candidates) {
+      $(sel).each((_, el) => {
+        const $el = $(el)
+        const name = $el.find('h2, h3, .doctor-name, .name, [itemprop="name"]').first().text().trim()
+        const spec = $el.find('.speciality, .specialty, .doctor-specialty, [itemprop="medicalSpecialty"]').first().text().trim()
+        const loc = $el.find('.city, .location, .doctor-city, [itemprop="addressLocality"]').first().text().trim()
+        if (name && results.length < 10) results.push({ name, speciality: spec, city: loc })
+      })
+      if (results.length > 0) break
+    }
+    // Generic heading-based fallback if no structured cards found
+    if (results.length === 0) {
+      $('h2 a, h3 a').each((_, el) => {
+        const txt = $(el).text().trim()
+        if (txt && /^(Dr\.?|د\.?|د\s)/i.test(txt) && results.length < 10) {
+          results.push({ name: txt, speciality: '', city: '' })
+        }
+      })
+    }
+    return { results, source: 'sahadoc', sourceUrl: url }
+  } catch (err) {
+    clearTimeout(timeout)
+    return { results: [], source: 'sahadoc', error: err.name === 'AbortError' ? 'timeout' : String(err.message || err) }
+  }
+}
+
+function formatDoctorResults(results, speciality, city) {
+  const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
+  const cityLabel = city?.ar || city?.fr || ''
+  const header = `🩺 **${specLabel}${cityLabel ? ` في ${cityLabel}` : ''}**\n`
+  if (!results.length) {
+    return header + '\nلم أجد نتائج في الوقت الحالي. جرّب تخصصاً آخر أو ولاية أخرى، أو افتح Sahadoc مباشرة:\n' +
+      `🔗 https://www.sahadoc.net/ar/recherche?q=${encodeURIComponent([specLabel, cityLabel].filter(Boolean).join(' '))}`
+  }
+  const lines = results.map((d, i) => {
+    const mapQuery = encodeURIComponent([d.name, d.city || cityLabel].filter(Boolean).join(' '))
+    const mapUrl = `https://www.openstreetmap.org/search?query=${mapQuery}`
+    return [
+      `**${i + 1}. ${d.name}**`,
+      d.city ? `📍 ${d.city}` : (cityLabel ? `📍 ${cityLabel}` : ''),
+      d.speciality ? `🧠 اختصاص: ${d.speciality}` : `🧠 اختصاص: ${specLabel}`,
+      `🗺️ [عرض على الخريطة](${mapUrl})`,
+    ].filter(Boolean).join('\n')
+  }).join('\n\n')
+  return header + '\n' + lines + '\n\n_المصدر: Sahadoc_'
+}
 
 function isCapabilitiesQuestion(message) {
   if (typeof message !== 'string' || !message) return false
@@ -2490,6 +2661,38 @@ const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9
 const VERCEL_GITHUB_REPO = 'Nadirinfograph23/DZ-GPT'
 const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'devin/1774405518-init-dz-gpt'
 
+app.post('/api/dz-agent/doctor-search', async (req, res) => {
+  try {
+    const query = sanitizeString(req.body?.query || '', 500)
+    if (!query) return res.status(400).json({ error: 'Query is required.' })
+    const intent = detectDoctorIntent(query)
+    if (!intent.isDoctorQuery) return res.status(400).json({ error: 'Not a doctor query.' })
+    if (!intent.speciality || !intent.city) {
+      return res.status(200).json({ needs: { speciality: !intent.speciality, city: !intent.city }, results: [] })
+    }
+    const cacheKey = `${intent.speciality.search}|${intent.city.fr}`
+    let results = getCachedDoctors(cacheKey)
+    let cached = !!results
+    let source = 'cache'
+    if (!results) {
+      const fetched = await fetchSahadocDoctors(intent.speciality.search, intent.city.fr)
+      results = fetched.results
+      source = fetched.source
+      if (results.length > 0) setCachedDoctors(cacheKey, results)
+    }
+    return res.status(200).json({
+      speciality: { ar: intent.speciality.ar, fr: intent.speciality.fr },
+      city: { ar: intent.city.ar, fr: intent.city.fr },
+      results,
+      cached,
+      source,
+    })
+  } catch (err) {
+    console.error('[doctor-search] error:', err)
+    return res.status(500).json({ error: 'Doctor search failed.' })
+  }
+})
+
 app.post('/api/dz-agent/deploy', async (req, res) => {
   if (!hasDeployAuthorization(req)) {
     return res.status(403).json({ error: 'Deploy endpoint is restricted.' })
@@ -2590,6 +2793,37 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMessage)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // ── Doctor search intent ─────────────────────────────────────────────────
+  const doctorIntent = detectDoctorIntent(lastUserMessage)
+  if (doctorIntent.isDoctorQuery) {
+    if (!doctorIntent.speciality && !doctorIntent.city) {
+      return res.status(200).json({
+        content: '🩺 **بحث عن طبيب**\n\nأي تخصص تحتاج؟ مثلاً: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...\n\nوإذا أمكن، أضف الولاية (عنابة، الجزائر، وهران...).',
+      })
+    }
+    if (!doctorIntent.speciality) {
+      return res.status(200).json({
+        content: '🩺 وضّح لي التخصص: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...',
+      })
+    }
+    if (!doctorIntent.city) {
+      return res.status(200).json({
+        content: `🩺 لاحظت طلبك على طبيب **${doctorIntent.speciality.ar}**.\n\nفي أي ولاية؟ (عنابة، الجزائر، وهران، قسنطينة، تيزي وزو...)`,
+      })
+    }
+    const cacheKey = `${doctorIntent.speciality.search}|${doctorIntent.city.fr}`
+    let results = getCachedDoctors(cacheKey)
+    let cached = !!results
+    if (!results) {
+      const fetched = await fetchSahadocDoctors(doctorIntent.speciality.search, doctorIntent.city.fr)
+      results = fetched.results
+      if (results.length > 0) setCachedDoctors(cacheKey, results)
+    }
+    return res.status(200).json({
+      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+    })
   }
 
   // ── GitHub URL detection (Smart Dev Mode trigger) ─────────────────────────

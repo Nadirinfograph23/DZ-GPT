@@ -170,16 +170,74 @@ const DEVELOPER_QUESTION_PATTERNS = [
   'propriétaire du site', 'qui a fait ce site',
 ]
 
-function isDeveloperOrOwnerQuestion(message) {
-  if (typeof message !== 'string' || !message) return false
-  // Normalize: lowercase + strip Arabic diacritics + collapse punctuation/whitespace
-  const normalized = message
+function normalizeQuery(message) {
+  return String(message || '')
     .toLowerCase()
     .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
     .replace(/[؟?!.,،:;()\[\]{}"']/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return DEVELOPER_QUESTION_PATTERNS.some(p => normalized.includes(p))
+}
+
+function isDeveloperOrOwnerQuestion(message) {
+  if (typeof message !== 'string' || !message) return false
+  return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))
+}
+
+// ===== UNIFIED CAPABILITIES QUESTION DETECTION =====
+const CAPABILITIES_RESPONSE = Object.freeze({
+  content: [
+    '🤖 **إمكانياتي كمساعد ذكي — DZ Agent** 🇩🇿',
+    '',
+    '🔎 **بحث ذكي**: محرك بحث Google-First مع تقييم المصادر والثقة (Reuters, BBC, APS, Aljazeera...).',
+    '📰 **أخبار حية**: متابعة آخر الأخبار الجزائرية والعالمية عبر RSS.',
+    '⚽ **رياضة**: نتائج LFP والدوريات الكبرى ومباشر المباريات.',
+    '🌤️ **طقس**: حالة الطقس لأي مدينة جزائرية أو عالمية.',
+    '🕌 **مواقيت الصلاة**: حسب موقعك.',
+    '📖 **قرآن كريم**: قراءة وتلاوات مع الترجمة.',
+    '🎓 **تعليم**: ملخصات ودروس من Eddirasa لكل المستويات.',
+    '💱 **عملات**: تحويل وأسعار مباشرة (DZD وغيرها).',
+    '💻 **برمجة + GitHub**: تحليل المستودعات، تعديل الملفات، commit، PR، deploy على Vercel.',
+    '🖼️ **OCR**: قراءة النصوص من الصور والـ PDF.',
+    '💬 **محادثة بالعربية، الإنجليزية، الفرنسية، واللهجة الجزائرية**.',
+    '',
+    'كيف يمكنني مساعدتك اليوم؟ 🚀',
+  ].join('\n'),
+})
+
+const CAPABILITIES_QUESTION_PATTERNS = [
+  // Arabic — Standard
+  'ما هي إمكانياتك', 'ما إمكانياتك', 'ما هي امكانياتك', 'ما امكانياتك',
+  'ماذا تستطيع', 'ماذا تقدر', 'ماذا يمكنك', 'ماذا بإمكانك',
+  'ما الذي تستطيع', 'ما الذي تقدر', 'ما الذي يمكنك',
+  'ماذا تفعل', 'ماذا تعمل', 'ما وظيفتك', 'ما هي وظيفتك',
+  'ما هي قدراتك', 'ما قدراتك', 'ما هي مميزاتك', 'ما مميزاتك',
+  'كيف تساعدني', 'كيف يمكنك مساعدتي', 'كيف تقدر تساعدني',
+  'ما هي خدماتك', 'ما خدماتك',
+  // Arabic dialect (Algerian/Maghrebi) — شكون / واش
+  'شكون قادر تدير', 'شكون تقدر تدير', 'شكون قادر دير', 'شكون تقدر دير',
+  'واش تقدر تدير', 'واش تقدر دير', 'واش تدير', 'واش تعرف دير',
+  'واش تعرف', 'واش تنجم تدير', 'تنجم تدير', 'تقدر تساعدني',
+  'كيفاش تساعدني', 'كيفاش تخدم', 'كيفاش تنجم تساعدني',
+  'واش هي إمكانياتك', 'واش هي امكانياتك', 'واش قدراتك',
+  // English
+  'what can you do', 'what are you able to do', 'what are your capabilities',
+  'what are your features', 'how can you help me', 'how can you help',
+  'what do you do', 'what is your function', 'what are your skills',
+  'help me', 'show me what you can do',
+  // French
+  'que peux-tu faire', 'que pouvez-vous faire', 'quelles sont tes capacités',
+  'quelles sont vos capacités', 'comment peux-tu m\'aider', 'comment pouvez-vous m\'aider',
+  'que sais-tu faire', 'tes fonctionnalités', 'vos fonctionnalités',
+  'à quoi sers-tu', 'a quoi sers tu',
+]
+
+function isCapabilitiesQuestion(message) {
+  if (typeof message !== 'string' || !message) return false
+  const normalized = normalizeQuery(message)
+  // Avoid false positives on developer questions
+  if (DEVELOPER_QUESTION_PATTERNS.some(p => normalized.includes(p))) return false
+  return CAPABILITIES_QUESTION_PATTERNS.some(p => normalized.includes(p))
 }
 
 function normalizeChatMessages(messages) {
@@ -397,6 +455,9 @@ app.post('/api/chat', async (req, res) => {
   const lastUserMsg = [...messages].reverse().find(m => m?.role === 'user')?.content || ''
   if (isDeveloperOrOwnerQuestion(lastUserMsg)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
+  }
+  if (isCapabilitiesQuestion(lastUserMsg)) {
+    return res.status(200).json(CAPABILITIES_RESPONSE)
   }
 
   if (getGroqKeys().length === 0) {
@@ -2523,9 +2584,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
-  // ── Local knowledge base — unified developer/owner intent ────────────────
+  // ── Local knowledge base — unified developer/owner + capabilities intents ─
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
+  }
+  if (isCapabilitiesQuestion(lastUserMessage)) {
+    return res.status(200).json(CAPABILITIES_RESPONSE)
   }
 
   // ── GitHub URL detection (Smart Dev Mode trigger) ─────────────────────────

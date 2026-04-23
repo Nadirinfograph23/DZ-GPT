@@ -304,103 +304,13 @@ function detectDoctorIntent(message) {
   return { isDoctorQuery: true, speciality, city }
 }
 
-// ===== DOCTOR SEARCH — Sahadoc fallback + 24h cache =====
-const doctorCache = new Map() // key -> { ts, results }
-const DOCTOR_CACHE_TTL_MS = 24 * 60 * 60 * 1000
-let lastSahadocFetchAt = 0
-const SAHADOC_MIN_DELAY_MS = 1500
-
-function getCachedDoctors(key) {
-  const entry = doctorCache.get(key)
-  if (!entry) return null
-  if (Date.now() - entry.ts > DOCTOR_CACHE_TTL_MS) { doctorCache.delete(key); return null }
-  return entry.results
-}
-
-function setCachedDoctors(key, results) {
-  doctorCache.set(key, { ts: Date.now(), results })
-  if (doctorCache.size > 200) {
-    const oldest = [...doctorCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]
-    if (oldest) doctorCache.delete(oldest[0])
-  }
-}
-
-async function fetchSahadocDoctors(speciality, city) {
-  const sinceLast = Date.now() - lastSahadocFetchAt
-  if (sinceLast < SAHADOC_MIN_DELAY_MS) {
-    await new Promise(r => setTimeout(r, SAHADOC_MIN_DELAY_MS - sinceLast))
-  }
-  lastSahadocFetchAt = Date.now()
-
-  const queryParts = [speciality, city].filter(Boolean).join(' ')
-  const url = `https://www.sahadoc.net/ar/recherche?q=${encodeURIComponent(queryParts)}`
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000)
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0; +https://dz-gpt.vercel.app)',
-        'Accept-Language': 'ar,fr;q=0.8,en;q=0.6',
-      },
-    })
-    clearTimeout(timeout)
-    if (!res.ok) return { results: [], source: 'sahadoc', error: `HTTP ${res.status}` }
-    const html = await res.text()
-    const cheerio = await import('cheerio')
-    const $ = cheerio.load(html)
-
-    const results = []
-    // Resilient: try multiple selectors commonly used on doctor directories
-    const candidates = [
-      '.doctor-card', '.search-result-item', '.result-item', '.doctor-item',
-      'article.doctor', '.profile-card', '[itemtype*="Physician"]',
-    ]
-    for (const sel of candidates) {
-      $(sel).each((_, el) => {
-        const $el = $(el)
-        const name = $el.find('h2, h3, .doctor-name, .name, [itemprop="name"]').first().text().trim()
-        const spec = $el.find('.speciality, .specialty, .doctor-specialty, [itemprop="medicalSpecialty"]').first().text().trim()
-        const loc = $el.find('.city, .location, .doctor-city, [itemprop="addressLocality"]').first().text().trim()
-        if (name && results.length < 10) results.push({ name, speciality: spec, city: loc })
-      })
-      if (results.length > 0) break
-    }
-    // Generic heading-based fallback if no structured cards found
-    if (results.length === 0) {
-      $('h2 a, h3 a').each((_, el) => {
-        const txt = $(el).text().trim()
-        if (txt && /^(Dr\.?|د\.?|د\s)/i.test(txt) && results.length < 10) {
-          results.push({ name: txt, speciality: '', city: '' })
-        }
-      })
-    }
-    return { results, source: 'sahadoc', sourceUrl: url }
-  } catch (err) {
-    clearTimeout(timeout)
-    return { results: [], source: 'sahadoc', error: err.name === 'AbortError' ? 'timeout' : String(err.message || err) }
-  }
-}
+// ===== DOCTOR SEARCH — multi-source aggregator (pj-dz, addalile, sahadoc, docteur360, algerie-docto) =====
+import { searchDoctors as multiSearchDoctors, formatResults as formatDoctorMulti } from './lib/doctorSearch.js'
 
 function formatDoctorResults(results, speciality, city) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
   const cityLabel = city?.ar || city?.fr || ''
-  const header = `🩺 **${specLabel}${cityLabel ? ` في ${cityLabel}` : ''}**\n`
-  if (!results.length) {
-    return header + '\nلم أجد نتائج في الوقت الحالي. جرّب تخصصاً آخر أو ولاية أخرى، أو افتح Sahadoc مباشرة:\n' +
-      `🔗 https://www.sahadoc.net/ar/recherche?q=${encodeURIComponent([specLabel, cityLabel].filter(Boolean).join(' '))}`
-  }
-  const lines = results.map((d, i) => {
-    const mapQuery = encodeURIComponent([d.name, d.city || cityLabel].filter(Boolean).join(' '))
-    const mapUrl = `https://www.openstreetmap.org/search?query=${mapQuery}`
-    return [
-      `**${i + 1}. ${d.name}**`,
-      d.city ? `📍 ${d.city}` : (cityLabel ? `📍 ${cityLabel}` : ''),
-      d.speciality ? `🧠 اختصاص: ${d.speciality}` : `🧠 اختصاص: ${specLabel}`,
-      `🗺️ [عرض على الخريطة](${mapUrl})`,
-    ].filter(Boolean).join('\n')
-  }).join('\n\n')
-  return header + '\n' + lines + '\n\n_المصدر: Sahadoc_'
+  return formatDoctorMulti(results, specLabel, cityLabel)
 }
 
 function isCapabilitiesQuestion(message) {
@@ -2670,22 +2580,17 @@ app.post('/api/dz-agent/doctor-search', async (req, res) => {
     if (!intent.speciality || !intent.city) {
       return res.status(200).json({ needs: { speciality: !intent.speciality, city: !intent.city }, results: [] })
     }
-    const cacheKey = `${intent.speciality.search}|${intent.city.fr}`
-    let results = getCachedDoctors(cacheKey)
-    let cached = !!results
-    let source = 'cache'
-    if (!results) {
-      const fetched = await fetchSahadocDoctors(intent.speciality.search, intent.city.fr)
-      results = fetched.results
-      source = fetched.source
-      if (results.length > 0) setCachedDoctors(cacheKey, results)
-    }
+    const { results, errors, cached } = await multiSearchDoctors({
+      speciality: intent.speciality.search,
+      city: intent.city.fr,
+    })
     return res.status(200).json({
       speciality: { ar: intent.speciality.ar, fr: intent.speciality.fr },
       city: { ar: intent.city.ar, fr: intent.city.fr },
       results,
-      cached,
-      source,
+      cached: !!cached,
+      sources: ['pj-dz', 'addalile', 'sahadoc', 'docteur360', 'algerie-docto'],
+      errors,
     })
   } catch (err) {
     console.error('[doctor-search] error:', err)
@@ -2813,14 +2718,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         content: `🩺 لاحظت طلبك على طبيب **${doctorIntent.speciality.ar}**.\n\nفي أي ولاية؟ (عنابة، الجزائر، وهران، قسنطينة، تيزي وزو...)`,
       })
     }
-    const cacheKey = `${doctorIntent.speciality.search}|${doctorIntent.city.fr}`
-    let results = getCachedDoctors(cacheKey)
-    let cached = !!results
-    if (!results) {
-      const fetched = await fetchSahadocDoctors(doctorIntent.speciality.search, doctorIntent.city.fr)
-      results = fetched.results
-      if (results.length > 0) setCachedDoctors(cacheKey, results)
-    }
+    const { results, cached } = await multiSearchDoctors({
+      speciality: doctorIntent.speciality.search,
+      city: doctorIntent.city.fr,
+    })
     return res.status(200).json({
       content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
     })

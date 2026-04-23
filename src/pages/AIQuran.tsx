@@ -1137,8 +1137,11 @@ ${wordCtx ? wordCtx : ''}
                   className="aq-ai-send-btn"
                   onClick={sendAiMessage}
                   disabled={aiLoading || !aiInput.trim()}
+                  title="إرسال"
+                  aria-label="إرسال"
                 >
                   <Send size={14} />
+                  <span className="aq-ai-send-label">إرسال</span>
                 </button>
               </div>
             </div>

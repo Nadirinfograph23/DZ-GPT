@@ -1,0 +1,225 @@
+.dzt-app {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e8e8e8;
+  font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+}
+
+.dzt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #0d0d0d;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dzt-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #b0bec5;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.dzt-back-btn:hover { background: #151515; color: #fff; }
+
+.dzt-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #ff4444;
+}
+.dzt-logo-icon { color: #ff4444; }
+
+.dzt-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+.dzt-intro h1 {
+  font-size: 24px;
+  margin: 0 0 8px;
+  color: #fff;
+}
+.dzt-intro p {
+  margin: 0 0 28px;
+  color: #888;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dzt-search-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dzt-input {
+  flex: 1;
+  padding: 12px 14px;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+.dzt-input:focus { border-color: rgba(255, 68, 68, 0.5); }
+
+.dzt-search-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 18px;
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.dzt-search-btn:hover:not(:disabled) { background: #e03333; }
+.dzt-search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dzt-error {
+  padding: 12px 14px;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.dzt-card {
+  background: #111;
+  border: 1px solid #1f1f1f;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.dzt-thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+.dzt-card-body { padding: 18px; }
+
+.dzt-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.5;
+}
+
+.dzt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 18px;
+}
+.dzt-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dzt-options { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+.dzt-option-label {
+  display: block;
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.dzt-format-row, .dzt-quality-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dzt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 12px;
+  background: #181818;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #b0bec5;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dzt-chip:hover:not(:disabled) { background: #1f1f1f; color: #fff; }
+.dzt-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.dzt-chip--active {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+}
+
+.dzt-hint { color: #666; font-size: 12px; padding: 6px 0; }
+
+.dzt-download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px;
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dzt-download-btn:hover:not(:disabled) { background: #e03333; }
+.dzt-download-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.dzt-progress {
+  height: 6px;
+  background: #181818;
+  border-radius: 3px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.dzt-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ff6b6b);
+  transition: width 0.3s;
+}
+
+@keyframes dzt-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.dzt-spin { animation: dzt-spin 0.8s linear infinite; }
+
+@media (max-width: 540px) {
+  .dzt-main { padding: 20px 14px 40px; }
+  .dzt-intro h1 { font-size: 20px; }
+  .dzt-search-row { flex-direction: column; }
+  .dzt-search-btn { justify-content: center; }
+}

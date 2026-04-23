@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen, Video } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -677,6 +677,10 @@ function App() {
               <button className="sidebar-nav-item" onClick={() => { navigate('/dzchat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
                 <MessageCircle size={14} />
                 <span>DZ CHAT</span>
+              </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-tube'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <Video size={14} />
+                <span>DZ Tube</span>
               </button>
             </div>
           )}

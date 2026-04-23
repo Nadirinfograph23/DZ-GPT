@@ -157,6 +157,8 @@ const DEVELOPER_QUESTION_PATTERNS = [
   'التطبيق ملك من', 'هذا التطبيق ملك من', 'الموقع ملك من', 'هذا الموقع ملك من',
   'من صنع هذا التطبيق', 'من برمج التطبيق', 'من طور التطبيق', 'من أنشأ التطبيق',
   'من صنع التطبيق', 'من عمل التطبيق',
+  // Variants with definite article ال
+  'من هو المطور', 'هو المطور', 'من المطور', 'صاحبك من', 'مطورك من',
   // Arabic dialect (Algerian/Maghrebi) — شكون
   'شكون خدمك', 'شكون برمجك', 'شكون صنعك', 'شكون عملك', 'شكون درك',
   'شكون صاوبك', 'شكون مطورك', 'شكون دار', 'شكون هو مطور', 'شكون صاحب',
@@ -4593,6 +4595,103 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
     return null
   }
 }
+
+// ===== DZ TUBE — In-app YouTube info & download via yt-dlp =====
+import { spawn } from 'child_process'
+
+function runYtDlpJSON(url) {
+  return new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', url]
+    const proc = spawn('yt-dlp', args)
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', d => { stdout += d.toString() })
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('error', reject)
+    proc.on('close', code => {
+      if (code !== 0) return reject(new Error(stderr || `yt-dlp exited ${code}`))
+      try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
+    })
+  })
+}
+
+function isValidYouTubeUrl(u) {
+  if (typeof u !== 'string' || u.length > 2048) return false
+  try {
+    const url = new URL(u)
+    return /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/i.test(url.hostname)
+  } catch { return false }
+}
+
+app.post('/api/dz-tube/info', async (req, res) => {
+  const { url } = req.body || {}
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
+  try {
+    const info = await runYtDlpJSON(url)
+    const formats = (info.formats || [])
+      .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
+      .map(f => ({ height: f.height, ext: f.ext, vcodec: f.vcodec, acodec: f.acodec, filesize: f.filesize || f.filesize_approx || null, format_id: f.format_id }))
+    const heights = Array.from(new Set(formats.map(f => f.height))).sort((a, b) => b - a)
+    res.json({
+      title: info.title || 'بدون عنوان',
+      thumbnail: info.thumbnail || null,
+      duration: info.duration || 0,
+      uploader: info.uploader || info.channel || '',
+      view_count: info.view_count || 0,
+      heights,
+      available: { mp4: heights.length > 0, mp3: true },
+    })
+  } catch (err) {
+    console.error('[DZTube:info]', err.message)
+    res.status(500).json({ error: 'تعذر جلب معلومات الفيديو' })
+  }
+})
+
+const DZ_TUBE_QUALITY_MAP = { '360': 360, '720': 720, '1080': 1080 }
+
+app.get('/api/dz-tube/download', async (req, res) => {
+  const url = String(req.query.url || '')
+  const format = String(req.query.format || 'mp4').toLowerCase()
+  const quality = String(req.query.quality || '720')
+
+  if (!isValidYouTubeUrl(url)) return res.status(400).send('رابط YouTube غير صالح')
+  if (format !== 'mp4' && format !== 'mp3') return res.status(400).send('Format must be mp4 or mp3')
+
+  let title = 'video'
+  try {
+    const info = await runYtDlpJSON(url)
+    title = (info.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
+  } catch {}
+
+  const safeName = title.replace(/\s+/g, '_')
+  let args
+  if (format === 'mp3') {
+    args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', '-', '--no-playlist', '--no-warnings', url]
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.mp3"; filename*=UTF-8''${encodeURIComponent(safeName)}.mp3`)
+  } else {
+    const h = DZ_TUBE_QUALITY_MAP[quality] || 720
+    const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
+    args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', '-', '--no-playlist', '--no-warnings', url]
+    res.setHeader('Content-Type', 'video/mp4')
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}_${h}p.mp4"; filename*=UTF-8''${encodeURIComponent(safeName)}_${h}p.mp4`)
+  }
+
+  const proc = spawn('yt-dlp', args)
+  let stderrBuf = ''
+  proc.stderr.on('data', d => { stderrBuf += d.toString() })
+  proc.stdout.pipe(res)
+  proc.on('error', err => {
+    console.error('[DZTube:download:error]', err.message)
+    if (!res.headersSent) res.status(500).end('فشل التحميل')
+    else res.end()
+  })
+  proc.on('close', code => {
+    if (code !== 0) console.warn('[DZTube:download] yt-dlp exit', code, stderrBuf.slice(0, 300))
+    res.end()
+  })
+  req.on('close', () => { try { proc.kill('SIGTERM') } catch {} })
+})
 
 // ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====
 app.post('/api/chat-room/join', (req, res) => {

@@ -304,13 +304,67 @@ function detectDoctorIntent(message) {
   return { isDoctorQuery: true, speciality, city }
 }
 
-// ===== DOCTOR SEARCH — multi-source aggregator (pj-dz, addalile, sahadoc, docteur360, algerie-docto) =====
-import { searchDoctors as multiSearchDoctors, formatResults as formatDoctorMulti } from './lib/doctorSearch.js'
+// ===== DOCTOR SEARCH — multi-source aggregator (pj-dz, addalile, sahadoc, docteur360, algerie-docto, sihhatech, machrou3) =====
+import {
+  searchDoctors as multiSearchDoctors,
+  searchDoctorsByName as multiSearchDoctorsByName,
+  formatResults as formatDoctorMulti,
+  EMERGENCY_INFO,
+} from './lib/doctorSearch.js'
+
+const DOCTOR_SOURCE_COUNT = 7
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
   const cityLabel = city?.ar || city?.fr || ''
-  return formatDoctorMulti(results, specLabel, cityLabel, { sourceCount: 6, ...opts })
+  return formatDoctorMulti(results, specLabel, cityLabel, { sourceCount: DOCTOR_SOURCE_COUNT, ...opts })
+}
+
+// ===== EMERGENCY INTENT (Algeria) =====
+const EMERGENCY_PATTERNS = [
+  // Arabic / Darija
+  'حالة طارئة', 'حالة طارءة', 'طارئة', 'الطوارئ', 'طوارئ',
+  'رقم الإسعاف', 'الاسعاف', 'الإسعاف', 'سعاف',
+  'الحماية المدنية', 'حماية مدنية', 'بروتيكسيون',
+  'الشرطة', 'شرطة', 'بوليس',
+  'الدرك الوطني', 'الدرك', 'جندارمة',
+  // French
+  'urgence', 'urgences', 'protection civile', 'pompiers',
+  'samu', 'ambulance', 'gendarmerie', 'numero police', 'numéro police',
+]
+function isEmergencyQuery(message) {
+  if (!message || typeof message !== 'string') return false
+  const norm = normalizeQuery(message)
+  return EMERGENCY_PATTERNS.some(p => norm.includes(p.toLowerCase()))
+}
+
+// ===== DOCTOR NAME SEARCH detection =====
+// Triggers when a user types "Dr X", "Docteur X", "دكتور X", "د. X" etc.,
+// without a known specialty keyword. Returns the extracted name (or '').
+const NAME_PREFIXES_RE = /(?:^|[\s,،])(?:dr\.?|docteur|د\.?|الدكتور|الدكتوره|دكتور|دكتوره)\s+([\p{L}\p{M}'’\- ]{2,80})/iu
+function extractDoctorName(message) {
+  if (!message || typeof message !== 'string') return ''
+  const m = message.match(NAME_PREFIXES_RE)
+  if (!m) return ''
+  // Trim trailing tokens that look like cities/specialties to keep the pure name.
+  let name = m[1].trim().replace(/\s+/g, ' ')
+  // Cap to first 5 tokens to avoid pulling in extra context
+  name = name.split(' ').slice(0, 5).join(' ')
+  return name
+}
+function detectDoctorNameIntent(message) {
+  if (!message || typeof message !== 'string') return { isNameQuery: false }
+  const intent = detectDoctorIntent(message)
+  // If a specialty was clearly detected, prefer specialty-search flow.
+  if (intent.speciality) return { isNameQuery: false }
+  const name = extractDoctorName(message)
+  if (!name) return { isNameQuery: false }
+  // Reject if "name" is actually a specialty alias.
+  const normName = name.toLowerCase()
+  for (const sp of SPECIALITIES) {
+    if (sp.aliases.some(a => normName === a.toLowerCase())) return { isNameQuery: false }
+  }
+  return { isNameQuery: true, name }
 }
 
 function isCapabilitiesQuestion(message) {
@@ -2575,6 +2629,28 @@ app.post('/api/dz-agent/doctor-search', async (req, res) => {
   try {
     const query = sanitizeString(req.body?.query || '', 500)
     if (!query) return res.status(400).json({ error: 'Query is required.' })
+
+    const ALL_SOURCES = ['pj-dz', 'addalile', 'sahadoc', 'docteur360', 'algerie-docto', 'sihhatech', 'machrou3']
+
+    // Emergency short-circuit
+    if (isEmergencyQuery(query)) {
+      return res.status(200).json({ emergency: true, content: EMERGENCY_INFO })
+    }
+
+    // Name-search short-circuit (no specialty needed)
+    const nameIntent = detectDoctorNameIntent(query)
+    if (nameIntent.isNameQuery) {
+      const { results, errors, cached } = await multiSearchDoctorsByName({ name: nameIntent.name })
+      return res.status(200).json({
+        byName: true,
+        queryName: nameIntent.name,
+        results,
+        cached: !!cached,
+        sources: ALL_SOURCES,
+        errors,
+      })
+    }
+
     const intent = detectDoctorIntent(query)
     if (!intent.isDoctorQuery) return res.status(400).json({ error: 'Not a doctor query.' })
     if (!intent.speciality || !intent.city) {
@@ -2589,7 +2665,7 @@ app.post('/api/dz-agent/doctor-search', async (req, res) => {
       city: { ar: intent.city.ar, fr: intent.city.fr },
       results,
       cached: !!cached,
-      sources: ['pj-dz', 'addalile', 'sahadoc', 'docteur360', 'algerie-docto'],
+      sources: ALL_SOURCES,
       errors,
     })
   } catch (err) {
@@ -2712,11 +2788,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
   }
 
+  // ── Emergency intent (Algeria) — answered immediately, before doctor search ──
+  if (isEmergencyQuery(lastUserMessage)) {
+    return res.status(200).json({ content: EMERGENCY_INFO })
+  }
+
+  // ── Doctor name search (no specialty needed) ────────────────────────────
+  const nameIntent = detectDoctorNameIntent(lastUserMessage)
+  if (nameIntent.isNameQuery) {
+    const { results, cached } = await multiSearchDoctorsByName({
+      name: nameIntent.name,
+      userLocation,
+    })
+    return res.status(200).json({
+      content: formatDoctorMulti(results, nameIntent.name, '', {
+        sourceCount: DOCTOR_SOURCE_COUNT,
+        hasGps: !!userLocation,
+        byName: true,
+        queryName: nameIntent.name,
+      }) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+    })
+  }
+
   const doctorIntent = detectDoctorIntent(lastUserMessage)
   if (doctorIntent.isDoctorQuery) {
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
-        content: '🩺 **بحث عن طبيب**\n\nأي تخصص تحتاج؟ مثلاً: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...\n\nوإذا أمكن، أضف الولاية (عنابة، الجزائر، وهران...).',
+        content: '🩺 **بحث عن طبيب**\n\nأي تخصص تحتاج؟ مثلاً: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...\n\nوإذا أمكن، أضف الولاية (عنابة، الجزائر، وهران...).\n\n💡 _يمكنك أيضاً البحث باسم الطبيب مباشرة، مثل:_ **دكتور محمد بن علي** أو **Dr Ahmed Oran**.',
       })
     }
     if (!doctorIntent.speciality) {

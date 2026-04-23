@@ -4623,6 +4623,71 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
+// Search YouTube (no API key — uses yt-dlp ytsearch)
+app.get('/api/dz-tube/search', async (req, res) => {
+  const q = String(req.query.q || '').trim()
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 12))
+  if (!q) return res.status(400).json({ error: 'Query is required' })
+  try {
+    const args = ['--flat-playlist', '-J', '--no-warnings', '--default-search', 'ytsearch', `ytsearch${limit}:${q}`]
+    const proc = spawn('yt-dlp', args)
+    let out = '', err = ''
+    proc.stdout.on('data', d => { out += d.toString() })
+    proc.stderr.on('data', d => { err += d.toString() })
+    proc.on('close', code => {
+      if (code !== 0) {
+        console.warn('[DZTube:search]', err.slice(0, 300))
+        return res.status(500).json({ error: 'تعذر البحث' })
+      }
+      try {
+        const data = JSON.parse(out)
+        const results = (data.entries || []).filter(e => e && e.id).map(e => ({
+          id: e.id,
+          title: e.title || 'بدون عنوان',
+          url: e.url || `https://www.youtube.com/watch?v=${e.id}`,
+          thumbnail: e.thumbnails?.[e.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`,
+          duration: e.duration || 0,
+          channel: e.channel || e.uploader || '',
+          views: e.view_count || 0,
+        }))
+        res.json({ results })
+      } catch (e) {
+        console.error('[DZTube:search:parse]', e.message)
+        res.status(500).json({ error: 'فشل تحليل النتائج' })
+      }
+    })
+    proc.on('error', e => {
+      console.error('[DZTube:search:spawn]', e.message)
+      if (!res.headersSent) res.status(500).json({ error: 'فشل البحث' })
+    })
+  } catch (e) {
+    res.status(500).json({ error: 'فشل البحث' })
+  }
+})
+
+// Get direct audio stream URL (for background playback via HTML5 audio)
+app.get('/api/dz-tube/audio-url', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
+  try {
+    const proc = spawn('yt-dlp', ['-f', 'bestaudio[ext=m4a]/bestaudio', '-g', '--no-warnings', '--no-playlist', url])
+    let out = '', err = ''
+    proc.stdout.on('data', d => { out += d.toString() })
+    proc.stderr.on('data', d => { err += d.toString() })
+    proc.on('close', code => {
+      const streamUrl = out.trim().split('\n')[0]
+      if (code !== 0 || !streamUrl) {
+        console.warn('[DZTube:audio-url]', err.slice(0, 200))
+        return res.status(500).json({ error: 'تعذر استخراج الصوت' })
+      }
+      res.json({ streamUrl })
+    })
+    proc.on('error', () => res.status(500).json({ error: 'فشل الاستخراج' }))
+  } catch {
+    res.status(500).json({ error: 'فشل الاستخراج' })
+  }
+})
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })

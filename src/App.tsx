@@ -1162,6 +1162,27 @@ function App() {
               </button>
             </div>
           )}
+          {selectedModel === 'claude-free' && claudeFreeStatus === 'offline' && (
+            <div style={{
+              margin: '0 0 8px',
+              padding: '8px 12px',
+              borderRadius: 8,
+              background: 'rgba(37, 99, 235, 0.08)',
+              border: '1px solid rgba(37, 99, 235, 0.35)',
+              color: '#93c5fd',
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              lineHeight: 1.4,
+            }}>
+              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+              <span>
+                <strong>Claude Free Mode غير متصل.</strong>{' '}
+                شغّل Ollama على السيرفر (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 4 }}>ollama pull mistral</code>) واضبط <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 4 }}>OLLAMA_PROXY_URL</code>.
+              </span>
+            </div>
+          )}
           <div className="input-model-row">
             <div className="input-model-dropdown">
               <button

@@ -1,7 +1,41 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, User } from 'lucide-react'
+import { ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, User, History, Trash2, RotateCw, X } from 'lucide-react'
 import '../styles/dz-tube.css'
+
+interface HistoryItem {
+  id: string
+  url: string
+  title: string
+  thumbnail: string | null
+  format: 'mp4' | 'mp3'
+  quality: string
+  timestamp: number
+}
+
+const HISTORY_KEY = 'dz-tube-history'
+const HISTORY_MAX = 30
+
+function loadHistory(): HistoryItem[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
+
+function saveHistory(items: HistoryItem[]) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_MAX))) } catch {}
+}
+
+function timeAgo(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 60) return 'الآن'
+  if (diff < 3600) return `قبل ${Math.floor(diff / 60)} د`
+  if (diff < 86400) return `قبل ${Math.floor(diff / 3600)} س`
+  return `قبل ${Math.floor(diff / 86400)} يوم`
+}
 
 interface VideoInfo {
   title: string
@@ -44,6 +78,26 @@ export default function DZTube() {
   const [quality, setQuality] = useState<Quality>('720')
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  useEffect(() => { saveHistory(history) }, [history])
+
+  const addHistory = useCallback((item: Omit<HistoryItem, 'id' | 'timestamp'>) => {
+    setHistory(prev => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const next = [{ ...item, id, timestamp: Date.now() }, ...prev.filter(h => !(h.url === item.url && h.format === item.format && h.quality === item.quality))]
+      return next.slice(0, HISTORY_MAX)
+    })
+  }, [])
+
+  const removeHistory = useCallback((id: string) => {
+    setHistory(prev => prev.filter(h => h.id !== id))
+  }, [])
+
+  const clearHistory = useCallback(() => {
+    if (confirm('هل تريد حذف كل سجل التحميلات؟')) setHistory([])
+  }, [])
 
   const fetchInfo = async () => {
     const u = url.trim()
@@ -110,6 +164,7 @@ export default function DZTube() {
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
       setProgress(100)
+      addHistory({ url: url.trim(), title: info.title, thumbnail: info.thumbnail, format, quality })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'فشل التحميل')
     } finally {
@@ -120,6 +175,15 @@ export default function DZTube() {
   const availableQualities = info
     ? QUALITIES.filter(q => info.heights.includes(Number(q)))
     : ([...QUALITIES] as Quality[])
+
+  const reDownload = useCallback((item: HistoryItem) => {
+    setUrl(item.url)
+    setFormat(item.format)
+    setQuality(item.quality as Quality)
+    setHistoryOpen(false)
+    setTimeout(() => fetchInfo(), 50)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="dzt-app">
@@ -132,6 +196,15 @@ export default function DZTube() {
           <Video size={22} className="dzt-logo-icon" />
           <span>DZ Tube</span>
         </div>
+        <button
+          className="dzt-history-btn"
+          onClick={() => setHistoryOpen(p => !p)}
+          title="سجل التحميلات"
+        >
+          <History size={16} />
+          <span>السجل</span>
+          {history.length > 0 && <span className="dzt-history-count">{history.length}</span>}
+        </button>
       </header>
 
       <main className="dzt-main">
@@ -246,6 +319,67 @@ export default function DZTube() {
           </div>
         )}
       </main>
+
+      {historyOpen && (
+        <>
+          <div className="dzt-history-overlay" onClick={() => setHistoryOpen(false)} />
+          <aside className="dzt-history-panel">
+            <div className="dzt-history-header">
+              <span className="dzt-history-title">
+                <History size={16} /> سجل التحميلات
+              </span>
+              <div className="dzt-history-actions">
+                {history.length > 0 && (
+                  <button className="dzt-history-clear" onClick={clearHistory} title="حذف الكل">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+                <button className="dzt-history-close" onClick={() => setHistoryOpen(false)}>
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="dzt-history-body">
+              {history.length === 0 ? (
+                <div className="dzt-history-empty">
+                  <History size={28} />
+                  <p>لا توجد تحميلات بعد</p>
+                </div>
+              ) : (
+                history.map(h => (
+                  <div key={h.id} className="dzt-history-item">
+                    {h.thumbnail && (
+                      <img className="dzt-history-thumb" src={h.thumbnail} alt={h.title} loading="lazy" />
+                    )}
+                    <div className="dzt-history-info">
+                      <span className="dzt-history-item-title" title={h.title}>{h.title}</span>
+                      <span className="dzt-history-meta">
+                        {h.format === 'mp3' ? 'MP3' : `MP4 ${h.quality}p`} · {timeAgo(h.timestamp)}
+                      </span>
+                    </div>
+                    <div className="dzt-history-item-actions">
+                      <button
+                        className="dzt-history-redo"
+                        onClick={() => reDownload(h)}
+                        title="إعادة التحميل"
+                      >
+                        <RotateCw size={13} />
+                      </button>
+                      <button
+                        className="dzt-history-remove"
+                        onClick={() => removeHistory(h.id)}
+                        title="حذف"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   )
 }

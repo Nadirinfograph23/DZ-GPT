@@ -4631,13 +4631,18 @@ app.get('/api/dz-tube/search', async (req, res) => {
   try {
     const args = ['--flat-playlist', '-J', '--no-warnings', '--default-search', 'ytsearch', `ytsearch${limit}:${q}`]
     const proc = spawn('yt-dlp', args)
-    let out = '', err = ''
+    let out = '', err = '', responded = false
+    const respond = (status, body) => {
+      if (responded || res.headersSent) return
+      responded = true
+      res.status(status).json(body)
+    }
     proc.stdout.on('data', d => { out += d.toString() })
     proc.stderr.on('data', d => { err += d.toString() })
     proc.on('close', code => {
       if (code !== 0) {
         console.warn('[DZTube:search]', err.slice(0, 300))
-        return res.status(500).json({ error: 'تعذر البحث' })
+        return respond(500, { error: 'تعذر البحث' })
       }
       try {
         const data = JSON.parse(out)
@@ -4650,15 +4655,15 @@ app.get('/api/dz-tube/search', async (req, res) => {
           channel: e.channel || e.uploader || '',
           views: e.view_count || 0,
         }))
-        res.json({ results })
+        respond(200, { results })
       } catch (e) {
         console.error('[DZTube:search:parse]', e.message)
-        res.status(500).json({ error: 'فشل تحليل النتائج' })
+        respond(500, { error: 'فشل تحليل النتائج' })
       }
     })
     proc.on('error', e => {
       console.error('[DZTube:search:spawn]', e.message)
-      if (!res.headersSent) res.status(500).json({ error: 'فشل البحث' })
+      respond(500, { error: 'فشل البحث' })
     })
   } catch (e) {
     res.status(500).json({ error: 'فشل البحث' })

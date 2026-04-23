@@ -179,7 +179,18 @@ export default function DZTube() {
             <h1>DZ Tube</h1>
             <p>ابحث عن أي فيديو على YouTube، شاهده داخل التطبيق، أو حمّله بصيغة فيديو أو صوت</p>
             <div className="dzt-suggestions">
-              {['Quran Mishary', 'دروس عربية', 'lofi music', 'الجزائر سياحة'].map(s => (
+              {[
+                'القرآن الكريم سعود الشريم',
+                'القرآن الكريم المشاري',
+                'الشروق نيوز بث مباشر',
+                'النهار TV بث مباشر',
+                'الجزائرية One بث مباشر',
+                'الجزيرة مباشر',
+                'العربية بث مباشر',
+                'بي إن سبورت مباشر',
+                'دروس تعليمية',
+                'الجزائر سياحة',
+              ].map(s => (
                 <button key={s} className="dzt-suggestion" onClick={() => { setQuery(s); search(s) }}>{s}</button>
               ))}
             </div>

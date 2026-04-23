@@ -2300,7 +2300,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               <div className="dz-message-sender">
                 {msg.role === 'user' ? 'You' : 'DZ Agent'}
               </div>
-              <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`}>
+              <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`} dir="auto">
                 {msg.role === 'assistant' ? (
                   typingId === msg.id && msg.richType === 'text' ? (
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />

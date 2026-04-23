@@ -628,7 +628,7 @@ app.post('/api/chat', async (req, res) => {
     return res.status(200).json(CAPABILITIES_RESPONSE)
   }
 
-  // ===== CLAUDE FREE MODE — 100% Local via Ollama (no external APIs) =====
+  // ===== CLAUDE FREE MODE — Ollama health check is exposed on /api/claude-free/status =====
   if (model === 'claude-free') {
     const ollamaUrl = process.env.OLLAMA_PROXY_URL || 'http://localhost:11434'
     const ollamaModel = process.env.OLLAMA_CLAUDE_MODEL || 'mistral'
@@ -684,6 +684,22 @@ app.post('/api/chat', async (req, res) => {
   } catch (error) {
     console.error('Chat API error:', error)
     return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
+  }
+})
+
+// ===== CLAUDE FREE MODE — Ollama health check =====
+app.get('/api/claude-free/status', async (_req, res) => {
+  const ollamaUrl = process.env.OLLAMA_PROXY_URL || 'http://localhost:11434'
+  const ollamaModel = process.env.OLLAMA_CLAUDE_MODEL || 'mistral'
+  try {
+    const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2500) })
+    if (!r.ok) return res.json({ online: false, url: ollamaUrl, model: ollamaModel, reason: `HTTP ${r.status}` })
+    const data = await r.json().catch(() => ({}))
+    const models = (data?.models || []).map(m => m.name || m.model).filter(Boolean)
+    const hasModel = models.some(n => String(n).startsWith(ollamaModel))
+    return res.json({ online: true, url: ollamaUrl, model: ollamaModel, hasModel, models })
+  } catch (err) {
+    return res.json({ online: false, url: ollamaUrl, model: ollamaModel, reason: err.message })
   }
 })
 

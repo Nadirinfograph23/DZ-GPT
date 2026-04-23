@@ -203,6 +203,7 @@ function App() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
   const [navDropdownOpen, setNavDropdownOpen] = useState(false)
+  const [claudeFreeStatus, setClaudeFreeStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [language, setLanguage] = useState<Lang>(() => {
     return (localStorage.getItem('dz-gpt-lang') as Lang) || 'ar'
   })
@@ -233,6 +234,23 @@ function App() {
   useEffect(() => {
     localStorage.setItem('dz-gpt-lang', language)
   }, [language])
+
+  // Claude Free Mode — periodic Ollama health check
+  useEffect(() => {
+    let cancelled = false
+    const ping = async () => {
+      try {
+        const r = await fetch('/api/claude-free/status')
+        const d = await r.json()
+        if (!cancelled) setClaudeFreeStatus(d.online ? 'online' : 'offline')
+      } catch {
+        if (!cancelled) setClaudeFreeStatus('offline')
+      }
+    }
+    ping()
+    const id = setInterval(ping, 30000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
 
   useEffect(() => {
     if (activeChatId) {
@@ -760,6 +778,14 @@ function App() {
                     {model.id === 'claude-free' && (
                       <>
                         <Sparkles size={12} style={{ color: '#2563eb', marginRight: 4 }} />
+                        <span
+                          title={`Ollama: ${claudeFreeStatus}`}
+                          style={{
+                            display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginRight: 4,
+                            background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
+                            boxShadow: claudeFreeStatus === 'online' ? '0 0 6px #10b981' : 'none',
+                          }}
+                        />
                         <span className="dz-free-blink" style={{ background: '#2563eb' }}>LOCAL</span>
                       </>
                     )}
@@ -838,7 +864,16 @@ function App() {
                     }
                     <span>{model.name}</span>
                     {model.id === 'claude-free' && (
-                      <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                      <>
+                        <span
+                          title={`Ollama: ${claudeFreeStatus}`}
+                          style={{
+                            display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginLeft: 6,
+                            background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
+                          }}
+                        />
+                        <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                      </>
                     )}
                   </button>
                 ))}
@@ -1168,7 +1203,16 @@ function App() {
                       }
                       <span>{model.name}</span>
                       {model.id === 'claude-free' && (
-                        <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                        <>
+                          <span
+                            title={`Ollama: ${claudeFreeStatus}`}
+                            style={{
+                              display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginLeft: 6,
+                              background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
+                            }}
+                          />
+                          <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                        </>
                       )}
                     </button>
                   ))}

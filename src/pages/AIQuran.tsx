@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { DeveloperCard } from '../components/DeveloperCard'
 import '../styles/ai-quran.css'
 
 const QURAN_API = 'https://api.quran.com/api/v4'
@@ -38,6 +39,7 @@ interface Reciter {
 interface AiMessage {
   role: 'user' | 'assistant'
   content: string
+  showDevCard?: boolean
 }
 
 interface BookmarkedAyah {
@@ -474,7 +476,11 @@ ${wordCtx ? wordCtx : ''}
         body: JSON.stringify({ messages, model: 'llama-70b' }),
       })
       const d = await r.json()
-      setAiMessages(prev => [...prev, { role: 'assistant', content: d.content || 'حدث خطأ، حاول مجدداً.' }])
+      setAiMessages(prev => [...prev, {
+        role: 'assistant',
+        content: d.content || 'حدث خطأ، حاول مجدداً.',
+        showDevCard: !!d.showDevCard,
+      }])
     } catch {
       setAiMessages(prev => [...prev, { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }])
     } finally {
@@ -1107,6 +1113,7 @@ ${wordCtx ? wordCtx : ''}
                       ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                       : m.content
                     }
+                    {m.role === 'assistant' && m.showDevCard && <DeveloperCard />}
                   </div>
                 ))}
                 {aiLoading && (

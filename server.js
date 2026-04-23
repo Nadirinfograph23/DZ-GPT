@@ -321,7 +321,7 @@ import {
   recordPendingLearning,
 } from './lib/dzLanguage.js'
 
-const DOCTOR_SOURCE_COUNT = 7
+const DOCTOR_SOURCE_COUNT = 8
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'

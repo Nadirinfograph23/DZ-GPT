@@ -771,6 +771,13 @@ function App() {
               >
                 📖 القرآن
               </button>
+              <button
+                className="model-tab dz-tube-nav-tab"
+                onClick={() => navigate('/dz-tube')}
+                title="DZ Tube"
+              >
+                <Video size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 4 }} /> DZ Tube
+              </button>
             </div>
           </div>
 
@@ -840,6 +847,13 @@ function App() {
                 >
                   <span>📖</span>
                   <span>القرآن الكريم</span>
+                </button>
+                <button
+                  className="mobile-model-option"
+                  onClick={() => { setShowMobileModelMenu(false); navigate('/dz-tube') }}
+                >
+                  <Video size={14} />
+                  <span>DZ Tube</span>
                 </button>
               </div>
             )}
@@ -1165,6 +1179,13 @@ function App() {
                   >
                     <span>📖</span>
                     <span>القرآن الكريم</span>
+                  </button>
+                  <button
+                    className="input-model-option"
+                    onClick={() => { setShowModelDropdown(false); navigate('/dz-tube') }}
+                  >
+                    <Video size={14} />
+                    <span>DZ Tube</span>
                   </button>
                 </div>
               )}

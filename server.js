@@ -628,39 +628,33 @@ app.post('/api/chat', async (req, res) => {
     return res.status(200).json(CAPABILITIES_RESPONSE)
   }
 
-  // ===== CLAUDE FREE MODE — DeepSeek primary, Groq fallback =====
+  // ===== CLAUDE FREE MODE — 100% Local via Ollama (no external APIs) =====
   if (model === 'claude-free') {
+    const ollamaUrl = process.env.OLLAMA_PROXY_URL || 'http://localhost:11434'
+    const ollamaModel = process.env.OLLAMA_CLAUDE_MODEL || 'mistral'
     const claudeMessages = [
       { role: 'system', content: CLAUDE_FREE_PROMPT },
       ...messages.filter(m => m.role !== 'system'),
     ]
-    const deepseekKey = process.env.DEEPSEEK_API_KEY
-    if (deepseekKey) {
-      try {
-        const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
-          body: JSON.stringify({ model: 'deepseek-chat', messages: claudeMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
-        })
-        if (r.ok) {
-          const d = await r.json()
-          const content = d.choices?.[0]?.message?.content
-          if (content) return res.status(200).json({ content })
-        }
-      } catch (err) { console.error('[Claude Free] DeepSeek error:', err.message) }
-    }
-    // Fallback to Groq (LLaMA 3.3 70B)
-    if (getGroqKeys().length > 0) {
-      try {
-        const { content, error } = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: claudeMessages, max_tokens: 3000, temperature: 0.7 })
-        if (content) return res.status(200).json({ content })
-        return res.status(500).json({ error: error || 'No response generated.' })
-      } catch (error) {
-        console.error('[Claude Free] Groq fallback error:', error)
-        return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
+    try {
+      const r = await fetch(`${ollamaUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: ollamaModel, messages: claudeMessages, stream: false }),
+      })
+      if (!r.ok) {
+        const errText = await r.text().catch(() => '')
+        console.error('[Claude Free] Ollama HTTP', r.status, errText.slice(0, 200))
+        return res.status(503).json({ error: `Local Claude AI unavailable (Ollama HTTP ${r.status}). Make sure Ollama is running with the "${ollamaModel}" model.` })
       }
+      const d = await r.json()
+      const content = d?.message?.content || d?.response
+      if (!content) return res.status(500).json({ error: 'Local Claude AI returned an empty response.' })
+      return res.status(200).json({ content, provider: 'ollama-local' })
+    } catch (err) {
+      console.error('[Claude Free] Ollama error:', err.message)
+      return res.status(503).json({ error: `Local Claude AI unreachable at ${ollamaUrl}. Ollama must be running on the server.` })
     }
-    return res.status(500).json({ error: 'No AI provider configured for Claude Free Mode.' })
   }
 
   if (getGroqKeys().length === 0) {

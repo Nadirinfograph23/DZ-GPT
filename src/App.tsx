@@ -57,7 +57,7 @@ const AI_MODELS = [
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
   { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
-  { id: 'claude-free', name: 'Claude Free Mode', color: '#d97757', free: true },
+  { id: 'claude-free', name: 'Claude Free Mode', color: '#2563eb', free: true },
 ]
 
 // ===== LANGUAGE CONFIG =====
@@ -757,7 +757,12 @@ function App() {
                     style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
                   >
                     {isDZAgent && <span className="dz-free-blink">Free</span>}
-                    {model.id === 'claude-free' && <span className="dz-free-blink" style={{ background: '#d97757' }}>FREE</span>}
+                    {model.id === 'claude-free' && (
+                      <>
+                        <Sparkles size={12} style={{ color: '#2563eb', marginRight: 4 }} />
+                        <span className="dz-free-blink" style={{ background: '#2563eb' }}>LOCAL</span>
+                      </>
+                    )}
                     {model.name}
                   </button>
                 )
@@ -828,10 +833,13 @@ function App() {
                     {model.id === 'dz-agent'
                       ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
                       : model.id === 'claude-free'
-                        ? <span className="dz-free-blink" style={{ fontSize: '10px', background: '#d97757' }}>FREE</span>
+                        ? <Sparkles size={14} style={{ color: '#2563eb' }} />
                         : <span className="input-model-dot" style={{ background: model.color }} />
                     }
                     <span>{model.name}</span>
+                    {model.id === 'claude-free' && (
+                      <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                    )}
                   </button>
                 ))}
                 <button
@@ -1155,10 +1163,13 @@ function App() {
                       {model.id === 'dz-agent'
                         ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
                         : model.id === 'claude-free'
-                          ? <span className="dz-free-blink" style={{ fontSize: '10px', background: '#d97757' }}>FREE</span>
+                          ? <Sparkles size={14} style={{ color: '#2563eb' }} />
                           : <span className="input-model-dot" style={{ background: model.color }} />
                       }
                       <span>{model.name}</span>
+                      {model.id === 'claude-free' && (
+                        <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
+                      )}
                     </button>
                   ))}
                   <button

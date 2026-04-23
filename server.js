@@ -312,6 +312,15 @@ import {
   EMERGENCY_INFO,
 } from './lib/doctorSearch.js'
 
+// ===== DZ LANGUAGE LAYER (additive: normalization, intent hint, moderation, learning) =====
+import {
+  normalizeDarija,
+  detectStyle as detectDzStyle,
+  detectLightIntent,
+  moderateMessage,
+  recordPendingLearning,
+} from './lib/dzLanguage.js'
+
 const DOCTOR_SOURCE_COUNT = 7
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
@@ -2768,6 +2777,35 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
+  // ── DZ Language pre-layer: moderation → normalization → light intent ──
+  // Runs BEFORE every existing handler. It does NOT replace any logic; it
+  // only blocks profanity early and adds an understanding hint for downstream.
+  const moderation = moderateMessage(lastUserMessage)
+  if (!moderation.ok) {
+    // Don’t teach or store anything from blocked messages.
+    return res.status(200).json({ content: moderation.replyIfBlocked })
+  }
+  const dzStyle = detectDzStyle(lastUserMessage)
+  const dzNorm = normalizeDarija(lastUserMessage)
+  const dzIntent = detectLightIntent(lastUserMessage)
+  // Best-effort, non-blocking learning (never stores sensitive/profane data)
+  if (dzNorm.changed) {
+    recordPendingLearning(
+      { input: lastUserMessage, normalized: dzNorm.normalized },
+      { moderation, style: dzStyle, intent: dzIntent.type },
+    )
+  }
+  // Internal-only context to nudge the downstream model — never shown to user.
+  // Existing AI request flow appends a system prompt; we add this as another.
+  const dzLanguageContext = (dzStyle === 'darija' || dzStyle === 'mixed' || dzNorm.changed)
+    ? `LANGUAGE_HINT: المستخدم يكتب باللهجة الجزائرية${dzStyle === 'mixed' ? ' المختلطة (عربي+فرانكو)' : ''}. ` +
+      `الترجمة التقريبية للنية: "${dzNorm.normalized}". ` +
+      `النية المحتملة: ${dzIntent.type}. ` +
+      `أجب بنفس أسلوب المستخدم (دارجة جزائرية محترمة) وحافظ على شخصية DZ Agent.`
+    : (dzStyle === 'msa'
+        ? 'LANGUAGE_HINT: المستخدم يكتب بالعربية الفصحى — أجب بالفصحى مع الحفاظ على شخصية DZ Agent.'
+        : '')
+
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
@@ -3513,7 +3551,9 @@ ${educationalContext ? `## 📚 سياق تعليمي من eddirasa.com أولا
 
 ${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}
 
-${clientBehaviorContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🧠 BEHAVIOR INTELLIGENCE (استخبارات المستخدم)\n━━━━━━━━━━━━━━━━━━━━━━\n${clientBehaviorContext}\n> استخدم هذا السياق لتكييف أسلوبك وترتيب أولويات إجابتك دون الإشارة إليه صراحةً.` : ''}`
+${clientBehaviorContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🧠 BEHAVIOR INTELLIGENCE (استخبارات المستخدم)\n━━━━━━━━━━━━━━━━━━━━━━\n${clientBehaviorContext}\n> استخدم هذا السياق لتكييف أسلوبك وترتيب أولويات إجابتك دون الإشارة إليه صراحةً.` : ''}
+
+${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🗣️ LANGUAGE LAYER (طبقة اللغة)\n━━━━━━━━━━━━━━━━━━━━━━\n${dzLanguageContext}\n> طبّق هذا التلميح بصمت دون إعلام المستخدم بأي معالجة لغوية.` : ''}`
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },

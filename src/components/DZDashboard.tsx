@@ -215,9 +215,22 @@ type DashboardContext = { priority: 'weather'; city: string }
 function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('')
+  const [showPopup, setShowPopup] = useState(false)
 
-  const handleClick = async () => {
+  const openPopup = () => {
     if (busy) return
+    setShowPopup(true)
+  }
+
+  const closePopup = () => setShowPopup(false)
+
+  const handleManual = () => {
+    closePopup()
+    onSend('أريد طبيب')
+  }
+
+  const handleUseGps = async () => {
+    closePopup()
     if (!('geolocation' in navigator)) {
       onSend('أريد طبيب')
       return
@@ -245,18 +258,14 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
           const a = j.address || {}
           city = a.city || a.town || a.village || a.municipality || a.county || a.state || ''
         }
-      } catch { /* ignore reverse-geocode failure */ }
+      } catch { /* reverse-geocode failure — ignore */ }
 
-      if (city) {
-        onSend(`أريد طبيب في ${city}`)
-      } else {
-        onSend('أريد طبيب')
-      }
+      const gpsTag = ` [GPS:${latitude.toFixed(5)},${longitude.toFixed(5)}]`
+      if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
+      else onSend(`أريد طبيب${gpsTag}`)
     } catch (err: any) {
       const denied = err && (err.code === 1 || /denied|permission/i.test(String(err.message || '')))
-      if (denied) {
-        setStatus('لم يتم تفعيل GPS — سنكمل بدون موقعك')
-      }
+      if (denied) setStatus('لم يتم تفعيل GPS — سنكمل بدون موقعك')
       onSend('أريد طبيب')
     } finally {
       setBusy(false)
@@ -269,7 +278,7 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
       <button
         type="button"
         className="dzd-doctor-card"
-        onClick={handleClick}
+        onClick={openPopup}
         disabled={busy}
         aria-label="ابحث عن طبيب قريب منك"
       >
@@ -277,11 +286,52 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
         <span className="dzd-doctor-text">
           <span className="dzd-doctor-title">نحوس على طبيب؟</span>
           <span className="dzd-doctor-sub">
-            {status || 'فعّل GPS للبحث قرب موقعك'}
+            {status || 'GPS اختياري — للبحث قرب موقعك'}
           </span>
         </span>
         <span className="dzd-doctor-arrow">›</span>
       </button>
+
+      {showPopup && (
+        <div
+          className="dzd-doctor-modal-backdrop"
+          onClick={closePopup}
+          role="presentation"
+        >
+          <div
+            className="dzd-doctor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dzd-doctor-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <div className="dzd-doctor-modal-icon">📍</div>
+            <h3 id="dzd-doctor-modal-title" className="dzd-doctor-modal-title">
+              تحديد الموقع
+            </h3>
+            <p className="dzd-doctor-modal-text">
+              هل تريد من DZ Agent تحديد موقعك لمعرفة الأطباء الأقرب إليك؟
+            </p>
+            <div className="dzd-doctor-modal-actions">
+              <button
+                type="button"
+                className="dzd-doctor-modal-btn dzd-doctor-modal-btn--primary"
+                onClick={handleUseGps}
+              >
+                ✅ نعم
+              </button>
+              <button
+                type="button"
+                className="dzd-doctor-modal-btn dzd-doctor-modal-btn--secondary"
+                onClick={handleManual}
+              >
+                ❌ سأبحث يدوياً
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

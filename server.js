@@ -307,10 +307,10 @@ function detectDoctorIntent(message) {
 // ===== DOCTOR SEARCH — multi-source aggregator (pj-dz, addalile, sahadoc, docteur360, algerie-docto) =====
 import { searchDoctors as multiSearchDoctors, formatResults as formatDoctorMulti } from './lib/doctorSearch.js'
 
-function formatDoctorResults(results, speciality, city) {
+function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
   const cityLabel = city?.ar || city?.fr || ''
-  return formatDoctorMulti(results, specLabel, cityLabel)
+  return formatDoctorMulti(results, specLabel, cityLabel, { sourceCount: 6, ...opts })
 }
 
 function isCapabilitiesQuestion(message) {
@@ -2701,6 +2701,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Doctor search intent ─────────────────────────────────────────────────
+  // Extract optional GPS tag injected by the dashboard: [GPS:lat,lng]
+  let userLocation = null
+  const gpsMatch = lastUserMessage.match(/\[GPS:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/i)
+  if (gpsMatch) {
+    const lat = parseFloat(gpsMatch[1]); const lng = parseFloat(gpsMatch[2])
+    if (Number.isFinite(lat) && Number.isFinite(lng)) userLocation = { lat, lng }
+    lastUserMessage = lastUserMessage.replace(gpsMatch[0], '').trim()
+    const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
+    if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
+  }
+
   const doctorIntent = detectDoctorIntent(lastUserMessage)
   if (doctorIntent.isDoctorQuery) {
     if (!doctorIntent.speciality && !doctorIntent.city) {
@@ -2721,9 +2732,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const { results, cached } = await multiSearchDoctors({
       speciality: doctorIntent.speciality.search,
       city: doctorIntent.city.fr,
+      userLocation,
     })
     return res.status(200).json({
-      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city, { hasGps: !!userLocation })
+        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
     })
   }
 

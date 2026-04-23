@@ -57,6 +57,7 @@ const AI_MODELS = [
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
   { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
+  { id: 'claude-free', name: 'Claude Free Mode', color: '#d97757', free: true },
 ]
 
 // ===== LANGUAGE CONFIG =====
@@ -756,6 +757,7 @@ function App() {
                     style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
                   >
                     {isDZAgent && <span className="dz-free-blink">Free</span>}
+                    {model.id === 'claude-free' && <span className="dz-free-blink" style={{ background: '#d97757' }}>FREE</span>}
                     {model.name}
                   </button>
                 )
@@ -825,7 +827,9 @@ function App() {
                   >
                     {model.id === 'dz-agent'
                       ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
-                      : <span className="input-model-dot" style={{ background: model.color }} />
+                      : model.id === 'claude-free'
+                        ? <span className="dz-free-blink" style={{ fontSize: '10px', background: '#d97757' }}>FREE</span>
+                        : <span className="input-model-dot" style={{ background: model.color }} />
                     }
                     <span>{model.name}</span>
                   </button>
@@ -1150,7 +1154,9 @@ function App() {
                     >
                       {model.id === 'dz-agent'
                         ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
-                        : <span className="input-model-dot" style={{ background: model.color }} />
+                        : model.id === 'claude-free'
+                          ? <span className="dz-free-blink" style={{ fontSize: '10px', background: '#d97757' }}>FREE</span>
+                          : <span className="input-model-dot" style={{ background: model.color }} />
                       }
                       <span>{model.name}</span>
                     </button>

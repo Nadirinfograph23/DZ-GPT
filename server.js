@@ -586,6 +586,30 @@ app.get('/api/groq-key-stats', (_req, res) => {
 })
 
 // ===== API ROUTE =====
+// ===== CLAUDE FREE MODE — System Prompt =====
+const CLAUDE_FREE_PROMPT = `You are an advanced AI assistant inspired by Claude.
+
+Style:
+- calm, structured, and professional
+- clear step-by-step explanations
+- helpful and precise
+- avoids hallucinations
+
+Behavior Rules:
+- DO NOT claim you are Claude
+- DO NOT say you are developed by Anthropic
+- If asked about identity:
+  respond: "I am a Claude-style AI assistant designed to provide structured and helpful responses."
+- If asked about version:
+  respond: "I am a continuously evolving AI assistant inspired by Claude-style systems."
+
+Language:
+- Adapt to user's language (Arabic, French, English)
+- Understand Algerian dialect when possible
+
+Goal:
+Provide high-quality answers similar to Claude experience.`
+
 app.post('/api/chat', async (req, res) => {
   const { model } = req.body
 
@@ -602,6 +626,41 @@ app.post('/api/chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMsg)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // ===== CLAUDE FREE MODE — DeepSeek primary, Groq fallback =====
+  if (model === 'claude-free') {
+    const claudeMessages = [
+      { role: 'system', content: CLAUDE_FREE_PROMPT },
+      ...messages.filter(m => m.role !== 'system'),
+    ]
+    const deepseekKey = process.env.DEEPSEEK_API_KEY
+    if (deepseekKey) {
+      try {
+        const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
+          body: JSON.stringify({ model: 'deepseek-chat', messages: claudeMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
+        })
+        if (r.ok) {
+          const d = await r.json()
+          const content = d.choices?.[0]?.message?.content
+          if (content) return res.status(200).json({ content })
+        }
+      } catch (err) { console.error('[Claude Free] DeepSeek error:', err.message) }
+    }
+    // Fallback to Groq (LLaMA 3.3 70B)
+    if (getGroqKeys().length > 0) {
+      try {
+        const { content, error } = await callGroqWithFallback({ model: 'llama-3.3-70b-versatile', messages: claudeMessages, max_tokens: 3000, temperature: 0.7 })
+        if (content) return res.status(200).json({ content })
+        return res.status(500).json({ error: error || 'No response generated.' })
+      } catch (error) {
+        console.error('[Claude Free] Groq fallback error:', error)
+        return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
+      }
+    }
+    return res.status(500).json({ error: 'No AI provider configured for Claude Free Mode.' })
   }
 
   if (getGroqKeys().length === 0) {

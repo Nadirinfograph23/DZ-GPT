@@ -776,6 +776,7 @@ function App() {
                 onClick={() => navigate('/dz-tube')}
                 title="DZ Tube"
               >
+                <span className="dz-tube-badge">NEW</span>
                 <Video size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 4 }} /> DZ Tube
               </button>
             </div>

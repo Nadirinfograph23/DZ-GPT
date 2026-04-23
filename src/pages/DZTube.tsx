@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2, RotateCw, X, Play, Headphones, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2, RotateCw, X, Play, Headphones, ChevronDown, Plus } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tube.css'
 
@@ -230,6 +230,13 @@ export default function DZTube() {
                     </button>
                     <button className="dzt-act dzt-act-bg" onClick={() => playInBackground(r)} title="تشغيل في الخلفية (صوت فقط)">
                       <Headphones size={13} /> خلفية
+                    </button>
+                    <button
+                      className="dzt-act dzt-act-q"
+                      onClick={() => player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })}
+                      title="إضافة لقائمة التشغيل"
+                    >
+                      <Plus size={13} /> للقائمة
                     </button>
                     <div className="dzt-act-dl-wrap">
                       <button

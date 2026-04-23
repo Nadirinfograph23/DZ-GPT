@@ -10,11 +10,16 @@ export interface PlayerTrack {
 
 interface MiniPlayerCtx {
   track: PlayerTrack | null
+  queue: PlayerTrack[]
   playing: boolean
   loading: boolean
   progress: number
   duration: number
   play: (track: PlayerTrack) => Promise<void>
+  enqueue: (track: PlayerTrack) => void
+  removeFromQueue: (id: string) => void
+  clearQueue: () => void
+  next: () => Promise<void>
   toggle: () => void
   seek: (sec: number) => void
   stop: () => void
@@ -30,40 +35,21 @@ export function useMiniPlayer() {
 
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [track, setTrack] = useState<PlayerTrack | null>(null)
+  const [queue, setQueue] = useState<PlayerTrack[]>([])
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const queueRef = useRef<PlayerTrack[]>([])
+  useEffect(() => { queueRef.current = queue }, [queue])
 
   if (!audioRef.current && typeof window !== 'undefined') {
     audioRef.current = new Audio()
     audioRef.current.preload = 'auto'
   }
 
-  useEffect(() => {
-    const a = audioRef.current
-    if (!a) return
-    const onTime = () => setProgress(a.currentTime)
-    const onMeta = () => setDuration(a.duration || 0)
-    const onPlay = () => setPlaying(true)
-    const onPause = () => setPlaying(false)
-    const onEnd = () => setPlaying(false)
-    a.addEventListener('timeupdate', onTime)
-    a.addEventListener('loadedmetadata', onMeta)
-    a.addEventListener('play', onPlay)
-    a.addEventListener('pause', onPause)
-    a.addEventListener('ended', onEnd)
-    return () => {
-      a.removeEventListener('timeupdate', onTime)
-      a.removeEventListener('loadedmetadata', onMeta)
-      a.removeEventListener('play', onPlay)
-      a.removeEventListener('pause', onPause)
-      a.removeEventListener('ended', onEnd)
-    }
-  }, [])
-
-  const play = useCallback(async (t: PlayerTrack) => {
+  const playInternal = useCallback(async (t: PlayerTrack) => {
     const a = audioRef.current
     if (!a) return
     setLoading(true)
@@ -76,8 +62,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       await a.play()
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title,
-          artist: t.channel,
+          title: t.title, artist: t.channel,
           artwork: [{ src: t.thumbnail, sizes: '480x360', type: 'image/jpeg' }],
         })
       }
@@ -88,6 +73,51 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     }
   }, [])
+
+  const next = useCallback(async () => {
+    const q = queueRef.current
+    if (q.length === 0) return
+    const [head, ...rest] = q
+    setQueue(rest)
+    await playInternal(head)
+  }, [playInternal])
+
+  useEffect(() => {
+    const a = audioRef.current
+    if (!a) return
+    const onTime = () => setProgress(a.currentTime)
+    const onMeta = () => setDuration(a.duration || 0)
+    const onPlay = () => setPlaying(true)
+    const onPause = () => setPlaying(false)
+    const onEnd = () => {
+      setPlaying(false)
+      if (queueRef.current.length > 0) next()
+    }
+    a.addEventListener('timeupdate', onTime)
+    a.addEventListener('loadedmetadata', onMeta)
+    a.addEventListener('play', onPlay)
+    a.addEventListener('pause', onPause)
+    a.addEventListener('ended', onEnd)
+    return () => {
+      a.removeEventListener('timeupdate', onTime)
+      a.removeEventListener('loadedmetadata', onMeta)
+      a.removeEventListener('play', onPlay)
+      a.removeEventListener('pause', onPause)
+      a.removeEventListener('ended', onEnd)
+    }
+  }, [next])
+
+  const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
+
+  const enqueue = useCallback((t: PlayerTrack) => {
+    setQueue(prev => prev.find(x => x.id === t.id) ? prev : [...prev, t])
+  }, [])
+
+  const removeFromQueue = useCallback((id: string) => {
+    setQueue(prev => prev.filter(t => t.id !== id))
+  }, [])
+
+  const clearQueue = useCallback(() => setQueue([]), [])
 
   const toggle = useCallback(() => {
     const a = audioRef.current
@@ -108,8 +138,15 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setProgress(0)
   }, [])
 
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.setActionHandler('play', toggle)
+    navigator.mediaSession.setActionHandler('pause', toggle)
+    navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
+  }, [toggle, next])
+
   return (
-    <Ctx.Provider value={{ track, playing, loading, progress, duration, play, toggle, seek, stop }}>
+    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
       {children}
     </Ctx.Provider>
   )

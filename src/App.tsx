@@ -54,10 +54,10 @@ const AI_MODELS = [
   { id: 'qwen', name: 'Qwen3 32B', color: '#7c3aed' },
   { id: 'compound', name: 'Compound', color: '#10a37f' },
   { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
+  { id: 'claude-free', name: 'Claude Free Mode', color: '#2563eb', free: true },
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
   { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
-  { id: 'claude-free', name: 'Claude Free Mode', color: '#2563eb', free: true },
 ]
 
 // ===== LANGUAGE CONFIG =====

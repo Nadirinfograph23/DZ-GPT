@@ -54,7 +54,6 @@ const AI_MODELS = [
   { id: 'qwen', name: 'Qwen3 32B', color: '#7c3aed' },
   { id: 'compound', name: 'Compound', color: '#10a37f' },
   { id: 'compound-mini', name: 'Compound Mini', color: '#d97706' },
-  { id: 'claude-free', name: 'Claude Free Mode', color: '#2563eb', free: true },
   { id: 'deepseek-pdf', name: 'DeepSeek PDF', color: '#4d6bfe' },
   { id: 'ocr-dz', name: 'OCR DZ', color: '#00b050' },
   { id: 'dz-agent', name: 'DZ Agent', color: '#c8ff00', free: true },
@@ -203,7 +202,6 @@ function App() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [showMobileModelMenu, setShowMobileModelMenu] = useState(false)
   const [navDropdownOpen, setNavDropdownOpen] = useState(false)
-  const [claudeFreeStatus, setClaudeFreeStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [language, setLanguage] = useState<Lang>(() => {
     return (localStorage.getItem('dz-gpt-lang') as Lang) || 'ar'
   })
@@ -234,23 +232,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('dz-gpt-lang', language)
   }, [language])
-
-  // Claude Free Mode — periodic Ollama health check
-  useEffect(() => {
-    let cancelled = false
-    const ping = async () => {
-      try {
-        const r = await fetch('/api/claude-free/status')
-        const d = await r.json()
-        if (!cancelled) setClaudeFreeStatus(d.online ? 'online' : 'offline')
-      } catch {
-        if (!cancelled) setClaudeFreeStatus('offline')
-      }
-    }
-    ping()
-    const id = setInterval(ping, 30000)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [])
 
   useEffect(() => {
     if (activeChatId) {
@@ -775,20 +756,6 @@ function App() {
                     style={selectedModel === model.id ? { borderColor: model.color, color: model.color } : {}}
                   >
                     {isDZAgent && <span className="dz-free-blink">Free</span>}
-                    {model.id === 'claude-free' && (
-                      <>
-                        <Sparkles size={12} style={{ color: '#2563eb', marginRight: 4 }} />
-                        <span
-                          title={`Ollama: ${claudeFreeStatus}`}
-                          style={{
-                            display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginRight: 4,
-                            background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
-                            boxShadow: claudeFreeStatus === 'online' ? '0 0 6px #10b981' : 'none',
-                          }}
-                        />
-                        <span className="dz-free-blink" style={{ background: '#2563eb' }}>LOCAL</span>
-                      </>
-                    )}
                     {model.name}
                   </button>
                 )
@@ -858,23 +825,9 @@ function App() {
                   >
                     {model.id === 'dz-agent'
                       ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
-                      : model.id === 'claude-free'
-                        ? <Sparkles size={14} style={{ color: '#2563eb' }} />
-                        : <span className="input-model-dot" style={{ background: model.color }} />
+                      : <span className="input-model-dot" style={{ background: model.color }} />
                     }
                     <span>{model.name}</span>
-                    {model.id === 'claude-free' && (
-                      <>
-                        <span
-                          title={`Ollama: ${claudeFreeStatus}`}
-                          style={{
-                            display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginLeft: 6,
-                            background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
-                          }}
-                        />
-                        <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
-                      </>
-                    )}
                   </button>
                 ))}
                 <button
@@ -1162,27 +1115,6 @@ function App() {
               </button>
             </div>
           )}
-          {selectedModel === 'claude-free' && claudeFreeStatus === 'offline' && (
-            <div style={{
-              margin: '0 0 8px',
-              padding: '8px 12px',
-              borderRadius: 8,
-              background: 'rgba(37, 99, 235, 0.08)',
-              border: '1px solid rgba(37, 99, 235, 0.35)',
-              color: '#93c5fd',
-              fontSize: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              lineHeight: 1.4,
-            }}>
-              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
-              <span>
-                <strong>Claude Free Mode غير متصل.</strong>{' '}
-                شغّل Ollama على السيرفر (<code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 4 }}>ollama pull mistral</code>) واضبط <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: 4 }}>OLLAMA_PROXY_URL</code>.
-              </span>
-            </div>
-          )}
           <div className="input-model-row">
             <div className="input-model-dropdown">
               <button
@@ -1218,23 +1150,9 @@ function App() {
                     >
                       {model.id === 'dz-agent'
                         ? <span className="dz-free-blink" style={{ fontSize: '10px' }}>Free</span>
-                        : model.id === 'claude-free'
-                          ? <Sparkles size={14} style={{ color: '#2563eb' }} />
-                          : <span className="input-model-dot" style={{ background: model.color }} />
+                        : <span className="input-model-dot" style={{ background: model.color }} />
                       }
                       <span>{model.name}</span>
-                      {model.id === 'claude-free' && (
-                        <>
-                          <span
-                            title={`Ollama: ${claudeFreeStatus}`}
-                            style={{
-                              display: 'inline-block', width: 7, height: 7, borderRadius: '50%', marginLeft: 6,
-                              background: claudeFreeStatus === 'online' ? '#10b981' : claudeFreeStatus === 'offline' ? '#ef4444' : '#6b7280',
-                            }}
-                          />
-                          <span className="dz-free-blink" style={{ fontSize: '10px', background: '#2563eb', marginLeft: 6 }}>LOCAL</span>
-                        </>
-                      )}
                     </button>
                   ))}
                   <button

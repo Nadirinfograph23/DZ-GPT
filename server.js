@@ -586,30 +586,6 @@ app.get('/api/groq-key-stats', (_req, res) => {
 })
 
 // ===== API ROUTE =====
-// ===== CLAUDE FREE MODE — System Prompt =====
-const CLAUDE_FREE_PROMPT = `You are an advanced AI assistant inspired by Claude.
-
-Style:
-- calm, structured, and professional
-- clear step-by-step explanations
-- helpful and precise
-- avoids hallucinations
-
-Behavior Rules:
-- DO NOT claim you are Claude
-- DO NOT say you are developed by Anthropic
-- If asked about identity:
-  respond: "I am a Claude-style AI assistant designed to provide structured and helpful responses."
-- If asked about version:
-  respond: "I am a continuously evolving AI assistant inspired by Claude-style systems."
-
-Language:
-- Adapt to user's language (Arabic, French, English)
-- Understand Algerian dialect when possible
-
-Goal:
-Provide high-quality answers similar to Claude experience.`
-
 app.post('/api/chat', async (req, res) => {
   const { model } = req.body
 
@@ -626,35 +602,6 @@ app.post('/api/chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMsg)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
-  }
-
-  // ===== CLAUDE FREE MODE — Ollama health check is exposed on /api/claude-free/status =====
-  if (model === 'claude-free') {
-    const ollamaUrl = process.env.OLLAMA_PROXY_URL || 'http://localhost:11434'
-    const ollamaModel = process.env.OLLAMA_CLAUDE_MODEL || 'mistral'
-    const claudeMessages = [
-      { role: 'system', content: CLAUDE_FREE_PROMPT },
-      ...messages.filter(m => m.role !== 'system'),
-    ]
-    try {
-      const r = await fetch(`${ollamaUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: ollamaModel, messages: claudeMessages, stream: false }),
-      })
-      if (!r.ok) {
-        const errText = await r.text().catch(() => '')
-        console.error('[Claude Free] Ollama HTTP', r.status, errText.slice(0, 200))
-        return res.status(503).json({ error: `Local Claude AI unavailable (Ollama HTTP ${r.status}). Make sure Ollama is running with the "${ollamaModel}" model.` })
-      }
-      const d = await r.json()
-      const content = d?.message?.content || d?.response
-      if (!content) return res.status(500).json({ error: 'Local Claude AI returned an empty response.' })
-      return res.status(200).json({ content, provider: 'ollama-local' })
-    } catch (err) {
-      console.error('[Claude Free] Ollama error:', err.message)
-      return res.status(503).json({ error: `Local Claude AI unreachable at ${ollamaUrl}. Ollama must be running on the server.` })
-    }
   }
 
   if (getGroqKeys().length === 0) {
@@ -684,22 +631,6 @@ app.post('/api/chat', async (req, res) => {
   } catch (error) {
     console.error('Chat API error:', error)
     return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
-  }
-})
-
-// ===== CLAUDE FREE MODE — Ollama health check =====
-app.get('/api/claude-free/status', async (_req, res) => {
-  const ollamaUrl = process.env.OLLAMA_PROXY_URL || 'http://localhost:11434'
-  const ollamaModel = process.env.OLLAMA_CLAUDE_MODEL || 'mistral'
-  try {
-    const r = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2500) })
-    if (!r.ok) return res.json({ online: false, url: ollamaUrl, model: ollamaModel, reason: `HTTP ${r.status}` })
-    const data = await r.json().catch(() => ({}))
-    const models = (data?.models || []).map(m => m.name || m.model).filter(Boolean)
-    const hasModel = models.some(n => String(n).startsWith(ollamaModel))
-    return res.json({ online: true, url: ollamaUrl, model: ollamaModel, hasModel, models })
-  } catch (err) {
-    return res.json({ online: false, url: ollamaUrl, model: ollamaModel, reason: err.message })
   }
 })
 

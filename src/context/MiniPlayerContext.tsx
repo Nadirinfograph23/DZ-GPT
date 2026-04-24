@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 
 export interface PlayerTrack {
   id: string
@@ -53,215 +53,192 @@ function persist(state: PersistedState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
 
-// Extract a YouTube videoId from any standard URL form (kept for parity).
-function extractVideoId(url: string): string | null {
-  if (!url) return null
-  try {
-    const u = new URL(url)
-    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split(/[/?#]/)[0] || null
-    if (/(^|\.)youtube\.com$/i.test(u.hostname)) {
-      if (u.pathname === '/watch') return u.searchParams.get('v')
-      const m = u.pathname.match(/^\/(embed|shorts|v|live)\/([^/?#]+)/)
-      if (m) return m[2]
-    }
-  } catch {}
-  if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url
-  return null
-}
-
-// Build a SAME-ORIGIN URL that the <audio> element can be bound to
-// synchronously inside the user-gesture frame. The server-side proxy
-// (/api/dz-tube/audio-proxy) does the slow work of resolving the
-// signed googlevideo URL and pipes the bytes through with full Range
-// support. This avoids three classical mini-player failure modes:
-//  1) Chrome/Safari blocking play() that runs after a 5s+ await
-//  2) CORS rejections on third-party proxies that omit ACAO
-//  3) googlevideo signed URLs expiring while the user listens
 function buildAudioSrc(track: PlayerTrack): string {
   const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
   return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}`
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Module-level audio singleton.
+//
+// The audio element AND its event listeners are created exactly once at module
+// load — NOT inside a React useEffect. This eliminates an entire class of bugs:
+//   • StrictMode double-mount re-attaching listeners on stale refs
+//   • Race between user gesture click and useEffect listener attach
+//   • Multiple <audio> elements being created on hot reload / re-render
+//   • Toggle button reading a stale audioRef.current
+//
+// React subscribes to state changes via the tiny pub-sub `subscribers` set.
+// There is one and only one HTMLAudioElement, accessible everywhere via
+// `getAudio()`, and one and only one set of listeners forwarding events into
+// the snapshot.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface AudioSnapshot {
+  playing: boolean
+  loading: boolean
+  progress: number
+  duration: number
+  trackId: string | null
+}
+
+let audioEl: HTMLAudioElement | null = null
+let snapshot: AudioSnapshot = { playing: false, loading: false, progress: 0, duration: 0, trackId: null }
+const subscribers = new Set<(s: AudioSnapshot) => void>()
+
+function notify() {
+  subscribers.forEach(fn => fn(snapshot))
+}
+function patch(p: Partial<AudioSnapshot>) {
+  snapshot = { ...snapshot, ...p }
+  notify()
+}
+
+function getAudio(): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null
+  if (audioEl) return audioEl
+  // Reuse a previously created element (survives React re-mounts).
+  let el = document.getElementById('dz-audio-host') as HTMLAudioElement | null
+  if (!el) {
+    el = document.createElement('audio')
+    el.id = 'dz-audio-host'
+    el.preload = 'metadata'
+    el.style.display = 'none'
+    el.setAttribute('playsinline', '')
+    el.setAttribute('webkit-playsinline', '')
+    document.body.appendChild(el)
+  }
+  audioEl = el
+  // Listeners attached EXACTLY ONCE for the lifetime of the page.
+  el.addEventListener('loadedmetadata', () => {
+    const d = el!.duration
+    if (Number.isFinite(d) && d > 0) patch({ duration: d })
+  })
+  el.addEventListener('durationchange', () => {
+    const d = el!.duration
+    if (Number.isFinite(d) && d > 0) patch({ duration: d })
+  })
+  el.addEventListener('timeupdate', () => {
+    patch({ progress: el!.currentTime || 0 })
+  })
+  el.addEventListener('play', () => patch({ playing: true, loading: false }))
+  el.addEventListener('pause', () => patch({ playing: false }))
+  el.addEventListener('waiting', () => patch({ loading: true }))
+  el.addEventListener('playing', () => patch({ loading: false, playing: true }))
+  el.addEventListener('canplay', () => patch({ loading: false }))
+  el.addEventListener('ended', () => {
+    patch({ playing: false })
+    if (onEndedCallback) onEndedCallback()
+  })
+  el.addEventListener('error', () => {
+    console.warn('[mini-player] audio error', el!.error)
+    patch({ loading: false, playing: false })
+  })
+  return el
+}
+
+let onEndedCallback: (() => void) | null = null
+
+function bindAndPlay(track: PlayerTrack, autoplay: boolean, resumeAt: number) {
+  const el = getAudio()
+  if (!el) return
+  patch({
+    loading: true,
+    progress: resumeAt > 1 ? resumeAt : 0,
+    duration: track.duration && track.duration > 0 ? track.duration : 0,
+    trackId: track.id,
+  })
+  try {
+    el.src = buildAudioSrc(track)
+    el.load()
+    if (resumeAt > 1) {
+      const seekOnce = () => {
+        try { el.currentTime = resumeAt } catch {}
+        el.removeEventListener('loadedmetadata', seekOnce)
+      }
+      el.addEventListener('loadedmetadata', seekOnce)
+    }
+    if (autoplay) {
+      const p = el.play()
+      if (p && typeof (p as Promise<void>).catch === 'function') {
+        ;(p as Promise<void>).catch(err => {
+          console.warn('[mini-player] play() rejected', err?.message || err)
+          patch({ loading: false })
+        })
+      }
+    }
+  } catch (e) {
+    console.warn('[mini-player] bindAndPlay failed', e)
+    patch({ loading: false })
+  }
+}
+
+// Expose on window for in-browser debugging (read-only inspection only).
+if (typeof window !== 'undefined') {
+  ;(window as any).__dzPlayer = {
+    get el() { return audioEl },
+    get snapshot() { return snapshot },
+    subscribers,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// React provider — thin wrapper around the singleton.
+// ─────────────────────────────────────────────────────────────────────────────
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const initial = loadPersisted()
   const [track, setTrack] = useState<PlayerTrack | null>(initial.track)
   const [queue, setQueue] = useState<PlayerTrack[]>(initial.queue)
-  const [playing, setPlaying] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [progress, setProgress] = useState(initial.progress)
-  const [duration, setDuration] = useState(initial.track?.duration || 0)
+  const [snap, setSnap] = useState<AudioSnapshot>(snapshot)
+  const queueRef = useRef<PlayerTrack[]>(initial.queue)
+  const restoredRef = useRef(false)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const queueRef = useRef<PlayerTrack[]>([])
-  const restoredRef = useRef<boolean>(false)
-  const resumeAtRef = useRef<number>(initial.progress)
-  // Counter to discard late stream-resolution responses when the user
-  // quickly switches tracks.
-  const loadTokenRef = useRef<number>(0)
-  // Track id currently bound to <audio>.src — used to skip redundant reloads.
-  const currentSrcIdRef = useRef<string | null>(null)
-  const nextRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => { queueRef.current = queue }, [queue])
 
-  // Mount a hidden, persistent <audio> element exactly once. Audio elements
-  // (unlike <video> or YouTube iframes) keep playing when the screen turns
-  // off on mobile, which is the whole point of switching the engine here.
+  // Subscribe to the singleton's state.
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    let el = document.getElementById('dz-audio-host') as HTMLAudioElement | null
-    if (!el) {
-      el = document.createElement('audio')
-      el.id = 'dz-audio-host'
-      el.preload = 'metadata'
-      // NOTE: deliberately NOT setting crossOrigin. We don't read raw audio
-      // samples (no Web Audio analyser, no canvas), and setting it forces
-      // strict CORS validation that some upstream proxies fail silently
-      // (the browser fires `error` with no useful message and playback dies).
-      // Hide from layout but keep mounted so background play survives nav.
-      el.style.display = 'none'
-      el.setAttribute('playsinline', '')
-      el.setAttribute('webkit-playsinline', '')
-      document.body.appendChild(el)
-    }
-    audioRef.current = el
-
-    const onLoadedMeta = () => {
-      const d = el!.duration
-      // NaN/Infinity guard — some HLS / MSE-less streams report Infinity.
-      if (Number.isFinite(d) && d > 0) setDuration(d)
-      // Resume position (set after metadata is ready so seek lands correctly).
-      if (resumeAtRef.current > 1 && Number.isFinite(d) && d > 0 && resumeAtRef.current < d - 1) {
-        try { el!.currentTime = resumeAtRef.current } catch {}
-      }
-      resumeAtRef.current = 0
-    }
-    const onDurationChange = () => {
-      const d = el!.duration
-      if (Number.isFinite(d) && d > 0) setDuration(d)
-    }
-    const onTimeUpdate = () => { setProgress(el!.currentTime || 0) }
-    const onPlay = () => { setPlaying(true); setLoading(false) }
-    const onPause = () => { setPlaying(false) }
-    const onWaiting = () => { setLoading(true) }
-    const onPlaying = () => { setLoading(false) }
-    const onCanPlay = () => { setLoading(false) }
-    const onEnded = () => {
-      setPlaying(false)
-      if (queueRef.current.length > 0) void nextRef.current()
-    }
-    const onError = () => {
-      setLoading(false)
-      setPlaying(false)
-      console.warn('[mini-player] audio error', el!.error)
-    }
-
-    el.addEventListener('loadedmetadata', onLoadedMeta)
-    el.addEventListener('durationchange', onDurationChange)
-    el.addEventListener('timeupdate', onTimeUpdate)
-    el.addEventListener('play', onPlay)
-    el.addEventListener('pause', onPause)
-    el.addEventListener('waiting', onWaiting)
-    el.addEventListener('playing', onPlaying)
-    el.addEventListener('canplay', onCanPlay)
-    el.addEventListener('ended', onEnded)
-    el.addEventListener('error', onError)
-
-    return () => {
-      el!.removeEventListener('loadedmetadata', onLoadedMeta)
-      el!.removeEventListener('durationchange', onDurationChange)
-      el!.removeEventListener('timeupdate', onTimeUpdate)
-      el!.removeEventListener('play', onPlay)
-      el!.removeEventListener('pause', onPause)
-      el!.removeEventListener('waiting', onWaiting)
-      el!.removeEventListener('playing', onPlaying)
-      el!.removeEventListener('canplay', onCanPlay)
-      el!.removeEventListener('ended', onEnded)
-      el!.removeEventListener('error', onError)
-    }
+    const fn = (s: AudioSnapshot) => setSnap(s)
+    subscribers.add(fn)
+    // Make sure the audio element exists (creates listeners on first call).
+    getAudio()
+    setSnap(snapshot)
+    return () => { subscribers.delete(fn) }
   }, [])
 
-  // Internal: bind <audio> to the same-origin streaming proxy and start
-  // playback. Bind + play are called SYNCHRONOUSLY so the user-gesture
-  // activation is preserved (no autoplay block). The slow work — resolving
-  // a signed googlevideo URL — happens server-side while the browser
-  // already shows a buffering state.
-  const loadAndPlay = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
-    const el = audioRef.current
-    if (!el) return
-    const myToken = ++loadTokenRef.current
-    setLoading(true)
-    setProgress(resumeAt > 1 ? resumeAt : 0)
-    // Optimistically show the duration we already know from the search
-    // result, so the mini-player doesn't sit at "0:00".
-    setDuration(t.duration && t.duration > 0 ? t.duration : 0)
-    resumeAtRef.current = resumeAt > 1 ? resumeAt : 0
-
-    try {
-      el.src = buildAudioSrc(t)
-      currentSrcIdRef.current = t.id
-      el.load()
-      if (autoplay) {
-        const p = el.play()
-        if (p && typeof (p as Promise<void>).catch === 'function') {
-          ;(p as Promise<void>).catch(err => {
-            // Token check guards against late rejection from a stale call.
-            if (myToken !== loadTokenRef.current) return
-            console.warn('[mini-player] play() rejected', err?.message || err)
-            setLoading(false)
-          })
-        }
-      }
-    } catch (e) {
-      console.warn('[mini-player] el.play failed', e)
-      setLoading(false)
-    }
-
-    // Update Media Session so the OS shows track info + lockscreen controls.
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-      try {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title,
-          artist: t.channel || 'DZ Tube',
-          album: 'DZ Tube',
-          artwork: [
-            { src: t.thumbnail, sizes: '96x96', type: 'image/jpeg' },
-            { src: t.thumbnail, sizes: '256x256', type: 'image/jpeg' },
-            { src: t.thumbnail, sizes: '480x360', type: 'image/jpeg' },
-          ],
-        })
-      } catch {}
-    }
-  }, [])
-
-  const playInternal = useCallback(async (t: PlayerTrack, autoplay: boolean = true) => {
+  const playInternal = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
     setTrack(t)
-    const resumeAt = resumeAtRef.current
-    resumeAtRef.current = 0
-    await loadAndPlay(t, autoplay, resumeAt)
-  }, [loadAndPlay])
+    bindAndPlay(t, autoplay, resumeAt)
+  }, [])
 
   const next = useCallback(async () => {
     const q = queueRef.current
     if (q.length === 0) return
     const [head, ...rest] = q
     setQueue(rest)
-    await playInternal(head)
+    playInternal(head, true, 0)
   }, [playInternal])
-  useEffect(() => { nextRef.current = next }, [next])
 
-  const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
+  // Wire end-of-track → next (module-level callback).
+  useEffect(() => {
+    onEndedCallback = () => { void next() }
+    return () => { onEndedCallback = null }
+  }, [next])
+
+  const play = useCallback(async (t: PlayerTrack) => {
+    playInternal(t, true, 0)
+  }, [playInternal])
 
   // Restore previous track on first mount (paused, ready to resume).
   useEffect(() => {
     if (restoredRef.current) return
     restoredRef.current = true
     if (initial.track) {
-      void playInternal(initial.track, false)
+      playInternal(initial.track, false, initial.progress)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist track / queue (progress is persisted on its own interval below).
+  // Persist track / queue.
   useEffect(() => {
     persist({ track, queue, progress: 0 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -269,8 +246,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!track) return
     const id = setInterval(() => {
-      const cur = audioRef.current?.currentTime || 0
-      persist({ track, queue: queueRef.current, progress: cur })
+      persist({ track, queue: queueRef.current, progress: snapshot.progress })
     }, 4000)
     return () => clearInterval(id)
   }, [track])
@@ -286,13 +262,12 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const clearQueue = useCallback(() => setQueue([]), [])
 
   const toggle = useCallback(() => {
-    const el = audioRef.current
+    const el = getAudio()
     if (!el || !track) return
     if (el.paused || el.ended) {
-      // If the source was never bound (e.g. user clicked play right after
-      // a restore), bind it now.
-      if (!el.src || currentSrcIdRef.current !== track.id) {
-        void loadAndPlay(track, true, audioRef.current?.currentTime || 0)
+      // Source not bound yet (e.g. user clicked play right after a restore).
+      if (!el.src || snapshot.trackId !== track.id) {
+        bindAndPlay(track, true, el.currentTime || 0)
         return
       }
       const p = el.play()
@@ -302,37 +277,52 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     } else {
       try { el.pause() } catch {}
     }
-  }, [track, loadAndPlay])
+  }, [track])
 
   const seek = useCallback((sec: number) => {
-    const el = audioRef.current
+    const el = getAudio()
     if (!el) return
     try {
       el.currentTime = Math.max(0, sec)
-      setProgress(el.currentTime)
+      patch({ progress: el.currentTime })
     } catch {}
   }, [])
 
   const stop = useCallback(() => {
-    const el = audioRef.current
+    const el = getAudio()
     if (el) {
       try { el.pause() } catch {}
       try { el.removeAttribute('src'); el.load() } catch {}
     }
-    currentSrcIdRef.current = null
+    patch({ playing: false, progress: 0, duration: 0, trackId: null, loading: false })
     setTrack(null)
-    setPlaying(false)
-    setProgress(0)
-    setDuration(0)
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
+
+  // Update Media Session metadata when track changes.
+  useEffect(() => {
+    if (!track) return
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: track.channel || 'DZ Tube',
+        album: 'DZ Tube',
+        artwork: [
+          { src: track.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+          { src: track.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+          { src: track.thumbnail, sizes: '480x360', type: 'image/jpeg' },
+        ],
+      })
+    } catch {}
+  }, [track])
 
   // Wire up Media Session action handlers (lockscreen / headset buttons).
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     try {
       navigator.mediaSession.setActionHandler('play', () => {
-        const el = audioRef.current
+        const el = getAudio()
         if (el && el.paused) {
           const p = el.play()
           if (p && typeof (p as Promise<void>).catch === 'function') {
@@ -341,22 +331,22 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         }
       })
       navigator.mediaSession.setActionHandler('pause', () => {
-        const el = audioRef.current
+        const el = getAudio()
         if (el && !el.paused) { try { el.pause() } catch {} }
       })
       navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
       navigator.mediaSession.setActionHandler('seekbackward', (d: any) => {
-        const el = audioRef.current
+        const el = getAudio()
         if (!el) return
         try { el.currentTime = Math.max(0, el.currentTime - (d?.seekOffset || 10)) } catch {}
       })
       navigator.mediaSession.setActionHandler('seekforward', (d: any) => {
-        const el = audioRef.current
+        const el = getAudio()
         if (!el) return
         try { el.currentTime = el.currentTime + (d?.seekOffset || 10) } catch {}
       })
       navigator.mediaSession.setActionHandler('seekto', (d: any) => {
-        const el = audioRef.current
+        const el = getAudio()
         if (!el || typeof d?.seekTime !== 'number') return
         try { el.currentTime = d.seekTime } catch {}
       })
@@ -367,30 +357,41 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     if (!('setPositionState' in navigator.mediaSession)) return
-    if (!duration || !Number.isFinite(duration)) return
+    if (!snap.duration || !Number.isFinite(snap.duration)) return
     try {
       ;(navigator.mediaSession as any).setPositionState({
-        duration,
-        playbackRate: audioRef.current?.playbackRate || 1,
-        position: Math.min(progress, duration),
+        duration: snap.duration,
+        playbackRate: getAudio()?.playbackRate || 1,
+        position: Math.min(snap.progress, snap.duration),
       })
     } catch {}
-  }, [progress, duration])
+  }, [snap.progress, snap.duration])
 
   // Reflect playback state to the OS so the lockscreen icon stays in sync.
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     try {
-      ;(navigator.mediaSession as any).playbackState = playing ? 'playing' : (track ? 'paused' : 'none')
+      ;(navigator.mediaSession as any).playbackState = snap.playing ? 'playing' : (track ? 'paused' : 'none')
     } catch {}
-  }, [playing, track])
-
-  // Suppress unused-warning for the legacy helper kept for parity with the
-  // previous IFrame implementation (other modules may still call it).
-  void extractVideoId
+  }, [snap.playing, track])
 
   return (
-    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
+    <Ctx.Provider value={{
+      track,
+      queue,
+      playing: snap.playing,
+      loading: snap.loading,
+      progress: snap.progress,
+      duration: snap.duration,
+      play,
+      enqueue,
+      removeFromQueue,
+      clearQueue,
+      next,
+      toggle,
+      seek,
+      stop,
+    }}>
       {children}
     </Ctx.Provider>
   )

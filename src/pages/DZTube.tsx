@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, KeyboardEvent, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
@@ -402,7 +403,7 @@ export default function DZTube() {
                             : <><Download size={13} /> <ChevronDown size={11} /></>
                           }
                         </button>
-                        {downloadMenuFor === r.id && (
+                        {downloadMenuFor === r.id && createPortal(
                           <>
                             <div className="dzt-dl-overlay" onClick={() => setDownloadMenuFor(null)} />
                             <div
@@ -422,7 +423,8 @@ export default function DZTube() {
                                 <span className="dzt-dl-quality">عالي</span>
                               </button>
                             </div>
-                          </>
+                          </>,
+                          document.body
                         )}
                       </div>
                     </div>

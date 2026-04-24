@@ -29,15 +29,19 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: isProd
+        ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com']
+        : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com'],
+      imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com'],
       connectSrc: isProd
         ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com'],
       mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
+      frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com'],
+      childSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com'],
       frameAncestors: isProd
         ? ["'none'"]
         : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev'],

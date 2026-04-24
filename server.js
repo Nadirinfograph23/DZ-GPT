@@ -5325,15 +5325,75 @@ async function resolveDirectAudioUrl(youtubeUrl) {
   throw new Error('all extractors failed')
 }
 
+// Detect Safari/iOS — these clients can NOT decode the webm/opus that YouTube
+// frequently serves as bestaudio. Any browser on iOS uses WebKit (and so has
+// the same codec limits as Safari), and on macOS Safari is the only major
+// browser without webm/opus support. We use ffmpeg to remux/transcode the
+// upstream stream to fragmented MP4 + AAC so playback works there.
+function isSafariOrIOS(ua) {
+  if (!ua) return false
+  const u = String(ua)
+  if (/iPhone|iPad|iPod/i.test(u)) return true
+  if (/Safari/i.test(u) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Brave/i.test(u)) return true
+  return false
+}
+
+// Stream a remuxed AAC-in-MP4 audio response to the client by piping the
+// upstream googlevideo URL through ffmpeg. Output is fragmented mp4 so the
+// browser can start playback before the whole song is downloaded.
+//   • `-c:a aac` re-encodes opus/webm → AAC (universal browser support).
+//   • `frag_keyframe+empty_moov+default_base_moof` makes the file streamable
+//      from the very first byte (no need for a seekable input).
+//   • `-vn` skips any video stream and `-bsf:a aac_adtstoasc` keeps timestamps
+//      clean if the source is already AAC-in-ADTS.
+function remuxAudioToClient(upstreamUrl, req, res) {
+  res.setHeader('Content-Type', 'audio/mp4')
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  // Fragmented mp4 over a single response → no Range support, but the
+  // browser can still start playback progressively as bytes arrive.
+  res.setHeader('Accept-Ranges', 'none')
+
+  const proc = spawn('ffmpeg', [
+    '-loglevel', 'error',
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '4',
+    '-user_agent', 'Mozilla/5.0',
+    '-i', upstreamUrl,
+    '-vn',
+    '-c:a', 'aac',
+    '-b:a', '160k',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    '-f', 'mp4',
+    'pipe:1',
+  ], { stdio: ['ignore', 'pipe', 'pipe'] })
+
+  let stderr = ''
+  proc.stderr.on('data', d => { stderr += d.toString() })
+  proc.stdout.pipe(res)
+
+  proc.on('error', err => {
+    console.warn('[audio-proxy:remux] ffmpeg spawn error:', err.message)
+    if (!res.headersSent) res.status(502).end('فشل تحضير الصوت')
+    else { try { res.end() } catch {} }
+  })
+  proc.on('close', code => {
+    if (code !== 0 && code !== null) {
+      console.warn('[audio-proxy:remux] ffmpeg exited', code, stderr.slice(0, 300))
+    }
+    try { res.end() } catch {}
+  })
+
+  // Kill ffmpeg if the listener closes the page / skips the track.
+  req.on('close', () => { try { proc.kill('SIGKILL') } catch {} })
+}
+
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
   // Resolve the direct googlevideo / proxy URL (cached for 30 min).
-  // We then 302-redirect the browser to it — proxying the bytes ourselves
-  // would exceed Vercel's 30s function timeout for any track > ~1MB and
-  // wastes serverless egress. The browser fetches directly from the CDN
-  // and gets full HTTP/2 + Range + parallel connections for free.
   let upstreamUrl
   try {
     upstreamUrl = await resolveDirectAudioUrl(url)
@@ -5342,7 +5402,16 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
     return res.status(502).end('فشل تحضير الصوت')
   }
 
-  // 307 (not 302) preserves the Range header on the follow-up request.
+  // Safari/iOS path: remux through ffmpeg if available so AAC-in-MP4 reaches
+  // the player. Falls back to the redirect (works for m4a sources) when
+  // ffmpeg is missing on the host (e.g. some serverless environments).
+  // Clients can also force this path via `?force_remux=1` for testing.
+  const wantRemux = req.query.force_remux === '1' || isSafariOrIOS(req.headers['user-agent'])
+  if (wantRemux && await ffmpegAvailable()) {
+    return remuxAudioToClient(upstreamUrl, req, res)
+  }
+
+  // Default fast-path: 307 preserves the Range header on the follow-up request.
   // Cache-Control: no-store so the browser re-asks us if it ever drops
   // the cached response, giving us a chance to re-resolve expired URLs.
   res.setHeader('Location', upstreamUrl)

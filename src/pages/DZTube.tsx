@@ -24,7 +24,7 @@ interface HistoryItem {
   url: string
   title: string
   thumbnail: string | null
-  format: 'mp4' | 'mp3'
+  format: 'mp4' | 'mp3' | 'audio'
   quality: string
   timestamp: number
 }
@@ -176,19 +176,34 @@ export default function DZTube() {
     setTimeout(() => document.querySelector('.dzt-embed')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }, [player])
 
-  const startDownload = useCallback(async (r: SearchResult, format: 'mp4' | 'mp3', quality: Quality) => {
+  const startDownload = useCallback(async (r: SearchResult, format: 'mp4' | 'mp3' | 'audio', quality: Quality) => {
     setDownloadMenuFor(null)
     setDownloadingId(r.id)
     setError(null)
     try {
       const params = new URLSearchParams({ url: r.url, format, quality })
-      showToast(`⏳ جاري تحضير ${format === 'mp3' ? 'الصوت' : 'الفيديو'}…`)
+      const isAudioReq = format === 'mp3' || format === 'audio'
+      showToast(`⏳ جاري تحضير ${isAudioReq ? 'الصوت' : 'الفيديو'}…`)
       const resp = await fetch(`/api/dz-tube/download?${params}`)
       if (!resp.ok) throw new Error(await resp.text() || 'فشل التحميل')
       const blob = await resp.blob()
-      const ext = format === 'mp3' ? 'mp3' : 'mp4'
+      // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the
+      // returned Content-Disposition / Content-Type so the file extension matches.
+      const cd = resp.headers.get('content-disposition') || ''
+      const ct = (resp.headers.get('content-type') || '').toLowerCase()
+      const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
       const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
-      const filename = format === 'mp3' ? `${safeTitle}.mp3` : `${safeTitle}_${quality}p.${ext}`
+      let serverName = ''
+      try { serverName = cdMatch ? decodeURIComponent(cdMatch[1]) : '' } catch { serverName = cdMatch?.[1] || '' }
+      let ext: string
+      if (serverName && /\.(mp3|m4a|webm|mp4)$/i.test(serverName)) {
+        ext = serverName.split('.').pop()!.toLowerCase()
+      } else if (ct.includes('audio/mpeg')) ext = 'mp3'
+      else if (ct.includes('audio/mp4')) ext = 'm4a'
+      else if (ct.includes('audio/webm')) ext = 'webm'
+      else if (isAudioReq) ext = format === 'mp3' ? 'mp3' : 'm4a'
+      else ext = 'mp4'
+      const filename = isAudioReq ? `${safeTitle}.${ext}` : `${safeTitle}_${quality}p.${ext}`
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url; a.download = filename
@@ -421,6 +436,10 @@ export default function DZTube() {
                               <button className="dzt-dl-option" onClick={() => startDownload(r, 'mp3', '720')}>
                                 <span>MP3</span>
                                 <span className="dzt-dl-quality">عالي</span>
+                              </button>
+                              <button className="dzt-dl-option" onClick={() => startDownload(r, 'audio', '720')}>
+                                <span>M4A</span>
+                                <span className="dzt-dl-quality">أصلي</span>
                               </button>
                             </div>
                           </>,

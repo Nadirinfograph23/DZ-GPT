@@ -4666,6 +4666,24 @@ function runYtDlpJSON(url) {
   })
 }
 
+// Same as runYtDlpJSON but accepts an explicit binary path (so it works on
+// Vercel where yt-dlp is bundled at bin/yt-dlp instead of installed on PATH).
+function runYtDlpJSONWith(binPath, url) {
+  return new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', url]
+    const proc = spawn(binPath, args)
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', d => { stdout += d.toString() })
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('error', reject)
+    proc.on('close', code => {
+      if (code !== 0) return reject(new Error(stderr || `yt-dlp exited ${code}`))
+      try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
+    })
+  })
+}
+
 // JS-only fallback (works on Vercel where yt-dlp binary is unavailable)
 async function jsSearch(q, limit) {
   const items = await YouTube.search(q, { limit, type: 'video', safeSearch: false })
@@ -5163,14 +5181,16 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const quality = String(req.query.quality || '720')
 
   if (!isValidYouTubeUrl(url)) return res.status(400).send('رابط YouTube غير صالح')
-  if (format !== 'mp4' && format !== 'mp3') return res.status(400).send('Format must be mp4 or mp3')
+  if (format !== 'mp4' && format !== 'mp3' && format !== 'audio') return res.status(400).send('Format must be mp4, mp3 or audio')
+
+  // Locate yt-dlp (PATH or bundled at bin/yt-dlp on Vercel)
+  const dlpBin = await ytDlpBinaryPath()
 
   // Resolve title (best-effort)
   let title = 'video'
   try {
-    const useDlp = await ytDlpAvailable()
-    if (useDlp) {
-      const info = await runYtDlpJSON(url)
+    if (dlpBin) {
+      const info = await runYtDlpJSONWith(dlpBin, url)
       title = info.title || title
     } else {
       const info = await ytdl.getInfo(url)
@@ -5179,22 +5199,42 @@ app.get('/api/dz-tube/download', async (req, res) => {
   } catch {}
   const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
-  const ext = format === 'mp3' ? 'mp3' : 'mp4'
-  const downloadName = format === 'mp3' ? `${safeName}.mp3` : `${safeName}_${h}p.mp4`
-  const mime = format === 'mp3' ? 'audio/mpeg' : 'video/mp4'
-  const outPath = tmpFile(ext)
+  const isAudio = format === 'mp3' || format === 'audio'
+  const initialExt = format === 'mp3' ? 'mp3' : (format === 'audio' ? 'm4a' : 'mp4')
+  const outPath = tmpFile(initialExt)
 
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
-    // yt-dlp backend → buffer to disk, then stream to client
+  const hasFfmpeg = await ffmpegAvailable()
+
+  if (dlpBin) {
+    // yt-dlp backend → buffer to disk, then stream to client.
+    // We must avoid features that require ffmpeg when it's not on PATH
+    // (e.g. on Vercel serverless where only the yt-dlp binary is bundled).
     let args
-    if (format === 'mp3') {
+    let downloadName
+    let mime
+    if (format === 'mp3' && hasFfmpeg) {
       args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', url]
-    } else {
+      downloadName = `${safeName}.mp3`
+      mime = 'audio/mpeg'
+    } else if (isAudio) {
+      // Native audio (m4a/webm) — no transcoding needed, works without ffmpeg.
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', url]
+      downloadName = `${safeName}.m4a`
+      mime = 'audio/mp4'
+    } else if (hasFfmpeg) {
       const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
       args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', url]
+      downloadName = `${safeName}_${h}p.mp4`
+      mime = 'video/mp4'
+    } else {
+      // No ffmpeg → must use a single progressive (combined audio+video) file.
+      // 18 = 360p mp4, 22 = 720p mp4. Newer YouTube videos may not expose 22.
+      const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/18`
+      args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', url]
+      downloadName = `${safeName}_${h}p.mp4`
+      mime = 'video/mp4'
     }
-    const proc = spawn('yt-dlp', args)
+    const proc = spawn(dlpBin, args)
     let stderrBuf = ''
     proc.stderr.on('data', d => { stderrBuf += d.toString() })
     let killed = false
@@ -5217,10 +5257,10 @@ app.get('/api/dz-tube/download', async (req, res) => {
     return
   }
 
-  // JS fallback (Vercel) — buffer to disk via ytdl-core then stream
+  // JS fallback (no yt-dlp) — buffer to disk via ytdl-core then stream
   try {
     let stream
-    if (format === 'mp3') {
+    if (isAudio) {
       // Audio-only m4a (no transcoding without ffmpeg in serverless)
       stream = ytdl(url, { quality: 'highestaudio', filter: 'audioonly' })
     } else {
@@ -5242,9 +5282,9 @@ app.get('/api/dz-tube/download', async (req, res) => {
     })
     ws.on('close', () => {
       if (aborted) return
-      // Switch mime/name to m4a if mp3 was requested but we couldn't transcode
-      const finalName = format === 'mp3' ? `${safeName}.m4a` : downloadName
-      const finalMime = format === 'mp3' ? 'audio/mp4' : mime
+      // mp3 conversion needs ffmpeg → fall back to native m4a
+      const finalName = isAudio ? `${safeName}.m4a` : `${safeName}_${h}p.mp4`
+      const finalMime = isAudio ? 'audio/mp4' : 'video/mp4'
       streamFileToClient(req, res, outPath, finalMime, finalName)
     })
     stream.pipe(ws)

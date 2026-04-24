@@ -5370,6 +5370,105 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
   }
 }
 
+// ─── ytdown.to + process4.me resolver ────────────────────────────────────────
+// Free public YouTube extraction service (same approach used by
+// nadir-downloader.vercel.app). Bypasses YouTube bot detection on
+// serverless because the actual extraction runs on ytdown.to's workers.
+// Returns: { title, thumbnail, items: [{ type, quality, format, url, size, task, mediaUrl }] }
+const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+const _YTDOWN_MAX_API_RETRIES = 2
+const _YTDOWN_MAX_POLL_ATTEMPTS = 12
+const _YTDOWN_POLL_DELAY_MS = 1500
+const _YTDOWN_QUALITY_LABEL = { FHD: '1080p', HD: '720p', SD: '480p' }
+
+async function _ytdownPollProcess4(mediaUrl) {
+  const headers = { 'User-Agent': _YTDOWN_UA, 'Referer': 'https://app.ytdown.to/', 'Accept': 'application/json' }
+  for (let i = 0; i < _YTDOWN_MAX_POLL_ATTEMPTS; i++) {
+    try {
+      const r = await fetch(mediaUrl, { headers, signal: AbortSignal.timeout(15000) })
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}))
+        const status = String(j.status || '').toLowerCase()
+        if (status === 'completed' && j.fileUrl) return { fileUrl: j.fileUrl, fileSize: j.fileSize || '' }
+        if (status === 'error' || status === 'failed') return null
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, _YTDOWN_POLL_DELAY_MS))
+  }
+  return null
+}
+
+async function fetchYtdownItems(youtubeUrl) {
+  const apiHeaders = {
+    'User-Agent': _YTDOWN_UA,
+    'Origin': 'https://app.ytdown.to',
+    'Referer': 'https://app.ytdown.to/fr23/',
+    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': '*/*',
+  }
+  const body = new URLSearchParams({ url: youtubeUrl }).toString()
+  let lastErr = null
+  for (let attempt = 1; attempt <= _YTDOWN_MAX_API_RETRIES; attempt++) {
+    try {
+      const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers: apiHeaders, body, signal: AbortSignal.timeout(20000) })
+      if (!r.ok) { lastErr = `HTTP ${r.status}`; continue }
+      const data = await r.json().catch(() => null)
+      const api = data?.api
+      if (!api || String(api.status).toLowerCase() !== 'ok') { lastErr = api?.message || 'bad status'; continue }
+      const items = Array.isArray(api.mediaItems) ? api.mediaItems : []
+      const out = []
+      for (const m of items) {
+        const type = m.type
+        const ext = String(m.mediaExtension || '').toUpperCase()
+        const qRaw = String(m.mediaQuality || '')
+        const task = String(m.mediaTask || '').toLowerCase()
+        const mediaUrl = m.mediaUrl
+        if (!mediaUrl) continue
+        const quality = _YTDOWN_QUALITY_LABEL[qRaw] || qRaw
+        out.push({ type, quality, format: ext, mediaUrl, task, size: m.mediaFileSize || '' })
+      }
+      return { title: api.title || 'video', thumbnail: api.imagePreviewUrl || '', items: out }
+    } catch (e) {
+      lastErr = e.message
+    }
+    await new Promise(r => setTimeout(r, 800))
+  }
+  throw new Error(`ytdown.to failed: ${lastErr || 'unknown'}`)
+}
+
+// Pick the best matching ytdown.to item for the requested format/quality.
+// `wantFormat`: 'mp4' | 'mp3' | 'audio' (audio = m4a)
+// `wantHeight`: numeric height (e.g. 720)
+function pickYtdownItem(items, wantFormat, wantHeight) {
+  if (!items?.length) return null
+  if (wantFormat === 'mp3') {
+    return items.find(it => it.type === 'Audio' && it.format === 'MP3') || null
+  }
+  if (wantFormat === 'audio') {
+    // Prefer highest-bitrate M4A
+    const audios = items.filter(it => it.type === 'Audio' && it.format === 'M4A')
+    audios.sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
+    return audios[0] || null
+  }
+  // Video MP4 — choose closest <=wantHeight, else fallback to highest available <=wantHeight
+  const videos = items.filter(it => it.type === 'Video' && it.format === 'MP4' && /^\d+p$/i.test(it.quality))
+  videos.sort((a, b) => parseInt(b.quality) - parseInt(a.quality))
+  const eligible = videos.filter(v => parseInt(v.quality) <= wantHeight)
+  if (eligible.length) return eligible[0]
+  return videos[videos.length - 1] || null
+}
+
+async function resolveYtdownDirectUrl(item) {
+  if (!item) return null
+  // The worker URL always returns a JSON status payload (even for task=download
+  // it's already in "completed" state on the first hit). So we always poll;
+  // the polling helper short-circuits on the first completed response.
+  const polled = await _ytdownPollProcess4(item.mediaUrl)
+  if (!polled) return null
+  return { url: polled.fileUrl, size: polled.fileSize || item.size }
+}
+
 // Stream a buffered file to the client with Content-Length and cleanup
 function streamFileToClient(req, res, filePath, mime, downloadName) {
   fs.stat(filePath, (err, st) => {
@@ -5396,6 +5495,36 @@ app.get('/api/dz-tube/download', async (req, res) => {
   if (!isValidYouTubeUrl(url)) return res.status(400).send('رابط YouTube غير صالح')
   if (format !== 'mp4' && format !== 'mp3' && format !== 'audio') return res.status(400).send('Format must be mp4, mp3 or audio')
 
+  const h = DZ_TUBE_QUALITY_MAP[quality] || 720
+  const isAudio = format === 'mp3' || format === 'audio'
+
+  // ── Primary path: ytdown.to (free, reliable, no bot challenges) ──
+  // Same technique used by nadir-downloader.vercel.app. Resolves to a
+  // direct CDN URL in 2–6 s, then we proxy-stream so the browser sees a
+  // real download with Content-Disposition.
+  try {
+    const yt = await fetchYtdownItems(url)
+    const item = pickYtdownItem(yt.items, format, h)
+    if (item) {
+      const resolved = await resolveYtdownDirectUrl(item)
+      if (resolved?.url) {
+        const safe = (yt.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
+        let dlExt, dlMime
+        if (format === 'mp3') { dlExt = 'mp3'; dlMime = 'audio/mpeg' }
+        else if (format === 'audio') { dlExt = 'm4a'; dlMime = 'audio/mp4' }
+        else { dlExt = 'mp4'; dlMime = 'video/mp4' }
+        const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${item.quality || h+'p'}.${dlExt}`
+        console.log('[DZTube:download] ytdown.to hit:', item.type, item.quality, item.format, '→', resolved.url.slice(0, 80))
+        return await streamUpstreamToClient(req, res, resolved.url, dlMime, downloadName)
+      }
+      console.warn('[DZTube:download] ytdown.to: matched item but resolution failed')
+    } else {
+      console.warn('[DZTube:download] ytdown.to: no matching item for', format, h)
+    }
+  } catch (e) {
+    console.warn('[DZTube:download] ytdown.to error → falling back to yt-dlp:', e.message)
+  }
+
   // Locate yt-dlp (PATH or bundled at bin/yt-dlp on Vercel)
   const dlpBin = await ytDlpBinaryPath()
 
@@ -5411,8 +5540,6 @@ app.get('/api/dz-tube/download', async (req, res) => {
     }
   } catch {}
   const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
-  const h = DZ_TUBE_QUALITY_MAP[quality] || 720
-  const isAudio = format === 'mp3' || format === 'audio'
   const initialExt = format === 'mp3' ? 'mp3' : (format === 'audio' ? 'm4a' : 'mp4')
   const outPath = tmpFile(initialExt)
 

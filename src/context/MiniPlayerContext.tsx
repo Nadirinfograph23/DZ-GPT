@@ -33,15 +33,37 @@ export function useMiniPlayer() {
   return c
 }
 
+const STORAGE_KEY = 'dz-tube-player-state'
+interface PersistedState {
+  track: PlayerTrack | null
+  queue: PlayerTrack[]
+  progress: number
+}
+function loadPersisted(): PersistedState {
+  if (typeof window === 'undefined') return { track: null, queue: [], progress: 0 }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { track: null, queue: [], progress: 0 }
+    const p = JSON.parse(raw)
+    return { track: p.track || null, queue: Array.isArray(p.queue) ? p.queue : [], progress: Number(p.progress) || 0 }
+  } catch { return { track: null, queue: [], progress: 0 } }
+}
+function persist(state: PersistedState) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
+}
+
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
-  const [track, setTrack] = useState<PlayerTrack | null>(null)
-  const [queue, setQueue] = useState<PlayerTrack[]>([])
+  const initial = loadPersisted()
+  const [track, setTrack] = useState<PlayerTrack | null>(initial.track)
+  const [queue, setQueue] = useState<PlayerTrack[]>(initial.queue)
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
+  const [progress, setProgress] = useState(initial.progress)
   const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
+  const restoredRef = useRef<boolean>(false)
+  const resumeAtRef = useRef<number>(initial.progress)
   useEffect(() => { queueRef.current = queue }, [queue])
 
   if (!audioRef.current && typeof window !== 'undefined') {
@@ -49,14 +71,15 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     audioRef.current.preload = 'auto'
   }
 
-  const playInternal = useCallback(async (t: PlayerTrack) => {
+  const playInternal = useCallback(async (t: PlayerTrack, autoplay: boolean = true) => {
     const a = audioRef.current
     if (!a) return
     setLoading(true)
     setTrack(t)
     try {
       a.src = `/api/dz-tube/audio-stream?url=${encodeURIComponent(t.url)}`
-      await a.play()
+      if (autoplay) await a.play()
+      else a.load()
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: t.title, artist: t.channel,
@@ -84,7 +107,13 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     const a = audioRef.current
     if (!a) return
     const onTime = () => setProgress(a.currentTime)
-    const onMeta = () => setDuration(a.duration || 0)
+    const onMeta = () => {
+      setDuration(a.duration || 0)
+      if (resumeAtRef.current > 0 && a.duration && resumeAtRef.current < a.duration - 1) {
+        try { a.currentTime = resumeAtRef.current } catch {}
+      }
+      resumeAtRef.current = 0
+    }
     const onPlay = () => setPlaying(true)
     const onPause = () => setPlaying(false)
     const onEnd = () => {
@@ -106,6 +135,29 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [next])
 
   const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
+
+  // Restore previous track on first mount (paused, ready to resume)
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    if (initial.track) {
+      void playInternal(initial.track, false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist track / queue / progress (debounced for progress)
+  useEffect(() => {
+    persist({ track, queue, progress: 0 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, queue])
+  useEffect(() => {
+    if (!track) return
+    const id = setInterval(() => {
+      persist({ track, queue: queueRef.current, progress: audioRef.current?.currentTime || 0 })
+    }, 4000)
+    return () => clearInterval(id)
+  }, [track])
 
   const enqueue = useCallback((t: PlayerTrack) => {
     setQueue(prev => prev.find(x => x.id === t.id) ? prev : [...prev, t])
@@ -134,6 +186,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setTrack(null)
     setPlaying(false)
     setProgress(0)
+    try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
   useEffect(() => {

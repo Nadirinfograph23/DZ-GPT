@@ -292,3 +292,136 @@
   .mini-player-time { display: none; }
   .mini-queue-panel { bottom: 86px; width: calc(100% - 16px); }
 }
+
+/* ========== Full-screen Now Playing ========== */
+.mini-player-full {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: mpfSlideUp .35s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes mpfSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.mpf-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  filter: blur(50px) brightness(.55) saturate(1.4);
+  transform: scale(1.2);
+}
+.mpf-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(10,10,18,.45) 0%, rgba(10,10,18,.85) 100%);
+}
+.mpf-content {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; align-items: center;
+  width: 100%; height: 100%; padding: 14px 22px 26px;
+  color: #fff;
+  max-width: 560px; margin: 0 auto;
+  box-sizing: border-box;
+}
+.mpf-handle {
+  width: 44px; height: 5px; border-radius: 999px;
+  background: rgba(255,255,255,.35);
+  margin-bottom: 8px;
+}
+.mpf-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; margin-bottom: 8px;
+}
+.mpf-icon-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.mpf-icon-btn:hover { background: rgba(255,255,255,.22); }
+.mpf-now {
+  font-size: 12px; opacity: .8; letter-spacing: .5px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.mpf-art-wrap {
+  flex: 1 1 auto;
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 14px 0;
+  min-height: 0;
+}
+.mpf-art {
+  max-width: 100%;
+  max-height: 100%;
+  width: 320px; height: 320px;
+  object-fit: cover;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08);
+}
+.mpf-meta {
+  width: 100%; text-align: center; margin: 6px 0 14px;
+}
+.mpf-title {
+  font-size: 19px; font-weight: 700; margin: 0 0 6px;
+  line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mpf-channel { font-size: 13px; opacity: .75; margin: 0; }
+.mpf-progress { width: 100%; margin-bottom: 18px; }
+.mpf-bar {
+  width: 100%; height: 5px;
+  background: rgba(255,255,255,.18);
+  border-radius: 999px; cursor: pointer; overflow: hidden;
+}
+.mpf-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff3366, #ff6633);
+  border-radius: 999px;
+  transition: width .15s linear;
+}
+.mpf-times {
+  display: flex; justify-content: space-between;
+  font-size: 11px; opacity: .7; margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.mpf-controls {
+  display: flex; align-items: center; justify-content: center; gap: 22px;
+  margin-bottom: 14px;
+}
+.mpf-side {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.18);
+  color: #fff; cursor: pointer; font-weight: 600; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .12s;
+}
+.mpf-side:hover { background: rgba(255,255,255,.2); transform: scale(1.06); }
+.mpf-play {
+  width: 78px; height: 78px; border-radius: 50%;
+  background: linear-gradient(135deg, #ff3366, #ff6633);
+  border: none; color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 12px 30px rgba(255,51,102,.45);
+  transition: transform .12s;
+}
+.mpf-play:hover { transform: scale(1.06); }
+.mpf-extra {
+  display: flex; gap: 10px; width: 100%;
+}
+.mpf-extra-btn {
+  flex: 1; padding: 11px 14px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 12px; color: #fff; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 13px; font-weight: 600;
+  transition: background .15s;
+}
+.mpf-extra-btn:hover:not(:disabled) { background: rgba(255,255,255,.2); }
+.mpf-extra-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+  .mpf-art { width: 260px; height: 260px; }
+  .mpf-title { font-size: 17px; }
+  .mpf-play { width: 70px; height: 70px; }
+  .mpf-side { width: 48px; height: 48px; }
+}

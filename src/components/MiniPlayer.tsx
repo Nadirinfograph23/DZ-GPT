@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 
 function fmt(s: number): string {
@@ -11,6 +11,34 @@ function fmt(s: number): string {
 export default function MiniPlayer() {
   const { track, queue, playing, loading, progress, duration, toggle, seek, stop, next, removeFromQueue, clearQueue } = useMiniPlayer()
   const [queueOpen, setQueueOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const touchStartY = useRef<number | null>(null)
+  const touchDeltaY = useRef<number>(0)
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+    touchDeltaY.current = 0
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStartY.current == null) return
+    touchDeltaY.current = e.touches[0].clientY - touchStartY.current
+  }
+  const onTouchEndBar = () => {
+    if (touchDeltaY.current < -40) setExpanded(true)
+    touchStartY.current = null; touchDeltaY.current = 0
+  }
+  const onTouchEndFull = () => {
+    if (touchDeltaY.current > 60) setExpanded(false)
+    touchStartY.current = null; touchDeltaY.current = 0
+  }
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false) }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [expanded])
 
   useEffect(() => {
     if (!track) return
@@ -40,8 +68,8 @@ export default function MiniPlayer() {
   return (
     <>
       {track && (
-        <div className="mini-player">
-          <img className="mini-player-thumb" src={track.thumbnail} alt="" />
+        <div className="mini-player" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndBar}>
+          <img className="mini-player-thumb" src={track.thumbnail} alt="" onClick={() => setExpanded(true)} style={{ cursor: 'pointer' }} />
           <div className="mini-player-info">
             <span className="mini-player-title" title={track.title}>{track.title}</span>
             <span className="mini-player-meta">{track.channel}</span>
@@ -73,9 +101,76 @@ export default function MiniPlayer() {
             <ListMusic size={15} />
             {queue.length > 0 && <span className="mini-player-queue-count">{queue.length}</span>}
           </button>
+          <button className="mini-player-side" onClick={() => setExpanded(true)} title="توسيع">
+            <ChevronUp size={15} />
+          </button>
           <button className="mini-player-close" onClick={stop} title="إغلاق">
             <X size={16} />
           </button>
+        </div>
+      )}
+
+      {track && expanded && (
+        <div
+          className="mini-player-full"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEndFull}
+        >
+          <div className="mpf-bg" style={{ backgroundImage: `url(${track.thumbnail})` }} />
+          <div className="mpf-overlay" />
+          <div className="mpf-content">
+            <div className="mpf-handle" />
+            <div className="mpf-topbar">
+              <button className="mpf-icon-btn" onClick={() => setExpanded(false)} title="تصغير">
+                <ChevronDown size={22} />
+              </button>
+              <span className="mpf-now"><Music2 size={14} /> يُشغَّل الآن</span>
+              <button className="mpf-icon-btn" onClick={stop} title="إغلاق">
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="mpf-art-wrap">
+              <img className="mpf-art" src={track.thumbnail} alt="" />
+            </div>
+
+            <div className="mpf-meta">
+              <h2 className="mpf-title">{track.title}</h2>
+              <p className="mpf-channel">{track.channel}</p>
+            </div>
+
+            <div className="mpf-progress">
+              <div className="mpf-bar" onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                const ratio = (e.clientX - r.left) / r.width
+                if (duration) seek(ratio * duration)
+              }}>
+                <div className="mpf-fill" style={{ width: duration ? `${(progress / duration) * 100}%` : '0%' }} />
+              </div>
+              <div className="mpf-times">
+                <span>{fmt(progress)}</span>
+                <span>{fmt(duration)}</span>
+              </div>
+            </div>
+
+            <div className="mpf-controls">
+              <button className="mpf-side" onClick={() => seek(Math.max(0, progress - 10))} title="-10s">−10</button>
+              <button className="mpf-play" onClick={toggle} title={playing ? 'إيقاف' : 'تشغيل'}>
+                {loading ? <Loader2 size={32} className="dzt-spin" /> : playing ? <Pause size={32} /> : <Play size={32} />}
+              </button>
+              <button className="mpf-side" onClick={() => seek(Math.min(duration || progress + 10, progress + 10))} title="+10s">+10</button>
+            </div>
+
+            <div className="mpf-extra">
+              <button className="mpf-extra-btn" onClick={() => next()} disabled={queue.length === 0}>
+                <SkipForward size={16} /> التالي
+              </button>
+              <button className="mpf-extra-btn" onClick={() => setQueueOpen(o => !o)}>
+                <ListMusic size={16} /> القائمة ({queue.length})
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

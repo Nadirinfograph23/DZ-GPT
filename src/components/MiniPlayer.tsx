@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 
@@ -11,6 +11,30 @@ function fmt(s: number): string {
 export default function MiniPlayer() {
   const { track, queue, playing, loading, progress, duration, toggle, seek, stop, next, removeFromQueue, clearQueue } = useMiniPlayer()
   const [queueOpen, setQueueOpen] = useState(false)
+
+  useEffect(() => {
+    if (!track) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      switch (e.key) {
+        case ' ':
+        case 'Spacebar':
+          e.preventDefault(); toggle(); break
+        case 'ArrowLeft':
+          e.preventDefault(); seek(Math.max(0, progress - 10)); break
+        case 'ArrowRight':
+          e.preventDefault(); seek(Math.min(duration || progress + 10, progress + 10)); break
+        case 'n': case 'N':
+          if (queue.length > 0) { e.preventDefault(); void next() }
+          break
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [track, toggle, seek, progress, duration, next, queue.length])
+
   if (!track && queue.length === 0) return null
 
   return (

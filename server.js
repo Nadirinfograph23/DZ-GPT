@@ -4941,6 +4941,232 @@ async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
   return null
 }
 
+// =====================================================================
+// Universal extractor: /api/extract?url=...
+// ---------------------------------------------------------------------
+// Production-grade YouTube extraction with high availability:
+//   1. Cache lookup (10-min TTL) — avoids repeat work + reduces ban risk
+//   2. yt-dlp -J (resolved via ytDlpBinaryPath, with anti-bot args + cookies)
+//   3. Piped fallback (multi-instance, racing internally) on yt-dlp failure
+// Returns a structured JSON: { title, duration, thumbnail, audio[], video[] }.
+// `audio[]` and `video[]` carry direct stream URLs the client can fetch.
+//
+// IMPORTANT: direct stream URLs from googlevideo are short-lived (≈ 6h)
+// and IP-bound. The cache TTL is intentionally tighter than that.
+// =====================================================================
+
+const _extractCache = new Map() // key -> { data, expiry }
+const _EXTRACT_TTL_MS = 10 * 60 * 1000 // 10 minutes
+
+function extractCacheGet(key) {
+  const item = _extractCache.get(key)
+  if (!item) return null
+  if (Date.now() > item.expiry) { _extractCache.delete(key); return null }
+  return item.data
+}
+function extractCacheSet(key, data, ttl = _EXTRACT_TTL_MS) {
+  _extractCache.set(key, { data, expiry: Date.now() + ttl })
+  // Soft cap to keep memory bounded.
+  if (_extractCache.size > 500) {
+    const firstKey = _extractCache.keys().next().value
+    if (firstKey) _extractCache.delete(firstKey)
+  }
+}
+
+// Normalize yt-dlp -J formats[] into the structured shape clients expect.
+function processFormats(formats) {
+  if (!Array.isArray(formats)) return { audio: [], video: [] }
+  // Exclude storyboard / image formats (vcodec === 'none' AND acodec === 'none', e.g. mhtml).
+  const valid = formats.filter(f => f && f.url && f.ext && f.ext !== 'mhtml' && !(f.acodec === 'none' && f.vcodec === 'none'))
+  // Pure audio-only DASH formats (preferred for background play).
+  const pureAudio = valid
+    .filter(f => f.vcodec === 'none' && f.acodec && f.acodec !== 'none')
+    .map(f => ({
+      url: f.url,
+      ext: f.ext,
+      bitrate: f.abr ?? f.tbr ?? null,
+      size: f.filesize ?? f.filesize_approx ?? null,
+      mime: f.mime_type || (f.ext === 'm4a' ? 'audio/mp4' : f.ext === 'webm' ? 'audio/webm' : null),
+      acodec: f.acodec || null,
+      muxed: false,
+    }))
+  // Fallback: progressive (audio+video muxed) formats — usable as audio
+  // sources by an HTML5 <audio> element since browsers play mp4 audio
+  // tracks even when the container also has video. Critical for videos
+  // where DASH audio requires PO Tokens (most public YouTube content).
+  const muxedAsAudio = valid
+    .filter(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none')
+    .map(f => ({
+      url: f.url,
+      ext: f.ext === 'mp4' ? 'm4a' : f.ext,
+      bitrate: f.abr ?? null,
+      size: f.filesize ?? f.filesize_approx ?? null,
+      mime: f.ext === 'mp4' ? 'audio/mp4' : (f.mime_type || null),
+      acodec: f.acodec || null,
+      muxed: true,
+    }))
+  const audio = [...pureAudio, ...muxedAsAudio]
+    .sort((a, b) => {
+      // Prefer pure-audio over muxed (lower bandwidth for the user)
+      if (a.muxed !== b.muxed) return a.muxed ? 1 : -1
+      return Number(b.bitrate || 0) - Number(a.bitrate || 0)
+    })
+  const video = valid
+    .filter(f => f.vcodec && f.vcodec !== 'none')
+    .map(f => ({
+      url: f.url,
+      quality: f.format_note || (f.height ? `${f.height}p` : null),
+      height: f.height || null,
+      ext: f.ext,
+      size: f.filesize ?? f.filesize_approx ?? null,
+      mime: f.mime_type || (f.ext === 'mp4' ? 'video/mp4' : f.ext === 'webm' ? 'video/webm' : null),
+      vcodec: f.vcodec || null,
+      acodec: f.acodec || null,
+      hasAudio: !!(f.acodec && f.acodec !== 'none'),
+    }))
+    .sort((a, b) => Number(b.height || 0) - Number(a.height || 0))
+  return { audio, video }
+}
+
+async function extractWithYtDlp(url) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) throw new Error('yt-dlp binary not available')
+  const cookies = await ytDlpCookiesArgs()
+  const data = await new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url]
+    const proc = spawn(dlpBin, args)
+    let stdout = ''
+    let stderr = ''
+    const killTimer = setTimeout(() => {
+      try { proc.kill('SIGKILL') } catch {}
+      reject(new Error('yt-dlp timeout'))
+    }, 22000)
+    proc.stdout.on('data', d => { stdout += d.toString() })
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('error', err => { clearTimeout(killTimer); reject(err) })
+    proc.on('close', code => {
+      clearTimeout(killTimer)
+      if (code !== 0) return reject(new Error((stderr || `yt-dlp exited ${code}`).slice(0, 300)))
+      try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
+    })
+  })
+  return {
+    title: data.title || '',
+    duration: Number(data.duration) || 0,
+    thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
+    uploader: data.uploader || data.channel || '',
+    formats: data.formats || [],
+  }
+}
+
+// Piped fallback that returns the full structured shape (not just one URL).
+async function extractWithPipedFull(videoId) {
+  if (!videoId) throw new Error('no videoId')
+  let lastErr
+  for (const base of PIPED_API_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' },
+      })
+      clearTimeout(t)
+      if (!r.ok) { lastErr = new Error(`piped ${r.status}`); continue }
+      const j = await r.json()
+      const audio = (j.audioStreams || [])
+        .filter(a => a && a.url)
+        .map(a => ({
+          url: a.url,
+          ext: (a.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
+          bitrate: Number(a.bitrate) || null,
+          size: a.contentLength ? Number(a.contentLength) : null,
+          mime: a.mimeType || 'audio/mp4',
+          acodec: a.codec || null,
+        }))
+        .sort((x, y) => Number(y.bitrate || 0) - Number(x.bitrate || 0))
+      const video = (j.videoStreams || [])
+        .filter(v => v && v.url)
+        .map(v => ({
+          url: v.url,
+          quality: v.quality || (v.height ? `${v.height}p` : null),
+          height: v.height || null,
+          ext: (v.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
+          size: v.contentLength ? Number(v.contentLength) : null,
+          mime: v.mimeType || 'video/mp4',
+          vcodec: v.codec || null,
+          hasAudio: v.videoOnly === false,
+        }))
+        .sort((x, y) => Number(y.height || 0) - Number(x.height || 0))
+      return {
+        title: j.title || '',
+        duration: Number(j.duration) || 0,
+        thumbnail: j.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        uploader: j.uploader || '',
+        audio,
+        video,
+        source: 'piped',
+        instance: base,
+      }
+    } catch (e) {
+      lastErr = e
+      // try next instance
+    }
+  }
+  throw lastErr || new Error('all piped instances failed')
+}
+
+// Random small delay to avoid identical-timestamp patterns from this IP.
+function antiBanDelay(maxMs = 800) {
+  return new Promise(r => setTimeout(r, Math.floor(Math.random() * maxMs)))
+}
+
+app.get('/api/extract', aiLimiter, async (req, res) => {
+  const url = String(req.query.url || '').trim()
+  if (!url) return res.status(400).json({ error: 'Missing URL' })
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'Invalid YouTube URL' })
+
+  const cacheKey = url
+  const cached = extractCacheGet(cacheKey)
+  if (cached) {
+    res.setHeader('X-Extract-Cache', 'HIT')
+    return res.json(cached)
+  }
+
+  // 1) yt-dlp primary path
+  try {
+    await antiBanDelay()
+    const raw = await extractWithYtDlp(url)
+    const { audio, video } = processFormats(raw.formats)
+    const result = {
+      source: 'yt-dlp',
+      title: raw.title,
+      duration: raw.duration,
+      thumbnail: raw.thumbnail,
+      uploader: raw.uploader,
+      audio,
+      video,
+    }
+    extractCacheSet(cacheKey, result)
+    res.setHeader('X-Extract-Cache', 'MISS')
+    return res.json(result)
+  } catch (e) {
+    console.warn('[extract:yt-dlp:fail]', e.message)
+  }
+
+  // 2) Piped fallback
+  try {
+    const videoId = extractYouTubeVideoId(url)
+    const result = await extractWithPipedFull(videoId)
+    extractCacheSet(cacheKey, result, 5 * 60 * 1000) // shorter TTL for fallback
+    res.setHeader('X-Extract-Cache', 'MISS')
+    return res.json(result)
+  } catch (e) {
+    console.warn('[extract:piped:fail]', e.message)
+    return res.status(502).json({ error: 'All extractors failed' })
+  }
+})
+
 // Search YouTube — yt-dlp first (uses bundled binary on Vercel + cookies),
 // then youtube-sr HTML scraper as last-resort fallback.
 app.get('/api/dz-tube/search', async (req, res) => {

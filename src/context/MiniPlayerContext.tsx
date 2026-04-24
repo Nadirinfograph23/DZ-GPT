@@ -53,7 +53,7 @@ function persist(state: PersistedState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
 
-// Extract a YouTube videoId from any standard URL form.
+// Extract a YouTube videoId from any standard URL form (kept for parity).
 function extractVideoId(url: string): string | null {
   if (!url) return null
   try {
@@ -65,39 +65,19 @@ function extractVideoId(url: string): string | null {
       if (m) return m[2]
     }
   } catch {}
-  // Fall back to bare videoId (11 chars)
   if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url
   return null
 }
 
-// ---------- YouTube IFrame API loader (singleton) ----------
-let _ytApiPromise: Promise<typeof window.YT> | null = null
-function loadYouTubeApi(): Promise<typeof window.YT> {
-  if (_ytApiPromise) return _ytApiPromise
-  _ytApiPromise = new Promise((resolve) => {
-    if (typeof window === 'undefined') return
-    if (window.YT && window.YT.Player) { resolve(window.YT); return }
-    const prev = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      if (prev) try { prev() } catch {}
-      resolve(window.YT)
-    }
-    if (!document.querySelector('script[data-yt-iframe-api]')) {
-      const s = document.createElement('script')
-      s.src = 'https://www.youtube.com/iframe_api'
-      s.async = true
-      s.dataset.ytIframeApi = '1'
-      document.head.appendChild(s)
-    }
-  })
-  return _ytApiPromise
-}
-
-declare global {
-  interface Window {
-    YT: any
-    onYouTubeIframeAPIReady?: () => void
-  }
+// Resolve a direct, playable audio URL for a YouTube video via the server.
+// Server tries yt-dlp first, then youtube-sr/ytdl-core, then Piped.
+async function resolveAudioUrl(track: PlayerTrack): Promise<string> {
+  const params = new URLSearchParams({ url: track.url || `https://www.youtube.com/watch?v=${track.id}` })
+  const res = await fetch(`/api/dz-tube/audio-url?${params.toString()}`)
+  if (!res.ok) throw new Error(`audio-url failed: ${res.status}`)
+  const j = await res.json()
+  if (!j.streamUrl) throw new Error('no streamUrl in response')
+  return j.streamUrl as string
 }
 
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
@@ -107,173 +87,161 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(initial.progress)
-  const [duration, setDuration] = useState(0)
+  const [duration, setDuration] = useState(initial.track?.duration || 0)
 
-  const playerRef = useRef<any>(null)
-  const playerReadyRef = useRef<boolean>(false)
-  const pendingTrackRef = useRef<{ t: PlayerTrack; autoplay: boolean; resumeAt: number } | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
   const restoredRef = useRef<boolean>(false)
   const resumeAtRef = useRef<number>(initial.progress)
-  const tickRef = useRef<number | null>(null)
+  // Counter to discard late stream-resolution responses when the user
+  // quickly switches tracks.
+  const loadTokenRef = useRef<number>(0)
+  // Track id currently bound to <audio>.src — used to skip redundant reloads.
+  const currentSrcIdRef = useRef<string | null>(null)
+  const nextRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => { queueRef.current = queue }, [queue])
 
-  // Mount a hidden host element + initialize YT.Player exactly once
+  // Mount a hidden, persistent <audio> element exactly once. Audio elements
+  // (unlike <video> or YouTube iframes) keep playing when the screen turns
+  // off on mobile, which is the whole point of switching the engine here.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    let host = document.getElementById('dz-yt-host') as HTMLDivElement | null
-    if (!host) {
-      host = document.createElement('div')
-      host.id = 'dz-yt-host'
-      // Visually hidden but kept in layout so the iframe still loads + plays.
-      // Some browsers refuse to play a 0×0 iframe; use 1×1 with very low opacity.
-      Object.assign(host.style, {
-        position: 'fixed',
-        left: '0px',
-        bottom: '0px',
-        width: '1px',
-        height: '1px',
-        opacity: '0.001',
-        pointerEvents: 'none',
-        zIndex: '-1',
-      } as CSSStyleDeclaration)
-      const inner = document.createElement('div')
-      inner.id = 'dz-yt-player'
-      host.appendChild(inner)
-      document.body.appendChild(host)
+    let el = document.getElementById('dz-audio-host') as HTMLAudioElement | null
+    if (!el) {
+      el = document.createElement('audio')
+      el.id = 'dz-audio-host'
+      el.preload = 'metadata'
+      el.crossOrigin = 'anonymous'
+      // Hide from layout but keep mounted so background play survives nav.
+      el.style.display = 'none'
+      document.body.appendChild(el)
+    }
+    audioRef.current = el
+
+    const onLoadedMeta = () => {
+      const d = el!.duration
+      // NaN/Infinity guard — some HLS / MSE-less streams report Infinity.
+      if (Number.isFinite(d) && d > 0) setDuration(d)
+      // Resume position (set after metadata is ready so seek lands correctly).
+      if (resumeAtRef.current > 1 && Number.isFinite(d) && d > 0 && resumeAtRef.current < d - 1) {
+        try { el!.currentTime = resumeAtRef.current } catch {}
+      }
+      resumeAtRef.current = 0
+    }
+    const onDurationChange = () => {
+      const d = el!.duration
+      if (Number.isFinite(d) && d > 0) setDuration(d)
+    }
+    const onTimeUpdate = () => { setProgress(el!.currentTime || 0) }
+    const onPlay = () => { setPlaying(true); setLoading(false) }
+    const onPause = () => { setPlaying(false) }
+    const onWaiting = () => { setLoading(true) }
+    const onPlaying = () => { setLoading(false) }
+    const onCanPlay = () => { setLoading(false) }
+    const onEnded = () => {
+      setPlaying(false)
+      if (queueRef.current.length > 0) void nextRef.current()
+    }
+    const onError = () => {
+      setLoading(false)
+      setPlaying(false)
+      console.warn('[mini-player] audio error', el!.error)
     }
 
-    let cancelled = false
-    loadYouTubeApi().then((YT) => {
-      if (cancelled) return
-      if (playerRef.current) return
-      playerRef.current = new YT.Player('dz-yt-player', {
-        height: '1',
-        width: '1',
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-          fs: 0,
-          iv_load_policy: 3,
-        },
-        events: {
-          onReady: () => {
-            playerReadyRef.current = true
-            // If the user clicked play before the API loaded, do it now.
-            const p = pendingTrackRef.current
-            if (p) {
-              pendingTrackRef.current = null
-              loadIntoPlayer(p.t, p.autoplay, p.resumeAt)
-            }
-          },
-          onStateChange: (e: any) => {
-            const S = window.YT?.PlayerState || {}
-            if (e.data === S.PLAYING) {
-              setPlaying(true)
-              setLoading(false)
-              try {
-                const d = playerRef.current?.getDuration?.() || 0
-                if (d > 0) setDuration(d)
-              } catch {}
-            } else if (e.data === S.PAUSED) {
-              setPlaying(false)
-              setLoading(false)
-            } else if (e.data === S.BUFFERING) {
-              setLoading(true)
-            } else if (e.data === S.ENDED) {
-              setPlaying(false)
-              setLoading(false)
-              if (queueRef.current.length > 0) void next()
-            } else if (e.data === S.CUED) {
-              setLoading(false)
-              try {
-                const d = playerRef.current?.getDuration?.() || 0
-                if (d > 0) setDuration(d)
-              } catch {}
-            }
-          },
-          onError: (e: any) => {
-            console.warn('[mini-player] YT error', e?.data)
-            setLoading(false)
-            setPlaying(false)
-          },
-        },
-      })
-    })
+    el.addEventListener('loadedmetadata', onLoadedMeta)
+    el.addEventListener('durationchange', onDurationChange)
+    el.addEventListener('timeupdate', onTimeUpdate)
+    el.addEventListener('play', onPlay)
+    el.addEventListener('pause', onPause)
+    el.addEventListener('waiting', onWaiting)
+    el.addEventListener('playing', onPlaying)
+    el.addEventListener('canplay', onCanPlay)
+    el.addEventListener('ended', onEnded)
+    el.addEventListener('error', onError)
 
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      el!.removeEventListener('loadedmetadata', onLoadedMeta)
+      el!.removeEventListener('durationchange', onDurationChange)
+      el!.removeEventListener('timeupdate', onTimeUpdate)
+      el!.removeEventListener('play', onPlay)
+      el!.removeEventListener('pause', onPause)
+      el!.removeEventListener('waiting', onWaiting)
+      el!.removeEventListener('playing', onPlaying)
+      el!.removeEventListener('canplay', onCanPlay)
+      el!.removeEventListener('ended', onEnded)
+      el!.removeEventListener('error', onError)
+    }
   }, [])
 
-  // Poll currentTime + duration while a track is loaded
-  useEffect(() => {
-    if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null }
-    if (!track) return
-    tickRef.current = window.setInterval(() => {
-      const p = playerRef.current
-      if (!p) return
-      try {
-        const t = p.getCurrentTime?.() || 0
-        const d = p.getDuration?.() || 0
-        setProgress(t)
-        if (d > 0 && d !== duration) setDuration(d)
-      } catch {}
-    }, 500) as unknown as number
-    return () => {
-      if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track])
+  // Internal: fetch stream URL & bind it to <audio>. Honors a token so
+  // late responses from a previous track don't overwrite the current one.
+  const loadAndPlay = useCallback(async (t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
+    const el = audioRef.current
+    if (!el) return
+    const myToken = ++loadTokenRef.current
+    setLoading(true)
+    setProgress(resumeAt > 1 ? resumeAt : 0)
+    // Optimistically use the metadata duration we already know from the
+    // search result, so the mini-player doesn't sit at "0:00" while the
+    // stream URL is being fetched.
+    setDuration(t.duration && t.duration > 0 ? t.duration : 0)
+    resumeAtRef.current = resumeAt > 1 ? resumeAt : 0
 
-  // Internal: load a track into the player (only call when ready)
-  const loadIntoPlayer = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
-    const player = playerRef.current
-    if (!player || !playerReadyRef.current) {
-      // Defer until onReady fires.
-      pendingTrackRef.current = { t, autoplay, resumeAt }
-      return
-    }
-    const videoId = extractVideoId(t.url) || extractVideoId(t.id)
-    if (!videoId) {
-      console.warn('[mini-player] could not extract videoId from', t.url, t.id)
-      setLoading(false)
-      return
-    }
+    let streamUrl = ''
     try {
+      streamUrl = await resolveAudioUrl(t)
+    } catch (e) {
+      if (myToken !== loadTokenRef.current) return
+      setLoading(false)
+      setPlaying(false)
+      console.warn('[mini-player] resolveAudioUrl failed', e)
+      return
+    }
+    if (myToken !== loadTokenRef.current) return
+
+    try {
+      el.src = streamUrl
+      currentSrcIdRef.current = t.id
+      el.load()
       if (autoplay) {
-        player.loadVideoById({ videoId, startSeconds: resumeAt > 1 ? resumeAt : 0 })
-      } else {
-        player.cueVideoById({ videoId, startSeconds: resumeAt > 1 ? resumeAt : 0 })
-      }
-      // Reset known duration; we'll get the real one from onStateChange.
-      setDuration(0)
-      setProgress(resumeAt > 1 ? resumeAt : 0)
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title, artist: t.channel,
-          artwork: [{ src: t.thumbnail, sizes: '480x360', type: 'image/jpeg' }],
-        })
+        const p = el.play()
+        if (p && typeof (p as Promise<void>).catch === 'function') {
+          ;(p as Promise<void>).catch(err => {
+            // Autoplay can be blocked until user gesture — surface it but
+            // don't tear down the player; the user can press play.
+            console.warn('[mini-player] autoplay blocked', err?.message || err)
+            setLoading(false)
+          })
+        }
       }
     } catch (e) {
-      console.error('[mini-player] loadIntoPlayer failed', e)
+      console.warn('[mini-player] el.play failed', e)
       setLoading(false)
+    }
+
+    // Update Media Session so the OS shows track info + lockscreen controls.
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: t.title,
+          artist: t.channel || 'DZ Tube',
+          album: 'DZ Tube',
+          artwork: [
+            { src: t.thumbnail, sizes: '96x96', type: 'image/jpeg' },
+            { src: t.thumbnail, sizes: '256x256', type: 'image/jpeg' },
+            { src: t.thumbnail, sizes: '480x360', type: 'image/jpeg' },
+          ],
+        })
+      } catch {}
     }
   }, [])
 
   const playInternal = useCallback(async (t: PlayerTrack, autoplay: boolean = true) => {
     setTrack(t)
-    setLoading(true)
     const resumeAt = resumeAtRef.current
     resumeAtRef.current = 0
-    // Ensure the API is loaded; the actual call to loadVideoById will happen
-    // either now (if ready) or once onReady fires.
-    await loadYouTubeApi()
-    loadIntoPlayer(t, autoplay, resumeAt)
-  }, [loadIntoPlayer])
+    await loadAndPlay(t, autoplay, resumeAt)
+  }, [loadAndPlay])
 
   const next = useCallback(async () => {
     const q = queueRef.current
@@ -282,10 +250,11 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setQueue(rest)
     await playInternal(head)
   }, [playInternal])
+  useEffect(() => { nextRef.current = next }, [next])
 
   const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
 
-  // Restore previous track on first mount (cued, ready to resume)
+  // Restore previous track on first mount (paused, ready to resume).
   useEffect(() => {
     if (restoredRef.current) return
     restoredRef.current = true
@@ -295,7 +264,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist track / queue / progress
+  // Persist track / queue (progress is persisted on its own interval below).
   useEffect(() => {
     persist({ track, queue, progress: 0 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,8 +272,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!track) return
     const id = setInterval(() => {
-      let cur = 0
-      try { cur = playerRef.current?.getCurrentTime?.() || 0 } catch {}
+      const cur = audioRef.current?.currentTime || 0
       persist({ track, queue: queueRef.current, progress: cur })
     }, 4000)
     return () => clearInterval(id)
@@ -321,30 +289,40 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const clearQueue = useCallback(() => setQueue([]), [])
 
   const toggle = useCallback(() => {
-    const p = playerRef.current
-    if (!p || !track) return
-    try {
-      const S = window.YT?.PlayerState || {}
-      const state = p.getPlayerState?.()
-      if (state === S.PLAYING || state === S.BUFFERING) {
-        p.pauseVideo()
-      } else {
-        p.playVideo()
+    const el = audioRef.current
+    if (!el || !track) return
+    if (el.paused || el.ended) {
+      // If the source was never bound (e.g. user clicked play right after
+      // a restore), bind it now.
+      if (!el.src || currentSrcIdRef.current !== track.id) {
+        void loadAndPlay(track, true, audioRef.current?.currentTime || 0)
+        return
       }
-    } catch (e) {
-      console.warn('[mini-player toggle]', e)
+      const p = el.play()
+      if (p && typeof (p as Promise<void>).catch === 'function') {
+        ;(p as Promise<void>).catch(err => console.warn('[mini-player] toggle play failed', err?.message || err))
+      }
+    } else {
+      try { el.pause() } catch {}
     }
-  }, [track])
+  }, [track, loadAndPlay])
 
   const seek = useCallback((sec: number) => {
-    const p = playerRef.current
-    if (!p) return
-    try { p.seekTo(sec, true); setProgress(sec) } catch {}
+    const el = audioRef.current
+    if (!el) return
+    try {
+      el.currentTime = Math.max(0, sec)
+      setProgress(el.currentTime)
+    } catch {}
   }, [])
 
   const stop = useCallback(() => {
-    const p = playerRef.current
-    if (p) { try { p.stopVideo() } catch {} }
+    const el = audioRef.current
+    if (el) {
+      try { el.pause() } catch {}
+      try { el.removeAttribute('src'); el.load() } catch {}
+    }
+    currentSrcIdRef.current = null
     setTrack(null)
     setPlaying(false)
     setProgress(0)
@@ -352,12 +330,67 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
+  // Wire up Media Session action handlers (lockscreen / headset buttons).
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.setActionHandler('play', toggle)
-    navigator.mediaSession.setActionHandler('pause', toggle)
-    navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
-  }, [toggle, next])
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      navigator.mediaSession.setActionHandler('play', () => {
+        const el = audioRef.current
+        if (el && el.paused) {
+          const p = el.play()
+          if (p && typeof (p as Promise<void>).catch === 'function') {
+            ;(p as Promise<void>).catch(() => {})
+          }
+        }
+      })
+      navigator.mediaSession.setActionHandler('pause', () => {
+        const el = audioRef.current
+        if (el && !el.paused) { try { el.pause() } catch {} }
+      })
+      navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
+      navigator.mediaSession.setActionHandler('seekbackward', (d: any) => {
+        const el = audioRef.current
+        if (!el) return
+        try { el.currentTime = Math.max(0, el.currentTime - (d?.seekOffset || 10)) } catch {}
+      })
+      navigator.mediaSession.setActionHandler('seekforward', (d: any) => {
+        const el = audioRef.current
+        if (!el) return
+        try { el.currentTime = el.currentTime + (d?.seekOffset || 10) } catch {}
+      })
+      navigator.mediaSession.setActionHandler('seekto', (d: any) => {
+        const el = audioRef.current
+        if (!el || typeof d?.seekTime !== 'number') return
+        try { el.currentTime = d.seekTime } catch {}
+      })
+    } catch {}
+  }, [next])
+
+  // Keep MediaSession position state in sync so lockscreen scrubber works.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    if (!('setPositionState' in navigator.mediaSession)) return
+    if (!duration || !Number.isFinite(duration)) return
+    try {
+      ;(navigator.mediaSession as any).setPositionState({
+        duration,
+        playbackRate: audioRef.current?.playbackRate || 1,
+        position: Math.min(progress, duration),
+      })
+    } catch {}
+  }, [progress, duration])
+
+  // Reflect playback state to the OS so the lockscreen icon stays in sync.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    try {
+      ;(navigator.mediaSession as any).playbackState = playing ? 'playing' : (track ? 'paused' : 'none')
+    } catch {}
+  }, [playing, track])
+
+  // Suppress unused-warning for the legacy helper kept for parity with the
+  // previous IFrame implementation (other modules may still call it).
+  void extractVideoId
 
   return (
     <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, removeFromQueue, clearQueue, next, toggle, seek, stop }}>

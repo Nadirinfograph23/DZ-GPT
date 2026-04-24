@@ -4811,14 +4811,83 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
-  // Refreshed 2026-04-24 — most public instances are dead. Only one reliable
-  // instance is currently operational, but we keep a couple of historical
-  // mirrors as cheap retries since the helper just falls through on failure.
+  // Refreshed 2026-04-24 (live-probed) — only two public instances were
+  // actually returning JSON; the rest are dead. We keep them anyway as cheap
+  // retries since the helper falls through on failure.
   'https://api.piped.private.coffee',
+  'https://piapi.ggtyler.dev',
   'https://pipedapi.kavin.rocks',
   'https://api.piped.privacydev.net',
-  'https://pipedapi.r4fo.com',
 ]
+
+// Invidious is a separate free YouTube proxy network. Unlike Piped, every
+// Invidious instance also exposes a `/latest_version?id=...&itag=...&local=true`
+// endpoint that PROXIES the actual stream bytes through the instance, which
+// bypasses googlevideo's IP-bound signed URL restrictions. We use it as a
+// third independent source raced alongside ytdown.to + Piped.
+const INVIDIOUS_API_INSTANCES = [
+  // Refreshed 2026-04-24 (live-probed) — these returned full JSON.
+  'https://invidious.materialio.us',
+  'https://iv.ggtyler.dev',
+  'https://invidious.protokolla.fi',
+  'https://inv.in.projectsegfau.lt',
+]
+
+// Best-effort fetch of a stream URL via the public Invidious network.
+// Returns { url, mime, ext, instance } where `url` already proxies through
+// the Invidious instance (so no IP-bound issues), or null if every instance
+// fails. The proxy URL is `${instance}/latest_version?id=VID&itag=ITAG&local=true`.
+async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
+  if (!videoId) return null
+  for (const base of INVIDIOUS_API_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const r = await fetch(`${base}/api/v1/videos/${encodeURIComponent(videoId)}?fields=formatStreams,adaptiveFormats,title`, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0', 'Accept': 'application/json' },
+      })
+      clearTimeout(t)
+      if (!r.ok) continue
+      const j = await r.json()
+      if (isAudio) {
+        // Pick highest-bitrate M4A audio from adaptiveFormats (itag 140 ≈ 128k)
+        const audios = (j.adaptiveFormats || []).filter(a => a && a.type && a.type.startsWith('audio/'))
+        if (!audios.length) continue
+        const m4a = audios.filter(a => a.type.includes('mp4') || a.type.includes('m4a'))
+        const pool = m4a.length ? m4a : audios
+        pool.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
+        const pick = pool[0]
+        if (!pick?.itag) continue
+        const isWebm = pick.type.includes('webm') || pick.type.includes('opus')
+        return {
+          url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+          mime: isWebm ? 'audio/webm' : 'audio/mp4',
+          ext: isWebm ? 'webm' : 'm4a',
+          instance: base,
+        }
+      }
+      // Video → prefer formatStreams (combined audio+video, mp4) at the
+      // highest resolution that fits the requested height. These itags
+      // (18, 22) DON'T require a PO Token and DO contain audio.
+      const combined = (j.formatStreams || [])
+        .filter(v => v && v.itag && (!v.type || v.type.includes('mp4')))
+        .map(v => ({ ...v, h: parseInt(v.resolution || '0', 10) || 0 }))
+      combined.sort((a, b) => b.h - a.h)
+      const pick = combined.find(v => v.h <= height) || combined[0]
+      if (!pick?.itag) continue
+      return {
+        url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+        mime: 'video/mp4',
+        ext: 'mp4',
+        instance: base,
+      }
+    } catch {
+      // try next instance
+    }
+  }
+  return null
+}
 
 // Best-effort fetch of direct stream URLs via the public Piped network.
 // Returns { url, mime, ext } for a direct googlevideo URL the client can fetch,
@@ -5596,14 +5665,19 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const isAudio = format === 'mp3' || format === 'audio'
 
   // ── Multi-source resolver ─────────────────────────────────────────────
-  // Capability matrix:
+  // Capability matrix (refreshed 2026-04-24):
   //   • ytdown.to  → MP4 (any height), M4A audio, MP3 audio  ✅ all formats
   //   • Piped      → ONLY audio-only streams (M4A/WebM). Their video URLs
   //                  are DASH video-only (no audio) so unusable without
-  //                  ffmpeg. Skip Piped for video and for MP3-conversion.
-  //   • yt-dlp     → final fallback (block below)
+  //                  ffmpeg. Skipped for MP4 video and for MP3-conversion.
+  //   • Invidious  → audio (M4A via /latest_version proxy) AND combined
+  //                  progressive MP4 video (itag 18=360p / 22=720p) — the
+  //                  proxy bypasses googlevideo's IP-bound signed URLs, so
+  //                  it works for both formats from any deployment.
+  //   • yt-dlp     → final fallback (block further below)
   let friendlyError = null
   let winner = null
+  const vidId = extractYouTubeVideoId(url)
 
   const tryYtdown = (async () => {
     try {
@@ -5620,30 +5694,38 @@ app.get('/api/dz-tube/download', async (req, res) => {
     }
   })()
 
-  // Only race Piped when we want native audio (M4A) — fastest & most reliable
-  // for that case. For video and MP3 we wait on ytdown alone since Piped
-  // can't satisfy those requests on Vercel without ffmpeg.
+  const tryInvidious = (async () => {
+    try {
+      const inv = await fetchInvidiousStreams(vidId, { isAudio, height: h })
+      if (!inv?.url) return null
+      return { source: `invidious(${inv.instance})`, title: '', url: inv.url, quality: isAudio ? 'audio' : `${h}p`, ext: inv.ext, mime: inv.mime }
+    } catch (e) { console.warn('[DZTube:download] invidious:', e.message); return null }
+  })()
+
+  // Piped only added to the audio race (it can't serve combined-AV video).
+  let tryPiped = null
   if (format === 'audio') {
-    const tryPiped = (async () => {
+    tryPiped = (async () => {
       try {
-        const vid = extractYouTubeVideoId(url)
-        const piped = await fetchPipedStreams(vid, { isAudio: true, height: h })
+        const piped = await fetchPipedStreams(vidId, { isAudio: true, height: h })
         if (!piped?.url) return null
         return { source: 'piped', title: '', url: piped.url, quality: 'audio', ext: piped.ext, mime: piped.mime }
       } catch (e) { console.warn('[DZTube:download] piped:', e.message); return null }
     })()
-    // Race — first non-null wins, but await both before falling through
-    winner = await Promise.race([
-      tryYtdown.then(r => r || new Promise(() => {})), // never resolve null
-      tryPiped.then(r => r || new Promise(() => {})),
-      Promise.allSettled([tryYtdown, tryPiped]).then(rs => {
-        for (const r of rs) if (r.status === 'fulfilled' && r.value) return r.value
-        return null
-      }),
-    ])
-  } else {
-    winner = await tryYtdown
   }
+
+  // Race — first non-null wins, but await all before declaring failure.
+  const racers = [tryYtdown, tryInvidious, ...(tryPiped ? [tryPiped] : [])]
+  winner = await Promise.race([
+    ...racers.map(p => p.then(r => r || new Promise(() => {}))), // null never wins
+    Promise.allSettled(racers).then(rs => {
+      for (const r of rs) if (r.status === 'fulfilled' && r.value) return r.value
+      return null
+    }),
+  ])
+  // MP3 conversion still needs ffmpeg → only ytdown can satisfy it directly.
+  // If ytdown didn't win and we're MP3, force the await on ytdown alone.
+  if (!winner && format === 'mp3') winner = await tryYtdown
 
   if (winner) {
     const safe = (winner.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'

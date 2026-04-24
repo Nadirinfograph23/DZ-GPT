@@ -4760,6 +4760,78 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
   }
 })
 
+// Streaming audio proxy: buffers to /tmp, then serves with Range support
+const audioCacheDir = `${os.tmpdir()}/dz-tube-audio`
+try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
+
+async function fetchAudioToFile(url, filePath) {
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    return new Promise((resolve, reject) => {
+      const proc = spawn('yt-dlp', [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
+        '--no-warnings', '--no-playlist',
+        '-o', filePath,
+        url,
+      ])
+      let err = ''
+      proc.stderr.on('data', d => { err += d.toString() })
+      proc.on('error', reject)
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error(err || `yt-dlp exit ${code}`)))
+    })
+  }
+  return new Promise((resolve, reject) => {
+    const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' })
+    const ws = fs.createWriteStream(filePath)
+    stream.pipe(ws)
+    ws.on('finish', resolve)
+    ws.on('error', reject)
+    stream.on('error', reject)
+  })
+}
+
+app.get('/api/dz-tube/audio-stream', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
+
+  const hash = crypto.createHash('sha1').update(url).digest('hex').slice(0, 20)
+  const filePath = `${audioCacheDir}/${hash}.m4a`
+
+  try {
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1024) {
+      console.log('[audio-stream] fetching', url)
+      await fetchAudioToFile(url, filePath)
+    }
+  } catch (e) {
+    console.error('[audio-stream]', e.message)
+    try { fs.unlinkSync(filePath) } catch {}
+    return res.status(502).end('فشل تحميل الصوت')
+  }
+
+  const stat = fs.statSync(filePath)
+  const total = stat.size
+  const range = req.headers.range
+  res.setHeader('Content-Type', 'audio/mp4')
+  res.setHeader('Accept-Ranges', 'bytes')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+
+  if (range) {
+    const m = /bytes=(\d+)-(\d*)/.exec(range)
+    if (!m) return res.status(416).end()
+    const start = parseInt(m[1], 10)
+    const end = m[2] ? parseInt(m[2], 10) : total - 1
+    if (start >= total || end >= total) return res.status(416).end()
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${total}`,
+      'Content-Length': end - start + 1,
+    })
+    fs.createReadStream(filePath, { start, end }).pipe(res)
+  } else {
+    res.setHeader('Content-Length', total)
+    fs.createReadStream(filePath).pipe(res)
+  }
+})
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })

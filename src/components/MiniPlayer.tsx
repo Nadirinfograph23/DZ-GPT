@@ -40,6 +40,16 @@ export default function MiniPlayer() {
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
   }, [expanded])
 
+  // Toggle a global body class while the mini-player bar is visible so that
+  // fixed/sticky chat input areas can lift themselves above the player and
+  // stay readable while the user types. Matching CSS lives in mini-player.css
+  // (body.dz-mini-active .input-area / .dz-input-area / .dzc-input-wrap).
+  useEffect(() => {
+    if (!track) return
+    document.body.classList.add('dz-mini-active')
+    return () => { document.body.classList.remove('dz-mini-active') }
+  }, [track])
+
   useEffect(() => {
     if (!track) return
     const onKey = (e: KeyboardEvent) => {

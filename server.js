@@ -5330,6 +5330,10 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
   // Resolve the direct googlevideo / proxy URL (cached for 30 min).
+  // We then 302-redirect the browser to it — proxying the bytes ourselves
+  // would exceed Vercel's 30s function timeout for any track > ~1MB and
+  // wastes serverless egress. The browser fetches directly from the CDN
+  // and gets full HTTP/2 + Range + parallel connections for free.
   let upstreamUrl
   try {
     upstreamUrl = await resolveDirectAudioUrl(url)
@@ -5338,56 +5342,13 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
     return res.status(502).end('فشل تحضير الصوت')
   }
 
-  // Forward the browser's Range header so seeking and streaming work.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fwdHeaders = { 'User-Agent': 'Mozilla/5.0 (compatible; DZGPT/1.0)' }
-      if (req.headers.range) fwdHeaders['Range'] = req.headers.range
-      const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
-
-      // Signed URL expired (403/410): drop cache and re-resolve once.
-      if ((upstream.status === 403 || upstream.status === 410) && attempt === 0) {
-        _audioUrlCache.delete(url)
-        upstreamUrl = await resolveDirectAudioUrl(url)
-        continue
-      }
-      if (!upstream.ok && upstream.status !== 206) {
-        console.error('[audio-proxy] upstream', upstream.status)
-        if (!res.headersSent) return res.status(502).end('فشل تحميل الصوت')
-        return res.end()
-      }
-
-      // Mirror caching/range/content headers so <audio> can seek properly.
-      const passHeaders = ['content-length', 'content-range', 'content-type', 'accept-ranges', 'last-modified']
-      for (const h of passHeaders) {
-        const v = upstream.headers.get(h)
-        if (v) res.setHeader(h, v)
-      }
-      if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'audio/mp4')
-      if (!upstream.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
-      res.setHeader('Cache-Control', 'private, max-age=600')
-      res.status(upstream.status)
-
-      if (!upstream.body) { res.end(); return }
-      const reader = upstream.body.getReader()
-      let aborted = false
-      req.on('close', () => { aborted = true; try { reader.cancel() } catch {} })
-      while (!aborted) {
-        const { done, value } = await reader.read()
-        if (done) break
-        if (!res.write(value)) await new Promise(r => res.once('drain', r))
-      }
-      res.end()
-      return
-    } catch (e) {
-      if (attempt === 1) {
-        console.error('[audio-proxy] fetch failed:', e.message)
-        if (!res.headersSent) res.status(502).end('فشل تحميل الصوت')
-        else res.end()
-        return
-      }
-    }
-  }
+  // 307 (not 302) preserves the Range header on the follow-up request.
+  // Cache-Control: no-store so the browser re-asks us if it ever drops
+  // the cached response, giving us a chance to re-resolve expired URLs.
+  res.setHeader('Location', upstreamUrl)
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.status(307).end()
 })
 
 // Streaming audio proxy: buffers to /tmp, then serves with Range support

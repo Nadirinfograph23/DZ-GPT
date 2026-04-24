@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import Hls from 'hls.js'
 
 export interface PlayerTrack {
   id: string
@@ -41,6 +42,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
   useEffect(() => { queueRef.current = queue }, [queue])
 
@@ -48,6 +50,13 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     audioRef.current = new Audio()
     audioRef.current.preload = 'auto'
   }
+
+  const detachHls = useCallback(() => {
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy() } catch {}
+      hlsRef.current = null
+    }
+  }, [])
 
   const playInternal = useCallback(async (t: PlayerTrack) => {
     const a = audioRef.current
@@ -58,8 +67,25 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       const r = await fetch(`/api/dz-tube/audio-url?url=${encodeURIComponent(t.url)}`)
       const d = await r.json()
       if (!r.ok || !d.streamUrl) throw new Error(d.error || 'فشل التشغيل')
-      a.src = d.streamUrl
-      await a.play()
+      detachHls()
+      const isHls = /\.m3u8|hls_playlist|manifest\.googlevideo/i.test(d.streamUrl)
+      if (isHls && Hls.isSupported() && !a.canPlayType('application/vnd.apple.mpegurl')) {
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: false })
+        hlsRef.current = hls
+        hls.attachMedia(a)
+        await new Promise<void>((resolve, reject) => {
+          hls.on(Hls.Events.MEDIA_ATTACHED, () => { hls.loadSource(d.streamUrl); resolve() })
+          hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) reject(new Error(data.details || 'HLS error')) })
+        })
+        await new Promise<void>((resolve, reject) => {
+          const onMani = () => { a.play().then(() => resolve(), reject); hls.off(Hls.Events.MANIFEST_PARSED, onMani) }
+          hls.on(Hls.Events.MANIFEST_PARSED, onMani)
+          setTimeout(() => reject(new Error('HLS manifest timeout')), 12000)
+        })
+      } else {
+        a.src = d.streamUrl
+        await a.play()
+      }
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: t.title, artist: t.channel,
@@ -69,6 +95,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error(e)
       setPlaying(false)
+      throw e
     } finally {
       setLoading(false)
     }
@@ -132,11 +159,12 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
   const stop = useCallback(() => {
     const a = audioRef.current
-    if (a) { a.pause(); a.src = '' }
+    detachHls()
+    if (a) { a.pause(); a.removeAttribute('src'); a.load() }
     setTrack(null)
     setPlaying(false)
     setProgress(0)
-  }, [])
+  }, [detachHls])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return

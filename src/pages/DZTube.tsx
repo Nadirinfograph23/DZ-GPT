@@ -105,6 +105,13 @@ export default function DZTube() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showToast = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
+    setToast({ msg, kind })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2400)
+  }, [])
   const inputRef = useRef<HTMLInputElement>(null)
   const resultsTopRef = useRef<HTMLDivElement>(null)
 
@@ -151,8 +158,14 @@ export default function DZTube() {
 
   const playInBackground = useCallback(async (r: SearchResult) => {
     setEmbedId(null)
-    await player.play({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })
-  }, [player])
+    showToast(`جاري تحميل: ${r.title.slice(0, 50)}…`)
+    try {
+      await player.play({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })
+      showToast('▶ يتم التشغيل في الخلفية')
+    } catch {
+      showToast('تعذر تشغيل الصوت', 'err')
+    }
+  }, [player, showToast])
 
   const playInFrame = useCallback((r: SearchResult) => {
     player.stop()
@@ -167,6 +180,7 @@ export default function DZTube() {
     setError(null)
     try {
       const params = new URLSearchParams({ url: r.url, format, quality })
+      showToast(`⏳ جاري تحضير ${format === 'mp3' ? 'الصوت' : 'الفيديو'}…`)
       const resp = await fetch(`/api/dz-tube/download?${params}`)
       if (!resp.ok) throw new Error(await resp.text() || 'فشل التحميل')
       const blob = await resp.blob()
@@ -178,16 +192,18 @@ export default function DZTube() {
       a.href = url; a.download = filename
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showToast('✅ تم التحميل بنجاح')
       setHistory(prev => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'فشل التحميل')
+      showToast('فشل التحميل', 'err')
     } finally {
       setDownloadingId(null)
     }
-  }, [])
+  }, [showToast])
 
   const removeHistory = (id: string) => setHistory(prev => prev.filter(h => h.id !== id))
   const clearHistory = () => { if (confirm('حذف كل السجل؟')) setHistory([]) }
@@ -359,7 +375,10 @@ export default function DZTube() {
                       </button>
                       <button
                         className="dzt-act dzt-act-q"
-                        onClick={() => player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })}
+                        onClick={() => {
+                          player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })
+                          showToast('➕ أُضيف إلى قائمة التشغيل')
+                        }}
                         title="إضافة للقائمة"
                       >
                         <Plus size={13} />
@@ -404,6 +423,12 @@ export default function DZTube() {
           </>
         )}
       </main>
+
+      {toast && (
+        <div className={`dzt-toast dzt-toast-${toast.kind}`} role="status">
+          {toast.msg}
+        </div>
+      )}
 
       {historyOpen && (
         <>

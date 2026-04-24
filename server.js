@@ -33,8 +33,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com'],
       connectSrc: isProd
-        ? ["'self'", 'https://api.quran.com']
-        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com'],
+        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com']
+        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com'],
       mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
@@ -4733,7 +4733,7 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
   if (useDlp) {
     try {
       const streamUrl = await new Promise((resolve, reject) => {
-        const proc = spawn('yt-dlp', ['-f', 'bestaudio[ext=m4a]/bestaudio', '-g', '--no-warnings', '--no-playlist', url])
+        const proc = spawn('yt-dlp', ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', url])
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })

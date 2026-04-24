@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import Hls from 'hls.js'
 
 export interface PlayerTrack {
   id: string
@@ -61,6 +62,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(initial.progress)
   const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
   const restoredRef = useRef<boolean>(false)
   const resumeAtRef = useRef<number>(initial.progress)
@@ -77,11 +79,24 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setTrack(t)
     try {
-      // CRITICAL: set src and call play() synchronously inside the user gesture.
-      // The server-side /api/dz-tube/audio-stream redirects (302) to the direct
-      // googlevideo URL so the browser gets full Range + duration support natively.
-      a.src = `/api/dz-tube/audio-stream?url=${encodeURIComponent(t.url)}`
-      a.load()
+      // Tear down any previous hls.js instance
+      if (hlsRef.current) {
+        try { hlsRef.current.destroy() } catch {}
+        hlsRef.current = null
+      }
+      const src = `/api/dz-tube/audio-stream?url=${encodeURIComponent(t.url)}`
+      // YouTube now serves audio as HLS only. Use hls.js everywhere except
+      // Safari (which has native HLS via canPlayType m3u8).
+      const canNativeHls = a.canPlayType('application/vnd.apple.mpegurl') !== ''
+      if (canNativeHls || !Hls.isSupported()) {
+        a.src = src
+        a.load()
+      } else {
+        const hls = new Hls({ enableWorker: true, lowLatencyMode: false })
+        hlsRef.current = hls
+        hls.loadSource(src)
+        hls.attachMedia(a)
+      }
       if (autoplay) {
         try {
           await a.play()
@@ -209,6 +224,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const stop = useCallback(() => {
+    if (hlsRef.current) { try { hlsRef.current.destroy() } catch {}; hlsRef.current = null }
     const a = audioRef.current
     if (a) { a.pause(); a.removeAttribute('src'); a.load() }
     setTrack(null)

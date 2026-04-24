@@ -4615,6 +4615,37 @@ function ytDlpAvailable() {
   })
 }
 
+// Resolve which yt-dlp binary to use. Prefers $YTDLP_BIN, then a bundled
+// binary at <projectRoot>/bin/yt-dlp (shipped to Vercel via includeFiles),
+// then any yt-dlp on PATH. Returns null if nothing works.
+let _ytDlpBinPathPromise = null
+function ytDlpBinaryPath() {
+  if (_ytDlpBinPathPromise) return _ytDlpBinPathPromise
+  _ytDlpBinPathPromise = (async () => {
+    const candidates = []
+    if (process.env.YTDLP_BIN) candidates.push(process.env.YTDLP_BIN)
+    try {
+      const url = await import('url')
+      const pathMod = await import('path')
+      const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
+      candidates.push(pathMod.join(here, 'bin', 'yt-dlp'))
+    } catch {}
+    candidates.push('yt-dlp')
+    for (const c of candidates) {
+      const ok = await new Promise(resolve => {
+        try {
+          const p = spawn(c, ['--version'])
+          p.on('error', () => resolve(false))
+          p.on('close', code => resolve(code === 0))
+        } catch { resolve(false) }
+      })
+      if (ok) return c
+    }
+    return null
+  })()
+  return _ytDlpBinPathPromise
+}
+
 function runYtDlpJSON(url) {
   return new Promise((resolve, reject) => {
     const args = ['-J', '--no-warnings', '--no-playlist', url]
@@ -4849,59 +4880,156 @@ async function downloadAudioToFile(url, outPath) {
   fs.renameSync(tmpFixed, outPath)
 }
 
-// Resolve a direct googlevideo.com audio URL for the given YouTube link.
-// Tries yt-dlp first (local), falls back to ytdl-core (works on Vercel).
-async function resolveDirectAudioUrl(url) {
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
-    try {
-      return await new Promise((resolve, reject) => {
-        // Force direct https progressive (no HLS / m3u8 — browsers can't play
-        // those natively in <audio>). Prefer itag 140 (m4a 128k AAC).
-        const proc = spawn('yt-dlp', [
-          '-f', 'ba[ext=m4a][protocol^=https][protocol!*=m3u8][protocol!*=hls]/140/bestaudio[protocol^=https][protocol!*=m3u8][protocol!*=hls]/bestaudio[ext=m4a]',
-          '-g', '--no-warnings', '--no-playlist', url,
-        ])
-        let out = '', err = ''
-        proc.stdout.on('data', d => { out += d.toString() })
-        proc.stderr.on('data', d => { err += d.toString() })
-        proc.on('error', reject)
-        proc.on('close', code => {
-          const u = out.trim().split('\n')[0]
-          if (code !== 0 || !u) return reject(new Error(err.slice(0, 200) || 'no url'))
-          if (/\.m3u8/i.test(u)) return reject(new Error('got HLS url, want progressive'))
-          resolve(u)
-        })
-      })
-    } catch (e) {
-      console.warn('[audio-stream] yt-dlp resolve failed, falling back to JS:', e.message)
-    }
-  }
-  const info = await ytdl.getInfo(url)
-  // Filter to non-HLS m4a/webm progressive formats only
-  const candidates = info.formats.filter(f =>
-    f.hasAudio && !f.hasVideo && f.url && !/\.m3u8/i.test(f.url) && (f.container === 'mp4' || f.container === 'webm')
-  )
-  const fmt = ytdl.chooseFormat(candidates.length ? candidates : info.formats, { quality: 'highestaudio', filter: 'audioonly' })
-  if (!fmt?.url) throw new Error('no audio format')
-  return fmt.url
+// Resolve an HLS m3u8 audio playlist URL for a YouTube link.
+// As of 2026-04, YouTube serves audio-only as HLS (itag 233/234) only, and
+// only when requested via the IOS player_client. Pure-JS extractors
+// (ytdl-core, youtubei.js) currently can't decipher current player.js.
+// We rely on yt-dlp; on Vercel we ship a standalone binary (see vercel.json).
+async function resolveAudioPlaylistUrl(youtubeUrl) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) throw new Error('yt-dlp غير متوفر على هذا الخادم')
+  return await new Promise((resolve, reject) => {
+    const proc = spawn(dlpBin, [
+      '--extractor-args', 'youtube:player_client=ios',
+      '-f', 'ba/bestaudio',
+      '-g', '--no-warnings', '--no-playlist', youtubeUrl,
+    ])
+    let out = '', err = ''
+    proc.stdout.on('data', d => { out += d.toString() })
+    proc.stderr.on('data', d => { err += d.toString() })
+    proc.on('error', reject)
+    proc.on('close', code => {
+      const u = out.trim().split('\n')[0]
+      if (code !== 0 || !u) return reject(new Error((err || 'yt-dlp failed').slice(0, 200)))
+      resolve(u)
+    })
+  })
 }
 
+// Cache resolved playlist URLs (signed URLs expire ~6h; refresh after 1h)
+const _playlistUrlCache = new Map() // youtubeUrl -> { url, expiresAt }
+async function getCachedPlaylistUrl(youtubeUrl) {
+  const cached = _playlistUrlCache.get(youtubeUrl)
+  if (cached && cached.expiresAt > Date.now()) return cached.url
+  const url = await resolveAudioPlaylistUrl(youtubeUrl)
+  _playlistUrlCache.set(youtubeUrl, { url, expiresAt: Date.now() + 60 * 60 * 1000 })
+  return url
+}
+
+// Whitelist of upstream hosts we are willing to proxy
+function isAllowedUpstreamHost(u) {
+  try {
+    const h = new URL(u).hostname
+    return /(^|\.)googlevideo\.com$/i.test(h) || /(^|\.)youtube\.com$/i.test(h) ||
+           /(^|\.)ytimg\.com$/i.test(h) || h === 'manifest.googlevideo.com'
+  } catch { return false }
+}
+
+// Serve the m3u8 playlist with each segment URL rewritten to go through our
+// /audio-segment proxy (googlevideo segments are signed to the server's IP).
 app.get('/api/dz-tube/audio-stream', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
-  // PREFERRED PATH: redirect the browser to the direct googlevideo.com URL.
-  // Lets the browser handle Range/duration/seeking natively (which is what
-  // HTML5 <audio> needs for the MiniPlayer to display time and play).
-  // Works on Vercel too, since CSP allows https://*.googlevideo.com as media.
+  let masterUrl
   try {
-    const direct = await resolveDirectAudioUrl(url)
-    res.setHeader('Cache-Control', 'no-store')
-    return res.redirect(302, direct)
+    masterUrl = await getCachedPlaylistUrl(url)
   } catch (e) {
-    console.warn('[audio-stream] direct-url resolve failed, falling back to proxy:', e.message)
+    console.error('[audio-stream] resolve failed:', e.message)
+    return res.status(502).end('فشل تحميل الصوت')
   }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const upstream = await fetch(masterUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+      if (upstream.status === 403 && attempt === 0) {
+        _playlistUrlCache.delete(url)
+        masterUrl = await getCachedPlaylistUrl(url)
+        continue
+      }
+      if (!upstream.ok) {
+        console.error('[audio-stream] upstream', upstream.status)
+        return res.status(502).end('فشل تحميل الصوت')
+      }
+      const text = await upstream.text()
+      // Rewrite every absolute URL line to our segment proxy
+      const rewritten = text.split('\n').map(line => {
+        const t = line.trim()
+        if (!t || t.startsWith('#')) return line
+        if (/^https?:\/\//i.test(t) && isAllowedUpstreamHost(t)) {
+          return `/api/dz-tube/audio-segment?u=${encodeURIComponent(t)}`
+        }
+        return line
+      }).join('\n')
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+      res.setHeader('Cache-Control', 'private, max-age=300')
+      res.status(200).end(rewritten)
+      return
+    } catch (e) {
+      if (attempt === 1) {
+        console.error('[audio-stream] fetch failed:', e.message)
+        if (!res.headersSent) res.status(502).end('فشل تحميل الصوت')
+        else res.end()
+        return
+      }
+    }
+  }
+})
+
+// Proxy individual HLS segments (and nested playlists) from googlevideo.
+app.get('/api/dz-tube/audio-segment', async (req, res) => {
+  const u = String(req.query.u || '')
+  if (!u || !isAllowedUpstreamHost(u)) return res.status(400).end('invalid url')
+  try {
+    const fwdHeaders = { 'User-Agent': 'Mozilla/5.0' }
+    if (req.headers.range) fwdHeaders['Range'] = req.headers.range
+    const upstream = await fetch(u, { headers: fwdHeaders })
+    // If upstream returned a nested playlist (HLS variant), rewrite it too.
+    const ct = upstream.headers.get('content-type') || ''
+    if (/mpegurl|m3u8/i.test(ct) || /\.m3u8($|\?)/i.test(u)) {
+      const text = await upstream.text()
+      const rewritten = text.split('\n').map(line => {
+        const t = line.trim()
+        if (!t || t.startsWith('#')) return line
+        if (/^https?:\/\//i.test(t) && isAllowedUpstreamHost(t)) {
+          return `/api/dz-tube/audio-segment?u=${encodeURIComponent(t)}`
+        }
+        return line
+      }).join('\n')
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+      res.setHeader('Cache-Control', 'private, max-age=300')
+      res.status(upstream.status).end(rewritten)
+      return
+    }
+    const passHeaders = ['content-length', 'content-range', 'content-type', 'accept-ranges', 'last-modified']
+    for (const h of passHeaders) {
+      const v = upstream.headers.get(h)
+      if (v) res.setHeader(h, v)
+    }
+    if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'video/MP2T')
+    res.setHeader('Cache-Control', 'private, max-age=600')
+    res.status(upstream.status)
+    if (!upstream.body) { res.end(); return }
+    const reader = upstream.body.getReader()
+    req.on('close', () => { try { reader.cancel() } catch {} })
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!res.write(value)) await new Promise(r => res.once('drain', r))
+    }
+    res.end()
+  } catch (e) {
+    console.error('[audio-segment] failed:', e.message)
+    if (!res.headersSent) res.status(502).end('segment failed')
+    else res.end()
+  }
+})
+
+// (Legacy disk-cache path retained as a fallback for the /api/dz-tube/download
+// endpoint via the helpers below; not used by the streaming endpoint.)
+app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
   const hash = crypto.createHash('sha1').update(url).digest('hex').slice(0, 20)
   const filePath = `${audioCacheDir}/${hash}.m4a`

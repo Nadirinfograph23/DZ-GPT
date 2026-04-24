@@ -412,7 +412,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     const anyNav = navigator as any
     if (!anyNav.wakeLock) return
     let sentinel: any = null
-    let cancelled = false
     const acquire = async () => {
       try {
         if (sentinel) return
@@ -426,7 +425,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     if (playing) void acquire(); else void release()
     const onVis = () => { if (document.visibilityState === 'visible' && playing) void acquire() }
     document.addEventListener('visibilitychange', onVis)
-    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); void release() }
+    return () => { document.removeEventListener('visibilitychange', onVis); void release() }
   }, [playing])
 
   return (

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
   RotateCw, X, Play, Headphones, ChevronDown, Plus, Sparkles, Radio, BookOpen,
-  GraduationCap, Trophy, Newspaper, Film, TrendingUp,
+  GraduationCap, Trophy, Newspaper, Film, TrendingUp, CheckSquare, Square, ListChecks,
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tube.css'
@@ -121,6 +121,15 @@ export default function DZTube() {
     xhr?: XMLHttpRequest
   }
   const [activeDownloads, setActiveDownloads] = useState<Record<string, ActiveDl>>({})
+  // Batch (multi-select) download state. The user toggles "select mode" from
+  // the header, ticks one or more cards, then triggers a single batch
+  // download. Items are queued sequentially through `startDownload` so we
+  // never hammer the server with N parallel requests.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [batchPending, setBatchPending] = useState<number>(0)
+  const [batchTotal, setBatchTotal] = useState<number>(0)
+  const batchAbortRef = useRef<boolean>(false)
   const activeForCardPct = useCallback((videoId: string): number | null => {
     const list = Object.values(activeDownloads).filter(d => d.videoId === videoId && d.status === 'downloading')
     if (list.length === 0) return null
@@ -256,86 +265,105 @@ export default function DZTube() {
     } catch {}
   }, [])
 
-  const startDownload = useCallback((r: SearchResult, format: 'mp4' | 'mp3' | 'audio', quality: Quality) => {
-    setDownloadMenuFor(null)
-    setDownloadingId(r.id)
-    setError(null)
-    const dlKey = `${r.id}-${format}-${quality}`
-    const isAudioReq = format === 'mp3' || format === 'audio'
+  // Returns a Promise that resolves to `true` on success and `false` on
+  // failure / cancel. The Promise version is what makes the batch queue
+  // possible (it awaits each download before starting the next one).
+  // `opts.silent` skips the per-item start toast and history-panel auto-open
+  // so a batch run doesn't spam the user with N "بدأ التحميل" toasts.
+  const startDownload = useCallback((r: SearchResult, format: 'mp4' | 'mp3' | 'audio', quality: Quality, opts?: { silent?: boolean }): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      setDownloadMenuFor(null)
+      setDownloadingId(r.id)
+      setError(null)
+      const dlKey = `${r.id}-${format}-${quality}`
+      const isAudioReq = format === 'mp3' || format === 'audio'
 
-    // Open the history panel automatically so the user can watch the
-    // percentage advance — and show a clear "started" toast.
-    setHistoryOpen(true)
-    showToast('⬇️ بدأ التحميل الآن')
-
-    const params = new URLSearchParams({ url: r.url, format, quality })
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', `/api/dz-tube/download?${params}`)
-    xhr.responseType = 'blob'
-
-    setActiveDownloads(prev => ({
-      ...prev,
-      [dlKey]: { key: dlKey, videoId: r.id, title: r.title, thumbnail: r.thumbnail, format, quality, loaded: 0, total: 0, status: 'downloading', xhr },
-    }))
-    xhr.onprogress = (e) => {
-      setActiveDownloads(prev => {
-        const cur = prev[dlKey]; if (!cur) return prev
-        return { ...prev, [dlKey]: { ...cur, loaded: e.loaded, total: e.lengthComputable ? e.total : 0 } }
-      })
-    }
-    xhr.onerror = () => {
-      setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
-      setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
-      setError('فشل التحميل')
-      showToast('فشل التحميل', 'err')
-      setDownloadingId(null)
-    }
-    xhr.onload = () => {
-      try {
-        if (xhr.status < 200 || xhr.status >= 300) {
-          setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
-          setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
-          throw new Error(`HTTP ${xhr.status}`)
-        }
-        const blob = xhr.response as Blob
-        // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the
-        // returned Content-Disposition / Content-Type so the file extension matches.
-        const cd = xhr.getResponseHeader('content-disposition') || ''
-        const ct = (xhr.getResponseHeader('content-type') || '').toLowerCase()
-        const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
-        const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
-        let serverName = ''
-        try { serverName = cdMatch ? decodeURIComponent(cdMatch[1]) : '' } catch { serverName = cdMatch?.[1] || '' }
-        let ext: string
-        if (serverName && /\.(mp3|m4a|webm|mp4)$/i.test(serverName)) {
-          ext = serverName.split('.').pop()!.toLowerCase()
-        } else if (ct.includes('audio/mpeg')) ext = 'mp3'
-        else if (ct.includes('audio/mp4')) ext = 'm4a'
-        else if (ct.includes('audio/webm')) ext = 'webm'
-        else if (isAudioReq) ext = format === 'mp3' ? 'mp3' : 'm4a'
-        else ext = 'mp4'
-        const filename = isAudioReq ? `${safeTitle}.${ext}` : `${safeTitle}_${quality}p.${ext}`
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url; a.download = filename
-        document.body.appendChild(a); a.click(); document.body.removeChild(a)
-        setTimeout(() => URL.revokeObjectURL(url), 1000)
-
-        showToast('✅ تم التحميل بنجاح')
-        notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
-        setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
-        setHistory(prev => {
-          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'فشل التحميل')
-        showToast('فشل التحميل', 'err')
-      } finally {
-        setDownloadingId(null)
+      if (!opts?.silent) {
+        // Open the history panel automatically so the user can watch the
+        // percentage advance — and show a clear "started" toast.
+        setHistoryOpen(true)
+        showToast('⬇️ بدأ التحميل الآن')
       }
-    }
-    xhr.send()
+
+      const params = new URLSearchParams({ url: r.url, format, quality })
+      const xhr = new XMLHttpRequest()
+      xhr.open('GET', `/api/dz-tube/download?${params}`)
+      xhr.responseType = 'blob'
+
+      setActiveDownloads(prev => ({
+        ...prev,
+        [dlKey]: { key: dlKey, videoId: r.id, title: r.title, thumbnail: r.thumbnail, format, quality, loaded: 0, total: 0, status: 'downloading', xhr },
+      }))
+      xhr.onprogress = (e) => {
+        setActiveDownloads(prev => {
+          const cur = prev[dlKey]; if (!cur) return prev
+          return { ...prev, [dlKey]: { ...cur, loaded: e.loaded, total: e.lengthComputable ? e.total : 0 } }
+        })
+      }
+      xhr.onabort = () => {
+        // User clicked the X on the active item — drop it from state and
+        // resolve with false so any awaiting batch loop moves on.
+        setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+        setDownloadingId(null)
+        resolve(false)
+      }
+      xhr.onerror = () => {
+        setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+        setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+        setError('فشل التحميل')
+        if (!opts?.silent) showToast('فشل التحميل', 'err')
+        setDownloadingId(null)
+        resolve(false)
+      }
+      xhr.onload = () => {
+        try {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+            setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+            throw new Error(`HTTP ${xhr.status}`)
+          }
+          const blob = xhr.response as Blob
+          // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the
+          // returned Content-Disposition / Content-Type so the file extension matches.
+          const cd = xhr.getResponseHeader('content-disposition') || ''
+          const ct = (xhr.getResponseHeader('content-type') || '').toLowerCase()
+          const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+          const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
+          let serverName = ''
+          try { serverName = cdMatch ? decodeURIComponent(cdMatch[1]) : '' } catch { serverName = cdMatch?.[1] || '' }
+          let ext: string
+          if (serverName && /\.(mp3|m4a|webm|mp4)$/i.test(serverName)) {
+            ext = serverName.split('.').pop()!.toLowerCase()
+          } else if (ct.includes('audio/mpeg')) ext = 'mp3'
+          else if (ct.includes('audio/mp4')) ext = 'm4a'
+          else if (ct.includes('audio/webm')) ext = 'webm'
+          else if (isAudioReq) ext = format === 'mp3' ? 'mp3' : 'm4a'
+          else ext = 'mp4'
+          const filename = isAudioReq ? `${safeTitle}.${ext}` : `${safeTitle}_${quality}p.${ext}`
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = filename
+          document.body.appendChild(a); a.click(); document.body.removeChild(a)
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+          if (!opts?.silent) showToast('✅ تم التحميل بنجاح')
+          notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
+          setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+          setHistory(prev => {
+            const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+            return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
+          })
+          resolve(true)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'فشل التحميل')
+          if (!opts?.silent) showToast('فشل التحميل', 'err')
+          resolve(false)
+        } finally {
+          setDownloadingId(null)
+        }
+      }
+      xhr.send()
+    })
   }, [showToast, notifyDone])
 
   const cancelActiveDownload = useCallback((key: string) => {
@@ -345,6 +373,64 @@ export default function DZTube() {
       const n = { ...prev }; delete n[key]; return n
     })
     setDownloadingId(null)
+  }, [])
+
+  // Sequentially download every selected card. We resolve each one before
+  // starting the next so the user sees a clear single-progress flow rather
+  // than 10 simultaneous bars at 0%.
+  const runBatchDownload = useCallback(async (items: SearchResult[], format: 'mp4' | 'mp3' | 'audio', quality: Quality) => {
+    if (items.length === 0) return
+    batchAbortRef.current = false
+    setBatchTotal(items.length)
+    setBatchPending(items.length)
+    setHistoryOpen(true)
+    showToast(`⬇️ بدأ التحميل الدفعي · ${items.length} مقاطع`)
+    let okCount = 0
+    for (let i = 0; i < items.length; i++) {
+      if (batchAbortRef.current) break
+      const r = items[i]
+      const success = await startDownload(r, format, quality, { silent: true })
+      if (success) okCount++
+      setBatchPending(items.length - i - 1)
+    }
+    const aborted = batchAbortRef.current
+    setBatchPending(0)
+    setBatchTotal(0)
+    setSelectedIds(new Set())
+    setSelectMode(false)
+    if (aborted) {
+      showToast(`⏹ أُوقف الطابور — اكتمل ${okCount} من ${items.length}`)
+    } else {
+      showToast(`✅ تم التحميل الدفعي · ${okCount} من ${items.length}`)
+    }
+  }, [showToast, startDownload])
+
+  const cancelBatch = useCallback(() => {
+    batchAbortRef.current = true
+    // Also abort the currently-running item so the loop exits immediately.
+    setActiveDownloads(prev => {
+      const next = { ...prev }
+      for (const k of Object.keys(next)) {
+        try { next[k].xhr?.abort() } catch {}
+        delete next[k]
+      }
+      return next
+    })
+  }, [])
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(results.map(r => r.id)))
+  }, [results])
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
   }, [])
 
   const removeHistory = (id: string) => setHistory(prev => prev.filter(h => h.id !== id))
@@ -365,10 +451,26 @@ export default function DZTube() {
             <span className="dzt-logo-sub">شاهد · حمّل · استمع</span>
           </div>
         </div>
-        <button className="dzt-history-btn" onClick={() => setHistoryOpen(p => !p)} title="السجل">
-          <History size={16} /><span className="dzt-history-label">السجل</span>
-          {history.length > 0 && <span className="dzt-history-count">{history.length}</span>}
-        </button>
+        <div className="dzt-header-actions">
+          {results.length > 0 && (
+            <button
+              className={`dzt-history-btn${selectMode ? ' dzt-select-active' : ''}`}
+              onClick={() => { if (selectMode) exitSelectMode(); else setSelectMode(true) }}
+              title={selectMode ? 'إلغاء التحديد' : 'تحديد متعدد'}
+              disabled={batchTotal > 0}
+            >
+              <ListChecks size={16} />
+              <span className="dzt-history-label">{selectMode ? 'إلغاء' : 'تحديد'}</span>
+              {selectedIds.size > 0 && <span className="dzt-history-count">{selectedIds.size}</span>}
+            </button>
+          )}
+          <button className="dzt-history-btn" onClick={() => setHistoryOpen(p => !p)} title="السجل">
+            <History size={16} /><span className="dzt-history-label">السجل</span>
+            {(history.length > 0 || Object.values(activeDownloads).length > 0) && (
+              <span className="dzt-history-count">{Object.values(activeDownloads).length || history.length}</span>
+            )}
+          </button>
+        </div>
       </header>
 
       <div className="dzt-search-bar">
@@ -488,18 +590,33 @@ export default function DZTube() {
               <h2><Video size={16} /> النتائج <span className="dzt-results-count">{results.length}</span></h2>
             </div>
             <div className="dzt-results-grid">
-              {results.map(r => (
-                <article key={r.id} className="dzt-card">
-                  <div className="dzt-card-thumb-wrap" onClick={() => playInFrame(r)}>
+              {results.map(r => {
+                const isSelected = selectedIds.has(r.id)
+                const onCardThumbClick = () => {
+                  if (selectMode) toggleSelect(r.id)
+                  else playInFrame(r)
+                }
+                return (
+                <article key={r.id} className={`dzt-card${selectMode ? ' dzt-card-selectable' : ''}${isSelected ? ' dzt-card-selected' : ''}`}>
+                  <div className="dzt-card-thumb-wrap" onClick={onCardThumbClick}>
                     <img className="dzt-card-thumb" src={r.thumbnail} alt={r.title} loading="lazy" />
                     {r.duration > 0 && (
                       <span className="dzt-card-duration">
                         <Clock size={10} /> {fmtDuration(r.duration)}
                       </span>
                     )}
-                    <div className="dzt-card-play-overlay">
-                      <div className="dzt-play-circle"><Play size={26} fill="#fff" /></div>
-                    </div>
+                    {selectMode ? (
+                      <div className="dzt-card-select-overlay">
+                        {isSelected
+                          ? <CheckSquare size={42} className="dzt-card-check-on" />
+                          : <Square size={42} className="dzt-card-check-off" />
+                        }
+                      </div>
+                    ) : (
+                      <div className="dzt-card-play-overlay">
+                        <div className="dzt-play-circle"><Play size={26} fill="#fff" /></div>
+                      </div>
+                    )}
                   </div>
                   <div className="dzt-card-body">
                     <h3 className="dzt-card-title" title={r.title}>{r.title}</h3>
@@ -552,7 +669,7 @@ export default function DZTube() {
                     </div>
                   </div>
                 </article>
-              ))}
+              )})}
             </div>
           </>
         )}
@@ -625,6 +742,65 @@ export default function DZTube() {
           document.body
         )
       })()}
+
+      {(selectMode && selectedIds.size > 0) || batchTotal > 0 ? (
+        <div className="dzt-batch-bar" role="region" aria-label="شريط التحميل الدفعي">
+          {batchTotal > 0 ? (
+            <>
+              <div className="dzt-batch-bar-info">
+                <Loader2 size={16} className="dzt-spin" />
+                <div className="dzt-batch-bar-text">
+                  <span className="dzt-batch-bar-title">جارٍ التحميل الدفعي</span>
+                  <span className="dzt-batch-bar-sub">
+                    تبقى {batchPending} من {batchTotal}
+                  </span>
+                </div>
+              </div>
+              <div className="dzt-batch-bar-actions">
+                <button className="dzt-batch-btn dzt-batch-btn-ghost" onClick={cancelBatch}>
+                  <X size={14} /> إيقاف الطابور
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="dzt-batch-bar-info">
+                <ListChecks size={16} />
+                <div className="dzt-batch-bar-text">
+                  <span className="dzt-batch-bar-title">{selectedIds.size} محدد</span>
+                  <span className="dzt-batch-bar-sub">اختر صيغة التحميل</span>
+                </div>
+              </div>
+              <div className="dzt-batch-bar-actions">
+                <button
+                  className="dzt-batch-btn dzt-batch-btn-ghost"
+                  onClick={selectAll}
+                  title="تحديد الكل"
+                >
+                  الكل
+                </button>
+                <button
+                  className="dzt-batch-btn"
+                  onClick={() => runBatchDownload(results.filter(r => selectedIds.has(r.id)), 'mp4', '720')}
+                  title="تحميل الكل بصيغة MP4 720p"
+                >
+                  <Video size={14} /> MP4 720p
+                </button>
+                <button
+                  className="dzt-batch-btn"
+                  onClick={() => runBatchDownload(results.filter(r => selectedIds.has(r.id)), 'audio', '720')}
+                  title="تحميل الكل صوت M4A"
+                >
+                  <Headphones size={14} /> M4A
+                </button>
+                <button className="dzt-batch-btn dzt-batch-btn-ghost" onClick={exitSelectMode} title="إلغاء">
+                  <X size={14} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {toast && (
         <div className={`dzt-toast dzt-toast-${toast.kind}`} role="status">

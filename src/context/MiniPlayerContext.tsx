@@ -299,6 +299,15 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     persist({ track, queue, progress: 0 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track, queue])
+
+  // Toggle a global body class so other pages can lift their fixed/sticky
+  // chat inputs above the floating mini-player (~84px tall + 16px gap).
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (track) document.body.classList.add('dz-mini-active')
+    else document.body.classList.remove('dz-mini-active')
+    return () => { document.body.classList.remove('dz-mini-active') }
+  }, [track])
   useEffect(() => {
     if (!track) return
     const id = setInterval(() => {

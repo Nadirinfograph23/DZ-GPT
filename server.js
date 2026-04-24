@@ -4652,6 +4652,25 @@ async function ytDlpCookiesArgs() {
   return p ? ['--cookies', p] : []
 }
 
+// Anti-bot / anti-IP-block args for yt-dlp.
+// YouTube actively blocks data-center IPs (Vercel/AWS) with "Sign in to
+// confirm" challenges. These flags rotate player clients (android first,
+// then ios, then web — android usually bypasses sign-in), spoof a recent
+// browser User-Agent, retry transient errors, and avoid HLS-only formats
+// where possible. Applied to every yt-dlp invocation.
+const YT_DLP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+function ytDlpAntiBotArgs() {
+  return [
+    '--extractor-args', 'youtube:player_client=android,ios,web',
+    '--user-agent', YT_DLP_USER_AGENT,
+    '--geo-bypass',
+    '--no-check-certificate',
+    '--retries', '3',
+    '--fragment-retries', '3',
+    '--socket-timeout', '20',
+  ]
+}
+
 // Resolve which yt-dlp binary to use. Prefers $YTDLP_BIN, then a bundled
 // binary at <projectRoot>/bin/yt-dlp (shipped to Vercel via includeFiles),
 // then any yt-dlp on PATH. Returns null if nothing works.
@@ -4719,7 +4738,7 @@ function runYtDlpJSON(url) {
 async function runYtDlpJSONWith(binPath, url) {
   const cookies = await ytDlpCookiesArgs()
   return new Promise((resolve, reject) => {
-    const args = ['-J', '--no-warnings', '--no-playlist', ...cookies, url]
+    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url]
     const proc = spawn(binPath, args)
     let stdout = ''
     let stderr = ''
@@ -4796,6 +4815,7 @@ app.get('/api/dz-tube/search', async (req, res) => {
         const args = [
           '--flat-playlist', '-J', '--no-warnings',
           '--default-search', 'ytsearch',
+          ...ytDlpAntiBotArgs(),
           ...cookies,
           `ytsearch${limit}:${q}`,
         ]
@@ -4847,7 +4867,7 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     try {
       const cookies = await ytDlpCookiesArgs()
       const streamUrl = await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...cookies, url])
+        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url])
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })
@@ -5294,25 +5314,37 @@ app.get('/api/dz-tube/download', async (req, res) => {
     let args
     let downloadName
     let mime
+    const antiBot = ytDlpAntiBotArgs()
+    // NOTE (2025-2026): YouTube now requires a "GVS PO Token" for separate
+    // audio/video streams on most clients, so `bestaudio` and `bestvideo`
+    // often return "Requested format is not available". Format `18` (360p
+    // mp4 with combined audio+video) does NOT need a PO Token, so we use
+    // it as a universal fallback in every format string below.
     if (format === 'mp3' && hasFfmpeg) {
-      args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
+      args = ['-f', 'bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.mp3`
       mime = 'audio/mpeg'
+    } else if (isAudio && hasFfmpeg) {
+      // Want native m4a — extract audio (transcodes from 18 if needed)
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-x', '--audio-format', 'm4a', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+      downloadName = `${safeName}.m4a`
+      mime = 'audio/mp4'
     } else if (isAudio) {
-      // Native audio (m4a/webm) — no transcoding needed, works without ffmpeg.
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
+      // No ffmpeg → if bestaudio is unavailable we serve format 18 (mp4
+      // with audio); browsers can still play the audio track from it.
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
-      const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
-      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
+      const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
+      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     } else {
       // No ffmpeg → must use a single progressive (combined audio+video) file.
-      // 18 = 360p mp4, 22 = 720p mp4. Newer YouTube videos may not expose 22.
-      const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/18`
-      args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
+      // 22 = 720p mp4, 18 = 360p mp4. Many videos only expose 18 nowadays.
+      const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/22/18`
+      args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     }
@@ -5329,9 +5361,18 @@ app.get('/api/dz-tube/download', async (req, res) => {
     proc.on('close', code => {
       if (killed) return
       if (code !== 0) {
-        console.warn('[DZTube:download:dlp] exit', code, stderrBuf.slice(0, 300))
+        console.warn('[DZTube:download:dlp] exit', code, stderrBuf.slice(0, 600))
         safeUnlink(outPath)
-        if (!res.headersSent) return res.status(500).end('فشل التحميل')
+        if (!res.headersSent) {
+          // Surface a hint when YouTube's bot/sign-in challenge is the culprit
+          // (extremely common on Vercel / data-center IPs without cookies).
+          const lower = stderrBuf.toLowerCase()
+          const isBot = lower.includes('sign in to confirm') || lower.includes('not a bot') || lower.includes('http error 429') || lower.includes('cookie')
+          const msg = isBot
+            ? 'فشل التحميل: YouTube يطلب تسجيل دخول من خادم النشر. أضف YOUTUBE_COOKIES كمتغير بيئة (محتوى ملف cookies.txt بصيغة Netscape) ثم أعد النشر.'
+            : `فشل التحميل: ${stderrBuf.split('\n').filter(l => l.includes('ERROR') || l.includes('error')).slice(-1)[0]?.slice(0, 220) || 'خطأ غير معروف'}`
+          return res.status(500).end(msg)
+        }
         return res.end()
       }
       streamFileToClient(req, res, outPath, mime, downloadName)

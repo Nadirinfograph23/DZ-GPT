@@ -425,3 +425,19 @@
   .mpf-play { width: 70px; height: 70px; }
   .mpf-side { width: 48px; height: 48px; }
 }
+
+/* ========================================================================
+   Lift fixed/sticky chat inputs above the floating mini-player.
+   Mini-player is ~84px tall + 16px from bottom = ~100px occupied space.
+   Activated by `body.dz-mini-active` (toggled in MiniPlayerContext).
+   ======================================================================== */
+body.dz-mini-active .input-area      { padding-bottom: 110px !important; }   /* App.tsx main chat */
+body.dz-mini-active .dzc-input-wrap  { padding-bottom: 96px;  }              /* DZCHAT room */
+body.dz-mini-active .dz-input-area   { padding-bottom: 100px !important; }   /* DZ Agent chatbox */
+
+/* On narrow phones the mini-player is a bit taller (wraps controls). */
+@media (max-width: 520px) {
+  body.dz-mini-active .input-area      { padding-bottom: 120px !important; }
+  body.dz-mini-active .dzc-input-wrap  { padding-bottom: 104px; }
+  body.dz-mini-active .dz-input-area   { padding-bottom: 110px !important; }
+}

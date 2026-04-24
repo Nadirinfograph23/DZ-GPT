@@ -278,6 +278,7 @@ export default function DZTube() {
               <div className="dzt-welcome-glow" />
               <Video size={56} className="dzt-welcome-icon" />
               <h1 className="dzt-welcome-title">DZ <span>Tube</span></h1>
+              <p className="dzt-welcome-credit">تطوير نذير حوامرية</p>
               <p className="dzt-welcome-sub">
                 ابحث عن أي فيديو على YouTube، شاهده داخل التطبيق، أو حمّله بصيغة فيديو أو صوت بأعلى جودة
               </p>

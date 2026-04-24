@@ -729,6 +729,78 @@
 .dzt-history-redo:hover { background: var(--dzt-red-bg); color: var(--dzt-red-soft); border-color: var(--dzt-red); }
 .dzt-history-remove:hover { background: var(--dzt-bg-soft); color: #fff; }
 
+/* Active downloads (in-progress) shown at the top of the history panel */
+.dzt-active-dl-section {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 4px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed var(--dzt-border);
+}
+.dzt-active-dl-title {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.2px;
+  color: var(--dzt-text-soft);
+  padding: 0 6px 4px;
+  text-transform: uppercase;
+}
+.dzt-active-dl-item {
+  display: flex; gap: 10px; align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(76, 175, 80, 0.06);
+  border: 1px solid rgba(76, 175, 80, 0.25);
+}
+.dzt-active-dl-failed {
+  background: rgba(255, 59, 59, 0.08);
+  border-color: rgba(255, 59, 59, 0.35);
+}
+.dzt-active-dl-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.dzt-active-dl-meta {
+  display: flex; gap: 5px; align-items: center;
+  font-size: 11px; color: var(--dzt-text-mute);
+}
+.dzt-active-dl-fail-text { color: #ffb4b4; font-weight: 600; }
+.dzt-active-dl-bar {
+  position: relative;
+  width: 100%; height: 5px;
+  background: var(--dzt-bg-soft);
+  border-radius: 999px; overflow: hidden;
+}
+.dzt-active-dl-fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #4caf50 0%, #76c47b 100%);
+  border-radius: 999px;
+  transition: width 0.18s ease-out;
+}
+.dzt-active-dl-fill-indet {
+  width: 35%;
+  animation: dzt-indet 1.4s linear infinite;
+}
+@keyframes dzt-indet {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(310%); }
+}
+.dzt-active-dl-side {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.dzt-active-dl-pct {
+  font-size: 12px; font-weight: 700;
+  color: #c8e6c9;
+  min-width: 38px; text-align: end;
+}
+
+/* Percentage badge that replaces the spinner on the result-card download
+   button while a download is in flight. */
+.dzt-act-pct {
+  display: inline-block;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.2px;
+  color: #c8e6c9;
+  min-width: 28px; text-align: center;
+}
+
 /* Toast */
 .dzt-toast {
   position: fixed;

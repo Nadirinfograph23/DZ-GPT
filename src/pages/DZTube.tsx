@@ -29,8 +29,7 @@ interface HistoryItem {
   timestamp: number
 }
 
-type Quality = '360' | '720' | '1080'
-const QUALITIES: Quality[] = ['1080', '720', '360']
+type Quality = string
 const HISTORY_KEY = 'dz-tube-history'
 const HISTORY_MAX = 30
 
@@ -104,6 +103,7 @@ export default function DZTube() {
   const [downloadMenuFor, setDownloadMenuFor] = useState<string | null>(null)
   const [downloadMenuPos, setDownloadMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [qualityCache, setQualityCache] = useState<Record<string, { qualities: Quality[]; loading: boolean; err: boolean }>>({})
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -157,6 +157,23 @@ export default function DZTube() {
   const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); search(query) }
   }
+
+  const fetchQualities = useCallback(async (r: SearchResult) => {
+    if (qualityCache[r.id]?.qualities || qualityCache[r.id]?.loading) return
+    setQualityCache(prev => ({ ...prev, [r.id]: { qualities: [], loading: true, err: false } }))
+    try {
+      const resp = await fetch('/api/dz-tube/info', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: r.url }),
+      })
+      const d = await resp.json()
+      if (!resp.ok) throw new Error(d.error || 'فشل')
+      const qualities: Quality[] = (d.downloadableHeights || []).map((h: number) => String(h))
+      setQualityCache(prev => ({ ...prev, [r.id]: { qualities, loading: false, err: false } }))
+    } catch {
+      setQualityCache(prev => ({ ...prev, [r.id]: { qualities: ['360'], loading: false, err: true } }))
+    }
+  }, [qualityCache])
 
   const playInBackground = useCallback(async (r: SearchResult) => {
     setEmbedId(null)
@@ -409,6 +426,7 @@ export default function DZTube() {
                             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
                             setDownloadMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
                             setDownloadMenuFor(r.id)
+                            fetchQualities(r)
                           }}
                           disabled={downloadingId === r.id}
                           title="تحميل"
@@ -426,19 +444,21 @@ export default function DZTube() {
                               style={{ top: downloadMenuPos.top, right: downloadMenuPos.right }}
                             >
                               <div className="dzt-dl-section-title"><Video size={11} /> فيديو</div>
-                              {QUALITIES.map(q => (
+                              {qualityCache[r.id]?.loading && (
+                                <div className="dzt-dl-loading"><Loader2 size={12} className="dzt-spin" /> جاري الفحص…</div>
+                              )}
+                              {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length === 0 && (
+                                <div className="dzt-dl-empty">لا توجد جودات متاحة</div>
+                              )}
+                              {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).map(q => (
                                 <button key={q} className="dzt-dl-option" onClick={() => startDownload(r, 'mp4', q)}>
                                   <span>MP4</span>
                                   <span className="dzt-dl-quality">{q}p</span>
                                 </button>
                               ))}
                               <div className="dzt-dl-section-title"><Music size={11} /> صوت</div>
-                              <button className="dzt-dl-option" onClick={() => startDownload(r, 'mp3', '720')}>
-                                <span>MP3</span>
-                                <span className="dzt-dl-quality">عالي</span>
-                              </button>
                               <button className="dzt-dl-option" onClick={() => startDownload(r, 'audio', '720')}>
-                                <span>M4A</span>
+                                <span>صوت</span>
                                 <span className="dzt-dl-quality">أصلي</span>
                               </button>
                             </div>

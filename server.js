@@ -4733,6 +4733,56 @@ async function runYtDlpJSONWith(binPath, url) {
   })
 }
 
+// Parse ISO 8601 duration like "PT1H2M3S" -> seconds
+function isoDurationToSeconds(s) {
+  if (typeof s !== 'string') return 0
+  const m = s.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/)
+  if (!m) return 0
+  return (Number(m[1]) || 0) * 3600 + (Number(m[2]) || 0) * 60 + (Number(m[3]) || 0)
+}
+
+// YouTube Data API v3 search — most reliable from data-center IPs
+// (Vercel/AWS) since it uses an authenticated API key instead of HTML
+// scraping. Requires GOOGLE_API_KEY (Google Cloud project with YouTube
+// Data API v3 enabled). Returns null if no key is configured.
+async function youtubeApiSearch(q, limit) {
+  const key = process.env.GOOGLE_API_KEY
+  if (!key) return null
+  const sUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${Math.min(50, limit)}&q=${encodeURIComponent(q)}&key=${key}`
+  const sResp = await fetch(sUrl)
+  if (!sResp.ok) {
+    const txt = await sResp.text().catch(() => '')
+    throw new Error(`YouTube API search ${sResp.status}: ${txt.slice(0, 200)}`)
+  }
+  const sData = await sResp.json()
+  const ids = (sData.items || []).map(it => it.id?.videoId).filter(Boolean)
+  if (ids.length === 0) return []
+  const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${ids.join(',')}&key=${key}`
+  const vResp = await fetch(vUrl)
+  if (!vResp.ok) {
+    // Soft fallback — return search results without details
+    return (sData.items || []).map(it => ({
+      id: it.id.videoId,
+      title: it.snippet?.title || 'بدون عنوان',
+      url: `https://www.youtube.com/watch?v=${it.id.videoId}`,
+      thumbnail: it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${it.id.videoId}/hqdefault.jpg`,
+      duration: 0,
+      channel: it.snippet?.channelTitle || '',
+      views: 0,
+    }))
+  }
+  const vData = await vResp.json()
+  return (vData.items || []).map(it => ({
+    id: it.id,
+    title: it.snippet?.title || 'بدون عنوان',
+    url: `https://www.youtube.com/watch?v=${it.id}`,
+    thumbnail: it.snippet?.thumbnails?.maxres?.url || it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${it.id}/hqdefault.jpg`,
+    duration: isoDurationToSeconds(it.contentDetails?.duration),
+    channel: it.snippet?.channelTitle || '',
+    views: Number(it.statistics?.viewCount) || 0,
+  }))
+}
+
 // JS-only fallback (works on Vercel where yt-dlp binary is unavailable)
 async function jsSearch(q, limit) {
   const items = await YouTube.search(q, { limit, type: 'video', safeSearch: false })
@@ -4780,12 +4830,24 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
-// Search YouTube — yt-dlp first, JS fallback (works on Vercel)
+// Search YouTube — tries: YouTube Data API v3 (most reliable on Vercel) →
+// yt-dlp (best on local with PATH binary) → youtube-sr scraping (last resort).
 app.get('/api/dz-tube/search', async (req, res) => {
   const q = String(req.query.q || '').trim()
-  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 12))
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 18))
   if (!q) return res.status(400).json({ error: 'Query is required' })
 
+  // 1) YouTube Data API (works from any IP, no bot detection)
+  if (process.env.GOOGLE_API_KEY) {
+    try {
+      const results = await youtubeApiSearch(q, limit)
+      if (results && results.length > 0) return res.json({ results })
+    } catch (e) {
+      console.warn('[DZTube:search:api-fail, trying yt-dlp]', e.message)
+    }
+  }
+
+  // 2) yt-dlp (only useful where YouTube doesn't block the IP — typically dev)
   const useDlp = await ytDlpAvailable()
   if (useDlp) {
     try {
@@ -4812,11 +4874,13 @@ app.get('/api/dz-tube/search', async (req, res) => {
           } catch (e) { reject(e) }
         })
       })
-      return res.json({ results })
+      if (results.length > 0) return res.json({ results })
     } catch (e) {
-      console.warn('[DZTube:search:dlp-fail, trying JS]', e.message)
+      console.warn('[DZTube:search:dlp-fail, trying JS scraper]', e.message)
     }
   }
+
+  // 3) youtube-sr HTML scraper (last resort, may fail on data-center IPs)
   try {
     const results = await jsSearch(q, limit)
     res.json({ results })
@@ -5171,10 +5235,23 @@ app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
   return fs.createReadStream(filePath).pipe(res)
 })
 
+// Compute which video heights the *server* can actually deliver as a single
+// downloadable mp4 file given the YouTube-offered heights.
+//   - With ffmpeg: any height (video+audio streams can be merged)
+//   - Without ffmpeg: only progressive single-file mp4s exist — itag 18 (360)
+//     is universal; itag 22 (720) is being deprecated and rarely available.
+//     We surface 360p as the only safe option in that case.
+function computeDownloadableHeights(heights, hasFfmpeg) {
+  const want = [144, 240, 360, 480, 720, 1080, 1440, 2160]
+  if (hasFfmpeg) return want.filter(h => heights.some(yh => yh >= h)).slice().reverse()
+  return heights.includes(360) || heights.length > 0 ? [360] : []
+}
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
 
+  const hasFfmpeg = await ffmpegAvailable()
   const useDlp = await ytDlpAvailable()
   if (useDlp) {
     try {
@@ -5190,7 +5267,9 @@ app.post('/api/dz-tube/info', async (req, res) => {
         uploader: info.uploader || info.channel || '',
         view_count: info.view_count || 0,
         heights,
-        available: { mp4: heights.length > 0, mp3: true },
+        downloadableHeights: computeDownloadableHeights(heights, hasFfmpeg),
+        hasFfmpeg,
+        available: { mp4: heights.length > 0, mp3: true, audio: true },
       })
     } catch (e) {
       console.warn('[DZTube:info:dlp-fail, trying JS]', e.message)
@@ -5199,6 +5278,9 @@ app.post('/api/dz-tube/info', async (req, res) => {
   try {
     const out = await jsInfo(url)
     delete out._info
+    out.hasFfmpeg = hasFfmpeg
+    out.downloadableHeights = computeDownloadableHeights(out.heights || [], hasFfmpeg)
+    out.available = { ...(out.available || {}), audio: true }
     res.json(out)
   } catch (e) {
     console.error('[DZTube:info:js]', e.message)
@@ -5206,7 +5288,7 @@ app.post('/api/dz-tube/info', async (req, res) => {
   }
 })
 
-const DZ_TUBE_QUALITY_MAP = { '360': 360, '720': 720, '1080': 1080 }
+const DZ_TUBE_QUALITY_MAP = { '144': 144, '240': 240, '360': 360, '480': 480, '720': 720, '1080': 1080, '1440': 1440, '2160': 2160 }
 
 // Stream a buffered file to the client with Content-Length and cleanup
 function streamFileToClient(req, res, filePath, mime, downloadName) {

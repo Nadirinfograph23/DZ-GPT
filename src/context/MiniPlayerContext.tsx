@@ -321,15 +321,38 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
   const clearQueue = useCallback(() => setQueue([]), [])
 
+  // Self-healing toggle (restored from older working build 90a08dc5).
+  // Some browsers — especially after a tab restore, after a long pause, or
+  // when a signed audio URL has expired — leave the <audio> element in a
+  // state where `a.play()` silently rejects and the user "clicks play and
+  // nothing happens". We detect those situations and re-resolve the source
+  // through `playInternal` so the button always *does* something.
   const toggle = useCallback(() => {
     const a = audioRef.current
     if (!a || !track) return
-    if (a.paused || a.ended) {
-      void a.play().catch(e => console.warn('[mini-player toggle:play]', e))
-    } else {
-      a.pause()
+    // Currently playing → just pause and we're done.
+    if (!a.paused && !a.ended) { a.pause(); return }
+    // No source attached, or the element is in an error state → full re-init.
+    const noSource = !a.currentSrc && !a.src
+    const errored = !!a.error || a.networkState === a.NETWORK_NO_SOURCE
+    if (noSource || errored) {
+      void playInternal(track, true)
+      return
     }
-  }, [track])
+    // Otherwise just resume; if play() rejects (signed URL expired,
+    // autoplay policy after long idle, etc.) self-heal by re-resolving
+    // the audio URL via the normal playInternal path.
+    setLoading(true)
+    const p = a.play()
+    if (p && typeof p.then === 'function') {
+      p.then(() => setLoading(false)).catch(err => {
+        console.warn('[mini-player toggle] play failed, re-initing:', err)
+        void playInternal(track, true)
+      })
+    } else {
+      setLoading(false)
+    }
+  }, [track, playInternal])
 
   const seek = useCallback((sec: number) => {
     const a = audioRef.current

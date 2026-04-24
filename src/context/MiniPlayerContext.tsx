@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import Hls from 'hls.js'
 
 export interface PlayerTrack {
   id: string
@@ -52,53 +53,6 @@ function persist(state: PersistedState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
 
-// Extract a YouTube videoId from any standard URL form.
-function extractVideoId(url: string): string | null {
-  if (!url) return null
-  try {
-    const u = new URL(url)
-    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split(/[/?#]/)[0] || null
-    if (/(^|\.)youtube\.com$/i.test(u.hostname)) {
-      if (u.pathname === '/watch') return u.searchParams.get('v')
-      const m = u.pathname.match(/^\/(embed|shorts|v|live)\/([^/?#]+)/)
-      if (m) return m[2]
-    }
-  } catch {}
-  // Fall back to bare videoId (11 chars)
-  if (/^[A-Za-z0-9_-]{11}$/.test(url)) return url
-  return null
-}
-
-// ---------- YouTube IFrame API loader (singleton) ----------
-let _ytApiPromise: Promise<typeof window.YT> | null = null
-function loadYouTubeApi(): Promise<typeof window.YT> {
-  if (_ytApiPromise) return _ytApiPromise
-  _ytApiPromise = new Promise((resolve) => {
-    if (typeof window === 'undefined') return
-    if (window.YT && window.YT.Player) { resolve(window.YT); return }
-    const prev = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      if (prev) try { prev() } catch {}
-      resolve(window.YT)
-    }
-    if (!document.querySelector('script[data-yt-iframe-api]')) {
-      const s = document.createElement('script')
-      s.src = 'https://www.youtube.com/iframe_api'
-      s.async = true
-      s.dataset.ytIframeApi = '1'
-      document.head.appendChild(s)
-    }
-  })
-  return _ytApiPromise
-}
-
-declare global {
-  interface Window {
-    YT: any
-    onYouTubeIframeAPIReady?: () => void
-  }
-}
-
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const initial = loadPersisted()
   const [track, setTrack] = useState<PlayerTrack | null>(initial.track)
@@ -108,171 +62,172 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(initial.progress)
   const [duration, setDuration] = useState(0)
 
-  const playerRef = useRef<any>(null)
-  const playerReadyRef = useRef<boolean>(false)
-  const pendingTrackRef = useRef<{ t: PlayerTrack; autoplay: boolean; resumeAt: number } | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
   const restoredRef = useRef<boolean>(false)
   const resumeAtRef = useRef<number>(initial.progress)
-  const tickRef = useRef<number | null>(null)
+  const reqIdRef = useRef<number>(0) // guard against stale fetches
   useEffect(() => { queueRef.current = queue }, [queue])
 
-  // Mount a hidden host element + initialize YT.Player exactly once
+  // Mount a hidden <audio> element used for background-friendly playback.
+  // Keeping it as a real element on the DOM lets the browser keep playing
+  // when the screen locks (unlike a YouTube iframe that pauses on lock).
   useEffect(() => {
     if (typeof window === 'undefined') return
-    let host = document.getElementById('dz-yt-host') as HTMLDivElement | null
-    if (!host) {
-      host = document.createElement('div')
-      host.id = 'dz-yt-host'
-      // Visually hidden but kept in layout so the iframe still loads + plays.
-      // Some browsers refuse to play a 0×0 iframe; use 1×1 with very low opacity.
-      Object.assign(host.style, {
-        position: 'fixed',
-        left: '0px',
-        bottom: '0px',
-        width: '1px',
-        height: '1px',
-        opacity: '0.001',
-        pointerEvents: 'none',
-        zIndex: '-1',
-      } as CSSStyleDeclaration)
-      const inner = document.createElement('div')
-      inner.id = 'dz-yt-player'
-      host.appendChild(inner)
-      document.body.appendChild(host)
+    if (audioRef.current) return
+    let a = document.getElementById('dz-mini-audio') as HTMLAudioElement | null
+    if (!a) {
+      a = document.createElement('audio')
+      a.id = 'dz-mini-audio'
+      a.preload = 'auto'
+      a.style.display = 'none'
+      // Important: keep playing in background tabs
+      ;(a as any).playsInline = true
+      a.setAttribute('playsinline', '')
+      a.setAttribute('webkit-playsinline', '')
+      document.body.appendChild(a)
     }
+    audioRef.current = a
 
-    let cancelled = false
-    loadYouTubeApi().then((YT) => {
-      if (cancelled) return
-      if (playerRef.current) return
-      playerRef.current = new YT.Player('dz-yt-player', {
-        height: '1',
-        width: '1',
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-          fs: 0,
-          iv_load_policy: 3,
-        },
-        events: {
-          onReady: () => {
-            playerReadyRef.current = true
-            // If the user clicked play before the API loaded, do it now.
-            const p = pendingTrackRef.current
-            if (p) {
-              pendingTrackRef.current = null
-              loadIntoPlayer(p.t, p.autoplay, p.resumeAt)
-            }
-          },
-          onStateChange: (e: any) => {
-            const S = window.YT?.PlayerState || {}
-            if (e.data === S.PLAYING) {
-              setPlaying(true)
-              setLoading(false)
-              try {
-                const d = playerRef.current?.getDuration?.() || 0
-                if (d > 0) setDuration(d)
-              } catch {}
-            } else if (e.data === S.PAUSED) {
-              setPlaying(false)
-              setLoading(false)
-            } else if (e.data === S.BUFFERING) {
-              setLoading(true)
-            } else if (e.data === S.ENDED) {
-              setPlaying(false)
-              setLoading(false)
-              if (queueRef.current.length > 0) void next()
-            } else if (e.data === S.CUED) {
-              setLoading(false)
-              try {
-                const d = playerRef.current?.getDuration?.() || 0
-                if (d > 0) setDuration(d)
-              } catch {}
-            }
-          },
-          onError: (e: any) => {
-            console.warn('[mini-player] YT error', e?.data)
-            setLoading(false)
-            setPlaying(false)
-          },
-        },
-      })
-    })
+    const onPlay = () => { setPlaying(true); setLoading(false) }
+    const onPause = () => setPlaying(false)
+    const onWaiting = () => setLoading(true)
+    const onCanPlay = () => setLoading(false)
+    const onLoadedMeta = () => { if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration) }
+    const onDurationChange = () => { if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration) }
+    const onTimeUpdate = () => { if (a) setProgress(a.currentTime || 0) }
+    const onEnded = () => { setPlaying(false); if (queueRef.current.length > 0) void next() }
+    const onError = () => { setLoading(false); setPlaying(false); console.warn('[mini-player] audio error', a?.error) }
 
-    return () => { cancelled = true }
+    a.addEventListener('play', onPlay)
+    a.addEventListener('playing', onPlay)
+    a.addEventListener('pause', onPause)
+    a.addEventListener('waiting', onWaiting)
+    a.addEventListener('canplay', onCanPlay)
+    a.addEventListener('loadedmetadata', onLoadedMeta)
+    a.addEventListener('durationchange', onDurationChange)
+    a.addEventListener('timeupdate', onTimeUpdate)
+    a.addEventListener('ended', onEnded)
+    a.addEventListener('error', onError)
+
+    return () => {
+      a?.removeEventListener('play', onPlay)
+      a?.removeEventListener('playing', onPlay)
+      a?.removeEventListener('pause', onPause)
+      a?.removeEventListener('waiting', onWaiting)
+      a?.removeEventListener('canplay', onCanPlay)
+      a?.removeEventListener('loadedmetadata', onLoadedMeta)
+      a?.removeEventListener('durationchange', onDurationChange)
+      a?.removeEventListener('timeupdate', onTimeUpdate)
+      a?.removeEventListener('ended', onEnded)
+      a?.removeEventListener('error', onError)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Poll currentTime + duration while a track is loaded
-  useEffect(() => {
-    if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null }
-    if (!track) return
-    tickRef.current = window.setInterval(() => {
-      const p = playerRef.current
-      if (!p) return
-      try {
-        const t = p.getCurrentTime?.() || 0
-        const d = p.getDuration?.() || 0
-        setProgress(t)
-        if (d > 0 && d !== duration) setDuration(d)
-      } catch {}
-    }, 500) as unknown as number
-    return () => {
-      if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null }
+  // Set audio source (HLS via hls.js, or direct URL via <audio>)
+  const attachSource = useCallback((srcUrl: string, isHls: boolean) => {
+    const a = audioRef.current
+    if (!a) return
+    // Tear down any existing hls instance first
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy() } catch {}
+      hlsRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track])
+    if (isHls && a.canPlayType('application/vnd.apple.mpegurl')) {
+      a.src = srcUrl
+    } else if (isHls && Hls.isSupported()) {
+      const hls = new Hls({ lowLatencyMode: false, backBufferLength: 30 })
+      hls.loadSource(srcUrl)
+      hls.attachMedia(a)
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data?.fatal) console.warn('[mini-player] HLS fatal error', data)
+      })
+      hlsRef.current = hls
+    } else {
+      a.src = srcUrl
+    }
+  }, [])
 
-  // Internal: load a track into the player (only call when ready)
-  const loadIntoPlayer = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
-    const player = playerRef.current
-    if (!player || !playerReadyRef.current) {
-      // Defer until onReady fires.
-      pendingTrackRef.current = { t, autoplay, resumeAt }
-      return
-    }
-    const videoId = extractVideoId(t.url) || extractVideoId(t.id)
-    if (!videoId) {
-      console.warn('[mini-player] could not extract videoId from', t.url, t.id)
-      setLoading(false)
-      return
-    }
+  const loadTrack = useCallback(async (t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
+    const a = audioRef.current
+    if (!a) return
+    const reqId = ++reqIdRef.current
+    setLoading(true)
+    setProgress(resumeAt > 1 ? resumeAt : 0)
+    setDuration(0)
+
+    // 1) Try direct audio URL (yt-dlp -g, then ytdl-core, then Piped)
+    let attached = false
     try {
-      if (autoplay) {
-        player.loadVideoById({ videoId, startSeconds: resumeAt > 1 ? resumeAt : 0 })
-      } else {
-        player.cueVideoById({ videoId, startSeconds: resumeAt > 1 ? resumeAt : 0 })
-      }
-      // Reset known duration; we'll get the real one from onStateChange.
-      setDuration(0)
-      setProgress(resumeAt > 1 ? resumeAt : 0)
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title, artist: t.channel,
-          artwork: [{ src: t.thumbnail, sizes: '480x360', type: 'image/jpeg' }],
-        })
+      const r = await fetch(`/api/dz-tube/audio-url?url=${encodeURIComponent(t.url)}`)
+      if (reqId !== reqIdRef.current) return
+      if (r.ok) {
+        const d = await r.json()
+        if (d?.streamUrl) {
+          attachSource(d.streamUrl, false)
+          attached = true
+        }
       }
     } catch (e) {
-      console.error('[mini-player] loadIntoPlayer failed', e)
+      console.warn('[mini-player] audio-url failed, will try HLS', e)
+    }
+
+    // 2) Fallback to server-proxied HLS (bypasses signed-IP and CORS issues)
+    if (!attached) {
+      try {
+        attachSource(`/api/dz-tube/audio-stream?url=${encodeURIComponent(t.url)}`, true)
+        attached = true
+      } catch (e) {
+        console.error('[mini-player] HLS fallback failed', e)
+      }
+    }
+
+    if (reqId !== reqIdRef.current) return
+
+    // Seek when metadata becomes available
+    if (resumeAt > 1) {
+      const onMeta = () => { try { a.currentTime = resumeAt } catch {} }
+      a.addEventListener('loadedmetadata', onMeta, { once: true })
+    }
+
+    if (autoplay) {
+      try { await a.play() } catch (e) {
+        console.warn('[mini-player] autoplay blocked', e)
+        setPlaying(false); setLoading(false)
+      }
+    } else {
       setLoading(false)
     }
-  }, [])
+
+    // MediaSession metadata so the lock-screen / notification controls show
+    // the correct title, artist & artwork. This is what allows playback to
+    // continue (and be controllable) while the screen is locked.
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: t.title || '',
+          artist: t.channel || '',
+          album: 'DZ Tube',
+          artwork: t.thumbnail
+            ? [
+                { src: t.thumbnail, sizes: '96x96',  type: 'image/jpeg' },
+                { src: t.thumbnail, sizes: '192x192', type: 'image/jpeg' },
+                { src: t.thumbnail, sizes: '512x512', type: 'image/jpeg' },
+              ]
+            : [],
+        })
+      } catch {}
+    }
+  }, [attachSource])
 
   const playInternal = useCallback(async (t: PlayerTrack, autoplay: boolean = true) => {
     setTrack(t)
-    setLoading(true)
     const resumeAt = resumeAtRef.current
     resumeAtRef.current = 0
-    // Ensure the API is loaded; the actual call to loadVideoById will happen
-    // either now (if ready) or once onReady fires.
-    await loadYouTubeApi()
-    loadIntoPlayer(t, autoplay, resumeAt)
-  }, [loadIntoPlayer])
+    await loadTrack(t, autoplay, resumeAt)
+  }, [loadTrack])
 
   const next = useCallback(async () => {
     const q = queueRef.current
@@ -284,7 +239,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
   const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
 
-  // Restore previous track on first mount (cued, ready to resume)
+  // Restore previous track on first mount (cued, ready to resume — do NOT
+  // autoplay because browsers block playback without a user gesture)
   useEffect(() => {
     if (restoredRef.current) return
     restoredRef.current = true
@@ -294,11 +250,20 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist track / queue / progress
+  // Persist track / queue (progress is persisted on its own interval)
   useEffect(() => {
     persist({ track, queue, progress: 0 })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track, queue])
+
+  useEffect(() => {
+    if (!track) return
+    const id = setInterval(() => {
+      const cur = audioRef.current?.currentTime || 0
+      persist({ track, queue: queueRef.current, progress: cur })
+    }, 4000)
+    return () => clearInterval(id)
+  }, [track])
 
   // Toggle a global body class so other pages can lift their fixed/sticky
   // chat inputs above the floating mini-player (~84px tall + 16px gap).
@@ -307,15 +272,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     if (track) document.body.classList.add('dz-mini-active')
     else document.body.classList.remove('dz-mini-active')
     return () => { document.body.classList.remove('dz-mini-active') }
-  }, [track])
-  useEffect(() => {
-    if (!track) return
-    const id = setInterval(() => {
-      let cur = 0
-      try { cur = playerRef.current?.getCurrentTime?.() || 0 } catch {}
-      persist({ track, queue: queueRef.current, progress: cur })
-    }, 4000)
-    return () => clearInterval(id)
   }, [track])
 
   const enqueue = useCallback((t: PlayerTrack) => {
@@ -329,30 +285,31 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const clearQueue = useCallback(() => setQueue([]), [])
 
   const toggle = useCallback(() => {
-    const p = playerRef.current
-    if (!p || !track) return
-    try {
-      const S = window.YT?.PlayerState || {}
-      const state = p.getPlayerState?.()
-      if (state === S.PLAYING || state === S.BUFFERING) {
-        p.pauseVideo()
-      } else {
-        p.playVideo()
-      }
-    } catch (e) {
-      console.warn('[mini-player toggle]', e)
+    const a = audioRef.current
+    if (!a || !track) return
+    if (a.paused || a.ended) {
+      void a.play().catch(e => console.warn('[mini-player toggle:play]', e))
+    } else {
+      a.pause()
     }
   }, [track])
 
   const seek = useCallback((sec: number) => {
-    const p = playerRef.current
-    if (!p) return
-    try { p.seekTo(sec, true); setProgress(sec) } catch {}
+    const a = audioRef.current
+    if (!a) return
+    try { a.currentTime = sec; setProgress(sec) } catch {}
   }, [])
 
   const stop = useCallback(() => {
-    const p = playerRef.current
-    if (p) { try { p.stopVideo() } catch {} }
+    const a = audioRef.current
+    if (a) {
+      try { a.pause() } catch {}
+      try { a.removeAttribute('src'); a.load() } catch {}
+    }
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy() } catch {}
+      hlsRef.current = null
+    }
     setTrack(null)
     setPlaying(false)
     setProgress(0)
@@ -360,22 +317,23 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
-  // Full MediaSession + Wake Lock wiring so audio keeps playing when the
-  // screen turns off and the OS lock-screen shows usable controls.
+  // Wire MediaSession action handlers — the OS uses these to drive the
+  // lock-screen / Bluetooth headset / notification-shade media controls.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     const ms = navigator.mediaSession
     const safe = (action: string, handler: any) => { try { ms.setActionHandler(action as any, handler) } catch {} }
-    safe('play', () => { try { playerRef.current?.playVideo?.() } catch {} })
-    safe('pause', () => { try { playerRef.current?.pauseVideo?.() } catch {} })
+    safe('play', () => { void audioRef.current?.play().catch(() => {}) })
+    safe('pause', () => { try { audioRef.current?.pause() } catch {} })
     safe('stop', () => stop())
     safe('nexttrack', () => { void next() })
-    safe('previoustrack', () => { try { playerRef.current?.seekTo?.(0, true); setProgress(0) } catch {} })
-    safe('seekbackward', (d: any) => { const cur = playerRef.current?.getCurrentTime?.() || 0; seek(Math.max(0, cur - (d?.seekOffset || 10))) })
-    safe('seekforward', (d: any) => { const cur = playerRef.current?.getCurrentTime?.() || 0; seek(cur + (d?.seekOffset || 10)) })
+    safe('previoustrack', () => { try { if (audioRef.current) { audioRef.current.currentTime = 0; setProgress(0) } } catch {} })
+    safe('seekbackward', (d: any) => { const cur = audioRef.current?.currentTime || 0; seek(Math.max(0, cur - (d?.seekOffset || 10))) })
+    safe('seekforward', (d: any) => { const cur = audioRef.current?.currentTime || 0; seek(cur + (d?.seekOffset || 10)) })
     safe('seekto', (d: any) => { if (typeof d?.seekTime === 'number') seek(d.seekTime) })
     return () => {
-      ['play','pause','stop','nexttrack','previoustrack','seekbackward','seekforward','seekto'].forEach(a => safe(a, null))
+      ;['play','pause','stop','nexttrack','previoustrack','seekbackward','seekforward','seekto']
+        .forEach(a => safe(a, null))
     }
   }, [next, seek, stop])
 
@@ -404,9 +362,10 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; window.clearInterval(id) }
   }, [track, duration, progress])
 
-  // Wake Lock — keep screen from sleeping while a track is actively playing.
-  // (On phones the lock-screen audio still plays via MediaSession anyway, but
-  // this prevents the tab from being aggressively suspended on some browsers.)
+  // Wake Lock — best-effort on browsers that support it. Audio playback via a
+  // real <audio> element does NOT actually need this to keep playing through
+  // a screen lock (MediaSession + audio focus handle that), but on some
+  // mobile browsers it helps prevent aggressive tab suspension.
   useEffect(() => {
     if (typeof navigator === 'undefined') return
     const anyNav = navigator as any

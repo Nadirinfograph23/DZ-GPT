@@ -53,7 +53,9 @@ const CATEGORIES: Category[] = [
 
 const QUICK_SUGGESTIONS = [
   'القرآن الكريم سعود الشريم',
-  'القرآن الكريم المشاري',
+  'تعلم اللغة الإنجليزية للمبتدئين',
+  'English conversation practice for beginners',
+  'BBC Learning English',
   'الشروق نيوز بث مباشر',
   'النهار TV بث مباشر',
   'الجزائرية One بث مباشر',
@@ -101,7 +103,6 @@ export default function DZTube() {
   const [embedId, setEmbedId] = useState<string | null>(null)
   const [embedTitle, setEmbedTitle] = useState<string>('')
   const [downloadMenuFor, setDownloadMenuFor] = useState<string | null>(null)
-  const [downloadMenuPos, setDownloadMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [qualityCache, setQualityCache] = useState<Record<string, { qualities: Quality[]; loading: boolean; err: boolean }>>({})
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -119,6 +120,19 @@ export default function DZTube() {
 
   useEffect(() => { saveHistory(history) }, [history])
   useEffect(() => { inputRef.current?.focus() }, [])
+
+  // Lock background scroll while the download modal is open and close on Esc
+  useEffect(() => {
+    if (!downloadMenuFor) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setDownloadMenuFor(null) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [downloadMenuFor])
 
   const search = useCallback(async (q: string, categoryKey: string | null = null) => {
     const trimmed = q.trim()
@@ -421,10 +435,8 @@ export default function DZTube() {
                       <div className="dzt-act-dl-wrap">
                         <button
                           className="dzt-act dzt-act-dl"
-                          onClick={(e) => {
+                          onClick={() => {
                             if (downloadMenuFor === r.id) { setDownloadMenuFor(null); return }
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                            setDownloadMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
                             setDownloadMenuFor(r.id)
                             fetchQualities(r)
                           }}
@@ -436,54 +448,6 @@ export default function DZTube() {
                             : <><Download size={13} /> <ChevronDown size={11} /></>
                           }
                         </button>
-                        {downloadMenuFor === r.id && createPortal(
-                          <>
-                            <div className="dzt-dl-overlay" onClick={() => setDownloadMenuFor(null)} />
-                            <div
-                              className="dzt-dl-menu"
-                              style={{ top: downloadMenuPos.top, right: downloadMenuPos.right }}
-                            >
-                              <div className="dzt-dl-section">
-                                <div className="dzt-dl-section-title"><Video size={12} /> فيديو</div>
-                                {qualityCache[r.id]?.loading && (
-                                  <div className="dzt-dl-loading"><Loader2 size={13} className="dzt-spin" /> جاري الفحص…</div>
-                                )}
-                                {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length === 0 && (
-                                  <div className="dzt-dl-empty">لا توجد جودات متاحة</div>
-                                )}
-                                {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length > 0 && (
-                                  <div className="dzt-dl-grid">
-                                    {(qualityCache[r.id]?.qualities || []).map(q => {
-                                      const n = Number(q)
-                                      const tag = n >= 2160 ? '4K' : n >= 1440 ? '2K' : n >= 1080 ? 'HD' : n >= 720 ? 'HD' : 'SD'
-                                      return (
-                                        <button key={q} className="dzt-dl-tile" onClick={() => startDownload(r, 'mp4', q)} title={`MP4 ${q}p`}>
-                                          <span className="dzt-dl-tile-q">{q}p</span>
-                                          <span className="dzt-dl-tile-tag">{tag} · MP4</span>
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="dzt-dl-divider" />
-                              <div className="dzt-dl-section">
-                                <div className="dzt-dl-section-title"><Music size={12} /> اجعلها صوت</div>
-                                <div className="dzt-dl-grid">
-                                  <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'audio', '720')} title="استخراج الصوت بصيغة M4A">
-                                    <span className="dzt-dl-tile-q">M4A</span>
-                                    <span className="dzt-dl-tile-tag">صوت أصلي</span>
-                                  </button>
-                                  <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'mp3', '720')} title="تحويل إلى MP3">
-                                    <span className="dzt-dl-tile-q">MP3</span>
-                                    <span className="dzt-dl-tile-tag">جودة عالية</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </>,
-                          document.body
-                        )}
                       </div>
                     </div>
                   </div>
@@ -493,6 +457,74 @@ export default function DZTube() {
           </>
         )}
       </main>
+
+      {downloadMenuFor && (() => {
+        const r = results.find(x => x.id === downloadMenuFor)
+        if (!r) return null
+        const cache = qualityCache[r.id]
+        return createPortal(
+          <div className="dzt-dl-modal-root" role="dialog" aria-modal="true" aria-labelledby="dzt-dl-modal-title">
+            <div className="dzt-dl-modal-overlay" onClick={() => setDownloadMenuFor(null)} />
+            <div className="dzt-dl-modal-card" onClick={(e) => e.stopPropagation()}>
+              <header className="dzt-dl-modal-head">
+                <div className="dzt-dl-modal-head-l">
+                  <div className="dzt-dl-modal-icon"><Download size={16} /></div>
+                  <div>
+                    <h3 id="dzt-dl-modal-title" className="dzt-dl-modal-title">تحميل الفيديو</h3>
+                    <p className="dzt-dl-modal-sub" title={r.title}>{r.title}</p>
+                  </div>
+                </div>
+                <button className="dzt-dl-modal-close" onClick={() => setDownloadMenuFor(null)} aria-label="إغلاق">
+                  <X size={18} />
+                </button>
+              </header>
+
+              <div className="dzt-dl-modal-body">
+                <div className="dzt-dl-section">
+                  <div className="dzt-dl-section-title"><Video size={12} /> فيديو (MP4)</div>
+                  {cache?.loading && (
+                    <div className="dzt-dl-loading"><Loader2 size={14} className="dzt-spin" /> جاري فحص الجودات…</div>
+                  )}
+                  {!cache?.loading && (cache?.qualities || []).length === 0 && (
+                    <div className="dzt-dl-empty">لا توجد جودات فيديو متاحة لهذا المقطع</div>
+                  )}
+                  {!cache?.loading && (cache?.qualities || []).length > 0 && (
+                    <div className="dzt-dl-grid">
+                      {(cache?.qualities || []).map(q => {
+                        const n = Number(q)
+                        const tag = n >= 2160 ? '4K' : n >= 1440 ? '2K' : n >= 1080 ? 'HD' : n >= 720 ? 'HD' : 'SD'
+                        return (
+                          <button key={q} className="dzt-dl-tile" onClick={() => startDownload(r, 'mp4', q)} title={`MP4 ${q}p`}>
+                            <span className="dzt-dl-tile-q">{q}p</span>
+                            <span className="dzt-dl-tile-tag">{tag} · MP4</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="dzt-dl-divider" />
+
+                <div className="dzt-dl-section">
+                  <div className="dzt-dl-section-title"><Music size={12} /> صوت فقط</div>
+                  <div className="dzt-dl-grid">
+                    <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'audio', '720')} title="استخراج الصوت بصيغة M4A">
+                      <span className="dzt-dl-tile-q">M4A</span>
+                      <span className="dzt-dl-tile-tag">صوت أصلي</span>
+                    </button>
+                    <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'mp3', '720')} title="تحويل إلى MP3">
+                      <span className="dzt-dl-tile-q">MP3</span>
+                      <span className="dzt-dl-tile-tag">جودة عالية</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      })()}
 
       {toast && (
         <div className={`dzt-toast dzt-toast-${toast.kind}`} role="status">

@@ -5331,6 +5331,45 @@ app.post('/api/dz-tube/info', async (req, res) => {
 
 const DZ_TUBE_QUALITY_MAP = { '144': 144, '240': 240, '360': 360, '480': 480, '720': 720, '1080': 1080, '1440': 1440, '2160': 2160 }
 
+// Stream a remote (upstream) URL through this server with a forced
+// Content-Disposition so the browser triggers a real download instead of
+// trying to play the file inline. Used for the Piped/googlevideo fallback
+// path when yt-dlp fails on Vercel due to bot challenges.
+async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName) {
+  try {
+    const fwdHeaders = { 'User-Agent': 'Mozilla/5.0' }
+    if (req.headers.range) fwdHeaders['Range'] = req.headers.range
+    const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
+    if (!upstream.ok && upstream.status !== 206) {
+      console.warn('[DZTube:upstream-proxy] upstream', upstream.status)
+      if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
+      return
+    }
+    res.setHeader('Content-Type', mime)
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`)
+    const passHeaders = ['content-length', 'content-range', 'accept-ranges']
+    for (const h of passHeaders) {
+      const v = upstream.headers.get(h)
+      if (v) res.setHeader(h, v)
+    }
+    res.status(upstream.status === 206 ? 206 : 200)
+    if (!upstream.body) { res.end(); return }
+    const reader = upstream.body.getReader()
+    let cancelled = false
+    req.on('close', () => { cancelled = true; try { reader.cancel() } catch {} })
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done || cancelled) break
+      if (!res.write(value)) await new Promise(r => res.once('drain', r))
+    }
+    res.end()
+  } catch (e) {
+    console.error('[DZTube:upstream-proxy] failed:', e.message)
+    if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
+    else { try { res.end() } catch {} }
+  }
+}
+
 // Stream a buffered file to the client with Content-Length and cleanup
 function streamFileToClient(req, res, filePath, mime, downloadName) {
   fs.stat(filePath, (err, st) => {
@@ -5438,14 +5477,19 @@ app.get('/api/dz-tube/download', async (req, res) => {
         safeUnlink(outPath)
         if (res.headersSent) return res.end()
         // Try Piped fallback (free public YouTube proxy) before giving up.
-        // This bypasses Vercel-IP bot challenges by getting a direct
-        // googlevideo URL that the user's browser fetches itself.
+        // We PROXY the resulting googlevideo URL through this server so the
+        // browser (a) actually triggers a download (Content-Disposition is
+        // attached) and (b) avoids googlevideo's signed-IP restriction.
         try {
           const vid = extractYouTubeVideoId(url)
           const piped = await fetchPipedStreams(vid, { isAudio, height: h })
           if (piped?.url) {
             console.log('[DZTube:download] Piped fallback hit for', vid)
-            return res.redirect(302, piped.url)
+            const fallbackName = isAudio
+              ? `${safeName}.${piped.ext === 'webm' ? 'webm' : 'm4a'}`
+              : `${safeName}_${h}p.${piped.ext === 'webm' ? 'webm' : 'mp4'}`
+            const fallbackMime = piped.mime || (isAudio ? 'audio/mp4' : 'video/mp4')
+            return await streamUpstreamToClient(req, res, piped.url, fallbackMime, fallbackName)
           }
         } catch (e) { console.warn('[DZTube:download] Piped fallback error', e.message) }
         const lower = stderrBuf.toLowerCase()

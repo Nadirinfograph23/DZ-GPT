@@ -5293,12 +5293,48 @@ function computeDownloadableHeights(heights, hasFfmpeg) {
   return heights.includes(360) || heights.length > 0 ? [360] : []
 }
 
+// Best-effort: ask ytdown.to which MP4 video heights are downloadable as
+// single-file (audio+video already muxed). This bypasses the need for ffmpeg
+// on the server and lets us expose the full range of qualities (360 → 1080+)
+// in the UI even on serverless deployments. Returns a sorted-desc array of
+// heights, or [] on any failure.
+async function fetchYtdownHeights(youtubeUrl) {
+  try {
+    const yt = await fetchYtdownItems(youtubeUrl)
+    const heights = (yt.items || [])
+      .filter(it => it.type === 'Video' && it.format === 'MP4' && /^\d+p$/i.test(it.quality))
+      .map(it => parseInt(it.quality, 10))
+      .filter(h => Number.isFinite(h) && h > 0)
+    return Array.from(new Set(heights)).sort((a, b) => b - a)
+  } catch (e) {
+    // Don't surface ytdown errors here — the JS/yt-dlp path already populated
+    // a fallback set. Just log for diagnostics.
+    console.warn('[DZTube:info:ytdown-heights]', e.message)
+    return []
+  }
+}
+
+// Merge two height arrays (server-known + ytdown), dedupe, sort desc.
+function mergeDownloadableHeights(a, b) {
+  const set = new Set()
+  for (const h of a || []) if (Number.isFinite(h) && h > 0) set.add(h)
+  for (const h of b || []) if (Number.isFinite(h) && h > 0) set.add(h)
+  return Array.from(set).sort((x, y) => y - x)
+}
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
 
   const hasFfmpeg = await ffmpegAvailable()
   const dlpBin = await ytDlpBinaryPath()
+
+  // Run the ytdown.to height probe in parallel with the primary metadata
+  // fetch — that way the multi-quality download menu is populated even on
+  // serverless deployments where ffmpeg isn't on PATH (the previous code
+  // path only surfaced 360p in that case).
+  const ytdownHeightsPromise = fetchYtdownHeights(url)
+
   if (dlpBin) {
     try {
       const info = await runYtDlpJSONWith(dlpBin, url)
@@ -5306,6 +5342,8 @@ app.post('/api/dz-tube/info', async (req, res) => {
         .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
         .map(f => f.height)
       const heights = Array.from(new Set(formats)).sort((a, b) => b - a)
+      const serverHeights = computeDownloadableHeights(heights, hasFfmpeg)
+      const ytdownHeights = await ytdownHeightsPromise
       return res.json({
         title: info.title || 'بدون عنوان',
         thumbnail: info.thumbnail || null,
@@ -5313,9 +5351,9 @@ app.post('/api/dz-tube/info', async (req, res) => {
         uploader: info.uploader || info.channel || '',
         view_count: info.view_count || 0,
         heights,
-        downloadableHeights: computeDownloadableHeights(heights, hasFfmpeg),
+        downloadableHeights: mergeDownloadableHeights(serverHeights, ytdownHeights),
         hasFfmpeg,
-        available: { mp4: heights.length > 0, mp3: true, audio: true },
+        available: { mp4: heights.length > 0 || ytdownHeights.length > 0, mp3: true, audio: true },
       })
     } catch (e) {
       console.warn('[DZTube:info:dlp-fail, trying JS]', e.message)
@@ -5325,10 +5363,30 @@ app.post('/api/dz-tube/info', async (req, res) => {
     const out = await jsInfo(url)
     delete out._info
     out.hasFfmpeg = hasFfmpeg
-    out.downloadableHeights = computeDownloadableHeights(out.heights || [], hasFfmpeg)
+    const serverHeights = computeDownloadableHeights(out.heights || [], hasFfmpeg)
+    const ytdownHeights = await ytdownHeightsPromise
+    out.downloadableHeights = mergeDownloadableHeights(serverHeights, ytdownHeights)
     out.available = { ...(out.available || {}), audio: true }
+    if (ytdownHeights.length > 0) out.available.mp4 = true
     res.json(out)
   } catch (e) {
+    // Even if both ytdl-core and yt-dlp failed, ytdown.to may still know
+    // the available qualities — return a minimal payload so the UI can
+    // still let the user pick a quality.
+    const ytdownHeights = await ytdownHeightsPromise
+    if (ytdownHeights.length > 0) {
+      return res.json({
+        title: 'بدون عنوان',
+        thumbnail: null,
+        duration: 0,
+        uploader: '',
+        view_count: 0,
+        heights: ytdownHeights,
+        downloadableHeights: ytdownHeights,
+        hasFfmpeg,
+        available: { mp4: true, mp3: true, audio: true },
+      })
+    }
     console.error('[DZTube:info:js]', e.message)
     res.status(500).json({ error: 'تعذر جلب معلومات الفيديو' })
   }

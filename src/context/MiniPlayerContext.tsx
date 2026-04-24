@@ -77,9 +77,18 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setTrack(t)
     try {
+      // CRITICAL: set src and call play() synchronously inside the user gesture.
+      // The server-side /api/dz-tube/audio-stream redirects (302) to the direct
+      // googlevideo URL so the browser gets full Range + duration support natively.
       a.src = `/api/dz-tube/audio-stream?url=${encodeURIComponent(t.url)}`
-      if (autoplay) await a.play()
-      else a.load()
+      a.load()
+      if (autoplay) {
+        try {
+          await a.play()
+        } catch (err) {
+          console.warn('[mini-player] autoplay blocked:', err)
+        }
+      }
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: t.title, artist: t.channel,
@@ -173,23 +182,25 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     const a = audioRef.current
     if (!a || !track) return
     if (!a.paused) { a.pause(); return }
-    // If the src was lost or never set (e.g. after a reload-restore), reload it now.
-    const expected = `/api/dz-tube/audio-stream?url=${encodeURIComponent(track.url)}`
-    if (!a.src || !a.src.endsWith(expected)) {
-      a.src = expected
-    }
-    setLoading(true)
-    const p = a.play()
-    if (p && typeof p.then === 'function') {
-      p.then(() => setLoading(false)).catch(err => {
-        console.error('[mini-player toggle] play failed:', err)
+    // Try to resume what's already loaded first — this preserves the user
+    // gesture for browser autoplay policies.
+    if (a.src && a.readyState >= 2) {
+      setLoading(true)
+      const p = a.play()
+      if (p && typeof p.then === 'function') {
+        p.then(() => setLoading(false)).catch(err => {
+          console.warn('[mini-player toggle] resume failed, re-resolving:', err)
+          setLoading(false)
+          void playInternal(track)
+        })
+      } else {
         setLoading(false)
-        // last resort: full re-init
-        void playInternal(track)
-      })
-    } else {
-      setLoading(false)
+      }
+      return
     }
+    // No src yet (or stale) — re-resolve and play. Must be inside the same
+    // user gesture for autoplay; do NOT await before calling .play().
+    void playInternal(track)
   }, [track, playInternal])
 
   const seek = useCallback((sec: number) => {

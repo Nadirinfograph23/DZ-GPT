@@ -4849,9 +4849,59 @@ async function downloadAudioToFile(url, outPath) {
   fs.renameSync(tmpFixed, outPath)
 }
 
+// Resolve a direct googlevideo.com audio URL for the given YouTube link.
+// Tries yt-dlp first (local), falls back to ytdl-core (works on Vercel).
+async function resolveDirectAudioUrl(url) {
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    try {
+      return await new Promise((resolve, reject) => {
+        // Force direct https progressive (no HLS / m3u8 — browsers can't play
+        // those natively in <audio>). Prefer itag 140 (m4a 128k AAC).
+        const proc = spawn('yt-dlp', [
+          '-f', 'ba[ext=m4a][protocol^=https][protocol!*=m3u8][protocol!*=hls]/140/bestaudio[protocol^=https][protocol!*=m3u8][protocol!*=hls]/bestaudio[ext=m4a]',
+          '-g', '--no-warnings', '--no-playlist', url,
+        ])
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', reject)
+        proc.on('close', code => {
+          const u = out.trim().split('\n')[0]
+          if (code !== 0 || !u) return reject(new Error(err.slice(0, 200) || 'no url'))
+          if (/\.m3u8/i.test(u)) return reject(new Error('got HLS url, want progressive'))
+          resolve(u)
+        })
+      })
+    } catch (e) {
+      console.warn('[audio-stream] yt-dlp resolve failed, falling back to JS:', e.message)
+    }
+  }
+  const info = await ytdl.getInfo(url)
+  // Filter to non-HLS m4a/webm progressive formats only
+  const candidates = info.formats.filter(f =>
+    f.hasAudio && !f.hasVideo && f.url && !/\.m3u8/i.test(f.url) && (f.container === 'mp4' || f.container === 'webm')
+  )
+  const fmt = ytdl.chooseFormat(candidates.length ? candidates : info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+  if (!fmt?.url) throw new Error('no audio format')
+  return fmt.url
+}
+
 app.get('/api/dz-tube/audio-stream', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
+
+  // PREFERRED PATH: redirect the browser to the direct googlevideo.com URL.
+  // Lets the browser handle Range/duration/seeking natively (which is what
+  // HTML5 <audio> needs for the MiniPlayer to display time and play).
+  // Works on Vercel too, since CSP allows https://*.googlevideo.com as media.
+  try {
+    const direct = await resolveDirectAudioUrl(url)
+    res.setHeader('Cache-Control', 'no-store')
+    return res.redirect(302, direct)
+  } catch (e) {
+    console.warn('[audio-stream] direct-url resolve failed, falling back to proxy:', e.message)
+  }
 
   const hash = crypto.createHash('sha1').update(url).digest('hex').slice(0, 20)
   const filePath = `${audioCacheDir}/${hash}.m4a`

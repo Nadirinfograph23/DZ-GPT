@@ -4596,8 +4596,24 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   }
 }
 
-// ===== DZ TUBE — In-app YouTube info & download via yt-dlp =====
+// ===== DZ TUBE — In-app YouTube info & download via yt-dlp (with JS fallback) =====
 import { spawn } from 'child_process'
+import fs from 'fs'
+import os from 'os'
+import ytdl from '@distube/ytdl-core'
+import YouTubeSR from 'youtube-sr'
+
+const YouTube = YouTubeSR.default || YouTubeSR
+
+let _ytDlpAvailable = null
+function ytDlpAvailable() {
+  if (_ytDlpAvailable !== null) return _ytDlpAvailable
+  return new Promise(resolve => {
+    const p = spawn('yt-dlp', ['--version'])
+    p.on('error', () => { _ytDlpAvailable = false; resolve(false) })
+    p.on('close', code => { _ytDlpAvailable = code === 0; resolve(_ytDlpAvailable) })
+  })
+}
 
 function runYtDlpJSON(url) {
   return new Promise((resolve, reject) => {
@@ -4615,6 +4631,45 @@ function runYtDlpJSON(url) {
   })
 }
 
+// JS-only fallback (works on Vercel where yt-dlp binary is unavailable)
+async function jsSearch(q, limit) {
+  const items = await YouTube.search(q, { limit, type: 'video', safeSearch: false })
+  return items.filter(v => v && v.id).map(v => ({
+    id: v.id,
+    title: v.title || 'بدون عنوان',
+    url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+    thumbnail: v.thumbnail?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+    duration: Math.floor((v.duration || 0) / 1000),
+    channel: v.channel?.name || '',
+    views: v.views || 0,
+  }))
+}
+
+async function jsInfo(url) {
+  const info = await ytdl.getInfo(url)
+  const vd = info.videoDetails
+  const heights = Array.from(new Set(
+    info.formats.filter(f => f.hasVideo && f.height).map(f => f.height)
+  )).sort((a, b) => b - a)
+  return {
+    title: vd.title || 'بدون عنوان',
+    thumbnail: vd.thumbnails?.[vd.thumbnails.length - 1]?.url || null,
+    duration: Number(vd.lengthSeconds) || 0,
+    uploader: vd.author?.name || '',
+    view_count: Number(vd.viewCount) || 0,
+    heights,
+    available: { mp4: heights.length > 0, mp3: true },
+    _info: info,
+  }
+}
+
+const TMP_DIR = path.join(os.tmpdir(), 'dz-tube')
+try { fs.mkdirSync(TMP_DIR, { recursive: true }) } catch {}
+function tmpFile(ext) {
+  return path.join(TMP_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`)
+}
+function safeUnlink(p) { fs.unlink(p, () => {}) }
+
 function isValidYouTubeUrl(u) {
   if (typeof u !== 'string' || u.length > 2048) return false
   try {
@@ -4623,49 +4678,48 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
-// Search YouTube (no API key — uses yt-dlp ytsearch)
+// Search YouTube — yt-dlp first, JS fallback (works on Vercel)
 app.get('/api/dz-tube/search', async (req, res) => {
   const q = String(req.query.q || '').trim()
   const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 12))
   if (!q) return res.status(400).json({ error: 'Query is required' })
-  try {
-    const args = ['--flat-playlist', '-J', '--no-warnings', '--default-search', 'ytsearch', `ytsearch${limit}:${q}`]
-    const proc = spawn('yt-dlp', args)
-    let out = '', err = '', responded = false
-    const respond = (status, body) => {
-      if (responded || res.headersSent) return
-      responded = true
-      res.status(status).json(body)
+
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    try {
+      const results = await new Promise((resolve, reject) => {
+        const args = ['--flat-playlist', '-J', '--no-warnings', '--default-search', 'ytsearch', `ytsearch${limit}:${q}`]
+        const proc = spawn('yt-dlp', args)
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', reject)
+        proc.on('close', code => {
+          if (code !== 0) return reject(new Error(err.slice(0, 200) || `exit ${code}`))
+          try {
+            const data = JSON.parse(out)
+            resolve((data.entries || []).filter(e => e && e.id).map(e => ({
+              id: e.id,
+              title: e.title || 'بدون عنوان',
+              url: e.url || `https://www.youtube.com/watch?v=${e.id}`,
+              thumbnail: e.thumbnails?.[e.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`,
+              duration: e.duration || 0,
+              channel: e.channel || e.uploader || '',
+              views: e.view_count || 0,
+            })))
+          } catch (e) { reject(e) }
+        })
+      })
+      return res.json({ results })
+    } catch (e) {
+      console.warn('[DZTube:search:dlp-fail, trying JS]', e.message)
     }
-    proc.stdout.on('data', d => { out += d.toString() })
-    proc.stderr.on('data', d => { err += d.toString() })
-    proc.on('close', code => {
-      if (code !== 0) {
-        console.warn('[DZTube:search]', err.slice(0, 300))
-        return respond(500, { error: 'تعذر البحث' })
-      }
-      try {
-        const data = JSON.parse(out)
-        const results = (data.entries || []).filter(e => e && e.id).map(e => ({
-          id: e.id,
-          title: e.title || 'بدون عنوان',
-          url: e.url || `https://www.youtube.com/watch?v=${e.id}`,
-          thumbnail: e.thumbnails?.[e.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`,
-          duration: e.duration || 0,
-          channel: e.channel || e.uploader || '',
-          views: e.view_count || 0,
-        }))
-        respond(200, { results })
-      } catch (e) {
-        console.error('[DZTube:search:parse]', e.message)
-        respond(500, { error: 'فشل تحليل النتائج' })
-      }
-    })
-    proc.on('error', e => {
-      console.error('[DZTube:search:spawn]', e.message)
-      respond(500, { error: 'فشل البحث' })
-    })
+  }
+  try {
+    const results = await jsSearch(q, limit)
+    res.json({ results })
   } catch (e) {
+    console.error('[DZTube:search:js]', e.message)
     res.status(500).json({ error: 'فشل البحث' })
   }
 })
@@ -4674,50 +4728,92 @@ app.get('/api/dz-tube/search', async (req, res) => {
 app.get('/api/dz-tube/audio-url', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
+
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    try {
+      const streamUrl = await new Promise((resolve, reject) => {
+        const proc = spawn('yt-dlp', ['-f', 'bestaudio[ext=m4a]/bestaudio', '-g', '--no-warnings', '--no-playlist', url])
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', reject)
+        proc.on('close', code => {
+          const u = out.trim().split('\n')[0]
+          if (code !== 0 || !u) return reject(new Error(err.slice(0, 200) || 'no url'))
+          resolve(u)
+        })
+      })
+      return res.json({ streamUrl })
+    } catch (e) {
+      console.warn('[DZTube:audio-url:dlp-fail, trying JS]', e.message)
+    }
+  }
   try {
-    const proc = spawn('yt-dlp', ['-f', 'bestaudio[ext=m4a]/bestaudio', '-g', '--no-warnings', '--no-playlist', url])
-    let out = '', err = ''
-    proc.stdout.on('data', d => { out += d.toString() })
-    proc.stderr.on('data', d => { err += d.toString() })
-    proc.on('close', code => {
-      const streamUrl = out.trim().split('\n')[0]
-      if (code !== 0 || !streamUrl) {
-        console.warn('[DZTube:audio-url]', err.slice(0, 200))
-        return res.status(500).json({ error: 'تعذر استخراج الصوت' })
-      }
-      res.json({ streamUrl })
-    })
-    proc.on('error', () => res.status(500).json({ error: 'فشل الاستخراج' }))
-  } catch {
-    res.status(500).json({ error: 'فشل الاستخراج' })
+    const info = await ytdl.getInfo(url)
+    const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+    if (!fmt?.url) throw new Error('no audio format')
+    res.json({ streamUrl: fmt.url })
+  } catch (e) {
+    console.error('[DZTube:audio-url:js]', e.message)
+    res.status(500).json({ error: 'تعذر استخراج الصوت' })
   }
 })
 
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
+
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    try {
+      const info = await runYtDlpJSON(url)
+      const formats = (info.formats || [])
+        .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
+        .map(f => f.height)
+      const heights = Array.from(new Set(formats)).sort((a, b) => b - a)
+      return res.json({
+        title: info.title || 'بدون عنوان',
+        thumbnail: info.thumbnail || null,
+        duration: info.duration || 0,
+        uploader: info.uploader || info.channel || '',
+        view_count: info.view_count || 0,
+        heights,
+        available: { mp4: heights.length > 0, mp3: true },
+      })
+    } catch (e) {
+      console.warn('[DZTube:info:dlp-fail, trying JS]', e.message)
+    }
+  }
   try {
-    const info = await runYtDlpJSON(url)
-    const formats = (info.formats || [])
-      .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
-      .map(f => ({ height: f.height, ext: f.ext, vcodec: f.vcodec, acodec: f.acodec, filesize: f.filesize || f.filesize_approx || null, format_id: f.format_id }))
-    const heights = Array.from(new Set(formats.map(f => f.height))).sort((a, b) => b - a)
-    res.json({
-      title: info.title || 'بدون عنوان',
-      thumbnail: info.thumbnail || null,
-      duration: info.duration || 0,
-      uploader: info.uploader || info.channel || '',
-      view_count: info.view_count || 0,
-      heights,
-      available: { mp4: heights.length > 0, mp3: true },
-    })
-  } catch (err) {
-    console.error('[DZTube:info]', err.message)
+    const out = await jsInfo(url)
+    delete out._info
+    res.json(out)
+  } catch (e) {
+    console.error('[DZTube:info:js]', e.message)
     res.status(500).json({ error: 'تعذر جلب معلومات الفيديو' })
   }
 })
 
 const DZ_TUBE_QUALITY_MAP = { '360': 360, '720': 720, '1080': 1080 }
+
+// Stream a buffered file to the client with Content-Length and cleanup
+function streamFileToClient(req, res, filePath, mime, downloadName) {
+  fs.stat(filePath, (err, st) => {
+    if (err || !st) {
+      if (!res.headersSent) res.status(500).end('فشل التحميل')
+      return safeUnlink(filePath)
+    }
+    res.setHeader('Content-Type', mime)
+    res.setHeader('Content-Length', String(st.size))
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`)
+    const rs = fs.createReadStream(filePath)
+    rs.on('error', () => { try { res.end() } catch {} ; safeUnlink(filePath) })
+    rs.on('close', () => safeUnlink(filePath))
+    req.on('close', () => { rs.destroy(); safeUnlink(filePath) })
+    rs.pipe(res)
+  })
+}
 
 app.get('/api/dz-tube/download', async (req, res) => {
   const url = String(req.query.url || '')
@@ -4727,40 +4823,94 @@ app.get('/api/dz-tube/download', async (req, res) => {
   if (!isValidYouTubeUrl(url)) return res.status(400).send('رابط YouTube غير صالح')
   if (format !== 'mp4' && format !== 'mp3') return res.status(400).send('Format must be mp4 or mp3')
 
+  // Resolve title (best-effort)
   let title = 'video'
   try {
-    const info = await runYtDlpJSON(url)
-    title = (info.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
+    const useDlp = await ytDlpAvailable()
+    if (useDlp) {
+      const info = await runYtDlpJSON(url)
+      title = info.title || title
+    } else {
+      const info = await ytdl.getInfo(url)
+      title = info.videoDetails?.title || title
+    }
   } catch {}
+  const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
+  const h = DZ_TUBE_QUALITY_MAP[quality] || 720
+  const ext = format === 'mp3' ? 'mp3' : 'mp4'
+  const downloadName = format === 'mp3' ? `${safeName}.mp3` : `${safeName}_${h}p.mp4`
+  const mime = format === 'mp3' ? 'audio/mpeg' : 'video/mp4'
+  const outPath = tmpFile(ext)
 
-  const safeName = title.replace(/\s+/g, '_')
-  let args
-  if (format === 'mp3') {
-    args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', '-', '--no-playlist', '--no-warnings', url]
-    res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.mp3"; filename*=UTF-8''${encodeURIComponent(safeName)}.mp3`)
-  } else {
-    const h = DZ_TUBE_QUALITY_MAP[quality] || 720
-    const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
-    args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', '-', '--no-playlist', '--no-warnings', url]
-    res.setHeader('Content-Type', 'video/mp4')
-    res.setHeader('Content-Disposition', `attachment; filename="${safeName}_${h}p.mp4"; filename*=UTF-8''${encodeURIComponent(safeName)}_${h}p.mp4`)
+  const useDlp = await ytDlpAvailable()
+  if (useDlp) {
+    // yt-dlp backend → buffer to disk, then stream to client
+    let args
+    if (format === 'mp3') {
+      args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', url]
+    } else {
+      const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
+      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', url]
+    }
+    const proc = spawn('yt-dlp', args)
+    let stderrBuf = ''
+    proc.stderr.on('data', d => { stderrBuf += d.toString() })
+    let killed = false
+    req.on('close', () => { if (!proc.killed) { killed = true; try { proc.kill('SIGTERM') } catch {} ; safeUnlink(outPath) } })
+    proc.on('error', err => {
+      console.error('[DZTube:download:dlp:spawn]', err.message)
+      safeUnlink(outPath)
+      if (!res.headersSent) res.status(500).end('فشل التحميل')
+    })
+    proc.on('close', code => {
+      if (killed) return
+      if (code !== 0) {
+        console.warn('[DZTube:download:dlp] exit', code, stderrBuf.slice(0, 300))
+        safeUnlink(outPath)
+        if (!res.headersSent) return res.status(500).end('فشل التحميل')
+        return res.end()
+      }
+      streamFileToClient(req, res, outPath, mime, downloadName)
+    })
+    return
   }
 
-  const proc = spawn('yt-dlp', args)
-  let stderrBuf = ''
-  proc.stderr.on('data', d => { stderrBuf += d.toString() })
-  proc.stdout.pipe(res)
-  proc.on('error', err => {
-    console.error('[DZTube:download:error]', err.message)
+  // JS fallback (Vercel) — buffer to disk via ytdl-core then stream
+  try {
+    let stream
+    if (format === 'mp3') {
+      // Audio-only m4a (no transcoding without ffmpeg in serverless)
+      stream = ytdl(url, { quality: 'highestaudio', filter: 'audioonly' })
+    } else {
+      stream = ytdl(url, { quality: 'highest', filter: f => f.hasVideo && f.hasAudio && (!h || (f.height || 0) <= h) })
+    }
+    const ws = fs.createWriteStream(outPath)
+    let aborted = false
+    req.on('close', () => { aborted = true; try { stream.destroy() } catch {} ; ws.destroy(); safeUnlink(outPath) })
+    stream.on('error', e => {
+      console.error('[DZTube:download:js:stream]', e.message)
+      ws.destroy(); safeUnlink(outPath)
+      if (!res.headersSent) res.status(500).end('فشل التحميل')
+    })
+    ws.on('error', e => {
+      console.error('[DZTube:download:js:write]', e.message)
+      try { stream.destroy() } catch {}
+      safeUnlink(outPath)
+      if (!res.headersSent) res.status(500).end('فشل التحميل')
+    })
+    ws.on('close', () => {
+      if (aborted) return
+      // Switch mime/name to m4a if mp3 was requested but we couldn't transcode
+      const finalName = format === 'mp3' ? `${safeName}.m4a` : downloadName
+      const finalMime = format === 'mp3' ? 'audio/mp4' : mime
+      streamFileToClient(req, res, outPath, finalMime, finalName)
+    })
+    stream.pipe(ws)
+  } catch (e) {
+    console.error('[DZTube:download:js]', e.message)
+    safeUnlink(outPath)
     if (!res.headersSent) res.status(500).end('فشل التحميل')
-    else res.end()
-  })
-  proc.on('close', code => {
-    if (code !== 0) console.warn('[DZTube:download] yt-dlp exit', code, stderrBuf.slice(0, 300))
-    res.end()
-  })
-  req.on('close', () => { try { proc.kill('SIGTERM') } catch {} })
+  }
 })
 
 // ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====

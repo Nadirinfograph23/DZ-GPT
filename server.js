@@ -4763,6 +4763,9 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
 // Streaming audio proxy: buffers to /tmp, then serves with Range support
 const audioCacheDir = `${os.tmpdir()}/dz-tube-audio`
 try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
+// In-flight downloads keyed by hash so concurrent requests for the same track
+// share a single yt-dlp/ffmpeg pipeline instead of racing each other.
+const audioDownloads = new Map()
 
 function spawnAudioStream(url) {
   return ytDlpAvailable().then(useDlp => {
@@ -4779,6 +4782,71 @@ function spawnAudioStream(url) {
     const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
     return { stream: s, kill: () => { try { s.destroy() } catch {} } }
   })
+}
+
+// Download full audio to disk via yt-dlp, then remux with faststart so the moov
+// atom is at the front (HTML5 audio needs this to know duration & to play).
+// Returns a promise that resolves once the file at `outPath` is fully written.
+function ffmpegAvailable() {
+  if (ffmpegAvailable._cached !== undefined) return Promise.resolve(ffmpegAvailable._cached)
+  return new Promise(resolve => {
+    const p = spawn('ffmpeg', ['-version'])
+    p.on('error', () => { ffmpegAvailable._cached = false; resolve(false) })
+    p.on('close', code => { ffmpegAvailable._cached = code === 0; resolve(ffmpegAvailable._cached) })
+  })
+}
+
+async function downloadAudioToFile(url, outPath) {
+  const tmpRaw = outPath + '.raw'
+  const useDlp = await ytDlpAvailable()
+
+  // Step 1: pull bytes to tmpRaw
+  await new Promise((resolve, reject) => {
+    if (useDlp) {
+      const proc = spawn('yt-dlp', [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
+        '--no-warnings', '--no-playlist',
+        '-o', tmpRaw,
+        url,
+      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stderr = ''
+      proc.stderr.on('data', d => { stderr += d.toString() })
+      proc.on('error', reject)
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `yt-dlp exited ${code}`)))
+    } else {
+      const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+      const ws = fs.createWriteStream(tmpRaw)
+      s.on('error', reject)
+      ws.on('error', reject)
+      ws.on('finish', resolve)
+      s.pipe(ws)
+    }
+  })
+
+  // Step 2: remux with ffmpeg if available, ensuring moov is at the front (faststart).
+  // This makes the file progressively playable & duration-readable.
+  const hasFf = await ffmpegAvailable()
+  if (!hasFf) {
+    fs.renameSync(tmpRaw, outPath)
+    return
+  }
+  const tmpFixed = outPath + '.fixed'
+  await new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', [
+      '-y',
+      '-i', tmpRaw,
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      '-f', 'mp4',
+      tmpFixed,
+    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('error', reject)
+    proc.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `ffmpeg exited ${code}`)))
+  })
+  try { fs.unlinkSync(tmpRaw) } catch {}
+  fs.renameSync(tmpFixed, outPath)
 }
 
 app.get('/api/dz-tube/audio-stream', async (req, res) => {
@@ -4812,56 +4880,44 @@ app.get('/api/dz-tube/audio-stream', async (req, res) => {
     return fs.createReadStream(filePath).pipe(res)
   }
 
-  // LIVE STREAM PATH: pipe upstream → response, tee to cache file in parallel
-  console.log('[audio-stream] live-stream', url)
-  let upstream
+  // FIRST-TIME PATH: download fully + faststart-remux, then serve with Range support.
+  // We do this (rather than live-piping) so HTML5 <audio> can read duration and seek
+  // — required for the mini-player to display time and respond to play.
+  console.log('[audio-stream] downloading', url)
   try {
-    upstream = await spawnAudioStream(url)
+    try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
+    if (!audioDownloads.has(hash)) {
+      audioDownloads.set(hash, downloadAudioToFile(url, filePath)
+        .finally(() => audioDownloads.delete(hash)))
+    }
+    await audioDownloads.get(hash)
+    console.log('[audio-stream] cached', hash)
   } catch (e) {
-    console.error('[audio-stream] spawn failed:', e.message)
+    console.error('[audio-stream] download failed:', e.message)
     return res.status(502).end('فشل تحميل الصوت')
   }
 
-  const tmpPath = `${filePath}.partial`
-  try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
-  let firstByte = false, errored = false
-  const ws = fs.createWriteStream(tmpPath)
-  ws.on('error', e => { errored = true; console.error('[audio-stream] write error:', e.message) })
-
+  // Re-enter the fast path now that the file is on disk.
+  if (!fs.existsSync(filePath)) return res.status(502).end('فشل تحميل الصوت')
+  const stat = fs.statSync(filePath)
+  const total = stat.size
   res.setHeader('Content-Type', 'audio/mp4')
-  res.setHeader('Cache-Control', 'no-cache')
-  // Note: no Accept-Ranges/Content-Length on live stream — browser will re-request once cache is complete
-
-  upstream.stream.on('data', chunk => {
-    if (!firstByte) { firstByte = true }
-    if (!res.writableEnded) res.write(chunk)
-    if (!ws.destroyed) ws.write(chunk)
-  })
-  upstream.stream.on('end', () => {
-    if (!res.writableEnded) res.end()
-    ws.end(() => {
-      if (!errored) {
-        try { fs.renameSync(tmpPath, filePath); console.log('[audio-stream] cached', hash) } catch {}
-      } else {
-        try { fs.unlinkSync(tmpPath) } catch {}
-      }
+  res.setHeader('Accept-Ranges', 'bytes')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+  if (range) {
+    const m = /bytes=(\d+)-(\d*)/.exec(range)
+    if (!m) return res.status(416).end()
+    const start = parseInt(m[1], 10)
+    const end = m[2] ? parseInt(m[2], 10) : total - 1
+    if (start >= total || end >= total) return res.status(416).end()
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${total}`,
+      'Content-Length': end - start + 1,
     })
-  })
-  upstream.stream.on('error', e => {
-    errored = true
-    console.error('[audio-stream] upstream error:', e.message)
-    if (!res.headersSent) res.status(502)
-    if (!res.writableEnded) res.end()
-    try { ws.destroy() } catch {}
-    try { fs.unlinkSync(tmpPath) } catch {}
-  })
-  req.on('close', () => {
-    if (!res.writableEnded) {
-      // client disconnected — kill upstream to save bandwidth
-      upstream.kill()
-      try { ws.destroy(); fs.unlinkSync(tmpPath) } catch {}
-    }
-  })
+    return fs.createReadStream(filePath, { start, end }).pipe(res)
+  }
+  res.setHeader('Content-Length', total)
+  return fs.createReadStream(filePath).pipe(res)
 })
 
 app.post('/api/dz-tube/info', async (req, res) => {

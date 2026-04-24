@@ -190,10 +190,21 @@ export default function DZTube() {
   }, [qualityCache])
 
   const playInBackground = useCallback(async (r: SearchResult) => {
+    if (!r.id || !r.url) {
+      showToast('بيانات الفيديو غير مكتملة', 'err')
+      return
+    }
     setEmbedId(null)
     showToast(`جاري تحميل: ${r.title.slice(0, 50)}…`)
     try {
-      await player.play({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })
+      await player.play({
+        id: r.id,
+        url: r.url,
+        title: r.title,
+        thumbnail: r.thumbnail,
+        channel: r.channel,
+        duration: r.duration,
+      })
       showToast('▶ يتم التشغيل في الخلفية')
     } catch {
       showToast('تعذر تشغيل الصوت', 'err')
@@ -425,7 +436,7 @@ export default function DZTube() {
                       <button
                         className="dzt-act dzt-act-q"
                         onClick={() => {
-                          player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })
+                          player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel, duration: r.duration })
                           showToast('➕ أُضيف إلى قائمة التشغيل')
                         }}
                         title="إضافة للقائمة"

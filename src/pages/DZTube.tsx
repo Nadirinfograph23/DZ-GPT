@@ -105,6 +105,29 @@ export default function DZTube() {
   const [downloadMenuFor, setDownloadMenuFor] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [qualityCache, setQualityCache] = useState<Record<string, { qualities: Quality[]; loading: boolean; err: boolean }>>({})
+  // Active (in-flight) downloads keyed by `${videoId}-${format}-${quality}`.
+  // We render a progress bar + percent for each one in the history panel
+  // and a small percent badge on the result card while it's downloading.
+  interface ActiveDl {
+    key: string
+    videoId: string
+    title: string
+    thumbnail: string | null
+    format: 'mp4' | 'mp3' | 'audio'
+    quality: Quality
+    loaded: number
+    total: number
+    status: 'downloading' | 'failed'
+    xhr?: XMLHttpRequest
+  }
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, ActiveDl>>({})
+  const activeForCardPct = useCallback((videoId: string): number | null => {
+    const list = Object.values(activeDownloads).filter(d => d.videoId === videoId && d.status === 'downloading')
+    if (list.length === 0) return null
+    const d = list[0]
+    if (d.total <= 0) return null
+    return Math.min(99, Math.floor((d.loaded / d.total) * 100))
+  }, [activeDownloads])
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -218,51 +241,111 @@ export default function DZTube() {
     setTimeout(() => document.querySelector('.dzt-embed')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }, [player])
 
-  const startDownload = useCallback(async (r: SearchResult, format: 'mp4' | 'mp3' | 'audio', quality: Quality) => {
+  // Best-effort OS notification when a download finishes. Silently no-ops
+  // if the browser doesn't support Notifications or the user denied them.
+  const notifyDone = useCallback((title: string, body: string, icon?: string | null) => {
+    try {
+      if (typeof window === 'undefined' || !('Notification' in window)) return
+      const fire = () => {
+        try { new Notification(title, { body, icon: icon || undefined, tag: 'dz-tube-download' }) } catch {}
+      }
+      if (Notification.permission === 'granted') fire()
+      else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(p => { if (p === 'granted') fire() }).catch(() => {})
+      }
+    } catch {}
+  }, [])
+
+  const startDownload = useCallback((r: SearchResult, format: 'mp4' | 'mp3' | 'audio', quality: Quality) => {
     setDownloadMenuFor(null)
     setDownloadingId(r.id)
     setError(null)
-    try {
-      const params = new URLSearchParams({ url: r.url, format, quality })
-      const isAudioReq = format === 'mp3' || format === 'audio'
-      showToast(`⏳ جاري تحضير ${isAudioReq ? 'الصوت' : 'الفيديو'}…`)
-      const resp = await fetch(`/api/dz-tube/download?${params}`)
-      if (!resp.ok) throw new Error(await resp.text() || 'فشل التحميل')
-      const blob = await resp.blob()
-      // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the
-      // returned Content-Disposition / Content-Type so the file extension matches.
-      const cd = resp.headers.get('content-disposition') || ''
-      const ct = (resp.headers.get('content-type') || '').toLowerCase()
-      const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
-      const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
-      let serverName = ''
-      try { serverName = cdMatch ? decodeURIComponent(cdMatch[1]) : '' } catch { serverName = cdMatch?.[1] || '' }
-      let ext: string
-      if (serverName && /\.(mp3|m4a|webm|mp4)$/i.test(serverName)) {
-        ext = serverName.split('.').pop()!.toLowerCase()
-      } else if (ct.includes('audio/mpeg')) ext = 'mp3'
-      else if (ct.includes('audio/mp4')) ext = 'm4a'
-      else if (ct.includes('audio/webm')) ext = 'webm'
-      else if (isAudioReq) ext = format === 'mp3' ? 'mp3' : 'm4a'
-      else ext = 'mp4'
-      const filename = isAudioReq ? `${safeTitle}.${ext}` : `${safeTitle}_${quality}p.${ext}`
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = filename
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      showToast('✅ تم التحميل بنجاح')
-      setHistory(prev => {
-        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
+    const dlKey = `${r.id}-${format}-${quality}`
+    const isAudioReq = format === 'mp3' || format === 'audio'
+
+    // Open the history panel automatically so the user can watch the
+    // percentage advance — and show a clear "started" toast.
+    setHistoryOpen(true)
+    showToast('⬇️ بدأ التحميل الآن')
+
+    const params = new URLSearchParams({ url: r.url, format, quality })
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', `/api/dz-tube/download?${params}`)
+    xhr.responseType = 'blob'
+
+    setActiveDownloads(prev => ({
+      ...prev,
+      [dlKey]: { key: dlKey, videoId: r.id, title: r.title, thumbnail: r.thumbnail, format, quality, loaded: 0, total: 0, status: 'downloading', xhr },
+    }))
+    xhr.onprogress = (e) => {
+      setActiveDownloads(prev => {
+        const cur = prev[dlKey]; if (!cur) return prev
+        return { ...prev, [dlKey]: { ...cur, loaded: e.loaded, total: e.lengthComputable ? e.total : 0 } }
       })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'فشل التحميل')
+    }
+    xhr.onerror = () => {
+      setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+      setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+      setError('فشل التحميل')
       showToast('فشل التحميل', 'err')
-    } finally {
       setDownloadingId(null)
     }
-  }, [showToast])
+    xhr.onload = () => {
+      try {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          setActiveDownloads(prev => prev[dlKey] ? { ...prev, [dlKey]: { ...prev[dlKey], status: 'failed' } } : prev)
+          setTimeout(() => setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n }), 4000)
+          throw new Error(`HTTP ${xhr.status}`)
+        }
+        const blob = xhr.response as Blob
+        // Server may downgrade mp3 → m4a if ffmpeg isn't available; respect the
+        // returned Content-Disposition / Content-Type so the file extension matches.
+        const cd = xhr.getResponseHeader('content-disposition') || ''
+        const ct = (xhr.getResponseHeader('content-type') || '').toLowerCase()
+        const cdMatch = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+        const safeTitle = r.title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim() || 'video'
+        let serverName = ''
+        try { serverName = cdMatch ? decodeURIComponent(cdMatch[1]) : '' } catch { serverName = cdMatch?.[1] || '' }
+        let ext: string
+        if (serverName && /\.(mp3|m4a|webm|mp4)$/i.test(serverName)) {
+          ext = serverName.split('.').pop()!.toLowerCase()
+        } else if (ct.includes('audio/mpeg')) ext = 'mp3'
+        else if (ct.includes('audio/mp4')) ext = 'm4a'
+        else if (ct.includes('audio/webm')) ext = 'webm'
+        else if (isAudioReq) ext = format === 'mp3' ? 'mp3' : 'm4a'
+        else ext = 'mp4'
+        const filename = isAudioReq ? `${safeTitle}.${ext}` : `${safeTitle}_${quality}p.${ext}`
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = filename
+        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+        showToast('✅ تم التحميل بنجاح')
+        notifyDone('DZ Tube — اكتمل التحميل', filename, r.thumbnail)
+        setActiveDownloads(prev => { const n = { ...prev }; delete n[dlKey]; return n })
+        setHistory(prev => {
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          return [{ id, url: r.url, title: r.title, thumbnail: r.thumbnail, format, quality, timestamp: Date.now() }, ...prev.filter(h => !(h.url === r.url && h.format === format && h.quality === quality))].slice(0, HISTORY_MAX)
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'فشل التحميل')
+        showToast('فشل التحميل', 'err')
+      } finally {
+        setDownloadingId(null)
+      }
+    }
+    xhr.send()
+  }, [showToast, notifyDone])
+
+  const cancelActiveDownload = useCallback((key: string) => {
+    setActiveDownloads(prev => {
+      const cur = prev[key]; if (!cur) return prev
+      try { cur.xhr?.abort() } catch {}
+      const n = { ...prev }; delete n[key]; return n
+    })
+    setDownloadingId(null)
+  }, [])
 
   const removeHistory = (id: string) => setHistory(prev => prev.filter(h => h.id !== id))
   const clearHistory = () => { if (confirm('حذف كل السجل؟')) setHistory([]) }
@@ -454,10 +537,16 @@ export default function DZTube() {
                           disabled={downloadingId === r.id}
                           title="تحميل"
                         >
-                          {downloadingId === r.id
-                            ? <Loader2 size={13} className="dzt-spin" />
-                            : <><Download size={13} /> <ChevronDown size={11} /></>
-                          }
+                          {downloadingId === r.id ? (
+                            (() => {
+                              const pct = activeForCardPct(r.id)
+                              return pct == null
+                                ? <Loader2 size={13} className="dzt-spin" />
+                                : <span className="dzt-act-pct">{pct}%</span>
+                            })()
+                          ) : (
+                            <><Download size={13} /> <ChevronDown size={11} /></>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -557,7 +646,55 @@ export default function DZTube() {
               </div>
             </div>
             <div className="dzt-history-body">
-              {history.length === 0 ? (
+              {Object.values(activeDownloads).length > 0 && (
+                <div className="dzt-active-dl-section">
+                  <div className="dzt-active-dl-title">
+                    <Loader2 size={12} className="dzt-spin" /> تحميلات جارية
+                  </div>
+                  {Object.values(activeDownloads).map(d => {
+                    const pct = d.total > 0 ? Math.min(100, Math.floor((d.loaded / d.total) * 100)) : 0
+                    const mb = (d.loaded / 1048576).toFixed(1)
+                    const totalMb = d.total > 0 ? (d.total / 1048576).toFixed(1) : null
+                    const failed = d.status === 'failed'
+                    return (
+                      <div key={d.key} className={`dzt-active-dl-item${failed ? ' dzt-active-dl-failed' : ''}`}>
+                        {d.thumbnail && <img className="dzt-history-thumb" src={d.thumbnail} alt="" />}
+                        <div className="dzt-active-dl-info">
+                          <span className="dzt-history-item-title" title={d.title}>{d.title}</span>
+                          <div className="dzt-active-dl-meta">
+                            <span>{d.format === 'mp3' ? 'MP3' : d.format === 'audio' ? 'M4A' : `MP4 ${d.quality}p`}</span>
+                            <span>·</span>
+                            {failed ? (
+                              <span className="dzt-active-dl-fail-text">فشل التحميل</span>
+                            ) : totalMb ? (
+                              <span>{mb} / {totalMb} م.ب</span>
+                            ) : (
+                              <span>{mb} م.ب</span>
+                            )}
+                          </div>
+                          <div className="dzt-active-dl-bar">
+                            <div
+                              className={`dzt-active-dl-fill${d.total > 0 ? '' : ' dzt-active-dl-fill-indet'}`}
+                              style={d.total > 0 ? { width: `${pct}%` } : undefined}
+                            />
+                          </div>
+                        </div>
+                        <div className="dzt-active-dl-side">
+                          {d.total > 0 && !failed && <span className="dzt-active-dl-pct">{pct}%</span>}
+                          <button
+                            className="dzt-history-remove"
+                            onClick={() => cancelActiveDownload(d.key)}
+                            title="إلغاء"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {history.length === 0 && Object.values(activeDownloads).length === 0 ? (
                 <div className="dzt-history-empty"><History size={28} /><p>لا توجد تحميلات بعد</p></div>
               ) : history.map(h => (
                 <div key={h.id} className="dzt-history-item">

@@ -4799,6 +4799,74 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
+function extractYouTubeVideoId(u) {
+  try {
+    const url = new URL(u)
+    if (/youtu\.be$/i.test(url.hostname)) return url.pathname.slice(1).split('/')[0] || null
+    if (url.pathname === '/watch') return url.searchParams.get('v')
+    const m = url.pathname.match(/^\/(shorts|embed|live)\/([\w-]{6,})/)
+    if (m) return m[2]
+    return url.searchParams.get('v')
+  } catch { return null }
+}
+
+const PIPED_API_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://api.piped.privacydev.net',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.r4fo.com',
+  'https://pipedapi.darkness.services',
+]
+
+// Best-effort fetch of direct stream URLs via the public Piped network.
+// Returns { url, mime, ext } for a direct googlevideo URL the client can fetch,
+// or null if every instance fails. Used as a fallback when YouTube blocks
+// our deployment IP and no cookies are configured.
+async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
+  if (!videoId) return null
+  for (const base of PIPED_API_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' },
+      })
+      clearTimeout(t)
+      if (!r.ok) continue
+      const j = await r.json()
+      if (isAudio) {
+        const audios = (j.audioStreams || []).filter(a => a && a.url)
+        if (!audios.length) continue
+        audios.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+        const pick = audios[0]
+        return {
+          url: pick.url,
+          mime: pick.mimeType || 'audio/mp4',
+          ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
+        }
+      }
+      // Prefer progressive videoOnly+audio combined (mp4 with audio); Piped
+      // sometimes labels these as videoOnly=false. Try those first.
+      const combined = (j.videoStreams || []).filter(v => v && v.url && v.videoOnly === false)
+      const candidates = combined.length ? combined : (j.videoStreams || []).filter(v => v && v.url)
+      if (!candidates.length) continue
+      // Pick highest height that is <= requested
+      candidates.sort((a, b) => (b.height || 0) - (a.height || 0))
+      const pick = candidates.find(v => (v.height || 0) <= height) || candidates[candidates.length - 1]
+      return {
+        url: pick.url,
+        mime: pick.mimeType || 'video/mp4',
+        ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
+      }
+    } catch {
+      // try next instance
+    }
+  }
+  return null
+}
+
 // Search YouTube — yt-dlp first (uses bundled binary on Vercel + cookies),
 // then youtube-sr HTML scraper as last-resort fallback.
 app.get('/api/dz-tube/search', async (req, res) => {
@@ -4887,11 +4955,16 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     const info = await ytdl.getInfo(url)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (!fmt?.url) throw new Error('no audio format')
-    res.json({ streamUrl: fmt.url })
+    return res.json({ streamUrl: fmt.url })
   } catch (e) {
-    console.error('[DZTube:audio-url:js]', e.message)
-    res.status(500).json({ error: 'تعذر استخراج الصوت' })
+    console.warn('[DZTube:audio-url:js-fail, trying Piped]', e.message)
   }
+  // Last-resort: public Piped network (free) → direct googlevideo audio URL.
+  try {
+    const piped = await fetchPipedStreams(extractYouTubeVideoId(url), { isAudio: true })
+    if (piped?.url) return res.json({ streamUrl: piped.url })
+  } catch (e) { console.warn('[DZTube:audio-url:piped]', e.message) }
+  res.status(500).json({ error: 'تعذر استخراج الصوت' })
 })
 
 // Streaming audio proxy: buffers to /tmp, then serves with Range support
@@ -5358,22 +5431,29 @@ app.get('/api/dz-tube/download', async (req, res) => {
       safeUnlink(outPath)
       if (!res.headersSent) res.status(500).end('فشل التحميل')
     })
-    proc.on('close', code => {
+    proc.on('close', async code => {
       if (killed) return
       if (code !== 0) {
         console.warn('[DZTube:download:dlp] exit', code, stderrBuf.slice(0, 600))
         safeUnlink(outPath)
-        if (!res.headersSent) {
-          // Surface a hint when YouTube's bot/sign-in challenge is the culprit
-          // (extremely common on Vercel / data-center IPs without cookies).
-          const lower = stderrBuf.toLowerCase()
-          const isBot = lower.includes('sign in to confirm') || lower.includes('not a bot') || lower.includes('http error 429') || lower.includes('cookie')
-          const msg = isBot
-            ? 'فشل التحميل: YouTube يطلب تسجيل دخول من خادم النشر. أضف YOUTUBE_COOKIES كمتغير بيئة (محتوى ملف cookies.txt بصيغة Netscape) ثم أعد النشر.'
-            : `فشل التحميل: ${stderrBuf.split('\n').filter(l => l.includes('ERROR') || l.includes('error')).slice(-1)[0]?.slice(0, 220) || 'خطأ غير معروف'}`
-          return res.status(500).end(msg)
-        }
-        return res.end()
+        if (res.headersSent) return res.end()
+        // Try Piped fallback (free public YouTube proxy) before giving up.
+        // This bypasses Vercel-IP bot challenges by getting a direct
+        // googlevideo URL that the user's browser fetches itself.
+        try {
+          const vid = extractYouTubeVideoId(url)
+          const piped = await fetchPipedStreams(vid, { isAudio, height: h })
+          if (piped?.url) {
+            console.log('[DZTube:download] Piped fallback hit for', vid)
+            return res.redirect(302, piped.url)
+          }
+        } catch (e) { console.warn('[DZTube:download] Piped fallback error', e.message) }
+        const lower = stderrBuf.toLowerCase()
+        const isBot = lower.includes('sign in to confirm') || lower.includes('not a bot') || lower.includes('http error 429') || lower.includes('cookie')
+        const msg = isBot
+          ? 'فشل التحميل: YouTube يحجب خادم النشر مؤقتاً وكل بدائلنا المجانية مشغولة. حاول مجدداً بعد دقيقة أو زوّدنا بـ YOUTUBE_COOKIES.'
+          : `فشل التحميل: ${stderrBuf.split('\n').filter(l => l.includes('ERROR') || l.includes('error')).slice(-1)[0]?.slice(0, 220) || 'خطأ غير معروف'}`
+        return res.status(500).end(msg)
       }
       streamFileToClient(req, res, outPath, mime, downloadName)
     })

@@ -69,15 +69,17 @@ function extractVideoId(url: string): string | null {
   return null
 }
 
-// Resolve a direct, playable audio URL for a YouTube video via the server.
-// Server tries yt-dlp first, then youtube-sr/ytdl-core, then Piped.
-async function resolveAudioUrl(track: PlayerTrack): Promise<string> {
-  const params = new URLSearchParams({ url: track.url || `https://www.youtube.com/watch?v=${track.id}` })
-  const res = await fetch(`/api/dz-tube/audio-url?${params.toString()}`)
-  if (!res.ok) throw new Error(`audio-url failed: ${res.status}`)
-  const j = await res.json()
-  if (!j.streamUrl) throw new Error('no streamUrl in response')
-  return j.streamUrl as string
+// Build a SAME-ORIGIN URL that the <audio> element can be bound to
+// synchronously inside the user-gesture frame. The server-side proxy
+// (/api/dz-tube/audio-proxy) does the slow work of resolving the
+// signed googlevideo URL and pipes the bytes through with full Range
+// support. This avoids three classical mini-player failure modes:
+//  1) Chrome/Safari blocking play() that runs after a 5s+ await
+//  2) CORS rejections on third-party proxies that omit ACAO
+//  3) googlevideo signed URLs expiring while the user listens
+function buildAudioSrc(track: PlayerTrack): string {
+  const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
+  return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}`
 }
 
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
@@ -111,9 +113,14 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       el = document.createElement('audio')
       el.id = 'dz-audio-host'
       el.preload = 'metadata'
-      el.crossOrigin = 'anonymous'
+      // NOTE: deliberately NOT setting crossOrigin. We don't read raw audio
+      // samples (no Web Audio analyser, no canvas), and setting it forces
+      // strict CORS validation that some upstream proxies fail silently
+      // (the browser fires `error` with no useful message and playback dies).
       // Hide from layout but keep mounted so background play survives nav.
       el.style.display = 'none'
+      el.setAttribute('playsinline', '')
+      el.setAttribute('webkit-playsinline', '')
       document.body.appendChild(el)
     }
     audioRef.current = el
@@ -173,43 +180,33 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Internal: fetch stream URL & bind it to <audio>. Honors a token so
-  // late responses from a previous track don't overwrite the current one.
-  const loadAndPlay = useCallback(async (t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
+  // Internal: bind <audio> to the same-origin streaming proxy and start
+  // playback. Bind + play are called SYNCHRONOUSLY so the user-gesture
+  // activation is preserved (no autoplay block). The slow work — resolving
+  // a signed googlevideo URL — happens server-side while the browser
+  // already shows a buffering state.
+  const loadAndPlay = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
     const el = audioRef.current
     if (!el) return
     const myToken = ++loadTokenRef.current
     setLoading(true)
     setProgress(resumeAt > 1 ? resumeAt : 0)
-    // Optimistically use the metadata duration we already know from the
-    // search result, so the mini-player doesn't sit at "0:00" while the
-    // stream URL is being fetched.
+    // Optimistically show the duration we already know from the search
+    // result, so the mini-player doesn't sit at "0:00".
     setDuration(t.duration && t.duration > 0 ? t.duration : 0)
     resumeAtRef.current = resumeAt > 1 ? resumeAt : 0
 
-    let streamUrl = ''
     try {
-      streamUrl = await resolveAudioUrl(t)
-    } catch (e) {
-      if (myToken !== loadTokenRef.current) return
-      setLoading(false)
-      setPlaying(false)
-      console.warn('[mini-player] resolveAudioUrl failed', e)
-      return
-    }
-    if (myToken !== loadTokenRef.current) return
-
-    try {
-      el.src = streamUrl
+      el.src = buildAudioSrc(t)
       currentSrcIdRef.current = t.id
       el.load()
       if (autoplay) {
         const p = el.play()
         if (p && typeof (p as Promise<void>).catch === 'function') {
           ;(p as Promise<void>).catch(err => {
-            // Autoplay can be blocked until user gesture — surface it but
-            // don't tear down the player; the user can press play.
-            console.warn('[mini-player] autoplay blocked', err?.message || err)
+            // Token check guards against late rejection from a stale call.
+            if (myToken !== loadTokenRef.current) return
+            console.warn('[mini-player] play() rejected', err?.message || err)
             setLoading(false)
           })
         }

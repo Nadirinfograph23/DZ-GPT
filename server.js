@@ -5267,6 +5267,129 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
   res.status(500).json({ error: 'تعذر استخراج الصوت' })
 })
 
+// Same-origin streaming proxy. The mini-player binds <audio>.src to this
+// endpoint, which lets us:
+//   1) call .play() inside the user-gesture frame (URL is set synchronously,
+//      no upfront await — fixes Chrome/Safari autoplay-block when extraction
+//      takes seconds),
+//   2) avoid CORS issues against arbitrary upstream proxies,
+//   3) silently re-resolve expired googlevideo signed URLs server-side.
+// Resolves stream URL via the same chain as /audio-url, then pipes bytes
+// through with full Range / Content-Length / Accept-Ranges support.
+const _audioUrlCache = new Map() // youtubeUrl -> { url, expiresAt }
+async function resolveDirectAudioUrl(youtubeUrl) {
+  const cached = _audioUrlCache.get(youtubeUrl)
+  if (cached && cached.expiresAt > Date.now()) return cached.url
+
+  const dlpBin = await ytDlpBinaryPath()
+  if (dlpBin) {
+    try {
+      const cookies = await ytDlpCookiesArgs()
+      // Use plain `bestaudio/best` (no `-S proto:https`, no anti-bot rotation)
+      // — yt-dlp's own ranking is more reliable across videos. The strict
+      // itag list (140/251/...) frequently 403s on this signed URL chain
+      // when combined with the anti-bot client switching.
+      const u = await new Promise((resolve, reject) => {
+        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-warnings', '--no-playlist', ...cookies, youtubeUrl])
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', reject)
+        proc.on('close', code => {
+          const url = out.trim().split('\n')[0]
+          if (code !== 0 || !url) return reject(new Error(err.slice(0, 300) || 'no url'))
+          resolve(url)
+        })
+      })
+      _audioUrlCache.set(youtubeUrl, { url: u, expiresAt: Date.now() + 30 * 60 * 1000 })
+      return u
+    } catch (e) {
+      console.warn('[audio-proxy:dlp-fail]', e.message)
+    }
+  }
+  try {
+    const info = await ytdl.getInfo(youtubeUrl)
+    const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+    if (fmt?.url) {
+      _audioUrlCache.set(youtubeUrl, { url: fmt.url, expiresAt: Date.now() + 30 * 60 * 1000 })
+      return fmt.url
+    }
+  } catch (e) {
+    console.warn('[audio-proxy:js-fail]', e.message)
+  }
+  const piped = await fetchPipedStreams(extractYouTubeVideoId(youtubeUrl), { isAudio: true })
+  if (piped?.url) {
+    _audioUrlCache.set(youtubeUrl, { url: piped.url, expiresAt: Date.now() + 30 * 60 * 1000 })
+    return piped.url
+  }
+  throw new Error('all extractors failed')
+}
+
+app.get('/api/dz-tube/audio-proxy', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
+
+  // Resolve the direct googlevideo / proxy URL (cached for 30 min).
+  let upstreamUrl
+  try {
+    upstreamUrl = await resolveDirectAudioUrl(url)
+  } catch (e) {
+    console.error('[audio-proxy] resolve failed:', e.message)
+    return res.status(502).end('فشل تحضير الصوت')
+  }
+
+  // Forward the browser's Range header so seeking and streaming work.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fwdHeaders = { 'User-Agent': 'Mozilla/5.0 (compatible; DZGPT/1.0)' }
+      if (req.headers.range) fwdHeaders['Range'] = req.headers.range
+      const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
+
+      // Signed URL expired (403/410): drop cache and re-resolve once.
+      if ((upstream.status === 403 || upstream.status === 410) && attempt === 0) {
+        _audioUrlCache.delete(url)
+        upstreamUrl = await resolveDirectAudioUrl(url)
+        continue
+      }
+      if (!upstream.ok && upstream.status !== 206) {
+        console.error('[audio-proxy] upstream', upstream.status)
+        if (!res.headersSent) return res.status(502).end('فشل تحميل الصوت')
+        return res.end()
+      }
+
+      // Mirror caching/range/content headers so <audio> can seek properly.
+      const passHeaders = ['content-length', 'content-range', 'content-type', 'accept-ranges', 'last-modified']
+      for (const h of passHeaders) {
+        const v = upstream.headers.get(h)
+        if (v) res.setHeader(h, v)
+      }
+      if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'audio/mp4')
+      if (!upstream.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
+      res.setHeader('Cache-Control', 'private, max-age=600')
+      res.status(upstream.status)
+
+      if (!upstream.body) { res.end(); return }
+      const reader = upstream.body.getReader()
+      let aborted = false
+      req.on('close', () => { aborted = true; try { reader.cancel() } catch {} })
+      while (!aborted) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!res.write(value)) await new Promise(r => res.once('drain', r))
+      }
+      res.end()
+      return
+    } catch (e) {
+      if (attempt === 1) {
+        console.error('[audio-proxy] fetch failed:', e.message)
+        if (!res.headersSent) res.status(502).end('فشل تحميل الصوت')
+        else res.end()
+        return
+      }
+    }
+  }
+})
+
 // Streaming audio proxy: buffers to /tmp, then serves with Range support
 const audioCacheDir = `${os.tmpdir()}/dz-tube-audio`
 try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}

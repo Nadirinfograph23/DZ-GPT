@@ -4619,6 +4619,39 @@ function ytDlpAvailable() {
   })
 }
 
+// If $YOUTUBE_COOKIES is set (Netscape-format cookies file *contents*),
+// materialize it once on disk and return its path so we can pass it via
+// `--cookies`. YouTube blocks data-center IPs (Vercel/AWS/etc.) without
+// authenticated cookies as of 2025-2026, so this is required for downloads
+// to work in production.
+let _ytDlpCookiesPathPromise = null
+function ytDlpCookiesPath() {
+  if (_ytDlpCookiesPathPromise) return _ytDlpCookiesPathPromise
+  _ytDlpCookiesPathPromise = (async () => {
+    const raw = process.env.YOUTUBE_COOKIES
+    if (!raw || !raw.trim()) return null
+    try {
+      const os = await import('os')
+      const pathMod = await import('path')
+      const dir = pathMod.join(os.tmpdir(), 'dz-tube')
+      try { fs.mkdirSync(dir, { recursive: true }) } catch {}
+      const p = pathMod.join(dir, 'cookies.txt')
+      fs.writeFileSync(p, raw, { mode: 0o600 })
+      return p
+    } catch (e) {
+      console.warn('[DZTube:cookies:write-fail]', e.message)
+      return null
+    }
+  })()
+  return _ytDlpCookiesPathPromise
+}
+
+// Returns ['--cookies', '<path>'] when cookies are available, else [].
+async function ytDlpCookiesArgs() {
+  const p = await ytDlpCookiesPath()
+  return p ? ['--cookies', p] : []
+}
+
 // Resolve which yt-dlp binary to use. Prefers $YTDLP_BIN, then a bundled
 // binary at <projectRoot>/bin/yt-dlp (shipped to Vercel via includeFiles),
 // then any yt-dlp on PATH. Returns null if nothing works.
@@ -4683,9 +4716,10 @@ function runYtDlpJSON(url) {
 
 // Same as runYtDlpJSON but accepts an explicit binary path (so it works on
 // Vercel where yt-dlp is bundled at bin/yt-dlp instead of installed on PATH).
-function runYtDlpJSONWith(binPath, url) {
+async function runYtDlpJSONWith(binPath, url) {
+  const cookies = await ytDlpCookiesArgs()
   return new Promise((resolve, reject) => {
-    const args = ['-J', '--no-warnings', '--no-playlist', url]
+    const args = ['-J', '--no-warnings', '--no-playlist', ...cookies, url]
     const proc = spawn(binPath, args)
     let stdout = ''
     let stderr = ''
@@ -4925,10 +4959,12 @@ async function downloadAudioToFile(url, outPath) {
 async function resolveAudioPlaylistUrl(youtubeUrl) {
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) throw new Error('yt-dlp غير متوفر على هذا الخادم')
+  const cookies = await ytDlpCookiesArgs()
   return await new Promise((resolve, reject) => {
     const proc = spawn(dlpBin, [
       '--extractor-args', 'youtube:player_client=ios',
       '-f', 'ba/bestaudio',
+      ...cookies,
       '-g', '--no-warnings', '--no-playlist', youtubeUrl,
     ])
     let out = '', err = ''
@@ -5135,73 +5171,6 @@ app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
   return fs.createReadStream(filePath).pipe(res)
 })
 
-// Temporary diagnostic — actually try a download to capture stderr
-app.get('/api/dz-tube/_diag-download', async (req, res) => {
-  const url = String(req.query.url || 'https://www.youtube.com/watch?v=jNQXAC9IVRw')
-  const client = String(req.query.client || '')
-  const dlpBin = await ytDlpBinaryPath()
-  if (!dlpBin) return res.json({ err: 'no yt-dlp binary' })
-  const outPath = tmpFile('m4a')
-  const args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings']
-  if (client) args.push('--extractor-args', `youtube:player_client=${client}`)
-  args.push(url)
-  const result = await new Promise(resolve => {
-    try {
-      const p = spawn(dlpBin, args)
-      let stdout = '', stderr = ''
-      p.stdout.on('data', d => { stdout += d.toString() })
-      p.stderr.on('data', d => { stderr += d.toString() })
-      p.on('error', e => resolve({ ok: false, errno: e.code, msg: e.message }))
-      p.on('close', code => {
-        let size = 0
-        try { size = fs.statSync(outPath).size } catch {}
-        safeUnlink(outPath)
-        resolve({ ok: code === 0, code, outPath, size, stdout: stdout.slice(-1500), stderr: stderr.slice(-1500) })
-      })
-      setTimeout(() => { try { p.kill('SIGKILL') } catch {}; resolve({ ok: false, timedOut: true }) }, 25000)
-    } catch (e) { resolve({ ok: false, msg: e.message }) }
-  })
-  res.json({ args, result })
-})
-
-// Temporary diagnostic — returns binary discovery info for production debugging
-app.get('/api/dz-tube/_diag', async (req, res) => {
-  const out = { cwd: process.cwd(), platform: process.platform, arch: process.arch, node: process.version }
-  try {
-    const url = await import('url')
-    const pathMod = await import('path')
-    const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
-    out.serverDir = here
-    const cands = [
-      pathMod.join(here, 'bin', 'yt-dlp'),
-      pathMod.join(process.cwd(), 'bin', 'yt-dlp'),
-    ]
-    out.candidates = cands.map(c => {
-      try {
-        const st = fs.statSync(c)
-        return { path: c, exists: true, size: st.size, mode: '0' + (st.mode & 0o777).toString(8) }
-      } catch (e) { return { path: c, exists: false, err: e.code || e.message } }
-    })
-  } catch (e) { out.err = e.message }
-  out.dlpBin = await ytDlpBinaryPath()
-  out.ffmpeg = await ffmpegAvailable()
-  // Try to spawn the binary directly
-  if (out.dlpBin) {
-    out.versionAttempt = await new Promise(resolve => {
-      try {
-        const p = spawn(out.dlpBin, ['--version'])
-        let stdout = '', stderr = ''
-        p.stdout.on('data', d => { stdout += d.toString() })
-        p.stderr.on('data', d => { stderr += d.toString() })
-        p.on('error', e => resolve({ ok: false, errno: e.code, msg: e.message }))
-        p.on('close', code => resolve({ ok: code === 0, code, stdout: stdout.trim(), stderr: stderr.slice(0, 500) }))
-        setTimeout(() => { try { p.kill('SIGKILL') } catch {}; resolve({ ok: false, timedOut: true }) }, 8000)
-      } catch (e) { resolve({ ok: false, msg: e.message }) }
-    })
-  }
-  res.json(out)
-})
-
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
@@ -5286,6 +5255,7 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const outPath = tmpFile(initialExt)
 
   const hasFfmpeg = await ffmpegAvailable()
+  const cookies = await ytDlpCookiesArgs()
 
   if (dlpBin) {
     // yt-dlp backend → buffer to disk, then stream to client.
@@ -5295,24 +5265,24 @@ app.get('/api/dz-tube/download', async (req, res) => {
     let downloadName
     let mime
     if (format === 'mp3' && hasFfmpeg) {
-      args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', url]
+      args = ['-f', 'bestaudio', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
       downloadName = `${safeName}.mp3`
       mime = 'audio/mpeg'
     } else if (isAudio) {
       // Native audio (m4a/webm) — no transcoding needed, works without ffmpeg.
-      args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', url]
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
       downloadName = `${safeName}.m4a`
       mime = 'audio/mp4'
     } else if (hasFfmpeg) {
       const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]`
-      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', url]
+      args = ['-f', fmt, '--merge-output-format', 'mp4', '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     } else {
       // No ffmpeg → must use a single progressive (combined audio+video) file.
       // 18 = 360p mp4, 22 = 720p mp4. Newer YouTube videos may not expose 22.
       const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/18`
-      args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', url]
+      args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', ...cookies, url]
       downloadName = `${safeName}_${h}p.mp4`
       mime = 'video/mp4'
     }

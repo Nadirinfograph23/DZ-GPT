@@ -4733,56 +4733,6 @@ async function runYtDlpJSONWith(binPath, url) {
   })
 }
 
-// Parse ISO 8601 duration like "PT1H2M3S" -> seconds
-function isoDurationToSeconds(s) {
-  if (typeof s !== 'string') return 0
-  const m = s.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/)
-  if (!m) return 0
-  return (Number(m[1]) || 0) * 3600 + (Number(m[2]) || 0) * 60 + (Number(m[3]) || 0)
-}
-
-// YouTube Data API v3 search — most reliable from data-center IPs
-// (Vercel/AWS) since it uses an authenticated API key instead of HTML
-// scraping. Requires GOOGLE_API_KEY (Google Cloud project with YouTube
-// Data API v3 enabled). Returns null if no key is configured.
-async function youtubeApiSearch(q, limit) {
-  const key = process.env.GOOGLE_API_KEY
-  if (!key) return null
-  const sUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${Math.min(50, limit)}&q=${encodeURIComponent(q)}&key=${key}`
-  const sResp = await fetch(sUrl)
-  if (!sResp.ok) {
-    const txt = await sResp.text().catch(() => '')
-    throw new Error(`YouTube API search ${sResp.status}: ${txt.slice(0, 200)}`)
-  }
-  const sData = await sResp.json()
-  const ids = (sData.items || []).map(it => it.id?.videoId).filter(Boolean)
-  if (ids.length === 0) return []
-  const vUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${ids.join(',')}&key=${key}`
-  const vResp = await fetch(vUrl)
-  if (!vResp.ok) {
-    // Soft fallback — return search results without details
-    return (sData.items || []).map(it => ({
-      id: it.id.videoId,
-      title: it.snippet?.title || 'بدون عنوان',
-      url: `https://www.youtube.com/watch?v=${it.id.videoId}`,
-      thumbnail: it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${it.id.videoId}/hqdefault.jpg`,
-      duration: 0,
-      channel: it.snippet?.channelTitle || '',
-      views: 0,
-    }))
-  }
-  const vData = await vResp.json()
-  return (vData.items || []).map(it => ({
-    id: it.id,
-    title: it.snippet?.title || 'بدون عنوان',
-    url: `https://www.youtube.com/watch?v=${it.id}`,
-    thumbnail: it.snippet?.thumbnails?.maxres?.url || it.snippet?.thumbnails?.high?.url || it.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${it.id}/hqdefault.jpg`,
-    duration: isoDurationToSeconds(it.contentDetails?.duration),
-    channel: it.snippet?.channelTitle || '',
-    views: Number(it.statistics?.viewCount) || 0,
-  }))
-}
-
 // JS-only fallback (works on Vercel where yt-dlp binary is unavailable)
 async function jsSearch(q, limit) {
   const items = await YouTube.search(q, { limit, type: 'video', safeSearch: false })
@@ -4830,36 +4780,32 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
-// Search YouTube — tries: YouTube Data API v3 (most reliable on Vercel) →
-// yt-dlp (best on local with PATH binary) → youtube-sr scraping (last resort).
+// Search YouTube — yt-dlp first (uses bundled binary on Vercel + cookies),
+// then youtube-sr HTML scraper as last-resort fallback.
 app.get('/api/dz-tube/search', async (req, res) => {
   const q = String(req.query.q || '').trim()
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 18))
   if (!q) return res.status(400).json({ error: 'Query is required' })
 
-  // 1) YouTube Data API (works from any IP, no bot detection)
-  if (process.env.GOOGLE_API_KEY) {
+  // 1) yt-dlp via the resolved binary path (PATH on dev, bundled on Vercel)
+  const dlpBin = await ytDlpBinaryPath()
+  if (dlpBin) {
     try {
-      const results = await youtubeApiSearch(q, limit)
-      if (results && results.length > 0) return res.json({ results })
-    } catch (e) {
-      console.warn('[DZTube:search:api-fail, trying yt-dlp]', e.message)
-    }
-  }
-
-  // 2) yt-dlp (only useful where YouTube doesn't block the IP — typically dev)
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
-    try {
+      const cookies = await ytDlpCookiesArgs()
       const results = await new Promise((resolve, reject) => {
-        const args = ['--flat-playlist', '-J', '--no-warnings', '--default-search', 'ytsearch', `ytsearch${limit}:${q}`]
-        const proc = spawn('yt-dlp', args)
+        const args = [
+          '--flat-playlist', '-J', '--no-warnings',
+          '--default-search', 'ytsearch',
+          ...cookies,
+          `ytsearch${limit}:${q}`,
+        ]
+        const proc = spawn(dlpBin, args)
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })
         proc.on('error', reject)
         proc.on('close', code => {
-          if (code !== 0) return reject(new Error(err.slice(0, 200) || `exit ${code}`))
+          if (code !== 0) return reject(new Error(err.slice(0, 300) || `exit ${code}`))
           try {
             const data = JSON.parse(out)
             resolve((data.entries || []).filter(e => e && e.id).map(e => ({
@@ -4875,12 +4821,13 @@ app.get('/api/dz-tube/search', async (req, res) => {
         })
       })
       if (results.length > 0) return res.json({ results })
+      console.warn('[DZTube:search:dlp] returned 0 results, trying JS scraper')
     } catch (e) {
       console.warn('[DZTube:search:dlp-fail, trying JS scraper]', e.message)
     }
   }
 
-  // 3) youtube-sr HTML scraper (last resort, may fail on data-center IPs)
+  // 2) youtube-sr HTML scraper (fallback)
   try {
     const results = await jsSearch(q, limit)
     res.json({ results })
@@ -4895,18 +4842,19 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
 
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (dlpBin) {
     try {
+      const cookies = await ytDlpCookiesArgs()
       const streamUrl = await new Promise((resolve, reject) => {
-        const proc = spawn('yt-dlp', ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', url])
+        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...cookies, url])
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })
         proc.on('error', reject)
         proc.on('close', code => {
           const u = out.trim().split('\n')[0]
-          if (code !== 0 || !u) return reject(new Error(err.slice(0, 200) || 'no url'))
+          if (code !== 0 || !u) return reject(new Error(err.slice(0, 300) || 'no url'))
           resolve(u)
         })
       })
@@ -5252,10 +5200,10 @@ app.post('/api/dz-tube/info', async (req, res) => {
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })
 
   const hasFfmpeg = await ffmpegAvailable()
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (dlpBin) {
     try {
-      const info = await runYtDlpJSON(url)
+      const info = await runYtDlpJSONWith(dlpBin, url)
       const formats = (info.formats || [])
         .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
         .map(f => f.height)

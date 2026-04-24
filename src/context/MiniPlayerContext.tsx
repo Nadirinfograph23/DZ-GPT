@@ -7,6 +7,9 @@ export interface PlayerTrack {
   title: string
   thumbnail: string
   channel: string
+  /** Known duration in seconds (from search result). Used as a fallback
+   *  when the streamed M4A reports `Infinity` / `0` for `audio.duration`. */
+  duration?: number
 }
 
 interface MiniPlayerCtx {
@@ -94,8 +97,28 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     const onPause = () => setPlaying(false)
     const onWaiting = () => setLoading(true)
     const onCanPlay = () => setLoading(false)
-    const onLoadedMeta = () => { if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration) }
-    const onDurationChange = () => { if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration) }
+    // For streamed M4A (YouTube DASH audio without faststart) the browser
+    // initially reports `Infinity` for duration. We accept it once it becomes
+    // a finite > 0 number; otherwise we keep whatever fallback (track.duration)
+    // was already set in `loadTrack`.
+    const tryAdoptAudioDuration = () => {
+      if (!a) return
+      if (isFinite(a.duration) && a.duration > 0) {
+        setDuration(a.duration)
+        return
+      }
+      // Some streams expose the real duration via the seekable range once the
+      // first segment has been parsed.
+      try {
+        if (a.seekable && a.seekable.length > 0) {
+          const end = a.seekable.end(a.seekable.length - 1)
+          if (isFinite(end) && end > 0) setDuration(end)
+        }
+      } catch {}
+    }
+    const onLoadedMeta = tryAdoptAudioDuration
+    const onDurationChange = tryAdoptAudioDuration
+    const onProgress = tryAdoptAudioDuration
     const onTimeUpdate = () => { if (a) setProgress(a.currentTime || 0) }
     const onEnded = () => { setPlaying(false); if (queueRef.current.length > 0) void next() }
     const onError = () => { setLoading(false); setPlaying(false); console.warn('[mini-player] audio error', a?.error) }
@@ -107,6 +130,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     a.addEventListener('canplay', onCanPlay)
     a.addEventListener('loadedmetadata', onLoadedMeta)
     a.addEventListener('durationchange', onDurationChange)
+    a.addEventListener('progress', onProgress)
     a.addEventListener('timeupdate', onTimeUpdate)
     a.addEventListener('ended', onEnded)
     a.addEventListener('error', onError)
@@ -119,6 +143,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       a?.removeEventListener('canplay', onCanPlay)
       a?.removeEventListener('loadedmetadata', onLoadedMeta)
       a?.removeEventListener('durationchange', onDurationChange)
+      a?.removeEventListener('progress', onProgress)
       a?.removeEventListener('timeupdate', onTimeUpdate)
       a?.removeEventListener('ended', onEnded)
       a?.removeEventListener('error', onError)
@@ -153,10 +178,22 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const loadTrack = useCallback(async (t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
     const a = audioRef.current
     if (!a) return
+    // Refuse to load anything without a YouTube id — this is the root cause
+    // of the "duration = 0 forever" bug some users hit when search results
+    // returned a malformed entry. Better to surface nothing than spin.
+    if (!t.id || !t.url) {
+      console.warn('[mini-player] refusing to load track without id/url', t)
+      setLoading(false)
+      return
+    }
     const reqId = ++reqIdRef.current
     setLoading(true)
     setProgress(resumeAt > 1 ? resumeAt : 0)
-    setDuration(0)
+    // Seed duration from the search-result value so the UI never shows 0:00
+    // while the audio element discovers its own duration. Once the element
+    // reports a finite duration via loadedmetadata/durationchange/progress,
+    // that value will replace this seed.
+    setDuration(t.duration && isFinite(t.duration) && t.duration > 0 ? t.duration : 0)
 
     // 1) Try direct audio URL (yt-dlp -g, then ytdl-core, then Piped)
     let attached = false
@@ -361,6 +398,37 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }, 1000)
     return () => { cancelled = true; window.clearInterval(id) }
   }, [track, duration, progress])
+
+  // Background-play safety net: some mobile browsers (notably iOS Safari and
+  // older Chrome on Android) pause an HTMLAudioElement when the tab becomes
+  // hidden or the screen locks, even when MediaSession is wired up. We track
+  // the user's desired playback intent in a ref so we can resume the audio
+  // ourselves the moment the tab becomes visible again — without ever
+  // re-loading the source (which would reset progress).
+  const desiredPlayingRef = useRef<boolean>(false)
+  useEffect(() => { desiredPlayingRef.current = playing }, [playing])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const onVis = () => {
+      const a = audioRef.current
+      if (!a || !track) return
+      // We never tear down the source on visibility changes — just make sure
+      // playback resumes if the OS paused us in the background.
+      if (document.visibilityState === 'visible' && desiredPlayingRef.current && a.paused) {
+        void a.play().catch(() => {})
+      }
+    }
+    const onPageShow = () => onVis()
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pageshow', onPageShow)
+    window.addEventListener('focus', onPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pageshow', onPageShow)
+      window.removeEventListener('focus', onPageShow)
+    }
+  }, [track])
 
   // Wake Lock — best-effort on browsers that support it. Audio playback via a
   // real <audio> element does NOT actually need this to keep playing through

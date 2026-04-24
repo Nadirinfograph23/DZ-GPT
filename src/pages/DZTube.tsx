@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback, useRef, KeyboardEvent } from 'react'
+import { useState, useEffect, useCallback, useRef, KeyboardEvent, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2, RotateCw, X, Play, Headphones, ChevronDown, Plus } from 'lucide-react'
+import {
+  ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
+  RotateCw, X, Play, Headphones, ChevronDown, Plus, Sparkles, Radio, BookOpen,
+  GraduationCap, Trophy, Newspaper, Film, TrendingUp,
+} from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tube.css'
 
@@ -28,6 +32,35 @@ type Quality = '360' | '720' | '1080'
 const QUALITIES: Quality[] = ['1080', '720', '360']
 const HISTORY_KEY = 'dz-tube-history'
 const HISTORY_MAX = 30
+
+interface Category {
+  key: string
+  label: string
+  query: string
+  icon: typeof Sparkles
+}
+
+const CATEGORIES: Category[] = [
+  { key: 'trending',  label: 'الأكثر رواجاً',  query: 'trending Algeria',                icon: TrendingUp },
+  { key: 'quran',     label: 'القرآن الكريم',  query: 'القرآن الكريم سعود الشريم',       icon: BookOpen },
+  { key: 'news',      label: 'أخبار مباشر',    query: 'الشروق نيوز بث مباشر',           icon: Newspaper },
+  { key: 'live',      label: 'قنوات حية',      query: 'قنوات جزائرية بث مباشر',         icon: Radio },
+  { key: 'sports',    label: 'رياضة',          query: 'بي إن سبورت مباشر',              icon: Trophy },
+  { key: 'edu',       label: 'تعليم',          query: 'دروس تعليمية الجزائر',           icon: GraduationCap },
+  { key: 'music',     label: 'موسيقى',         query: 'lofi music',                      icon: Music },
+  { key: 'movies',    label: 'أفلام',          query: 'أفلام جزائرية',                  icon: Film },
+]
+
+const QUICK_SUGGESTIONS = [
+  'القرآن الكريم سعود الشريم',
+  'القرآن الكريم المشاري',
+  'الشروق نيوز بث مباشر',
+  'النهار TV بث مباشر',
+  'الجزائرية One بث مباشر',
+  'الجزيرة مباشر',
+  'العربية بث مباشر',
+  'بي إن سبورت مباشر',
+]
 
 function loadHistory(): HistoryItem[] {
   try { const r = localStorage.getItem(HISTORY_KEY); return r ? (JSON.parse(r) || []) : [] } catch { return [] }
@@ -66,25 +99,27 @@ export default function DZTube() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [embedId, setEmbedId] = useState<string | null>(null)
+  const [embedTitle, setEmbedTitle] = useState<string>('')
   const [downloadMenuFor, setDownloadMenuFor] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const [historyOpen, setHistoryOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const resultsEndRef = useRef<HTMLDivElement>(null)
+  const resultsTopRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { saveHistory(history) }, [history])
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  const search = useCallback(async (q: string) => {
+  const search = useCallback(async (q: string, categoryKey: string | null = null) => {
     const trimmed = q.trim()
     if (!trimmed) return
     setError(null)
     setSearching(true)
     setResults([])
     setEmbedId(null)
+    setActiveCategory(categoryKey)
     try {
-      // If user pasted a URL, fetch info & open embed directly
       if (isYouTubeUrl(trimmed)) {
         const r = await fetch('/api/dz-tube/info', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -95,14 +130,14 @@ export default function DZTube() {
         const m = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/)
         const id = m?.[1] || ''
         setResults([{ id, title: d.title, url: trimmed, thumbnail: d.thumbnail, duration: d.duration, channel: d.uploader, views: d.view_count }])
-        if (id) setEmbedId(id)
+        if (id) { setEmbedId(id); setEmbedTitle(d.title || '') }
       } else {
-        const r = await fetch(`/api/dz-tube/search?q=${encodeURIComponent(trimmed)}&limit=15`)
+        const r = await fetch(`/api/dz-tube/search?q=${encodeURIComponent(trimmed)}&limit=18`)
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'فشل البحث')
         setResults(d.results || [])
       }
-      setTimeout(() => resultsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+      setTimeout(() => resultsTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'فشل البحث')
     } finally {
@@ -122,6 +157,7 @@ export default function DZTube() {
   const playInFrame = useCallback((r: SearchResult) => {
     player.stop()
     setEmbedId(r.id)
+    setEmbedTitle(r.title)
     setTimeout(() => document.querySelector('.dzt-embed')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }, [player])
 
@@ -156,6 +192,8 @@ export default function DZTube() {
   const removeHistory = (id: string) => setHistory(prev => prev.filter(h => h.id !== id))
   const clearHistory = () => { if (confirm('حذف كل السجل؟')) setHistory([]) }
 
+  const showWelcome = useMemo(() => results.length === 0 && !searching && !error && !embedId, [results, searching, error, embedId])
+
   return (
     <div className="dzt-app">
       <header className="dzt-header">
@@ -163,145 +201,209 @@ export default function DZTube() {
           <ArrowLeft size={18} /><span>رجوع</span>
         </button>
         <div className="dzt-logo">
-          <Video size={22} className="dzt-logo-icon" />
-          <span>DZ Tube</span>
+          <div className="dzt-logo-badge"><Video size={18} /></div>
+          <div className="dzt-logo-text">
+            <span className="dzt-logo-title">DZ Tube</span>
+            <span className="dzt-logo-sub">شاهد · حمّل · استمع</span>
+          </div>
         </div>
         <button className="dzt-history-btn" onClick={() => setHistoryOpen(p => !p)} title="السجل">
-          <History size={16} /><span>السجل</span>
+          <History size={16} /><span className="dzt-history-label">السجل</span>
           {history.length > 0 && <span className="dzt-history-count">{history.length}</span>}
         </button>
       </header>
 
-      <main className="dzt-chat">
-        {results.length === 0 && !searching && !error && (
-          <div className="dzt-welcome">
-            <Video size={48} className="dzt-welcome-icon" />
-            <h1>DZ Tube</h1>
-            <p>ابحث عن أي فيديو على YouTube، شاهده داخل التطبيق، أو حمّله بصيغة فيديو أو صوت</p>
-            <div className="dzt-suggestions">
-              {[
-                'القرآن الكريم سعود الشريم',
-                'القرآن الكريم المشاري',
-                'الشروق نيوز بث مباشر',
-                'النهار TV بث مباشر',
-                'الجزائرية One بث مباشر',
-                'الجزيرة مباشر',
-                'العربية بث مباشر',
-                'بي إن سبورت مباشر',
-                'دروس تعليمية',
-                'الجزائر سياحة',
-              ].map(s => (
-                <button key={s} className="dzt-suggestion" onClick={() => { setQuery(s); search(s) }}>{s}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {error && <div className="dzt-alert">{error}</div>}
-
-        {embedId && (
-          <div className="dzt-embed">
-            <div className="dzt-embed-frame">
-              <iframe
-                src={`https://www.youtube.com/embed/${embedId}?autoplay=1&rel=0`}
-                title="YouTube player"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                loading="lazy"
-              />
-            </div>
-            <button className="dzt-embed-close" onClick={() => setEmbedId(null)}>
-              <X size={14} /> إغلاق المشغل
-            </button>
-          </div>
-        )}
-
-        {searching && (
-          <div className="dzt-searching"><Loader2 className="dzt-spin" size={18} /> جارٍ البحث...</div>
-        )}
-
-        {results.length > 0 && (
-          <div className="dzt-results">
-            {results.map(r => (
-              <div key={r.id} className="dzt-card">
-                <div className="dzt-card-thumb-wrap" onClick={() => playInFrame(r)}>
-                  <img className="dzt-card-thumb" src={r.thumbnail} alt={r.title} loading="lazy" />
-                  {r.duration > 0 && <span className="dzt-card-duration"><Clock size={10} /> {fmtDuration(r.duration)}</span>}
-                  <div className="dzt-card-play-overlay"><Play size={28} fill="#fff" /></div>
-                </div>
-                <div className="dzt-card-body">
-                  <h3 className="dzt-card-title" title={r.title}>{r.title}</h3>
-                  <div className="dzt-card-meta">
-                    {r.channel && <span>{r.channel}</span>}
-                    {r.views > 0 && <span><Eye size={11} /> {fmtViews(r.views)}</span>}
-                  </div>
-                  <div className="dzt-card-actions">
-                    <button className="dzt-act dzt-act-play" onClick={() => playInFrame(r)}>
-                      <Play size={13} /> تشغيل
-                    </button>
-                    <button className="dzt-act dzt-act-bg" onClick={() => playInBackground(r)} title="تشغيل في الخلفية (صوت فقط)">
-                      <Headphones size={13} /> خلفية
-                    </button>
-                    <button
-                      className="dzt-act dzt-act-q"
-                      onClick={() => player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })}
-                      title="إضافة لقائمة التشغيل"
-                    >
-                      <Plus size={13} /> للقائمة
-                    </button>
-                    <div className="dzt-act-dl-wrap">
-                      <button
-                        className="dzt-act dzt-act-dl"
-                        onClick={() => setDownloadMenuFor(downloadMenuFor === r.id ? null : r.id)}
-                        disabled={downloadingId === r.id}
-                      >
-                        {downloadingId === r.id
-                          ? <><Loader2 size={13} className="dzt-spin" /> جارٍ التحميل</>
-                          : <><Download size={13} /> تحميل <ChevronDown size={11} /></>
-                        }
-                      </button>
-                      {downloadMenuFor === r.id && (
-                        <div className="dzt-dl-menu">
-                          <div className="dzt-dl-section-title">الفيديو</div>
-                          {QUALITIES.map(q => (
-                            <button key={q} className="dzt-dl-option" onClick={() => startDownload(r, 'mp4', q)}>
-                              <Video size={12} /> MP4 {q}p
-                            </button>
-                          ))}
-                          <div className="dzt-dl-section-title">الصوت</div>
-                          <button className="dzt-dl-option" onClick={() => startDownload(r, 'mp3', '720')}>
-                            <Music size={12} /> MP3
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div ref={resultsEndRef} />
-          </div>
-        )}
-      </main>
-
-      <div className="dzt-input-bar">
-        <div className="dzt-input-wrap">
-          <Search size={16} className="dzt-input-icon" />
+      <div className="dzt-search-bar">
+        <div className="dzt-search-wrap">
+          <Search size={18} className="dzt-search-icon" />
           <input
             ref={inputRef}
-            className="dzt-input"
-            placeholder="ابحث عن فيديو على YouTube أو الصق رابطاً..."
+            className="dzt-search-input"
+            placeholder="ابحث على YouTube أو الصق رابط الفيديو..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKey}
             disabled={searching}
           />
-          <button className="dzt-send" onClick={() => search(query)} disabled={searching || !query.trim()}>
-            {searching ? <Loader2 size={16} className="dzt-spin" /> : <Search size={16} />}
+          {query && !searching && (
+            <button className="dzt-search-clear" onClick={() => { setQuery(''); inputRef.current?.focus() }}>
+              <X size={14} />
+            </button>
+          )}
+          <button className="dzt-search-btn" onClick={() => search(query)} disabled={searching || !query.trim()}>
+            {searching ? <Loader2 size={16} className="dzt-spin" /> : <Sparkles size={16} />}
             <span>بحث</span>
           </button>
         </div>
       </div>
+
+      <nav className="dzt-categories" aria-label="فئات">
+        {CATEGORIES.map(cat => {
+          const Icon = cat.icon
+          const active = activeCategory === cat.key
+          return (
+            <button
+              key={cat.key}
+              className={`dzt-cat${active ? ' dzt-cat-active' : ''}`}
+              onClick={() => { setQuery(cat.query); search(cat.query, cat.key) }}
+              disabled={searching}
+            >
+              <Icon size={14} />
+              <span>{cat.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      <main className="dzt-main">
+        {showWelcome && (
+          <div className="dzt-welcome">
+            <div className="dzt-welcome-hero">
+              <div className="dzt-welcome-glow" />
+              <Video size={56} className="dzt-welcome-icon" />
+              <h1 className="dzt-welcome-title">DZ <span>Tube</span></h1>
+              <p className="dzt-welcome-sub">
+                ابحث عن أي فيديو على YouTube، شاهده داخل التطبيق، أو حمّله بصيغة فيديو أو صوت بأعلى جودة
+              </p>
+            </div>
+            <div className="dzt-quick-grid">
+              <h3 className="dzt-quick-title"><Sparkles size={14} /> اقتراحات سريعة</h3>
+              <div className="dzt-suggestions">
+                {QUICK_SUGGESTIONS.map(s => (
+                  <button key={s} className="dzt-suggestion" onClick={() => { setQuery(s); search(s) }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="dzt-alert">
+            <span>{error}</span>
+            <button onClick={() => setError(null)}><X size={14} /></button>
+          </div>
+        )}
+
+        {embedId && (
+          <div className="dzt-embed">
+            <div className="dzt-embed-header">
+              <div className="dzt-now-playing">
+                <span className="dzt-live-dot" /> قيد التشغيل
+              </div>
+              <button className="dzt-embed-close" onClick={() => setEmbedId(null)}>
+                <X size={14} /> إغلاق
+              </button>
+            </div>
+            <div className="dzt-embed-frame">
+              <iframe
+                src={`https://www.youtube.com/embed/${embedId}?autoplay=1&rel=0&modestbranding=1`}
+                title={embedTitle || 'YouTube player'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                loading="lazy"
+              />
+            </div>
+            {embedTitle && <div className="dzt-embed-title">{embedTitle}</div>}
+          </div>
+        )}
+
+        {searching && (
+          <div className="dzt-skeleton-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="dzt-skeleton-card">
+                <div className="dzt-skeleton-thumb" />
+                <div className="dzt-skeleton-line dzt-skeleton-line-lg" />
+                <div className="dzt-skeleton-line dzt-skeleton-line-sm" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div ref={resultsTopRef} />
+
+        {results.length > 0 && (
+          <>
+            <div className="dzt-results-header">
+              <h2><Video size={16} /> النتائج <span className="dzt-results-count">{results.length}</span></h2>
+            </div>
+            <div className="dzt-results-grid">
+              {results.map(r => (
+                <article key={r.id} className="dzt-card">
+                  <div className="dzt-card-thumb-wrap" onClick={() => playInFrame(r)}>
+                    <img className="dzt-card-thumb" src={r.thumbnail} alt={r.title} loading="lazy" />
+                    {r.duration > 0 && (
+                      <span className="dzt-card-duration">
+                        <Clock size={10} /> {fmtDuration(r.duration)}
+                      </span>
+                    )}
+                    <div className="dzt-card-play-overlay">
+                      <div className="dzt-play-circle"><Play size={26} fill="#fff" /></div>
+                    </div>
+                  </div>
+                  <div className="dzt-card-body">
+                    <h3 className="dzt-card-title" title={r.title}>{r.title}</h3>
+                    <div className="dzt-card-meta">
+                      {r.channel && <span className="dzt-card-channel">{r.channel}</span>}
+                      {r.views > 0 && (
+                        <span className="dzt-card-views"><Eye size={11} /> {fmtViews(r.views)}</span>
+                      )}
+                    </div>
+                    <div className="dzt-card-actions">
+                      <button className="dzt-act dzt-act-play" onClick={() => playInFrame(r)} title="تشغيل داخل الإطار">
+                        <Play size={13} fill="currentColor" /> تشغيل
+                      </button>
+                      <button className="dzt-act dzt-act-bg" onClick={() => playInBackground(r)} title="استمع في الخلفية">
+                        <Headphones size={13} />
+                      </button>
+                      <button
+                        className="dzt-act dzt-act-q"
+                        onClick={() => player.enqueue({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel })}
+                        title="إضافة للقائمة"
+                      >
+                        <Plus size={13} />
+                      </button>
+                      <div className="dzt-act-dl-wrap">
+                        <button
+                          className="dzt-act dzt-act-dl"
+                          onClick={() => setDownloadMenuFor(downloadMenuFor === r.id ? null : r.id)}
+                          disabled={downloadingId === r.id}
+                          title="تحميل"
+                        >
+                          {downloadingId === r.id
+                            ? <Loader2 size={13} className="dzt-spin" />
+                            : <><Download size={13} /> <ChevronDown size={11} /></>
+                          }
+                        </button>
+                        {downloadMenuFor === r.id && (
+                          <>
+                            <div className="dzt-dl-overlay" onClick={() => setDownloadMenuFor(null)} />
+                            <div className="dzt-dl-menu">
+                              <div className="dzt-dl-section-title"><Video size={11} /> فيديو</div>
+                              {QUALITIES.map(q => (
+                                <button key={q} className="dzt-dl-option" onClick={() => startDownload(r, 'mp4', q)}>
+                                  <span>MP4</span>
+                                  <span className="dzt-dl-quality">{q}p</span>
+                                </button>
+                              ))}
+                              <div className="dzt-dl-section-title"><Music size={11} /> صوت</div>
+                              <button className="dzt-dl-option" onClick={() => startDownload(r, 'mp3', '720')}>
+                                <span>MP3</span>
+                                <span className="dzt-dl-quality">عالي</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
 
       {historyOpen && (
         <>
@@ -311,7 +413,7 @@ export default function DZTube() {
               <span className="dzt-history-title"><History size={16} /> سجل التحميلات</span>
               <div className="dzt-history-actions">
                 {history.length > 0 && (
-                  <button className="dzt-history-clear" onClick={clearHistory}><Trash2 size={14} /></button>
+                  <button className="dzt-history-clear" onClick={clearHistory} title="مسح الكل"><Trash2 size={14} /></button>
                 )}
                 <button className="dzt-history-close" onClick={() => setHistoryOpen(false)}><X size={16} /></button>
               </div>

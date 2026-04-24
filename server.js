@@ -5138,10 +5138,13 @@ app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
 // Temporary diagnostic — actually try a download to capture stderr
 app.get('/api/dz-tube/_diag-download', async (req, res) => {
   const url = String(req.query.url || 'https://www.youtube.com/watch?v=jNQXAC9IVRw')
+  const client = String(req.query.client || '')
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) return res.json({ err: 'no yt-dlp binary' })
   const outPath = tmpFile('m4a')
-  const args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', url]
+  const args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings']
+  if (client) args.push('--extractor-args', `youtube:player_client=${client}`)
+  args.push(url)
   const result = await new Promise(resolve => {
     try {
       const p = spawn(dlpBin, args)

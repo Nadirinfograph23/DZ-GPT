@@ -4633,14 +4633,29 @@ function ytDlpBinaryPath() {
       const pathMod = await import('path')
       const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
       candidates.push(pathMod.join(here, 'bin', 'yt-dlp'))
+      // Vercel function root (older bundling may put includeFiles here)
+      candidates.push(pathMod.join(process.cwd(), 'bin', 'yt-dlp'))
     } catch {}
     candidates.push('yt-dlp')
     for (const c of candidates) {
+      // Vercel `includeFiles` strips the execute bit — chmod first if we own
+      // an absolute path to the binary so spawn() can actually start it.
+      try {
+        if (c && c.includes('/')) {
+          if (fs.existsSync(c)) {
+            try { fs.chmodSync(c, 0o755) } catch {}
+          } else {
+            continue
+          }
+        }
+      } catch {}
       const ok = await new Promise(resolve => {
         try {
           const p = spawn(c, ['--version'])
-          p.on('error', () => resolve(false))
-          p.on('close', code => resolve(code === 0))
+          let killed = false
+          const t = setTimeout(() => { killed = true; try { p.kill('SIGKILL') } catch {}; resolve(false) }, 5000)
+          p.on('error', () => { clearTimeout(t); resolve(false) })
+          p.on('close', code => { clearTimeout(t); if (!killed) resolve(code === 0) })
         } catch { resolve(false) }
       })
       if (ok) return c

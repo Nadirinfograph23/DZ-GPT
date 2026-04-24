@@ -5135,6 +5135,44 @@ app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
   return fs.createReadStream(filePath).pipe(res)
 })
 
+// Temporary diagnostic — returns binary discovery info for production debugging
+app.get('/api/dz-tube/_diag', async (req, res) => {
+  const out = { cwd: process.cwd(), platform: process.platform, arch: process.arch, node: process.version }
+  try {
+    const url = await import('url')
+    const pathMod = await import('path')
+    const here = pathMod.dirname(url.fileURLToPath(import.meta.url))
+    out.serverDir = here
+    const cands = [
+      pathMod.join(here, 'bin', 'yt-dlp'),
+      pathMod.join(process.cwd(), 'bin', 'yt-dlp'),
+    ]
+    out.candidates = cands.map(c => {
+      try {
+        const st = fs.statSync(c)
+        return { path: c, exists: true, size: st.size, mode: '0' + (st.mode & 0o777).toString(8) }
+      } catch (e) { return { path: c, exists: false, err: e.code || e.message } }
+    })
+  } catch (e) { out.err = e.message }
+  out.dlpBin = await ytDlpBinaryPath()
+  out.ffmpeg = await ffmpegAvailable()
+  // Try to spawn the binary directly
+  if (out.dlpBin) {
+    out.versionAttempt = await new Promise(resolve => {
+      try {
+        const p = spawn(out.dlpBin, ['--version'])
+        let stdout = '', stderr = ''
+        p.stdout.on('data', d => { stdout += d.toString() })
+        p.stderr.on('data', d => { stderr += d.toString() })
+        p.on('error', e => resolve({ ok: false, errno: e.code, msg: e.message }))
+        p.on('close', code => resolve({ ok: code === 0, code, stdout: stdout.trim(), stderr: stderr.slice(0, 500) }))
+        setTimeout(() => { try { p.kill('SIGKILL') } catch {}; resolve({ ok: false, timedOut: true }) }, 8000)
+      } catch (e) { resolve({ ok: false, msg: e.message }) }
+    })
+  }
+  res.json(out)
+})
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })

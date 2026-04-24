@@ -5135,6 +5135,32 @@ app.get('/api/dz-tube/_unused-audio-stream-disk', async (req, res) => {
   return fs.createReadStream(filePath).pipe(res)
 })
 
+// Temporary diagnostic — actually try a download to capture stderr
+app.get('/api/dz-tube/_diag-download', async (req, res) => {
+  const url = String(req.query.url || 'https://www.youtube.com/watch?v=jNQXAC9IVRw')
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) return res.json({ err: 'no yt-dlp binary' })
+  const outPath = tmpFile('m4a')
+  const args = ['-f', 'bestaudio[ext=m4a]/bestaudio', '-o', outPath, '--no-playlist', '--no-warnings', url]
+  const result = await new Promise(resolve => {
+    try {
+      const p = spawn(dlpBin, args)
+      let stdout = '', stderr = ''
+      p.stdout.on('data', d => { stdout += d.toString() })
+      p.stderr.on('data', d => { stderr += d.toString() })
+      p.on('error', e => resolve({ ok: false, errno: e.code, msg: e.message }))
+      p.on('close', code => {
+        let size = 0
+        try { size = fs.statSync(outPath).size } catch {}
+        safeUnlink(outPath)
+        resolve({ ok: code === 0, code, outPath, size, stdout: stdout.slice(-1500), stderr: stderr.slice(-1500) })
+      })
+      setTimeout(() => { try { p.kill('SIGKILL') } catch {}; resolve({ ok: false, timedOut: true }) }, 25000)
+    } catch (e) { resolve({ ok: false, msg: e.message }) }
+  })
+  res.json({ args, result })
+})
+
 // Temporary diagnostic — returns binary discovery info for production debugging
 app.get('/api/dz-tube/_diag', async (req, res) => {
   const out = { cwd: process.cwd(), platform: process.platform, arch: process.arch, node: process.version }

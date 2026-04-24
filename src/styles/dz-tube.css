@@ -219,6 +219,16 @@
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
 }
+.dzt-welcome-credit {
+  position: relative; z-index: 1;
+  margin: 4px 0 14px;
+  font-size: 13px; font-weight: 600;
+  color: var(--dzt-text-soft); letter-spacing: 0.3px;
+  background: var(--dzt-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  opacity: 0.95;
+}
 .dzt-welcome-sub {
   position: relative; z-index: 1;
   margin: 0; max-width: 520px; margin-inline: auto;

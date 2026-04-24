@@ -6,6 +6,7 @@ export interface PlayerTrack {
   title: string
   thumbnail: string
   channel: string
+  duration?: number
 }
 
 interface MiniPlayerCtx {

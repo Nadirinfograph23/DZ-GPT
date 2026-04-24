@@ -172,8 +172,25 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const toggle = useCallback(() => {
     const a = audioRef.current
     if (!a || !track) return
-    if (a.paused) a.play(); else a.pause()
-  }, [track])
+    if (!a.paused) { a.pause(); return }
+    // If the src was lost or never set (e.g. after a reload-restore), reload it now.
+    const expected = `/api/dz-tube/audio-stream?url=${encodeURIComponent(track.url)}`
+    if (!a.src || !a.src.endsWith(expected)) {
+      a.src = expected
+    }
+    setLoading(true)
+    const p = a.play()
+    if (p && typeof p.then === 'function') {
+      p.then(() => setLoading(false)).catch(err => {
+        console.error('[mini-player toggle] play failed:', err)
+        setLoading(false)
+        // last resort: full re-init
+        void playInternal(track)
+      })
+    } else {
+      setLoading(false)
+    }
+  }, [track, playInternal])
 
   const seek = useCallback((sec: number) => {
     const a = audioRef.current

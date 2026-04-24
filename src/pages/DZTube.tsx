@@ -443,24 +443,43 @@ export default function DZTube() {
                               className="dzt-dl-menu"
                               style={{ top: downloadMenuPos.top, right: downloadMenuPos.right }}
                             >
-                              <div className="dzt-dl-section-title"><Video size={11} /> فيديو</div>
-                              {qualityCache[r.id]?.loading && (
-                                <div className="dzt-dl-loading"><Loader2 size={12} className="dzt-spin" /> جاري الفحص…</div>
-                              )}
-                              {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length === 0 && (
-                                <div className="dzt-dl-empty">لا توجد جودات متاحة</div>
-                              )}
-                              {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).map(q => (
-                                <button key={q} className="dzt-dl-option" onClick={() => startDownload(r, 'mp4', q)}>
-                                  <span>MP4</span>
-                                  <span className="dzt-dl-quality">{q}p</span>
-                                </button>
-                              ))}
-                              <div className="dzt-dl-section-title"><Music size={11} /> صوت</div>
-                              <button className="dzt-dl-option" onClick={() => startDownload(r, 'audio', '720')}>
-                                <span>صوت</span>
-                                <span className="dzt-dl-quality">أصلي</span>
-                              </button>
+                              <div className="dzt-dl-section">
+                                <div className="dzt-dl-section-title"><Video size={12} /> فيديو</div>
+                                {qualityCache[r.id]?.loading && (
+                                  <div className="dzt-dl-loading"><Loader2 size={13} className="dzt-spin" /> جاري الفحص…</div>
+                                )}
+                                {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length === 0 && (
+                                  <div className="dzt-dl-empty">لا توجد جودات متاحة</div>
+                                )}
+                                {!qualityCache[r.id]?.loading && (qualityCache[r.id]?.qualities || []).length > 0 && (
+                                  <div className="dzt-dl-grid">
+                                    {(qualityCache[r.id]?.qualities || []).map(q => {
+                                      const n = Number(q)
+                                      const tag = n >= 2160 ? '4K' : n >= 1440 ? '2K' : n >= 1080 ? 'HD' : n >= 720 ? 'HD' : 'SD'
+                                      return (
+                                        <button key={q} className="dzt-dl-tile" onClick={() => startDownload(r, 'mp4', q)} title={`MP4 ${q}p`}>
+                                          <span className="dzt-dl-tile-q">{q}p</span>
+                                          <span className="dzt-dl-tile-tag">{tag} · MP4</span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="dzt-dl-divider" />
+                              <div className="dzt-dl-section">
+                                <div className="dzt-dl-section-title"><Music size={12} /> اجعلها صوت</div>
+                                <div className="dzt-dl-grid">
+                                  <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'audio', '720')} title="استخراج الصوت بصيغة M4A">
+                                    <span className="dzt-dl-tile-q">M4A</span>
+                                    <span className="dzt-dl-tile-tag">صوت أصلي</span>
+                                  </button>
+                                  <button className="dzt-dl-tile dzt-dl-tile-audio" onClick={() => startDownload(r, 'mp3', '720')} title="تحويل إلى MP3">
+                                    <span className="dzt-dl-tile-q">MP3</span>
+                                    <span className="dzt-dl-tile-tag">جودة عالية</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </>,
                           document.body

@@ -34,8 +34,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
     "ws": "^8.20.0",
-    "youtube-sr": "^4.3.12",
-    "youtubei.js": "^17.0.1"
+    "youtube-sr": "^4.3.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

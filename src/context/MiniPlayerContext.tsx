@@ -360,12 +360,74 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
+  // Full MediaSession + Wake Lock wiring so audio keeps playing when the
+  // screen turns off and the OS lock-screen shows usable controls.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.setActionHandler('play', toggle)
-    navigator.mediaSession.setActionHandler('pause', toggle)
-    navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
-  }, [toggle, next])
+    const ms = navigator.mediaSession
+    const safe = (action: string, handler: any) => { try { ms.setActionHandler(action as any, handler) } catch {} }
+    safe('play', () => { try { playerRef.current?.playVideo?.() } catch {} })
+    safe('pause', () => { try { playerRef.current?.pauseVideo?.() } catch {} })
+    safe('stop', () => stop())
+    safe('nexttrack', () => { void next() })
+    safe('previoustrack', () => { try { playerRef.current?.seekTo?.(0, true); setProgress(0) } catch {} })
+    safe('seekbackward', (d: any) => { const cur = playerRef.current?.getCurrentTime?.() || 0; seek(Math.max(0, cur - (d?.seekOffset || 10))) })
+    safe('seekforward', (d: any) => { const cur = playerRef.current?.getCurrentTime?.() || 0; seek(cur + (d?.seekOffset || 10)) })
+    safe('seekto', (d: any) => { if (typeof d?.seekTime === 'number') seek(d.seekTime) })
+    return () => {
+      ['play','pause','stop','nexttrack','previoustrack','seekbackward','seekforward','seekto'].forEach(a => safe(a, null))
+    }
+  }, [next, seek, stop])
+
+  // Sync playbackState with the OS so lock-screen shows correct play/pause icon
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    try { navigator.mediaSession.playbackState = track ? (playing ? 'playing' : 'paused') : 'none' } catch {}
+  }, [playing, track])
+
+  // Push positionState every second so the lock-screen scrubber stays in sync
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !track) return
+    let cancelled = false
+    const id = window.setInterval(() => {
+      if (cancelled) return
+      try {
+        if (duration > 0 && navigator.mediaSession.setPositionState) {
+          navigator.mediaSession.setPositionState({
+            duration,
+            playbackRate: 1,
+            position: Math.min(progress, duration),
+          })
+        }
+      } catch {}
+    }, 1000)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [track, duration, progress])
+
+  // Wake Lock — keep screen from sleeping while a track is actively playing.
+  // (On phones the lock-screen audio still plays via MediaSession anyway, but
+  // this prevents the tab from being aggressively suspended on some browsers.)
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    const anyNav = navigator as any
+    if (!anyNav.wakeLock) return
+    let sentinel: any = null
+    let cancelled = false
+    const acquire = async () => {
+      try {
+        if (sentinel) return
+        sentinel = await anyNav.wakeLock.request('screen')
+        sentinel.addEventListener?.('release', () => { sentinel = null })
+      } catch {}
+    }
+    const release = async () => {
+      try { if (sentinel) { await sentinel.release(); sentinel = null } } catch {}
+    }
+    if (playing) void acquire(); else void release()
+    const onVis = () => { if (document.visibilityState === 'visible' && playing) void acquire() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', onVis); void release() }
+  }, [playing])
 
   return (
     <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, removeFromQueue, clearQueue, next, toggle, seek, stop }}>

@@ -4811,12 +4811,13 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
+  // Refreshed 2026-04-24 — most public instances are dead. Only one reliable
+  // instance is currently operational, but we keep a couple of historical
+  // mirrors as cheap retries since the helper just falls through on failure.
+  'https://api.piped.private.coffee',
   'https://pipedapi.kavin.rocks',
   'https://api.piped.privacydev.net',
-  'https://pipedapi.adminforge.de',
-  'https://pipedapi.leptons.xyz',
   'https://pipedapi.r4fo.com',
-  'https://pipedapi.darkness.services',
 ]
 
 // Best-effort fetch of direct stream URLs via the public Piped network.
@@ -4839,8 +4840,12 @@ async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
       if (isAudio) {
         const audios = (j.audioStreams || []).filter(a => a && a.url)
         if (!audios.length) continue
-        audios.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
-        const pick = audios[0]
+        // Prefer M4A (better universal player support) over WebM/Opus, then
+        // pick the highest bitrate within that preferred format.
+        const m4a = audios.filter(a => !(a.format || '').toLowerCase().includes('webm'))
+        const pool = m4a.length ? m4a : audios
+        pool.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+        const pick = pool[0]
         return {
           url: pick.url,
           mime: pick.mimeType || 'audio/mp4',
@@ -5398,6 +5403,24 @@ async function _ytdownPollProcess4(mediaUrl) {
   return null
 }
 
+// Map ytdown.to API errors to user-friendly Arabic messages so the user
+// understands WHY a particular video can't be downloaded (rather than seeing
+// a generic "download failed").
+function _ytdownFriendlyError(code, message) {
+  const m = String(message || '').toLowerCase()
+  if (code === 429 || m.includes('too many requests')) return 'الخدمة مشغولة جداً، انتظر دقيقة وحاول مرة أخرى'
+  if (m.includes('private')) return 'هذا الفيديو خاص ولا يمكن تحميله'
+  if (m.includes('unavailable') || m.includes('not exist') || m.includes('removed')) return 'هذا الفيديو محذوف أو غير متاح'
+  if (m.includes('age') || m.includes('sign in')) return 'هذا الفيديو يتطلب تسجيل دخول (محتوى للبالغين أو محمي)'
+  if (m.includes('region') || m.includes('country') || m.includes('geo')) return 'هذا الفيديو محظور في منطقة الخادم'
+  if (m.includes('live') || m.includes('stream')) return 'البث المباشر لا يدعم التحميل'
+  if (m.includes('premiere')) return 'العرض المجدول لم يُنشر بعد'
+  if (m.includes('member') || m.includes('premium') || m.includes('paid')) return 'هذا المحتوى مدفوع أو محصور بالأعضاء'
+  if (m.includes('copyright')) return 'الفيديو محظور بسبب حقوق الطبع'
+  if (m.includes('maintenance') || code === 503) return 'الخدمة قيد الصيانة، حاول لاحقاً'
+  return null
+}
+
 async function fetchYtdownItems(youtubeUrl) {
   const apiHeaders = {
     'User-Agent': _YTDOWN_UA,
@@ -5409,13 +5432,28 @@ async function fetchYtdownItems(youtubeUrl) {
   }
   const body = new URLSearchParams({ url: youtubeUrl }).toString()
   let lastErr = null
+  let lastFriendly = null
   for (let attempt = 1; attempt <= _YTDOWN_MAX_API_RETRIES; attempt++) {
     try {
-      const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers: apiHeaders, body, signal: AbortSignal.timeout(20000) })
+      const ctl = new AbortController()
+      const t = setTimeout(() => ctl.abort(), 15000)
+      const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers: apiHeaders, body, signal: ctl.signal })
+      clearTimeout(t)
       if (!r.ok) { lastErr = `HTTP ${r.status}`; continue }
       const data = await r.json().catch(() => null)
       const api = data?.api
-      if (!api || String(api.status).toLowerCase() !== 'ok') { lastErr = api?.message || 'bad status'; continue }
+      if (!api) { lastErr = 'invalid response'; continue }
+      const status = String(api.status || '').toLowerCase()
+      if (status === 'error' || status !== 'ok') {
+        // Specific upstream error — translate and bail (no retry helps here)
+        const friendly = _ytdownFriendlyError(api.code, api.message)
+        if (friendly) {
+          const e = new Error(friendly); e.userFriendly = true; e.upstream = 'ytdown'; throw e
+        }
+        lastErr = api.message || `status=${status}`
+        lastFriendly = null
+        continue
+      }
       const items = Array.isArray(api.mediaItems) ? api.mediaItems : []
       const out = []
       for (const m of items) {
@@ -5430,11 +5468,12 @@ async function fetchYtdownItems(youtubeUrl) {
       }
       return { title: api.title || 'video', thumbnail: api.imagePreviewUrl || '', items: out }
     } catch (e) {
+      if (e.userFriendly) throw e
       lastErr = e.message
     }
     await new Promise(r => setTimeout(r, 800))
   }
-  throw new Error(`ytdown.to failed: ${lastErr || 'unknown'}`)
+  const e = new Error(`ytdown.to: ${lastErr || 'unknown'}`); e.upstream = 'ytdown'; throw e
 }
 
 // Pick the best matching ytdown.to item for the requested format/quality.
@@ -5498,32 +5537,70 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
   const isAudio = format === 'mp3' || format === 'audio'
 
-  // ── Primary path: ytdown.to (free, reliable, no bot challenges) ──
-  // Same technique used by nadir-downloader.vercel.app. Resolves to a
-  // direct CDN URL in 2–6 s, then we proxy-stream so the browser sees a
-  // real download with Content-Disposition.
-  try {
-    const yt = await fetchYtdownItems(url)
-    const item = pickYtdownItem(yt.items, format, h)
-    if (item) {
+  // ── Multi-source resolver ─────────────────────────────────────────────
+  // Capability matrix:
+  //   • ytdown.to  → MP4 (any height), M4A audio, MP3 audio  ✅ all formats
+  //   • Piped      → ONLY audio-only streams (M4A/WebM). Their video URLs
+  //                  are DASH video-only (no audio) so unusable without
+  //                  ffmpeg. Skip Piped for video and for MP3-conversion.
+  //   • yt-dlp     → final fallback (block below)
+  let friendlyError = null
+  let winner = null
+
+  const tryYtdown = (async () => {
+    try {
+      const yt = await fetchYtdownItems(url)
+      const item = pickYtdownItem(yt.items, format, h)
+      if (!item) return null
       const resolved = await resolveYtdownDirectUrl(item)
-      if (resolved?.url) {
-        const safe = (yt.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
-        let dlExt, dlMime
-        if (format === 'mp3') { dlExt = 'mp3'; dlMime = 'audio/mpeg' }
-        else if (format === 'audio') { dlExt = 'm4a'; dlMime = 'audio/mp4' }
-        else { dlExt = 'mp4'; dlMime = 'video/mp4' }
-        const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${item.quality || h+'p'}.${dlExt}`
-        console.log('[DZTube:download] ytdown.to hit:', item.type, item.quality, item.format, '→', resolved.url.slice(0, 80))
-        return await streamUpstreamToClient(req, res, resolved.url, dlMime, downloadName)
-      }
-      console.warn('[DZTube:download] ytdown.to: matched item but resolution failed')
-    } else {
-      console.warn('[DZTube:download] ytdown.to: no matching item for', format, h)
+      if (!resolved?.url) return null
+      return { source: 'ytdown', title: yt.title, url: resolved.url, quality: item.quality }
+    } catch (e) {
+      if (e.userFriendly) friendlyError = e.message
+      console.warn('[DZTube:download] ytdown.to:', e.message)
+      return null
     }
-  } catch (e) {
-    console.warn('[DZTube:download] ytdown.to error → falling back to yt-dlp:', e.message)
+  })()
+
+  // Only race Piped when we want native audio (M4A) — fastest & most reliable
+  // for that case. For video and MP3 we wait on ytdown alone since Piped
+  // can't satisfy those requests on Vercel without ffmpeg.
+  if (format === 'audio') {
+    const tryPiped = (async () => {
+      try {
+        const vid = extractYouTubeVideoId(url)
+        const piped = await fetchPipedStreams(vid, { isAudio: true, height: h })
+        if (!piped?.url) return null
+        return { source: 'piped', title: '', url: piped.url, quality: 'audio', ext: piped.ext, mime: piped.mime }
+      } catch (e) { console.warn('[DZTube:download] piped:', e.message); return null }
+    })()
+    // Race — first non-null wins, but await both before falling through
+    winner = await Promise.race([
+      tryYtdown.then(r => r || new Promise(() => {})), // never resolve null
+      tryPiped.then(r => r || new Promise(() => {})),
+      Promise.allSettled([tryYtdown, tryPiped]).then(rs => {
+        for (const r of rs) if (r.status === 'fulfilled' && r.value) return r.value
+        return null
+      }),
+    ])
+  } else {
+    winner = await tryYtdown
   }
+
+  if (winner) {
+    const safe = (winner.title || 'video').replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
+    let dlExt, dlMime
+    if (format === 'mp3') { dlExt = 'mp3'; dlMime = 'audio/mpeg' }
+    else if (format === 'audio') { dlExt = winner.ext || 'm4a'; dlMime = winner.mime || 'audio/mp4' }
+    else { dlExt = 'mp4'; dlMime = 'video/mp4' }
+    const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${winner.quality || h+'p'}.${dlExt}`
+    console.log(`[DZTube:download] ${winner.source} hit → ${downloadName}`)
+    return await streamUpstreamToClient(req, res, winner.url, dlMime, downloadName)
+  }
+
+  // If ytdown returned an actionable error (private / live / unavailable),
+  // surface it immediately — yt-dlp won't fare better for these cases.
+  if (friendlyError) return res.status(400).send(`فشل التحميل: ${friendlyError}`)
 
   // Locate yt-dlp (PATH or bundled at bin/yt-dlp on Vercel)
   const dlpBin = await ytDlpBinaryPath()

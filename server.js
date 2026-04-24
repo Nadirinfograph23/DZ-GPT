@@ -5195,6 +5195,24 @@ function computeDownloadableHeights(heights, hasFfmpeg) {
   return heights.includes(360) || heights.length > 0 ? [360] : []
 }
 
+// Temporary diagnostic — returns raw stderr/stdout from yt-dlp for debugging
+app.get('/api/dz-tube/_diag', async (req, res) => {
+  const url = String(req.query.url || 'https://www.youtube.com/watch?v=jNQXAC9IVRw')
+  const dlpBin = await ytDlpBinaryPath()
+  const cookies = await ytDlpCookiesArgs()
+  if (!dlpBin) return res.json({ error: 'no yt-dlp binary' })
+  const t0 = Date.now()
+  const result = await new Promise(resolve => {
+    const proc = spawn(dlpBin, ['-J', '--no-warnings', '--no-playlist', ...cookies, url])
+    let out = '', err = ''
+    proc.stdout.on('data', d => { out += d.toString() })
+    proc.stderr.on('data', d => { err += d.toString() })
+    proc.on('error', e => resolve({ spawnError: e.message }))
+    proc.on('close', code => resolve({ code, ms: Date.now() - t0, stderr: err.slice(0, 4000), stdoutLen: out.length, stdoutHead: out.slice(0, 200) }))
+  })
+  res.json({ binary: dlpBin, hasCookies: cookies.length > 0, url, ...result })
+})
+
 app.post('/api/dz-tube/info', async (req, res) => {
   const { url } = req.body || {}
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'رابط YouTube غير صالح' })

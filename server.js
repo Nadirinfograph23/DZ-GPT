@@ -4764,29 +4764,20 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
 const audioCacheDir = `${os.tmpdir()}/dz-tube-audio`
 try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
 
-async function fetchAudioToFile(url, filePath) {
-  const useDlp = await ytDlpAvailable()
-  if (useDlp) {
-    return new Promise((resolve, reject) => {
+function spawnAudioStream(url) {
+  return ytDlpAvailable().then(useDlp => {
+    if (useDlp) {
       const proc = spawn('yt-dlp', [
         '-f', 'bestaudio[ext=m4a]/bestaudio',
         '--no-warnings', '--no-playlist',
-        '-o', filePath,
+        '-o', '-',
         url,
-      ])
-      let err = ''
-      proc.stderr.on('data', d => { err += d.toString() })
-      proc.on('error', reject)
-      proc.on('close', code => code === 0 ? resolve() : reject(new Error(err || `yt-dlp exit ${code}`)))
-    })
-  }
-  return new Promise((resolve, reject) => {
-    const stream = ytdl(url, { filter: 'audioonly', quality: 'highestaudio' })
-    const ws = fs.createWriteStream(filePath)
-    stream.pipe(ws)
-    ws.on('finish', resolve)
-    ws.on('error', reject)
-    stream.on('error', reject)
+      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      proc.stderr.on('data', d => { /* console.warn('[yt-dlp]', d.toString()) */ })
+      return { stream: proc.stdout, kill: () => { try { proc.kill('SIGKILL') } catch {} } }
+    }
+    const s = ytdl(url, { filter: 'audioonly', quality: 'highestaudio', highWaterMark: 1 << 25 })
+    return { stream: s, kill: () => { try { s.destroy() } catch {} } }
   })
 }
 
@@ -4796,40 +4787,81 @@ app.get('/api/dz-tube/audio-stream', async (req, res) => {
 
   const hash = crypto.createHash('sha1').update(url).digest('hex').slice(0, 20)
   const filePath = `${audioCacheDir}/${hash}.m4a`
+  const range = req.headers.range
 
-  try {
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).size < 1024) {
-      console.log('[audio-stream] fetching', url)
-      await fetchAudioToFile(url, filePath)
+  // FAST PATH: cache exists and is complete → serve with Range support
+  if (fs.existsSync(filePath) && fs.statSync(filePath).size >= 1024) {
+    const stat = fs.statSync(filePath)
+    const total = stat.size
+    res.setHeader('Content-Type', 'audio/mp4')
+    res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    if (range) {
+      const m = /bytes=(\d+)-(\d*)/.exec(range)
+      if (!m) return res.status(416).end()
+      const start = parseInt(m[1], 10)
+      const end = m[2] ? parseInt(m[2], 10) : total - 1
+      if (start >= total || end >= total) return res.status(416).end()
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Content-Length': end - start + 1,
+      })
+      return fs.createReadStream(filePath, { start, end }).pipe(res)
     }
+    res.setHeader('Content-Length', total)
+    return fs.createReadStream(filePath).pipe(res)
+  }
+
+  // LIVE STREAM PATH: pipe upstream → response, tee to cache file in parallel
+  console.log('[audio-stream] live-stream', url)
+  let upstream
+  try {
+    upstream = await spawnAudioStream(url)
   } catch (e) {
-    console.error('[audio-stream]', e.message)
-    try { fs.unlinkSync(filePath) } catch {}
+    console.error('[audio-stream] spawn failed:', e.message)
     return res.status(502).end('فشل تحميل الصوت')
   }
 
-  const stat = fs.statSync(filePath)
-  const total = stat.size
-  const range = req.headers.range
-  res.setHeader('Content-Type', 'audio/mp4')
-  res.setHeader('Accept-Ranges', 'bytes')
-  res.setHeader('Cache-Control', 'public, max-age=3600')
+  const tmpPath = `${filePath}.partial`
+  try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
+  let firstByte = false, errored = false
+  const ws = fs.createWriteStream(tmpPath)
+  ws.on('error', e => { errored = true; console.error('[audio-stream] write error:', e.message) })
 
-  if (range) {
-    const m = /bytes=(\d+)-(\d*)/.exec(range)
-    if (!m) return res.status(416).end()
-    const start = parseInt(m[1], 10)
-    const end = m[2] ? parseInt(m[2], 10) : total - 1
-    if (start >= total || end >= total) return res.status(416).end()
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${total}`,
-      'Content-Length': end - start + 1,
+  res.setHeader('Content-Type', 'audio/mp4')
+  res.setHeader('Cache-Control', 'no-cache')
+  // Note: no Accept-Ranges/Content-Length on live stream — browser will re-request once cache is complete
+
+  upstream.stream.on('data', chunk => {
+    if (!firstByte) { firstByte = true }
+    if (!res.writableEnded) res.write(chunk)
+    if (!ws.destroyed) ws.write(chunk)
+  })
+  upstream.stream.on('end', () => {
+    if (!res.writableEnded) res.end()
+    ws.end(() => {
+      if (!errored) {
+        try { fs.renameSync(tmpPath, filePath); console.log('[audio-stream] cached', hash) } catch {}
+      } else {
+        try { fs.unlinkSync(tmpPath) } catch {}
+      }
     })
-    fs.createReadStream(filePath, { start, end }).pipe(res)
-  } else {
-    res.setHeader('Content-Length', total)
-    fs.createReadStream(filePath).pipe(res)
-  }
+  })
+  upstream.stream.on('error', e => {
+    errored = true
+    console.error('[audio-stream] upstream error:', e.message)
+    if (!res.headersSent) res.status(502)
+    if (!res.writableEnded) res.end()
+    try { ws.destroy() } catch {}
+    try { fs.unlinkSync(tmpPath) } catch {}
+  })
+  req.on('close', () => {
+    if (!res.writableEnded) {
+      // client disconnected — kill upstream to save bandwidth
+      upstream.kill()
+      try { ws.destroy(); fs.unlinkSync(tmpPath) } catch {}
+    }
+  })
 })
 
 app.post('/api/dz-tube/info', async (req, res) => {

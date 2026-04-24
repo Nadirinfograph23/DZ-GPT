@@ -101,6 +101,7 @@ export default function DZTube() {
   const [embedId, setEmbedId] = useState<string | null>(null)
   const [embedTitle, setEmbedTitle] = useState<string>('')
   const [downloadMenuFor, setDownloadMenuFor] = useState<string | null>(null)
+  const [downloadMenuPos, setDownloadMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
@@ -387,7 +388,12 @@ export default function DZTube() {
                       <div className="dzt-act-dl-wrap">
                         <button
                           className="dzt-act dzt-act-dl"
-                          onClick={() => setDownloadMenuFor(downloadMenuFor === r.id ? null : r.id)}
+                          onClick={(e) => {
+                            if (downloadMenuFor === r.id) { setDownloadMenuFor(null); return }
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                            setDownloadMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+                            setDownloadMenuFor(r.id)
+                          }}
                           disabled={downloadingId === r.id}
                           title="تحميل"
                         >
@@ -399,7 +405,10 @@ export default function DZTube() {
                         {downloadMenuFor === r.id && (
                           <>
                             <div className="dzt-dl-overlay" onClick={() => setDownloadMenuFor(null)} />
-                            <div className="dzt-dl-menu">
+                            <div
+                              className="dzt-dl-menu"
+                              style={{ top: downloadMenuPos.top, right: downloadMenuPos.right }}
+                            >
                               <div className="dzt-dl-section-title"><Video size={11} /> فيديو</div>
                               {QUALITIES.map(q => (
                                 <button key={q} className="dzt-dl-option" onClick={() => startDownload(r, 'mp4', q)}>

@@ -3191,3 +3191,32 @@
   color: #fca5a5;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
+
+/* Sync button & info variants */
+.dz-deploy-btn--sync {
+  background: linear-gradient(180deg, #0a2a1a 0%, #061a10 100%);
+  border-color: #1a4a32;
+  color: #d6ffd6;
+}
+.dz-deploy-btn--sync:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0e3a24 0%, #082218 100%);
+  border-color: #2a6a45;
+}
+.dz-deploy-btn--sync:disabled {
+  background: #0a0a0a;
+  border-color: #1a1a1a;
+  color: #555;
+}
+.dz-deploy-pending-count {
+  margin-inline-start: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.dz-deploy-feedback--info {
+  background: rgba(96, 165, 250, 0.08);
+  color: #93c5fd;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}

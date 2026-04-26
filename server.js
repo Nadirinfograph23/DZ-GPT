@@ -6,6 +6,8 @@ import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { readFile } from 'fs/promises'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import {
   createStaticEducationalFallback,
@@ -126,6 +128,7 @@ app.use('/api/update-index', searchLimiter)
 app.use('/api/lessons', searchLimiter)
 app.use('/api/lesson', searchLimiter)
 app.use('/api/dz-agent/deploy', deployLimiter)
+app.use('/api/dz-agent/sync', deployLimiter)
 app.use('/api/dz-agent/doctor-search', searchLimiter)
 
 // ===== INPUT SANITIZER =====
@@ -419,6 +422,17 @@ function hasDeployAuthorization(req) {
   const providedBuffer = Buffer.from(provided)
   const expectedBuffer = Buffer.from(expected)
   return providedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+}
+
+const execFileAsync = promisify(execFile)
+const REPO_ROOT = path.resolve(__dirname)
+async function runGit(args, opts = {}) {
+  return execFileAsync('git', args, {
+    cwd: REPO_ROOT,
+    timeout: opts.timeout || 30000,
+    maxBuffer: 4 * 1024 * 1024,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...(opts.env || {}) },
+  })
 }
 
 // ===== GROQ SMART KEY ROTATION SYSTEM =====
@@ -2694,6 +2708,122 @@ app.post('/api/dz-agent/doctor-search', async (req, res) => {
   } catch (err) {
     console.error('[doctor-search] error:', err)
     return res.status(500).json({ error: 'Doctor search failed.' })
+  }
+})
+
+// ===== SYNC ENDPOINT (commit + push to GitHub from Replit) =====
+app.get('/api/dz-agent/sync/status', async (_req, res) => {
+  try {
+    await runGit(['--version'])
+    const { stdout: branchOut } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => ({ stdout: '' }))
+    const { stdout: statusOut } = await runGit(['status', '--porcelain']).catch(() => ({ stdout: '' }))
+    const changedFiles = statusOut.trim() ? statusOut.trim().split('\n').length : 0
+    return res.json({
+      available: true,
+      hasGithubToken: !!process.env.GITHUB_TOKEN,
+      branch: branchOut.trim() || null,
+      changedFiles,
+      runtime: process.env.VERCEL ? 'vercel' : 'replit',
+    })
+  } catch {
+    return res.json({ available: false, hasGithubToken: !!process.env.GITHUB_TOKEN, runtime: process.env.VERCEL ? 'vercel' : 'unknown' })
+  }
+})
+
+app.post('/api/dz-agent/sync', async (req, res) => {
+  if (!hasDeployAuthorization(req)) {
+    return res.status(403).json({ error: 'Sync endpoint is restricted.' })
+  }
+  const githubToken = process.env.GITHUB_TOKEN
+  if (!githubToken) {
+    return res.status(500).json({ error: 'GITHUB_TOKEN not configured on server.' })
+  }
+
+  const rawMessage = sanitizeString(req.body?.message || '', 200).trim()
+  const safeMessage = rawMessage && /[^\s]/.test(rawMessage)
+    ? rawMessage
+    : `chore: sync from Replit at ${new Date().toISOString()}`
+
+  try {
+    // Verify git is available and we're in a repo
+    await runGit(['rev-parse', '--git-dir'])
+
+    // Check for changes
+    const { stdout: statusOut } = await runGit(['status', '--porcelain'])
+    if (!statusOut.trim()) {
+      const { stdout: shaOut } = await runGit(['rev-parse', 'HEAD'])
+      return res.json({
+        success: true,
+        code: 'NO_CHANGES',
+        message: 'No local changes to sync — repository already up to date.',
+        sha: shaOut.trim(),
+        shortSha: shaOut.trim().slice(0, 8),
+      })
+    }
+
+    // Determine current branch
+    const { stdout: branchOut } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'])
+    const branch = branchOut.trim()
+    if (!branch || branch === 'HEAD') {
+      return res.status(400).json({ error: 'Detached HEAD — please checkout a branch first.' })
+    }
+
+    // Ensure user.email/name are configured for the commit
+    try { await runGit(['config', 'user.email']) } catch {
+      await runGit(['config', 'user.email', 'dz-agent@replit.local'])
+    }
+    try { await runGit(['config', 'user.name']) } catch {
+      await runGit(['config', 'user.name', 'DZ Agent (Replit)'])
+    }
+
+    // Stage all changes
+    await runGit(['add', '-A'])
+
+    // Commit (allow empty just in case)
+    try {
+      await runGit(['commit', '-m', safeMessage])
+    } catch (commitErr) {
+      // If nothing actually got staged, surface a clean message
+      const text = String(commitErr?.stderr || commitErr?.stdout || commitErr?.message || '')
+      if (/nothing to commit/i.test(text)) {
+        const { stdout: shaOut } = await runGit(['rev-parse', 'HEAD'])
+        return res.json({
+          success: true,
+          code: 'NO_CHANGES',
+          message: 'No staged changes — repository already up to date.',
+          sha: shaOut.trim(),
+          shortSha: shaOut.trim().slice(0, 8),
+        })
+      }
+      throw commitErr
+    }
+
+    // Push using authenticated URL (token kept off the command line via -c http.extraHeader)
+    const remoteUrl = `https://github.com/${VERCEL_GITHUB_REPO}.git`
+    const authHeader = `AUTHORIZATION: Basic ${Buffer.from(`x-access-token:${githubToken}`).toString('base64')}`
+    await runGit(
+      ['-c', `http.extraHeader=${authHeader}`, 'push', remoteUrl, `HEAD:refs/heads/${branch}`],
+      { timeout: 60000 }
+    )
+
+    const { stdout: newShaOut } = await runGit(['rev-parse', 'HEAD'])
+    const sha = newShaOut.trim()
+    return res.json({
+      success: true,
+      code: 'PUSHED',
+      message: 'Changes pushed to GitHub. Vercel will deploy automatically.',
+      branch,
+      sha,
+      shortSha: sha.slice(0, 8),
+      commitMessage: safeMessage,
+    })
+  } catch (err) {
+    const detail = String(err?.stderr || err?.stdout || err?.message || 'Unknown git error')
+      // Strip any leaked token from error output (defense in depth)
+      .replace(/x-access-token:[^@\s]+/g, 'x-access-token:***')
+      .slice(0, 600)
+    console.error('[sync] error:', detail)
+    return res.status(500).json({ error: 'Sync failed.', detail })
   }
 })
 

@@ -5277,9 +5277,15 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
 // Resolves stream URL via the same chain as /audio-url, then pipes bytes
 // through with full Range / Content-Length / Accept-Ranges support.
 const _audioUrlCache = new Map() // youtubeUrl -> { url, expiresAt }
-async function resolveDirectAudioUrl(youtubeUrl) {
-  const cached = _audioUrlCache.get(youtubeUrl)
-  if (cached && cached.expiresAt > Date.now()) return cached.url
+async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
+  // `bypassCache: true` forces a fresh extraction — used when the client
+  // explicitly says "the cached URL is dead, get me a new one".
+  if (!opts.bypassCache) {
+    const cached = _audioUrlCache.get(youtubeUrl)
+    if (cached && cached.expiresAt > Date.now()) return cached.url
+  } else {
+    _audioUrlCache.delete(youtubeUrl)
+  }
 
   const dlpBin = await ytDlpBinaryPath()
   if (dlpBin) {
@@ -5301,7 +5307,7 @@ async function resolveDirectAudioUrl(youtubeUrl) {
           resolve(url)
         })
       })
-      _audioUrlCache.set(youtubeUrl, { url: u, expiresAt: Date.now() + 30 * 60 * 1000 })
+      _audioUrlCache.set(youtubeUrl, { url: u, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
       return u
     } catch (e) {
       console.warn('[audio-proxy:dlp-fail]', e.message)
@@ -5311,7 +5317,7 @@ async function resolveDirectAudioUrl(youtubeUrl) {
     const info = await ytdl.getInfo(youtubeUrl)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
     if (fmt?.url) {
-      _audioUrlCache.set(youtubeUrl, { url: fmt.url, expiresAt: Date.now() + 30 * 60 * 1000 })
+      _audioUrlCache.set(youtubeUrl, { url: fmt.url, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
       return fmt.url
     }
   } catch (e) {
@@ -5319,7 +5325,7 @@ async function resolveDirectAudioUrl(youtubeUrl) {
   }
   const piped = await fetchPipedStreams(extractYouTubeVideoId(youtubeUrl), { isAudio: true })
   if (piped?.url) {
-    _audioUrlCache.set(youtubeUrl, { url: piped.url, expiresAt: Date.now() + 30 * 60 * 1000 })
+    _audioUrlCache.set(youtubeUrl, { url: piped.url, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
     return piped.url
   }
   throw new Error('all extractors failed')
@@ -5336,6 +5342,24 @@ function isSafariOrIOS(ua) {
   if (/iPhone|iPad|iPod/i.test(u)) return true
   if (/Safari/i.test(u) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Brave/i.test(u)) return true
   return false
+}
+
+// LRU-bound the URL cache so a long-running server doesn't grow unbounded.
+// Googlevideo URLs are valid for ~6 hours but yt-dlp can rate-limit us if
+// we re-resolve too aggressively, so we keep entries for 20 min and never
+// hold more than 200 of them. This single cap is the difference between
+// "works for an hour or two" and "works forever".
+const _AUDIO_URL_CACHE_MAX = 200
+const _AUDIO_URL_CACHE_TTL_MS = 20 * 60 * 1000
+function _trimAudioUrlCache() {
+  if (_audioUrlCache.size <= _AUDIO_URL_CACHE_MAX) return
+  // Drop the oldest insertion-order entries until we're back under the cap.
+  const overflow = _audioUrlCache.size - _AUDIO_URL_CACHE_MAX
+  let i = 0
+  for (const k of _audioUrlCache.keys()) {
+    if (i++ >= overflow) break
+    _audioUrlCache.delete(k)
+  }
 }
 
 // Stream a remuxed AAC-in-MP4 audio response to the client by piping the
@@ -5389,25 +5413,34 @@ function remuxAudioToClient(upstreamUrl, req, res) {
   req.on('close', () => { try { proc.kill('SIGKILL') } catch {} })
 }
 
-// True byte-pipe proxy. We deliberately do NOT 307-redirect to googlevideo
-// anymore — that approach broke playback whenever the signed URL expired or
-// returned 403 (the <audio> element fires `error` once and dies, with no way
-// to recover from the client side). Piping bytes through our origin lets us:
-//   • forward the browser's Range header upstream, preserving seek/scrub,
-//   • silently re-resolve expired googlevideo URLs and retry with the new
-//     one — the browser never sees the failure,
-//   • set the User-Agent we know googlevideo will accept,
-//   • keep CORS trivial (everything is same-origin).
+// PERMANENT-FIX RATIONALE
+// ───────────────────────
+// Earlier this endpoint piped bytes through the server. That worked locally
+// but broke in production after 30 seconds because Vercel kills serverless
+// functions at `maxDuration` (30s in vercel.json). For a 4-minute song the
+// audio element saw the stream end mid-track, recovered, played another 30s,
+// and so on — building up cache pressure and yt-dlp rate-limit hits until the
+// player became unrecoverably broken after an hour or two. The byte-pipe also
+// added our small Node host as a bandwidth bottleneck and a single point of
+// failure for every active listener.
+//
+// The robust answer is the standard YouTube-frontend pattern:
+//   1) Resolve the direct googlevideo URL once (cached).
+//   2) 307-redirect the <audio> element straight to googlevideo.
+// The Vercel function then exits in milliseconds, the browser streams from
+// googlevideo at full CDN speed, and the function timeout becomes irrelevant.
+// When googlevideo eventually 403s (URL expiry), the <audio> fires `error`,
+// the client retries this endpoint with `&_r=<ts>`, which forces us to
+// invalidate the cache and resolve a fresh URL. The browser then follows the
+// new redirect and resumes from the saved position.
+//
+// The only client that still needs byte-pipe + ffmpeg is Safari/iOS (no
+// opus/webm decode), which is handled by `remuxAudioToClient` below.
 async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
-    // googlevideo throttles non-Range "media player" style downloads to a
-    // few hundred KB/s, which makes <audio> sit at "loading" for tens of
-    // seconds and looks like the player is broken. ALWAYS send a Range
-    // header upstream — we'll translate the 206 back to a 200 for the
-    // client when the client itself didn't ask for a range.
     'Range': rangeHeader || 'bytes=0-',
   }
   return fetch(upstreamUrl, { headers, redirect: 'follow' })
@@ -5417,98 +5450,99 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
-  // Resolve the direct googlevideo URL (cached for 30 min). On a stale-URL
-  // failure below we'll invalidate this entry and re-resolve once.
+  // Client-driven cache invalidation. The mini-player adds `&_r=<ts>` on
+  // every recovery rebind — that's our signal that the current cached URL
+  // is dead and we must re-extract.
+  const bypassCache = !!req.query._r
+
+  // Resolve the direct googlevideo URL.
   let upstreamUrl
   try {
-    upstreamUrl = await resolveDirectAudioUrl(url)
+    upstreamUrl = await resolveDirectAudioUrl(url, { bypassCache })
   } catch (e) {
     console.error('[audio-proxy] resolve failed:', e.message)
     return res.status(502).end('فشل تحضير الصوت')
   }
 
-  // Safari/iOS path: remux opus/webm to AAC-in-MP4 so the WebKit decoder
-  // can play it. Falls through to the byte-pipe when ffmpeg isn't installed.
+  // Safari / iOS path: remux opus/webm to AAC-in-MP4 in a streaming ffmpeg
+  // pipeline. WebKit can't decode opus directly. This path DOES go through
+  // our function, so on Vercel it remains subject to maxDuration — but
+  // Safari users are a small slice and the client-side recovery handles
+  // mid-stream drops by reconnecting from the saved position.
   const wantRemux = req.query.force_remux === '1' || isSafariOrIOS(req.headers['user-agent'])
   if (wantRemux && await ffmpegAvailable()) {
     return remuxAudioToClient(upstreamUrl, req, res)
   }
 
+  // Default fast path: redirect to googlevideo. The browser handles bytes
+  // directly with full Range + CDN speed; our function lifetime is < 1s.
+  // 307 preserves the request method/body; google honors Range on the
+  // follow-up request.
+  res.setHeader('Location', upstreamUrl)
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORP/COEP-safe — these match the rest of the API responses.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  res.status(307).end()
+})
+
+// Last-resort recovery endpoint: when the client gives up on the redirect
+// path (multiple 403s in a row), it can call /api/dz-tube/audio-pipe which
+// proxies bytes through the server. Slower and subject to function timeouts,
+// but useful as a manual escape hatch for stubborn videos.
+app.get('/api/dz-tube/audio-pipe', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
+
+  let upstreamUrl
+  try {
+    upstreamUrl = await resolveDirectAudioUrl(url, { bypassCache: !!req.query._r })
+  } catch (e) {
+    return res.status(502).end('فشل تحضير الصوت')
+  }
+
   const range = req.headers.range || ''
-  // Try once with the cached URL, then once more after invalidating it.
   let upstream
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       upstream = await fetchUpstreamRange(upstreamUrl, range)
     } catch (e) {
-      if (attempt === 1) {
-        console.error('[audio-proxy] upstream fetch failed:', e.message)
-        if (!res.headersSent) return res.status(502).end('فشل تحميل الصوت')
-        try { res.end() } catch {}
-        return
-      }
-      _audioUrlCache.delete(url)
-      try { upstreamUrl = await resolveDirectAudioUrl(url) } catch (err) {
-        console.error('[audio-proxy] re-resolve failed:', err.message)
-        if (!res.headersSent) return res.status(502).end('فشل تحضير الصوت')
-        try { res.end() } catch {}
-        return
-      }
+      if (attempt === 1) { if (!res.headersSent) res.status(502).end('فشل'); else try { res.end() } catch {}; return }
+      try { upstreamUrl = await resolveDirectAudioUrl(url, { bypassCache: true }) } catch { if (!res.headersSent) res.status(502).end('فشل'); return }
       continue
     }
-    // Treat expired-signed-URL responses as a cache-miss and retry once.
     if ((upstream.status === 403 || upstream.status === 410 || upstream.status === 404) && attempt === 0) {
       try { upstream.body?.cancel?.() } catch {}
-      _audioUrlCache.delete(url)
-      try { upstreamUrl = await resolveDirectAudioUrl(url) } catch (err) {
-        console.error('[audio-proxy] re-resolve failed:', err.message)
-        if (!res.headersSent) return res.status(502).end('فشل تحضير الصوت')
-        try { res.end() } catch {}
-        return
-      }
+      try { upstreamUrl = await resolveDirectAudioUrl(url, { bypassCache: true }) } catch { if (!res.headersSent) res.status(502).end('فشل'); return }
       continue
     }
     break
   }
-
   if (!upstream || (!upstream.ok && upstream.status !== 206)) {
-    console.error('[audio-proxy] upstream status', upstream?.status)
-    if (!res.headersSent) return res.status(upstream?.status || 502).end('فشل تحميل الصوت')
+    if (!res.headersSent) return res.status(upstream?.status || 502).end('فشل')
     try { res.end() } catch {}
     return
   }
 
-  // We always send a Range header upstream (see fetchUpstreamRange), so
-  // googlevideo will reply with 206 + Content-Range. Translate that back
-  // to a plain 200 when the *client* didn't request a range — otherwise
-  // the browser sees a 206 to a non-Range request and panics.
   const clientAskedRange = !!range
   const upstreamCT = upstream.headers.get('content-type') || 'audio/mp4'
   const upstreamLen = upstream.headers.get('content-length')
   const upstreamCR = upstream.headers.get('content-range')
-
   res.setHeader('Content-Type', upstreamCT)
   res.setHeader('Accept-Ranges', 'bytes')
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Access-Control-Allow-Origin', '*')
-
   if (clientAskedRange) {
     if (upstreamCR) res.setHeader('Content-Range', upstreamCR)
     if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
     res.status(upstream.status === 206 ? 206 : upstream.status)
   } else {
-    // Derive the FULL resource size from "Content-Range: bytes 0-N/TOTAL"
-    // so the browser can show a real progress bar instead of "0:00".
     let totalSize = null
-    if (upstreamCR) {
-      const m = upstreamCR.match(/\/(\d+)\s*$/)
-      if (m) totalSize = m[1]
-    }
+    if (upstreamCR) { const m = upstreamCR.match(/\/(\d+)\s*$/); if (m) totalSize = m[1] }
     if (totalSize) res.setHeader('Content-Length', totalSize)
     else if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
     res.status(200)
   }
-
   if (!upstream.body) { res.end(); return }
   const reader = upstream.body.getReader()
   let cancelled = false
@@ -5519,12 +5553,7 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
       if (done || cancelled) break
       if (!res.write(value)) await new Promise(r => res.once('drain', r))
     }
-  } catch (e) {
-    // Mid-stream upstream drop. The client-side player will retry the
-    // request (it adds a cache-bust on `error`) which will land in the
-    // 403/expiry branch above and re-resolve a fresh URL.
-    console.warn('[audio-proxy] stream interrupted:', e.message)
-  }
+  } catch (e) { console.warn('[audio-pipe] interrupted:', e.message) }
   try { res.end() } catch {}
 })
 

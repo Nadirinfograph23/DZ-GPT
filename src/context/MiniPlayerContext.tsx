@@ -256,6 +256,35 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     el.addEventListener('error', onError)
     el.addEventListener('stalled', onStalled)
 
+    // STUCK DETECTOR — the safety net that makes "works for an hour or two"
+    // become "works forever". The browser sometimes fails to fire `error`
+    // or `stalled` when an audio stream silently dies (mid-stream socket
+    // close after a backgrounded tab is throttled, expired googlevideo URL
+    // returning bytes that decode to nothing, etc). We poll every 4s: if
+    // the user wants playback, the element claims to not be paused, but
+    // currentTime hasn't advanced in 8s, force a recovery rebind from the
+    // last known position with a fresh cache-bust query.
+    let lastSeenTime = el.currentTime
+    let lastSeenAt = Date.now()
+    const stuckTimer = window.setInterval(() => {
+      const a = audioRef.current
+      if (!a) return
+      if (!wantPlayingRef.current) { lastSeenTime = a.currentTime; lastSeenAt = Date.now(); return }
+      if (a.paused) { lastSeenTime = a.currentTime; lastSeenAt = Date.now(); return }
+      if (a.readyState < 2) return // still loading initial data — let it
+      const advanced = Math.abs(a.currentTime - lastSeenTime) > 0.25
+      if (advanced) {
+        lastSeenTime = a.currentTime
+        lastSeenAt = Date.now()
+        return
+      }
+      if (Date.now() - lastSeenAt > 8000) {
+        console.warn('[mini-player] stuck for >8s, forcing recovery')
+        lastSeenAt = Date.now() // reset window to avoid recovery loop
+        scheduleRecovery(0)
+      }
+    }, 4000) as unknown as number
+
     return () => {
       el!.removeEventListener('loadedmetadata', onLoadedMeta)
       el!.removeEventListener('durationchange', onDurationChange)
@@ -269,6 +298,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       el!.removeEventListener('error', onError)
       el!.removeEventListener('stalled', onStalled)
       if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
+      clearInterval(stuckTimer)
     }
   }, [])
 

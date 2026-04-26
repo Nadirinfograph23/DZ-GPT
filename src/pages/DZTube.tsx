@@ -5,6 +5,7 @@ import {
   ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
   RotateCw, X, Play, Headphones, ChevronDown, Plus, Sparkles, Radio, BookOpen,
   GraduationCap, Trophy, Newspaper, Film, TrendingUp, CheckSquare, Square, ListChecks,
+  SkipForward,
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tube.css'
@@ -632,6 +633,16 @@ export default function DZTube() {
                       </button>
                       <button className="dzt-act dzt-act-bg" onClick={() => playInBackground(r)} title="استمع في الخلفية">
                         <Headphones size={13} />
+                      </button>
+                      <button
+                        className="dzt-act dzt-act-q"
+                        onClick={() => {
+                          player.playNext({ id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail, channel: r.channel, duration: r.duration })
+                          showToast('⏭️ سيُشغَّل بعد المقطع الحالي')
+                        }}
+                        title="تشغيل بعد الحالي"
+                      >
+                        <SkipForward size={13} />
                       </button>
                       <button
                         className="dzt-act dzt-act-q"

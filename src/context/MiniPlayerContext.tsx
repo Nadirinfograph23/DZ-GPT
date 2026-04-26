@@ -18,6 +18,7 @@ interface MiniPlayerCtx {
   duration: number
   play: (track: PlayerTrack) => Promise<void>
   enqueue: (track: PlayerTrack) => void
+  playNext: (track: PlayerTrack) => void
   removeFromQueue: (id: string) => void
   clearQueue: () => void
   next: () => Promise<void>
@@ -77,9 +78,10 @@ function extractVideoId(url: string): string | null {
 //  1) Chrome/Safari blocking play() that runs after a 5s+ await
 //  2) CORS rejections on third-party proxies that omit ACAO
 //  3) googlevideo signed URLs expiring while the user listens
-function buildAudioSrc(track: PlayerTrack): string {
+function buildAudioSrc(track: PlayerTrack, cacheBust?: number): string {
   const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
-  return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}`
+  const cb = cacheBust ? `&_r=${cacheBust}` : ''
+  return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}${cb}`
 }
 
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
@@ -100,8 +102,18 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const loadTokenRef = useRef<number>(0)
   // Track id currently bound to <audio>.src — used to skip redundant reloads.
   const currentSrcIdRef = useRef<string | null>(null)
+  // Auto-recovery state: how many times have we tried to silently reload the
+  // current track after an `error`/`stalled` event, and when did we last try.
+  // Resets on every successful play / track change so a long-lived song can
+  // recover many times across its full duration.
+  const recoverAttemptsRef = useRef<number>(0)
+  const lastRecoverAtRef = useRef<number>(0)
+  const recoverTimerRef = useRef<number | null>(null)
+  const trackRef = useRef<PlayerTrack | null>(initial.track)
+  const wantPlayingRef = useRef<boolean>(false)
   const nextRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => { queueRef.current = queue }, [queue])
+  useEffect(() => { trackRef.current = track }, [track])
 
   // Mount a hidden, persistent <audio> element exactly once. Audio elements
   // (unlike <video> or YouTube iframes) keep playing when the screen turns
@@ -140,19 +152,96 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       if (Number.isFinite(d) && d > 0) setDuration(d)
     }
     const onTimeUpdate = () => { setProgress(el!.currentTime || 0) }
-    const onPlay = () => { setPlaying(true); setLoading(false) }
-    const onPause = () => { setPlaying(false) }
+    const onPlay = () => {
+      setPlaying(true); setLoading(false)
+      wantPlayingRef.current = true
+      // A successful play resets the recovery budget so the next mid-stream
+      // failure (URL expiry, network blip) gets its own retry quota.
+      recoverAttemptsRef.current = 0
+    }
+    const onPause = () => {
+      setPlaying(false)
+      // Only treat a pause as user-intent when it didn't come from an error
+      // currently in flight. The error/stalled handlers set the want flag
+      // before scheduling a recovery.
+      if (!recoverTimerRef.current) wantPlayingRef.current = false
+    }
     const onWaiting = () => { setLoading(true) }
     const onPlaying = () => { setLoading(false) }
     const onCanPlay = () => { setLoading(false) }
     const onEnded = () => {
       setPlaying(false)
+      wantPlayingRef.current = false
       if (queueRef.current.length > 0) void nextRef.current()
     }
+
+    // ── Auto-recovery ────────────────────────────────────────────────────
+    // The byte-pipe on the server already retries when googlevideo expires,
+    // but a few classes of failures still surface to the <audio> element:
+    //   • our own server returns 502 because both extractors failed once,
+    //   • the client lost connectivity for a few seconds,
+    //   • the browser dropped the source for memory pressure.
+    // In every case the right answer is the same: rebind the same track
+    // with a cache-bust and resume from the last known position. We bound
+    // attempts at 6 within a sliding 90s window so a truly broken track
+    // doesn't loop forever.
+    const scheduleRecovery = (delayMs: number) => {
+      if (recoverTimerRef.current) return
+      const t = trackRef.current
+      if (!t) return
+      const now = Date.now()
+      if (now - lastRecoverAtRef.current > 90_000) recoverAttemptsRef.current = 0
+      if (recoverAttemptsRef.current >= 6) {
+        console.warn('[mini-player] giving up after 6 recovery attempts')
+        wantPlayingRef.current = false
+        return
+      }
+      recoverAttemptsRef.current += 1
+      lastRecoverAtRef.current = now
+      const resumeAt = el!.currentTime || 0
+      recoverTimerRef.current = window.setTimeout(() => {
+        recoverTimerRef.current = null
+        const cur = trackRef.current
+        if (!cur || cur.id !== t.id) return
+        try {
+          resumeAtRef.current = resumeAt
+          el!.src = buildAudioSrc(cur, Date.now())
+          currentSrcIdRef.current = cur.id
+          el!.load()
+          if (wantPlayingRef.current) {
+            const p = el!.play()
+            if (p && typeof (p as Promise<void>).catch === 'function') {
+              ;(p as Promise<void>).catch(() => {/* will retry via error handler */})
+            }
+          }
+        } catch (e) {
+          console.warn('[mini-player] recovery rebind failed', e)
+        }
+      }, delayMs) as unknown as number
+    }
+
     const onError = () => {
-      setLoading(false)
-      setPlaying(false)
-      console.warn('[mini-player] audio error', el!.error)
+      console.warn('[mini-player] audio error', el!.error?.code, el!.error?.message)
+      setLoading(true) // keep buffering UI while we retry
+      // Backoff: 600ms, 1.2s, 2s, 3s, 4s, 5s
+      const backoff = [600, 1200, 2000, 3000, 4000, 5000]
+      const i = Math.min(recoverAttemptsRef.current, backoff.length - 1)
+      scheduleRecovery(backoff[i])
+    }
+    const onStalled = () => {
+      // Stalled fires when the network can't deliver enough data. Give the
+      // network a couple seconds before forcing a rebind — most stalls
+      // resolve on their own.
+      if (recoverTimerRef.current) return
+      window.setTimeout(() => {
+        if (!trackRef.current) return
+        const a = audioRef.current
+        if (!a) return
+        // Still stalled? buffered range hasn't grown past currentTime → rebind.
+        const buffEnd = a.buffered.length ? a.buffered.end(a.buffered.length - 1) : 0
+        if (a.paused || buffEnd > a.currentTime + 0.25) return
+        scheduleRecovery(0)
+      }, 2500)
     }
 
     el.addEventListener('loadedmetadata', onLoadedMeta)
@@ -165,6 +254,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     el.addEventListener('canplay', onCanPlay)
     el.addEventListener('ended', onEnded)
     el.addEventListener('error', onError)
+    el.addEventListener('stalled', onStalled)
 
     return () => {
       el!.removeEventListener('loadedmetadata', onLoadedMeta)
@@ -177,6 +267,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       el!.removeEventListener('canplay', onCanPlay)
       el!.removeEventListener('ended', onEnded)
       el!.removeEventListener('error', onError)
+      el!.removeEventListener('stalled', onStalled)
+      if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
     }
   }, [])
 
@@ -279,6 +371,16 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setQueue(prev => prev.find(x => x.id === t.id) ? prev : [...prev, t])
   }, [])
 
+  // Insert a track at the FRONT of the queue so it plays right after the
+  // currently playing one. If the same track is already in the queue, move
+  // it to the front instead of duplicating.
+  const playNext = useCallback((t: PlayerTrack) => {
+    setQueue(prev => {
+      const without = prev.filter(x => x.id !== t.id)
+      return [t, ...without]
+    })
+  }, [])
+
   const removeFromQueue = useCallback((id: string) => {
     setQueue(prev => prev.filter(t => t.id !== id))
   }, [])
@@ -289,6 +391,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     const el = audioRef.current
     if (!el || !track) return
     if (el.paused || el.ended) {
+      wantPlayingRef.current = true
+      recoverAttemptsRef.current = 0
       // If the source was never bound (e.g. user clicked play right after
       // a restore), bind it now.
       if (!el.src || currentSrcIdRef.current !== track.id) {
@@ -300,6 +404,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         ;(p as Promise<void>).catch(err => console.warn('[mini-player] toggle play failed', err?.message || err))
       }
     } else {
+      wantPlayingRef.current = false
       try { el.pause() } catch {}
     }
   }, [track, loadAndPlay])
@@ -314,6 +419,9 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const stop = useCallback(() => {
+    wantPlayingRef.current = false
+    if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
+    recoverAttemptsRef.current = 0
     const el = audioRef.current
     if (el) {
       try { el.pause() } catch {}
@@ -327,6 +435,40 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
+  // Background-play resilience: when the tab becomes visible again, if the
+  // user wanted playback to continue but the browser paused our audio (some
+  // mobile browsers do this on long backgrounding), resume it. We never
+  // pause on `hidden` — the whole point is to keep playing in the background.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      const el = audioRef.current
+      const t = trackRef.current
+      if (!el || !t) return
+      if (wantPlayingRef.current && el.paused) {
+        // If the source was unloaded by the browser, rebind it first.
+        if (!el.src || currentSrcIdRef.current !== t.id) {
+          try {
+            el.src = buildAudioSrc(t, Date.now())
+            currentSrcIdRef.current = t.id
+            el.load()
+          } catch {}
+        }
+        const p = el.play()
+        if (p && typeof (p as Promise<void>).catch === 'function') {
+          ;(p as Promise<void>).catch(() => {})
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onVis)
+    }
+  }, [])
+
   // Wire up Media Session action handlers (lockscreen / headset buttons).
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
@@ -334,6 +476,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       navigator.mediaSession.setActionHandler('play', () => {
         const el = audioRef.current
         if (el && el.paused) {
+          wantPlayingRef.current = true
+          recoverAttemptsRef.current = 0
           const p = el.play()
           if (p && typeof (p as Promise<void>).catch === 'function') {
             ;(p as Promise<void>).catch(() => {})
@@ -342,7 +486,10 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       })
       navigator.mediaSession.setActionHandler('pause', () => {
         const el = audioRef.current
-        if (el && !el.paused) { try { el.pause() } catch {} }
+        if (el && !el.paused) {
+          wantPlayingRef.current = false
+          try { el.pause() } catch {}
+        }
       })
       navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
       navigator.mediaSession.setActionHandler('seekbackward', (d: any) => {
@@ -390,7 +537,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   void extractVideoId
 
   return (
-    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
+    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
       {children}
     </Ctx.Provider>
   )

@@ -5389,11 +5389,31 @@ function remuxAudioToClient(upstreamUrl, req, res) {
   req.on('close', () => { try { proc.kill('SIGKILL') } catch {} })
 }
 
+// True byte-pipe proxy. We deliberately do NOT 307-redirect to googlevideo
+// anymore — that approach broke playback whenever the signed URL expired or
+// returned 403 (the <audio> element fires `error` once and dies, with no way
+// to recover from the client side). Piping bytes through our origin lets us:
+//   • forward the browser's Range header upstream, preserving seek/scrub,
+//   • silently re-resolve expired googlevideo URLs and retry with the new
+//     one — the browser never sees the failure,
+//   • set the User-Agent we know googlevideo will accept,
+//   • keep CORS trivial (everything is same-origin).
+async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+  }
+  if (rangeHeader) headers['Range'] = rangeHeader
+  return fetch(upstreamUrl, { headers, redirect: 'follow' })
+}
+
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
-  // Resolve the direct googlevideo / proxy URL (cached for 30 min).
+  // Resolve the direct googlevideo URL (cached for 30 min). On a stale-URL
+  // failure below we'll invalidate this entry and re-resolve once.
   let upstreamUrl
   try {
     upstreamUrl = await resolveDirectAudioUrl(url)
@@ -5402,22 +5422,86 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
     return res.status(502).end('فشل تحضير الصوت')
   }
 
-  // Safari/iOS path: remux through ffmpeg if available so AAC-in-MP4 reaches
-  // the player. Falls back to the redirect (works for m4a sources) when
-  // ffmpeg is missing on the host (e.g. some serverless environments).
-  // Clients can also force this path via `?force_remux=1` for testing.
+  // Safari/iOS path: remux opus/webm to AAC-in-MP4 so the WebKit decoder
+  // can play it. Falls through to the byte-pipe when ffmpeg isn't installed.
   const wantRemux = req.query.force_remux === '1' || isSafariOrIOS(req.headers['user-agent'])
   if (wantRemux && await ffmpegAvailable()) {
     return remuxAudioToClient(upstreamUrl, req, res)
   }
 
-  // Default fast-path: 307 preserves the Range header on the follow-up request.
-  // Cache-Control: no-store so the browser re-asks us if it ever drops
-  // the cached response, giving us a chance to re-resolve expired URLs.
-  res.setHeader('Location', upstreamUrl)
+  const range = req.headers.range || ''
+  // Try once with the cached URL, then once more after invalidating it.
+  let upstream
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      upstream = await fetchUpstreamRange(upstreamUrl, range)
+    } catch (e) {
+      if (attempt === 1) {
+        console.error('[audio-proxy] upstream fetch failed:', e.message)
+        if (!res.headersSent) return res.status(502).end('فشل تحميل الصوت')
+        try { res.end() } catch {}
+        return
+      }
+      _audioUrlCache.delete(url)
+      try { upstreamUrl = await resolveDirectAudioUrl(url) } catch (err) {
+        console.error('[audio-proxy] re-resolve failed:', err.message)
+        if (!res.headersSent) return res.status(502).end('فشل تحضير الصوت')
+        try { res.end() } catch {}
+        return
+      }
+      continue
+    }
+    // Treat expired-signed-URL responses as a cache-miss and retry once.
+    if ((upstream.status === 403 || upstream.status === 410 || upstream.status === 404) && attempt === 0) {
+      try { upstream.body?.cancel?.() } catch {}
+      _audioUrlCache.delete(url)
+      try { upstreamUrl = await resolveDirectAudioUrl(url) } catch (err) {
+        console.error('[audio-proxy] re-resolve failed:', err.message)
+        if (!res.headersSent) return res.status(502).end('فشل تحضير الصوت')
+        try { res.end() } catch {}
+        return
+      }
+      continue
+    }
+    break
+  }
+
+  if (!upstream || (!upstream.ok && upstream.status !== 206)) {
+    console.error('[audio-proxy] upstream status', upstream?.status)
+    if (!res.headersSent) return res.status(upstream?.status || 502).end('فشل تحميل الصوت')
+    try { res.end() } catch {}
+    return
+  }
+
+  // Pass through the headers the player needs for seek + buffering UI.
+  const passHeaders = ['content-length', 'content-range', 'content-type', 'accept-ranges', 'last-modified', 'etag']
+  for (const h of passHeaders) {
+    const v = upstream.headers.get(h)
+    if (v) res.setHeader(h, v)
+  }
+  if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'audio/mp4')
+  if (!upstream.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.status(307).end()
+  res.status(upstream.status)
+
+  if (!upstream.body) { res.end(); return }
+  const reader = upstream.body.getReader()
+  let cancelled = false
+  req.on('close', () => { cancelled = true; try { reader.cancel() } catch {} })
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done || cancelled) break
+      if (!res.write(value)) await new Promise(r => res.once('drain', r))
+    }
+  } catch (e) {
+    // Mid-stream upstream drop. The client-side player will retry the
+    // request (it adds a cache-bust on `error`) which will land in the
+    // 403/expiry branch above and re-resolve a fresh URL.
+    console.warn('[audio-proxy] stream interrupted:', e.message)
+  }
+  try { res.end() } catch {}
 })
 
 // Streaming audio proxy: buffers to /tmp, then serves with Range support

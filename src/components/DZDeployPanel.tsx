@@ -19,6 +19,10 @@ interface SyncCapability {
   hasGithubToken: boolean
   branch?: string | null
   changedFiles?: number
+  unpushedCommits?: number
+  pendingTotal?: number
+  localSha?: string | null
+  remoteSha?: string | null
   runtime?: string
 }
 
@@ -244,7 +248,7 @@ export default function DZDeployPanel({ language }: Props) {
     sync?.status === 'synced' ? 'dz-deploy-status--ok' : sync?.status === 'out_of_sync' ? 'dz-deploy-status--warn' : 'dz-deploy-status--unknown'
 
   const syncAvailable = capability?.available && capability?.hasGithubToken
-  const pendingChanges = capability?.changedFiles || 0
+  const pendingChanges = capability?.pendingTotal ?? capability?.changedFiles ?? 0
 
   return (
     <div className="dz-deploy-panel" dir={language === 'ar' ? 'rtl' : 'ltr'}>

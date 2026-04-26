@@ -2716,13 +2716,45 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
   try {
     await runGit(['--version'])
     const { stdout: branchOut } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => ({ stdout: '' }))
+    const branch = branchOut.trim()
     const { stdout: statusOut } = await runGit(['status', '--porcelain']).catch(() => ({ stdout: '' }))
     const changedFiles = statusOut.trim() ? statusOut.trim().split('\n').length : 0
+
+    // Also check unpushed commits if we have a token & branch
+    let unpushedCommits = 0
+    let localSha = null
+    let remoteSha = null
+    if (branch && process.env.GITHUB_TOKEN) {
+      try {
+        const remoteUrl = `https://github.com/${VERCEL_GITHUB_REPO}.git`
+        const authHeader = `AUTHORIZATION: Basic ${Buffer.from(`x-access-token:${process.env.GITHUB_TOKEN}`).toString('base64')}`
+        const { stdout: localOut } = await runGit(['rev-parse', 'HEAD'])
+        localSha = localOut.trim()
+        const { stdout: lsOut } = await runGit(
+          ['-c', `http.extraHeader=${authHeader}`, 'ls-remote', remoteUrl, `refs/heads/${branch}`],
+          { timeout: 15000 }
+        )
+        const m = lsOut.trim().match(/^([0-9a-f]{40})\s/)
+        remoteSha = m ? m[1] : null
+        if (remoteSha && localSha && remoteSha !== localSha) {
+          // Count commits in local that aren't on remote (best-effort; depends on shallow clone state)
+          try {
+            const { stdout: cntOut } = await runGit(['rev-list', '--count', `${remoteSha}..HEAD`])
+            unpushedCommits = parseInt(cntOut.trim(), 10) || 0
+          } catch { unpushedCommits = 1 }
+        }
+      } catch { /* ignore */ }
+    }
+
     return res.json({
       available: true,
       hasGithubToken: !!process.env.GITHUB_TOKEN,
-      branch: branchOut.trim() || null,
+      branch: branch || null,
       changedFiles,
+      unpushedCommits,
+      pendingTotal: changedFiles + unpushedCommits,
+      localSha,
+      remoteSha,
       runtime: process.env.VERCEL ? 'vercel' : 'replit',
     })
   } catch {
@@ -2748,19 +2780,6 @@ app.post('/api/dz-agent/sync', async (req, res) => {
     // Verify git is available and we're in a repo
     await runGit(['rev-parse', '--git-dir'])
 
-    // Check for changes
-    const { stdout: statusOut } = await runGit(['status', '--porcelain'])
-    if (!statusOut.trim()) {
-      const { stdout: shaOut } = await runGit(['rev-parse', 'HEAD'])
-      return res.json({
-        success: true,
-        code: 'NO_CHANGES',
-        message: 'No local changes to sync — repository already up to date.',
-        sha: shaOut.trim(),
-        shortSha: shaOut.trim().slice(0, 8),
-      })
-    }
-
     // Determine current branch
     const { stdout: branchOut } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'])
     const branch = branchOut.trim()
@@ -2776,46 +2795,63 @@ app.post('/api/dz-agent/sync', async (req, res) => {
       await runGit(['config', 'user.name', 'DZ Agent (Replit)'])
     }
 
-    // Stage all changes
-    await runGit(['add', '-A'])
-
-    // Commit (allow empty just in case)
-    try {
-      await runGit(['commit', '-m', safeMessage])
-    } catch (commitErr) {
-      // If nothing actually got staged, surface a clean message
-      const text = String(commitErr?.stderr || commitErr?.stdout || commitErr?.message || '')
-      if (/nothing to commit/i.test(text)) {
-        const { stdout: shaOut } = await runGit(['rev-parse', 'HEAD'])
-        return res.json({
-          success: true,
-          code: 'NO_CHANGES',
-          message: 'No staged changes — repository already up to date.',
-          sha: shaOut.trim(),
-          shortSha: shaOut.trim().slice(0, 8),
-        })
+    // Stage + commit only if there are working-tree changes
+    const { stdout: statusOut } = await runGit(['status', '--porcelain'])
+    let didCommit = false
+    if (statusOut.trim()) {
+      await runGit(['add', '-A'])
+      try {
+        await runGit(['commit', '-m', safeMessage])
+        didCommit = true
+      } catch (commitErr) {
+        const text = String(commitErr?.stderr || commitErr?.stdout || commitErr?.message || '')
+        if (!/nothing to commit/i.test(text)) throw commitErr
       }
-      throw commitErr
     }
 
-    // Push using authenticated URL (token kept off the command line via -c http.extraHeader)
+    // Determine if local is ahead of remote (so we know whether push has anything to do)
     const remoteUrl = `https://github.com/${VERCEL_GITHUB_REPO}.git`
     const authHeader = `AUTHORIZATION: Basic ${Buffer.from(`x-access-token:${githubToken}`).toString('base64')}`
+
+    // Fetch remote state for the branch (cheap, no merge)
+    let remoteSha = null
+    try {
+      const { stdout: lsOut } = await runGit(
+        ['-c', `http.extraHeader=${authHeader}`, 'ls-remote', remoteUrl, `refs/heads/${branch}`],
+        { timeout: 30000 }
+      )
+      const m = lsOut.trim().match(/^([0-9a-f]{40})\s/)
+      remoteSha = m ? m[1] : null
+    } catch { /* ignore — push will still try */ }
+
+    const { stdout: localShaOut } = await runGit(['rev-parse', 'HEAD'])
+    const localSha = localShaOut.trim()
+
+    if (!didCommit && remoteSha === localSha) {
+      return res.json({
+        success: true,
+        code: 'NO_CHANGES',
+        message: 'No local changes and remote is already up to date.',
+        sha: localSha,
+        shortSha: localSha.slice(0, 8),
+      })
+    }
+
+    // Push (token-authenticated)
     await runGit(
       ['-c', `http.extraHeader=${authHeader}`, 'push', remoteUrl, `HEAD:refs/heads/${branch}`],
       { timeout: 60000 }
     )
 
-    const { stdout: newShaOut } = await runGit(['rev-parse', 'HEAD'])
-    const sha = newShaOut.trim()
     return res.json({
       success: true,
       code: 'PUSHED',
       message: 'Changes pushed to GitHub. Vercel will deploy automatically.',
       branch,
-      sha,
-      shortSha: sha.slice(0, 8),
-      commitMessage: safeMessage,
+      sha: localSha,
+      shortSha: localSha.slice(0, 8),
+      commitMessage: didCommit ? safeMessage : null,
+      committed: didCommit,
     })
   } catch (err) {
     const detail = String(err?.stderr || err?.stdout || err?.message || 'Unknown git error')

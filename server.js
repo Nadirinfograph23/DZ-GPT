@@ -5403,8 +5403,13 @@ async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
+    // googlevideo throttles non-Range "media player" style downloads to a
+    // few hundred KB/s, which makes <audio> sit at "loading" for tens of
+    // seconds and looks like the player is broken. ALWAYS send a Range
+    // header upstream — we'll translate the 206 back to a 200 for the
+    // client when the client itself didn't ask for a range.
+    'Range': rangeHeader || 'bytes=0-',
   }
-  if (rangeHeader) headers['Range'] = rangeHeader
   return fetch(upstreamUrl, { headers, redirect: 'follow' })
 }
 
@@ -5473,17 +5478,36 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
     return
   }
 
-  // Pass through the headers the player needs for seek + buffering UI.
-  const passHeaders = ['content-length', 'content-range', 'content-type', 'accept-ranges', 'last-modified', 'etag']
-  for (const h of passHeaders) {
-    const v = upstream.headers.get(h)
-    if (v) res.setHeader(h, v)
-  }
-  if (!upstream.headers.get('content-type')) res.setHeader('Content-Type', 'audio/mp4')
-  if (!upstream.headers.get('accept-ranges')) res.setHeader('Accept-Ranges', 'bytes')
+  // We always send a Range header upstream (see fetchUpstreamRange), so
+  // googlevideo will reply with 206 + Content-Range. Translate that back
+  // to a plain 200 when the *client* didn't request a range — otherwise
+  // the browser sees a 206 to a non-Range request and panics.
+  const clientAskedRange = !!range
+  const upstreamCT = upstream.headers.get('content-type') || 'audio/mp4'
+  const upstreamLen = upstream.headers.get('content-length')
+  const upstreamCR = upstream.headers.get('content-range')
+
+  res.setHeader('Content-Type', upstreamCT)
+  res.setHeader('Accept-Ranges', 'bytes')
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.status(upstream.status)
+
+  if (clientAskedRange) {
+    if (upstreamCR) res.setHeader('Content-Range', upstreamCR)
+    if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
+    res.status(upstream.status === 206 ? 206 : upstream.status)
+  } else {
+    // Derive the FULL resource size from "Content-Range: bytes 0-N/TOTAL"
+    // so the browser can show a real progress bar instead of "0:00".
+    let totalSize = null
+    if (upstreamCR) {
+      const m = upstreamCR.match(/\/(\d+)\s*$/)
+      if (m) totalSize = m[1]
+    }
+    if (totalSize) res.setHeader('Content-Length', totalSize)
+    else if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
+    res.status(200)
+  }
 
   if (!upstream.body) { res.end(); return }
   const reader = upstream.body.getReader()

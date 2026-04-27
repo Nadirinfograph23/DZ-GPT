@@ -1081,6 +1081,181 @@ function logInvalidResponse(stage, query, raw) {
   console.warn(`[DZ Agent:Invalid] stage=${stage} | query="${(query || '').slice(0, 80)}" | raw="${preview}"`)
 }
 
+// ===== INTERNAL DIAGNOSTIC LOGGER =====
+// Centralised logger for empty responses, outdated data usage and source
+// failures. Keeps last 200 events in memory so /api/dz-agent/diagnostics can
+// surface them. Console output is always emitted for tail -f workflows.
+const DIAG_EVENTS = []
+const DIAG_MAX = 200
+function diagLog(kind, payload = {}) {
+  const entry = { kind, ts: new Date().toISOString(), ...payload }
+  DIAG_EVENTS.push(entry)
+  if (DIAG_EVENTS.length > DIAG_MAX) DIAG_EVENTS.splice(0, DIAG_EVENTS.length - DIAG_MAX)
+  const tag = kind === 'empty' ? '⚠️ EMPTY'
+            : kind === 'outdated' ? '🕰️ OUTDATED'
+            : kind === 'source_fail' ? '❌ SRC-FAIL'
+            : kind === 'fallback' ? '↩ FALLBACK'
+            : kind
+  const detail = Object.entries(payload).slice(0, 4).map(([k, v]) => `${k}=${String(v).slice(0, 60)}`).join(' ')
+  console.warn(`[DZ-Diag:${tag}] ${detail}`)
+}
+
+// ===== REAL-TIME / FRESHNESS ENGINE =====
+// Dynamic current year so AI prompts and validators always reflect "now".
+function getCurrentYear() { return new Date().getFullYear() }
+function getCurrentDateString(locale = 'ar-DZ') {
+  try { return new Date().toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
+  catch { return new Date().toISOString().slice(0, 10) }
+}
+
+// Returns true if the item is "fresh enough":
+//   - has a valid pubDate within the last `maxAgeDays`
+//   - OR has no date at all (assumed live / undated)
+//   - OR date year >= currentYear - 1 (tolerate Dec→Jan boundary)
+// Items dated in earlier years are considered outdated and rejected.
+function isFreshItem(item, { maxAgeDays = 30 } = {}) {
+  const raw = item?.pubDate || item?.date || item?.publishedDate
+  if (!raw) return true
+  const t = new Date(raw).getTime()
+  if (!Number.isFinite(t)) return true
+  const ageDays = (Date.now() - t) / 86400000
+  if (ageDays > maxAgeDays) return false
+  const y = new Date(raw).getFullYear()
+  if (y < getCurrentYear() - 1) return false
+  return true
+}
+
+// Scores recency 0-100 (higher = fresher). Items with no date get a neutral 60.
+function freshnessScore(item) {
+  const raw = item?.pubDate || item?.date || item?.publishedDate
+  if (!raw) return 60
+  const t = new Date(raw).getTime()
+  if (!Number.isFinite(t)) return 60
+  const ageH = (Date.now() - t) / 3600000
+  if (ageH < 6)   return 100
+  if (ageH < 24)  return 90
+  if (ageH < 48)  return 80
+  if (ageH < 168) return 65 // 7d
+  if (ageH < 720) return 45 // 30d
+  return 25
+}
+
+// ===== NEWS INTELLIGENCE — CATEGORY CLASSIFIER + BALANCER =====
+// Priority Algeria keywords (Arabic + French + English).
+const NEWS_DZ_KEYWORDS = [
+  // Arabic
+  'الجزائر', 'الجزائرية', 'الجزائريين', 'الجزائريون', 'جزائري',
+  'الحكومة', 'الرئيس', 'تبون', 'الوزير', 'البرلمان', 'وزارة',
+  'اقتصاد', 'مجتمع', 'سياسة', 'الديوان', 'الولاية', 'العاصمة',
+  // French
+  'algérie', 'algerie', 'alger', 'algerien', 'algérien', 'algériens',
+  'gouvernement', 'économie', 'economie', 'politique', 'société', 'societe',
+  'wilaya', 'tebboune', 'ministère', 'ministre',
+  // English
+  'algeria', 'algiers', 'algerian',
+]
+const NEWS_SPORTS_KEYWORDS = [
+  'رياضة', 'مباراة', 'كرة', 'دوري', 'بطولة', 'لاعب', 'هدف', 'فريق',
+  'sport', 'football', 'soccer', 'match', 'league', 'goal', 'player',
+  'foot', 'équipe', 'championnat',
+]
+const NEWS_INTL_HINTS = [
+  'world', 'international', 'global', 'usa', 'china', 'russia', 'europe',
+  'دولي', 'عالمي', 'أمريكا', 'الصين', 'روسيا', 'أوروبا', 'فلسطين', 'غزة',
+  'mondial', 'monde', 'états-unis', 'chine', 'russie',
+]
+function _lcText(item) {
+  return ((item?.title || '') + ' ' + (item?.description || '') + ' ' + (item?.source || '') + ' ' + (item?.feedName || '')).toLowerCase()
+}
+function classifyNewsArticle(item) {
+  const t = _lcText(item)
+  const hasSport = NEWS_SPORTS_KEYWORDS.some(k => t.includes(k))
+  const hasDz    = NEWS_DZ_KEYWORDS.some(k => t.includes(k))
+  const hasIntl  = NEWS_INTL_HINTS.some(k => t.includes(k))
+  if (hasSport && !hasDz) return 'sports'
+  if (hasSport && hasDz)  return 'national_dz' // Algerian sport story → national bucket
+  if (hasDz)              return 'national_dz'
+  if (hasIntl)            return 'international'
+  return 'international'
+}
+// Algeria-aware relevance score (0-100). Combines location, freshness, source.
+const NEWS_TRUST = {
+  'aps.dz': 95, 'echoroukonline.com': 82, 'ennaharonline.com': 80,
+  'elkhabar.com': 85, 'elbilad.net': 78, 'djazairess.com': 88,
+  'aljazeera.net': 88, 'bbc.co.uk': 90, 'reuters.com': 95,
+  'news.google.com': 75,
+}
+function _sourceTrust(item) {
+  const s = ((item?.source || '') + ' ' + (item?.link || '') + ' ' + (item?.feedName || '')).toLowerCase()
+  for (const [host, score] of Object.entries(NEWS_TRUST)) if (s.includes(host)) return score
+  return 60
+}
+function newsRelevanceScore(item) {
+  const cat = classifyNewsArticle(item)
+  const loc = cat === 'national_dz' ? 100 : cat === 'sports' ? 50 : 70
+  const fresh = freshnessScore(item)
+  const trust = _sourceTrust(item)
+  return Math.round(loc * 0.45 + fresh * 0.35 + trust * 0.20)
+}
+// Dedup by title similarity using normalised fingerprints + Jaccard token check.
+function _normTitle(s) {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[^\u0600-\u06FFa-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+function _tokens(s) {
+  const set = new Set(_normTitle(s).split(' ').filter(w => w.length > 2))
+  return set
+}
+function _jaccard(a, b) {
+  if (!a.size || !b.size) return 0
+  let inter = 0
+  for (const x of a) if (b.has(x)) inter++
+  return inter / (a.size + b.size - inter)
+}
+function dedupByTitleSimilarity(items, threshold = 0.7) {
+  const out = []
+  const tokenized = []
+  for (const it of items) {
+    const tk = _tokens(it.title || '')
+    let dup = false
+    for (let i = 0; i < tokenized.length; i++) {
+      if (_jaccard(tk, tokenized[i]) >= threshold) { dup = true; break }
+    }
+    if (!dup) { out.push(it); tokenized.push(tk) }
+  }
+  return out
+}
+// Enforce category balance: ≤30% sports, ≥40% national, rest international.
+function balanceNewsCategories(items, target = 18) {
+  const tagged = items.map(i => ({ ...i, _cat: classifyNewsArticle(i), _score: newsRelevanceScore(i) }))
+  const byCat = { national_dz: [], international: [], sports: [] }
+  for (const it of tagged) (byCat[it._cat] || byCat.international).push(it)
+  for (const k of Object.keys(byCat)) {
+    byCat[k].sort((a, b) => (b._score - a._score) || (new Date(b.pubDate || 0) - new Date(a.pubDate || 0)))
+  }
+  const maxSports = Math.floor(target * 0.30)
+  const minNat    = Math.ceil(target * 0.40)
+  const out = []
+  out.push(...byCat.national_dz.slice(0, Math.max(minNat, Math.min(byCat.national_dz.length, target))))
+  const remainingAfterNat = target - out.length
+  const intlSlice = byCat.international.slice(0, Math.max(0, remainingAfterNat - Math.min(maxSports, byCat.sports.length)))
+  out.push(...intlSlice)
+  const sportsSlice = byCat.sports.slice(0, Math.min(maxSports, target - out.length))
+  out.push(...sportsSlice)
+  // Trim or top up if needed
+  if (out.length < target) {
+    const pool = [...byCat.national_dz, ...byCat.international, ...byCat.sports].filter(x => !out.includes(x))
+    out.push(...pool.slice(0, target - out.length))
+  }
+  // Final sort: most recent first (with score as tiebreaker)
+  out.sort((a, b) => (new Date(b.pubDate || 0) - new Date(a.pubDate || 0)) || (b._score - a._score))
+  // Strip internal helper fields before returning
+  return out.slice(0, target).map(({ _cat, _score, ...rest }) => ({ ...rest, category: _cat }))
+}
+
 // Calls DeepSeek with timeout protection. Returns content string or null.
 async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } = {}) {
   const key = process.env.DEEPSEEK_API_KEY
@@ -2466,8 +2641,20 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
   const gnDashboardArticles = (gnRssResult.status === 'fulfilled' ? gnRssResult.value : [])
     .map(item => ({ ...item, feedName: item.gnSource || 'Google News' }))
 
-  const allNews = deduplicateGNArticles([...gnDashboardArticles, ...existingNews])
-    .slice(0, 18)
+  // ── NEWS INTELLIGENCE PIPELINE ──────────────────────────────────────────
+  // 1. merge GN-RSS + classic feeds  2. dedup by title similarity
+  // 3. drop outdated (year < currentYear-1)  4. balance categories
+  //    (≤30% sports, ≥40% Algerian national, rest international)
+  // 5. sort most-recent-first. Anti-empty: if upstream returned nothing,
+  //    we still set news=[] so the UI can show its own empty-state.
+  const mergedNewsRaw = deduplicateGNArticles([...gnDashboardArticles, ...existingNews])
+  const mergedFreshNews = mergedNewsRaw.filter(n => isFreshItem(n, { maxAgeDays: 30 }))
+  if (mergedFreshNews.length < mergedNewsRaw.length) {
+    diagLog('outdated', { module: 'dashboard.news', dropped: mergedNewsRaw.length - mergedFreshNews.length })
+  }
+  const dedupedNews = dedupByTitleSimilarity(mergedFreshNews, 0.7)
+  const allNews = balanceNewsCategories(dedupedNews, 18)
+  if (allNews.length === 0) diagLog('empty', { module: 'dashboard.news', upstream: mergedNewsRaw.length })
 
   const allSports = (sportsFeeds.status === 'fulfilled' ? sportsFeeds.value : [])
     .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
@@ -2935,7 +3122,102 @@ async function fetchLFPData() {
 
 app.get('/api/dz-agent/lfp', async (_req, res) => {
   const data = await fetchLFPData()
-  res.json(data)
+  // Anti-empty: never return a silently empty card. Attach a localised message
+  // when no matches & no articles could be sourced from lfp.dz.
+  const noMatches  = !data?.matches  || data.matches.length === 0
+  const noArticles = !data?.articles || data.articles.length === 0
+  if (noMatches && noArticles) {
+    diagLog('empty', { module: 'lfp', source: data?.source || 'lfp.dz' })
+    return res.json({
+      ...data,
+      matches: [],
+      articles: [],
+      status: 'unavailable',
+      message: '⚠️ بيانات الدوري الجزائري غير متاحة حالياً من lfp.dz — يُرجى المحاولة لاحقاً.',
+    })
+  }
+  res.json({ ...data, status: 'ok' })
+})
+
+// ===== BALANCED NEWS ENDPOINT =====
+// Algeria-priority news with category balancing for the news card and any
+// downstream consumers (chat AI context, dashboard refresh, etc.).
+const NEWS_BALANCED_CACHE = { data: null, ts: 0 }
+const NEWS_BALANCED_TTL = 8 * 60 * 1000 // 8 min — within 5–15 min spec
+app.get('/api/dz-agent/news', async (req, res) => {
+  const limit = Math.max(5, Math.min(40, parseInt(req.query.limit, 10) || 18))
+  const now = Date.now()
+  if (NEWS_BALANCED_CACHE.data && now - NEWS_BALANCED_CACHE.ts < NEWS_BALANCED_TTL) {
+    return res.json({ ...NEWS_BALANCED_CACHE.data, cached: true })
+  }
+  try {
+    const [classicSettled, gnSettled] = await Promise.allSettled([
+      fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
+      fetchGNRSSArticles(GN_RSS_FEEDS.ar),
+    ])
+    const classic = (classicSettled.status === 'fulfilled' ? classicSettled.value : [])
+      .flatMap(f => (f?.items || []).map(item => ({ ...item, feedName: f.name })))
+    if (classicSettled.status !== 'fulfilled') diagLog('source_fail', { module: 'news.classic', reason: classicSettled.reason?.message })
+    const gn = (gnSettled.status === 'fulfilled' ? gnSettled.value : [])
+      .map(item => ({ ...item, feedName: item.gnSource || 'Google News' }))
+    if (gnSettled.status !== 'fulfilled') diagLog('source_fail', { module: 'news.gn-rss', reason: gnSettled.reason?.message })
+
+    const merged = deduplicateGNArticles([...gn, ...classic])
+    const fresh  = merged.filter(n => isFreshItem(n, { maxAgeDays: 30 }))
+    if (fresh.length < merged.length) diagLog('outdated', { module: 'news.endpoint', dropped: merged.length - fresh.length })
+    const deduped = dedupByTitleSimilarity(fresh, 0.7)
+    const balanced = balanceNewsCategories(deduped, limit)
+
+    const counts = balanced.reduce((acc, a) => { acc[a.category] = (acc[a.category] || 0) + 1; return acc }, {})
+    const payload = {
+      year: getCurrentYear(),
+      generatedAt: new Date().toISOString(),
+      total: balanced.length,
+      counts,
+      items: balanced,
+    }
+
+    if (balanced.length === 0) {
+      diagLog('empty', { module: 'news.endpoint', upstream: merged.length })
+      return res.json({
+        ...payload,
+        status: 'unavailable',
+        message: '⚠️ تعذر جلب الأخبار حالياً، يُرجى المحاولة لاحقاً.',
+      })
+    }
+
+    payload.status = 'ok'
+    NEWS_BALANCED_CACHE.data = payload
+    NEWS_BALANCED_CACHE.ts = now
+    return res.json(payload)
+  } catch (err) {
+    diagLog('source_fail', { module: 'news.endpoint', reason: err.message })
+    if (NEWS_BALANCED_CACHE.data) {
+      return res.json({ ...NEWS_BALANCED_CACHE.data, cached: true, stale: true })
+    }
+    return res.json({
+      year: getCurrentYear(),
+      generatedAt: new Date().toISOString(),
+      total: 0,
+      items: [],
+      status: 'unavailable',
+      message: '⚠️ لا توجد بيانات أخبار حديثة الآن — يرجى المحاولة لاحقاً.',
+    })
+  }
+})
+
+// ===== INTERNAL DIAGNOSTICS ENDPOINT =====
+// Exposes the in-memory diagnostic event ring (empty responses, outdated
+// data, source failures). Read-only, no PII.
+app.get('/api/dz-agent/diagnostics', (_req, res) => {
+  const summary = DIAG_EVENTS.reduce((acc, e) => { acc[e.kind] = (acc[e.kind] || 0) + 1; return acc }, {})
+  res.json({
+    year: getCurrentYear(),
+    today: getCurrentDateString(),
+    totalEvents: DIAG_EVENTS.length,
+    summary,
+    recent: DIAG_EVENTS.slice(-50).reverse(),
+  })
 })
 
 // ===== TASK 4 — ALGERIAN LEAGUE STANDINGS (kooora.com) =====
@@ -4747,7 +5029,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       ? 'وضع الاستدعاء الحالي: /github — ركّز على GitHub والكود والمستودعات والإجراءات البرمجية.'
       : 'وضع الاستدعاء الحالي: @dz-agent — ركّز على البحث الحي والخدمات الجزائرية وGitHub عند الحاجة.'
 
+  const _yearNow = getCurrentYear()
+  const _todayHuman = getCurrentDateString('ar-DZ')
   const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🕒 REAL-TIME CONTEXT (تحقق إجباري)
+━━━━━━━━━━━━━━━━━━━━━━
+- اليوم: **${_todayHuman}**
+- السنة الحالية: **${_yearNow}**
+- ❌ لا تُجب بأي معلومة مؤرَّخة قبل سنة ${_yearNow - 1} على أنها حديثة. إذا كانت النتائج المسترجعة قديمة → صرّح بذلك أو ارفضها.
+- ✅ عند الإجابة عن أي حدث أو رياضة أو خبر، استعمل عبارات الحاضر مثل "اليوم"، "هذا الأسبوع"، "آخر الأخبار في ${_yearNow}".
+- ✅ إذا لم تتوفر بيانات حديثة من المصادر → قُل صراحة: «لا تتوفر بيانات حديثة الآن، يرجى المحاولة لاحقاً». لا تُولّد إجابة فارغة أبداً.
+- ⛔ لا تستعمل المعرفة الداخلية للنموذج للأحداث الزمنية الحديثة — فقط ما تَرِد في كتلة الاسترجاع أدناه.
 
 ${invocationInstruction}
 
@@ -4780,7 +5074,7 @@ ${invocationInstruction}
 - ❌ لا تستخدم معلوماتك الداخلية عند الإجابة عن أحداث زمنية
 - ❌ لا تقدّم بيانات تخمينية كأنها حقائق
 - ✅ إذا لم توجد نتائج → قل بوضوح: **"لا توجد نتائج حديثة مؤكدة من المصادر المتاحة"**
-- ✅ أي سؤال يحتوي على: آخر / جديد / اليوم / نتائج / مباريات / 2025 / 2026 → بحث إلزامي
+- ✅ أي سؤال يحتوي على: آخر / جديد / اليوم / نتائج / مباريات / ${_yearNow - 1} / ${_yearNow} → بحث إلزامي
 
 ━━━━━━━━━━━━━━━━━━━━━━
 📊 SCORING SYSTEM (Applied to all retrieved results)

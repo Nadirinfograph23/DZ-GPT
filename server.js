@@ -3391,6 +3391,194 @@ app.get('/api/dz-agent/standings', async (_req, res) => {
 const GLOBAL_LEAGUES_CACHE = { data: null, ts: 0 }
 const GLOBAL_LEAGUES_TTL = 5 * 60 * 1000 // 5 min freshness window
 
+// ===== JDWEL.COM SCRAPER (PRIMARY GLOBAL LEAGUES SOURCE) =====
+// User-mandated source for the Global Leagues card. jdwel.com renders
+// server-side HTML with stable CSS classes for matches & competitions,
+// so we parse with regex rather than depending on a JS-rendered API.
+const JDWEL_CACHE = { data: null, ts: 0, date: null }
+const JDWEL_CACHE_TTL = 5 * 60 * 1000
+
+function _decodeJdwelText(s) {
+  return (s || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Parser approach (because jdwel.com's <ul> closes early before the actual
+// <li class="single_match"> rows):
+//   1. Index every comp_separator header with its position + name + comp_id
+//   2. Walk every <li id="match_NNN" class="single_match ..."> in order
+//   3. Assign each match to the most recently preceding comp_separator
+function parseJdwelHtml(html) {
+  if (!html || typeof html !== 'string') return []
+  const single = html.replace(/\s+/g, ' ')
+
+  // Step 1: index headers
+  // <ul ... data-comp_id="N"> ... <h4 class="title">NAME</h4> ... </ul>
+  const headers = []
+  const headerRe = /<ul[^>]*class="comp_matches_list[^"]*"[^>]*data-comp_id="(\d+)"[^>]*>([\s\S]*?)<\/ul>/g
+  let h
+  while ((h = headerRe.exec(single)) !== null) {
+    const compId = h[1]
+    const inner = h[2]
+    const titleM = inner.match(/<h4[^>]*class="title"[^>]*>([^<]+)<\/h4>/)
+    headers.push({
+      pos: h.index,
+      compId,
+      name: titleM ? _decodeJdwelText(titleM[1]) : `بطولة #${compId}`,
+    })
+  }
+  // Sort ascending by pos so we can find the closest preceding header
+  headers.sort((a, b) => a.pos - b.pos)
+  function competitionAt(pos) {
+    let chosen = null
+    for (const hd of headers) {
+      if (hd.pos <= pos) chosen = hd
+      else break
+    }
+    return chosen || { name: 'أخرى', compId: '0' }
+  }
+
+  // Step 2: find each match <li>
+  const liRe = /<li[^>]*id="match_(\d+)"[^>]*class="single_match[^"]*"[^>]*data-keys="([^"]*)"[\s\S]*?<div[^>]*class="match_row[^"]*"[^>]*>([\s\S]*?)<div[^>]*class="match_tab/g
+  const groupMap = new Map()
+  let lim
+  while ((lim = liRe.exec(single)) !== null) {
+    const matchId = lim[1]
+    const block = lim[3]
+    // Extract teams from the row (more reliable than data-keys because
+    // data-keys also embeds day/date/status tokens).
+    const homeM = block.match(/team\s+hometeam[\s\S]*?<span[^>]*class="the_team"[^>]*>([^<]+)<\/span>/)
+    const awayM = block.match(/team\s+awayteam[\s\S]*?<span[^>]*class="the_team"[^>]*>([^<]+)<\/span>/)
+    if (!homeM && !awayM) continue
+    const home = homeM ? _decodeJdwelText(homeM[1]) : ''
+    const away = awayM ? _decodeJdwelText(awayM[1]) : ''
+    const scoreH = block.match(/<span\s+class="hometeam">(\d+)<\/span>/)
+    const scoreA = block.match(/<span\s+class="awayteam">(\d+)<\/span>/)
+    const timeM = block.match(/<span\s+class="the_otime">([^<]+)<\/span>/)
+    const statusFromKeys = (lim[2] || '').match(/(انتهت|لم تبدأ|جاري|live|ft)/i)
+    const hScore = scoreH ? Number(scoreH[1]) : null
+    const aScore = scoreA ? Number(scoreA[1]) : null
+    const played = (hScore != null && aScore != null) && (statusFromKeys?.[1] === 'انتهت' || /finished|ft/i.test(statusFromKeys?.[1] || ''))
+    const live = /(جاري|live)/i.test(statusFromKeys?.[1] || '')
+
+    const comp = competitionAt(lim.index)
+    const item = {
+      matchId,
+      homeTeam: home,
+      awayTeam: away,
+      homeScore: hScore,
+      awayScore: aScore,
+      score: (hScore != null && aScore != null) ? `${hScore} - ${aScore}` : null,
+      startTime: timeM ? _decodeJdwelText(timeM[1]) : '',
+      statusType: live ? 'live' : played ? 'finished' : 'scheduled',
+      competition: comp.name,
+      compId: comp.compId,
+      link: `https://jdwel.com/match/?id=${matchId}`,
+      source: 'jdwel.com',
+    }
+    if (!groupMap.has(comp.compId)) groupMap.set(comp.compId, { name: comp.name, compId: comp.compId, matches: [] })
+    groupMap.get(comp.compId).matches.push(item)
+  }
+  return Array.from(groupMap.values())
+}
+
+// jdwel.com is fronted by Cloudflare and rejects Node's `fetch` based on its
+// TLS/JA3 fingerprint (returns 403 even with a full Chrome header set). The
+// only reliable way from a server is to shell out to `curl`, which is present
+// in Replit's Nix runtime and in AWS Lambda's Amazon Linux base image used by
+// Vercel. We fall back to `fetch` if curl is missing.
+async function _spawnCurl(url, timeoutSec = 15) {
+  const { spawn } = await import('child_process')
+  return new Promise((resolve) => {
+    const args = [
+      '-sSL',
+      '--max-time', String(timeoutSec),
+      '--compressed',
+      '-A', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      '-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      '-H', 'Accept-Language: ar,en;q=0.8',
+      url,
+    ]
+    let stdout = ''
+    let stderr = ''
+    let proc
+    try {
+      proc = spawn('curl', args)
+    } catch (e) {
+      return resolve({ ok: false, error: 'curl-spawn-failed: ' + e.message })
+    }
+    proc.stdout.on('data', d => { stdout += d.toString('utf8') })
+    proc.stderr.on('data', d => { stderr += d.toString('utf8') })
+    proc.on('error', e => resolve({ ok: false, error: e.message }))
+    proc.on('close', code => {
+      if (code === 0 && stdout.length > 0) resolve({ ok: true, body: stdout })
+      else resolve({ ok: false, error: `exit=${code} stderr=${stderr.slice(0, 200)}` })
+    })
+  })
+}
+
+async function fetchJdwelMatches(dateStr = null) {
+  const cacheDate = dateStr || new Date().toISOString().slice(0, 10)
+  if (JDWEL_CACHE.data && JDWEL_CACHE.date === cacheDate && Date.now() - JDWEL_CACHE.ts < JDWEL_CACHE_TTL) {
+    return JDWEL_CACHE.data
+  }
+  // jdwel.com today page loads matches for the current day in viewer's TZ
+  const url = dateStr
+    ? `https://jdwel.com/matches/?date=${dateStr}`
+    : 'https://jdwel.com/today/'
+  try {
+    let html = null
+    // Primary: curl (bypasses Cloudflare JA3 block on Node fetch)
+    const curlRes = await _spawnCurl(url, 15)
+    if (curlRes.ok) {
+      html = curlRes.body
+    } else {
+      diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
+      // Last-ditch: try Node fetch (will normally 403 for jdwel but kept for portability)
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'ar,en;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!r.ok) {
+        diagLog('source_fail', { module: 'jdwel', status: r.status, url })
+        return null
+      }
+      html = await r.text()
+    }
+    const groups = parseJdwelHtml(html)
+    if (groups.length === 0) {
+      diagLog('empty', { module: 'jdwel', url, htmlSize: html.length })
+      return null
+    }
+    const data = {
+      groups,
+      totalMatches: groups.reduce((s, g) => s + g.matches.length, 0),
+      fetchedAt: new Date().toISOString(),
+      source: 'jdwel.com',
+      sourceUrl: url,
+    }
+    JDWEL_CACHE.data = data
+    JDWEL_CACHE.ts = Date.now()
+    JDWEL_CACHE.date = cacheDate
+    console.log(`[jdwel] ✓ Parsed ${data.totalMatches} matches across ${groups.length} leagues`)
+    return data
+  } catch (err) {
+    diagLog('source_fail', { module: 'jdwel', error: err.message })
+    return null
+  }
+}
+
 function buildLeagueGroups(matches) {
   const leagueMap = {}
   for (const m of matches || []) {
@@ -3417,16 +3605,32 @@ app.get('/api/dz-agent/global-leagues', async (req, res) => {
   }
 
   try {
-    const [sfResult, rssResult] = await Promise.allSettled([
+    // PRIMARY: jdwel.com (user-mandated source for the global leagues card)
+    // Fallbacks: SofaScore → international football RSS → last-good cache
+    const [jdwelResult, sfResult, rssResult] = await Promise.allSettled([
+      fetchJdwelMatches(dateStr === new Date().toISOString().slice(0, 10) ? null : dateStr),
       fetchSofaScoreFootball(dateStr),
       fetchMultipleFeeds(INTL_FOOTBALL_FEEDS),
     ])
+    const jdwelData = jdwelResult.status === 'fulfilled' ? jdwelResult.value : null
     const sfData = sfResult.status === 'fulfilled' ? sfResult.value : null
     const rss = rssResult.status === 'fulfilled' ? rssResult.value : []
+    if (jdwelResult.status !== 'fulfilled' || !jdwelData) diagLog('source_fail', { module: 'global-leagues.jdwel', reason: jdwelResult.reason?.message || 'no-data' })
 
-    // Primary: SofaScore matches grouped by league
-    let leagues = sfData?.matches?.length ? buildLeagueGroups(sfData.matches) : []
-    let source = sfData ? 'sofascore' : null
+    // Primary: jdwel groups already shaped as { name, matches }
+    let leagues = []
+    let source = null
+    if (jdwelData?.groups?.length) {
+      leagues = jdwelData.groups
+        .sort((a, b) => b.matches.length - a.matches.length)
+        .slice(0, 12)
+        .map(g => ({ name: g.name, matches: g.matches.slice(0, 8) }))
+      source = 'jdwel.com'
+    } else if (sfData?.matches?.length) {
+      leagues = buildLeagueGroups(sfData.matches)
+      source = 'sofascore'
+      diagLog('fallback', { module: 'global-leagues', from: 'jdwel', to: 'sofascore' })
+    }
 
     // Fallback chain: if SofaScore returned nothing, try to extract a minimal
     // league list from RSS news (so the card always has *something* to show).

@@ -1012,6 +1012,58 @@ function validateAIContent(text, query = '') {
   return true
 }
 
+// ===== ISSUE 4 FIX — GLOBAL RESPONSE GUARD =====
+// Used by every dashboard / chat endpoint to make sure the user NEVER sees
+// an empty or null response. Returns a localized Arabic fallback message
+// keyed by data type when the upstream payload is missing.
+const FINAL_FALLBACK_MESSAGES = {
+  weather:  '⚠️ تعذر جلب حالة الطقس حالياً.',
+  currency: '⚠️ بيانات الصرف غير متوفرة حالياً.',
+  sports:   '⚠️ بيانات المباريات غير متاحة حالياً.',
+  league:   '⚠️ بيانات الدوري غير متاحة حالياً.',
+  global:   '⚠️ بيانات الدوريات العالمية غير متاحة حالياً.',
+  news:     '⚠️ تعذر جلب الأخبار حالياً.',
+  prayer:   '⚠️ تعذر جلب مواقيت الصلاة حالياً.',
+  ai:       '⚠️ لم نتمكن من توليد رد، يرجى المحاولة مرة أخرى.',
+  default:  '⚠️ حدث خطأ، حاول مرة أخرى.',
+}
+function finalResponseGuard(response, type = 'default') {
+  // Arrays: empty → fallback message
+  if (Array.isArray(response)) {
+    if (response.length === 0) return FINAL_FALLBACK_MESSAGES[type] || FINAL_FALLBACK_MESSAGES.default
+    return response
+  }
+  // Strings: empty / whitespace → fallback
+  if (typeof response === 'string') {
+    return response.trim().length > 0
+      ? response
+      : (FINAL_FALLBACK_MESSAGES[type] || FINAL_FALLBACK_MESSAGES.default)
+  }
+  // Objects: null/undefined → fallback message; non-empty object passes through
+  if (response === null || response === undefined) {
+    return FINAL_FALLBACK_MESSAGES[type] || FINAL_FALLBACK_MESSAGES.default
+  }
+  return response
+}
+
+// Server-side robust fetch with retry + delay. Wraps any async fn that may
+// fail intermittently (network/scrape/API). Returns null after final failure
+// so callers can apply their own cache fallback.
+async function robustFetch(fn, { retries = 3, delayMs = 1000 } = {}) {
+  let lastErr
+  for (let i = 0; i < retries; i++) {
+    try {
+      const out = await fn()
+      if (out !== null && out !== undefined) return out
+    } catch (err) {
+      lastErr = err
+    }
+    if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs))
+  }
+  if (lastErr) console.warn('[robustFetch] gave up after', retries, 'tries:', lastErr.message)
+  return null
+}
+
 // Trims chat history to keep context relevant: system messages + last N turns.
 // Removes any null/empty messages defensively.
 function trimRelevantContext(messages, maxTurns = 8) {
@@ -2175,8 +2227,11 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
+// NOTE: Removed 'سبورت 360' (sport360) feed — was contaminating the Algerian
+// League card with unrelated content. Algerian league data is now strictly
+// sourced from lfp.dz only. Generic football news is sourced from
+// Algeria-focused / international football feeds only.
 const SPORTS_FEEDS_DASHBOARD = [
-  { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
   { name: 'الجزيرة الرياضة', url: 'https://www.aljazeera.net/aljazeerarss/a5a4f016-e494-4734-9d83-b1f26bfd8091/c65de6d9-3b39-4b75-a0ce-1b0e8f8e0db6' },
   { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
   { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
@@ -2802,6 +2857,27 @@ function parseLFPArticles(html) {
   return articles
 }
 
+// ===== ALGERIAN LEAGUE — STRICT VALIDATION (Issue 1 fix) =====
+// Reject any match whose teams contain forbidden tokens (e.g. "360",
+// "sport360"). Ensures the Algerian-League card never shows unrelated data
+// scraped from other sources.
+const LFP_FORBIDDEN_TOKENS = ['360', 'sport360', 'سبورت 360']
+function isCleanTeamName(name) {
+  if (!name || typeof name !== 'string') return false
+  const trimmed = name.trim()
+  if (trimmed.length < 2) return false
+  const lower = trimmed.toLowerCase()
+  return !LFP_FORBIDDEN_TOKENS.some(tok => lower.includes(tok.toLowerCase()))
+}
+function validateAlgerianLeague(matches) {
+  if (!Array.isArray(matches) || matches.length === 0) return false
+  return matches.every(m => isCleanTeamName(m.home) && isCleanTeamName(m.away))
+}
+function sanitizeAlgerianLeague(matches) {
+  if (!Array.isArray(matches)) return []
+  return matches.filter(m => isCleanTeamName(m.home) && isCleanTeamName(m.away))
+}
+
 async function fetchLFPData() {
   // Task 13: Use new resilient cache first
   const sportsCached = SPORTS_CACHE_V2.get('lfp')
@@ -2809,30 +2885,45 @@ async function fetchLFPData() {
   if (LFP_CACHE.data && Date.now() - LFP_CACHE.ts < LFP_CACHE_TTL) return LFP_CACHE.data
 
   try {
-    // Task 11+17: Use resilientFetch with anti-block headers for LFP
-    const [homeRes, articlesRes] = await Promise.allSettled([
-      resilientFetch('https://lfp.dz/ar', { timeout: 12000, retries: 3 }),
+    // Issue 1 fix: STRICT source binding — only lfp.dz pages.
+    // Primary match source is the official calendar page; /ar is a backup
+    // gallery view; /ar/articles is for news only.
+    const [calRes, homeRes, articlesRes] = await Promise.allSettled([
+      resilientFetch('https://lfp.dz/ar/calendar', { timeout: 12000, retries: 3 }),
+      resilientFetch('https://lfp.dz/ar', { timeout: 12000, retries: 2 }),
       resilientFetch('https://lfp.dz/ar/articles', { timeout: 12000, retries: 2 }),
     ])
 
+    const calHtml = calRes.status === 'fulfilled' && calRes.value.ok ? await calRes.value.text() : ''
     const homeHtml = homeRes.status === 'fulfilled' && homeRes.value.ok ? await homeRes.value.text() : ''
     const articlesHtml = articlesRes.status === 'fulfilled' && articlesRes.value.ok ? await articlesRes.value.text() : ''
 
-    const matches = homeHtml ? parseLFPMatches(homeHtml) : []
+    // Try calendar first, fall back to homepage
+    let matches = calHtml ? parseLFPMatches(calHtml) : []
+    if (matches.length === 0 && homeHtml) matches = parseLFPMatches(homeHtml)
+
+    // Issue 1 fix: validate + sanitize before exposing to UI / AI
+    matches = sanitizeAlgerianLeague(matches)
+    if (matches.length > 0 && !validateAlgerianLeague(matches)) {
+      console.warn('[LFP] Validation failed after sanitize — falling back to cache')
+      const stale = SPORTS_CACHE_V2.getStale('lfp')
+      return stale?.data || LFP_CACHE.data || { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
+    }
+
     const articles = articlesHtml ? parseLFPArticles(articlesHtml) : []
 
     const data = {
       matches,
       articles: articles.slice(0, 10),
       fetchedAt: new Date().toISOString(),
-      source: 'lfp.dz',
+      source: 'lfp.dz/ar/calendar',
     }
 
     // Task 13: Store in both caches
     LFP_CACHE.data = data
     LFP_CACHE.ts = Date.now()
     SPORTS_CACHE_V2.set('lfp', data)
-    console.log(`[LFP] ✓ Scraped ${matches.length} matches, ${articles.length} articles`)
+    console.log(`[LFP] ✓ Scraped ${matches.length} matches, ${articles.length} articles (source: lfp.dz/ar/calendar)`)
     return data
   } catch (err) {
     console.error('[LFP] Scraping error:', err.message)
@@ -2850,6 +2941,56 @@ app.get('/api/dz-agent/lfp', async (_req, res) => {
 // ===== TASK 4 — ALGERIAN LEAGUE STANDINGS (kooora.com) =====
 const STANDINGS_CACHE = { data: null, ts: 0 }
 const STANDINGS_TTL = 30 * 60 * 1000 // 30 min
+
+// ===== STANDINGS — DEDUP + NORMALIZE (Issue 2 fix) =====
+// Many scraped table cells contain the team name twice (image alt + text
+// label concatenated). Detect and collapse exact halves.
+function dedupTeamName(raw) {
+  const name = (raw || '').toString().replace(/\s+/g, ' ').trim()
+  if (!name) return ''
+  const len = name.length
+  if (len % 2 === 0) {
+    const half = name.slice(0, len / 2)
+    if (name.slice(len / 2) === half) return half.trim()
+  }
+  // Also collapse "X X" repetition with separator
+  const m = name.match(/^(.+?)\s+\1$/)
+  if (m) return m[1].trim()
+  return name
+}
+function normalizeTeamRow(team, index) {
+  const name = dedupTeamName(team.team || team.name || '')
+  const toNum = v => {
+    const n = Number(String(v ?? '').replace(/[^\d.-]/g, ''))
+    return Number.isFinite(n) ? n : 0
+  }
+  return {
+    rank: index + 1,
+    team: name,
+    played: toNum(team.played),
+    wins: toNum(team.wins),
+    draws: toNum(team.draws),
+    losses: toNum(team.losses),
+    points: toNum(team.points),
+  }
+}
+function dedupStandings(rows) {
+  if (!Array.isArray(rows)) return []
+  const seen = new Set()
+  const cleaned = []
+  for (const r of rows) {
+    // Normalize team name FIRST (collapse doubled labels), then dedup by it.
+    const name = dedupTeamName(r.team || r.name || '')
+    if (!name || name.length < 2) continue
+    if (!isCleanTeamName(name)) continue // strip 360-style noise
+    const key = name.toLowerCase().replace(/\s+/g, ' ')
+    if (seen.has(key)) continue
+    seen.add(key)
+    cleaned.push({ ...r, team: name })
+  }
+  // re-rank after dedup so positions are contiguous (1..N)
+  return cleaned.map((r, i) => normalizeTeamRow(r, i))
+}
 
 async function fetchAlgerianStandings() {
   if (STANDINGS_CACHE.data && Date.now() - STANDINGS_CACHE.ts < STANDINGS_TTL) {
@@ -2908,10 +3049,13 @@ async function fetchAlgerianStandings() {
         }
       }
       if (rows.length > 0) {
-        const data = { standings: rows, source: 'kooora.com', fetchedAt: new Date().toISOString() }
+        // Issue 2 fix: dedupe + normalize before caching/returning
+        const cleaned = dedupStandings(rows)
+        if (cleaned.length === 0) continue
+        const data = { standings: cleaned, source: 'kooora.com', fetchedAt: new Date().toISOString() }
         STANDINGS_CACHE.data = data
         STANDINGS_CACHE.ts = Date.now()
-        console.log(`[Standings] Fetched ${rows.length} teams from kooora.com`)
+        console.log(`[Standings] Fetched ${rows.length} rows → ${cleaned.length} unique teams from kooora.com`)
         return data
       }
     } catch (err) {
@@ -2937,7 +3081,8 @@ async function fetchAlgerianStandings() {
         else { teams[home].draws++; teams[home].points++; teams[away].draws++; teams[away].points++ }
       }
       const sorted = Object.values(teams).sort((a, b) => b.points - a.points || b.wins - a.wins)
-      const standings = sorted.map((t, i) => ({ rank: String(i + 1), team: t.team, played: String(t.played), wins: String(t.wins), draws: String(t.draws), losses: String(t.losses), points: String(t.points) }))
+      // Issue 2 fix: normalize + dedupe (defensive, in case duplicates slipped in)
+      const standings = dedupStandings(sorted)
       const data = { standings, source: 'lfp.dz (calculated)', fetchedAt: new Date().toISOString() }
       STANDINGS_CACHE.data = data
       STANDINGS_CACHE.ts = Date.now()
@@ -2958,9 +3103,37 @@ app.get('/api/dz-agent/standings', async (_req, res) => {
   }
 })
 
-// ===== TASK 5 — GLOBAL LEAGUES CALENDAR (SofaScore + RSS) =====
+// ===== TASK 5 — GLOBAL LEAGUES CALENDAR (multi-source fallback) =====
+// Issue 3 fix: persist last-success result so the card NEVER shows empty when
+// all live sources are temporarily down.
+const GLOBAL_LEAGUES_CACHE = { data: null, ts: 0 }
+const GLOBAL_LEAGUES_TTL = 5 * 60 * 1000 // 5 min freshness window
+
+function buildLeagueGroups(matches) {
+  const leagueMap = {}
+  for (const m of matches || []) {
+    const league = m.competition || m.country || 'Other'
+    if (!leagueMap[league]) leagueMap[league] = []
+    leagueMap[league].push(m)
+  }
+  return Object.entries(leagueMap)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 10)
+    .map(([name, matches]) => ({ name, matches: matches.slice(0, 6) }))
+}
+
 app.get('/api/dz-agent/global-leagues', async (req, res) => {
   const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+
+  // Serve fresh cache if still warm
+  if (
+    GLOBAL_LEAGUES_CACHE.data &&
+    GLOBAL_LEAGUES_CACHE.data.date === dateStr &&
+    Date.now() - GLOBAL_LEAGUES_CACHE.ts < GLOBAL_LEAGUES_TTL
+  ) {
+    return res.json(GLOBAL_LEAGUES_CACHE.data)
+  }
+
   try {
     const [sfResult, rssResult] = await Promise.allSettled([
       fetchSofaScoreFootball(dateStr),
@@ -2969,30 +3142,79 @@ app.get('/api/dz-agent/global-leagues', async (req, res) => {
     const sfData = sfResult.status === 'fulfilled' ? sfResult.value : null
     const rss = rssResult.status === 'fulfilled' ? rssResult.value : []
 
-    // Group SofaScore matches by league for structured output
-    const leagueMap = {}
-    if (sfData?.matches) {
-      for (const m of sfData.matches) {
-        const league = m.competition || m.country || 'Other'
-        if (!leagueMap[league]) leagueMap[league] = []
-        leagueMap[league].push(m)
+    // Primary: SofaScore matches grouped by league
+    let leagues = sfData?.matches?.length ? buildLeagueGroups(sfData.matches) : []
+    let source = sfData ? 'sofascore' : null
+
+    // Fallback chain: if SofaScore returned nothing, try to extract a minimal
+    // league list from RSS news (so the card always has *something* to show).
+    if (leagues.length === 0 && Array.isArray(rss) && rss.length > 0) {
+      const rssMatches = []
+      for (const feed of rss) {
+        for (const item of (feed?.items || []).slice(0, 5)) {
+          rssMatches.push({
+            homeTeam: item.title?.split(' vs ')?.[0]?.trim() || item.title?.slice(0, 40) || '',
+            awayTeam: item.title?.split(' vs ')?.[1]?.trim() || '',
+            competition: feed.name || 'أخبار كرة القدم',
+            statusType: 'news',
+            startTime: '',
+          })
+        }
+      }
+      if (rssMatches.length > 0) {
+        leagues = buildLeagueGroups(rssMatches)
+        source = 'rss-fallback'
       }
     }
-    const leagues = Object.entries(leagueMap)
-      .sort((a, b) => b[1].length - a[1].length)
-      .slice(0, 10)
-      .map(([name, matches]) => ({ name, matches: matches.slice(0, 6) }))
 
-    return res.json({
+    // Final fallback: last successful payload (any date) so the card never
+    // appears empty.
+    if (leagues.length === 0 && GLOBAL_LEAGUES_CACHE.data?.leagues?.length > 0) {
+      const stale = {
+        ...GLOBAL_LEAGUES_CACHE.data,
+        source: `${GLOBAL_LEAGUES_CACHE.data.source || 'cache'} (stale)`,
+        fetchedAt: GLOBAL_LEAGUES_CACHE.data.fetchedAt,
+        servedFromCacheAt: new Date().toISOString(),
+      }
+      return res.json(stale)
+    }
+
+    const payload = {
       leagues,
-      rssNews: (rss || []).slice(0, 10),
+      rssNews: (rss || []).flatMap(f => (f?.items || []).map(it => ({ ...it, feedName: f.name }))).slice(0, 10),
       date: dateStr,
       fetchedAt: new Date().toISOString(),
-      source: sfData ? 'sofascore' : 'rss',
-    })
+      source: source || 'unavailable',
+      status: leagues.length > 0 ? 'ok' : 'unavailable',
+      message: leagues.length > 0 ? null : '⚠️ بيانات الدوريات العالمية غير متاحة حالياً، حاول لاحقاً.',
+    }
+
+    // Only persist non-empty results so cache always holds the last GOOD payload
+    if (leagues.length > 0) {
+      GLOBAL_LEAGUES_CACHE.data = payload
+      GLOBAL_LEAGUES_CACHE.ts = Date.now()
+    }
+
+    return res.json(payload)
   } catch (err) {
     console.error('[GlobalLeagues] Error:', err.message)
-    return res.json({ leagues: [], rssNews: [], date: dateStr, fetchedAt: new Date().toISOString(), source: 'error' })
+    // Cache fallback on hard error
+    if (GLOBAL_LEAGUES_CACHE.data?.leagues?.length > 0) {
+      return res.json({
+        ...GLOBAL_LEAGUES_CACHE.data,
+        source: `${GLOBAL_LEAGUES_CACHE.data.source || 'cache'} (stale)`,
+        servedFromCacheAt: new Date().toISOString(),
+      })
+    }
+    return res.json({
+      leagues: [],
+      rssNews: [],
+      date: dateStr,
+      fetchedAt: new Date().toISOString(),
+      source: 'error',
+      status: 'unavailable',
+      message: '⚠️ بيانات الدوريات العالمية غير متاحة حالياً، حاول لاحقاً.',
+    })
   }
 })
 

@@ -76,6 +76,14 @@ const T: Record<Lang, Record<string, string>> = {
     syncError: 'فشل الرفع',
     syncUnavailable: 'الرفع متاح فقط من بيئة Replit',
     changedFiles: 'تغييرات بانتظار الرفع',
+    notifTitle: 'حالة النشر',
+    notifBuilding: 'جاري بناء النشر على Vercel…',
+    notifReady: 'تم النشر بنجاح على Vercel ✅',
+    notifFailed: 'فشل نشر Vercel ❌',
+    notifCanceled: 'تم إلغاء نشر Vercel',
+    notifTimeout: 'انتهت مهلة متابعة النشر — تحقّق من Vercel يدوياً',
+    notifClose: 'إغلاق',
+    notifOpen: 'فتح Vercel',
   },
   en: {
     title: 'Deploy & Sync',
@@ -101,6 +109,14 @@ const T: Record<Lang, Record<string, string>> = {
     syncError: 'Push failed',
     syncUnavailable: 'Push only available from Replit environment',
     changedFiles: 'pending changes',
+    notifTitle: 'Deploy status',
+    notifBuilding: 'Vercel build in progress…',
+    notifReady: 'Vercel deploy succeeded ✅',
+    notifFailed: 'Vercel deploy failed ❌',
+    notifCanceled: 'Vercel deploy canceled',
+    notifTimeout: 'Deploy watch timed out — check Vercel manually',
+    notifClose: 'Close',
+    notifOpen: 'Open Vercel',
   },
   fr: {
     title: 'Déploiement & Sync',
@@ -126,10 +142,30 @@ const T: Record<Lang, Record<string, string>> = {
     syncError: 'Échec de l’envoi',
     syncUnavailable: 'Push disponible uniquement depuis Replit',
     changedFiles: 'changements en attente',
+    notifTitle: 'État du déploiement',
+    notifBuilding: 'Build Vercel en cours…',
+    notifReady: 'Déploiement Vercel réussi ✅',
+    notifFailed: 'Échec du déploiement Vercel ❌',
+    notifCanceled: 'Déploiement Vercel annulé',
+    notifTimeout: 'Surveillance expirée — vérifiez Vercel manuellement',
+    notifClose: 'Fermer',
+    notifOpen: 'Ouvrir Vercel',
   },
 }
 
 const TOKEN_KEY = 'dz-deploy-admin-token'
+
+type WatchPhase = 'idle' | 'building' | 'ready' | 'failed' | 'canceled' | 'timeout'
+
+interface DeployNotification {
+  phase: WatchPhase
+  text: string
+  url?: string | null
+  startedAt: number
+}
+
+const WATCH_INTERVAL_MS = 5000
+const WATCH_TIMEOUT_MS = 6 * 60 * 1000 // 6 minutes
 
 export default function DZDeployPanel({ language }: Props) {
   const t = T[language]
@@ -140,6 +176,15 @@ export default function DZDeployPanel({ language }: Props) {
   const [pushing, setPushing] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null)
   const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [watching, setWatching] = useState(false)
+  const [notification, setNotification] = useState<DeployNotification | null>(null)
+  const watchRef = useRef<{
+    timer: ReturnType<typeof setInterval> | null
+    timeout: ReturnType<typeof setTimeout> | null
+    baselineSha: string | null
+    startedAt: number
+  }>({ timer: null, timeout: null, baselineSha: null, startedAt: 0 })
 
   const [githubConnected, setGithubConnected] = useState<boolean>(() => {
     try { return !!sessionStorage.getItem('dz-agent-gh-token') } catch { return false }
@@ -175,25 +220,90 @@ export default function DZDeployPanel({ language }: Props) {
     fbTimer.current = setTimeout(() => setFeedback(null), duration)
   }, [])
 
-  const fetchSync = useCallback(async () => {
+  const fetchSync = useCallback(async (): Promise<SyncStatus | null> => {
     setLoadingSync(true)
     try {
       const [syncRes, capRes] = await Promise.all([
         fetch('/api/dz-agent/sync-status', { cache: 'no-store' }),
         fetch('/api/dz-agent/sync/status', { cache: 'no-store' }),
       ])
-      if (syncRes.ok) setSync((await syncRes.json()) as SyncStatus)
+      let next: SyncStatus | null = null
+      if (syncRes.ok) {
+        next = (await syncRes.json()) as SyncStatus
+        setSync(next)
+      }
       if (capRes.ok) setCapability((await capRes.json()) as SyncCapability)
+      return next
     } catch {
-      // ignore
+      return null
     } finally {
       setLoadingSync(false)
     }
   }, [])
 
+  const stopWatch = useCallback(() => {
+    if (watchRef.current.timer) clearInterval(watchRef.current.timer)
+    if (watchRef.current.timeout) clearTimeout(watchRef.current.timeout)
+    watchRef.current.timer = null
+    watchRef.current.timeout = null
+    setWatching(false)
+  }, [])
+
+  const startDeployWatch = useCallback(() => {
+    stopWatch()
+    const baseline = sync?.vercel?.commitSha || null
+    watchRef.current.baselineSha = baseline
+    watchRef.current.startedAt = Date.now()
+    setWatching(true)
+    setNotification({
+      phase: 'building',
+      text: t.notifBuilding,
+      url: sync?.vercel?.deploymentUrl || null,
+      startedAt: Date.now(),
+    })
+
+    const tick = async () => {
+      const next = await fetchSync()
+      if (!next) return
+      const state = (next.vercel?.state || '').toUpperCase()
+      const newSha = next.vercel?.commitSha || null
+      const url = next.vercel?.deploymentUrl || null
+      const shaChanged = newSha && newSha !== watchRef.current.baselineSha
+
+      if (state === 'READY' && (shaChanged || next.status === 'synced')) {
+        stopWatch()
+        setNotification({ phase: 'ready', text: t.notifReady, url, startedAt: Date.now() })
+      } else if (state === 'ERROR' || state === 'FAILED') {
+        stopWatch()
+        setNotification({ phase: 'failed', text: t.notifFailed, url, startedAt: Date.now() })
+      } else if (state === 'CANCELED') {
+        stopWatch()
+        setNotification({ phase: 'canceled', text: t.notifCanceled, url, startedAt: Date.now() })
+      } else {
+        setNotification({
+          phase: 'building',
+          text: t.notifBuilding,
+          url,
+          startedAt: watchRef.current.startedAt,
+        })
+      }
+    }
+
+    watchRef.current.timer = setInterval(tick, WATCH_INTERVAL_MS)
+    watchRef.current.timeout = setTimeout(() => {
+      stopWatch()
+      setNotification({ phase: 'timeout', text: t.notifTimeout, startedAt: Date.now() })
+    }, WATCH_TIMEOUT_MS)
+    setTimeout(tick, 1500)
+  }, [fetchSync, stopWatch, sync, t])
+
   useEffect(() => {
     if (githubConnected) fetchSync()
-    return () => { if (fbTimer.current) clearTimeout(fbTimer.current) }
+    return () => {
+      if (fbTimer.current) clearTimeout(fbTimer.current)
+      if (watchRef.current.timer) clearInterval(watchRef.current.timer)
+      if (watchRef.current.timeout) clearTimeout(watchRef.current.timeout)
+    }
   }, [fetchSync, githubConnected])
 
   const ensureToken = useCallback((): string | null => {
@@ -227,16 +337,14 @@ export default function DZDeployPanel({ language }: Props) {
         showFeedback('err', `${t.deployError}: ${data.error || r.statusText}`)
       } else {
         showFeedback('ok', t.deploySuccess)
-        setTimeout(fetchSync, 4000)
-        setTimeout(fetchSync, 15000)
-        setTimeout(fetchSync, 45000)
+        startDeployWatch()
       }
     } catch (err) {
       showFeedback('err', `${t.deployError}: ${(err as Error).message}`)
     } finally {
       setDeploying(false)
     }
-  }, [ensureToken, fetchSync, showFeedback, t])
+  }, [ensureToken, showFeedback, startDeployWatch, t])
 
   const triggerSync = useCallback(async () => {
     const token = ensureToken()
@@ -258,17 +366,14 @@ export default function DZDeployPanel({ language }: Props) {
         showFeedback('info', t.noChanges)
       } else {
         showFeedback('ok', `${t.syncSuccess} (${data.shortSha})`, 8000)
-        // Refresh capability + sync status; Vercel will auto-deploy and we want to see SHAs converge
-        setTimeout(fetchSync, 3000)
-        setTimeout(fetchSync, 20000)
-        setTimeout(fetchSync, 60000)
+        startDeployWatch()
       }
     } catch (err) {
       showFeedback('err', `${t.syncError}: ${(err as Error).message}`)
     } finally {
       setPushing(false)
     }
-  }, [ensureToken, fetchSync, showFeedback, t])
+  }, [ensureToken, showFeedback, startDeployWatch, t])
 
   const statusLabel =
     sync?.status === 'synced' ? t.statusSynced : sync?.status === 'out_of_sync' ? t.statusOut : t.statusUnknown
@@ -376,6 +481,55 @@ export default function DZDeployPanel({ language }: Props) {
       {feedback && (
         <div className={`dz-deploy-feedback dz-deploy-feedback--${feedback.kind}`}>
           {feedback.text}
+        </div>
+      )}
+
+      {notification && (
+        <div
+          className={`dz-deploy-toast dz-deploy-toast--${notification.phase}`}
+          dir={language === 'ar' ? 'rtl' : 'ltr'}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="dz-deploy-toast-icon">
+            {notification.phase === 'building' ? (
+              <Loader2 size={16} className="dz-deploy-spin" />
+            ) : notification.phase === 'ready' ? (
+              <CheckCircle2 size={16} />
+            ) : (
+              <AlertCircle size={16} />
+            )}
+          </div>
+          <div className="dz-deploy-toast-body">
+            <div className="dz-deploy-toast-title">{t.notifTitle}</div>
+            <div className="dz-deploy-toast-text">{notification.text}</div>
+            {watching && (
+              <div className="dz-deploy-toast-elapsed">
+                {Math.max(0, Math.round((Date.now() - notification.startedAt) / 1000))}s
+              </div>
+            )}
+          </div>
+          <div className="dz-deploy-toast-actions">
+            {notification.url && (
+              <a
+                className="dz-deploy-toast-link"
+                href={notification.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={12} />
+                <span>{t.notifOpen}</span>
+              </a>
+            )}
+            <button
+              className="dz-deploy-toast-close"
+              onClick={() => { stopWatch(); setNotification(null) }}
+              aria-label={t.notifClose}
+              title={t.notifClose}
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
     </div>

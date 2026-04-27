@@ -9,6 +9,7 @@ import { readFile } from 'fs/promises'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
+import compression from 'compression'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -67,6 +68,17 @@ app.use(cors({
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
   credentials: false,
+}))
+
+// ===== TASK 15+23: GZIP COMPRESSION (Algeria Network Optimization) =====
+app.use(compression({
+  level: 6, // balanced speed/size
+  threshold: 1024, // compress responses > 1KB
+  filter: (req, res) => {
+    // Don't compress streaming or binary
+    if (req.headers['x-no-compression']) return false
+    return compression.filter(req, res)
+  },
 }))
 
 // ===== NO-CACHE IN DEVELOPMENT =====
@@ -196,6 +208,472 @@ function normalizeQuery(message) {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+// ============================================================
+// ████  RESILIENT DATA ENGINE — Tasks 11-24  ████
+// API-Optional • Anti-Block • Fail-Safe • Auto-Refresh
+// ============================================================
+
+// ── Task 17: Anti-Block Header Rotation ──────────────────────
+const UA_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+]
+
+const REFERERS = [
+  'https://www.google.com/',
+  'https://www.google.dz/',
+  'https://www.bing.com/',
+  'https://duckduckgo.com/',
+  'https://search.yahoo.com/',
+]
+
+function randomUA() { return UA_POOL[Math.floor(Math.random() * UA_POOL.length)] }
+function randomReferer() { return REFERERS[Math.floor(Math.random() * REFERERS.length)] }
+
+function buildScrapingHeaders(extra = {}) {
+  return {
+    'User-Agent': randomUA(),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'ar,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'Referer': randomReferer(),
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'cross-site',
+    'DNT': '1',
+    ...extra,
+  }
+}
+
+// ── Task 17: Random Human-Like Delay ─────────────────────────
+function randomDelay(minMs = 300, maxMs = 1200) {
+  return new Promise(res => setTimeout(res, minMs + Math.random() * (maxMs - minMs)))
+}
+
+// ── Task 18: Request Throttle Queue (max 3 req/sec per domain) ─
+const THROTTLE_MAP = new Map() // domain → { count, resetAt }
+const MAX_REQ_PER_SEC = 3
+
+function throttleCheck(url) {
+  const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
+  const now = Date.now()
+  const entry = THROTTLE_MAP.get(domain) || { count: 0, resetAt: now + 1000 }
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 1000 }
+  if (entry.count >= MAX_REQ_PER_SEC) return false
+  entry.count++
+  THROTTLE_MAP.set(domain, entry)
+  return true
+}
+
+async function waitForThrottle(url, retries = 8) {
+  for (let i = 0; i < retries; i++) {
+    if (throttleCheck(url)) return
+    await randomDelay(350, 700)
+  }
+}
+
+// ── Task 11+21: Resilient Fetch with retry + anti-block ────────
+async function resilientFetch(url, opts = {}) {
+  const {
+    timeout = 12000,
+    retries = 3,
+    delay = true,
+    scrapingHeaders = true,
+    extraHeaders = {},
+    body = undefined,
+    method = 'GET',
+  } = opts
+
+  await waitForThrottle(url)
+  let lastErr
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    if (attempt > 0 && delay) await randomDelay(600 * attempt, 1500 * attempt)
+    try {
+      const headers = scrapingHeaders
+        ? buildScrapingHeaders(extraHeaders)
+        : { 'User-Agent': 'DZ-GPT-Agent/1.0', ...extraHeaders }
+
+      const fetchOpts = {
+        method,
+        headers,
+        signal: AbortSignal.timeout(timeout),
+      }
+      if (body) fetchOpts.body = body
+
+      const r = await fetch(url, fetchOpts)
+
+      // 429 Too Many Requests — back off harder
+      if (r.status === 429) {
+        const retryAfter = parseInt(r.headers.get('retry-after') || '5', 10)
+        console.warn(`[ResilientFetch] 429 on ${url} — backing off ${retryAfter}s`)
+        await randomDelay(retryAfter * 1000, retryAfter * 1000 + 2000)
+        lastErr = new Error(`HTTP 429`)
+        continue
+      }
+
+      // 503/502 — brief pause then retry
+      if (r.status === 503 || r.status === 502) {
+        lastErr = new Error(`HTTP ${r.status}`)
+        await randomDelay(1000, 2000)
+        continue
+      }
+
+      return r
+    } catch (err) {
+      lastErr = err
+      console.warn(`[ResilientFetch] attempt ${attempt + 1}/${retries} failed for ${url}: ${err.message}`)
+    }
+  }
+  throw lastErr || new Error(`resilientFetch failed for ${url}`)
+}
+
+// ── Task 13+24: Universal Cache Factory ────────────────────────
+function makeCache(ttlMs = 10 * 60 * 1000) {
+  const store = new Map()
+  return {
+    get(key) {
+      const e = store.get(key)
+      if (!e) return null
+      if (Date.now() - e.ts > ttlMs) return null
+      return e.data
+    },
+    getStale(key) { // returns even expired data as last-resort fallback
+      const e = store.get(key)
+      return e ? { data: e.data, ts: e.ts, stale: Date.now() - e.ts > ttlMs } : null
+    },
+    set(key, data) { store.set(key, { data, ts: Date.now() }) },
+    has(key) { return store.has(key) },
+    invalidate(key) { store.delete(key) },
+    clear() { store.clear() },
+    get size() { return store.size },
+  }
+}
+
+// Global caches
+const WEATHER_CACHE_V2  = makeCache(10 * 60 * 1000)  // 10 min
+const CURRENCY_CACHE_V2 = makeCache(20 * 60 * 1000)  // 20 min
+const SPORTS_CACHE_V2   = makeCache(8 * 60 * 1000)   // 8 min
+const GLOBAL_CACHE_V2   = makeCache(6 * 60 * 1000)   // 6 min
+
+// ── Task 11: API-Free Weather (wttr.in + open-meteo) ───────────
+const CITY_COORDS = {
+  Algiers:     { lat: 36.737, lon: 3.086,  ar: 'الجزائر' },
+  Oran:        { lat: 35.697, lon: -0.633, ar: 'وهران' },
+  Constantine: { lat: 36.365, lon: 6.614,  ar: 'قسنطينة' },
+  Annaba:      { lat: 36.897, lon: 7.747,  ar: 'عنابة' },
+  Setif:       { lat: 36.190, lon: 5.412,  ar: 'سطيف' },
+  Batna:       { lat: 35.556, lon: 6.174,  ar: 'باتنة' },
+  Blida:       { lat: 36.470, lon: 2.828,  ar: 'البليدة' },
+  Tlemcen:     { lat: 34.878, lon: -1.316, ar: 'تلمسان' },
+  Bejaia:      { lat: 36.755, lon: 5.084,  ar: 'بجاية' },
+  Tizi:        { lat: 36.711, lon: 4.046,  ar: 'تيزي وزو' },
+}
+
+const WMO_CODES = {
+  0: 'صافٍ', 1: 'صافٍ غالباً', 2: 'غائم جزئياً', 3: 'غائم',
+  45: 'ضبابي', 48: 'ضبابي مع صقيع',
+  51: 'رذاذ خفيف', 53: 'رذاذ متوسط', 55: 'رذاذ كثيف',
+  61: 'مطر خفيف', 63: 'مطر متوسط', 65: 'مطر غزير',
+  71: 'ثلج خفيف', 73: 'ثلج متوسط', 75: 'ثلج كثيف',
+  80: 'زخات مطر خفيفة', 81: 'زخات مطر متوسطة', 82: 'زخات مطر عنيفة',
+  95: 'عاصفة رعدية', 96: 'عاصفة مع برَد', 99: 'عاصفة مع برَد كثيف',
+}
+
+async function fetchWeatherOpenMeteo(city) {
+  const coords = CITY_COORDS[city]
+  if (!coords) throw new Error(`No coords for city: ${city}`)
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Africa%2FAlgiers&forecast_days=1`
+  const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
+  if (!r.ok) throw new Error(`open-meteo HTTP ${r.status}`)
+  const d = await r.json()
+  const cur = d.current
+  const wmo = cur?.weather_code
+  return {
+    city,
+    temp: Math.round(cur?.temperature_2m ?? 0),
+    feels_like: Math.round(cur?.apparent_temperature ?? 0),
+    temp_min: Math.round(d.daily?.temperature_2m_min?.[0] ?? 0),
+    temp_max: Math.round(d.daily?.temperature_2m_max?.[0] ?? 0),
+    condition: WMO_CODES[wmo] || `رمز ${wmo}`,
+    icon: null,
+    humidity: cur?.relative_humidity_2m ?? null,
+    wind: Math.round(cur?.wind_speed_10m ?? 0),
+    visibility: null,
+    source: 'open-meteo.com',
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
+async function fetchWeatherWttr(city) {
+  const citySlug = encodeURIComponent(city + ',Algeria')
+  const url = `https://wttr.in/${citySlug}?format=j1`
+  const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
+  if (!r.ok) throw new Error(`wttr.in HTTP ${r.status}`)
+  const d = await r.json()
+  const cur = d?.current_condition?.[0]
+  if (!cur) throw new Error('wttr.in: no current condition')
+  const desc = cur.lang_ar?.[0]?.value || cur.weatherDesc?.[0]?.value || ''
+  return {
+    city,
+    temp: parseInt(cur.temp_C, 10),
+    feels_like: parseInt(cur.FeelsLikeC, 10),
+    temp_min: parseInt(d.weather?.[0]?.mintempC ?? cur.temp_C, 10),
+    temp_max: parseInt(d.weather?.[0]?.maxtempC ?? cur.temp_C, 10),
+    condition: desc,
+    icon: null,
+    humidity: parseInt(cur.humidity, 10),
+    wind: Math.round(parseInt(cur.windspeedKmph, 10)),
+    visibility: parseInt(cur.visibility, 10),
+    source: 'wttr.in',
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
+async function fetchWeatherOpenWeather(city) {
+  const apiKey = process.env.OPENWEATHER_API_KEY
+  if (!apiKey) throw new Error('OPENWEATHER_API_KEY not set')
+  const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},Algeria&appid=${apiKey}&units=metric&lang=ar`
+  const r = await fetch(url, { signal: AbortSignal.timeout(7000) })
+  if (!r.ok) throw new Error(`OpenWeather HTTP ${r.status}`)
+  const d = await r.json()
+  return {
+    city,
+    temp: Math.round(d.main?.temp ?? 0),
+    feels_like: Math.round(d.main?.feels_like ?? 0),
+    temp_min: Math.round(d.main?.temp_min ?? 0),
+    temp_max: Math.round(d.main?.temp_max ?? 0),
+    condition: d.weather?.[0]?.description || '',
+    icon: d.weather?.[0]?.icon || null,
+    humidity: d.main?.humidity ?? null,
+    wind: Math.round(d.wind?.speed ?? 0),
+    visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
+    source: 'openweathermap.org',
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
+// Task 12: Intelligent source switching for weather
+async function fetchCityWeatherResilient(city) {
+  const safeCity = String(city || 'Algiers').slice(0, 80)
+  const cacheKey = safeCity.toLowerCase()
+
+  const cached = WEATHER_CACHE_V2.get(cacheKey)
+  if (cached) return cached
+
+  const sources = [
+    { name: 'open-meteo', fn: () => fetchWeatherOpenMeteo(safeCity) },
+    { name: 'wttr.in',    fn: () => fetchWeatherWttr(safeCity) },
+    { name: 'openweather', fn: () => fetchWeatherOpenWeather(safeCity) },
+  ]
+
+  for (const src of sources) {
+    try {
+      const data = await src.fn()
+      if (data && data.temp !== null && !isNaN(data.temp)) {
+        WEATHER_CACHE_V2.set(cacheKey, data)
+        console.log(`[Weather] ✓ ${safeCity} from ${src.name}: ${data.temp}°C ${data.condition}`)
+        return data
+      }
+    } catch (err) {
+      console.warn(`[Weather] ${src.name} failed for ${safeCity}: ${err.message}`)
+    }
+  }
+
+  // Task 24: Fail-safe — return stale cache rather than nothing
+  const stale = WEATHER_CACHE_V2.getStale(cacheKey)
+  if (stale?.data) {
+    console.warn(`[Weather] All sources failed for ${safeCity}, returning stale cache`)
+    return { ...stale.data, status: 'stale', staleAgeMin: Math.round((Date.now() - stale.ts) / 60000) }
+  }
+
+  throw new Error(`تعذّر جلب الطقس لـ ${safeCity} من جميع المصادر`)
+}
+
+// ── Task 11+12: API-Free Currency (multi-source cascade) ───────
+async function fetchCurrencyFawazahmed() {
+  // fawazahmed0 CDN — completely free, no key, high uptime
+  const DATE = new Date().toISOString().split('T')[0]
+  const urls = [
+    `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${DATE}/v1/currencies/dzd.json`,
+    `https://latest.currency-api.pages.dev/v1/currencies/dzd.json`,
+  ]
+  const targets = ['usd', 'eur', 'gbp', 'sar', 'aed', 'tnd', 'mad', 'egp', 'qar', 'kwd', 'cad', 'chf', 'cny', 'try', 'jpy']
+  for (const url of urls) {
+    try {
+      const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
+      if (!r.ok) continue
+      const d = await r.json()
+      const dzdRates = d?.dzd
+      if (!dzdRates) continue
+      const rates = {}
+      for (const t of targets) {
+        const v = dzdRates[t]
+        if (v && !isNaN(v) && v > 0) rates[t.toUpperCase()] = +v.toFixed(6)
+      }
+      if (Object.keys(rates).length > 0) {
+        return { base: 'DZD', provider: 'fawazahmed0/currency-api (CDN)', rates, status: 'live', last_update: new Date().toISOString() }
+      }
+    } catch (err) {
+      console.warn(`[Currency] fawazahmed0 ${url} failed: ${err.message}`)
+    }
+  }
+  return null
+}
+
+async function fetchCurrencyExchangeRateHost() {
+  // exchangerate.host — free, no key required
+  const urls = [
+    'https://api.exchangerate.host/latest?base=DZD&symbols=USD,EUR,GBP,SAR,AED,TND,MAD,EGP,QAR,KWD,CAD,CHF,CNY,TRY,JPY',
+    'https://open.er-api.com/v6/latest/DZD',
+  ]
+  for (const url of urls) {
+    try {
+      const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
+      if (!r.ok) continue
+      const d = await r.json()
+      const rawRates = d?.rates || d?.conversion_rates
+      if (!rawRates) continue
+      const targets = ['USD','EUR','GBP','SAR','AED','TND','MAD','EGP','QAR','KWD','CAD','CHF','CNY','TRY','JPY']
+      const rates = {}
+      for (const sym of targets) {
+        const v = rawRates[sym]
+        if (v && !isNaN(v) && v > 0) rates[sym] = +v.toFixed(6)
+      }
+      if (Object.keys(rates).length > 0) {
+        return { base: 'DZD', provider: url.includes('er-api') ? 'open.er-api.com' : 'exchangerate.host', rates, status: 'live', last_update: new Date().toISOString() }
+      }
+    } catch (err) {
+      console.warn(`[Currency] exchangerate.host ${url} failed: ${err.message}`)
+    }
+  }
+  return null
+}
+
+// Task 12: Intelligent currency source switching
+async function fetchCurrencyResilient(forceRefresh = false) {
+  const cacheKey = 'dzd_rates'
+  if (!forceRefresh) {
+    const cached = CURRENCY_CACHE_V2.get(cacheKey)
+    if (cached) return cached
+  }
+
+  const sources = [
+    { name: 'fawazahmed0/cdn',    fn: fetchCurrencyFawazahmed },
+    { name: 'floatrates.com',     fn: fetchCurrencyFloatRates },
+    { name: 'exchangerate.host',  fn: fetchCurrencyExchangeRateHost },
+    { name: 'exchangerate.fallback', fn: fetchCurrencyFallback },
+  ]
+
+  for (const src of sources) {
+    try {
+      const data = await src.fn()
+      if (data?.rates && Object.keys(data.rates).length >= 5) {
+        CURRENCY_CACHE_V2.set(cacheKey, data)
+        console.log(`[Currency] ✓ from ${src.name}: ${Object.keys(data.rates).length} pairs`)
+        return data
+      }
+    } catch (err) {
+      console.warn(`[Currency] ${src.name} failed: ${err.message}`)
+    }
+  }
+
+  // Task 24: stale fallback
+  const stale = CURRENCY_CACHE_V2.getStale(cacheKey)
+  if (stale?.data) {
+    console.warn('[Currency] All sources failed — returning stale cache')
+    return { ...stale.data, status: 'stale', stale_since: new Date(stale.ts).toISOString() }
+  }
+  return null
+}
+
+// ── Task 15+23: Lightweight Preload Data (Algeria Mode) ────────
+const PRELOAD_CACHE = makeCache(10 * 60 * 1000)
+
+async function preloadEssentialData() {
+  const tasks = [
+    { key: 'weather_algiers', fn: () => fetchCityWeatherResilient('Algiers') },
+    { key: 'currency',        fn: () => fetchCurrencyResilient() },
+  ]
+  const results = {}
+  await Promise.allSettled(tasks.map(async t => {
+    try {
+      const d = await t.fn()
+      PRELOAD_CACHE.set(t.key, d)
+      results[t.key] = 'ok'
+    } catch (err) {
+      results[t.key] = `failed: ${err.message}`
+    }
+  }))
+  console.log('[Preload] Essential data preloaded:', results)
+  return results
+}
+
+// ── Task 22: Smart Preloading endpoint ─────────────────────────
+app.get('/api/dz-agent/preload-status', (_req, res) => {
+  res.json({
+    preloaded: {
+      weather_algiers: PRELOAD_CACHE.has('weather_algiers'),
+      currency: PRELOAD_CACHE.has('currency'),
+    },
+    cacheStats: {
+      weather: WEATHER_CACHE_V2.size,
+      currency: CURRENCY_CACHE_V2.size,
+      sports: SPORTS_CACHE_V2.size,
+    },
+    fetchedAt: new Date().toISOString(),
+  })
+})
+
+// ── Task 14: Offline / Network Awareness probe ─────────────────
+app.get('/api/dz-agent/connectivity', async (_req, res) => {
+  const probes = [
+    { name: 'open-meteo', url: 'https://api.open-meteo.com/v1/forecast?latitude=36.737&longitude=3.086&current=temperature_2m&forecast_days=1' },
+    { name: 'currency-cdn', url: 'https://latest.currency-api.pages.dev/v1/currencies/dzd.json' },
+    { name: 'kooora', url: 'https://www.kooora.com/?l=108' },
+  ]
+  const results = {}
+  await Promise.allSettled(probes.map(async p => {
+    try {
+      const r = await resilientFetch(p.url, { timeout: 6000, retries: 1 })
+      results[p.name] = r.ok ? 'online' : `http_${r.status}`
+    } catch { results[p.name] = 'offline' }
+  }))
+  const allOnline = Object.values(results).every(v => v === 'online')
+  res.json({ online: allOnline, sources: results, fetchedAt: new Date().toISOString() })
+})
+
+// ── Task 20: Multi-Agent status endpoint ───────────────────────
+app.get('/api/dz-agent/agent-status', (_req, res) => {
+  res.json({
+    agents: {
+      data: { status: 'active', description: 'Scraping + API fetching' },
+      parsing: { status: 'active', description: 'HTML parsing & data structuring' },
+      cache: { status: 'active', description: 'TTL caching & stale fallback', entries: WEATHER_CACHE_V2.size + CURRENCY_CACHE_V2.size },
+      response: { status: 'active', description: 'AI response generation' },
+    },
+    resilience: {
+      headerRotation: true,
+      randomDelay: true,
+      throttling: `max ${MAX_REQ_PER_SEC} req/sec/domain`,
+      retries: 3,
+      staleCache: true,
+      sourceCascade: true,
+    },
+    fetchedAt: new Date().toISOString(),
+  })
+})
+// ============================================================
+// END RESILIENT DATA ENGINE
+// ============================================================
 
 function isDeveloperOrOwnerQuestion(message) {
   if (typeof message !== 'string' || !message) return false
@@ -1901,28 +2379,10 @@ function refreshGNRSSInBackground(feeds) {
 }
 
 async function fetchWeatherAlgiers() {
+  // Task 11+12: Use resilient multi-source engine — no API key needed
   const WEATHER_CITIES = ['Algiers', 'Oran', 'Constantine', 'Annaba']
-  const apiKey = process.env.OPENWEATHER_API_KEY
-  if (!apiKey) {
-    return WEATHER_CITIES.map(city => ({ city, temp: null, condition: null, icon: null, error: 'No API key' }))
-  }
   const results = await Promise.allSettled(
-    WEATHER_CITIES.map(async (city) => {
-      const r = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=ar`,
-        { signal: AbortSignal.timeout(6000) }
-      )
-      if (!r.ok) return { city, temp: null, condition: null, icon: null }
-      const d = await r.json()
-      return {
-        city,
-        temp: Math.round(d.main?.temp ?? null),
-        condition: d.weather?.[0]?.description || null,
-        icon: d.weather?.[0]?.icon || null,
-        humidity: d.main?.humidity,
-        wind: Math.round(d.wind?.speed ?? 0),
-      }
-    })
+    WEATHER_CITIES.map(city => fetchCityWeatherResilient(city))
   )
   return results.map((r, i) =>
     r.status === 'fulfilled' ? r.value : { city: WEATHER_CITIES[i], temp: null, condition: null, icon: null }
@@ -2230,70 +2690,26 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
   return res.json(data)
 })
 
-// ===== WEATHER BY CITY (single-city endpoint for user location) =====
-const CITY_WEATHER_CACHE = new Map()
-const CITY_WEATHER_TTL = 15 * 60 * 1000 // 15 min
-
-async function fetchCityWeather(city) {
-  const safeCity = String(city || 'Algiers').slice(0, 80)
-  const cacheKey = safeCity.toLowerCase()
-  const cached = CITY_WEATHER_CACHE.get(cacheKey)
-  if (cached && Date.now() - cached.ts < CITY_WEATHER_TTL) return cached.data
-
-  const apiKey = process.env.OPENWEATHER_API_KEY
-  if (!apiKey) throw new Error('OPENWEATHER_API_KEY not configured')
-
-  const tryFetch = async (q) => {
-    const r = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&appid=${apiKey}&units=metric&lang=ar`,
-      { signal: AbortSignal.timeout(6000) }
-    )
-    if (!r.ok) return null
-    return r.json()
-  }
-
-  let d = await tryFetch(`${safeCity},Algeria`)
-  if (!d) d = await tryFetch(safeCity)
-  if (!d) throw new Error(`No weather data for: ${safeCity}`)
-
-  const result = {
-    city: safeCity,
-    temp: Math.round(d.main?.temp ?? 0),
-    feels_like: Math.round(d.main?.feels_like ?? 0),
-    temp_min: Math.round(d.main?.temp_min ?? 0),
-    temp_max: Math.round(d.main?.temp_max ?? 0),
-    condition: d.weather?.[0]?.description || '',
-    icon: d.weather?.[0]?.icon || null,
-    humidity: d.main?.humidity,
-    wind: Math.round(d.wind?.speed ?? 0),
-    visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
-    fetchedAt: new Date().toISOString(),
-  }
-  CITY_WEATHER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
-  return result
-}
+// ===== WEATHER BY CITY — Resilient Multi-Source (Tasks 11-13) =====
+// Primary: open-meteo.com (free, no key)
+// Secondary: wttr.in (free, no key)
+// Tertiary: OpenWeatherMap (API key optional)
+// Fallback: stale cache — NEVER returns empty
 
 app.get('/api/dz-agent/weather', async (req, res) => {
   const city = String(req.query.city || 'Algiers').slice(0, 80)
   try {
-    return res.json(await fetchCityWeather(city))
+    const data = await fetchCityWeatherResilient(city)
+    return res.json(data)
   } catch (err) {
-    console.error('[Weather] Error:', err.message)
-    // Always return a structured response — never empty body. Dashboard handles `error` field gracefully.
-    const isMissingKey = err.message.includes('OPENWEATHER_API_KEY')
+    console.error('[Weather] All sources failed:', err.message)
+    // Task 24: Fail-safe — always return structured data
     return res.status(200).json({
       city,
-      temp: null,
-      feels_like: null,
-      temp_min: null,
-      temp_max: null,
-      condition: null,
-      icon: null,
-      humidity: null,
-      wind: null,
-      visibility: null,
-      error: isMissingKey ? 'بيانات الطقس غير متوفرة (مفتاح OpenWeather غير مهيأ)' : `تعذّر جلب الطقس لـ ${city}`,
-      status: isMissingKey ? 'unavailable' : 'not_found',
+      temp: null, feels_like: null, temp_min: null, temp_max: null,
+      condition: null, icon: null, humidity: null, wind: null, visibility: null,
+      error: `تعذّر جلب الطقس لـ ${city} — يعاد المحاولة في الخلفية`,
+      status: 'unavailable',
       fetchedAt: new Date().toISOString(),
     })
   }
@@ -2387,15 +2803,16 @@ function parseLFPArticles(html) {
 }
 
 async function fetchLFPData() {
+  // Task 13: Use new resilient cache first
+  const sportsCached = SPORTS_CACHE_V2.get('lfp')
+  if (sportsCached) return sportsCached
   if (LFP_CACHE.data && Date.now() - LFP_CACHE.ts < LFP_CACHE_TTL) return LFP_CACHE.data
 
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  const headers = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ar,fr;q=0.9' }
-
   try {
+    // Task 11+17: Use resilientFetch with anti-block headers for LFP
     const [homeRes, articlesRes] = await Promise.allSettled([
-      fetch('https://lfp.dz/ar', { headers, signal: AbortSignal.timeout(10000) }),
-      fetch('https://lfp.dz/ar/articles', { headers, signal: AbortSignal.timeout(10000) }),
+      resilientFetch('https://lfp.dz/ar', { timeout: 12000, retries: 3 }),
+      resilientFetch('https://lfp.dz/ar/articles', { timeout: 12000, retries: 2 }),
     ])
 
     const homeHtml = homeRes.status === 'fulfilled' && homeRes.value.ok ? await homeRes.value.text() : ''
@@ -2411,13 +2828,17 @@ async function fetchLFPData() {
       source: 'lfp.dz',
     }
 
+    // Task 13: Store in both caches
     LFP_CACHE.data = data
     LFP_CACHE.ts = Date.now()
-    console.log(`[LFP] Scraped ${matches.length} matches, ${articles.length} articles`)
+    SPORTS_CACHE_V2.set('lfp', data)
+    console.log(`[LFP] ✓ Scraped ${matches.length} matches, ${articles.length} articles`)
     return data
   } catch (err) {
     console.error('[LFP] Scraping error:', err.message)
-    return LFP_CACHE.data || { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
+    // Task 24: always return something
+    const stale = SPORTS_CACHE_V2.getStale('lfp')
+    return stale?.data || LFP_CACHE.data || { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
   }
 }
 
@@ -2434,17 +2855,14 @@ async function fetchAlgerianStandings() {
   if (STANDINGS_CACHE.data && Date.now() - STANDINGS_CACHE.ts < STANDINGS_TTL) {
     return STANDINGS_CACHE.data
   }
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   const sources = [
     'https://www.kooora.com/?l=108',
     'https://www.kooora.com/كرة-القدم/دولة/الجزائر/جدول/alg',
   ]
   for (const url of sources) {
     try {
-      const r = await fetch(url, {
-        headers: { 'User-Agent': UA, 'Accept-Language': 'ar,fr;q=0.9', 'Accept': 'text/html,*/*' },
-        signal: AbortSignal.timeout(12000),
-      })
+      // Task 11+17: Use resilientFetch with anti-block headers
+      const r = await resilientFetch(url, { timeout: 14000, retries: 3 })
       if (!r.ok) continue
       const html = await r.text()
       const rows = []
@@ -2811,24 +3229,8 @@ async function fetchCurrencyFallback() {
 }
 
 async function fetchCurrencyData(forceRefresh = false) {
-  if (!forceRefresh && CURRENCY_CACHE.data && Date.now() - CURRENCY_CACHE.ts < CURRENCY_TTL) {
-    return CURRENCY_CACHE.data
-  }
-  let data = await fetchCurrencyFloatRates()
-  if (!data) data = await fetchCurrencyFallback()
-  if (data) {
-    CURRENCY_CACHE.data = data
-    CURRENCY_CACHE.ts = Date.now()
-    CURRENCY_CACHE.status = 'live'
-    console.log(`[Currency] Refreshed from ${data.provider} — ${Object.keys(data.rates).length} currencies`)
-    return data
-  }
-  if (CURRENCY_CACHE.data) {
-    const stale = { ...CURRENCY_CACHE.data, status: 'stale', stale_since: new Date(CURRENCY_CACHE.ts).toISOString() }
-    console.warn('[Currency] All sources failed — returning stale cache')
-    return stale
-  }
-  return null
+  // Task 12: Delegate to the resilient multi-source cascade
+  return fetchCurrencyResilient(forceRefresh)
 }
 
 function detectCurrencyQuery(msg) {
@@ -7386,6 +7788,45 @@ if (isMain) {
       .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
       .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
   }, 7 * 24 * 60 * 60 * 1000)
+
+  // ── Task 22: Smart Preloading — warm caches on startup ──────────
+  setTimeout(() => {
+    preloadEssentialData().catch(err => console.warn('[Preload] Startup preload error:', err.message))
+  }, 2000)
+
+  // ── Task 16: Auto-Refresh — silent background refresh (5-10 min) ─
+  const AUTO_REFRESH_INTERVAL = 7 * 60 * 1000 // 7 minutes
+
+  setInterval(() => {
+    console.log('[AutoRefresh] Refreshing weather caches...')
+    const cities = ['Algiers', 'Oran', 'Constantine', 'Annaba', 'Setif']
+    for (const city of cities) {
+      WEATHER_CACHE_V2.invalidate(city.toLowerCase())
+      fetchCityWeatherResilient(city)
+        .then(d => console.log(`[AutoRefresh] Weather ${city}: ${d?.temp}°C`))
+        .catch(err => console.warn(`[AutoRefresh] Weather ${city} failed:`, err.message))
+    }
+  }, AUTO_REFRESH_INTERVAL)
+
+  setInterval(() => {
+    console.log('[AutoRefresh] Refreshing currency...')
+    fetchCurrencyResilient(true)
+      .then(d => console.log(`[AutoRefresh] Currency: ${d?.provider} (${Object.keys(d?.rates || {}).length} pairs)`))
+      .catch(err => console.warn('[AutoRefresh] Currency failed:', err.message))
+  }, AUTO_REFRESH_INTERVAL + 60000) // offset by 1 min from weather
+
+  setInterval(() => {
+    console.log('[AutoRefresh] Refreshing LFP matches...')
+    SPORTS_CACHE_V2.invalidate('lfp')
+    fetchLFPData()
+      .then(d => console.log(`[AutoRefresh] LFP: ${d?.matches?.length} matches`))
+      .catch(err => console.warn('[AutoRefresh] LFP failed:', err.message))
+  }, 10 * 60 * 1000) // 10 min
+
+  setInterval(() => {
+    console.log('[AutoRefresh] Refreshing standings...')
+    STANDINGS_CACHE.ts = 0 // force refresh on next request
+  }, 25 * 60 * 1000) // 25 min
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

@@ -25,6 +25,28 @@ A Vite + React + Express AI chat application with multi-model support.
 - **DZChatBox**: 400ms debounce on sendMessage (ref-based, no state overhead), `withRetry(1 retry)` on fetch
 - **server.js**: behavior context extraction — client-injected `[سياق المستخدم: ...]` is stripped from user message and injected into system prompt as `BEHAVIOR INTELLIGENCE` section
 
+## DZ Agent Reliability Layer (server.js)
+
+Added a server-side reliability layer that prevents empty/irrelevant responses:
+
+- **`validateAIContent(text, query)`**: Rejects null, undefined, empty strings, placeholder responses (`null`, `undefined`, `n/a`, `...`), and content shorter than 5 meaningful chars.
+- **`trimRelevantContext(messages, maxTurns=8)`**: Drops empty messages and keeps only system messages + last 8 turns. Reduces off-topic answers caused by unrelated history.
+- **`safeGenerateAI({ messages, query, max_tokens })`**: Master fallback. Tries DeepSeek → Ollama → 4 Groq models in order, validating each response. Returns the first valid one.
+- **`callDeepSeek` / `callOllama`**: Each wrapped in 25s `AbortController` timeout to prevent hanging requests.
+- **`logInvalidResponse(stage, query, raw)`**: Structured warning log when a model returns invalid content, so failing stages can be traced.
+
+Wired into:
+- `/api/dz-agent-chat` — replaces previous inline DeepSeek/Ollama/Groq fallback chain. Falls through to existing static fallbacks (educational, weather priority, RSS, welcome) when all AI models fail.
+- `/api/chat` — validates output and tries a secondary Groq model before failing.
+
+## Dashboard Endpoint Resilience
+
+All dashboard endpoints now return structured 200 responses (not 503/404) with explicit `error` and `status` fields, so the UI never sees an empty body:
+
+- `/api/dz-agent/weather?city=...` — returns full schema with `null` values + `error` + `status: 'unavailable' | 'not_found'` on failure.
+- `/api/currency/latest` — returns `{ base, provider, rates: {}, status: 'unavailable', error }` when all sources fail.
+- `/api/dz-agent/prayer?city=...` — returns full prayer-times schema with `--` placeholders + `error` + `status: 'unavailable'` on failure.
+
 ## Running the App
 
 ```bash

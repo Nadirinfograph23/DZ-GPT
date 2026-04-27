@@ -519,6 +519,118 @@ function logKeyStats() {
   console.log(`[Groq:Stats] ${stats}`)
 }
 
+// ===== DZ AGENT RELIABILITY LAYER =====
+// Validates AI text output before returning it to the user.
+// Catches: empty / null / undefined / placeholder / too-short responses.
+function validateAIContent(text, query = '') {
+  if (text === null || text === undefined) return false
+  if (typeof text !== 'string') return false
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '')
+  cleaned = cleaned.replace(/\s+/g, ' ').trim()
+  if (cleaned.length < 5) return false
+  if (/^(null|undefined|n\/a|none|empty|---+|\.\.\.+)\s*$/i.test(cleaned)) return false
+  // Catch the model echoing the system prompt header back instead of answering
+  if (cleaned.length < 30 && /^(system|assistant|user)\s*:/i.test(cleaned)) return false
+  return true
+}
+
+// Trims chat history to keep context relevant: system messages + last N turns.
+// Removes any null/empty messages defensively.
+function trimRelevantContext(messages, maxTurns = 8) {
+  if (!Array.isArray(messages)) return []
+  const safe = messages.filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
+  const systemMsgs = safe.filter(m => m.role === 'system')
+  const nonSystem = safe.filter(m => m.role !== 'system')
+  const trimmed = nonSystem.slice(-(maxTurns * 2))
+  return [...systemMsgs, ...trimmed]
+}
+
+// Logs an empty/invalid AI response with the originating query for debugging.
+function logInvalidResponse(stage, query, raw) {
+  const preview = typeof raw === 'string' ? raw.slice(0, 80) : String(raw).slice(0, 80)
+  console.warn(`[DZ Agent:Invalid] stage=${stage} | query="${(query || '').slice(0, 80)}" | raw="${preview}"`)
+}
+
+// Calls DeepSeek with timeout protection. Returns content string or null.
+async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } = {}) {
+  const key = process.env.DEEPSEEK_API_KEY
+  if (!key) return null
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'deepseek-chat', messages, max_tokens, temperature: 0.7, stream: false }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!r.ok) {
+      console.warn(`[DeepSeek] HTTP ${r.status}`)
+      return null
+    }
+    const d = await r.json()
+    return d.choices?.[0]?.message?.content || null
+  } catch (err) {
+    console.warn('[DeepSeek] error:', err.message)
+    return null
+  }
+}
+
+// Calls Ollama proxy with timeout protection. Returns content string or null.
+async function callOllama(messages, { timeoutMs = 25000 } = {}) {
+  const url = process.env.OLLAMA_PROXY_URL
+  if (!url) return null
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const r = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'llama3', messages, stream: false }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!r.ok) return null
+    const d = await r.json()
+    return d.message?.content || null
+  } catch (err) {
+    console.warn('[Ollama] error:', err.message)
+    return null
+  }
+}
+
+// Master fallback: tries DeepSeek → Ollama → multiple Groq models.
+// Returns { content, model } where content is validated, or { content: null }.
+async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+  const trimmed = trimRelevantContext(messages, 8)
+
+  // 1. DeepSeek
+  const ds = await callDeepSeek(trimmed, { max_tokens })
+  if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
+  if (ds !== null) logInvalidResponse('deepseek', query, ds)
+
+  // 2. Ollama
+  const ol = await callOllama(trimmed)
+  if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
+  if (ol !== null) logInvalidResponse('ollama', query, ol)
+
+  // 3. Groq fallback chain
+  const fallbackModels = [
+    'llama-3.3-70b-versatile',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'qwen/qwen3-32b',
+    'llama-3.1-8b-instant',
+  ]
+  for (const model of fallbackModels) {
+    const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens })
+    if (validateAIContent(content, query)) return { content, model }
+    if (content) logInvalidResponse(`groq:${model}`, query, content)
+  }
+
+  return { content: null, model: null }
+}
+
 async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
   const allKeys = getGroqKeys()
   if (allKeys.length === 0) return { content: null, error: 'API key not configured.' }
@@ -653,9 +765,25 @@ app.post('/api/chat', async (req, res) => {
   const actualModel = groqModelMap[model] || model
 
   try {
-    const { content, error } = await callGroqWithFallback({ model: actualModel, messages })
-    if (!content) return res.status(500).json({ error: error || 'No response generated.' })
-    return res.status(200).json({ content })
+    const trimmed = trimRelevantContext(messages, 8)
+    const lastQuery = [...trimmed].reverse().find(m => m.role === 'user')?.content || ''
+    const { content, error } = await callGroqWithFallback({ model: actualModel, messages: trimmed })
+    if (validateAIContent(content, lastQuery)) {
+      return res.status(200).json({ content })
+    }
+    if (content) logInvalidResponse(`chat:${actualModel}`, lastQuery, content)
+
+    // Try a second Groq model before failing
+    const secondaryModel = actualModel === 'llama-3.3-70b-versatile'
+      ? 'llama-3.1-8b-instant'
+      : 'llama-3.3-70b-versatile'
+    const retry = await callGroqWithFallback({ model: secondaryModel, messages: trimmed })
+    if (validateAIContent(retry.content, lastQuery)) {
+      return res.status(200).json({ content: retry.content, fallbackModel: secondaryModel })
+    }
+    if (retry.content) logInvalidResponse(`chat:${secondaryModel}`, lastQuery, retry.content)
+
+    return res.status(500).json({ error: error || retry.error || 'No response generated.' })
   } catch (error) {
     console.error('Chat API error:', error)
     return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
@@ -2086,9 +2214,19 @@ async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
 }
 
 app.get('/api/dz-agent/prayer', async (req, res) => {
-  const city = req.query.city || 'Algiers'
+  const city = String(req.query.city || 'Algiers').slice(0, 80)
   const data = await fetchPrayerTimesAladhan(city)
-  if (!data) return res.status(503).json({ error: 'تعذّر جلب مواقيت الصلاة' })
+  if (!data) {
+    return res.status(200).json({
+      city,
+      country: 'Algeria',
+      source: 'unavailable',
+      date: new Date().toLocaleDateString('ar-DZ'),
+      times: { 'الفجر': '--', 'الشروق': '--', 'الظهر': '--', 'العصر': '--', 'المغرب': '--', 'العشاء': '--' },
+      error: 'تعذّر جلب مواقيت الصلاة من aladhan.com مؤقتاً',
+      status: 'unavailable',
+    })
+  }
   return res.json(data)
 })
 
@@ -2141,8 +2279,23 @@ app.get('/api/dz-agent/weather', async (req, res) => {
     return res.json(await fetchCityWeather(city))
   } catch (err) {
     console.error('[Weather] Error:', err.message)
-    const status = err.message.includes('OPENWEATHER_API_KEY') ? 503 : 404
-    return res.status(status).json({ error: err.message || 'Weather fetch failed' })
+    // Always return a structured response — never empty body. Dashboard handles `error` field gracefully.
+    const isMissingKey = err.message.includes('OPENWEATHER_API_KEY')
+    return res.status(200).json({
+      city,
+      temp: null,
+      feels_like: null,
+      temp_min: null,
+      temp_max: null,
+      condition: null,
+      icon: null,
+      humidity: null,
+      wind: null,
+      visibility: null,
+      error: isMissingKey ? 'بيانات الطقس غير متوفرة (مفتاح OpenWeather غير مهيأ)' : `تعذّر جلب الطقس لـ ${city}`,
+      status: isMissingKey ? 'unavailable' : 'not_found',
+      fetchedAt: new Date().toISOString(),
+    })
   }
 })
 
@@ -2408,7 +2561,18 @@ function buildCurrencyContext(data) {
 app.get('/api/currency/latest', async (req, res) => {
   const force = req.query.refresh === '1'
   const data = await fetchCurrencyData(force)
-  if (!data) return res.status(503).json({ error: 'Currency data unavailable', status: 'unavailable' })
+  if (!data) {
+    // Always return a structured response with empty rates rather than a 503 — keeps the dashboard alive.
+    console.warn('[Currency] No data available — returning empty structured response')
+    return res.status(200).json({
+      base: 'DZD',
+      provider: 'unavailable',
+      rates: {},
+      status: 'unavailable',
+      error: 'تعذّر جلب أسعار الصرف من جميع المصادر مؤقتاً',
+      last_update: new Date().toISOString(),
+    })
+  }
   return res.json(data)
 })
 
@@ -3524,9 +3688,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── AI response with GitHub-aware system prompt ───────────────────────────
-  const deepseekKey = process.env.DEEPSEEK_API_KEY
-  const ollamaUrl = process.env.OLLAMA_PROXY_URL
-
   const invocationInstruction = invocationMode === '@dz-gpt'
     ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ GPT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
     : invocationMode === '/github'
@@ -3855,43 +4016,18 @@ ${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━�
     ...messages,
   ]
 
-  // ── Fallback chain: DeepSeek → Ollama → Groq (multi-key auto-fallback) ───
-  if (deepseekKey) {
-    try {
-      const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${deepseekKey}` },
-        body: JSON.stringify({ model: 'deepseek-chat', messages: apiMessages, max_tokens: 3000, temperature: 0.7, stream: false }),
-      })
-      if (r.ok) {
-        const d = await r.json()
-        const content = d.choices?.[0]?.message?.content
-        if (content) return res.status(200).json({ content })
-      }
-    } catch (err) { console.error('DeepSeek error:', err.message) }
+  // ── Validated fallback chain: DeepSeek → Ollama → Groq (with response validation) ───
+  // Each step's output is validated for non-empty, meaningful content before returning.
+  // History is trimmed to last 8 turns to keep context relevant and reduce off-topic answers.
+  const aiResult = await safeGenerateAI({
+    messages: apiMessages,
+    query: lastUserMessage,
+    max_tokens: 3000,
+  })
+  if (aiResult.content) {
+    return res.status(200).json({ content: aiResult.content, fallbackModel: aiResult.model })
   }
-
-  if (ollamaUrl) {
-    try {
-      const r = await fetch(`${ollamaUrl}/api/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'llama3', messages: apiMessages, stream: false }),
-      })
-      if (r.ok) { const d = await r.json(); const c = d.message?.content; if (c) return res.status(200).json({ content: c }) }
-    } catch (err) { console.error('Ollama error:', err.message) }
-  }
-
-  // Auto-fallback across all Groq keys + models
-  const fallbackModels = [
-    'llama-3.3-70b-versatile',
-    'meta-llama/llama-4-scout-17b-16e-instruct',
-    'qwen/qwen3-32b',
-    'llama-3.1-8b-instant',
-  ]
-  for (const model of fallbackModels) {
-    const { content } = await callGroqWithFallback({ model, messages: apiMessages, max_tokens: 3000 })
-    if (content) return res.status(200).json({ content, fallbackModel: model })
-  }
+  console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
 
   if (educationalContext) {
     return res.status(200).json({

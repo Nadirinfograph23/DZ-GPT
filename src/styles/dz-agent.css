@@ -3325,3 +3325,9 @@
   .dz-deploy-toast { right: 12px; left: 12px; max-width: none; min-width: 0; }
   [dir="rtl"] .dz-deploy-toast { right: 12px; left: 12px; }
 }
+
+.dz-deploy-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

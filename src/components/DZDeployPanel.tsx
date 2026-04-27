@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Rocket, RefreshCw, CheckCircle2, AlertCircle, Loader2,
-  ExternalLink, GitBranch, Github, UploadCloud,
+  ExternalLink, GitBranch, Github, UploadCloud, KeyRound,
 } from 'lucide-react'
 
 type Lang = 'ar' | 'en' | 'fr'
@@ -84,6 +84,8 @@ const T: Record<Lang, Record<string, string>> = {
     notifTimeout: 'انتهت مهلة متابعة النشر — تحقّق من Vercel يدوياً',
     notifClose: 'إغلاق',
     notifOpen: 'فتح Vercel',
+    changeToken: 'تغيير الرمز',
+    tokenCleared: 'تم مسح الرمز. سيُطلب منك إدخاله في المرة القادمة.',
   },
   en: {
     title: 'Deploy & Sync',
@@ -117,6 +119,8 @@ const T: Record<Lang, Record<string, string>> = {
     notifTimeout: 'Deploy watch timed out — check Vercel manually',
     notifClose: 'Close',
     notifOpen: 'Open Vercel',
+    changeToken: 'Change token',
+    tokenCleared: 'Token cleared. You will be prompted again next time.',
   },
   fr: {
     title: 'Déploiement & Sync',
@@ -150,6 +154,8 @@ const T: Record<Lang, Record<string, string>> = {
     notifTimeout: 'Surveillance expirée — vérifiez Vercel manuellement',
     notifClose: 'Fermer',
     notifOpen: 'Ouvrir Vercel',
+    changeToken: 'Changer le jeton',
+    tokenCleared: 'Jeton effacé. Il sera demandé à nouveau.',
   },
 }
 
@@ -320,6 +326,11 @@ export default function DZDeployPanel({ language }: Props) {
     return token
   }, [showFeedback, t])
 
+  const clearAdminToken = useCallback(() => {
+    sessionStorage.removeItem(TOKEN_KEY)
+    showFeedback('info', t.tokenCleared)
+  }, [showFeedback, t])
+
   const triggerDeploy = useCallback(async () => {
     const token = ensureToken()
     if (!token) return
@@ -392,15 +403,25 @@ export default function DZDeployPanel({ language }: Props) {
           <Rocket size={14} />
           <span>{t.title}</span>
         </div>
-        <button
-          className="dz-deploy-refresh"
-          onClick={fetchSync}
-          disabled={loadingSync}
-          title={t.refresh}
-          aria-label={t.refresh}
-        >
-          <RefreshCw size={12} className={loadingSync ? 'dz-deploy-spin' : ''} />
-        </button>
+        <div className="dz-deploy-header-actions">
+          <button
+            className="dz-deploy-refresh"
+            onClick={clearAdminToken}
+            title={t.changeToken}
+            aria-label={t.changeToken}
+          >
+            <KeyRound size={12} />
+          </button>
+          <button
+            className="dz-deploy-refresh"
+            onClick={fetchSync}
+            disabled={loadingSync}
+            title={t.refresh}
+            aria-label={t.refresh}
+          >
+            <RefreshCw size={12} className={loadingSync ? 'dz-deploy-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       <div className={`dz-deploy-status ${statusClass}`}>

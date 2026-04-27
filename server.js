@@ -3153,6 +3153,121 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
+  // ── Natural-language GitHub action dispatch (when a repo is selected) ────
+  // Detects intent like: scan / find bugs / security / suggestions / branches
+  // / issues / PRs / stats / files even without explicit slash-commands.
+  const repoActionTriggers = {
+    securityScan: [
+      'security audit', 'security scan', 'security check', 'vulnerabilities',
+      'فحص امني', 'فحص أمني', 'الفحص الأمني', 'ثغرات', 'تدقيق امني', 'تدقيق أمني',
+      'audit de sécurité', 'analyse de sécurité', 'vulnérabilités',
+    ],
+    bugScan: [
+      'find bugs', 'find issues in code', 'detect bugs', 'check for bugs',
+      'ابحث عن اخطاء', 'ابحث عن أخطاء', 'اخطاء في الكود', 'أخطاء في الكود',
+      'كشف الاخطاء', 'كشف الأخطاء', 'الأخطاء البرمجية',
+      'trouve les bugs', 'détecter les bugs', 'erreurs dans le code',
+    ],
+    suggestImprovements: [
+      'suggest improvements', 'improvements', 'optimize code', 'best practices',
+      'اقتراحات تحسين', 'اقتراحات للتحسين', 'حسّن الكود', 'تحسينات',
+      'افضل الممارسات', 'أفضل الممارسات',
+      'suggérer des améliorations', 'optimiser le code', 'meilleures pratiques',
+    ],
+    fullScan: [
+      'scan repo', 'scan the repo', 'scan repository', 'analyze repo', 'analyze repository',
+      'review repo', 'review repository', 'audit repo', 'audit repository',
+      'افحص المستودع', 'فحص المستودع', 'افحص هذا المستودع', 'افحص الريبو',
+      'حلل المستودع', 'تحليل المستودع', 'راجع المستودع', 'مراجعة المستودع',
+      'scanner le dépôt', 'analyser le dépôt', 'vérifier le dépôt',
+    ],
+    listBranches: [
+      'list branches', 'show branches', 'all branches',
+      'اعرض الفروع', 'قائمة الفروع', 'الفروع',
+      'lister les branches', 'montrer les branches',
+    ],
+    listIssues: [
+      'list issues', 'show issues', 'open issues', 'all issues',
+      'اعرض المشاكل', 'قائمة المشاكل', 'المشاكل المفتوحة', 'مشاكل المستودع',
+      'lister les issues', 'montrer les issues', 'problèmes ouverts',
+    ],
+    listPulls: [
+      'list pull requests', 'show pull requests', 'list prs', 'show prs', 'open prs',
+      'اعرض ال pr', 'اعرض pull requests', 'قائمة الـ pr', 'الـ pr المفتوحة',
+      'lister les pr', 'montrer les pull requests',
+    ],
+    repoStats: [
+      'repo stats', 'repository stats', 'show stats', 'statistics',
+      'إحصائيات المستودع', 'احصائيات المستودع', 'احصائيات الريبو',
+      'statistiques du dépôt', 'statistiques',
+    ],
+    listFiles: [
+      'show files', 'list files', 'show structure', 'project structure', 'repo files',
+      'اعرض الملفات', 'قائمة الملفات', 'ملفات المستودع', 'هيكل المشروع', 'بنية المشروع',
+      'lister les fichiers', 'structure du projet',
+    ],
+  }
+
+  const matchTrigger = (key) => repoActionTriggers[key].some(p => lowerMsg.includes(p))
+
+  if (githubToken) {
+    // Specific scans first (more specific wins)
+    if (matchTrigger('securityScan')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🔐 لإجراء فحص أمني، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'security', content: `🔐 جاري الفحص الأمني للمستودع **${currentRepo}**...` })
+    }
+    if (matchTrigger('bugScan')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🐛 لإيجاد الأخطاء، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'bugs', content: `🐛 جاري البحث عن الأخطاء في **${currentRepo}**...` })
+    }
+    if (matchTrigger('suggestImprovements')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '💡 لاقتراح تحسينات، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'suggest', content: `💡 جاري إعداد اقتراحات التحسين لـ **${currentRepo}**...` })
+    }
+    if (matchTrigger('fullScan')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🔍 لفحص مستودع، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: '', content: `🔍 جاري الفحص الشامل للمستودع **${currentRepo}**...` })
+    }
+    if (matchTrigger('listBranches')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🌿 لعرض الفروع، اختر مستودعاً أولاً.' })
+      }
+      return res.status(200).json({ action: 'list-branches', repo: currentRepo, content: `🌿 جلب فروع **${currentRepo}**...` })
+    }
+    if (matchTrigger('listIssues')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '📋 لعرض المشاكل (Issues)، اختر مستودعاً أولاً.' })
+      }
+      return res.status(200).json({ action: 'list-issues', repo: currentRepo, content: `📋 جلب مشاكل **${currentRepo}**...` })
+    }
+    if (matchTrigger('listPulls')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🔀 لعرض Pull Requests، اختر مستودعاً أولاً.' })
+      }
+      return res.status(200).json({ action: 'list-pulls', repo: currentRepo, content: `🔀 جلب Pull Requests لـ **${currentRepo}**...` })
+    }
+    if (matchTrigger('repoStats')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '📊 لعرض الإحصائيات، اختر مستودعاً أولاً.' })
+      }
+      return res.status(200).json({ action: 'repo-stats', repo: currentRepo, content: `📊 جلب إحصائيات **${currentRepo}**...` })
+    }
+    if (matchTrigger('listFiles')) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '📂 لعرض الملفات، اختر مستودعاً أولاً.' })
+      }
+      return res.status(200).json({ action: 'list-files', repo: currentRepo, content: `📂 جلب ملفات **${currentRepo}**...` })
+    }
+  }
+
   // Detect: generate code request
   const isGenerateCode = [
     'generate', 'write a', 'create a script', 'create a function', 'write code',
@@ -4493,7 +4608,33 @@ ${filesSummary}
       temperature: 0.2,
     })
 
-    if (!result?.content) throw new Error('AI service unavailable')
+    // Graceful fallback when no AI is available — return a structural overview
+    // so the user still gets useful information instead of an empty error.
+    if (!result?.content) {
+      const overview = [
+        `## 📦 نظرة عامة على المستودع: \`${repo}\``,
+        `- **اللغة الرئيسية:** ${repoData.language || 'غير محدد'}`,
+        `- **النجوم:** ${repoData.stargazers_count} · **الفروع (Forks):** ${repoData.forks_count}`,
+        `- **الفرع الافتراضي:** \`${defaultBranch}\``,
+        `- **الوصف:** ${repoData.description || '—'}`,
+        '',
+        `### 📂 الملفات المفحوصة (${files.length})`,
+        files.map(f => `- \`${f.path}\``).join('\n') || '_لا توجد ملفات قابلة للقراءة على المستوى الجذري._',
+        '',
+        '> ⚠️ لم تتوفّر خدمة الذكاء الاصطناعي حالياً. هذه نظرة هيكلية فقط. يمكنك فتح أي ملف لقراءته أو تحليله.',
+      ].join('\n')
+      return res.status(200).json({
+        success: true,
+        repo,
+        language: repoData.language,
+        defaultBranch,
+        filesScanned: files.map(f => f.path),
+        analysis: overview,
+        stars: repoData.stargazers_count,
+        forks: repoData.forks_count,
+        aiUnavailable: true,
+      })
+    }
 
     return res.status(200).json({
       success: true,

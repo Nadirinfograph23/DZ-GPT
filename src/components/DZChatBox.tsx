@@ -1584,8 +1584,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to fetch repos')
-      addAssistantMessage({ content: `Found ${data.repos.length} repositories:`, richType: 'repos', repos: data.repos })
-      addToLog({ type: 'list-repos', description: `Listed ${data.repos.length} repositories`, status: 'success' })
+      const repoCount = Array.isArray(data.repos) ? data.repos.length : 0
+      if (repoCount === 0) {
+        addAssistantMessage({
+          content: 'لم أعثر على أي مستودعات مرتبطة بهذا الحساب. تأكد أن صلاحيات التوكن تشمل **repo** و **read:user**، أو أنشئ مستودعاً جديداً على GitHub أولاً.',
+          richType: 'text',
+        })
+      } else {
+        addAssistantMessage({
+          content: `✅ تم العثور على **${repoCount}** مستودعاً — اختر واحداً للبدء:`,
+          richType: 'repos',
+          repos: data.repos,
+        })
+      }
+      addToLog({ type: 'list-repos', description: `Listed ${repoCount} repositories`, status: 'success' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       addAssistantMessage({ content: `Failed to fetch repositories: ${msg}`, richType: 'text', isError: true })
@@ -2064,6 +2076,44 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // Build a synthetic RepoItem from a "owner/name" string when needed
+      const buildRepoItem = (full: string): RepoItem => ({
+        name: full.split('/')[1] || full,
+        full_name: full,
+        description: null,
+        language: null,
+        private: false,
+        default_branch: 'main',
+        html_url: `https://github.com/${full}`,
+      })
+
+      if (data.action === 'scan-repo' && data.repo) {
+        trackFeatureUsage('github-scan')
+        const focus = data.focus || undefined
+        await scanRepo(buildRepoItem(data.repo), focus)
+        return
+      }
+      if (data.action === 'list-branches' && data.repo) {
+        trackFeatureUsage('github-branches')
+        await fetchBranches(buildRepoItem(data.repo))
+        return
+      }
+      if (data.action === 'list-issues' && data.repo) {
+        trackFeatureUsage('github-issues')
+        await fetchIssues(buildRepoItem(data.repo))
+        return
+      }
+      if (data.action === 'list-pulls' && data.repo) {
+        trackFeatureUsage('github-pulls')
+        await fetchPulls(buildRepoItem(data.repo))
+        return
+      }
+      if (data.action === 'repo-stats' && data.repo) {
+        trackFeatureUsage('github-stats')
+        await fetchStats(buildRepoItem(data.repo))
+        return
+      }
+
       if (data.pendingAction) {
         addAssistantMessage({
           content: data.content || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
@@ -2085,7 +2135,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, fetchRepos, fetchFiles, fetchFileContent, addAssistantMessage])
+  }, [input, isLoading, messages, githubToken, currentRepo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return

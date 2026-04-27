@@ -2426,6 +2426,312 @@ app.get('/api/dz-agent/lfp', async (_req, res) => {
   res.json(data)
 })
 
+// ===== TASK 4 — ALGERIAN LEAGUE STANDINGS (kooora.com) =====
+const STANDINGS_CACHE = { data: null, ts: 0 }
+const STANDINGS_TTL = 30 * 60 * 1000 // 30 min
+
+async function fetchAlgerianStandings() {
+  if (STANDINGS_CACHE.data && Date.now() - STANDINGS_CACHE.ts < STANDINGS_TTL) {
+    return STANDINGS_CACHE.data
+  }
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  const sources = [
+    'https://www.kooora.com/?l=108',
+    'https://www.kooora.com/كرة-القدم/دولة/الجزائر/جدول/alg',
+  ]
+  for (const url of sources) {
+    try {
+      const r = await fetch(url, {
+        headers: { 'User-Agent': UA, 'Accept-Language': 'ar,fr;q=0.9', 'Accept': 'text/html,*/*' },
+        signal: AbortSignal.timeout(12000),
+      })
+      if (!r.ok) continue
+      const html = await r.text()
+      const rows = []
+      // Extract table rows — kooora uses <tr class="..."> with td cells
+      const tableMatch = html.match(/<table[^>]*standings[^>]*>([\s\S]*?)<\/table>/i)
+        || html.match(/<table[^>]*league-table[^>]*>([\s\S]*?)<\/table>/i)
+        || html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)
+      if (tableMatch) {
+        const tbody = tableMatch[1]
+        const trs = [...tbody.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+        for (const tr of trs) {
+          const tds = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
+            m[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim()
+          ).filter(Boolean)
+          if (tds.length >= 7) {
+            rows.push({
+              rank: tds[0] || '',
+              team: tds[1] || tds[2] || '',
+              played: tds[2] || tds[3] || '',
+              wins: tds[3] || tds[4] || '',
+              draws: tds[4] || tds[5] || '',
+              losses: tds[5] || tds[6] || '',
+              points: tds[tds.length - 1] || '',
+            })
+          }
+        }
+      }
+      // Fallback: extract any table-like data
+      if (rows.length === 0) {
+        const trMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+        let inTable = false
+        for (const tr of trMatches) {
+          const text = tr[1].replace(/<[^>]+>/g, '').trim()
+          if (/الدوري|المركز|الفريق|نقطة|pts|pos/i.test(text)) { inTable = true; continue }
+          if (!inTable) continue
+          const tds = [...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
+            m[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim()
+          ).filter(Boolean)
+          if (tds.length >= 5 && /^\d+$/.test(tds[0])) {
+            rows.push({ rank: tds[0], team: tds[1] || '', played: tds[2] || '', wins: tds[3] || '', draws: tds[4] || '', losses: tds[5] || '', points: tds[tds.length - 1] || '' })
+            if (rows.length >= 20) break
+          }
+        }
+      }
+      if (rows.length > 0) {
+        const data = { standings: rows, source: 'kooora.com', fetchedAt: new Date().toISOString() }
+        STANDINGS_CACHE.data = data
+        STANDINGS_CACHE.ts = Date.now()
+        console.log(`[Standings] Fetched ${rows.length} teams from kooora.com`)
+        return data
+      }
+    } catch (err) {
+      console.warn('[Standings] Error fetching from', url, ':', err.message)
+    }
+  }
+
+  // Fallback: use LFP match data to infer a basic standings
+  try {
+    const lfp = await fetchLFPData()
+    if (lfp?.matches?.length > 0) {
+      const teams = {}
+      for (const m of lfp.matches.filter(x => x.played)) {
+        const home = m.home; const away = m.away
+        if (!home || !away) continue
+        if (!teams[home]) teams[home] = { team: home, played: 0, wins: 0, draws: 0, losses: 0, points: 0 }
+        if (!teams[away]) teams[away] = { team: away, played: 0, wins: 0, draws: 0, losses: 0, points: 0 }
+        const hS = Number(m.homeScore); const aS = Number(m.awayScore)
+        if (isNaN(hS) || isNaN(aS)) continue
+        teams[home].played++; teams[away].played++
+        if (hS > aS) { teams[home].wins++; teams[home].points += 3; teams[away].losses++ }
+        else if (hS < aS) { teams[away].wins++; teams[away].points += 3; teams[home].losses++ }
+        else { teams[home].draws++; teams[home].points++; teams[away].draws++; teams[away].points++ }
+      }
+      const sorted = Object.values(teams).sort((a, b) => b.points - a.points || b.wins - a.wins)
+      const standings = sorted.map((t, i) => ({ rank: String(i + 1), team: t.team, played: String(t.played), wins: String(t.wins), draws: String(t.draws), losses: String(t.losses), points: String(t.points) }))
+      const data = { standings, source: 'lfp.dz (calculated)', fetchedAt: new Date().toISOString() }
+      STANDINGS_CACHE.data = data
+      STANDINGS_CACHE.ts = Date.now()
+      return data
+    }
+  } catch {}
+
+  return STANDINGS_CACHE.data || { standings: [], source: 'unavailable', fetchedAt: new Date().toISOString() }
+}
+
+app.get('/api/dz-agent/standings', async (_req, res) => {
+  try {
+    const data = await fetchAlgerianStandings()
+    res.json(data)
+  } catch (err) {
+    console.error('[Standings] Endpoint error:', err.message)
+    res.json({ standings: [], source: 'error', fetchedAt: new Date().toISOString() })
+  }
+})
+
+// ===== TASK 5 — GLOBAL LEAGUES CALENDAR (SofaScore + RSS) =====
+app.get('/api/dz-agent/global-leagues', async (req, res) => {
+  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  try {
+    const [sfResult, rssResult] = await Promise.allSettled([
+      fetchSofaScoreFootball(dateStr),
+      fetchMultipleFeeds(INTL_FOOTBALL_FEEDS),
+    ])
+    const sfData = sfResult.status === 'fulfilled' ? sfResult.value : null
+    const rss = rssResult.status === 'fulfilled' ? rssResult.value : []
+
+    // Group SofaScore matches by league for structured output
+    const leagueMap = {}
+    if (sfData?.matches) {
+      for (const m of sfData.matches) {
+        const league = m.competition || m.country || 'Other'
+        if (!leagueMap[league]) leagueMap[league] = []
+        leagueMap[league].push(m)
+      }
+    }
+    const leagues = Object.entries(leagueMap)
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, 10)
+      .map(([name, matches]) => ({ name, matches: matches.slice(0, 6) }))
+
+    return res.json({
+      leagues,
+      rssNews: (rss || []).slice(0, 10),
+      date: dateStr,
+      fetchedAt: new Date().toISOString(),
+      source: sfData ? 'sofascore' : 'rss',
+    })
+  } catch (err) {
+    console.error('[GlobalLeagues] Error:', err.message)
+    return res.json({ leagues: [], rssNews: [], date: dateStr, fetchedAt: new Date().toISOString(), source: 'error' })
+  }
+})
+
+// ===== TASK 6 — RESOURCE INJECTION LAYER (weekly cron cache) =====
+const RESOURCE_CACHE = { data: null, ts: 0 }
+const RESOURCE_CACHE_TTL = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+const RESOURCE_SOURCES = [
+  { category: 'github-trending', url: 'https://github.com/trending', label: 'GitHub Trending' },
+  { category: 'public-apis', url: 'https://raw.githubusercontent.com/public-apis/public-apis/master/README.md', label: 'Public APIs' },
+  { category: 'ai-tools', url: 'https://huggingface.co', label: 'HuggingFace' },
+  { category: 'docs', url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript', label: 'MDN JavaScript' },
+]
+
+async function fetchAndCacheResources() {
+  if (RESOURCE_CACHE.data && Date.now() - RESOURCE_CACHE.ts < RESOURCE_CACHE_TTL) {
+    return RESOURCE_CACHE.data
+  }
+  const results = {}
+  for (const src of RESOURCE_SOURCES) {
+    try {
+      const r = await fetch(src.url, {
+        headers: { 'User-Agent': 'DZ-GPT-Agent/1.0', 'Accept': 'text/html,text/plain,*/*' },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!r.ok) continue
+      const text = await r.text()
+      // Extract meaningful links and titles
+      const links = [...text.matchAll(/href="(https?:\/\/[^"]+)"/gi)].map(m => m[1]).slice(0, 20)
+      const titles = [...text.matchAll(/<h[1-3][^>]*>([^<]{5,80})<\/h[1-3]>/gi)].map(m => m[1].trim()).slice(0, 10)
+      results[src.category] = {
+        label: src.label,
+        url: src.url,
+        links: [...new Set(links)].slice(0, 10),
+        titles: [...new Set(titles)].slice(0, 8),
+        fetchedAt: new Date().toISOString(),
+      }
+    } catch (err) {
+      console.warn(`[Resources] Failed to fetch ${src.label}:`, err.message)
+    }
+  }
+  RESOURCE_CACHE.data = results
+  RESOURCE_CACHE.ts = Date.now()
+  console.log(`[Resources] Injected ${Object.keys(results).length} resource categories`)
+  return results
+}
+
+app.get('/api/dz-agent/resources', async (_req, res) => {
+  try {
+    const data = await fetchAndCacheResources()
+    res.json({ resources: data, fetchedAt: new Date().toISOString() })
+  } catch (err) {
+    console.error('[Resources] Endpoint error:', err.message)
+    res.json({ resources: {}, fetchedAt: new Date().toISOString() })
+  }
+})
+
+// ===== TASK 7 — GITHUB FILE CREATE/UPDATE (Octokit-compatible REST) =====
+app.post('/api/dz-agent/github/create-file', async (req, res) => {
+  const { repo, path: filePath, content, message, branch = 'main' } = req.body
+  if (!repo || !filePath || !content || !message) {
+    return res.status(400).json({ error: 'repo, path, content, message are required.' })
+  }
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo format.' })
+  if (!isValidGithubPath(filePath)) return res.status(400).json({ error: 'Invalid file path.' })
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN not configured.' })
+
+  try {
+    // Check if file exists (to get its SHA for update)
+    let sha = undefined
+    const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`, {
+      headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0', Accept: 'application/vnd.github+json' },
+    })
+    if (checkRes.ok) {
+      const existing = await checkRes.json()
+      sha = existing.sha
+    }
+
+    const body = {
+      message: sanitizeString(message, 500),
+      content: Buffer.from(content).toString('base64'),
+      branch,
+    }
+    if (sha) body.sha = sha
+
+    const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0', 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    })
+    const result = await putRes.json()
+    if (!putRes.ok) {
+      return res.status(putRes.status).json({ error: result.message || 'GitHub file write failed.' })
+    }
+    return res.json({
+      success: true,
+      action: sha ? 'updated' : 'created',
+      path: filePath,
+      repo,
+      branch,
+      sha: result.content?.sha,
+      url: result.content?.html_url,
+      commit: result.commit?.sha,
+    })
+  } catch (err) {
+    console.error('[GitHub:create-file] Error:', err.message)
+    return res.status(500).json({ error: `GitHub file operation failed: ${err.message}` })
+  }
+})
+
+// ===== TASK 9 — ENHANCED INTENT ENGINE (create/update/fix/optimize) =====
+// Exposed as a utility endpoint for frontend intent mapping
+app.post('/api/dz-agent/detect-intent', (req, res) => {
+  const message = sanitizeString(req.body.message || '', 1000)
+  if (!message) return res.status(400).json({ error: 'message required' })
+
+  const lower = normalizeQuery(message)
+  const intentMap = {
+    create: ['انشئ', 'اصنع', 'اكتب', 'create', 'generate', 'write', 'make', 'أنشئ', 'créer', 'générer'],
+    update: ['عدّل', 'حدّث', 'غيّر', 'update', 'modify', 'change', 'edit', 'modifier', 'changer'],
+    fix: ['صلح', 'أصلح', 'fix', 'repair', 'debug', 'solve', 'corriger', 'résoudre', 'حل مشكلة'],
+    optimize: ['حسّن', 'اسرّع', 'optimize', 'improve', 'refactor', 'speed up', 'optimiser', 'améliorer'],
+    search: ['ابحث', 'search', 'find', 'cherche', 'أبحث', 'قارن', 'explain'],
+    deploy: ['انشر', 'deploy', 'publish', 'launch', 'déployer', 'push'],
+    read: ['اقرأ', 'اعرض', 'show', 'read', 'view', 'list', 'montrer', 'afficher'],
+  }
+
+  let detectedIntent = 'general'
+  for (const [intent, patterns] of Object.entries(intentMap)) {
+    if (patterns.some(p => lower.includes(p))) {
+      detectedIntent = intent
+      break
+    }
+  }
+
+  // Dashboard card mapping (Task 1)
+  const dashboardMap = {
+    weather: ['الطقس', 'weather', 'température', 'حرارة', 'جو'],
+    currency: ['صرف', 'دولار', 'يورو', 'currency', 'euro', 'dollar', 'dzd'],
+    sports: ['مباراة', 'دوري', 'كرة', 'football', 'soccer', 'match', 'lfp'],
+    standings: ['ترتيب', 'جدول', 'standings', 'classement', 'نقاط'],
+    global: ['بريميرليغ', 'ليغا', 'champions', 'premier league', 'la liga', 'دوريات'],
+  }
+
+  let dashboardTarget = null
+  for (const [card, patterns] of Object.entries(dashboardMap)) {
+    if (patterns.some(p => lower.includes(p))) {
+      dashboardTarget = card
+      break
+    }
+  }
+
+  return res.json({ intent: detectedIntent, dashboardTarget, message, normalized: lower })
+})
+
 // ===== FOOTBALL INTELLIGENCE ENDPOINT =====
 app.get('/api/dz-agent/football', async (req, res) => {
   const dateStr = req.query.date || new Date().toISOString().split('T')[0]
@@ -2961,12 +3267,12 @@ app.post('/api/dz-agent/sync', async (req, res) => {
       return res.status(400).json({ error: 'Detached HEAD — please checkout a branch first.' })
     }
 
-    // Ensure user.email/name are configured for the commit
-    try { await runGit(['config', 'user.email']) } catch {
-      await runGit(['config', 'user.email', 'dz-agent@replit.local'])
-    }
-    try { await runGit(['config', 'user.name']) } catch {
-      await runGit(['config', 'user.name', 'DZ Agent (Replit)'])
+    // Use GIT_* env vars for identity to avoid needing git config write access
+    const GIT_IDENTITY_ENV = {
+      GIT_AUTHOR_NAME: 'DZ Agent (Replit)',
+      GIT_AUTHOR_EMAIL: 'dz-agent@replit.local',
+      GIT_COMMITTER_NAME: 'DZ Agent (Replit)',
+      GIT_COMMITTER_EMAIL: 'dz-agent@replit.local',
     }
 
     // Stage + commit only if there are working-tree changes
@@ -2975,7 +3281,7 @@ app.post('/api/dz-agent/sync', async (req, res) => {
     if (statusOut.trim()) {
       await runGit(['add', '-A'])
       try {
-        await runGit(['commit', '-m', safeMessage])
+        await runGit(['commit', '-m', safeMessage], { env: GIT_IDENTITY_ENV })
         didCommit = true
       } catch (commitErr) {
         const text = String(commitErr?.stderr || commitErr?.stdout || commitErr?.message || '')
@@ -7069,6 +7375,17 @@ if (isMain) {
       .then(index => console.log(`[Eddirasa] Scheduled index update complete: ${index.lessons.length} lessons`))
       .catch(err => console.warn('[Eddirasa] Scheduled index update failed:', err.message))
   }, 24 * 60 * 60 * 1000)
+
+  // Task 6 — Resource Injection Layer: weekly cron
+  fetchAndCacheResources()
+    .then(r => console.log(`[Resources] Initial injection: ${Object.keys(r).length} categories`))
+    .catch(err => console.warn('[Resources] Initial injection failed:', err.message))
+  setInterval(() => {
+    RESOURCE_CACHE.ts = 0 // force refresh
+    fetchAndCacheResources()
+      .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
+      .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
+  }, 7 * 24 * 60 * 60 * 1000)
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

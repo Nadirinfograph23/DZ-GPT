@@ -366,11 +366,17 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const [syncStatus, setSyncStatus] = useState<SyncStatusData | null>(null)
   const [syncLoading, setSyncLoading] = useState(false)
 
+  const [standingsData, setStandingsData] = useState<{ standings: { rank: string; team: string; played: string; wins: string; draws: string; losses: string; points: string }[]; source: string; fetchedAt: string } | null>(null)
+  const [standingsLoading, setStandingsLoading] = useState(false)
+
+  const [globalLeagues, setGlobalLeagues] = useState<{ leagues: { name: string; matches: { homeTeam: string; awayTeam: string; homeScore: number | null; awayScore: number | null; statusType: string; startTime: string; link: string }[] }[]; date: string; source: string } | null>(null)
+  const [globalLoading, setGlobalLoading] = useState(false)
+
   // Welcome toast
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
   const [welcomeVisible, setWelcomeVisible] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'tech' | 'currency' | 'sync' | 'quran'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'sync' | 'quran'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -461,6 +467,40 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
+  const loadStandings = useCallback(async () => {
+    setStandingsLoading(true)
+    try {
+      const result = await withRetry(async () => {
+        const r = await fetch('/api/dz-agent/standings')
+        if (!r.ok) throw new Error(`Standings API error: ${r.status}`)
+        return r.json()
+      }, 2)
+      setStandingsData(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadStandings failed:', err)
+      setStandingsData(null)
+    } finally {
+      setStandingsLoading(false)
+    }
+  }, [])
+
+  const loadGlobalLeagues = useCallback(async () => {
+    setGlobalLoading(true)
+    try {
+      const result = await withRetry(async () => {
+        const r = await fetch('/api/dz-agent/global-leagues')
+        if (!r.ok) throw new Error(`Global leagues API error: ${r.status}`)
+        return r.json()
+      }, 2)
+      setGlobalLeagues(result)
+    } catch (err) {
+      console.error('[DZDashboard] loadGlobalLeagues failed:', err)
+      setGlobalLeagues(null)
+    } finally {
+      setGlobalLoading(false)
+    }
+  }, [])
+
   const changeCity = useCallback((city: string) => {
     saveCity(city)
     setShowPicker(false)
@@ -516,6 +556,8 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     loadWeather(selectedCity)
     loadCurrency()
     loadSyncStatus()
+    loadStandings()
+    loadGlobalLeagues()
   }, [])
 
   const tabs = [
@@ -523,7 +565,9 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     { key: 'prayer' as const, label: 'مواقيت الصلاة', icon: '🕌' },
     { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
     { key: 'news' as const, label: 'الأخبار', icon: '📰' },
-    { key: 'sports' as const, label: 'الرزنامة الرياضية', icon: '⚽' },
+    { key: 'sports' as const, label: 'الدوري الجزائري', icon: '⚽' },
+    { key: 'standings' as const, label: 'الترتيب', icon: '🏆' },
+    { key: 'global' as const, label: 'الدوريات العالمية', icon: '🌍' },
     { key: 'tech' as const, label: 'الأخبار التقنية', icon: '💻' },
     { key: 'currency' as const, label: 'أسعار الصرف', icon: '💱' },
     { key: 'sync' as const, label: 'التزامن', icon: '🔄' },
@@ -608,10 +652,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus() }}
+          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus(); loadStandings(); loadGlobalLeagues() }}
           title="تحديث"
         >
-          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || syncLoading) ? 'dzd-spin' : ''} />
+          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || syncLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
         </button>
       </div>
 
@@ -824,21 +868,35 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
           </div>
         )}
 
-        {/* ===== SPORTS ===== */}
+        {/* ===== SPORTS — الدوري الجزائري ===== */}
         {activeSection === 'sports' && (
           <div className="dzd-sports-panel">
+            <div className="dzd-sports-header" style={{ display: 'flex', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
+              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هو ترتيب الدوري الجزائري المحترف؟')}>
+                🏆 الترتيب
+              </button>
+              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هي مباريات الدوري الجزائري القادمة؟')}>
+                📅 المباريات القادمة
+              </button>
+              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هي نتائج مباريات الدوري الجزائري الأخيرة؟')}>
+                ✅ النتائج
+              </button>
+            </div>
             {loading ? (
               <div className="dzd-match-list">
                 {[...Array(4)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--match" />)}
               </div>
             ) : (visibleMatches.length === 0 && data?.sports?.length === 0) ? (
-              <div className="dzd-empty-state">لا توجد رزنامة رياضية حالياً</div>
+              <div className="dzd-empty-state">
+                <p>لا توجد بيانات حالياً</p>
+                <button className="dzd-retry-btn" onClick={loadDashboard}>إعادة المحاولة</button>
+              </div>
             ) : (
               <>
                 {visibleMatches.length > 0 && (
                   <div className="dzd-match-list">
                     {visibleMatches.map((match, i) => (
-                      <div key={`${match.home}-${match.away}-${i}`} className={`dzd-match-card ${match.played ? 'dzd-match-card--played' : ''}`} onClick={() => onSend(`الرزنامة الرياضية: ${match.home} ضد ${match.away}`)}>
+                      <div key={`${match.home}-${match.away}-${i}`} className={`dzd-match-card ${match.played ? 'dzd-match-card--played' : ''}`} onClick={() => onSend(`الدوري الجزائري: ${match.home} ضد ${match.away}`)}>
                         <div className="dzd-match-meta">
                           <span><Trophy size={10} /> {match.round || 'الرابطة المحترفة'}</span>
                           <span>{match.played ? 'نتيجة' : 'قادمة'}</span>
@@ -887,6 +945,123 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {/* ===== STANDINGS — جدول الترتيب ===== */}
+        {activeSection === 'standings' && (
+          <div className="dzd-sports-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0' }}>
+              <span>🏆 ترتيب الدوري الجزائري المحترف</span>
+              {standingsData?.source && <span style={{ fontSize: '10px' }}>المصدر: {standingsData.source}</span>}
+            </div>
+            {standingsLoading ? (
+              <div className="dzd-match-list">
+                {[...Array(6)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--match" />)}
+              </div>
+            ) : standingsData?.standings && standingsData.standings.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', direction: 'rtl' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#a0a0b0' }}>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>#</th>
+                      <th style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>الفريق</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>ل</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>ف</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>ت</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600 }}>خ</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, color: '#34d399' }}>ن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standingsData.standings.slice(0, 20).map((row, i) => (
+                      <tr
+                        key={i}
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }}
+                        onClick={() => onSend(`أخبار ${row.team} في الدوري الجزائري`)}
+                      >
+                        <td style={{ padding: '6px 4px', textAlign: 'center', color: i < 3 ? '#34d399' : i >= (standingsData.standings.length - 3) ? '#f87171' : '#a0a0b0', fontWeight: 700 }}>{row.rank || i + 1}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{row.team}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center', color: '#a0a0b0' }}>{row.played}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center', color: '#34d399' }}>{row.wins}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center', color: '#facc15' }}>{row.draws}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center', color: '#f87171' }}>{row.losses}</td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 700, color: '#34d399' }}>{row.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="dzd-empty-state">
+                <p>جاري جلب جدول الترتيب...</p>
+                <button className="dzd-retry-btn" onClick={loadStandings}>إعادة المحاولة</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== GLOBAL LEAGUES — الدوريات العالمية ===== */}
+        {activeSection === 'global' && (
+          <div className="dzd-sports-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0' }}>
+              <span>🌍 الدوريات العالمية — {globalLeagues?.date || new Date().toLocaleDateString('ar-DZ')}</span>
+              {globalLeagues?.source && <span style={{ fontSize: '10px' }}>المصدر: {globalLeagues.source}</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              {['بريميرليغ', 'ليغا', 'تشامبيونز ليغ', 'بوندسليغا', 'سيريا إيه'].map(league => (
+                <button key={league} className="dzd-retry-btn" style={{ fontSize: '11px', padding: '3px 8px' }} onClick={() => onSend(`مباريات ${league} اليوم`)}>
+                  {league}
+                </button>
+              ))}
+            </div>
+            {globalLoading ? (
+              <div className="dzd-match-list">
+                {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--match" />)}
+              </div>
+            ) : globalLeagues?.leagues && globalLeagues.leagues.length > 0 ? (
+              <div className="dzd-match-list">
+                {globalLeagues.leagues.map((league, li) => (
+                  <div key={li} style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#a78bfa', padding: '4px 0', borderBottom: '1px solid rgba(167,139,250,0.2)', marginBottom: '6px' }}>
+                      🏟️ {league.name}
+                    </div>
+                    {league.matches.map((match, mi) => (
+                      <div
+                        key={mi}
+                        className={`dzd-match-card ${match.statusType === 'finished' ? 'dzd-match-card--played' : ''}`}
+                        onClick={() => onSend(`${match.homeTeam} ضد ${match.awayTeam} ${league.name}`)}
+                        style={{ marginBottom: '4px' }}
+                      >
+                        <div className="dzd-match-teams" style={{ fontSize: '12px' }}>
+                          <span>{match.homeTeam}</span>
+                          <strong style={{ color: match.statusType === 'inprogress' ? '#f87171' : undefined }}>
+                            {match.statusType === 'notstarted'
+                              ? (match.startTime || 'VS')
+                              : `${match.homeScore ?? 0} - ${match.awayScore ?? 0}`}
+                          </strong>
+                          <span>{match.awayTeam}</span>
+                        </div>
+                        {match.statusType === 'inprogress' && (
+                          <div style={{ textAlign: 'center', fontSize: '10px', color: '#f87171', marginTop: '2px' }}>🔴 جارية الآن</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dzd-empty-state">
+                <p>لا توجد مباريات متاحة حالياً</p>
+                <button className="dzd-retry-btn" onClick={loadGlobalLeagues}>إعادة المحاولة</button>
+                <p style={{ fontSize: '11px', color: '#a0a0b0', marginTop: '8px' }}>اسأل DZ Agent عن أي دوري:</p>
+                {['بريميرليغ اليوم', 'ليغا اليوم', 'دوري أبطال أوروبا'].map(q => (
+                  <button key={q} className="dzd-retry-btn" style={{ margin: '2px', fontSize: '11px' }} onClick={() => onSend(q)}>
+                    {q}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         )}

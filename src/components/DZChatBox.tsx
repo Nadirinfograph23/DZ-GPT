@@ -1467,6 +1467,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         setGithubToken(token)
         sessionStorage.setItem('dz-agent-gh-token', token)
         localStorage.removeItem('dz-agent-gh-token')
+        try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
         window.history.replaceState(null, '', '/dz-agent')
         // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
@@ -1543,6 +1544,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setGithubToken(t)
     sessionStorage.setItem('dz-agent-gh-token', t)
     localStorage.removeItem('dz-agent-gh-token')
+    try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
   }, [])
 
   const clearToken = useCallback(() => {
@@ -1552,6 +1554,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setShowGhMenu(false)
     sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
+    try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
   }, [])
 
   const copyMessage = useCallback((id: string, content: string) => {

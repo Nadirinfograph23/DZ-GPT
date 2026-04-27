@@ -141,6 +141,34 @@ export default function DZDeployPanel({ language }: Props) {
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null)
   const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [githubConnected, setGithubConnected] = useState<boolean>(() => {
+    try { return !!sessionStorage.getItem('dz-agent-gh-token') } catch { return false }
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/dz-agent/github/status')
+      .then(r => r.json())
+      .then(d => { if (!cancelled && d?.connected) setGithubConnected(true) })
+      .catch(() => {})
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dz-agent-gh-token') {
+        setGithubConnected(!!e.newValue)
+      }
+    }
+    const onTokenChange = () => {
+      try { setGithubConnected(!!sessionStorage.getItem('dz-agent-gh-token')) } catch {}
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('dz-agent-gh-token-change', onTokenChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('dz-agent-gh-token-change', onTokenChange)
+    }
+  }, [])
+
   const showFeedback = useCallback((kind: 'ok' | 'err' | 'info', text: string, duration = 6000) => {
     setFeedback({ kind, text })
     if (fbTimer.current) clearTimeout(fbTimer.current)
@@ -164,9 +192,9 @@ export default function DZDeployPanel({ language }: Props) {
   }, [])
 
   useEffect(() => {
-    fetchSync()
+    if (githubConnected) fetchSync()
     return () => { if (fbTimer.current) clearTimeout(fbTimer.current) }
-  }, [fetchSync])
+  }, [fetchSync, githubConnected])
 
   const ensureToken = useCallback((): string | null => {
     let token = sessionStorage.getItem(TOKEN_KEY) || ''
@@ -249,6 +277,8 @@ export default function DZDeployPanel({ language }: Props) {
 
   const syncAvailable = capability?.available && capability?.hasGithubToken
   const pendingChanges = capability?.pendingTotal ?? capability?.changedFiles ?? 0
+
+  if (!githubConnected) return null
 
   return (
     <div className="dz-deploy-panel" dir={language === 'ar' ? 'rtl' : 'ltr'}>

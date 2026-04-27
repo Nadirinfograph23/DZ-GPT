@@ -2913,6 +2913,9 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
     return res.json({
       available: true,
       hasGithubToken: !!process.env.GITHUB_TOKEN,
+      hasVercelToken: !!process.env.VERCEL_TOKEN,
+      hasDeployAdminToken: !!process.env.DEPLOY_ADMIN_TOKEN,
+      deployReady: !!(process.env.GITHUB_TOKEN && process.env.VERCEL_TOKEN && process.env.DEPLOY_ADMIN_TOKEN),
       branch: branch || null,
       changedFiles,
       unpushedCommits,
@@ -2922,7 +2925,14 @@ app.get('/api/dz-agent/sync/status', async (_req, res) => {
       runtime: process.env.VERCEL ? 'vercel' : 'replit',
     })
   } catch {
-    return res.json({ available: false, hasGithubToken: !!process.env.GITHUB_TOKEN, runtime: process.env.VERCEL ? 'vercel' : 'unknown' })
+    return res.json({
+      available: false,
+      hasGithubToken: !!process.env.GITHUB_TOKEN,
+      hasVercelToken: !!process.env.VERCEL_TOKEN,
+      hasDeployAdminToken: !!process.env.DEPLOY_ADMIN_TOKEN,
+      deployReady: !!(process.env.GITHUB_TOKEN && process.env.VERCEL_TOKEN && process.env.DEPLOY_ADMIN_TOKEN),
+      runtime: process.env.VERCEL ? 'vercel' : 'unknown',
+    })
   }
 })
 
@@ -3029,39 +3039,53 @@ app.post('/api/dz-agent/sync', async (req, res) => {
 
 app.post('/api/dz-agent/deploy', async (req, res) => {
   if (!hasDeployAuthorization(req)) {
-    return res.status(403).json({ error: 'Deploy endpoint is restricted.' })
+    return res.status(403).json({ error: 'رمز النشر غير صحيح أو غير مهيأ على الخادم (DEPLOY_ADMIN_TOKEN).' })
   }
   const vercelToken = process.env.VERCEL_TOKEN
   const githubToken = process.env.GITHUB_TOKEN
-  if (!vercelToken) return res.status(500).json({ error: 'VERCEL_TOKEN not configured.' })
+  const missing = []
+  if (!vercelToken) missing.push('VERCEL_TOKEN')
+  if (!githubToken) missing.push('GITHUB_TOKEN')
+  if (missing.length) {
+    return res.status(500).json({
+      error: `الأسرار التالية غير مهيأة على الخادم: ${missing.join(', ')}. أضفها في لوحة Secrets ثم أعد المحاولة.`,
+      missing,
+    })
+  }
 
   try {
-    // Get latest commit SHA on the deploy branch
-    let sha = null
-    if (githubToken) {
-      const branchRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}/git/ref/heads/${encodeURIComponent(VERCEL_DEPLOY_BRANCH)}`, {
-        headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+    // Get GitHub repo ID (required for Vercel git-source deploys)
+    const repoRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}`, {
+      headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+    })
+    const repoData = await repoRes.json().catch(() => ({}))
+    if (!repoRes.ok || !repoData.id) {
+      return res.status(repoRes.status || 502).json({
+        error: `تعذّر الوصول إلى مستودع GitHub (${VERCEL_GITHUB_REPO}): ${repoData?.message || repoRes.statusText}`,
+        stage: 'github-repo-lookup',
       })
-      const branchData = await branchRes.json()
-      sha = branchData?.object?.sha || null
     }
+    const repoId = String(repoData.id)
 
-    // Get GitHub repo ID
-    let repoId = null
-    if (githubToken) {
-      const repoRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}`, {
-        headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+    // Get latest commit SHA on the deploy branch
+    const branchRes = await fetch(`https://api.github.com/repos/${VERCEL_GITHUB_REPO}/git/ref/heads/${encodeURIComponent(VERCEL_DEPLOY_BRANCH)}`, {
+      headers: { Authorization: `token ${githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
+    })
+    const branchData = await branchRes.json().catch(() => ({}))
+    if (!branchRes.ok || !branchData?.object?.sha) {
+      return res.status(branchRes.status || 502).json({
+        error: `تعذّر إيجاد فرع GitHub (${VERCEL_DEPLOY_BRANCH}): ${branchData?.message || branchRes.statusText}`,
+        stage: 'github-branch-lookup',
       })
-      const repoData = await repoRes.json()
-      repoId = String(repoData.id)
     }
+    const sha = branchData.object.sha
 
     // Create new production deployment from GitHub
     const deployBody = {
       name: 'dz-gpt',
       project: VERCEL_PROJECT_ID,
       target: 'production',
-      ...(repoId && { gitSource: { type: 'github', repoId, ref: VERCEL_DEPLOY_BRANCH, ...(sha && { sha }) } }),
+      gitSource: { type: 'github', repoId, ref: VERCEL_DEPLOY_BRANCH, sha },
     }
 
     const r = await fetch('https://api.vercel.com/v13/deployments', {
@@ -3070,17 +3094,31 @@ app.post('/api/dz-agent/deploy', async (req, res) => {
       body: JSON.stringify(deployBody),
     })
     const d = await r.json().catch(() => ({}))
-    if (!r.ok) return res.status(r.status).json({ error: d.error?.message || 'Deploy failed.', detail: d })
+    if (!r.ok) {
+      const vercelMsg = d?.error?.message || d?.message || r.statusText || 'Vercel deploy failed.'
+      return res.status(r.status).json({
+        error: `فشل Vercel: ${vercelMsg}`,
+        stage: 'vercel-create-deployment',
+        vercelStatus: r.status,
+        detail: d,
+      })
+    }
     return res.json({
       success: true,
       message: 'Vercel deploy triggered successfully.',
       url: `https://${d.url || 'dz-gpt.vercel.app'}`,
       production: 'https://dz-gpt.vercel.app',
       deploymentId: d.id,
+      sha,
+      shortSha: sha.slice(0, 8),
+      branch: VERCEL_DEPLOY_BRANCH,
     })
   } catch (err) {
     console.error('Vercel deploy error:', err)
-    return res.status(500).json({ error: 'Failed to trigger deploy.' })
+    return res.status(500).json({
+      error: `استثناء أثناء النشر: ${err?.message || 'unknown'}`,
+      stage: 'exception',
+    })
   }
 })
 

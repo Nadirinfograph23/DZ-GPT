@@ -383,11 +383,12 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     setSelectedCity(city)
   }, [])
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (opts: { force?: boolean } = {}) => {
     setLoading(true)
     try {
+      const url = opts.force ? '/api/dz-agent/dashboard?bypassCache=1' : '/api/dz-agent/dashboard'
       const result = await withRetry(async () => {
-        const r = await fetch('/api/dz-agent/dashboard')
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Dashboard API error: ${r.status}`)
         return r.json()
       }, 1)
@@ -484,11 +485,12 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
-  const loadGlobalLeagues = useCallback(async () => {
+  const loadGlobalLeagues = useCallback(async (opts: { force?: boolean } = {}) => {
     setGlobalLoading(true)
     try {
+      const url = opts.force ? '/api/dz-agent/global-leagues?bypassCache=1' : '/api/dz-agent/global-leagues'
       const result = await withRetry(async () => {
-        const r = await fetch('/api/dz-agent/global-leagues')
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Global leagues API error: ${r.status}`)
         return r.json()
       }, 2)
@@ -652,7 +654,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard(); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus(); loadStandings(); loadGlobalLeagues() }}
+          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus(); loadStandings(); loadGlobalLeagues({ force: true }) }}
           title="تحديث"
         >
           <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || syncLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
@@ -840,7 +842,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                 <p className="dzd-empty-sub">تحقق من اتصالك أو حاول مجدداً</p>
                 <button
                   className="dzd-retry-btn"
-                  onClick={() => { loadDashboard() }}
+                  onClick={() => { loadDashboard({ force: true }) }}
                 >
                   <RefreshCw size={12} /> إعادة المحاولة
                 </button>
@@ -876,9 +878,9 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               <button
                 className="dzd-retry-btn"
                 style={{ fontSize: '10px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                onClick={loadDashboard}
+                onClick={() => loadDashboard({ force: true })}
                 disabled={loading}
-                title="تحديث سريع من lfp.dz"
+                title="تحديث سريع من lfp.dz (يتجاوز ذاكرة التخزين المؤقت)"
               >
                 <RefreshCw size={11} className={loading ? 'dzd-spin' : ''} />
                 {loading ? 'جاري التحديث…' : 'تحديث سريع'}
@@ -902,7 +904,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
             ) : (visibleMatches.length === 0 && data?.sports?.length === 0) ? (
               <div className="dzd-empty-state">
                 <p>لا توجد بيانات حالياً</p>
-                <button className="dzd-retry-btn" onClick={loadDashboard}>إعادة المحاولة</button>
+                <button className="dzd-retry-btn" onClick={() => loadDashboard({ force: true })}>إعادة المحاولة</button>
               </div>
             ) : (
               <>
@@ -1037,9 +1039,9 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                 <button
                   className="dzd-retry-btn"
                   style={{ fontSize: '10px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                  onClick={loadGlobalLeagues}
+                  onClick={() => loadGlobalLeagues({ force: true })}
                   disabled={globalLoading}
-                  title="تحديث سريع من jdwel.com"
+                  title="تحديث سريع من jdwel.com (يتجاوز ذاكرة التخزين المؤقت)"
                 >
                   <RefreshCw size={11} className={globalLoading ? 'dzd-spin' : ''} />
                   {globalLoading ? 'جاري…' : 'تحديث'}
@@ -1091,7 +1093,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
             ) : (
               <div className="dzd-empty-state">
                 <p>لا توجد مباريات متاحة حالياً</p>
-                <button className="dzd-retry-btn" onClick={loadGlobalLeagues}>إعادة المحاولة</button>
+                <button className="dzd-retry-btn" onClick={() => loadGlobalLeagues({ force: true })}>إعادة المحاولة</button>
                 <p style={{ fontSize: '11px', color: '#a0a0b0', marginTop: '8px' }}>اسأل DZ Agent عن أي دوري:</p>
                 {['بريميرليغ اليوم', 'ليغا اليوم', 'دوري أبطال أوروبا'].map(q => (
                   <button key={q} className="dzd-retry-btn" style={{ margin: '2px', fontSize: '11px' }} onClick={() => onSend(q)}>

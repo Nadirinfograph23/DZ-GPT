@@ -217,3 +217,46 @@ DZ Agent prioritizes the GitHub workflow on the welcome screen:
 - In development, the CSP `frame-ancestors` directive allows Replit preview iframe origins; production keeps iframe embedding disabled with `frame-ancestors 'none'`.
 - The production service worker uses network-first/no-store fetching for app assets to prevent old cached UI bundles from mixing with newly deployed versions.
 - DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search backend endpoints may remain available but the education center UI is not exposed in DZ Agent.
+
+## DZ Smart Agent Layer (added 2026-04-28)
+
+A new modular intelligence layer was added under `/lib/` and exposed as
+`/api/agent/*` endpoints. It is **additive** — the existing
+`/api/dz-agent-chat`, dashboard endpoints, and UI components are unchanged.
+
+### Pipeline
+`User Query → Intent Detection → Smart Router → Multi-Source Fetch →
+Filter + Rank → Engine Response → Memory + LRU Cache`
+
+### Files
+- `lib/intent.js` — `detectIntent()` returns `builder | github | news | structured | general` plus language and live-mode flags. Includes `expandQuery()` for AR↔EN multi-query expansion.
+- `lib/router.js` — `ask(query)` orchestrator + per-engine functions.
+- `lib/news.js` — `FEED_MANIFEST` (Algeria-first), `getTopNews()`, parallel feed fetch, optional injected fetcher.
+- `lib/github.js` — `searchRepos()`, `searchCode()`, `getRepoInsight()`, `trendingRepos()`, heuristic `detectStack()`. Uses `GITHUB_TOKEN` if set.
+- `lib/builder.js` — `buildSite(brief)` returns plan + scaffold files; pulls inspiration from GitHub trending templates.
+- `lib/ranker.js` — `rankAndTrim()` with Algeria-first scoring (Djazairess +60, APS +55, Echorouk/Ennahar +50, El Heddaf +45 sports, Google News DZ +40, Arabic +25, Global +10) + freshness + relevance + spam filter + dedup.
+- `lib/cache.js` — LRU + TTL cache (`queryCache`, `newsCache`, `githubCache`, `builderCache`).
+- `lib/memory.js` — File-backed self-learning memory (`/data/memory.json`), Jaccard similarity recall, fresh-reuse window 30min.
+- `lib/agent-mount.js` — Express mount + 6h background refresh loop.
+- `data/memory.json` — persistent answer memory store.
+
+### Endpoints
+- `GET  /api/agent/health`
+- `GET  /api/agent/ask?q=...&limit=...`
+- `POST /api/agent/ask` — body `{ query, limit?, bypassCache?, bypassMemory? }`
+- `GET  /api/agent/news?q=...&limit=...&sports=1`
+- `GET  /api/agent/github?q=...&limit=...&insight=1`
+- `POST /api/agent/builder` — body `{ brief }`
+- `GET  /api/agent/memory/recent` and `/api/agent/memory/stats`
+- `POST /api/agent/memory/purge`
+- `POST /api/agent/refresh` — manual trigger of the 6h cron warm-up
+
+### Wiring in server.js
+- Single import at top: `import { mountSmartAgent } from './lib/agent-mount.js'`
+- Single call before `app.listen(...)`: `mountSmartAgent(app, { fetcher: feed => fetchMultipleFeeds([feed]).then(arr => arr[0] || null) })`
+- Background refresh runs every 6h (warms news cache + trending repos).
+
+### Notes
+- The smart agent reuses the server's `fetchMultipleFeeds` / `RSS_CACHE` so feed fetches are not duplicated.
+- Memory is capped at 500 entries with LRU eviction; writes are atomic (`tmp` + `rename`).
+- All engines fail safe with `⚠️ لم أتمكن من العثور على بيانات حديثة...` if no results.

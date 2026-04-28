@@ -10,6 +10,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
+import { mountSmartAgent } from './lib/agent-mount.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -8660,6 +8661,16 @@ if (isMain) {
     console.log('[AutoRefresh] Refreshing standings...')
     STANDINGS_CACHE.ts = 0 // force refresh on next request
   }, 25 * 60 * 1000) // 25 min
+
+  // Mount the new modular Smart Agent layer (intent → router → engines)
+  // Injects the existing fetchMultipleFeeds plumbing for shared RSS caching.
+  try {
+    mountSmartAgent(app, {
+      fetcher: (feed) => fetchMultipleFeeds([feed]).then(arr => arr[0] || null),
+    })
+  } catch (err) {
+    console.warn('[smart-agent] mount failed:', err.message)
+  }
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

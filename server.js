@@ -3166,6 +3166,49 @@ function _dedupAlgerianMatches(arr) {
   return out
 }
 
+// jdwel.com backup for the Algerian league.
+// jdwel.com renders Arabic match cards under the heading
+//   "الدوري الجزائري الدرجة الأولى"
+// which we can pull via the existing curl-based scraper.
+async function fetchAlgerianLeagueJdwel() {
+  try {
+    const dateStr = new Date().toISOString().slice(0, 10)
+    const j = await fetchJdwelMatches(dateStr)
+    if (!j?.groups?.length) return null
+    const ALG_NAME_HINTS = [
+      'الدوري الجزائري',
+      'الجزائر',
+      'algerian',
+      'ligue 1 algérie',
+      'ligue 1 algerie',
+      'ligue 1 algeria',
+    ]
+    const matches = []
+    for (const g of j.groups) {
+      const name = (g?.name || '').toLowerCase()
+      if (!ALG_NAME_HINTS.some(k => name.includes(k.toLowerCase()))) continue
+      for (const m of (g.matches || [])) {
+        const finished = m.statusType === 'finished'
+        matches.push({
+          round: g.name || 'Ligue 1',
+          home: m.homeTeam,
+          away: m.awayTeam,
+          homeScore: finished ? m.homeScore : null,
+          awayScore: finished ? m.awayScore : null,
+          played: finished,
+          date: dateStr,
+          time: m.startTime || '',
+          link: m.link || 'https://jdwel.com/today/',
+        })
+      }
+    }
+    return matches.length ? { matches, source: 'jdwel.com' } : null
+  } catch (err) {
+    console.warn('[AlgerianLeague:jdwel] error:', err.message)
+    return null
+  }
+}
+
 async function fetchAlgerianLeagueAPIFootball() {
   const key = process.env.RAPIDAPI_KEY || process.env.API_FOOTBALL_KEY
   if (!key) return null
@@ -3285,11 +3328,21 @@ async function fetchAlgerianLeague() {
     }
   } catch (err) { diagLog('source_fail', { module: 'algerian-league.lfp', error: err.message }) }
 
-  // Step 2: BACKUP 1 — API-Football
-  try {
-    const api = await fetchAlgerianLeagueAPIFootball()
-    if (api?.matches?.length) sources.push({ ...api, articles: [] })
-  } catch (err) { diagLog('source_fail', { module: 'algerian-league.api-football', error: err.message }) }
+  // Step 2: BACKUP 1 — jdwel.com (Arabic match aggregator, scraped via curl)
+  if (!sources.some(s => s.matches.length > 0)) {
+    try {
+      const jd = await fetchAlgerianLeagueJdwel()
+      if (jd?.matches?.length) sources.push({ ...jd, articles: [] })
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.jdwel', error: err.message }) }
+  }
+
+  // Step 3: BACKUP 2 — API-Football
+  if (!sources.some(s => s.matches.length > 0)) {
+    try {
+      const api = await fetchAlgerianLeagueAPIFootball()
+      if (api?.matches?.length) sources.push({ ...api, articles: [] })
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.api-football', error: err.message }) }
+  }
 
   // Step 3: BACKUP 2 — SofaScore filtered to Algeria
   if (!sources.some(s => s.matches.length > 0)) {
@@ -3821,6 +3874,44 @@ const GLOBAL_LEAGUES_TARGETS = {
   ],
 }
 
+// jdwel.com PRIMARY for the Global-Leagues card.
+// jdwel.com aggregates Arabic match cards across competitions and exposes
+// each league under an Arabic <h4 class="title"> heading. We map a few
+// well-known fragments to the five canonical European league names.
+const JDWEL_LEAGUE_MATCHERS = [
+  { key: 'Champions League', match: ['دوري أبطال أوروبا', 'champions league'] },
+  { key: 'Premier League',   match: ['الدوري الإنجليزي الممتاز', 'الإنجليزي الممتاز', 'premier league'] },
+  { key: 'La Liga',          match: ['الدوري الإسباني', 'la liga', 'laliga'] },
+  { key: 'Serie A',          match: ['الدوري الإيطالي', 'serie a'] },
+  { key: 'Bundesliga',       match: ['الدوري الألماني', 'bundesliga'] },
+]
+async function fetchGlobalLeaguesJdwel(dateStr) {
+  try {
+    const j = await fetchJdwelMatches(dateStr)
+    if (!j?.groups?.length) return null
+    const grouped = {}
+    for (const g of j.groups) {
+      const lname = (g?.name || '').toLowerCase()
+      const matched = JDWEL_LEAGUE_MATCHERS.find(x => x.match.some(s => lname.includes(s.toLowerCase())))
+      if (!matched) continue
+      ;(grouped[matched.key] ??= []).push(...(g.matches || []).map(m => ({
+        homeTeam:  m.homeTeam,
+        awayTeam:  m.awayTeam,
+        homeScore: (m.statusType === 'finished' || m.statusType === 'live') ? m.homeScore : null,
+        awayScore: (m.statusType === 'finished' || m.statusType === 'live') ? m.awayScore : null,
+        statusType: m.statusType === 'live' ? 'inprogress' : (m.statusType === 'finished' ? 'finished' : 'notstarted'),
+        startTime: m.startTime || '',
+        link:      m.link || 'https://jdwel.com/today/',
+      })))
+    }
+    const leagues = Object.entries(grouped).map(([name, matches]) => ({ name, matches: matches.slice(0, 8) }))
+    return leagues.length ? { leagues, source: 'jdwel.com' } : null
+  } catch (err) {
+    console.warn('[GlobalLeagues:jdwel] error:', err.message)
+    return null
+  }
+}
+
 async function fetchGlobalLeaguesAPIFootball(dateStr) {
   const key = process.env.RAPIDAPI_KEY || process.env.API_FOOTBALL_KEY
   if (!key) return null
@@ -3898,15 +3989,24 @@ app.get('/api/dz-agent/global-leagues', async (req, res) => {
   }
 
   try {
-    // PRIMARY: API-Football for Top-5
-    let result = await fetchGlobalLeaguesAPIFootball(dateStr)
+    // PRIMARY: jdwel.com (Arabic match aggregator, scraped via curl)
+    let result = await fetchGlobalLeaguesJdwel(dateStr)
 
-    // BACKUP: SofaScore filtered to Top-5
+    // BACKUP 1: API-Football for Top-5 (only if RAPIDAPI key set)
+    if (!result?.leagues?.length) {
+      const apf = await fetchGlobalLeaguesAPIFootball(dateStr)
+      if (apf?.leagues?.length) {
+        result = apf
+        diagLog('fallback', { module: 'global-leagues', from: 'jdwel', to: 'api-football' })
+      }
+    }
+
+    // BACKUP 2: SofaScore filtered to Top-5
     if (!result?.leagues?.length) {
       const sof = await fetchGlobalLeaguesSofaScore(dateStr)
       if (sof?.leagues?.length) {
         result = sof
-        diagLog('fallback', { module: 'global-leagues', from: 'api-football', to: 'sofascore' })
+        diagLog('fallback', { module: 'global-leagues', from: 'jdwel|api-football', to: 'sofascore' })
       }
     }
 

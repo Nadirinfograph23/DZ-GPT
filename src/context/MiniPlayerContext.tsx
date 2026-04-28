@@ -161,15 +161,33 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }
     const onPause = () => {
       setPlaying(false)
-      // Only treat a pause as user-intent when it didn't come from an error
-      // currently in flight. The error/stalled handlers set the want flag
-      // before scheduling a recovery.
-      if (!recoverTimerRef.current) wantPlayingRef.current = false
+      // CRITICAL: do NOT mutate wantPlayingRef here. The browser fires `pause`
+      // for many reasons we don't control (error, stalled, source swap,
+      // device wake-up, codec hiccup) and they often race ahead of `error`.
+      // wantPlayingRef tracks USER intent only — it is set to false exclusively
+      // by user actions (toggle/stop) and the media-session pause handler.
+      // This was the #1 cause of "player stops mid-track and never resumes".
     }
     const onWaiting = () => { setLoading(true) }
     const onPlaying = () => { setLoading(false) }
     const onCanPlay = () => { setLoading(false) }
     const onEnded = () => {
+      // Premature `ended` is the #2 cause of mid-track stops. The browser
+      // fires `ended` whenever the stream socket is closed cleanly — and
+      // when an expired googlevideo URL drops the connection without a
+      // proper error code, the browser treats that as natural EOF.
+      // Real EOF only counts when currentTime is within ~3s of the known
+      // duration. Anything earlier is a connection drop → recover the same
+      // track from the last position so the user never notices.
+      const a = audioRef.current
+      const cur = a?.currentTime || 0
+      const d = a && Number.isFinite(a.duration) ? a.duration : 0
+      const realEnd = d > 0 ? cur >= d - 3 : false
+      if (!realEnd && wantPlayingRef.current && trackRef.current) {
+        console.warn('[mini-player] premature ended at', cur, '/', d, '— recovering')
+        scheduleRecovery(0)
+        return
+      }
       setPlaying(false)
       wantPlayingRef.current = false
       if (queueRef.current.length > 0) void nextRef.current()
@@ -190,12 +208,13 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       const t = trackRef.current
       if (!t) return
       const now = Date.now()
+      // Throttle: if we've burned through the rapid-retry quota in the last
+      // 90s, fall back to a long cooldown (30s) instead of giving up. A
+      // truly broken track stays paused but a flaky network or expired URL
+      // cycle eventually recovers — even after hours of listening.
       if (now - lastRecoverAtRef.current > 90_000) recoverAttemptsRef.current = 0
-      if (recoverAttemptsRef.current >= 6) {
-        console.warn('[mini-player] giving up after 6 recovery attempts')
-        wantPlayingRef.current = false
-        return
-      }
+      const overQuota = recoverAttemptsRef.current >= 6
+      const effectiveDelay = overQuota ? Math.max(delayMs, 30_000) : delayMs
       recoverAttemptsRef.current += 1
       lastRecoverAtRef.current = now
       const resumeAt = el!.currentTime || 0
@@ -208,16 +227,19 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
           el!.src = buildAudioSrc(cur, Date.now())
           currentSrcIdRef.current = cur.id
           el!.load()
-          if (wantPlayingRef.current) {
-            const p = el!.play()
-            if (p && typeof (p as Promise<void>).catch === 'function') {
-              ;(p as Promise<void>).catch(() => {/* will retry via error handler */})
-            }
+          // ALWAYS attempt to resume after a recovery rebind. wantPlayingRef
+          // can be momentarily desynced by browser-issued pause events that
+          // race the error handler, so we trust the recovery context: if
+          // the user hadn't actively paused/stopped (those paths cancel
+          // the timer + reset the flag), we want this to play.
+          const p = el!.play()
+          if (p && typeof (p as Promise<void>).catch === 'function') {
+            ;(p as Promise<void>).catch(() => {/* will retry via error handler */})
           }
         } catch (e) {
           console.warn('[mini-player] recovery rebind failed', e)
         }
-      }, delayMs) as unknown as number
+      }, effectiveDelay) as unknown as number
     }
 
     const onError = () => {
@@ -435,6 +457,10 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       }
     } else {
       wantPlayingRef.current = false
+      // Cancel any in-flight recovery so it doesn't restart playback after
+      // a user-issued pause. Without this, pressing pause during a recovery
+      // window could result in the timer resuming playback seconds later.
+      if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
       try { el.pause() } catch {}
     }
   }, [track, loadAndPlay])
@@ -518,6 +544,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         const el = audioRef.current
         if (el && !el.paused) {
           wantPlayingRef.current = false
+          if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
           try { el.pause() } catch {}
         }
       })

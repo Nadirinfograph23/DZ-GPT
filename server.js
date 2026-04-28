@@ -7949,8 +7949,14 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     const dlpBin = await ytDlpBinaryPath()
     if (!dlpBin) throw new Error('yt-dlp: not available')
     const cookies = await ytDlpCookiesArgs()
+    const antiBot = ytDlpAntiBotArgs()
     return new Promise((resolve, reject) => {
-      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-warnings', '--no-playlist', ...cookies, youtubeUrl])
+      // CRITICAL: ytDlpAntiBotArgs() supplies --extractor-args
+      // youtube:player_client=android,ios,web which is what allows yt-dlp
+      // to extract URLs from data-center IPs (Vercel/AWS) without hitting
+      // "Sign in to confirm you're not a bot". Without it, every cold call
+      // here returns a 403 ~6s later and the whole audio-proxy 502s.
+      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
       let out = '', err = ''
       proc.stdout.on('data', d => { out += d.toString() })
       proc.stderr.on('data', d => { err += d.toString() })

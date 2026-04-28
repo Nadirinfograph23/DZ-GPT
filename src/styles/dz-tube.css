@@ -450,7 +450,17 @@
 .dzt-act:disabled { opacity: 0.6; cursor: not-allowed; }
 .dzt-act-play { flex: 1; background: var(--dzt-grad); border-color: transparent; color: #fff; }
 .dzt-act-play:hover:not(:disabled) { filter: brightness(1.1); border-color: transparent; }
-.dzt-act-bg, .dzt-act-q, .dzt-act-dl { padding: 8px 9px; }
+.dzt-act-bg, .dzt-act-q, .dzt-act-dl, .dzt-act-mp3 { padding: 8px 9px; }
+.dzt-act-mp3 {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.08);
+}
+.dzt-act-mp3:hover:not(:disabled) {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(52, 211, 153, 0.5);
+}
 .dzt-act-dl-wrap { position: relative; }
 
 /* ===== Centered Download Modal ===== */

@@ -654,6 +654,18 @@ export default function DZTube() {
                       >
                         <Plus size={13} />
                       </button>
+                      <button
+                        className="dzt-act dzt-act-mp3"
+                        onClick={() => {
+                          if (downloadingId === r.id) return
+                          showToast('🎵 جاري تنزيل MP3…')
+                          void startDownload(r, 'mp3', '720', { silent: true })
+                        }}
+                        disabled={downloadingId === r.id}
+                        title="تنزيل MP3 مباشرة"
+                      >
+                        <Music size={13} />
+                      </button>
                       <div className="dzt-act-dl-wrap">
                         <button
                           className="dzt-act dzt-act-dl"
@@ -663,7 +675,7 @@ export default function DZTube() {
                             fetchQualities(r)
                           }}
                           disabled={downloadingId === r.id}
-                          title="تحميل"
+                          title="تحميل (خيارات الجودة)"
                         >
                           {downloadingId === r.id ? (
                             (() => {

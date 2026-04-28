@@ -2,6 +2,29 @@
 
 A Vite + React + Express AI chat application with multi-model support.
 
+## DZ Tube Audio Playback (server.js + MiniPlayerContext)
+
+The mini-player streams YouTube audio through `/api/dz-tube/audio-proxy`, which 307-redirects to a direct googlevideo URL resolved by `resolveDirectAudioUrl`. That resolver races four extractors in parallel via `Promise.any` (first success wins):
+
+1. **Piped** (`fetchPipedStreams`) — public Piped instances, queried in parallel via `Promise.any`
+2. **Invidious** (`fetchInvidiousStreams`) — public Invidious instances, queried in parallel
+3. **ytdl-core** — JavaScript YouTube extractor
+4. **yt-dlp** binary at `bin/yt-dlp` with `ytDlpAntiBotArgs()` (player_client=android,ios,web) + `ytDlpCookiesArgs()`
+
+Successful URLs are cached in `_audioUrlCache` for 20 minutes (200-entry LRU). The client adds `&_r=<ts>` to bust cache on recovery.
+
+### YouTube Bot Detection on Vercel — Requires `YOUTUBE_COOKIES`
+
+YouTube blocks data-center IPs (Vercel/AWS) with "Sign in to confirm you're not a bot" on **every** extraction path unless **logged-in account cookies** are provided. Anonymous visitor cookies are not sufficient.
+
+To enable reliable playback in production:
+1. Sign into YouTube in your browser
+2. Export cookies for `youtube.com` in **Netscape format** using a browser extension (e.g. "Get cookies.txt LOCALLY")
+3. Set the env var `YOUTUBE_COOKIES` on Vercel to the full **contents** of that file (not the path)
+4. Trigger a redeploy
+
+Without cookies, only videos cached by Piped resolve (~1 in 7). With logged-in cookies, yt-dlp resolves cold in ~1-3s per video, all videos.
+
 ## Architecture
 
 - **Frontend**: React + TypeScript, built with Vite. Located in `src/`.

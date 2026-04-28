@@ -8103,38 +8103,6 @@ async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
   return fetch(upstreamUrl, { headers, redirect: 'follow' })
 }
 
-// Diag endpoint (temporary)
-app.get('/api/dz-tube/_audio-debug', async (req, res) => {
-  const url = String(req.query.url || '')
-  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'invalid url' })
-  const out = { url, cookiesEnvSet: !!process.env.YOUTUBE_COOKIES, cookiesEnvLen: (process.env.YOUTUBE_COOKIES || '').length, cookiesPath: null, extractors: {} }
-  try { out.cookiesPath = await ytDlpCookiesPath() } catch (e) { out.cookiesPathErr = e.message }
-  const dlpBin = await ytDlpBinaryPath()
-  out.dlpBin = dlpBin
-  const cookies = await ytDlpCookiesArgs()
-  const antiBot = ytDlpAntiBotArgs()
-  out.cookieArgs = cookies
-  const time = (label, args) => new Promise((resolve) => {
-    const t0 = Date.now()
-    const proc = spawn(dlpBin, args)
-    let o = '', e = ''
-    proc.stdout.on('data', d => { o += d.toString() })
-    proc.stderr.on('data', d => { e += d.toString() })
-    const kill = setTimeout(() => { try { proc.kill('SIGKILL') } catch {} ; resolve({ ok: false, ms: Date.now()-t0, err: 'timeout' }) }, 25000)
-    proc.on('close', code => {
-      clearTimeout(kill)
-      const u = o.trim().split('\n')[0]
-      out.extractors[label] = code === 0 && u ? { ok: true, ms: Date.now()-t0, sample: u.slice(0,80) } : { ok: false, ms: Date.now()-t0, err: `exit=${code} stderr=${e.slice(0,500)}` }
-      resolve()
-    })
-  })
-  await time('dlp_cookies_anti', ['-f','bestaudio[ext=m4a]/bestaudio/best','-g','--no-playlist',...antiBot,...cookies,url])
-  await time('dlp_cookies_only', ['-f','bestaudio[ext=m4a]/bestaudio/best','-g','--no-playlist',...cookies,url])
-  await time('dlp_anti_only',    ['-f','bestaudio[ext=m4a]/bestaudio/best','-g','--no-playlist',...antiBot,url])
-  await time('dlp_bare',         ['-f','bestaudio[ext=m4a]/bestaudio/best','-g','--no-playlist',url])
-  res.json(out)
-})
-
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')

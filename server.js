@@ -7348,26 +7348,28 @@ const INVIDIOUS_API_INSTANCES = [
 // fails. The proxy URL is `${instance}/latest_version?id=VID&itag=ITAG&local=true`.
 async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
   if (!videoId) return null
-  for (const base of INVIDIOUS_API_INSTANCES) {
+  // PERF: race all instances in parallel. Sequential iteration paid up to
+  // 8s × N for every dead instance before reaching a working one. With
+  // Promise.any the first responder wins and the rest are abandoned.
+  const probe = async (base) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
     try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 8000)
       const r = await fetch(`${base}/api/v1/videos/${encodeURIComponent(videoId)}?fields=formatStreams,adaptiveFormats,title`, {
         signal: ctrl.signal,
         headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0', 'Accept': 'application/json' },
       })
       clearTimeout(t)
-      if (!r.ok) continue
+      if (!r.ok) throw new Error(`http ${r.status}`)
       const j = await r.json()
       if (isAudio) {
-        // Pick highest-bitrate M4A audio from adaptiveFormats (itag 140 ≈ 128k)
         const audios = (j.adaptiveFormats || []).filter(a => a && a.type && a.type.startsWith('audio/'))
-        if (!audios.length) continue
+        if (!audios.length) throw new Error('no audio formats')
         const m4a = audios.filter(a => a.type.includes('mp4') || a.type.includes('m4a'))
         const pool = m4a.length ? m4a : audios
         pool.sort((a, b) => Number(b.bitrate || 0) - Number(a.bitrate || 0))
         const pick = pool[0]
-        if (!pick?.itag) continue
+        if (!pick?.itag) throw new Error('no itag')
         const isWebm = pick.type.includes('webm') || pick.type.includes('opus')
         return {
           url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
@@ -7376,26 +7378,27 @@ async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
           instance: base,
         }
       }
-      // Video → prefer formatStreams (combined audio+video, mp4) at the
-      // highest resolution that fits the requested height. These itags
-      // (18, 22) DON'T require a PO Token and DO contain audio.
       const combined = (j.formatStreams || [])
         .filter(v => v && v.itag && (!v.type || v.type.includes('mp4')))
         .map(v => ({ ...v, h: parseInt(v.resolution || '0', 10) || 0 }))
       combined.sort((a, b) => b.h - a.h)
       const pick = combined.find(v => v.h <= height) || combined[0]
-      if (!pick?.itag) continue
+      if (!pick?.itag) throw new Error('no video itag')
       return {
         url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
         mime: 'video/mp4',
         ext: 'mp4',
         instance: base,
       }
-    } catch {
-      // try next instance
+    } finally {
+      clearTimeout(t)
     }
   }
-  return null
+  try {
+    return await Promise.any(INVIDIOUS_API_INSTANCES.map(probe))
+  } catch {
+    return null
+  }
 }
 
 // Best-effort fetch of direct stream URLs via the public Piped network.
@@ -7404,22 +7407,21 @@ async function fetchInvidiousStreams(videoId, { isAudio, height = 720 } = {}) {
 // our deployment IP and no cookies are configured.
 async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
   if (!videoId) return null
-  for (const base of PIPED_API_INSTANCES) {
+  // PERF: race instances in parallel — see fetchInvidiousStreams for rationale.
+  const probe = async (base) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
     try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 8000)
       const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
         signal: ctrl.signal,
         headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' },
       })
       clearTimeout(t)
-      if (!r.ok) continue
+      if (!r.ok) throw new Error(`http ${r.status}`)
       const j = await r.json()
       if (isAudio) {
         const audios = (j.audioStreams || []).filter(a => a && a.url)
-        if (!audios.length) continue
-        // Prefer M4A (better universal player support) over WebM/Opus, then
-        // pick the highest bitrate within that preferred format.
+        if (!audios.length) throw new Error('no audio streams')
         const m4a = audios.filter(a => !(a.format || '').toLowerCase().includes('webm'))
         const pool = m4a.length ? m4a : audios
         pool.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
@@ -7430,12 +7432,9 @@ async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
           ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
         }
       }
-      // Prefer progressive videoOnly+audio combined (mp4 with audio); Piped
-      // sometimes labels these as videoOnly=false. Try those first.
       const combined = (j.videoStreams || []).filter(v => v && v.url && v.videoOnly === false)
       const candidates = combined.length ? combined : (j.videoStreams || []).filter(v => v && v.url)
-      if (!candidates.length) continue
-      // Pick highest height that is <= requested
+      if (!candidates.length) throw new Error('no video streams')
       candidates.sort((a, b) => (b.height || 0) - (a.height || 0))
       const pick = candidates.find(v => (v.height || 0) <= height) || candidates[candidates.length - 1]
       return {
@@ -7443,11 +7442,15 @@ async function fetchPipedStreams(videoId, { isAudio, height = 720 } = {}) {
         mime: pick.mimeType || 'video/mp4',
         ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
       }
-    } catch {
-      // try next instance
+    } finally {
+      clearTimeout(t)
     }
   }
-  return null
+  try {
+    return await Promise.any(PIPED_API_INSTANCES.map(probe))
+  } catch {
+    return null
+  }
 }
 
 // =====================================================================
@@ -7928,6 +7931,13 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     return piped.url
   })()
 
+  const tryInvidious = (async () => {
+    if (!videoId) throw new Error('no videoId')
+    const inv = await fetchInvidiousStreams(videoId, { isAudio: true })
+    if (!inv?.url) throw new Error('invidious: no url')
+    return inv.url
+  })()
+
   const tryJs = (async () => {
     const info = await ytdl.getInfo(youtubeUrl)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
@@ -7957,6 +7967,7 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
   // the main race rejection (Promise.any rejects only when ALL fail).
   const tagged = [
     tryPiped.catch(e => { console.warn('[audio-proxy:piped-fail]', e.message); throw e }),
+    tryInvidious.catch(e => { console.warn('[audio-proxy:invidious-fail]', e.message); throw e }),
     tryJs.catch(e => { console.warn('[audio-proxy:js-fail]', e.message); throw e }),
     tryDlp.catch(e => { console.warn('[audio-proxy:dlp-fail]', e.message); throw e }),
   ]

@@ -3385,6 +3385,31 @@ async function fetchAlgerianLeague() {
   return data
 }
 
+app.get('/api/dz-agent/debug-jdwel', async (_req, res) => {
+  const out = { env: { node: process.version, platform: process.platform, vercel: !!process.env.VERCEL_ENV, vercelEnv: process.env.VERCEL_ENV || null }, steps: [] }
+  // Step A: try curl
+  try {
+    const c = await _spawnCurl('https://jdwel.com/today/', 10)
+    out.steps.push({ step: 'curl', ok: c.ok, error: c.error || null, bodyLen: c.body ? c.body.length : 0 })
+  } catch (e) { out.steps.push({ step: 'curl', error: e.message }) }
+  // Step B: try r.jina.ai
+  try {
+    const pr = await fetch('https://r.jina.ai/https://jdwel.com/today/', { headers: { 'User-Agent': 'DZ-GPT/1.0', 'Accept': 'text/plain,*/*' }, signal: AbortSignal.timeout(15000) })
+    const txt = pr.ok ? await pr.text() : null
+    out.steps.push({ step: 'jina', status: pr.status, ok: pr.ok, mdLen: txt ? txt.length : 0, mdHead: txt ? txt.slice(0, 200) : null })
+    if (txt) {
+      const groups = parseJdwelMarkdown(txt)
+      out.steps.push({ step: 'jina_parse', groups: groups.length, total: groups.reduce((s,g)=>s+g.matches.length,0), sample: groups.slice(0, 3).map(g => ({ name: g.name, compId: g.compId, matchCount: g.matches.length })) })
+    }
+  } catch (e) { out.steps.push({ step: 'jina', error: e.message }) }
+  // Step C: full fetchJdwelMatches
+  try {
+    const data = await fetchJdwelMatches()
+    out.steps.push({ step: 'full', ok: !!data, totalMatches: data?.totalMatches || 0, source: data?.source, via: data?.via })
+  } catch (e) { out.steps.push({ step: 'full', error: e.message }) }
+  res.json(out)
+})
+
 app.get('/api/dz-agent/lfp', async (_req, res) => {
   const data = await fetchAlgerianLeague()
   // Anti-empty: never return a silently empty card.

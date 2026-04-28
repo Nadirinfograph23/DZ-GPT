@@ -288,3 +288,40 @@ and adapted them for an Algerian-first audience. UI was not touched.
 - Deep pipeline on "أخبار الجزائر": 8 s end-to-end, fetched 180 articles, kept top 8 with 100% Algerian sources at the top, 8 inline citations attached, zero self-critique issues.
 - Safety scan correctly detected `ignore previous instructions` + `reveal system prompt` patterns and redacted a leaked `ghp_` token.
 - Planner correctly identified `compare react vs vue today` as `structured` intent with `liveMode: true` and added the `2026` temporal qualifier.
+
+## Live Sports Cards — Vercel Runtime Fix (added 2026-04-28)
+
+The Algerian-league card and the global-leagues card both source their data
+from `jdwel.com`, which sits behind Cloudflare and rejects Node `fetch`
+based on its TLS/JA3 fingerprint. Locally we shell out to `curl` and parse
+the resulting HTML. On Vercel's serverless runtime, however, `curl` exists
+but Cloudflare returns a tiny challenge page (~6 KB) instead of the real
+~600 KB content, so the HTML parser used to silently produce zero matches
+and the cards rendered empty in production.
+
+### Fix in `server.js` → `fetchJdwelMatches`
+1. Run `parseJdwelHtml` on the curl body. If it produces zero groups
+   (Cloudflare challenge), discard the body and continue to step 2.
+2. Fetch `https://r.jina.ai/<jdwel-url>` (Jina AI Reader free reverse-proxy)
+   which returns clean Markdown of the page.
+3. Parse that Markdown with `parseJdwelMarkdown(text)` — a dedicated parser
+   that walks `#### [comp-name](.../competition/<id>)` headers and
+   `* STATUS HOME![…] H - A YYYY-MM-DD HH:MM ![…] AWAY` match lines, then
+   attaches the next `[صفحة المباراة](url)` as the per-match link.
+4. Cache the parsed shape in `JDWEL_CACHE` exactly like the curl path so
+   downstream callers (`fetchAlgerianLeagueJdwel`, `fetchGlobalLeaguesJdwel`)
+   are runtime-agnostic.
+
+### Diagnostics
+- `GET /api/dz-agent/debug-jdwel` returns the per-step result of curl,
+  Jina fetch + parse, and the full `fetchJdwelMatches` pipeline. Used to
+  prove that on Vercel curl returns 5962 bytes (Cloudflare challenge)
+  while Jina returns ~30 KB Markdown that parses to 21 leagues / 52 matches.
+- The existing `diagLog('jdwel.curl_empty', …)` and `diagLog('jdwel_jina_ok', …)`
+  events surface in `GET /api/dz-agent/diagnostics`.
+
+### Verified production behavior (commit `dfb4b62f`)
+- `/api/dz-agent/lfp` → `{matches:[{home:"مولودية الجزائر",away:"أولمبيك أقبو",…}], source:"jdwel.com", status:"ok"}`
+- `/api/dz-agent/global-leagues` → `{leagues:[{name:"Champions League", matches:[{homeTeam:"باريس سان جيرمان", awayTeam:"بايرن ميونخ", …}]}], status:"ok"}`
+- `/api/dz-agent/news` → 5 fresh 2026 items, `pubDate` DESC, year-priority sort intact.
+- `/api/dz-agent/sync-status` → GitHub and Vercel both at the same SHA.

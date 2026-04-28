@@ -1122,8 +1122,23 @@ function isFreshItem(item, { maxAgeDays = 30 } = {}) {
   const ageDays = (Date.now() - t) / 86400000
   if (ageDays > maxAgeDays) return false
   const y = new Date(raw).getFullYear()
+  // STRICT: only allow current year and previous year (e.g. 2026 + 2025 in 2026).
+  // Older years are considered outdated for the dashboard / news pipeline.
   if (y < getCurrentYear() - 1) return false
   return true
+}
+
+// Year-priority bucketer for "2026 first, then 2025, ignore older" rule.
+// Higher value = displayed first.
+function _itemYearPriority(item) {
+  const raw = item?.pubDate || item?.date || item?.publishedDate
+  if (!raw) return 0
+  const y = new Date(raw).getFullYear()
+  const cy = getCurrentYear()
+  if (!Number.isFinite(y)) return 0
+  if (y >= cy)     return 3  // current year (e.g. 2026) → top priority
+  if (y === cy-1)  return 2  // previous year (e.g. 2025) → second
+  return 0                   // older → deprioritised (already filtered by isFreshItem)
 }
 
 // Scores recency 0-100 (higher = fresher). Items with no date get a neutral 60.
@@ -1251,8 +1266,15 @@ function balanceNewsCategories(items, target = 18) {
     const pool = [...byCat.national_dz, ...byCat.international, ...byCat.sports].filter(x => !out.includes(x))
     out.push(...pool.slice(0, target - out.length))
   }
-  // Final sort: most recent first (with score as tiebreaker)
-  out.sort((a, b) => (new Date(b.pubDate || 0) - new Date(a.pubDate || 0)) || (b._score - a._score))
+  // Final sort: year-priority first (2026 > 2025 > older), then publishedAt DESC,
+  // then relevance score as tiebreaker.
+  out.sort((a, b) => {
+    const yp = _itemYearPriority(b) - _itemYearPriority(a)
+    if (yp !== 0) return yp
+    const dt = (new Date(b.pubDate || 0)) - (new Date(a.pubDate || 0))
+    if (dt !== 0) return dt
+    return b._score - a._score
+  })
   // Strip internal helper fields before returning
   return out.slice(0, target).map(({ _cat, _score, ...rest }) => ({ ...rest, category: _cat }))
 }
@@ -2396,6 +2418,7 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
   { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
   { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
+  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
   { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
   { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
   { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
@@ -2630,7 +2653,7 @@ app.get('/api/dz-agent/dashboard', async (_req, res) => {
     fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
     fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
     fetchWeatherAlgiers(),
-    fetchLFPData(),
+    fetchAlgerianLeague(),
     // GN-RSS: fetch Arabic Algeria feeds for dashboard augmentation
     fetchGNRSSArticles(GN_RSS_FEEDS.ar),
   ])
@@ -3121,20 +3144,207 @@ async function fetchLFPData() {
   }
 }
 
+// ===== ALGERIAN LEAGUE — RESILIENT MULTI-SOURCE CASCADE =====
+// Primary  : lfp.dz (official site, scraped via fetchLFPData)
+// Backup 1 : API-Football (RapidAPI), league=186 (Algeria Ligue 1)
+// Backup 2 : SofaScore filtered to Algeria
+// Backup 3 : Flashscore lightweight scrape
+// Cache    : 10 min (matches the 5–10 min spec) via ALGERIAN_LEAGUE_CACHE
+const ALGERIAN_LEAGUE_CACHE = { data: null, ts: 0 }
+const ALGERIAN_LEAGUE_TTL = 10 * 60 * 1000
+
+function _dedupAlgerianMatches(arr) {
+  const seen = new Set()
+  const out = []
+  for (const m of arr || []) {
+    if (!m?.home || !m?.away) continue
+    const key = `${(m.home || '').trim().toLowerCase()}|${(m.away || '').trim().toLowerCase()}|${m.date || ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(m)
+  }
+  return out
+}
+
+async function fetchAlgerianLeagueAPIFootball() {
+  const key = process.env.RAPIDAPI_KEY || process.env.API_FOOTBALL_KEY
+  if (!key) return null
+  try {
+    const season = new Date().getFullYear()
+    const headers = {
+      'X-RapidAPI-Key': key,
+      'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
+    }
+    // League 186 = Algeria Ligue 1 Professionnelle
+    const r = await fetch(`https://api-football-v1.p.rapidapi.com/v3/fixtures?league=186&season=${season}`, {
+      headers, signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) { console.warn('[AlgerianLeague:API-Football]', r.status); return null }
+    const d = await r.json()
+    const fixtures = d?.response || []
+    const matches = fixtures.slice(0, 30).map(f => {
+      const status = f.fixture?.status?.short || ''
+      const played = ['FT', 'AET', 'PEN'].includes(status)
+      const dt = f.fixture?.date ? new Date(f.fixture.date) : null
+      return {
+        id: f.fixture?.id,
+        round: f.league?.round || 'Ligue 1',
+        home: f.teams?.home?.name || '',
+        away: f.teams?.away?.name || '',
+        homeScore: played ? (f.goals?.home ?? null) : null,
+        awayScore: played ? (f.goals?.away ?? null) : null,
+        played,
+        date: dt ? dt.toLocaleDateString('ar-DZ', { timeZone: 'Africa/Algiers' }) : '',
+        time: dt ? dt.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers' }) : '',
+        link: f.fixture?.id ? `https://www.api-football.com/fixture/${f.fixture.id}` : '',
+      }
+    })
+    return matches.length ? { matches, source: 'api-football' } : null
+  } catch (err) {
+    console.warn('[AlgerianLeague:API-Football] error:', err.message)
+    return null
+  }
+}
+
+async function fetchAlgerianLeagueSofaScore() {
+  try {
+    const today = new Date().toISOString().split('T')[0]
+    const sf = await fetchSofaScoreFootball(today)
+    if (!sf?.matches?.length) return null
+    const dz = sf.matches.filter(m => {
+      const c = (m.country || '').toLowerCase()
+      const comp = (m.competition || '').toLowerCase()
+      return c.includes('algeria') || c.includes('algérie') || c.includes('الجزائر') ||
+             comp.includes('algeria') || comp.includes('ligue 1') && comp.includes('alger')
+    })
+    if (!dz.length) return null
+    const matches = dz.map(m => ({
+      round: m.competition || 'Ligue 1',
+      home: m.homeTeam,
+      away: m.awayTeam,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      played: m.statusType === 'finished',
+      date: m.date || '',
+      time: m.startTime || '',
+      link: m.link || '',
+    }))
+    return { matches, source: 'sofascore' }
+  } catch (err) {
+    console.warn('[AlgerianLeague:SofaScore] error:', err.message)
+    return null
+  }
+}
+
+async function fetchAlgerianLeagueFlashscore() {
+  try {
+    const r = await fetch('https://www.flashscore.com/football/algeria/ligue-1/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!r.ok) return null
+    const html = await r.text()
+    // Best-effort scrape: extract team-name pairs from JSON-like blobs
+    const re = /"home":\s*\{[^}]*"name":\s*"([^"]+)"[^}]*\}[^{]*"away":\s*\{[^}]*"name":\s*"([^"]+)"/g
+    const matches = []
+    let m
+    while ((m = re.exec(html)) !== null && matches.length < 20) {
+      matches.push({
+        round: 'Ligue 1',
+        home: m[1], away: m[2],
+        homeScore: null, awayScore: null,
+        played: false, date: '', time: '',
+        link: 'https://www.flashscore.com/football/algeria/ligue-1/',
+      })
+    }
+    return matches.length ? { matches, source: 'flashscore' } : null
+  } catch (err) {
+    console.warn('[AlgerianLeague:Flashscore] error:', err.message)
+    return null
+  }
+}
+
+async function fetchAlgerianLeague() {
+  // Serve fresh cache (5–10 min spec — using 10)
+  if (ALGERIAN_LEAGUE_CACHE.data && Date.now() - ALGERIAN_LEAGUE_CACHE.ts < ALGERIAN_LEAGUE_TTL) {
+    return ALGERIAN_LEAGUE_CACHE.data
+  }
+  const sources = []
+
+  // Step 1: PRIMARY — lfp.dz scrape
+  try {
+    const lfp = await fetchLFPData()
+    if (lfp?.matches?.length) {
+      sources.push({ source: 'lfp.dz', matches: lfp.matches, articles: lfp.articles || [] })
+    } else if (lfp?.articles?.length) {
+      sources.push({ source: 'lfp.dz', matches: [], articles: lfp.articles })
+    }
+  } catch (err) { diagLog('source_fail', { module: 'algerian-league.lfp', error: err.message }) }
+
+  // Step 2: BACKUP 1 — API-Football
+  try {
+    const api = await fetchAlgerianLeagueAPIFootball()
+    if (api?.matches?.length) sources.push({ ...api, articles: [] })
+  } catch (err) { diagLog('source_fail', { module: 'algerian-league.api-football', error: err.message }) }
+
+  // Step 3: BACKUP 2 — SofaScore filtered to Algeria
+  if (!sources.some(s => s.matches.length > 0)) {
+    try {
+      const sf = await fetchAlgerianLeagueSofaScore()
+      if (sf?.matches?.length) sources.push({ ...sf, articles: [] })
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.sofascore', error: err.message }) }
+  }
+
+  // Step 4: BACKUP 3 — Flashscore
+  if (!sources.some(s => s.matches.length > 0)) {
+    try {
+      const fs = await fetchAlgerianLeagueFlashscore()
+      if (fs?.matches?.length) sources.push({ ...fs, articles: [] })
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.flashscore', error: err.message }) }
+  }
+
+  // Merge: take first non-empty `matches` source as primary, accumulate articles
+  const primary = sources.find(s => s.matches.length > 0) || sources[0] || null
+  const allMatches = primary ? sanitizeAlgerianLeague(primary.matches || []) : []
+  const dedupedMatches = _dedupAlgerianMatches(allMatches)
+  const allArticles = sources.flatMap(s => s.articles || []).slice(0, 10)
+
+  const data = {
+    matches: dedupedMatches,
+    articles: allArticles,
+    fetchedAt: new Date().toISOString(),
+    source: primary?.source || 'unavailable',
+    sourcesAttempted: sources.map(s => s.source),
+  }
+
+  // Only cache non-empty success — preserves last-good payload on transient failure
+  if (dedupedMatches.length > 0 || allArticles.length > 0) {
+    ALGERIAN_LEAGUE_CACHE.data = data
+    ALGERIAN_LEAGUE_CACHE.ts = Date.now()
+  } else if (ALGERIAN_LEAGUE_CACHE.data) {
+    // Anti-empty: serve stale rather than empty
+    return { ...ALGERIAN_LEAGUE_CACHE.data, stale: true }
+  }
+  return data
+}
+
 app.get('/api/dz-agent/lfp', async (_req, res) => {
-  const data = await fetchLFPData()
-  // Anti-empty: never return a silently empty card. Attach a localised message
-  // when no matches & no articles could be sourced from lfp.dz.
+  const data = await fetchAlgerianLeague()
+  // Anti-empty: never return a silently empty card.
   const noMatches  = !data?.matches  || data.matches.length === 0
   const noArticles = !data?.articles || data.articles.length === 0
   if (noMatches && noArticles) {
-    diagLog('empty', { module: 'lfp', source: data?.source || 'lfp.dz' })
+    diagLog('empty', { module: 'algerian-league', sources: data?.sourcesAttempted || [] })
     return res.json({
       ...data,
       matches: [],
       articles: [],
       status: 'unavailable',
-      message: '⚠️ بيانات الدوري الجزائري غير متاحة حالياً من lfp.dz — يُرجى المحاولة لاحقاً.',
+      message: '⚠️ بيانات الدوري الجزائري غير متاحة حالياً — يُرجى المحاولة لاحقاً.',
     })
   }
   res.json({ ...data, status: 'ok' })
@@ -3593,6 +3803,88 @@ function buildLeagueGroups(matches) {
     .map(([name, matches]) => ({ name, matches: matches.slice(0, 6) }))
 }
 
+// ===== GLOBAL LEAGUES — TOP-5 EUROPEAN COMPETITIONS CASCADE =====
+// Champions League (UCL), Premier League (EPL), La Liga, Serie A, Bundesliga.
+// Primary  : API-Football (RapidAPI) when RAPIDAPI_KEY/API_FOOTBALL_KEY is set
+// Backup   : SofaScore (filtered to those 5 competitions)
+// Failsafe : last-good cache → never empty UI
+const GLOBAL_LEAGUES_TARGETS = {
+  // API-Football league IDs
+  apiFootball: { 2: 'Champions League', 39: 'Premier League', 140: 'La Liga', 135: 'Serie A', 78: 'Bundesliga' },
+  // SofaScore competition-name fragments (case-insensitive)
+  sofaNameMatchers: [
+    { key: 'Champions League', match: ['champions league', 'دوري أبطال أوروبا'] },
+    { key: 'Premier League',   match: ['premier league', 'الدوري الإنجليزي'] },
+    { key: 'La Liga',          match: ['laliga', 'la liga', 'الدوري الإسباني'] },
+    { key: 'Serie A',          match: ['serie a', 'الدوري الإيطالي'] },
+    { key: 'Bundesliga',       match: ['bundesliga', 'الدوري الألماني'] },
+  ],
+}
+
+async function fetchGlobalLeaguesAPIFootball(dateStr) {
+  const key = process.env.RAPIDAPI_KEY || process.env.API_FOOTBALL_KEY
+  if (!key) return null
+  try {
+    const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com' }
+    const r = await fetch(`https://api-football-v1.p.rapidapi.com/v3/fixtures?date=${dateStr}`, {
+      headers, signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) return null
+    const d = await r.json()
+    const fixtures = d?.response || []
+    const wanted = GLOBAL_LEAGUES_TARGETS.apiFootball
+    const grouped = {}
+    for (const f of fixtures) {
+      const lid = f.league?.id
+      if (!wanted[lid]) continue
+      const name = wanted[lid]
+      const status = f.fixture?.status?.short || ''
+      const finished = ['FT', 'AET', 'PEN'].includes(status)
+      const live = ['1H', '2H', 'ET', 'HT', 'P', 'BT'].includes(status)
+      const dt = f.fixture?.date ? new Date(f.fixture.date) : null
+      ;(grouped[name] ??= []).push({
+        homeTeam: f.teams?.home?.name || '',
+        awayTeam: f.teams?.away?.name || '',
+        homeScore: (finished || live) ? (f.goals?.home ?? null) : null,
+        awayScore: (finished || live) ? (f.goals?.away ?? null) : null,
+        statusType: finished ? 'finished' : live ? 'inprogress' : 'notstarted',
+        startTime: dt ? dt.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers' }) : '',
+        link: f.fixture?.id ? `https://www.api-football.com/fixture/${f.fixture.id}` : '',
+      })
+    }
+    const leagues = Object.entries(grouped).map(([name, matches]) => ({ name, matches: matches.slice(0, 8) }))
+    return leagues.length ? { leagues, source: 'api-football' } : null
+  } catch (err) {
+    console.warn('[GlobalLeagues:API-Football] error:', err.message)
+    return null
+  }
+}
+
+async function fetchGlobalLeaguesSofaScore(dateStr) {
+  try {
+    const sf = await fetchSofaScoreFootball(dateStr)
+    if (!sf?.matches?.length) return null
+    const grouped = {}
+    for (const m of sf.matches) {
+      const comp = (m.competition || '').toLowerCase()
+      const matched = GLOBAL_LEAGUES_TARGETS.sofaNameMatchers.find(x => x.match.some(s => comp.includes(s)))
+      if (!matched) continue
+      ;(grouped[matched.key] ??= []).push({
+        homeTeam: m.homeTeam, awayTeam: m.awayTeam,
+        homeScore: m.homeScore, awayScore: m.awayScore,
+        statusType: m.statusType || '',
+        startTime: m.startTime || '',
+        link: m.link || '',
+      })
+    }
+    const leagues = Object.entries(grouped).map(([name, matches]) => ({ name, matches: matches.slice(0, 8) }))
+    return leagues.length ? { leagues, source: 'sofascore' } : null
+  } catch (err) {
+    console.warn('[GlobalLeagues:SofaScore] error:', err.message)
+    return null
+  }
+}
+
 app.get('/api/dz-agent/global-leagues', async (req, res) => {
   const dateStr = req.query.date || new Date().toISOString().split('T')[0]
 
@@ -3606,86 +3898,53 @@ app.get('/api/dz-agent/global-leagues', async (req, res) => {
   }
 
   try {
-    // PRIMARY: jdwel.com (user-mandated source for the global leagues card)
-    // Fallbacks: SofaScore → international football RSS → last-good cache
-    const [jdwelResult, sfResult, rssResult] = await Promise.allSettled([
-      fetchJdwelMatches(dateStr === new Date().toISOString().slice(0, 10) ? null : dateStr),
-      fetchSofaScoreFootball(dateStr),
-      fetchMultipleFeeds(INTL_FOOTBALL_FEEDS),
-    ])
-    const jdwelData = jdwelResult.status === 'fulfilled' ? jdwelResult.value : null
-    const sfData = sfResult.status === 'fulfilled' ? sfResult.value : null
-    const rss = rssResult.status === 'fulfilled' ? rssResult.value : []
-    if (jdwelResult.status !== 'fulfilled' || !jdwelData) diagLog('source_fail', { module: 'global-leagues.jdwel', reason: jdwelResult.reason?.message || 'no-data' })
+    // PRIMARY: API-Football for Top-5
+    let result = await fetchGlobalLeaguesAPIFootball(dateStr)
 
-    // Primary: jdwel groups already shaped as { name, matches }
-    let leagues = []
-    let source = null
-    if (jdwelData?.groups?.length) {
-      leagues = jdwelData.groups
-        .sort((a, b) => b.matches.length - a.matches.length)
-        .slice(0, 12)
-        .map(g => ({ name: g.name, matches: g.matches.slice(0, 8) }))
-      source = 'jdwel.com'
-    } else if (sfData?.matches?.length) {
-      leagues = buildLeagueGroups(sfData.matches)
-      source = 'sofascore'
-      diagLog('fallback', { module: 'global-leagues', from: 'jdwel', to: 'sofascore' })
-    }
-
-    // Fallback chain: if SofaScore returned nothing, try to extract a minimal
-    // league list from RSS news (so the card always has *something* to show).
-    if (leagues.length === 0 && Array.isArray(rss) && rss.length > 0) {
-      const rssMatches = []
-      for (const feed of rss) {
-        for (const item of (feed?.items || []).slice(0, 5)) {
-          rssMatches.push({
-            homeTeam: item.title?.split(' vs ')?.[0]?.trim() || item.title?.slice(0, 40) || '',
-            awayTeam: item.title?.split(' vs ')?.[1]?.trim() || '',
-            competition: feed.name || 'أخبار كرة القدم',
-            statusType: 'news',
-            startTime: '',
-          })
-        }
-      }
-      if (rssMatches.length > 0) {
-        leagues = buildLeagueGroups(rssMatches)
-        source = 'rss-fallback'
+    // BACKUP: SofaScore filtered to Top-5
+    if (!result?.leagues?.length) {
+      const sof = await fetchGlobalLeaguesSofaScore(dateStr)
+      if (sof?.leagues?.length) {
+        result = sof
+        diagLog('fallback', { module: 'global-leagues', from: 'api-football', to: 'sofascore' })
       }
     }
 
-    // Final fallback: last successful payload (any date) so the card never
-    // appears empty.
-    if (leagues.length === 0 && GLOBAL_LEAGUES_CACHE.data?.leagues?.length > 0) {
-      const stale = {
-        ...GLOBAL_LEAGUES_CACHE.data,
-        source: `${GLOBAL_LEAGUES_CACHE.data.source || 'cache'} (stale)`,
-        fetchedAt: GLOBAL_LEAGUES_CACHE.data.fetchedAt,
-        servedFromCacheAt: new Date().toISOString(),
+    // FAILSAFE: last-good cache → never empty UI
+    if (!result?.leagues?.length) {
+      if (GLOBAL_LEAGUES_CACHE.data?.leagues?.length > 0) {
+        return res.json({
+          ...GLOBAL_LEAGUES_CACHE.data,
+          source: `${GLOBAL_LEAGUES_CACHE.data.source || 'cache'} (stale)`,
+          servedFromCacheAt: new Date().toISOString(),
+        })
       }
-      return res.json(stale)
+      diagLog('empty', { module: 'global-leagues', date: dateStr })
+      return res.json({
+        leagues: [],
+        date: dateStr,
+        fetchedAt: new Date().toISOString(),
+        source: 'unavailable',
+        status: 'unavailable',
+        message: '⚠️ بيانات الدوريات العالمية غير متاحة حالياً، حاول لاحقاً.',
+      })
     }
 
     const payload = {
-      leagues,
-      rssNews: (rss || []).flatMap(f => (f?.items || []).map(it => ({ ...it, feedName: f.name }))).slice(0, 10),
+      leagues: result.leagues,
       date: dateStr,
       fetchedAt: new Date().toISOString(),
-      source: source || 'unavailable',
-      status: leagues.length > 0 ? 'ok' : 'unavailable',
-      message: leagues.length > 0 ? null : '⚠️ بيانات الدوريات العالمية غير متاحة حالياً، حاول لاحقاً.',
+      source: result.source,
+      status: 'ok',
+      message: null,
     }
 
     // Only persist non-empty results so cache always holds the last GOOD payload
-    if (leagues.length > 0) {
-      GLOBAL_LEAGUES_CACHE.data = payload
-      GLOBAL_LEAGUES_CACHE.ts = Date.now()
-    }
-
+    GLOBAL_LEAGUES_CACHE.data = payload
+    GLOBAL_LEAGUES_CACHE.ts = Date.now()
     return res.json(payload)
   } catch (err) {
     console.error('[GlobalLeagues] Error:', err.message)
-    // Cache fallback on hard error
     if (GLOBAL_LEAGUES_CACHE.data?.leagues?.length > 0) {
       return res.json({
         ...GLOBAL_LEAGUES_CACHE.data,
@@ -3695,7 +3954,6 @@ app.get('/api/dz-agent/global-leagues', async (req, res) => {
     }
     return res.json({
       leagues: [],
-      rssNews: [],
       date: dateStr,
       fetchedAt: new Date().toISOString(),
       source: 'error',

@@ -4992,7 +4992,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isCurrencyQuery ? fetchCurrencyData() : Promise.resolve(null),
     (isFootballQuery && !isLFPQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
-    isGlobalLeaguesQuery ? fetchSofaScoreFootball(today) : Promise.resolve(null),
+    // Use jdwel.com (same source as the card) with SofaScore as a fallback
+    isGlobalLeaguesQuery ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today)]) : Promise.resolve(null),
   ])
 
   // ── Build context strings from parallel results ────────────────────────────
@@ -5107,20 +5108,43 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── NEW: Global Leagues context injection ─────────────────────────────────
+  // ── Global Leagues context injection — PRIMARY: jdwel.com (matches the card) ──
   let globalLeaguesContext = ''
   if (isGlobalLeaguesQuery) {
-    const glData = globalLeaguesResult.status === 'fulfilled' ? globalLeaguesResult.value : null
-    if (glData?.matches?.length > 0) {
-      console.log(`[DZ Agent] Global leagues — injecting ${glData.matches.length} matches from SofaScore`)
+    const settled = globalLeaguesResult.status === 'fulfilled' ? globalLeaguesResult.value : null
+    const jdwelData = settled && settled[0]?.status === 'fulfilled' ? settled[0].value : null
+    const sfData    = settled && settled[1]?.status === 'fulfilled' ? settled[1].value : null
+
+    const formatJdwelMatch = (m) => {
+      const t = m.startTime || ''
+      if (m.statusType === 'inprogress') return `🔴 **${m.homeScore ?? 0} - ${m.awayScore ?? 0}** (مباشر${t ? ` ${t}` : ''})`
+      if (m.statusType === 'finished')   return `✅ **${m.homeScore ?? 0} - ${m.awayScore ?? 0}**`
+      return `(${t || 'قادمة'})`
+    }
+
+    if (jdwelData?.groups?.length > 0) {
+      console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches across ${jdwelData.groups.length} leagues from jdwel.com`)
+      const fetchTime = jdwelData.fetchedAt ? new Date(jdwelData.fetchedAt).toLocaleString('ar-DZ') : ''
+      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية — ${today} (المصدر: jdwel.com — ${fetchTime}) ---\n`
+      for (const g of jdwelData.groups.slice(0, 10)) {
+        globalLeaguesContext += `\n**🏟️ ${g.name}:**\n`
+        for (const m of g.matches.slice(0, 6)) {
+          globalLeaguesContext += `• ${m.homeTeam} ${formatJdwelMatch(m)} ${m.awayTeam}`
+          if (m.link) globalLeaguesContext += ` — ${m.link}`
+          globalLeaguesContext += '\n'
+        }
+      }
+      globalLeaguesContext += `\n*المصدر الرسمي: ${jdwelData.sourceUrl || 'https://jdwel.com/today/'}*\n---`
+    } else if (sfData?.matches?.length > 0) {
+      console.log(`[DZ Agent] Global leagues — jdwel unavailable, falling back to SofaScore (${sfData.matches.length} matches)`)
       // Group by competition
       const leagueMap = {}
-      for (const m of glData.matches) {
+      for (const m of sfData.matches) {
         const comp = m.competition || m.country || 'بطولة دولية'
         if (!leagueMap[comp]) leagueMap[comp] = []
         leagueMap[comp].push(m)
       }
-      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية — ${today} (المصدر: SofaScore) ---\n`
+      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية — ${today} (المصدر الاحتياطي: SofaScore) ---\n`
       for (const [league, matches] of Object.entries(leagueMap).slice(0, 8)) {
         globalLeaguesContext += `\n**${league}:**\n`
         for (const m of matches.slice(0, 5)) {
@@ -5132,10 +5156,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           globalLeaguesContext += `• ${m.homeTeam} ${score} ${m.awayTeam}\n`
         }
       }
-      globalLeaguesContext += '\n---'
+      globalLeaguesContext += '\n*ملاحظة: المصدر الأساسي jdwel.com غير متاح حالياً — تم استخدام SofaScore كاحتياط.*\n---'
     } else {
-      // Fallback: provide helpful info
-      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية ---\nللاطلاع على نتائج الدوريات العالمية الحية، يرجى زيارة: sofascore.com أو flashscore.com\n---`
+      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية ---\nتعذّر جلب بيانات المباريات العالمية حالياً من jdwel.com أو SofaScore. يرجى المحاولة لاحقاً أو زيارة: https://jdwel.com/today/\n---`
     }
   }
 

@@ -871,6 +871,19 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {/* ===== SPORTS — الدوري الجزائري ===== */}
         {activeSection === 'sports' && (
           <div className="dzd-sports-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 6px', fontSize: '11px', color: '#a0a0b0' }}>
+              <span>⚽ الدوري الجزائري — المصدر: lfp.dz/ar/calendar</span>
+              <button
+                className="dzd-retry-btn"
+                style={{ fontSize: '10px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                onClick={loadDashboard}
+                disabled={loading}
+                title="تحديث سريع من lfp.dz"
+              >
+                <RefreshCw size={11} className={loading ? 'dzd-spin' : ''} />
+                {loading ? 'جاري التحديث…' : 'تحديث سريع'}
+              </button>
+            </div>
             <div className="dzd-sports-header" style={{ display: 'flex', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
               <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هو ترتيب الدوري الجزائري المحترف؟')}>
                 🏆 الترتيب
@@ -952,9 +965,21 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {/* ===== STANDINGS — جدول الترتيب ===== */}
         {activeSection === 'standings' && (
           <div className="dzd-sports-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0', gap: '8px', flexWrap: 'wrap' }}>
               <span>🏆 ترتيب الدوري الجزائري المحترف</span>
-              {standingsData?.source && <span style={{ fontSize: '10px' }}>المصدر: {standingsData.source}</span>}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                {standingsData?.source && <span style={{ fontSize: '10px' }}>المصدر: {standingsData.source}</span>}
+                <button
+                  className="dzd-retry-btn"
+                  style={{ fontSize: '10px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  onClick={loadStandings}
+                  disabled={standingsLoading}
+                  title="تحديث سريع"
+                >
+                  <RefreshCw size={11} className={standingsLoading ? 'dzd-spin' : ''} />
+                  {standingsLoading ? 'جاري…' : 'تحديث'}
+                </button>
+              </span>
             </div>
             {standingsLoading ? (
               <div className="dzd-match-list">
@@ -1005,9 +1030,21 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {/* ===== GLOBAL LEAGUES — الدوريات العالمية ===== */}
         {activeSection === 'global' && (
           <div className="dzd-sports-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0', gap: '8px', flexWrap: 'wrap' }}>
               <span>🌍 الدوريات العالمية — {globalLeagues?.date || new Date().toLocaleDateString('ar-DZ')}</span>
-              {globalLeagues?.source && <span style={{ fontSize: '10px' }}>المصدر: {globalLeagues.source}</span>}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                {globalLeagues?.source && <span style={{ fontSize: '10px' }}>المصدر: {globalLeagues.source}</span>}
+                <button
+                  className="dzd-retry-btn"
+                  style={{ fontSize: '10px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  onClick={loadGlobalLeagues}
+                  disabled={globalLoading}
+                  title="تحديث سريع من jdwel.com"
+                >
+                  <RefreshCw size={11} className={globalLoading ? 'dzd-spin' : ''} />
+                  {globalLoading ? 'جاري…' : 'تحديث'}
+                </button>
+              </span>
             </div>
             <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
               {['بريميرليغ', 'ليغا', 'تشامبيونز ليغ', 'بوندسليغا', 'سيريا إيه'].map(league => (

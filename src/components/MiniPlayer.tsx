@@ -9,7 +9,7 @@ function fmt(s: number): string {
 }
 
 export default function MiniPlayer() {
-  const { track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, toggle, seek, stop, next, removeFromQueue, clearQueue } = useMiniPlayer()
+  const { track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, toggle, seek, stop, next, removeFromQueue, clearQueue, play } = useMiniPlayer()
   const [queueOpen, setQueueOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const touchStartY = useRef<number | null>(null)
@@ -212,19 +212,46 @@ export default function MiniPlayer() {
           <div className="mini-queue-body">
             {queue.length === 0 ? (
               <div className="mini-queue-empty">القائمة فارغة. أضف مقاطع من DZ Tube.</div>
-            ) : queue.map((t, i) => (
-              <div key={t.id} className="mini-queue-item">
-                <span className="mini-queue-idx">{i + 1}</span>
-                <img className="mini-queue-thumb" src={t.thumbnail} alt="" />
-                <div className="mini-queue-info">
-                  <span className="mini-queue-title" title={t.title}>{t.title}</span>
-                  <span className="mini-queue-channel">{t.channel}</span>
+            ) : queue.map((t, i) => {
+              const isCurrent = track?.id === t.id
+              // SYNC by design: play() must be invoked in the same task as the
+              // click so the user-gesture activation is preserved (mobile Safari
+              // autoplay). Remove from queue afterwards so the queue reflects
+              // "upcoming tracks" only. See MiniPlayerCtx.play() comment.
+              const onPlayClick = () => {
+                if (isCurrent) { toggle(); return }
+                play({ id: t.id, url: t.url, title: t.title, thumbnail: t.thumbnail, channel: t.channel, duration: t.duration })
+                removeFromQueue(t.id)
+              }
+              return (
+                <div
+                  key={t.id}
+                  className={`mini-queue-item${isCurrent ? ' is-playing' : ''}`}
+                  onClick={onPlayClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPlayClick() } }}
+                  style={{ cursor: 'pointer' }}
+                  title={isCurrent ? (playing ? 'إيقاف' : 'تشغيل') : 'تشغيل في المشغّل المصغّر'}
+                >
+                  <span className="mini-queue-idx">
+                    {isCurrent ? (loading ? <Loader2 size={12} className="dzt-spin" /> : playing ? <Pause size={12} /> : <Play size={12} />) : i + 1}
+                  </span>
+                  <img className="mini-queue-thumb" src={t.thumbnail} alt="" />
+                  <div className="mini-queue-info">
+                    <span className="mini-queue-title" title={t.title}>{t.title}</span>
+                    <span className="mini-queue-channel">{t.channel}</span>
+                  </div>
+                  <button
+                    className="mini-queue-remove"
+                    onClick={(e) => { e.stopPropagation(); removeFromQueue(t.id) }}
+                    title="حذف"
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
-                <button className="mini-queue-remove" onClick={() => removeFromQueue(t.id)} title="حذف">
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

@@ -3885,17 +3885,27 @@ async function fetchJdwelMatches(dateStr = null) {
     : 'https://jdwel.com/today/'
   try {
     let html = null
-    // Primary: curl (bypasses Cloudflare JA3 block on Node fetch). Available
-    // in Replit's Nix runtime but NOT guaranteed in Vercel's serverless lambda.
+    let groups = []
+    // Primary: curl (bypasses Cloudflare JA3 block on Node fetch). Works in
+    // Replit's Nix runtime. On Vercel, curl exists but jdwel's Cloudflare
+    // returns a tiny challenge page (~5–10 KB) instead of the real content,
+    // so we must detect that and fall through to the Jina reader-proxy.
     const curlRes = await _spawnCurl(url, 15)
-    if (curlRes.ok) {
+    if (curlRes.ok && curlRes.body) {
       html = curlRes.body
+      groups = parseJdwelHtml(html)
+      if (groups.length === 0) {
+        diagLog('jdwel.curl_empty', { url, bodyLen: html.length })
+        html = null  // force Jina fallback
+      }
     } else {
       diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
-      // Vercel-friendly fallback: r.jina.ai is a free reader-proxy that
-      // fetches the page server-side and returns clean markdown, bypassing
-      // Cloudflare's JA3-fingerprint block on Node `fetch`. We parse the
-      // markdown with `parseJdwelMarkdown` (separate from the html parser).
+    }
+    // Vercel-friendly fallback: r.jina.ai is a free reader-proxy that fetches
+    // the page server-side and returns clean markdown, bypassing Cloudflare's
+    // JA3-fingerprint block. Used when curl is missing OR when curl returns a
+    // Cloudflare challenge page that fails the HTML parser.
+    if (!html || groups.length === 0) {
       try {
         const proxied = `https://r.jina.ai/${url}`
         const pr = await fetch(proxied, {
@@ -3931,24 +3941,9 @@ async function fetchJdwelMatches(dateStr = null) {
       } catch (perr) {
         diagLog('source_fail', { module: 'jdwel.jina', error: perr.message })
       }
-      // Last-ditch: try Node fetch (will normally 403 for jdwel but kept for portability)
-      const r = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'ar,en;q=0.8',
-        },
-        signal: AbortSignal.timeout(15000),
-      })
-      if (!r.ok) {
-        diagLog('source_fail', { module: 'jdwel', status: r.status, url })
-        return null
-      }
-      html = await r.text()
     }
-    const groups = parseJdwelHtml(html)
-    if (groups.length === 0) {
-      diagLog('empty', { module: 'jdwel', url, htmlSize: html.length })
+    if (!html || groups.length === 0) {
+      diagLog('empty', { module: 'jdwel', url, htmlSize: html ? html.length : 0 })
       return null
     }
     const data = {

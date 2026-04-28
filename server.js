@@ -7910,48 +7910,65 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     _audioUrlCache.delete(youtubeUrl)
   }
 
-  const dlpBin = await ytDlpBinaryPath()
-  if (dlpBin) {
-    try {
-      const cookies = await ytDlpCookiesArgs()
-      // Use plain `bestaudio/best` (no `-S proto:https`, no anti-bot rotation)
-      // — yt-dlp's own ranking is more reliable across videos. The strict
-      // itag list (140/251/...) frequently 403s on this signed URL chain
-      // when combined with the anti-bot client switching.
-      const u = await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-warnings', '--no-playlist', ...cookies, youtubeUrl])
-        let out = '', err = ''
-        proc.stdout.on('data', d => { out += d.toString() })
-        proc.stderr.on('data', d => { err += d.toString() })
-        proc.on('error', reject)
-        proc.on('close', code => {
-          const url = out.trim().split('\n')[0]
-          if (code !== 0 || !url) return reject(new Error(err.slice(0, 300) || 'no url'))
-          resolve(url)
-        })
-      })
-      _audioUrlCache.set(youtubeUrl, { url: u, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
-      return u
-    } catch (e) {
-      console.warn('[audio-proxy:dlp-fail]', e.message)
-    }
-  }
-  try {
+  // PERF: race all three extractors in parallel and use whichever returns
+  // first. Previously the chain ran sequentially with yt-dlp first, which
+  // meant every cold play paid 3-7s of subprocess startup before the 307
+  // redirect could be sent and the browser could even start fetching bytes.
+  // Piped is typically <1s (cached HTTP API), ytdl-core is variable, and
+  // yt-dlp is the slowest but most reliable. Any one of them returning a
+  // valid URL is enough; the others continue in the background but their
+  // results are ignored (the cache assignment is still safe — last writer
+  // wins and TTL covers the rare case of a stale URL).
+  const videoId = extractYouTubeVideoId(youtubeUrl)
+
+  const tryPiped = (async () => {
+    if (!videoId) throw new Error('no videoId')
+    const piped = await fetchPipedStreams(videoId, { isAudio: true })
+    if (!piped?.url) throw new Error('piped: no url')
+    return piped.url
+  })()
+
+  const tryJs = (async () => {
     const info = await ytdl.getInfo(youtubeUrl)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
-    if (fmt?.url) {
-      _audioUrlCache.set(youtubeUrl, { url: fmt.url, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
-      return fmt.url
-    }
-  } catch (e) {
-    console.warn('[audio-proxy:js-fail]', e.message)
+    if (!fmt?.url) throw new Error('ytdl-core: no url')
+    return fmt.url
+  })()
+
+  const tryDlp = (async () => {
+    const dlpBin = await ytDlpBinaryPath()
+    if (!dlpBin) throw new Error('yt-dlp: not available')
+    const cookies = await ytDlpCookiesArgs()
+    return new Promise((resolve, reject) => {
+      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-warnings', '--no-playlist', ...cookies, youtubeUrl])
+      let out = '', err = ''
+      proc.stdout.on('data', d => { out += d.toString() })
+      proc.stderr.on('data', d => { err += d.toString() })
+      proc.on('error', reject)
+      proc.on('close', code => {
+        const url = out.trim().split('\n')[0]
+        if (code !== 0 || !url) return reject(new Error(err.slice(0, 300) || 'no url'))
+        resolve(url)
+      })
+    })
+  })()
+
+  // Wrap each promise so we can log per-extractor failures without polluting
+  // the main race rejection (Promise.any rejects only when ALL fail).
+  const tagged = [
+    tryPiped.catch(e => { console.warn('[audio-proxy:piped-fail]', e.message); throw e }),
+    tryJs.catch(e => { console.warn('[audio-proxy:js-fail]', e.message); throw e }),
+    tryDlp.catch(e => { console.warn('[audio-proxy:dlp-fail]', e.message); throw e }),
+  ]
+
+  try {
+    const winner = await Promise.any(tagged)
+    _audioUrlCache.set(youtubeUrl, { url: winner, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS })
+    _trimAudioUrlCache()
+    return winner
+  } catch {
+    throw new Error('all extractors failed')
   }
-  const piped = await fetchPipedStreams(extractYouTubeVideoId(youtubeUrl), { isAudio: true })
-  if (piped?.url) {
-    _audioUrlCache.set(youtubeUrl, { url: piped.url, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS }); _trimAudioUrlCache()
-    return piped.url
-  }
-  throw new Error('all extractors failed')
 }
 
 // Detect Safari/iOS — these clients can NOT decode the webm/opus that YouTube

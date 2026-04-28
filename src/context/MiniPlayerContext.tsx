@@ -80,22 +80,28 @@ function extractVideoId(url: string): string | null {
 }
 
 // Build a SAME-ORIGIN URL that the <audio> element can be bound to
-// synchronously inside the user-gesture frame. The server-side proxy
-// (/api/dz-tube/audio-pipe) resolves the signed googlevideo URL AND
-// streams the bytes through our server with full Range support.
+// synchronously inside the user-gesture frame.
 //
-// Why audio-pipe and NOT audio-proxy:
-// audio-proxy answers with HTTP 307 → googlevideo.com directly. That
-// looks faster, but googlevideo signs the URL with the SERVER's IP.
-// When the browser follows the redirect from a different client IP,
-// google often returns a silent 403 / connection close — and on some
-// browsers the <audio> element doesn't even fire `error`. Result:
-// the spinner spins forever and playback never starts. audio-pipe
-// avoids this by never exposing the IP-bound URL to the browser.
-function buildAudioSrc(track: PlayerTrack, cacheBust?: number): string {
+// Strategy (fixed Apr 2026):
+//   • DEFAULT path → /api/dz-tube/audio-proxy (HTTP 307 → googlevideo.com).
+//     The serverless function exits in milliseconds and the browser streams
+//     directly from googlevideo's CDN with full Range support. This is the
+//     ONLY path that works for tracks longer than the Vercel function
+//     maxDuration (60s) — because the function is no longer in the byte
+//     path, the timeout is irrelevant.
+//   • FALLBACK path → /api/dz-tube/audio-pipe (server byte-pipe). Used only
+//     after the proxy path has failed for a track (e.g. googlevideo signed
+//     the URL with the server IP and rejects the client, or a regional
+//     edge blocks the redirect). Still bounded by the function timeout,
+//     but acceptable for short tracks and as a recovery escape hatch.
+//
+// Previous version called audio-pipe by default, which silently truncated
+// every song at 60s on Vercel and produced the "infinite spinner" bug.
+function buildAudioSrc(track: PlayerTrack, cacheBust?: number, useFallback?: boolean): string {
   const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
   const cb = cacheBust ? `&_r=${cacheBust}` : ''
-  return `/api/dz-tube/audio-pipe?url=${encodeURIComponent(yt)}${cb}`
+  const endpoint = useFallback ? 'audio-pipe' : 'audio-proxy'
+  return `/api/dz-tube/${endpoint}?url=${encodeURIComponent(yt)}${cb}`
 }
 
 const AUTO_RADIO_KEY = 'dz-tube-auto-radio'
@@ -141,6 +147,12 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const recoverAttemptsRef = useRef<number>(0)
   const lastRecoverAtRef = useRef<number>(0)
   const recoverTimerRef = useRef<number | null>(null)
+  // Per-track endpoint strategy. We start every track on the fast 307 path
+  // (audio-proxy). If it errors, we flip this flag for the current track id
+  // so subsequent recoveries use the byte-pipe (audio-pipe). Cleared on
+  // every track change.
+  const useFallbackRef = useRef<boolean>(false)
+  const proxyFailedIdsRef = useRef<Set<string>>(new Set())
   const trackRef = useRef<PlayerTrack | null>(initial.track)
   const wantPlayingRef = useRef<boolean>(false)
   const nextRef = useRef<() => void>(() => {})
@@ -263,7 +275,16 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         if (!cur || cur.id !== t.id) return
         try {
           resumeAtRef.current = resumeAt
-          el!.src = buildAudioSrc(cur, Date.now())
+          // After 2 failed attempts on the proxy path for this track, flip
+          // to the byte-pipe fallback for the rest of the session. The pipe
+          // is slower but bypasses the IP-binding / regional-edge issues
+          // that cause the 307 redirect to fail silently.
+          if (recoverAttemptsRef.current >= 2 && !useFallbackRef.current) {
+            useFallbackRef.current = true
+            proxyFailedIdsRef.current.add(cur.id)
+            console.warn('[mini-player] switching to byte-pipe fallback for', cur.id)
+          }
+          el!.src = buildAudioSrc(cur, Date.now(), useFallbackRef.current)
           currentSrcIdRef.current = cur.id
           el!.load()
           // ALWAYS attempt to resume after a recovery rebind. wantPlayingRef
@@ -378,9 +399,14 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     // result, so the mini-player doesn't sit at "0:00".
     setDuration(t.duration && t.duration > 0 ? t.duration : 0)
     resumeAtRef.current = resumeAt > 1 ? resumeAt : 0
+    // Reset per-track recovery state for the new track. If we already know
+    // the proxy path is broken for this track id (from an earlier attempt
+    // in the same session), start directly on the byte-pipe.
+    recoverAttemptsRef.current = 0
+    useFallbackRef.current = proxyFailedIdsRef.current.has(t.id)
 
     try {
-      el.src = buildAudioSrc(t)
+      el.src = buildAudioSrc(t, undefined, useFallbackRef.current)
       currentSrcIdRef.current = t.id
       el.load()
       if (autoplay) {
@@ -631,7 +657,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         // If the source was unloaded by the browser, rebind it first.
         if (!el.src || currentSrcIdRef.current !== t.id) {
           try {
-            el.src = buildAudioSrc(t, Date.now())
+            el.src = buildAudioSrc(t, Date.now(), useFallbackRef.current)
             currentSrcIdRef.current = t.id
             el.load()
           } catch {}

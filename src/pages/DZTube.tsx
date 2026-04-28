@@ -262,26 +262,25 @@ export default function DZTube() {
     }
   }, [qualityCache])
 
-  const playInBackground = useCallback(async (r: SearchResult) => {
+  // SYNC by design: must call player.play() in the same task as the user's
+  // click so HTMLMediaElement.play() inherits the gesture activation. Any
+  // `await` between click and play() triggers NotAllowedError on Safari/iOS
+  // and increasingly on Chrome too. See MiniPlayerCtx.play comment.
+  const playInBackground = useCallback((r: SearchResult) => {
     if (!r.id || !r.url) {
       showToast('بيانات الفيديو غير مكتملة', 'err')
       return
     }
     setEmbedId(null)
     showToast(`جاري تحميل: ${r.title.slice(0, 50)}…`)
-    try {
-      await player.play({
-        id: r.id,
-        url: r.url,
-        title: r.title,
-        thumbnail: r.thumbnail,
-        channel: r.channel,
-        duration: r.duration,
-      })
-      showToast('▶ يتم التشغيل في الخلفية')
-    } catch {
-      showToast('تعذر تشغيل الصوت', 'err')
-    }
+    player.play({
+      id: r.id,
+      url: r.url,
+      title: r.title,
+      thumbnail: r.thumbnail,
+      channel: r.channel,
+      duration: r.duration,
+    })
   }, [player, showToast])
 
   const playInFrame = useCallback((r: SearchResult) => {

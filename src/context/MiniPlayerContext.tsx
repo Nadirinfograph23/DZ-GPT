@@ -18,12 +18,19 @@ interface MiniPlayerCtx {
   duration: number
   autoRadio: boolean
   setAutoRadio: (v: boolean) => void
-  play: (track: PlayerTrack) => Promise<void>
+  // play() is intentionally SYNCHRONOUS (not Promise<void>). The reason:
+  // browsers (especially Safari/iOS but increasingly Chrome too) consider
+  // the user-gesture activation broken once a microtask boundary is
+  // crossed between the click handler and HTMLMediaElement.play(). A
+  // single `await` on a sync function is enough to push play() into a
+  // microtask and trigger NotAllowedError. By keeping this sync we
+  // guarantee el.play() runs in the same task as the click.
+  play: (track: PlayerTrack) => void
   enqueue: (track: PlayerTrack) => void
   playNext: (track: PlayerTrack) => void
   removeFromQueue: (id: string) => void
   clearQueue: () => void
-  next: () => Promise<void>
+  next: () => void
   toggle: () => void
   seek: (sec: number) => void
   stop: () => void
@@ -136,7 +143,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const recoverTimerRef = useRef<number | null>(null)
   const trackRef = useRef<PlayerTrack | null>(initial.track)
   const wantPlayingRef = useRef<boolean>(false)
-  const nextRef = useRef<() => Promise<void>>(async () => {})
+  const nextRef = useRef<() => void>(() => {})
   useEffect(() => { queueRef.current = queue }, [queue])
   useEffect(() => { trackRef.current = track }, [track])
 
@@ -409,11 +416,14 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const playInternal = useCallback(async (t: PlayerTrack, autoplay: boolean = true) => {
+  // SYNC by design — see MiniPlayerCtx.play comment for why we cannot await.
+  // setTrack is a React state setter (sync) and loadAndPlay is sync, so the
+  // whole chain stays in the same task as the originating user click.
+  const playInternal = useCallback((t: PlayerTrack, autoplay: boolean = true) => {
     setTrack(t)
     const resumeAt = resumeAtRef.current
     resumeAtRef.current = 0
-    await loadAndPlay(t, autoplay, resumeAt)
+    loadAndPlay(t, autoplay, resumeAt)
   }, [loadAndPlay])
 
   // Pull a fresh batch of related tracks for the seed and append them to the
@@ -445,36 +455,37 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const next = useCallback(async () => {
-    let q = queueRef.current
-    // Auto-radio: when the queue is empty but the user wants continuous play,
-    // pull a fresh batch of related tracks for the current seed and use the
-    // first one as "next". The remaining tracks land in the queue so the
-    // radio survives even if the next /related call fails.
-    if (q.length === 0 && autoRadioRef.current && trackRef.current) {
-      const radio = await fetchRadio(trackRef.current.id)
-      if (radio.length > 0) {
+  const next = useCallback(() => {
+    const q = queueRef.current
+    // Fast path: queue has something. Run synchronously so click-driven
+    // "next" preserves the user-gesture activation for the new play().
+    if (q.length > 0) {
+      const [head, ...rest] = q
+      setQueue(rest)
+      const leaving = trackRef.current?.id
+      if (leaving && !recentRef.current.includes(leaving)) {
+        recentRef.current = [leaving, ...recentRef.current].slice(0, 25)
+      }
+      playInternal(head)
+      return
+    }
+    // Slow path: queue empty + auto-radio on → background fetch then play.
+    // This intentionally does NOT preserve the user gesture (we already
+    // waited for the network), but auto-radio is only invoked from the
+    // `ended` event or background top-up, never from a click that needs
+    // to survive autoplay restrictions.
+    if (autoRadioRef.current && trackRef.current) {
+      const seedId = trackRef.current.id
+      void fetchRadio(seedId).then(radio => {
+        if (radio.length === 0) return
         const [head, ...rest] = radio
         setQueue(rest)
-        // Track the seed so the next radio call doesn't return it again.
-        const id = trackRef.current.id
-        if (id && !recentRef.current.includes(id)) {
-          recentRef.current = [id, ...recentRef.current].slice(0, 25)
+        if (seedId && !recentRef.current.includes(seedId)) {
+          recentRef.current = [seedId, ...recentRef.current].slice(0, 25)
         }
-        await playInternal(head)
-        return
-      }
+        playInternal(head)
+      })
     }
-    q = queueRef.current
-    if (q.length === 0) return
-    const [head, ...rest] = q
-    setQueue(rest)
-    // Remember the track we're leaving so the radio doesn't loop back to it.
-    const leaving = trackRef.current?.id
-    if (leaving && !recentRef.current.includes(leaving)) {
-      recentRef.current = [leaving, ...recentRef.current].slice(0, 25)
-    }
-    await playInternal(head)
   }, [playInternal, fetchRadio])
   useEffect(() => { nextRef.current = next }, [next])
 
@@ -506,7 +517,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [autoRadio, track, queue.length, fetchRadio])
 
-  const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
+  // SYNC by design — see MiniPlayerCtx.play comment.
+  const play = useCallback((t: PlayerTrack) => { playInternal(t) }, [playInternal])
 
   // Restore previous track on first mount (paused, ready to resume).
   useEffect(() => {

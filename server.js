@@ -8103,59 +8103,6 @@ async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
   return fetch(upstreamUrl, { headers, redirect: 'follow' })
 }
 
-// TEMPORARY diagnostic endpoint — returns per-extractor success/failure for a
-// single URL so we can see what's happening on Vercel where stdout/stderr
-// from the function aren't easily accessible. Remove after debugging.
-app.get('/api/dz-tube/_audio-debug', async (req, res) => {
-  const url = String(req.query.url || '')
-  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'invalid url' })
-  const videoId = extractYouTubeVideoId(url)
-  const out = { url, videoId, extractors: {} }
-  const time = async (label, fn) => {
-    const t0 = Date.now()
-    try { const v = await fn(); out.extractors[label] = { ok: true, ms: Date.now() - t0, sample: String(v).slice(0, 80) } }
-    catch (e) { out.extractors[label] = { ok: false, ms: Date.now() - t0, err: e.message?.slice(0, 300) } }
-  }
-  await Promise.all([
-    time('piped', async () => {
-      const r = await fetchPipedStreams(videoId, { isAudio: true })
-      if (!r?.url) throw new Error('no url')
-      return r.url
-    }),
-    time('invidious', async () => {
-      const r = await fetchInvidiousStreams(videoId, { isAudio: true })
-      if (!r?.url) throw new Error('no url')
-      return r.url
-    }),
-    time('ytdl-core', async () => {
-      const info = await ytdl.getInfo(url)
-      const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
-      if (!fmt?.url) throw new Error('no url')
-      return fmt.url
-    }),
-    time('yt-dlp', async () => {
-      const dlpBin = await ytDlpBinaryPath()
-      if (!dlpBin) throw new Error('binary not found')
-      const cookies = await ytDlpCookiesArgs()
-      const antiBot = ytDlpAntiBotArgs()
-      out.extractors['yt-dlp_bin'] = dlpBin
-      return await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, url])
-        let o = '', e = ''
-        proc.stdout.on('data', d => { o += d.toString() })
-        proc.stderr.on('data', d => { e += d.toString() })
-        proc.on('error', reject)
-        proc.on('close', code => {
-          const u = o.trim().split('\n')[0]
-          if (code !== 0 || !u) return reject(new Error(`exit=${code} stderr=${e.slice(0, 400)}`))
-          resolve(u)
-        })
-      })
-    }),
-  ])
-  res.json(out)
-})
-
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')

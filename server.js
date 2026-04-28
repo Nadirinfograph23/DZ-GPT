@@ -3799,26 +3799,52 @@ async function fetchJdwelMatches(dateStr = null) {
     : 'https://jdwel.com/today/'
   try {
     let html = null
-    // Primary: curl (bypasses Cloudflare JA3 block on Node fetch)
+    // Primary: curl (bypasses Cloudflare JA3 block on Node fetch). Available
+    // in Replit's Nix runtime but NOT guaranteed in Vercel's serverless lambda.
     const curlRes = await _spawnCurl(url, 15)
     if (curlRes.ok) {
       html = curlRes.body
     } else {
       diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
-      // Last-ditch: try Node fetch (will normally 403 for jdwel but kept for portability)
-      const r = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-          'Accept-Language': 'ar,en;q=0.8',
-        },
-        signal: AbortSignal.timeout(15000),
-      })
-      if (!r.ok) {
-        diagLog('source_fail', { module: 'jdwel', status: r.status, url })
-        return null
+      // Vercel-friendly fallback: r.jina.ai is a free reader-proxy that
+      // fetches the page server-side and returns the raw HTML, bypassing
+      // Cloudflare's JA3-fingerprint block on Node `fetch`. We ask for raw
+      // HTML via the X-Return-Format header so the parser gets the same
+      // markup curl would have returned.
+      try {
+        const proxied = `https://r.jina.ai/${url}`
+        const pr = await fetch(proxied, {
+          headers: {
+            'User-Agent': 'DZ-GPT/1.0 (+https://dz-gpt.vercel.app)',
+            'Accept': 'text/html,*/*',
+            'X-Return-Format': 'html',
+          },
+          signal: AbortSignal.timeout(15000),
+        })
+        if (pr.ok) {
+          html = await pr.text()
+        } else {
+          diagLog('source_fail', { module: 'jdwel.jina', status: pr.status, url })
+        }
+      } catch (perr) {
+        diagLog('source_fail', { module: 'jdwel.jina', error: perr.message })
       }
-      html = await r.text()
+      // Last-ditch: try Node fetch (will normally 403 for jdwel but kept for portability)
+      if (!html) {
+        const r = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'ar,en;q=0.8',
+          },
+          signal: AbortSignal.timeout(15000),
+        })
+        if (!r.ok) {
+          diagLog('source_fail', { module: 'jdwel', status: r.status, url })
+          return null
+        }
+        html = await r.text()
+      }
     }
     const groups = parseJdwelHtml(html)
     if (groups.length === 0) {

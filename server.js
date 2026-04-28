@@ -7734,6 +7734,120 @@ app.get('/api/dz-tube/search', async (req, res) => {
   }
 })
 
+// Get auto-radio related videos for a given video id, used by the
+// MiniPlayer's "إذاعة تلقائية" feature so playback never stops when the
+// queue is empty. We try three strategies in order, keeping the first
+// non-empty result so the client always gets something to play next:
+//   1) yt-dlp on the YouTube Mix playlist (RD<videoId>) — best quality
+//      ranking; truly "stations" related to the seed track.
+//   2) youtube-sr getRelated() — pure-JS fallback for serverless envs.
+//   3) Title-based search fallback — last resort that always returns
+//      something even on cold infra.
+// Results are de-duplicated and the seed id is excluded.
+app.get('/api/dz-tube/related', async (req, res) => {
+  const id = String(req.query.id || '').trim()
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 10))
+  const excludeRaw = String(req.query.exclude || '').trim()
+  const exclude = new Set((excludeRaw ? excludeRaw.split(',') : []).filter(Boolean))
+  if (id) exclude.add(id)
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) {
+    return res.status(400).json({ error: 'invalid video id' })
+  }
+
+  const dedupe = (list) => {
+    const seen = new Set()
+    const out = []
+    for (const v of list) {
+      if (!v || !v.id) continue
+      if (exclude.has(v.id) || seen.has(v.id)) continue
+      seen.add(v.id)
+      out.push(v)
+      if (out.length >= limit) break
+    }
+    return out
+  }
+
+  // Strategy 1: yt-dlp Mix playlist
+  const dlpBin = await ytDlpBinaryPath()
+  if (dlpBin) {
+    try {
+      const cookies = await ytDlpCookiesArgs()
+      const mixUrl = `https://www.youtube.com/watch?v=${id}&list=RD${id}`
+      const items = await new Promise((resolve, reject) => {
+        const proc = spawn(dlpBin, [
+          '--flat-playlist', '-J', '--no-warnings',
+          '--playlist-end', String(limit + 5),
+          ...ytDlpAntiBotArgs(),
+          ...cookies,
+          mixUrl,
+        ])
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', reject)
+        proc.on('close', code => {
+          if (code !== 0) return reject(new Error(err.slice(0, 200) || `exit ${code}`))
+          try {
+            const data = JSON.parse(out)
+            resolve((data.entries || []).filter(e => e && e.id).map(e => ({
+              id: e.id,
+              title: e.title || 'بدون عنوان',
+              url: e.url || `https://www.youtube.com/watch?v=${e.id}`,
+              thumbnail: e.thumbnails?.[e.thumbnails.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`,
+              duration: e.duration || 0,
+              channel: e.channel || e.uploader || '',
+              views: e.view_count || 0,
+            })))
+          } catch (e) { reject(e) }
+        })
+      })
+      const out = dedupe(items)
+      if (out.length > 0) return res.json({ results: out, source: 'mix' })
+    } catch (e) {
+      console.warn('[DZTube:related:dlp]', e.message)
+    }
+  }
+
+  // Strategy 2: youtube-sr getRelated
+  try {
+    if (typeof YouTube.getVideo === 'function') {
+      const v = await YouTube.getVideo(`https://www.youtube.com/watch?v=${id}`)
+      const related = (v?.related || []).filter(x => x && x.id).map(x => ({
+        id: x.id,
+        title: x.title || 'بدون عنوان',
+        url: x.url || `https://www.youtube.com/watch?v=${x.id}`,
+        thumbnail: x.thumbnail?.url || `https://i.ytimg.com/vi/${x.id}/hqdefault.jpg`,
+        duration: Math.floor((x.duration || 0) / 1000),
+        channel: x.channel?.name || '',
+        views: x.views || 0,
+      }))
+      const out = dedupe(related)
+      if (out.length > 0) return res.json({ results: out, source: 'sr-related' })
+    }
+  } catch (e) {
+    console.warn('[DZTube:related:sr]', e.message)
+  }
+
+  // Strategy 3: title-based search fallback
+  try {
+    let title = ''
+    if (typeof YouTube.getVideo === 'function') {
+      try {
+        const v = await YouTube.getVideo(`https://www.youtube.com/watch?v=${id}`)
+        title = (v?.title || '').trim()
+      } catch {}
+    }
+    const seedQuery = title || id
+    const items = await jsSearch(seedQuery, limit + 5)
+    const out = dedupe(items)
+    if (out.length > 0) return res.json({ results: out, source: 'search' })
+  } catch (e) {
+    console.warn('[DZTube:related:search]', e.message)
+  }
+
+  return res.json({ results: [], source: 'none' })
+})
+
 // Get direct audio stream URL (for background playback via HTML5 audio)
 app.get('/api/dz-tube/audio-url', async (req, res) => {
   const url = String(req.query.url || '')

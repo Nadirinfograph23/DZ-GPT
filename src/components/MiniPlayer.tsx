@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2 } from 'lucide-react'
+import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2, Radio } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 
 function fmt(s: number): string {
@@ -9,7 +9,7 @@ function fmt(s: number): string {
 }
 
 export default function MiniPlayer() {
-  const { track, queue, playing, loading, progress, duration, toggle, seek, stop, next, removeFromQueue, clearQueue } = useMiniPlayer()
+  const { track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, toggle, seek, stop, next, removeFromQueue, clearQueue } = useMiniPlayer()
   const [queueOpen, setQueueOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const touchStartY = useRef<number | null>(null)
@@ -98,10 +98,17 @@ export default function MiniPlayer() {
           <button
             className="mini-player-side"
             onClick={() => next()}
-            disabled={queue.length === 0}
+            disabled={queue.length === 0 && !autoRadio}
             title="التالي"
           >
             <SkipForward size={15} />
+          </button>
+          <button
+            className={`mini-player-side ${autoRadio ? 'active' : ''}`}
+            onClick={() => setAutoRadio(!autoRadio)}
+            title={autoRadio ? 'إيقاف الإذاعة التلقائية' : 'تشغيل الإذاعة التلقائية'}
+          >
+            <Radio size={15} />
           </button>
           <button
             className={`mini-player-side ${queueOpen ? 'active' : ''}`}
@@ -173,8 +180,15 @@ export default function MiniPlayer() {
             </div>
 
             <div className="mpf-extra">
-              <button className="mpf-extra-btn" onClick={() => next()} disabled={queue.length === 0}>
+              <button className="mpf-extra-btn" onClick={() => next()} disabled={queue.length === 0 && !autoRadio}>
                 <SkipForward size={16} /> التالي
+              </button>
+              <button
+                className={`mpf-extra-btn ${autoRadio ? 'active' : ''}`}
+                onClick={() => setAutoRadio(!autoRadio)}
+                title={autoRadio ? 'إيقاف الإذاعة التلقائية' : 'تشغيل الإذاعة التلقائية'}
+              >
+                <Radio size={16} /> {autoRadio ? 'الإذاعة مفعّلة' : 'إذاعة تلقائية'}
               </button>
               <button className="mpf-extra-btn" onClick={() => setQueueOpen(o => !o)}>
                 <ListMusic size={16} /> القائمة ({queue.length})

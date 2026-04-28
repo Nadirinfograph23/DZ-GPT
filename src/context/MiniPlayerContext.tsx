@@ -16,6 +16,8 @@ interface MiniPlayerCtx {
   loading: boolean
   progress: number
   duration: number
+  autoRadio: boolean
+  setAutoRadio: (v: boolean) => void
   play: (track: PlayerTrack) => Promise<void>
   enqueue: (track: PlayerTrack) => void
   playNext: (track: PlayerTrack) => void
@@ -84,6 +86,12 @@ function buildAudioSrc(track: PlayerTrack, cacheBust?: number): string {
   return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}${cb}`
 }
 
+const AUTO_RADIO_KEY = 'dz-tube-auto-radio'
+function loadAutoRadio(): boolean {
+  if (typeof window === 'undefined') return false
+  try { return localStorage.getItem(AUTO_RADIO_KEY) === '1' } catch { return false }
+}
+
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const initial = loadPersisted()
   const [track, setTrack] = useState<PlayerTrack | null>(initial.track)
@@ -92,6 +100,18 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(initial.progress)
   const [duration, setDuration] = useState(initial.track?.duration || 0)
+  const [autoRadio, setAutoRadioState] = useState<boolean>(loadAutoRadio())
+  const setAutoRadio = useCallback((v: boolean) => {
+    setAutoRadioState(v)
+    try { localStorage.setItem(AUTO_RADIO_KEY, v ? '1' : '0') } catch {}
+  }, [])
+  // Recently-played ids — sent to /related as exclusion list so the
+  // auto-radio doesn't loop the same 3-4 tracks. Capped at 25.
+  const recentRef = useRef<string[]>([])
+  // Lock to avoid concurrent /related fetches when the user mashes "next".
+  const fetchingRelatedRef = useRef<boolean>(false)
+  const autoRadioRef = useRef<boolean>(autoRadio)
+  useEffect(() => { autoRadioRef.current = autoRadio }, [autoRadio])
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const queueRef = useRef<PlayerTrack[]>([])
@@ -189,8 +209,15 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         return
       }
       setPlaying(false)
+      // If the user wants the auto-radio to keep going, hand off to next()
+      // which knows how to fall back to /related when the queue is empty.
+      // We deliberately keep wantPlayingRef=true so loadAndPlay's onPlay
+      // event for the new track flows through cleanly.
+      if (queueRef.current.length > 0 || (autoRadioRef.current && trackRef.current)) {
+        void nextRef.current()
+        return
+      }
       wantPlayingRef.current = false
-      if (queueRef.current.length > 0) void nextRef.current()
     }
 
     // ── Auto-recovery ────────────────────────────────────────────────────
@@ -384,14 +411,95 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     await loadAndPlay(t, autoplay, resumeAt)
   }, [loadAndPlay])
 
+  // Pull a fresh batch of related tracks for the seed and append them to the
+  // queue. Used by the auto-radio loop. Returns the list it appended (may be
+  // empty on network/extractor failure).
+  const fetchRadio = useCallback(async (seedId: string): Promise<PlayerTrack[]> => {
+    if (fetchingRelatedRef.current) return []
+    fetchingRelatedRef.current = true
+    try {
+      const exclude = encodeURIComponent(recentRef.current.slice(0, 20).join(','))
+      const r = await fetch(`/api/dz-tube/related?id=${encodeURIComponent(seedId)}&limit=10&exclude=${exclude}`)
+      if (!r.ok) return []
+      const data = await r.json()
+      const items: PlayerTrack[] = (data.results || [])
+        .filter((x: any) => x && x.id && /^[A-Za-z0-9_-]{11}$/.test(x.id))
+        .map((x: any) => ({
+          id: x.id,
+          url: x.url || `https://www.youtube.com/watch?v=${x.id}`,
+          title: x.title || 'بدون عنوان',
+          thumbnail: x.thumbnail || `https://i.ytimg.com/vi/${x.id}/hqdefault.jpg`,
+          channel: x.channel || '',
+          duration: x.duration || 0,
+        }))
+      return items
+    } catch {
+      return []
+    } finally {
+      fetchingRelatedRef.current = false
+    }
+  }, [])
+
   const next = useCallback(async () => {
-    const q = queueRef.current
+    let q = queueRef.current
+    // Auto-radio: when the queue is empty but the user wants continuous play,
+    // pull a fresh batch of related tracks for the current seed and use the
+    // first one as "next". The remaining tracks land in the queue so the
+    // radio survives even if the next /related call fails.
+    if (q.length === 0 && autoRadioRef.current && trackRef.current) {
+      const radio = await fetchRadio(trackRef.current.id)
+      if (radio.length > 0) {
+        const [head, ...rest] = radio
+        setQueue(rest)
+        // Track the seed so the next radio call doesn't return it again.
+        const id = trackRef.current.id
+        if (id && !recentRef.current.includes(id)) {
+          recentRef.current = [id, ...recentRef.current].slice(0, 25)
+        }
+        await playInternal(head)
+        return
+      }
+    }
+    q = queueRef.current
     if (q.length === 0) return
     const [head, ...rest] = q
     setQueue(rest)
+    // Remember the track we're leaving so the radio doesn't loop back to it.
+    const leaving = trackRef.current?.id
+    if (leaving && !recentRef.current.includes(leaving)) {
+      recentRef.current = [leaving, ...recentRef.current].slice(0, 25)
+    }
     await playInternal(head)
-  }, [playInternal])
+  }, [playInternal, fetchRadio])
   useEffect(() => { nextRef.current = next }, [next])
+
+  // Auto-radio top-up: when the queue gets thin (≤1) while autoRadio is
+  // on, opportunistically pre-fetch the next batch in the background so
+  // the user experiences zero gap between tracks. Runs whenever the
+  // queue length or current track changes.
+  useEffect(() => {
+    if (!autoRadio) return
+    if (!track) return
+    if (queue.length > 1) return
+    if (fetchingRelatedRef.current) return
+    let cancelled = false
+    void (async () => {
+      const items = await fetchRadio(track.id)
+      if (cancelled || items.length === 0) return
+      setQueue(prev => {
+        const have = new Set(prev.map(t => t.id))
+        const seedId = trackRef.current?.id
+        const merged = [...prev]
+        for (const it of items) {
+          if (have.has(it.id)) continue
+          if (it.id === seedId) continue
+          merged.push(it)
+        }
+        return merged
+      })
+    })()
+    return () => { cancelled = true }
+  }, [autoRadio, track, queue.length, fetchRadio])
 
   const play = useCallback(async (t: PlayerTrack) => { await playInternal(t) }, [playInternal])
 
@@ -594,7 +702,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   void extractVideoId
 
   return (
-    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
+    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
       {children}
     </Ctx.Provider>
   )

@@ -5,7 +5,7 @@ import {
   ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
   RotateCw, X, Play, Headphones, ChevronDown, Plus, Sparkles, Radio, BookOpen,
   GraduationCap, Trophy, Newspaper, Film, TrendingUp, CheckSquare, Square, ListChecks,
-  SkipForward,
+  SkipForward, Heart,
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tube.css'
@@ -33,6 +33,24 @@ interface HistoryItem {
 type Quality = string
 const HISTORY_KEY = 'dz-tube-history'
 const HISTORY_MAX = 30
+const FAVORITES_KEY = 'dz-tube-favorites'
+const FAVORITES_MAX = 100
+
+interface FavoriteItem {
+  id: string
+  url: string
+  title: string
+  thumbnail: string
+  channel: string
+  duration: number
+  addedAt: number
+}
+function loadFavorites(): FavoriteItem[] {
+  try { const r = localStorage.getItem(FAVORITES_KEY); return r ? (JSON.parse(r) || []) : [] } catch { return [] }
+}
+function saveFavorites(items: FavoriteItem[]) {
+  try { localStorage.setItem(FAVORITES_KEY, JSON.stringify(items.slice(0, FAVORITES_MAX))) } catch {}
+}
 
 interface Category {
   key: string
@@ -141,6 +159,8 @@ export default function DZTube() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [favorites, setFavorites] = useState<FavoriteItem[]>(() => loadFavorites())
+  const favoriteIds = useMemo(() => new Set(favorites.map(f => f.id)), [favorites])
   const [toast, setToast] = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showToast = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
@@ -152,7 +172,27 @@ export default function DZTube() {
   const resultsTopRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { saveHistory(history) }, [history])
+  useEffect(() => { saveFavorites(favorites) }, [favorites])
   useEffect(() => { inputRef.current?.focus() }, [])
+
+  const toggleFavorite = useCallback((r: Pick<SearchResult, 'id' | 'url' | 'title' | 'thumbnail' | 'channel' | 'duration'>) => {
+    setFavorites(prev => {
+      if (prev.some(f => f.id === r.id)) {
+        showToast('💔 أُزيل من المفضلة')
+        return prev.filter(f => f.id !== r.id)
+      }
+      showToast('❤️ أُضيف للمفضلة')
+      return [{
+        id: r.id, url: r.url, title: r.title, thumbnail: r.thumbnail,
+        channel: r.channel, duration: r.duration, addedAt: Date.now(),
+      }, ...prev].slice(0, FAVORITES_MAX)
+    })
+  }, [showToast])
+
+  const playFavorite = useCallback((f: FavoriteItem) => {
+    void player.play({ id: f.id, url: f.url, title: f.title, thumbnail: f.thumbnail, channel: f.channel, duration: f.duration })
+    showToast('▶️ يُشغَّل الآن')
+  }, [player, showToast])
 
   // Lock background scroll while the download modal is open and close on Esc
   useEffect(() => {
@@ -528,6 +568,55 @@ export default function DZTube() {
                 ابحث عن أي فيديو على YouTube، شاهده داخل التطبيق، أو حمّله بصيغة فيديو أو صوت بأعلى جودة
               </p>
             </div>
+            {favorites.length > 0 && (
+              <div className="dzt-fav-section">
+                <h3 className="dzt-fav-title">
+                  <Heart size={14} fill="currentColor" /> المفضلة
+                  <span className="dzt-fav-count">{favorites.length}</span>
+                </h3>
+                <div className="dzt-fav-grid">
+                  {favorites.map(f => (
+                    <article key={f.id} className="dzt-fav-card">
+                      <button className="dzt-fav-thumb-btn" onClick={() => playFavorite(f)} title="تشغيل">
+                        <img className="dzt-fav-thumb" src={f.thumbnail} alt={f.title} loading="lazy" />
+                        <span className="dzt-fav-play-overlay"><Play size={20} fill="currentColor" /></span>
+                        {f.duration > 0 && <span className="dzt-fav-dur">{fmtDuration(f.duration)}</span>}
+                      </button>
+                      <div className="dzt-fav-info">
+                        <div className="dzt-fav-card-title" title={f.title}>{f.title}</div>
+                        {f.channel && <div className="dzt-fav-channel">{f.channel}</div>}
+                      </div>
+                      <div className="dzt-fav-actions">
+                        <button
+                          className="dzt-fav-act"
+                          onClick={() => playFavorite(f)}
+                          title="تشغيل"
+                        >
+                          <Play size={12} fill="currentColor" />
+                        </button>
+                        <button
+                          className="dzt-fav-act dzt-fav-act-mp3"
+                          onClick={() => {
+                            showToast('🎵 جاري تنزيل MP3…')
+                            void startDownload({ id: f.id, url: f.url, title: f.title, thumbnail: f.thumbnail, channel: f.channel, duration: f.duration, views: 0 }, 'mp3', '720', { silent: true })
+                          }}
+                          title="تنزيل MP3"
+                        >
+                          <Music size={12} />
+                        </button>
+                        <button
+                          className="dzt-fav-act dzt-fav-act-rm"
+                          onClick={() => toggleFavorite(f)}
+                          title="إزالة من المفضلة"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="dzt-quick-grid">
               <h3 className="dzt-quick-title"><Sparkles size={14} /> اقتراحات سريعة</h3>
               <div className="dzt-suggestions">
@@ -653,6 +742,13 @@ export default function DZTube() {
                         title="إضافة للقائمة"
                       >
                         <Plus size={13} />
+                      </button>
+                      <button
+                        className={`dzt-act dzt-act-fav${favoriteIds.has(r.id) ? ' active' : ''}`}
+                        onClick={() => toggleFavorite(r)}
+                        title={favoriteIds.has(r.id) ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
+                      >
+                        <Heart size={13} fill={favoriteIds.has(r.id) ? 'currentColor' : 'none'} />
                       </button>
                       <button
                         className="dzt-act dzt-act-mp3"

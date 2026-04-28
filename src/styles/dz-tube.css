@@ -450,7 +450,7 @@
 .dzt-act:disabled { opacity: 0.6; cursor: not-allowed; }
 .dzt-act-play { flex: 1; background: var(--dzt-grad); border-color: transparent; color: #fff; }
 .dzt-act-play:hover:not(:disabled) { filter: brightness(1.1); border-color: transparent; }
-.dzt-act-bg, .dzt-act-q, .dzt-act-dl, .dzt-act-mp3 { padding: 8px 9px; }
+.dzt-act-bg, .dzt-act-q, .dzt-act-dl, .dzt-act-mp3, .dzt-act-fav { padding: 8px 9px; }
 .dzt-act-mp3 {
   color: #34d399;
   border-color: rgba(52, 211, 153, 0.3);
@@ -461,7 +461,151 @@
   background: rgba(52, 211, 153, 0.18);
   border-color: rgba(52, 211, 153, 0.5);
 }
+.dzt-act-fav { color: #9aa0a8; }
+.dzt-act-fav:hover:not(:disabled) {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.08);
+}
+.dzt-act-fav.active {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.12);
+}
+.dzt-act-fav.active:hover:not(:disabled) {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.2);
+}
 .dzt-act-dl-wrap { position: relative; }
+
+/* ===== Favorites Section ===== */
+.dzt-fav-section {
+  margin: 28px auto 18px;
+  max-width: 1100px;
+  padding: 18px 18px 20px;
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.06), rgba(248, 113, 113, 0.02));
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 14px;
+}
+.dzt-fav-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f87171;
+}
+.dzt-fav-count {
+  margin-inline-start: auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+}
+.dzt-fav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.dzt-fav-card {
+  display: flex;
+  flex-direction: column;
+  background: #131319;
+  border: 1px solid #23232b;
+  border-radius: 11px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.dzt-fav-card:hover {
+  border-color: rgba(248, 113, 113, 0.4);
+  transform: translateY(-2px);
+}
+.dzt-fav-thumb-btn {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: #0a0a0e;
+  cursor: pointer;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+}
+.dzt-fav-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.dzt-fav-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.dzt-fav-thumb-btn:hover .dzt-fav-play-overlay { opacity: 1; }
+.dzt-fav-dur {
+  position: absolute;
+  bottom: 6px;
+  inset-inline-end: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border-radius: 4px;
+}
+.dzt-fav-info { padding: 9px 10px 6px; flex: 1; }
+.dzt-fav-card-title {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #e8e8ee;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dzt-fav-channel {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #888892;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dzt-fav-actions {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 9px;
+  border-top: 1px solid #1d1d24;
+  margin-top: 4px;
+}
+.dzt-fav-act {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: #1a1a22;
+  border: 1px solid #26262e;
+  border-radius: 6px;
+  color: #c8c8d0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.dzt-fav-act:hover { background: #20202a; border-color: #34343d; color: #fff; }
+.dzt-fav-act-mp3 { color: #34d399; border-color: rgba(52, 211, 153, 0.25); }
+.dzt-fav-act-mp3:hover { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.5); background: rgba(52, 211, 153, 0.12); }
+.dzt-fav-act-rm:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.5); background: rgba(248, 113, 113, 0.1); }
 
 /* ===== Centered Download Modal ===== */
 .dzt-dl-modal-root {

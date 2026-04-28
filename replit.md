@@ -260,3 +260,31 @@ Filter + Rank → Engine Response → Memory + LRU Cache`
 - The smart agent reuses the server's `fetchMultipleFeeds` / `RSS_CACHE` so feed fetches are not duplicated.
 - Memory is capped at 500 entries with LRU eviction; writes are atomic (`tmp` + `rename`).
 - All engines fail safe with `⚠️ لم أتمكن من العثور على بيانات حديثة...` if no results.
+
+## DZ Smart Agent — Phase 2: Reasoning + Citations + Safety (added 2026-04-28)
+
+Distilled production patterns from a curated set of leaked system prompts
+(Perplexity Comet, GPT-5 Thinking, Claude Code, Warp 2.0 Agent, Kagi)
+and adapted them for an Algerian-first audience. UI was not touched.
+
+### New Modules
+- `lib/prompts.js` — DZ Agent master system prompt, composed by intent (`general | news | github | builder | structured | deep`). Sections: identity, core behavior (no-clarification, partial-over-perfect, anti-sycophancy), Algeria context, search discipline (max 3 sub-queries), response formatting, safety, tool-use, code rules.
+- `lib/citations.js` — Perplexity-style numbered inline citations `[n]`, no bibliography, sentence-level keyword matching, registry export.
+- `lib/safety.js` — Prompt-injection detection (AR + EN patterns), `quarantineExternal()` wrapper for fetched content (treat as data, not commands), secret redaction (GitHub/Vercel/OpenAI/Anthropic/Google/Slack tokens, JWTs, private keys), PII redaction, safe refusal builder.
+- `lib/planner.js` — Decomposes a query into 1–3 focused sub-queries with temporal qualifiers (Perplexity discipline), returns ordered execution plan.
+- `lib/responder.js` — Renders router payloads as clean Markdown: news cards with tier flags 🇩🇿/🌐/🌍, GitHub tables, builder plans + scaffold code blocks, structured tables, then attaches inline citations.
+- `lib/reasoner.js` — Deep-research orchestrator: `plan → parallel multi-fetch → fuse + rank → self-critique → render with citations → memory`.
+
+### New Endpoints (all under `/api/agent/*`, additive)
+- `GET  /api/agent/think?q=…`        — fast intent + plan, no fetch
+- `GET  /api/agent/plan?q=…`         — full plan with sub-queries + steps
+- `GET/POST /api/agent/deep`         — deep-research pipeline (markdown + citations)
+- `POST /api/agent/render`           — render any payload to Markdown + citations
+- `GET  /api/agent/system-prompt?intent=…`
+- `POST /api/agent/safety/scan`      — injection score + harm score + sanitized output
+- `POST /api/agent/safety/refusal`   — clean refusal builder
+
+### Verified behavior
+- Deep pipeline on "أخبار الجزائر": 8 s end-to-end, fetched 180 articles, kept top 8 with 100% Algerian sources at the top, 8 inline citations attached, zero self-critique issues.
+- Safety scan correctly detected `ignore previous instructions` + `reveal system prompt` patterns and redacted a leaked `ghp_` token.
+- Planner correctly identified `compare react vs vue today` as `structured` intent with `liveMode: true` and added the `2026` temporal qualifier.

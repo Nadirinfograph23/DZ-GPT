@@ -3753,6 +3753,67 @@ function parseJdwelHtml(html) {
   return Array.from(groupMap.values())
 }
 
+// Parse jdwel.com matches from r.jina.ai markdown output. Jina renders the
+// page server-side and emits a clean markdown view that preserves every
+// match line. This parser is the Vercel-runtime path (curl is unavailable
+// in serverless lambdas, and direct `fetch` is 403'd by jdwel's Cloudflare
+// JA3 fingerprint check).
+function parseJdwelMarkdown(text) {
+  if (!text || typeof text !== 'string') return []
+  const lines = text.split('\n')
+  const groups = []
+  let currentGroup = null
+  let pendingMatch = null
+  const compHeaderRe = /^####\s*\[([^\]]+)\]\(https?:\/\/jdwel\.com\/competition\/([^/?\s)]+)/
+  // Match line shape (Arabic):
+  //   *   STATUS  HOME![Image N: HOME](url)  H - A  YYYY-MM-DD HH:MM ![Image N+1: AWAY](url) AWAY
+  // STATUS ∈ { "لم تبدأ", "انتهت", "جاري" }. Date/time is optional for finished games.
+  const matchRe = /^\*\s+(لم تبدأ|انتهت|جاري)\s+(.+?)!\[[^\]]*\]\([^)]+\)\s+(\d+)\s*-\s*(\d+)\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})?[^!]*!\[[^\]]*\]\([^)]+\)\s*(.+?)\s*$/
+  const linkRe = /\[صفحة المباراة\]\((https?:\/\/[^\s)]+)\)/
+  for (const line of lines) {
+    const ch = line.match(compHeaderRe)
+    if (ch) {
+      currentGroup = { name: ch[1].trim(), compId: ch[2] || '', matches: [] }
+      groups.push(currentGroup)
+      pendingMatch = null
+      continue
+    }
+    if (!currentGroup) continue
+    const mm = line.match(matchRe)
+    if (mm) {
+      const status = mm[1]
+      const finished = status === 'انتهت'
+      const live     = status === 'جاري'
+      pendingMatch = {
+        matchId:    '',
+        homeTeam:   mm[2].trim(),
+        awayTeam:   mm[6].trim(),
+        homeScore:  (finished || live) ? Number(mm[3]) : null,
+        awayScore:  (finished || live) ? Number(mm[4]) : null,
+        score:      (finished || live) ? `${mm[3]} - ${mm[4]}` : null,
+        startTime:  (mm[5] || '').trim(),
+        statusType: live ? 'live' : finished ? 'finished' : 'scheduled',
+        competition: currentGroup.name,
+        compId:      currentGroup.compId,
+        link:        'https://jdwel.com/today/',
+        source:      'jdwel.com',
+      }
+      currentGroup.matches.push(pendingMatch)
+      continue
+    }
+    if (pendingMatch) {
+      const lm = line.match(linkRe)
+      if (lm) {
+        pendingMatch.link = lm[1]
+        const idMatch = lm[1].match(/id=(\d+)/)
+        if (idMatch) pendingMatch.matchId = idMatch[1]
+        pendingMatch = null
+      }
+    }
+  }
+  return groups.filter(g => g.matches.length > 0)
+}
+
 // jdwel.com is fronted by Cloudflare and rejects Node's `fetch` based on its
 // TLS/JA3 fingerprint (returns 403 even with a full Chrome header set). The
 // only reliable way from a server is to shell out to `curl`, which is present
@@ -3807,22 +3868,38 @@ async function fetchJdwelMatches(dateStr = null) {
     } else {
       diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
       // Vercel-friendly fallback: r.jina.ai is a free reader-proxy that
-      // fetches the page server-side and returns the raw HTML, bypassing
-      // Cloudflare's JA3-fingerprint block on Node `fetch`. We ask for raw
-      // HTML via the X-Return-Format header so the parser gets the same
-      // markup curl would have returned.
+      // fetches the page server-side and returns clean markdown, bypassing
+      // Cloudflare's JA3-fingerprint block on Node `fetch`. We parse the
+      // markdown with `parseJdwelMarkdown` (separate from the html parser).
       try {
         const proxied = `https://r.jina.ai/${url}`
         const pr = await fetch(proxied, {
           headers: {
             'User-Agent': 'DZ-GPT/1.0 (+https://dz-gpt.vercel.app)',
-            'Accept': 'text/html,*/*',
-            'X-Return-Format': 'html',
+            'Accept': 'text/plain,*/*',
           },
           signal: AbortSignal.timeout(15000),
         })
         if (pr.ok) {
-          html = await pr.text()
+          const md = await pr.text()
+          const mdGroups = parseJdwelMarkdown(md)
+          if (mdGroups.length > 0) {
+            const data = {
+              groups: mdGroups,
+              totalMatches: mdGroups.reduce((s, g) => s + g.matches.length, 0),
+              fetchedAt: new Date().toISOString(),
+              source: 'jdwel.com',
+              sourceUrl: url,
+              via: 'r.jina.ai',
+            }
+            JDWEL_CACHE.data = data
+            JDWEL_CACHE.ts = Date.now()
+            JDWEL_CACHE.date = cacheDate
+            diagLog('jdwel_jina_ok', { url, groups: mdGroups.length, total: data.totalMatches })
+            console.log(`[jdwel] ✓ (jina) Parsed ${data.totalMatches} matches across ${mdGroups.length} leagues`)
+            return data
+          }
+          diagLog('empty', { module: 'jdwel.jina', url, mdSize: md.length })
         } else {
           diagLog('source_fail', { module: 'jdwel.jina', status: pr.status, url })
         }
@@ -3830,21 +3907,19 @@ async function fetchJdwelMatches(dateStr = null) {
         diagLog('source_fail', { module: 'jdwel.jina', error: perr.message })
       }
       // Last-ditch: try Node fetch (will normally 403 for jdwel but kept for portability)
-      if (!html) {
-        const r = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'ar,en;q=0.8',
-          },
-          signal: AbortSignal.timeout(15000),
-        })
-        if (!r.ok) {
-          diagLog('source_fail', { module: 'jdwel', status: r.status, url })
-          return null
-        }
-        html = await r.text()
+      const r = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'ar,en;q=0.8',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!r.ok) {
+        diagLog('source_fail', { module: 'jdwel', status: r.status, url })
+        return null
       }
+      html = await r.text()
     }
     const groups = parseJdwelHtml(html)
     if (groups.length === 0) {

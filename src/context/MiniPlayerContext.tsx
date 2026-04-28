@@ -74,16 +74,21 @@ function extractVideoId(url: string): string | null {
 
 // Build a SAME-ORIGIN URL that the <audio> element can be bound to
 // synchronously inside the user-gesture frame. The server-side proxy
-// (/api/dz-tube/audio-proxy) does the slow work of resolving the
-// signed googlevideo URL and pipes the bytes through with full Range
-// support. This avoids three classical mini-player failure modes:
-//  1) Chrome/Safari blocking play() that runs after a 5s+ await
-//  2) CORS rejections on third-party proxies that omit ACAO
-//  3) googlevideo signed URLs expiring while the user listens
+// (/api/dz-tube/audio-pipe) resolves the signed googlevideo URL AND
+// streams the bytes through our server with full Range support.
+//
+// Why audio-pipe and NOT audio-proxy:
+// audio-proxy answers with HTTP 307 → googlevideo.com directly. That
+// looks faster, but googlevideo signs the URL with the SERVER's IP.
+// When the browser follows the redirect from a different client IP,
+// google often returns a silent 403 / connection close — and on some
+// browsers the <audio> element doesn't even fire `error`. Result:
+// the spinner spins forever and playback never starts. audio-pipe
+// avoids this by never exposing the IP-bound URL to the browser.
 function buildAudioSrc(track: PlayerTrack, cacheBust?: number): string {
   const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
   const cb = cacheBust ? `&_r=${cacheBust}` : ''
-  return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(yt)}${cb}`
+  return `/api/dz-tube/audio-pipe?url=${encodeURIComponent(yt)}${cb}`
 }
 
 const AUTO_RADIO_KEY = 'dz-tube-auto-radio'

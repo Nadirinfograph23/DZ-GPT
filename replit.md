@@ -35,6 +35,48 @@ V2 is an **additive** intelligence layer on top of the existing V1 agent. It doe
 
 ---
 
+## DZ Agent V4 PRO — Multi-file project generation engine (additive layer)
+
+V4 is an additive intelligence layer at `/api/dz-agent-v4/*`. It does not modify any V1/V2/V3 code, route, or UI. It implements a professional multi-file code generation system inspired by GPT Engineer, smol-ai/developer, Devika, Open Interpreter and the Vercel AI SDK — without copying any of their code, only replicating architecture and patterns.
+
+**Modules** (all in `lib/dz-v4/`):
+- `prompts.js` — strict `FILE: /project/<path>` block format prompts (planner / generator / modifier).
+- `parser.js` — tolerant parser for `FILE:` blocks + JSON object recovery.
+- `validator.js` — empty/placeholder check, JSON parse, HTML cross-link verification, unique paths, entry-file existence.
+- `project-store.js` — persistent storage at `data/dz-v4/projects/<id>/` (Replit) or `/tmp/dz-v4/projects/<id>/` (Vercel). In-memory index hydrated from disk on boot.
+- `generator.js` — orchestrator: `planProject()` → `generateFiles()` → validate. Reuses host `safeGenerateAI` (DeepSeek → Ollama → Groq fallback). Always returns a usable result (deterministic fallback template if AI is unavailable).
+- `mount.js` — Express router.
+
+**Endpoints** (mounted in `server.js` directly before `export { app }`):
+- `GET  /api/dz-agent-v4/health` — version + storage stats.
+- `POST /api/dz-agent-v4/plan` `{ prompt }` — preview project structure JSON before generating.
+- `POST /api/dz-agent-v4/generate` `{ prompt, persist? }` — full plan → files → validate → save. Returns `{ ok, projectId, plan, files, validation, downloadUrl }`.
+- `POST /api/dz-agent-v4/modify` `{ projectId, path, instruction }` — regenerate ONE file in an existing project.
+- `GET  /api/dz-agent-v4/projects` — recent projects + storage stats.
+- `GET  /api/dz-agent-v4/project/:id` — project metadata.
+- `GET  /api/dz-agent-v4/project/:id/files` — all files (full content).
+- `GET  /api/dz-agent-v4/project/:id/file?path=…` — single file.
+- `GET  /api/dz-agent-v4/project/:id/validate` — re-run validator on saved files.
+- `GET  /api/dz-agent-v4/project/:id/download` — download as zip (reuses V3 `createZip` PKZIP archiver, no zip dependency).
+- `DELETE /api/dz-agent-v4/project/:id` — remove project.
+
+**Strict output contract** — every file the LLM returns must use:
+```
+FILE: /project/<relative/path/to/file.ext>
+```<lang>
+<content>
+```
+```
+The parser tolerates LLM drift (CRLF, optional language tag, leading prose) and the generator retries with a stricter reminder once if nothing parses. If both attempts fail, V4 falls through to a deterministic 4-file static template so the contract "never return empty" (shared with V2/V3) holds.
+
+**Project memory** — every persisted project carries `_meta.json` (title, stack, entry, files, prompt, timestamps), so the modifier endpoint can update single files without regenerating the whole project.
+
+**Vercel persistence note:** same constraint as V2/V3 — `/var/task` is read-only on Vercel serverless, so `lib/dz-v4/project-store.js` writes to `/tmp/dz-v4/projects/` when `process.env.VERCEL` is set. Projects persist within a warm container but are cleared on cold starts. `health.stats.persistent` reflects this.
+
+**No UI changes** — V4 is backend-only. Existing pages (`/`, `/dz-agent`, `/quran`, `/dzchat`, `/dz-tube`, `/agent`) are untouched.
+
+---
+
 ## DZ Agent V3 — Autonomous multi-agent + web app generator (additive layer)
 
 V3 builds on V1+V2 to deliver real autonomous task execution and full-stack web app generation. **Does not modify any V1 or V2 code, route, or UI.** Lives entirely under `lib/dz-v3/` and a new isolated route `/agent`.

@@ -8,6 +8,7 @@ import {
   SkipForward, Heart,
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
+import { warmTrackUrl } from '../utils/playerEnhancements'
 import '../styles/dz-tube.css'
 
 interface SearchResult {
@@ -686,7 +687,12 @@ export default function DZTube() {
                   else playInFrame(r)
                 }
                 return (
-                <article key={r.id} className={`dzt-card${selectMode ? ' dzt-card-selectable' : ''}${isSelected ? ' dzt-card-selected' : ''}`}>
+                <article
+                  key={r.id}
+                  className={`dzt-card${selectMode ? ' dzt-card-selectable' : ''}${isSelected ? ' dzt-card-selected' : ''}`}
+                  onMouseEnter={() => warmTrackUrl(r.url)}
+                  onTouchStart={() => warmTrackUrl(r.url)}
+                >
                   <div className="dzt-card-thumb-wrap" onClick={onCardThumbClick}>
                     <img className="dzt-card-thumb" src={r.thumbnail} alt={r.title} loading="lazy" />
                     {r.duration > 0 && (

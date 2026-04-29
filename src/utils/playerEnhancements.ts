@@ -33,6 +33,7 @@ interface MiniPlayerLikeState {
   trackUrl: string | null
   trackTitle: string | null
   queueHeadUrl: string | null
+  queueSecondUrl?: string | null
   queueLength: number
   playing: boolean
   loading: boolean
@@ -146,25 +147,40 @@ function flushEvents() {
   } catch {}
 }
 
-// ── Preload-next: warm Vercel function for the next queue item ──────────────
-function preloadNext(nextUrl: string, abortRef: React.MutableRefObject<AbortController | null>) {
-  if (!nextUrl) return
-  if (abortRef.current) { try { abortRef.current.abort() } catch {} }
+// ── Warm helpers ────────────────────────────────────────────────────────────
+// Tiny module-level cache of recent warm calls so we don't re-warm the same
+// URL within 5 minutes (the server already caches for 20 min, but a client
+// dedup avoids unnecessary network round-trips).
+const _warmedAt = new Map<string, number>()
+const WARM_DEDUP_MS = 5 * 60 * 1000
+function _shouldWarm(url: string): boolean {
+  const last = _warmedAt.get(url) || 0
+  if (Date.now() - last < WARM_DEDUP_MS) return false
+  _warmedAt.set(url, Date.now())
+  if (_warmedAt.size > 200) {
+    // Trim oldest entries.
+    const arr = [...(_warmedAt.entries() as any)].sort((a: any, b: any) => a[1] - b[1])
+    for (let i = 0; i < 50 && arr[i]; i++) _warmedAt.delete(arr[i][0])
+  }
+  return true
+}
+
+// Hit /api/dz-tube/warm to pre-resolve + cache the googlevideo URL on the
+// server. Lightweight — returns JSON, no 307 round-trip. Used by:
+//   • the mini-player when a new track starts (warm queue head + queue[1])
+//   • DZ Tube search-result cards on hover/touchstart (warm what user might click)
+export function warmTrackUrl(youtubeUrl: string | null | undefined, abortRef?: React.MutableRefObject<AbortController | null>) {
+  if (!youtubeUrl) return
+  if (!_shouldWarm(youtubeUrl)) return
+  if (abortRef?.current) { try { abortRef.current.abort() } catch {} }
   const ac = new AbortController()
-  abortRef.current = ac
-  // Use a Range:bytes=0-1 GET so Vercel resolves the signed URL & sends a
-  // partial response we discard. HEAD doesn't always reach the upstream.
-  const url = `/api/dz-tube/audio-proxy?url=${encodeURIComponent(nextUrl)}&_warm=1`
-  fetch(url, {
+  if (abortRef) abortRef.current = ac
+  fetch(`/api/dz-tube/warm?url=${encodeURIComponent(youtubeUrl)}`, {
     signal: ac.signal,
     method: 'GET',
-    headers: { Range: 'bytes=0-1' },
     cache: 'no-store',
-    redirect: 'follow',
-  }).then(r => {
-    // Don't read the body — we just wanted the redirect resolution to be cached.
-    try { r.body?.cancel() } catch {}
-  }).catch(() => {})
+    keepalive: true,
+  }).catch(() => {/* warm failures are silent — the real audio-proxy call will retry */})
 }
 
 export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
@@ -292,16 +308,27 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
     }
   }, [state.trackId, state.trackTitle, state.duration])
 
-  // 4. Preload-next when current is past 75% of duration.
+  // 4. Eager next-track warm: fire immediately when a NEW track starts (no
+  //    75% threshold — that was too late for short songs). Warms queue[0]
+  //    right away and queue[1] after a short delay so the second-next click
+  //    is also instant.
   useEffect(() => {
-    if (!state.trackId || !state.queueHeadUrl) return
-    if (!state.duration || state.duration < 30) return
-    if (state.progress / state.duration < 0.75) return
-    const key = `${state.trackId}::${state.queueHeadUrl}`
-    if (preloadedForRef.current === key) return
-    preloadedForRef.current = key
-    preloadNext(state.queueHeadUrl, preloadAbortRef)
-  }, [state.trackId, state.queueHeadUrl, state.progress, state.duration])
+    if (!state.trackId) return
+    if (state.queueHeadUrl) {
+      const key = `${state.trackId}::${state.queueHeadUrl}`
+      if (preloadedForRef.current !== key) {
+        preloadedForRef.current = key
+        warmTrackUrl(state.queueHeadUrl, preloadAbortRef)
+      }
+    }
+    // Tier-2 warm runs 4s later so it doesn't compete with the active track's
+    // initial buffer. If the user skips before 4s the timeout still completes
+    // — that's fine, an extra warm is cheap (server in-flight dedup handles it).
+    if (state.queueSecondUrl) {
+      const t = window.setTimeout(() => warmTrackUrl(state.queueSecondUrl!), 4000)
+      return () => clearTimeout(t)
+    }
+  }, [state.trackId, state.queueHeadUrl, state.queueSecondUrl])
 
   // 5. Flush analytics on visibility hidden / page hide.
   useEffect(() => {

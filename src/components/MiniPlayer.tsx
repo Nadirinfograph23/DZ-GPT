@@ -24,6 +24,7 @@ export default function MiniPlayer() {
     trackUrl: track?.url ?? null,
     trackTitle: track?.title ?? null,
     queueHeadUrl: queue[0]?.url ?? null,
+    queueSecondUrl: queue[1]?.url ?? null,
     queueLength: queue.length,
     playing,
     loading,

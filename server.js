@@ -8106,6 +8106,45 @@ async function fetchUpstreamRange(upstreamUrl, rangeHeader) {
   return fetch(upstreamUrl, { headers, redirect: 'follow' })
 }
 
+// ── Warm endpoint ─────────────────────────────────────────────────────────────
+// Lightweight URL resolver that ONLY fills the audio URL cache and returns
+// JSON. The mini-player calls this to pre-resolve the next track in the
+// queue and DZ Tube cards call it on hover/touchstart, so by the time the
+// user actually clicks Play, the cached googlevideo URL is ready and the
+// real audio-proxy call returns a 307 in a few milliseconds.
+//
+// Concurrency-safe: an in-flight Map ensures parallel warms for the same
+// URL share a single extractor race. Without it, hovering over multiple
+// cards quickly would fire N parallel piped/invidious/yt-js/yt-dlp pipelines
+// per card and rate-limit the upstream extractors.
+const _warmInflight = new Map() // youtubeUrl -> Promise<string>
+app.get('/api/dz-tube/warm', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ ok: false, error: 'invalid url' })
+
+  const t0 = Date.now()
+  // Fast path: already cached → return immediately, signal cache-hit.
+  const cached = _audioUrlCache.get(url)
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ ok: true, cached: true, ms: 0, expiresInMs: cached.expiresAt - Date.now() })
+  }
+
+  // Coalesce concurrent calls.
+  let pending = _warmInflight.get(url)
+  if (!pending) {
+    pending = resolveDirectAudioUrl(url, { bypassCache: false })
+      .finally(() => { _warmInflight.delete(url) })
+    _warmInflight.set(url, pending)
+  }
+
+  try {
+    await pending
+    return res.json({ ok: true, cached: false, ms: Date.now() - t0 })
+  } catch (e) {
+    return res.status(502).json({ ok: false, error: e.message, ms: Date.now() - t0 })
+  }
+})
+
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')

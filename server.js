@@ -11,6 +11,7 @@ import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
 import { mountSmartAgent } from './lib/agent-mount.js'
+import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -9304,6 +9305,32 @@ if (isMain) {
     })
   } catch (err) {
     console.warn('[smart-agent] mount failed:', err.message)
+  }
+
+  // Mount DZ Agent V2 (multi-agent orchestrator + memory + plugins).
+  // Additive: does not touch /api/chat, /api/dz-agent-chat or /api/agent/*.
+  try {
+    const v2InternalBase = `http://127.0.0.1:${PORT}`
+    const v2Fetch = async (path) => {
+      try {
+        const r = await fetch(`${v2InternalBase}${path}`, { signal: AbortSignal.timeout(5500) })
+        if (!r.ok) return null
+        return await r.json()
+      } catch { return null }
+    }
+    mountDzAgentV2(app, {
+      aiGenerate: ({ messages, query, max_tokens }) =>
+        safeGenerateAI({ messages, query, max_tokens }),
+      host: {
+        fetchNews: (q) => v2Fetch(`/api/dz-agent/news?q=${encodeURIComponent(q || '')}&limit=8`),
+        fetchCurrency: () => v2Fetch('/api/currency/latest'),
+        fetchWeather: (city) => v2Fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city || 'Algiers')}`),
+        fetchWebSearch: (q) => v2Fetch(`/api/agent/ask?q=${encodeURIComponent(q || '')}&limit=6`),
+        fetchGithub: (q) => v2Fetch(`/api/agent/github?q=${encodeURIComponent(q || '')}&limit=6`),
+      },
+    })
+  } catch (err) {
+    console.warn('[dz-agent-v2] mount failed:', err.message)
   }
 
   if (isProd) {

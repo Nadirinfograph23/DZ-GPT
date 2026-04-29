@@ -2,6 +2,47 @@
 
 A Vite + React + Express AI chat application with multi-model support.
 
+## DZ Agent V2 — Multi-Agent Layer (`lib/dz-v2/`, mounted at `/api/dz-agent-v2/*`)
+
+V2 is an **additive** intelligence layer on top of the existing V1 agent. It does not modify, replace or break any existing endpoint. UI is unchanged.
+
+**Modules** (all in `lib/dz-v2/`):
+- `language.js` — AR/FR/EN auto-detection + matched-tone instruction strings.
+- `memory-store.js` — 3-tier memory:
+  - short-term (in-memory ring buffer per `sessionId`, 20 turns, 1h idle GC),
+  - long-term preferences (file-based, `data/dz-v2/memory.json`),
+  - semantic recall (Jaccard token overlap + recency boost — no vector DB needed at this scale).
+- `plugins.js` — Plugin registry. Built-in: `news`, `currency`, `weather`, `web-search`, `github`, `dev`. Each plugin scores against the query and runs in parallel with a 6s timeout.
+- `validator.js` — Validation 2.0: empty / placeholder / system-echo / relevance check; `generateWithRetry()` does up to 3 regen attempts feeding the rejection reason back into the system prompt.
+- `learning.js` — Append-only JSONL log at `data/dz-v2/learning.jsonl` (5MB rotation) tracking model, plugins used, attempts, latency, validation outcome.
+- `agents.js` — `plan()` (intent + language + tool selection) → `execute()` (gather tool results + recall + LLM gen with retry) → `qa()` (final guard with localized graceful fallback).
+- `orchestrator.js` — `handle({ query, sessionId, aiGenerate })` ties it all together and persists.
+- `mount.js` — Express endpoints.
+
+**Endpoints** (additive, separate namespace `/api/dz-agent-v2`):
+- `POST /api/dz-agent-v2/chat` `{ query, sessionId? }` — full multi-agent flow.
+- `GET  /api/dz-agent-v2/health`
+- `GET  /api/dz-agent-v2/plan?q=...&sessionId=...`
+- `GET  /api/dz-agent-v2/plugins`
+- `GET  /api/dz-agent-v2/memory/stats`
+- `POST /api/dz-agent-v2/memory/purge` `{ kind?, olderThanDays? }`
+- `GET  /api/dz-agent-v2/learning/recent`
+- `GET  /api/dz-agent-v2/learning/stats`
+
+**Wiring** (`server.js`): one import + one `mountDzAgentV2(app, { aiGenerate, host })` call. `aiGenerate` reuses the existing `safeGenerateAI` (DeepSeek → Ollama → Groq fallback chain). `host` bridges to existing V1 endpoints (`/api/dz-agent/news`, `/api/currency/latest`, etc.) so V2 enriches answers with the same fresh data the dashboard uses.
+
+**Guarantees:**
+- Never returns an empty response — falls through to a localized graceful message in detected language (AR/FR/EN).
+- Always validates relevance + length before sending.
+- Up to 3 regen attempts with rejection-reason feedback.
+- Semantic memory persists across restarts.
+- Self-learning log enables future analytics / fine-tuning.
+
+**Explicit non-goals (intentionally out of scope):**
+- No Docker/e2b sandboxed code execution (incompatible with Vercel serverless).
+- No FAISS/Chroma vector DB (keyword-scored recall is sufficient at this scale; can be swapped later).
+- No UI changes (intentional — V2 is intelligence-only).
+
 ## DZ Tube Audio Playback (server.js + MiniPlayerContext)
 
 The mini-player streams YouTube audio through `/api/dz-tube/audio-proxy`, which 307-redirects to a direct googlevideo URL resolved by `resolveDirectAudioUrl`. That resolver races four extractors in parallel via `Promise.any` (first success wins):

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# DZ Agent V4 generated user projects (not committed)
+data/dz-v4/

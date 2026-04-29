@@ -13,6 +13,7 @@ import compression from 'compression'
 import { mountSmartAgent } from './lib/agent-mount.js'
 import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
+import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import {
   createStaticEducationalFallback,
@@ -9323,6 +9324,18 @@ try {
   })
 } catch (err) {
   console.warn('[dz-agent-v3] mount failed:', err.message)
+}
+
+// ===== DZ AGENT V4 PRO (multi-file project generation engine) =====
+// Additive layer at /api/dz-agent-v4/*. Reuses the same safeGenerateAI chain.
+// Implements: planner → generator → validator → persistent project store.
+try {
+  mountDzAgentV4(app, {
+    aiGenerate: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-agent-v4] mount failed:', err.message)
 }
 
 // ===== DZ TUBE ANALYTICS (mini-player events) =====

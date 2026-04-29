@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2, Radio } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
+import { useEnhancedMiniPlayer, recordSkip } from '../utils/playerEnhancements'
 
 function fmt(s: number): string {
   if (!isFinite(s) || s <= 0) return '0:00'
@@ -14,6 +15,21 @@ export default function MiniPlayer() {
   const [expanded, setExpanded] = useState(false)
   const touchStartY = useRef<number | null>(null)
   const touchDeltaY = useRef<number>(0)
+
+  // Mini Player V2 enhancement layer — preload-next, persisted volume/speed/mute,
+  // hidden keyboard shortcuts (+/- volume, ,/. speed, M mute), analytics beacons.
+  // Pure side-effect hook — does not touch rendered output or context API.
+  useEnhancedMiniPlayer({
+    trackId: track?.id ?? null,
+    trackUrl: track?.url ?? null,
+    trackTitle: track?.title ?? null,
+    queueHeadUrl: queue[0]?.url ?? null,
+    queueLength: queue.length,
+    playing,
+    loading,
+    progress,
+    duration,
+  })
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -97,7 +113,7 @@ export default function MiniPlayer() {
           </button>
           <button
             className="mini-player-side"
-            onClick={() => next()}
+            onClick={() => { recordSkip(track.id, progress, duration); next() }}
             disabled={queue.length === 0 && !autoRadio}
             title="التالي"
           >
@@ -180,7 +196,7 @@ export default function MiniPlayer() {
             </div>
 
             <div className="mpf-extra">
-              <button className="mpf-extra-btn" onClick={() => next()} disabled={queue.length === 0 && !autoRadio}>
+              <button className="mpf-extra-btn" onClick={() => { recordSkip(track.id, progress, duration); next() }} disabled={queue.length === 0 && !autoRadio}>
                 <SkipForward size={16} /> التالي
               </button>
               <button

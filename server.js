@@ -13,6 +13,7 @@ import compression from 'compression'
 import { mountSmartAgent } from './lib/agent-mount.js'
 import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
+import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -9283,6 +9284,14 @@ try {
   })
 } catch (err) {
   console.warn('[dz-agent-v3] mount failed:', err.message)
+}
+
+// ===== DZ TUBE ANALYTICS (mini-player events) =====
+// Additive endpoints: /api/dz-tube/analytics/{event,recent,stats}.
+try {
+  mountDzTubeAnalytics(app)
+} catch (err) {
+  console.warn('[dz-tube-analytics] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

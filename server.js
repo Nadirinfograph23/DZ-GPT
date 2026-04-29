@@ -12,6 +12,7 @@ import { WebSocketServer } from 'ws'
 import compression from 'compression'
 import { mountSmartAgent } from './lib/agent-mount.js'
 import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
+import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -9271,6 +9272,17 @@ try {
   })
 } catch (err) {
   console.warn('[dz-agent-v2] mount failed:', err.message)
+}
+
+// ===== DZ AGENT V3 (autonomous multi-agent + web app generator) =====
+// Additive layer at /api/dz-agent-v3/*. Reuses the same safeGenerateAI chain.
+try {
+  mountDzAgentV3(app, {
+    aiGenerate: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-agent-v3] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

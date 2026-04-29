@@ -33,6 +33,61 @@ V2 is an **additive** intelligence layer on top of the existing V1 agent. It doe
 
 **Vercel persistence note:** `/var/task` is read-only on Vercel serverless, so `lib/dz-v2/memory-store.js` and `lib/dz-v2/learning.js` write to `/tmp/dz-v2/` when `process.env.VERCEL` is set. Memory therefore persists within a warm container but is cleared on cold starts. For cross-instance persistence, swap the file backend in `memory-store.js` for Vercel KV / Upstash Redis (drop-in: only the `loadDisk()` / `persist()` functions need to change).
 
+---
+
+## DZ Agent V3 — Autonomous multi-agent + web app generator (additive layer)
+
+V3 builds on V1+V2 to deliver real autonomous task execution and full-stack web app generation. **Does not modify any V1 or V2 code, route, or UI.** Lives entirely under `lib/dz-v3/` and a new isolated route `/agent`.
+
+**Five specialized agents** (`lib/dz-v3/agents/`):
+- `news-agent.js` — Algerian + global news aggregation (uses V1 `/api/dz-agent/news`)
+- `research-agent.js` — Open-web research via Google CSE + smart agent ask
+- `dev-agent.js` — Generates real React + Express templates (`news-site`, `saas-starter`, `blog-cms`)
+- `execution-agent.js` — Packages generated apps into a downloadable zip artifact + deploy instructions
+- `qa-agent.js` — Validates outputs (empty/incomplete/missing-fields)
+
+**Coordination** (`lib/dz-v3/`):
+- `bus.js` — In-process pub/sub for agent-to-agent events (`agent.start`, `agent.thought`, `agent.tool`, `agent.result`, `agent.error`, `task.start`, `task.done`)
+- `task-manager.js` — Task lifecycle (`pending`/`running`/`done`/`error`) persisted to `/tmp/dz-v3/tasks.json` on Vercel
+- `streaming.js` — Server-Sent Events helper (replays history then subscribes to live events; auto-closes after 55s for Vercel function limit)
+- `orchestrator.js` — Decides which agents to run from the user query, coordinates them, runs synthesis (real AI) then QA
+- `webapp-generator.js` — In-memory artifact store + dependency-free PKZIP archiver (generates valid zip files without any zip library)
+
+**Endpoints** (mounted in `server.js` directly before `export { app }`):
+- `POST /api/dz-agent-v3/run` — start autonomous task → returns `{ taskId, streamUrl, statusUrl }`
+- `GET  /api/dz-agent-v3/task/:id` — current task state + agent log
+- `GET  /api/dz-agent-v3/task/:id/stream` — SSE live agent events
+- `GET  /api/dz-agent-v3/tasks` — recent tasks list + stats
+- `POST /api/dz-agent-v3/generate-app` — generate web app file tree (no full task)
+- `GET  /api/dz-agent-v3/templates` — list available templates
+- `GET  /api/dz-agent-v3/artifact/:id/download` — download generated app as zip
+- `GET  /api/dz-agent-v3/artifact/:id/file?path=…` — read single file from artifact
+- `POST /api/dz-agent-v3/scrape-live` — unified live scrape (news + currency + weather)
+- `GET  /api/dz-agent-v3/agents` — list agents + descriptions
+- `GET  /api/dz-agent-v3/health`
+
+**Frontend dashboard** at `/agent` (`src/pages/DZAgentV3.tsx`, registered in `src/main.tsx`):
+- Composer + 4 example prompts (EN/FR/AR)
+- Live agent log via SSE (color-coded per agent)
+- Result panel: synthesis text, generated-app card with one-click zip download, news/research lists, QA status
+- Sidebar with recent tasks (clickable to inspect)
+- Existing routes (`/`, `/dz-agent`, `/quran`, `/dzchat`, `/dz-tube`) **untouched**
+
+**Honest scope of V3 — what it does and does not do on Vercel serverless:**
+- ✅ Real multi-agent coordination (in-process bus, complete within one function invocation)
+- ✅ Real generated apps (downloadable zips containing working React + Express code that runs with `npm install && npm run dev`)
+- ✅ Real-time streaming via SSE (capped at 55s for Vercel function limit)
+- ✅ Multilingual (auto-detects AR/FR/EN, synthesis + fallback summaries in all three)
+- ❌ Long-running autonomous loops > 60s (Vercel function timeout)
+- ❌ Autonomous deployment to AWS/Heroku/etc — generated apps include deploy instructions but actual deployment requires the user's own infra
+- ❌ FAISS/Pinecone vector DB — same constraint as V2 (would need external paid infra)
+- ❌ Sandboxed code execution — incompatible with Vercel; user must run generated code on their own machine
+
+**Guarantees (same as V1/V2):**
+- Never returns empty responses (graceful fallback summary in detected language)
+- QA agent flags any agent output that's empty/missing-fields before delivery
+- All artifacts have a 1h TTL (in-memory map, GC'd on every store)
+
 **Guarantees:**
 - Never returns an empty response — falls through to a localized graceful message in detected language (AR/FR/EN).
 - Always validates relevance + length before sending.

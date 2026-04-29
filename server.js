@@ -9234,6 +9234,45 @@ function setupChatWebSocket(httpServer) {
   console.log('[WS:Chat] Chat WebSocket server ready on /ws/chat')
 }
 
+// ===== MOUNT MULTI-AGENT LAYERS (must run on Vercel serverless too) =====
+// These attach routes to `app` and must execute at import time, BEFORE the
+// `app` is exported, so that Vercel's serverless wrapper sees them.
+try {
+  mountSmartAgent(app, {
+    fetcher: (feed) => fetchMultipleFeeds([feed]).then(arr => arr[0] || null),
+  })
+} catch (err) {
+  console.warn('[smart-agent] mount failed:', err.message)
+}
+
+try {
+  const v2InternalBase = `http://127.0.0.1:${PORT}`
+  const v2Fetch = async (path) => {
+    try {
+      const ac = new AbortController()
+      const t = setTimeout(() => ac.abort(), 5500)
+      try {
+        const r = await fetch(`${v2InternalBase}${path}`, { signal: ac.signal })
+        if (!r.ok) return null
+        return await r.json()
+      } finally { clearTimeout(t) }
+    } catch { return null }
+  }
+  mountDzAgentV2(app, {
+    aiGenerate: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+    host: {
+      fetchNews: (q) => v2Fetch(`/api/dz-agent/news?q=${encodeURIComponent(q || '')}&limit=8`),
+      fetchCurrency: () => v2Fetch('/api/currency/latest'),
+      fetchWeather: (city) => v2Fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city || 'Algiers')}`),
+      fetchWebSearch: (q) => v2Fetch(`/api/agent/ask?q=${encodeURIComponent(q || '')}&limit=6`),
+      fetchGithub: (q) => v2Fetch(`/api/agent/github?q=${encodeURIComponent(q || '')}&limit=6`),
+    },
+  })
+} catch (err) {
+  console.warn('[dz-agent-v2] mount failed:', err.message)
+}
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -9297,41 +9336,8 @@ if (isMain) {
     STANDINGS_CACHE.ts = 0 // force refresh on next request
   }, 25 * 60 * 1000) // 25 min
 
-  // Mount the new modular Smart Agent layer (intent → router → engines)
-  // Injects the existing fetchMultipleFeeds plumbing for shared RSS caching.
-  try {
-    mountSmartAgent(app, {
-      fetcher: (feed) => fetchMultipleFeeds([feed]).then(arr => arr[0] || null),
-    })
-  } catch (err) {
-    console.warn('[smart-agent] mount failed:', err.message)
-  }
-
-  // Mount DZ Agent V2 (multi-agent orchestrator + memory + plugins).
-  // Additive: does not touch /api/chat, /api/dz-agent-chat or /api/agent/*.
-  try {
-    const v2InternalBase = `http://127.0.0.1:${PORT}`
-    const v2Fetch = async (path) => {
-      try {
-        const r = await fetch(`${v2InternalBase}${path}`, { signal: AbortSignal.timeout(5500) })
-        if (!r.ok) return null
-        return await r.json()
-      } catch { return null }
-    }
-    mountDzAgentV2(app, {
-      aiGenerate: ({ messages, query, max_tokens }) =>
-        safeGenerateAI({ messages, query, max_tokens }),
-      host: {
-        fetchNews: (q) => v2Fetch(`/api/dz-agent/news?q=${encodeURIComponent(q || '')}&limit=8`),
-        fetchCurrency: () => v2Fetch('/api/currency/latest'),
-        fetchWeather: (city) => v2Fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city || 'Algiers')}`),
-        fetchWebSearch: (q) => v2Fetch(`/api/agent/ask?q=${encodeURIComponent(q || '')}&limit=6`),
-        fetchGithub: (q) => v2Fetch(`/api/agent/github?q=${encodeURIComponent(q || '')}&limit=6`),
-      },
-    })
-  } catch (err) {
-    console.warn('[dz-agent-v2] mount failed:', err.message)
-  }
+  // (mountSmartAgent + mountDzAgentV2 already mounted above so they also
+  // attach on Vercel serverless. Keeping background-refresh / intervals here.)
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

@@ -29,7 +29,9 @@ V2 is an **additive** intelligence layer on top of the existing V1 agent. It doe
 - `GET  /api/dz-agent-v2/learning/recent`
 - `GET  /api/dz-agent-v2/learning/stats`
 
-**Wiring** (`server.js`): one import + one `mountDzAgentV2(app, { aiGenerate, host })` call. `aiGenerate` reuses the existing `safeGenerateAI` (DeepSeek → Ollama → Groq fallback chain). `host` bridges to existing V1 endpoints (`/api/dz-agent/news`, `/api/currency/latest`, etc.) so V2 enriches answers with the same fresh data the dashboard uses.
+**Wiring** (`server.js`): one import + one `mountDzAgentV2(app, { aiGenerate, host })` call placed **before** `export { app }` (so it attaches on Vercel serverless too — anything inside the `if (isMain)` block does not run on Vercel). `aiGenerate` reuses the existing `safeGenerateAI` (DeepSeek → Ollama → Groq fallback chain). `host` bridges to existing V1 endpoints (`/api/dz-agent/news`, `/api/currency/latest`, etc.) so V2 enriches answers with the same fresh data the dashboard uses.
+
+**Vercel persistence note:** `/var/task` is read-only on Vercel serverless, so `lib/dz-v2/memory-store.js` and `lib/dz-v2/learning.js` write to `/tmp/dz-v2/` when `process.env.VERCEL` is set. Memory therefore persists within a warm container but is cleared on cold starts. For cross-instance persistence, swap the file backend in `memory-store.js` for Vercel KV / Upstash Redis (drop-in: only the `loadDisk()` / `persist()` functions need to change).
 
 **Guarantees:**
 - Never returns an empty response — falls through to a localized graceful message in detected language (AR/FR/EN).

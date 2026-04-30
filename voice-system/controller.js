@@ -183,6 +183,38 @@ export function createDVIS({ baseUrl = '' } = {}) {
       try { await tts.speak(text, { lang }) } finally { setState('idle') }
     },
 
+    // Auto-speak helper for text-mode chat: only speaks SHORT replies so the
+    // assistant feels conversational without becoming a monologue.
+    // Skips if: muted, currently speaking/listening, text too long, or already
+    // contains code blocks / tables / long links.
+    async speakIfShort(text, opts = {}) {
+      if (prefs.muted) return { skipped: 'muted' }
+      if (state === 'speaking' || state === 'listening') return { skipped: state }
+      const raw = String(text || '').trim()
+      if (!raw) return { skipped: 'empty' }
+      const maxChars = opts.maxChars ?? 280
+      const maxSentences = opts.maxSentences ?? 3
+      // Strip markdown / code so we don't "read" syntax.
+      const clean = raw
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/`[^`]*`/g, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+        .replace(/[#>*_~|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (!clean) return { skipped: 'no-speakable-text' }
+      if (clean.length > maxChars) return { skipped: 'too-long', length: clean.length }
+      const sentences = clean.split(/[.!?؟…]\s+/).filter(s => s.trim().length > 0)
+      if (sentences.length > maxSentences) return { skipped: 'too-many-sentences', count: sentences.length }
+      // Looks like a code dump — skip.
+      if (/https?:\/\/\S{60,}/.test(clean)) return { skipped: 'long-url' }
+      const lang = opts.lang || detectLang(clean) || resolveLang()
+      setState('speaking')
+      try { await tts.speak(clean, { lang }) } finally { setState('idle') }
+      return { ok: true, length: clean.length, lang }
+    },
+
     // Send arbitrary text to the agent and speak the reply (programmatic entry).
     async send(text) {
       lastUserText = text

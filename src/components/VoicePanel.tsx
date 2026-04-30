@@ -39,6 +39,12 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
     dvisRef.current = dvis
     setSupported({ stt: dvis.isSttSupported(), tts: dvis.isTtsSupported() })
     setPrefs(dvis.getPrefs())
+    // Expose globally so the chat can request auto-speak for short replies
+    // even when the user typed (didn't use voice input).
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).__dvis = dvis
+    }
     const unState = dvis.on('state', (s: DvisState) => setState(s))
     const unTr = dvis.on('transcript', ({ text, isFinal }: { text: string; isFinal: boolean }) => {
       if (isFinal && onTranscript) onTranscript(text)
@@ -50,6 +56,10 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
     dvis.preload()
     return () => {
       unState?.(); unTr?.(); unReply?.(); unPrefs?.()
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delete (window as any).__dvis
+      }
       dvis.destroy()
     }
   }, [onTranscript, onReply])

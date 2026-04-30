@@ -1568,6 +1568,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const id = generateId()
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
+    // Auto-speak short text replies via the voice system (no-op if muted/long).
+    if ((msg.richType === 'text' || !msg.richType) && msg.content) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dvis = (typeof window !== 'undefined' ? (window as any).__dvis : null)
+      if (dvis?.speakIfShort) {
+        try { dvis.speakIfShort(msg.content) } catch { /* never block chat */ }
+      }
+    }
     return id
   }, [])
 

@@ -225,6 +225,21 @@ function App() {
   const filteredChats = chats.filter(c => c.modelId === selectedModel)
   const isPdfModel = selectedModel === 'deepseek-pdf' || selectedModel === 'ocr-dz'
 
+  // Auto-speak short assistant replies via the voice system (DVIS).
+  // Tracks the last spoken message id so re-renders / chat switches don't replay.
+  const lastSpokenIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const last = activeChat?.messages?.[activeChat.messages.length - 1]
+    if (!last || last.role !== 'assistant' || !last.content) return
+    if (lastSpokenIdRef.current === last.id) return
+    lastSpokenIdRef.current = last.id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dvis = (typeof window !== 'undefined' ? (window as any).__dvis : null)
+    if (dvis?.speakIfShort) {
+      try { dvis.speakIfShort(last.content) } catch { /* never block chat */ }
+    }
+  }, [activeChat?.messages])
+
   // Persist to localStorage
   useEffect(() => {
     localStorage.setItem('dz-gpt-chats', JSON.stringify(chats))

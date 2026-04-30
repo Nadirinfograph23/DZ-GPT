@@ -73,9 +73,17 @@ export function createDVIS({ baseUrl = '' } = {}) {
   })
 
   function resolveLang() {
+    // Arabic is the PRIMARY language for dz Agent's voice mode.
+    // 'auto' means: start in Arabic, then follow whatever the user actually
+    // speaks on subsequent turns (detectLang of last transcript).
     if (prefs.language && prefs.language !== 'auto') return prefs.language
-    // Use last user text to bias; default ar (matches the rest of the app).
-    return detectLang(lastUserText) || 'ar'
+    if (lastUserText) {
+      const d = detectLang(lastUserText)
+      // detectLang returns 'en' for empty/non-script text — only honour it
+      // when we're certain it isn't a default fallback.
+      return d
+    }
+    return 'ar'
   }
 
   // ── Core flow: user text → AI → speak → maybe re-listen ───────────────

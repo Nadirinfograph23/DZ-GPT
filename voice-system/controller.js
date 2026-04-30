@@ -35,6 +35,11 @@ export function createDVIS({ baseUrl = '' } = {}) {
   let lastUserText = ''
   let lastReplyText = ''
   let abortCtl = null
+  // Buffered transcript: accumulates final fragments while the user is still
+  // speaking, then is sent as one message after a short silence window so we
+  // never cut a sentence in the middle.
+  let sttBuffer = ''
+  let sttSilenceTimer = null
 
   function setState(s) {
     if (state === s) return
@@ -44,6 +49,19 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
   function clearFollowUp() {
     if (followUpTimer) { clearTimeout(followUpTimer); followUpTimer = null }
+  }
+
+  function clearSilence() {
+    if (sttSilenceTimer) { clearTimeout(sttSilenceTimer); sttSilenceTimer = null }
+  }
+
+  function flushBuffer() {
+    clearSilence()
+    const text = sttBuffer.trim()
+    sttBuffer = ''
+    if (!text) return
+    lastUserText = text
+    handleUserText(text)
   }
 
   function applyPrefs() {
@@ -56,12 +74,21 @@ export function createDVIS({ baseUrl = '' } = {}) {
   stt.on('result', ({ text, isFinal, lang }) => {
     bus.emit('transcript', { text, isFinal, lang })
     if (isFinal && text) {
-      lastUserText = text
-      handleUserText(text)
+      // Append to buffer (with a separating space if needed) and arm the
+      // silence timer. Each new final fragment resets the timer so the user
+      // can keep speaking as long as they want without being cut off.
+      sttBuffer = sttBuffer ? `${sttBuffer} ${text}` : text
+      clearSilence()
+      sttSilenceTimer = setTimeout(flushBuffer, TIMINGS.sttSilenceMs)
     }
   })
   stt.on('error', (e) => bus.emit('error', e))
-  stt.on('end',   () => { if (state === 'listening') setState('idle') })
+  stt.on('end',   () => {
+    // If recognition really ended (manual stop) and we still have buffered
+    // text, send it now instead of dropping it on the floor.
+    if (sttBuffer.trim()) flushBuffer()
+    if (state === 'listening') setState('idle')
+  })
 
   // ── Wake-word wiring ───────────────────────────────────────────────────
   wake.on('wake', ({ phrase }) => {
@@ -160,6 +187,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
     stopListening() {
       clearFollowUp()
+      // Send anything still buffered before fully stopping.
+      if (sttBuffer.trim()) flushBuffer()
       try { stt.stop() } catch {}
       setState('idle')
       // Re-arm wake word if it was on.
@@ -223,6 +252,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
     destroy() {
       clearFollowUp()
+      clearSilence()
+      sttBuffer = ''
       try { stt.abort() } catch {}
       try { wakeStt.abort() } catch {}
       try { tts.cancel() } catch {}

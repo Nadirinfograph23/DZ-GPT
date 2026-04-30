@@ -1568,12 +1568,24 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const id = generateId()
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
-    // Auto-speak short text replies via the voice system (no-op if muted/long).
+    // Auto-speak the full text reply via the voice system (no-op if muted).
+    // The TTS engine chunks long replies into sentences so nothing is truncated.
     if ((msg.richType === 'text' || !msg.richType) && msg.content) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dvis = (typeof window !== 'undefined' ? (window as any).__dvis : null)
-      if (dvis?.speakIfShort) {
-        try { dvis.speakIfShort(msg.content) } catch { /* never block chat */ }
+      if (dvis && !dvis.getPrefs?.()?.muted) {
+        // Strip markdown / code so we don't read syntax aloud.
+        const clean = String(msg.content)
+          .replace(/```[\s\S]*?```/g, '')
+          .replace(/`[^`]*`/g, '')
+          .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+          .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+          .replace(/[#>*_~|]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (clean) {
+          try { dvis.speak(clean) } catch { /* never block chat */ }
+        }
       }
     }
     return id

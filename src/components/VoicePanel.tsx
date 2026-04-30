@@ -89,7 +89,7 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
   return (
     <div className="dz-voice-panel" data-state={state}>
       {state !== 'idle' && (
-        <span className="dz-voice-state">{stateLabel[state]}</span>
+        <span className="dz-voice-state" aria-live="polite">{stateLabel[state]}</span>
       )}
 
       {supported.stt && (
@@ -99,6 +99,7 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
           title={isMicActive ? 'إيقاف الاستماع' : 'تحدث إلى DZ Agent'}
           onClick={onMicClick}
           aria-label="voice input"
+          aria-pressed={isMicActive}
         >
           {isMicActive ? <MicOff size={18} /> : <Mic size={18} />}
         </button>
@@ -111,6 +112,7 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
           title={prefs.muted ? 'تشغيل الصوت' : 'كتم الصوت'}
           onClick={() => updatePref('muted', !prefs.muted)}
           aria-label="mute"
+          aria-pressed={prefs.muted}
         >
           {prefs.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
         </button>
@@ -118,10 +120,11 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
 
       <button
         type="button"
-        className="dz-voice-btn"
+        className={`dz-voice-btn ${showSettings ? 'is-open' : ''}`}
         title="إعدادات الصوت"
         onClick={() => setShowSettings(s => !s)}
         aria-label="voice settings"
+        aria-expanded={showSettings}
       >
         <Settings2 size={18} />
       </button>

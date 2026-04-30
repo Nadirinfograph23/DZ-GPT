@@ -1229,6 +1229,8 @@
   border-radius: 14px;
   padding: 10px 12px;
   transition: border-color 0.2s;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .dz-input-container:focus-within {
@@ -1252,7 +1254,13 @@
 
 .dz-chat-input::placeholder { color: #444; }
 
-.dz-input-actions { flex-shrink: 0; }
+.dz-input-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative; /* anchor for the voice settings popover */
+}
 
 .dz-send-btn {
   width: 36px;
@@ -3337,13 +3345,23 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
+/* The transient state label ("listening…", "speaking", …) sits above the
+ * controls so it never pushes the buttons sideways or wraps onto a new line. */
 .dz-voice-state {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  inset-inline-end: 0;
   font-size: 11px;
   color: #94a3b8;
-  margin-inline-end: 6px;
   white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  pointer-events: none;
   animation: dz-voice-pulse 1.6s ease-in-out infinite;
 }
 @keyframes dz-voice-pulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
@@ -3383,12 +3401,18 @@
   color: #f87171;
   border-color: rgba(248, 113, 113, 0.4);
 }
+.dz-voice-btn.is-open {
+  background: rgba(59, 130, 246, 0.22);
+  color: #f1f5f9;
+  border-color: rgba(59, 130, 246, 0.55);
+}
 
 .dz-voice-settings {
   position: absolute;
   bottom: calc(100% + 10px);
   inset-inline-end: 0;
-  width: 240px;
+  width: 260px;
+  max-width: calc(100vw - 32px);
   padding: 12px;
   border-radius: 12px;
   background: #0f172a;
@@ -3400,6 +3424,25 @@
   gap: 10px;
   font-size: 13px;
   color: #e2e8f0;
+}
+
+/* ===== Mobile (<= 480px): keep mic / speaker / settings / send on one row ===== */
+@media (max-width: 480px) {
+  .dz-voice-btn { width: 32px; height: 32px; border-radius: 9px; }
+  .dz-input-actions { gap: 4px; }
+  .dz-voice-panel { gap: 4px; }
+  .dz-voice-state {
+    font-size: 10.5px;
+    padding: 2px 6px;
+    /* On very narrow screens the floating label could clip the right edge —
+     * pin it to the input row instead so it never overlaps the buttons. */
+    inset-inline-end: 0;
+    inset-inline-start: auto;
+  }
+  .dz-send-btn { width: 34px; height: 34px; }
+  /* Anchor the settings popover to the right edge of the input on mobile so
+   * it never overflows the viewport. */
+  .dz-voice-settings { width: min(260px, calc(100vw - 24px)); }
 }
 .dz-voice-settings-row {
   display: flex;

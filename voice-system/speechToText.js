@@ -47,8 +47,11 @@ export function createSTT() {
       const code = e.error || 'unknown'
       // `aborted` happens on intentional stop — silent.
       if (code === 'aborted') return
-      // Transient errors → retry up to TIMINGS.sttMaxRetries.
-      if ((code === 'no-speech' || code === 'network') && !manualStop && retries < TIMINGS.sttMaxRetries) {
+      // `no-speech` is normal during pauses; let onend auto-restart instead of
+      // surfacing it as an error to the UI.
+      if (code === 'no-speech' && !manualStop) return
+      // Other transient errors → retry up to TIMINGS.sttMaxRetries.
+      if (code === 'network' && !manualStop && retries < TIMINGS.sttMaxRetries) {
         retries++
         await sleep(250)
         try { r.start() } catch {}
@@ -58,6 +61,25 @@ export function createSTT() {
     }
     r.onend = () => {
       active = false
+      // Web Speech (especially on Chrome) stops on its own after short silence
+      // even when `continuous = true`. If the user hasn't manually stopped, we
+      // immediately restart so the mic keeps listening for full sentences and
+      // long pauses don't end the session prematurely.
+      if (!manualStop) {
+        try {
+          r.start()
+          return
+        } catch {
+          // InvalidStateError → wait a tick and retry once.
+          setTimeout(() => {
+            if (!manualStop) {
+              try { r.start(); return } catch {}
+            }
+            bus.emit('end')
+          }, 120)
+          return
+        }
+      }
       bus.emit('end')
     }
     r.onstart = () => {

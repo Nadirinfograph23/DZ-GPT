@@ -70,6 +70,20 @@ class BackgroundPlayer {
       this.updateMediaSessionState('paused')
     })
     a.addEventListener('ended', () => {
+      // Guard against premature 'ended' caused by an upstream proxy
+      // (Piped/Invidious) closing the connection cleanly after a few KB.
+      // When that happens the browser fires 'ended' even though the track
+      // has barely started. Detect it: < 10 s of actual playback is always
+      // a truncated stream, not a genuine track end.
+      const ct = a.currentTime || 0
+      const dur = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 0
+      const looksGenuine = ct > 10 && (dur <= 0 || ct >= dur * 0.85)
+      if (!looksGenuine && this.wantPlaying) {
+        // Treat as a recoverable network error so the error handler in
+        // MiniPlayerContext can unmute the YT iframe and retry the stream.
+        this.listeners.error?.(new Event('ended-premature'))
+        return
+      }
       this.wantPlaying = false
       this.listeners.ended?.()
       this.updateMediaSessionState('none')

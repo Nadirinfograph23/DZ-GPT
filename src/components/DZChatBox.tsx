@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
+import VoicePanel from './VoicePanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== TYPES =====
@@ -2490,6 +2491,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
+            <VoicePanel
+              onTranscript={(t) => {
+                setInput((cur) => (cur ? `${cur} ${t}` : t))
+                setTimeout(() => sendMessage(t), 50)
+              }}
+            />
             {isLoading ? (
               <button className="dz-stop-btn" onClick={() => { abortRef.current?.abort(); setIsLoading(false) }}>إيقاف</button>
             ) : (

@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
 import PwaInstallBanner from './PwaInstallBanner'
+import VoicePanel from './components/VoicePanel'
 import './App.css'
 import './styles/dz-agent.css'
 
@@ -1203,6 +1204,12 @@ function App() {
               className="chat-input"
             />
             <div className="input-actions">
+              <VoicePanel
+                onTranscript={(t) => {
+                  setInput((cur) => (cur ? `${cur} ${t}` : t))
+                  setTimeout(() => sendMessage(t), 50)
+                }}
+              />
               {isLoading ? (
                 <button className="stop-btn" onClick={stopGeneration}>
                   Stop

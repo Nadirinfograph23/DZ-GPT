@@ -3331,3 +3331,125 @@
   align-items: center;
   gap: 4px;
 }
+
+/* ===== dz Voice Intelligence System (DVIS) ===== */
+.dz-voice-panel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dz-voice-state {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-inline-end: 6px;
+  white-space: nowrap;
+  animation: dz-voice-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dz-voice-pulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+
+.dz-voice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.35);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s, border-color 0.15s;
+}
+.dz-voice-btn:hover {
+  background: rgba(59, 130, 246, 0.18);
+  color: #f1f5f9;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+.dz-voice-btn:active { transform: scale(0.95); }
+.dz-voice-btn.is-active {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+  animation: dz-voice-mic 1.4s ease-out infinite;
+}
+@keyframes dz-voice-mic {
+  0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+  70%  { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.dz-voice-btn.is-muted {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.dz-voice-settings {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  inset-inline-end: 0;
+  width: 240px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.dz-voice-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dz-voice-settings-row label {
+  flex: 1;
+  font-size: 12.5px;
+  color: #cbd5e1;
+}
+.dz-voice-settings-row select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.dz-voice-settings-row input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+.dz-voice-toggle-group {
+  display: inline-flex;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dz-voice-toggle-group button {
+  background: transparent;
+  color: #cbd5e1;
+  border: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dz-voice-toggle-group button:hover { background: rgba(59, 130, 246, 0.15); }
+.dz-voice-toggle-group button.on {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+}
+.dz-voice-settings-foot {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  font-size: 10.5px;
+  color: #64748b;
+  text-align: center;
+}

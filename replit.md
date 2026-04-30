@@ -94,6 +94,45 @@ The parser tolerates LLM drift (CRLF, optional language tag, leading prose) and 
 
 ---
 
+## dz Voice Intelligence System (DVIS) — V1 + V2 voice add-on (`voice-system/`)
+
+A fully **modular, browser-native, free** voice layer added on top of dz Agent. Lives in `voice-system/` and a single React wrapper `src/components/VoicePanel.tsx`. **Does not modify any agent core logic.**
+
+### Modules
+- `voice-system/config.js` — central settings (languages, wake words, timings, voice gender hints, prefs storage key).
+- `voice-system/utils.js` — env detection (`hasSTT`/`hasTTS`), language heuristic, prefs persist (localStorage), tiny `Emitter`, `normalize` for wake-word matching.
+- `voice-system/speechToText.js` — Web Speech API wrapper. AR/FR/EN, continuous + interim results, auto-retry on `no-speech`/`network` (max 2), per-event bus (`result`/`error`/`end`/`start`).
+- `voice-system/textToSpeech.js` — `SpeechSynthesis` wrapper. Pickable male/female voice via name-hint heuristics, pitch tuning, utterance config cache, warm-up to remove first-call latency. `setEngine()` lets a Piper/WASM engine be plugged in later without UI changes.
+- `voice-system/wakeWordEngine.js` — V2 wake-word listener using a separate STT instance. Matches normalized substrings against `WAKE_WORDS` (default: `hey dz`, `hi dz`, `dz agent`, `يا دي زي`, `دي زي`). Auto-restarts on browser timeouts.
+- `voice-system/voiceRouter.js` — sends transcript to the agent. Tries in order: `window.__dzAgentProcess(text)` → `/api/dz-agent-v4/smart` → `/api/agent` → `/api/chat`. Always returns a non-empty reply (localized fallback).
+- `voice-system/controller.js` — orchestrates the full flow `STT → Router → TTS`, manages V2 features (continuous mode, follow-up silence timer, wake-word toggle), exposes a single API: `createDVIS()` → `{ on, setPrefs, startListening, stopListening, toggleListening, speak, send, preload, destroy }`.
+
+### React UI
+- `src/components/VoicePanel.tsx` — minimal panel (mic / mute / settings buttons) injected into:
+  - `src/App.tsx` → main multi-model chat (next to Send).
+  - `src/components/DZChatBox.tsx` → DZ Agent chat (next to Send).
+- Settings popover: voice gender (👩/👨), language (auto/AR/FR/EN), continuous mode, wake word toggle, fast mode.
+- CSS appended to `src/styles/dz-agent.css` (no existing rules touched). Mic pulses when listening; settings panel anchored above input.
+
+### Behaviour
+- **V1**: tap mic → STT (continuous + interim) → transcript dropped into chat input → `sendMessage()` fires → AI reply spoken via TTS in matching language. Female voice default, user-switchable.
+- **V2**: 
+  - **Wake word** (opt-in toggle): background SpeechRecognition stays warm, fires `wake` event on phrase match, auto-switches to active listening.
+  - **Continuous conversation**: after TTS finishes, STT auto-restarts; auto-sleeps after 15 s of silence.
+  - **Latency**: TTS warm-up at mount; utterance config cache; async pipeline; non-blocking.
+
+### Free-tool guarantees
+- ✅ Web Speech API (browser-native, free, offline-capable on most platforms).
+- ✅ `SpeechSynthesis` (browser-native, free, offline-capable).
+- ✅ Wake-word via the same SpeechRecognition stream (no Porcupine, no models).
+- ❌ Zero paid APIs. No ElevenLabs, no OpenAI TTS, no Whisper API.
+- Graceful degradation: if a browser lacks STT or TTS, the panel hides itself; chat still works.
+
+### Persistence
+- User prefs stored in `localStorage` under `dvis.prefs.v1`.
+
+---
+
 ## DZ Agent V3 — Autonomous multi-agent + web app generator (additive layer)
 
 V3 builds on V1+V2 to deliver real autonomous task execution and full-stack web app generation. **Does not modify any V1 or V2 code, route, or UI.** Lives entirely under `lib/dz-v3/` and a new isolated route `/agent`.

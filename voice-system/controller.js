@@ -60,6 +60,10 @@ export function createDVIS({ baseUrl = '' } = {}) {
     const text = sttBuffer.trim()
     sttBuffer = ''
     if (!text) return
+    // Stop the mic the moment we have a finalized utterance so it doesn't
+    // keep listening while the AI is thinking / speaking. Without this, the
+    // STT engine auto-restarts in `onend` and the microphone stays hot.
+    try { stt.stop() } catch {}
     lastUserText = text
     handleUserText(text)
   }
@@ -128,7 +132,9 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
     if (replyText && !prefs.muted) {
       setState('speaking')
-      try { await tts.speak(replyText, { lang: language }) } catch (e) { bus.emit('error', e) }
+      // Voice replies are ALWAYS spoken in Arabic for dz Agent's voice mode,
+      // regardless of the input language. Users explicitly requested AR voice.
+      try { await tts.speak(replyText, { lang: 'ar' }) } catch (e) { bus.emit('error', e) }
     }
     const dt = (performance.now?.() || Date.now()) - t0
     if (dt > TIMINGS.responseTargetMs) console.debug('[dvis] slow round-trip', Math.round(dt), 'ms')
@@ -206,8 +212,10 @@ export function createDVIS({ baseUrl = '' } = {}) {
     },
 
     // Speak arbitrary text (used by host to read AI replies coming from text mode too).
+    // dz Agent voice mode is Arabic-only by product decision — force AR unless
+    // the caller explicitly overrides via opts.lang.
     async speak(text, opts = {}) {
-      const lang = opts.lang || detectLang(text) || resolveLang()
+      const lang = opts.lang || 'ar'
       setState('speaking')
       try { await tts.speak(text, { lang }) } finally { setState('idle') }
     },
@@ -238,7 +246,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
       if (sentences.length > maxSentences) return { skipped: 'too-many-sentences', count: sentences.length }
       // Looks like a code dump — skip.
       if (/https?:\/\/\S{60,}/.test(clean)) return { skipped: 'long-url' }
-      const lang = opts.lang || detectLang(clean) || resolveLang()
+      const lang = opts.lang || 'ar'
       setState('speaking')
       try { await tts.speak(clean, { lang }) } finally { setState('idle') }
       return { ok: true, length: clean.length, lang }

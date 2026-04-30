@@ -8267,8 +8267,13 @@ app.get('/api/dz-tube/warm', async (req, res) => {
 })
 
 // Diagnostic: run each extractor independently and report which succeed/fail.
-// Used to debug why audio-proxy returns 502 in production. NOT cached.
+// Useful for triaging "audio doesn't play" reports — gated behind a token so
+// the diagnostic surface isn't open to the world. Set DEBUG_EXTRACT_TOKEN to
+// enable; pass `?token=<value>`.
 app.get('/api/dz-tube/debug-extract', async (req, res) => {
+  const expected = process.env.DEBUG_EXTRACT_TOKEN
+  if (!expected) return res.status(404).end()
+  if (String(req.query.token || '') !== expected) return res.status(403).end()
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'invalid url' })
   const videoId = extractYouTubeVideoId(url)
@@ -8283,6 +8288,7 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
     }
   }
   const dlpBin = await ytDlpBinaryPath().catch(() => null)
+  const cookiesPath = await ytDlpCookiesPath().catch(() => null)
   const results = await Promise.all([
     runOne('piped', async () => {
       const r = await fetchPipedStreams(videoId, { isAudio: true })
@@ -8317,7 +8323,7 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
       })
     }),
   ])
-  res.json({ videoId, totalMs: Date.now() - t0, dlpBin, results })
+  res.json({ videoId, totalMs: Date.now() - t0, dlpBin, cookiesConfigured: !!cookiesPath, results })
 })
 
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {

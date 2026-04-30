@@ -1,4 +1,13 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
+import { backgroundPlayer } from '../utils/backgroundPlayer'
+
+// Same-origin endpoint that resolves a YouTube URL to a direct audio stream
+// and pipes the bytes back with Range support. Building it inline keeps the
+// background player decoupled from the YT IFrame API: even if the iframe is
+// suspended (mobile screen lock) the <audio> element keeps fetching.
+function buildAudioPipeUrl(youtubeUrl: string): string {
+  return `/api/dz-tube/audio-pipe?url=${encodeURIComponent(youtubeUrl)}`
+}
 
 export interface PlayerTrack {
   id: string
@@ -240,10 +249,22 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
             if (s === 1) {
               setPlaying(true); setLoading(false)
               wantPlayingRef.current = true
+              // Mirror video → audio playback so the user hears uninterrupted
+              // sound even if the iframe is killed by the OS (screen lock).
+              try {
+                if (backgroundPlayer.isPaused() && wantPlayingRef.current) {
+                  backgroundPlayer.play()
+                }
+              } catch {}
             } else if (s === 2) {
               setPlaying(false)
               // Don't mutate wantPlayingRef here — pause may be browser-issued
               // (window blur, tab throttle); user-pause toggles wantPlaying.
+              // We intentionally DO NOT pause the bg <audio> here because the
+              // YT iframe is frequently paused by the OS in the background
+              // while the user still wants playback. The bg player keeps the
+              // audio alive; manual pauses go through `toggle()` which pauses
+              // both engines.
             } else if (s === 3) {
               setLoading(true)
             } else if (s === 5) {
@@ -286,7 +307,18 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     })
 
     // Poll currentTime / duration so the progress bar updates smoothly.
+    // Prefer the background <audio> element when it has a usable duration —
+    // it stays accurate even when the YT iframe is suspended (mobile lock).
     progressTimer = window.setInterval(() => {
+      try {
+        const bgDur = backgroundPlayer.getDuration()
+        const bgCur = backgroundPlayer.getCurrentTime()
+        if (Number.isFinite(bgDur) && bgDur > 0) {
+          if (Number.isFinite(bgCur)) setProgress(bgCur)
+          setDuration(bgDur)
+          return
+        }
+      } catch {}
       const p = ytPlayerRef.current
       if (!p || !ytReadyRef.current) return
       try {
@@ -336,12 +368,57 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setProgress(resumeAt > 1 ? resumeAt : 0)
     setDuration(t.duration && t.duration > 0 ? t.duration : 0)
     wantPlayingRef.current = true
+
+    // ── Audio engine (primary audible source) ─────────────────────────────
+    // Spin up the background <audio> element first so the user-gesture
+    // unlock is captured even on the very first click. Audio bytes come
+    // from our same-origin pipe endpoint so the stream survives the YT
+    // iframe being suspended on screen lock.
+    try {
+      backgroundPlayer.init()
+      const audioUrl = buildAudioPipeUrl(t.url)
+      // Skip a redundant reload of the same source — keeps the buffered
+      // bytes intact and prevents a hiccup when toggling pause/play.
+      if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
+        backgroundPlayer.play(audioUrl, {
+          title:   t.title,
+          artist:  t.channel || 'DZ Tube',
+          album:   'DZ Tube',
+          artwork: t.thumbnail,
+        })
+        // Apply resume offset once the audio has loaded enough metadata to
+        // honour the seek. Without the small delay the seek is silently
+        // dropped on first load.
+        if (resumeAt > 1) {
+          window.setTimeout(() => {
+            try { backgroundPlayer.seek(resumeAt) } catch {}
+          }, 250)
+        }
+      } else {
+        backgroundPlayer.play()
+        if (resumeAt > 1) {
+          try { backgroundPlayer.seek(resumeAt) } catch {}
+        }
+        backgroundPlayer.setMediaSession({
+          title:   t.title,
+          artist:  t.channel || 'DZ Tube',
+          album:   'DZ Tube',
+          artwork: t.thumbnail,
+        })
+      }
+    } catch (err) {
+      console.warn('[mini-player] bg audio failed', err)
+    }
+
     // If the YT API isn't ready yet, queue the click. onReady will drain it.
     if (!ytPlayerRef.current || !ytReadyRef.current) {
       pendingPlayRef.current = { track: t, resumeAt }
       return
     }
     try {
+      // Mute the iframe so we never get double audio — the bg <audio>
+      // element is now the sole audible source.
+      try { ytPlayerRef.current.mute() } catch {}
       // Skip redundant reloads of the same id — the player already has the
       // buffered stream; just resume / play.
       if (currentVideoIdRef.current === videoId) {
@@ -366,7 +443,9 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     }
 
     // Update Media Session metadata so the OS shows track info on the
-    // lockscreen / notification shade.
+    // lockscreen / notification shade. (BackgroundPlayer also sets this
+    // above; we re-assign here so the metadata stays current even when
+    // the bg player skipped due to an unchanged URL.)
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -543,6 +622,20 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       pendingPlayRef.current = { track: t, resumeAt: progress }
       wantPlayingRef.current = true
       setLoading(true)
+      // Still drive the bg player so audio resumes on lockscreen even
+      // before the YT iframe is ready.
+      try {
+        backgroundPlayer.init()
+        const audioUrl = buildAudioPipeUrl(t.url)
+        if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
+          backgroundPlayer.play(audioUrl, {
+            title: t.title, artist: t.channel || 'DZ Tube',
+            album: 'DZ Tube', artwork: t.thumbnail,
+          })
+        } else {
+          backgroundPlayer.play()
+        }
+      } catch {}
       return
     }
     try {
@@ -551,6 +644,9 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       if (state === 1 || state === 3) {
         wantPlayingRef.current = false
         p.pauseVideo()
+        // Mirror the user-pause to the audio engine so the OS lockscreen
+        // and headset buttons show the right state.
+        try { backgroundPlayer.pause() } catch {}
       } else {
         wantPlayingRef.current = true
         // If video was never bound (e.g. fresh restore) bind it now.
@@ -558,7 +654,20 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         if (currentVideoIdRef.current !== videoId) {
           startVideo(t, progress)
         } else {
+          // Mute YT (bg <audio> is the audible source) and play both.
+          try { p.mute() } catch {}
           p.playVideo()
+          try {
+            const audioUrl = buildAudioPipeUrl(t.url)
+            if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
+              backgroundPlayer.play(audioUrl, {
+                title: t.title, artist: t.channel || 'DZ Tube',
+                album: 'DZ Tube', artwork: t.thumbnail,
+              })
+            } else {
+              backgroundPlayer.play()
+            }
+          } catch {}
         }
       }
     } catch (err) {
@@ -567,10 +676,14 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [progress, startVideo])
 
   const seek = useCallback((sec: number) => {
-    const p = ytPlayerRef.current
-    if (!p || !ytReadyRef.current) return
     const target = Math.max(0, sec)
-    try { p.seekTo(target, true); setProgress(target) } catch {}
+    const p = ytPlayerRef.current
+    if (p && ytReadyRef.current) {
+      try { p.seekTo(target, true) } catch {}
+    }
+    // Always seek the audio engine — that is what the user actually hears.
+    try { backgroundPlayer.seek(target) } catch {}
+    setProgress(target)
   }, [])
 
   const stop = useCallback(() => {
@@ -579,6 +692,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     if (p && ytReadyRef.current) {
       try { p.stopVideo() } catch {}
     }
+    try { backgroundPlayer.stop() } catch {}
     currentVideoIdRef.current = null
     setTrack(null)
     setPlaying(false)
@@ -589,12 +703,30 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
   // Background-play resilience: when the tab becomes visible again, if the
   // user wanted playback but the engine paused us, resume.
+  // Resync YT to the bg <audio> position so the visible progress bar
+  // matches the audio you actually heard while the app was in the background.
   useEffect(() => {
     if (typeof document === 'undefined') return
     const onVis = () => {
       if (document.visibilityState !== 'visible') return
+      // Make sure the bg engine is still playing if the user wanted it.
+      try {
+        if (wantPlayingRef.current && backgroundPlayer.isPaused()) {
+          backgroundPlayer.play()
+        }
+      } catch {}
       const p = ytPlayerRef.current
       if (!p || !ytReadyRef.current) return
+      // Pull the YT iframe back to the audible position before resuming.
+      try {
+        const bgPos = backgroundPlayer.getCurrentTime()
+        if (Number.isFinite(bgPos) && bgPos > 0) {
+          const ytPos = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0
+          if (Math.abs(bgPos - (ytPos || 0)) > 1.2) {
+            try { p.seekTo(bgPos, true) } catch {}
+          }
+        }
+      } catch {}
       if (!wantPlayingRef.current) return
       try {
         const state = typeof p.getPlayerState === 'function' ? p.getPlayerState() : -1
@@ -610,49 +742,61 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Wire up Media Session action handlers (lockscreen / headset buttons).
+  // CRITICAL: these handlers must drive the BACKGROUND <audio> engine first
+  // because that is the only thing still alive when the screen is off — the
+  // YT iframe is suspended by the OS at that point. We also forward the
+  // intent to YT so the visible UI catches up when the user comes back.
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     try {
       navigator.mediaSession.setActionHandler('play', () => {
-        const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current) return
         wantPlayingRef.current = true
-        try { p.playVideo() } catch {}
+        try { backgroundPlayer.play() } catch {}
+        const p = ytPlayerRef.current
+        if (p && ytReadyRef.current) {
+          try { p.mute() } catch {}
+          try { p.playVideo() } catch {}
+        }
       })
       navigator.mediaSession.setActionHandler('pause', () => {
-        const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current) return
         wantPlayingRef.current = false
-        try { p.pauseVideo() } catch {}
+        try { backgroundPlayer.pause() } catch {}
+        const p = ytPlayerRef.current
+        if (p && ytReadyRef.current) {
+          try { p.pauseVideo() } catch {}
+        }
       })
       navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
       navigator.mediaSession.setActionHandler('previoustrack', () => {
         // We don't keep a "previous" stack, but rewinding to track start is
         // the universal "previous" fallback that music apps expose.
+        try { backgroundPlayer.seek(0); backgroundPlayer.play() } catch {}
         const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current) return
-        try { p.seekTo(0, true); p.playVideo() } catch {}
+        if (p && ytReadyRef.current) {
+          try { p.seekTo(0, true); p.playVideo() } catch {}
+        }
       })
       navigator.mediaSession.setActionHandler('seekbackward', (d: any) => {
+        const off = (d && d.seekOffset) || 10
+        const cur = backgroundPlayer.getCurrentTime() || 0
+        const target = Math.max(0, cur - off)
+        try { backgroundPlayer.seek(target) } catch {}
         const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current) return
-        try {
-          const cur = p.getCurrentTime() || 0
-          p.seekTo(Math.max(0, cur - (d?.seekOffset || 10)), true)
-        } catch {}
+        if (p && ytReadyRef.current) { try { p.seekTo(target, true) } catch {} }
       })
       navigator.mediaSession.setActionHandler('seekforward', (d: any) => {
+        const off = (d && d.seekOffset) || 10
+        const cur = backgroundPlayer.getCurrentTime() || 0
+        const target = cur + off
+        try { backgroundPlayer.seek(target) } catch {}
         const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current) return
-        try {
-          const cur = p.getCurrentTime() || 0
-          p.seekTo(cur + (d?.seekOffset || 10), true)
-        } catch {}
+        if (p && ytReadyRef.current) { try { p.seekTo(target, true) } catch {} }
       })
       navigator.mediaSession.setActionHandler('seekto', (d: any) => {
+        if (typeof d?.seekTime !== 'number') return
+        try { backgroundPlayer.seek(d.seekTime) } catch {}
         const p = ytPlayerRef.current
-        if (!p || !ytReadyRef.current || typeof d?.seekTime !== 'number') return
-        try { p.seekTo(d.seekTime, true) } catch {}
+        if (p && ytReadyRef.current) { try { p.seekTo(d.seekTime, true) } catch {} }
       })
     } catch {}
   }, [next])

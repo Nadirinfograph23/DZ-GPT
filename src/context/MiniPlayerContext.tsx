@@ -18,13 +18,9 @@ interface MiniPlayerCtx {
   duration: number
   autoRadio: boolean
   setAutoRadio: (v: boolean) => void
-  // play() is intentionally SYNCHRONOUS (not Promise<void>). The reason:
-  // browsers (especially Safari/iOS but increasingly Chrome too) consider
-  // the user-gesture activation broken once a microtask boundary is
-  // crossed between the click handler and HTMLMediaElement.play(). A
-  // single `await` on a sync function is enough to push play() into a
-  // microtask and trigger NotAllowedError. By keeping this sync we
-  // guarantee el.play() runs in the same task as the click.
+  // play() is intentionally SYNCHRONOUS so the YouTube IFrame Player API call
+  // happens inside the originating click frame and the browser keeps the
+  // user-gesture activation (required for autoplay on iOS/Android).
   play: (track: PlayerTrack) => void
   enqueue: (track: PlayerTrack) => void
   playNext: (track: PlayerTrack) => void
@@ -63,8 +59,8 @@ function persist(state: PersistedState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
 }
 
-// Extract a YouTube videoId from any standard URL form (kept for parity).
-function extractVideoId(url: string): string | null {
+// Extract a YouTube videoId from any standard URL form.
+export function extractVideoId(url: string): string | null {
   if (!url) return null
   try {
     const u = new URL(url)
@@ -79,35 +75,42 @@ function extractVideoId(url: string): string | null {
   return null
 }
 
-// Build a SAME-ORIGIN URL that the <audio> element can be bound to
-// synchronously inside the user-gesture frame.
-//
-// Strategy (fixed Apr 2026):
-//   • DEFAULT path → /api/dz-tube/audio-proxy (HTTP 307 → googlevideo.com).
-//     The serverless function exits in milliseconds and the browser streams
-//     directly from googlevideo's CDN with full Range support. This is the
-//     ONLY path that works for tracks longer than the Vercel function
-//     maxDuration (60s) — because the function is no longer in the byte
-//     path, the timeout is irrelevant.
-//   • FALLBACK path → /api/dz-tube/audio-pipe (server byte-pipe). Used only
-//     after the proxy path has failed for a track (e.g. googlevideo signed
-//     the URL with the server IP and rejects the client, or a regional
-//     edge blocks the redirect). Still bounded by the function timeout,
-//     but acceptable for short tracks and as a recovery escape hatch.
-//
-// Previous version called audio-pipe by default, which silently truncated
-// every song at 60s on Vercel and produced the "infinite spinner" bug.
-function buildAudioSrc(track: PlayerTrack, cacheBust?: number, useFallback?: boolean): string {
-  const yt = track.url || `https://www.youtube.com/watch?v=${track.id}`
-  const cb = cacheBust ? `&_r=${cacheBust}` : ''
-  const endpoint = useFallback ? 'audio-pipe' : 'audio-proxy'
-  return `/api/dz-tube/${endpoint}?url=${encodeURIComponent(yt)}${cb}`
-}
-
 const AUTO_RADIO_KEY = 'dz-tube-auto-radio'
 function loadAutoRadio(): boolean {
   if (typeof window === 'undefined') return false
   try { return localStorage.getItem(AUTO_RADIO_KEY) === '1' } catch { return false }
+}
+
+// ── YouTube IFrame Player API loader ────────────────────────────────────────
+// The IFrame API loads a global window.YT object and calls
+// window.onYouTubeIframeAPIReady when ready. We load it once on first need.
+declare global {
+  interface Window {
+    YT?: any
+    onYouTubeIframeAPIReady?: () => void
+    __dzYtReadyPromise?: Promise<any>
+    __dzYtPlayer?: any
+  }
+}
+function loadYouTubeIframeAPI(): Promise<any> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT)
+  if (window.__dzYtReadyPromise) return window.__dzYtReadyPromise
+  window.__dzYtReadyPromise = new Promise(resolve => {
+    const prev = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      try { prev && prev() } catch {}
+      resolve(window.YT)
+    }
+    if (!document.getElementById('dz-yt-iframe-api')) {
+      const s = document.createElement('script')
+      s.id = 'dz-yt-iframe-api'
+      s.src = 'https://www.youtube.com/iframe_api'
+      s.async = true
+      document.head.appendChild(s)
+    }
+  })
+  return window.__dzYtReadyPromise
 }
 
 export function MiniPlayerProvider({ children }: { children: ReactNode }) {
@@ -123,6 +126,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setAutoRadioState(v)
     try { localStorage.setItem(AUTO_RADIO_KEY, v ? '1' : '0') } catch {}
   }, [])
+
   // Recently-played ids — sent to /related as exclusion list so the
   // auto-radio doesn't loop the same 3-4 tracks. Capped at 25.
   const recentRef = useRef<string[]>([])
@@ -131,301 +135,238 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const autoRadioRef = useRef<boolean>(autoRadio)
   useEffect(() => { autoRadioRef.current = autoRadio }, [autoRadio])
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // YouTube IFrame Player singleton + state refs
+  const ytPlayerRef = useRef<any>(null)
+  const ytReadyRef = useRef<boolean>(false)
   const queueRef = useRef<PlayerTrack[]>([])
   const restoredRef = useRef<boolean>(false)
   const resumeAtRef = useRef<number>(initial.progress)
-  // Counter to discard late stream-resolution responses when the user
-  // quickly switches tracks.
-  const loadTokenRef = useRef<number>(0)
-  // Track id currently bound to <audio>.src — used to skip redundant reloads.
-  const currentSrcIdRef = useRef<string | null>(null)
-  // Auto-recovery state: how many times have we tried to silently reload the
-  // current track after an `error`/`stalled` event, and when did we last try.
-  // Resets on every successful play / track change so a long-lived song can
-  // recover many times across its full duration.
-  const recoverAttemptsRef = useRef<number>(0)
-  const lastRecoverAtRef = useRef<number>(0)
-  const recoverTimerRef = useRef<number | null>(null)
-  // Per-track endpoint strategy. We start every track on the fast 307 path
-  // (audio-proxy). If it errors, we flip this flag for the current track id
-  // so subsequent recoveries use the byte-pipe (audio-pipe). Cleared on
-  // every track change.
-  const useFallbackRef = useRef<boolean>(false)
-  const proxyFailedIdsRef = useRef<Set<string>>(new Set())
-  const trackRef = useRef<PlayerTrack | null>(initial.track)
+  // Pending track to play once the YT API finishes loading. Without this the
+  // first click on a track right after page load would silently no-op.
+  const pendingPlayRef = useRef<{ track: PlayerTrack; resumeAt: number } | null>(null)
+  // Tracks user intent so visibility/recovery handlers know whether to resume.
   const wantPlayingRef = useRef<boolean>(false)
+  const trackRef = useRef<PlayerTrack | null>(initial.track)
   const nextRef = useRef<() => void>(() => {})
+  // Currently bound video id — used to skip redundant loadVideoById() calls
+  // (which would otherwise re-buffer the same track and cause a hiccup).
+  const currentVideoIdRef = useRef<string | null>(null)
   useEffect(() => { queueRef.current = queue }, [queue])
   useEffect(() => { trackRef.current = track }, [track])
 
-  // Mount a hidden, persistent <audio> element exactly once. Audio elements
-  // (unlike <video> or YouTube iframes) keep playing when the screen turns
-  // off on mobile, which is the whole point of switching the engine here.
+  // ── YT.Player singleton creation ──────────────────────────────────────────
+  // Mount a hidden host div ONCE, load the IFrame API, then construct a
+  // single YT.Player. All subsequent track changes call loadVideoById() on
+  // this same instance — never destroy + recreate. This eliminates the
+  // "infinite loading" race that happens when a player is recreated on
+  // every play().
   useEffect(() => {
     if (typeof window === 'undefined') return
-    let el = document.getElementById('dz-audio-host') as HTMLAudioElement | null
-    if (!el) {
-      el = document.createElement('audio')
-      el.id = 'dz-audio-host'
-      el.preload = 'metadata'
-      // NOTE: deliberately NOT setting crossOrigin. We don't read raw audio
-      // samples (no Web Audio analyser, no canvas), and setting it forces
-      // strict CORS validation that some upstream proxies fail silently
-      // (the browser fires `error` with no useful message and playback dies).
-      // Hide from layout but keep mounted so background play survives nav.
-      el.style.display = 'none'
-      el.setAttribute('playsinline', '')
-      el.setAttribute('webkit-playsinline', '')
-      document.body.appendChild(el)
-    }
-    audioRef.current = el
-
-    const onLoadedMeta = () => {
-      const d = el!.duration
-      // NaN/Infinity guard — some HLS / MSE-less streams report Infinity.
-      if (Number.isFinite(d) && d > 0) setDuration(d)
-      // Resume position (set after metadata is ready so seek lands correctly).
-      if (resumeAtRef.current > 1 && Number.isFinite(d) && d > 0 && resumeAtRef.current < d - 1) {
-        try { el!.currentTime = resumeAtRef.current } catch {}
-      }
-      resumeAtRef.current = 0
-    }
-    const onDurationChange = () => {
-      const d = el!.duration
-      if (Number.isFinite(d) && d > 0) setDuration(d)
-    }
-    const onTimeUpdate = () => { setProgress(el!.currentTime || 0) }
-    const onPlay = () => {
-      setPlaying(true); setLoading(false)
-      wantPlayingRef.current = true
-      // A successful play resets the recovery budget so the next mid-stream
-      // failure (URL expiry, network blip) gets its own retry quota.
-      recoverAttemptsRef.current = 0
-    }
-    const onPause = () => {
-      setPlaying(false)
-      // CRITICAL: do NOT mutate wantPlayingRef here. The browser fires `pause`
-      // for many reasons we don't control (error, stalled, source swap,
-      // device wake-up, codec hiccup) and they often race ahead of `error`.
-      // wantPlayingRef tracks USER intent only — it is set to false exclusively
-      // by user actions (toggle/stop) and the media-session pause handler.
-      // This was the #1 cause of "player stops mid-track and never resumes".
-    }
-    const onWaiting = () => { setLoading(true) }
-    const onPlaying = () => { setLoading(false) }
-    const onCanPlay = () => { setLoading(false) }
-    const onEnded = () => {
-      // Premature `ended` is the #2 cause of mid-track stops. The browser
-      // fires `ended` whenever the stream socket is closed cleanly — and
-      // when an expired googlevideo URL drops the connection without a
-      // proper error code, the browser treats that as natural EOF.
-      // Real EOF only counts when currentTime is within ~3s of the known
-      // duration. Anything earlier is a connection drop → recover the same
-      // track from the last position so the user never notices.
-      const a = audioRef.current
-      const cur = a?.currentTime || 0
-      const d = a && Number.isFinite(a.duration) ? a.duration : 0
-      const realEnd = d > 0 ? cur >= d - 3 : false
-      if (!realEnd && wantPlayingRef.current && trackRef.current) {
-        console.warn('[mini-player] premature ended at', cur, '/', d, '— recovering')
-        scheduleRecovery(0)
-        return
-      }
-      setPlaying(false)
-      // If the user wants the auto-radio to keep going, hand off to next()
-      // which knows how to fall back to /related when the queue is empty.
-      // We deliberately keep wantPlayingRef=true so loadAndPlay's onPlay
-      // event for the new track flows through cleanly.
-      if (queueRef.current.length > 0 || (autoRadioRef.current && trackRef.current)) {
-        void nextRef.current()
-        return
-      }
-      wantPlayingRef.current = false
+    let host = document.getElementById('dz-yt-host')
+    if (!host) {
+      host = document.createElement('div')
+      host.id = 'dz-yt-host'
+      // Keep present in the DOM (mobile browsers refuse iframe playback if
+      // the element is display:none) but visually invisible. 1×1 px in the
+      // bottom-right corner is invisible to the user but accepted by every
+      // engine we tested (Chrome Android, iOS Safari, Firefox).
+      host.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;overflow:hidden'
+      document.body.appendChild(host)
+      // Inner div is what YT.Player replaces with the iframe.
+      const inner = document.createElement('div')
+      inner.id = 'dz-yt-inner'
+      host.appendChild(inner)
     }
 
-    // ── Auto-recovery ────────────────────────────────────────────────────
-    // The byte-pipe on the server already retries when googlevideo expires,
-    // but a few classes of failures still surface to the <audio> element:
-    //   • our own server returns 502 because both extractors failed once,
-    //   • the client lost connectivity for a few seconds,
-    //   • the browser dropped the source for memory pressure.
-    // In every case the right answer is the same: rebind the same track
-    // with a cache-bust and resume from the last known position. We bound
-    // attempts at 6 within a sliding 90s window so a truly broken track
-    // doesn't loop forever.
-    const scheduleRecovery = (delayMs: number) => {
-      if (recoverTimerRef.current) return
-      const t = trackRef.current
-      if (!t) return
-      const now = Date.now()
-      // Throttle: if we've burned through the rapid-retry quota in the last
-      // 90s, fall back to a long cooldown (30s) instead of giving up. A
-      // truly broken track stays paused but a flaky network or expired URL
-      // cycle eventually recovers — even after hours of listening.
-      if (now - lastRecoverAtRef.current > 90_000) recoverAttemptsRef.current = 0
-      const overQuota = recoverAttemptsRef.current >= 6
-      const effectiveDelay = overQuota ? Math.max(delayMs, 30_000) : delayMs
-      recoverAttemptsRef.current += 1
-      lastRecoverAtRef.current = now
-      const resumeAt = el!.currentTime || 0
-      recoverTimerRef.current = window.setTimeout(() => {
-        recoverTimerRef.current = null
-        const cur = trackRef.current
-        if (!cur || cur.id !== t.id) return
-        try {
-          resumeAtRef.current = resumeAt
-          // After 2 failed attempts on the proxy path for this track, flip
-          // to the byte-pipe fallback for the rest of the session. The pipe
-          // is slower but bypasses the IP-binding / regional-edge issues
-          // that cause the 307 redirect to fail silently.
-          if (recoverAttemptsRef.current >= 2 && !useFallbackRef.current) {
-            useFallbackRef.current = true
-            proxyFailedIdsRef.current.add(cur.id)
-            console.warn('[mini-player] switching to byte-pipe fallback for', cur.id)
-          }
-          el!.src = buildAudioSrc(cur, Date.now(), useFallbackRef.current)
-          currentSrcIdRef.current = cur.id
-          el!.load()
-          // ALWAYS attempt to resume after a recovery rebind. wantPlayingRef
-          // can be momentarily desynced by browser-issued pause events that
-          // race the error handler, so we trust the recovery context: if
-          // the user hadn't actively paused/stopped (those paths cancel
-          // the timer + reset the flag), we want this to play.
-          const p = el!.play()
-          if (p && typeof (p as Promise<void>).catch === 'function') {
-            ;(p as Promise<void>).catch(() => {/* will retry via error handler */})
-          }
-        } catch (e) {
-          console.warn('[mini-player] recovery rebind failed', e)
+    let cancelled = false
+    let progressTimer: number | null = null
+    let stuckTimer: number | null = null
+
+    loadYouTubeIframeAPI().then(YT => {
+      if (cancelled) return
+      if (ytPlayerRef.current) return
+      const initialId = trackRef.current ? extractVideoId(trackRef.current.url) || trackRef.current.id : ''
+      // Build the options dict conditionally — YT.Player rejects an
+      // explicitly-undefined videoId at construction time. When we have no
+      // restored track we omit the field entirely and call loadVideoById()
+      // on the first user click instead.
+      const playerOpts: any = {
+        // Do NOT autoplay on initial mount — that would be an autoplay-block
+        // violation (no user gesture). The user clicks Play on the restored
+        // track to start it, just like any music app.
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+        },
+        events: {
+          onReady: () => {
+            ytReadyRef.current = true
+            window.__dzYtPlayer = ytPlayerRef.current
+            // If a track was restored from localStorage, queue it (paused)
+            // so its metadata loads but it doesn't autoplay.
+            const t = trackRef.current
+            if (t && initialId && resumeAtRef.current > 1) {
+              try { ytPlayerRef.current.cueVideoById({ videoId: initialId, startSeconds: resumeAtRef.current }) } catch {}
+            }
+            // Drain a pending click that fired before YT finished loading.
+            const pending = pendingPlayRef.current
+            if (pending) {
+              pendingPlayRef.current = null
+              startVideo(pending.track, pending.resumeAt)
+            }
+            // Restore user volume/rate prefs, if any.
+            try {
+              const raw = localStorage.getItem('dz-tube-player-prefs')
+              if (raw) {
+                const p = JSON.parse(raw)
+                if (typeof p.volume === 'number') ytPlayerRef.current.setVolume(Math.max(0, Math.min(100, p.volume * 100)))
+                if (p.muted) ytPlayerRef.current.mute()
+                if (typeof p.rate === 'number') {
+                  try { ytPlayerRef.current.setPlaybackRate(p.rate) } catch {}
+                }
+              }
+            } catch {}
+          },
+          onStateChange: (e: any) => {
+            // YT states: -1 unstarted, 0 ended, 1 playing, 2 paused,
+            // 3 buffering, 5 cued.
+            const s = e?.data
+            if (s === 1) {
+              setPlaying(true); setLoading(false)
+              wantPlayingRef.current = true
+            } else if (s === 2) {
+              setPlaying(false)
+              // Don't mutate wantPlayingRef here — pause may be browser-issued
+              // (window blur, tab throttle); user-pause toggles wantPlaying.
+            } else if (s === 3) {
+              setLoading(true)
+            } else if (s === 5) {
+              setLoading(false); setPlaying(false)
+            } else if (s === 0) {
+              setPlaying(false); setLoading(false)
+              const q = queueRef.current
+              if (q.length > 0 || (autoRadioRef.current && trackRef.current)) {
+                void nextRef.current()
+              } else {
+                wantPlayingRef.current = false
+              }
+            }
+          },
+          onError: (e: any) => {
+            // YT error codes: 2 invalid param, 5 HTML5 player error,
+            // 100 video not found, 101/150 embed disabled. For 101/150 we
+            // skip to the next track since this video can never play.
+            const code = e?.data
+            console.warn('[mini-player] YT error', code)
+            setLoading(false)
+            if (code === 101 || code === 150 || code === 100) {
+              if (queueRef.current.length > 0 || autoRadioRef.current) {
+                window.setTimeout(() => { void nextRef.current() }, 400)
+              } else {
+                setPlaying(false)
+                wantPlayingRef.current = false
+              }
+            }
+          },
+        },
+      }
+      if (initialId && /^[A-Za-z0-9_-]{11}$/.test(initialId)) {
+        playerOpts.videoId = initialId
+      }
+      ytPlayerRef.current = new YT.Player('dz-yt-inner', playerOpts)
+    }).catch(err => {
+      console.warn('[mini-player] YT API load failed', err)
+      setLoading(false)
+    })
+
+    // Poll currentTime / duration so the progress bar updates smoothly.
+    progressTimer = window.setInterval(() => {
+      const p = ytPlayerRef.current
+      if (!p || !ytReadyRef.current) return
+      try {
+        const cur = typeof p.getCurrentTime === 'function' ? p.getCurrentTime() : 0
+        const dur = typeof p.getDuration === 'function' ? p.getDuration() : 0
+        if (Number.isFinite(cur)) setProgress(cur)
+        if (Number.isFinite(dur) && dur > 0) setDuration(dur)
+      } catch {}
+    }, 500) as unknown as number
+
+    // Stuck detector: if the user wants playback but the player is in PAUSED
+    // state for >5s without a user pause, attempt one resume. Bounded so it
+    // doesn't fight a real pause.
+    let lastResumeAt = 0
+    stuckTimer = window.setInterval(() => {
+      const p = ytPlayerRef.current
+      if (!p || !ytReadyRef.current) return
+      if (!wantPlayingRef.current) return
+      try {
+        const state = typeof p.getPlayerState === 'function' ? p.getPlayerState() : -1
+        // 2 = paused. We only auto-resume from a paused-while-wanting state.
+        if (state === 2 && Date.now() - lastResumeAt > 5000) {
+          lastResumeAt = Date.now()
+          p.playVideo()
         }
-      }, effectiveDelay) as unknown as number
-    }
-
-    const onError = () => {
-      console.warn('[mini-player] audio error', el!.error?.code, el!.error?.message)
-      setLoading(true) // keep buffering UI while we retry
-      // Backoff: 600ms, 1.2s, 2s, 3s, 4s, 5s
-      const backoff = [600, 1200, 2000, 3000, 4000, 5000]
-      const i = Math.min(recoverAttemptsRef.current, backoff.length - 1)
-      scheduleRecovery(backoff[i])
-    }
-    const onStalled = () => {
-      // Stalled fires when the network can't deliver enough data. Give the
-      // network a couple seconds before forcing a rebind — most stalls
-      // resolve on their own.
-      if (recoverTimerRef.current) return
-      window.setTimeout(() => {
-        if (!trackRef.current) return
-        const a = audioRef.current
-        if (!a) return
-        // Still stalled? buffered range hasn't grown past currentTime → rebind.
-        const buffEnd = a.buffered.length ? a.buffered.end(a.buffered.length - 1) : 0
-        if (a.paused || buffEnd > a.currentTime + 0.25) return
-        scheduleRecovery(0)
-      }, 2500)
-    }
-
-    el.addEventListener('loadedmetadata', onLoadedMeta)
-    el.addEventListener('durationchange', onDurationChange)
-    el.addEventListener('timeupdate', onTimeUpdate)
-    el.addEventListener('play', onPlay)
-    el.addEventListener('pause', onPause)
-    el.addEventListener('waiting', onWaiting)
-    el.addEventListener('playing', onPlaying)
-    el.addEventListener('canplay', onCanPlay)
-    el.addEventListener('ended', onEnded)
-    el.addEventListener('error', onError)
-    el.addEventListener('stalled', onStalled)
-
-    // STUCK DETECTOR — the safety net that makes "works for an hour or two"
-    // become "works forever". The browser sometimes fails to fire `error`
-    // or `stalled` when an audio stream silently dies (mid-stream socket
-    // close after a backgrounded tab is throttled, expired googlevideo URL
-    // returning bytes that decode to nothing, etc). We poll every 4s: if
-    // the user wants playback, the element claims to not be paused, but
-    // currentTime hasn't advanced in 8s, force a recovery rebind from the
-    // last known position with a fresh cache-bust query.
-    let lastSeenTime = el.currentTime
-    let lastSeenAt = Date.now()
-    const stuckTimer = window.setInterval(() => {
-      const a = audioRef.current
-      if (!a) return
-      if (!wantPlayingRef.current) { lastSeenTime = a.currentTime; lastSeenAt = Date.now(); return }
-      if (a.paused) { lastSeenTime = a.currentTime; lastSeenAt = Date.now(); return }
-      if (a.readyState < 2) return // still loading initial data — let it
-      const advanced = Math.abs(a.currentTime - lastSeenTime) > 0.25
-      if (advanced) {
-        lastSeenTime = a.currentTime
-        lastSeenAt = Date.now()
-        return
-      }
-      if (Date.now() - lastSeenAt > 8000) {
-        console.warn('[mini-player] stuck for >8s, forcing recovery')
-        lastSeenAt = Date.now() // reset window to avoid recovery loop
-        scheduleRecovery(0)
-      }
+      } catch {}
     }, 4000) as unknown as number
 
     return () => {
-      el!.removeEventListener('loadedmetadata', onLoadedMeta)
-      el!.removeEventListener('durationchange', onDurationChange)
-      el!.removeEventListener('timeupdate', onTimeUpdate)
-      el!.removeEventListener('play', onPlay)
-      el!.removeEventListener('pause', onPause)
-      el!.removeEventListener('waiting', onWaiting)
-      el!.removeEventListener('playing', onPlaying)
-      el!.removeEventListener('canplay', onCanPlay)
-      el!.removeEventListener('ended', onEnded)
-      el!.removeEventListener('error', onError)
-      el!.removeEventListener('stalled', onStalled)
-      if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
-      clearInterval(stuckTimer)
+      cancelled = true
+      if (progressTimer != null) clearInterval(progressTimer)
+      if (stuckTimer != null) clearInterval(stuckTimer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Internal: bind <audio> to the same-origin streaming proxy and start
-  // playback. Bind + play are called SYNCHRONOUSLY so the user-gesture
-  // activation is preserved (no autoplay block). The slow work — resolving
-  // a signed googlevideo URL — happens server-side while the browser
-  // already shows a buffering state.
-  const loadAndPlay = useCallback((t: PlayerTrack, autoplay: boolean, resumeAt: number) => {
-    const el = audioRef.current
-    if (!el) return
-    const myToken = ++loadTokenRef.current
+  // ── Internal: start a video on the singleton player ──────────────────────
+  // Called synchronously from the user-gesture frame so YT can autoplay.
+  const startVideo = useCallback((t: PlayerTrack, resumeAt: number) => {
+    const videoId = extractVideoId(t.url) || t.id
+    if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+      console.warn('[mini-player] invalid videoId', t.id, t.url)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setProgress(resumeAt > 1 ? resumeAt : 0)
-    // Optimistically show the duration we already know from the search
-    // result, so the mini-player doesn't sit at "0:00".
     setDuration(t.duration && t.duration > 0 ? t.duration : 0)
-    resumeAtRef.current = resumeAt > 1 ? resumeAt : 0
-    // Reset per-track recovery state for the new track. If we already know
-    // the proxy path is broken for this track id (from an earlier attempt
-    // in the same session), start directly on the byte-pipe.
-    recoverAttemptsRef.current = 0
-    useFallbackRef.current = proxyFailedIdsRef.current.has(t.id)
-
+    wantPlayingRef.current = true
+    // If the YT API isn't ready yet, queue the click. onReady will drain it.
+    if (!ytPlayerRef.current || !ytReadyRef.current) {
+      pendingPlayRef.current = { track: t, resumeAt }
+      return
+    }
     try {
-      el.src = buildAudioSrc(t, undefined, useFallbackRef.current)
-      currentSrcIdRef.current = t.id
-      el.load()
-      if (autoplay) {
-        const p = el.play()
-        if (p && typeof (p as Promise<void>).catch === 'function') {
-          ;(p as Promise<void>).catch(err => {
-            // Token check guards against late rejection from a stale call.
-            if (myToken !== loadTokenRef.current) return
-            console.warn('[mini-player] play() rejected', err?.message || err)
-            setLoading(false)
-          })
+      // Skip redundant reloads of the same id — the player already has the
+      // buffered stream; just resume / play.
+      if (currentVideoIdRef.current === videoId) {
+        if (resumeAt > 1) {
+          try { ytPlayerRef.current.seekTo(resumeAt, true) } catch {}
         }
+        ytPlayerRef.current.playVideo()
+      } else {
+        currentVideoIdRef.current = videoId
+        // loadVideoById starts playback immediately on most engines; we still
+        // call playVideo() right after to cover engines that only "cue".
+        ytPlayerRef.current.loadVideoById({
+          videoId,
+          startSeconds: resumeAt > 1 ? resumeAt : 0,
+        })
+        // Some browsers honour autoplay only with this explicit nudge.
+        try { ytPlayerRef.current.playVideo() } catch {}
       }
-    } catch (e) {
-      console.warn('[mini-player] el.play failed', e)
+    } catch (err) {
+      console.warn('[mini-player] startVideo failed', err)
       setLoading(false)
     }
 
-    // Update Media Session so the OS shows track info + lockscreen controls.
+    // Update Media Session metadata so the OS shows track info on the
+    // lockscreen / notification shade.
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -443,14 +384,26 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // SYNC by design — see MiniPlayerCtx.play comment for why we cannot await.
-  // setTrack is a React state setter (sync) and loadAndPlay is sync, so the
-  // whole chain stays in the same task as the originating user click.
   const playInternal = useCallback((t: PlayerTrack, autoplay: boolean = true) => {
     setTrack(t)
     const resumeAt = resumeAtRef.current
     resumeAtRef.current = 0
-    loadAndPlay(t, autoplay, resumeAt)
-  }, [loadAndPlay])
+    if (autoplay) {
+      startVideo(t, resumeAt)
+    } else {
+      // Cue (don't play) — used for restore-on-mount.
+      const videoId = extractVideoId(t.url) || t.id
+      currentVideoIdRef.current = videoId
+      if (ytPlayerRef.current && ytReadyRef.current && videoId) {
+        try { ytPlayerRef.current.cueVideoById({ videoId, startSeconds: resumeAt > 1 ? resumeAt : 0 }) } catch {}
+      } else {
+        // Keep the resume position around for when the user finally hits play.
+        resumeAtRef.current = resumeAt
+      }
+      setProgress(resumeAt > 1 ? resumeAt : 0)
+      setDuration(t.duration && t.duration > 0 ? t.duration : 0)
+    }
+  }, [startVideo])
 
   // Pull a fresh batch of related tracks for the seed and append them to the
   // queue. Used by the auto-radio loop. Returns the list it appended (may be
@@ -483,8 +436,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
 
   const next = useCallback(() => {
     const q = queueRef.current
-    // Fast path: queue has something. Run synchronously so click-driven
-    // "next" preserves the user-gesture activation for the new play().
     if (q.length > 0) {
       const [head, ...rest] = q
       setQueue(rest)
@@ -495,11 +446,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       playInternal(head)
       return
     }
-    // Slow path: queue empty + auto-radio on → background fetch then play.
-    // This intentionally does NOT preserve the user gesture (we already
-    // waited for the network), but auto-radio is only invoked from the
-    // `ended` event or background top-up, never from a click that needs
-    // to survive autoplay restrictions.
     if (autoRadioRef.current && trackRef.current) {
       const seedId = trackRef.current.id
       void fetchRadio(seedId).then(radio => {
@@ -515,10 +461,8 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [playInternal, fetchRadio])
   useEffect(() => { nextRef.current = next }, [next])
 
-  // Auto-radio top-up: when the queue gets thin (≤1) while autoRadio is
-  // on, opportunistically pre-fetch the next batch in the background so
-  // the user experiences zero gap between tracks. Runs whenever the
-  // queue length or current track changes.
+  // Auto-radio top-up: when the queue gets thin (≤1) while autoRadio is on,
+  // pre-fetch the next batch so the user experiences zero gap between tracks.
   useEffect(() => {
     if (!autoRadio) return
     if (!track) return
@@ -543,10 +487,9 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [autoRadio, track, queue.length, fetchRadio])
 
-  // SYNC by design — see MiniPlayerCtx.play comment.
   const play = useCallback((t: PlayerTrack) => { playInternal(t) }, [playInternal])
 
-  // Restore previous track on first mount (paused, ready to resume).
+  // Restore previous track on first mount (cued, ready to resume on click).
   useEffect(() => {
     if (restoredRef.current) return
     restoredRef.current = true
@@ -564,7 +507,11 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!track) return
     const id = setInterval(() => {
-      const cur = audioRef.current?.currentTime || 0
+      let cur = 0
+      try {
+        const p = ytPlayerRef.current
+        if (p && ytReadyRef.current && typeof p.getCurrentTime === 'function') cur = p.getCurrentTime() || 0
+      } catch {}
       persist({ track, queue: queueRef.current, progress: cur })
     }, 4000)
     return () => clearInterval(id)
@@ -574,9 +521,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     setQueue(prev => prev.find(x => x.id === t.id) ? prev : [...prev, t])
   }, [])
 
-  // Insert a track at the FRONT of the queue so it plays right after the
-  // currently playing one. If the same track is already in the queue, move
-  // it to the front instead of duplicating.
   const playNext = useCallback((t: PlayerTrack) => {
     setQueue(prev => {
       const without = prev.filter(x => x.id !== t.id)
@@ -591,50 +535,51 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const clearQueue = useCallback(() => setQueue([]), [])
 
   const toggle = useCallback(() => {
-    const el = audioRef.current
-    if (!el || !track) return
-    if (el.paused || el.ended) {
+    const p = ytPlayerRef.current
+    const t = trackRef.current
+    if (!t) return
+    // If YT isn't ready yet, treat this as a play request and queue it.
+    if (!p || !ytReadyRef.current) {
+      pendingPlayRef.current = { track: t, resumeAt: progress }
       wantPlayingRef.current = true
-      recoverAttemptsRef.current = 0
-      // If the source was never bound (e.g. user clicked play right after
-      // a restore), bind it now.
-      if (!el.src || currentSrcIdRef.current !== track.id) {
-        void loadAndPlay(track, true, audioRef.current?.currentTime || 0)
-        return
-      }
-      const p = el.play()
-      if (p && typeof (p as Promise<void>).catch === 'function') {
-        ;(p as Promise<void>).catch(err => console.warn('[mini-player] toggle play failed', err?.message || err))
-      }
-    } else {
-      wantPlayingRef.current = false
-      // Cancel any in-flight recovery so it doesn't restart playback after
-      // a user-issued pause. Without this, pressing pause during a recovery
-      // window could result in the timer resuming playback seconds later.
-      if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
-      try { el.pause() } catch {}
+      setLoading(true)
+      return
     }
-  }, [track, loadAndPlay])
+    try {
+      const state = typeof p.getPlayerState === 'function' ? p.getPlayerState() : -1
+      // States 1=playing, 3=buffering count as "is playing" → pause.
+      if (state === 1 || state === 3) {
+        wantPlayingRef.current = false
+        p.pauseVideo()
+      } else {
+        wantPlayingRef.current = true
+        // If video was never bound (e.g. fresh restore) bind it now.
+        const videoId = extractVideoId(t.url) || t.id
+        if (currentVideoIdRef.current !== videoId) {
+          startVideo(t, progress)
+        } else {
+          p.playVideo()
+        }
+      }
+    } catch (err) {
+      console.warn('[mini-player] toggle failed', err)
+    }
+  }, [progress, startVideo])
 
   const seek = useCallback((sec: number) => {
-    const el = audioRef.current
-    if (!el) return
-    try {
-      el.currentTime = Math.max(0, sec)
-      setProgress(el.currentTime)
-    } catch {}
+    const p = ytPlayerRef.current
+    if (!p || !ytReadyRef.current) return
+    const target = Math.max(0, sec)
+    try { p.seekTo(target, true); setProgress(target) } catch {}
   }, [])
 
   const stop = useCallback(() => {
     wantPlayingRef.current = false
-    if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
-    recoverAttemptsRef.current = 0
-    const el = audioRef.current
-    if (el) {
-      try { el.pause() } catch {}
-      try { el.removeAttribute('src'); el.load() } catch {}
+    const p = ytPlayerRef.current
+    if (p && ytReadyRef.current) {
+      try { p.stopVideo() } catch {}
     }
-    currentSrcIdRef.current = null
+    currentVideoIdRef.current = null
     setTrack(null)
     setPlaying(false)
     setProgress(0)
@@ -643,30 +588,18 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Background-play resilience: when the tab becomes visible again, if the
-  // user wanted playback to continue but the browser paused our audio (some
-  // mobile browsers do this on long backgrounding), resume it. We never
-  // pause on `hidden` — the whole point is to keep playing in the background.
+  // user wanted playback but the engine paused us, resume.
   useEffect(() => {
     if (typeof document === 'undefined') return
     const onVis = () => {
       if (document.visibilityState !== 'visible') return
-      const el = audioRef.current
-      const t = trackRef.current
-      if (!el || !t) return
-      if (wantPlayingRef.current && el.paused) {
-        // If the source was unloaded by the browser, rebind it first.
-        if (!el.src || currentSrcIdRef.current !== t.id) {
-          try {
-            el.src = buildAudioSrc(t, Date.now(), useFallbackRef.current)
-            currentSrcIdRef.current = t.id
-            el.load()
-          } catch {}
-        }
-        const p = el.play()
-        if (p && typeof (p as Promise<void>).catch === 'function') {
-          ;(p as Promise<void>).catch(() => {})
-        }
-      }
+      const p = ytPlayerRef.current
+      if (!p || !ytReadyRef.current) return
+      if (!wantPlayingRef.current) return
+      try {
+        const state = typeof p.getPlayerState === 'function' ? p.getPlayerState() : -1
+        if (state === 2 || state === 5 || state === -1) p.playVideo()
+      } catch {}
     }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('focus', onVis)
@@ -681,44 +614,50 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     try {
       navigator.mediaSession.setActionHandler('play', () => {
-        const el = audioRef.current
-        if (el && el.paused) {
-          wantPlayingRef.current = true
-          recoverAttemptsRef.current = 0
-          const p = el.play()
-          if (p && typeof (p as Promise<void>).catch === 'function') {
-            ;(p as Promise<void>).catch(() => {})
-          }
-        }
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current) return
+        wantPlayingRef.current = true
+        try { p.playVideo() } catch {}
       })
       navigator.mediaSession.setActionHandler('pause', () => {
-        const el = audioRef.current
-        if (el && !el.paused) {
-          wantPlayingRef.current = false
-          if (recoverTimerRef.current) { clearTimeout(recoverTimerRef.current); recoverTimerRef.current = null }
-          try { el.pause() } catch {}
-        }
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current) return
+        wantPlayingRef.current = false
+        try { p.pauseVideo() } catch {}
       })
       navigator.mediaSession.setActionHandler('nexttrack', () => { void next() })
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        // We don't keep a "previous" stack, but rewinding to track start is
+        // the universal "previous" fallback that music apps expose.
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current) return
+        try { p.seekTo(0, true); p.playVideo() } catch {}
+      })
       navigator.mediaSession.setActionHandler('seekbackward', (d: any) => {
-        const el = audioRef.current
-        if (!el) return
-        try { el.currentTime = Math.max(0, el.currentTime - (d?.seekOffset || 10)) } catch {}
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current) return
+        try {
+          const cur = p.getCurrentTime() || 0
+          p.seekTo(Math.max(0, cur - (d?.seekOffset || 10)), true)
+        } catch {}
       })
       navigator.mediaSession.setActionHandler('seekforward', (d: any) => {
-        const el = audioRef.current
-        if (!el) return
-        try { el.currentTime = el.currentTime + (d?.seekOffset || 10) } catch {}
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current) return
+        try {
+          const cur = p.getCurrentTime() || 0
+          p.seekTo(cur + (d?.seekOffset || 10), true)
+        } catch {}
       })
       navigator.mediaSession.setActionHandler('seekto', (d: any) => {
-        const el = audioRef.current
-        if (!el || typeof d?.seekTime !== 'number') return
-        try { el.currentTime = d.seekTime } catch {}
+        const p = ytPlayerRef.current
+        if (!p || !ytReadyRef.current || typeof d?.seekTime !== 'number') return
+        try { p.seekTo(d.seekTime, true) } catch {}
       })
     } catch {}
   }, [next])
 
-  // Keep MediaSession position state in sync so lockscreen scrubber works.
+  // Keep MediaSession position state in sync so the lockscreen scrubber works.
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
     if (!('setPositionState' in navigator.mediaSession)) return
@@ -726,7 +665,7 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     try {
       ;(navigator.mediaSession as any).setPositionState({
         duration,
-        playbackRate: audioRef.current?.playbackRate || 1,
+        playbackRate: 1,
         position: Math.min(progress, duration),
       })
     } catch {}
@@ -739,10 +678,6 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       ;(navigator.mediaSession as any).playbackState = playing ? 'playing' : (track ? 'paused' : 'none')
     } catch {}
   }, [playing, track])
-
-  // Suppress unused-warning for the legacy helper kept for parity with the
-  // previous IFrame implementation (other modules may still call it).
-  void extractVideoId
 
   return (
     <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>

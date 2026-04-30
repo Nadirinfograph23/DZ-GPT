@@ -1,30 +1,11 @@
 // Mini Player V2 enhancements — additive, non-UI hook.
 // Mounted from <MiniPlayer />. Touches no rendered output and no public
-// context API. Reaches the persistent <audio id="dz-audio-host"> element by
-// DOM id (the same element the context manages) and adds:
+// context API.
 //
-//   1. Preload-next: when progress crosses 75% of the current track and the
-//      queue has at least one item, send a HEAD-style fetch to the next
-//      track's audio-proxy URL so Vercel resolves+caches the signed
-//      googlevideo URL before the browser actually needs it.
-//   2. Persistent volume / speed / mute restored on mount and saved on
-//      change (extends "Smart Resume" with audio preferences).
-//   3. Hidden keyboard shortcuts (no UI change):
-//        +/-      → volume ±5%
-//        ,/.      → playback speed cycle (0.5,0.75,1,1.25,1.5,1.75,2)
-//        m / M    → mute toggle
-//        l / L    → audio-only label-only (already audio-only; no-op marker)
-//   4. Network-aware: when navigator.connection.effectiveType is 2g/slow-2g,
-//      append a hint cookie 'dzt_slow=1' so the server can pick lower-bitrate
-//      formats (used by audio-proxy to prefer itag 139/249 over 251).
-//   5. preload="auto" once a play has succeeded (default is "metadata") so
-//      the next user-driven play hits a warm decoder.
-//   6. Analytics beacon: sends play/pause/skip/complete/error events to
-//      /api/dz-tube/analytics/event using navigator.sendBeacon (works during
-//      page unload). Also flushes on visibility=hidden.
-//   7. Belt-and-suspenders memory cleanup: clears any preload AbortController
-//      on track change so a slow HEAD request from a stale track can't keep
-//      a TCP socket open.
+// Updated for YouTube IFrame Player API (Apr 2026): the legacy <audio>
+// element was replaced by a singleton YT.Player exposed at
+// window.__dzYtPlayer. All volume/rate/mute controls now call into that
+// player; analytics + preload + keyboard shortcuts are unchanged.
 
 import { useEffect, useRef } from 'react'
 
@@ -80,15 +61,18 @@ function nextRate(cur: number, dir: 1 | -1): number {
   return RATE_STEPS[i]
 }
 
-function getAudio(): HTMLAudioElement | null {
-  if (typeof document === 'undefined') return null
-  return document.getElementById('dz-audio-host') as HTMLAudioElement | null
+// Get the singleton YouTube IFrame Player instance the context publishes to
+// window.__dzYtPlayer. Returns null until the IFrame API has loaded.
+function getYt(): any {
+  if (typeof window === 'undefined') return null
+  const p = (window as any).__dzYtPlayer
+  if (!p) return null
+  // YT.Player is only safe to call once getPlayerState exists.
+  if (typeof p.getPlayerState !== 'function') return null
+  return p
 }
 
 // ── Network state observability ─────────────────────────────────────────────
-// Read navigator.connection and report transitions to analytics so we have
-// real data on what kind of links our players are over. Does NOT change
-// endpoint selection — that decision lives in MiniPlayerContext.
 let lastNetworkState: string = ''
 function reportNetwork() {
   if (typeof navigator === 'undefined') return
@@ -148,9 +132,10 @@ function flushEvents() {
 }
 
 // ── Warm helpers ────────────────────────────────────────────────────────────
-// Tiny module-level cache of recent warm calls so we don't re-warm the same
-// URL within 5 minutes (the server already caches for 20 min, but a client
-// dedup avoids unnecessary network round-trips).
+// Kept as a no-op-friendly export so any caller (e.g. DZ Tube cards) can
+// still invoke it without breaking — under YT IFrame playback there is no
+// server-side stream to pre-resolve, so this is now a tiny analytics ping
+// only and does not perform a server warm round-trip.
 const _warmedAt = new Map<string, number>()
 const WARM_DEDUP_MS = 5 * 60 * 1000
 function _shouldWarm(url: string): boolean {
@@ -158,78 +143,90 @@ function _shouldWarm(url: string): boolean {
   if (Date.now() - last < WARM_DEDUP_MS) return false
   _warmedAt.set(url, Date.now())
   if (_warmedAt.size > 200) {
-    // Trim oldest entries.
     const arr = [...(_warmedAt.entries() as any)].sort((a: any, b: any) => a[1] - b[1])
     for (let i = 0; i < 50 && arr[i]; i++) _warmedAt.delete(arr[i][0])
   }
   return true
 }
 
-// Hit /api/dz-tube/warm to pre-resolve + cache the googlevideo URL on the
-// server. Lightweight — returns JSON, no 307 round-trip. Used by:
-//   • the mini-player when a new track starts (warm queue head + queue[1])
-//   • DZ Tube search-result cards on hover/touchstart (warm what user might click)
-export function warmTrackUrl(youtubeUrl: string | null | undefined, abortRef?: React.MutableRefObject<AbortController | null>) {
+// Public API kept for source-compatibility. Under YT IFrame playback the
+// "warm" concept is a no-op (the iframe handles its own buffering), so we
+// just dedup and return. The signature is preserved to avoid touching call
+// sites in DZTube.tsx and other UI files.
+export function warmTrackUrl(youtubeUrl: string | null | undefined, _abortRef?: React.MutableRefObject<AbortController | null>) {
   if (!youtubeUrl) return
   if (!_shouldWarm(youtubeUrl)) return
-  if (abortRef?.current) { try { abortRef.current.abort() } catch {} }
-  const ac = new AbortController()
-  if (abortRef) abortRef.current = ac
-  fetch(`/api/dz-tube/warm?url=${encodeURIComponent(youtubeUrl)}`, {
-    signal: ac.signal,
-    method: 'GET',
-    cache: 'no-store',
-    keepalive: true,
-  }).catch(() => {/* warm failures are silent — the real audio-proxy call will retry */})
+  // intentional no-op
 }
 
 export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
   const lastTrackIdRef = useRef<string | null>(null)
   const preloadedForRef = useRef<string | null>(null)
-  const preloadAbortRef = useRef<AbortController | null>(null)
-  const lastVolumeChangeRef = useRef<number>(0)
 
-  // 1. Restore prefs + apply preload="auto" once.
+  // 1. Restore prefs onto the YT player as soon as it's available, then keep
+  //    them in sync via a light poll (the IFrame API has no volumechange
+  //    event so we observe via getVolume()).
   useEffect(() => {
-    const el = getAudio()
-    if (!el) return
-    const p = loadPrefs()
-    try {
-      el.volume = p.volume
-      el.muted = p.muted
-      el.playbackRate = p.rate
-      // Bump preload from "metadata" → "auto" so the browser keeps a
-      // bigger forward buffer when a track is bound. The first bind still
-      // happens during user-gesture so this doesn't trigger autoplay block.
-      el.preload = 'auto'
-    } catch {}
+    let cancelled = false
+    const lastApplied = { volume: -1, rate: -1, muted: 2 }
 
-    const onVolume = () => {
-      const now = Date.now()
-      // Debounce — browsers can fire many volumechange in a sec when
-      // dragging a slider. Persist at most every 250ms.
-      if (now - lastVolumeChangeRef.current < 250) return
-      lastVolumeChangeRef.current = now
-      savePrefs({ volume: el.volume, muted: el.muted })
-      pushEvent({ type: 'volume', trackId: lastTrackIdRef.current, volume: el.volume, ts: Date.now() })
-    }
-    const onRate = () => {
-      savePrefs({ rate: el.playbackRate })
-      pushEvent({ type: 'rate', trackId: lastTrackIdRef.current, rate: el.playbackRate, ts: Date.now() })
-    }
-    const onSeeked = () => {
-      pushEvent({
-        type: 'seek',
-        trackId: lastTrackIdRef.current,
-        position: el.currentTime,
-        duration: Number.isFinite(el.duration) ? el.duration : 0,
-        ts: Date.now(),
-      })
+    const applyPrefs = () => {
+      const yt = getYt()
+      if (!yt) return false
+      const p = loadPrefs()
+      try {
+        if (typeof yt.setVolume === 'function') yt.setVolume(Math.round(p.volume * 100))
+        if (p.muted && typeof yt.mute === 'function') yt.mute()
+        else if (!p.muted && typeof yt.unMute === 'function') yt.unMute()
+        if (typeof yt.setPlaybackRate === 'function') {
+          try { yt.setPlaybackRate(p.rate) } catch {}
+        }
+        lastApplied.volume = p.volume
+        lastApplied.rate = p.rate
+        lastApplied.muted = p.muted ? 1 : 0
+      } catch {}
+      return true
     }
 
-    el.addEventListener('volumechange', onVolume)
-    el.addEventListener('ratechange', onRate)
-    el.addEventListener('seeked', onSeeked)
+    // Wait for YT to come online (poll up to 15s).
+    let waited = 0
+    const waitTimer = window.setInterval(() => {
+      if (cancelled) return
+      if (applyPrefs() || (waited += 250) > 15_000) clearInterval(waitTimer)
+    }, 250)
+
+    // Persist YT-side changes (volume/rate/mute) back to prefs.
+    const syncTimer = window.setInterval(() => {
+      const yt = getYt()
+      if (!yt) return
+      try {
+        const v = typeof yt.getVolume === 'function' ? yt.getVolume() / 100 : lastApplied.volume
+        const muted = typeof yt.isMuted === 'function' ? !!yt.isMuted() : !!lastApplied.muted
+        const rate = typeof yt.getPlaybackRate === 'function' ? yt.getPlaybackRate() : lastApplied.rate
+        const changed: Partial<Prefs> = {}
+        if (Math.abs((v ?? 1) - lastApplied.volume) > 0.01) {
+          changed.volume = clamp01(v)
+          lastApplied.volume = changed.volume!
+        }
+        if ((muted ? 1 : 0) !== lastApplied.muted) {
+          changed.muted = muted
+          lastApplied.muted = muted ? 1 : 0
+        }
+        if (Math.abs((rate ?? 1) - lastApplied.rate) > 0.01) {
+          changed.rate = clampRate(rate)
+          lastApplied.rate = changed.rate!
+        }
+        if (Object.keys(changed).length > 0) {
+          savePrefs(changed)
+          if ('volume' in changed) {
+            pushEvent({ type: 'volume', trackId: lastTrackIdRef.current, volume: changed.volume!, ts: Date.now() })
+          }
+          if ('rate' in changed) {
+            pushEvent({ type: 'rate', trackId: lastTrackIdRef.current, rate: changed.rate!, ts: Date.now() })
+          }
+        }
+      } catch {}
+    }, 1500) as unknown as number
 
     reportNetwork()
     const conn: any = (navigator as any).connection
@@ -238,49 +235,55 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
     }
 
     return () => {
-      try { el.removeEventListener('volumechange', onVolume) } catch {}
-      try { el.removeEventListener('ratechange', onRate) } catch {}
-      try { el.removeEventListener('seeked', onSeeked) } catch {}
+      cancelled = true
+      clearInterval(waitTimer)
+      clearInterval(syncTimer)
       if (conn && typeof conn.removeEventListener === 'function') {
         conn.removeEventListener('change', reportNetwork)
       }
     }
   }, [])
 
-  // 2. Hidden keyboard shortcuts.
+  // 2. Hidden keyboard shortcuts (now driving YT player).
   useEffect(() => {
     if (typeof window === 'undefined') return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      const el = getAudio()
-      if (!el) return
+      const yt = getYt()
+      if (!yt) return
       switch (e.key) {
         case '+': case '=': {
           e.preventDefault()
-          el.volume = clamp01(el.volume + 0.05)
-          if (el.muted && el.volume > 0) el.muted = false
+          try {
+            const v = clamp01((yt.getVolume() / 100) + 0.05)
+            yt.setVolume(Math.round(v * 100))
+            if (yt.isMuted && yt.isMuted()) yt.unMute()
+          } catch {}
           break
         }
         case '-': case '_': {
           e.preventDefault()
-          el.volume = clamp01(el.volume - 0.05)
+          try {
+            const v = clamp01((yt.getVolume() / 100) - 0.05)
+            yt.setVolume(Math.round(v * 100))
+          } catch {}
           break
         }
         case 'm': case 'M': {
           e.preventDefault()
-          el.muted = !el.muted
+          try { if (yt.isMuted && yt.isMuted()) yt.unMute(); else yt.mute() } catch {}
           break
         }
         case '.': case '>': {
           e.preventDefault()
-          el.playbackRate = nextRate(el.playbackRate, 1)
+          try { yt.setPlaybackRate(nextRate(yt.getPlaybackRate(), 1)) } catch {}
           break
         }
         case ',': case '<': {
           e.preventDefault()
-          el.playbackRate = nextRate(el.playbackRate, -1)
+          try { yt.setPlaybackRate(nextRate(yt.getPlaybackRate(), -1)) } catch {}
           break
         }
       }
@@ -289,11 +292,9 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // 3. Track-change events + memory cleanup.
+  // 3. Track-change events.
   useEffect(() => {
     if (state.trackId !== lastTrackIdRef.current) {
-      // Cancel any in-flight preload from the previous track.
-      if (preloadAbortRef.current) { try { preloadAbortRef.current.abort() } catch {} ; preloadAbortRef.current = null }
       preloadedForRef.current = null
       lastTrackIdRef.current = state.trackId
       if (state.trackId) {
@@ -308,22 +309,16 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
     }
   }, [state.trackId, state.trackTitle, state.duration])
 
-  // 4. Eager next-track warm: fire immediately when a NEW track starts (no
-  //    75% threshold — that was too late for short songs). Warms queue[0]
-  //    right away and queue[1] after a short delay so the second-next click
-  //    is also instant.
+  // 4. Eager preload (no-op under YT iframe but kept for analytics path).
   useEffect(() => {
     if (!state.trackId) return
     if (state.queueHeadUrl) {
       const key = `${state.trackId}::${state.queueHeadUrl}`
       if (preloadedForRef.current !== key) {
         preloadedForRef.current = key
-        warmTrackUrl(state.queueHeadUrl, preloadAbortRef)
+        warmTrackUrl(state.queueHeadUrl)
       }
     }
-    // Tier-2 warm runs 4s later so it doesn't compete with the active track's
-    // initial buffer. If the user skips before 4s the timeout still completes
-    // — that's fine, an extra warm is cheap (server in-flight dedup handles it).
     if (state.queueSecondUrl) {
       const t = window.setTimeout(() => warmTrackUrl(state.queueSecondUrl!), 4000)
       return () => clearTimeout(t)
@@ -335,25 +330,23 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
     if (typeof document === 'undefined') return
     const onHide = () => {
       if (document.visibilityState === 'hidden') {
-        const el = getAudio()
         pushEvent({
-          type: 'pause', // soft — captures background transitions
+          type: 'pause',
           trackId: lastTrackIdRef.current,
-          position: el?.currentTime || 0,
-          duration: el && Number.isFinite(el.duration) ? el.duration : 0,
+          position: state.progress,
+          duration: state.duration,
           ts: Date.now(),
         })
         flushEvents()
       }
     }
     const onUnload = () => {
-      const el = getAudio()
       if (lastTrackIdRef.current) {
         pushEvent({
           type: 'pause',
           trackId: lastTrackIdRef.current,
-          position: el?.currentTime || 0,
-          duration: el && Number.isFinite(el.duration) ? el.duration : 0,
+          position: state.progress,
+          duration: state.duration,
           ts: Date.now(),
         })
       }
@@ -365,10 +358,9 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
       document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('pagehide', onUnload)
     }
-  }, [])
+  }, [state.progress, state.duration])
 
-  // 6. Detect "complete" — when progress reaches near duration without
-  //    pause. Reads play/pause state changes.
+  // 6. Detect "complete" + emit play/pause analytics on state transitions.
   const wasPlayingRef = useRef<boolean>(state.playing)
   useEffect(() => {
     if (wasPlayingRef.current && !state.playing && state.duration > 0 && state.progress >= state.duration - 3) {
@@ -401,8 +393,7 @@ export function useEnhancedMiniPlayer(state: MiniPlayerLikeState) {
   }, [state.playing, state.progress, state.duration])
 }
 
-// Public utility for callers who want to record a skip explicitly (called
-// from MiniPlayer when user presses "next").
+// Public utility for callers who want to record a skip explicitly.
 export function recordSkip(trackId: string | null, position: number, duration: number) {
   pushEvent({ type: 'skip', trackId, position, duration, ts: Date.now() })
 }

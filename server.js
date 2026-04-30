@@ -7928,28 +7928,21 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
   // wins and TTL covers the rare case of a stale URL).
   const videoId = extractYouTubeVideoId(youtubeUrl)
 
-  // Piped + Invidious return URLs that go through THEIR proxy (not direct
-  // googlevideo). Those URLs only work when the corresponding proxy/instance
-  // is up — and in practice it's common for a Piped proxy to 500 or for an
-  // Invidious instance to abuse-block our requests with a text/plain message
-  // while still returning HTTP 200 from the API. A 32-byte range probe rejects
-  // those broken URLs in <2s so they don't win the race and break playback.
-  const tryPiped = (async () => {
-    if (!videoId) throw new Error('no videoId')
-    const piped = await fetchPipedStreams(videoId, { isAudio: true })
-    if (!piped?.url) throw new Error('piped: no url')
-    if (!await probeUpstreamPlayable(piped.url)) throw new Error('piped: proxy unhealthy')
-    return piped.url
-  })()
+  // ── Why Piped / Invidious are excluded from this race ──────────────────────
+  // Piped and Invidious proxy YouTube DASH audio segments. When fetched with a
+  // Range header, they return Content-Range: bytes 0-X/X+1 — i.e. they always
+  // report the total file size as (range_end + 1), NOT the real audio length.
+  // This causes the browser's <audio> element to think the track ends after
+  // exactly one chunk (e.g. 1MB ≈ 60 s) and fire 'ended' prematurely.
+  //
+  // yt-dlp and @distube/ytdl-core return direct googlevideo.com CDN URLs.
+  // Those URLs support Range requests correctly (proper Content-Range totals),
+  // are IP-bound to our server (byte-piped by streamAudioBytesToClient), and
+  // produce uninterrupted playback via the 1 MB chunk scheme.
+  // ────────────────────────────────────────────────────────────────────────────
 
-  const tryInvidious = (async () => {
-    if (!videoId) throw new Error('no videoId')
-    const inv = await fetchInvidiousStreams(videoId, { isAudio: true })
-    if (!inv?.url) throw new Error('invidious: no url')
-    if (!await probeUpstreamPlayable(inv.url)) throw new Error('invidious: instance unhealthy')
-    return inv.url
-  })()
-
+  // ytdl-core: fast, Node.js only — frequently blocked on datacenter IPs but
+  // included as the first contestant because it occasionally wins on warm runs.
   const tryJs = (async () => {
     const info = await ytdl.getInfo(youtubeUrl)
     const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
@@ -7957,17 +7950,16 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     return fmt.url
   })()
 
+  // yt-dlp: subprocess, slower to start but most reliable on Vercel/AWS IPs
+  // because --extractor-args youtube:player_client=android,ios,web bypasses
+  // YouTube's datacenter IP bot-detection gate. Preferred format is m4a so
+  // every browser can decode it (no WebM/Opus issues on Safari/iOS).
   const tryDlp = (async () => {
     const dlpBin = await ytDlpBinaryPath()
     if (!dlpBin) throw new Error('yt-dlp: not available')
     const cookies = await ytDlpCookiesArgs()
     const antiBot = ytDlpAntiBotArgs()
     return new Promise((resolve, reject) => {
-      // CRITICAL: ytDlpAntiBotArgs() supplies --extractor-args
-      // youtube:player_client=android,ios,web which is what allows yt-dlp
-      // to extract URLs from data-center IPs (Vercel/AWS) without hitting
-      // "Sign in to confirm you're not a bot". Without it, every cold call
-      // here returns a 403 ~6s later and the whole audio-proxy 502s.
       const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
       let out = '', err = ''
       proc.stdout.on('data', d => { out += d.toString() })
@@ -7981,11 +7973,8 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     })
   })()
 
-  // Wrap each promise so we can log per-extractor failures without polluting
-  // the main race rejection (Promise.any rejects only when ALL fail).
+  // Race the two reliable extractors.
   const tagged = [
-    tryPiped.catch(e => { console.warn('[audio-proxy:piped-fail]', e.message); throw e }),
-    tryInvidious.catch(e => { console.warn('[audio-proxy:invidious-fail]', e.message); throw e }),
     tryJs.catch(e => { console.warn('[audio-proxy:js-fail]', e.message); throw e }),
     tryDlp.catch(e => { console.warn('[audio-proxy:dlp-fail]', e.message); throw e }),
   ]

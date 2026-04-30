@@ -6,7 +6,6 @@ import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
 import PwaInstallBanner from './PwaInstallBanner'
-import VoicePanel from './components/VoicePanel'
 import './App.css'
 import './styles/dz-agent.css'
 
@@ -224,21 +223,6 @@ function App() {
   const activeChat = chats.find(c => c.id === activeChatId) || null
   const filteredChats = chats.filter(c => c.modelId === selectedModel)
   const isPdfModel = selectedModel === 'deepseek-pdf' || selectedModel === 'ocr-dz'
-
-  // Auto-speak short assistant replies via the voice system (DVIS).
-  // Tracks the last spoken message id so re-renders / chat switches don't replay.
-  const lastSpokenIdRef = useRef<string | null>(null)
-  useEffect(() => {
-    const last = activeChat?.messages?.[activeChat.messages.length - 1]
-    if (!last || last.role !== 'assistant' || !last.content) return
-    if (lastSpokenIdRef.current === last.id) return
-    lastSpokenIdRef.current = last.id
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dvis = (typeof window !== 'undefined' ? (window as any).__dvis : null)
-    if (dvis?.speakIfShort) {
-      try { dvis.speakIfShort(last.content) } catch { /* never block chat */ }
-    }
-  }, [activeChat?.messages])
 
   // Persist to localStorage
   useEffect(() => {
@@ -1219,12 +1203,6 @@ function App() {
               className="chat-input"
             />
             <div className="input-actions">
-              <VoicePanel
-                onTranscript={(t) => {
-                  setInput((cur) => (cur ? `${cur} ${t}` : t))
-                  setTimeout(() => sendMessage(t), 50)
-                }}
-              />
               {isLoading ? (
                 <button className="stop-btn" onClick={stopGeneration}>
                   Stop

@@ -221,6 +221,11 @@ To enable reliable playback in production:
 
 Without cookies, only videos cached by Piped resolve (~1 in 7). With logged-in cookies, yt-dlp resolves cold in ~1-3s per video, all videos.
 
+### Hardening (2026-04-30)
+- `probeUpstreamPlayable(url)` — 32-byte Range probe (≤2.5s) used inside the Piped/Invidious branches of `resolveDirectAudioUrl`. Prevents a broken Piped/Invidious proxy URL (e.g. `proxy.piped.private.coffee` returning 500) from winning the race and silently breaking playback.
+- `isDirectGoogleVideoUrl(url)` + `streamAudioBytesToClient(req, res, ytUrl, upstream)` — when the resolver returns a direct googlevideo URL (yt-dlp / ytdl-core), `audio-proxy` now byte-pipes through the server (whose IP matches the signed `ip=` param) instead of 307-redirecting the browser (which would 403). Range requests keep each chunk under the 60s function timeout.
+- `/api/dz-tube/debug-extract?token=$DEBUG_EXTRACT_TOKEN&url=<yt>` — gated diagnostic that runs each of the four extractors independently and returns `{ok, ms, error|url}` per source plus `cookiesConfigured`. Returns 404 unless `DEBUG_EXTRACT_TOKEN` env var is set, 403 on token mismatch.
+
 ## Architecture
 
 - **Frontend**: React + TypeScript, built with Vite. Located in `src/`.

@@ -88,14 +88,24 @@ class BackgroundPlayer {
     // hiccup, brief offline) the browser fires `stalled` / `suspend`. We
     // try one play() to nudge it back. Bounded so we don't spin in a tight
     // loop if the URL is genuinely dead.
+    // Per spec: always attempt recovery on stall/suspend while wantPlaying.
     const tryRecover = () => {
       if (!this.wantPlaying) return
-      if (Date.now() - this.lastResumeAt < 3000) return
+      if (Date.now() - this.lastResumeAt < 2000) return
       this.lastResumeAt = Date.now()
       a.play().catch(() => {})
     }
-    a.addEventListener('stalled', tryRecover)
-    a.addEventListener('suspend', tryRecover)
+    a.addEventListener('stalled',  tryRecover)
+    a.addEventListener('suspend',  tryRecover)
+    // `emptied` fires when the browser discards the buffer (e.g. tab
+    // backgrounded on iOS). Re-load and resume so playback survives.
+    a.addEventListener('emptied', () => {
+      if (!this.wantPlaying || !this.currentUrl) return
+      if (Date.now() - this.lastResumeAt < 2000) return
+      this.lastResumeAt = Date.now()
+      a.load()
+      a.play().catch(() => {})
+    })
     a.addEventListener('error', (e) => {
       this.listeners.error?.(e)
       // Browsers fire MEDIA_ERR_NETWORK as code 2 — recoverable.
@@ -191,9 +201,12 @@ class BackgroundPlayer {
     if (!this.audio) return
     try {
       this.audio.pause()
-      // Drop the source so the browser releases the network connection.
+      // Drop the source to release the network connection, but keep the
+      // audio element alive in memory — never destroy it. Recreating the
+      // element would lose the user-gesture unlock on iOS/Android.
       this.audio.removeAttribute('src')
-      this.audio.load()
+      // `load()` after removing src resets the decoder but keeps the element.
+      try { this.audio.load() } catch {}
     } catch {}
     this.currentUrl = null
     this.updateMediaSessionState('none')

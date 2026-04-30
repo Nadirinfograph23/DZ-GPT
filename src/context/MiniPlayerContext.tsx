@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
 import { backgroundPlayer } from '../utils/backgroundPlayer'
 
-// Same-origin endpoint that resolves a YouTube URL to a direct audio stream
-// and pipes the bytes back with Range support. Building it inline keeps the
-// background player decoupled from the YT IFrame API: even if the iframe is
-// suspended (mobile screen lock) the <audio> element keeps fetching.
+// Smart audio proxy: for Piped/Invidious URLs it returns a 307 redirect so the
+// browser fetches directly from the CDN proxy (fast, no server timeout risk).
+// For IP-bound googlevideo URLs it byte-pipes through the server.
+// Using audio-proxy (not audio-pipe) avoids Vercel's 60s function timeout
+// which was silently killing every song longer than 60 seconds.
 function buildAudioPipeUrl(youtubeUrl: string): string {
-  return `/api/dz-tube/audio-pipe?url=${encodeURIComponent(youtubeUrl)}`
+  return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(youtubeUrl)}`
 }
 
 export interface PlayerTrack {
@@ -353,6 +354,71 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       if (stuckTimer != null) clearInterval(stuckTimer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Background audio error recovery ──────────────────────────────────────
+  // When the background <audio> element fails (e.g. audio-proxy returns 502,
+  // network error, or the URL expires), unmute the YT iframe as an audible
+  // fallback so the user always hears something instead of silence.
+  // Error counter: if we get 3 errors within 30s we stop trying to recover
+  // the bg audio and leave the YT iframe unmuted permanently for that track.
+  useEffect(() => {
+    let bgErrorCount = 0
+    let bgErrorResetTimer: ReturnType<typeof setTimeout> | null = null
+
+    backgroundPlayer.on('error', () => {
+      if (!wantPlayingRef.current) return
+      bgErrorCount++
+      if (bgErrorResetTimer) clearTimeout(bgErrorResetTimer)
+      bgErrorResetTimer = setTimeout(() => { bgErrorCount = 0 }, 30000)
+
+      console.warn('[mini-player] bg audio error #', bgErrorCount)
+
+      // Unmute YT iframe as immediate audible fallback so the user always hears sound
+      try {
+        const p = ytPlayerRef.current
+        if (p && ytReadyRef.current) {
+          p.unMute?.()
+          p.setVolume?.(100)
+        }
+      } catch {}
+
+      // After 3 errors, stop trying to recover the bg audio — the YT iframe
+      // is now the sole audio source for this track.
+      if (bgErrorCount >= 3) return
+
+      // Single retry: rebuild the audio-proxy URL with cache-bust so the
+      // server invalidates the stale/expired stream URL and extracts a fresh one.
+      const t = trackRef.current
+      if (!t) return
+      const freshUrl = buildAudioPipeUrl(t.url) + `&_r=${Date.now()}`
+      setTimeout(() => {
+        if (!wantPlayingRef.current) return
+        try {
+          backgroundPlayer.play(freshUrl, {
+            title: t.title,
+            artist: t.channel || 'DZ Tube',
+            album: 'DZ Tube',
+            artwork: t.thumbnail,
+          })
+        } catch {}
+      }, 1500)
+    })
+
+    // When bg audio recovers and starts playing, re-mute the YT iframe
+    // to prevent double audio (iframe was unmuted as fallback).
+    backgroundPlayer.on('play', () => {
+      try {
+        const p = ytPlayerRef.current
+        if (p && ytReadyRef.current) p.mute?.()
+      } catch {}
+    })
+
+    return () => {
+      backgroundPlayer.off('error')
+      backgroundPlayer.off('play')
+      if (bgErrorResetTimer) clearTimeout(bgErrorResetTimer)
+    }
   }, [])
 
   // ── Internal: start a video on the singleton player ──────────────────────

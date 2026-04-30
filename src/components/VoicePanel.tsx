@@ -33,12 +33,35 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [supported, setSupported] = useState({ stt: false, tts: false })
+  // dz Agent voice mode is Arabic-only. We hide the entire voice UI when the
+  // browser cannot speak Arabic (no `ar-*` SpeechSynthesis voice installed),
+  // per product requirement.
+  const [arabicSupported, setArabicSupported] = useState<boolean | null>(null)
 
   useEffect(() => {
     const dvis = createDVIS({ baseUrl: '' })
     dvisRef.current = dvis
     setSupported({ stt: dvis.isSttSupported(), tts: dvis.isTtsSupported() })
     setPrefs(dvis.getPrefs())
+    // Probe SpeechSynthesis for an Arabic-capable voice. Chrome populates the
+    // voice list async, so we listen and re-probe.
+    let cancelled = false
+    const probeArabic = async () => {
+      try {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+          if (!cancelled) setArabicSupported(false)
+          return
+        }
+        const voices = await dvis.listVoices()
+        const hasAr = Array.isArray(voices) && voices.some((v: SpeechSynthesisVoice) =>
+          (v.lang || '').toLowerCase().startsWith('ar')
+        )
+        if (!cancelled) setArabicSupported(hasAr)
+      } catch {
+        if (!cancelled) setArabicSupported(false)
+      }
+    }
+    probeArabic()
     // Expose globally so the chat can request auto-speak for short replies
     // even when the user typed (didn't use voice input).
     if (typeof window !== 'undefined') {
@@ -54,7 +77,11 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
     })
     const unPrefs = dvis.on('prefs', (p: Prefs) => setPrefs(p))
     dvis.preload()
+    // Re-probe Arabic voice after preload completes (Chrome populates voices async).
+    const reProbeTimer = setTimeout(probeArabic, 1500)
     return () => {
+      cancelled = true
+      clearTimeout(reProbeTimer)
       unState?.(); unTr?.(); unReply?.(); unPrefs?.()
       if (typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,6 +93,9 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
 
   if (!prefs) return null
   if (!supported.stt && !supported.tts) return null
+  // Hide the entire mic / volume / settings UI when the browser has no
+  // Arabic voice — dz Agent voice mode is Arabic-only.
+  if (arabicSupported === false) return null
 
   const updatePref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
     dvisRef.current?.setPrefs({ [k]: v } as Partial<Prefs>)

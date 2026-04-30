@@ -8266,6 +8266,60 @@ app.get('/api/dz-tube/warm', async (req, res) => {
   }
 })
 
+// Diagnostic: run each extractor independently and report which succeed/fail.
+// Used to debug why audio-proxy returns 502 in production. NOT cached.
+app.get('/api/dz-tube/debug-extract', async (req, res) => {
+  const url = String(req.query.url || '')
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'invalid url' })
+  const videoId = extractYouTubeVideoId(url)
+  const t0 = Date.now()
+  const runOne = async (name, fn) => {
+    const s = Date.now()
+    try {
+      const out = await fn()
+      return { name, ok: true, ms: Date.now() - s, url: typeof out === 'string' ? out.slice(0, 200) : (out?.url || '').slice(0, 200) }
+    } catch (e) {
+      return { name, ok: false, ms: Date.now() - s, error: String(e?.message || e).slice(0, 400) }
+    }
+  }
+  const dlpBin = await ytDlpBinaryPath().catch(() => null)
+  const results = await Promise.all([
+    runOne('piped', async () => {
+      const r = await fetchPipedStreams(videoId, { isAudio: true })
+      if (!r?.url) throw new Error('no url')
+      const probe = await probeUpstreamPlayable(r.url)
+      return { url: r.url, probe }
+    }),
+    runOne('invidious', async () => {
+      const r = await fetchInvidiousStreams(videoId, { isAudio: true })
+      if (!r?.url) throw new Error('no url')
+      const probe = await probeUpstreamPlayable(r.url)
+      return { url: r.url, probe }
+    }),
+    runOne('ytdl-core', async () => {
+      const info = await ytdl.getInfo(url)
+      const fmt = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' })
+      if (!fmt?.url) throw new Error('no url')
+      return fmt.url
+    }),
+    runOne('yt-dlp', async () => {
+      if (!dlpBin) throw new Error('binary not available')
+      const cookies = await ytDlpCookiesArgs()
+      const antiBot = ytDlpAntiBotArgs()
+      return await new Promise((resolve, reject) => {
+        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, url])
+        let out = '', err = ''
+        const t = setTimeout(() => { try { proc.kill('SIGKILL') } catch {}; reject(new Error('timeout 15s; stderr=' + err.slice(0, 300))) }, 15000)
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', e => { clearTimeout(t); reject(e) })
+        proc.on('close', code => { clearTimeout(t); const u = out.trim().split('\n')[0]; if (code !== 0 || !u) return reject(new Error('exit ' + code + '; stderr=' + err.slice(0, 300))); resolve(u) })
+      })
+    }),
+  ])
+  res.json({ videoId, totalMs: Date.now() - t0, dlpBin, results })
+})
+
 app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')

@@ -8165,16 +8165,45 @@ function isDirectGoogleVideoUrl(url) {
   } catch { return false }
 }
 
+// Maximum bytes sent per serverless invocation.
+// At 128 kbps audio, 1 MB = ~60 seconds of audio, streamed in <3s.
+// This keeps every Vercel function invocation well under the 60s timeout.
+// The browser automatically requests the next chunk via a follow-up Range
+// request once it exhausts the current one.
+const MAX_PIPE_CHUNK = 1 * 1024 * 1024 // 1 MB
+
 // Shared byte-pipe streaming helper used by both /audio-pipe and the
-// /audio-proxy fallback path. Handles Range requests, single retry on
-// 403/410/404 with a fresh URL, and graceful client-cancel cleanup.
+// /audio-proxy path. ALWAYS responds 206 with a bounded chunk so that:
+//  1. Vercel's 60-second function timeout is never hit (each call < 5s)
+//  2. The browser gets a proper Content-Range and knows to fetch more
+//  3. Piped/Invidious connections are proxied through our server —
+//     no 307 redirect — so unstable upstream drops are invisible to
+//     the browser's <audio> element (it only sees clean chunk responses).
 async function streamAudioBytesToClient(req, res, youtubeUrl, initialUpstreamUrl) {
-  const range = req.headers.range || ''
+  // Parse the byte range the client wants.
+  const rawRange = req.headers.range || ''
+  let clientStart = 0
+  let clientEnd = null
+  if (rawRange) {
+    const m = rawRange.match(/bytes=(\d+)-(\d*)/)
+    if (m) {
+      clientStart = parseInt(m[1], 10)
+      clientEnd = m[2] ? parseInt(m[2], 10) : null
+    }
+  }
+
+  // Clamp the chunk size so we never stream more than MAX_PIPE_CHUNK bytes
+  // in a single serverless invocation, regardless of what the client asked for.
+  const chunkEnd = (clientEnd !== null && clientEnd < clientStart + MAX_PIPE_CHUNK)
+    ? clientEnd
+    : clientStart + MAX_PIPE_CHUNK - 1
+  const upstreamRange = `bytes=${clientStart}-${chunkEnd}`
+
   let upstreamUrl = initialUpstreamUrl
   let upstream
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      upstream = await fetchUpstreamRange(upstreamUrl, range)
+      upstream = await fetchUpstreamRange(upstreamUrl, upstreamRange)
     } catch (e) {
       if (attempt === 1) { if (!res.headersSent) res.status(502).end('فشل'); else try { res.end() } catch {}; return }
       try { upstreamUrl = await resolveDirectAudioUrl(youtubeUrl, { bypassCache: true }) } catch { if (!res.headersSent) res.status(502).end('فشل'); return }
@@ -8193,35 +8222,52 @@ async function streamAudioBytesToClient(req, res, youtubeUrl, initialUpstreamUrl
     return
   }
 
-  const clientAskedRange = !!range
   const upstreamCT = upstream.headers.get('content-type') || 'audio/mp4'
-  const upstreamLen = upstream.headers.get('content-length')
-  const upstreamCR = upstream.headers.get('content-range')
+  const upstreamLen = upstream.headers.get('content-length')   // bytes in THIS response
+  const upstreamCR  = upstream.headers.get('content-range')    // bytes X-Y/TOTAL from upstream
+
+  // Derive the true total file size so the browser knows there is more to fetch.
+  let totalSize = '*'
+  if (upstreamCR) {
+    const m = upstreamCR.match(/\/(\d+)\s*$/)
+    if (m) totalSize = m[1]
+  }
+  // If upstream returned 200 (ignoring our Range header) Content-Length IS total size.
+  if (totalSize === '*' && upstream.status === 200 && upstreamLen) {
+    totalSize = upstreamLen
+  }
+
+  // Actual last byte we will send (upstream may give us fewer than we asked).
+  let actualEnd = chunkEnd
+  if (upstreamLen) {
+    const len = parseInt(upstreamLen, 10)
+    if (!isNaN(len)) actualEnd = clientStart + len - 1
+  }
+
   res.setHeader('Content-Type', upstreamCT)
   res.setHeader('Accept-Ranges', 'bytes')
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
-  if (clientAskedRange) {
-    if (upstreamCR) res.setHeader('Content-Range', upstreamCR)
-    if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
-    res.status(upstream.status === 206 ? 206 : upstream.status)
-  } else {
-    let totalSize = null
-    if (upstreamCR) { const m = upstreamCR.match(/\/(\d+)\s*$/); if (m) totalSize = m[1] }
-    if (totalSize) res.setHeader('Content-Length', totalSize)
-    else if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
-    res.status(200)
-  }
+  // Always 206 + Content-Range so the browser treats this as a partial
+  // response and issues a follow-up Range request for the next chunk.
+  res.setHeader('Content-Range', `bytes ${clientStart}-${actualEnd}/${totalSize}`)
+  if (upstreamLen) res.setHeader('Content-Length', upstreamLen)
+  res.status(206)
+
   if (!upstream.body) { res.end(); return }
   const reader = upstream.body.getReader()
   let cancelled = false
+  let bytesWritten = 0
   req.on('close', () => { cancelled = true; try { reader.cancel() } catch {} })
   try {
     while (true) {
       const { done, value } = await reader.read()
       if (done || cancelled) break
       if (!res.write(value)) await new Promise(r => res.once('drain', r))
+      bytesWritten += value.length
+      // Hard safety: stop after MAX_PIPE_CHUNK even if upstream ignores our Range
+      if (bytesWritten >= MAX_PIPE_CHUNK) { try { reader.cancel() } catch {}; break }
     }
   } catch (e) { console.warn('[audio-bytes] interrupted:', e.message) }
   try { res.end() } catch {}
@@ -8351,26 +8397,21 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
     return remuxAudioToClient(upstreamUrl, req, res)
   }
 
-  // ROUTING (the permanent fix):
-  //   • If the upstream URL is a direct googlevideo CDN URL, it was extracted
-  //     by yt-dlp / ytdl-core on THIS server and the signed `ip` parameter
-  //     binds it to the server's IP. Redirecting the browser there would
-  //     fail with 403 (browser IP ≠ signed IP). Instead we transparently
-  //     stream bytes through this function — the server's own IP matches,
-  //     and Range requests keep each chunk well under the function timeout.
-  //   • Otherwise (Piped/Invidious proxy URL that already passed the
-  //     playability probe in resolveDirectAudioUrl), 307-redirect for max
-  //     speed — the proxy makes the actual fetch and our function exits
-  //     in milliseconds.
-  if (isDirectGoogleVideoUrl(upstreamUrl)) {
-    return streamAudioBytesToClient(req, res, url, upstreamUrl)
-  }
-
-  res.setHeader('Location', upstreamUrl)
-  res.setHeader('Cache-Control', 'no-store')
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
-  res.status(307).end()
+  // ALWAYS byte-pipe — never 307-redirect.
+  // Previously we 307-redirected Piped/Invidious URLs directly to the browser.
+  // This caused two fatal bugs:
+  //  1. Piped/Invidious instances close connections after a few KB (rate limiting,
+  //     abuse prevention). When they do, the browser's <audio> element receives a
+  //     clean close and fires 'ended' — the player thinks the track finished and
+  //     advances to the next one, causing silent playback.
+  //  2. crossOrigin='anonymous' on the <audio> element triggers a CORS preflight.
+  //     Piped doesn't always return Access-Control-Allow-Origin: *, so the request
+  //     is silently blocked by the browser.
+  // By always routing through streamAudioBytesToClient we:
+  //  • Control the connection (Piped drops are invisible to the browser)
+  //  • Serve chunks ≤1 MB so every Vercel invocation finishes in < 5 s
+  //  • Let the browser request successive Range chunks automatically
+  return streamAudioBytesToClient(req, res, url, upstreamUrl)
 })
 
 // Explicit byte-pipe endpoint kept for parity with the client's fallback

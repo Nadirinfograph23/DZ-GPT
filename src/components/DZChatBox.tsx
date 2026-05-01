@@ -1435,6 +1435,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [renderKey, setRenderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
@@ -2062,27 +2063,49 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // Retry once on network/server failure (not on user abort)
-      const res = await withRetry(async () => {
-        const r = await fetch('/api/dz-agent-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: outboundMessages,
-            githubToken: githubToken || undefined,
-            currentRepo: currentRepo || undefined,
-            dashboardContext,
-          }),
-          signal,
-        })
-        if (!r.ok) {
-          const errData = await r.json().catch(() => null)
-          throw new Error(errData?.error || `Server error: ${r.status}`)
-        }
-        return r
-      }, 1, 1000)
+      // Helper to perform one DZ Agent fetch attempt
+      const fetchAgentResponse = async () => {
+        const r = await withRetry(async () => {
+          const req = await fetch('/api/dz-agent-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: outboundMessages,
+              githubToken: githubToken || undefined,
+              currentRepo: currentRepo || undefined,
+              dashboardContext,
+            }),
+            signal,
+          })
+          if (!req.ok) {
+            const errData = await req.json().catch(() => null)
+            throw new Error(errData?.error || `Server error: ${req.status}`)
+          }
+          return req
+        }, 1, 1000)
+        return r.json()
+      }
 
-      const data = await res.json()
+      // Auto-retry up to 2 times when response content is empty
+      let data: Record<string, unknown> = {}
+      let attempts = 0
+      while (attempts < 3) {
+        data = await fetchAgentResponse()
+        console.log('[DZChatBox] API response (attempt', attempts + 1, '):', data)
+        if (data.action || data.pendingAction || (typeof data.content === 'string' && data.content.trim() !== '')) {
+          break
+        }
+        attempts++
+        if (attempts < 3) {
+          console.warn('[DZChatBox] Empty response, retrying... attempt', attempts + 1)
+          await new Promise(resolve => setTimeout(resolve, 800))
+        }
+      }
+
+      // Ensure content is never blank
+      if (!data.content || (typeof data.content === 'string' && data.content.trim() === '')) {
+        data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
+      }
 
       if (data.action === 'list-repos') {
         trackFeatureUsage('github-repos')
@@ -2091,12 +2114,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
       if (data.action === 'list-files' && data.repo) {
         trackFeatureUsage('github-files')
-        await fetchFiles(data.repo, data.path || '')
+        await fetchFiles(data.repo as string, (data.path as string) || '')
         return
       }
       if (data.action === 'read-file' && data.repo && data.path) {
         trackFeatureUsage('github-read-file')
-        await fetchFileContent(data.repo, data.path)
+        await fetchFileContent(data.repo as string, data.path as string)
         return
       }
 
@@ -2113,48 +2136,52 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
       if (data.action === 'scan-repo' && data.repo) {
         trackFeatureUsage('github-scan')
-        const focus = data.focus || undefined
-        await scanRepo(buildRepoItem(data.repo), focus)
+        const focus = (data.focus as string) || undefined
+        await scanRepo(buildRepoItem(data.repo as string), focus)
         return
       }
       if (data.action === 'list-branches' && data.repo) {
         trackFeatureUsage('github-branches')
-        await fetchBranches(buildRepoItem(data.repo))
+        await fetchBranches(buildRepoItem(data.repo as string))
         return
       }
       if (data.action === 'list-issues' && data.repo) {
         trackFeatureUsage('github-issues')
-        await fetchIssues(buildRepoItem(data.repo))
+        await fetchIssues(buildRepoItem(data.repo as string))
         return
       }
       if (data.action === 'list-pulls' && data.repo) {
         trackFeatureUsage('github-pulls')
-        await fetchPulls(buildRepoItem(data.repo))
+        await fetchPulls(buildRepoItem(data.repo as string))
         return
       }
       if (data.action === 'repo-stats' && data.repo) {
         trackFeatureUsage('github-stats')
-        await fetchStats(buildRepoItem(data.repo))
+        await fetchStats(buildRepoItem(data.repo as string))
         return
       }
 
       if (data.pendingAction) {
         addAssistantMessage({
-          content: data.content || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
+          content: (data.content as string) || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
           richType: 'approval',
-          pendingAction: data.pendingAction,
+          pendingAction: data.pendingAction as PendingAction,
         })
       } else {
         addAssistantMessage({
-          content: data.content || 'تعذر تنفيذ الطلب، حاول مرة أخرى.',
+          content: (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
           richType: 'text',
           showDevCard: !!data.showDevCard,
         })
       }
+
+      // Force re-render to ensure UI reflects the new state
+      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       console.error('[DZChatBox] sendMessage error:', err)
-      addAssistantMessage({ content: 'تعذر تنفيذ الطلب، حاول مرة أخرى.', richType: 'text', isError: true })
+      addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
+      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null
@@ -2168,20 +2195,39 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setIsLoading(true)
     try {
       abortRef.current = new AbortController()
-      const res = await fetch('/api/dz-agent-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
-          githubToken: githubToken || undefined,
-        }),
-        signal: abortRef.current.signal,
+      const signal = abortRef.current.signal
+
+      // Auto-retry up to 2 times on empty response
+      let content = ''
+      let attempts = 0
+      while (attempts < 3) {
+        const res = await fetch('/api/dz-agent-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
+            githubToken: githubToken || undefined,
+          }),
+          signal,
+        })
+        const data = await res.json()
+        console.log('[DZChatBox] regenerate response (attempt', attempts + 1, '):', data)
+        content = typeof data.content === 'string' ? data.content.trim() : ''
+        if (content) break
+        attempts++
+        if (attempts < 3) await new Promise(resolve => setTimeout(resolve, 800))
+      }
+
+      addAssistantMessage({
+        content: content || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
+        richType: 'text',
       })
-      const data = await res.json()
-      addAssistantMessage({ content: data.content || 'No response.', richType: 'text' })
+      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
-      addAssistantMessage({ content: 'Error. Please try again.', richType: 'text', isError: true })
+      console.error('[DZChatBox] regenerate error:', err)
+      addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
+      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null
@@ -2323,7 +2369,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         </div>
       ) : (
       /* Messages */
-      <div className="dz-messages">
+      <div className="dz-messages" data-render-key={renderKey}>
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
             <div className="dz-message-avatar">

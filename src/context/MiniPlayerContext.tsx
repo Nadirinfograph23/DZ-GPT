@@ -406,17 +406,33 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     })
 
     // When bg audio recovers and starts playing, re-mute the YT iframe
-    // to prevent double audio (iframe was unmuted as fallback).
+    // to prevent double audio (iframe was unmuted as fallback). Also reflect
+    // the play state in the UI — the bg player is the true audio source, so
+    // it drives the playing indicator even when the YT iframe is suspended.
     backgroundPlayer.on('play', () => {
+      setPlaying(true)
       try {
         const p = ytPlayerRef.current
         if (p && ytReadyRef.current) p.mute?.()
       } catch {}
     })
 
+    backgroundPlayer.on('pause', () => {
+      // Only reflect a pause if the user actually wanted to pause — the OS
+      // may issue a system pause (phone call, audio focus loss) that we
+      // should not mirror to the UI permanently.
+      if (!wantPlayingRef.current) setPlaying(false)
+    })
+
+    backgroundPlayer.on('ended', () => {
+      setPlaying(false)
+    })
+
     return () => {
       backgroundPlayer.off('error')
       backgroundPlayer.off('play')
+      backgroundPlayer.off('pause')
+      backgroundPlayer.off('ended')
       if (bgErrorResetTimer) clearTimeout(bgErrorResetTimer)
     }
   }, [])

@@ -996,6 +996,32 @@ function App() {
                         spellCheck={false}
                       />
 
+                      {/* Word & character count */}
+                      {ocrDisplayText && (
+                        <div className="ocr-text-stats">
+                          <span>
+                            <span className="ocr-stat-value">
+                              {ocrDisplayText.trim().split(/\s+/).filter(Boolean).length.toLocaleString()}
+                            </span>
+                            {' '}كلمة
+                          </span>
+                          <span className="ocr-stat-sep">·</span>
+                          <span>
+                            <span className="ocr-stat-value">
+                              {ocrDisplayText.length.toLocaleString()}
+                            </span>
+                            {' '}حرف
+                          </span>
+                          <span className="ocr-stat-sep">·</span>
+                          <span>
+                            <span className="ocr-stat-value">
+                              {ocrDisplayText.trim().split(/[.!?؟\n]+/).filter(Boolean).length.toLocaleString()}
+                            </span>
+                            {' '}جملة
+                          </span>
+                        </div>
+                      )}
+
                       {/* Action buttons */}
                       <div className="ocr-action-row">
                         <button

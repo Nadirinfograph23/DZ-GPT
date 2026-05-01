@@ -42,6 +42,9 @@ class BackgroundPlayer {
   // don't fight a real pause.
   private wantPlaying = false
   private lastResumeAt = 0
+  // Visibility nudge: re-triggers play() the moment a tab goes hidden so the
+  // audio thread stays warm before the OS has a chance to suspend it.
+  private visibilityHandler: (() => void) | null = null
 
   constructor() {
     if (typeof window === 'undefined') return
@@ -90,6 +93,9 @@ class BackgroundPlayer {
     })
     a.addEventListener('timeupdate', () => {
       this.listeners.timeupdate?.(a.currentTime || 0, a.duration || 0)
+      // Keep lockscreen scrubber position in sync on every timeupdate so the
+      // OS progress bar is accurate even when the screen is off.
+      this.updatePositionState(a.currentTime || 0, a.duration || 0, a.playbackRate || 1)
     })
     a.addEventListener('loadedmetadata', () => {
       this.listeners.loadedmetadata?.(a.duration || 0)
@@ -128,6 +134,33 @@ class BackgroundPlayer {
     })
 
     this.audio = a
+
+    // ── Keep-alive: nudge currentTime every 20 s ─────────────────────────
+    // Chrome/Android throttle background audio threads when they detect no
+    // activity. A tiny imperceptible currentTime bump convinces the browser
+    // the audio pipeline is still active, preventing freeze / suspension.
+    // Store as a local variable (not a class field) to avoid the TS6133
+    // "declared but never read" error — the timer is self-sufficient.
+    const keepAlive = setInterval(() => {
+      if (!this.audio || !this.wantPlaying || this.audio.paused) return
+      try { this.audio.currentTime += 0.00001 } catch {}
+    }, 20000)
+    // Keep reference alive for the lifetime of the object.
+    void keepAlive
+
+    // ── Visibility nudge ──────────────────────────────────────────────────
+    // When the page is hidden (tab switch / screen lock) call play() before
+    // the OS has a chance to suspend the audio thread. When visible again,
+    // do the same so any OS-level resume is properly reflected.
+    if (typeof document !== 'undefined') {
+      this.visibilityHandler = () => {
+        if (!this.wantPlaying || !this.audio) return
+        if (this.audio.paused) {
+          this.audio.play().catch(() => {})
+        }
+      }
+      document.addEventListener('visibilitychange', this.visibilityHandler, { passive: true })
+    }
   }
 
   /** Wire up a one-shot user-gesture unlock so iOS/Safari grants playback. */

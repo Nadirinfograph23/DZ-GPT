@@ -497,6 +497,18 @@ function App() {
     }
   }, [ocrDisplayText, ocrCopied])
 
+  const downloadOCRText = useCallback(() => {
+    if (!ocrDisplayText.trim()) return
+    const baseName = pdfFileName ? pdfFileName.replace(/\.[^.]+$/, '') : 'ocr-text'
+    const blob = new Blob([ocrDisplayText], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${baseName}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [ocrDisplayText, pdfFileName])
+
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
       id: generateId(),
@@ -1047,6 +1059,14 @@ function App() {
                         >
                           {ocrCopied ? '✅' : '📋'}
                           <span>{ocrCopied ? 'تم النسخ!' : 'نسخ النص'}</span>
+                        </button>
+                        <button
+                          className="ocr-action-btn ocr-btn-download"
+                          onClick={downloadOCRText}
+                          disabled={!ocrDisplayText.trim()}
+                          title="تحميل كملف نصي"
+                        >
+                          ⬇️ <span>تحميل .txt</span>
                         </button>
                       </div>
                     </div>

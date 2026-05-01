@@ -2029,6 +2029,35 @@ body:has(.dzt-app) {
   line-height: 1;
 }
 
+.ocr-lang-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+  animation: fadeIn 0.2s ease;
+}
+.ocr-lang-ar {
+  background: #0d2a1a;
+  color: #00c85a;
+  border-color: #00b050;
+}
+.ocr-lang-fr {
+  background: #1a1d2e;
+  color: #7ab0ff;
+  border-color: #3060cc;
+}
+.ocr-lang-en {
+  background: #1e1a10;
+  color: #d4a940;
+  border-color: #a07a20;
+}
+
 .ocr-btn-copy {
   background: #1e1e1e;
   color: #aaa;

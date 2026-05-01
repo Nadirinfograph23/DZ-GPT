@@ -2009,6 +2009,25 @@ body:has(.dzt-app) {
   animation: spin 1s linear infinite;
 }
 
+.ocr-btn-copy {
+  background: #1e1e1e;
+  color: #aaa;
+  border: 1px solid #333;
+  margin-left: auto;
+}
+.ocr-btn-copy:not(:disabled):hover {
+  background: #282828;
+  color: #ccc;
+  border-color: #444;
+  transform: translateY(-1px);
+}
+.ocr-btn-copied {
+  background: #0d2a1a !important;
+  color: #00c85a !important;
+  border-color: #00b050 !important;
+  transition: all 0.2s;
+}
+
 /* ===== SIDEBAR NAVIGATION DROPDOWN ===== */
 .sidebar-nav-dropdown {
   margin: 4px 12px 8px;

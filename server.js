@@ -8403,6 +8403,29 @@ app.get('/api/dz-tube/audio-proxy', async (req, res) => {
   return streamAudioBytesToClient(req, res, url, upstreamUrl)
 })
 
+// Clean /api/stream?id=VIDEO_ID alias used by the Service Worker and any
+// external consumer. Translates a bare video ID to the full audio-proxy flow.
+app.get('/api/stream', async (req, res) => {
+  const id = String(req.query.id || '').trim()
+  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return res.status(400).end('invalid id')
+  // Rewrite to the canonical YouTube URL so resolveDirectAudioUrl recognises it.
+  req.query.url = `https://www.youtube.com/watch?v=${id}`
+  // Proxy through the same byte-pipe handler used by the mini-player.
+  const url = req.query.url
+  let upstreamUrl
+  try {
+    upstreamUrl = await resolveDirectAudioUrl(url, { bypassCache: !!req.query._r })
+  } catch (e) {
+    console.error('[stream] resolve failed:', e.message)
+    return res.status(502).end('فشل تحضير الصوت')
+  }
+  // Set appropriate headers for clients that consume this as a standalone URL.
+  res.setHeader('Content-Type', 'audio/mpeg')
+  res.setHeader('Accept-Ranges', 'bytes')
+  res.setHeader('Cache-Control', 'public, max-age=3600')
+  return streamAudioBytesToClient(req, res, url, upstreamUrl)
+})
+
 // Explicit byte-pipe endpoint kept for parity with the client's fallback
 // path (after multiple 403s on the redirect path the mini-player flips to
 // this). Now that audio-proxy auto-routes direct googlevideo URLs through

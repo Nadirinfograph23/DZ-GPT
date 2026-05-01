@@ -1599,11 +1599,13 @@ function detectQueryIntent(msg) {
   const isArabic = /[\u0600-\u06FF]/.test(msg)
 
   const INTENTS = {
-    sports:   ['كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','منتخب','رياضة','football','soccer','sport','match','score','goal','team','league','cup','fifa','ligue'],
-    economy:  ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
-    politics: ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
-    tech:     ['تقنية','تكنولوجيا','ذكاء','برمجة','تطبيق','هاكر','أمن','tech','technology','ai','software','app','cyber','security','startup','code','programming'],
-    news:     ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','news','latest','today','breaking','recent','actualité'],
+    sports:      ['كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','منتخب','رياضة','football','soccer','sport','match','score','goal','team','league','cup','fifa','ligue'],
+    economy:     ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
+    politics:    ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
+    tech:        ['تقنية','تكنولوجيا','ذكاء','برمجة','تطبيق','هاكر','أمن','tech','technology','ai','software','app','cyber','security','startup','code','programming'],
+    news:        ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','news','latest','today','breaking','recent','actualité'],
+    celebrities: ['نجم','نجمة','فنان','فنانة','ممثل','ممثلة','مطرب','مطربة','رياضي','شخصية','مشهور','مشهورة','سيلبريتي','celebrity','celebrities','actor','actress','singer','star','famous','influencer','vedette'],
+    incidents:   ['حادثة','حادث','كارثة','انفجار','زلزال','فيضان','حريق','اعتداء','هجوم','اغتيال','وفاة','مات','مقتل','accident','incident','disaster','explosion','earthquake','flood','fire','attack','death','killed','tragedy'],
   }
 
   const detected = []
@@ -1611,8 +1613,9 @@ function detectQueryIntent(msg) {
     if (kws.some(k => lower.includes(k))) detected.push(intent)
   }
 
-  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant']
+  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant','أخيراً','مؤخراً','recently']
   const isTemporal = temporalMarkers.some(m => lower.includes(m)) || /\b(20[2-9]\d)\b/.test(msg)
+    || detected.includes('celebrities') || detected.includes('incidents')
 
   return { primary: detected[0] || 'general', all: detected, isTemporal, isArabic }
 }
@@ -1623,12 +1626,14 @@ function buildOptimizedQueries(query, intent) {
   const isArabic = /[\u0600-\u06FF]/.test(query)
 
   const suffixMap = {
-    sports:   isArabic ? `كرة القدم نتائج ${year}` : `football results ${year}`,
-    economy:  isArabic ? `اقتصاد ${year}` : `economy ${year}`,
-    politics: isArabic ? `سياسة ${year}` : `politics ${year}`,
-    tech:     isArabic ? `تكنولوجيا ${year}` : `technology ${year}`,
-    news:     isArabic ? `أخبار ${year}` : `news ${year}`,
-    general:  `${year}`,
+    sports:      isArabic ? `كرة القدم نتائج ${year}` : `football results ${year}`,
+    economy:     isArabic ? `اقتصاد ${year}` : `economy ${year}`,
+    politics:    isArabic ? `سياسة ${year}` : `politics ${year}`,
+    tech:        isArabic ? `تكنولوجيا ${year}` : `technology ${year}`,
+    news:        isArabic ? `أخبار ${year}` : `news ${year}`,
+    celebrities: isArabic ? `أخبار فنانين مشاهير ${year}` : `celebrity news latest ${year}`,
+    incidents:   isArabic ? `حادثة أخبار عاجلة ${year}` : `incident breaking news ${year}`,
+    general:     `${year}`,
   }
 
   const suffix = suffixMap[intent.primary] || suffixMap.general
@@ -1638,7 +1643,7 @@ function buildOptimizedQueries(query, intent) {
   const rssHL   = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
   const rssQuery = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' ' + year)}&hl=${rssHL}`
 
-  const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', general: '' }
+  const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', celebrities: 'celebrity news', incidents: 'incident breaking news', general: '' }
   const enSuffix = enMap[intent.primary] || ''
   const isAlgeria = /جزائر|algérie|algeria/i.test(query)
   const enQuery = isAlgeria ? `Algeria ${enSuffix} ${year}`.trim() : `${query} ${enSuffix} ${year}`.trim()
@@ -5685,7 +5690,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (!skipSearch) {
     try {
       const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(lastUserMessage, msgIntent)
-      const mustSearch = msgIntent.isTemporal || ['news','sports','economy','politics','tech'].includes(msgIntent.primary) || !!newsQueryType
+      const mustSearch = msgIntent.isTemporal
+        || ['news','sports','economy','politics','tech','celebrities','incidents'].includes(msgIntent.primary)
+        || msgIntent.all.some(i => ['celebrities','incidents','news','politics'].includes(i))
+        || !!newsQueryType
+
+      console.log(`[DZ Retrieval] Query: "${cseQuery}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + legacy web fallback
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
@@ -5698,6 +5708,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const gnResults   = gnRssRes.status === 'fulfilled' ? gnRssRes.value : []
       const legacyData  = legacyRes.status === 'fulfilled' ? legacyRes.value : { results: [] }
 
+      console.log(`[DZ Retrieval] Raw results: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length}`)
+      if (cseResults.length > 0) console.log(`[DZ Retrieval] CSE URLs: ${cseResults.slice(0,3).map(r => r.url).join(' | ')}`)
+      if (gnResults.length > 0) console.log(`[DZ Retrieval] GN URLs: ${gnResults.slice(0,3).map(r => r.url || r.link).join(' | ')}`)
+
       // Merge + score + deduplicate
       const allSearchResults = [...cseResults, ...gnResults, ...(legacyData.results || [])]
       const seenUrls = new Set()
@@ -5708,14 +5722,54 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         return true
       })
 
-      const scoredResults = uniqueResults.map(r => ({
+      let scoredResults = uniqueResults.map(r => ({
         ...r, _score: scoreResult(r, lastUserMessage)
       })).sort((a, b) => b._score - a._score).slice(0, 8)
+
+      // Staleness re-search: if mustSearch and ALL top results are > 30 days old, try broader query
+      if (mustSearch && scoredResults.length > 0) {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+        const allStale = scoredResults.every(r => {
+          const d = r.date || r.pubDate || r.publishedDate
+          if (!d) return true
+          const ts = new Date(d).getTime()
+          return isNaN(ts) || ts < thirtyDaysAgo
+        })
+        if (allStale) {
+          console.warn(`[DZ Retrieval] All results stale — forcing re-search with broader query`)
+          const year = new Date().getFullYear()
+          const broaderQuery = `${lastUserMessage} ${year} أخبار`
+          const [freshCse, freshGn] = await Promise.allSettled([
+            searchGoogleCSE(broaderQuery),
+            searchGoogleNewsRSS(`https://news.google.com/rss/search?q=${encodeURIComponent(lastUserMessage + ' ' + year)}&hl=ar&gl=DZ&ceid=DZ:ar`),
+          ])
+          const freshResults = [
+            ...(freshCse.status === 'fulfilled' ? freshCse.value : []),
+            ...(freshGn.status === 'fulfilled' ? freshGn.value : []),
+          ]
+          if (freshResults.length > 0) {
+            const freshScored = freshResults.map(r => ({ ...r, _score: scoreResult(r, lastUserMessage) }))
+              .sort((a, b) => b._score - a._score).slice(0, 8)
+            scoredResults = freshScored
+            console.log(`[DZ Retrieval] Re-search returned ${freshResults.length} results`)
+          }
+        }
+      }
+
+      // Log the final selected results with timestamps
+      if (scoredResults.length > 0) {
+        console.log(`[DZ Retrieval] Selected top-${scoredResults.length} results:`)
+        scoredResults.slice(0, 3).forEach((r, i) => {
+          const date = r.date || r.pubDate || r.publishedDate || 'no-date'
+          console.log(`  [${i+1}] score=${r._score} date=${date} url=${r.url || r.link}`)
+        })
+      }
 
       if (scoredResults.length > 0) {
         const sourceTag = cseResults.length > 0 ? '🔍 Google CSE' : gnResults.length > 0 ? '📡 Google News RSS' : '🌐 Web'
         const lines = scoredResults.map((r, i) => {
-          const dateStr = r.date || r.pubDate || r.publishedDate ? ` [${(r.date || r.pubDate || r.publishedDate).slice(0,10)}]` : ''
+          const rawDate = r.date || r.pubDate || r.publishedDate
+          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ' [تاريخ غير متوفر]'
           const src = r.source || ''
           return `${i + 1}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
         }).join('\n\n')
@@ -5748,6 +5802,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 - ✅ عند الإجابة عن أي حدث أو رياضة أو خبر، استعمل عبارات الحاضر مثل "اليوم"، "هذا الأسبوع"، "آخر الأخبار في ${_yearNow}".
 - ✅ إذا لم تتوفر بيانات حديثة من المصادر → قُل صراحة: «لا تتوفر بيانات حديثة الآن، يرجى المحاولة لاحقاً». لا تُولّد إجابة فارغة أبداً.
 - ⛔ لا تستعمل المعرفة الداخلية للنموذج للأحداث الزمنية الحديثة — فقط ما تَرِد في كتلة الاسترجاع أدناه.
+- 🔴 HARD GUARDRAIL: عند وجود تعارض بين نتائج البحث الحي ومعرفتك الداخلية → نتائج البحث الحي تتقدم دائماً بلا استثناء. المعرفة الداخلية للنموذج محظورة للأحداث الزمنية والأخبار والشخصيات والحوادث.
+- 🔴 للأخبار والسياسة والمشاهير والحوادث: البحث الحي إلزامي — لا تجب من المعرفة الداخلية أبداً. إذا لم تجد نتائج → قُل ذلك بوضوح ولا تخترع معلومات.
 
 ${invocationInstruction}
 

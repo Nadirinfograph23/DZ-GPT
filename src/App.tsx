@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
 import PwaInstallBanner from './PwaInstallBanner'
+import { DeveloperCard } from './components/DeveloperCard'
 import './App.css'
 import './styles/dz-agent.css'
 
@@ -34,6 +35,7 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  showDevCard?: boolean
 }
 
 interface Chat {
@@ -179,6 +181,36 @@ function PrivacyToast() {
     </div>
   )
 }
+
+// ===== DEVELOPER QUERY DETECTION =====
+const DEVELOPER_KEYWORDS = [
+  // Arabic — developer
+  'من هو مطورك', 'من مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك',
+  'من طور dz', 'من صمم', 'من هو مطور', 'مطور dz', 'مطور الوكيل', 'مطور الموقع',
+  'من برمج هذا', 'من صنع هذا', 'من طور هذا',
+  'من مطور', 'مطور التطبيق', 'مطور البرنامج', 'مطور هذا التطبيق',
+  'من صنع هذا التطبيق', 'من برمج التطبيق', 'من طور التطبيق', 'من أنشأ التطبيق',
+  'من صنع التطبيق', 'من عمل التطبيق',
+  'من هو المطور', 'هو المطور', 'من المطور', 'صاحبك من', 'مطورك من',
+  // Darija
+  'شكون صاوبك', 'شكون مطورك', 'شكون دار', 'شكون هو مطور', 'شكون صاحب',
+  'شكون مطور التطبيق', 'شكون صاحب التطبيق', 'شكون مالك التطبيق',
+  'شكون طورك', 'شكون برمجك', 'شكون صنعك',
+  // French
+  'qui est votre développeur', 'qui vous a créé', 'qui vous a développé',
+  'qui a fait', 'qui a créé', 'qui a développé', 'développeur de',
+  // English
+  'who is your developer', 'who made you', 'who created you', 'who built you',
+  'who programmed you', 'who designed you', 'who is dz agent developer',
+  'who made this', 'who created this', 'who built this', 'who is the developer',
+  // OCR DZ specific
+  'من طور ocr', 'من صنع ocr', 'مطور ocr dz', 'من انشأ ocr',
+]
+function isDeveloperQuery(text: string): boolean {
+  const lower = text.toLowerCase().trim()
+  return DEVELOPER_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()))
+}
+const DEVELOPER_RESPONSE = 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي'
 
 // ===== LANGUAGE DETECTION =====
 type OcrLang = { code: 'ar' | 'fr' | 'en'; label: string; flag: string; dir: 'rtl' | 'ltr' }
@@ -441,6 +473,25 @@ function App() {
     if (!text || isLoading || ocrActionLoading) return
     setOcrActionLoading(true)
 
+    // Intercept developer-identity questions
+    if (isDeveloperQuery(text)) {
+      let currentChatId = activeChatId
+      let currentChats = chats
+      const existingOcrChat = currentChats.find(c => c.id === currentChatId && c.modelId === 'ocr-dz')
+      if (!currentChatId || !existingOcrChat) {
+        const newChat = { id: generateId(), title: text.substring(0, 60), messages: [] as Message[], modelId: 'ocr-dz' as string }
+        currentChats = [newChat, ...currentChats]
+        currentChatId = newChat.id
+        setChats(currentChats)
+        setActiveChatId(currentChatId)
+      }
+      const userMsg: Message = { id: generateId(), role: 'user', content: text }
+      const devMsg: Message = { id: generateId(), role: 'assistant', content: DEVELOPER_RESPONSE, showDevCard: true }
+      setChats(prev => prev.map(c => c.id === currentChatId ? { ...c, messages: [...c.messages, userMsg, devMsg] } : c))
+      setOcrActionLoading(false)
+      return
+    }
+
     const messageText = type === 'correct'
       ? `قم بتصحيح النص التالي المستخرج من OCR مع تحسين الإملاء والتنسيق دون تغيير المعنى:\n\n${text}`
       : `هذا النص تم استخراجه من OCR. قم بتحليله ويمكنني طرح أسئلة عليه:\n\n${text}`
@@ -616,6 +667,14 @@ function App() {
       { role: 'system', content: systemPrompt },
       ...chat.messages.map(m => ({ role: m.role, content: m.content })),
     ]
+
+    // OCR DZ: intercept developer-identity questions client-side
+    if (selectedModel === 'ocr-dz' && isDeveloperQuery(text)) {
+      const devMsg: Message = { id: generateId(), role: 'assistant', content: DEVELOPER_RESPONSE, showDevCard: true }
+      setChats(prev => prev.map(c => c.id === currentChatId ? { ...c, messages: [...c.messages, devMsg] } : c))
+      setIsLoading(false)
+      return
+    }
 
     try {
       abortRef.current = new AbortController()
@@ -1283,6 +1342,7 @@ function App() {
                         )}
                       </div>
                     )}
+                    {message.showDevCard && <DeveloperCard />}
                   </div>
                 </div>
               ))}

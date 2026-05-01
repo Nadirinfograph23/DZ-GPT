@@ -15,6 +15,7 @@ import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
+import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -5281,10 +5282,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         if (validation.ok) {
           console.log(`[Website Builder v5] OK on attempt ${attempt} — ${htmlCode.length} chars via ${wbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
           return res.status(200).json({
-            content: `✅ **تم إنشاء موقعك بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته أو **"تحميل .html"** لحفظه على جهازك.`,
+            content: `✅ **تم إنشاء موقعك بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته، أو استخدم أزرار **تحميل .html** / **تحميل ZIP** لحفظه.`,
             isWebsite: true,
             htmlCode,
+            cssCode: cssCode || '',
+            jsCode:  jsCode  || '',
           })
         }
 
@@ -5302,10 +5307,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // All attempts exhausted — return best effort if we got something
     if (lastHtml && lastHtml.length > 200) {
       console.warn('[Website Builder v5] All attempts failed validation — returning best-effort HTML')
+      const cssCode = extractCssFromHtml(lastHtml)
+      const jsCode  = extractJsFromHtml(lastHtml)
       return res.status(200).json({
         content: `⚠️ **تم توليد الموقع بشكل جزئي** — قد لا يكون مكتملاً. معاينة مباشرة أو تحميل لمشاهدة النتيجة.`,
         isWebsite: true,
         htmlCode: lastHtml,
+        cssCode: cssCode || '',
+        jsCode:  jsCode  || '',
       })
     }
     return res.status(200).json({

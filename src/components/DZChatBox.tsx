@@ -2187,12 +2187,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // Helper to perform one DZ Agent fetch attempt
-      const fetchAgentResponse = async () => {
-        const r = await withRetry(async () => {
+      // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
+      const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
+        return await withRetry(async () => {
           const req = await fetch('/api/dz-agent-chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache',
+              'Pragma': 'no-cache',
+            },
+            cache: 'no-store',
             body: JSON.stringify({
               messages: outboundMessages,
               githubToken: githubToken || undefined,
@@ -2205,12 +2210,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const errData = await req.json().catch(() => null)
             throw new Error(errData?.error || `Server error: ${req.status}`)
           }
-          return req
-        }, 1, 1000)
-        return r.json()
+          const parsed = await req.json()
+          if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON response')
+          return parsed as Record<string, unknown>
+        }, 2, 1000)
       }
 
-      // Auto-retry up to 2 times when response content is empty
+      // Auto-retry up to 3 times when response content is empty
       let data: Record<string, unknown> = {}
       let attempts = 0
       while (attempts < 3) {
@@ -2222,7 +2228,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         attempts++
         if (attempts < 3) {
           console.warn('[DZChatBox] Empty response, retrying... attempt', attempts + 1)
-          await new Promise(resolve => setTimeout(resolve, 800))
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 
@@ -2328,25 +2334,31 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // Auto-retry up to 2 times on empty response
+      // Auto-retry up to 3 times on empty response
       let content = ''
       let attempts = 0
       while (attempts < 3) {
         const res = await fetch('/api/dz-agent-chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache',
+          },
+          cache: 'no-store',
           body: JSON.stringify({
             messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
             githubToken: githubToken || undefined,
           }),
           signal,
         })
+        if (!res.ok) throw new Error(`Server error: ${res.status}`)
         const data = await res.json()
         console.log('[DZChatBox] regenerate response (attempt', attempts + 1, '):', data)
         content = typeof data.content === 'string' ? data.content.trim() : ''
         if (content) break
         attempts++
-        if (attempts < 3) await new Promise(resolve => setTimeout(resolve, 800))
+        if (attempts < 3) await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
       addAssistantMessage({
@@ -2660,8 +2672,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                   </div>
                 </div>
               ) : (
-                <div className="dz-typing-indicator">
-                  <span /><span /><span />
+                <div className="dz-thinking-step">
+                  <span className="dz-thinking-label">جاري التفكير...</span>
+                  <div className="dz-typing-indicator">
+                    <span /><span /><span />
+                  </div>
                 </div>
               )}
             </div>

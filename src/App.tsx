@@ -217,6 +217,7 @@ function App() {
   const [ocrProgress, setOcrProgress] = useState(0)
   const [ocrDisplayText, setOcrDisplayText] = useState('')
   const [ocrActionLoading, setOcrActionLoading] = useState(false)
+  const [ocrCopied, setOcrCopied] = useState(false)
   const ocrInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -480,6 +481,21 @@ function App() {
       setOcrActionLoading(false)
     }
   }, [ocrDisplayText, isLoading, ocrActionLoading, activeChatId, chats, selectedModel])
+
+  const copyOCRText = useCallback(async () => {
+    if (!ocrDisplayText.trim() || ocrCopied) return
+    try {
+      await navigator.clipboard.writeText(ocrDisplayText)
+      setOcrCopied(true)
+      setTimeout(() => setOcrCopied(false), 2000)
+    } catch {
+      // Fallback for browsers that block clipboard API
+      const el = document.getElementById('ocr-output') as HTMLTextAreaElement | null
+      if (el) { el.select(); document.execCommand('copy') }
+      setOcrCopied(true)
+      setTimeout(() => setOcrCopied(false), 2000)
+    }
+  }, [ocrDisplayText, ocrCopied])
 
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
@@ -996,6 +1012,15 @@ function App() {
                           disabled={!ocrDisplayText.trim() || ocrActionLoading || isLoading}
                         >
                           💬 <span>مناقشة النص</span>
+                        </button>
+                        <button
+                          className={`ocr-action-btn ocr-btn-copy${ocrCopied ? ' ocr-btn-copied' : ''}`}
+                          onClick={copyOCRText}
+                          disabled={!ocrDisplayText.trim()}
+                          title="نسخ النص"
+                        >
+                          {ocrCopied ? '✅' : '📋'}
+                          <span>{ocrCopied ? 'تم النسخ!' : 'نسخ النص'}</span>
                         </button>
                       </div>
                     </div>

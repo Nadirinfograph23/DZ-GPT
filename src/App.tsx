@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen, Video } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -180,6 +180,21 @@ function PrivacyToast() {
   )
 }
 
+// ===== LANGUAGE DETECTION =====
+type OcrLang = { code: 'ar' | 'fr' | 'en'; label: string; flag: string; dir: 'rtl' | 'ltr' }
+function detectOCRLang(text: string): OcrLang | null {
+  if (!text.trim()) return null
+  const total = text.length
+  // Arabic Unicode block \u0600–\u06FF
+  const arabicChars = (text.match(/[\u0600-\u06FF]/g) || []).length
+  if (arabicChars / total > 0.15) return { code: 'ar', label: 'عربي', flag: '🇩🇿', dir: 'rtl' }
+  // French-specific diacritics + common stop-words
+  const frenchChars = (text.match(/[éèêëàâùûçœîïô]/gi) || []).length
+  const frenchWords = (text.match(/\b(le|la|les|des|du|un|une|est|avec|dans|pour|que|qui|pas|sur|au|aux|je|tu|il|elle|nous|vous|ils|elles|mon|ton|son|mais|ou|et|donc|or|ni|car|très|aussi|plus|comme|si|bien|même|encore|tout|tous|cette|cet|ces|leur|leurs|quel|quels|quelle|quelles)\b/gi) || []).length
+  if (frenchChars / total > 0.02 || frenchWords >= 3) return { code: 'fr', label: 'Français', flag: '🇫🇷', dir: 'ltr' }
+  return { code: 'en', label: 'English', flag: '🇬🇧', dir: 'ltr' }
+}
+
 // ===== COMPONENT =====
 function App() {
   const navigate = useNavigate()
@@ -218,6 +233,7 @@ function App() {
   const [ocrDisplayText, setOcrDisplayText] = useState('')
   const [ocrActionLoading, setOcrActionLoading] = useState(false)
   const [ocrCopied, setOcrCopied] = useState(false)
+  const ocrLang = useMemo(() => detectOCRLang(ocrDisplayText), [ocrDisplayText])
   const ocrInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -1008,7 +1024,7 @@ function App() {
                         spellCheck={false}
                       />
 
-                      {/* Word & character count */}
+                      {/* Word, character count & language badge */}
                       {ocrDisplayText && (
                         <div className="ocr-text-stats">
                           <span>
@@ -1031,6 +1047,11 @@ function App() {
                             </span>
                             {' '}جملة
                           </span>
+                          {ocrLang && (
+                            <span className={`ocr-lang-badge ocr-lang-${ocrLang.code}`}>
+                              {ocrLang.flag} {ocrLang.label}
+                            </span>
+                          )}
                         </div>
                       )}
 

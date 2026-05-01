@@ -31,6 +31,7 @@ type RichType =
   | 'issues'
   | 'pulls'
   | 'stats'
+  | 'website'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -164,6 +165,7 @@ interface DZMessage {
   issues?: IssueItem[]
   pulls?: PullItem[]
   stats?: RepoStats
+  htmlCode?: string
 }
 
 interface ActionLogEntry {
@@ -687,6 +689,90 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
         </button>
       </div>
       <pre><code className={className}>{children}</code></pre>
+    </div>
+  )
+}
+
+// ===== WEBSITE PREVIEW =====
+function WebsitePreview({ htmlCode }: { htmlCode: string }) {
+  const [view, setView] = useState<'preview' | 'code'>('preview')
+  const [copied, setCopied] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+
+  const handleDownload = () => {
+    const blob = new Blob([htmlCode], { type: 'text/html' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'dz-agent-website.html'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(htmlCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className={`dz-wp-root${fullscreen ? ' dz-wp-root--fs' : ''}`}>
+      <div className="dz-wp-toolbar">
+        <div className="dz-wp-tabs">
+          <button
+            className={`dz-wp-tab${view === 'preview' ? ' dz-wp-tab--active' : ''}`}
+            onClick={() => setView('preview')}
+          >
+            👁 معاينة مباشرة
+          </button>
+          <button
+            className={`dz-wp-tab${view === 'code' ? ' dz-wp-tab--active' : ''}`}
+            onClick={() => setView('code')}
+          >
+            {'</>'}  الكود
+          </button>
+        </div>
+        <div className="dz-wp-actions">
+          <button className="dz-wp-btn" onClick={handleCopy}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'تم النسخ' : 'نسخ الكود'}
+          </button>
+          <button className="dz-wp-btn dz-wp-btn--dl" onClick={handleDownload}>
+            <Download size={13} /> تحميل .html
+          </button>
+          <button className="dz-wp-btn dz-wp-btn--fs" onClick={() => setFullscreen(f => !f)} title="ملء الشاشة">
+            {fullscreen ? '⊠' : '⊡'}
+          </button>
+        </div>
+      </div>
+
+      {view === 'preview' ? (
+        <div className="dz-wp-frame-wrap">
+          <div className="dz-wp-browser-bar">
+            <span className="dz-wp-dot dz-wp-dot--r" />
+            <span className="dz-wp-dot dz-wp-dot--y" />
+            <span className="dz-wp-dot dz-wp-dot--g" />
+            <span className="dz-wp-url">dz-agent-website.html</span>
+          </div>
+          <iframe
+            srcDoc={htmlCode}
+            className="dz-wp-frame"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            title="Website Preview"
+          />
+        </div>
+      ) : (
+        <div className="dz-wp-code-wrap">
+          <DZCodeBlock className="language-html">{htmlCode}</DZCodeBlock>
+        </div>
+      )}
+
+      {fullscreen && (
+        <button className="dz-wp-close-fs" onClick={() => setFullscreen(false)}>
+          ✕ إغلاق
+        </button>
+      )}
     </div>
   )
 }
@@ -2167,6 +2253,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
+      } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
+        trackFeatureUsage('website-builder')
+        addAssistantMessage({
+          content: (data.content as string) || '✅ تم إنشاء موقعك!',
+          richType: 'website',
+          htmlCode: data.htmlCode as string,
+        })
       } else {
         addAssistantMessage({
           content: (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
@@ -2462,6 +2555,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       )}
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
+                      )}
+                      {msg.richType === 'website' && msg.htmlCode && (
+                        <WebsitePreview htmlCode={msg.htmlCode} />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog

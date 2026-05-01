@@ -1593,6 +1593,73 @@ function scoreResult(result, query) {
   return Math.round(freshness * 0.45 + trust * 0.25 + relevance * 0.20 + snippetS * 0.10)
 }
 
+// ── Website Builder: query detection ─────────────────────────────────────────
+function detectWebsiteBuilderQuery(msg) {
+  const lower = msg.toLowerCase()
+  const keywords = [
+    'أنشئ موقع', 'انشئ موقع', 'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع',
+    'أنشئ صفحة', 'انشئ صفحة', 'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
+    'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'landing page', 'build website', 'create website',
+    'generate website', 'make website', 'design website', 'make a landing', 'build a landing',
+    'portfolio website', 'business website', 'company website', 'startup website', 'saas website',
+    'html website', 'html page', 'create html', 'build html', 'generate html',
+    'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
+    'dashboard ui', 'analytics dashboard', 'create dashboard', 'build dashboard',
+    'e-commerce', 'ecommerce site', 'shop website', 'store website',
+  ]
+  return keywords.some(k => lower.includes(k))
+}
+
+// ── Website Builder: extract raw HTML from AI response ────────────────────────
+function extractHtmlFromResponse(text) {
+  if (!text) return null
+  // Try ```html ... ``` block first
+  const fenced = text.match(/```(?:html|HTML)?\s*(<!DOCTYPE[\s\S]*?<\/html>)\s*```/i)
+  if (fenced) return fenced[1].trim()
+  // Try any fenced block that looks like HTML
+  const anyFenced = text.match(/```(?:html|HTML)?\s*(<html[\s\S]*?<\/html>)\s*```/i)
+  if (anyFenced) return anyFenced[1].trim()
+  // Try raw DOCTYPE html
+  const rawDoctype = text.match(/(<!DOCTYPE html[\s\S]*?<\/html>)/i)
+  if (rawDoctype) return rawDoctype[1].trim()
+  // Try raw <html> tag
+  const rawHtml = text.match(/(<html[\s\S]*?<\/html>)/i)
+  if (rawHtml) return rawHtml[1].trim()
+  // Try any fenced code block with HTML tags
+  const fallback = text.match(/```[\w]*\s*([\s\S]*?)\s*```/)
+  if (fallback && fallback[1].includes('<') && fallback[1].includes('</')) return fallback[1].trim()
+  return null
+}
+
+// ── Website Builder: specialized system prompt ────────────────────────────────
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FRONTEND ENGINEER and UI/UX DESIGNER working in "Website Builder God Mode".
+
+CRITICAL OUTPUT RULE: Output ONLY the complete HTML code — nothing else. No explanations, no markdown fences, no comments outside the code. The ENTIRE response must be a single, valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+
+DESIGN INTELLIGENCE:
+- If user says "company" or "business" → SaaS landing page
+- If user says "portfolio" → creative personal website  
+- If user says "dashboard" → analytics UI with charts
+- If user says "e-commerce" or "shop" → product/store UI
+- If unclear → modern startup landing page
+
+OUTPUT REQUIREMENTS (STRICT):
+1. Single HTML file: HTML + CSS + JS all in one <style> and <script> block
+2. NO external dependencies (no React, no Vue, no CDNs required for core layout)
+3. Fully responsive (mobile-first)
+4. Modern premium UI: glassmorphism, clean SaaS, or minimal premium — choose based on context
+5. ALL buttons must work (JS alerts or simulated actions)
+6. ALL forms must respond (validation + success feedback)
+7. Smooth CSS animations and hover effects
+8. Professional typography (use Google Fonts via @import ONLY if needed)
+9. Output must work by double-click in browser (no server needed)
+10. Include a floating "Download This Site" button in the HTML itself using this exact code:
+    <button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='website.html';a.click();})()" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#7c3aed;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.3)">⬇ Download</button>
+
+QUALITY STANDARD: The output must look like a product-level startup website — not a demo or beginner code. Clean spacing, professional typography, pixel-perfect layout.
+
+START OUTPUT NOW — HTML CODE ONLY:`
+
 // ── Detect query intent ───────────────────────────────────────────────────────
 function detectQueryIntent(msg) {
   const lower = msg.toLowerCase()
@@ -5111,6 +5178,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Emergency intent (Algeria) — answered immediately, before doctor search ──
   if (isEmergencyQuery(lastUserMessage)) {
     return res.status(200).json({ content: EMERGENCY_INFO })
+  }
+
+  // ── Website Builder God Mode ──────────────────────────────────────────────
+  if (detectWebsiteBuilderQuery(lastUserMessage)) {
+    console.log(`[Website Builder] Detected website request: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const wbMessages = [
+        { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
+        { role: 'user', content: lastUserMessage },
+      ]
+      const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+      const rawOutput = wbResult.content || ''
+      const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+
+      if (htmlCode && htmlCode.length > 200) {
+        console.log(`[Website Builder] Generated ${htmlCode.length} chars of HTML via ${wbResult.model}`)
+        return res.status(200).json({
+          content: `✅ **تم إنشاء موقعك بنجاح!** — انقر على "معاينة مباشرة" لمشاهدته، أو "تحميل .html" لحفظه.`,
+          isWebsite: true,
+          htmlCode,
+        })
+      }
+      // Fallback: return as text if extraction fails
+      console.warn('[Website Builder] HTML extraction failed — returning raw text')
+      return res.status(200).json({
+        content: rawOutput || '⚠️ لم يتمكن النظام من توليد الموقع. يرجى إعادة المحاولة بوصف أكثر تفصيلاً.',
+      })
+    } catch (err) {
+      console.error('[Website Builder] Error:', err.message)
+      return res.status(200).json({
+        content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.',
+      })
+    }
   }
 
   // ── Doctor name search (no specialty needed) ────────────────────────────

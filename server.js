@@ -56,6 +56,8 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
+  frameguard: isProd ? { action: 'deny' } : false,
+  crossOriginOpenerPolicy: isProd ? { policy: 'same-origin' } : false,
 }))
 
 // ===== CORS =====
@@ -1597,15 +1599,26 @@ function scoreResult(result, query) {
 function detectWebsiteBuilderQuery(msg) {
   const lower = msg.toLowerCase()
   const keywords = [
+    // Arabic
     'أنشئ موقع', 'انشئ موقع', 'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع',
     'أنشئ صفحة', 'انشئ صفحة', 'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
-    'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'landing page', 'build website', 'create website',
-    'generate website', 'make website', 'design website', 'make a landing', 'build a landing',
-    'portfolio website', 'business website', 'company website', 'startup website', 'saas website',
-    'html website', 'html page', 'create html', 'build html', 'generate html',
+    'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'طور موقع', 'طوّر موقع', 'اكتب كود موقع',
+    'اصنعلي موقع', 'صمملي موقع', 'ابنيلي موقع', 'عملي موقع', 'اعملي موقع',
+    'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو', 'موقع شركة', 'موقع تجاري',
+    'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر', 'موقع متجر',
+    // English
+    'landing page', 'build website', 'create website', 'generate website', 'make website',
+    'design website', 'make a landing', 'build a landing', 'portfolio website',
+    'business website', 'company website', 'startup website', 'saas website', 'saas landing',
+    'html website', 'html page', 'create html', 'build html', 'generate html', 'write html',
+    'dashboard ui', 'analytics dashboard', 'create dashboard', 'build dashboard', 'admin dashboard',
+    'e-commerce', 'ecommerce site', 'shop website', 'store website', 'product page',
+    'personal website', 'personal site', 'portfolio site', 'blog website',
+    'web app', 'web application', 'single page', 'one page website',
+    // French
     'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
-    'dashboard ui', 'analytics dashboard', 'create dashboard', 'build dashboard',
-    'e-commerce', 'ecommerce site', 'shop website', 'store website',
+    'construire un site', 'générer un site', 'design un site', 'tableau de bord',
+    'page de destination', 'site e-commerce', 'boutique en ligne',
   ]
   return keywords.some(k => lower.includes(k))
 }
@@ -1631,34 +1644,95 @@ function extractHtmlFromResponse(text) {
   return null
 }
 
+// ── Website Builder: HTML quality validator ───────────────────────────────────
+function validateHtmlOutput(html) {
+  if (!html || typeof html !== 'string') return { ok: false, reason: 'empty' }
+  if (html.length < 500) return { ok: false, reason: 'too_short' }
+  if (!/<html/i.test(html)) return { ok: false, reason: 'missing_html_tag' }
+  if (!/<\/html>/i.test(html)) return { ok: false, reason: 'missing_closing_html' }
+  if (!/<style[\s>]/i.test(html)) return { ok: false, reason: 'missing_style' }
+  if (!/<\/style>/i.test(html)) return { ok: false, reason: 'missing_closing_style' }
+  if (!/<body[\s>]/i.test(html)) return { ok: false, reason: 'missing_body' }
+  return { ok: true }
+}
+
 // ── Website Builder: specialized system prompt ────────────────────────────────
-const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FRONTEND ENGINEER and UI/UX DESIGNER working in "Website Builder God Mode".
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FRONTEND ENGINEER and UI/UX DESIGNER operating in "Website Builder God Mode v5".
 
-CRITICAL OUTPUT RULE: Output ONLY the complete HTML code — nothing else. No explanations, no markdown fences, no comments outside the code. The ENTIRE response must be a single, valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+════════════════════════════════════════════
+CRITICAL OUTPUT RULE (ABSOLUTE):
+Output ONLY the complete HTML code — NOTHING ELSE.
+No explanations. No markdown fences. No preamble. No comments outside HTML.
+The ENTIRE response must be ONE valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+════════════════════════════════════════════
 
-DESIGN INTELLIGENCE:
-- If user says "company" or "business" → SaaS landing page
-- If user says "portfolio" → creative personal website  
-- If user says "dashboard" → analytics UI with charts
-- If user says "e-commerce" or "shop" → product/store UI
-- If unclear → modern startup landing page
+DESIGN INTELLIGENCE — AUTO SELECT:
+- "company" / "business" / "saas" / "startup"  → Modern SaaS landing page
+- "portfolio" / "personal" / "cv" / "resume"    → Creative personal brand site
+- "dashboard" / "admin" / "analytics"           → Dark analytics dashboard with charts
+- "e-commerce" / "shop" / "store" / "متجر"      → Product showcase + cart UI
+- "blog" / "مدونة"                              → Clean editorial blog layout
+- "agency" / "وكالة"                            → Bold agency/creative studio page
+- Unclear / general                             → Premium startup landing page
 
-OUTPUT REQUIREMENTS (STRICT):
-1. Single HTML file: HTML + CSS + JS all in one <style> and <script> block
-2. NO external dependencies (no React, no Vue, no CDNs required for core layout)
-3. Fully responsive (mobile-first)
-4. Modern premium UI: glassmorphism, clean SaaS, or minimal premium — choose based on context
-5. ALL buttons must work (JS alerts or simulated actions)
-6. ALL forms must respond (validation + success feedback)
-7. Smooth CSS animations and hover effects
-8. Professional typography (use Google Fonts via @import ONLY if needed)
-9. Output must work by double-click in browser (no server needed)
-10. Include a floating "Download This Site" button in the HTML itself using this exact code:
-    <button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='website.html';a.click();})()" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#7c3aed;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.3)">⬇ Download</button>
+════════════════════════════════════════════
+MANDATORY STRUCTURE (every site MUST have):
+1. <head> with: charset, viewport meta, title, Google Fonts @import
+2. <style> block with ALL CSS (no external CSS files)
+3. <body> with these sections IN ORDER:
+   a. Navigation bar (logo + links + CTA button)
+   b. Hero section (headline + subheadline + CTA buttons + visual element)
+   c. Features / Services section (3–6 cards with icons)
+   d. Stats / Social proof section (numbers, testimonials, or logos)
+   e. About / How it works section
+   f. Call-to-action section (email capture or contact form)
+   g. Footer (links + copyright)
+4. <script> block with working JavaScript
+════════════════════════════════════════════
 
-QUALITY STANDARD: The output must look like a product-level startup website — not a demo or beginner code. Clean spacing, professional typography, pixel-perfect layout.
+CSS REQUIREMENTS (STRICT):
+- CSS custom properties (variables) for colors/spacing
+- Smooth scroll: html { scroll-behavior: smooth }
+- Mobile-first responsive: @media (max-width: 768px)
+- CSS animations: @keyframes fadeInUp, float, pulse for hero elements
+- Hover transitions on ALL buttons and cards (transform + box-shadow)
+- Glassmorphism cards: backdrop-filter: blur(20px); background: rgba(255,255,255,0.1)
+- Gradient backgrounds: linear-gradient or radial-gradient for hero
+- CSS Grid + Flexbox layout
 
-START OUTPUT NOW — HTML CODE ONLY:`
+JAVASCRIPT REQUIREMENTS:
+- Smooth navbar: shrink + shadow on scroll (window.addEventListener scroll)
+- Mobile hamburger menu toggle
+- Form validation with visual error/success states
+- Intersection Observer for scroll-in animations (animate elements as they enter viewport)
+- Counter animation for stats (count up from 0 when visible)
+- ALL buttons MUST respond (modals, alerts, or form feedback — no dead buttons)
+- Floating download button (REQUIRED — exact code below)
+
+FONTS (use @import from Google Fonts, pick best match):
+- Modern/SaaS: Inter or Plus Jakarta Sans
+- Creative/Portfolio: Space Grotesk or DM Sans  
+- Elegant/Luxury: Playfair Display + Inter combo
+
+COLOR PALETTE (pick ONE palette based on type):
+- SaaS/Tech: #0f172a (dark) + #6366f1 (indigo) + #06b6d4 (cyan)
+- Creative: #111 (dark) + #f97316 (orange) + #ffffff
+- Clean/Minimal: #fafafa (light) + #1a1a2e (navy) + #e879f9 (pink)
+- Professional: #0a192f (navy) + #64ffda (mint) + #ccd6f6 (light)
+
+FLOATING DOWNLOAD BUTTON (include EXACTLY as-is):
+<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';a.click();})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 8px 32px rgba(124,58,237,.4);transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 40px rgba(124,58,237,.6)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.4)'">⬇ Download Site</button>
+
+════════════════════════════════════════════
+QUALITY STANDARD:
+- Looks like a $10,000 Dribbble-quality product
+- NOT a demo or beginner project
+- Professional spacing (8px grid)
+- Pixel-perfect layout
+- NO placeholder images (use CSS gradients or SVG patterns instead)
+- NO Lorem Ipsum — use realistic, context-aware content
+
+START OUTPUT NOW — PURE HTML CODE ONLY (no markdown, no explanation):`
 
 // ── Detect query intent ───────────────────────────────────────────────────────
 function detectQueryIntent(msg) {
@@ -5180,37 +5254,63 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: EMERGENCY_INFO })
   }
 
-  // ── Website Builder God Mode ──────────────────────────────────────────────
+  // ── Website Builder God Mode v5 ───────────────────────────────────────────
   if (detectWebsiteBuilderQuery(lastUserMessage)) {
-    console.log(`[Website Builder] Detected website request: "${lastUserMessage.slice(0, 80)}"`)
-    try {
-      const wbMessages = [
-        { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
-        { role: 'user', content: lastUserMessage },
-      ]
-      const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
-      const rawOutput = wbResult.content || ''
-      const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+    console.log(`[Website Builder v5] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    const MAX_WB_ATTEMPTS = 3
+    let lastHtml = null
+    let lastValidation = null
 
-      if (htmlCode && htmlCode.length > 200) {
-        console.log(`[Website Builder] Generated ${htmlCode.length} chars of HTML via ${wbResult.model}`)
-        return res.status(200).json({
-          content: `✅ **تم إنشاء موقعك بنجاح!** — انقر على "معاينة مباشرة" لمشاهدته، أو "تحميل .html" لحفظه.`,
-          isWebsite: true,
-          htmlCode,
-        })
+    for (let attempt = 1; attempt <= MAX_WB_ATTEMPTS; attempt++) {
+      try {
+        const retryNote = attempt > 1
+          ? `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${lastValidation?.reason}. Fix it — output MUST include <html>, <style>, <script>, and <body> with complete content. HTML ONLY, nothing else.`
+          : ''
+
+        const wbMessages = [
+          { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
+          { role: 'user', content: lastUserMessage },
+        ]
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const rawOutput = wbResult.content || ''
+        const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+
+        const validation = validateHtmlOutput(htmlCode)
+        lastHtml = htmlCode
+        lastValidation = validation
+
+        if (validation.ok) {
+          console.log(`[Website Builder v5] OK on attempt ${attempt} — ${htmlCode.length} chars via ${wbResult.model}`)
+          return res.status(200).json({
+            content: `✅ **تم إنشاء موقعك بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته أو **"تحميل .html"** لحفظه على جهازك.`,
+            isWebsite: true,
+            htmlCode,
+          })
+        }
+
+        console.warn(`[Website Builder v5] Attempt ${attempt} failed validation: ${validation.reason} (${htmlCode.length} chars) — retrying...`)
+        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 800))
+      } catch (err) {
+        console.error(`[Website Builder v5] Attempt ${attempt} error:`, err.message)
+        if (attempt === MAX_WB_ATTEMPTS) {
+          return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.' })
+        }
+        await new Promise(r => setTimeout(r, 800))
       }
-      // Fallback: return as text if extraction fails
-      console.warn('[Website Builder] HTML extraction failed — returning raw text')
+    }
+
+    // All attempts exhausted — return best effort if we got something
+    if (lastHtml && lastHtml.length > 200) {
+      console.warn('[Website Builder v5] All attempts failed validation — returning best-effort HTML')
       return res.status(200).json({
-        content: rawOutput || '⚠️ لم يتمكن النظام من توليد الموقع. يرجى إعادة المحاولة بوصف أكثر تفصيلاً.',
-      })
-    } catch (err) {
-      console.error('[Website Builder] Error:', err.message)
-      return res.status(200).json({
-        content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.',
+        content: `⚠️ **تم توليد الموقع بشكل جزئي** — قد لا يكون مكتملاً. معاينة مباشرة أو تحميل لمشاهدة النتيجة.`,
+        isWebsite: true,
+        htmlCode: lastHtml,
       })
     }
+    return res.status(200).json({
+      content: '⚠️ لم يتمكن النظام من توليد كود HTML صحيح. يرجى تفصيل طلبك أكثر وإعادة المحاولة.',
+    })
   }
 
   // ── Doctor name search (no specialty needed) ────────────────────────────
@@ -9772,14 +9872,20 @@ if (isMain) {
   } else {
     // Dev: embed Vite as middleware so both API and frontend run on port 5000
     const { createServer: createViteServer } = await import('vite')
+    const http = await import('http')
+    const httpServer = http.createServer(app)
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: { server: httpServer, clientPort: 443, protocol: 'wss' },
+      },
       appType: 'spa',
     })
     app.use(vite.middlewares)
-    const httpServer = app.listen(PORT, '0.0.0.0', () => {
+    setupChatWebSocket(httpServer)
+    httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`Dev server running on http://0.0.0.0:${PORT}`)
     })
-    setupChatWebSocket(httpServer)
   }
 }

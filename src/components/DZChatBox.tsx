@@ -166,6 +166,8 @@ interface DZMessage {
   pulls?: PullItem[]
   stats?: RepoStats
   htmlCode?: string
+  cssCode?: string
+  jsCode?: string
 }
 
 interface ActionLogEntry {
@@ -701,16 +703,74 @@ const WP_VIEWPORTS: { id: WPViewport; label: string; icon: string; width: string
   { id: 'desktop', label: 'سطح مكتب', icon: '🖥️', width: '100%' },
 ]
 
-function WebsitePreview({ htmlCode }: { htmlCode: string }) {
-  const [view, setView]           = useState<'preview' | 'code'>('preview')
-  const [viewport, setViewport]   = useState<WPViewport>('desktop')
-  const [copied, setCopied]       = useState(false)
-  const [downloaded, setDownloaded] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+// ── WebsitePreview template blocks ──────────────────────────────────────────
+const WP_TEMPLATES = [
+  { id: 'navbar',       icon: '🔲', labelAr: 'شريط تنقل',   prompt: 'أضف شريط تنقل احترافي متجاوب مع شعار وروابط وزر CTA' },
+  { id: 'hero',         icon: '🚀', labelAr: 'قسم البطل',    prompt: 'أضف قسم hero مذهل بعنوان رئيسي وعنوان فرعي وأزرار وعنصر بصري متحرك' },
+  { id: 'features',     icon: '✨', labelAr: 'الميزات',      prompt: 'أضف قسم ميزات/خدمات بشبكة من 6 بطاقات مع أيقونات وتأثير hover' },
+  { id: 'pricing',      icon: '💰', labelAr: 'الأسعار',      prompt: 'أضف جدول أسعار بثلاث خطط مع تمييز الخطة الموصى بها' },
+  { id: 'testimonials', icon: '💬', labelAr: 'الشهادات',     prompt: 'أضف قسم شهادات/مراجعات ببطاقات صور ونجوم تقييم' },
+  { id: 'stats',        icon: '📊', labelAr: 'الإحصائيات',   prompt: 'أضف قسم إحصائيات مع أنيميشن عد تصاعدي وأيقونات' },
+  { id: 'contact',      icon: '📬', labelAr: 'نموذج التواصل', prompt: 'أضف نموذج تواصل متكامل مع التحقق من البيانات' },
+  { id: 'footer',       icon: '🔻', labelAr: 'التذييل',      prompt: 'أضف تذييل شامل مع شعار وأعمدة روابط وأيقونات سوشيال' },
+]
 
-  const sizeKb = Math.round(new Blob([htmlCode]).size / 1024)
+// ── Client-side CSS/JS extraction (fallback if server didn't extract) ────────
+function clientExtractCss(html: string): string {
+  const blocks: string[] = []
+  const re = /<style[^>]*>([\s\S]*?)<\/style>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) blocks.push(m[1].trim())
+  return blocks.join('\n\n').trim()
+}
+function clientExtractJs(html: string): string {
+  const blocks: string[] = []
+  const re = /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const c = m[1].trim()
+    if (c.length > 10) blocks.push(c)
+  }
+  return blocks.join('\n\n').trim()
+}
+function buildHtmlShellClient(html: string, _css: string, _js: string): string {
+  let result = html
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '<link rel="stylesheet" href="style.css">')
+  result = result.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/gi, '<script src="script.js"></script>')
+  return result
+}
 
-  const handleDownload = () => {
+type WPCodeTab = 'html' | 'css' | 'js'
+
+function WebsitePreview({
+  htmlCode,
+  cssCode: cssCodeProp = '',
+  jsCode:  jsCodeProp  = '',
+  onInsertPrompt,
+}: {
+  htmlCode: string
+  cssCode?: string
+  jsCode?: string
+  onInsertPrompt?: (p: string) => void
+}) {
+  const [view, setView]               = useState<'preview' | 'code'>('preview')
+  const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
+  const [viewport, setViewport]       = useState<WPViewport>('desktop')
+  const [copied, setCopied]           = useState(false)
+  const [downloaded, setDownloaded]   = useState(false)
+  const [zipping, setZipping]         = useState(false)
+  const [zipped, setZipped]           = useState(false)
+  const [fullscreen, setFullscreen]   = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  const cssCode = cssCodeProp || clientExtractCss(htmlCode)
+  const jsCode  = jsCodeProp  || clientExtractJs(htmlCode)
+  const sizeKb  = Math.round(new Blob([htmlCode]).size / 1024)
+
+  const activeCode = codeTab === 'html' ? htmlCode : codeTab === 'css' ? cssCode : jsCode
+  const codeLang   = codeTab === 'html' ? 'language-html' : codeTab === 'css' ? 'language-css' : 'language-javascript'
+
+  const handleDownloadHtml = () => {
     const blob = new Blob([htmlCode], { type: 'text/html' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -723,8 +783,34 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
     setTimeout(() => setDownloaded(false), 2500)
   }
 
+  const handleDownloadZip = async () => {
+    setZipping(true)
+    try {
+      const JSZip = (await import('jszip')).default
+      const zip   = new JSZip()
+      const shell = buildHtmlShellClient(htmlCode, cssCode, jsCode)
+      zip.file('index.html', shell)
+      zip.file('style.css',  cssCode)
+      zip.file('script.js',  jsCode)
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = 'dz-agent-site.zip'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+      setZipped(true)
+      setTimeout(() => setZipped(false), 2500)
+    } catch {
+      alert('فشل تحميل ZIP. يرجى المحاولة مجدداً.')
+    } finally {
+      setZipping(false)
+    }
+  }
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(htmlCode)
+    navigator.clipboard.writeText(activeCode || htmlCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -751,19 +837,65 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
         </div>
         <div className="dz-wp-actions">
           <span className="dz-wp-size">{sizeKb} KB</span>
-          <button className="dz-wp-btn" onClick={handleCopy}>
+          <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'تم النسخ ✓' : 'نسخ الكود'}
+            {copied ? 'تم النسخ ✓' : 'نسخ'}
           </button>
-          <button className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`} onClick={handleDownload}>
+          <button
+            className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleDownloadHtml}
+            title="تحميل ملف HTML واحد"
+          >
             {downloaded ? <Check size={13} /> : <Download size={13} />}
-            {downloaded ? 'تم التحميل ✓' : 'تحميل .html'}
+            {downloaded ? 'تم ✓' : '.html'}
           </button>
-          <button className="dz-wp-btn dz-wp-btn--fs" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}>
+          <button
+            className={`dz-wp-btn dz-wp-btn--zip${zipped ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleDownloadZip}
+            disabled={zipping}
+            title="تحميل ZIP (HTML + CSS + JS منفصلة)"
+          >
+            {zipping ? '⏳' : zipped ? <Check size={13} /> : '🗜'}
+            {zipping ? 'جارٍ...' : zipped ? 'تم ✓' : 'ZIP'}
+          </button>
+          {onInsertPrompt && (
+            <button
+              className={`dz-wp-btn dz-wp-btn--tpl${showTemplates ? ' dz-wp-btn--active' : ''}`}
+              onClick={() => setShowTemplates(s => !s)}
+              title="إضافة قسم جديد"
+            >
+              🧩 قوالب
+            </button>
+          )}
+          <button
+            className="dz-wp-btn dz-wp-btn--fs"
+            onClick={() => setFullscreen(f => !f)}
+            title={fullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+          >
             {fullscreen ? '⊠' : '⊡'}
           </button>
         </div>
       </div>
+
+      {/* ── Template picker ── */}
+      {showTemplates && onInsertPrompt && (
+        <div className="dz-wp-tpl-bar">
+          <span className="dz-wp-tpl-label">أضف قسماً:</span>
+          {WP_TEMPLATES.map(t => (
+            <button
+              key={t.id}
+              className="dz-wp-tpl-btn"
+              title={t.prompt}
+              onClick={() => {
+                onInsertPrompt(t.prompt)
+                setShowTemplates(false)
+              }}
+            >
+              {t.icon} {t.labelAr}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Viewport selector (only in preview mode) ── */}
       {view === 'preview' && (
@@ -776,6 +908,27 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
               title={vp.label}
             >
               {vp.icon} {vp.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Code tab selector (only in code mode) ── */}
+      {view === 'code' && (
+        <div className="dz-wp-codetab-bar">
+          {(['html', 'css', 'js'] as WPCodeTab[]).map(tab => (
+            <button
+              key={tab}
+              className={`dz-wp-codetab${codeTab === tab ? ' dz-wp-codetab--active' : ''}`}
+              onClick={() => setCodeTab(tab)}
+            >
+              {tab === 'html' ? '🌐 HTML' : tab === 'css' ? '🎨 CSS' : '⚡ JS'}
+              {tab === 'css' && cssCode.length > 0 && (
+                <span className="dz-wp-codetab-badge">{Math.round(cssCode.length / 1024 * 10) / 10}k</span>
+              )}
+              {tab === 'js' && jsCode.length > 0 && (
+                <span className="dz-wp-codetab-badge">{Math.round(jsCode.length / 1024 * 10) / 10}k</span>
+              )}
             </button>
           ))}
         </div>
@@ -802,7 +955,11 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
         </div>
       ) : (
         <div className="dz-wp-code-wrap">
-          <DZCodeBlock className="language-html">{htmlCode}</DZCodeBlock>
+          {activeCode ? (
+            <DZCodeBlock className={codeLang}>{activeCode}</DZCodeBlock>
+          ) : (
+            <div className="dz-wp-empty-tab">لا يوجد كود {codeTab.toUpperCase()} مستخرج</div>
+          )}
         </div>
       )}
 
@@ -2303,6 +2460,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           content: (data.content as string) || '✅ تم إنشاء موقعك!',
           richType: 'website',
           htmlCode: data.htmlCode as string,
+          cssCode: (data.cssCode as string) || '',
+          jsCode:  (data.jsCode  as string) || '',
         })
       } else {
         addAssistantMessage({
@@ -2607,7 +2766,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         <StatsPanel stats={msg.stats} />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
-                        <WebsitePreview htmlCode={msg.htmlCode} />
+                        <WebsitePreview
+                          htmlCode={msg.htmlCode}
+                          cssCode={msg.cssCode}
+                          jsCode={msg.jsCode}
+                          onInsertPrompt={p => setInput(p)}
+                        />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog

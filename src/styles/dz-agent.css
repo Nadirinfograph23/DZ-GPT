@@ -3730,3 +3730,128 @@
   .dz-wp-frame { height: 360px; }
   .dz-wp-viewport-bar { flex-wrap: wrap; }
 }
+
+/* ── WebsitePreview — ZIP button ─────────────────────────────────────── */
+.dz-wp-btn--zip {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+.dz-wp-btn--zip:hover:not(:disabled) { opacity: 0.88; background: linear-gradient(135deg, #0e7490, #155e75); }
+.dz-wp-btn--zip:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── WebsitePreview — success state (shared) ─────────────────────────── */
+.dz-wp-btn--ok {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+
+/* ── WebsitePreview — templates button ──────────────────────────────── */
+.dz-wp-btn--tpl {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: #fcd34d;
+}
+.dz-wp-btn--tpl:hover { background: rgba(234, 179, 8, 0.2); color: #fef08a; }
+.dz-wp-btn--tpl.dz-wp-btn--active {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: rgba(234, 179, 8, 0.6);
+  color: #fef9c3;
+}
+
+/* ── WebsitePreview — template picker bar ────────────────────────────── */
+.dz-wp-tpl-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(234, 179, 8, 0.05);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.15);
+  animation: dz-fadeIn 0.18s ease;
+}
+.dz-wp-tpl-label {
+  font-size: 11px;
+  color: #a3a3a3;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.dz-wp-tpl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  background: rgba(234, 179, 8, 0.08);
+  color: #fcd34d;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-wp-tpl-btn:hover {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.5);
+  color: #fef9c3;
+  transform: translateY(-1px);
+}
+
+/* ── WebsitePreview — code tab selector bar ──────────────────────────── */
+.dz-wp-codetab-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #0e0e16;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.dz-wp-codetab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #71717a;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-wp-codetab:hover { background: rgba(255,255,255,0.06); color: #d4d4d8; }
+.dz-wp-codetab--active {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #c4b5fd;
+  font-weight: 600;
+}
+.dz-wp-codetab-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* ── WebsitePreview — empty code tab state ───────────────────────────── */
+.dz-wp-empty-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: #52525b;
+  font-size: 13px;
+  font-style: italic;
+}
+
+@keyframes dz-fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

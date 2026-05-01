@@ -2009,6 +2009,26 @@ body:has(.dzt-app) {
   animation: spin 1s linear infinite;
 }
 
+.ocr-text-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #555;
+  direction: rtl;
+  padding: 0 2px;
+  flex-wrap: wrap;
+}
+.ocr-stat-value {
+  color: #888;
+  font-weight: 600;
+}
+.ocr-stat-sep {
+  color: #333;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .ocr-btn-copy {
   background: #1e1e1e;
   color: #aaa;

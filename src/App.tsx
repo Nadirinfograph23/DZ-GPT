@@ -107,20 +107,46 @@ async function fetchAIResponse(
     ? JSON.stringify({ messages: messages.filter(m => m.role !== 'system') })
     : JSON.stringify({ messages, model: modelId })
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    signal,
-  })
+  const MAX_ATTEMPTS = 3
+  let lastError: Error | null = null
 
-  if (!response.ok) {
-    const errData = await response.json().catch(() => null)
-    throw new Error(errData?.error || `Server error: ${response.status}`)
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal,
+      })
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(errData?.error || `Server error: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const content = typeof data.content === 'string' ? data.content.trim() : ''
+
+      if (content) return content
+
+      console.warn(`[fetchAIResponse] Empty content on attempt ${attempt}/${MAX_ATTEMPTS}`)
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 800 * attempt))
+        continue
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err
+      lastError = err instanceof Error ? err : new Error(String(err))
+      console.warn(`[fetchAIResponse] Attempt ${attempt} failed:`, lastError.message)
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 800 * attempt))
+        continue
+      }
+    }
   }
 
-  const data = await response.json()
-  return data.content || 'No response generated.'
+  if (lastError) throw lastError
+  return '⚠️ No response generated. Please try again.'
 }
 
 // ===== CODE BLOCK =====

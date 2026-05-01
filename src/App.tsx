@@ -215,6 +215,8 @@ function App() {
   const [ocrRunning, setOcrRunning] = useState(false)
   const [ocrCorrecting, setOcrCorrecting] = useState(false)
   const [ocrProgress, setOcrProgress] = useState(0)
+  const [ocrDisplayText, setOcrDisplayText] = useState('')
+  const [ocrActionLoading, setOcrActionLoading] = useState(false)
   const ocrInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -315,6 +317,7 @@ function App() {
     setPdfText(null)
     setPdfFileName(null)
     setPdfImageOnly(false)
+    setOcrDisplayText('')
   }, [])
 
   const handleOCRFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,6 +366,8 @@ function App() {
       setOcrRunning(false)
       setOcrCorrecting(true)
       setOcrProgress(80)
+      // Show raw text immediately so user can see it while AI corrects
+      setOcrDisplayText(rawText)
 
       const correctionMessages = [
         {
@@ -398,6 +403,7 @@ function App() {
 
       setOcrProgress(100)
       setPdfText(correctedText)
+      setOcrDisplayText(correctedText)
       setPdfFileName(ocrFile.name)
       setOcrFile(null)
       console.log('[OCR] Done. Characters extracted:', correctedText.length)
@@ -409,6 +415,71 @@ function App() {
       setOcrProgress(0)
     }
   }, [ocrFile])
+
+  // Send an OCR action message to chat and optionally update the textarea.
+  // 'correct': sends correction prompt; AI response updates ocrDisplayText + pdfText.
+  // 'discuss': sends analysis prompt; AI response stays in chat only.
+  const sendOCRMessage = useCallback(async (type: 'correct' | 'discuss') => {
+    const text = ocrDisplayText.trim()
+    if (!text || isLoading || ocrActionLoading) return
+    setOcrActionLoading(true)
+
+    const messageText = type === 'correct'
+      ? `قم بتصحيح النص التالي المستخرج من OCR مع تحسين الإملاء والتنسيق دون تغيير المعنى:\n\n${text}`
+      : `هذا النص تم استخراجه من OCR. قم بتحليله ويمكنني طرح أسئلة عليه:\n\n${text}`
+
+    // Ensure there is an active chat for ocr-dz
+    let currentChatId = activeChatId
+    let currentChats = chats
+    const existingOcrChat = currentChats.find(c => c.id === currentChatId && c.modelId === 'ocr-dz')
+    if (!currentChatId || !existingOcrChat) {
+      const newChat = {
+        id: generateId(),
+        title: messageText.substring(0, 60),
+        messages: [] as Message[],
+        modelId: 'ocr-dz' as string,
+      }
+      currentChats = [newChat, ...currentChats]
+      currentChatId = newChat.id
+      setChats(currentChats)
+      setActiveChatId(currentChatId)
+    }
+
+    const userMsg: Message = { id: generateId(), role: 'user', content: messageText }
+    const withUser = currentChats.map(c =>
+      c.id === currentChatId ? { ...c, messages: [...c.messages, userMsg], title: c.messages.length === 0 ? messageText.substring(0, 60) : c.title } : c
+    )
+    setChats(withUser)
+    setIsLoading(true)
+
+    const chatForApi = withUser.find(c => c.id === currentChatId)!
+    const systemPrompt = `أنت متخصص في تنظيف النصوص المستخرجة عبر OCR وتحليلها. أجب بدقة وبشكل مفيد.`
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...chatForApi.messages.map(m => ({ role: m.role, content: m.content })),
+    ]
+
+    try {
+      const response = await fetchAIResponse(apiMessages, selectedModel)
+      const assistantMsg: Message = { id: generateId(), role: 'assistant', content: response }
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId ? { ...c, messages: [...c.messages, assistantMsg] } : c
+      ))
+      // For correction: update the textarea with the AI's cleaned text
+      if (type === 'correct') {
+        setOcrDisplayText(response)
+        setPdfText(response)
+      }
+    } catch (err) {
+      const errorMsg: Message = { id: generateId(), role: 'assistant', content: 'حدث خطأ أثناء معالجة الطلب. حاول مجدداً.' }
+      setChats(prev => prev.map(c =>
+        c.id === currentChatId ? { ...c, messages: [...c.messages, errorMsg] } : c
+      ))
+    } finally {
+      setIsLoading(false)
+      setOcrActionLoading(false)
+    }
+  }, [ocrDisplayText, isLoading, ocrActionLoading, activeChatId, chats, selectedModel])
 
   const createNewChat = useCallback(() => {
     const newChat: Chat = {
@@ -885,28 +956,54 @@ function App() {
                     id="ocr-upload"
                   />
                   {pdfFileName ? (
-                    <div className="pdf-upload-success">
-                      <div className="pdf-success-icon" style={{ color: '#00b050' }}>
-                        <CheckCircle size={32} />
-                      </div>
-                      <div className="pdf-success-text">✨ تم استخراج النص وتصحيحه بالذكاء الاصطناعي</div>
-                      <div className="pdf-file-badge">
-                        <FileText size={18} />
-                        <span className="pdf-file-name">{pdfFileName}</span>
-                        <button className="pdf-remove-btn" onClick={removePdf}>
+                    <div className="ocr-result-card">
+                      {/* Header row */}
+                      <div className="ocr-result-header">
+                        <div className="ocr-result-title">
+                          <CheckCircle size={18} style={{ color: '#00b050' }} />
+                          <span>النص المستخرج</span>
+                          <span className="ocr-result-file">{pdfFileName}</span>
+                        </div>
+                        <button className="pdf-remove-btn" onClick={removePdf} title="إزالة الملف">
                           <XIcon size={14} />
                         </button>
                       </div>
-                      <div className="pdf-search-hint">
-                        <MessageCircle size={16} />
-                        <span>يمكنك الآن طرح أسئلة حول النص المستخرج أو تحليله</span>
+
+                      {/* Editable, scrollable OCR output */}
+                      <textarea
+                        id="ocr-output"
+                        className="ocr-output"
+                        value={ocrDisplayText}
+                        onChange={e => { setOcrDisplayText(e.target.value); setPdfText(e.target.value) }}
+                        placeholder="سيظهر النص المستخرج هنا..."
+                        dir="auto"
+                        spellCheck={false}
+                      />
+
+                      {/* Action buttons */}
+                      <div className="ocr-action-row">
+                        <button
+                          className="ocr-action-btn ocr-btn-correct"
+                          onClick={() => sendOCRMessage('correct')}
+                          disabled={!ocrDisplayText.trim() || ocrActionLoading || isLoading}
+                        >
+                          {ocrActionLoading ? <Loader2 size={15} className="ocr-btn-spin" /> : '✨'}
+                          <span>تصحيح النص</span>
+                        </button>
+                        <button
+                          className="ocr-action-btn ocr-btn-discuss"
+                          onClick={() => sendOCRMessage('discuss')}
+                          disabled={!ocrDisplayText.trim() || ocrActionLoading || isLoading}
+                        >
+                          💬 <span>مناقشة النص</span>
+                        </button>
                       </div>
                     </div>
                   ) : ocrRunning || ocrCorrecting ? (
                     <div className="ocr-progress-box">
                       <Loader2 size={28} className="ocr-spin-icon" />
                       <div className="ocr-progress-label">
-                        {ocrRunning ? '🔍 جاري استخراج النص بـ Tesseract OCR...' : '✨ جاري تصحيح النص بالذكاء الاصطناعي...'}
+                        {ocrRunning ? '🔍 جاري استخراج النص بـ DZ OCR...' : '✨ جاري تصحيح النص بالذكاء الاصطناعي...'}
                       </div>
                       <div className="ocr-progress-bar-wrap">
                         <div className="ocr-progress-bar" style={{ width: `${ocrProgress}%` }} />

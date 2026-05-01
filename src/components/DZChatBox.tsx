@@ -694,20 +694,33 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
 }
 
 // ===== WEBSITE PREVIEW =====
+type WPViewport = 'mobile' | 'tablet' | 'desktop'
+const WP_VIEWPORTS: { id: WPViewport; label: string; icon: string; width: string }[] = [
+  { id: 'mobile',  label: 'موبايل',  icon: '📱', width: '375px'  },
+  { id: 'tablet',  label: 'تابلت',   icon: '📟', width: '768px'  },
+  { id: 'desktop', label: 'سطح مكتب', icon: '🖥️', width: '100%' },
+]
+
 function WebsitePreview({ htmlCode }: { htmlCode: string }) {
-  const [view, setView] = useState<'preview' | 'code'>('preview')
-  const [copied, setCopied] = useState(false)
+  const [view, setView]           = useState<'preview' | 'code'>('preview')
+  const [viewport, setViewport]   = useState<WPViewport>('desktop')
+  const [copied, setCopied]       = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+
+  const sizeKb = Math.round(new Blob([htmlCode]).size / 1024)
 
   const handleDownload = () => {
     const blob = new Blob([htmlCode], { type: 'text/html' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'dz-agent-website.html'
+    a.download = 'dz-agent-site.html'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
   }
 
   const handleCopy = () => {
@@ -716,8 +729,11 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
+
   return (
     <div className={`dz-wp-root${fullscreen ? ' dz-wp-root--fs' : ''}`}>
+      {/* ── Top toolbar ── */}
       <div className="dz-wp-toolbar">
         <div className="dz-wp-tabs">
           <button
@@ -730,37 +746,59 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
             className={`dz-wp-tab${view === 'code' ? ' dz-wp-tab--active' : ''}`}
             onClick={() => setView('code')}
           >
-            {'</>'}  الكود
+            {'</>'} الكود
           </button>
         </div>
         <div className="dz-wp-actions">
+          <span className="dz-wp-size">{sizeKb} KB</span>
           <button className="dz-wp-btn" onClick={handleCopy}>
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'تم النسخ' : 'نسخ الكود'}
+            {copied ? 'تم النسخ ✓' : 'نسخ الكود'}
           </button>
-          <button className="dz-wp-btn dz-wp-btn--dl" onClick={handleDownload}>
-            <Download size={13} /> تحميل .html
+          <button className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`} onClick={handleDownload}>
+            {downloaded ? <Check size={13} /> : <Download size={13} />}
+            {downloaded ? 'تم التحميل ✓' : 'تحميل .html'}
           </button>
-          <button className="dz-wp-btn dz-wp-btn--fs" onClick={() => setFullscreen(f => !f)} title="ملء الشاشة">
+          <button className="dz-wp-btn dz-wp-btn--fs" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}>
             {fullscreen ? '⊠' : '⊡'}
           </button>
         </div>
       </div>
 
+      {/* ── Viewport selector (only in preview mode) ── */}
+      {view === 'preview' && (
+        <div className="dz-wp-viewport-bar">
+          {WP_VIEWPORTS.map(vp => (
+            <button
+              key={vp.id}
+              className={`dz-wp-vp-btn${viewport === vp.id ? ' dz-wp-vp-btn--active' : ''}`}
+              onClick={() => setViewport(vp.id)}
+              title={vp.label}
+            >
+              {vp.icon} {vp.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Content area ── */}
       {view === 'preview' ? (
         <div className="dz-wp-frame-wrap">
           <div className="dz-wp-browser-bar">
             <span className="dz-wp-dot dz-wp-dot--r" />
             <span className="dz-wp-dot dz-wp-dot--y" />
             <span className="dz-wp-dot dz-wp-dot--g" />
-            <span className="dz-wp-url">dz-agent-website.html</span>
+            <span className="dz-wp-url">dz-agent-site.html</span>
           </div>
-          <iframe
-            srcDoc={htmlCode}
-            className="dz-wp-frame"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            title="Website Preview"
-          />
+          <div className="dz-wp-frame-scroller">
+            <iframe
+              srcDoc={htmlCode}
+              className="dz-wp-frame"
+              style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              title="Website Live Preview"
+            />
+          </div>
         </div>
       ) : (
         <div className="dz-wp-code-wrap">

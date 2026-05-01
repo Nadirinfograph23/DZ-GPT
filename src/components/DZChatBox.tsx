@@ -975,21 +975,26 @@ function WebsitePreview({
 // ===== TYPING EFFECT =====
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('')
-  const indexRef = useRef(0)
+  const indexRef  = useRef(0)
+  // Keep a stable ref to onDone so it never causes the effect to reset
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
 
   useEffect(() => {
     indexRef.current = 0
     setDisplayed('')
+    // Type ~4 chars per tick at 8ms → smooth and fast for any response length
+    const STEP = 4
     const interval = setInterval(() => {
-      indexRef.current++
+      indexRef.current = Math.min(indexRef.current + STEP, text.length)
       setDisplayed(text.slice(0, indexRef.current))
       if (indexRef.current >= text.length) {
         clearInterval(interval)
-        onDone()
+        onDoneRef.current()
       }
-    }, 6)
+    }, 8)
     return () => clearInterval(interval)
-  }, [text, onDone])
+  }, [text]) // ← onDone intentionally omitted: stored in ref above
 
   return <span>{displayed}</span>
 }
@@ -2470,14 +2475,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           showDevCard: !!data.showDevCard,
         })
       }
-
-      // Force re-render to ensure UI reflects the new state
-      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       console.error('[DZChatBox] sendMessage error:', err)
       addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
-      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null
@@ -2524,12 +2525,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         content: content || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
         richType: 'text',
       })
-      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       console.error('[DZChatBox] regenerate error:', err)
       addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
-      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null

@@ -1898,6 +1898,117 @@ body:has(.dzt-app) {
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ===== OCR RESULT CARD ===== */
+.ocr-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 600px;
+  animation: fadeIn 0.25s ease;
+}
+
+.ocr-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ocr-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.ocr-result-file {
+  color: #555;
+  font-size: 11px;
+  font-weight: 400;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ocr-output {
+  width: 100%;
+  min-height: 180px;
+  max-height: 320px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 12px 14px;
+  resize: vertical;
+  overflow-y: auto;
+  direction: auto;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.ocr-output:focus {
+  outline: none;
+  border-color: #00b050;
+}
+
+.ocr-action-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ocr-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+.ocr-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.ocr-btn-correct {
+  background: linear-gradient(135deg, #00b050, #007a36);
+  color: #fff;
+}
+.ocr-btn-correct:not(:disabled):hover {
+  background: linear-gradient(135deg, #00c85a, #009945);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,176,80,0.3);
+}
+
+.ocr-btn-discuss {
+  background: #1e2a3a;
+  color: #7ab3f0;
+  border: 1px solid #2a3d55;
+}
+.ocr-btn-discuss:not(:disabled):hover {
+  background: #243247;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(100,160,240,0.15);
+}
+
+.ocr-btn-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* ===== SIDEBAR NAVIGATION DROPDOWN ===== */
 .sidebar-nav-dropdown {
   margin: 4px 12px 8px;

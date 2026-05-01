@@ -114,14 +114,23 @@ async function fetchAIResponse(
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache',
+        },
+        cache: 'no-store',
         body,
         signal,
       })
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null)
-        throw new Error(errData?.error || `Server error: ${response.status}`)
+        const errMsg = errData?.error || `Server error: ${response.status}`
+        if (response.status === 500 && errMsg.includes('API key not configured')) {
+          return '⚠️ لم يتم تكوين مفتاح AI. يرجى إضافة AI_API_KEY في إعدادات المشروع.'
+        }
+        throw new Error(errMsg)
       }
 
       const data = await response.json()
@@ -131,7 +140,7 @@ async function fetchAIResponse(
 
       console.warn(`[fetchAIResponse] Empty content on attempt ${attempt}/${MAX_ATTEMPTS}`)
       if (attempt < MAX_ATTEMPTS) {
-        await new Promise(r => setTimeout(r, 800 * attempt))
+        await new Promise(r => setTimeout(r, 1000 * attempt))
         continue
       }
     } catch (err) {
@@ -139,14 +148,14 @@ async function fetchAIResponse(
       lastError = err instanceof Error ? err : new Error(String(err))
       console.warn(`[fetchAIResponse] Attempt ${attempt} failed:`, lastError.message)
       if (attempt < MAX_ATTEMPTS) {
-        await new Promise(r => setTimeout(r, 800 * attempt))
+        await new Promise(r => setTimeout(r, 1000 * attempt))
         continue
       }
     }
   }
 
   if (lastError) throw lastError
-  return '⚠️ No response generated. Please try again.'
+  return '⚠️ لم يتم توليد رد. يرجى المحاولة مرة أخرى.'
 }
 
 // ===== CODE BLOCK =====

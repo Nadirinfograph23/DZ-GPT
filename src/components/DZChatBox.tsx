@@ -783,7 +783,6 @@ function WebsitePreview({
     else setEditedJs(v)
   }
   const activeCode = activeRaw
-  const codeLang   = codeTab === 'html' ? 'language-html' : codeTab === 'css' ? 'language-css' : 'language-javascript'
 
   const applyEdits = () => {
     let src = editedHtml

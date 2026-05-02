@@ -892,11 +892,14 @@ import {
   EMERGENCY_INFO,
 } from './lib/doctorSearch.js'
 
-// ===== DZ LANGUAGE LAYER (additive: normalization, intent hint, moderation, learning) =====
+// ===== DZ LANGUAGE LAYER V2 (Algerian Darja Understanding System) =====
 import {
   normalizeDarija,
   detectStyle as detectDzStyle,
+  detectIntent as detectDzIntent,
   detectLightIntent,
+  extractEntities as extractDzEntities,
+  buildResponseStyle,
   moderateMessage,
   recordPendingLearning,
 } from './lib/dzLanguage.js'
@@ -5457,35 +5460,76 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
-  // ── DZ Language pre-layer: moderation → normalization → light intent ──
-  // Runs BEFORE every existing handler. It does NOT replace any logic; it
-  // only blocks profanity early and adds an understanding hint for downstream.
+  // ══════════════════════════════════════════════════════════════════════
+  // DZ LANGUAGE LAYER V2 — Algerian Darja Understanding System
+  // Pipeline: Moderation → Normalization → Intent → Entities → Style
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Step 1: Moderation guard
   const moderation = moderateMessage(lastUserMessage)
   if (!moderation.ok) {
-    // Don’t teach or store anything from blocked messages.
     return res.status(200).json({ content: moderation.replyIfBlocked })
   }
+
+  // Step 2: Style detection (darija | franco | mixed | msa | french | unknown)
   const dzStyle = detectDzStyle(lastUserMessage)
+
+  // Step 3: Normalization — Franco-Arab & Darja → normalized Arabic for intent understanding
   const dzNorm = normalizeDarija(lastUserMessage)
-  const dzIntent = detectLightIntent(lastUserMessage)
-  // Best-effort, non-blocking learning (never stores sensitive/profane data)
-  if (dzNorm.changed) {
+
+  // Step 4: Full intent detection V2 (20 intent types with confidence scores)
+  const dzIntent   = detectDzIntent(lastUserMessage)
+  const dzEntities = extractDzEntities(lastUserMessage)
+
+  // Step 5: Response style instruction for the AI model
+  const dzResponseStyle = buildResponseStyle(dzStyle, dzIntent)
+
+  // Step 6: Self-learning — record Darja patterns (best-effort, non-blocking)
+  if (dzNorm.changed || dzStyle === 'darija' || dzStyle === 'franco') {
     recordPendingLearning(
       { input: lastUserMessage, normalized: dzNorm.normalized },
-      { moderation, style: dzStyle, intent: dzIntent.type },
+      { moderation, style: dzStyle, intent: dzIntent.type, entities: dzEntities },
     )
   }
-  // Internal-only context to nudge the downstream model — never shown to user.
-  // Existing AI request flow appends a system prompt; we add this as another.
-  const dzLanguageContext = (dzStyle === 'darija' || dzStyle === 'mixed' || dzNorm.changed)
-    ? `LANGUAGE_HINT: المستخدم يكتب باللهجة الجزائرية${dzStyle === 'mixed' ? ' المختلطة (عربي+فرانكو)' : ''}. ` +
-      `الترجمة التقريبية للنية: "${dzNorm.normalized}". ` +
-      `النية المحتملة: ${dzIntent.type}. ` +
-      `أجب بنفس أسلوب المستخدم (دارجة جزائرية محترمة) وحافظ على شخصية DZ Agent.`
-    : (dzStyle === 'msa'
-        ? 'LANGUAGE_HINT: المستخدم يكتب بالعربية الفصحى — أجب بالفصحى مع الحفاظ على شخصية DZ Agent.'
-        : '')
 
+  // Build rich language context injected into system prompt (never shown to user)
+  const _styleLabel = {
+    darija: 'دارجة جزائرية', franco: 'فرانكو-عربي جزائري',
+    mixed: 'مزيج دارجة+فرنسية', msa: 'عربية فصحى',
+    french: 'فرنسية', unknown: 'غير محددة',
+  }[dzStyle] || dzStyle
+
+  const _entityParts = []
+  if (dzEntities.location)    _entityParts.push('الموقع: ' + dzEntities.location)
+  if (dzEntities.serviceType) _entityParts.push('الخدمة: ' + dzEntities.serviceType)
+  if (dzEntities.language)    _entityParts.push('اللغة: ' + dzEntities.language)
+  if (dzEntities.timeframe)   _entityParts.push('الزمن: ' + dzEntities.timeframe)
+
+  const dzLanguageContext = (() => {
+    const isDarijaLike = ['darija','franco','mixed'].includes(dzStyle) || dzNorm.changed
+    if (!isDarijaLike && dzStyle !== 'french' && dzStyle !== 'msa') return ''
+
+    if (dzStyle === 'msa') {
+      return '🗣️ LANGUAGE_HINT: المستخدم يكتب بالعربية الفصحى — أجب بالفصحى مع الحفاظ على شخصية DZ Agent.'
+    }
+    if (dzStyle === 'french') {
+      return "🗣️ LANGUAGE_HINT: L'utilisateur écrit en français. Réponds en français naturel et amical, en gardant le caractère DZ Agent."
+    }
+
+    const lines = [
+      '━━━ DZ LANGUAGE LAYER V2 ━━━',
+      '🗣️ لغة المستخدم: ' + _styleLabel,
+    ]
+    if (dzNorm.changed) lines.push('🔄 الترجمة الداخلية: "' + dzNorm.normalized + '"')
+    lines.push('🎯 النية: ' + dzIntent.type + (dzIntent.subtype ? ' + ' + dzIntent.subtype : '') + ' (ثقة ' + Math.round(dzIntent.confidence * 100) + '%)')
+    if (_entityParts.length) lines.push('📍 ' + _entityParts.join(' | '))
+    lines.push('')
+    lines.push('📋 أسلوب الرد (إلزامي): ' + dzResponseStyle)
+    lines.push('⚠️ لا تُعلم المستخدم بأي معالجة لغوية — طبّق الأسلوب بصمت تام.')
+    lines.push('⚠️ لا تقل "لم أفهم" — حاول دائماً تفسير القصد والإجابة بشكل مفيد.')
+    lines.push('⚠️ إذا كانت كلمة دارجة غير معروفة → اعتبرها سياقاً وأجب بشكل طبيعي.')
+    return lines.join('\n')
+  })()
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)

@@ -1384,9 +1384,25 @@ function RepoActionPanel({
 }
 
 // ===== GPS NEARBY CARD =====
+interface NearbyResult {
+  osmId?: number
+  name: string
+  nameAr?: string
+  nameFr?: string
+  lat: number
+  lng: number
+  distanceM: number
+  distanceLabel: string
+  phone?: string
+  opening?: string
+  gmapsDir: string
+  gmapsPlace: string
+}
+
 function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
   const [resolvedMeta, setResolvedMeta] = useState<Record<string, unknown> | null>(null)
+  const [nearbyResults, setNearbyResults] = useState<NearbyResult[]>([])
   const [errMsg, setErrMsg] = useState('')
   const s = (v: unknown) => String(v ?? '')
 
@@ -1414,6 +1430,7 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
           const data = await r.json()
           if (data.mapMeta) {
             setResolvedMeta(data.mapMeta)
+            setNearbyResults(Array.isArray(data.results) ? data.results : [])
             setPhase('ready')
           } else {
             setErrMsg(data.error || 'لم يتمكن من تحميل الخريطة')
@@ -1433,7 +1450,71 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
   }
 
   if (phase === 'ready' && resolvedMeta) {
-    return <MapPreview mapHtml="" mapMeta={resolvedMeta} />
+    return (
+      <div className="dz-nearby-resolved">
+        <MapPreview mapHtml="" mapMeta={resolvedMeta} />
+
+        {nearbyResults.length > 0 && (
+          <div className="dz-nearby-results">
+            <div className="dz-nearby-results-header">
+              <span>{poiIcon}</span>
+              <strong>أقرب {poiNameAr} — {nearbyResults.length} نتيجة</strong>
+            </div>
+            <div className="dz-nearby-list">
+              {nearbyResults.map((r, i) => (
+                <div key={r.osmId ?? i} className="dz-nearby-item">
+                  <div className="dz-nearby-item-rank">#{i + 1}</div>
+                  <div className="dz-nearby-item-body">
+                    <div className="dz-nearby-item-name">
+                      {r.nameAr || r.name}
+                      {r.nameAr && r.nameFr && r.nameAr !== r.nameFr && (
+                        <span className="dz-nearby-item-name-fr"> ({r.nameFr})</span>
+                      )}
+                    </div>
+                    <div className="dz-nearby-item-meta">
+                      <span className="dz-nearby-dist-badge">{r.distanceLabel}</span>
+                      {r.phone && <span className="dz-nearby-phone">📞 {r.phone}</span>}
+                      {r.opening && <span className="dz-nearby-opening">🕐 {r.opening}</span>}
+                    </div>
+                  </div>
+                  <div className="dz-nearby-item-actions">
+                    <a
+                      href={r.gmapsDir}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dz-nearby-action-btn dz-nearby-action-btn--nav"
+                    >
+                      🚗 مسار
+                    </a>
+                    <a
+                      href={r.gmapsPlace}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dz-nearby-action-btn dz-nearby-action-btn--info"
+                    >
+                      <ExternalLink size={11} /> تفاصيل
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="dz-nearby-results-footer">
+              بيانات حقيقية من OpenStreetMap · ضمن {nearbyResults[nearbyResults.length - 1]?.distanceLabel || '3 كم'}
+            </div>
+          </div>
+        )}
+
+        {nearbyResults.length === 0 && (
+          <div className="dz-nearby-empty">
+            ℹ️ لم يتم العثور على {poiNameAr} في قاعدة بيانات OSM ضمن 3 كم. جرّب
+            {' '}
+            <a href={(resolvedMeta.gmapsLink as string) || '#'} target="_blank" rel="noopener noreferrer">
+              البحث في Google Maps
+            </a>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -1442,7 +1523,7 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
         <span className="dz-gps-nearby-poi-icon">{poiIcon}</span>
         <div className="dz-gps-nearby-info">
           <strong>{poiKey ? `أقرب ${poiNameAr} منك` : 'البحث القريب منك'}</strong>
-          <span>شارك موقعك لعرض الخريطة</span>
+          <span>شارك موقعك لعرض الخريطة والنتائج القريبة</span>
         </div>
       </div>
       {phase === 'error' && (
@@ -1455,12 +1536,12 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
         type="button"
       >
         {phase === 'loading'
-          ? <><Loader2 size={15} className="dz-spin-icon" /> جارٍ تحديد موقعك...</>
-          : <><MapPin size={15} /> 📍 تفعيل GPS وعرض الخريطة</>
+          ? <><Loader2 size={15} className="dz-spin-icon" /> جارٍ البحث في المنطقة...</>
+          : <><MapPin size={15} /> 📍 تفعيل GPS وعرض أقرب {poiNameAr}</>
         }
       </button>
       <div className="dz-gps-nearby-hint">
-        سيُطلب منك الإذن مرة واحدة فقط • لا يتم حفظ موقعك
+        سيُطلب منك الإذن مرة واحدة فقط • لا يتم حفظ موقعك • بيانات OpenStreetMap
       </div>
     </div>
   )

@@ -380,11 +380,14 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }
 
-  const loadWeather = useCallback(async (city: string) => {
+  const loadWeather = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setWeatherLoading(true)
     try {
+      const url = coords
+        ? `/api/dz-agent/weather?lat=${coords.lat}&lon=${coords.lon}`
+        : `/api/dz-agent/weather?city=${encodeURIComponent(city)}`
       const result = await withRetry(async () => {
-        const r = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Weather API error: ${r.status}`)
         return r.json()
       }, 1)
@@ -397,11 +400,14 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
-  const loadPrayer = useCallback(async (city: string) => {
+  const loadPrayer = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setPrayerLoading(true)
     try {
+      const url = coords
+        ? `/api/dz-agent/prayer?lat=${coords.lat}&lon=${coords.lon}`
+        : `/api/dz-agent/prayer?city=${encodeURIComponent(city)}`
       const result = await withRetry(async () => {
-        const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
         return r.json()
       }, 1)
@@ -479,42 +485,53 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     setTimeout(() => setWelcomeVisible(false), 4000)
   }, [saveCity, loadWeather, loadPrayer])
 
-  // Detect location via browser Geolocation API → Nominatim reverse geocode
+  // Detect location via browser Geolocation API → backend nearest-wilaya (no external API)
   const detectLocation = useCallback(async () => {
     setGeoLoading(true)
     setGeoError(null)
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 5 * 60 * 1000,
+        })
       )
-      const { latitude, longitude } = position.coords
-      const r = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
-        { headers: { 'User-Agent': 'DZ-GPT/1.0' } }
-      )
-      if (!r.ok) throw new Error('Nominatim error')
-      const geo = await r.json()
-      const stateName = geo.address?.state || geo.address?.county || geo.address?.city || ''
+      const { latitude: lat, longitude: lon } = position.coords
+      const coords = { lat, lon }
 
-      // Match to closest wilaya
-      const lower = stateName.toLowerCase()
-      const match = WILAYAS.find(w =>
-        lower.includes(w.en.toLowerCase().split(' ')[0]) ||
-        (w.ar && stateName.includes(w.ar.split(' ')[0]))
-      ) || WILAYAS.find(w => w.en === 'Algiers')
+      // 1. Ask our backend for the nearest wilaya (pure math, no external API)
+      let nearestEn = 'Algiers'
+      let nearestAr = 'الجزائر'
+      try {
+        const geoR = await fetch(`/api/dz-agent/reverse-geocode?lat=${lat}&lon=${lon}`)
+        if (geoR.ok) {
+          const geoData = await geoR.json()
+          if (geoData.en) { nearestEn = geoData.en; nearestAr = geoData.ar }
+        }
+      } catch { /* silently use default */ }
 
-      if (match) changeCity(match.en)
-      else setGeoError('لم يتم التعرف على ولايتك — اختر يدوياً')
+      // 2. Load prayer & weather directly with GPS coords (most accurate)
+      loadPrayer(nearestEn, coords)
+      loadWeather(nearestEn, coords)
+
+      // 3. Update selected city for display & persist
+      saveCity(nearestEn)
+      setWelcomeCity(nearestAr)
+      setWelcomeVisible(true)
+      setTimeout(() => setWelcomeVisible(false), 4000)
     } catch (err: unknown) {
       if (err instanceof GeolocationPositionError && err.code === 1) {
-        setGeoError('لم يتم السماح بالوصول للموقع')
+        setGeoError('لم يتم السماح بالوصول للموقع — فعّل الـ GPS من إعدادات المتصفح')
+      } else if (err instanceof GeolocationPositionError && err.code === 3) {
+        setGeoError('انتهت مهلة GPS — حاول مرة أخرى')
       } else {
         setGeoError('تعذّر تحديد الموقع')
       }
     } finally {
       setGeoLoading(false)
     }
-  }, [changeCity])
+  }, [loadPrayer, loadWeather, saveCity])
 
   useEffect(() => {
     loadDashboard()

@@ -388,6 +388,77 @@ const CITY_COORDS = {
   Tizi:        { lat: 36.711, lon: 4.046,  ar: 'تيزي وزو' },
 }
 
+// All 58 wilayas with coords — used for GPS nearest-wilaya matching
+const WILAYA_COORDS_FULL = [
+  { en: 'Adrar',               ar: 'أدرار',            lat: 27.874, lon: -0.284 },
+  { en: 'Chlef',               ar: 'الشلف',            lat: 36.169, lon:  1.330 },
+  { en: 'Laghouat',            ar: 'الأغواط',          lat: 33.800, lon:  2.865 },
+  { en: 'Oum el Bouaghi',      ar: 'أم البواقي',       lat: 35.879, lon:  7.114 },
+  { en: 'Batna',               ar: 'باتنة',            lat: 35.556, lon:  6.174 },
+  { en: 'Bejaia',              ar: 'بجاية',            lat: 36.755, lon:  5.084 },
+  { en: 'Biskra',              ar: 'بسكرة',            lat: 34.850, lon:  5.731 },
+  { en: 'Bechar',              ar: 'بشار',             lat: 31.617, lon: -2.216 },
+  { en: 'Blida',               ar: 'البليدة',          lat: 36.470, lon:  2.828 },
+  { en: 'Bouira',              ar: 'البويرة',          lat: 36.381, lon:  3.900 },
+  { en: 'Tamanrasset',         ar: 'تمنراست',          lat: 22.785, lon:  5.523 },
+  { en: 'Tebessa',             ar: 'تبسة',             lat: 35.404, lon:  8.120 },
+  { en: 'Tlemcen',             ar: 'تلمسان',           lat: 34.878, lon: -1.316 },
+  { en: 'Tiaret',              ar: 'تيارت',            lat: 35.371, lon:  1.317 },
+  { en: 'Tizi Ouzou',          ar: 'تيزي وزو',         lat: 36.711, lon:  4.046 },
+  { en: 'Algiers',             ar: 'الجزائر',          lat: 36.737, lon:  3.086 },
+  { en: 'Djelfa',              ar: 'الجلفة',           lat: 34.670, lon:  3.263 },
+  { en: 'Jijel',               ar: 'جيجل',             lat: 36.820, lon:  5.766 },
+  { en: 'Setif',               ar: 'سطيف',             lat: 36.190, lon:  5.412 },
+  { en: 'Saida',               ar: 'سعيدة',            lat: 34.831, lon:  0.151 },
+  { en: 'Skikda',              ar: 'سكيكدة',           lat: 36.878, lon:  6.906 },
+  { en: 'Sidi bel Abbes',      ar: 'سيدي بلعباس',      lat: 35.191, lon: -0.630 },
+  { en: 'Annaba',              ar: 'عنابة',            lat: 36.897, lon:  7.747 },
+  { en: 'Guelma',              ar: 'قالمة',            lat: 36.462, lon:  7.432 },
+  { en: 'Constantine',         ar: 'قسنطينة',          lat: 36.365, lon:  6.614 },
+  { en: 'Medea',               ar: 'المدية',           lat: 36.264, lon:  2.751 },
+  { en: 'Mostaganem',          ar: 'مستغانم',          lat: 35.931, lon:  0.089 },
+  { en: 'Msila',               ar: 'المسيلة',          lat: 35.706, lon:  4.543 },
+  { en: 'Mascara',             ar: 'معسكر',            lat: 35.396, lon:  0.139 },
+  { en: 'Ouargla',             ar: 'ورقلة',            lat: 31.951, lon:  5.325 },
+  { en: 'Oran',                ar: 'وهران',            lat: 35.697, lon: -0.633 },
+  { en: 'El Bayadh',           ar: 'البيض',            lat: 33.684, lon:  1.016 },
+  { en: 'Illizi',              ar: 'إليزي',            lat: 26.508, lon:  8.477 },
+  { en: 'Bordj Bou Arreridj',  ar: 'برج بوعريريج',     lat: 36.073, lon:  4.763 },
+  { en: 'Boumerdes',           ar: 'بومرداس',          lat: 36.762, lon:  3.477 },
+  { en: 'El Tarf',             ar: 'الطارف',           lat: 36.767, lon:  8.313 },
+  { en: 'Tindouf',             ar: 'تندوف',            lat: 27.674, lon: -8.147 },
+  { en: 'Tissemsilt',          ar: 'تيسمسيلت',         lat: 35.607, lon:  1.812 },
+  { en: 'El Oued',             ar: 'الوادي',           lat: 33.356, lon:  6.863 },
+  { en: 'Khenchela',           ar: 'خنشلة',            lat: 35.436, lon:  7.146 },
+  { en: 'Souk Ahras',          ar: 'سوق أهراس',        lat: 36.286, lon:  7.951 },
+  { en: 'Tipaza',              ar: 'تيبازة',           lat: 36.589, lon:  2.449 },
+  { en: 'Mila',                ar: 'ميلة',             lat: 36.450, lon:  6.264 },
+  { en: 'Ain Defla',           ar: 'عين الدفلى',       lat: 36.264, lon:  1.967 },
+  { en: 'Naama',               ar: 'النعامة',          lat: 33.267, lon: -0.313 },
+  { en: 'Ain Temouchent',      ar: 'عين تموشنت',       lat: 35.298, lon: -1.140 },
+  { en: 'Ghardaia',            ar: 'غرداية',           lat: 32.490, lon:  3.673 },
+  { en: 'Relizane',            ar: 'غليزان',           lat: 35.738, lon:  0.557 },
+  { en: 'Timimoun',            ar: 'تيميمون',          lat: 29.264, lon:  0.234 },
+  { en: 'Bordj Badji Mokhtar', ar: 'برج باجي مختار',   lat: 21.334, lon:  0.956 },
+  { en: 'Ouled Djellal',       ar: 'أولاد جلال',       lat: 34.420, lon:  5.067 },
+  { en: 'Beni Abbes',          ar: 'بني عباس',         lat: 30.128, lon: -2.163 },
+  { en: 'In Salah',            ar: 'عين صالح',         lat: 27.197, lon:  2.468 },
+  { en: 'In Guezzam',          ar: 'عين قزام',         lat: 19.567, lon:  5.771 },
+  { en: 'Touggourt',           ar: 'تقرت',             lat: 33.100, lon:  6.067 },
+  { en: 'Djanet',              ar: 'جانت',             lat: 24.554, lon:  9.484 },
+  { en: 'El Meghaier',         ar: 'المغير',           lat: 33.945, lon:  5.924 },
+  { en: 'El Meniaa',           ar: 'المنيعة',          lat: 30.584, lon:  2.880 },
+]
+
+function findNearestWilaya(lat, lon) {
+  let best = null, bestDist = Infinity
+  for (const w of WILAYA_COORDS_FULL) {
+    const d = Math.pow(w.lat - lat, 2) + Math.pow(w.lon - lon, 2)
+    if (d < bestDist) { bestDist = d; best = w }
+  }
+  return best
+}
+
 const WMO_CODES = {
   0: 'صافٍ', 1: 'صافٍ غالباً', 2: 'غائم جزئياً', 3: 'غائم',
   45: 'ضبابي', 48: 'ضبابي مع صقيع',
@@ -401,14 +472,18 @@ const WMO_CODES = {
 async function fetchWeatherOpenMeteo(city) {
   const coords = CITY_COORDS[city]
   if (!coords) throw new Error(`No coords for city: ${city}`)
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Africa%2FAlgiers&forecast_days=1`
+  return fetchWeatherByCoords(coords.lat, coords.lon, city)
+}
+
+async function fetchWeatherByCoords(lat, lon, cityLabel) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Africa%2FAlgiers&forecast_days=1`
   const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
   if (!r.ok) throw new Error(`open-meteo HTTP ${r.status}`)
   const d = await r.json()
   const cur = d.current
   const wmo = cur?.weather_code
   return {
-    city,
+    city: cityLabel || `${lat.toFixed(3)},${lon.toFixed(3)}`,
     temp: Math.round(cur?.temperature_2m ?? 0),
     feels_like: Math.round(cur?.apparent_temperature ?? 0),
     temp_min: Math.round(d.daily?.temperature_2m_min?.[0] ?? 0),
@@ -3094,7 +3169,68 @@ async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
   }
 }
 
+async function fetchPrayerByCoords(lat, lon, cityLabel) {
+  const cacheKey = `coords-${lat.toFixed(3)}-${lon.toFixed(3)}`
+  const cached = PRAYER_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < PRAYER_CACHE_TTL) return cached.data
+  try {
+    const today = new Date()
+    const dd = String(today.getDate()).padStart(2, '0')
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const yyyy = today.getFullYear()
+    const url = `https://api.aladhan.com/v1/timings/${dd}-${mm}-${yyyy}?latitude=${lat}&longitude=${lon}&method=2`
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error(`aladhan coords error: ${r.status}`)
+    const d = await r.json()
+    if (d.code !== 200) throw new Error('aladhan returned non-200')
+    const t = d.data?.timings
+    const result = {
+      city: cityLabel || 'موقعك الحالي',
+      source: 'aladhan.com',
+      date: d.data?.date?.readable || new Date().toLocaleDateString('ar-DZ'),
+      times: {
+        'الفجر': t?.Fajr || '--',
+        'الشروق': t?.Sunrise || '--',
+        'الظهر': t?.Dhuhr || '--',
+        'العصر': t?.Asr || '--',
+        'المغرب': t?.Maghrib || '--',
+        'العشاء': t?.Isha || '--',
+      },
+    }
+    PRAYER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
+    return result
+  } catch (err) {
+    console.error('[Prayer] aladhan coords error:', err.message)
+    return null
+  }
+}
+
+// GPS reverse-geocode: returns nearest wilaya by Euclidean distance (no external API)
+app.get('/api/dz-agent/reverse-geocode', (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+  if (isNaN(lat) || isNaN(lon)) return res.status(400).json({ error: 'lat/lon required' })
+  const w = findNearestWilaya(lat, lon)
+  if (!w) return res.status(404).json({ error: 'no match' })
+  res.json({ en: w.en, ar: w.ar, lat: w.lat, lon: w.lon })
+})
+
 app.get('/api/dz-agent/prayer', async (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+
+  // GPS mode: use coordinates directly
+  if (!isNaN(lat) && !isNaN(lon)) {
+    const nearest = findNearestWilaya(lat, lon)
+    const label = nearest?.ar || 'موقعك الحالي'
+    const data = await fetchPrayerByCoords(lat, lon, label)
+    if (data) return res.json({ ...data, gps: true })
+    // fallback to nearest city
+    const fallbackCity = nearest?.en || 'Algiers'
+    const fallback = await fetchPrayerTimesAladhan(fallbackCity)
+    if (fallback) return res.json({ ...fallback, gps: true })
+  }
+
   const city = String(req.query.city || 'Algiers').slice(0, 80)
   const data = await fetchPrayerTimesAladhan(city)
   if (!data) {
@@ -3118,13 +3254,28 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
 // Fallback: stale cache — NEVER returns empty
 
 app.get('/api/dz-agent/weather', async (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+
+  // GPS mode: use coordinates directly via open-meteo
+  if (!isNaN(lat) && !isNaN(lon)) {
+    try {
+      const nearest = findNearestWilaya(lat, lon)
+      const label = nearest?.ar || 'موقعك الحالي'
+      const data = await fetchWeatherByCoords(lat, lon, label)
+      return res.json({ ...data, gps: true })
+    } catch (err) {
+      console.error('[Weather] GPS coords fetch failed:', err.message)
+      // fallback to nearest city name
+    }
+  }
+
   const city = String(req.query.city || 'Algiers').slice(0, 80)
   try {
     const data = await fetchCityWeatherResilient(city)
     return res.json(data)
   } catch (err) {
     console.error('[Weather] All sources failed:', err.message)
-    // Task 24: Fail-safe — always return structured data
     return res.status(200).json({
       city,
       temp: null, feels_like: null, temp_min: null, temp_max: null,

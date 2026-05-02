@@ -904,6 +904,15 @@ import {
   recordPendingLearning,
 } from './lib/dzLanguage.js'
 
+// ===== DZ PLACE SEARCH (OpenStreetMap Nominatim — no API key) =====
+import {
+  searchPlaces,
+  buildPlaceResponse,
+  PLACE_INTENTS,
+  INTENT_TO_SERVICE,
+  SERVICE_CONFIG,
+} from './lib/dzPlaceSearch.js'
+
 const DOCTOR_SOURCE_COUNT = 8
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
@@ -5574,6 +5583,44 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
   }
+
+  // ── DZ Place Search (OSM Nominatim) ─────────────────────────────────────
+  // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
+  // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
+  if (PLACE_INTENTS.has(dzIntent.type) && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
+    const intentService = INTENT_TO_SERVICE[dzIntent.type]
+    const serviceType   = intentService || dzEntities.serviceType || 'restaurant'
+    const location      = dzEntities.location
+
+    console.log(`[DZ-Places] intent=${dzIntent.type} service=${serviceType} location=${location}`)
+    try {
+      const placeResults = await searchPlaces(serviceType, location, 8)
+      if (placeResults && placeResults.length > 0) {
+        const placeResp = buildPlaceResponse(placeResults, serviceType, location, dzStyle)
+        const svc = SERVICE_CONFIG[serviceType] || {}
+        const noLocMsg = !location
+          ? (dzStyle === 'french'
+              ? `\n\n> **Conseil :** Précisez la ville ou la wilaya pour des résultats plus proches (ex: "pharmacie à Oran").`
+              : dzStyle === 'msa'
+                ? `\n\n> **ملاحظة:** حدّد الولاية أو المدينة للحصول على نتائج أقرب إليك (مثال: "صيدلية في وهران").`
+                : `\n\n> **نصيحة:** حدد الولاية ولا المدينة باش نلقيلك الأقرب (مثال: "${svc.labelAr || 'مكان'} في وهران").`)
+          : ''
+        return res.status(200).json({
+          content:  placeResp.text + noLocMsg,
+          isMap:    !!placeResp.mapHtml,
+          mapHtml:  placeResp.mapHtml || null,
+          mapMeta:  { type: 'places', service: serviceType, location, count: placeResp.count },
+          placeSearch: true,
+        })
+      }
+      // Results empty: fall through to AI handler with enriched prompt
+      console.log(`[DZ-Places] No results for service=${serviceType} location=${location} — falling through to AI`)
+    } catch (placeErr) {
+      console.error('[DZ-Places] Error:', placeErr.message)
+      // Non-fatal — fall through to AI handler
+    }
+  }
+
 
   // ── DZ Maps Intelligence Engine ──────────────────────────────────────────
   if (isMapQuery(lastUserMessage)) {

@@ -1471,10 +1471,10 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
         <div className="dz-map-card-title">
           <MapPin size={14} style={{ color: '#00ff90', flexShrink: 0 }} />
           <span>{title}</span>
-          {isPoi && meta.count && (
+          {isPoi && !!meta.count && (
             <span className="dz-map-badge dz-map-badge--green">{s(meta.count)} نتيجة</span>
           )}
-          {isRoute && meta.distanceKm && (
+          {isRoute && !!meta.distanceKm && (
             <span className="dz-map-badge dz-map-badge--orange">📏 {s(meta.distanceKm)} كم</span>
           )}
         </div>
@@ -1492,10 +1492,10 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
             sandbox="allow-scripts allow-same-origin"
             title={title}
           />
-          {isRoute && meta.distanceKm && (
+          {isRoute && !!meta.distanceKm && (
             <div className="dz-map-route-overlay">
               <div className="dz-map-route-stat" style={{ color: '#00ff90' }}>📏 {s(meta.distanceKm)} كم</div>
-              {meta.durationMin && <div className="dz-map-route-stat" style={{ color: '#aaa' }}>⏱️ ~{s(meta.durationMin)} دقيقة</div>}
+              {!!meta.durationMin && <div className="dz-map-route-stat" style={{ color: '#aaa' }}>⏱️ ~{s(meta.durationMin)} دقيقة</div>}
             </div>
           )}
         </div>

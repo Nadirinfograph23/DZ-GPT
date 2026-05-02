@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
-  GitBranch, Cloud, BookOpen,
+  BookOpen,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
@@ -77,24 +77,6 @@ interface CurrencyData {
   last_update?: string
 }
 
-interface SyncStatusData {
-  status: 'synced' | 'out_of_sync' | 'unknown'
-  branch: string
-  repository: string
-  github?: {
-    commitSha: string | null
-    shortSha: string | null
-  }
-  vercel?: {
-    commitSha: string | null
-    shortSha: string | null
-    deploymentUrl: string | null
-    state: string
-    source: string
-  }
-  checkedAt: string
-  error?: string
-}
 
 const PRAYER_ICONS: Record<string, string> = {
   'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤️', 'المغرب': '🌇', 'العشاء': '🌙',
@@ -363,8 +345,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
 
   const [currencyData, setCurrencyData] = useState<CurrencyData | null>(null)
   const [currencyLoading, setCurrencyLoading] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<SyncStatusData | null>(null)
-  const [syncLoading, setSyncLoading] = useState(false)
 
   const [standingsData, setStandingsData] = useState<{ standings: { rank: string; team: string; played: string; wins: string; draws: string; losses: string; points: string }[]; source: string; fetchedAt: string } | null>(null)
   const [standingsLoading, setStandingsLoading] = useState(false)
@@ -376,7 +356,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
   const [welcomeVisible, setWelcomeVisible] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'sync' | 'quran'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -451,22 +431,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
-  const loadSyncStatus = useCallback(async () => {
-    setSyncLoading(true)
-    try {
-      const result = await withRetry(async () => {
-        const r = await fetch('/api/dz-agent/sync-status')
-        if (!r.ok) throw new Error(`Sync API error: ${r.status}`)
-        return r.json()
-      }, 1)
-      setSyncStatus(result)
-    } catch (err) {
-      console.error('[DZDashboard] loadSyncStatus failed:', err)
-      setSyncStatus(null)
-    } finally {
-      setSyncLoading(false)
-    }
-  }, [])
 
   const loadStandings = useCallback(async () => {
     setStandingsLoading(true)
@@ -557,7 +521,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     loadPrayer(selectedCity)
     loadWeather(selectedCity)
     loadCurrency()
-    loadSyncStatus()
     loadStandings()
     loadGlobalLeagues()
   }, [])
@@ -572,7 +535,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     { key: 'global' as const, label: 'الدوريات العالمية', icon: '🌍' },
     { key: 'tech' as const, label: 'الأخبار التقنية', icon: '💻' },
     { key: 'currency' as const, label: 'أسعار الصرف', icon: '💱' },
-    { key: 'sync' as const, label: 'التزامن', icon: '🔄' },
   ]
 
   const matches = data?.lfp?.matches || []
@@ -654,10 +616,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus(); loadStandings(); loadGlobalLeagues({ force: true }) }}
+          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadStandings(); loadGlobalLeagues({ force: true }) }}
           title="تحديث"
         >
-          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || syncLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
+          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
         </button>
       </div>
 
@@ -697,63 +659,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               <div className="dzd-error-state">
                 <span>⚠️ تعذّر تحميل مواقيت الصلاة</span>
                 <button className="dzd-retry-btn" onClick={() => loadPrayer(selectedCity)}>إعادة المحاولة</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeSection === 'sync' && (
-          <div className="dzd-sync-panel">
-            {syncLoading ? (
-              <div className="dzd-skeleton-grid">
-                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton" />)}
-              </div>
-            ) : syncStatus ? (
-              <div className={`dzd-sync-card dzd-sync-card--${syncStatus.status}`}>
-                <div className="dzd-sync-header">
-                  <span className="dzd-sync-badge">
-                    {syncStatus.status === 'synced' ? 'متزامن' : syncStatus.status === 'out_of_sync' ? 'غير متزامن' : 'غير معروف'}
-                  </span>
-                  <button className="dzd-sync-refresh" onClick={loadSyncStatus}>
-                    <RefreshCw size={12} /> فحص الآن
-                  </button>
-                </div>
-                <div className="dzd-sync-summary">
-                  {syncStatus.status === 'synced'
-                    ? 'GitHub و Vercel يعملان على نفس النسخة.'
-                    : syncStatus.status === 'out_of_sync'
-                      ? 'يوجد اختلاف بين آخر commit في GitHub والنسخة المنشورة على Vercel.'
-                      : syncStatus.error || 'تعذّر تأكيد التزامن حالياً.'}
-                </div>
-                <div className="dzd-sync-grid">
-                  <div className="dzd-sync-item">
-                    <GitBranch size={16} />
-                    <div>
-                      <span className="dzd-sync-label">GitHub</span>
-                      <strong>{syncStatus.github?.shortSha || 'غير متاح'}</strong>
-                      <small>{syncStatus.branch}</small>
-                    </div>
-                  </div>
-                  <div className="dzd-sync-item">
-                    <Cloud size={16} />
-                    <div>
-                      <span className="dzd-sync-label">Vercel</span>
-                      <strong>{syncStatus.vercel?.shortSha || 'غير متاح'}</strong>
-                      <small>{syncStatus.vercel?.state || 'UNKNOWN'}</small>
-                    </div>
-                  </div>
-                </div>
-                <div className="dzd-sync-footer">
-                  <span>{syncStatus.repository}</span>
-                  <span>{new Date(syncStatus.checkedAt).toLocaleString('ar-DZ')}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="dzd-empty">
-                <p>تعذّر تحميل حالة التزامن.</p>
-                <button className="dzd-sync-refresh" onClick={loadSyncStatus}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
               </div>
             )}
           </div>

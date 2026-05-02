@@ -17,7 +17,7 @@ import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
-import { handleMapQuery, isMapQuery } from './modules/dz-maps/index.js'
+import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -3321,6 +3321,40 @@ async function fetchPrayerByCoords(lat, lon, cityLabel) {
 }
 
 // GPS reverse-geocode: returns nearest wilaya by Euclidean distance (no external API)
+// ── DZ Maps: GPS Nearby endpoint ─────────────────────────────────────────
+app.post('/api/dz-maps/nearby', (req, res) => {
+  const { lat, lng, poiKey } = req.body || {}
+  if (!lat || !lng || isNaN(Number(lat)) || isNaN(Number(lng))) {
+    return res.status(400).json({ error: 'lat/lng required' })
+  }
+  const numLat = Number(lat)
+  const numLng = Number(lng)
+  const def = poiKey ? POI_TYPES[poiKey] : null
+  const enSearch = poiKey ? (POI_EN_SEARCH[poiKey] || def?.nameAr || '') : ''
+
+  const embedUrl = buildNearbyEmbedUrl(numLat, numLng)
+  const gmapsSearchLink = poiKey
+    ? `https://www.google.com/maps/search/${encodeURIComponent(enSearch)}/@${numLat},${numLng},15z`
+    : `https://www.google.com/maps/@${numLat},${numLng},15z`
+
+  return res.json({
+    isMap: true,
+    mapMeta: {
+      type:         poiKey ? 'poi' : 'location',
+      gmapsUrl:     embedUrl,
+      gmapsLink:    gmapsSearchLink,
+      poiKey:       poiKey || null,
+      poiIcon:      def?.icon  || '📍',
+      poiNameAr:    def?.nameAr || 'موقعك',
+      locationName: 'موقعك الحالي',
+      locationFr:   'votre position',
+      lat:          numLat,
+      lng:          numLng,
+      fromGps:      true,
+    },
+  })
+})
+
 app.get('/api/dz-agent/reverse-geocode', (req, res) => {
   const lat = parseFloat(req.query.lat)
   const lon = parseFloat(req.query.lon)
@@ -10334,9 +10368,7 @@ if (isMain) {
       server: {
         middlewareMode: true,
         allowedHosts: true,
-        hmr: replitDomain
-          ? { server: httpServer, clientPort: 443, protocol: 'wss', host: replitDomain }
-          : { server: httpServer, clientPort: 443, protocol: 'wss' },
+        hmr: false,
       },
       appType: 'spa',
     })

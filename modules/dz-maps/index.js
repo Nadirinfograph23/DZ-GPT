@@ -1,46 +1,45 @@
 /**
- * DZ Maps — Main Entry Point v4
+ * DZ Maps — Main Entry Point v5
  * Smart Map Intelligence Engine for DZ Agent
- * Uses Google Maps embed (no API key needed) + Algeria local geo DB
+ * Uses OpenStreetMap embed (no API key) + Algeria local geo DB
  * GOLDEN RULE: No map shown without verified Algerian location
+ *              EXCEPT for GPS nearby queries (needsGps: true)
  */
 
 export { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, hasGpsIntent, GPS_PROXIMITY_WORDS, POI_TYPES } from './intent.js'
 export { geocode, reverseGeocode, searchPOI, getRoute } from './geo.js'
-export { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml, buildPoiEmbedUrl, buildLocationEmbedUrl, buildRouteEmbedUrl } from './leaflet-builder.js'
+export { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml, buildPoiEmbedUrl, buildLocationEmbedUrl, buildRouteEmbedUrl, buildNearbyEmbedUrl, POI_EN_SEARCH } from './leaflet-builder.js'
 
-import { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, POI_TYPES } from './intent.js'
+import { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, hasGpsIntent, POI_TYPES } from './intent.js'
 import { buildPoiEmbedUrl, buildLocationEmbedUrl, buildRouteEmbedUrl } from './leaflet-builder.js'
 import { searchGeoLocation } from './algeria-geo-db.js'
 import { geocode, getRoute } from './geo.js'
 
 /**
- * Resolve a location string → {lat, lng, displayName, displayNameFr, type, parent}
+ * Resolve a location string → {lat, lng, displayName, displayNameFr, ...}
  * 1. Local Algeria geo DB (fast, fuzzy)
  * 2. Nominatim geocode fallback (Algeria only)
- * NEVER returns Algiers as a default — returns null if unknown
+ * NEVER returns Algiers as default — returns null if unknown
  */
 async function resolveLocation(locationStr) {
   if (!locationStr || !locationStr.trim()) return null
 
-  // Step 1: Algeria local DB
   const result = searchGeoLocation(locationStr)
   if (result.found && result.entry) {
     const e = result.entry
     return {
-      lat:            e.lat,
-      lng:            e.lng,
-      displayName:    e.nameAr || e.name,
-      displayNameFr:  e.nameFr || e.name,
-      type:           e.type,
-      parent:         e.parent,
-      parentFr:       e.parentFr,
-      confidence:     result.confidence,
-      fromLocalDB:    true,
+      lat:           e.lat,
+      lng:           e.lng,
+      displayName:   e.nameAr || e.name,
+      displayNameFr: e.nameFr || e.name,
+      type:          e.type,
+      parent:        e.parent,
+      parentFr:      e.parentFr,
+      confidence:    result.confidence,
+      fromLocalDB:   true,
     }
   }
 
-  // Step 2: Nominatim fallback
   try {
     const geo = await geocode(locationStr, true)
     if (geo) {
@@ -68,10 +67,9 @@ function formatSuggestions(suggestions) {
 }
 
 /**
- * Main handler: detects map intent, builds Google Maps embed URL + response text
+ * Main handler: detects map intent, builds OSM embed URL + response text
  * @param {string} msg - cleaned user message
- * @param {object|null} _userLocation - ignored (GPS removed)
- * @returns {object|null} { content, isMap, mapHtml:'', mapMeta:{gmapsUrl,...} } or null
+ * @returns {object|null} { content, isMap, mapHtml, mapMeta } or null
  */
 export async function handleMapQuery(msg, _userLocation = null) {
   if (!isMapQuery(msg)) return null
@@ -80,7 +78,29 @@ export async function handleMapQuery(msg, _userLocation = null) {
   const isRoute = isRoutingQuery(msg)
   const routing = isRoute ? parseRouting(msg) : null
 
-  // ── ROUTING: A → B ────────────────────────────────────────────────────────
+  // ── GPS NEARBY INTENT ────────────────────────────────────────────────────
+  // When user says "قريب مني" / "من موقعي" — request GPS from browser
+  if (hasGpsIntent(msg)) {
+    const def = poiKey ? POI_TYPES[poiKey] : null
+    const poiLabel = def ? def.nameAr : 'مرفق'
+    const poiIcon  = def ? def.icon  : '📍'
+    return {
+      content: def
+        ? `${poiIcon} **${poiLabel} القريبة منك**\n\nاضغط على الزر أدناه للسماح بتحديد موقعك، وسأُظهر لك خريطة بأقرب ${poiLabel} 📍`
+        : `📍 **البحث القريب منك**\n\nاضغط على الزر لتحديد موقعك وعرض الخريطة.`,
+      isMap:   true,
+      mapHtml: '',
+      mapMeta: {
+        type:      'gps-nearby',
+        needsGps:  true,
+        poiKey:    poiKey || null,
+        poiIcon,
+        poiNameAr: poiLabel,
+      },
+    }
+  }
+
+  // ── ROUTING: A → B ───────────────────────────────────────────────────────
   if (routing) {
     const [fromGeo, toGeo] = await Promise.all([
       resolveLocation(routing.from),
@@ -115,7 +135,10 @@ export async function handleMapQuery(msg, _userLocation = null) {
     let routeStats = null
     try { routeStats = await getRoute(fromGeo.lat, fromGeo.lng, toGeo.lat, toGeo.lng) } catch {}
 
-    const gmapsUrl = buildRouteEmbedUrl(fromGeo.displayNameFr, toGeo.displayNameFr)
+    const gmapsUrl = buildRouteEmbedUrl(
+      fromGeo.displayNameFr, toGeo.displayNameFr,
+      fromGeo.lat, fromGeo.lng, toGeo.lat, toGeo.lng
+    )
     const distText = routeStats
       ? `المسافة: **${routeStats.distanceKm} كم** — وقت الوصول التقريبي: **~${routeStats.durationMin} دقيقة** بالسيارة.`
       : ''
@@ -131,13 +154,17 @@ export async function handleMapQuery(msg, _userLocation = null) {
         to:          toGeo.displayName,
         fromFr:      fromGeo.displayNameFr,
         toFr:        toGeo.displayNameFr,
+        fromLat:     fromGeo.lat,
+        fromLng:     fromGeo.lng,
+        toLat:       toGeo.lat,
+        toLng:       toGeo.lng,
         distanceKm:  routeStats?.distanceKm,
         durationMin: routeStats?.durationMin,
       },
     }
   }
 
-  // ── LOCATION / POI SEARCH ─────────────────────────────────────────────────
+  // ── LOCATION / POI SEARCH ────────────────────────────────────────────────
   const locStr = extractLocationFromMsg(msg, poiKey)
   let center = null
 
@@ -145,19 +172,19 @@ export async function handleMapQuery(msg, _userLocation = null) {
     center = await resolveLocation(locStr)
   }
 
-  // ⚠️ GOLDEN RULE: No map without a verified location
+  // GOLDEN RULE: No map without verified location
   if (!center) {
     const fallback = searchGeoLocation(locStr || msg.slice(0, 60))
     const sugg = formatSuggestions(fallback.suggestions)
     return {
-      content: `⚠️ **لم يتم العثور على الموقع**\n\nلم أجد مدينة أو ولاية جزائرية في رسالتك.\n\n${sugg ? `**أقرب المواقع المشابهة:**\n${sugg}\n\n` : ''}جرّب: "مستشفى في وهران" أو "صيدلية في قسنطينة"`,
+      content: `⚠️ **لم يتم العثور على الموقع**\n\nلم أجد مدينة أو ولاية جزائرية في رسالتك.\n\n${sugg ? `**أقرب المواقع المشابهة:**\n${sugg}\n\n` : ''}جرّب: "مستشفى في وهران" أو "صيدلية في قسنطينة"\n\nأو اسأل عن **قريب مني** لاستخدام موقعك الحالي 📍`,
       isMap: false,
     }
   }
 
-  // ── Pure location card (no POI keyword) ──────────────────────────────────
+  // ── Pure location card (no POI keyword) ─────────────────────────────────
   if (!poiKey) {
-    const gmapsUrl = buildLocationEmbedUrl(center.displayNameFr)
+    const gmapsUrl = buildLocationEmbedUrl(center.displayNameFr, center.lat, center.lng)
     const typeLabel   = center.type   ? ` (${center.type})`      : ''
     const parentLabel = center.parent ? ` — ولاية ${center.parent}` : ''
 
@@ -178,16 +205,12 @@ export async function handleMapQuery(msg, _userLocation = null) {
     }
   }
 
-  // ── POI Search ────────────────────────────────────────────────────────────
+  // ── POI Search ───────────────────────────────────────────────────────────
   const def      = POI_TYPES[poiKey]
-  const gmapsUrl = buildPoiEmbedUrl(poiKey, center.displayNameFr)
-
-  const topList = def
-    ? `\n\n> اضغط على الخريطة لرؤية ${def.nameAr} القريبة في ${center.displayName}`
-    : ''
+  const gmapsUrl = buildPoiEmbedUrl(poiKey, center.displayNameFr, center.lat, center.lng)
 
   return {
-    content: `${def.icon} **${def.nameAr} في ${center.displayName}**${topList}\n\nالخريطة جاهزة 👇`,
+    content: `${def.icon} **${def.nameAr} في ${center.displayName}**\n\n> اضغط على الخريطة لاستكشاف ${def.nameAr} في المنطقة\n\nالخريطة جاهزة 👇`,
     isMap:   true,
     mapHtml: '',
     mapMeta: {

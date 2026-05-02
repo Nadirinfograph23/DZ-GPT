@@ -16,6 +16,7 @@ import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
+import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -5253,6 +5254,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Emergency intent (Algeria) — answered immediately, before doctor search ──
   if (isEmergencyQuery(lastUserMessage)) {
     return res.status(200).json({ content: EMERGENCY_INFO })
+  }
+
+  // ── Algeria Citizen Knowledge System ─────────────────────────────────────
+  if (isAlgerianCitizenQuery(lastUserMessage)) {
+    const algeriaResult = searchAlgeria(lastUserMessage)
+    if (algeriaResult) {
+      console.log(`[Algeria-KS] Match: category=${algeriaResult.match.category} score=${algeriaResult.score}`)
+      return res.status(200).json({
+        content: formatAlgeriaResponse(algeriaResult),
+        algeriaSource: algeriaResult.match.link || null,
+        algeriaCategory: algeriaResult.match.category,
+      })
+    }
+    // Query seems Algerian but no exact match — enrich AI prompt with Algerian context
+    if (!messages.find(m => m.role === 'system')) {
+      messages.unshift({
+        role: 'system',
+        content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
+      })
+    }
   }
 
   // ── Website Builder God Mode v5 ───────────────────────────────────────────

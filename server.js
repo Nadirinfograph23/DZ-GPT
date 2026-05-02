@@ -1673,8 +1673,36 @@ function scoreResult(result, query) {
   return Math.round(freshness * 0.45 + trust * 0.25 + relevance * 0.20 + snippetS * 0.10)
 }
 
+// ── Map Website Builder: query detection ─────────────────────────────────────
+function detectMapWebsiteQuery(msg) {
+  const lower = msg.toLowerCase()
+  const keywords = [
+    // Arabic — explicit map website
+    'موقع خريطة', 'موقع مع خريطة', 'موقع خرائط', 'صفحة خريطة', 'صفحة مع خريطة',
+    'أنشئ خريطة تفاعلية', 'انشئ خريطة تفاعلية', 'اصنع خريطة تفاعلية',
+    'موقع يعرض خريطة', 'موقع فيه خريطة', 'موقع بخريطة',
+    'اصنع موقع خريطة', 'أنشئ موقع خريطة', 'ابني موقع خريطة', 'عمل موقع خريطة',
+    'موقع جغرافي', 'موقع تتبع', 'موقع للخريطة', 'تطبيق خريطة',
+    'خريطة تفاعلية كموقع', 'خريطة ويب', 'صفحة خرائط',
+    'اعمل موقع خرائط', 'صمم موقع خريطة', 'موقع خرائط تفاعلية',
+    // English
+    'map website', 'map site', 'map web app', 'website with map', 'site with map',
+    'map application', 'create map website', 'build map website', 'leaflet website',
+    'interactive map website', 'location website', 'mapping website',
+    'create a map site', 'build a map app', 'generate a map website',
+    'map page', 'map-based website', 'geo website',
+    // French
+    'site avec carte', 'site de carte', 'site cartographique', 'application carte',
+    'créer une carte interactive', 'site web avec carte', 'carte interactive site',
+    'site web carte', 'page web carte',
+  ]
+  return keywords.some(k => lower.includes(k))
+}
+
 // ── Website Builder: query detection ─────────────────────────────────────────
 function detectWebsiteBuilderQuery(msg) {
+  // Map website requests are handled separately
+  if (detectMapWebsiteQuery(msg)) return false
   const lower = msg.toLowerCase()
   const keywords = [
     // Arabic
@@ -1811,6 +1839,81 @@ QUALITY STANDARD:
 - NO Lorem Ipsum — use realistic, context-aware content
 
 START OUTPUT NOW — PURE HTML CODE ONLY (no markdown, no explanation):`
+
+// ── Map Website Builder: specialized system prompt ────────────────────────────
+const MAP_WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FULL-STACK DEVELOPER specializing in interactive map web applications.
+
+════════════════════════════════════════════
+CRITICAL OUTPUT RULE (ABSOLUTE):
+Output ONLY the complete HTML code — NOTHING ELSE.
+No explanations. No markdown fences. No preamble. No comments outside HTML.
+The ENTIRE response must be ONE valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+════════════════════════════════════════════
+
+TECHNOLOGY STACK (MANDATORY):
+- Leaflet.js v1.9.4 via CDN (MUST include both CSS and JS):
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+- OpenStreetMap tiles: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+  Attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+- Google Fonts via @import for modern UI
+
+CONTEXT-AWARE MAP CENTER:
+- Algeria-focused request → center: [28.0, 2.0], zoom: 5
+- City-specific (e.g. Algiers/الجزائر) → center: [36.737, 3.086], zoom: 12
+- Oran/وهران → [35.697, -0.633], zoom: 12
+- Constantine/قسنطينة → [36.365, 6.614], zoom: 12
+- World map request → center: [20, 0], zoom: 2
+
+DESIGN REQUIREMENTS (MANDATORY):
+- Split-screen or full-screen layout with a stylish sidebar
+- Dark modern UI: background #0f172a, cards #1e293b, accent #0ea5e9
+- Navigation/header bar with logo and controls
+- Search box that lets user search locations
+- Interactive markers with custom styled popups
+- Legend panel showing marker types if multiple
+- Info panel that shows details on marker click
+- Mobile responsive (@media max-width: 768px)
+- Smooth CSS animations and transitions
+
+JAVASCRIPT REQUIREMENTS:
+- Initialize Leaflet map with OpenStreetMap tiles
+- Add multiple relevant markers based on the request context
+- Each marker must have a rich popup (icon + title + description + coordinates)
+- Search input that flies to typed locations using Nominatim API:
+  fetch(\`https://nominatim.openstreetmap.org/search?format=json&q=\${encodeURIComponent(query)}\`)
+- Locate Me button using navigator.geolocation if appropriate
+- Fit bounds to show all markers on load
+- Animate markers on load (staggered appearance)
+- Layer controls if multiple marker types exist
+
+MANDATORY SECTIONS:
+1. <head>: charset, viewport, title, Leaflet CSS, Google Fonts, custom <style>
+2. <body>:
+   a. Header/navbar (title + search bar + controls)
+   b. Main layout: sidebar (info panel, legend, stats) + map container
+   c. Map container with id="map" (must have explicit height: 100% or fixed height)
+   d. Info panel that updates on marker click
+   e. Footer bar with attribution + stats
+3. <script>: Leaflet initialization + all interactive logic
+
+CSS RULES:
+- #map must have explicit height (e.g., height: calc(100vh - 60px) or height: 600px)
+- Use CSS Grid or Flexbox for layout
+- Glassmorphism sidebar: backdrop-filter: blur(10px)
+- Custom scrollbar styling
+- Hover effects on sidebar items
+
+FLOATING DOWNLOAD BUTTON (include EXACTLY as-is):
+<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-map-site.html';a.click();})()" style="position:fixed;bottom:24px;right:80px;z-index:9999;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;border:none;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 8px 32px rgba(14,165,233,.4);transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">🗺️ Download Map</button>
+
+QUALITY STANDARD:
+- Looks like a professional $10,000 geo/mapping product
+- All markers must be relevant to the user's request
+- No placeholder text — use realistic, context-aware content
+- Map must actually work and display correctly in browser
+
+START OUTPUT NOW — PURE HTML MAP CODE ONLY (no markdown, no explanation):`
 
 // ── Detect query intent ───────────────────────────────────────────────────────
 function detectQueryIntent(msg) {
@@ -5445,6 +5548,66 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       console.error('[DZ-Maps] Error:', mapErr.message)
       // Fall through to AI handler
     }
+  }
+
+  // ── Map Website Builder ───────────────────────────────────────────────────
+  if (detectMapWebsiteQuery(lastUserMessage)) {
+    console.log(`[Map Website Builder] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    const MAX_MWB_ATTEMPTS = 3
+    let lastMwbHtml = null
+    let lastMwbValidation = null
+
+    for (let attempt = 1; attempt <= MAX_MWB_ATTEMPTS; attempt++) {
+      try {
+        const retryNote = attempt > 1
+          ? `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${lastMwbValidation?.reason}. Fix it — output MUST include <html>, <style>, <script>, <body>, and Leaflet.js CDN links. HTML ONLY, nothing else.`
+          : ''
+        const mwbMessages = [
+          { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
+          { role: 'user', content: lastUserMessage },
+        ]
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const rawOutput = mwbResult.content || ''
+        const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+        const validation = validateHtmlOutput(htmlCode)
+        lastMwbHtml = htmlCode
+        lastMwbValidation = validation
+        if (validation.ok) {
+          console.log(`[Map Website Builder] OK attempt ${attempt} — ${htmlCode.length} chars via ${mwbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
+          return res.status(200).json({
+            content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n📋 **المزايا:**\n- خريطة تفاعلية كاملة مع علامات وnوافذ معلومات\n- بحث عن المواقع\n- تصميم عصري وmستجيب\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو **"تحميل .html"** لحفظها.`,
+            isWebsite: true,
+            isMapWebsite: true,
+            htmlCode,
+            cssCode: cssCode || '',
+            jsCode:  jsCode  || '',
+          })
+        }
+        console.warn(`[Map Website Builder] Attempt ${attempt} failed: ${validation.reason} — retrying...`)
+        if (attempt < MAX_MWB_ATTEMPTS) await new Promise(r => setTimeout(r, 800))
+      } catch (err) {
+        console.error(`[Map Website Builder] Attempt ${attempt} error:`, err.message)
+        if (attempt === MAX_MWB_ATTEMPTS) {
+          return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد موقع الخريطة. يرجى المحاولة مرة أخرى.' })
+        }
+        await new Promise(r => setTimeout(r, 800))
+      }
+    }
+    if (lastMwbHtml && lastMwbHtml.length > 200) {
+      const cssCode = extractCssFromHtml(lastMwbHtml)
+      const jsCode  = extractJsFromHtml(lastMwbHtml)
+      return res.status(200).json({
+        content: `⚠️ **تم توليد موقع الخريطة جزئياً** — قد لا يكون مكتملاً. تحقق من المعاينة.`,
+        isWebsite: true,
+        isMapWebsite: true,
+        htmlCode: lastMwbHtml,
+        cssCode: cssCode || '',
+        jsCode:  jsCode  || '',
+      })
+    }
+    return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
   }
 
   // ── Website Builder God Mode v5 ───────────────────────────────────────────

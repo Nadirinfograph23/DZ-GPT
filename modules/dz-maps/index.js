@@ -2,91 +2,72 @@
  * DZ Maps — Main Entry Point
  * Map Intelligence Engine for DZ Agent
  * Sources: OpenStreetMap, Nominatim, Overpass API, OSRM — 100% free & open source
+ * v2: Full Algeria geo DB, fuzzy matching, NO default Algiers fallback
  */
 
 export { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, POI_TYPES } from './intent.js'
 export { geocode, reverseGeocode, searchPOI, getRoute } from './geo.js'
-export { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml } from './leaflet-builder.js'
+export { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml } from './leaflet-builder.js'
 
 import { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, POI_TYPES } from './intent.js'
 import { geocode, searchPOI, getRoute } from './geo.js'
-import { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml } from './leaflet-builder.js'
+import { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml } from './leaflet-builder.js'
+import { searchGeoLocation, normText } from './algeria-geo-db.js'
 
 /**
- * Default Algerian cities for fallback geocoding
- */
-const DZ_CITIES = {
-  'الجزائر العاصمة': { lat: 36.7372, lng: 3.0865 },
-  'الجزائر': { lat: 36.7372, lng: 3.0865 },
-  'alger': { lat: 36.7372, lng: 3.0865 },
-  'وهران': { lat: 35.6987, lng: -0.6349 },
-  'oran': { lat: 35.6987, lng: -0.6349 },
-  'قسنطينة': { lat: 36.3650, lng: 6.6147 },
-  'constantine': { lat: 36.3650, lng: 6.6147 },
-  'عنابة': { lat: 36.9000, lng: 7.7667 },
-  'annaba': { lat: 36.9000, lng: 7.7667 },
-  'سطيف': { lat: 36.1911, lng: 5.4131 },
-  'setif': { lat: 36.1911, lng: 5.4131 },
-  'سكيكدة': { lat: 36.8765, lng: 6.9062 },
-  'تلمسان': { lat: 34.8833, lng: -1.3167 },
-  'tlemcen': { lat: 34.8833, lng: -1.3167 },
-  'بسكرة': { lat: 34.8500, lng: 5.7333 },
-  'biskra': { lat: 34.8500, lng: 5.7333 },
-  'بجاية': { lat: 36.7539, lng: 5.0564 },
-  'bejaia': { lat: 36.7539, lng: 5.0564 },
-  'تيزي وزو': { lat: 36.7170, lng: 4.0465 },
-  'tizi ouzou': { lat: 36.7170, lng: 4.0465 },
-  'برج بوعريريج': { lat: 36.0703, lng: 4.7630 },
-  'غرداية': { lat: 32.4912, lng: 3.6740 },
-  'ghardaia': { lat: 32.4912, lng: 3.6740 },
-  'بومرداس': { lat: 36.7645, lng: 3.4776 },
-  'المدية': { lat: 36.2679, lng: 2.7528 },
-  'الشلف': { lat: 36.1653, lng: 1.3338 },
-  'الأغواط': { lat: 33.8000, lng: 2.8833 },
-  'المسيلة': { lat: 35.7056, lng: 4.5444 },
-  'جيجل': { lat: 36.8186, lng: 5.7660 },
-  'خنشلة': { lat: 35.4333, lng: 7.1500 },
-  'ورقلة': { lat: 31.9497, lng: 5.3244 },
-  'ouargla': { lat: 31.9497, lng: 5.3244 },
-  'تيارت': { lat: 35.3713, lng: 1.3217 },
-  'تيسمسيلت': { lat: 35.6070, lng: 1.8073 },
-  'سعيدة': { lat: 34.8317, lng: 0.1500 },
-  'مستغانم': { lat: 35.9312, lng: 0.0892 },
-  'معسكر': { lat: 35.3955, lng: 0.1400 },
-  'ميلة': { lat: 36.4500, lng: 6.2667 },
-  'عين الدفلى': { lat: 36.2638, lng: 1.9658 },
-  'نعامة': { lat: 33.2667, lng: -0.3167 },
-  'عين تموشنت': { lat: 35.2959, lng: -1.1392 },
-  'غليزان': { lat: 35.9656, lng: 0.5469 },
-  'البيض': { lat: 33.6900, lng: 1.0042 },
-  'إليزي': { lat: 26.4847, lng: 8.4842 },
-  'تندوف': { lat: 27.8000, lng: -8.1500 },
-  'تمنراست': { lat: 22.7906, lng: 5.5228 },
-  'tamanrasset': { lat: 22.7906, lng: 5.5228 },
-  'أدرار': { lat: 27.8741, lng: -0.2889 },
-}
-
-/**
- * Resolve a location string → {lat, lng, displayName}
- * First checks local city DB, then Nominatim
+ * Resolve a location string → {lat, lng, displayName, type, parent}
+ * 1. Check Algeria local DB with fuzzy matching (fast, zero API call)
+ * 2. Fall back to Nominatim geocoding (always restricted to Algeria)
+ * NEVER defaults to Algiers — returns null if not found
  */
 async function resolveLocation(locationStr) {
-  if (!locationStr) return null
-  const lowerLoc = locationStr.trim().toLowerCase()
+  if (!locationStr || !locationStr.trim()) return null
 
-  // Check local DB first (faster, no API call)
-  for (const [key, coords] of Object.entries(DZ_CITIES)) {
-    if (lowerLoc.includes(key) || key.includes(lowerLoc)) {
-      return { ...coords, displayName: locationStr }
+  // ── Step 1: local Algeria geo DB (instant, fuzzy) ──────────────────────
+  const result = searchGeoLocation(locationStr)
+  if (result.found && result.entry) {
+    const e = result.entry
+    return {
+      lat: e.lat,
+      lng: e.lng,
+      displayName: e.nameAr || e.name,
+      displayNameFr: e.nameFr || e.name,
+      type: e.type,
+      parent: e.parent,
+      parentFr: e.parentFr,
+      confidence: result.confidence,
+      fromLocalDB: true,
     }
   }
 
-  // Fall back to Nominatim
+  // ── Step 2: Nominatim fallback (Algeria only) ───────────────────────────
   try {
-    return await geocode(locationStr, true)
-  } catch {
-    return null
-  }
+    const geo = await geocode(locationStr, true)
+    if (geo) {
+      return {
+        lat: geo.lat,
+        lng: geo.lng,
+        displayName: locationStr,
+        displayNameFr: locationStr,
+        type: null,
+        parent: null,
+        confidence: 85,
+        fromLocalDB: false,
+      }
+    }
+  } catch {}
+
+  return null // NOT FOUND — never return Algiers as default
+}
+
+/**
+ * Format suggestions for user feedback
+ */
+function formatSuggestions(suggestions) {
+  if (!suggestions || !suggestions.length) return ''
+  return suggestions.map(s =>
+    `• **${s.nameAr}** (${s.nameFr || s.name})${s.parent ? ` — ${s.type} في ${s.parent}` : ` — ${s.type}`}`
+  ).join('\n')
 }
 
 /**
@@ -98,9 +79,9 @@ async function resolveLocation(locationStr) {
 export async function handleMapQuery(msg, userLocation = null) {
   if (!isMapQuery(msg)) return null
 
-  const poiKey   = detectPoiType(msg)
-  const isRoute  = isRoutingQuery(msg)
-  const routing  = isRoute ? parseRouting(msg) : null
+  const poiKey  = detectPoiType(msg)
+  const isRoute = isRoutingQuery(msg)
+  const routing = isRoute ? parseRouting(msg) : null
 
   // ── Routing: A → B ──────────────────────────────────────────────────────
   if (routing) {
@@ -109,9 +90,30 @@ export async function handleMapQuery(msg, userLocation = null) {
       resolveLocation(routing.to),
     ])
 
-    if (!fromGeo || !toGeo) {
+    // ⚠️ Cannot find either location — show error, NEVER fallback to Algiers
+    if (!fromGeo && !toGeo) {
+      const fromRes = searchGeoLocation(routing.from)
+      const toRes   = searchGeoLocation(routing.to)
+      const suggFrom = fromRes.suggestions.slice(0, 2).map(s => s.nameAr).join('، ')
+      const suggTo   = toRes.suggestions.slice(0, 2).map(s => s.nameAr).join('، ')
       return {
-        content: `⚠️ لم أتمكن من تحديد المواقع: **${routing.from}** أو **${routing.to}**. تحقق من أسماء المدن وحاول مجدداً.`,
+        content: `⚠️ لم أتمكن من تحديد الموقعين:\n- **${routing.from}**${suggFrom ? ` — هل تقصد: ${suggFrom}؟` : ''}\n- **${routing.to}**${suggTo ? ` — هل تقصد: ${suggTo}؟` : ''}\n\nاكتب الاسم بشكل أوضح أو جرّب باللغة العربية أو الفرنسية.`,
+        isMap: false,
+      }
+    }
+    if (!fromGeo) {
+      const res = searchGeoLocation(routing.from)
+      const sugg = formatSuggestions(res.suggestions)
+      return {
+        content: `⚠️ لم يتم العثور على **"${routing.from}"** بدقة.\n\nاقتراحات مشابهة:\n${sugg || 'لا توجد اقتراحات — حاول كتابة الاسم بطريقة مختلفة.'}`,
+        isMap: false,
+      }
+    }
+    if (!toGeo) {
+      const res = searchGeoLocation(routing.to)
+      const sugg = formatSuggestions(res.suggestions)
+      return {
+        content: `⚠️ لم يتم العثور على **"${routing.to}"** بدقة.\n\nاقتراحات مشابهة:\n${sugg || 'لا توجد اقتراحات — حاول كتابة الاسم بطريقة مختلفة.'}`,
         isMap: false,
       }
     }
@@ -120,8 +122,8 @@ export async function handleMapQuery(msg, userLocation = null) {
     try { route = await getRoute(fromGeo.lat, fromGeo.lng, toGeo.lat, toGeo.lng) } catch {}
 
     const mapHtml = buildRouteMapHtml({
-      fromName: routing.from,
-      toName:   routing.to,
+      fromName: fromGeo.displayName,
+      toName:   toGeo.displayName,
       fromLat:  fromGeo.lat,
       fromLng:  fromGeo.lng,
       toLat:    toGeo.lat,
@@ -129,53 +131,80 @@ export async function handleMapQuery(msg, userLocation = null) {
       route,
     })
 
-    const distText = route ? `المسافة: **${route.distanceKm} كم** — وقت الوصول التقريبي: **~${route.durationMin} دقيقة** بالسيارة.` : ''
+    const distText = route
+      ? `المسافة: **${route.distanceKm} كم** — وقت الوصول التقريبي: **~${route.durationMin} دقيقة** بالسيارة.`
+      : ''
 
     return {
-      content: `🗺️ **مسار: ${routing.from} ← ${routing.to}**\n\n${distText}\n\n> 🟢 نقطة الانطلاق: ${routing.from}\n> 🔴 الوجهة: ${routing.to}\n\nالخريطة التفاعلية جاهزة 👇`,
+      content: `🗺️ **مسار: ${fromGeo.displayName} ← ${toGeo.displayName}**\n\n${distText}\n\n> 🟢 نقطة الانطلاق: ${fromGeo.displayName}\n> 🔴 الوجهة: ${toGeo.displayName}\n\nالخريطة التفاعلية جاهزة 👇`,
       isMap: true,
       mapHtml,
       mapMeta: {
         type: 'route',
-        from: routing.from,
-        to:   routing.to,
+        from: fromGeo.displayName,
+        to:   toGeo.displayName,
         distanceKm: route?.distanceKm,
         durationMin: route?.durationMin,
       },
     }
   }
 
-  // ── POI Search ──────────────────────────────────────────────────────────
+  // ── Location / POI Search ────────────────────────────────────────────────
   const locStr = extractLocationFromMsg(msg, poiKey)
-  let center   = userLocation ? { lat: userLocation.lat, lng: userLocation.lng, displayName: 'موقعك الحالي' } : null
+  let center   = userLocation
+    ? { lat: userLocation.lat, lng: userLocation.lng, displayName: 'موقعك الحالي', type: null, parent: null }
+    : null
 
   if (!center && locStr) {
     center = await resolveLocation(locStr)
   }
 
-  // Default to Algiers if no location found
+  // ⚠️ GOLDEN RULE: NO MAP WITHOUT VERIFIED LOCATION
   if (!center) {
-    center = { lat: 36.7372, lng: 3.0865, displayName: 'الجزائر العاصمة' }
-  }
+    // Try to get fuzzy suggestions from the raw message
+    const fallbackQuery = locStr || msg.slice(0, 60)
+    const res = searchGeoLocation(fallbackQuery)
+    const sugg = formatSuggestions(res.suggestions)
 
-  // If no specific POI, just show location map
-  if (!poiKey) {
-    const mapHtml = buildLocationMapHtml({
-      locationName: center.displayName,
-      lat: center.lat,
-      lng: center.lng,
-    })
     return {
-      content: `📍 **${center.displayName}**\n\nالإحداثيات: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}\n\nالخريطة التفاعلية جاهزة 👇`,
-      isMap: true,
-      mapHtml,
-      mapMeta: { type: 'location', locationName: center.displayName, lat: center.lat, lng: center.lng },
+      content: `⚠️ **لم يتم العثور على الموقع بدقة**\n\nلم أجد موقعاً جزائرياً مطابقاً لـ: *"${locStr || msg.slice(0, 40)}"*\n\n${sugg ? `**أقرب المواقع المشابهة:**\n${sugg}\n\n` : ''}جرّب أن تكتب الاسم:\n• بالعربية: مثلاً "وهران", "الوادي", "بسكرة"\n• بالفرنسية: مثلاً "Oran", "El Oued", "Biskra"\n• أو اذكر رقم الولاية: مثلاً "ولاية 39"`,
+      isMap: false,
     }
   }
 
-  // Fetch POIs
-  const def   = POI_TYPES[poiKey]
-  let   pois  = []
+  // ── Simple location card (no POI) ───────────────────────────────────────
+  if (!poiKey) {
+    const mapHtml = buildGeoCardHtml({
+      locationName: center.displayName,
+      locationNameFr: center.displayNameFr,
+      lat: center.lat,
+      lng: center.lng,
+      type: center.type,
+      parent: center.parent,
+      confidence: center.confidence,
+    })
+
+    const typeLabel = center.type ? ` (${center.type})` : ''
+    const parentLabel = center.parent ? ` — تابعة لولاية ${center.parent}` : ''
+
+    return {
+      content: `📍 **${center.displayName}**${typeLabel}${parentLabel}\n\n🌍 الإحداثيات: \`${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}\`\n\nالخريطة التفاعلية جاهزة 👇`,
+      isMap: true,
+      mapHtml,
+      mapMeta: {
+        type: 'location',
+        locationName: center.displayName,
+        lat: center.lat,
+        lng: center.lng,
+        locationType: center.type,
+        parent: center.parent,
+      },
+    }
+  }
+
+  // ── POI Search ───────────────────────────────────────────────────────────
+  const def  = POI_TYPES[poiKey]
+  let   pois = []
   try {
     pois = await searchPOI(poiKey, center.lat, center.lng, 8000, 20)
   } catch (e) {
@@ -183,8 +212,14 @@ export async function handleMapQuery(msg, userLocation = null) {
   }
 
   if (!pois.length) {
-    // Fallback: show location map with message
-    const mapHtml = buildLocationMapHtml({ locationName: center.displayName, lat: center.lat, lng: center.lng })
+    const mapHtml = buildGeoCardHtml({
+      locationName: center.displayName,
+      locationNameFr: center.displayNameFr,
+      lat: center.lat,
+      lng: center.lng,
+      type: center.type,
+      parent: center.parent,
+    })
     return {
       content: `🔍 لم أجد ${def.icon} **${def.nameAr}** في نطاق 8 كم حول **${center.displayName}**.\n\nجرب تحديد ولاية أخرى أو ابحث بمنطقة أوسع.`,
       isMap: true,

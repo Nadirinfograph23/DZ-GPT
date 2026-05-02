@@ -9883,11 +9883,14 @@ if (isMain) {
     const { createServer: createViteServer } = await import('vite')
     const http = await import('http')
     const httpServer = http.createServer(app)
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
         allowedHosts: true,
-        hmr: { server: httpServer, clientPort: 443, protocol: 'wss' },
+        hmr: replitDomain
+          ? { server: httpServer, clientPort: 443, protocol: 'wss', host: replitDomain }
+          : { server: httpServer, clientPort: 443, protocol: 'wss' },
       },
       appType: 'spa',
     })

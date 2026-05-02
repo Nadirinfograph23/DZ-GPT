@@ -171,6 +171,7 @@ interface DZMessage {
   jsCode?: string
   mapHtml?: string
   mapMeta?: Record<string, unknown>
+  webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
 }
 
 interface ActionLogEntry {
@@ -750,11 +751,13 @@ function WebsitePreview({
   cssCode: cssCodeProp = '',
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
+  webBuilderMeta,
 }: {
   htmlCode: string
   cssCode?: string
   jsCode?: string
   onInsertPrompt?: (p: string) => void
+  webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
 }) {
   const [view, setView]               = useState<'preview' | 'code'>('preview')
   const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
@@ -845,6 +848,30 @@ function WebsitePreview({
 
   return (
     <div className={`dz-wp-root${fullscreen ? ' dz-wp-root--fs' : ''}`}>
+
+      {/* ── Project card header ── */}
+      {webBuilderMeta && (
+        <div className={`dz-wb-project-card dz-wb-project-card--${webBuilderMeta.type}`}>
+          <div className="dz-wb-project-card-left">
+            <div className="dz-wb-project-icon">{webBuilderMeta.icon}</div>
+            <div className="dz-wb-project-info">
+              <div className="dz-wb-project-title">{webBuilderMeta.title}</div>
+              <div className="dz-wb-project-desc">{webBuilderMeta.description}</div>
+            </div>
+          </div>
+          <div className="dz-wb-project-card-right">
+            <span className="dz-wb-style-badge">{
+              webBuilderMeta.style === 'premium' ? '⭐ احترافي' :
+              webBuilderMeta.style === 'minimal'  ? '🔲 بسيط' :
+              webBuilderMeta.style === 'creative' ? '🎨 إبداعي' :
+              webBuilderMeta.style === 'dark'     ? '🌑 داكن' :
+              '✨ عصري'
+            }</span>
+            <span className="dz-wb-size-badge">{sizeKb} KB</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Top toolbar ── */}
       <div className="dz-wp-toolbar">
         <div className="dz-wp-tabs">
@@ -2805,6 +2832,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           htmlCode: data.htmlCode as string,
           cssCode: (data.cssCode as string) || '',
           jsCode:  (data.jsCode  as string) || '',
+          webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
         })
       } else {
         addAssistantMessage({
@@ -3113,6 +3141,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           cssCode={msg.cssCode}
                           jsCode={msg.jsCode}
                           onInsertPrompt={p => setInput(p)}
+                          webBuilderMeta={msg.webBuilderMeta}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (

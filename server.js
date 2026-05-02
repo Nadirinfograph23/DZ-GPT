@@ -1718,18 +1718,25 @@ function detectWebsiteBuilderQuery(msg) {
   if (detectMapWebsiteQuery(msg)) return false
   const lower = msg.toLowerCase()
   const keywords = [
-    // Arabic — verbs + "موقع/صفحة"
-    'أنشئ موقع', 'انشئ موقع', 'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع',
-    'أنشئ صفحة', 'انشئ صفحة', 'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
+    // Arabic — verbs + "موقع/صفحة" (all spelling variants of أنشئ/انشئ/إنشأ/إنشاء)
+    'أنشئ موقع', 'انشئ موقع', 'إنشأ موقع', 'انشأ موقع', 'أنشأ موقع', 'إنشاء موقع',
+    'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع', 'اعملي موقع',
+    'أنشئ صفحة', 'انشئ صفحة', 'إنشأ صفحة', 'انشأ صفحة', 'إنشاء صفحة',
+    'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
     'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'طور موقع', 'طوّر موقع', 'اكتب كود موقع',
-    'اصنعلي موقع', 'صمملي موقع', 'ابنيلي موقع', 'عملي موقع', 'اعملي موقع',
-    'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو', 'موقع شركة', 'موقع تجاري',
-    'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر', 'موقع متجر',
+    'اصنعلي موقع', 'صمملي موقع', 'ابنيلي موقع', 'عملي موقع',
+    'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو',
+    'موقع شركة', 'موقع تجاري', 'موقع متجر', 'موقع مطعم', 'موقع فندق',
+    'موقع وكالة', 'موقع مدرسة', 'موقع شخصي', 'موقع احترافي',
+    'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر',
     'اصنع لي موقع', 'ابني لي موقع', 'عمل موقع', 'نريد موقع',
     'موقع HTML', 'موقع html', 'كود موقع', 'كود HTML', 'كود html',
     'صفحة ويب', 'اعمل صفحة', 'صمم لي موقع', 'طورلي موقع',
-    // Darija
+    'انشئ لي موقع', 'أنشئ لي موقع', 'إنشأ لي موقع', 'أنشئلي موقع', 'انشئلي موقع',
+    // Darija (Algerian)
     'دير موقع', 'عمل لي موقع', 'ابنيلي موقع', 'صنعلي موقع',
+    'دير لي موقع', 'دير لينا موقع', 'عملي موقع', 'صمملي موقع',
+    'بغيت موقع', 'نحتاج موقع', 'نبغي موقع',
     // English
     'landing page', 'build website', 'create website', 'generate website', 'make website',
     'design website', 'make a landing', 'build a landing', 'portfolio website',
@@ -1746,8 +1753,16 @@ function detectWebsiteBuilderQuery(msg) {
     'construire un site', 'générer un site', 'design un site', 'tableau de bord',
     'page de destination', 'site e-commerce', 'boutique en ligne',
     'créer une page', 'faire une page', 'site vitrine', 'site portfolio',
+    'créer un site restaurant', 'site restaurant', 'site hotel', 'site boutique',
   ]
-  return keywords.some(k => lower.includes(k))
+  if (keywords.some(k => lower.includes(k))) return true
+
+  // Extra pattern: creation verb + topic keyword (catches "إنشأ موقع مطعم", "أنشئ صفحة فندق", etc.)
+  const creationVerbs = /(?:أنش[أئ]|انش[أئ]|إنش[أئا]|اصنع|ابني?|اعمل|أعمل|عمل|صمم|دير|طور|بني?|generate|create|build|make|design|créer?|faire|construire)\s/i
+  const webNouns = /(?:موقع|صفحة|site|page|web|html|تطبيق ويب|web app)/i
+  if (creationVerbs.test(msg) && webNouns.test(msg)) return true
+
+  return false
 }
 
 // ── Website Builder: extract project metadata from user request ───────────────
@@ -5701,7 +5716,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── DZ Place Search (OSM Nominatim) ─────────────────────────────────────
   // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
-  if (PLACE_INTENTS.has(dzIntent.type) && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
+  // Guard: skip place search when user is clearly asking to CREATE a website/app.
+  if (PLACE_INTENTS.has(dzIntent.type)
+    && !detectWebsiteBuilderQuery(lastUserMessage)
+    && !detectMapWebsiteQuery(lastUserMessage)
+    && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
     const intentService = INTENT_TO_SERVICE[dzIntent.type]
     const serviceType   = intentService || dzEntities.serviceType || 'restaurant'
     const location      = dzEntities.location

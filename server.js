@@ -6031,7 +6031,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 10000 })
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
 

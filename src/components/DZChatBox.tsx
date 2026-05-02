@@ -1383,6 +1383,89 @@ function RepoActionPanel({
   )
 }
 
+// ===== GPS NEARBY CARD =====
+function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
+  const [resolvedMeta, setResolvedMeta] = useState<Record<string, unknown> | null>(null)
+  const [errMsg, setErrMsg] = useState('')
+  const s = (v: unknown) => String(v ?? '')
+
+  const poiKey    = s(meta.poiKey)
+  const poiIcon   = s(meta.poiIcon) || '📍'
+  const poiNameAr = s(meta.poiNameAr) || 'مرفق'
+
+  const handleGps = () => {
+    if (!navigator.geolocation) {
+      setErrMsg('المتصفح لا يدعم خدمة تحديد الموقع')
+      setPhase('error')
+      return
+    }
+    setPhase('loading')
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        try {
+          const r = await fetch('/api/dz-maps/nearby', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng, poiKey: poiKey || null }),
+          })
+          const data = await r.json()
+          if (data.mapMeta) {
+            setResolvedMeta(data.mapMeta)
+            setPhase('ready')
+          } else {
+            setErrMsg(data.error || 'لم يتمكن من تحميل الخريطة')
+            setPhase('error')
+          }
+        } catch {
+          setErrMsg('فشل الاتصال بالخادم. تحقق من اتصالك.')
+          setPhase('error')
+        }
+      },
+      () => {
+        setErrMsg('لم يتم الحصول على إذن الموقع. يرجى السماح للمتصفح بالوصول إلى موقعك ثم أعد المحاولة.')
+        setPhase('error')
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
+  }
+
+  if (phase === 'ready' && resolvedMeta) {
+    return <MapPreview mapHtml="" mapMeta={resolvedMeta} />
+  }
+
+  return (
+    <div className="dz-gps-nearby-card">
+      <div className="dz-gps-nearby-header">
+        <span className="dz-gps-nearby-poi-icon">{poiIcon}</span>
+        <div className="dz-gps-nearby-info">
+          <strong>{poiKey ? `أقرب ${poiNameAr} منك` : 'البحث القريب منك'}</strong>
+          <span>شارك موقعك لعرض الخريطة</span>
+        </div>
+      </div>
+      {phase === 'error' && (
+        <div className="dz-gps-nearby-error">⚠️ {errMsg}</div>
+      )}
+      <button
+        className={`dz-gps-nearby-btn${phase === 'loading' ? ' dz-gps-nearby-btn--loading' : ''}`}
+        onClick={handleGps}
+        disabled={phase === 'loading'}
+        type="button"
+      >
+        {phase === 'loading'
+          ? <><Loader2 size={15} className="dz-spin-icon" /> جارٍ تحديد موقعك...</>
+          : <><MapPin size={15} /> 📍 تفعيل GPS وعرض الخريطة</>
+        }
+      </button>
+      <div className="dz-gps-nearby-hint">
+        سيُطلب منك الإذن مرة واحدة فقط • لا يتم حفظ موقعك
+      </div>
+    </div>
+  )
+}
+
 // ===== MAP PREVIEW =====
 function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(true)
@@ -2912,8 +2995,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
                       )}
-                      {msg.richType === 'map' && msg.mapHtml && (
-                        <MapPreview mapHtml={msg.mapHtml} mapMeta={msg.mapMeta} />
+                      {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
+                        (msg.mapMeta as Record<string, unknown>)?.needsGps
+                          ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
+                          : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview

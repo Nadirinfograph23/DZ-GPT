@@ -18,6 +18,7 @@ import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
+import { queryNearby, formatDistance } from './modules/dz-maps/overpass.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -3321,15 +3322,15 @@ async function fetchPrayerByCoords(lat, lon, cityLabel) {
 }
 
 // GPS reverse-geocode: returns nearest wilaya by Euclidean distance (no external API)
-// ── DZ Maps: GPS Nearby endpoint ─────────────────────────────────────────
-app.post('/api/dz-maps/nearby', (req, res) => {
-  const { lat, lng, poiKey } = req.body || {}
+// ── DZ Maps: GPS Nearby endpoint (Overpass API) ───────────────────────────
+app.post('/api/dz-maps/nearby', async (req, res) => {
+  const { lat, lng, poiKey, radius = 3000 } = req.body || {}
   if (!lat || !lng || isNaN(Number(lat)) || isNaN(Number(lng))) {
     return res.status(400).json({ error: 'lat/lng required' })
   }
   const numLat = Number(lat)
   const numLng = Number(lng)
-  const def = poiKey ? POI_TYPES[poiKey] : null
+  const def      = poiKey ? POI_TYPES[poiKey] : null
   const enSearch = poiKey ? (POI_EN_SEARCH[poiKey] || def?.nameAr || '') : ''
 
   const embedUrl = buildNearbyEmbedUrl(numLat, numLng)
@@ -3337,8 +3338,24 @@ app.post('/api/dz-maps/nearby', (req, res) => {
     ? `https://www.google.com/maps/search/${encodeURIComponent(enSearch)}/@${numLat},${numLng},15z`
     : `https://www.google.com/maps/@${numLat},${numLng},15z`
 
+  // Query real POI data from OpenStreetMap Overpass API
+  let results = []
+  try {
+    const raw = await queryNearby(numLat, numLng, poiKey || null, Number(radius))
+    results = raw.map(r => ({
+      ...r,
+      distanceLabel: formatDistance(r.distanceM),
+      gmapsDir: `https://www.google.com/maps/dir/${numLat},${numLng}/${r.lat},${r.lng}`,
+      gmapsPlace: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}&query_place_id=${r.osmId || ''}`,
+    }))
+  } catch (e) {
+    console.warn('[DZ-Maps/Nearby] Overpass query failed:', e.message)
+    // Non-fatal — return map without results list
+  }
+
   return res.json({
     isMap: true,
+    results,
     mapMeta: {
       type:         poiKey ? 'poi' : 'location',
       gmapsUrl:     embedUrl,

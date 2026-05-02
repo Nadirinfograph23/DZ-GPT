@@ -6541,14 +6541,57 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       if (scoredResults.length > 0) {
         const sourceTag = cseResults.length > 0 ? '🔍 Google CSE' : gnResults.length > 0 ? '📡 Google News RSS' : '🌐 Web'
-        const lines = scoredResults.map((r, i) => {
+
+        // Sort by date descending (newest first) for temporal ordering
+        const now_ms = Date.now()
+        const ONE_DAY = 24 * 60 * 60 * 1000
+        const ONE_WEEK = 7 * ONE_DAY
+        const ONE_MONTH = 30 * ONE_DAY
+
+        function getResultAgeMs(r) {
+          const d = r.date || r.pubDate || r.publishedDate
+          if (!d) return Infinity
+          const t = new Date(d).getTime()
+          return isNaN(t) ? Infinity : now_ms - t
+        }
+
+        // Sort by date (freshest first), fall back to score
+        const temporallySorted = [...scoredResults].sort((a, b) => {
+          const ageA = getResultAgeMs(a)
+          const ageB = getResultAgeMs(b)
+          if (ageA === Infinity && ageB === Infinity) return b._score - a._score
+          if (ageA === Infinity) return 1
+          if (ageB === Infinity) return -1
+          return ageA - ageB
+        })
+
+        // Group into temporal buckets
+        const buckets = { today: [], week: [], month: [], older: [] }
+        for (const r of temporallySorted) {
+          const age = getResultAgeMs(r)
+          if (age <= ONE_DAY) buckets.today.push(r)
+          else if (age <= ONE_WEEK) buckets.week.push(r)
+          else if (age <= ONE_MONTH) buckets.month.push(r)
+          else buckets.older.push(r)
+        }
+
+        function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
           const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ' [تاريخ غير متوفر]'
           const src = r.source || ''
-          return `${i + 1}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
-        }).join('\n\n')
-        webSearchContext = `${sourceTag} | مرتبة بالنقاط (حداثة 45% · ثقة 25% · صلة 20% · مقتطف 10%)\n\n${lines}`
-        console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length}`)
+          return `${idx}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
+        }
+
+        const sections = []
+        let idx = 1
+        if (buckets.today.length)  { sections.push(`🟢 **الأحدث (اليوم / آخر 24 ساعة)**\n${buckets.today.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.week.length)   { sections.push(`🟡 **هذا الأسبوع**\n${buckets.week.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.month.length)  { sections.push(`🟠 **هذا الشهر**\n${buckets.month.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.older.length)  { sections.push(`⚫ **أقدم (للسياق فقط)**\n${buckets.older.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+
+        const lines = sections.length > 0 ? sections.join('\n\n') : temporallySorted.map((r, i) => formatResult(r, i+1)).join('\n\n')
+        webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
+        console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (mustSearch) {
         webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
         console.log('[DZ Retrieval] No results found for mandatory search')
@@ -6679,13 +6722,42 @@ Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88
 4. If data unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
 
 ━━━━━━━━━━━━━━━━━━━━━━
-📰 NEWS MODULE
+📰 NEWS MODULE — UP-TO-DATE TEMPORAL ORDERING (MANDATORY)
 ━━━━━━━━━━━━━━━━━━━━━━
 
+عند أي سؤال يتعلق بـ: أخبار · أحداث · حوادث · نتائج رياضية · تواريخ (إصدار، مباريات، قرارات):
+
+🧠 تحليل النية (MANDATORY):
+1. هل السؤال يتعلق بحدث جارٍ أو نتيجة حديثة؟ → وضع "البحث الحديث"
+2. هل يحتاج آخر الأخبار؟ → اجلب من Google CSE + Google News RSS أولاً
+3. هل يتعلق بتاريخ معين؟ → رتّب زمنياً من الأحدث للأقدم
+
+📅 ترتيب الإجابة (MANDATORY FORMAT — لا تتجاوزه):
+
+1. 🟢 **الأحدث** — اليوم أو آخر 24 ساعة
+2. 🟡 **هذا الأسبوع**
+3. 🟠 **هذا الشهر**
+4. 🔵 **الشهر السابق** (إن لزم)
+5. ⚫ **معلومات أقدم** (فقط للسياق)
+
+📌 قواعد إضافية إلزامية:
 - صنّف: أخبار الجزائر 🇩🇿 / دولية 🌍 / تقنية 💻 / اقتصاد 💰 / رياضة ⚽
-- أدرج دائماً: التاريخ + رابط المصدر لكل خبر
-- رتّب من الأحدث إلى الأقدم
+- أدرج دائماً: التاريخ الدقيق + رابط المصدر لكل خبر
+- رتّب من الأحدث إلى الأقدم داخل كل فئة زمنية
 - لا تدمج بيانات الملاعب مع أخبار الوكالات
+- ❌ لا تعتمد على معلومات قديمة إذا توفر تحديث أحدث
+- ❌ إذا لم توجد معلومات حديثة → قُل ذلك بوضوح، لا تخترع
+- ✅ إذا كان هناك تحديث مستمر → أشر إلى ذلك
+
+🏆 مثال تطبيقي (اتبع هذا الهيكل دائماً):
+سؤال: "نتيجة مباراة ريال مدريد اليوم"
+الإجابة:
+🟢 اليوم:
+- فاز ريال مدريد على برشلونة 2-1 (المصدر: SofaScore | ${_todayHuman})
+🟡 هذا الأسبوع:
+- تعادل مع أتلتيكو مدريد 1-1
+🟠 هذا الشهر:
+- فاز على إشبيلية 3-0
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🧾 OUTPUT FORMAT

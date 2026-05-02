@@ -1343,16 +1343,17 @@ function RepoActionPanel({
 
 // ===== MAP PREVIEW =====
 function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
-  const [expanded, setExpanded] = React.useState(true)
+  const [expanded, setExpanded] = useState(true)
   const meta = mapMeta || {}
+  const s = (v: unknown) => String(v ?? '')
   const title = meta.type === 'route'
-    ? `🗺️ مسار: ${meta.from} ← ${meta.to}`
+    ? `🗺️ مسار: ${s(meta.from)} ← ${s(meta.to)}`
     : meta.type === 'poi'
-      ? `${meta.poiIcon || '📍'} ${meta.poiNameAr || 'خريطة'} في ${meta.locationName || 'الجزائر'} (${meta.count || 0} نتيجة)`
-      : `📍 ${meta.locationName || 'الجزائر'}`
+      ? `${s(meta.poiIcon) || '📍'} ${s(meta.poiNameAr) || 'خريطة'} في ${s(meta.locationName) || 'الجزائر'} (${s(meta.count) || 0} نتيجة)`
+      : `📍 ${s(meta.locationName) || 'الجزائر'}`
 
   const osmLink = meta.lat && meta.lng
-    ? `https://www.openstreetmap.org/?mlat=${meta.lat}&mlon=${meta.lng}#map=12/${meta.lat}/${meta.lng}`
+    ? `https://www.openstreetmap.org/?mlat=${s(meta.lat)}&mlon=${s(meta.lng)}#map=12/${s(meta.lat)}/${s(meta.lng)}`
     : 'https://www.openstreetmap.org'
 
   return (
@@ -1393,17 +1394,17 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
             srcDoc={mapHtml}
             style={{ width: '100%', height: '480px', border: 'none', display: 'block' }}
             sandbox="allow-scripts allow-same-origin"
-            title={String(title)}
+            title={title}
           />
-          {meta.type === 'route' && meta.distanceKm && (
+          {meta.type === 'route' && !!meta.distanceKm && (
             <div style={{
               position: 'absolute', bottom: '10px', right: '10px',
               background: 'rgba(10,10,20,0.85)', backdropFilter: 'blur(8px)',
               border: '1px solid #00ff9040', borderRadius: '10px',
               padding: '8px 14px', color: '#fff', fontSize: '12px', lineHeight: 1.6,
             }}>
-              <div style={{ color: '#00ff90', fontWeight: 700 }}>📏 {String(meta.distanceKm)} كم</div>
-              {meta.durationMin && <div style={{ color: '#ccc' }}>⏱️ ~{String(meta.durationMin)} دقيقة</div>}
+              <div style={{ color: '#00ff90', fontWeight: 700 }}>📏 {s(meta.distanceKm)} كم</div>
+              {!!meta.durationMin && <div style={{ color: '#ccc' }}>⏱️ ~{s(meta.durationMin)} دقيقة</div>}
             </div>
           )}
         </div>

@@ -8,7 +8,7 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain, MapPin, Navigation,
+  Download, ArrowRight, Loader2, Brain, MapPin,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1383,87 +1383,38 @@ function RepoActionPanel({
   )
 }
 
-// ===== GPS BUTTON =====
-function GPSButton({ onLocation }: { onLocation: (lat: number, lng: number) => void }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'active'>('idle')
-
-  const handleClick = () => {
-    if (state === 'loading') return
-    if (state === 'active') {
-      setState('idle')
-      return
-    }
-    if (!navigator.geolocation) {
-      alert('المتصفح لا يدعم خدمة تحديد الموقع')
-      return
-    }
-    setState('loading')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = parseFloat(pos.coords.latitude.toFixed(6))
-        const lng = parseFloat(pos.coords.longitude.toFixed(6))
-        onLocation(lat, lng)
-        setState('active')
-      },
-      (_err) => {
-        setState('idle')
-        alert('لم يتمكن من تحديد موقعك. تأكد من منح إذن الموقع للمتصفح.')
-      },
-      { timeout: 8000, enableHighAccuracy: true }
-    )
-  }
-
-  return (
-    <button
-      className={`dz-gps-btn${state === 'active' ? ' dz-gps-btn--active' : ''}${state === 'loading' ? ' dz-gps-btn--loading' : ''}`}
-      onClick={handleClick}
-      title={state === 'active' ? 'الموقع مفعّل — اضغط لإلغاء' : 'شارك موقعك لبحث "قريب مني"'}
-      type="button"
-    >
-      {state === 'loading'
-        ? <Loader2 size={15} />
-        : state === 'active'
-          ? <Navigation size={15} />
-          : <MapPin size={15} />
-      }
-      <span className="dz-gps-tooltip">
-        {state === 'active' ? '📍 موقعك مفعّل' : '📍 قريب مني'}
-      </span>
-    </button>
-  )
-}
-
 // ===== MAP PREVIEW =====
 function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(true)
   const meta = mapMeta || {}
   const s = (v: unknown) => String(v ?? '')
 
-  const isRoute   = meta.type === 'route'
-  const isPoi     = meta.type === 'poi'
-  const isLocation = meta.type === 'location' || (!isRoute && !isPoi)
+  const isRoute    = meta.type === 'route'
+  const isPoi      = meta.type === 'poi'
+  const isLocation = !isRoute && !isPoi
 
   const title = isRoute
-    ? `🗺️ مسار: ${s(meta.from)} ← ${s(meta.to)}`
+    ? `🗺️ مسار: ${s(meta.from)} → ${s(meta.to)}`
     : isPoi
       ? `${s(meta.poiIcon) || '📍'} ${s(meta.poiNameAr) || 'خريطة'} في ${s(meta.locationName) || 'الجزائر'}`
       : `📍 ${s(meta.locationName) || 'الجزائر'}`
 
+  // Google Maps embed URL (primary) or legacy Leaflet HTML
+  const gmapsUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
+
+  // External links
+  const locationFr  = s(meta.locationFr || meta.locationName || '')
+  const gmapsOpen   = isPoi
+    ? `https://www.google.com/maps/search/${encodeURIComponent(s(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
+    : isRoute
+      ? `https://www.google.com/maps/dir/${encodeURIComponent(s(meta.fromFr) + ' Algeria')}/${encodeURIComponent(s(meta.toFr) + ' Algeria')}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(locationFr + ' Algeria')}`
+
   const lat = meta.lat ? Number(meta.lat) : null
   const lng = meta.lng ? Number(meta.lng) : null
-
-  const osmLink = lat && lng
+  const osmOpen = lat && lng
     ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=14/${lat}/${lng}`
-    : 'https://www.openstreetmap.org'
-  const gmapsLink = lat && lng
-    ? `https://www.google.com/maps?q=${lat},${lng}`
-    : null
-  const routeLink = lat && lng
-    ? `https://www.openstreetmap.org/directions?from=&to=${lat}%2C${lng}`
-    : null
-  const osmRouteLink = isRoute
-    ? `https://www.openstreetmap.org/directions?from=${meta.fromLat}%2C${meta.fromLng}&to=${meta.toLat}%2C${meta.toLng}`
-    : null
+    : `https://www.openstreetmap.org`
 
   return (
     <div className="dz-map-card">
@@ -1471,58 +1422,58 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
         <div className="dz-map-card-title">
           <MapPin size={14} style={{ color: '#00ff90', flexShrink: 0 }} />
           <span>{title}</span>
-          {isPoi && !!meta.count && (
-            <span className="dz-map-badge dz-map-badge--green">{s(meta.count)} نتيجة</span>
-          )}
           {isRoute && !!meta.distanceKm && (
             <span className="dz-map-badge dz-map-badge--orange">📏 {s(meta.distanceKm)} كم</span>
           )}
+          {isRoute && !!meta.durationMin && (
+            <span className="dz-map-badge dz-map-badge--subtle">⏱️ {s(meta.durationMin)} د</span>
+          )}
         </div>
         <div className="dz-map-card-controls">
-          <span className="dz-map-badge dz-map-badge--subtle">OSM • Leaflet • مجاني</span>
+          <span className="dz-map-badge dz-map-badge--subtle">Google Maps</span>
           <span className="dz-map-collapse-btn">{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
 
       {expanded && (
         <div className="dz-map-iframe-wrap">
-          <iframe
-            srcDoc={mapHtml}
-            style={{ width: '100%', height: '460px', border: 'none', display: 'block' }}
-            sandbox="allow-scripts allow-same-origin"
-            title={title}
-          />
-          {isRoute && !!meta.distanceKm && (
-            <div className="dz-map-route-overlay">
-              <div className="dz-map-route-stat" style={{ color: '#00ff90' }}>📏 {s(meta.distanceKm)} كم</div>
-              {!!meta.durationMin && <div className="dz-map-route-stat" style={{ color: '#aaa' }}>⏱️ ~{s(meta.durationMin)} دقيقة</div>}
-            </div>
-          )}
+          {gmapsUrl ? (
+            <iframe
+              src={gmapsUrl}
+              width="100%"
+              height="380"
+              style={{ border: 'none', display: 'block' }}
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+              title={title}
+            />
+          ) : mapHtml && mapHtml.length > 50 ? (
+            <iframe
+              srcDoc={mapHtml}
+              style={{ width: '100%', height: '380px', border: 'none', display: 'block' }}
+              sandbox="allow-scripts allow-same-origin"
+              title={title}
+            />
+          ) : null}
         </div>
       )}
 
       <div className="dz-map-card-actions">
-        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          <MapPin size={11} /> فتح في Google Maps
+        </a>
+        {!isRoute && lat && lng && (
+          <a className="dz-map-action-btn dz-map-action-btn--route" href={`https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+            🚗 إنشاء مسار
+          </a>
+        )}
+        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
           🗺️ OpenStreetMap
         </a>
-        {gmapsLink && !isRoute && (
-          <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-            📍 Google Maps
-          </a>
-        )}
-        {routeLink && isLocation && (
-          <a className="dz-map-action-btn dz-map-action-btn--route" href={routeLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-            <Navigation size={11} /> إنشاء مسار
-          </a>
-        )}
-        {osmRouteLink && isRoute && (
-          <a className="dz-map-action-btn dz-map-action-btn--route" href={osmRouteLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-            🚗 تفاصيل الطريق
-          </a>
-        )}
       </div>
       <div className="dz-map-card-footer">
-        © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> — Leaflet.js — Overpass — OSRM
+        Google Maps Embed · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> · مجاني 🇩🇿
       </div>
     </div>
   )
@@ -2649,7 +2600,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
-      } else if (data.isMap && typeof data.mapHtml === 'string' && data.mapHtml.length > 100) {
+      } else if (data.isMap && (data.mapMeta?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
         trackFeatureUsage('dz-maps')
         addAssistantMessage({
           content: (data.content as string) || '🗺️ الخريطة جاهزة',
@@ -3070,13 +3021,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
-            <GPSButton onLocation={(lat, lng) => {
-              const tag = `[GPS:${lat},${lng}]`
-              setInput(cur => {
-                const stripped = cur.replace(/\[GPS:[^\]]+\]/g, '').trim()
-                return stripped ? `${stripped} ${tag}` : tag
-              })
-            }} />
             <VoicePanel
               onTranscript={(t) => {
                 setInput((cur) => (cur ? `${cur} ${t}` : t))

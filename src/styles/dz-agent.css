@@ -4031,3 +4031,85 @@
 .dz-map-card-footer a:hover { color: #666; }
 
 /* GPS button styles removed — replaced by smart intent detection */
+
+/* ===== GPS NEARBY CARD ===== */
+.dz-gps-nearby-card {
+  background: linear-gradient(135deg, rgba(0,255,144,0.05) 0%, rgba(0,204,255,0.05) 100%);
+  border: 1px solid rgba(0,255,144,0.25);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+.dz-gps-nearby-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dz-gps-nearby-poi-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dz-gps-nearby-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dz-gps-nearby-info strong {
+  color: #e8e8e8;
+  font-size: 14px;
+  font-weight: 700;
+}
+.dz-gps-nearby-info span {
+  color: #888;
+  font-size: 12px;
+}
+.dz-gps-nearby-error {
+  background: rgba(255,80,80,0.1);
+  border: 1px solid rgba(255,80,80,0.3);
+  border-radius: 8px;
+  color: #ff8080;
+  font-size: 12px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+.dz-gps-nearby-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #00ff90, #00ccff);
+  border: none;
+  border-radius: 10px;
+  color: #0a0a12;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 20px;
+  transition: opacity 0.2s, transform 0.15s;
+  width: 100%;
+}
+.dz-gps-nearby-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.dz-gps-nearby-btn:disabled,
+.dz-gps-nearby-btn--loading {
+  background: rgba(0,255,144,0.3);
+  color: #00ff90;
+  cursor: not-allowed;
+  transform: none;
+}
+.dz-gps-nearby-hint {
+  color: #555;
+  font-size: 11px;
+  text-align: center;
+}
+@keyframes dz-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.dz-spin-icon { animation: dz-spin 1s linear infinite; }

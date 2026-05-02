@@ -1854,82 +1854,234 @@ function validateHtmlOutput(html) {
 }
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
-const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FRONTEND ENGINEER and UI/UX DESIGNER operating in "Website Builder God Mode v5".
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER with deep knowledge of the best patterns on CodePen, GitHub, Uiverse, Tailwind UI, and Flowbite. You build production-quality websites that look like they cost $15,000.
 
 ════════════════════════════════════════════
-CRITICAL OUTPUT RULE (ABSOLUTE):
-Output ONLY the complete HTML code — NOTHING ELSE.
-No explanations. No markdown fences. No preamble. No comments outside HTML.
-The ENTIRE response must be ONE valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+ABSOLUTE OUTPUT RULE:
+Output ONLY raw HTML — NOTHING ELSE.
+No markdown fences. No explanations. No comments outside code.
+Response = ONE complete file: <!DOCTYPE html> … </html>
 ════════════════════════════════════════════
 
-DESIGN INTELLIGENCE — AUTO SELECT:
-- "company" / "business" / "saas" / "startup"  → Modern SaaS landing page
-- "portfolio" / "personal" / "cv" / "resume"    → Creative personal brand site
-- "dashboard" / "admin" / "analytics"           → Dark analytics dashboard with charts
-- "e-commerce" / "shop" / "store" / "متجر"      → Product showcase + cart UI
-- "blog" / "مدونة"                              → Clean editorial blog layout
-- "agency" / "وكالة"                            → Bold agency/creative studio page
-- Unclear / general                             → Premium startup landing page
+DESIGN INTELLIGENCE (auto-detect from request):
+- restaurant / مطعم / café    → Elegant food site: dark hero, menu grid, booking form, warm amber palette
+- hotel / فندق / resort       → Luxury hotel: full-screen video-bg hero, rooms gallery, amenities, booking CTA
+- store / متجر / shop         → E-commerce: product grid cards, cart sidebar, filter bar, badge ribbons
+- portfolio / personal / cv   → Creative dev/designer portfolio: split hero, animated skills bar, project cards
+- dashboard / admin / analytics → Dark analytics: sidebar nav, chart placeholders (CSS-drawn), KPI cards, data table
+- agency / وكالة / studio     → Bold creative agency: full-screen type hero, work grid, team section, neon accents
+- business / company / startup → Premium SaaS landing: gradient mesh hero, feature bento grid, pricing table, testimonials
+- blog / مدونة                → Editorial: clean typographic layout, article cards, category filters, newsletter
+- education / school / دورة   → E-learning platform: course cards, progress bars, instructor section, FAQ accordion
+- default                     → Premium startup landing: animated gradient hero + feature grid
 
 ════════════════════════════════════════════
-MANDATORY STRUCTURE (every site MUST have):
-1. <head> with: charset, viewport meta, title, Google Fonts @import
-2. <style> block with ALL CSS (no external CSS files)
-3. <body> with these sections IN ORDER:
-   a. Navigation bar (logo + links + CTA button)
-   b. Hero section (headline + subheadline + CTA buttons + visual element)
-   c. Features / Services section (3–6 cards with icons)
-   d. Stats / Social proof section (numbers, testimonials, or logos)
-   e. About / How it works section
-   f. Call-to-action section (email capture or contact form)
-   g. Footer (links + copyright)
-4. <script> block with working JavaScript
+MANDATORY HTML STRUCTURE:
+1. <head>
+   - charset + viewport + title (contextual, not generic)
+   - Google Fonts @import (2 fonts max, well-paired)
+   - Font Awesome 6 CDN: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+   - <style> block with ALL CSS
+
+2. <body> sections (ALL required):
+   a. Sticky navbar — logo + nav links + CTA button + hamburger (mobile)
+   b. Hero — full-viewport, animated headline, subtext, 2 CTAs, decorative SVG/shape
+   c. Features/Services — 3–6 bento-style cards with Font Awesome icons
+   d. Social proof — animated stat counters (3 numbers) + testimonial cards
+   e. How it works / About — 3-step process or split-screen with visual
+   f. CTA section — gradient background, email input + submit button
+   g. Footer — logo + 3 link columns + social icons + copyright
+
+3. <script> block with all JS logic
 ════════════════════════════════════════════
 
-CSS REQUIREMENTS (STRICT):
-- CSS custom properties (variables) for colors/spacing
-- Smooth scroll: html { scroll-behavior: smooth }
-- Mobile-first responsive: @media (max-width: 768px)
-- CSS animations: @keyframes fadeInUp, float, pulse for hero elements
-- Hover transitions on ALL buttons and cards (transform + box-shadow)
-- Glassmorphism cards: backdrop-filter: blur(20px); background: rgba(255,255,255,0.1)
-- Gradient backgrounds: linear-gradient or radial-gradient for hero
-- CSS Grid + Flexbox layout
+CSS PATTERNS (MANDATORY — from Tailwind UI / Flowbite / CodePen):
 
-JAVASCRIPT REQUIREMENTS:
-- Smooth navbar: shrink + shadow on scroll (window.addEventListener scroll)
-- Mobile hamburger menu toggle
-- Form validation with visual error/success states
-- Intersection Observer for scroll-in animations (animate elements as they enter viewport)
-- Counter animation for stats (count up from 0 when visible)
-- ALL buttons MUST respond (modals, alerts, or form feedback — no dead buttons)
-- Floating download button (REQUIRED — exact code below)
+Variables (always define these):
+:root {
+  --primary: <contextual>;
+  --secondary: <contextual>;
+  --accent: <contextual>;
+  --bg: <contextual>;
+  --surface: <contextual>;
+  --text: <contextual>;
+  --text-muted: <contextual>;
+  --radius: 16px;
+  --shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  --transition: all .3s cubic-bezier(.4,0,.2,1);
+}
 
-FONTS (use @import from Google Fonts, pick best match):
-- Modern/SaaS: Inter or Plus Jakarta Sans
-- Creative/Portfolio: Space Grotesk or DM Sans  
-- Elegant/Luxury: Playfair Display + Inter combo
+Layout:
+- html { scroll-behavior: smooth }
+- *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+- CSS Grid for page sections (display:grid; gap:2rem)
+- Flexbox for nav, cards row, footer columns
 
-COLOR PALETTE (pick ONE palette based on type):
-- SaaS/Tech: #0f172a (dark) + #6366f1 (indigo) + #06b6d4 (cyan)
-- Creative: #111 (dark) + #f97316 (orange) + #ffffff
-- Clean/Minimal: #fafafa (light) + #1a1a2e (navy) + #e879f9 (pink)
-- Professional: #0a192f (navy) + #64ffda (mint) + #ccd6f6 (light)
+Animations (ALL required — CodePen-inspired):
+@keyframes fadeInUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+@keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.4)} 70%{box-shadow:0 0 0 12px transparent} }
+@keyframes slideInLeft { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:translateX(0)} }
+@keyframes countUp { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
 
-FLOATING DOWNLOAD BUTTON (include EXACTLY as-is):
-<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';a.click();})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 8px 32px rgba(124,58,237,.4);transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 40px rgba(124,58,237,.6)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.4)'">⬇ Download Site</button>
+Hero:
+- background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%)
+- background-size: 400% 400%; animation: gradientShift 8s ease infinite
+- Headline: font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1
+- Decorative element: absolute-positioned SVG blob or geometric shape (float animation)
+- Hero animation: .hero-content { animation: fadeInUp .8s ease both }
+
+Cards (Uiverse-inspired):
+- border: 1px solid rgba(255,255,255,.08)
+- background: rgba(255,255,255,.03) or var(--surface)
+- backdrop-filter: blur(20px)
+- border-radius: var(--radius)
+- transition: var(--transition)
+- :hover { transform: translateY(-6px) scale(1.02); box-shadow: var(--shadow) }
+
+Buttons:
+- Primary: gradient background + border-radius:50px + padding:14px 32px + font-weight:700
+- :hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(primary,.5) }
+- :active { transform: translateY(0) }
+
+Responsive (mobile-first):
+@media (max-width: 768px) {
+  .nav-links { display:none }
+  .hamburger { display:flex }
+  .grid-3 { grid-template-columns: 1fr }
+  .hero h1 { font-size: clamp(1.8rem, 8vw, 3rem) }
+  .hero { padding: 5rem 1rem 3rem }
+}
+
+Scrollbar:
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px }
+
+Typography:
+- h1–h3: font-weight 700–900, tight line-height
+- Body: font-size: 1rem; line-height: 1.7; color: var(--text-muted)
+- Section labels: text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; color:var(--accent)
 
 ════════════════════════════════════════════
-QUALITY STANDARD:
-- Looks like a $10,000 Dribbble-quality product
-- NOT a demo or beginner project
-- Professional spacing (8px grid)
-- Pixel-perfect layout
-- NO placeholder images (use CSS gradients or SVG patterns instead)
-- NO Lorem Ipsum — use realistic, context-aware content
+JAVASCRIPT (ALL required — from CodePen best practices):
 
-START OUTPUT NOW — PURE HTML CODE ONLY (no markdown, no explanation):`
+1. Navbar scroll shrink:
+window.addEventListener('scroll',()=>{
+  document.querySelector('nav').classList.toggle('scrolled', window.scrollY > 50)
+})
+nav.scrolled { padding:.5rem 2rem; background: var(--bg); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
+
+2. Mobile hamburger:
+document.querySelector('.hamburger').addEventListener('click',()=>{
+  document.querySelector('.nav-links').classList.toggle('open')
+})
+
+3. Intersection Observer (scroll-in animations):
+const obs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target) }})
+},{ threshold:0.15 })
+document.querySelectorAll('.animate-on-scroll').forEach(el=>obs.observe(el))
+// CSS: .animate-on-scroll{opacity:0;transform:translateY(24px);transition:var(--transition)}
+//      .animate-on-scroll.visible{opacity:1;transform:translateY(0)}
+
+4. Counter animation for stats (count up from 0):
+function animateCounter(el){
+  const target=+el.dataset.target; const dur=1800; const step=target/dur*16;
+  let current=0; const t=setInterval(()=>{
+    current=Math.min(current+step,target);
+    el.textContent=Math.floor(current).toLocaleString()+(el.dataset.suffix||'');
+    if(current>=target)clearInterval(t)
+  },16)
+}
+new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ animateCounter(e.target); obs2.unobserve(e.target) }})
+}).observe(document.querySelectorAll('[data-target]'))
+
+5. Smooth active link highlight:
+const sections=document.querySelectorAll('section[id]');
+window.addEventListener('scroll',()=>{
+  sections.forEach(s=>{ if(window.scrollY>=s.offsetTop-100){ document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active')); document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active') }})
+})
+
+6. Form validation with success state (not alert):
+document.querySelector('form')?.addEventListener('submit',e=>{
+  e.preventDefault()
+  const input=e.target.querySelector('input[type="email"]')
+  if(input && input.value.includes('@')){
+    input.style.borderColor='#10b981'
+    e.target.innerHTML='<p style="color:#10b981;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</p>'
+  } else if(input){ input.style.borderColor='#ef4444'; input.placeholder='أدخل بريد إلكتروني صحيح' }
+})
+
+════════════════════════════════════════════
+FONT PAIRINGS (pick by type):
+- restaurant / hotel / luxury → Playfair Display (headings) + Lato (body)
+- portfolio / agency / creative → Space Grotesk (headings) + Inter (body)
+- saas / business / startup → Plus Jakarta Sans (all) — modern and clean
+- dashboard / analytics → JetBrains Mono (data) + Inter (UI)
+- education / blog → Merriweather (headings) + Source Sans 3 (body)
+
+COLOR PALETTES (pick ONE based on type, be bold and unique):
+- restaurant: #0d0d0d (bg) + #c9a84c (gold) + #8b0000 (deep red) — warm/elegant
+- hotel: #0f0f1a (bg) + #d4af37 (gold) + #f5f5dc (cream) — luxury
+- store/ecommerce: #ffffff (bg) + #111 (text) + #7c3aed (purple) — modern
+- portfolio: #09090b (bg) + #f97316 (orange) + #ffffff — bold creative
+- dashboard: #020817 (bg) + #6366f1 (indigo) + #06b6d4 (cyan) — dark analytics
+- agency: #000000 (bg) + #a855f7 (purple) + #ec4899 (pink) — bold/neon
+- startup/saas: #0f172a (bg) + #7c3aed (violet) + #38bdf8 (sky) — modern SaaS
+- blog/education: #fafafa (bg) + #1e293b (text) + #0ea5e9 (blue) — clean
+
+FLOATING DOWNLOAD BUTTON (include EXACTLY):
+<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href)})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:14px 22px;border-radius:14px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 8px 32px rgba(124,58,237,.5);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;gap:8px;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 48px rgba(124,58,237,.7)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.5)'"><i class="fa-solid fa-download"></i> تحميل الموقع</button>
+
+════════════════════════════════════════════
+QUALITY BARS (MANDATORY — NO EXCEPTIONS):
+✅ MUST look like Dribbble / Awwwards top picks
+✅ MUST use realistic content (no "Lorem ipsum", no "Title here", no "Description...")
+✅ MUST use Font Awesome icons on every feature card
+✅ MUST have working JS (no dead buttons, no broken interactions)
+✅ MUST be fully mobile responsive
+✅ NO external CSS files (all CSS inside <style>)
+✅ NO placeholder images (use CSS gradients, SVG shapes, or emoji as visual accents)
+✅ Every section MUST have a subtle entrance animation (fadeInUp via Intersection Observer)
+✅ Content MUST be context-aware (restaurant → menu items, hotel → room types, etc.)
+
+START OUTPUT NOW — PURE HTML ONLY:`
+
+// ── Website Builder: UI inspiration search ────────────────────────────────────
+// Searches CodePen, GitHub, Flowbite and Uiverse for real patterns matching the site type.
+// Results are injected into the AI prompt as inspiration context.
+async function searchUiInspiration(siteType, userMsg) {
+  const TYPE_QUERIES = {
+    restaurant: ['site:codepen.io restaurant landing page CSS animation', 'restaurant website UI modern HTML CSS GitHub template'],
+    hotel:      ['site:codepen.io hotel luxury website CSS', 'hotel booking website template GitHub HTML'],
+    store:      ['site:codepen.io ecommerce product card CSS animation', 'shop website UI flowbite tailwind template'],
+    portfolio:  ['site:codepen.io portfolio personal website CSS animation', 'developer portfolio website GitHub modern'],
+    dashboard:  ['site:codepen.io analytics dashboard dark CSS', 'admin dashboard UI dark theme flowbite'],
+    agency:     ['site:codepen.io creative agency website animation', 'agency portfolio website bold CSS GitHub'],
+    business:   ['site:codepen.io saas startup landing page CSS', 'startup landing page tailwind flowbite GitHub'],
+    blog:       ['site:codepen.io blog editorial CSS modern', 'blog website minimal clean GitHub template'],
+    education:  ['site:codepen.io elearning education platform CSS', 'online course website UI GitHub template'],
+    landing:    ['site:codepen.io startup landing page CSS animation gradient', 'modern landing page tailwind flowbite GitHub'],
+  }
+  const queries = TYPE_QUERIES[siteType] || TYPE_QUERIES.landing
+  try {
+    const settled = await Promise.allSettled(queries.map(q => searchGoogleCSE(q)))
+    const items = []
+    for (const r of settled) {
+      if (r.status === 'fulfilled') {
+        for (const item of (r.value || []).slice(0, 2)) {
+          if (item.title && item.snippet) {
+            items.push({ title: item.title.slice(0, 80), snippet: item.snippet.slice(0, 200), url: item.url || '' })
+          }
+        }
+      }
+    }
+    return items.slice(0, 6)
+  } catch { return [] }
+}
 
 // ── Map Website Builder: specialized system prompt ────────────────────────────
 const MAP_WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FULL-STACK DEVELOPER specializing in interactive map web applications.
@@ -5836,9 +5988,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
   }
 
-  // ── Website Builder God Mode v5 ───────────────────────────────────────────
+  // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
   if (detectWebsiteBuilderQuery(lastUserMessage)) {
-    console.log(`[Website Builder v5] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    console.log(`[Website Builder v6] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    const wbMeta = extractWebBuilderMeta(lastUserMessage)
+
+    // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
+    let inspirationBlock = ''
+    try {
+      const inspiration = await searchUiInspiration(wbMeta.type, lastUserMessage)
+      if (inspiration.length > 0) {
+        inspirationBlock = `\n\n════════════════════════════════════════════\nUI INSPIRATION FOUND (from CodePen / GitHub / Flowbite — study these patterns, then CREATE BETTER):\n` +
+          inspiration.map((item, i) => `${i + 1}. "${item.title}"\n   → ${item.snippet}\n   URL: ${item.url}`).join('\n') +
+          `\n\nINSTRUCTION: Use these as design direction only. Build something original and superior — not a copy.\n════════════════════════════════════════════`
+        console.log(`[Website Builder v6] Injected ${inspiration.length} inspiration items for type="${wbMeta.type}"`)
+      }
+    } catch (inspErr) {
+      console.warn('[Website Builder v6] Inspiration search failed (non-fatal):', inspErr.message)
+    }
+
+    // ── Step 2: Build enriched user message with metadata hints ──────────────
+    const enrichedUserMsg = [
+      lastUserMessage,
+      `\n[SITE TYPE: ${wbMeta.type} | STYLE: ${wbMeta.style} | TITLE: ${wbMeta.title}]`,
+      `[Generate a complete, production-quality ${wbMeta.description}]`,
+    ].join('\n')
+
+    // ── Step 3: Generate HTML with up to 3 attempts ───────────────────────────
     const MAX_WB_ATTEMPTS = 3
     let lastHtml = null
     let lastValidation = null
@@ -5846,14 +6022,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     for (let attempt = 1; attempt <= MAX_WB_ATTEMPTS; attempt++) {
       try {
         const retryNote = attempt > 1
-          ? `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${lastValidation?.reason}. Fix it — output MUST include <html>, <style>, <script>, and <body> with complete content. HTML ONLY, nothing else.`
+          ? `\n\nATTEMPT ${attempt} — PREVIOUS FAILED: "${lastValidation?.reason}". MANDATORY FIX: output MUST be a SINGLE complete HTML file with <html>, <head>, <style>, <body>, <script>, </html>. NO markdown. NO explanation. HTML ONLY.`
           : ''
 
+        const systemContent = WEBSITE_BUILDER_SYSTEM_PROMPT + inspirationBlock + retryNote
         const wbMessages = [
-          { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
-          { role: 'user', content: lastUserMessage },
+          { role: 'system', content: systemContent },
+          { role: 'user', content: enrichedUserMsg },
         ]
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 10000 })
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
 
@@ -5862,12 +6040,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         lastValidation = validation
 
         if (validation.ok) {
-          console.log(`[Website Builder v5] OK on attempt ${attempt} — ${htmlCode.length} chars via ${wbResult.model}`)
+          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
           const cssCode = extractCssFromHtml(htmlCode)
           const jsCode  = extractJsFromHtml(htmlCode)
-          const wbMeta  = extractWebBuilderMeta(lastUserMessage)
           return res.status(200).json({
-            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته، أو استخدم أزرار **تحميل .html** / **تحميل ZIP** لحفظه.`,
+            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** الموجود داخل الصفحة.`,
             isWebsite: true,
             htmlCode,
             cssCode: cssCode || '',
@@ -5876,29 +6053,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           })
         }
 
-        console.warn(`[Website Builder v5] Attempt ${attempt} failed validation: ${validation.reason} (${htmlCode.length} chars) — retrying...`)
-        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 800))
+        console.warn(`[Website Builder v6] Attempt ${attempt} failed: ${validation.reason} (${htmlCode.length} chars)`)
+        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
       } catch (err) {
-        console.error(`[Website Builder v5] Attempt ${attempt} error:`, err.message)
+        console.error(`[Website Builder v6] Attempt ${attempt} error:`, err.message)
         if (attempt === MAX_WB_ATTEMPTS) {
           return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.' })
         }
-        await new Promise(r => setTimeout(r, 800))
+        await new Promise(r => setTimeout(r, 1000))
       }
     }
 
-    // All attempts exhausted — return best effort if we got something
+    // All attempts exhausted — return best effort
     if (lastHtml && lastHtml.length > 200) {
-      console.warn('[Website Builder v5] All attempts failed validation — returning best-effort HTML')
+      console.warn('[Website Builder v6] All attempts failed — returning best-effort HTML')
       const cssCode = extractCssFromHtml(lastHtml)
       const jsCode  = extractJsFromHtml(lastHtml)
       return res.status(200).json({
-        content: `⚠️ **تم توليد الموقع بشكل جزئي** — قد لا يكون مكتملاً. معاينة مباشرة أو تحميل لمشاهدة النتيجة.`,
+        content: `⚠️ **تم توليد الموقع بشكل جزئي** — قد لا يكون مكتملاً. جرّب المعاينة أو التحميل.`,
         isWebsite: true,
         htmlCode: lastHtml,
         cssCode: cssCode || '',
         jsCode:  jsCode  || '',
-        webBuilderMeta: extractWebBuilderMeta(lastUserMessage),
+        webBuilderMeta: wbMeta,
       })
     }
     return res.status(200).json({

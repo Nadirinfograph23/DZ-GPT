@@ -1399,11 +1399,20 @@ interface NearbyResult {
   gmapsPlace: string
 }
 
+const RADIUS_OPTIONS = [
+  { value: 500,  label: '500م' },
+  { value: 1000, label: '1 كم' },
+  { value: 3000, label: '3 كم' },
+  { value: 5000, label: '5 كم' },
+] as const
+type RadiusValue = typeof RADIUS_OPTIONS[number]['value']
+
 function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
   const [phase, setPhase] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
   const [resolvedMeta, setResolvedMeta] = useState<Record<string, unknown> | null>(null)
   const [nearbyResults, setNearbyResults] = useState<NearbyResult[]>([])
   const [errMsg, setErrMsg] = useState('')
+  const [radius, setRadius] = useState<RadiusValue>(3000)
   const s = (v: unknown) => String(v ?? '')
 
   const poiKey    = s(meta.poiKey)
@@ -1425,7 +1434,7 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
           const r = await fetch('/api/dz-maps/nearby', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat, lng, poiKey: poiKey || null }),
+            body: JSON.stringify({ lat, lng, poiKey: poiKey || null, radius }),
           })
           const data = await r.json()
           if (data.mapMeta) {
@@ -1529,6 +1538,23 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
       {phase === 'error' && (
         <div className="dz-gps-nearby-error">⚠️ {errMsg}</div>
       )}
+      <div className="dz-radius-selector">
+        <span className="dz-radius-label">نطاق البحث:</span>
+        <div className="dz-radius-pills">
+          {RADIUS_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`dz-radius-pill${radius === opt.value ? ' dz-radius-pill--active' : ''}`}
+              onClick={() => setRadius(opt.value)}
+              disabled={phase === 'loading'}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <button
         className={`dz-gps-nearby-btn${phase === 'loading' ? ' dz-gps-nearby-btn--loading' : ''}`}
         onClick={handleGps}

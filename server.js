@@ -1718,13 +1718,18 @@ function detectWebsiteBuilderQuery(msg) {
   if (detectMapWebsiteQuery(msg)) return false
   const lower = msg.toLowerCase()
   const keywords = [
-    // Arabic
+    // Arabic — verbs + "موقع/صفحة"
     'أنشئ موقع', 'انشئ موقع', 'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع',
     'أنشئ صفحة', 'انشئ صفحة', 'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
     'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'طور موقع', 'طوّر موقع', 'اكتب كود موقع',
     'اصنعلي موقع', 'صمملي موقع', 'ابنيلي موقع', 'عملي موقع', 'اعملي موقع',
     'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو', 'موقع شركة', 'موقع تجاري',
     'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر', 'موقع متجر',
+    'اصنع لي موقع', 'ابني لي موقع', 'عمل موقع', 'نريد موقع',
+    'موقع HTML', 'موقع html', 'كود موقع', 'كود HTML', 'كود html',
+    'صفحة ويب', 'اعمل صفحة', 'صمم لي موقع', 'طورلي موقع',
+    // Darija
+    'دير موقع', 'عمل لي موقع', 'ابنيلي موقع', 'صنعلي موقع',
     // English
     'landing page', 'build website', 'create website', 'generate website', 'make website',
     'design website', 'make a landing', 'build a landing', 'portfolio website',
@@ -1734,12 +1739,70 @@ function detectWebsiteBuilderQuery(msg) {
     'e-commerce', 'ecommerce site', 'shop website', 'store website', 'product page',
     'personal website', 'personal site', 'portfolio site', 'blog website',
     'web app', 'web application', 'single page', 'one page website',
+    'portfolio page', 'restaurant website', 'hotel website', 'agency website',
+    'make me a website', 'create me a website', 'build me a website',
     // French
     'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
     'construire un site', 'générer un site', 'design un site', 'tableau de bord',
     'page de destination', 'site e-commerce', 'boutique en ligne',
+    'créer une page', 'faire une page', 'site vitrine', 'site portfolio',
   ]
   return keywords.some(k => lower.includes(k))
+}
+
+// ── Website Builder: extract project metadata from user request ───────────────
+function extractWebBuilderMeta(msg) {
+  // Detect site type
+  let type = 'landing'
+  if (/متجر|بقالة|محل|e-commerce|ecommerce|shop|store|boutique|منتجات|سلة/i.test(msg)) type = 'store'
+  else if (/portfolio|بورتفوليو|شخصي|personal|cv|resume|سيرة ذاتية|أعمالي/i.test(msg)) type = 'portfolio'
+  else if (/مطعم|كافيه|restaurant|café|cafe|food|أكل|وجبة/i.test(msg)) type = 'restaurant'
+  else if (/فندق|hotel|إقامة|نزل/i.test(msg)) type = 'hotel'
+  else if (/مدونة|blog|مقالات|articles/i.test(msg)) type = 'blog'
+  else if (/dashboard|لوحة تحكم|لوحة إدارة|tableau de bord|analytics/i.test(msg)) type = 'dashboard'
+  else if (/وكالة|agency|creative studio|استوديو/i.test(msg)) type = 'agency'
+  else if (/شركة|company|business|entreprise|startup|saas/i.test(msg)) type = 'business'
+  else if (/مدرسة|تعليم|دورة|school|education|course|learning/i.test(msg)) type = 'education'
+
+  // Detect style hint
+  let style = 'modern'
+  if (/احترافي|professional|premium|luxury|راقي|فخم/i.test(msg)) style = 'premium'
+  else if (/بسيط|simple|minimal|clean|واضح/i.test(msg)) style = 'minimal'
+  else if (/مذهل|رائع|amazing|stunning|creative|إبداعي/i.test(msg)) style = 'creative'
+  else if (/داكن|dark|أسود/i.test(msg)) style = 'dark'
+
+  const TYPE_META = {
+    store:     { icon: '🛒', nameAr: 'متجر إلكتروني',  desc: 'موقع متجر إلكتروني مع عرض المنتجات وسلة التسوق' },
+    portfolio: { icon: '🎨', nameAr: 'موقع شخصي',      desc: 'موقع شخصي إبداعي لعرض الأعمال والمهارات' },
+    restaurant:{ icon: '🍽️', nameAr: 'موقع مطعم',      desc: 'موقع مطعم أنيق مع القائمة والحجز والموقع' },
+    hotel:     { icon: '🏨', nameAr: 'موقع فندق',       desc: 'موقع فندق فاخر مع الغرف والحجز والخدمات' },
+    blog:      { icon: '✍️', nameAr: 'مدونة',           desc: 'مدونة عصرية مع مقالات وتصنيفات وبحث' },
+    dashboard: { icon: '📊', nameAr: 'لوحة تحكم',       desc: 'لوحة تحكم ذكية مع إحصائيات ورسوم بيانية' },
+    agency:    { icon: '🚀', nameAr: 'وكالة إبداعية',   desc: 'موقع وكالة مع أعمال وخدمات وفريق' },
+    business:  { icon: '🏢', nameAr: 'موقع شركة',       desc: 'موقع شركة احترافي مع خدمات وتواصل' },
+    education: { icon: '📚', nameAr: 'موقع تعليمي',     desc: 'منصة تعليمية مع دورات وإحصائيات' },
+    landing:   { icon: '✨', nameAr: 'صفحة هبوط',       desc: 'صفحة هبوط احترافية مع hero وخدمات وتواصل' },
+  }
+
+  const meta = TYPE_META[type] || TYPE_META.landing
+
+  // Try to extract a subject name from the message
+  const subjectPatterns = [
+    /(?:موقع|صفحة|site|page)\s+(?:مطعم|شركة|متجر|فندق|وكالة|portfolio|لـ|for|pour|de|d')\s*([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n,،؟?!.]{1,30})/i,
+    /(?:اسمه|اسمها|يُسمى|called|named|nommé)\s+([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n,،؟?!.]{1,30})/i,
+    /["«]([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n"»]{1,30})["»]/,
+  ]
+  let subjectName = ''
+  for (const pat of subjectPatterns) {
+    const m = msg.match(pat)
+    if (m && m[1]) { subjectName = m[1].trim(); break }
+  }
+
+  const title = subjectName
+    ? `${meta.icon} ${meta.nameAr}: ${subjectName}`
+    : `${meta.icon} ${meta.nameAr}`
+
+  return { type, style, title, description: meta.desc, icon: meta.icon }
 }
 
 // ── Website Builder: extract raw HTML from AI response ────────────────────────
@@ -5719,12 +5782,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const cssCode = extractCssFromHtml(htmlCode)
           const jsCode  = extractJsFromHtml(htmlCode)
           return res.status(200).json({
-            content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n📋 **المزايا:**\n- خريطة تفاعلية كاملة مع علامات وnوافذ معلومات\n- بحث عن المواقع\n- تصميم عصري وmستجيب\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو **"تحميل .html"** لحفظها.`,
+            content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو استخدم أزرار التحميل لحفظها.`,
             isWebsite: true,
             isMapWebsite: true,
             htmlCode,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
+            webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي مبني بـ Leaflet.js و OpenStreetMap', icon: '🗺️' },
           })
         }
         console.warn(`[Map Website Builder] Attempt ${attempt} failed: ${validation.reason} — retrying...`)
@@ -5747,6 +5811,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         htmlCode: lastMwbHtml,
         cssCode: cssCode || '',
         jsCode:  jsCode  || '',
+        webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي', icon: '🗺️' },
       })
     }
     return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
@@ -5781,12 +5846,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           console.log(`[Website Builder v5] OK on attempt ${attempt} — ${htmlCode.length} chars via ${wbResult.model}`)
           const cssCode = extractCssFromHtml(htmlCode)
           const jsCode  = extractJsFromHtml(htmlCode)
+          const wbMeta  = extractWebBuilderMeta(lastUserMessage)
           return res.status(200).json({
-            content: `✅ **تم إنشاء موقعك بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته، أو استخدم أزرار **تحميل .html** / **تحميل ZIP** لحفظه.`,
+            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!** انقر **"معاينة مباشرة"** لمشاهدته، أو استخدم أزرار **تحميل .html** / **تحميل ZIP** لحفظه.`,
             isWebsite: true,
             htmlCode,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
+            webBuilderMeta: wbMeta,
           })
         }
 
@@ -5812,6 +5879,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         htmlCode: lastHtml,
         cssCode: cssCode || '',
         jsCode:  jsCode  || '',
+        webBuilderMeta: extractWebBuilderMeta(lastUserMessage),
       })
     }
     return res.status(200).json({

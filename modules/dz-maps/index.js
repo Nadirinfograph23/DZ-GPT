@@ -5,11 +5,11 @@
  * v2: Full Algeria geo DB, fuzzy matching, NO default Algiers fallback
  */
 
-export { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, POI_TYPES } from './intent.js'
+export { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, hasGpsIntent, GPS_PROXIMITY_WORDS, POI_TYPES } from './intent.js'
 export { geocode, reverseGeocode, searchPOI, getRoute } from './geo.js'
 export { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml } from './leaflet-builder.js'
 
-import { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, POI_TYPES } from './intent.js'
+import { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, hasGpsIntent, POI_TYPES } from './intent.js'
 import { geocode, searchPOI, getRoute } from './geo.js'
 import { buildPoiMapHtml, buildRouteMapHtml, buildLocationMapHtml, buildGeoCardHtml } from './leaflet-builder.js'
 import { searchGeoLocation, normText } from './algeria-geo-db.js'

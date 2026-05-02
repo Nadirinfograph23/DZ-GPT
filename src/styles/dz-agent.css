@@ -4103,6 +4103,45 @@
   cursor: not-allowed;
   transform: none;
 }
+.dz-radius-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dz-radius-label {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dz-radius-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dz-radius-pill {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: #999;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: all 0.15s;
+}
+.dz-radius-pill:hover:not(:disabled) {
+  background: rgba(0,255,144,0.08);
+  border-color: rgba(0,255,144,0.3);
+  color: #00ff90;
+}
+.dz-radius-pill--active {
+  background: rgba(0,255,144,0.12) !important;
+  border-color: rgba(0,255,144,0.5) !important;
+  color: #00ff90 !important;
+}
+.dz-radius-pill:disabled { opacity: 0.4; cursor: not-allowed; }
 .dz-gps-nearby-hint {
   color: #555;
   font-size: 11px;

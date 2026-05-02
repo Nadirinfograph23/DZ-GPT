@@ -2929,7 +2929,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                 </div>
               ) : (
                 <div className="dz-thinking-step">
-                  <span className="dz-thinking-label">جاري التفكير...</span>
+                  <span className="dz-thinking-label">راني نخمم أصبر...</span>
                   <div className="dz-typing-indicator">
                     <span /><span /><span />
                   </div>

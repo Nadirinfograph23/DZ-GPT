@@ -1,87 +1,91 @@
 /**
- * DZ Maps — Google Maps Embed Builder v4
- * Builds Google Maps embed URLs for POI, location, and route queries.
- * No API key required — uses public Google Maps embed endpoint.
+ * DZ Maps — OSM Embed Builder v5
+ * Builds OpenStreetMap embed URLs for POI, location, route, and GPS nearby.
+ * No API key required — uses public OSM tile server.
  */
 
 import { POI_TYPES } from './intent.js'
 
-// English search terms for each POI type (used in Google Maps query)
-const POI_EN_SEARCH = {
-  hospital:     'hospital',
-  mosque:       'mosque',
-  restaurant:   'restaurant',
-  fuel:         'gas station',
-  school:       'school',
-  bank:         'bank ATM',
-  pharmacy:     'pharmacy',
-  police:       'police station',
-  post_office:  'post office',
-  supermarket:  'supermarket',
-  hotel:        'hotel',
-  park:         'park',
-  airport:      'airport',
-  government:   'city hall government',
-  parking:      'parking',
+export const POI_EN_SEARCH = {
+  hospital:    'hospital clinic',
+  mosque:      'mosque masjid',
+  restaurant:  'restaurant',
+  fuel:        'gas station fuel',
+  school:      'school university',
+  bank:        'bank ATM',
+  pharmacy:    'pharmacy',
+  police:      'police station',
+  post_office: 'post office',
+  supermarket: 'supermarket grocery',
+  hotel:       'hotel',
+  park:        'park garden',
+  airport:     'airport',
+  government:  'city hall government',
+  parking:     'parking',
 }
 
 /**
- * Build a Google Maps embed URL for a POI search
- * e.g. "hospital in Annaba Algeria"
+ * Internal: build OSM export embed URL
+ * bbox = [west, south, east, north], optional marker
  */
-export function buildPoiEmbedUrl(poiKey, cityFr) {
-  const enSearch = POI_EN_SEARCH[poiKey] || (POI_TYPES[poiKey]?.nameAr) || 'place'
-  const q = `${enSearch} in ${cityFr} Algeria`
-  return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`
+function osmEmbed(lat, lng, d = 0.08, marker = true) {
+  const w = (lng - d).toFixed(5)
+  const s = (lat - d).toFixed(5)
+  const e = (lng + d).toFixed(5)
+  const n = (lat + d).toFixed(5)
+  const mk = marker ? `&marker=${lat},${lng}` : ''
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${w},${s},${e},${n}&layer=mapnik${mk}`
 }
 
-/**
- * Build a Google Maps embed URL for a specific location
- * e.g. "Annaba Algeria"
- */
-export function buildLocationEmbedUrl(cityFr) {
-  const q = `${cityFr} Algeria`
-  return `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`
+/** POI search — wider view, no marker (shows surrounding area) */
+export function buildPoiEmbedUrl(_poiKey, _cityFr, lat, lng) {
+  if (lat && lng) return osmEmbed(lat, lng, 0.10, false)
+  return null
 }
 
-/**
- * Build a Google Maps embed URL for routing (A → B)
- */
-export function buildRouteEmbedUrl(fromFr, toFr) {
-  const saddr = `${fromFr} Algeria`
-  const daddr = `${toFr} Algeria`
-  return `https://www.google.com/maps?saddr=${encodeURIComponent(saddr)}&daddr=${encodeURIComponent(daddr)}&output=embed`
+/** Single location — tight zoom with pin marker */
+export function buildLocationEmbedUrl(_cityFr, lat, lng) {
+  if (lat && lng) return osmEmbed(lat, lng, 0.07, true)
+  return null
 }
 
-/**
- * Build full card HTML using Google Maps embed iframe
- * Used as legacy mapHtml (iframe with embedded Google Maps)
- */
+/** Route A→B — bbox covering both endpoints */
+export function buildRouteEmbedUrl(_fromFr, _toFr, fromLat, fromLng, toLat, toLng) {
+  if (fromLat && fromLng && toLat && toLng) {
+    const minLat = Math.min(fromLat, toLat) - 0.15
+    const maxLat = Math.max(fromLat, toLat) + 0.15
+    const minLng = Math.min(fromLng, toLng) - 0.15
+    const maxLng = Math.max(fromLng, toLng) + 0.15
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${minLng.toFixed(5)},${minLat.toFixed(5)},${maxLng.toFixed(5)},${maxLat.toFixed(5)}&layer=mapnik`
+  }
+  return null
+}
+
+/** GPS nearby — very tight zoom on user's exact coordinates */
+export function buildNearbyEmbedUrl(lat, lng) {
+  return osmEmbed(lat, lng, 0.030, true)
+}
+
+// ── Legacy HTML wrappers (kept for compatibility) ──────────────────────────
+function wrapEmbed(embedUrl) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a12;height:100vh;display:flex;flex-direction:column}iframe{flex:1;border:none;width:100%;height:100%}</style></head><body><iframe src="${embedUrl}" allowfullscreen loading="lazy"></iframe></body></html>`
+}
+
 export function buildGeoCardHtml({ locationName, locationNameFr, lat, lng }) {
-  const q = encodeURIComponent(`${locationNameFr || locationName} Algeria`)
-  const embedUrl = `https://www.google.com/maps?q=${q}&output=embed`
-  return buildMapCardHtml({ title: `📍 ${locationName}`, embedUrl, type: 'location' })
+  const url = buildLocationEmbedUrl(locationNameFr || locationName, lat, lng)
+  return url ? wrapEmbed(url) : ''
 }
 
-export function buildPoiMapHtml({ poiKey, locationName, locationNameFr, centerLat, centerLng, pois }) {
-  const def = POI_TYPES[poiKey] || { icon: '📍', nameAr: 'نتائج' }
-  const cityFr = locationNameFr || locationName
-  const embedUrl = buildPoiEmbedUrl(poiKey, cityFr)
-  return buildMapCardHtml({ title: `${def.icon} ${def.nameAr} في ${locationName}`, embedUrl, type: 'poi' })
+export function buildPoiMapHtml({ poiKey, locationName, locationNameFr, centerLat, centerLng }) {
+  const url = buildPoiEmbedUrl(poiKey, locationNameFr || locationName, centerLat, centerLng)
+  return url ? wrapEmbed(url) : ''
 }
 
-export function buildRouteMapHtml({ fromName, toName, fromLat, fromLng, toLat, toLng, route, fromNameFr, toNameFr }) {
-  const embedUrl = buildRouteEmbedUrl(fromNameFr || fromName, toNameFr || toName)
-  return buildMapCardHtml({ title: `🗺️ ${fromName} → ${toName}`, embedUrl, type: 'route' })
+export function buildRouteMapHtml({ fromName, toName, fromLat, fromLng, toLat, toLng, fromNameFr, toNameFr }) {
+  const url = buildRouteEmbedUrl(fromNameFr || fromName, toNameFr || toName, fromLat, fromLng, toLat, toLng)
+  return url ? wrapEmbed(url) : ''
 }
 
 export function buildLocationMapHtml({ locationName, locationNameFr, lat, lng }) {
   return buildGeoCardHtml({ locationName, locationNameFr, lat, lng })
-}
-
-// ── Internal helper ────────────────────────────────────────────────────────
-function buildMapCardHtml({ title, embedUrl }) {
-  // Return a minimal wrapper — MapPreview will use meta.gmapsUrl directly
-  // This HTML is only used as legacy fallback
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a12;display:flex;flex-direction:column;height:100vh}iframe{flex:1;border:none;width:100%;height:100%}</style></head><body><iframe src="${embedUrl}" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></body></html>`
 }

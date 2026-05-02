@@ -17,6 +17,7 @@ import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
+import { handleMapQuery, isMapQuery } from './modules/dz-maps/index.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -5273,6 +5274,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         role: 'system',
         content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
       })
+    }
+  }
+
+  // ── DZ Maps Intelligence Engine ──────────────────────────────────────────
+  if (isMapQuery(lastUserMessage)) {
+    console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const mapResult = await handleMapQuery(lastUserMessage, userLocation)
+      if (mapResult) {
+        return res.status(200).json({
+          content:  mapResult.content,
+          isMap:    mapResult.isMap || false,
+          mapHtml:  mapResult.mapHtml || null,
+          mapMeta:  mapResult.mapMeta || null,
+        })
+      }
+    } catch (mapErr) {
+      console.error('[DZ-Maps] Error:', mapErr.message)
+      // Fall through to AI handler
     }
   }
 

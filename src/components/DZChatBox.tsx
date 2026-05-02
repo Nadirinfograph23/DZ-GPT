@@ -32,6 +32,7 @@ type RichType =
   | 'pulls'
   | 'stats'
   | 'website'
+  | 'map'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -168,6 +169,8 @@ interface DZMessage {
   htmlCode?: string
   cssCode?: string
   jsCode?: string
+  mapHtml?: string
+  mapMeta?: Record<string, unknown>
 }
 
 interface ActionLogEntry {
@@ -1338,6 +1341,84 @@ function RepoActionPanel({
   )
 }
 
+// ===== MAP PREVIEW =====
+function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
+  const [expanded, setExpanded] = React.useState(true)
+  const meta = mapMeta || {}
+  const title = meta.type === 'route'
+    ? `🗺️ مسار: ${meta.from} ← ${meta.to}`
+    : meta.type === 'poi'
+      ? `${meta.poiIcon || '📍'} ${meta.poiNameAr || 'خريطة'} في ${meta.locationName || 'الجزائر'} (${meta.count || 0} نتيجة)`
+      : `📍 ${meta.locationName || 'الجزائر'}`
+
+  const osmLink = meta.lat && meta.lng
+    ? `https://www.openstreetmap.org/?mlat=${meta.lat}&mlon=${meta.lng}#map=12/${meta.lat}/${meta.lng}`
+    : 'https://www.openstreetmap.org'
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg,#0f1117 0%,#1a1a2e 100%)',
+      border: '1px solid #00ff9030',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      marginTop: '12px',
+      fontFamily: "'Segoe UI',Tahoma,sans-serif",
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 14px',
+        background: 'rgba(0,255,144,0.05)',
+        borderBottom: '1px solid #00ff9020',
+        cursor: 'pointer',
+      }} onClick={() => setExpanded(e => !e)}>
+        <span style={{ color: '#00ff90', fontWeight: 700, fontSize: '13px' }}>{title}</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', color: '#666', background: '#00ff9010', border: '1px solid #00ff9025', borderRadius: '10px', padding: '2px 8px' }}>
+            OSM • Leaflet • مجاني
+          </span>
+          <a href={osmLink} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: '11px', color: '#00ccff', textDecoration: 'none', padding: '2px 8px', background: '#00ccff10', borderRadius: '8px', border: '1px solid #00ccff25' }}
+            onClick={e => e.stopPropagation()}>
+            🔗 OSM
+          </a>
+          <span style={{ color: '#666', fontSize: '14px' }}>{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ position: 'relative' }}>
+          <iframe
+            srcDoc={mapHtml}
+            style={{ width: '100%', height: '480px', border: 'none', display: 'block' }}
+            sandbox="allow-scripts allow-same-origin"
+            title={String(title)}
+          />
+          {meta.type === 'route' && meta.distanceKm && (
+            <div style={{
+              position: 'absolute', bottom: '10px', right: '10px',
+              background: 'rgba(10,10,20,0.85)', backdropFilter: 'blur(8px)',
+              border: '1px solid #00ff9040', borderRadius: '10px',
+              padding: '8px 14px', color: '#fff', fontSize: '12px', lineHeight: 1.6,
+            }}>
+              <div style={{ color: '#00ff90', fontWeight: 700 }}>📏 {String(meta.distanceKm)} كم</div>
+              {meta.durationMin && <div style={{ color: '#ccc' }}>⏱️ ~{String(meta.durationMin)} دقيقة</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        padding: '6px 14px', fontSize: '10px', color: '#444',
+        borderTop: '1px solid #ffffff08', textAlign: 'center',
+      }}>
+        © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style={{ color: '#555', textDecoration: 'none' }}>OpenStreetMap contributors</a> — Leaflet.js — Overpass API — OSRM
+      </div>
+    </div>
+  )
+}
+
 // ===== BRANCHES PANEL =====
 function BranchesPanel({ branches, repo }: { branches: BranchItem[]; repo: string }) {
   return (
@@ -2459,6 +2540,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
+      } else if (data.isMap && typeof data.mapHtml === 'string' && data.mapHtml.length > 100) {
+        trackFeatureUsage('dz-maps')
+        addAssistantMessage({
+          content: (data.content as string) || '🗺️ الخريطة جاهزة',
+          richType: 'map',
+          mapHtml: data.mapHtml as string,
+          mapMeta: (data.mapMeta as Record<string, unknown>) || {},
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -2763,6 +2852,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       )}
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
+                      )}
+                      {msg.richType === 'map' && msg.mapHtml && (
+                        <MapPreview mapHtml={msg.mapHtml} mapMeta={msg.mapMeta} />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview

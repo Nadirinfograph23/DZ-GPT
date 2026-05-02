@@ -770,11 +770,35 @@ function WebsitePreview({
   const jsCode  = jsCodeProp  || clientExtractJs(htmlCode)
   const sizeKb  = Math.round(new Blob([htmlCode]).size / 1024)
 
-  const activeCode = codeTab === 'html' ? htmlCode : codeTab === 'css' ? cssCode : jsCode
+  const [editedHtml, setEditedHtml] = useState(htmlCode)
+  const [editedCss,  setEditedCss]  = useState(cssCode)
+  const [editedJs,   setEditedJs]   = useState(jsCode)
+  const [previewSrc, setPreviewSrc] = useState(htmlCode)
+  const [editApplied, setEditApplied] = useState(false)
+
+  const activeRaw = codeTab === 'html' ? editedHtml : codeTab === 'css' ? editedCss : editedJs
+  const setActiveRaw = (v: string) => {
+    if (codeTab === 'html') setEditedHtml(v)
+    else if (codeTab === 'css') setEditedCss(v)
+    else setEditedJs(v)
+  }
+  const activeCode = activeRaw
   const codeLang   = codeTab === 'html' ? 'language-html' : codeTab === 'css' ? 'language-css' : 'language-javascript'
 
+  const applyEdits = () => {
+    let src = editedHtml
+    const styleTag  = `<style>${editedCss}</style>`
+    const scriptTag = `<script>${editedJs}</script>`
+    src = src.replace(/<style[^>]*>[\s\S]*?<\/style>/i, styleTag)
+    src = src.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/i, scriptTag)
+    setPreviewSrc(src)
+    setEditApplied(true)
+    setTimeout(() => setEditApplied(false), 2000)
+    setView('preview')
+  }
+
   const handleDownloadHtml = () => {
-    const blob = new Blob([htmlCode], { type: 'text/html' })
+    const blob = new Blob([previewSrc], { type: 'text/html' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'dz-agent-site.html'
@@ -791,10 +815,10 @@ function WebsitePreview({
     try {
       const JSZip = (await import('jszip')).default
       const zip   = new JSZip()
-      const shell = buildHtmlShellClient(htmlCode, cssCode, jsCode)
+      const shell = buildHtmlShellClient(editedHtml, editedCss, editedJs)
       zip.file('index.html', shell)
-      zip.file('style.css',  cssCode)
-      zip.file('script.js',  jsCode)
+      zip.file('style.css',  editedCss)
+      zip.file('script.js',  editedJs)
       const blob = await zip.generateAsync({ type: 'blob' })
       const a    = document.createElement('a')
       a.href     = URL.createObjectURL(blob)
@@ -813,7 +837,7 @@ function WebsitePreview({
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(activeCode || htmlCode)
+    navigator.clipboard.writeText(activeCode || previewSrc)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -948,7 +972,7 @@ function WebsitePreview({
           </div>
           <div className="dz-wp-frame-scroller">
             <iframe
-              srcDoc={htmlCode}
+              srcDoc={previewSrc}
               className="dz-wp-frame"
               style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -958,8 +982,27 @@ function WebsitePreview({
         </div>
       ) : (
         <div className="dz-wp-code-wrap">
-          {activeCode ? (
-            <DZCodeBlock className={codeLang}>{activeCode}</DZCodeBlock>
+          {activeCode !== undefined ? (
+            <>
+              <textarea
+                className="dz-wp-editor"
+                value={activeCode}
+                onChange={e => setActiveRaw(e.target.value)}
+                spellCheck={false}
+                dir="ltr"
+                placeholder={`اكتب كود ${codeTab.toUpperCase()} هنا...`}
+              />
+              <div className="dz-wp-editor-bar">
+                <span className="dz-wp-editor-hint">✏️ يمكنك تعديل الكود مباشرة</span>
+                <button
+                  className={`dz-wp-btn dz-wp-btn--apply${editApplied ? ' dz-wp-btn--ok' : ''}`}
+                  onClick={applyEdits}
+                  title="تطبيق التعديلات ومعاينة النتيجة"
+                >
+                  {editApplied ? '✓ تم التطبيق' : '▶ تطبيق ومعاينة'}
+                </button>
+              </div>
+            </>
           ) : (
             <div className="dz-wp-empty-tab">لا يوجد كود {codeTab.toUpperCase()} مستخرج</div>
           )}

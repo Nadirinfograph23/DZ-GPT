@@ -1389,9 +1389,8 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
   const meta = mapMeta || {}
   const s = (v: unknown) => String(v ?? '')
 
-  const isRoute    = meta.type === 'route'
-  const isPoi      = meta.type === 'poi'
-  const isLocation = !isRoute && !isPoi
+  const isRoute = meta.type === 'route'
+  const isPoi   = meta.type === 'poi'
 
   const title = isRoute
     ? `🗺️ مسار: ${s(meta.from)} → ${s(meta.to)}`
@@ -2600,7 +2599,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
-      } else if (data.isMap && (data.mapMeta?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
+      } else if (data.isMap && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
         trackFeatureUsage('dz-maps')
         addAssistantMessage({
           content: (data.content as string) || '🗺️ الخريطة جاهزة',

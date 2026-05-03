@@ -44,3 +44,5 @@
 {"type":"pause","trackId":null,"position":0,"duration":0,"ts":1777851343965}
 {"type":"volume","trackId":null,"ts":1777851467305,"message":"network:4g:std"}
 {"type":"volume","trackId":null,"ts":1777851467714,"message":"network:4g:std"}
+{"type":"volume","trackId":null,"ts":1777851738761,"message":"network:4g:std"}
+{"type":"pause","trackId":null,"position":0,"duration":0,"ts":1777851740766}

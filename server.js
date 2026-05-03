@@ -3121,27 +3121,94 @@ function detectNewsQuery(msg) {
   return null
 }
 
+// ── Extract the specific subject/entity from a news query ─────────────────────
+// e.g. "آخر الأخبار عن رياض محرز" → "رياض محرز"
+//      "news about Mahrez" → "Mahrez"
+//      "أخبار الجزائر" → null (generic, not a specific subject)
+function extractNewsSubject(msg) {
+  if (!msg) return null
+  let s = msg.trim()
+
+  // Strip Arabic preposition patterns (order matters: longest first)
+  const arPrefixes = [
+    /^(ما هي |ما هو |ما |هل )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل|الخاصة ب|المتعلقة ب)\s+/i,
+    /^(أعطني |اعطني |اريد |أريد |أخبرني عن |قدم لي |قدملي )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل)\s+/i,
+    /^(ما آخر|ما أخبار|آخر) أخبار\s+/i,
+    /^أخبار\s+/i,
+    /^(اريد |أريد )أخبار\s+/i,
+  ]
+  // Strip English preposition patterns
+  const enPrefixes = [
+    /^(what('s| is| are) the )?(latest|recent|last|breaking) news (about|on|regarding|of)\s+/i,
+    /^news (about|on|regarding|of)\s+/i,
+    /^(tell me )?(about|latest about)\s+/i,
+  ]
+  // Strip French preposition patterns
+  const frPrefixes = [
+    /^(quelles sont les )?(dernières nouvelles|actualités|nouvelles) (sur|de|à propos de|concernant)\s+/i,
+    /^(nouvelles|actualités) (sur|de)\s+/i,
+  ]
+
+  for (const re of [...arPrefixes, ...enPrefixes, ...frPrefixes]) {
+    const m = s.match(re)
+    if (m) { s = s.slice(m[0].length).trim(); break }
+  }
+
+  // If nothing was stripped, the subject is ambiguous — don't return it
+  if (s.toLowerCase() === msg.trim().toLowerCase()) return null
+
+  // Strip trailing punctuation / question marks
+  s = s.replace(/[\u061F?!،,\.]+$/, '').trim()
+
+  // Ignore very short (1 char) or very generic terms
+  if (!s || s.length < 2) return null
+  const genericTerms = [
+    'الجزائر','algeria','algérie','الاقتصاد','السياسة','الرياضة','اليوم','العالم',
+    'economy','politics','sport','world','today','الأخبار','news',
+  ]
+  if (genericTerms.some(g => s.toLowerCase() === g.toLowerCase())) return null
+
+  return s
+}
+
 function isNewspaperHeadlineQuery(msg) {
   const lower = msg.toLowerCase()
   const newspaperKw = ['صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse']
   return newspaperKw.some(k => lower.includes(k))
 }
 
-function buildRSSContext(feedResults, queryType) {
+function buildRSSContext(feedResults, queryType, subject = null) {
   if (!feedResults.length) return ''
   const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const label = queryType === 'sports' ? '⚽ نتائج وأخبار رياضية' : '📰 أخبار'
-  let ctx = `\n\n--- ${label} — ${date} ---\n`
+
+  // Build subject keywords for filtering (split multi-word subject into tokens)
+  const subjectTokens = subject
+    ? subject.toLowerCase().split(/\s+/).filter(t => t.length > 1)
+    : null
+
+  function itemMatchesSubject(item) {
+    if (!subjectTokens || subjectTokens.length === 0) return true
+    const haystack = ((item.title || '') + ' ' + (item.description || '')).toLowerCase()
+    return subjectTokens.some(tok => haystack.includes(tok))
+  }
+
+  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} ---\n`
+  let totalItems = 0
   for (const feed of feedResults) {
     if (!feed.items?.length) continue
+    const items = feed.items.filter(itemMatchesSubject).slice(0, 4)
+    if (!items.length) continue
     ctx += `\n**${feed.name}:**\n`
-    for (const item of feed.items.slice(0, 4)) {
+    for (const item of items) {
       ctx += `• ${item.title}`
       if (item.link) ctx += ` — ${item.link}`
       if (item.description) ctx += `\n  ${item.description}`
       ctx += '\n'
+      totalItems++
     }
   }
+  if (totalItems === 0) return ''
   ctx += '\n---\n'
   return ctx
 }
@@ -6883,8 +6950,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── RSS News/Sports detection and fetch ───────────────────────────────────
   let rssContext = ''
   const newsQueryType = detectNewsQuery(lastUserMessage)
+  // Extract specific subject/entity from the query (e.g. "رياض محرز" from "آخر الأخبار عن رياض محرز")
+  const newsSubject = extractNewsSubject(lastUserMessage)
+  if (newsSubject) console.log(`[DZ Agent] News subject extracted: "${newsSubject}"`)
+
   if (newsQueryType && !isPrayerQuery && !isFootballQuery) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
+
+    // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
+    if (newsSubject) {
+      try {
+        const year = new Date().getFullYear()
+        const isArabic = /[\u0600-\u06FF]/.test(newsSubject)
+        const rssHL = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
+        const targetedRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(newsSubject + ' ' + year)}&hl=${rssHL}`
+        const targetedArticles = await searchGoogleNewsRSS(targetedRssUrl)
+        if (targetedArticles.length > 0) {
+          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
+          for (const art of targetedArticles.slice(0, 8)) {
+            targeted += `• ${art.title || art.headline || ''}`
+            if (art.link || art.url) targeted += ` — ${art.link || art.url}`
+            targeted += '\n'
+          }
+          targeted += '\n---\n'
+          rssContext = targeted
+          console.log(`[DZ Agent] Targeted GN-RSS: ${targetedArticles.length} articles for "${newsSubject}"`)
+        }
+      } catch (err) {
+        console.error('[DZ Agent] Targeted GN-RSS search failed:', err.message)
+      }
+    }
+
+    // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
@@ -6892,12 +6990,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     const feedResults = await fetchMultipleFeeds(feedsToFetch)
     if (feedResults.length > 0) {
-      rssContext = buildRSSContext(feedResults, newsQueryType)
-      console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+      // Pass newsSubject so buildRSSContext filters articles to only those mentioning the subject
+      const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
+      if (generalCtx) {
+        rssContext = rssContext ? rssContext + generalCtx : generalCtx
+        console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+      }
     }
 
-    // ── GN-RSS ADD-ON: augment news context with Google News RSS ─────────────
-    if (newsQueryType === 'news' || newsQueryType === 'both') {
+    // ── GN-RSS ADD-ON: augment with general Google News RSS only when no specific subject ──
+    if (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both')) {
       try {
         const queryLang = detectQueryLanguage(lastUserMessage)
         const gnFeeds = GN_RSS_FEEDS[queryLang] || GN_RSS_FEEDS.ar
@@ -6925,13 +7027,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   if (!skipSearch) {
     try {
-      const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(lastUserMessage, msgIntent)
+      // If a specific subject was extracted (e.g. "رياض محرز"), use it as the search query
+      // so CSE and GN-RSS search precisely for that subject rather than the full sentence
+      const retrievalQuery = newsSubject || lastUserMessage
+      const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(retrievalQuery, msgIntent)
       const mustSearch = msgIntent.isTemporal
         || ['news','sports','economy','politics','tech','celebrities','incidents'].includes(msgIntent.primary)
         || msgIntent.all.some(i => ['celebrities','incidents','news','politics'].includes(i))
         || !!newsQueryType
 
-      console.log(`[DZ Retrieval] Query: "${cseQuery}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
+      console.log(`[DZ Retrieval] Query: "${cseQuery}" | subject="${newsSubject || ''}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + legacy web fallback
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([

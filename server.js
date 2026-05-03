@@ -1765,6 +1765,95 @@ function detectWebsiteBuilderQuery(msg) {
   return false
 }
 
+// ── Code Execution Mode Detection (Programming Section ONLY) ─────────────────
+function detectCodeExecutionQuery(msg) {
+  const lower = msg.toLowerCase()
+  // Must NOT trigger for non-programming queries
+  const nonCodeKw = ['موقع','صفحة','landing','website','dashboard ui','لوحة تحكم','خريطة','طبيب','صيدلية','مسجد','أخبار','صحف','طقس','مباراة','نتائج','ترتيب','دوري','صلاة','قرآن']
+  if (nonCodeKw.some(k => lower.includes(k))) return null
+
+  // Execution keywords: user wants code to be RUN, not just explained
+  const execVerbs = [
+    'اكتب كود','اكتب دالة','اكتب سكريبت','اكتب برنامج','اكتب تطبيق',
+    'أنشئ كود','أنشئ دالة','أنشئ سكريبت','أنشئ برنامج',
+    'نفذ','شغل','اعمل كود','اعمل دالة','اعمل برنامج',
+    'اصنع كود','اصنع برنامج','اصنع سكريبت',
+    'دير كود','دير دالة','دير برنامج','دير سكريبت',
+    'write code','write function','write script','write program',
+    'create code','create function','create script','create program',
+    'build code','build function','build script','build program',
+    'run code','execute code','make code','make function','make program',
+    'écris un code','créer un programme','écrire une fonction',
+    'اكتب لي','اكتب لي كود','اكتب لي دالة','اكتب لي برنامج',
+    'اعملي كود','اعملي دالة','اعملي برنامج',
+  ]
+  if (execVerbs.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  // Pattern: coding verb + language keyword
+  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute|code|كود|دالة|function|script|سكريبت|برنامج|program|تطبيق)\s/i
+  const langKw = /(?:python|javascript|js|typescript|ts|react|node|html|css|php|java|c\+\+|c#|rust|go|sql|bash|shell|بايثون|جافاسكريبت)/i
+  if (codingVerb.test(msg) && langKw.test(msg)) {
+    return detectExecLanguage(lower)
+  }
+
+  // Direct code-related commands
+  const directCode = [
+    'كود python','كود javascript','كود js','كود html',
+    'دالة python','دالة javascript','دالة js',
+    'سكريبت python','سكريبت javascript','سكريبت bash',
+    'python code','javascript code','js code',
+    'python function','javascript function',
+    'python script','javascript script','bash script',
+  ]
+  if (directCode.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  return null
+}
+
+function detectExecLanguage(lower) {
+  if (/python|بايثون|\.py\b/i.test(lower)) return 'python'
+  if (/javascript|js\b|node|جافاسكريبت/i.test(lower)) return 'javascript'
+  if (/typescript|ts\b/i.test(lower)) return 'javascript'
+  if (/html|css|واجهة/i.test(lower)) return 'html'
+  if (/bash|shell|terminal|سكريبت/i.test(lower)) return 'javascript' // fallback to JS
+  if (/react|vue|angular|svelte/i.test(lower)) return 'html'
+  if (/php|java\b|c\+\+|c#|rust|go\b|sql/i.test(lower)) return 'python' // show code, no exec
+  return 'python' // default
+}
+
+const CODE_EXECUTION_SYSTEM_PROMPT = `You are DZ Agent in CODE EXECUTION MODE.
+Your job: generate COMPLETE, RUNNABLE code that works immediately.
+
+RULES:
+1. Output ONLY code — no explanations before or after the code block
+2. Code must be COMPLETE and SELF-CONTAINED — include all imports, dependencies, sample data
+3. Code must WORK when executed directly — no placeholders, no "TODO", no "..." ellipsis
+4. After the code block, add a brief explanation in Arabic (2-3 lines max)
+
+OUTPUT FORMAT — you MUST follow this exactly:
+\`\`\`[language]
+// complete runnable code here
+\`\`\`
+
+**شرح:** وصف مختصر بالعربية لما يفعله الكود
+
+LANGUAGE-SPECIFIC RULES:
+- Python: use print() for output, include sample data, no external APIs unless explicitly asked
+- JavaScript: use console.log() for output, include sample data, write modern ES6+
+- HTML: generate a complete HTML file with embedded CSS and JS, make it visually appealing
+
+FORBIDDEN:
+- ❌ No markdown before the code block
+- ❌ No "هنا الكود" or similar preambles
+- ❌ No incomplete code
+- ❌ No placeholder values like [your_api_key] or TODO
+- ❌ No input() in Python (use hardcoded sample data instead)
+`
+
 // ── Website Builder: extract project metadata from user request ───────────────
 function extractWebBuilderMeta(msg) {
   // Detect site type
@@ -6068,6 +6157,55 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
     return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
+  }
+
+  // ── Code Execution Mode (Programming Section ONLY) ─────────────────────────
+  const execLang = detectCodeExecutionQuery(lastUserMessage)
+  if (execLang) {
+    console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
+
+    try {
+      const execMessages = [
+        { role: 'system', content: CODE_EXECUTION_SYSTEM_PROMPT },
+        { role: 'user', content: lastUserMessage },
+      ]
+
+      const execResult = await safeGenerateAI({ messages: execMessages, query: lastUserMessage, max_tokens: 4000 })
+      const rawOutput = execResult.content || ''
+
+      // Extract code block
+      const codeMatch = rawOutput.match(/```(\w*)\n([\s\S]*?)```/)
+      const code = codeMatch ? codeMatch[2].trim() : rawOutput.trim()
+      const detectedLang = codeMatch?.[1] || execLang
+
+      // Extract explanation (everything after the code block)
+      const explanation = rawOutput.replace(/```[\s\S]*?```/, '').trim()
+
+      // For HTML: return as website (reuse WebsitePreview)
+      if (detectedLang === 'html' || (code.includes('<html') && code.includes('</html>'))) {
+        const cssCode = extractCssFromHtml(code)
+        const jsCode  = extractJsFromHtml(code)
+        return res.status(200).json({
+          content: explanation || '✅ تم إنشاء الكود بنجاح!',
+          isWebsite: true,
+          htmlCode: code,
+          cssCode: cssCode || '',
+          jsCode: jsCode || '',
+          webBuilderMeta: { type: 'code', style: 'modern', title: '💻 تنفيذ كود', description: 'كود قابل للتشغيل', icon: '💻' },
+        })
+      }
+
+      // For Python/JavaScript: return as execution
+      return res.status(200).json({
+        content: explanation || '✅ تم إنشاء الكود بنجاح!',
+        isExecution: true,
+        executionLang: detectedLang === 'python' || detectedLang === 'py' ? 'python' : 'javascript',
+        executionCode: code,
+      })
+    } catch (err) {
+      console.error('[Code Execution] Error:', err.message)
+      return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الكود. يرجى المحاولة مرة أخرى.' })
+    }
   }
 
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────

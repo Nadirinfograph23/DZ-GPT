@@ -3934,6 +3934,107 @@
   box-shadow: 0 4px 16px rgba(124,58,237,.35);
 }
 
+/* ===== CODE EXECUTION PREVIEW ===== */
+.dz-exec-root {
+  margin-top: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0d0d14;
+}
+.dz-exec-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.05));
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  flex-wrap: wrap;
+}
+.dz-exec-lang {
+  font-size: 12px;
+  font-weight: 600;
+  color: #22c55e;
+  padding: 3px 10px;
+  background: rgba(34, 197, 94, 0.12);
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  white-space: nowrap;
+}
+.dz-exec-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+.dz-exec-tab {
+  padding: 5px 12px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.dz-exec-tab:hover { color: #e0e0e0; background: rgba(255,255,255,0.05); }
+.dz-exec-tab--active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  font-weight: 600;
+}
+.dz-exec-actions {
+  display: flex;
+  gap: 4px;
+}
+.dz-exec-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.08);
+  color: #a3e635;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-exec-btn:hover {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.dz-exec-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dz-exec-body {
+  min-height: 220px;
+  max-height: 500px;
+  overflow: auto;
+}
+.dz-exec-iframe {
+  width: 100%;
+  min-height: 220px;
+  height: 300px;
+  border: none;
+  background: #1a1a2e;
+  display: block;
+}
+.dz-exec-code {
+  margin: 0;
+  padding: 16px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e0e0e0;
+  background: #1a1a2e;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dz-exec-code code {
+  font-family: inherit;
+  color: inherit;
+}
+
 /* ===== MAP CARD COMPONENT ===== */
 .dz-map-card {
   background: linear-gradient(135deg, #0f1117 0%, #1a1a2e 100%);

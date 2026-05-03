@@ -33,6 +33,7 @@ type RichType =
   | 'stats'
   | 'website'
   | 'map'
+  | 'execution'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -174,6 +175,8 @@ interface DZMessage {
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
   hasMoreNews?: boolean
   newsQuery?: string
+  executionLang?: string
+  executionCode?: string
 }
 
 interface ActionLogEntry {
@@ -744,6 +747,166 @@ function buildHtmlShellClient(html: string, _css: string, _js: string): string {
   result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '<link rel="stylesheet" href="style.css">')
   result = result.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/gi, '<script src="script.js"></script>')
   return result
+}
+
+// ── Code Execution Preview Component (Programming Section ONLY) ──────────────
+function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
+  const [view, setView] = useState<'output' | 'code'>('output')
+  const [output, setOutput] = useState<string[]>([])
+  const [running, setRunning] = useState(false)
+  const [hasRun, setHasRun] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const runCode = useCallback(() => {
+    setRunning(true)
+    setOutput([])
+    setHasRun(true)
+
+    if (lang === 'python') {
+      // Python execution via Pyodide in sandboxed iframe
+      const pyHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"><\/script></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+async function main() {
+  try {
+    out.textContent = '⏳ جاري تحميل Python...\\n';
+    const pyodide = await loadPyodide();
+    out.textContent = '▶ جاري التنفيذ...\\n\\n';
+    pyodide.setStdout({ batched: (text) => { logs.push(text); out.textContent += text + '\\n'; } });
+    pyodide.setStderr({ batched: (text) => { logs.push('⚠️ ' + text); out.textContent += '⚠️ ' + text + '\\n'; } });
+    await pyodide.runPythonAsync(${JSON.stringify(code)});
+    if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+    else out.textContent += '\\n✅ انتهى التنفيذ';
+    window.parent.postMessage({ type: 'exec-done', logs }, '*');
+  } catch (e) {
+    out.textContent += '\\n❌ خطأ: ' + e.message;
+    window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+  }
+}
+main();
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = pyHtml
+      }
+    } else {
+      // JavaScript execution via sandboxed iframe
+      const jsHtml = `<!DOCTYPE html><html><head></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+const origLog = console.log;
+const origErr = console.error;
+const origWarn = console.warn;
+console.log = (...args) => { const t = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.error = (...args) => { const t = '❌ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.warn = (...args) => { const t = '⚠️ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+try {
+  out.textContent = '▶ جاري التنفيذ...\\n\\n';
+  ${code}
+  if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+  else out.textContent += '\\n✅ انتهى التنفيذ';
+  window.parent.postMessage({ type: 'exec-done', logs }, '*');
+} catch (e) {
+  out.textContent += '\\n❌ خطأ: ' + e.message;
+  window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+}
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = jsHtml
+      }
+    }
+
+    // Listen for completion
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'exec-done') {
+        setOutput(e.data.logs || [])
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      } else if (e.data?.type === 'exec-error') {
+        setOutput(prev => [...prev, `❌ ${e.data.error}`])
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      }
+    }
+    window.addEventListener('message', handler)
+
+    // Timeout after 30s
+    setTimeout(() => {
+      setRunning(false)
+      window.removeEventListener('message', handler)
+    }, 30000)
+  }, [code, lang])
+
+  // Auto-run on mount
+  useEffect(() => {
+    if (!hasRun) runCode()
+  }, [runCode, hasRun])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleDownload = () => {
+    const ext = lang === 'python' ? 'py' : 'js'
+    const blob = new Blob([code], { type: 'text/plain' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
+  const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
+
+  return (
+    <div className="dz-exec-root">
+      <div className="dz-exec-header">
+        <span className="dz-exec-lang">{langLabel}</span>
+        <div className="dz-exec-tabs">
+          <button className={`dz-exec-tab${view === 'output' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('output')}>
+            ▶ المخرجات
+          </button>
+          <button className={`dz-exec-tab${view === 'code' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('code')}>
+            {'</>'} الكود
+          </button>
+        </div>
+        <div className="dz-exec-actions">
+          <button className="dz-exec-btn" onClick={runCode} disabled={running} title="إعادة التشغيل">
+            {running ? '⏳' : '▶'} {running ? 'جارٍ...' : 'تشغيل'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleCopy} title="نسخ الكود">
+            {copied ? '✓ تم' : '📋 نسخ'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? '✓ تم' : '⬇ تحميل'}
+          </button>
+        </div>
+      </div>
+      <div className="dz-exec-body">
+        {view === 'output' ? (
+          <iframe
+            ref={iframeRef}
+            className="dz-exec-iframe"
+            sandbox="allow-scripts"
+            title="Code Execution Output"
+          />
+        ) : (
+          <pre className="dz-exec-code"><code>{code}</code></pre>
+        )}
+      </div>
+    </div>
+  )
 }
 
 type WPCodeTab = 'html' | 'css' | 'js'
@@ -2826,6 +2989,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           mapHtml: data.mapHtml as string,
           mapMeta: (data.mapMeta as Record<string, unknown>) || {},
         })
+      } else if (data.isExecution && typeof data.executionCode === 'string' && data.executionCode.length > 5) {
+        trackFeatureUsage('code-execution')
+        addAssistantMessage({
+          content: (data.content as string) || '✅ تم إنشاء الكود بنجاح!',
+          richType: 'execution',
+          executionLang: (data.executionLang as string) || 'javascript',
+          executionCode: data.executionCode as string,
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -3146,6 +3317,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         (msg.mapMeta as Record<string, unknown>)?.needsGps
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
                           : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
+                      )}
+                      {msg.richType === 'execution' && msg.executionCode && (
+                        <CodeExecutionPreview
+                          code={msg.executionCode}
+                          lang={msg.executionLang || 'javascript'}
+                        />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview

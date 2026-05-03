@@ -1661,6 +1661,28 @@ function getRecencyScore(dateStr) {
   } catch { return 0 }
 }
 
+// ── Hard freshness filter: drop items older than maxAgeDays ──────────────────
+// Items with no parseable date are kept (we cannot determine their age).
+function filterFreshItems(items, maxAgeDays = 60) {
+  const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000
+  return items.filter(item => {
+    const dateStr = item.pubDate || item.date || item.publishedDate || ''
+    if (!dateStr) return true
+    const ts = new Date(dateStr).getTime()
+    if (isNaN(ts)) return true
+    return ts >= cutoffMs
+  })
+}
+
+// ── Build a Google News RSS URL with an `after:` date restriction ─────────────
+// maxAgeDays controls how far back to go (default: 30 days for news queries)
+function buildFreshGNRssUrl(query, lang = 'ar', maxAgeDays = 30) {
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+  const afterStr = cutoff.toISOString().split('T')[0] // YYYY-MM-DD
+  const hl = lang === 'ar' ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' after:' + afterStr)}&hl=${hl}`
+}
+
 function getRelevanceScore(result, query) {
   const q = query.toLowerCase()
   const words = q.split(/\s+/).filter(w => w.length > 2)
@@ -2369,8 +2391,8 @@ function buildOptimizedQueries(query, intent) {
   const cseQuery  = `${query} ${suffix}`
 
   const rssLang = isArabic ? 'ar' : 'en'
-  const rssHL   = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
-  const rssQuery = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' ' + year)}&hl=${rssHL}`
+  // Always restrict to the last 30 days using the `after:` operator
+  const rssQuery = buildFreshGNRssUrl(query, rssLang, 30)
 
   const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', celebrities: 'celebrity news', incidents: 'incident breaking news', general: '' }
   const enSuffix = enMap[intent.primary] || ''
@@ -2684,13 +2706,19 @@ async function searchGoogleNewsRSS(rssUrl) {
     if (!r.ok) return []
     const xml = await r.text()
     const items = parseRSS(xml, 'Google News RSS')
-    return items.slice(0, 12).map(item => ({
+    const mapped = items.slice(0, 20).map(item => ({
       source: item.source || 'Google News',
       title: item.title || '',
       snippet: item.description || '',
       url: item.link || '',
       date: item.pubDate || '',
     }))
+    // Hard freshness filter: discard articles older than 60 days
+    const fresh = filterFreshItems(mapped, 60)
+    if (mapped.length > 0 && fresh.length < mapped.length) {
+      console.log(`[GN-RSS] Dropped ${mapped.length - fresh.length} stale articles (> 60 days)`)
+    }
+    return fresh.slice(0, 12)
   } catch (err) { console.warn('[GN-RSS Search] Error:', err.message); return [] }
 }
 
@@ -3177,7 +3205,7 @@ function isNewspaperHeadlineQuery(msg) {
   return newspaperKw.some(k => lower.includes(k))
 }
 
-function buildRSSContext(feedResults, queryType, subject = null) {
+function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 60) {
   if (!feedResults.length) return ''
   const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const label = queryType === 'sports' ? '⚽ نتائج وأخبار رياضية' : '📰 أخبار'
@@ -3197,7 +3225,9 @@ function buildRSSContext(feedResults, queryType, subject = null) {
   let totalItems = 0
   for (const feed of feedResults) {
     if (!feed.items?.length) continue
-    const items = feed.items.filter(itemMatchesSubject).slice(0, 4)
+    // Apply hard freshness filter + subject filter
+    const freshItems = filterFreshItems(feed.items, maxAgeDays)
+    const items = freshItems.filter(itemMatchesSubject).slice(0, 4)
     if (!items.length) continue
     ctx += `\n**${feed.name}:**\n`
     for (const item of items) {
@@ -6960,10 +6990,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
     if (newsSubject) {
       try {
-        const year = new Date().getFullYear()
         const isArabic = /[\u0600-\u06FF]/.test(newsSubject)
-        const rssHL = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
-        const targetedRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(newsSubject + ' ' + year)}&hl=${rssHL}`
+        const lang = isArabic ? 'ar' : 'en'
+        // Use fresh URL with after: operator (30 days) for targeted subject search
+        const targetedRssUrl = buildFreshGNRssUrl(newsSubject, lang, 30)
         const targetedArticles = await searchGoogleNewsRSS(targetedRssUrl)
         if (targetedArticles.length > 0) {
           const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -7067,22 +7097,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ...r, _score: scoreResult(r, lastUserMessage)
       })).sort((a, b) => b._score - a._score).slice(0, 8)
 
-      // Staleness re-search: if mustSearch and ALL top results are > 30 days old, try broader query
+      // Staleness re-search: if mustSearch and ALL top results are > 14 days old, try broader query
       if (mustSearch && scoredResults.length > 0) {
-        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+        const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
         const allStale = scoredResults.every(r => {
           const d = r.date || r.pubDate || r.publishedDate
           if (!d) return true
           const ts = new Date(d).getTime()
-          return isNaN(ts) || ts < thirtyDaysAgo
+          return isNaN(ts) || ts < fourteenDaysAgo
         })
         if (allStale) {
-          console.warn(`[DZ Retrieval] All results stale — forcing re-search with broader query`)
-          const year = new Date().getFullYear()
-          const broaderQuery = `${lastUserMessage} ${year} أخبار`
+          console.warn(`[DZ Retrieval] All results stale (> 14 days) — forcing re-search with broader query`)
+          const broaderQuery = newsSubject || lastUserMessage
+          const isArabicQ = /[\u0600-\u06FF]/.test(broaderQuery)
           const [freshCse, freshGn] = await Promise.allSettled([
             searchGoogleCSE(broaderQuery),
-            searchGoogleNewsRSS(`https://news.google.com/rss/search?q=${encodeURIComponent(lastUserMessage + ' ' + year)}&hl=ar&gl=DZ&ceid=DZ:ar`),
+            searchGoogleNewsRSS(buildFreshGNRssUrl(broaderQuery, isArabicQ ? 'ar' : 'en', 30)),
           ])
           const freshResults = [
             ...(freshCse.status === 'fulfilled' ? freshCse.value : []),

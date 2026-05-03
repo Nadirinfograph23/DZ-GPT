@@ -3014,6 +3014,8 @@ function detectNewsQuery(msg) {
     'أخبار','خبر','اليوم','الآن','آخر','جديد','تقرير','حدث','أحداث','عاجل','بيان',
     'news','latest','today','breaking','recent','actualité','nouvelles','aujourd','حوادث',
     'الجزائر','سياسة','اقتصاد','صحة','تعليم','برلمان','حكومة','وزير',
+    'صحف','صحيفة','عناوين','جرائد','جريدة','الشروق','النهار','الخبر','الوطن','الشعب','البلاد',
+    'newspaper','headlines','press','presse','journal','journaux',
   ]
   const isSports = sportsKw.some(k => lower.includes(k))
   const isNews = newsKw.some(k => lower.includes(k))
@@ -3021,6 +3023,12 @@ function detectNewsQuery(msg) {
   if (isSports) return 'sports'
   if (isNews) return 'news'
   return null
+}
+
+function isNewspaperHeadlineQuery(msg) {
+  const lower = msg.toLowerCase()
+  const newspaperKw = ['صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse']
+  return newspaperKw.some(k => lower.includes(k))
 }
 
 function buildRSSContext(feedResults, queryType) {
@@ -7264,7 +7272,7 @@ ${globalLeaguesContext ? `## 🌍 الدوريات العالمية — بيان
 
 ${currencyContext ? `## 💱 أسعار الصرف — بيانات فعلية (بدون مفتاح API)\n${currencyContext}\n\n**قواعد العملة:**\n1. لا تخترع أسعار الصرف — استخدم البيانات أعلاه فقط\n2. اعرض الأسعار في جدول بالاتجاهين\n3. للتحويل: احسب باستخدام الأسعار المقدمة\n4. اذكر المصدر ووقت التحديث\n5. ملاحظة: الأسعار رسمية — قد تختلف أسعار السوق الموازي` : ''}
 
-${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.` : ''}
+${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.${isNewspaperHeadlineQuery(lastUserMessage) ? '\n\n📰 **تعليمات خاصة — عناوين الصحف الجزائرية:**\n1. اعرض أبرز العناوين من كل صحيفة جزائرية (الشروق، النهار، الخبر، البلاد، الوطن، الشعب...)\n2. رتّب العناوين حسب الصحيفة — اذكر اسم الصحيفة كعنوان فرعي\n3. لكل عنوان: اذكر العنوان + الرابط\n4. استخدم فقط العناوين الموجودة في بيانات RSS أعلاه — لا تخترع عناوين\n5. اذكر تاريخ اليوم في بداية الإجابة' : ''}` : ''}
 
 ${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
 

@@ -90,6 +90,14 @@ export function isAlgerianCitizenQuery(query) {
   const hasSportsContext = SPORTS_EXCLUSIONS.some(sw => q.includes(normalize(sw)))
   if (hasSportsContext) return false
 
+  // If the query is about news/newspapers/headlines, skip citizen knowledge
+  const NEWS_EXCLUSIONS = [
+    'صحف', 'صحيفة', 'عناوين', 'جرائد', 'أخبار', 'خبر', 'عاجل',
+    'newspaper', 'headlines', 'press', 'news',
+  ]
+  const hasNewsContext = NEWS_EXCLUSIONS.some(nw => q.includes(normalize(nw)))
+  if (hasNewsContext) return false
+
   const CITIZEN_TRIGGERS = [
     // Exam results
     'نتائج', 'نتيجة', 'باك', 'بكالوريا', 'بيام', 'bem', 'bac', 'ابتدائي', 'onec',

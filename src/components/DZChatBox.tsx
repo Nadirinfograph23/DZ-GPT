@@ -894,7 +894,7 @@ try {
           <iframe
             ref={iframeRef}
             className="dz-exec-iframe"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             title="Code Execution Output"
           />
         ) : (

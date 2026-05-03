@@ -210,34 +210,6 @@ function DoctorResultsCard({ results, query }: { results: NonNullable<DZMessage[
   )
 }
 
-function HospitalResultsCard({ results, query }: { results: NonNullable<DZMessage['hospitalResults']>, query?: string }) {
-  if (!results.length) return null
-  return (
-    <div className="dz-doctor-results">
-      <div className="dz-doctor-results-header">
-        <strong>🏥 نتائج المستشفيات {query ? `— ${query}` : ''}</strong>
-      </div>
-      <div className="dz-doctor-list">
-        {results.slice(0, 8).map((hospital, index) => (
-          <div className="dz-doctor-item" key={`${hospital.name || hospital.nameAr || index}-${index}`}>
-            <div className="dz-doctor-item-rank">#{index + 1}</div>
-            <div className="dz-doctor-item-body">
-              <div className="dz-doctor-item-name">{hospital.nameAr || hospital.name || 'مستشفى'}</div>
-              <div className="dz-doctor-item-meta">
-                {hospital.address ? ` · ${hospital.address}` : ''}
-              </div>
-              <div className="dz-doctor-item-meta">
-                {hospital.phone ? `📞 ${hospital.phone}` : ''}
-                {hospital.fromGps ? ' · 📍 قريب منك' : ''}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 interface ActionLogEntry {
   timestamp: string
   type: string

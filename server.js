@@ -5937,7 +5937,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
   // Guard: skip place search when user is clearly asking to CREATE a website/app.
+  // Guard: skip place search for doctor queries — handled by dedicated doctor search below.
+  const _doctorGuard = detectDoctorIntent(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
+    && !_doctorGuard.isDoctorQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {

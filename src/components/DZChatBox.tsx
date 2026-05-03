@@ -2617,7 +2617,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           doctorResults: data.doctorResults as DZMessage['doctorResults'],
           doctorQuery: data.doctorQuery as string | undefined,
         })
-      } else if (data.isMap && !data.isDoctorSearch && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
+      } else if (data.isMap && !data.isDoctorSearch && !data.isHospitalSearch && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
         trackFeatureUsage('dz-maps')
         addAssistantMessage({
           content: (data.content as string) || '🗺️ الخريطة جاهزة',
@@ -2944,11 +2944,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       {msg.richType === 'text' && msg.doctorResults && (
                         <div className="dz-doctor-text-only">
                           <DoctorResultsCard results={msg.doctorResults} query={msg.doctorQuery} />
-                        </div>
-                      )}
-                      {msg.richType === 'text' && msg.hospitalResults && (
-                        <div className="dz-doctor-text-only">
-                          <HospitalResultsCard results={msg.hospitalResults} query={msg.hospitalQuery} />
                         </div>
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (

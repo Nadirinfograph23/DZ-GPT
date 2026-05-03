@@ -1768,11 +1768,19 @@ function detectWebsiteBuilderQuery(msg) {
 // ── Code Execution Mode Detection (Programming Section ONLY) ─────────────────
 function detectCodeExecutionQuery(msg) {
   const lower = msg.toLowerCase()
-  // Must NOT trigger for non-programming queries
-  const nonCodeKw = ['موقع','صفحة','landing','website','dashboard ui','لوحة تحكم','خريطة','طبيب','صيدلية','مسجد','أخبار','صحف','طقس','مباراة','نتائج','ترتيب','دوري','صلاة','قرآن']
-  if (nonCodeKw.some(k => lower.includes(k))) return null
 
-  // Execution keywords: user wants code to be RUN, not just explained
+  // Strong programming signals — if ANY of these exist, it's definitely code
+  const hasLangKw = /(?:python|javascript|js\b|typescript|ts\b|react|node|html|css|php|java\b|c\+\+|c#|rust|go\b|sql|bash|shell|بايثون|جافاسكريبت)/i.test(lower)
+  const hasCodeKw = /(?:كود|دالة|function|class|سكريبت|script|برنامج|program|algorithm|خوارزمية|مصفوفة|array|loop|حلقة|متغير|variable|API|json|regex)/i.test(lower)
+
+  // If no programming language AND no code keyword → not a code query
+  if (!hasLangKw && !hasCodeKw) return null
+
+  // Non-code contexts: only block if there are NO programming indicators
+  const nonCodeContexts = ['خريطة','طبيب','صيدلية','مسجد','صحف','صلاة','قرآن']
+  if (nonCodeContexts.some(k => lower.includes(k)) && !hasLangKw) return null
+
+  // Execution keywords: user wants code to be generated/run
   const execVerbs = [
     'اكتب كود','اكتب دالة','اكتب سكريبت','اكتب برنامج','اكتب تطبيق',
     'أنشئ كود','أنشئ دالة','أنشئ سكريبت','أنشئ برنامج',
@@ -1792,9 +1800,8 @@ function detectCodeExecutionQuery(msg) {
   }
 
   // Pattern: coding verb + language keyword
-  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute|code|كود|دالة|function|script|سكريبت|برنامج|program|تطبيق)\s/i
-  const langKw = /(?:python|javascript|js|typescript|ts|react|node|html|css|php|java|c\+\+|c#|rust|go|sql|bash|shell|بايثون|جافاسكريبت)/i
-  if (codingVerb.test(msg) && langKw.test(msg)) {
+  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute)\s/i
+  if (codingVerb.test(msg) && hasLangKw) {
     return detectExecLanguage(lower)
   }
 
@@ -6043,6 +6050,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     && !_isNewsQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
+    && !detectCodeExecutionQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
     const intentService = INTENT_TO_SERVICE[dzIntent.type]
     const serviceType   = intentService || dzEntities.serviceType || 'restaurant'

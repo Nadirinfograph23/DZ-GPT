@@ -6893,11 +6893,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
-          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
+          const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'long' }) : ''
           const url = r.url || r.link || ''
           const label = getSourceLabel(url, r.source)
-          const titleLink = url ? `[${r.title || ''}](${url})` : (r.title || '')
-          return `${idx}. **${titleLink}**${dateStr} — ${label}\n   ${(r.snippet || r.description || '').slice(0, 220)}`
+          // Remove source suffix from title (Google News format: "Title - Source")
+          let cleanTitle = (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || ''
+          return `• [${cleanTitle}](${url}) — ${label}${dateStr ? ` (${dateStr})` : ''}`
         }
 
         const sections = []

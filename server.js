@@ -92,16 +92,17 @@ app.use(compression({
   },
 }))
 
-// ===== NO-CACHE FOR APP ROUTES =====
-app.use((req, res, next) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/rss') && !req.path.startsWith('/assets')) {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
-    res.setHeader('Pragma', 'no-cache')
-    res.setHeader('Expires', '0')
-    res.setHeader('Surrogate-Control', 'no-store')
-  }
-  next()
-})
+// ===== NO-CACHE IN DEVELOPMENT =====
+if (!isProd) {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/rss')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+    }
+    next()
+  })
+}
 
 // ===== BODY SIZE LIMIT =====
 app.use(express.json({ limit: '1mb' }))
@@ -968,27 +969,6 @@ function detectDoctorNameIntent(message) {
   return { isNameQuery: true, name }
 }
 
-function detectHospitalIntent(message) {
-  if (!message || typeof message !== 'string') return { isHospitalQuery: false }
-  const norm = normalizeQuery(message)
-  if (detectDoctorIntent(message).isDoctorQuery) return { isHospitalQuery: false }
-  const hospitalPatterns = [
-    'مستشفى', 'المستشفى', 'hospital', 'hôpital', 'hopital', 'clinique', 'clínica', 'clinique médicale'
-  ]
-  const isHospitalQuery = hospitalPatterns.some(p => norm.includes(p.toLowerCase()))
-  if (!isHospitalQuery) return { isHospitalQuery: false }
-  return { isHospitalQuery: true }
-}
-
-function detectHospitalCity(message) {
-  if (!message || typeof message !== 'string') return null
-  const norm = normalizeQuery(message)
-  for (const c of DOCTOR_CITIES) {
-    if (norm.includes(c.ar.toLowerCase()) || norm.includes(c.fr.toLowerCase())) return c
-  }
-  return null
-}
-
 function isCapabilitiesQuestion(message) {
   if (typeof message !== 'string' || !message) return false
   const normalized = normalizeQuery(message)
@@ -1784,6 +1764,102 @@ function detectWebsiteBuilderQuery(msg) {
 
   return false
 }
+
+// ── Code Execution Mode Detection (Programming Section ONLY) ─────────────────
+function detectCodeExecutionQuery(msg) {
+  const lower = msg.toLowerCase()
+
+  // Strong programming signals — if ANY of these exist, it's definitely code
+  const hasLangKw = /(?:python|javascript|js\b|typescript|ts\b|react|node|html|css|php|java\b|c\+\+|c#|rust|go\b|sql|bash|shell|بايثون|جافاسكريبت)/i.test(lower)
+  const hasCodeKw = /(?:كود|دالة|function|class|سكريبت|script|برنامج|program|algorithm|خوارزمية|مصفوفة|array|loop|حلقة|متغير|variable|API|json|regex)/i.test(lower)
+
+  // If no programming language AND no code keyword → not a code query
+  if (!hasLangKw && !hasCodeKw) return null
+
+  // Non-code contexts: only block if there are NO programming indicators
+  const nonCodeContexts = ['خريطة','طبيب','صيدلية','مسجد','صحف','صلاة','قرآن']
+  if (nonCodeContexts.some(k => lower.includes(k)) && !hasLangKw) return null
+
+  // Execution keywords: user wants code to be generated/run
+  const execVerbs = [
+    'اكتب كود','اكتب دالة','اكتب سكريبت','اكتب برنامج','اكتب تطبيق',
+    'أنشئ كود','أنشئ دالة','أنشئ سكريبت','أنشئ برنامج',
+    'نفذ','شغل','اعمل كود','اعمل دالة','اعمل برنامج',
+    'اصنع كود','اصنع برنامج','اصنع سكريبت',
+    'دير كود','دير دالة','دير برنامج','دير سكريبت',
+    'write code','write function','write script','write program',
+    'create code','create function','create script','create program',
+    'build code','build function','build script','build program',
+    'run code','execute code','make code','make function','make program',
+    'écris un code','créer un programme','écrire une fonction',
+    'اكتب لي','اكتب لي كود','اكتب لي دالة','اكتب لي برنامج',
+    'اعملي كود','اعملي دالة','اعملي برنامج',
+  ]
+  if (execVerbs.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  // Pattern: coding verb + language keyword
+  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute)\s/i
+  if (codingVerb.test(msg) && hasLangKw) {
+    return detectExecLanguage(lower)
+  }
+
+  // Direct code-related commands
+  const directCode = [
+    'كود python','كود javascript','كود js','كود html',
+    'دالة python','دالة javascript','دالة js',
+    'سكريبت python','سكريبت javascript','سكريبت bash',
+    'python code','javascript code','js code',
+    'python function','javascript function',
+    'python script','javascript script','bash script',
+  ]
+  if (directCode.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  return null
+}
+
+function detectExecLanguage(lower) {
+  if (/python|بايثون|\.py\b/i.test(lower)) return 'python'
+  if (/javascript|js\b|node|جافاسكريبت/i.test(lower)) return 'javascript'
+  if (/typescript|ts\b/i.test(lower)) return 'javascript'
+  if (/html|css|واجهة/i.test(lower)) return 'html'
+  if (/bash|shell|terminal|سكريبت/i.test(lower)) return 'javascript' // fallback to JS
+  if (/react|vue|angular|svelte/i.test(lower)) return 'html'
+  if (/php|java\b|c\+\+|c#|rust|go\b|sql/i.test(lower)) return 'python' // show code, no exec
+  return 'python' // default
+}
+
+const CODE_EXECUTION_SYSTEM_PROMPT = `You are DZ Agent in CODE EXECUTION MODE.
+Your job: generate COMPLETE, RUNNABLE code that works immediately.
+
+RULES:
+1. Output ONLY code — no explanations before or after the code block
+2. Code must be COMPLETE and SELF-CONTAINED — include all imports, dependencies, sample data
+3. Code must WORK when executed directly — no placeholders, no "TODO", no "..." ellipsis
+4. After the code block, add a brief explanation in Arabic (2-3 lines max)
+
+OUTPUT FORMAT — you MUST follow this exactly:
+\`\`\`[language]
+// complete runnable code here
+\`\`\`
+
+**شرح:** وصف مختصر بالعربية لما يفعله الكود
+
+LANGUAGE-SPECIFIC RULES:
+- Python: use print() for output, include sample data, no external APIs unless explicitly asked
+- JavaScript: use console.log() for output, include sample data, write modern ES6+
+- HTML: generate a complete HTML file with embedded CSS and JS, make it visually appealing
+
+FORBIDDEN:
+- ❌ No markdown before the code block
+- ❌ No "هنا الكود" or similar preambles
+- ❌ No incomplete code
+- ❌ No placeholder values like [your_api_key] or TODO
+- ❌ No input() in Python (use hardcoded sample data instead)
+`
 
 // ── Website Builder: extract project metadata from user request ───────────────
 function extractWebBuilderMeta(msg) {
@@ -3034,6 +3110,8 @@ function detectNewsQuery(msg) {
     'أخبار','خبر','اليوم','الآن','آخر','جديد','تقرير','حدث','أحداث','عاجل','بيان',
     'news','latest','today','breaking','recent','actualité','nouvelles','aujourd','حوادث',
     'الجزائر','سياسة','اقتصاد','صحة','تعليم','برلمان','حكومة','وزير',
+    'صحف','صحيفة','عناوين','جرائد','جريدة','الشروق','النهار','الخبر','الوطن','الشعب','البلاد',
+    'newspaper','headlines','press','presse','journal','journaux',
   ]
   const isSports = sportsKw.some(k => lower.includes(k))
   const isNews = newsKw.some(k => lower.includes(k))
@@ -3041,6 +3119,12 @@ function detectNewsQuery(msg) {
   if (isSports) return 'sports'
   if (isNews) return 'news'
   return null
+}
+
+function isNewspaperHeadlineQuery(msg) {
+  const lower = msg.toLowerCase()
+  const newspaperKw = ['صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse']
+  return newspaperKw.some(k => lower.includes(k))
 }
 
 function buildRSSContext(feedResults, queryType) {
@@ -5957,9 +6041,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
   // Guard: skip place search when user is clearly asking to CREATE a website/app.
+  // Guard: skip place search for doctor queries — handled by dedicated doctor search below.
+  // Guard: skip place search for news/newspaper queries — handled by news/RSS handler.
+  const _doctorGuard = detectDoctorIntent(lastUserMessage)
+  const _isNewsQuery = isNewspaperHeadlineQuery(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
+    && !_doctorGuard.isDoctorQuery
+    && !_isNewsQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
+    && !detectCodeExecutionQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
     const intentService = INTENT_TO_SERVICE[dzIntent.type]
     const serviceType   = intentService || dzEntities.serviceType || 'restaurant'
@@ -6074,6 +6165,55 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
     return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
+  }
+
+  // ── Code Execution Mode (Programming Section ONLY) ─────────────────────────
+  const execLang = detectCodeExecutionQuery(lastUserMessage)
+  if (execLang) {
+    console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
+
+    try {
+      const execMessages = [
+        { role: 'system', content: CODE_EXECUTION_SYSTEM_PROMPT },
+        { role: 'user', content: lastUserMessage },
+      ]
+
+      const execResult = await safeGenerateAI({ messages: execMessages, query: lastUserMessage, max_tokens: 4000 })
+      const rawOutput = execResult.content || ''
+
+      // Extract code block
+      const codeMatch = rawOutput.match(/```(\w*)\n([\s\S]*?)```/)
+      const code = codeMatch ? codeMatch[2].trim() : rawOutput.trim()
+      const detectedLang = codeMatch?.[1] || execLang
+
+      // Extract explanation (everything after the code block)
+      const explanation = rawOutput.replace(/```[\s\S]*?```/, '').trim()
+
+      // For HTML: return as website (reuse WebsitePreview)
+      if (detectedLang === 'html' || (code.includes('<html') && code.includes('</html>'))) {
+        const cssCode = extractCssFromHtml(code)
+        const jsCode  = extractJsFromHtml(code)
+        return res.status(200).json({
+          content: explanation || '✅ تم إنشاء الكود بنجاح!',
+          isWebsite: true,
+          htmlCode: code,
+          cssCode: cssCode || '',
+          jsCode: jsCode || '',
+          webBuilderMeta: { type: 'code', style: 'modern', title: '💻 تنفيذ كود', description: 'كود قابل للتشغيل', icon: '💻' },
+        })
+      }
+
+      // For Python/JavaScript: return as execution
+      return res.status(200).json({
+        content: explanation || '✅ تم إنشاء الكود بنجاح!',
+        isExecution: true,
+        executionLang: detectedLang === 'python' || detectedLang === 'py' ? 'python' : 'javascript',
+        executionCode: code,
+      })
+    } catch (err) {
+      console.error('[Code Execution] Error:', err.message)
+      return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الكود. يرجى المحاولة مرة أخرى.' })
+    }
   }
 
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
@@ -6191,16 +6331,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const doctorIntent = detectDoctorIntent(lastUserMessage)
   if (doctorIntent.isDoctorQuery) {
-    const doctorGpsMatch = lastUserMessage.match(/\[GPS:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/i)
-    const doctorUserLocation = doctorGpsMatch && Number.isFinite(parseFloat(doctorGpsMatch[1])) && Number.isFinite(parseFloat(doctorGpsMatch[2]))
-      ? { lat: parseFloat(doctorGpsMatch[1]), lng: parseFloat(doctorGpsMatch[2]) }
-      : userLocation
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
         content: [
-          '🩺 **نحوس على طبيب؟ راك جايت صح!**',
+          '🩺 **نحوس على طبيب؟ راني جايك!**',
           '',
-          '**شنو التخصص اللي تحتاجه؟**',
+          '**واشنو التخصص اللي تحتاجه؟**',
           '',
           '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
           '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
@@ -6245,50 +6381,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ].join('\n'),
       })
     }
-    const searchCity = doctorIntent.city.fr
-    const { results, cached } = doctorUserLocation
-      ? await multiSearchDoctors({
-          speciality: doctorIntent.speciality.search,
-          city: searchCity,
-          userLocation: doctorUserLocation,
-        })
-      : await multiSearchDoctorsByName({
-          name: `${doctorIntent.speciality.ar} ${doctorIntent.city.ar}`,
-        })
-    const mergedResults = results.map(r => ({
-      ...r,
-      fromGps: !!doctorUserLocation,
-    }))
-    return res.status(200).json({
-      content: formatDoctorResults(mergedResults, doctorIntent.speciality, doctorIntent.city, { hasGps: !!doctorUserLocation })
-        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
-      isDoctorSearch: true,
-      doctorResults: mergedResults,
-      doctorQuery: lastUserMessage,
-      doctorMapMeta: null,
-    })
-  }
-
-  const hospitalIntent = detectHospitalIntent(lastUserMessage)
-  if (hospitalIntent.isHospitalQuery) {
-    const hospitalCity = detectHospitalCity(lastUserMessage)
-    const query = `${hospitalCity ? hospitalCity.ar + ' ' : ''}مستشفى`
-    const { results, cached } = await searchPlaces(query, {
-      serviceType: 'hospital',
+    const { results, cached } = await multiSearchDoctors({
+      speciality: doctorIntent.speciality.search,
+      city: doctorIntent.city.fr,
       userLocation,
     })
     return res.status(200).json({
-      content: buildPlaceResponse(results, {
-        title: '🏥 نتائج المستشفيات',
-        query: lastUserMessage,
-        serviceType: 'hospital',
-        city: hospitalCity?.ar || '',
-        hasGps: !!userLocation,
-      }) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
-      isMap: false,
-      isHospitalSearch: true,
-      hospitalResults: results,
-      hospitalQuery: lastUserMessage,
+      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city, { hasGps: !!userLocation })
+        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
     })
   }
 
@@ -6820,7 +6920,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let hasNewsResults = false
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
-  const skipSearch = isPrayerQuery || isFootballQuery || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
+  const isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
 
   if (!skipSearch) {
     try {
@@ -6938,11 +7039,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
-          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
+          const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'long' }) : ''
           const url = r.url || r.link || ''
           const label = getSourceLabel(url, r.source)
-          const srcLink = url ? `[${label}](${url})` : label
-          return `${idx}. **${r.title || ''}**${dateStr}\n   ${(r.snippet || r.description || '').slice(0, 220)}\n   📰 ${srcLink}`
+          // Remove source suffix from title (Google News format: "Title - Source")
+          let cleanTitle = (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || ''
+          return `• [${cleanTitle}](${url}) — ${label}${dateStr ? ` (${dateStr})` : ''}`
         }
 
         const sections = []
@@ -6972,7 +7074,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const systemPrompt = `أنت DZ Agent — مساعد بناء مشاريع وتوليد أكواد ومحتوى عملي أنشأه **نذير حوامرية (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
+  const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🕒 REAL-TIME CONTEXT (تحقق إجباري)
@@ -6993,45 +7095,8 @@ ${invocationInstruction}
 - @dz-gpt: DZ GPT للأسئلة العامة والشرح والكتابة.
 - /github: أوامر GitHub والمستودعات والكود.
 
-أنت لست نموذج إجابة معرفية فقط. أنت **مساعد تطوير وتنفيذ** يهدف لتحويل الطلب إلى مشروع أو كود عملي قابل للتشغيل.
-قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → لا تختلق؛ ابحث أو صرّح بوضوح بما تستطيع تنفيذه**.
-
-━━━━━━━━━━━━━━━━━━━━━━
-🧩 MISSION MODE — BUILD PROJECTS
-━━━━━━━━━━━━━━━━━━━━━━
-
-When the user asks to create a project:
-1. Understand intent (website, app, script)
-2. Search GitHub for relevant repositories
-3. Extract best parts (UI, API, logic)
-4. Merge into a clean project
-5. Generate working code (HTML/CSS/JS or full stack)
-6. Provide preview (iframe or demo structure)
-7. Provide download (ZIP structure)
-
-RULES:
-- Never return empty answers
-- Prefer modern frameworks (React, Next.js, Vanilla JS)
-- Always include working API if needed
-- Optimize for simplicity and beauty
-
-SEARCH SOURCES:
-- GitHub
-- Open APIs
-- CodePen examples
-
-OUTPUT FORMAT:
-1. Project preview
-2. Full code
-3. File structure
-4. Optional improvements
-
-SPECIAL:
-- If request is "Islamic / Quran", use Quran APIs
-- If user asks "simple", use static HTML
-
-GOAL:
-Act like a real developer, not a chatbot.
+أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
+قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🔎 RETRIEVAL PIPELINE (MANDATORY ORDER)
@@ -7170,6 +7235,15 @@ Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88
 ✔ **النتيجة الرئيسية 1** — بمصدر + تاريخ
 ✔ **النتيجة الرئيسية 2** — بمصدر + تاريخ
 ✔ **مصادر المرجع** — روابط المصادر المستخدمة
+
+⚠️ **قاعدة الروابط (إلزامية — MUST FOLLOW):**
+- ❌ ممنوع كتابة أي رابط URL ظاهر في النص نهائياً
+- ❌ ممنوع كتابة "— المصدر — التاريخ" كنص عادي بجانب الرابط
+- ✅ ادمج الرابط في اسم المصدر فقط: [اسم المصدر](الرابط)
+- مثال صحيح: وفاة الفنان هاني شاكر — [الشروق](https://www.echoroukonline.com/article-url)
+- مثال خاطئ: وفاة الفنان هاني شاكر — الشروق — https://www.echoroukonline.com/article-url
+- مثال خاطئ: وفاة الفنان هاني شاكر — [365Scores](url) — السبت، 2 ماي ← الرابط هنا صحيح لكن لا تكرر اسم المصدر كنص
+- الشكل المطلوب: عنوان الخبر + وصف مختصر — [اسم المصدر](الرابط)
 
 استخدم Markdown دائماً. اقرأ لغة المستخدم وأجب بنفس اللغة (العربية RTL، الفرنسية، الإنجليزية).
 
@@ -7358,9 +7432,9 @@ ${globalLeaguesContext ? `## 🌍 الدوريات العالمية — بيان
 
 ${currencyContext ? `## 💱 أسعار الصرف — بيانات فعلية (بدون مفتاح API)\n${currencyContext}\n\n**قواعد العملة:**\n1. لا تخترع أسعار الصرف — استخدم البيانات أعلاه فقط\n2. اعرض الأسعار في جدول بالاتجاهين\n3. للتحويل: احسب باستخدام الأسعار المقدمة\n4. اذكر المصدر ووقت التحديث\n5. ملاحظة: الأسعار رسمية — قد تختلف أسعار السوق الموازي` : ''}
 
-${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.` : ''}
+${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.\n> ⚠️ لا تكتب الروابط الكاملة — استخدم [عنوان الخبر](الرابط) دائماً.${isNewspaperHeadlineQuery(lastUserMessage) ? '\n\n📰 **تعليمات خاصة — عناوين الصحف الجزائرية:**\n1. اعرض أبرز العناوين من كل صحيفة جزائرية (الشروق، النهار، الخبر، البلاد، الوطن، الشعب...)\n2. رتّب العناوين حسب الصحيفة — اذكر اسم الصحيفة كعنوان فرعي\n3. لكل عنوان: اكتب بصيغة [عنوان الخبر](الرابط الكامل) ليكون قابلاً للنقر — ممنوع كتابة الرابط كنص عادي\n4. استخدم فقط العناوين الموجودة في بيانات RSS أعلاه — لا تخترع عناوين\n5. اذكر تاريخ اليوم في بداية الإجابة' : ''}` : ''}
 
-${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
+${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ ادمج الرابط في اسم المصدر فقط: [اسم المصدر](الرابط) — ممنوع كتابة URL ظاهر في النص` : ''}
 
 ${weatherPriorityContext ? `## 🌤️ أولوية الطقس — OpenWeather API\n${weatherPriorityContext}\n\n**قواعد أولوية الطقس:**\n1. ابدأ الإجابة ببيانات الطقس أعلاه\n2. اذكر المصدر OpenWeather API\n3. لا تخمّن أي قيمة غير موجودة\n4. إذا فشل الجلب، أعط رسالة fallback واضحة ومختصرة` : ''}
 

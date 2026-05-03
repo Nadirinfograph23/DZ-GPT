@@ -8,7 +8,7 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain,
+  Download, ArrowRight, Loader2, Brain, MapPin,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -33,6 +33,7 @@ type RichType =
   | 'stats'
   | 'website'
   | 'map'
+  | 'execution'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -174,40 +175,8 @@ interface DZMessage {
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
   hasMoreNews?: boolean
   newsQuery?: string
-  doctorResults?: Array<{ name?: string; nameAr?: string; nameFr?: string; specialty?: string; specialtyAr?: string; specialtyFr?: string; city?: string; cityAr?: string; cityFr?: string; address?: string; phone?: string; sources?: string[]; mapLat?: number; mapLng?: number; fromGps?: boolean }>
-  doctorQuery?: string
-  hospitalResults?: Array<{ name?: string; nameAr?: string; nameFr?: string; address?: string; phone?: string; fromGps?: boolean }>
-  hospitalQuery?: string
-}
-
-function DoctorResultsCard({ results, query }: { results: NonNullable<DZMessage['doctorResults']>, query?: string }) {
-  if (!results.length) return null
-  return (
-    <div className="dz-doctor-results">
-      <div className="dz-doctor-results-header">
-        <strong>🩺 نتائج الأطباء {query ? `— ${query}` : ''}</strong>
-      </div>
-      <div className="dz-doctor-list">
-        {results.slice(0, 8).map((doctor, index) => (
-          <div className="dz-doctor-item" key={`${doctor.name || doctor.nameAr || index}-${index}`}>
-            <div className="dz-doctor-item-rank">#{index + 1}</div>
-            <div className="dz-doctor-item-body">
-              <div className="dz-doctor-item-name">{doctor.nameAr || doctor.name || 'طبيب'}</div>
-              <div className="dz-doctor-item-meta">
-                {doctor.specialtyAr || doctor.specialty || ''}
-                {doctor.cityAr || doctor.city || ''}
-                {doctor.address ? ` · ${doctor.address}` : ''}
-              </div>
-              <div className="dz-doctor-item-meta">
-                {doctor.phone ? `📞 ${doctor.phone}` : ''}
-                {doctor.fromGps ? ' · 📍 قريب منك' : ''}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+  executionLang?: string
+  executionCode?: string
 }
 
 interface ActionLogEntry {
@@ -778,6 +747,162 @@ function buildHtmlShellClient(html: string, _css: string, _js: string): string {
   result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '<link rel="stylesheet" href="style.css">')
   result = result.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/gi, '<script src="script.js"></script>')
   return result
+}
+
+// ── Code Execution Preview Component (Programming Section ONLY) ──────────────
+function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
+  const [view, setView] = useState<'output' | 'code'>('output')
+  const [running, setRunning] = useState(false)
+  const [hasRun, setHasRun] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const runCode = useCallback(() => {
+    setRunning(true)
+    setHasRun(true)
+
+    if (lang === 'python') {
+      // Python execution via Pyodide in sandboxed iframe
+      const pyHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"><\/script></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+async function main() {
+  try {
+    out.textContent = '⏳ جاري تحميل Python...\\n';
+    const pyodide = await loadPyodide();
+    out.textContent = '▶ جاري التنفيذ...\\n\\n';
+    pyodide.setStdout({ batched: (text) => { logs.push(text); out.textContent += text + '\\n'; } });
+    pyodide.setStderr({ batched: (text) => { logs.push('⚠️ ' + text); out.textContent += '⚠️ ' + text + '\\n'; } });
+    await pyodide.runPythonAsync(${JSON.stringify(code)});
+    if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+    else out.textContent += '\\n✅ انتهى التنفيذ';
+    window.parent.postMessage({ type: 'exec-done', logs }, '*');
+  } catch (e) {
+    out.textContent += '\\n❌ خطأ: ' + e.message;
+    window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+  }
+}
+main();
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = pyHtml
+      }
+    } else {
+      // JavaScript execution via sandboxed iframe
+      const jsHtml = `<!DOCTYPE html><html><head></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+const origLog = console.log;
+const origErr = console.error;
+const origWarn = console.warn;
+console.log = (...args) => { const t = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.error = (...args) => { const t = '❌ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.warn = (...args) => { const t = '⚠️ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+try {
+  out.textContent = '▶ جاري التنفيذ...\\n\\n';
+  ${code}
+  if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+  else out.textContent += '\\n✅ انتهى التنفيذ';
+  window.parent.postMessage({ type: 'exec-done', logs }, '*');
+} catch (e) {
+  out.textContent += '\\n❌ خطأ: ' + e.message;
+  window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+}
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = jsHtml
+      }
+    }
+
+    // Listen for completion
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'exec-done') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      } else if (e.data?.type === 'exec-error') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      }
+    }
+    window.addEventListener('message', handler)
+
+    // Timeout after 30s
+    setTimeout(() => {
+      setRunning(false)
+      window.removeEventListener('message', handler)
+    }, 30000)
+  }, [code, lang])
+
+  // Auto-run on mount
+  useEffect(() => {
+    if (!hasRun) runCode()
+  }, [runCode, hasRun])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleDownload = () => {
+    const ext = lang === 'python' ? 'py' : 'js'
+    const blob = new Blob([code], { type: 'text/plain' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
+  const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
+
+  return (
+    <div className="dz-exec-root">
+      <div className="dz-exec-header">
+        <span className="dz-exec-lang">{langLabel}</span>
+        <div className="dz-exec-tabs">
+          <button className={`dz-exec-tab${view === 'output' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('output')}>
+            ▶ المخرجات
+          </button>
+          <button className={`dz-exec-tab${view === 'code' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('code')}>
+            {'</>'} الكود
+          </button>
+        </div>
+        <div className="dz-exec-actions">
+          <button className="dz-exec-btn" onClick={runCode} disabled={running} title="إعادة التشغيل">
+            {running ? '⏳' : '▶'} {running ? 'جارٍ...' : 'تشغيل'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleCopy} title="نسخ الكود">
+            {copied ? '✓ تم' : '📋 نسخ'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? '✓ تم' : '⬇ تحميل'}
+          </button>
+        </div>
+      </div>
+      <div className="dz-exec-body">
+        {view === 'output' ? (
+          <iframe
+            ref={iframeRef}
+            className="dz-exec-iframe"
+            sandbox="allow-scripts allow-same-origin"
+            title="Code Execution Output"
+          />
+        ) : (
+          <pre className="dz-exec-code"><code>{code}</code></pre>
+        )}
+      </div>
+    </div>
+  )
 }
 
 type WPCodeTab = 'html' | 'css' | 'js'
@@ -1446,6 +1571,291 @@ function RepoActionPanel({
   )
 }
 
+// ===== GPS NEARBY CARD =====
+interface NearbyResult {
+  osmId?: number
+  name: string
+  nameAr?: string
+  nameFr?: string
+  lat: number
+  lng: number
+  distanceM: number
+  distanceLabel: string
+  phone?: string
+  opening?: string
+  gmapsDir: string
+  gmapsPlace: string
+}
+
+const RADIUS_OPTIONS = [
+  { value: 500,  label: '500م' },
+  { value: 1000, label: '1 كم' },
+  { value: 3000, label: '3 كم' },
+  { value: 5000, label: '5 كم' },
+] as const
+type RadiusValue = typeof RADIUS_OPTIONS[number]['value']
+
+function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
+  const [resolvedMeta, setResolvedMeta] = useState<Record<string, unknown> | null>(null)
+  const [nearbyResults, setNearbyResults] = useState<NearbyResult[]>([])
+  const [errMsg, setErrMsg] = useState('')
+  const [radius, setRadius] = useState<RadiusValue>(3000)
+  const s = (v: unknown) => String(v ?? '')
+
+  const poiKey    = s(meta.poiKey)
+  const poiIcon   = s(meta.poiIcon) || '📍'
+  const poiNameAr = s(meta.poiNameAr) || 'مرفق'
+
+  const handleGps = () => {
+    if (!navigator.geolocation) {
+      setErrMsg('المتصفح لا يدعم خدمة تحديد الموقع')
+      setPhase('error')
+      return
+    }
+    setPhase('loading')
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6))
+        const lng = parseFloat(pos.coords.longitude.toFixed(6))
+        try {
+          const r = await fetch('/api/dz-maps/nearby', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng, poiKey: poiKey || null, radius }),
+          })
+          const data = await r.json()
+          if (data.mapMeta) {
+            setResolvedMeta(data.mapMeta)
+            setNearbyResults(Array.isArray(data.results) ? data.results : [])
+            setPhase('ready')
+          } else {
+            setErrMsg(data.error || 'لم يتمكن من تحميل الخريطة')
+            setPhase('error')
+          }
+        } catch {
+          setErrMsg('فشل الاتصال بالخادم. تحقق من اتصالك.')
+          setPhase('error')
+        }
+      },
+      () => {
+        setErrMsg('لم يتم الحصول على إذن الموقع. يرجى السماح للمتصفح بالوصول إلى موقعك ثم أعد المحاولة.')
+        setPhase('error')
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
+  }
+
+  if (phase === 'ready' && resolvedMeta) {
+    return (
+      <div className="dz-nearby-resolved">
+        <MapPreview mapHtml="" mapMeta={resolvedMeta} />
+
+        {nearbyResults.length > 0 && (
+          <div className="dz-nearby-results">
+            <div className="dz-nearby-results-header">
+              <span>{poiIcon}</span>
+              <strong>أقرب {poiNameAr} — {nearbyResults.length} نتيجة</strong>
+            </div>
+            <div className="dz-nearby-list">
+              {nearbyResults.map((r, i) => (
+                <div key={r.osmId ?? i} className="dz-nearby-item">
+                  <div className="dz-nearby-item-rank">#{i + 1}</div>
+                  <div className="dz-nearby-item-body">
+                    <div className="dz-nearby-item-name">
+                      {r.nameAr || r.name}
+                      {r.nameAr && r.nameFr && r.nameAr !== r.nameFr && (
+                        <span className="dz-nearby-item-name-fr"> ({r.nameFr})</span>
+                      )}
+                    </div>
+                    <div className="dz-nearby-item-meta">
+                      <span className="dz-nearby-dist-badge">{r.distanceLabel}</span>
+                      {r.phone && <span className="dz-nearby-phone">📞 {r.phone}</span>}
+                      {r.opening && <span className="dz-nearby-opening">🕐 {r.opening}</span>}
+                    </div>
+                  </div>
+                  <div className="dz-nearby-item-actions">
+                    <a
+                      href={r.gmapsDir}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dz-nearby-action-btn dz-nearby-action-btn--nav"
+                    >
+                      🚗 مسار
+                    </a>
+                    <a
+                      href={r.gmapsPlace}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dz-nearby-action-btn dz-nearby-action-btn--info"
+                    >
+                      <ExternalLink size={11} /> تفاصيل
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="dz-nearby-results-footer">
+              بيانات حقيقية من OpenStreetMap · ضمن {nearbyResults[nearbyResults.length - 1]?.distanceLabel || '3 كم'}
+            </div>
+          </div>
+        )}
+
+        {nearbyResults.length === 0 && (
+          <div className="dz-nearby-empty">
+            ℹ️ لم يتم العثور على {poiNameAr} في قاعدة بيانات OSM ضمن 3 كم. جرّب
+            {' '}
+            <a href={(resolvedMeta.gmapsLink as string) || '#'} target="_blank" rel="noopener noreferrer">
+              البحث في Google Maps
+            </a>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="dz-gps-nearby-card">
+      <div className="dz-gps-nearby-header">
+        <span className="dz-gps-nearby-poi-icon">{poiIcon}</span>
+        <div className="dz-gps-nearby-info">
+          <strong>{poiKey ? `أقرب ${poiNameAr} منك` : 'البحث القريب منك'}</strong>
+          <span>شارك موقعك لعرض الخريطة والنتائج القريبة</span>
+        </div>
+      </div>
+      {phase === 'error' && (
+        <div className="dz-gps-nearby-error">⚠️ {errMsg}</div>
+      )}
+      <div className="dz-radius-selector">
+        <span className="dz-radius-label">نطاق البحث:</span>
+        <div className="dz-radius-pills">
+          {RADIUS_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`dz-radius-pill${radius === opt.value ? ' dz-radius-pill--active' : ''}`}
+              onClick={() => setRadius(opt.value)}
+              disabled={phase === 'loading'}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        className={`dz-gps-nearby-btn${phase === 'loading' ? ' dz-gps-nearby-btn--loading' : ''}`}
+        onClick={handleGps}
+        disabled={phase === 'loading'}
+        type="button"
+      >
+        {phase === 'loading'
+          ? <><Loader2 size={15} className="dz-spin-icon" /> جارٍ البحث في المنطقة...</>
+          : <><MapPin size={15} /> 📍 تفعيل GPS وعرض أقرب {poiNameAr}</>
+        }
+      </button>
+      <div className="dz-gps-nearby-hint">
+        سيُطلب منك الإذن مرة واحدة فقط • لا يتم حفظ موقعك • بيانات OpenStreetMap
+      </div>
+    </div>
+  )
+}
+
+// ===== MAP PREVIEW =====
+function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(true)
+  const meta = mapMeta || {}
+  const s = (v: unknown) => String(v ?? '')
+
+  const isRoute = meta.type === 'route'
+  const isPoi   = meta.type === 'poi'
+
+  const title = isRoute
+    ? `🗺️ مسار: ${s(meta.from)} → ${s(meta.to)}`
+    : isPoi
+      ? `${s(meta.poiIcon) || '📍'} ${s(meta.poiNameAr) || 'خريطة'} في ${s(meta.locationName) || 'الجزائر'}`
+      : `📍 ${s(meta.locationName) || 'الجزائر'}`
+
+  // Google Maps embed URL (primary) or legacy Leaflet HTML
+  const gmapsUrl = meta.gmapsUrl ? String(meta.gmapsUrl) : null
+
+  // External links
+  const locationFr  = s(meta.locationFr || meta.locationName || '')
+  const gmapsOpen   = isPoi
+    ? `https://www.google.com/maps/search/${encodeURIComponent(s(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
+    : isRoute
+      ? `https://www.google.com/maps/dir/${encodeURIComponent(s(meta.fromFr) + ' Algeria')}/${encodeURIComponent(s(meta.toFr) + ' Algeria')}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(locationFr + ' Algeria')}`
+
+  const lat = meta.lat ? Number(meta.lat) : null
+  const lng = meta.lng ? Number(meta.lng) : null
+  const osmOpen = lat && lng
+    ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=14/${lat}/${lng}`
+    : `https://www.openstreetmap.org`
+
+  return (
+    <div className="dz-map-card">
+      <div className="dz-map-card-header" onClick={() => setExpanded(e => !e)}>
+        <div className="dz-map-card-title">
+          <MapPin size={14} style={{ color: '#00ff90', flexShrink: 0 }} />
+          <span>{title}</span>
+          {isRoute && !!meta.distanceKm && (
+            <span className="dz-map-badge dz-map-badge--orange">📏 {s(meta.distanceKm)} كم</span>
+          )}
+          {isRoute && !!meta.durationMin && (
+            <span className="dz-map-badge dz-map-badge--subtle">⏱️ {s(meta.durationMin)} د</span>
+          )}
+        </div>
+        <div className="dz-map-card-controls">
+          <span className="dz-map-badge dz-map-badge--subtle">Google Maps</span>
+          <span className="dz-map-collapse-btn">{expanded ? '▲' : '▼'}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="dz-map-iframe-wrap">
+          {gmapsUrl ? (
+            <iframe
+              src={gmapsUrl}
+              width="100%"
+              height="380"
+              style={{ border: 'none', display: 'block' }}
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+              title={title}
+            />
+          ) : mapHtml && mapHtml.length > 50 ? (
+            <iframe
+              srcDoc={mapHtml}
+              style={{ width: '100%', height: '380px', border: 'none', display: 'block' }}
+              sandbox="allow-scripts allow-same-origin"
+              title={title}
+            />
+          ) : null}
+        </div>
+      )}
+
+      <div className="dz-map-card-actions">
+        <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          <MapPin size={11} /> فتح في Google Maps
+        </a>
+        {!isRoute && lat && lng && (
+          <a className="dz-map-action-btn dz-map-action-btn--route" href={`https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+            🚗 إنشاء مسار
+          </a>
+        )}
+        <a className="dz-map-action-btn dz-map-action-btn--osm" href={osmOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          🗺️ OpenStreetMap
+        </a>
+      </div>
+      <div className="dz-map-card-footer">
+        Google Maps Embed · © <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> · مجاني 🇩🇿
+      </div>
+    </div>
+  )
+}
+
 // ===== BRANCHES PANEL =====
 function BranchesPanel({ branches, repo }: { branches: BranchItem[]; repo: string }) {
   return (
@@ -1829,19 +2239,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
-    } catch {
-      return ''
-    }
-  })
-  const [groqKey, setGroqKey] = useState<string>(() => {
-    try {
-      return sessionStorage.getItem('dz-agent-groq-key') || ''
     } catch {
       return ''
     }
@@ -1859,15 +2263,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
-
-  const saveGroqKey = useCallback(() => {
-    const key = groqKey.trim()
-    if (!key) return
-    try {
-      sessionStorage.setItem('dz-agent-groq-key', key)
-      localStorage.removeItem('dz-agent-groq-key')
-    } catch {}
-  }, [groqKey])
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -2582,20 +2977,21 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
-      } else if (data.doctorResults && Array.isArray(data.doctorResults)) {
-        addAssistantMessage({
-          content: (data.content as string) || '🩺 نتائج الأطباء جاهزة',
-          richType: 'text',
-          doctorResults: data.doctorResults as DZMessage['doctorResults'],
-          doctorQuery: data.doctorQuery as string | undefined,
-        })
-      } else if (data.isMap && !data.isDoctorSearch && !data.isHospitalSearch && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
+      } else if (data.isMap && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
         trackFeatureUsage('dz-maps')
         addAssistantMessage({
           content: (data.content as string) || '🗺️ الخريطة جاهزة',
           richType: 'map',
           mapHtml: data.mapHtml as string,
           mapMeta: (data.mapMeta as Record<string, unknown>) || {},
+        })
+      } else if (data.isExecution && typeof data.executionCode === 'string' && data.executionCode.length > 5) {
+        trackFeatureUsage('code-execution')
+        addAssistantMessage({
+          content: (data.content as string) || '✅ تم إنشاء الكود بنجاح!',
+          richType: 'execution',
+          executionLang: (data.executionLang as string) || 'javascript',
+          executionCode: data.executionCode as string,
         })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
@@ -2811,7 +3207,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         </div>
       ) : (
       /* Messages */
-      <div className="dz-messages">
+      <div className="dz-messages" data-render-key={renderKey}>
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
             <div className="dz-message-avatar">
@@ -2913,10 +3309,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
                       )}
-                      {msg.richType === 'text' && msg.doctorResults && (
-                        <div className="dz-doctor-text-only">
-                          <DoctorResultsCard results={msg.doctorResults} query={msg.doctorQuery} />
-                        </div>
+                      {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
+                        (msg.mapMeta as Record<string, unknown>)?.needsGps
+                          ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
+                          : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
+                      )}
+                      {msg.richType === 'execution' && msg.executionCode && (
+                        <CodeExecutionPreview
+                          code={msg.executionCode}
+                          lang={msg.executionLang || 'javascript'}
+                        />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview
@@ -3011,18 +3413,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
         )}
         <div className="dz-input-container">
-          <div className="dz-groq-secret-row">
-            <input
-              value={groqKey}
-              onChange={(e) => setGroqKey(e.target.value)}
-              placeholder="أدخل Groq API Key لـ DZ Agent Pro"
-              type="password"
-              className="dz-groq-secret-input"
-            />
-            <button className="dz-groq-secret-btn" onClick={saveGroqKey} disabled={!groqKey.trim()}>
-              حفظ
-            </button>
-          </div>
           <textarea
             ref={textareaRef}
             value={input}

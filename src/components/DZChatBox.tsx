@@ -172,6 +172,8 @@ interface DZMessage {
   mapHtml?: string
   mapMeta?: Record<string, unknown>
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  hasMoreNews?: boolean
+  newsQuery?: string
 }
 
 interface ActionLogEntry {
@@ -2839,6 +2841,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           content: (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
           richType: 'text',
           showDevCard: !!data.showDevCard,
+          hasMoreNews: !!data.hasMoreNews,
+          newsQuery: data.newsQuery as string | undefined,
         })
       }
     } catch (err: unknown) {
@@ -3070,6 +3074,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                             pre({ children }) { return <>{children}</> },
                           }}
                         >{msg.content}</ReactMarkdown>
+                      )}
+                      {msg.hasMoreNews && msg.newsQuery && (
+                        <button
+                          className="dz-load-more-news-btn"
+                          onClick={() => sendMessage(`عرض المزيد من الأخبار حول: ${msg.newsQuery}`)}
+                        >
+                          📰 عرض المزيد من الأخبار
+                        </button>
                       )}
                       {msg.showDevCard && <DeveloperCard />}
                       {msg.richType === 'repos' && msg.repos && (

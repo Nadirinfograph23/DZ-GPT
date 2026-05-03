@@ -148,6 +148,16 @@ const NON_MAP_REGEXES = [
   /ماذا جرى/i,
   /ما جديد/i,
   /ما أخبار/i,
+  // Newspapers & headlines
+  /عناوين/i,
+  /صحف/i,
+  /صحيفة/i,
+  /جرائد/i,
+  /جريدة/i,
+  /الصحف/i,
+  /الجرائد/i,
+  /newspaper/i,
+  /headlines/i,
 
   // Sports results & standings (NOT stadium locations)
   /نتائج\s+(فريق|اتحاد|شبيبة|أمل|نجم|مولودية|وفاق|اتحاد|أهلي|ترجي|نادي|كأس|دوري|مباريات)/i,

@@ -92,16 +92,17 @@ app.use(compression({
   },
 }))
 
-// ===== NO-CACHE FOR APP ROUTES =====
-app.use((req, res, next) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/rss') && !req.path.startsWith('/assets')) {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
-    res.setHeader('Pragma', 'no-cache')
-    res.setHeader('Expires', '0')
-    res.setHeader('Surrogate-Control', 'no-store')
-  }
-  next()
-})
+// ===== NO-CACHE IN DEVELOPMENT =====
+if (!isProd) {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/rss')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+    }
+    next()
+  })
+}
 
 // ===== BODY SIZE LIMIT =====
 app.use(express.json({ limit: '1mb' }))
@@ -966,27 +967,6 @@ function detectDoctorNameIntent(message) {
     if (sp.aliases.some(a => normName === a.toLowerCase())) return { isNameQuery: false }
   }
   return { isNameQuery: true, name }
-}
-
-function detectHospitalIntent(message) {
-  if (!message || typeof message !== 'string') return { isHospitalQuery: false }
-  const norm = normalizeQuery(message)
-  if (detectDoctorIntent(message).isDoctorQuery) return { isHospitalQuery: false }
-  const hospitalPatterns = [
-    'مستشفى', 'المستشفى', 'hospital', 'hôpital', 'hopital', 'clinique', 'clínica', 'clinique médicale'
-  ]
-  const isHospitalQuery = hospitalPatterns.some(p => norm.includes(p.toLowerCase()))
-  if (!isHospitalQuery) return { isHospitalQuery: false }
-  return { isHospitalQuery: true }
-}
-
-function detectHospitalCity(message) {
-  if (!message || typeof message !== 'string') return null
-  const norm = normalizeQuery(message)
-  for (const c of DOCTOR_CITIES) {
-    if (norm.includes(c.ar.toLowerCase()) || norm.includes(c.fr.toLowerCase())) return c
-  }
-  return null
 }
 
 function isCapabilitiesQuestion(message) {
@@ -5957,7 +5937,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
   // Guard: skip place search when user is clearly asking to CREATE a website/app.
+  // Guard: skip place search for doctor queries — handled by dedicated doctor search below.
+  const _doctorGuard = detectDoctorIntent(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
+    && !_doctorGuard.isDoctorQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
@@ -6191,16 +6174,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const doctorIntent = detectDoctorIntent(lastUserMessage)
   if (doctorIntent.isDoctorQuery) {
-    const doctorGpsMatch = lastUserMessage.match(/\[GPS:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/i)
-    const doctorUserLocation = doctorGpsMatch && Number.isFinite(parseFloat(doctorGpsMatch[1])) && Number.isFinite(parseFloat(doctorGpsMatch[2]))
-      ? { lat: parseFloat(doctorGpsMatch[1]), lng: parseFloat(doctorGpsMatch[2]) }
-      : userLocation
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
         content: [
-          '🩺 **نحوس على طبيب؟ راك جايت صح!**',
+          '🩺 **نحوس على طبيب؟ راني جايك!**',
           '',
-          '**شنو التخصص اللي تحتاجه؟**',
+          '**واشنو التخصص اللي تحتاجه؟**',
           '',
           '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
           '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
@@ -6245,50 +6224,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ].join('\n'),
       })
     }
-    const searchCity = doctorIntent.city.fr
-    const { results, cached } = doctorUserLocation
-      ? await multiSearchDoctors({
-          speciality: doctorIntent.speciality.search,
-          city: searchCity,
-          userLocation: doctorUserLocation,
-        })
-      : await multiSearchDoctorsByName({
-          name: `${doctorIntent.speciality.ar} ${doctorIntent.city.ar}`,
-        })
-    const mergedResults = results.map(r => ({
-      ...r,
-      fromGps: !!doctorUserLocation,
-    }))
-    return res.status(200).json({
-      content: formatDoctorResults(mergedResults, doctorIntent.speciality, doctorIntent.city, { hasGps: !!doctorUserLocation })
-        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
-      isDoctorSearch: true,
-      doctorResults: mergedResults,
-      doctorQuery: lastUserMessage,
-      doctorMapMeta: null,
-    })
-  }
-
-  const hospitalIntent = detectHospitalIntent(lastUserMessage)
-  if (hospitalIntent.isHospitalQuery) {
-    const hospitalCity = detectHospitalCity(lastUserMessage)
-    const query = `${hospitalCity ? hospitalCity.ar + ' ' : ''}مستشفى`
-    const { results, cached } = await searchPlaces(query, {
-      serviceType: 'hospital',
+    const { results, cached } = await multiSearchDoctors({
+      speciality: doctorIntent.speciality.search,
+      city: doctorIntent.city.fr,
       userLocation,
     })
     return res.status(200).json({
-      content: buildPlaceResponse(results, {
-        title: '🏥 نتائج المستشفيات',
-        query: lastUserMessage,
-        serviceType: 'hospital',
-        city: hospitalCity?.ar || '',
-        hasGps: !!userLocation,
-      }) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
-      isMap: false,
-      isHospitalSearch: true,
-      hospitalResults: results,
-      hospitalQuery: lastUserMessage,
+      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city, { hasGps: !!userLocation })
+        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
     })
   }
 
@@ -6972,7 +6915,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const systemPrompt = `أنت DZ Agent — مساعد بناء مشاريع وتوليد أكواد ومحتوى عملي أنشأه **نذير حوامرية (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
+  const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🕒 REAL-TIME CONTEXT (تحقق إجباري)
@@ -6993,45 +6936,8 @@ ${invocationInstruction}
 - @dz-gpt: DZ GPT للأسئلة العامة والشرح والكتابة.
 - /github: أوامر GitHub والمستودعات والكود.
 
-أنت لست نموذج إجابة معرفية فقط. أنت **مساعد تطوير وتنفيذ** يهدف لتحويل الطلب إلى مشروع أو كود عملي قابل للتشغيل.
-قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → لا تختلق؛ ابحث أو صرّح بوضوح بما تستطيع تنفيذه**.
-
-━━━━━━━━━━━━━━━━━━━━━━
-🧩 MISSION MODE — BUILD PROJECTS
-━━━━━━━━━━━━━━━━━━━━━━
-
-When the user asks to create a project:
-1. Understand intent (website, app, script)
-2. Search GitHub for relevant repositories
-3. Extract best parts (UI, API, logic)
-4. Merge into a clean project
-5. Generate working code (HTML/CSS/JS or full stack)
-6. Provide preview (iframe or demo structure)
-7. Provide download (ZIP structure)
-
-RULES:
-- Never return empty answers
-- Prefer modern frameworks (React, Next.js, Vanilla JS)
-- Always include working API if needed
-- Optimize for simplicity and beauty
-
-SEARCH SOURCES:
-- GitHub
-- Open APIs
-- CodePen examples
-
-OUTPUT FORMAT:
-1. Project preview
-2. Full code
-3. File structure
-4. Optional improvements
-
-SPECIAL:
-- If request is "Islamic / Quran", use Quran APIs
-- If user asks "simple", use static HTML
-
-GOAL:
-Act like a real developer, not a chatbot.
+أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
+قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🔎 RETRIEVAL PIPELINE (MANDATORY ORDER)

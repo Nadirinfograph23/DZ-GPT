@@ -1194,6 +1194,33 @@
   color: #888;
 }
 
+/* ===== LOAD MORE NEWS BUTTON ===== */
+.dz-load-more-news-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 16px;
+  background: linear-gradient(135deg, #0f2027, #1a3a2a);
+  border: 1px solid #1e5c3a;
+  border-radius: 20px;
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+}
+.dz-load-more-news-btn:hover {
+  background: linear-gradient(135deg, #152c24, #1f4a32);
+  border-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.15);
+  transform: translateY(-1px);
+}
+.dz-load-more-news-btn:active {
+  transform: translateY(0);
+}
+
 /* ===== INPUT AREA ===== */
 .dz-input-area {
   padding: 12px 16px 20px;
@@ -3663,8 +3690,712 @@
 }
 .dz-wp-close-fs:hover { background: #7c3aed; }
 
+/* File size badge */
+.dz-wp-size {
+  font-size: 10px;
+  color: #6b5f8a;
+  font-family: monospace;
+  padding: 2px 7px;
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  white-space: nowrap;
+}
+
+/* Download success state */
+.dz-wp-btn--ok {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+
+/* Viewport selector bar */
+.dz-wp-viewport-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #0e0e1a;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+}
+
+.dz-wp-vp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  background: transparent;
+  color: #7c6fa0;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.dz-wp-vp-btn:hover { background: rgba(124, 58, 237, 0.12); color: #c4b5fd; }
+.dz-wp-vp-btn--active {
+  background: rgba(124, 58, 237, 0.22);
+  border-color: rgba(124, 58, 237, 0.55);
+  color: #e9d5ff;
+  font-weight: 600;
+}
+
+/* Frame scroller (for viewport sizing) */
+.dz-wp-frame-scroller {
+  overflow-x: auto;
+  flex: 1;
+  background: #1a1a2e;
+}
+.dz-wp-frame-scroller iframe {
+  transition: width 0.25s ease;
+}
+
 @media (max-width: 600px) {
   .dz-wp-toolbar { flex-direction: column; align-items: flex-start; }
   .dz-wp-actions { width: 100%; justify-content: flex-end; }
   .dz-wp-frame { height: 360px; }
+  .dz-wp-viewport-bar { flex-wrap: wrap; }
+}
+
+/* ── WebsitePreview — ZIP button ─────────────────────────────────────── */
+.dz-wp-btn--zip {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+.dz-wp-btn--zip:hover:not(:disabled) { opacity: 0.88; background: linear-gradient(135deg, #0e7490, #155e75); }
+.dz-wp-btn--zip:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── WebsitePreview — success state (shared) ─────────────────────────── */
+.dz-wp-btn--ok {
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+
+/* ── WebsitePreview — templates button ──────────────────────────────── */
+.dz-wp-btn--tpl {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: #fcd34d;
+}
+.dz-wp-btn--tpl:hover { background: rgba(234, 179, 8, 0.2); color: #fef08a; }
+.dz-wp-btn--tpl.dz-wp-btn--active {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: rgba(234, 179, 8, 0.6);
+  color: #fef9c3;
+}
+
+/* ── WebsitePreview — template picker bar ────────────────────────────── */
+.dz-wp-tpl-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(234, 179, 8, 0.05);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.15);
+  animation: dz-fadeIn 0.18s ease;
+}
+.dz-wp-tpl-label {
+  font-size: 11px;
+  color: #a3a3a3;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.dz-wp-tpl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  background: rgba(234, 179, 8, 0.08);
+  color: #fcd34d;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-wp-tpl-btn:hover {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.5);
+  color: #fef9c3;
+  transform: translateY(-1px);
+}
+
+/* ── WebsitePreview — code tab selector bar ──────────────────────────── */
+.dz-wp-codetab-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #0e0e16;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.dz-wp-codetab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #71717a;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-wp-codetab:hover { background: rgba(255,255,255,0.06); color: #d4d4d8; }
+.dz-wp-codetab--active {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #c4b5fd;
+  font-weight: 600;
+}
+.dz-wp-codetab-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  color: #a1a1aa;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+/* ── WebsitePreview — empty code tab state ───────────────────────────── */
+.dz-wp-empty-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: #52525b;
+  font-size: 13px;
+  font-style: italic;
+}
+
+@keyframes dz-fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── VFS Editor (editable code view) ─────────────────────────────────── */
+.dz-wp-editor {
+  width: 100%;
+  min-height: 360px;
+  max-height: 460px;
+  background: #09090f;
+  color: #c4b5fd;
+  border: 1px solid rgba(124,58,237,0.2);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.dz-wp-editor:focus {
+  border-color: rgba(124,58,237,0.5);
+  box-shadow: 0 0 0 2px rgba(124,58,237,0.12);
+}
+.dz-wp-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 4px 0;
+}
+.dz-wp-editor-hint {
+  font-size: 11px;
+  color: #6b5f8a;
+}
+.dz-wp-btn--apply {
+  background: linear-gradient(135deg,#7c3aed,#4f46e5);
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform .15s, box-shadow .15s;
+}
+.dz-wp-btn--apply:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(124,58,237,.35);
+}
+
+/* ===== MAP CARD COMPONENT ===== */
+.dz-map-card {
+  background: linear-gradient(135deg, #0f1117 0%, #1a1a2e 100%);
+  border: 1px solid rgba(0,255,144,0.18);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 14px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  direction: rtl;
+}
+
+.dz-map-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  background: rgba(0,255,144,0.04);
+  border-bottom: 1px solid rgba(0,255,144,0.1);
+  cursor: pointer;
+  gap: 10px;
+  flex-wrap: wrap;
+  transition: background 0.2s;
+}
+.dz-map-card-header:hover { background: rgba(0,255,144,0.07); }
+
+.dz-map-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #00ff90;
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dz-map-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dz-map-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dz-map-badge--green  { background: rgba(0,255,144,0.08); color: #00ff90; border: 1px solid rgba(0,255,144,0.25); }
+.dz-map-badge--orange { background: rgba(255,153,0,0.08);  color: #ff9900; border: 1px solid rgba(255,153,0,0.25); }
+.dz-map-badge--subtle { background: rgba(255,255,255,0.04); color: #555;   border: 1px solid rgba(255,255,255,0.08); font-size: 10px; }
+
+.dz-map-collapse-btn {
+  color: #555;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dz-map-iframe-wrap {
+  position: relative;
+}
+
+.dz-map-route-overlay {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(10,10,22,0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0,255,144,0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  pointer-events: none;
+}
+.dz-map-route-stat { font-weight: 700; }
+
+.dz-map-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.2);
+}
+
+.dz-map-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+  border: 1px solid transparent;
+}
+.dz-map-action-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+.dz-map-action-btn--osm   { background: rgba(0,255,144,0.08); color: #00ff90; border-color: rgba(0,255,144,0.25); }
+.dz-map-action-btn--gmaps { background: rgba(66,133,244,0.08); color: #5b9bf5; border-color: rgba(66,133,244,0.25); }
+.dz-map-action-btn--route { background: rgba(255,153,0,0.08);  color: #ff9900; border-color: rgba(255,153,0,0.25); }
+.dz-map-action-btn--share { background: rgba(156,39,176,0.08); color: #ce93d8; border-color: rgba(156,39,176,0.25); }
+
+.dz-map-card-footer {
+  padding: 5px 14px;
+  font-size: 10px;
+  color: #333;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  text-align: center;
+}
+.dz-map-card-footer a { color: #444; text-decoration: none; }
+.dz-map-card-footer a:hover { color: #666; }
+
+/* GPS button styles removed — replaced by smart intent detection */
+
+/* ===== GPS NEARBY CARD ===== */
+.dz-gps-nearby-card {
+  background: linear-gradient(135deg, rgba(0,255,144,0.05) 0%, rgba(0,204,255,0.05) 100%);
+  border: 1px solid rgba(0,255,144,0.25);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+.dz-gps-nearby-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dz-gps-nearby-poi-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dz-gps-nearby-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dz-gps-nearby-info strong {
+  color: #e8e8e8;
+  font-size: 14px;
+  font-weight: 700;
+}
+.dz-gps-nearby-info span {
+  color: #888;
+  font-size: 12px;
+}
+.dz-gps-nearby-error {
+  background: rgba(255,80,80,0.1);
+  border: 1px solid rgba(255,80,80,0.3);
+  border-radius: 8px;
+  color: #ff8080;
+  font-size: 12px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+.dz-gps-nearby-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #00ff90, #00ccff);
+  border: none;
+  border-radius: 10px;
+  color: #0a0a12;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 20px;
+  transition: opacity 0.2s, transform 0.15s;
+  width: 100%;
+}
+.dz-gps-nearby-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.dz-gps-nearby-btn:disabled,
+.dz-gps-nearby-btn--loading {
+  background: rgba(0,255,144,0.3);
+  color: #00ff90;
+  cursor: not-allowed;
+  transform: none;
+}
+.dz-radius-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dz-radius-label {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dz-radius-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dz-radius-pill {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: #999;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: all 0.15s;
+}
+.dz-radius-pill:hover:not(:disabled) {
+  background: rgba(0,255,144,0.08);
+  border-color: rgba(0,255,144,0.3);
+  color: #00ff90;
+}
+.dz-radius-pill--active {
+  background: rgba(0,255,144,0.12) !important;
+  border-color: rgba(0,255,144,0.5) !important;
+  color: #00ff90 !important;
+}
+.dz-radius-pill:disabled { opacity: 0.4; cursor: not-allowed; }
+.dz-gps-nearby-hint {
+  color: #555;
+  font-size: 11px;
+  text-align: center;
+}
+@keyframes dz-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.dz-spin-icon { animation: dz-spin 1s linear infinite; }
+
+/* ===== WEB BUILDER PROJECT CARD ===== */
+.dz-wb-project-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(6,182,212,0.08) 100%);
+  border: 1px solid rgba(99,102,241,0.25);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  flex-wrap: wrap;
+}
+.dz-wb-project-card--store     { background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(5,150,105,0.08) 100%); border-color: rgba(16,185,129,0.25); }
+.dz-wb-project-card--portfolio { background: linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(139,92,246,0.08) 100%); border-color: rgba(168,85,247,0.25); }
+.dz-wb-project-card--restaurant{ background: linear-gradient(135deg, rgba(249,115,22,0.12) 0%, rgba(234,88,12,0.08) 100%); border-color: rgba(249,115,22,0.25); }
+.dz-wb-project-card--dashboard { background: linear-gradient(135deg, rgba(14,165,233,0.12) 0%, rgba(2,132,199,0.08) 100%); border-color: rgba(14,165,233,0.25); }
+.dz-wb-project-card--blog      { background: linear-gradient(135deg, rgba(234,179,8,0.10) 0%, rgba(202,138,4,0.07) 100%); border-color: rgba(234,179,8,0.25); }
+
+.dz-wb-project-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.dz-wb-project-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dz-wb-project-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.dz-wb-project-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dz-wb-project-desc {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dz-wb-project-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dz-wb-style-badge {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: #aaa;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.dz-wb-size-badge {
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 20px;
+  color: #818cf8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+}
+
+/* When project card is present, remove top rounding from wp-root */
+.dz-wb-project-card + .dz-wp-toolbar,
+.dz-wb-project-card ~ .dz-wp-toolbar {
+  border-radius: 0;
+}
+
+/* ===== NEARBY RESULTS LIST ===== */
+.dz-nearby-resolved {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dz-nearby-results {
+  background: rgba(10,10,20,0.6);
+  border: 1px solid rgba(0,255,144,0.15);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.dz-nearby-results-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0,255,144,0.07);
+  border-bottom: 1px solid rgba(0,255,144,0.12);
+  font-size: 13px;
+  color: #00ff90;
+}
+.dz-nearby-results-header strong { font-weight: 700; }
+.dz-nearby-list { display: flex; flex-direction: column; }
+.dz-nearby-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.15s;
+}
+.dz-nearby-item:last-child { border-bottom: none; }
+.dz-nearby-item:hover { background: rgba(255,255,255,0.03); }
+.dz-nearby-item-rank {
+  font-size: 11px;
+  color: #555;
+  font-weight: 700;
+  width: 22px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.dz-nearby-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dz-nearby-item-name {
+  font-size: 13px;
+  color: #e0e0e0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dz-nearby-item-name-fr {
+  color: #888;
+  font-weight: 400;
+  font-size: 11px;
+}
+.dz-nearby-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dz-nearby-dist-badge {
+  background: rgba(0,255,144,0.12);
+  border: 1px solid rgba(0,255,144,0.25);
+  border-radius: 5px;
+  color: #00ff90;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+}
+.dz-nearby-phone,
+.dz-nearby-opening {
+  color: #666;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.dz-nearby-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dz-nearby-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.dz-nearby-action-btn:hover { opacity: 0.85; }
+.dz-nearby-action-btn--nav {
+  background: rgba(0,255,144,0.12);
+  border: 1px solid rgba(0,255,144,0.3);
+  color: #00ff90;
+}
+.dz-nearby-action-btn--info {
+  background: rgba(0,204,255,0.08);
+  border: 1px solid rgba(0,204,255,0.2);
+  color: #00ccff;
+}
+.dz-nearby-results-footer {
+  padding: 7px 14px;
+  font-size: 10px;
+  color: #444;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  text-align: center;
+}
+.dz-nearby-empty {
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #666;
+  font-size: 12px;
+  padding: 10px 14px;
+  text-align: center;
+}
+.dz-nearby-empty a {
+  color: #00ccff;
+  text-decoration: underline;
 }

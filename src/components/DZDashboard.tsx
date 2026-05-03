@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
-  GitBranch, Cloud, BookOpen,
+  BookOpen,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
@@ -77,24 +77,6 @@ interface CurrencyData {
   last_update?: string
 }
 
-interface SyncStatusData {
-  status: 'synced' | 'out_of_sync' | 'unknown'
-  branch: string
-  repository: string
-  github?: {
-    commitSha: string | null
-    shortSha: string | null
-  }
-  vercel?: {
-    commitSha: string | null
-    shortSha: string | null
-    deploymentUrl: string | null
-    state: string
-    source: string
-  }
-  checkedAt: string
-  error?: string
-}
 
 const PRAYER_ICONS: Record<string, string> = {
   'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤️', 'المغرب': '🌇', 'العشاء': '🌙',
@@ -363,8 +345,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
 
   const [currencyData, setCurrencyData] = useState<CurrencyData | null>(null)
   const [currencyLoading, setCurrencyLoading] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<SyncStatusData | null>(null)
-  const [syncLoading, setSyncLoading] = useState(false)
 
   const [standingsData, setStandingsData] = useState<{ standings: { rank: string; team: string; played: string; wins: string; draws: string; losses: string; points: string }[]; source: string; fetchedAt: string } | null>(null)
   const [standingsLoading, setStandingsLoading] = useState(false)
@@ -376,7 +356,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
   const [welcomeVisible, setWelcomeVisible] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'sync' | 'quran'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -400,11 +380,14 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }
 
-  const loadWeather = useCallback(async (city: string) => {
+  const loadWeather = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setWeatherLoading(true)
     try {
+      const url = coords
+        ? `/api/dz-agent/weather?lat=${coords.lat}&lon=${coords.lon}`
+        : `/api/dz-agent/weather?city=${encodeURIComponent(city)}`
       const result = await withRetry(async () => {
-        const r = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(city)}`)
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Weather API error: ${r.status}`)
         return r.json()
       }, 1)
@@ -417,11 +400,14 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
-  const loadPrayer = useCallback(async (city: string) => {
+  const loadPrayer = useCallback(async (city: string, coords?: { lat: number; lon: number }) => {
     setPrayerLoading(true)
     try {
+      const url = coords
+        ? `/api/dz-agent/prayer?lat=${coords.lat}&lon=${coords.lon}`
+        : `/api/dz-agent/prayer?city=${encodeURIComponent(city)}`
       const result = await withRetry(async () => {
-        const r = await fetch(`/api/dz-agent/prayer?city=${encodeURIComponent(city)}`)
+        const r = await fetch(url)
         if (!r.ok) throw new Error(`Prayer API error: ${r.status}`)
         return r.json()
       }, 1)
@@ -451,22 +437,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     }
   }, [])
 
-  const loadSyncStatus = useCallback(async () => {
-    setSyncLoading(true)
-    try {
-      const result = await withRetry(async () => {
-        const r = await fetch('/api/dz-agent/sync-status')
-        if (!r.ok) throw new Error(`Sync API error: ${r.status}`)
-        return r.json()
-      }, 1)
-      setSyncStatus(result)
-    } catch (err) {
-      console.error('[DZDashboard] loadSyncStatus failed:', err)
-      setSyncStatus(null)
-    } finally {
-      setSyncLoading(false)
-    }
-  }, [])
 
   const loadStandings = useCallback(async () => {
     setStandingsLoading(true)
@@ -515,49 +485,59 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     setTimeout(() => setWelcomeVisible(false), 4000)
   }, [saveCity, loadWeather, loadPrayer])
 
-  // Detect location via browser Geolocation API → Nominatim reverse geocode
+  // Detect location via browser Geolocation API → backend nearest-wilaya (no external API)
   const detectLocation = useCallback(async () => {
     setGeoLoading(true)
     setGeoError(null)
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 5 * 60 * 1000,
+        })
       )
-      const { latitude, longitude } = position.coords
-      const r = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
-        { headers: { 'User-Agent': 'DZ-GPT/1.0' } }
-      )
-      if (!r.ok) throw new Error('Nominatim error')
-      const geo = await r.json()
-      const stateName = geo.address?.state || geo.address?.county || geo.address?.city || ''
+      const { latitude: lat, longitude: lon } = position.coords
+      const coords = { lat, lon }
 
-      // Match to closest wilaya
-      const lower = stateName.toLowerCase()
-      const match = WILAYAS.find(w =>
-        lower.includes(w.en.toLowerCase().split(' ')[0]) ||
-        (w.ar && stateName.includes(w.ar.split(' ')[0]))
-      ) || WILAYAS.find(w => w.en === 'Algiers')
+      // 1. Ask our backend for the nearest wilaya (pure math, no external API)
+      let nearestEn = 'Algiers'
+      let nearestAr = 'الجزائر'
+      try {
+        const geoR = await fetch(`/api/dz-agent/reverse-geocode?lat=${lat}&lon=${lon}`)
+        if (geoR.ok) {
+          const geoData = await geoR.json()
+          if (geoData.en) { nearestEn = geoData.en; nearestAr = geoData.ar }
+        }
+      } catch { /* silently use default */ }
 
-      if (match) changeCity(match.en)
-      else setGeoError('لم يتم التعرف على ولايتك — اختر يدوياً')
+      // 2. Load prayer & weather directly with GPS coords (most accurate)
+      loadPrayer(nearestEn, coords)
+      loadWeather(nearestEn, coords)
+
+      // 3. Update selected city for display & persist
+      saveCity(nearestEn)
+      setWelcomeCity(nearestAr)
+      setWelcomeVisible(true)
+      setTimeout(() => setWelcomeVisible(false), 4000)
     } catch (err: unknown) {
       if (err instanceof GeolocationPositionError && err.code === 1) {
-        setGeoError('لم يتم السماح بالوصول للموقع')
+        setGeoError('لم يتم السماح بالوصول للموقع — فعّل الـ GPS من إعدادات المتصفح')
+      } else if (err instanceof GeolocationPositionError && err.code === 3) {
+        setGeoError('انتهت مهلة GPS — حاول مرة أخرى')
       } else {
         setGeoError('تعذّر تحديد الموقع')
       }
     } finally {
       setGeoLoading(false)
     }
-  }, [changeCity])
+  }, [loadPrayer, loadWeather, saveCity])
 
   useEffect(() => {
     loadDashboard()
     loadPrayer(selectedCity)
     loadWeather(selectedCity)
     loadCurrency()
-    loadSyncStatus()
     loadStandings()
     loadGlobalLeagues()
   }, [])
@@ -572,7 +552,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     { key: 'global' as const, label: 'الدوريات العالمية', icon: '🌍' },
     { key: 'tech' as const, label: 'الأخبار التقنية', icon: '💻' },
     { key: 'currency' as const, label: 'أسعار الصرف', icon: '💱' },
-    { key: 'sync' as const, label: 'التزامن', icon: '🔄' },
   ]
 
   const matches = data?.lfp?.matches || []
@@ -654,10 +633,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadSyncStatus(); loadStandings(); loadGlobalLeagues({ force: true }) }}
+          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadStandings(); loadGlobalLeagues({ force: true }) }}
           title="تحديث"
         >
-          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || syncLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
+          <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
         </button>
       </div>
 
@@ -697,63 +676,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               <div className="dzd-error-state">
                 <span>⚠️ تعذّر تحميل مواقيت الصلاة</span>
                 <button className="dzd-retry-btn" onClick={() => loadPrayer(selectedCity)}>إعادة المحاولة</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeSection === 'sync' && (
-          <div className="dzd-sync-panel">
-            {syncLoading ? (
-              <div className="dzd-skeleton-grid">
-                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton" />)}
-              </div>
-            ) : syncStatus ? (
-              <div className={`dzd-sync-card dzd-sync-card--${syncStatus.status}`}>
-                <div className="dzd-sync-header">
-                  <span className="dzd-sync-badge">
-                    {syncStatus.status === 'synced' ? 'متزامن' : syncStatus.status === 'out_of_sync' ? 'غير متزامن' : 'غير معروف'}
-                  </span>
-                  <button className="dzd-sync-refresh" onClick={loadSyncStatus}>
-                    <RefreshCw size={12} /> فحص الآن
-                  </button>
-                </div>
-                <div className="dzd-sync-summary">
-                  {syncStatus.status === 'synced'
-                    ? 'GitHub و Vercel يعملان على نفس النسخة.'
-                    : syncStatus.status === 'out_of_sync'
-                      ? 'يوجد اختلاف بين آخر commit في GitHub والنسخة المنشورة على Vercel.'
-                      : syncStatus.error || 'تعذّر تأكيد التزامن حالياً.'}
-                </div>
-                <div className="dzd-sync-grid">
-                  <div className="dzd-sync-item">
-                    <GitBranch size={16} />
-                    <div>
-                      <span className="dzd-sync-label">GitHub</span>
-                      <strong>{syncStatus.github?.shortSha || 'غير متاح'}</strong>
-                      <small>{syncStatus.branch}</small>
-                    </div>
-                  </div>
-                  <div className="dzd-sync-item">
-                    <Cloud size={16} />
-                    <div>
-                      <span className="dzd-sync-label">Vercel</span>
-                      <strong>{syncStatus.vercel?.shortSha || 'غير متاح'}</strong>
-                      <small>{syncStatus.vercel?.state || 'UNKNOWN'}</small>
-                    </div>
-                  </div>
-                </div>
-                <div className="dzd-sync-footer">
-                  <span>{syncStatus.repository}</span>
-                  <span>{new Date(syncStatus.checkedAt).toLocaleString('ar-DZ')}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="dzd-empty">
-                <p>تعذّر تحميل حالة التزامن.</p>
-                <button className="dzd-sync-refresh" onClick={loadSyncStatus}>
-                  <RefreshCw size={12} /> إعادة المحاولة
-                </button>
               </div>
             )}
           </div>

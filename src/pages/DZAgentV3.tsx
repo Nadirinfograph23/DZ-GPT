@@ -225,9 +225,42 @@ export default function DZAgentV3() {
 
 function ResultView({ task }: { task: Task }) {
   const r = task.result
+  const [previewTab, setPreviewTab] = useState<'preview' | 'code' | 'deploy'>('preview')
+  const [codeTab, setCodeTab] = useState<'html' | 'css' | 'js'>('html')
+  const [ghPushing, setGhPushing] = useState(false)
+  const [ghMsg, setGhMsg] = useState('')
+
   if (task.status === 'error') return <div style={{ ...S.muted, color: '#fca5a5' }}>Error: {String(task.error || 'unknown')}</div>
   if (task.status === 'pending' || task.status === 'running') return <div style={S.muted}>Running… (status: {task.status})</div>
   if (!r) return <div style={S.muted}>No result.</div>
+
+  const previewHtml = r.app?.previewHtml || null
+
+  const pushToGitHub = async () => {
+    const token = prompt('Enter your GitHub token:')
+    if (!token) return
+    const repo  = prompt('Enter repo name (e.g. my-app):')
+    if (!repo)  return
+    const owner = prompt('Enter your GitHub username:')
+    if (!owner) return
+    setGhPushing(true)
+    setGhMsg('')
+    try {
+      const base64 = btoa(unescape(encodeURIComponent(previewHtml || '')))
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html`, {
+        method: 'PUT',
+        headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'Add DZ Agent V3 generated site', content: base64 }),
+      })
+      if (res.ok) setGhMsg('✅ Pushed to GitHub successfully!')
+      else { const j = await res.json(); setGhMsg(`❌ ${j.message || 'Push failed'}`) }
+    } catch (e: any) {
+      setGhMsg(`❌ Error: ${e.message}`)
+    } finally {
+      setGhPushing(false)
+    }
+  }
+
   return (
     <div>
       {r.summary && (
@@ -236,19 +269,82 @@ function ResultView({ task }: { task: Task }) {
           <div style={S.summary}>{r.summary}</div>
         </div>
       )}
-      {r.app && r.deploy && (
+      {r.app && (
         <div style={S.appBox}>
           <div style={S.summaryLabel}>GENERATED APP</div>
           <div style={S.appTitle}>{r.app.title} <span style={S.appTpl}>{r.app.template}</span></div>
           <div style={S.muted}>{r.app.fileCount} files · {(r.app.totalBytes / 1024).toFixed(1)} KB</div>
-          <a href={r.deploy.downloadPath} style={S.downloadBtn} download>⬇ Download zip</a>
-          {r.deploy.deployInstructions && (
-            <details style={{ marginTop: 12 }}>
-              <summary style={{ cursor: 'pointer', color: '#94a3b8' }}>Deploy instructions</summary>
-              <ol style={{ marginTop: 8, paddingLeft: 20 }}>
-                {r.deploy.deployInstructions.map((s: string, i: number) => <li key={i} style={{ marginBottom: 4, fontSize: 13 }}>{s}</li>)}
-              </ol>
-            </details>
+
+          {previewHtml && (
+            <>
+              <div style={S.previewTabs}>
+                {(['preview', 'code', 'deploy'] as const).map(t => (
+                  <button key={t} onClick={() => setPreviewTab(t)} style={{ ...S.previewTab, ...(previewTab === t ? S.previewTabActive : {}) }}>
+                    {t === 'preview' ? '👁 Preview' : t === 'code' ? '</> Code' : '⬇ Deploy'}
+                  </button>
+                ))}
+              </div>
+
+              {previewTab === 'preview' && (
+                <div style={S.iframeWrap}>
+                  <div style={S.browserBar}>
+                    <span style={S.dot} /><span style={{ ...S.dot, background: '#f59e0b' }} /><span style={{ ...S.dot, background: '#10b981' }} />
+                    <span style={S.urlBar}>{r.app.title || 'dz-agent-v3-site'}.html</span>
+                  </div>
+                  <iframe
+                    srcDoc={previewHtml}
+                    style={S.iframe}
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    title="V3 App Preview"
+                  />
+                </div>
+              )}
+
+              {previewTab === 'code' && (
+                <div style={S.codePanel}>
+                  <div style={S.codeTabs}>
+                    {(['html', 'css', 'js'] as const).map(t => (
+                      <button key={t} onClick={() => setCodeTab(t)} style={{ ...S.codeTab, ...(codeTab === t ? S.codeTabActive : {}) }}>
+                        {t === 'html' ? '🌐 HTML' : t === 'css' ? '🎨 CSS' : '⚡ JS'}
+                      </button>
+                    ))}
+                  </div>
+                  <pre style={S.pre}>
+                    <code style={{ fontSize: 11 }}>
+                      {codeTab === 'html' ? previewHtml.slice(0, 6000) : codeTab === 'css' ? extractBlock(previewHtml, 'style') : extractBlock(previewHtml, 'script')}
+                    </code>
+                  </pre>
+                </div>
+              )}
+
+              {previewTab === 'deploy' && (
+                <div style={{ padding: '12px 0' }}>
+                  {r.deploy && (
+                    <a href={r.deploy.downloadPath} style={S.downloadBtn} download>⬇ Download ZIP</a>
+                  )}
+                  <button
+                    onClick={pushToGitHub}
+                    disabled={ghPushing}
+                    style={{ ...S.downloadBtn, background: ghPushing ? '#334155' : '#1f6feb', marginLeft: 10, border: 'none', cursor: 'pointer' }}
+                  >
+                    {ghPushing ? '⏳ Pushing…' : '🐙 Push to GitHub'}
+                  </button>
+                  {ghMsg && <div style={{ marginTop: 10, fontSize: 13, color: ghMsg.startsWith('✅') ? '#86efac' : '#fca5a5' }}>{ghMsg}</div>}
+                  {r.deploy?.deployInstructions && (
+                    <details style={{ marginTop: 12 }}>
+                      <summary style={{ cursor: 'pointer', color: '#94a3b8' }}>Deploy instructions</summary>
+                      <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                        {r.deploy.deployInstructions.map((s: string, i: number) => <li key={i} style={{ marginBottom: 4, fontSize: 13 }}>{s}</li>)}
+                      </ol>
+                    </details>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {!previewHtml && r.deploy && (
+            <a href={r.deploy.downloadPath} style={S.downloadBtn} download>⬇ Download zip</a>
           )}
         </div>
       )}
@@ -275,6 +371,14 @@ function ResultView({ task }: { task: Task }) {
       )}
     </div>
   )
+}
+
+function extractBlock(html: string, tag: 'style' | 'script'): string {
+  const re = tag === 'style'
+    ? /<style[^>]*>([\s\S]*?)<\/style>/i
+    : /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/i
+  const m = html.match(re)
+  return m ? m[1].trim().slice(0, 6000) : '(none extracted)'
 }
 
 function summarize(e: AgentEvent): string {
@@ -348,4 +452,17 @@ const S: Record<string, React.CSSProperties> = {
   section: { padding: '10px 0', fontSize: 13 },
   list: { paddingLeft: 18, margin: '8px 0' },
   link: { color: '#38bdf8', textDecoration: 'none' },
+  previewTabs: { display: 'flex', gap: 6, marginTop: 12, marginBottom: 8 },
+  previewTab: { background: 'transparent', border: '1px solid #334155', color: '#94a3b8', padding: '5px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 500 },
+  previewTabActive: { background: '#c8ff00', color: '#0b1120', borderColor: '#c8ff00', fontWeight: 700 },
+  iframeWrap: { border: '1px solid #1e293b', borderRadius: 8, overflow: 'hidden', marginTop: 4 },
+  browserBar: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: '#0f172a', borderBottom: '1px solid #1e293b' },
+  dot: { width: 10, height: 10, borderRadius: '50%', background: '#ef4444', flexShrink: 0 },
+  urlBar: { flex: 1, fontSize: 11, color: '#64748b', background: '#020617', padding: '3px 10px', borderRadius: 4, border: '1px solid #1e293b', fontFamily: 'monospace' },
+  iframe: { width: '100%', height: 420, border: 'none', display: 'block', background: '#fff' },
+  codePanel: { marginTop: 6 },
+  codeTabs: { display: 'flex', gap: 4, marginBottom: 8 },
+  codeTab: { background: 'transparent', border: '1px solid #334155', color: '#94a3b8', padding: '3px 12px', borderRadius: 5, cursor: 'pointer', fontSize: 11 },
+  codeTabActive: { background: '#1e293b', color: '#e2e8f0', borderColor: '#475569' },
+  pre: { background: '#020617', border: '1px solid #1e293b', borderRadius: 6, padding: '10px 14px', maxHeight: 380, overflowY: 'auto' as const, margin: 0 },
 }

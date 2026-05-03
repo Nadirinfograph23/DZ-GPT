@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
-import DZDeployPanel from '../components/DZDeployPanel'
 import '../styles/dz-agent.css'
 
 type Lang = 'ar' | 'en' | 'fr'
@@ -173,7 +172,6 @@ export default function DZAgent() {
           )}
         </div>
 
-        <DZDeployPanel language={language} />
       </div>
 
       {sidebarOpen && <div className="dza-overlay" onClick={() => setSidebarOpen(false)} />}

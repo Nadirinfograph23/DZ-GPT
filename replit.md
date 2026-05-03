@@ -1,551 +1,87 @@
 # DZ-GPT
 
-A Vite + React + Express AI chat application with multi-model support.
-
-## DZ Agent V2 — Multi-Agent Layer (`lib/dz-v2/`, mounted at `/api/dz-agent-v2/*`)
-
-V2 is an **additive** intelligence layer on top of the existing V1 agent. It does not modify, replace or break any existing endpoint. UI is unchanged.
-
-**Modules** (all in `lib/dz-v2/`):
-- `language.js` — AR/FR/EN auto-detection + matched-tone instruction strings.
-- `memory-store.js` — 3-tier memory:
-  - short-term (in-memory ring buffer per `sessionId`, 20 turns, 1h idle GC),
-  - long-term preferences (file-based, `data/dz-v2/memory.json`),
-  - semantic recall (Jaccard token overlap + recency boost — no vector DB needed at this scale).
-- `plugins.js` — Plugin registry. Built-in: `news`, `currency`, `weather`, `web-search`, `github`, `dev`. Each plugin scores against the query and runs in parallel with a 6s timeout.
-- `validator.js` — Validation 2.0: empty / placeholder / system-echo / relevance check; `generateWithRetry()` does up to 3 regen attempts feeding the rejection reason back into the system prompt.
-- `learning.js` — Append-only JSONL log at `data/dz-v2/learning.jsonl` (5MB rotation) tracking model, plugins used, attempts, latency, validation outcome.
-- `agents.js` — `plan()` (intent + language + tool selection) → `execute()` (gather tool results + recall + LLM gen with retry) → `qa()` (final guard with localized graceful fallback).
-- `orchestrator.js` — `handle({ query, sessionId, aiGenerate })` ties it all together and persists.
-- `mount.js` — Express endpoints.
-
-**Endpoints** (additive, separate namespace `/api/dz-agent-v2`):
-- `POST /api/dz-agent-v2/chat` `{ query, sessionId? }` — full multi-agent flow.
-- `GET  /api/dz-agent-v2/health`
-- `GET  /api/dz-agent-v2/plan?q=...&sessionId=...`
-- `GET  /api/dz-agent-v2/plugins`
-- `GET  /api/dz-agent-v2/memory/stats`
-- `POST /api/dz-agent-v2/memory/purge` `{ kind?, olderThanDays? }`
-- `GET  /api/dz-agent-v2/learning/recent`
-- `GET  /api/dz-agent-v2/learning/stats`
-
-**Wiring** (`server.js`): one import + one `mountDzAgentV2(app, { aiGenerate, host })` call placed **before** `export { app }` (so it attaches on Vercel serverless too — anything inside the `if (isMain)` block does not run on Vercel). `aiGenerate` reuses the existing `safeGenerateAI` (DeepSeek → Ollama → Groq fallback chain). `host` bridges to existing V1 endpoints (`/api/dz-agent/news`, `/api/currency/latest`, etc.) so V2 enriches answers with the same fresh data the dashboard uses.
-
-**Vercel persistence note:** `/var/task` is read-only on Vercel serverless, so `lib/dz-v2/memory-store.js` and `lib/dz-v2/learning.js` write to `/tmp/dz-v2/` when `process.env.VERCEL` is set. Memory therefore persists within a warm container but is cleared on cold starts. For cross-instance persistence, swap the file backend in `memory-store.js` for Vercel KV / Upstash Redis (drop-in: only the `loadDisk()` / `persist()` functions need to change).
-
----
-
-## DZ Agent V4 PRO — Multi-file project generation engine (additive layer)
-
-V4 is an additive intelligence layer at `/api/dz-agent-v4/*`. It does not modify any V1/V2/V3 code, route, or UI. It implements a professional multi-file code generation system inspired by GPT Engineer, smol-ai/developer, Devika, Open Interpreter and the Vercel AI SDK — without copying any of their code, only replicating architecture and patterns.
-
-**Modules** (all in `lib/dz-v4/`):
-- `prompts.js` — strict `FILE: /project/<path>` block format prompts (planner / generator / modifier).
-- `parser.js` — tolerant parser for `FILE:` blocks + JSON object recovery.
-- `validator.js` — empty/placeholder check, JSON parse, HTML cross-link verification, unique paths, entry-file existence.
-- `project-store.js` — persistent storage at `data/dz-v4/projects/<id>/` (Replit) or `/tmp/dz-v4/projects/<id>/` (Vercel). In-memory index hydrated from disk on boot.
-- `generator.js` — orchestrator: `planProject()` → `generateFiles()` → validate. Reuses host `safeGenerateAI` (DeepSeek → Ollama → Groq fallback). Always returns a usable result (deterministic fallback template if AI is unavailable).
-- `mount.js` — Express router.
-
-**Endpoints** (mounted in `server.js` directly before `export { app }`):
-- `GET  /api/dz-agent-v4/health` — version + storage stats.
-- `POST /api/dz-agent-v4/plan` `{ prompt }` — preview project structure JSON before generating.
-- `POST /api/dz-agent-v4/generate` `{ prompt, persist? }` — full plan → files → validate → save. Returns `{ ok, projectId, plan, files, validation, downloadUrl }`.
-- `POST /api/dz-agent-v4/modify` `{ projectId, path, instruction }` — regenerate ONE file in an existing project.
-- `GET  /api/dz-agent-v4/projects` — recent projects + storage stats.
-- `GET  /api/dz-agent-v4/project/:id` — project metadata.
-- `GET  /api/dz-agent-v4/project/:id/files` — all files (full content).
-- `GET  /api/dz-agent-v4/project/:id/file?path=…` — single file.
-- `GET  /api/dz-agent-v4/project/:id/validate` — re-run validator on saved files.
-- `GET  /api/dz-agent-v4/project/:id/download` — download as zip (reuses V3 `createZip` PKZIP archiver, no zip dependency).
-- `DELETE /api/dz-agent-v4/project/:id` — remove project.
-
-**Strict output contract** — every file the LLM returns must use:
-```
-FILE: /project/<relative/path/to/file.ext>
-```<lang>
-<content>
-```
-```
-The parser tolerates LLM drift (CRLF, optional language tag, leading prose) and the generator retries with a stricter reminder once if nothing parses. If both attempts fail, V4 falls through to a deterministic 4-file static template so the contract "never return empty" (shared with V2/V3) holds.
-
-**Project memory** — every persisted project carries `_meta.json` (title, stack, entry, files, prompt, timestamps), so the modifier endpoint can update single files without regenerating the whole project.
-
-**Vercel persistence note:** same constraint as V2/V3 — `/var/task` is read-only on Vercel serverless, so `lib/dz-v4/project-store.js` writes to `/tmp/dz-v4/projects/` when `process.env.VERCEL` is set. Projects persist within a warm container but are cleared on cold starts. `health.stats.persistent` reflects this.
-
-**Free-tier engines added (no UI changes):**
-
-- `lib/dz-v4/image.js` — image generation via the HuggingFace free Inference API (model fallback chain: SDXL Turbo → SD 2 → SD 1.5). `HF_TOKEN` (or `HUGGINGFACE_API_KEY`) is OPTIONAL — when missing, every HF call fails fast and the engine returns a deterministic gradient SVG placeholder so the "never empty" contract holds. Output format: `IMAGE: <url>\nPROMPT USED: <enhanced>`. Generated bytes are cached in memory keyed by `img_<id>` and served by `GET /api/dz-agent-v4/image/:id` with a 1h TTL.
-
-- `lib/dz-v4/chart.js` — data visualization engine that produces a self-contained Chart.js project (`/project/index.html`, `/project/styles/main.css`, `/project/scripts/chart.js`, `/project/data.json`, `/project/README.md`) without any LLM call. Supported types: `bar`, `line`, `pie`, `doughnut`, `radar`, `polarArea`, `scatter`, `bubble`. Accepts either `{ labels, datasets }` or the simpler `{ data: [{label, value}, …] }` shape. Persisted via the same `project-store.js` so the chart project gets a normal `projectId` and `/download` zip.
-
-- `lib/dz-v4/dispatcher.js` — smart intent classifier. Cheap multi-language keyword scorer (Arabic / French / English) runs first; only if confidence < 0.45 does it consult the host LLM for a one-word verdict (`code` | `image` | `chart`). Free, fast, deterministic for the common case.
-
-**Additional endpoints under `/api/dz-agent-v4/*`:**
-- `POST /classify` `{ prompt }` — returns `{ intent, confidence, scores, source }`.
-- `POST /smart`    `{ prompt, persist?, …chart-fields? }` — classifies then runs the right engine in one call. Returns `{ route, verdict, … engine-specific payload }`.
-- `POST /image`    `{ prompt, model?, negativePrompt? }` — direct image generation.
-- `GET  /image/:id` — serves cached image bytes (PNG from HF or SVG fallback).
-- `POST /chart`    `{ title, type, data | (labels + datasets), options? }` — direct chart project generation.
-
-`/health` now lists the active engines, supported chart types, and reports whether `HF_TOKEN` is configured.
-
-**No UI changes** — V4 is backend-only. Existing pages (`/`, `/dz-agent`, `/quran`, `/dzchat`, `/dz-tube`, `/agent`) are untouched.
-
----
-
-## dz Voice Intelligence System (DVIS) — V1 + V2 voice add-on (`voice-system/`)
-
-A fully **modular, browser-native, free** voice layer added on top of dz Agent. Lives in `voice-system/` and a single React wrapper `src/components/VoicePanel.tsx`. **Does not modify any agent core logic.**
-
-### Modules
-- `voice-system/config.js` — central settings (languages, wake words, timings, voice gender hints, prefs storage key).
-- `voice-system/utils.js` — env detection (`hasSTT`/`hasTTS`), language heuristic, prefs persist (localStorage), tiny `Emitter`, `normalize` for wake-word matching.
-- `voice-system/speechToText.js` — Web Speech API wrapper. AR/FR/EN, continuous + interim results, auto-retry on `no-speech`/`network` (max 2), per-event bus (`result`/`error`/`end`/`start`).
-- `voice-system/textToSpeech.js` — `SpeechSynthesis` wrapper. Pickable male/female voice via name-hint heuristics, pitch tuning, utterance config cache, warm-up to remove first-call latency. `setEngine()` lets a Piper/WASM engine be plugged in later without UI changes.
-- `voice-system/wakeWordEngine.js` — V2 wake-word listener using a separate STT instance. Matches normalized substrings against `WAKE_WORDS` (default: `hey dz`, `hi dz`, `dz agent`, `يا دي زي`, `دي زي`). Auto-restarts on browser timeouts.
-- `voice-system/voiceRouter.js` — sends transcript to the agent. Tries in order: `window.__dzAgentProcess(text)` → `/api/dz-agent-v4/smart` → `/api/agent` → `/api/chat`. Always returns a non-empty reply (localized fallback).
-- `voice-system/controller.js` — orchestrates the full flow `STT → Router → TTS`, manages V2 features (continuous mode, follow-up silence timer, wake-word toggle), exposes a single API: `createDVIS()` → `{ on, setPrefs, startListening, stopListening, toggleListening, speak, send, preload, destroy }`.
-
-### React UI
-- `src/components/VoicePanel.tsx` — minimal panel (mic / mute / settings buttons) injected into:
-  - `src/App.tsx` → main multi-model chat (next to Send).
-  - `src/components/DZChatBox.tsx` → DZ Agent chat (next to Send).
-- Settings popover: voice gender (👩/👨), language (auto/AR/FR/EN), continuous mode, wake word toggle, fast mode.
-- CSS appended to `src/styles/dz-agent.css` (no existing rules touched). Mic pulses when listening; settings panel anchored above input.
-
-### Behaviour
-- **V1**: tap mic → STT (continuous + interim) → transcript dropped into chat input → `sendMessage()` fires → AI reply spoken via TTS in matching language. Female voice default, user-switchable.
-- **V2**: 
-  - **Wake word** (opt-in toggle): background SpeechRecognition stays warm, fires `wake` event on phrase match, auto-switches to active listening.
-  - **Continuous conversation**: after TTS finishes, STT auto-restarts; auto-sleeps after 15 s of silence.
-  - **Latency**: TTS warm-up at mount; utterance config cache; async pipeline; non-blocking.
-
-### Free-tool guarantees
-- ✅ Web Speech API (browser-native, free, offline-capable on most platforms).
-- ✅ `SpeechSynthesis` (browser-native, free, offline-capable).
-- ✅ Wake-word via the same SpeechRecognition stream (no Porcupine, no models).
-- ❌ Zero paid APIs. No ElevenLabs, no OpenAI TTS, no Whisper API.
-- Graceful degradation: if a browser lacks STT or TTS, the panel hides itself; chat still works.
-
-### Persistence
-- User prefs stored in `localStorage` under `dvis.prefs.v1`.
-
----
-
-## DZ Agent V3 — Autonomous multi-agent + web app generator (additive layer)
-
-V3 builds on V1+V2 to deliver real autonomous task execution and full-stack web app generation. **Does not modify any V1 or V2 code, route, or UI.** Lives entirely under `lib/dz-v3/` and a new isolated route `/agent`.
-
-**Five specialized agents** (`lib/dz-v3/agents/`):
-- `news-agent.js` — Algerian + global news aggregation (uses V1 `/api/dz-agent/news`)
-- `research-agent.js` — Open-web research via Google CSE + smart agent ask
-- `dev-agent.js` — Generates real React + Express templates (`news-site`, `saas-starter`, `blog-cms`)
-- `execution-agent.js` — Packages generated apps into a downloadable zip artifact + deploy instructions
-- `qa-agent.js` — Validates outputs (empty/incomplete/missing-fields)
-
-**Coordination** (`lib/dz-v3/`):
-- `bus.js` — In-process pub/sub for agent-to-agent events (`agent.start`, `agent.thought`, `agent.tool`, `agent.result`, `agent.error`, `task.start`, `task.done`)
-- `task-manager.js` — Task lifecycle (`pending`/`running`/`done`/`error`) persisted to `/tmp/dz-v3/tasks.json` on Vercel
-- `streaming.js` — Server-Sent Events helper (replays history then subscribes to live events; auto-closes after 55s for Vercel function limit)
-- `orchestrator.js` — Decides which agents to run from the user query, coordinates them, runs synthesis (real AI) then QA
-- `webapp-generator.js` — In-memory artifact store + dependency-free PKZIP archiver (generates valid zip files without any zip library)
-
-**Endpoints** (mounted in `server.js` directly before `export { app }`):
-- `POST /api/dz-agent-v3/run` — start autonomous task → returns `{ taskId, streamUrl, statusUrl }`
-- `GET  /api/dz-agent-v3/task/:id` — current task state + agent log
-- `GET  /api/dz-agent-v3/task/:id/stream` — SSE live agent events
-- `GET  /api/dz-agent-v3/tasks` — recent tasks list + stats
-- `POST /api/dz-agent-v3/generate-app` — generate web app file tree (no full task)
-- `GET  /api/dz-agent-v3/templates` — list available templates
-- `GET  /api/dz-agent-v3/artifact/:id/download` — download generated app as zip
-- `GET  /api/dz-agent-v3/artifact/:id/file?path=…` — read single file from artifact
-- `POST /api/dz-agent-v3/scrape-live` — unified live scrape (news + currency + weather)
-- `GET  /api/dz-agent-v3/agents` — list agents + descriptions
-- `GET  /api/dz-agent-v3/health`
-
-**Frontend dashboard** at `/agent` (`src/pages/DZAgentV3.tsx`, registered in `src/main.tsx`):
-- Composer + 4 example prompts (EN/FR/AR)
-- Live agent log via SSE (color-coded per agent)
-- Result panel: synthesis text, generated-app card with one-click zip download, news/research lists, QA status
-- Sidebar with recent tasks (clickable to inspect)
-- Existing routes (`/`, `/dz-agent`, `/quran`, `/dzchat`, `/dz-tube`) **untouched**
-
-**Honest scope of V3 — what it does and does not do on Vercel serverless:**
-- ✅ Real multi-agent coordination (in-process bus, complete within one function invocation)
-- ✅ Real generated apps (downloadable zips containing working React + Express code that runs with `npm install && npm run dev`)
-- ✅ Real-time streaming via SSE (capped at 55s for Vercel function limit)
-- ✅ Multilingual (auto-detects AR/FR/EN, synthesis + fallback summaries in all three)
-- ❌ Long-running autonomous loops > 60s (Vercel function timeout)
-- ❌ Autonomous deployment to AWS/Heroku/etc — generated apps include deploy instructions but actual deployment requires the user's own infra
-- ❌ FAISS/Pinecone vector DB — same constraint as V2 (would need external paid infra)
-- ❌ Sandboxed code execution — incompatible with Vercel; user must run generated code on their own machine
-
-**Guarantees (same as V1/V2):**
-- Never returns empty responses (graceful fallback summary in detected language)
-- QA agent flags any agent output that's empty/missing-fields before delivery
-- All artifacts have a 1h TTL (in-memory map, GC'd on every store)
-
-**Guarantees:**
-- Never returns an empty response — falls through to a localized graceful message in detected language (AR/FR/EN).
-- Always validates relevance + length before sending.
-- Up to 3 regen attempts with rejection-reason feedback.
-- Semantic memory persists across restarts.
-- Self-learning log enables future analytics / fine-tuning.
-
-**Explicit non-goals (intentionally out of scope):**
-- No Docker/e2b sandboxed code execution (incompatible with Vercel serverless).
-- No FAISS/Chroma vector DB (keyword-scored recall is sufficient at this scale; can be swapped later).
-- No UI changes (intentional — V2 is intelligence-only).
-
-## DZ Tube Audio Playback (server.js + MiniPlayerContext)
-
-The mini-player streams YouTube audio through `/api/dz-tube/audio-proxy`, which 307-redirects to a direct googlevideo URL resolved by `resolveDirectAudioUrl`. That resolver races four extractors in parallel via `Promise.any` (first success wins):
-
-1. **Piped** (`fetchPipedStreams`) — public Piped instances, queried in parallel via `Promise.any`
-2. **Invidious** (`fetchInvidiousStreams`) — public Invidious instances, queried in parallel
-3. **ytdl-core** — JavaScript YouTube extractor
-4. **yt-dlp** binary at `bin/yt-dlp` with `ytDlpAntiBotArgs()` (player_client=android,ios,web) + `ytDlpCookiesArgs()`
-
-Successful URLs are cached in `_audioUrlCache` for 20 minutes (200-entry LRU). The client adds `&_r=<ts>` to bust cache on recovery.
-
-### YouTube Bot Detection on Vercel — Requires `YOUTUBE_COOKIES`
-
-YouTube blocks data-center IPs (Vercel/AWS) with "Sign in to confirm you're not a bot" on **every** extraction path unless **logged-in account cookies** are provided. Anonymous visitor cookies are not sufficient.
-
-To enable reliable playback in production:
-1. Sign into YouTube in your browser
-2. Export cookies for `youtube.com` in **Netscape format** using a browser extension (e.g. "Get cookies.txt LOCALLY")
-3. Set the env var `YOUTUBE_COOKIES` on Vercel to the full **contents** of that file (not the path)
-4. Trigger a redeploy
-
-Without cookies, only videos cached by Piped resolve (~1 in 7). With logged-in cookies, yt-dlp resolves cold in ~1-3s per video, all videos.
-
-### Hardening (2026-04-30)
-- `probeUpstreamPlayable(url)` — 32-byte Range probe (≤2.5s) used inside the Piped/Invidious branches of `resolveDirectAudioUrl`. Prevents a broken Piped/Invidious proxy URL (e.g. `proxy.piped.private.coffee` returning 500) from winning the race and silently breaking playback.
-- `isDirectGoogleVideoUrl(url)` + `streamAudioBytesToClient(req, res, ytUrl, upstream)` — when the resolver returns a direct googlevideo URL (yt-dlp / ytdl-core), `audio-proxy` now byte-pipes through the server (whose IP matches the signed `ip=` param) instead of 307-redirecting the browser (which would 403). Range requests keep each chunk under the 60s function timeout.
-- `/api/dz-tube/debug-extract?token=$DEBUG_EXTRACT_TOKEN&url=<yt>` — gated diagnostic that runs each of the four extractors independently and returns `{ok, ms, error|url}` per source plus `cookiesConfigured`. Returns 404 unless `DEBUG_EXTRACT_TOKEN` env var is set, 403 on token mismatch.
-
-## Architecture
-
-- **Frontend**: React + TypeScript, built with Vite. Located in `src/`.
-- **Backend**: Express.js server in `server.js` — serves API routes and in development acts as a Vite middleware host.
-- **Port**: Both dev and production run on port `5000` at `0.0.0.0`.
-- **Intelligence Layer**: `src/utils/dzMemory.ts` — localStorage-based user behavior memory (intent detection, query tracking, smart suggestions, behavior context injection).
-
-## User Intelligence System (dzMemory)
-
-`src/utils/dzMemory.ts` provides a zero-dependency, privacy-first behavior layer:
-- **Intent Detection**: classifies queries into 10 categories (coding, quran, ocr, news, sports, weather, github, currency, education, general)
-- **Query Tracking**: stores last 30 queries with intent + timestamp in localStorage (`dza-memory-queries`)
-- **Feature Usage Tracking**: tracks GitHub feature usage frequency
-- **Behavior Context**: `buildBehaviorContext()` generates Arabic context hints injected into AI requests (server strips & uses them as BEHAVIOR INTELLIGENCE in system prompt)
-- **Smart Suggestions**: `getSmartSuggestions()` returns ranked suggestions based on user history
-- **Retry Utility**: `withRetry(fn, retries, delayMs)` — exponential retry used by all API loaders
-
-## Performance & Reliability
-
-- **DZDashboard**: all 5 API loaders wrapped with `withRetry(1 retry, 800ms delay)` — no more silent failures
-- **DZChatBox**: 400ms debounce on sendMessage (ref-based, no state overhead), `withRetry(1 retry)` on fetch
-- **server.js**: behavior context extraction — client-injected `[سياق المستخدم: ...]` is stripped from user message and injected into system prompt as `BEHAVIOR INTELLIGENCE` section
-
-## DZ Agent Reliability Layer (server.js)
-
-Added a server-side reliability layer that prevents empty/irrelevant responses:
-
-- **`validateAIContent(text, query)`**: Rejects null, undefined, empty strings, placeholder responses (`null`, `undefined`, `n/a`, `...`), and content shorter than 5 meaningful chars.
-- **`trimRelevantContext(messages, maxTurns=8)`**: Drops empty messages and keeps only system messages + last 8 turns. Reduces off-topic answers caused by unrelated history.
-- **`safeGenerateAI({ messages, query, max_tokens })`**: Master fallback. Tries DeepSeek → Ollama → 4 Groq models in order, validating each response. Returns the first valid one.
-- **`callDeepSeek` / `callOllama`**: Each wrapped in 25s `AbortController` timeout to prevent hanging requests.
-- **`logInvalidResponse(stage, query, raw)`**: Structured warning log when a model returns invalid content, so failing stages can be traced.
-
-Wired into:
-- `/api/dz-agent-chat` — replaces previous inline DeepSeek/Ollama/Groq fallback chain. Falls through to existing static fallbacks (educational, weather priority, RSS, welcome) when all AI models fail.
-- `/api/chat` — validates output and tries a secondary Groq model before failing.
-
-## Dashboard Endpoint Resilience
-
-All dashboard endpoints now return structured 200 responses (not 503/404) with explicit `error` and `status` fields, so the UI never sees an empty body:
-
-- `/api/dz-agent/weather?city=...` — returns full schema with `null` values + `error` + `status: 'unavailable' | 'not_found'` on failure.
-- `/api/currency/latest` — returns `{ base, provider, rates: {}, status: 'unavailable', error }` when all sources fail.
-- `/api/dz-agent/prayer?city=...` — returns full prayer-times schema with `--` placeholders + `error` + `status: 'unavailable'` on failure.
-
-## Running the App
-
-```bash
-npm run dev      # Development (Vite middleware + Express API)
-npm run build    # Build frontend to dist/
-npm run start    # Production (serves dist/ + Express API)
-```
-
-## Environment Variables / Secrets
-
-The following secrets must be configured in Replit's Secrets tab and Vercel project environment:
-
-| Key | Purpose |
-|-----|---------|
-| `AI_API_KEY` | Primary AI provider API key (Groq by default) |
-| `AI_API_URL` | AI API endpoint (default: Groq's completions URL) |
-| `DEEPSEEK_API_KEY` | DeepSeek API key (for DeepSeek model support) |
-| `GITHUB_TOKEN` | GitHub personal access token (for server-side GitHub integration routes and deployment push automation) |
-| `OLLAMA_PROXY_URL` | URL for Ollama proxy (for local model support) |
-| `GOOGLE_API_KEY` | Google Custom Search Engine API key (for DZ Agent search) |
-| `GOOGLE_CSE_ID` | Google CSE engine ID (cx) — optional, defaults to `12e6f922595f64d35` |
-| `OPENWEATHER_API_KEY` | OpenWeatherMap API key (for weather in DZ Agent dashboard and weather-priority chat answers) |
-| `GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
-| `APP_BASE_URL` | Public app base URL, e.g. `https://dz-gpt.vercel.app` |
-| `VERCEL_TOKEN` | Vercel token for deployment trigger route and deployment automation |
-| `DEPLOY_ADMIN_TOKEN` | Required admin token for the restricted `/api/dz-agent/deploy` route |
-
-## API Routes
-
-- `POST /api/chat` — Chat completions (multi-model via Groq/OpenAI compatible)
-- `POST /api/dz-agent-chat` — DZ Agent chat with live retrieval, GitHub context, and weather-priority support
-- `POST /api/dz-agent-search` — DZ Agent search
-- `GET /api/dz-agent/dashboard` — Live dashboard: news (RSS), sports, weather (cached 10 min)
-- `GET /api/dz-agent/sync-status` — Compares the production GitHub branch head with the Vercel-deployed commit for DZ Agent sync visibility
-- `GET /api/dz-agent/weather` — Per-city weather via OpenWeather API with server-side caching
-- `GET /api/currency/latest` — Live exchange rates against the Algerian dinar
-- `POST /api/dz-agent/deploy` — Restricted Vercel deploy trigger; requires `DEPLOY_ADMIN_TOKEN` via `x-deploy-token` or Bearer auth
-- `GET /api/auth/github` — Starts GitHub OAuth
-- `GET /api/auth/github/callback` — Handles GitHub OAuth callback
-- Various GitHub API proxy routes:
-  - `POST /api/dz-agent/github/repos` — List user repos
-  - `POST /api/dz-agent/github/files` — Browse repo files
-  - `POST /api/dz-agent/github/file-content` — Read file
-  - `POST /api/dz-agent/github/analyze` — AI code analysis
-  - `POST /api/dz-agent/github/code-action` — Code actions (fix, explain, improve)
-  - `POST /api/dz-agent/github/commit` — Commit changes
-  - `POST /api/dz-agent/github/pr` — Create Pull Request
-  - `POST /api/dz-agent/github/repo-scan` — Full repo AI scan
-  - `POST /api/dz-agent/github/branches` — List branches
-  - `POST /api/dz-agent/github/issues` — List open issues
-  - `POST /api/dz-agent/github/pulls` — List Pull Requests
-  - `POST /api/dz-agent/github/stats` — Repo statistics & contributors
-
-## DZ Agent Sidebar & Chat History
-
-DZ Agent features a sidebar identical in style to the main DZ GPT models, including:
-
-- **Chat history**: Each conversation is stored per-chat in `localStorage` under `dz-agent-msgs-{chatId}`. Chat list is stored under `dz-agent-chats`.
-- **New chat button**: Creates a fresh conversation and saves it to the list.
-- **Delete chat**: Removes the conversation and its messages from `localStorage`.
-- **Language selector**: Three languages with flags — 🇩🇿 العربية (Arabic), 🇬🇧 English, 🇫🇷 Français. Language preference is persisted in `localStorage` under `dz-agent-lang`.
-- **Mobile responsive**: Sidebar slides in/out on mobile (width < 769px); always visible on desktop.
-- **DZChatBox** accepts `chatId`, `language`, and `onTitleChange` props for external chat management.
-
-Key files: `src/pages/DZAgent.tsx` (layout + sidebar state), `src/styles/dz-agent.css` (`.dza-*` classes).
-
-## DZ Agent GitHub Workspace
-
-DZ Agent prioritizes the GitHub workflow on the welcome screen:
-
-- GitHub OAuth is available from the main workspace card and the top GitHub bar.
-- After OAuth completes, the app automatically fetches the user's repositories.
-- Selecting a repository shows a repository action card with scan, bug finding, security scan, suggestions, files, branches, issues, Pull Requests, Commit, PR creation, and stats actions.
-- The previous education center/study selector UI has been removed from the DZ Agent interface.
-- GitHub OAuth state validation is cookie-backed so it works reliably on serverless production hosts such as Vercel.
-
-## DZ Agent Live Cards
-
-- The DZ Agent landing dashboard includes prayer times, weather, news, sports calendar/LFP results, tech news, and currency exchange rates.
-- Weather and prayer times share the selected Algerian wilaya.
-- Currency rates are loaded from `/api/currency/latest`; sports calendar data comes through the dashboard LFP payload.
-- A sync tab compares the GitHub production branch with the Vercel-deployed commit and shows whether both are on the same version.
-- Clicking the weather dashboard card sends a clean chat prompt while injecting `context: weather_priority` only into the server request. The server fetches OpenWeather data before the AI response and falls back safely if the API key or API response is unavailable.
-
-## DZ Agent Header Update
-
-- `/dz-agent` header now places the HOME button at the far-left side of the main header and keeps SPA navigation to `/`.
-- The refresh icon button creates a new DZ Agent chat session with the same state reset behavior as the sidebar New Chat button.
-- The refresh action is SPA-only and does not reload the page.
-
-## Homepage Suggestion Interaction
-
-- Homepage suggestion chips now force a fresh chat session, inject the clicked suggestion as the first user message, and auto-send it immediately.
-- The action is guarded by the existing loading state to avoid duplicate sessions from repeated clicks.
-
-## DZ Agent Security and Expertise
-
-- API chat messages are normalized server-side, limited to the last 24 messages, stripped of control characters, and capped per message before reaching AI providers.
-- The public deploy route is restricted with `DEPLOY_ADMIN_TOKEN` and rate limited to reduce abuse risk.
-- GitHub tokens entered in the UI are stored in `sessionStorage` only; legacy `localStorage` token copies are removed on load.
-- Production CSP no longer enables `unsafe-eval`; development keeps it only for Vite tooling.
-- DZ Agent's trusted source list includes OWASP, MDN, Node.js, React, Vite, Express, GitHub Docs, Vercel, npm, and Cloudflare for programming/security answers.
-
-## Key Files
-
-- `server.js` — Express server with all API routes + Vite integration
-- `vite.config.ts` — Vite config (host: 0.0.0.0, port: 5000)
-- `src/` — React frontend
-- `src/pages/` — Page components
-- `src/components/` — UI components
-- `src/components/DZChatBox.tsx` — DZ Agent chat UI, GitHub OAuth, repository selection, dashboard prompt handling, and repository action panels
-- `src/components/DZDashboard.tsx` — Live dashboard cards and weather-priority prompt trigger
-- `src/pages/AIQuran.tsx` — AI Quran page
-- `src/styles/ai-quran.css` — AI Quran page styles
-- `src/styles/dz-agent.css` — DZ Agent styles including GitHub workspace, header controls, and repository action panel styles
-
-## DZ Agent Chat Navigation Update
-
-- `/dz-agent` now acts as the DZ Agent landing page with a prominent AI-DZ CHAT entry button plus HOME navigation.
-- `/chat` is the dedicated AI-DZ CHAT page with HOME and DZ Agent navigation buttons in the header.
-- The chat supports visible invocation codes at the top of the welcome state: `@dz-agent`, `@dz-gpt`, and `/github`.
-- The welcome cards were compacted so the DZ Agent chat box remains visible and usable on smaller screens.
-
-## OCR DZ (نموذج استخراج النصوص)
-
-- النموذج `ocr-dz` يدعم رفع الصور (jpg, png, bmp, webp, tiff) وملفات PDF في نفس الوقت
-- يستخدم `tesseract.js` لاستخراج النص بدقة (عربي + إنجليزي + فرنسي)
-- بعد رفع الملف يظهر زر "Extract Text" لبدء المعالجة
-- **Pipeline ذكي**: استخراج النص → تصحيح AI (إملاء + صياغة + تنظيف) → وضع chat للتحليل
-- ملفات PDF المحتوية على صور تُحوَّل إلى canvas ثم OCR (دعم حتى 15 صفحة)
-- النص المستخرج والمصحح يُمرَّر كـ context للمحادثة للإجابة على الأسئلة
-
-## AI Quran
-
-- `/aiquran` is available as a dedicated Quran page using Quran.com API v4 for chapters, verses, translations, recitations, and audio.
-- **Theme colors**: Updated from golden yellow (`#c8a96e`) to yellow-green (`#9acd32`) to match DZ GPT branding.
-- The page includes chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search with highlighted word matches.
-- The Quran audio player supports full-surah listening from the ayah menu, repeat-current-surah mode, and automatic next-surah playback.
-- Quran verse search accepts an ayah number for the currently open surah, scrolls directly to it, and highlights it.
-- Quran text uses bundled Amiri Quran and Noto Naskh Arabic font files from `public/fonts/` to avoid missing Arabic glyphs in production browsers.
-- CSP allows `https://api.quran.com` for data requests and Quran audio domains for media playback.
-
-### Ayah Interaction System
-- Each verse card has a ⋮ menu button that opens a context menu with three actions:
-  1. **حفظ العلامة (Bookmark)** — saves the ayah to localStorage, shows in bookmarks panel
-  2. **استماع (Listen)** — plays audio for that specific ayah via Quran API verse-level recitation
-  3. **المساعد الذكي (Smart Assistant)** — opens the AI chat with the ayah pre-loaded for tafsir
-- A bookmarks panel (toggle button in header) shows all saved ayat with listen, ask AI, and delete options
-- Individual verse audio plays via a floating mini-player bar at the bottom of the screen
-- The verse audio uses `GET /api/v4/recitations/{recitation_id}/by_ayah/{ayah_key}` from the Quran API
-
-### Mobile Responsiveness
-- Fully responsive layout: sidebar collapses to a slide-in panel on mobile
-- AI assistant panel is hidden on mobile (accessible via the toggle button)
-- Surah index modal is usable on mobile with proper sizing
-- Header elements collapse gracefully on small screens
-
-### DZ Agent Dashboard — Quran Card
-- "القرآن الكريم" is the first tab in the DZ Agent dashboard, with a 📖 icon
-- Clicking it redirects to `/aiquran` (navigation card, not a data panel)
-- The Quran button was removed from the DZ Agent header
-
-## Notes
-
-- The server correctly binds to `0.0.0.0:5000` for Replit compatibility.
-- `allowedHosts: true` is set in vite.config.ts for proxied preview support.
-- In development, the CSP `frame-ancestors` directive allows Replit preview iframe origins; production keeps iframe embedding disabled with `frame-ancestors 'none'`.
-- The production service worker uses network-first/no-store fetching for app assets to prevent old cached UI bundles from mixing with newly deployed versions.
-- DZ Agent's Google CSE default is `12e6f922595f64d35`; eddirasa search backend endpoints may remain available but the education center UI is not exposed in DZ Agent.
-
-## DZ Smart Agent Layer (added 2026-04-28)
-
-A new modular intelligence layer was added under `/lib/` and exposed as
-`/api/agent/*` endpoints. It is **additive** — the existing
-`/api/dz-agent-chat`, dashboard endpoints, and UI components are unchanged.
-
-### Pipeline
-`User Query → Intent Detection → Smart Router → Multi-Source Fetch →
-Filter + Rank → Engine Response → Memory + LRU Cache`
-
-### Files
-- `lib/intent.js` — `detectIntent()` returns `builder | github | news | structured | general` plus language and live-mode flags. Includes `expandQuery()` for AR↔EN multi-query expansion.
-- `lib/router.js` — `ask(query)` orchestrator + per-engine functions.
-- `lib/news.js` — `FEED_MANIFEST` (Algeria-first), `getTopNews()`, parallel feed fetch, optional injected fetcher.
-- `lib/github.js` — `searchRepos()`, `searchCode()`, `getRepoInsight()`, `trendingRepos()`, heuristic `detectStack()`. Uses `GITHUB_TOKEN` if set.
-- `lib/builder.js` — `buildSite(brief)` returns plan + scaffold files; pulls inspiration from GitHub trending templates.
-- `lib/ranker.js` — `rankAndTrim()` with Algeria-first scoring (Djazairess +60, APS +55, Echorouk/Ennahar +50, El Heddaf +45 sports, Google News DZ +40, Arabic +25, Global +10) + freshness + relevance + spam filter + dedup.
-- `lib/cache.js` — LRU + TTL cache (`queryCache`, `newsCache`, `githubCache`, `builderCache`).
-- `lib/memory.js` — File-backed self-learning memory (`/data/memory.json`), Jaccard similarity recall, fresh-reuse window 30min.
-- `lib/agent-mount.js` — Express mount + 6h background refresh loop.
-- `data/memory.json` — persistent answer memory store.
-
-### Endpoints
-- `GET  /api/agent/health`
-- `GET  /api/agent/ask?q=...&limit=...`
-- `POST /api/agent/ask` — body `{ query, limit?, bypassCache?, bypassMemory? }`
-- `GET  /api/agent/news?q=...&limit=...&sports=1`
-- `GET  /api/agent/github?q=...&limit=...&insight=1`
-- `POST /api/agent/builder` — body `{ brief }`
-- `GET  /api/agent/memory/recent` and `/api/agent/memory/stats`
-- `POST /api/agent/memory/purge`
-- `POST /api/agent/refresh` — manual trigger of the 6h cron warm-up
-
-### Wiring in server.js
-- Single import at top: `import { mountSmartAgent } from './lib/agent-mount.js'`
-- Single call before `app.listen(...)`: `mountSmartAgent(app, { fetcher: feed => fetchMultipleFeeds([feed]).then(arr => arr[0] || null) })`
-- Background refresh runs every 6h (warms news cache + trending repos).
-
-### Notes
-- The smart agent reuses the server's `fetchMultipleFeeds` / `RSS_CACHE` so feed fetches are not duplicated.
-- Memory is capped at 500 entries with LRU eviction; writes are atomic (`tmp` + `rename`).
-- All engines fail safe with `⚠️ لم أتمكن من العثور على بيانات حديثة...` if no results.
-
-## DZ Smart Agent — Phase 2: Reasoning + Citations + Safety (added 2026-04-28)
-
-Distilled production patterns from a curated set of leaked system prompts
-(Perplexity Comet, GPT-5 Thinking, Claude Code, Warp 2.0 Agent, Kagi)
-and adapted them for an Algerian-first audience. UI was not touched.
-
-### New Modules
-- `lib/prompts.js` — DZ Agent master system prompt, composed by intent (`general | news | github | builder | structured | deep`). Sections: identity, core behavior (no-clarification, partial-over-perfect, anti-sycophancy), Algeria context, search discipline (max 3 sub-queries), response formatting, safety, tool-use, code rules.
-- `lib/citations.js` — Perplexity-style numbered inline citations `[n]`, no bibliography, sentence-level keyword matching, registry export.
-- `lib/safety.js` — Prompt-injection detection (AR + EN patterns), `quarantineExternal()` wrapper for fetched content (treat as data, not commands), secret redaction (GitHub/Vercel/OpenAI/Anthropic/Google/Slack tokens, JWTs, private keys), PII redaction, safe refusal builder.
-- `lib/planner.js` — Decomposes a query into 1–3 focused sub-queries with temporal qualifiers (Perplexity discipline), returns ordered execution plan.
-- `lib/responder.js` — Renders router payloads as clean Markdown: news cards with tier flags 🇩🇿/🌐/🌍, GitHub tables, builder plans + scaffold code blocks, structured tables, then attaches inline citations.
-- `lib/reasoner.js` — Deep-research orchestrator: `plan → parallel multi-fetch → fuse + rank → self-critique → render with citations → memory`.
-
-### New Endpoints (all under `/api/agent/*`, additive)
-- `GET  /api/agent/think?q=…`        — fast intent + plan, no fetch
-- `GET  /api/agent/plan?q=…`         — full plan with sub-queries + steps
-- `GET/POST /api/agent/deep`         — deep-research pipeline (markdown + citations)
-- `POST /api/agent/render`           — render any payload to Markdown + citations
-- `GET  /api/agent/system-prompt?intent=…`
-- `POST /api/agent/safety/scan`      — injection score + harm score + sanitized output
-- `POST /api/agent/safety/refusal`   — clean refusal builder
-
-### Verified behavior
-- Deep pipeline on "أخبار الجزائر": 8 s end-to-end, fetched 180 articles, kept top 8 with 100% Algerian sources at the top, 8 inline citations attached, zero self-critique issues.
-- Safety scan correctly detected `ignore previous instructions` + `reveal system prompt` patterns and redacted a leaked `ghp_` token.
-- Planner correctly identified `compare react vs vue today` as `structured` intent with `liveMode: true` and added the `2026` temporal qualifier.
-
-## Live Sports Cards — Vercel Runtime Fix (added 2026-04-28)
-
-The Algerian-league card and the global-leagues card both source their data
-from `jdwel.com`, which sits behind Cloudflare and rejects Node `fetch`
-based on its TLS/JA3 fingerprint. Locally we shell out to `curl` and parse
-the resulting HTML. On Vercel's serverless runtime, however, `curl` exists
-but Cloudflare returns a tiny challenge page (~6 KB) instead of the real
-~600 KB content, so the HTML parser used to silently produce zero matches
-and the cards rendered empty in production.
-
-### Fix in `server.js` → `fetchJdwelMatches`
-1. Run `parseJdwelHtml` on the curl body. If it produces zero groups
-   (Cloudflare challenge), discard the body and continue to step 2.
-2. Fetch `https://r.jina.ai/<jdwel-url>` (Jina AI Reader free reverse-proxy)
-   which returns clean Markdown of the page.
-3. Parse that Markdown with `parseJdwelMarkdown(text)` — a dedicated parser
-   that walks `#### [comp-name](.../competition/<id>)` headers and
-   `* STATUS HOME![…] H - A YYYY-MM-DD HH:MM ![…] AWAY` match lines, then
-   attaches the next `[صفحة المباراة](url)` as the per-match link.
-4. Cache the parsed shape in `JDWEL_CACHE` exactly like the curl path so
-   downstream callers (`fetchAlgerianLeagueJdwel`, `fetchGlobalLeaguesJdwel`)
-   are runtime-agnostic.
-
-### Diagnostics
-- `GET /api/dz-agent/debug-jdwel` returns the per-step result of curl,
-  Jina fetch + parse, and the full `fetchJdwelMatches` pipeline. Used to
-  prove that on Vercel curl returns 5962 bytes (Cloudflare challenge)
-  while Jina returns ~30 KB Markdown that parses to 21 leagues / 52 matches.
-- The existing `diagLog('jdwel.curl_empty', …)` and `diagLog('jdwel_jina_ok', …)`
-  events surface in `GET /api/dz-agent/diagnostics`.
-
-### Verified production behavior (commit `dfb4b62f`)
-- `/api/dz-agent/lfp` → `{matches:[{home:"مولودية الجزائر",away:"أولمبيك أقبو",…}], source:"jdwel.com", status:"ok"}`
-- `/api/dz-agent/global-leagues` → `{leagues:[{name:"Champions League", matches:[{homeTeam:"باريس سان جيرمان", awayTeam:"بايرن ميونخ", …}]}], status:"ok"}`
-- `/api/dz-agent/news` → 5 fresh 2026 items, `pubDate` DESC, year-priority sort intact.
-- `/api/dz-agent/sync-status` → GitHub and Vercel both at the same SHA.
+## Overview
+DZ-GPT is a comprehensive AI chat application built with Vite, React, and Express, designed to offer multi-model AI capabilities and a rich user experience. The project aims to provide an advanced, multi-functional AI agent that can handle diverse queries, generate code, provide real-time information, and offer voice-based interactions. Key features include autonomous multi-agent task execution, full-stack web application generation, and intelligent conversational abilities with multi-language support (Arabic, French, English). The project emphasizes reliability, performance, and user-centric design, ensuring robust responses and a seamless experience across various functionalities like news aggregation, weather updates, GitHub integration, and specialized Quranic AI.
+
+## User Preferences
+(No explicit user preferences were found in the provided document.)
+
+## System Architecture
+
+### Core Architecture
+The system is built as a layered architecture, with V1, V2, V3, and V4 representing additive intelligence layers. This design ensures backward compatibility and modularity, allowing new features to be integrated without disrupting existing functionalities. The backend is an Express.js server, while the frontend is a React application built with Vite.
+
+### UI/UX Decisions
+- **General Design**: UI is largely untouched across different agent versions (V2, V4).
+- **Voice UI**: `VoicePanel.tsx` provides a minimal panel with mic/mute/settings buttons. Settings popover includes voice gender, language, continuous mode, wake word toggle, and fast mode. Mic pulses when listening; settings panel is anchored above input.
+- **DZ Agent Sidebar**: Features chat history, new chat/delete chat buttons, and a language selector (AR/EN/FR). Mobile responsive design with sidebar sliding in/out.
+- **DZ Agent Dashboard**: Displays live cards for prayer times, weather, news, sports, tech news, and currency rates.
+- **AI Quran Page**: Features chapter navigation, reading/tafsir/audio tabs, a Quran-only AI chat box, and verse search. It uses specific Arabic fonts for correct rendering and includes an Ayah Interaction System with bookmarking, listening, and smart assistant features.
+- **Color Scheme**: Quran page theme updated to yellow-green (`#9acd32`) to match DZ-GPT branding.
+
+### Technical Implementations
+- **Multi-Agent Layer (V2)**:
+    - **Memory**: 3-tier memory system (short-term ring buffer, long-term file-based preferences, semantic recall via Jaccard token overlap).
+    - **Plugins**: Registry for `news`, `currency`, `weather`, `web-search`, `github`, `dev` plugins, each with parallel execution and timeouts.
+    - **Validation**: Empty/placeholder/system-echo/relevance checks with retry mechanisms.
+    - **Learning**: Append-only JSONL log for tracking model and plugin usage.
+    - **Orchestration**: `plan()` for intent/language/tool selection, `execute()` for tool results/recall/LLM generation, and `qa()` for final guard.
+- **Multi-file Project Generation Engine (V4 PRO)**:
+    - **Code Generation**: Implements a professional multi-file code generation system using strict `FILE: /project/<path>` block format.
+    - **Persistence**: Project storage in `data/dz-v4/projects/<id>/` (Replit) or `/tmp/dz-v4/projects/<id>/` (Vercel).
+    - **Image/Chart Generation**: `image.js` for image generation (SDXL Turbo, SD 2, SD 1.5) via HuggingFace Inference API with fallbacks; `chart.js` for Chart.js project generation without LLM calls.
+    - **Dispatcher**: Smart intent classifier for `code`, `image`, `chart` intents.
+- **Voice Intelligence System (DVIS)**:
+    - **Browser-Native Voice**: Utilizes Web Speech API for Speech-to-Text (STT) and `SpeechSynthesis` for Text-to-Speech (TTS).
+    - **Wake Word Engine**: V2 wake-word listener using a separate STT instance for phrases like "hey dz", "hi dz", "dz agent".
+    - **Voice Router**: Routes transcripts to appropriate agent endpoints (`window.__dzAgentProcess`, V4 smart, V1 agent, chat).
+    - **Controller**: Orchestrates STT → Router → TTS flow, manages continuous mode, follow-up silence, and wake-word toggle.
+- **Autonomous Multi-Agent + Web App Generator (V3)**:
+    - **Specialized Agents**: `news-agent`, `research-agent`, `dev-agent`, `execution-agent`, `qa-agent`.
+    - **Coordination**: In-process pub/sub bus for agent-to-agent events, task manager for lifecycle, SSE for streaming.
+    - **Webapp Generator**: In-memory artifact store with dependency-free PKZIP archiver.
+- **DZ Tube Audio Playback**:
+    - Streams YouTube audio via `/api/dz-tube/audio-proxy`.
+    - Resolves direct `googlevideo` URLs by racing multiple extractors (Piped, Invidious, `ytdl-core`, `yt-dlp`).
+    - Caching of successful URLs with 20-minute TTL.
+    - Hardening with `probeUpstreamPlayable` and byte-piping for direct `googlevideo` URLs.
+- **User Intelligence System (dzMemory)**:
+    - LocalStorage-based user behavior memory (`src/utils/dzMemory.ts`).
+    - Intent detection, query tracking, feature usage tracking (GitHub).
+    - `buildBehaviorContext()` for injecting Arabic context hints into AI requests.
+    - `getSmartSuggestions()` for ranked suggestions.
+- **Reliability Layer**:
+    - `validateAIContent()` to prevent empty/irrelevant responses.
+    - `trimRelevantContext()` to reduce off-topic answers.
+    - `safeGenerateAI()` for master fallback across DeepSeek, Ollama, and Groq models.
+    - AbortController timeouts for AI calls.
+    - Structured error logging.
+- **OCR DZ**: Supports image (jpg, png, bmp, webp, tiff) and PDF (up to 15 pages) uploads. Uses `tesseract.js` for text extraction (AR/EN/FR), followed by AI correction and context injection into chat.
+- **AI Quran**: Integrates with Quran.com API v4 for chapters, verses, translations, recitations, and audio. Features chapter navigation, verse search, and an ayah interaction system.
+- **DZ Smart Agent Layer (V1)**:
+    - **Pipeline**: User Query → Intent Detection → Smart Router → Multi-Source Fetch → Filter + Rank → Engine Response → Memory + LRU Cache.
+    - **Intent Detection**: `detectIntent()` for `builder | github | news | structured | general` with language and live-mode flags.
+    - **Ranking**: `rankAndTrim()` with Algeria-first scoring, freshness, relevance, spam filter, and dedup.
+    - **Memory**: File-backed self-learning memory with Jaccard similarity recall.
+    - **Reasoning**: Distilled production patterns from various advanced AI agents for planning, citations, and safety.
+    - **Prompts**: Master system prompt (`lib/prompts.js`) composed by intent, including identity, core behavior, Algeria context, search discipline, response formatting, safety, and tool-use.
+    - **Citations**: Perplexity-style numbered inline citations.
+    - **Safety**: Prompt-injection detection, `quarantineExternal()`, secret/PII redaction, safe refusal builder.
+    - **Planner**: Decomposes query into focused sub-queries with temporal qualifiers.
+    - **Responder**: Renders router payloads as clean Markdown with citations.
+    - **Reasoner**: Deep-research orchestrator: `plan → parallel multi-fetch → fuse + rank → self-critique → render with citations → memory`.
+- **Live Sports Cards**: Implemented a fix for `jdwel.com` data sourcing on Vercel by using Jina AI Reader as a reverse-proxy for Cloudflare-protected sites.
+
+## External Dependencies
+
+- **AI Providers**: Groq (default), DeepSeek, Ollama.
+- **Google Services**: Custom Search Engine API (`GOOGLE_API_KEY`, `GOOGLE_CSE_ID`).
+- **Weather API**: OpenWeatherMap (`OPENWEATHER_API_KEY`).
+- **GitHub**: GitHub API (for server-side integration and OAuth), GitHub OAuth app (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`).
+- **YouTube Extractors**: Piped instances, Invidious instances, `ytdl-core`, `yt-dlp` binary.
+- **Image Generation**: HuggingFace free Inference API (`HF_TOKEN` or `HUGGINGFACE_API_KEY`).
+- **OCR**: `tesseract.js`.
+- **Quran Data**: Quran.com API v4.
+- **Web Scraping**: `jdwel.com` (via Jina AI Reader for Cloudflare bypass).
+- **Deployment**: Vercel (`VERCEL_TOKEN`).
+- **Libraries/Frameworks**: React, Vite, Express.js.

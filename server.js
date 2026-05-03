@@ -2050,6 +2050,74 @@ QUALITY BARS (MANDATORY — NO EXCEPTIONS):
 
 START OUTPUT NOW — PURE HTML ONLY:`
 
+// ── News: domain → friendly label map ─────────────────────────────────────────
+// Converts a raw URL or `source` string into a readable Arabic/French label.
+function getSourceLabel(url, source) {
+  // If source is already a clean name (not a URL), use it as-is
+  if (source && !/^https?:\/\//i.test(source) && source.trim().length > 0 && source.trim().length < 55) {
+    const s = source.trim()
+    // Map raw English domain-style names to nicer labels
+    const KNOWN = {
+      'echoroukonline': 'الشروق أونلاين', 'echorouk': 'الشروق أونلاين',
+      'ennahar': 'النهار', 'elkhabar': 'الخبر', 'elwatan': 'الوطن',
+      'elheddaf': 'الهداف', 'elmoudjahid': 'المجاهد',
+      'tsa': 'TSA Algérie', 'dzair': 'Dzair News',
+      'aps': 'وكالة APS', 'aljazeera': 'الجزيرة',
+      'bbc': 'BBC', 'reuters': 'Reuters', 'google': 'Google أخبار',
+    }
+    const lower = s.toLowerCase()
+    for (const [k, v] of Object.entries(KNOWN)) {
+      if (lower.includes(k)) return v
+    }
+    return s
+  }
+  try {
+    const host = new URL(url).hostname.replace(/^www\.|^m\.|^ar\./i, '')
+    const DOMAIN_MAP = {
+      'news.google.com':         'Google أخبار',
+      'google.com':              'Google',
+      'echoroukonline.com':      'الشروق أونلاين',
+      'ennaharonline.com':       'النهار أونلاين',
+      'alnaharonline.com':       'النهار',
+      'aps.dz':                  'وكالة APS',
+      'elkhabar.com':            'الخبر',
+      'elwatan.com':             'الوطن',
+      'elwatan-dz.com':          'El Watan',
+      'tsa-algerie.com':         'TSA Algérie',
+      'dzair-news.com':          'Dzair News',
+      'dzair-daily.com':         'Dzair Daily',
+      'elmoudjahid.com':         'المجاهد',
+      'elheddaf.com':            'الهداف',
+      'algerie360.com':          'Algérie 360',
+      'liberte-algerie.com':     'Liberté',
+      'horizons-dz.com':         'Horizons',
+      'depechedekabylie.com':    'Dépêche de Kabylie',
+      'maghrebemergent.com':     'Maghreb Émergent',
+      'radioalgerie.dz':         'إذاعة الجزائر',
+      'entv.dz':                 'ENTV',
+      'aljazeera.net':           'الجزيرة',
+      'aljazeera.com':           'Al Jazeera',
+      'bbc.com':                 'BBC عربي',
+      'bbc.co.uk':               'BBC',
+      'reuters.com':             'Reuters',
+      'apnews.com':              'AP News',
+      'france24.com':            'France 24',
+      'rfi.fr':                  'RFI',
+      'lemonde.fr':              'Le Monde',
+      'lefigaro.fr':             'Le Figaro',
+      'dzfoot.com':              'DZ Foot',
+      'kooora.com':              'كووورة',
+      'sofascore.com':           'SofaScore',
+      'twitter.com':             'Twitter / X',
+      'x.com':                   'X (Twitter)',
+      'youtube.com':             'YouTube',
+      'wikipedia.org':           'ويكيبيديا',
+      'facebook.com':            'Facebook',
+    }
+    return DOMAIN_MAP[host] || host
+  } catch { return source || 'المصدر' }
+}
+
 // ── Website Builder: UI inspiration search ────────────────────────────────────
 // Searches CodePen, GitHub, Flowbite and Uiverse for real patterns matching the site type.
 // Results are injected into the AI prompt as inspiration context.
@@ -6689,6 +6757,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
   let webSearchContext = ''
+  let hasNewsResults = false
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const skipSearch = isPrayerQuery || isFootballQuery || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
@@ -6809,9 +6878,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
-          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ' [تاريخ غير متوفر]'
-          const src = r.source || ''
-          return `${idx}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
+          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
+          const url = r.url || r.link || ''
+          const label = getSourceLabel(url, r.source)
+          const srcLink = url ? `[${label}](${url})` : label
+          return `${idx}. **${r.title || ''}**${dateStr}\n   ${(r.snippet || r.description || '').slice(0, 220)}\n   📰 ${srcLink}`
         }
 
         const sections = []
@@ -6823,6 +6894,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         const lines = sections.length > 0 ? sections.join('\n\n') : temporallySorted.map((r, i) => formatResult(r, i+1)).join('\n\n')
         webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
+        hasNewsResults = true
         console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (mustSearch) {
         webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
@@ -7217,7 +7289,12 @@ ${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━�
     max_tokens: 3000,
   })
   if (aiResult.content) {
-    return res.status(200).json({ content: aiResult.content, fallbackModel: aiResult.model })
+    return res.status(200).json({
+      content: aiResult.content,
+      fallbackModel: aiResult.model,
+      hasMoreNews: hasNewsResults,
+      newsQuery: hasNewsResults ? lastUserMessage : undefined,
+    })
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
 

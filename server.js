@@ -15,6 +15,10 @@ import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
+import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
+import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
+import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
+import { queryNearby, formatDistance } from './modules/dz-maps/overpass.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -56,6 +60,8 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false,
+  frameguard: isProd ? { action: 'deny' } : false,
+  crossOriginOpenerPolicy: isProd ? { policy: 'same-origin' } : false,
 }))
 
 // ===== CORS =====
@@ -86,17 +92,16 @@ app.use(compression({
   },
 }))
 
-// ===== NO-CACHE IN DEVELOPMENT =====
-if (!isProd) {
-  app.use((req, res, next) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/rss')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-    }
-    next()
-  })
-}
+// ===== NO-CACHE FOR APP ROUTES =====
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/rss') && !req.path.startsWith('/assets')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.setHeader('Surrogate-Control', 'no-store')
+  }
+  next()
+})
 
 // ===== BODY SIZE LIMIT =====
 app.use(express.json({ limit: '1mb' }))
@@ -383,6 +388,77 @@ const CITY_COORDS = {
   Tizi:        { lat: 36.711, lon: 4.046,  ar: 'تيزي وزو' },
 }
 
+// All 58 wilayas with coords — used for GPS nearest-wilaya matching
+const WILAYA_COORDS_FULL = [
+  { en: 'Adrar',               ar: 'أدرار',            lat: 27.874, lon: -0.284 },
+  { en: 'Chlef',               ar: 'الشلف',            lat: 36.169, lon:  1.330 },
+  { en: 'Laghouat',            ar: 'الأغواط',          lat: 33.800, lon:  2.865 },
+  { en: 'Oum el Bouaghi',      ar: 'أم البواقي',       lat: 35.879, lon:  7.114 },
+  { en: 'Batna',               ar: 'باتنة',            lat: 35.556, lon:  6.174 },
+  { en: 'Bejaia',              ar: 'بجاية',            lat: 36.755, lon:  5.084 },
+  { en: 'Biskra',              ar: 'بسكرة',            lat: 34.850, lon:  5.731 },
+  { en: 'Bechar',              ar: 'بشار',             lat: 31.617, lon: -2.216 },
+  { en: 'Blida',               ar: 'البليدة',          lat: 36.470, lon:  2.828 },
+  { en: 'Bouira',              ar: 'البويرة',          lat: 36.381, lon:  3.900 },
+  { en: 'Tamanrasset',         ar: 'تمنراست',          lat: 22.785, lon:  5.523 },
+  { en: 'Tebessa',             ar: 'تبسة',             lat: 35.404, lon:  8.120 },
+  { en: 'Tlemcen',             ar: 'تلمسان',           lat: 34.878, lon: -1.316 },
+  { en: 'Tiaret',              ar: 'تيارت',            lat: 35.371, lon:  1.317 },
+  { en: 'Tizi Ouzou',          ar: 'تيزي وزو',         lat: 36.711, lon:  4.046 },
+  { en: 'Algiers',             ar: 'الجزائر',          lat: 36.737, lon:  3.086 },
+  { en: 'Djelfa',              ar: 'الجلفة',           lat: 34.670, lon:  3.263 },
+  { en: 'Jijel',               ar: 'جيجل',             lat: 36.820, lon:  5.766 },
+  { en: 'Setif',               ar: 'سطيف',             lat: 36.190, lon:  5.412 },
+  { en: 'Saida',               ar: 'سعيدة',            lat: 34.831, lon:  0.151 },
+  { en: 'Skikda',              ar: 'سكيكدة',           lat: 36.878, lon:  6.906 },
+  { en: 'Sidi bel Abbes',      ar: 'سيدي بلعباس',      lat: 35.191, lon: -0.630 },
+  { en: 'Annaba',              ar: 'عنابة',            lat: 36.897, lon:  7.747 },
+  { en: 'Guelma',              ar: 'قالمة',            lat: 36.462, lon:  7.432 },
+  { en: 'Constantine',         ar: 'قسنطينة',          lat: 36.365, lon:  6.614 },
+  { en: 'Medea',               ar: 'المدية',           lat: 36.264, lon:  2.751 },
+  { en: 'Mostaganem',          ar: 'مستغانم',          lat: 35.931, lon:  0.089 },
+  { en: 'Msila',               ar: 'المسيلة',          lat: 35.706, lon:  4.543 },
+  { en: 'Mascara',             ar: 'معسكر',            lat: 35.396, lon:  0.139 },
+  { en: 'Ouargla',             ar: 'ورقلة',            lat: 31.951, lon:  5.325 },
+  { en: 'Oran',                ar: 'وهران',            lat: 35.697, lon: -0.633 },
+  { en: 'El Bayadh',           ar: 'البيض',            lat: 33.684, lon:  1.016 },
+  { en: 'Illizi',              ar: 'إليزي',            lat: 26.508, lon:  8.477 },
+  { en: 'Bordj Bou Arreridj',  ar: 'برج بوعريريج',     lat: 36.073, lon:  4.763 },
+  { en: 'Boumerdes',           ar: 'بومرداس',          lat: 36.762, lon:  3.477 },
+  { en: 'El Tarf',             ar: 'الطارف',           lat: 36.767, lon:  8.313 },
+  { en: 'Tindouf',             ar: 'تندوف',            lat: 27.674, lon: -8.147 },
+  { en: 'Tissemsilt',          ar: 'تيسمسيلت',         lat: 35.607, lon:  1.812 },
+  { en: 'El Oued',             ar: 'الوادي',           lat: 33.356, lon:  6.863 },
+  { en: 'Khenchela',           ar: 'خنشلة',            lat: 35.436, lon:  7.146 },
+  { en: 'Souk Ahras',          ar: 'سوق أهراس',        lat: 36.286, lon:  7.951 },
+  { en: 'Tipaza',              ar: 'تيبازة',           lat: 36.589, lon:  2.449 },
+  { en: 'Mila',                ar: 'ميلة',             lat: 36.450, lon:  6.264 },
+  { en: 'Ain Defla',           ar: 'عين الدفلى',       lat: 36.264, lon:  1.967 },
+  { en: 'Naama',               ar: 'النعامة',          lat: 33.267, lon: -0.313 },
+  { en: 'Ain Temouchent',      ar: 'عين تموشنت',       lat: 35.298, lon: -1.140 },
+  { en: 'Ghardaia',            ar: 'غرداية',           lat: 32.490, lon:  3.673 },
+  { en: 'Relizane',            ar: 'غليزان',           lat: 35.738, lon:  0.557 },
+  { en: 'Timimoun',            ar: 'تيميمون',          lat: 29.264, lon:  0.234 },
+  { en: 'Bordj Badji Mokhtar', ar: 'برج باجي مختار',   lat: 21.334, lon:  0.956 },
+  { en: 'Ouled Djellal',       ar: 'أولاد جلال',       lat: 34.420, lon:  5.067 },
+  { en: 'Beni Abbes',          ar: 'بني عباس',         lat: 30.128, lon: -2.163 },
+  { en: 'In Salah',            ar: 'عين صالح',         lat: 27.197, lon:  2.468 },
+  { en: 'In Guezzam',          ar: 'عين قزام',         lat: 19.567, lon:  5.771 },
+  { en: 'Touggourt',           ar: 'تقرت',             lat: 33.100, lon:  6.067 },
+  { en: 'Djanet',              ar: 'جانت',             lat: 24.554, lon:  9.484 },
+  { en: 'El Meghaier',         ar: 'المغير',           lat: 33.945, lon:  5.924 },
+  { en: 'El Meniaa',           ar: 'المنيعة',          lat: 30.584, lon:  2.880 },
+]
+
+function findNearestWilaya(lat, lon) {
+  let best = null, bestDist = Infinity
+  for (const w of WILAYA_COORDS_FULL) {
+    const d = Math.pow(w.lat - lat, 2) + Math.pow(w.lon - lon, 2)
+    if (d < bestDist) { bestDist = d; best = w }
+  }
+  return best
+}
+
 const WMO_CODES = {
   0: 'صافٍ', 1: 'صافٍ غالباً', 2: 'غائم جزئياً', 3: 'غائم',
   45: 'ضبابي', 48: 'ضبابي مع صقيع',
@@ -396,14 +472,18 @@ const WMO_CODES = {
 async function fetchWeatherOpenMeteo(city) {
   const coords = CITY_COORDS[city]
   if (!coords) throw new Error(`No coords for city: ${city}`)
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Africa%2FAlgiers&forecast_days=1`
+  return fetchWeatherByCoords(coords.lat, coords.lon, city)
+}
+
+async function fetchWeatherByCoords(lat, lon, cityLabel) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Africa%2FAlgiers&forecast_days=1`
   const r = await resilientFetch(url, { timeout: 8000, retries: 2, scrapingHeaders: false, extraHeaders: { 'Accept': 'application/json' } })
   if (!r.ok) throw new Error(`open-meteo HTTP ${r.status}`)
   const d = await r.json()
   const cur = d.current
   const wmo = cur?.weather_code
   return {
-    city,
+    city: cityLabel || `${lat.toFixed(3)},${lon.toFixed(3)}`,
     temp: Math.round(cur?.temperature_2m ?? 0),
     feels_like: Math.round(cur?.apparent_temperature ?? 0),
     temp_min: Math.round(d.daily?.temperature_2m_min?.[0] ?? 0),
@@ -812,14 +892,26 @@ import {
   EMERGENCY_INFO,
 } from './lib/doctorSearch.js'
 
-// ===== DZ LANGUAGE LAYER (additive: normalization, intent hint, moderation, learning) =====
+// ===== DZ LANGUAGE LAYER V2 (Algerian Darja Understanding System) =====
 import {
   normalizeDarija,
   detectStyle as detectDzStyle,
+  detectIntent as detectDzIntent,
   detectLightIntent,
+  extractEntities as extractDzEntities,
+  buildResponseStyle,
   moderateMessage,
   recordPendingLearning,
 } from './lib/dzLanguage.js'
+
+// ===== DZ PLACE SEARCH (OpenStreetMap Nominatim — no API key) =====
+import {
+  searchPlaces,
+  buildPlaceResponse,
+  PLACE_INTENTS,
+  INTENT_TO_SERVICE,
+  SERVICE_CONFIG,
+} from './lib/dzPlaceSearch.js'
 
 const DOCTOR_SOURCE_COUNT = 8
 
@@ -874,6 +966,27 @@ function detectDoctorNameIntent(message) {
     if (sp.aliases.some(a => normName === a.toLowerCase())) return { isNameQuery: false }
   }
   return { isNameQuery: true, name }
+}
+
+function detectHospitalIntent(message) {
+  if (!message || typeof message !== 'string') return { isHospitalQuery: false }
+  const norm = normalizeQuery(message)
+  if (detectDoctorIntent(message).isDoctorQuery) return { isHospitalQuery: false }
+  const hospitalPatterns = [
+    'مستشفى', 'المستشفى', 'hospital', 'hôpital', 'hopital', 'clinique', 'clínica', 'clinique médicale'
+  ]
+  const isHospitalQuery = hospitalPatterns.some(p => norm.includes(p.toLowerCase()))
+  if (!isHospitalQuery) return { isHospitalQuery: false }
+  return { isHospitalQuery: true }
+}
+
+function detectHospitalCity(message) {
+  if (!message || typeof message !== 'string') return null
+  const norm = normalizeQuery(message)
+  for (const c of DOCTOR_CITIES) {
+    if (norm.includes(c.ar.toLowerCase()) || norm.includes(c.fr.toLowerCase())) return c
+  }
+  return null
 }
 
 function isCapabilitiesQuestion(message) {
@@ -1593,21 +1706,138 @@ function scoreResult(result, query) {
   return Math.round(freshness * 0.45 + trust * 0.25 + relevance * 0.20 + snippetS * 0.10)
 }
 
-// ── Website Builder: query detection ─────────────────────────────────────────
-function detectWebsiteBuilderQuery(msg) {
+// ── Map Website Builder: query detection ─────────────────────────────────────
+function detectMapWebsiteQuery(msg) {
   const lower = msg.toLowerCase()
   const keywords = [
-    'أنشئ موقع', 'انشئ موقع', 'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع',
-    'أنشئ صفحة', 'انشئ صفحة', 'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
-    'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'landing page', 'build website', 'create website',
-    'generate website', 'make website', 'design website', 'make a landing', 'build a landing',
-    'portfolio website', 'business website', 'company website', 'startup website', 'saas website',
-    'html website', 'html page', 'create html', 'build html', 'generate html',
-    'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
-    'dashboard ui', 'analytics dashboard', 'create dashboard', 'build dashboard',
-    'e-commerce', 'ecommerce site', 'shop website', 'store website',
+    // Arabic — explicit map website
+    'موقع خريطة', 'موقع مع خريطة', 'موقع خرائط', 'صفحة خريطة', 'صفحة مع خريطة',
+    'أنشئ خريطة تفاعلية', 'انشئ خريطة تفاعلية', 'اصنع خريطة تفاعلية',
+    'موقع يعرض خريطة', 'موقع فيه خريطة', 'موقع بخريطة',
+    'اصنع موقع خريطة', 'أنشئ موقع خريطة', 'ابني موقع خريطة', 'عمل موقع خريطة',
+    'موقع جغرافي', 'موقع تتبع', 'موقع للخريطة', 'تطبيق خريطة',
+    'خريطة تفاعلية كموقع', 'خريطة ويب', 'صفحة خرائط',
+    'اعمل موقع خرائط', 'صمم موقع خريطة', 'موقع خرائط تفاعلية',
+    // English
+    'map website', 'map site', 'map web app', 'website with map', 'site with map',
+    'map application', 'create map website', 'build map website', 'leaflet website',
+    'interactive map website', 'location website', 'mapping website',
+    'create a map site', 'build a map app', 'generate a map website',
+    'map page', 'map-based website', 'geo website',
+    // French
+    'site avec carte', 'site de carte', 'site cartographique', 'application carte',
+    'créer une carte interactive', 'site web avec carte', 'carte interactive site',
+    'site web carte', 'page web carte',
   ]
   return keywords.some(k => lower.includes(k))
+}
+
+// ── Website Builder: query detection ─────────────────────────────────────────
+function detectWebsiteBuilderQuery(msg) {
+  // Map website requests are handled separately
+  if (detectMapWebsiteQuery(msg)) return false
+  const lower = msg.toLowerCase()
+  const keywords = [
+    // Arabic — verbs + "موقع/صفحة" (all spelling variants of أنشئ/انشئ/إنشأ/إنشاء)
+    'أنشئ موقع', 'انشئ موقع', 'إنشأ موقع', 'انشأ موقع', 'أنشأ موقع', 'إنشاء موقع',
+    'اصنع موقع', 'ابني موقع', 'أبني موقع', 'اعمل موقع', 'أعمل موقع', 'اعملي موقع',
+    'أنشئ صفحة', 'انشئ صفحة', 'إنشأ صفحة', 'انشأ صفحة', 'إنشاء صفحة',
+    'صمم موقع', 'صمم صفحة', 'اصنع صفحة', 'بني موقع', 'بنيلي موقع',
+    'موقع ويب كامل', 'صفحة هبوط', 'صمملي', 'طور موقع', 'طوّر موقع', 'اكتب كود موقع',
+    'اصنعلي موقع', 'صمملي موقع', 'ابنيلي موقع', 'عملي موقع',
+    'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو',
+    'موقع شركة', 'موقع تجاري', 'موقع متجر', 'موقع مطعم', 'موقع فندق',
+    'موقع وكالة', 'موقع مدرسة', 'موقع شخصي', 'موقع احترافي',
+    'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر',
+    'اصنع لي موقع', 'ابني لي موقع', 'عمل موقع', 'نريد موقع',
+    'موقع HTML', 'موقع html', 'كود موقع', 'كود HTML', 'كود html',
+    'صفحة ويب', 'اعمل صفحة', 'صمم لي موقع', 'طورلي موقع',
+    'انشئ لي موقع', 'أنشئ لي موقع', 'إنشأ لي موقع', 'أنشئلي موقع', 'انشئلي موقع',
+    // Darija (Algerian)
+    'دير موقع', 'عمل لي موقع', 'ابنيلي موقع', 'صنعلي موقع',
+    'دير لي موقع', 'دير لينا موقع', 'عملي موقع', 'صمملي موقع',
+    'بغيت موقع', 'نحتاج موقع', 'نبغي موقع',
+    // English
+    'landing page', 'build website', 'create website', 'generate website', 'make website',
+    'design website', 'make a landing', 'build a landing', 'portfolio website',
+    'business website', 'company website', 'startup website', 'saas website', 'saas landing',
+    'html website', 'html page', 'create html', 'build html', 'generate html', 'write html',
+    'dashboard ui', 'analytics dashboard', 'create dashboard', 'build dashboard', 'admin dashboard',
+    'e-commerce', 'ecommerce site', 'shop website', 'store website', 'product page',
+    'personal website', 'personal site', 'portfolio site', 'blog website',
+    'web app', 'web application', 'single page', 'one page website',
+    'portfolio page', 'restaurant website', 'hotel website', 'agency website',
+    'make me a website', 'create me a website', 'build me a website',
+    // French
+    'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
+    'construire un site', 'générer un site', 'design un site', 'tableau de bord',
+    'page de destination', 'site e-commerce', 'boutique en ligne',
+    'créer une page', 'faire une page', 'site vitrine', 'site portfolio',
+    'créer un site restaurant', 'site restaurant', 'site hotel', 'site boutique',
+  ]
+  if (keywords.some(k => lower.includes(k))) return true
+
+  // Extra pattern: creation verb + topic keyword (catches "إنشأ موقع مطعم", "أنشئ صفحة فندق", etc.)
+  const creationVerbs = /(?:أنش[أئ]|انش[أئ]|إنش[أئا]|اصنع|ابني?|اعمل|أعمل|عمل|صمم|دير|طور|بني?|generate|create|build|make|design|créer?|faire|construire)\s/i
+  const webNouns = /(?:موقع|صفحة|site|page|web|html|تطبيق ويب|web app)/i
+  if (creationVerbs.test(msg) && webNouns.test(msg)) return true
+
+  return false
+}
+
+// ── Website Builder: extract project metadata from user request ───────────────
+function extractWebBuilderMeta(msg) {
+  // Detect site type
+  let type = 'landing'
+  if (/متجر|بقالة|محل|e-commerce|ecommerce|shop|store|boutique|منتجات|سلة/i.test(msg)) type = 'store'
+  else if (/portfolio|بورتفوليو|شخصي|personal|cv|resume|سيرة ذاتية|أعمالي/i.test(msg)) type = 'portfolio'
+  else if (/مطعم|كافيه|restaurant|café|cafe|food|أكل|وجبة/i.test(msg)) type = 'restaurant'
+  else if (/فندق|hotel|إقامة|نزل/i.test(msg)) type = 'hotel'
+  else if (/مدونة|blog|مقالات|articles/i.test(msg)) type = 'blog'
+  else if (/dashboard|لوحة تحكم|لوحة إدارة|tableau de bord|analytics/i.test(msg)) type = 'dashboard'
+  else if (/وكالة|agency|creative studio|استوديو/i.test(msg)) type = 'agency'
+  else if (/شركة|company|business|entreprise|startup|saas/i.test(msg)) type = 'business'
+  else if (/مدرسة|تعليم|دورة|school|education|course|learning/i.test(msg)) type = 'education'
+
+  // Detect style hint
+  let style = 'modern'
+  if (/احترافي|professional|premium|luxury|راقي|فخم/i.test(msg)) style = 'premium'
+  else if (/بسيط|simple|minimal|clean|واضح/i.test(msg)) style = 'minimal'
+  else if (/مذهل|رائع|amazing|stunning|creative|إبداعي/i.test(msg)) style = 'creative'
+  else if (/داكن|dark|أسود/i.test(msg)) style = 'dark'
+
+  const TYPE_META = {
+    store:     { icon: '🛒', nameAr: 'متجر إلكتروني',  desc: 'موقع متجر إلكتروني مع عرض المنتجات وسلة التسوق' },
+    portfolio: { icon: '🎨', nameAr: 'موقع شخصي',      desc: 'موقع شخصي إبداعي لعرض الأعمال والمهارات' },
+    restaurant:{ icon: '🍽️', nameAr: 'موقع مطعم',      desc: 'موقع مطعم أنيق مع القائمة والحجز والموقع' },
+    hotel:     { icon: '🏨', nameAr: 'موقع فندق',       desc: 'موقع فندق فاخر مع الغرف والحجز والخدمات' },
+    blog:      { icon: '✍️', nameAr: 'مدونة',           desc: 'مدونة عصرية مع مقالات وتصنيفات وبحث' },
+    dashboard: { icon: '📊', nameAr: 'لوحة تحكم',       desc: 'لوحة تحكم ذكية مع إحصائيات ورسوم بيانية' },
+    agency:    { icon: '🚀', nameAr: 'وكالة إبداعية',   desc: 'موقع وكالة مع أعمال وخدمات وفريق' },
+    business:  { icon: '🏢', nameAr: 'موقع شركة',       desc: 'موقع شركة احترافي مع خدمات وتواصل' },
+    education: { icon: '📚', nameAr: 'موقع تعليمي',     desc: 'منصة تعليمية مع دورات وإحصائيات' },
+    landing:   { icon: '✨', nameAr: 'صفحة هبوط',       desc: 'صفحة هبوط احترافية مع hero وخدمات وتواصل' },
+  }
+
+  const meta = TYPE_META[type] || TYPE_META.landing
+
+  // Try to extract a subject name from the message
+  const subjectPatterns = [
+    /(?:موقع|صفحة|site|page)\s+(?:مطعم|شركة|متجر|فندق|وكالة|portfolio|لـ|for|pour|de|d')\s*([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n,،؟?!.]{1,30})/i,
+    /(?:اسمه|اسمها|يُسمى|called|named|nommé)\s+([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n,،؟?!.]{1,30})/i,
+    /["«]([\u0600-\u06FFa-zA-ZÀ-ÿ][^\n"»]{1,30})["»]/,
+  ]
+  let subjectName = ''
+  for (const pat of subjectPatterns) {
+    const m = msg.match(pat)
+    if (m && m[1]) { subjectName = m[1].trim(); break }
+  }
+
+  const title = subjectName
+    ? `${meta.icon} ${meta.nameAr}: ${subjectName}`
+    : `${meta.icon} ${meta.nameAr}`
+
+  return { type, style, title, description: meta.desc, icon: meta.icon }
 }
 
 // ── Website Builder: extract raw HTML from AI response ────────────────────────
@@ -1631,34 +1861,390 @@ function extractHtmlFromResponse(text) {
   return null
 }
 
+// ── Website Builder: HTML quality validator ───────────────────────────────────
+function validateHtmlOutput(html) {
+  if (!html || typeof html !== 'string') return { ok: false, reason: 'empty' }
+  if (html.length < 500) return { ok: false, reason: 'too_short' }
+  if (!/<html/i.test(html)) return { ok: false, reason: 'missing_html_tag' }
+  if (!/<\/html>/i.test(html)) return { ok: false, reason: 'missing_closing_html' }
+  if (!/<style[\s>]/i.test(html)) return { ok: false, reason: 'missing_style' }
+  if (!/<\/style>/i.test(html)) return { ok: false, reason: 'missing_closing_style' }
+  if (!/<body[\s>]/i.test(html)) return { ok: false, reason: 'missing_body' }
+  return { ok: true }
+}
+
 // ── Website Builder: specialized system prompt ────────────────────────────────
-const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FRONTEND ENGINEER and UI/UX DESIGNER working in "Website Builder God Mode".
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER with deep knowledge of the best patterns on CodePen, GitHub, Uiverse, Tailwind UI, and Flowbite. You build production-quality websites that look like they cost $15,000.
 
-CRITICAL OUTPUT RULE: Output ONLY the complete HTML code — nothing else. No explanations, no markdown fences, no comments outside the code. The ENTIRE response must be a single, valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+════════════════════════════════════════════
+ABSOLUTE OUTPUT RULE:
+Output ONLY raw HTML — NOTHING ELSE.
+No markdown fences. No explanations. No comments outside code.
+Response = ONE complete file: <!DOCTYPE html> … </html>
+════════════════════════════════════════════
 
-DESIGN INTELLIGENCE:
-- If user says "company" or "business" → SaaS landing page
-- If user says "portfolio" → creative personal website  
-- If user says "dashboard" → analytics UI with charts
-- If user says "e-commerce" or "shop" → product/store UI
-- If unclear → modern startup landing page
+DESIGN INTELLIGENCE (auto-detect from request):
+- restaurant / مطعم / café    → Elegant food site: dark hero, menu grid, booking form, warm amber palette
+- hotel / فندق / resort       → Luxury hotel: full-screen video-bg hero, rooms gallery, amenities, booking CTA
+- store / متجر / shop         → E-commerce: product grid cards, cart sidebar, filter bar, badge ribbons
+- portfolio / personal / cv   → Creative dev/designer portfolio: split hero, animated skills bar, project cards
+- dashboard / admin / analytics → Dark analytics: sidebar nav, chart placeholders (CSS-drawn), KPI cards, data table
+- agency / وكالة / studio     → Bold creative agency: full-screen type hero, work grid, team section, neon accents
+- business / company / startup → Premium SaaS landing: gradient mesh hero, feature bento grid, pricing table, testimonials
+- blog / مدونة                → Editorial: clean typographic layout, article cards, category filters, newsletter
+- education / school / دورة   → E-learning platform: course cards, progress bars, instructor section, FAQ accordion
+- default                     → Premium startup landing: animated gradient hero + feature grid
 
-OUTPUT REQUIREMENTS (STRICT):
-1. Single HTML file: HTML + CSS + JS all in one <style> and <script> block
-2. NO external dependencies (no React, no Vue, no CDNs required for core layout)
-3. Fully responsive (mobile-first)
-4. Modern premium UI: glassmorphism, clean SaaS, or minimal premium — choose based on context
-5. ALL buttons must work (JS alerts or simulated actions)
-6. ALL forms must respond (validation + success feedback)
-7. Smooth CSS animations and hover effects
-8. Professional typography (use Google Fonts via @import ONLY if needed)
-9. Output must work by double-click in browser (no server needed)
-10. Include a floating "Download This Site" button in the HTML itself using this exact code:
-    <button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='website.html';a.click();})()" style="position:fixed;bottom:20px;right:20px;z-index:9999;background:#7c3aed;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.3)">⬇ Download</button>
+════════════════════════════════════════════
+MANDATORY HTML STRUCTURE:
+1. <head>
+   - charset + viewport + title (contextual, not generic)
+   - Google Fonts @import (2 fonts max, well-paired)
+   - Font Awesome 6 CDN: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+   - <style> block with ALL CSS
 
-QUALITY STANDARD: The output must look like a product-level startup website — not a demo or beginner code. Clean spacing, professional typography, pixel-perfect layout.
+2. <body> sections (ALL required):
+   a. Sticky navbar — logo + nav links + CTA button + hamburger (mobile)
+   b. Hero — full-viewport, animated headline, subtext, 2 CTAs, decorative SVG/shape
+   c. Features/Services — 3–6 bento-style cards with Font Awesome icons
+   d. Social proof — animated stat counters (3 numbers) + testimonial cards
+   e. How it works / About — 3-step process or split-screen with visual
+   f. CTA section — gradient background, email input + submit button
+   g. Footer — logo + 3 link columns + social icons + copyright
 
-START OUTPUT NOW — HTML CODE ONLY:`
+3. <script> block with all JS logic
+════════════════════════════════════════════
+
+CSS PATTERNS (MANDATORY — from Tailwind UI / Flowbite / CodePen):
+
+Variables (always define these):
+:root {
+  --primary: <contextual>;
+  --secondary: <contextual>;
+  --accent: <contextual>;
+  --bg: <contextual>;
+  --surface: <contextual>;
+  --text: <contextual>;
+  --text-muted: <contextual>;
+  --radius: 16px;
+  --shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  --transition: all .3s cubic-bezier(.4,0,.2,1);
+}
+
+Layout:
+- html { scroll-behavior: smooth }
+- *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+- CSS Grid for page sections (display:grid; gap:2rem)
+- Flexbox for nav, cards row, footer columns
+
+Animations (ALL required — CodePen-inspired):
+@keyframes fadeInUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+@keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.4)} 70%{box-shadow:0 0 0 12px transparent} }
+@keyframes slideInLeft { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:translateX(0)} }
+@keyframes countUp { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
+
+Hero:
+- background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%)
+- background-size: 400% 400%; animation: gradientShift 8s ease infinite
+- Headline: font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1
+- Decorative element: absolute-positioned SVG blob or geometric shape (float animation)
+- Hero animation: .hero-content { animation: fadeInUp .8s ease both }
+
+Cards (Uiverse-inspired):
+- border: 1px solid rgba(255,255,255,.08)
+- background: rgba(255,255,255,.03) or var(--surface)
+- backdrop-filter: blur(20px)
+- border-radius: var(--radius)
+- transition: var(--transition)
+- :hover { transform: translateY(-6px) scale(1.02); box-shadow: var(--shadow) }
+
+Buttons:
+- Primary: gradient background + border-radius:50px + padding:14px 32px + font-weight:700
+- :hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(primary,.5) }
+- :active { transform: translateY(0) }
+
+Responsive (mobile-first):
+@media (max-width: 768px) {
+  .nav-links { display:none }
+  .hamburger { display:flex }
+  .grid-3 { grid-template-columns: 1fr }
+  .hero h1 { font-size: clamp(1.8rem, 8vw, 3rem) }
+  .hero { padding: 5rem 1rem 3rem }
+}
+
+Scrollbar:
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px }
+
+Typography:
+- h1–h3: font-weight 700–900, tight line-height
+- Body: font-size: 1rem; line-height: 1.7; color: var(--text-muted)
+- Section labels: text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; color:var(--accent)
+
+════════════════════════════════════════════
+JAVASCRIPT (ALL required — from CodePen best practices):
+
+1. Navbar scroll shrink:
+window.addEventListener('scroll',()=>{
+  document.querySelector('nav').classList.toggle('scrolled', window.scrollY > 50)
+})
+nav.scrolled { padding:.5rem 2rem; background: var(--bg); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
+
+2. Mobile hamburger:
+document.querySelector('.hamburger').addEventListener('click',()=>{
+  document.querySelector('.nav-links').classList.toggle('open')
+})
+
+3. Intersection Observer (scroll-in animations):
+const obs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target) }})
+},{ threshold:0.15 })
+document.querySelectorAll('.animate-on-scroll').forEach(el=>obs.observe(el))
+// CSS: .animate-on-scroll{opacity:0;transform:translateY(24px);transition:var(--transition)}
+//      .animate-on-scroll.visible{opacity:1;transform:translateY(0)}
+
+4. Counter animation for stats (count up from 0):
+function animateCounter(el){
+  const target=+el.dataset.target; const dur=1800; const step=target/dur*16;
+  let current=0; const t=setInterval(()=>{
+    current=Math.min(current+step,target);
+    el.textContent=Math.floor(current).toLocaleString()+(el.dataset.suffix||'');
+    if(current>=target)clearInterval(t)
+  },16)
+}
+new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ animateCounter(e.target); obs2.unobserve(e.target) }})
+}).observe(document.querySelectorAll('[data-target]'))
+
+5. Smooth active link highlight:
+const sections=document.querySelectorAll('section[id]');
+window.addEventListener('scroll',()=>{
+  sections.forEach(s=>{ if(window.scrollY>=s.offsetTop-100){ document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active')); document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active') }})
+})
+
+6. Form validation with success state (not alert):
+document.querySelector('form')?.addEventListener('submit',e=>{
+  e.preventDefault()
+  const input=e.target.querySelector('input[type="email"]')
+  if(input && input.value.includes('@')){
+    input.style.borderColor='#10b981'
+    e.target.innerHTML='<p style="color:#10b981;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</p>'
+  } else if(input){ input.style.borderColor='#ef4444'; input.placeholder='أدخل بريد إلكتروني صحيح' }
+})
+
+════════════════════════════════════════════
+FONT PAIRINGS (pick by type):
+- restaurant / hotel / luxury → Playfair Display (headings) + Lato (body)
+- portfolio / agency / creative → Space Grotesk (headings) + Inter (body)
+- saas / business / startup → Plus Jakarta Sans (all) — modern and clean
+- dashboard / analytics → JetBrains Mono (data) + Inter (UI)
+- education / blog → Merriweather (headings) + Source Sans 3 (body)
+
+COLOR PALETTES (pick ONE based on type, be bold and unique):
+- restaurant: #0d0d0d (bg) + #c9a84c (gold) + #8b0000 (deep red) — warm/elegant
+- hotel: #0f0f1a (bg) + #d4af37 (gold) + #f5f5dc (cream) — luxury
+- store/ecommerce: #ffffff (bg) + #111 (text) + #7c3aed (purple) — modern
+- portfolio: #09090b (bg) + #f97316 (orange) + #ffffff — bold creative
+- dashboard: #020817 (bg) + #6366f1 (indigo) + #06b6d4 (cyan) — dark analytics
+- agency: #000000 (bg) + #a855f7 (purple) + #ec4899 (pink) — bold/neon
+- startup/saas: #0f172a (bg) + #7c3aed (violet) + #38bdf8 (sky) — modern SaaS
+- blog/education: #fafafa (bg) + #1e293b (text) + #0ea5e9 (blue) — clean
+
+FLOATING DOWNLOAD BUTTON (include EXACTLY):
+<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href)})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:14px 22px;border-radius:14px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 8px 32px rgba(124,58,237,.5);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;gap:8px;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 48px rgba(124,58,237,.7)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.5)'"><i class="fa-solid fa-download"></i> تحميل الموقع</button>
+
+════════════════════════════════════════════
+QUALITY BARS (MANDATORY — NO EXCEPTIONS):
+✅ MUST look like Dribbble / Awwwards top picks
+✅ MUST use realistic content (no "Lorem ipsum", no "Title here", no "Description...")
+✅ MUST use Font Awesome icons on every feature card
+✅ MUST have working JS (no dead buttons, no broken interactions)
+✅ MUST be fully mobile responsive
+✅ NO external CSS files (all CSS inside <style>)
+✅ NO placeholder images (use CSS gradients, SVG shapes, or emoji as visual accents)
+✅ Every section MUST have a subtle entrance animation (fadeInUp via Intersection Observer)
+✅ Content MUST be context-aware (restaurant → menu items, hotel → room types, etc.)
+
+START OUTPUT NOW — PURE HTML ONLY:`
+
+// ── News: domain → friendly label map ─────────────────────────────────────────
+// Converts a raw URL or `source` string into a readable Arabic/French label.
+function getSourceLabel(url, source) {
+  // If source is already a clean name (not a URL), use it as-is
+  if (source && !/^https?:\/\//i.test(source) && source.trim().length > 0 && source.trim().length < 55) {
+    const s = source.trim()
+    // Map raw English domain-style names to nicer labels
+    const KNOWN = {
+      'echoroukonline': 'الشروق أونلاين', 'echorouk': 'الشروق أونلاين',
+      'ennahar': 'النهار', 'elkhabar': 'الخبر', 'elwatan': 'الوطن',
+      'elheddaf': 'الهداف', 'elmoudjahid': 'المجاهد',
+      'tsa': 'TSA Algérie', 'dzair': 'Dzair News',
+      'aps': 'وكالة APS', 'aljazeera': 'الجزيرة',
+      'bbc': 'BBC', 'reuters': 'Reuters', 'google': 'Google أخبار',
+    }
+    const lower = s.toLowerCase()
+    for (const [k, v] of Object.entries(KNOWN)) {
+      if (lower.includes(k)) return v
+    }
+    return s
+  }
+  try {
+    const host = new URL(url).hostname.replace(/^www\.|^m\.|^ar\./i, '')
+    const DOMAIN_MAP = {
+      'news.google.com':         'Google أخبار',
+      'google.com':              'Google',
+      'echoroukonline.com':      'الشروق أونلاين',
+      'ennaharonline.com':       'النهار أونلاين',
+      'alnaharonline.com':       'النهار',
+      'aps.dz':                  'وكالة APS',
+      'elkhabar.com':            'الخبر',
+      'elwatan.com':             'الوطن',
+      'elwatan-dz.com':          'El Watan',
+      'tsa-algerie.com':         'TSA Algérie',
+      'dzair-news.com':          'Dzair News',
+      'dzair-daily.com':         'Dzair Daily',
+      'elmoudjahid.com':         'المجاهد',
+      'elheddaf.com':            'الهداف',
+      'algerie360.com':          'Algérie 360',
+      'liberte-algerie.com':     'Liberté',
+      'horizons-dz.com':         'Horizons',
+      'depechedekabylie.com':    'Dépêche de Kabylie',
+      'maghrebemergent.com':     'Maghreb Émergent',
+      'radioalgerie.dz':         'إذاعة الجزائر',
+      'entv.dz':                 'ENTV',
+      'aljazeera.net':           'الجزيرة',
+      'aljazeera.com':           'Al Jazeera',
+      'bbc.com':                 'BBC عربي',
+      'bbc.co.uk':               'BBC',
+      'reuters.com':             'Reuters',
+      'apnews.com':              'AP News',
+      'france24.com':            'France 24',
+      'rfi.fr':                  'RFI',
+      'lemonde.fr':              'Le Monde',
+      'lefigaro.fr':             'Le Figaro',
+      'dzfoot.com':              'DZ Foot',
+      'kooora.com':              'كووورة',
+      'sofascore.com':           'SofaScore',
+      'twitter.com':             'Twitter / X',
+      'x.com':                   'X (Twitter)',
+      'youtube.com':             'YouTube',
+      'wikipedia.org':           'ويكيبيديا',
+      'facebook.com':            'Facebook',
+    }
+    return DOMAIN_MAP[host] || host
+  } catch { return source || 'المصدر' }
+}
+
+// ── Website Builder: UI inspiration search ────────────────────────────────────
+// Searches CodePen, GitHub, Flowbite and Uiverse for real patterns matching the site type.
+// Results are injected into the AI prompt as inspiration context.
+async function searchUiInspiration(siteType, userMsg) {
+  const TYPE_QUERIES = {
+    restaurant: ['site:codepen.io restaurant landing page CSS animation', 'restaurant website UI modern HTML CSS GitHub template'],
+    hotel:      ['site:codepen.io hotel luxury website CSS', 'hotel booking website template GitHub HTML'],
+    store:      ['site:codepen.io ecommerce product card CSS animation', 'shop website UI flowbite tailwind template'],
+    portfolio:  ['site:codepen.io portfolio personal website CSS animation', 'developer portfolio website GitHub modern'],
+    dashboard:  ['site:codepen.io analytics dashboard dark CSS', 'admin dashboard UI dark theme flowbite'],
+    agency:     ['site:codepen.io creative agency website animation', 'agency portfolio website bold CSS GitHub'],
+    business:   ['site:codepen.io saas startup landing page CSS', 'startup landing page tailwind flowbite GitHub'],
+    blog:       ['site:codepen.io blog editorial CSS modern', 'blog website minimal clean GitHub template'],
+    education:  ['site:codepen.io elearning education platform CSS', 'online course website UI GitHub template'],
+    landing:    ['site:codepen.io startup landing page CSS animation gradient', 'modern landing page tailwind flowbite GitHub'],
+  }
+  const queries = TYPE_QUERIES[siteType] || TYPE_QUERIES.landing
+  try {
+    const settled = await Promise.allSettled(queries.map(q => searchGoogleCSE(q)))
+    const items = []
+    for (const r of settled) {
+      if (r.status === 'fulfilled') {
+        for (const item of (r.value || []).slice(0, 2)) {
+          if (item.title && item.snippet) {
+            items.push({ title: item.title.slice(0, 80), snippet: item.snippet.slice(0, 200), url: item.url || '' })
+          }
+        }
+      }
+    }
+    return items.slice(0, 6)
+  } catch { return [] }
+}
+
+// ── Map Website Builder: specialized system prompt ────────────────────────────
+const MAP_WEBSITE_BUILDER_SYSTEM_PROMPT = `You are a SENIOR FULL-STACK DEVELOPER specializing in interactive map web applications.
+
+════════════════════════════════════════════
+CRITICAL OUTPUT RULE (ABSOLUTE):
+Output ONLY the complete HTML code — NOTHING ELSE.
+No explanations. No markdown fences. No preamble. No comments outside HTML.
+The ENTIRE response must be ONE valid HTML file starting with <!DOCTYPE html> and ending with </html>.
+════════════════════════════════════════════
+
+TECHNOLOGY STACK (MANDATORY):
+- Leaflet.js v1.9.4 via CDN (MUST include both CSS and JS):
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+- OpenStreetMap tiles: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+  Attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+- Google Fonts via @import for modern UI
+
+CONTEXT-AWARE MAP CENTER:
+- Algeria-focused request → center: [28.0, 2.0], zoom: 5
+- City-specific (e.g. Algiers/الجزائر) → center: [36.737, 3.086], zoom: 12
+- Oran/وهران → [35.697, -0.633], zoom: 12
+- Constantine/قسنطينة → [36.365, 6.614], zoom: 12
+- World map request → center: [20, 0], zoom: 2
+
+DESIGN REQUIREMENTS (MANDATORY):
+- Split-screen or full-screen layout with a stylish sidebar
+- Dark modern UI: background #0f172a, cards #1e293b, accent #0ea5e9
+- Navigation/header bar with logo and controls
+- Search box that lets user search locations
+- Interactive markers with custom styled popups
+- Legend panel showing marker types if multiple
+- Info panel that shows details on marker click
+- Mobile responsive (@media max-width: 768px)
+- Smooth CSS animations and transitions
+
+JAVASCRIPT REQUIREMENTS:
+- Initialize Leaflet map with OpenStreetMap tiles
+- Add multiple relevant markers based on the request context
+- Each marker must have a rich popup (icon + title + description + coordinates)
+- Search input that flies to typed locations using Nominatim API:
+  fetch(\`https://nominatim.openstreetmap.org/search?format=json&q=\${encodeURIComponent(query)}\`)
+- Locate Me button using navigator.geolocation if appropriate
+- Fit bounds to show all markers on load
+- Animate markers on load (staggered appearance)
+- Layer controls if multiple marker types exist
+
+MANDATORY SECTIONS:
+1. <head>: charset, viewport, title, Leaflet CSS, Google Fonts, custom <style>
+2. <body>:
+   a. Header/navbar (title + search bar + controls)
+   b. Main layout: sidebar (info panel, legend, stats) + map container
+   c. Map container with id="map" (must have explicit height: 100% or fixed height)
+   d. Info panel that updates on marker click
+   e. Footer bar with attribution + stats
+3. <script>: Leaflet initialization + all interactive logic
+
+CSS RULES:
+- #map must have explicit height (e.g., height: calc(100vh - 60px) or height: 600px)
+- Use CSS Grid or Flexbox for layout
+- Glassmorphism sidebar: backdrop-filter: blur(10px)
+- Custom scrollbar styling
+- Hover effects on sidebar items
+
+FLOATING DOWNLOAD BUTTON (include EXACTLY as-is):
+<button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-map-site.html';a.click();})()" style="position:fixed;bottom:24px;right:80px;z-index:9999;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;border:none;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;box-shadow:0 8px 32px rgba(14,165,233,.4);transition:transform .2s,box-shadow .2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">🗺️ Download Map</button>
+
+QUALITY STANDARD:
+- Looks like a professional $10,000 geo/mapping product
+- All markers must be relevant to the user's request
+- No placeholder text — use realistic, context-aware content
+- Map must actually work and display correctly in browser
+
+START OUTPUT NOW — PURE HTML MAP CODE ONLY (no markdown, no explanation):`
 
 // ── Detect query intent ───────────────────────────────────────────────────────
 function detectQueryIntent(msg) {
@@ -3017,7 +3603,118 @@ async function fetchPrayerTimesAladhan(city, country = 'Algeria') {
   }
 }
 
+async function fetchPrayerByCoords(lat, lon, cityLabel) {
+  const cacheKey = `coords-${lat.toFixed(3)}-${lon.toFixed(3)}`
+  const cached = PRAYER_CACHE.get(cacheKey)
+  if (cached && Date.now() - cached.ts < PRAYER_CACHE_TTL) return cached.data
+  try {
+    const today = new Date()
+    const dd = String(today.getDate()).padStart(2, '0')
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const yyyy = today.getFullYear()
+    const url = `https://api.aladhan.com/v1/timings/${dd}-${mm}-${yyyy}?latitude=${lat}&longitude=${lon}&method=2`
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error(`aladhan coords error: ${r.status}`)
+    const d = await r.json()
+    if (d.code !== 200) throw new Error('aladhan returned non-200')
+    const t = d.data?.timings
+    const result = {
+      city: cityLabel || 'موقعك الحالي',
+      source: 'aladhan.com',
+      date: d.data?.date?.readable || new Date().toLocaleDateString('ar-DZ'),
+      times: {
+        'الفجر': t?.Fajr || '--',
+        'الشروق': t?.Sunrise || '--',
+        'الظهر': t?.Dhuhr || '--',
+        'العصر': t?.Asr || '--',
+        'المغرب': t?.Maghrib || '--',
+        'العشاء': t?.Isha || '--',
+      },
+    }
+    PRAYER_CACHE.set(cacheKey, { data: result, ts: Date.now() })
+    return result
+  } catch (err) {
+    console.error('[Prayer] aladhan coords error:', err.message)
+    return null
+  }
+}
+
+// GPS reverse-geocode: returns nearest wilaya by Euclidean distance (no external API)
+// ── DZ Maps: GPS Nearby endpoint (Overpass API) ───────────────────────────
+app.post('/api/dz-maps/nearby', async (req, res) => {
+  const { lat, lng, poiKey, radius = 3000 } = req.body || {}
+  if (!lat || !lng || isNaN(Number(lat)) || isNaN(Number(lng))) {
+    return res.status(400).json({ error: 'lat/lng required' })
+  }
+  const numLat = Number(lat)
+  const numLng = Number(lng)
+  const def      = poiKey ? POI_TYPES[poiKey] : null
+  const enSearch = poiKey ? (POI_EN_SEARCH[poiKey] || def?.nameAr || '') : ''
+
+  const embedUrl = buildNearbyEmbedUrl(numLat, numLng)
+  const gmapsSearchLink = poiKey
+    ? `https://www.google.com/maps/search/${encodeURIComponent(enSearch)}/@${numLat},${numLng},15z`
+    : `https://www.google.com/maps/@${numLat},${numLng},15z`
+
+  // Query real POI data from OpenStreetMap Overpass API
+  let results = []
+  try {
+    const raw = await queryNearby(numLat, numLng, poiKey || null, Number(radius))
+    results = raw.map(r => ({
+      ...r,
+      distanceLabel: formatDistance(r.distanceM),
+      gmapsDir: `https://www.google.com/maps/dir/${numLat},${numLng}/${r.lat},${r.lng}`,
+      gmapsPlace: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name)}&query_place_id=${r.osmId || ''}`,
+    }))
+  } catch (e) {
+    console.warn('[DZ-Maps/Nearby] Overpass query failed:', e.message)
+    // Non-fatal — return map without results list
+  }
+
+  return res.json({
+    isMap: true,
+    results,
+    mapMeta: {
+      type:         poiKey ? 'poi' : 'location',
+      gmapsUrl:     embedUrl,
+      gmapsLink:    gmapsSearchLink,
+      poiKey:       poiKey || null,
+      poiIcon:      def?.icon  || '📍',
+      poiNameAr:    def?.nameAr || 'موقعك',
+      locationName: 'موقعك الحالي',
+      locationFr:   'votre position',
+      lat:          numLat,
+      lng:          numLng,
+      fromGps:      true,
+    },
+  })
+})
+
+app.get('/api/dz-agent/reverse-geocode', (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+  if (isNaN(lat) || isNaN(lon)) return res.status(400).json({ error: 'lat/lon required' })
+  const w = findNearestWilaya(lat, lon)
+  if (!w) return res.status(404).json({ error: 'no match' })
+  res.json({ en: w.en, ar: w.ar, lat: w.lat, lon: w.lon })
+})
+
 app.get('/api/dz-agent/prayer', async (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+
+  // GPS mode: use coordinates directly
+  if (!isNaN(lat) && !isNaN(lon)) {
+    const nearest = findNearestWilaya(lat, lon)
+    const label = nearest?.ar || 'موقعك الحالي'
+    const data = await fetchPrayerByCoords(lat, lon, label)
+    if (data) return res.json({ ...data, gps: true })
+    // fallback to nearest city
+    const fallbackCity = nearest?.en || 'Algiers'
+    const fallback = await fetchPrayerTimesAladhan(fallbackCity)
+    if (fallback) return res.json({ ...fallback, gps: true })
+  }
+
   const city = String(req.query.city || 'Algiers').slice(0, 80)
   const data = await fetchPrayerTimesAladhan(city)
   if (!data) {
@@ -3041,13 +3738,28 @@ app.get('/api/dz-agent/prayer', async (req, res) => {
 // Fallback: stale cache — NEVER returns empty
 
 app.get('/api/dz-agent/weather', async (req, res) => {
+  const lat = parseFloat(req.query.lat)
+  const lon = parseFloat(req.query.lon)
+
+  // GPS mode: use coordinates directly via open-meteo
+  if (!isNaN(lat) && !isNaN(lon)) {
+    try {
+      const nearest = findNearestWilaya(lat, lon)
+      const label = nearest?.ar || 'موقعك الحالي'
+      const data = await fetchWeatherByCoords(lat, lon, label)
+      return res.json({ ...data, gps: true })
+    } catch (err) {
+      console.error('[Weather] GPS coords fetch failed:', err.message)
+      // fallback to nearest city name
+    }
+  }
+
   const city = String(req.query.city || 'Algiers').slice(0, 80)
   try {
     const data = await fetchCityWeatherResilient(city)
     return res.json(data)
   } catch (err) {
     console.error('[Weather] All sources failed:', err.message)
-    // Task 24: Fail-safe — always return structured data
     return res.status(200).json({
       city,
       temp: null, feels_like: null, temp_min: null, temp_max: null,
@@ -5126,35 +5838,76 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
-  // ── DZ Language pre-layer: moderation → normalization → light intent ──
-  // Runs BEFORE every existing handler. It does NOT replace any logic; it
-  // only blocks profanity early and adds an understanding hint for downstream.
+  // ══════════════════════════════════════════════════════════════════════
+  // DZ LANGUAGE LAYER V2 — Algerian Darja Understanding System
+  // Pipeline: Moderation → Normalization → Intent → Entities → Style
+  // ══════════════════════════════════════════════════════════════════════
+
+  // Step 1: Moderation guard
   const moderation = moderateMessage(lastUserMessage)
   if (!moderation.ok) {
-    // Don’t teach or store anything from blocked messages.
     return res.status(200).json({ content: moderation.replyIfBlocked })
   }
+
+  // Step 2: Style detection (darija | franco | mixed | msa | french | unknown)
   const dzStyle = detectDzStyle(lastUserMessage)
+
+  // Step 3: Normalization — Franco-Arab & Darja → normalized Arabic for intent understanding
   const dzNorm = normalizeDarija(lastUserMessage)
-  const dzIntent = detectLightIntent(lastUserMessage)
-  // Best-effort, non-blocking learning (never stores sensitive/profane data)
-  if (dzNorm.changed) {
+
+  // Step 4: Full intent detection V2 (20 intent types with confidence scores)
+  const dzIntent   = detectDzIntent(lastUserMessage)
+  const dzEntities = extractDzEntities(lastUserMessage)
+
+  // Step 5: Response style instruction for the AI model
+  const dzResponseStyle = buildResponseStyle(dzStyle, dzIntent)
+
+  // Step 6: Self-learning — record Darja patterns (best-effort, non-blocking)
+  if (dzNorm.changed || dzStyle === 'darija' || dzStyle === 'franco') {
     recordPendingLearning(
       { input: lastUserMessage, normalized: dzNorm.normalized },
-      { moderation, style: dzStyle, intent: dzIntent.type },
+      { moderation, style: dzStyle, intent: dzIntent.type, entities: dzEntities },
     )
   }
-  // Internal-only context to nudge the downstream model — never shown to user.
-  // Existing AI request flow appends a system prompt; we add this as another.
-  const dzLanguageContext = (dzStyle === 'darija' || dzStyle === 'mixed' || dzNorm.changed)
-    ? `LANGUAGE_HINT: المستخدم يكتب باللهجة الجزائرية${dzStyle === 'mixed' ? ' المختلطة (عربي+فرانكو)' : ''}. ` +
-      `الترجمة التقريبية للنية: "${dzNorm.normalized}". ` +
-      `النية المحتملة: ${dzIntent.type}. ` +
-      `أجب بنفس أسلوب المستخدم (دارجة جزائرية محترمة) وحافظ على شخصية DZ Agent.`
-    : (dzStyle === 'msa'
-        ? 'LANGUAGE_HINT: المستخدم يكتب بالعربية الفصحى — أجب بالفصحى مع الحفاظ على شخصية DZ Agent.'
-        : '')
 
+  // Build rich language context injected into system prompt (never shown to user)
+  const _styleLabel = {
+    darija: 'دارجة جزائرية', franco: 'فرانكو-عربي جزائري',
+    mixed: 'مزيج دارجة+فرنسية', msa: 'عربية فصحى',
+    french: 'فرنسية', unknown: 'غير محددة',
+  }[dzStyle] || dzStyle
+
+  const _entityParts = []
+  if (dzEntities.location)    _entityParts.push('الموقع: ' + dzEntities.location)
+  if (dzEntities.serviceType) _entityParts.push('الخدمة: ' + dzEntities.serviceType)
+  if (dzEntities.language)    _entityParts.push('اللغة: ' + dzEntities.language)
+  if (dzEntities.timeframe)   _entityParts.push('الزمن: ' + dzEntities.timeframe)
+
+  const dzLanguageContext = (() => {
+    const isDarijaLike = ['darija','franco','mixed'].includes(dzStyle) || dzNorm.changed
+    if (!isDarijaLike && dzStyle !== 'french' && dzStyle !== 'msa') return ''
+
+    if (dzStyle === 'msa') {
+      return '🗣️ LANGUAGE_HINT: المستخدم يكتب بالعربية الفصحى — أجب بالفصحى مع الحفاظ على شخصية DZ Agent.'
+    }
+    if (dzStyle === 'french') {
+      return "🗣️ LANGUAGE_HINT: L'utilisateur écrit en français. Réponds en français naturel et amical, en gardant le caractère DZ Agent."
+    }
+
+    const lines = [
+      '━━━ DZ LANGUAGE LAYER V2 ━━━',
+      '🗣️ لغة المستخدم: ' + _styleLabel,
+    ]
+    if (dzNorm.changed) lines.push('🔄 الترجمة الداخلية: "' + dzNorm.normalized + '"')
+    lines.push('🎯 النية: ' + dzIntent.type + (dzIntent.subtype ? ' + ' + dzIntent.subtype : '') + ' (ثقة ' + Math.round(dzIntent.confidence * 100) + '%)')
+    if (_entityParts.length) lines.push('📍 ' + _entityParts.join(' | '))
+    lines.push('')
+    lines.push('📋 أسلوب الرد (إلزامي): ' + dzResponseStyle)
+    lines.push('⚠️ لا تُعلم المستخدم بأي معالجة لغوية — طبّق الأسلوب بصمت تام.')
+    lines.push('⚠️ لا تقل "لم أفهم" — حاول دائماً تفسير القصد والإجابة بشكل مفيد.')
+    lines.push('⚠️ إذا كانت كلمة دارجة غير معروفة → اعتبرها سياقاً وأجب بشكل طبيعي.')
+    return lines.join('\n')
+  })()
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
@@ -5180,37 +5933,243 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: EMERGENCY_INFO })
   }
 
-  // ── Website Builder God Mode ──────────────────────────────────────────────
-  if (detectWebsiteBuilderQuery(lastUserMessage)) {
-    console.log(`[Website Builder] Detected website request: "${lastUserMessage.slice(0, 80)}"`)
-    try {
-      const wbMessages = [
-        { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
-        { role: 'user', content: lastUserMessage },
-      ]
-      const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
-      const rawOutput = wbResult.content || ''
-      const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
-
-      if (htmlCode && htmlCode.length > 200) {
-        console.log(`[Website Builder] Generated ${htmlCode.length} chars of HTML via ${wbResult.model}`)
-        return res.status(200).json({
-          content: `✅ **تم إنشاء موقعك بنجاح!** — انقر على "معاينة مباشرة" لمشاهدته، أو "تحميل .html" لحفظه.`,
-          isWebsite: true,
-          htmlCode,
-        })
-      }
-      // Fallback: return as text if extraction fails
-      console.warn('[Website Builder] HTML extraction failed — returning raw text')
+  // ── Algeria Citizen Knowledge System ─────────────────────────────────────
+  if (isAlgerianCitizenQuery(lastUserMessage)) {
+    const algeriaResult = searchAlgeria(lastUserMessage)
+    if (algeriaResult) {
+      console.log(`[Algeria-KS] Match: category=${algeriaResult.match.category} score=${algeriaResult.score}`)
       return res.status(200).json({
-        content: rawOutput || '⚠️ لم يتمكن النظام من توليد الموقع. يرجى إعادة المحاولة بوصف أكثر تفصيلاً.',
-      })
-    } catch (err) {
-      console.error('[Website Builder] Error:', err.message)
-      return res.status(200).json({
-        content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.',
+        content: formatAlgeriaResponse(algeriaResult),
+        algeriaSource: algeriaResult.match.link || null,
+        algeriaCategory: algeriaResult.match.category,
       })
     }
+    // Query seems Algerian but no exact match — enrich AI prompt with Algerian context
+    if (!messages.find(m => m.role === 'system')) {
+      messages.unshift({
+        role: 'system',
+        content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
+      })
+    }
+  }
+
+  // ── DZ Place Search (OSM Nominatim) ─────────────────────────────────────
+  // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
+  // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
+  // Guard: skip place search when user is clearly asking to CREATE a website/app.
+  if (PLACE_INTENTS.has(dzIntent.type)
+    && !detectWebsiteBuilderQuery(lastUserMessage)
+    && !detectMapWebsiteQuery(lastUserMessage)
+    && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
+    const intentService = INTENT_TO_SERVICE[dzIntent.type]
+    const serviceType   = intentService || dzEntities.serviceType || 'restaurant'
+    const location      = dzEntities.location
+
+    console.log(`[DZ-Places] intent=${dzIntent.type} service=${serviceType} location=${location}`)
+    try {
+      const placeResults = await searchPlaces(serviceType, location, 8)
+      if (placeResults && placeResults.length > 0) {
+        const placeResp = buildPlaceResponse(placeResults, serviceType, location, dzStyle)
+        const svc = SERVICE_CONFIG[serviceType] || {}
+        const noLocMsg = !location
+          ? (dzStyle === 'french'
+              ? `\n\n> **Conseil :** Précisez la ville ou la wilaya pour des résultats plus proches (ex: "pharmacie à Oran").`
+              : dzStyle === 'msa'
+                ? `\n\n> **ملاحظة:** حدّد الولاية أو المدينة للحصول على نتائج أقرب إليك (مثال: "صيدلية في وهران").`
+                : `\n\n> **نصيحة:** حدد الولاية ولا المدينة باش نلقيلك الأقرب (مثال: "${svc.labelAr || 'مكان'} في وهران").`)
+          : ''
+        return res.status(200).json({
+          content:  placeResp.text + noLocMsg,
+          isMap:    !!placeResp.mapHtml,
+          mapHtml:  placeResp.mapHtml || null,
+          mapMeta:  { type: 'places', service: serviceType, location, count: placeResp.count },
+          placeSearch: true,
+        })
+      }
+      // Results empty: fall through to AI handler with enriched prompt
+      console.log(`[DZ-Places] No results for service=${serviceType} location=${location} — falling through to AI`)
+    } catch (placeErr) {
+      console.error('[DZ-Places] Error:', placeErr.message)
+      // Non-fatal — fall through to AI handler
+    }
+  }
+
+
+  // ── DZ Maps Intelligence Engine ──────────────────────────────────────────
+  if (isMapQuery(lastUserMessage)) {
+    console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const mapResult = await handleMapQuery(lastUserMessage, userLocation)
+      if (mapResult) {
+        return res.status(200).json({
+          content:  mapResult.content,
+          isMap:    mapResult.isMap || false,
+          mapHtml:  mapResult.mapHtml || null,
+          mapMeta:  mapResult.mapMeta || null,
+        })
+      }
+    } catch (mapErr) {
+      console.error('[DZ-Maps] Error:', mapErr.message)
+      // Fall through to AI handler
+    }
+  }
+
+  // ── Map Website Builder ───────────────────────────────────────────────────
+  if (detectMapWebsiteQuery(lastUserMessage)) {
+    console.log(`[Map Website Builder] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    const MAX_MWB_ATTEMPTS = 3
+    let lastMwbHtml = null
+    let lastMwbValidation = null
+
+    for (let attempt = 1; attempt <= MAX_MWB_ATTEMPTS; attempt++) {
+      try {
+        const retryNote = attempt > 1
+          ? `\n\nPREVIOUS ATTEMPT FAILED VALIDATION: ${lastMwbValidation?.reason}. Fix it — output MUST include <html>, <style>, <script>, <body>, and Leaflet.js CDN links. HTML ONLY, nothing else.`
+          : ''
+        const mwbMessages = [
+          { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
+          { role: 'user', content: lastUserMessage },
+        ]
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const rawOutput = mwbResult.content || ''
+        const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+        const validation = validateHtmlOutput(htmlCode)
+        lastMwbHtml = htmlCode
+        lastMwbValidation = validation
+        if (validation.ok) {
+          console.log(`[Map Website Builder] OK attempt ${attempt} — ${htmlCode.length} chars via ${mwbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
+          return res.status(200).json({
+            content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو استخدم أزرار التحميل لحفظها.`,
+            isWebsite: true,
+            isMapWebsite: true,
+            htmlCode,
+            cssCode: cssCode || '',
+            jsCode:  jsCode  || '',
+            webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي مبني بـ Leaflet.js و OpenStreetMap', icon: '🗺️' },
+          })
+        }
+        console.warn(`[Map Website Builder] Attempt ${attempt} failed: ${validation.reason} — retrying...`)
+        if (attempt < MAX_MWB_ATTEMPTS) await new Promise(r => setTimeout(r, 800))
+      } catch (err) {
+        console.error(`[Map Website Builder] Attempt ${attempt} error:`, err.message)
+        if (attempt === MAX_MWB_ATTEMPTS) {
+          return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد موقع الخريطة. يرجى المحاولة مرة أخرى.' })
+        }
+        await new Promise(r => setTimeout(r, 800))
+      }
+    }
+    if (lastMwbHtml && lastMwbHtml.length > 200) {
+      const cssCode = extractCssFromHtml(lastMwbHtml)
+      const jsCode  = extractJsFromHtml(lastMwbHtml)
+      return res.status(200).json({
+        content: `⚠️ **تم توليد موقع الخريطة جزئياً** — قد لا يكون مكتملاً. تحقق من المعاينة.`,
+        isWebsite: true,
+        isMapWebsite: true,
+        htmlCode: lastMwbHtml,
+        cssCode: cssCode || '',
+        jsCode:  jsCode  || '',
+        webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي', icon: '🗺️' },
+      })
+    }
+    return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
+  }
+
+  // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
+  if (detectWebsiteBuilderQuery(lastUserMessage)) {
+    console.log(`[Website Builder v6] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    const wbMeta = extractWebBuilderMeta(lastUserMessage)
+
+    // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
+    let inspirationBlock = ''
+    try {
+      const inspiration = await searchUiInspiration(wbMeta.type, lastUserMessage)
+      if (inspiration.length > 0) {
+        inspirationBlock = `\n\n════════════════════════════════════════════\nUI INSPIRATION FOUND (from CodePen / GitHub / Flowbite — study these patterns, then CREATE BETTER):\n` +
+          inspiration.map((item, i) => `${i + 1}. "${item.title}"\n   → ${item.snippet}\n   URL: ${item.url}`).join('\n') +
+          `\n\nINSTRUCTION: Use these as design direction only. Build something original and superior — not a copy.\n════════════════════════════════════════════`
+        console.log(`[Website Builder v6] Injected ${inspiration.length} inspiration items for type="${wbMeta.type}"`)
+      }
+    } catch (inspErr) {
+      console.warn('[Website Builder v6] Inspiration search failed (non-fatal):', inspErr.message)
+    }
+
+    // ── Step 2: Build enriched user message with metadata hints ──────────────
+    const enrichedUserMsg = [
+      lastUserMessage,
+      `\n[SITE TYPE: ${wbMeta.type} | STYLE: ${wbMeta.style} | TITLE: ${wbMeta.title}]`,
+      `[Generate a complete, production-quality ${wbMeta.description}]`,
+    ].join('\n')
+
+    // ── Step 3: Generate HTML with up to 3 attempts ───────────────────────────
+    const MAX_WB_ATTEMPTS = 3
+    let lastHtml = null
+    let lastValidation = null
+
+    for (let attempt = 1; attempt <= MAX_WB_ATTEMPTS; attempt++) {
+      try {
+        const retryNote = attempt > 1
+          ? `\n\nATTEMPT ${attempt} — PREVIOUS FAILED: "${lastValidation?.reason}". MANDATORY FIX: output MUST be a SINGLE complete HTML file with <html>, <head>, <style>, <body>, <script>, </html>. NO markdown. NO explanation. HTML ONLY.`
+          : ''
+
+        const systemContent = WEBSITE_BUILDER_SYSTEM_PROMPT + inspirationBlock + retryNote
+        const wbMessages = [
+          { role: 'system', content: systemContent },
+          { role: 'user', content: enrichedUserMsg },
+        ]
+
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+        console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
+        const rawOutput = wbResult.content || ''
+        const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
+
+        const validation = validateHtmlOutput(htmlCode)
+        lastHtml = htmlCode
+        lastValidation = validation
+
+        if (validation.ok) {
+          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
+          return res.status(200).json({
+            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** الموجود داخل الصفحة.`,
+            isWebsite: true,
+            htmlCode,
+            cssCode: cssCode || '',
+            jsCode:  jsCode  || '',
+            webBuilderMeta: wbMeta,
+          })
+        }
+
+        console.warn(`[Website Builder v6] Attempt ${attempt} failed: ${validation.reason} (${htmlCode.length} chars)`)
+        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
+      } catch (err) {
+        console.error(`[Website Builder v6] Attempt ${attempt} error:`, err.message)
+        if (attempt === MAX_WB_ATTEMPTS) {
+          return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.' })
+        }
+        await new Promise(r => setTimeout(r, 1000))
+      }
+    }
+
+    // All attempts exhausted — return best effort
+    if (lastHtml && lastHtml.length > 200) {
+      console.warn('[Website Builder v6] All attempts failed — returning best-effort HTML')
+      const cssCode = extractCssFromHtml(lastHtml)
+      const jsCode  = extractJsFromHtml(lastHtml)
+      return res.status(200).json({
+        content: `⚠️ **تم توليد الموقع بشكل جزئي** — قد لا يكون مكتملاً. جرّب المعاينة أو التحميل.`,
+        isWebsite: true,
+        htmlCode: lastHtml,
+        cssCode: cssCode || '',
+        jsCode:  jsCode  || '',
+        webBuilderMeta: wbMeta,
+      })
+    }
+    return res.status(200).json({
+      content: '⚠️ لم يتمكن النظام من توليد كود HTML صحيح. يرجى تفصيل طلبك أكثر وإعادة المحاولة.',
+    })
   }
 
   // ── Doctor name search (no specialty needed) ────────────────────────────
@@ -5232,29 +6191,104 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const doctorIntent = detectDoctorIntent(lastUserMessage)
   if (doctorIntent.isDoctorQuery) {
+    const doctorGpsMatch = lastUserMessage.match(/\[GPS:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)\]/i)
+    const doctorUserLocation = doctorGpsMatch && Number.isFinite(parseFloat(doctorGpsMatch[1])) && Number.isFinite(parseFloat(doctorGpsMatch[2]))
+      ? { lat: parseFloat(doctorGpsMatch[1]), lng: parseFloat(doctorGpsMatch[2]) }
+      : userLocation
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
-        content: '🩺 **بحث عن طبيب**\n\nأي تخصص تحتاج؟ مثلاً: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...\n\nوإذا أمكن، أضف الولاية (عنابة، الجزائر، وهران...).\n\n💡 _يمكنك أيضاً البحث باسم الطبيب مباشرة، مثل:_ **دكتور محمد بن علي** أو **Dr Ahmed Oran**.',
+        content: [
+          '🩺 **نحوس على طبيب؟ راك جايت صح!**',
+          '',
+          '**شنو التخصص اللي تحتاجه؟**',
+          '',
+          '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
+          '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
+          '🩺 `طبيب عام` · 🧬 `طبيب أعصاب` · 🔪 `جراح` · 💧 `طبيب مسالك`',
+          '',
+          '**وفي أي ولاية؟**',
+          '',
+          '`عنابة` · `الجزائر` · `وهران` · `قسنطينة` · `سطيف`',
+          '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`',
+          '',
+          '💡 _مثال: اكتب مباشرة_ **"طبيب أسنان في عنابة"** _أو_ **"دكتور قلب في وهران"**',
+          '',
+          '_يمكنك أيضاً البحث باسم الطبيب مباشرة: **دكتور محمد بن علي** أو **Dr Ahmed Annaba**_',
+        ].join('\n'),
       })
     }
     if (!doctorIntent.speciality) {
       return res.status(200).json({
-        content: '🩺 وضّح لي التخصص: **أسنان، عظام، قلب، أطفال، عيون، جلدية، نفسي، عام**...',
+        content: [
+          '🩺 **وضّح لي التخصص اللي تحتاجه:**',
+          '',
+          '🦷 `طبيب أسنان` · 🫀 `طبيب قلب` · 🦴 `طبيب عظام` · 👶 `طبيب أطفال`',
+          '👁️ `طبيب عيون` · 🌿 `طبيب جلدية` · 🧠 `طبيب نفسي` · 👩‍⚕️ `طبيب نساء`',
+          '🩺 `طبيب عام` · 🧬 `طبيب أعصاب` · 🔪 `جراح` · 💧 `طبيب مسالك`',
+          '',
+          '_مثال: **"أسنان في عنابة"** أو **"عظام في وهران"**_',
+        ].join('\n'),
       })
     }
     if (!doctorIntent.city) {
       return res.status(200).json({
-        content: `🩺 لاحظت طلبك على طبيب **${doctorIntent.speciality.ar}**.\n\nفي أي ولاية؟ (عنابة، الجزائر، وهران، قسنطينة، تيزي وزو...)`,
+        content: [
+          `🩺 فاهم — تحتاج **طبيب ${doctorIntent.speciality.ar}**.`,
+          '',
+          '**في أي ولاية؟**',
+          '',
+          '`عنابة` · `الجزائر العاصمة` · `وهران` · `قسنطينة` · `سطيف`',
+          '`تيزي وزو` · `ورقلة` · `باتنة` · `بجاية` · `بسكرة`',
+          '`سكيكدة` · `قالمة` · `بومرداس` · `البليدة` · `تلمسان`',
+          '',
+          `_مثال: اكتب **"طبيب ${doctorIntent.speciality.ar} في سطيف"**_`,
+        ].join('\n'),
       })
     }
-    const { results, cached } = await multiSearchDoctors({
-      speciality: doctorIntent.speciality.search,
-      city: doctorIntent.city.fr,
+    const searchCity = doctorIntent.city.fr
+    const { results, cached } = doctorUserLocation
+      ? await multiSearchDoctors({
+          speciality: doctorIntent.speciality.search,
+          city: searchCity,
+          userLocation: doctorUserLocation,
+        })
+      : await multiSearchDoctorsByName({
+          name: `${doctorIntent.speciality.ar} ${doctorIntent.city.ar}`,
+        })
+    const mergedResults = results.map(r => ({
+      ...r,
+      fromGps: !!doctorUserLocation,
+    }))
+    return res.status(200).json({
+      content: formatDoctorResults(mergedResults, doctorIntent.speciality, doctorIntent.city, { hasGps: !!doctorUserLocation })
+        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+      isDoctorSearch: true,
+      doctorResults: mergedResults,
+      doctorQuery: lastUserMessage,
+      doctorMapMeta: null,
+    })
+  }
+
+  const hospitalIntent = detectHospitalIntent(lastUserMessage)
+  if (hospitalIntent.isHospitalQuery) {
+    const hospitalCity = detectHospitalCity(lastUserMessage)
+    const query = `${hospitalCity ? hospitalCity.ar + ' ' : ''}مستشفى`
+    const { results, cached } = await searchPlaces(query, {
+      serviceType: 'hospital',
       userLocation,
     })
     return res.status(200).json({
-      content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city, { hasGps: !!userLocation })
-        + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+      content: buildPlaceResponse(results, {
+        title: '🏥 نتائج المستشفيات',
+        query: lastUserMessage,
+        serviceType: 'hospital',
+        city: hospitalCity?.ar || '',
+        hasGps: !!userLocation,
+      }) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+      isMap: false,
+      isHospitalSearch: true,
+      hospitalResults: results,
+      hospitalQuery: lastUserMessage,
     })
   }
 
@@ -5783,6 +6817,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
   let webSearchContext = ''
+  let hasNewsResults = false
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const skipSearch = isPrayerQuery || isFootballQuery || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
@@ -5867,14 +6902,60 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       if (scoredResults.length > 0) {
         const sourceTag = cseResults.length > 0 ? '🔍 Google CSE' : gnResults.length > 0 ? '📡 Google News RSS' : '🌐 Web'
-        const lines = scoredResults.map((r, i) => {
+
+        // Sort by date descending (newest first) for temporal ordering
+        const now_ms = Date.now()
+        const ONE_DAY = 24 * 60 * 60 * 1000
+        const ONE_WEEK = 7 * ONE_DAY
+        const ONE_MONTH = 30 * ONE_DAY
+
+        function getResultAgeMs(r) {
+          const d = r.date || r.pubDate || r.publishedDate
+          if (!d) return Infinity
+          const t = new Date(d).getTime()
+          return isNaN(t) ? Infinity : now_ms - t
+        }
+
+        // Sort by date (freshest first), fall back to score
+        const temporallySorted = [...scoredResults].sort((a, b) => {
+          const ageA = getResultAgeMs(a)
+          const ageB = getResultAgeMs(b)
+          if (ageA === Infinity && ageB === Infinity) return b._score - a._score
+          if (ageA === Infinity) return 1
+          if (ageB === Infinity) return -1
+          return ageA - ageB
+        })
+
+        // Group into temporal buckets
+        const buckets = { today: [], week: [], month: [], older: [] }
+        for (const r of temporallySorted) {
+          const age = getResultAgeMs(r)
+          if (age <= ONE_DAY) buckets.today.push(r)
+          else if (age <= ONE_WEEK) buckets.week.push(r)
+          else if (age <= ONE_MONTH) buckets.month.push(r)
+          else buckets.older.push(r)
+        }
+
+        function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
-          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ' [تاريخ غير متوفر]'
-          const src = r.source || ''
-          return `${i + 1}. **${r.title || ''}**${dateStr} — ${src}\n   ${(r.snippet || r.description || '').slice(0, 250)}\n   🔗 ${r.url || r.link || ''}`
-        }).join('\n\n')
-        webSearchContext = `${sourceTag} | مرتبة بالنقاط (حداثة 45% · ثقة 25% · صلة 20% · مقتطف 10%)\n\n${lines}`
-        console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length}`)
+          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
+          const url = r.url || r.link || ''
+          const label = getSourceLabel(url, r.source)
+          const srcLink = url ? `[${label}](${url})` : label
+          return `${idx}. **${r.title || ''}**${dateStr}\n   ${(r.snippet || r.description || '').slice(0, 220)}\n   📰 ${srcLink}`
+        }
+
+        const sections = []
+        let idx = 1
+        if (buckets.today.length)  { sections.push(`🟢 **الأحدث (اليوم / آخر 24 ساعة)**\n${buckets.today.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.week.length)   { sections.push(`🟡 **هذا الأسبوع**\n${buckets.week.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.month.length)  { sections.push(`🟠 **هذا الشهر**\n${buckets.month.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+        if (buckets.older.length)  { sections.push(`⚫ **أقدم (للسياق فقط)**\n${buckets.older.map(r => formatResult(r, idx++)).join('\n\n')}`) }
+
+        const lines = sections.length > 0 ? sections.join('\n\n') : temporallySorted.map((r, i) => formatResult(r, i+1)).join('\n\n')
+        webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
+        hasNewsResults = true
+        console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (mustSearch) {
         webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
         console.log('[DZ Retrieval] No results found for mandatory search')
@@ -5891,7 +6972,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
+  const systemPrompt = `أنت DZ Agent — مساعد بناء مشاريع وتوليد أكواد ومحتوى عملي أنشأه **نذير حوامرية (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🕒 REAL-TIME CONTEXT (تحقق إجباري)
@@ -5912,8 +6993,45 @@ ${invocationInstruction}
 - @dz-gpt: DZ GPT للأسئلة العامة والشرح والكتابة.
 - /github: أوامر GitHub والمستودعات والكود.
 
-أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
-قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.
+أنت لست نموذج إجابة معرفية فقط. أنت **مساعد تطوير وتنفيذ** يهدف لتحويل الطلب إلى مشروع أو كود عملي قابل للتشغيل.
+قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → لا تختلق؛ ابحث أو صرّح بوضوح بما تستطيع تنفيذه**.
+
+━━━━━━━━━━━━━━━━━━━━━━
+🧩 MISSION MODE — BUILD PROJECTS
+━━━━━━━━━━━━━━━━━━━━━━
+
+When the user asks to create a project:
+1. Understand intent (website, app, script)
+2. Search GitHub for relevant repositories
+3. Extract best parts (UI, API, logic)
+4. Merge into a clean project
+5. Generate working code (HTML/CSS/JS or full stack)
+6. Provide preview (iframe or demo structure)
+7. Provide download (ZIP structure)
+
+RULES:
+- Never return empty answers
+- Prefer modern frameworks (React, Next.js, Vanilla JS)
+- Always include working API if needed
+- Optimize for simplicity and beauty
+
+SEARCH SOURCES:
+- GitHub
+- Open APIs
+- CodePen examples
+
+OUTPUT FORMAT:
+1. Project preview
+2. Full code
+3. File structure
+4. Optional improvements
+
+SPECIAL:
+- If request is "Islamic / Quran", use Quran APIs
+- If user asks "simple", use static HTML
+
+GOAL:
+Act like a real developer, not a chatbot.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🔎 RETRIEVAL PIPELINE (MANDATORY ORDER)
@@ -6005,13 +7123,42 @@ Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88
 4. If data unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
 
 ━━━━━━━━━━━━━━━━━━━━━━
-📰 NEWS MODULE
+📰 NEWS MODULE — UP-TO-DATE TEMPORAL ORDERING (MANDATORY)
 ━━━━━━━━━━━━━━━━━━━━━━
 
+عند أي سؤال يتعلق بـ: أخبار · أحداث · حوادث · نتائج رياضية · تواريخ (إصدار، مباريات، قرارات):
+
+🧠 تحليل النية (MANDATORY):
+1. هل السؤال يتعلق بحدث جارٍ أو نتيجة حديثة؟ → وضع "البحث الحديث"
+2. هل يحتاج آخر الأخبار؟ → اجلب من Google CSE + Google News RSS أولاً
+3. هل يتعلق بتاريخ معين؟ → رتّب زمنياً من الأحدث للأقدم
+
+📅 ترتيب الإجابة (MANDATORY FORMAT — لا تتجاوزه):
+
+1. 🟢 **الأحدث** — اليوم أو آخر 24 ساعة
+2. 🟡 **هذا الأسبوع**
+3. 🟠 **هذا الشهر**
+4. 🔵 **الشهر السابق** (إن لزم)
+5. ⚫ **معلومات أقدم** (فقط للسياق)
+
+📌 قواعد إضافية إلزامية:
 - صنّف: أخبار الجزائر 🇩🇿 / دولية 🌍 / تقنية 💻 / اقتصاد 💰 / رياضة ⚽
-- أدرج دائماً: التاريخ + رابط المصدر لكل خبر
-- رتّب من الأحدث إلى الأقدم
+- أدرج دائماً: التاريخ الدقيق + رابط المصدر لكل خبر
+- رتّب من الأحدث إلى الأقدم داخل كل فئة زمنية
 - لا تدمج بيانات الملاعب مع أخبار الوكالات
+- ❌ لا تعتمد على معلومات قديمة إذا توفر تحديث أحدث
+- ❌ إذا لم توجد معلومات حديثة → قُل ذلك بوضوح، لا تخترع
+- ✅ إذا كان هناك تحديث مستمر → أشر إلى ذلك
+
+🏆 مثال تطبيقي (اتبع هذا الهيكل دائماً):
+سؤال: "نتيجة مباراة ريال مدريد اليوم"
+الإجابة:
+🟢 اليوم:
+- فاز ريال مدريد على برشلونة 2-1 (المصدر: SofaScore | ${_todayHuman})
+🟡 هذا الأسبوع:
+- تعادل مع أتلتيكو مدريد 1-1
+🟠 هذا الشهر:
+- فاز على إشبيلية 3-0
 
 ━━━━━━━━━━━━━━━━━━━━━━
 🧾 OUTPUT FORMAT
@@ -6239,7 +7386,12 @@ ${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━�
     max_tokens: 3000,
   })
   if (aiResult.content) {
-    return res.status(200).json({ content: aiResult.content, fallbackModel: aiResult.model })
+    return res.status(200).json({
+      content: aiResult.content,
+      fallbackModel: aiResult.model,
+      hasMoreNews: hasNewsResults,
+      newsQuery: hasNewsResults ? lastUserMessage : undefined,
+    })
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
 
@@ -9772,14 +10924,21 @@ if (isMain) {
   } else {
     // Dev: embed Vite as middleware so both API and frontend run on port 5000
     const { createServer: createViteServer } = await import('vite')
+    const http = await import('http')
+    const httpServer = http.createServer(app)
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: false,
+      },
       appType: 'spa',
     })
     app.use(vite.middlewares)
-    const httpServer = app.listen(PORT, '0.0.0.0', () => {
+    setupChatWebSocket(httpServer)
+    httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`Dev server running on http://0.0.0.0:${PORT}`)
     })
-    setupChatWebSocket(httpServer)
   }
 }

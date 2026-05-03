@@ -5946,9 +5946,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
   // Guard: skip place search when user is clearly asking to CREATE a website/app.
   // Guard: skip place search for doctor queries — handled by dedicated doctor search below.
+  // Guard: skip place search for news/newspaper queries — handled by news/RSS handler.
   const _doctorGuard = detectDoctorIntent(lastUserMessage)
+  const _isNewsQuery = isNewspaperHeadlineQuery(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
     && !_doctorGuard.isDoctorQuery
+    && !_isNewsQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {

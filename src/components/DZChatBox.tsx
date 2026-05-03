@@ -32,6 +32,7 @@ type RichType =
   | 'pulls'
   | 'stats'
   | 'website'
+  | 'map'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -166,6 +167,75 @@ interface DZMessage {
   pulls?: PullItem[]
   stats?: RepoStats
   htmlCode?: string
+  cssCode?: string
+  jsCode?: string
+  mapHtml?: string
+  mapMeta?: Record<string, unknown>
+  webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  hasMoreNews?: boolean
+  newsQuery?: string
+  doctorResults?: Array<{ name?: string; nameAr?: string; nameFr?: string; specialty?: string; specialtyAr?: string; specialtyFr?: string; city?: string; cityAr?: string; cityFr?: string; address?: string; phone?: string; sources?: string[]; mapLat?: number; mapLng?: number; fromGps?: boolean }>
+  doctorQuery?: string
+  hospitalResults?: Array<{ name?: string; nameAr?: string; nameFr?: string; address?: string; phone?: string; fromGps?: boolean }>
+  hospitalQuery?: string
+}
+
+function DoctorResultsCard({ results, query }: { results: NonNullable<DZMessage['doctorResults']>, query?: string }) {
+  if (!results.length) return null
+  return (
+    <div className="dz-doctor-results">
+      <div className="dz-doctor-results-header">
+        <strong>🩺 نتائج الأطباء {query ? `— ${query}` : ''}</strong>
+      </div>
+      <div className="dz-doctor-list">
+        {results.slice(0, 8).map((doctor, index) => (
+          <div className="dz-doctor-item" key={`${doctor.name || doctor.nameAr || index}-${index}`}>
+            <div className="dz-doctor-item-rank">#{index + 1}</div>
+            <div className="dz-doctor-item-body">
+              <div className="dz-doctor-item-name">{doctor.nameAr || doctor.name || 'طبيب'}</div>
+              <div className="dz-doctor-item-meta">
+                {doctor.specialtyAr || doctor.specialty || ''}
+                {doctor.cityAr || doctor.city || ''}
+                {doctor.address ? ` · ${doctor.address}` : ''}
+              </div>
+              <div className="dz-doctor-item-meta">
+                {doctor.phone ? `📞 ${doctor.phone}` : ''}
+                {doctor.fromGps ? ' · 📍 قريب منك' : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function HospitalResultsCard({ results, query }: { results: NonNullable<DZMessage['hospitalResults']>, query?: string }) {
+  if (!results.length) return null
+  return (
+    <div className="dz-doctor-results">
+      <div className="dz-doctor-results-header">
+        <strong>🏥 نتائج المستشفيات {query ? `— ${query}` : ''}</strong>
+      </div>
+      <div className="dz-doctor-list">
+        {results.slice(0, 8).map((hospital, index) => (
+          <div className="dz-doctor-item" key={`${hospital.name || hospital.nameAr || index}-${index}`}>
+            <div className="dz-doctor-item-rank">#{index + 1}</div>
+            <div className="dz-doctor-item-body">
+              <div className="dz-doctor-item-name">{hospital.nameAr || hospital.name || 'مستشفى'}</div>
+              <div className="dz-doctor-item-meta">
+                {hospital.address ? ` · ${hospital.address}` : ''}
+              </div>
+              <div className="dz-doctor-item-meta">
+                {hospital.phone ? `📞 ${hospital.phone}` : ''}
+                {hospital.fromGps ? ' · 📍 قريب منك' : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 interface ActionLogEntry {
@@ -694,30 +764,179 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
 }
 
 // ===== WEBSITE PREVIEW =====
-function WebsitePreview({ htmlCode }: { htmlCode: string }) {
-  const [view, setView] = useState<'preview' | 'code'>('preview')
-  const [copied, setCopied] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
+type WPViewport = 'mobile' | 'tablet' | 'desktop'
+const WP_VIEWPORTS: { id: WPViewport; label: string; icon: string; width: string }[] = [
+  { id: 'mobile',  label: 'موبايل',  icon: '📱', width: '375px'  },
+  { id: 'tablet',  label: 'تابلت',   icon: '📟', width: '768px'  },
+  { id: 'desktop', label: 'سطح مكتب', icon: '🖥️', width: '100%' },
+]
 
-  const handleDownload = () => {
-    const blob = new Blob([htmlCode], { type: 'text/html' })
+// ── WebsitePreview template blocks ──────────────────────────────────────────
+const WP_TEMPLATES = [
+  { id: 'navbar',       icon: '🔲', labelAr: 'شريط تنقل',   prompt: 'أضف شريط تنقل احترافي متجاوب مع شعار وروابط وزر CTA' },
+  { id: 'hero',         icon: '🚀', labelAr: 'قسم البطل',    prompt: 'أضف قسم hero مذهل بعنوان رئيسي وعنوان فرعي وأزرار وعنصر بصري متحرك' },
+  { id: 'features',     icon: '✨', labelAr: 'الميزات',      prompt: 'أضف قسم ميزات/خدمات بشبكة من 6 بطاقات مع أيقونات وتأثير hover' },
+  { id: 'pricing',      icon: '💰', labelAr: 'الأسعار',      prompt: 'أضف جدول أسعار بثلاث خطط مع تمييز الخطة الموصى بها' },
+  { id: 'testimonials', icon: '💬', labelAr: 'الشهادات',     prompt: 'أضف قسم شهادات/مراجعات ببطاقات صور ونجوم تقييم' },
+  { id: 'stats',        icon: '📊', labelAr: 'الإحصائيات',   prompt: 'أضف قسم إحصائيات مع أنيميشن عد تصاعدي وأيقونات' },
+  { id: 'contact',      icon: '📬', labelAr: 'نموذج التواصل', prompt: 'أضف نموذج تواصل متكامل مع التحقق من البيانات' },
+  { id: 'footer',       icon: '🔻', labelAr: 'التذييل',      prompt: 'أضف تذييل شامل مع شعار وأعمدة روابط وأيقونات سوشيال' },
+]
+
+// ── Client-side CSS/JS extraction (fallback if server didn't extract) ────────
+function clientExtractCss(html: string): string {
+  const blocks: string[] = []
+  const re = /<style[^>]*>([\s\S]*?)<\/style>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) blocks.push(m[1].trim())
+  return blocks.join('\n\n').trim()
+}
+function clientExtractJs(html: string): string {
+  const blocks: string[] = []
+  const re = /<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const c = m[1].trim()
+    if (c.length > 10) blocks.push(c)
+  }
+  return blocks.join('\n\n').trim()
+}
+function buildHtmlShellClient(html: string, _css: string, _js: string): string {
+  let result = html
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '<link rel="stylesheet" href="style.css">')
+  result = result.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/gi, '<script src="script.js"></script>')
+  return result
+}
+
+type WPCodeTab = 'html' | 'css' | 'js'
+
+function WebsitePreview({
+  htmlCode,
+  cssCode: cssCodeProp = '',
+  jsCode:  jsCodeProp  = '',
+  onInsertPrompt,
+  webBuilderMeta,
+}: {
+  htmlCode: string
+  cssCode?: string
+  jsCode?: string
+  onInsertPrompt?: (p: string) => void
+  webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+}) {
+  const [view, setView]               = useState<'preview' | 'code'>('preview')
+  const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
+  const [viewport, setViewport]       = useState<WPViewport>('desktop')
+  const [copied, setCopied]           = useState(false)
+  const [downloaded, setDownloaded]   = useState(false)
+  const [zipping, setZipping]         = useState(false)
+  const [zipped, setZipped]           = useState(false)
+  const [fullscreen, setFullscreen]   = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  const cssCode = cssCodeProp || clientExtractCss(htmlCode)
+  const jsCode  = jsCodeProp  || clientExtractJs(htmlCode)
+  const sizeKb  = Math.round(new Blob([htmlCode]).size / 1024)
+
+  const [editedHtml, setEditedHtml] = useState(htmlCode)
+  const [editedCss,  setEditedCss]  = useState(cssCode)
+  const [editedJs,   setEditedJs]   = useState(jsCode)
+  const [previewSrc, setPreviewSrc] = useState(htmlCode)
+  const [editApplied, setEditApplied] = useState(false)
+
+  const activeRaw = codeTab === 'html' ? editedHtml : codeTab === 'css' ? editedCss : editedJs
+  const setActiveRaw = (v: string) => {
+    if (codeTab === 'html') setEditedHtml(v)
+    else if (codeTab === 'css') setEditedCss(v)
+    else setEditedJs(v)
+  }
+  const activeCode = activeRaw
+
+  const applyEdits = () => {
+    let src = editedHtml
+    const styleTag  = `<style>${editedCss}</style>`
+    const scriptTag = `<script>${editedJs}</script>`
+    src = src.replace(/<style[^>]*>[\s\S]*?<\/style>/i, styleTag)
+    src = src.replace(/<script(?![^>]*\bsrc\b)[^>]*>[\s\S]*?<\/script>/i, scriptTag)
+    setPreviewSrc(src)
+    setEditApplied(true)
+    setTimeout(() => setEditApplied(false), 2000)
+    setView('preview')
+  }
+
+  const handleDownloadHtml = () => {
+    const blob = new Blob([previewSrc], { type: 'text/html' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'dz-agent-website.html'
+    a.download = 'dz-agent-site.html'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
+  const handleDownloadZip = async () => {
+    setZipping(true)
+    try {
+      const JSZip = (await import('jszip')).default
+      const zip   = new JSZip()
+      const shell = buildHtmlShellClient(editedHtml, editedCss, editedJs)
+      zip.file('index.html', shell)
+      zip.file('style.css',  editedCss)
+      zip.file('script.js',  editedJs)
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = 'dz-agent-site.zip'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(a.href)
+      setZipped(true)
+      setTimeout(() => setZipped(false), 2500)
+    } catch {
+      alert('فشل تحميل ZIP. يرجى المحاولة مجدداً.')
+    } finally {
+      setZipping(false)
+    }
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(htmlCode)
+    navigator.clipboard.writeText(activeCode || previewSrc)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
+
   return (
     <div className={`dz-wp-root${fullscreen ? ' dz-wp-root--fs' : ''}`}>
+
+      {/* ── Project card header ── */}
+      {webBuilderMeta && (
+        <div className={`dz-wb-project-card dz-wb-project-card--${webBuilderMeta.type}`}>
+          <div className="dz-wb-project-card-left">
+            <div className="dz-wb-project-icon">{webBuilderMeta.icon}</div>
+            <div className="dz-wb-project-info">
+              <div className="dz-wb-project-title">{webBuilderMeta.title}</div>
+              <div className="dz-wb-project-desc">{webBuilderMeta.description}</div>
+            </div>
+          </div>
+          <div className="dz-wb-project-card-right">
+            <span className="dz-wb-style-badge">{
+              webBuilderMeta.style === 'premium' ? '⭐ احترافي' :
+              webBuilderMeta.style === 'minimal'  ? '🔲 بسيط' :
+              webBuilderMeta.style === 'creative' ? '🎨 إبداعي' :
+              webBuilderMeta.style === 'dark'     ? '🌑 داكن' :
+              '✨ عصري'
+            }</span>
+            <span className="dz-wb-size-badge">{sizeKb} KB</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Top toolbar ── */}
       <div className="dz-wp-toolbar">
         <div className="dz-wp-tabs">
           <button
@@ -730,41 +949,153 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
             className={`dz-wp-tab${view === 'code' ? ' dz-wp-tab--active' : ''}`}
             onClick={() => setView('code')}
           >
-            {'</>'}  الكود
+            {'</>'} الكود
           </button>
         </div>
         <div className="dz-wp-actions">
-          <button className="dz-wp-btn" onClick={handleCopy}>
+          <span className="dz-wp-size">{sizeKb} KB</span>
+          <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'تم النسخ' : 'نسخ الكود'}
+            {copied ? 'تم النسخ ✓' : 'نسخ'}
           </button>
-          <button className="dz-wp-btn dz-wp-btn--dl" onClick={handleDownload}>
-            <Download size={13} /> تحميل .html
+          <button
+            className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleDownloadHtml}
+            title="تحميل ملف HTML واحد"
+          >
+            {downloaded ? <Check size={13} /> : <Download size={13} />}
+            {downloaded ? 'تم ✓' : '.html'}
           </button>
-          <button className="dz-wp-btn dz-wp-btn--fs" onClick={() => setFullscreen(f => !f)} title="ملء الشاشة">
+          <button
+            className={`dz-wp-btn dz-wp-btn--zip${zipped ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleDownloadZip}
+            disabled={zipping}
+            title="تحميل ZIP (HTML + CSS + JS منفصلة)"
+          >
+            {zipping ? '⏳' : zipped ? <Check size={13} /> : '🗜'}
+            {zipping ? 'جارٍ...' : zipped ? 'تم ✓' : 'ZIP'}
+          </button>
+          {onInsertPrompt && (
+            <button
+              className={`dz-wp-btn dz-wp-btn--tpl${showTemplates ? ' dz-wp-btn--active' : ''}`}
+              onClick={() => setShowTemplates(s => !s)}
+              title="إضافة قسم جديد"
+            >
+              🧩 قوالب
+            </button>
+          )}
+          <button
+            className="dz-wp-btn dz-wp-btn--fs"
+            onClick={() => setFullscreen(f => !f)}
+            title={fullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+          >
             {fullscreen ? '⊠' : '⊡'}
           </button>
         </div>
       </div>
 
+      {/* ── Template picker ── */}
+      {showTemplates && onInsertPrompt && (
+        <div className="dz-wp-tpl-bar">
+          <span className="dz-wp-tpl-label">أضف قسماً:</span>
+          {WP_TEMPLATES.map(t => (
+            <button
+              key={t.id}
+              className="dz-wp-tpl-btn"
+              title={t.prompt}
+              onClick={() => {
+                onInsertPrompt(t.prompt)
+                setShowTemplates(false)
+              }}
+            >
+              {t.icon} {t.labelAr}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Viewport selector (only in preview mode) ── */}
+      {view === 'preview' && (
+        <div className="dz-wp-viewport-bar">
+          {WP_VIEWPORTS.map(vp => (
+            <button
+              key={vp.id}
+              className={`dz-wp-vp-btn${viewport === vp.id ? ' dz-wp-vp-btn--active' : ''}`}
+              onClick={() => setViewport(vp.id)}
+              title={vp.label}
+            >
+              {vp.icon} {vp.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Code tab selector (only in code mode) ── */}
+      {view === 'code' && (
+        <div className="dz-wp-codetab-bar">
+          {(['html', 'css', 'js'] as WPCodeTab[]).map(tab => (
+            <button
+              key={tab}
+              className={`dz-wp-codetab${codeTab === tab ? ' dz-wp-codetab--active' : ''}`}
+              onClick={() => setCodeTab(tab)}
+            >
+              {tab === 'html' ? '🌐 HTML' : tab === 'css' ? '🎨 CSS' : '⚡ JS'}
+              {tab === 'css' && cssCode.length > 0 && (
+                <span className="dz-wp-codetab-badge">{Math.round(cssCode.length / 1024 * 10) / 10}k</span>
+              )}
+              {tab === 'js' && jsCode.length > 0 && (
+                <span className="dz-wp-codetab-badge">{Math.round(jsCode.length / 1024 * 10) / 10}k</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Content area ── */}
       {view === 'preview' ? (
         <div className="dz-wp-frame-wrap">
           <div className="dz-wp-browser-bar">
             <span className="dz-wp-dot dz-wp-dot--r" />
             <span className="dz-wp-dot dz-wp-dot--y" />
             <span className="dz-wp-dot dz-wp-dot--g" />
-            <span className="dz-wp-url">dz-agent-website.html</span>
+            <span className="dz-wp-url">dz-agent-site.html</span>
           </div>
-          <iframe
-            srcDoc={htmlCode}
-            className="dz-wp-frame"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            title="Website Preview"
-          />
+          <div className="dz-wp-frame-scroller">
+            <iframe
+              srcDoc={previewSrc}
+              className="dz-wp-frame"
+              style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              title="Website Live Preview"
+            />
+          </div>
         </div>
       ) : (
         <div className="dz-wp-code-wrap">
-          <DZCodeBlock className="language-html">{htmlCode}</DZCodeBlock>
+          {activeCode !== undefined ? (
+            <>
+              <textarea
+                className="dz-wp-editor"
+                value={activeCode}
+                onChange={e => setActiveRaw(e.target.value)}
+                spellCheck={false}
+                dir="ltr"
+                placeholder={`اكتب كود ${codeTab.toUpperCase()} هنا...`}
+              />
+              <div className="dz-wp-editor-bar">
+                <span className="dz-wp-editor-hint">✏️ يمكنك تعديل الكود مباشرة</span>
+                <button
+                  className={`dz-wp-btn dz-wp-btn--apply${editApplied ? ' dz-wp-btn--ok' : ''}`}
+                  onClick={applyEdits}
+                  title="تطبيق التعديلات ومعاينة النتيجة"
+                >
+                  {editApplied ? '✓ تم التطبيق' : '▶ تطبيق ومعاينة'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="dz-wp-empty-tab">لا يوجد كود {codeTab.toUpperCase()} مستخرج</div>
+          )}
         </div>
       )}
 
@@ -780,21 +1111,26 @@ function WebsitePreview({ htmlCode }: { htmlCode: string }) {
 // ===== TYPING EFFECT =====
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('')
-  const indexRef = useRef(0)
+  const indexRef  = useRef(0)
+  // Keep a stable ref to onDone so it never causes the effect to reset
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
 
   useEffect(() => {
     indexRef.current = 0
     setDisplayed('')
+    // Type ~4 chars per tick at 8ms → smooth and fast for any response length
+    const STEP = 4
     const interval = setInterval(() => {
-      indexRef.current++
+      indexRef.current = Math.min(indexRef.current + STEP, text.length)
       setDisplayed(text.slice(0, indexRef.current))
       if (indexRef.current >= text.length) {
         clearInterval(interval)
-        onDone()
+        onDoneRef.current()
       }
-    }, 6)
+    }, 8)
     return () => clearInterval(interval)
-  }, [text, onDone])
+  }, [text]) // ← onDone intentionally omitted: stored in ref above
 
   return <span>{displayed}</span>
 }
@@ -1521,13 +1857,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [renderKey, setRenderKey] = useState(0)
+  const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
+    } catch {
+      return ''
+    }
+  })
+  const [groqKey, setGroqKey] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('dz-agent-groq-key') || ''
     } catch {
       return ''
     }
@@ -1545,6 +1888,15 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
+
+  const saveGroqKey = useCallback(() => {
+    const key = groqKey.trim()
+    if (!key) return
+    try {
+      sessionStorage.setItem('dz-agent-groq-key', key)
+      localStorage.removeItem('dz-agent-groq-key')
+    } catch {}
+  }, [groqKey])
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -2149,12 +2501,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // Helper to perform one DZ Agent fetch attempt
-      const fetchAgentResponse = async () => {
-        const r = await withRetry(async () => {
+      // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
+      const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
+        return await withRetry(async () => {
           const req = await fetch('/api/dz-agent-chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache',
+              'Pragma': 'no-cache',
+            },
+            cache: 'no-store',
             body: JSON.stringify({
               messages: outboundMessages,
               githubToken: githubToken || undefined,
@@ -2167,12 +2524,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const errData = await req.json().catch(() => null)
             throw new Error(errData?.error || `Server error: ${req.status}`)
           }
-          return req
-        }, 1, 1000)
-        return r.json()
+          const parsed = await req.json()
+          if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON response')
+          return parsed as Record<string, unknown>
+        }, 2, 1000)
       }
 
-      // Auto-retry up to 2 times when response content is empty
+      // Auto-retry up to 3 times when response content is empty
       let data: Record<string, unknown> = {}
       let attempts = 0
       while (attempts < 3) {
@@ -2184,7 +2542,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         attempts++
         if (attempts < 3) {
           console.warn('[DZChatBox] Empty response, retrying... attempt', attempts + 1)
-          await new Promise(resolve => setTimeout(resolve, 800))
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 
@@ -2253,28 +2611,44 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'approval',
           pendingAction: data.pendingAction as PendingAction,
         })
+      } else if (data.doctorResults && Array.isArray(data.doctorResults)) {
+        addAssistantMessage({
+          content: (data.content as string) || '🩺 نتائج الأطباء جاهزة',
+          richType: 'text',
+          doctorResults: data.doctorResults as DZMessage['doctorResults'],
+          doctorQuery: data.doctorQuery as string | undefined,
+        })
+      } else if (data.isMap && !data.isDoctorSearch && ((data.mapMeta as Record<string, unknown>)?.gmapsUrl || (typeof data.mapHtml === 'string' && data.mapHtml.length > 100))) {
+        trackFeatureUsage('dz-maps')
+        addAssistantMessage({
+          content: (data.content as string) || '🗺️ الخريطة جاهزة',
+          richType: 'map',
+          mapHtml: data.mapHtml as string,
+          mapMeta: (data.mapMeta as Record<string, unknown>) || {},
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
           content: (data.content as string) || '✅ تم إنشاء موقعك!',
           richType: 'website',
           htmlCode: data.htmlCode as string,
+          cssCode: (data.cssCode as string) || '',
+          jsCode:  (data.jsCode  as string) || '',
+          webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
         })
       } else {
         addAssistantMessage({
           content: (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
           richType: 'text',
           showDevCard: !!data.showDevCard,
+          hasMoreNews: !!data.hasMoreNews,
+          newsQuery: data.newsQuery as string | undefined,
         })
       }
-
-      // Force re-render to ensure UI reflects the new state
-      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       console.error('[DZChatBox] sendMessage error:', err)
       addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
-      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null
@@ -2290,37 +2664,41 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // Auto-retry up to 2 times on empty response
+      // Auto-retry up to 3 times on empty response
       let content = ''
       let attempts = 0
       while (attempts < 3) {
         const res = await fetch('/api/dz-agent-chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache',
+          },
+          cache: 'no-store',
           body: JSON.stringify({
             messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
             githubToken: githubToken || undefined,
           }),
           signal,
         })
+        if (!res.ok) throw new Error(`Server error: ${res.status}`)
         const data = await res.json()
         console.log('[DZChatBox] regenerate response (attempt', attempts + 1, '):', data)
         content = typeof data.content === 'string' ? data.content.trim() : ''
         if (content) break
         attempts++
-        if (attempts < 3) await new Promise(resolve => setTimeout(resolve, 800))
+        if (attempts < 3) await new Promise(resolve => setTimeout(resolve, 1000))
       }
 
       addAssistantMessage({
         content: content || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
         richType: 'text',
       })
-      setRenderKey(prev => prev + 1)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       console.error('[DZChatBox] regenerate error:', err)
       addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
-      setRenderKey(prev => prev + 1)
     } finally {
       setIsLoading(false)
       abortRef.current = null
@@ -2497,6 +2875,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}
+                      {msg.hasMoreNews && msg.newsQuery && (
+                        <button
+                          className="dz-load-more-news-btn"
+                          onClick={() => sendMessage(`عرض المزيد من الأخبار حول: ${msg.newsQuery}`)}
+                        >
+                          📰 عرض المزيد من الأخبار
+                        </button>
+                      )}
                       {msg.showDevCard && <DeveloperCard />}
                       {msg.richType === 'repos' && msg.repos && (
                         <ReposList
@@ -2556,8 +2942,24 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
                       )}
+                      {msg.richType === 'text' && msg.doctorResults && (
+                        <div className="dz-doctor-text-only">
+                          <DoctorResultsCard results={msg.doctorResults} query={msg.doctorQuery} />
+                        </div>
+                      )}
+                      {msg.richType === 'text' && msg.hospitalResults && (
+                        <div className="dz-doctor-text-only">
+                          <HospitalResultsCard results={msg.hospitalResults} query={msg.hospitalQuery} />
+                        </div>
+                      )}
                       {msg.richType === 'website' && msg.htmlCode && (
-                        <WebsitePreview htmlCode={msg.htmlCode} />
+                        <WebsitePreview
+                          htmlCode={msg.htmlCode}
+                          cssCode={msg.cssCode}
+                          jsCode={msg.jsCode}
+                          onInsertPrompt={p => setInput(p)}
+                          webBuilderMeta={msg.webBuilderMeta}
+                        />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog
@@ -2622,8 +3024,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                   </div>
                 </div>
               ) : (
-                <div className="dz-typing-indicator">
-                  <span /><span /><span />
+                <div className="dz-thinking-step">
+                  <span className="dz-thinking-label">راني نخمم أصبر...</span>
+                  <div className="dz-typing-indicator">
+                    <span /><span /><span />
+                  </div>
                 </div>
               )}
             </div>
@@ -2640,6 +3045,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
         )}
         <div className="dz-input-container">
+          <div className="dz-groq-secret-row">
+            <input
+              value={groqKey}
+              onChange={(e) => setGroqKey(e.target.value)}
+              placeholder="أدخل Groq API Key لـ DZ Agent Pro"
+              type="password"
+              className="dz-groq-secret-input"
+            />
+            <button className="dz-groq-secret-btn" onClick={saveGroqKey} disabled={!groqKey.trim()}>
+              حفظ
+            </button>
+          </div>
           <textarea
             ref={textareaRef}
             value={input}

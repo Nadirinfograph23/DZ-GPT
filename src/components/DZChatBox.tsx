@@ -752,7 +752,6 @@ function buildHtmlShellClient(html: string, _css: string, _js: string): string {
 // ── Code Execution Preview Component (Programming Section ONLY) ──────────────
 function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
   const [view, setView] = useState<'output' | 'code'>('output')
-  const [output, setOutput] = useState<string[]>([])
   const [running, setRunning] = useState(false)
   const [hasRun, setHasRun] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -761,7 +760,6 @@ function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
 
   const runCode = useCallback(() => {
     setRunning(true)
-    setOutput([])
     setHasRun(true)
 
     if (lang === 'python') {
@@ -824,11 +822,9 @@ try {
     // Listen for completion
     const handler = (e: MessageEvent) => {
       if (e.data?.type === 'exec-done') {
-        setOutput(e.data.logs || [])
         setRunning(false)
         window.removeEventListener('message', handler)
       } else if (e.data?.type === 'exec-error') {
-        setOutput(prev => [...prev, `❌ ${e.data.error}`])
         setRunning(false)
         window.removeEventListener('message', handler)
       }

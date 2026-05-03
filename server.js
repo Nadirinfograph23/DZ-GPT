@@ -6896,8 +6896,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
           const url = r.url || r.link || ''
           const label = getSourceLabel(url, r.source)
-          const srcLink = url ? `[${label}](${url})` : label
-          return `${idx}. **${r.title || ''}**${dateStr}\n   ${(r.snippet || r.description || '').slice(0, 220)}\n   📰 ${srcLink}`
+          const titleLink = url ? `[${r.title || ''}](${url})` : (r.title || '')
+          return `${idx}. **${titleLink}**${dateStr} — ${label}\n   ${(r.snippet || r.description || '').slice(0, 220)}`
         }
 
         const sections = []

@@ -81,6 +81,15 @@ export function isAlgerianCitizenQuery(query) {
   if (!query) return false
   const q = normalize(query)
 
+  // If the query is clearly about sports/football, skip citizen knowledge
+  const SPORTS_EXCLUSIONS = [
+    'مباراة', 'مباريات', 'كرة القدم', 'كرة', 'دوري', 'بطولة', 'كأس', 'فريق',
+    'هدف', 'أهداف', 'ملعب', 'لاعب', 'مدرب', 'منتخب', 'تصفيات',
+    'football', 'soccer', 'match', 'league', 'score', 'goal',
+  ]
+  const hasSportsContext = SPORTS_EXCLUSIONS.some(sw => q.includes(normalize(sw)))
+  if (hasSportsContext) return false
+
   const CITIZEN_TRIGGERS = [
     // Exam results
     'نتائج', 'نتيجة', 'باك', 'بكالوريا', 'بيام', 'bem', 'bac', 'ابتدائي', 'onec',

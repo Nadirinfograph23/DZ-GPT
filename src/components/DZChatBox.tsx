@@ -1857,7 +1857,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
@@ -2840,7 +2839,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         </div>
       ) : (
       /* Messages */
-      <div className="dz-messages" data-render-key={renderKey}>
+      <div className="dz-messages">
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
             <div className="dz-message-avatar">

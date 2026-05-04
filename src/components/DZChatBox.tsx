@@ -8,7 +8,7 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain, MapPin,
+  Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -177,6 +177,7 @@ interface DZMessage {
   newsQuery?: string
   executionLang?: string
   executionCode?: string
+  webReaderIntent?: 'build' | 'reader' | 'update'
 }
 
 interface ActionLogEntry {
@@ -679,10 +680,33 @@ function CodeAnalysisPanel({
 }
 
 // ===== CODE BLOCK =====
+// ── Web Reader Intent Badge ────────────────────────────────────────────────
+function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' }) {
+  const config = {
+    build:  { icon: <Hammer size={12} />,  label: 'Build Mode',  color: '#22c55e', bg: '#052e16' },
+    reader: { icon: <Monitor size={12} />, label: 'Reader Mode', color: '#38bdf8', bg: '#082f49' },
+    update: { icon: <Layers size={12} />,  label: 'Update Mode', color: '#f59e0b', bg: '#1c1008' },
+  }[intent]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+      color: config.color, background: config.bg, border: `1px solid ${config.color}40`,
+      marginBottom: 6,
+    }}>
+      {config.icon} 🌐 {config.label}
+    </span>
+  )
+}
+
 function DZCodeBlock({ children, className }: { children: React.ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const language = className?.replace('language-', '') || ''
   const codeText = String(children).replace(/\n$/, '')
+  const isHtml = language === 'html' || language === 'htm' ||
+    (codeText.includes('<html') && codeText.includes('</html>'))
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeText)
@@ -690,16 +714,48 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownload = () => {
+    const ext = language || 'txt'
+    const mime = language === 'html' ? 'text/html' : language === 'css' ? 'text/css' :
+      language === 'js' || language === 'javascript' ? 'text/javascript' :
+      language === 'python' || language === 'py' ? 'text/x-python' : 'text/plain'
+    const blob = new Blob([codeText], { type: mime })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a); a.click()
+    document.body.removeChild(a); URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
   return (
     <div className="dz-code-block">
       <div className="dz-code-block-header">
         <span className="dz-code-lang">{language || 'code'}</span>
-        <button className="dz-code-copy-btn" onClick={handleCopy}>
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {isHtml && (
+            <button className="dz-code-copy-btn" onClick={() => setShowPreview(p => !p)} title="معاينة في الإطار">
+              <Monitor size={13} />
+              {showPreview ? 'إخفاء' : 'معاينة'}
+            </button>
+          )}
+          <button className="dz-code-copy-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? <Check size={13} /> : <Download size={13} />}
+            {downloaded ? 'تم' : 'تحميل'}
+          </button>
+          <button className="dz-code-copy-btn" onClick={handleCopy}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </div>
       <pre><code className={className}>{children}</code></pre>
+      {isHtml && showPreview && (
+        <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a3e' }}>
+          <WebsitePreview htmlCode={codeText} />
+        </div>
+      )}
     </div>
   )
 }
@@ -3002,6 +3058,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           cssCode: (data.cssCode as string) || '',
           jsCode:  (data.jsCode  as string) || '',
           webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | undefined,
         })
       } else {
         addAssistantMessage({
@@ -3010,6 +3067,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | undefined,
         })
       }
     } catch (err: unknown) {
@@ -3229,6 +3287,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />
                   ) : (
                     <>
+                      {msg.webReaderIntent && (
+                        <div style={{ marginBottom: 6 }}>
+                          <WebReaderIntentBadge intent={msg.webReaderIntent} />
+                        </div>
+                      )}
                       {msg.content && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}

@@ -2438,6 +2438,13 @@ function stripHtml(html = '') {
 
 function detectEducationIntent(msg = '') {
   const lower = msg.toLowerCase()
+  // ⚡ Sports override: if sports person/team detected → never education
+  if (SPORTS_PERSONS_RE.test(msg) || SPORTS_TEAMS_RE.test(msg)) return false
+  // ⚡ Sports keywords override: "نتائج" + sports context → never education
+  const sportsKw = ['مباراة','مباريات','نتيجة','نتائج','هدف','دوري','كأس','منتخب','لاعب','فريق','ملعب','تصفيات','football','soccer','match','score','league']
+  const hasSportsKw = sportsKw.some(k => lower.includes(k))
+  const hasExamKw   = ['بكالوريا','بيام','امتحان','فرض','بيام','bem','baccalauréat'].some(k => lower.includes(k))
+  if (hasSportsKw && !hasExamKw) return false
   const keywords = [
     'درس','دروس','تمرين','تمارين','حل','حلول','تعلم','اشرح','شرح','مراجعة','اختبار','فرض','واجب','بكالوريا','بيام','ابتدائي','متوسط','ثانوي',
     'math','physics','arabic','french','english','science','history','geography','lesson','exercise','learn','explain','homework','bem','bac',
@@ -3205,21 +3212,116 @@ function isNewspaperHeadlineQuery(msg) {
   return newspaperKw.some(k => lower.includes(k))
 }
 
+// ── Web Reader Mode — URL detection & content extraction ─────────────────────
+const URL_RE = /https?:\/\/[^\s\u0600-\u06FF"'،؟!]+/gi
+
+function extractUrlsFromMessage(msg) {
+  if (!msg) return []
+  return [...msg.matchAll(URL_RE)].map(m => m[0].replace(/[.,;)>\]]+$/, '')).filter(u => {
+    try { new URL(u); return true } catch { return false }
+  })
+}
+
+async function fetchWebContent(url, maxChars = 6000) {
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT-WebReader/1.0)',
+        'Accept': 'text/html,text/plain,*/*',
+        'Accept-Language': 'ar,fr,en',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) return { error: `HTTP ${r.status}`, url }
+    const raw = await r.text()
+
+    // Strip scripts, styles, nav, footer, ads
+    let clean = raw
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+
+    // Extract title
+    const title = (clean.match(/<title[^>]*>([^<]{1,200})<\/title>/i) || [])[1]?.trim() || ''
+
+    // Extract headings
+    const headings = [...clean.matchAll(/<h[1-4][^>]*>([\s\S]{1,150}?)<\/h[1-4]>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim()).filter(h => h.length > 2).slice(0, 15)
+
+    // Extract paragraphs
+    const paragraphs = [...clean.matchAll(/<p[^>]*>([\s\S]{20,1200}?)<\/p>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      .filter(p => p.length > 20).slice(0, 30)
+
+    // Extract code blocks
+    const codeBlocks = [...clean.matchAll(/<(?:pre|code)[^>]*>([\s\S]{10,2000}?)<\/(?:pre|code)>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim()).slice(0, 5)
+
+    // Extract meta description
+    const metaDesc = (clean.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,300})["']/i) || [])[1]?.trim() || ''
+
+    const content = [
+      title ? `## ${title}` : '',
+      metaDesc ? `> ${metaDesc}` : '',
+      headings.length ? '\n### Headings:\n' + headings.map(h => `- ${h}`).join('\n') : '',
+      paragraphs.length ? '\n### Content:\n' + paragraphs.join('\n\n') : '',
+      codeBlocks.length ? '\n### Code:\n' + codeBlocks.map(c => '```\n' + c + '\n```').join('\n') : '',
+    ].filter(Boolean).join('\n')
+
+    return {
+      url,
+      title,
+      content: content.length > maxChars ? content.slice(0, maxChars) + '\n...[مقتطع]' : content,
+      headings,
+      paragraphs: paragraphs.length,
+      hasCodes: codeBlocks.length > 0,
+    }
+  } catch (err) {
+    return { error: err.message, url }
+  }
+}
+
+// ── Web Reader Intent Detector — BUILD / READER / UPDATE ─────────────────────
+function detectWebReaderIntent(msg) {
+  if (!msg) return 'reader'
+  // BUILD: "ابني من هذا الموقع" / "اصنع" / "اعمل" / "أنشئ" / build / create
+  if (/ابني?(?:لي)?|اصنع(?:لي)?|أنش[أئ](?:لي)?|انش[أئ]|اعمل(?:لي)?|أعمل|بني?|صمم|دير|طور|generate|build|create|make|inspired?|استلهم|مستوحى/i.test(msg)) return 'build'
+  // UPDATE: "أضف ميزة" / "عدّل" / "حسّن" / add feature / improve
+  if (/أضف|اضف|اضافه|ميزه|ميزة|عدّل|عدل|حسّن|حسن|طوّر|اضافة|update|modify|improve|add\s+feature|تحديث|تحسين/i.test(msg)) return 'update'
+  // READER: default — analyze, summarize, explain
+  return 'reader'
+}
+
 // ── Deep Query Analyzer — يفهم من/ماذا/متى/أين/كيف/لماذا قبل الإجابة ─────
+// Known sports persons — used to disambiguate "نتائج" from exam results
+const SPORTS_PERSONS_RE = /محرز|مانه|مبابي|بنزيمة|رونالدو|ميسي|نيمار|صلاح|هالاند|زيدان|ماني|بن لمقدم|بن ناصر|هاري|بن راهمة|سليماني|قداف|آيت نور|بن عيسى|بوزوق|بلايلي|بن شريفة|تالسكر|تاليسكا|بنتال|فاران|خيمينيز|شيكي|لمين يمال|بن مبارك|بوفال|Mahrez|Mane|Mbappe|Benzema|Ronaldo|Messi|Neymar|Salah|Haaland|Zidane|Atal|Bennacer|Slimani|Ghoulam|Brahimi|Feghouli|Bounedjah/i
+
+// Sports teams — clubs and national teams
+const SPORTS_TEAMS_RE = /شبيبة بلوزداد|اتحاد الجزائر|مولودية الجزائر|وفاق سطيف|مولودية وهران|نصر حسين داي|اتحاد بسكرة|ريال مدريد|برشلونة|باريس سان جيرمان|مانشستر|ليفربول|باييرن|يوفنتوس|دورتموند|أرسنال|تشيلسي|الهلال|النصر|الأهلي|المنتخب الجزائري|المنتخب الوطني|Real Madrid|Barcelona|PSG|Manchester|Liverpool|Bayern|Juventus|Arsenal|Chelsea|Dortmund/i
+
 function analyzeQuery(msg) {
   if (!msg || msg.trim().length < 2) return null
   const isArabic = /[\u0600-\u06FF]/.test(msg)
   const isFrench = /\b(bonjour|comment|quoi|quel|quelle|est-ce|pourquoi|quand|où|qui|nouvelles|actualité|dernières?)\b/i.test(msg)
   const lang = isArabic ? 'ar' : isFrench ? 'fr' : 'en'
 
+  // ── 0. PRIORITY: Sports person / team detection (beats generic classifiers) ──
+  // Fixes: "آخر نتائج رياض محرز" → sports_news (not education/news)
+  const hasSportsPerson = SPORTS_PERSONS_RE.test(msg)
+  const hasSportsTeam   = SPORTS_TEAMS_RE.test(msg)
+  const hasSportsContext = hasSportsPerson || hasSportsTeam
+
   // ── 1. Question Type Detection ────────────────────────────────────────
   const QT = {
-    news:       /أخبار|خبر|آخر أخبار|آخر|عاجل|حدث|news|latest|breaking|actualité|nouvelles/i,
-    sports:     /مباراة|مباريات|نتيجة|نتائج|هدف|دوري|كأس|منتخب|لاعب|فريق|football|soccer|match|score|league|ليغ|هداف/i,
+    news:       /أخبار|خبر|آخر أخبار|عاجل|حدث|news|latest|breaking|actualité|nouvelles/i,
+    sports:     /مباراة|مباريات|نتيجة|نتائج رياضية|هدف|دوري|كأس|منتخب|لاعب|فريق|football|soccer|match|score|league|ليغ|هداف|تصفيات|الملعب|ركلة|خماسي|سداسي|تشكيلة/i,
     weather:    /طقس|حرارة|مطر|رياح|جو|درجة|weather|température|pluie|ثلج|عاصفة|رطوبة/i,
     price:      /سعر|أسعار|سعر الصرف|دولار|يورو|دينار|price|exchange rate|cours|تحويل|كم يساوي|صرف/i,
     prayer:     /صلاة|أذان|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|prayer|salat/i,
-    education:  /درس|دروس|تمرين|شرح|مادة|بكالوريا|بيام|lesson|exercise|homework|cours|bac|شرح لي|اشرح/i,
+    education:  /درس|دروس|تمرين|شرح|مادة|بكالوريا|بيام|lesson|exercise|homework|bac|شرح لي|اشرح/i,
     code:       /كود|برمجة|كيف أعمل|كيف أكتب|github|api|function|class|error|bug|npm|python|javascript|react|كتابة كود|اكتب لي|اكتب برنامج/i,
     howto:      /كيف|طريقة|خطوات|كيفية|how to|comment faire|étapes|steps|guide|tutorial|ما هي طريقة|علاش|وش كيف/i,
     factual:    /ما هو|ما هي|من هو|من هي|متى|أين|كم|what is|who is|when|where|pourquoi|combien|قداش|شكون|وين|وقتاه/i,
@@ -3229,10 +3331,31 @@ function analyzeQuery(msg) {
   }
 
   let questionType = 'general'
-  for (const [type, re] of Object.entries(QT)) {
-    if (re.test(msg)) { questionType = type; break }
+
+  // PRIORITY 0: URL in message → web_reader mode (beats everything)
+  const _msgUrls = extractUrlsFromMessage(msg)
+  if (_msgUrls.length > 0) {
+    questionType = 'web_reader'
+  } else if (hasSportsContext) {
+    // If sports person/team detected → always sports_news (highest priority)
+    questionType = 'sports_news'
+  } else {
+    for (const [type, re] of Object.entries(QT)) {
+      if (re.test(msg)) { questionType = type; break }
+    }
+    // "آخر / نتائج" + sports keywords → sports_news
+    if (QT.sports.test(msg) && (QT.news.test(msg) || /آخر|أحدث|جديد|latest|recent/i.test(msg))) {
+      questionType = 'sports_news'
+    }
   }
-  if (QT.sports.test(msg) && QT.news.test(msg)) questionType = 'sports_news'
+
+  // Safety: if "نتائج" alone (without explicit exam context) + sports signal → sports_news
+  // Prevents AI from hallucinating "نتائج البكالوريا" for sports queries
+  const hasNatayij = /نتائج|نتيجة/.test(msg)
+  const hasExamContext = /بكالوريا|بيام|شهادة|امتحان|اختبار|فرض|bem|bac\b/.test(msg)
+  if (hasNatayij && !hasExamContext && QT.sports.test(msg)) {
+    questionType = 'sports_news'
+  }
 
   // ── 2. Timeframe Detection ────────────────────────────────────────────
   let timeframe = null
@@ -3243,24 +3366,34 @@ function analyzeQuery(msg) {
 
   // ── 3. Entity Extraction ──────────────────────────────────────────────
   const entities = []
+
+  // Priority: detect known sports person/team names first
+  const sportsPersonMatch = msg.match(SPORTS_PERSONS_RE)
+  const sportsTeamMatch   = msg.match(SPORTS_TEAMS_RE)
+  if (sportsPersonMatch) entities.push(sportsPersonMatch[0])
+  else if (sportsTeamMatch) entities.push(sportsTeamMatch[0])
+
+  // Arabic entity patterns (prep phrases + contextual nouns)
   const arEntityPatterns = [
     /(?:عن|حول|بخصوص|بشأن|لـ|لل|خاص بـ?)\s+([\u0600-\u06FF][\u0600-\u06FF\s]{2,28}?)(?:\s*[؟?!،,]|$)/,
-    /(?:أخبار|خبر|معلومات|تفاصيل|وضع|حال|قصة)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,})*)/,
+    /(?:أخبار|خبر|معلومات|تفاصيل|نتائج|وضع|حال|قصة|مسيرة|إحصائيات)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){0,3})/,
   ]
   for (const re of arEntityPatterns) {
     const m = msg.match(re)
     if (m && m[1]) {
       const candidate = m[1].trim().replace(/[\u061F?!،,\.]+$/, '').replace(/\s+/g, ' ')
-      const genericTerms = ['الجزائر','اليوم','العالم','الأخبار','الرياضة','السياسة']
-      if (candidate.length > 2 && !genericTerms.includes(candidate)) {
+      const genericTerms = new Set(['الجزائر','اليوم','العالم','الأخبار','الرياضة','السياسة','المباريات'])
+      if (candidate.length > 2 && !genericTerms.has(candidate) && !entities.includes(candidate)) {
         entities.push(candidate); break
       }
     }
   }
+
+  // Latin proper names (capitalized sequences)
   const latinEntities = msg.match(/(?<![.!?]\s)\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*/g) || []
   const skipWords = new Set(['The','This','What','When','Who','How','Where','Why','Latest','News','Tell','Are','Does','Did','Can'])
   for (const e of latinEntities) {
-    if (!skipWords.has(e)) entities.push(e)
+    if (!skipWords.has(e) && !entities.includes(e)) entities.push(e)
   }
 
   // ── 4. Main Subject (reuses existing extractor) ───────────────────────
@@ -6127,6 +6260,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let educationalContext = ''
   let weatherPriorityContext = ''
 
+  // ── Web Reader Mode — URL detection ──────────────────────────────────────
+  const _detectedUrls = extractUrlsFromMessage(lastUserMessage)
+  const isWebReaderQuery = _detectedUrls.length > 0
+  let webReaderContext = ''
+
   // ══════════════════════════════════════════════════════════════════════
   // DZ LANGUAGE LAYER V2 — Algerian Darja Understanding System
   // Pipeline: Moderation → Normalization → Intent → Entities → Style
@@ -6239,6 +6377,80 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         role: 'system',
         content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
       })
+    }
+  }
+
+  // ── Web Reader Mode — fetch & extract content from URLs in message ───────
+  const _webReaderIntent = isWebReaderQuery ? detectWebReaderIntent(lastUserMessage) : 'reader'
+  if (isWebReaderQuery && _detectedUrls.length > 0) {
+    console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
+    const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
+    const fetched = results
+      .filter(r => r.status === 'fulfilled' && !r.value.error)
+      .map(r => r.value)
+    const failed = results
+      .filter(r => r.status === 'fulfilled' && r.value.error)
+      .map(r => r.value)
+
+    if (fetched.length > 0) {
+      webReaderContext = fetched.map(f =>
+        `🌐 [${f.title || f.url}](${f.url})\n${f.content}`
+      ).join('\n\n---\n\n')
+      console.log(`[WebReader] Extracted ${fetched.length} pages, total chars: ${webReaderContext.length}`)
+
+      // ── BUILD MODE: route to website builder with extracted content as inspiration ──
+      if (_webReaderIntent === 'build') {
+        console.log('[WebReader:BUILD] Routing to Website Builder with web content as inspiration')
+        const wbMeta = extractWebBuilderMeta(lastUserMessage) || {
+          type: 'landing', style: 'modern', title: 'موقع مستوحى من الرابط',
+          description: 'website inspired by provided URL', icon: '🌐',
+        }
+        const webInspirationBlock = `\n\n════════════════════════════════════════════\nWEB READER INSPIRATION — محتوى الموقع المُقدَّم (استلهم منه فقط — لا تنسخه):\n${webReaderContext.slice(0, 3000)}\n\nINSTRUCTION: Study the design concept, structure and purpose of this page, then BUILD something original and superior inspired by it.\n════════════════════════════════════════════`
+        let _buildHandled = false
+        try {
+          const wbMessages = [
+            { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
+            { role: 'user', content: lastUserMessage },
+          ]
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+          const rawHtml = wbResult.content || ''
+          const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
+          const validation = validateHtmlOutput(htmlCode)
+          _buildHandled = true
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
+          // Return best-effort HTML even if validation fails (partial HTML is better than no HTML)
+          if (htmlCode && htmlCode.length > 100) {
+            return res.status(200).json({
+              content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو استخدم **⬇ تحميل** للحفظ.${!validation.ok ? '\n\n⚠️ ملاحظة: الكود قد يحتاج تعديلاً طفيفاً.' : ''}`,
+              isWebsite: true,
+              htmlCode,
+              cssCode: cssCode || '',
+              jsCode:  jsCode  || '',
+              webBuilderMeta: { ...wbMeta, title: `🌐 ${wbMeta.title}` },
+              webReaderIntent: 'build',
+            })
+          }
+        } catch (err) {
+          console.error('[WebReader:BUILD] Website builder failed:', err.message)
+        }
+        // BUILD was handled (even if failed) — skip normal website builder below
+        if (_buildHandled) {
+          return res.status(200).json({
+            content: `⚠️ لم أتمكن من توليد موقع من الرابط. يمكنك وصف التصميم المطلوب بشكل أكثر تفصيلاً.`,
+            webReaderIntent: 'build',
+          })
+        }
+      }
+
+      // ── UPDATE MODE: inject update instruction into system prompt ──────────
+      if (_webReaderIntent === 'update') {
+        webReaderContext = `[UPDATE MODE] المستخدم يريد إضافة ميزة أو تحسين:\n${webReaderContext}`
+      }
+    }
+
+    if (failed.length > 0 && fetched.length === 0) {
+      webReaderContext = `⚠️ لم يتمكن DZ Agent من قراءة الصفحة: ${failed.map(f => `${f.url} (${f.error})`).join(', ')}`
     }
   }
 
@@ -6422,7 +6634,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
-  if (detectWebsiteBuilderQuery(lastUserMessage)) {
+  // Guard: skip if this was already handled as a Web Reader BUILD mode query
+  if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
     console.log(`[Website Builder v6] Detected: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
@@ -7345,12 +7558,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
   const _qType = queryAnalysis?.questionType || 'general'
-  const _isCode    = ['code'].includes(_qType) || !!githubToken
-  const _isEdu     = _qType === 'education'
-  const _isSports  = ['sports', 'sports_news'].includes(_qType)
-  const _isNews    = ['news', 'sports_news'].includes(_qType)
-  const _isAdmin   = ['admin', 'howto'].includes(_qType)
-  const _isWeather = _qType === 'weather'
+  const _isCode      = ['code'].includes(_qType) || !!githubToken
+  const _isEdu       = _qType === 'education'
+  const _isSports    = ['sports', 'sports_news'].includes(_qType)
+  const _isNews      = ['news', 'sports_news'].includes(_qType)
+  const _isAdmin     = ['admin', 'howto'].includes(_qType)
+  const _isWeather   = _qType === 'weather'
+  const _isWebReader = _qType === 'web_reader' || isWebReaderQuery
 
   // Compress + trim contexts to prevent TPM exhaustion (Groq free tier limits)
   // GN article URLs can be 400-600 chars each — strip to save tokens
@@ -7384,7 +7598,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ].join('\n') : '',
 
     // ── SPORTS MODULE (sports / sports_news only) ─────────────────────────
-    _isSports ? `⚽ SPORTS: لا تخترع نتائج المباريات أبداً. تنسيق: 🔴 LIVE · ✅ نتيجة · 📅 قادم. إذا لم تتوفر بيانات → وجّه إلى sofascore.com أو flashscore.com.` : '',
+    _isSports ? [
+      `⚽ SPORTS: لا تخترع نتائج المباريات أبداً. تنسيق: 🔴 LIVE · ✅ نتيجة · 📅 قادم. إذا لم تتوفر بيانات → وجّه إلى sofascore.com أو flashscore.com.`,
+      `⚠️ DISAMBIGUATION CRITIQUE: "نتائج" + اسم لاعب أو فريق = **نتائج رياضية** (مباريات / إحصائيات / أهداف). ليست نتائج امتحانات أو بكالوريا. لا تذكر ONEC أو البكالوريا أبداً في هذا السياق.`,
+      `⚠️ DISAMBIGUATION: "آخر نتائج رياض محرز" = آخر مباريات ومعلومات اللاعب رياض محرز. ليس نتائج بكالوريا.`,
+    ].join('\n') : '',
 
     // ── EDUCATION MODE (education queries only) ───────────────────────────
     _isEdu ? `📚 EDUCATION: حدّد المادة والمستوى (ابتدائي/متوسط/ثانوي/بكالوريا). ابحث أولاً في eddirasa.com. للتمارين: فهم → موضوع → حل خطوة بخطوة → شرح مبسط. للشرح: ملخص + أمثلة + 3 تمارين + اختبار صغير.` : '',
@@ -7404,7 +7622,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── WEATHER RULE (weather queries only) ──────────────────────────────
     _isWeather ? `🌤️ WEATHER: استخدم فقط البيانات المسترجعة (open-meteo / wttr.in / openweather). لا تخمّن أي قيمة. اذكر المصدر دائماً.` : '',
 
+    // ── WEB READER MODULE (activated when URL detected in message) ────────
+    _isWebReader ? [
+      `🌐 WEB READER MODE: المستخدم أرسل رابطاً. لقد قرأت محتواه وأرسلته إليك في "محتوى الموقع" أدناه.`,
+      `أجب بهذا الهيكل الإلزامي:`,
+      `### 🌐 تحليل المصدر\n(ما هو هذا الموقع/الصفحة)`,
+      `### 🧠 المعلومات الرئيسية\n- نقطة 1\n- نقطة 2`,
+      `### 📊 التفاصيل المستخرجة\n(أرقام / بيانات / كود مهم)`,
+      `### 💡 تحليل ذكي\n(تفسيرك كوكيل خبير)`,
+      `### ✅ الإجابة النهائية\n(الإجابة المباشرة على سؤال المستخدم)`,
+      `قواعد صارمة: ❌ لا تخترع معلومات غير موجودة في الصفحة | ✅ استند فقط للمحتوى المستخرج | إذا لم يُقرأ الموقع → أخبر المستخدم صراحةً`,
+      `إذا طلب المستخدم "ابني من هذا الموقع" → استخرج الفكرة واقترح خطة تنفيذ + كود.`,
+    ].join('\n') : '',
+
     // ── LIVE DATA BLOCKS (conditional, trimmed) ───────────────────────────
+    webReaderContext ? `🌐 محتوى الموقع (مُستخرج تلقائياً):\n${_trim(webReaderContext, 5000)}\n> أجب بناءً على هذا المحتوى فقط.` : '',
     prayerContext    ? `🕌 مواقيت الصلاة (aladhan.com):\n${_trim(prayerContext, 800)}\n> اعرض في جدول. لا تخمّن.` : '',
     lfpContext       ? `🏆 LFP (lfp.dz):\n${_trim(lfpContext, 1500)}\n> لا تختلق نتائج.` : '',
     footballContext  ? `⚽ كرة القدم:\n${_trim(footballContext, 1500)}\n> لا تخترع نتائج.` : '',
@@ -7438,6 +7670,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       fallbackModel: aiResult.model,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
+      webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
     })
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)

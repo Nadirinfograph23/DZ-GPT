@@ -36,10 +36,10 @@ function scoreEntry(entry, query) {
       // Longer keyword match = higher confidence
       score += nkw.split(' ').length * 10
     } else {
-      // Partial word overlap
+      // Partial word overlap — only words ≥4 chars to avoid false positives
       const kwWords = nkw.split(' ')
       for (const word of kwWords) {
-        if (word.length >= 3 && q.includes(word)) {
+        if (word.length >= 4 && q.includes(word)) {
           score += 3
         }
       }
@@ -48,6 +48,15 @@ function scoreEntry(entry, query) {
 
   return score
 }
+
+// ── Sports person / team names — never route to citizen knowledge ──────────
+const SPORTS_PERSONS_NORM = normalize(
+  'محرز مانه مبابي بنزيمة رونالدو ميسي نيمار صلاح هالاند زيدان ماني بن لمقدم بن ناصر سليماني قداف آيت نور بن عيسى بوزوق بلايلي بن شريفة بوفال لمين يمال mahrez mane mbappe benzema ronaldo messi neymar salah haaland zidane atal bennacer slimani ghoulam brahimi feghouli bounedjah'
+).split(' ')
+
+const SPORTS_TEAMS_NORM = normalize(
+  'شبيبة بلوزداد اتحاد الجزائر مولودية وفاق سطيف نصر حسين داي ريال مدريد برشلونة باريس سان جيرمان مانشستر ليفربول باييرن يوفنتوس دورتموند ارسنال تشيلسي الهلال النصر الاهلي real madrid barcelona psg manchester liverpool bayern juventus arsenal chelsea dortmund'
+).split(' ').filter(w => w.length >= 4)
 
 /**
  * Search the Algeria knowledge base.
@@ -81,16 +90,22 @@ export function isAlgerianCitizenQuery(query) {
   if (!query) return false
   const q = normalize(query)
 
-  // If the query is clearly about sports/football, skip citizen knowledge
+  // ── PRIORITY 1: Sports person name → never citizen knowledge ─────────────
+  // Fixes: "آخر نتائج رياض محرز" → should NOT trigger ONEC/BAC response
+  const hasSportsPerson = SPORTS_PERSONS_NORM.some(name => name.length >= 4 && q.includes(name))
+  const hasSportsTeam   = SPORTS_TEAMS_NORM.some(team => team.length >= 4 && q.includes(team))
+  if (hasSportsPerson || hasSportsTeam) return false
+
+  // ── PRIORITY 2: Generic sports / football keywords → skip citizen knowledge
   const SPORTS_EXCLUSIONS = [
     'مباراة', 'مباريات', 'كرة القدم', 'كرة', 'دوري', 'بطولة', 'كأس', 'فريق',
-    'هدف', 'أهداف', 'ملعب', 'لاعب', 'مدرب', 'منتخب', 'تصفيات',
+    'هدف', 'أهداف', 'ملعب', 'لاعب', 'مدرب', 'منتخب', 'تصفيات', 'رياضة',
     'football', 'soccer', 'match', 'league', 'score', 'goal',
   ]
   const hasSportsContext = SPORTS_EXCLUSIONS.some(sw => q.includes(normalize(sw)))
   if (hasSportsContext) return false
 
-  // If the query is about news/newspapers/headlines, skip citizen knowledge
+  // ── PRIORITY 3: News / press queries → skip citizen knowledge ────────────
   const NEWS_EXCLUSIONS = [
     'صحف', 'صحيفة', 'عناوين', 'جرائد', 'أخبار', 'خبر', 'عاجل',
     'newspaper', 'headlines', 'press', 'news',
@@ -98,9 +113,18 @@ export function isAlgerianCitizenQuery(query) {
   const hasNewsContext = NEWS_EXCLUSIONS.some(nw => q.includes(normalize(nw)))
   if (hasNewsContext) return false
 
+  // ── PRIORITY 4: "نتائج" alone is NOT enough — needs exam context ──────────
+  // "آخر نتائج رياض محرز" = sports results, NOT exam results
+  // Only trigger if "نتائج" appears WITH exam-specific terms
+  const hasNatayij  = q.includes('نتايج') || q.includes('نتيجه')
+  const hasExamTerm = ['بكالوريا', 'باك', 'بيام', 'bem', 'bac', 'ابتدايي', 'خامسه ابتدايي',
+                        'متوسط', 'ثانوي', 'امتحان', 'اونيك', 'onec'].some(t => q.includes(normalize(t)))
+  if (hasNatayij && !hasExamTerm) return false
+
   const CITIZEN_TRIGGERS = [
-    // Exam results
-    'نتائج', 'نتيجة', 'باك', 'بكالوريا', 'بيام', 'bem', 'bac', 'ابتدائي', 'onec',
+    // Exam results — only with explicit exam context (handled above for bare "نتائج")
+    'نتائج البكالوريا', 'نتائج الباك', 'نتائج البيام', 'نتائج bem', 'نتائج الابتدائي',
+    'باك', 'بكالوريا', 'بيام', 'bem', 'bac', 'ابتدائي', 'onec',
     // Docs
     'جواز سفر', 'بطاقة تعريف', 'شهادة ميلاد', 'شهادة اقامه', 'سوابق',
     // Housing

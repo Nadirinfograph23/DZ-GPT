@@ -1661,6 +1661,28 @@ function getRecencyScore(dateStr) {
   } catch { return 0 }
 }
 
+// ── Hard freshness filter: drop items older than maxAgeDays ──────────────────
+// Items with no parseable date are kept (we cannot determine their age).
+function filterFreshItems(items, maxAgeDays = 60) {
+  const cutoffMs = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000
+  return items.filter(item => {
+    const dateStr = item.pubDate || item.date || item.publishedDate || ''
+    if (!dateStr) return true
+    const ts = new Date(dateStr).getTime()
+    if (isNaN(ts)) return true
+    return ts >= cutoffMs
+  })
+}
+
+// ── Build a Google News RSS URL with an `after:` date restriction ─────────────
+// maxAgeDays controls how far back to go (default: 30 days for news queries)
+function buildFreshGNRssUrl(query, lang = 'ar', maxAgeDays = 30) {
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+  const afterStr = cutoff.toISOString().split('T')[0] // YYYY-MM-DD
+  const hl = lang === 'ar' ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' after:' + afterStr)}&hl=${hl}`
+}
+
 function getRelevanceScore(result, query) {
   const q = query.toLowerCase()
   const words = q.split(/\s+/).filter(w => w.length > 2)
@@ -1764,6 +1786,102 @@ function detectWebsiteBuilderQuery(msg) {
 
   return false
 }
+
+// ── Code Execution Mode Detection (Programming Section ONLY) ─────────────────
+function detectCodeExecutionQuery(msg) {
+  const lower = msg.toLowerCase()
+
+  // Strong programming signals — if ANY of these exist, it's definitely code
+  const hasLangKw = /(?:python|javascript|js\b|typescript|ts\b|react|node|html|css|php|java\b|c\+\+|c#|rust|go\b|sql|bash|shell|بايثون|جافاسكريبت)/i.test(lower)
+  const hasCodeKw = /(?:كود|دالة|function|class|سكريبت|script|برنامج|program|algorithm|خوارزمية|مصفوفة|array|loop|حلقة|متغير|variable|API|json|regex)/i.test(lower)
+
+  // If no programming language AND no code keyword → not a code query
+  if (!hasLangKw && !hasCodeKw) return null
+
+  // Non-code contexts: only block if there are NO programming indicators
+  const nonCodeContexts = ['خريطة','طبيب','صيدلية','مسجد','صحف','صلاة','قرآن']
+  if (nonCodeContexts.some(k => lower.includes(k)) && !hasLangKw) return null
+
+  // Execution keywords: user wants code to be generated/run
+  const execVerbs = [
+    'اكتب كود','اكتب دالة','اكتب سكريبت','اكتب برنامج','اكتب تطبيق',
+    'أنشئ كود','أنشئ دالة','أنشئ سكريبت','أنشئ برنامج',
+    'نفذ','شغل','اعمل كود','اعمل دالة','اعمل برنامج',
+    'اصنع كود','اصنع برنامج','اصنع سكريبت',
+    'دير كود','دير دالة','دير برنامج','دير سكريبت',
+    'write code','write function','write script','write program',
+    'create code','create function','create script','create program',
+    'build code','build function','build script','build program',
+    'run code','execute code','make code','make function','make program',
+    'écris un code','créer un programme','écrire une fonction',
+    'اكتب لي','اكتب لي كود','اكتب لي دالة','اكتب لي برنامج',
+    'اعملي كود','اعملي دالة','اعملي برنامج',
+  ]
+  if (execVerbs.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  // Pattern: coding verb + language keyword
+  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute)\s/i
+  if (codingVerb.test(msg) && hasLangKw) {
+    return detectExecLanguage(lower)
+  }
+
+  // Direct code-related commands
+  const directCode = [
+    'كود python','كود javascript','كود js','كود html',
+    'دالة python','دالة javascript','دالة js',
+    'سكريبت python','سكريبت javascript','سكريبت bash',
+    'python code','javascript code','js code',
+    'python function','javascript function',
+    'python script','javascript script','bash script',
+  ]
+  if (directCode.some(k => lower.includes(k))) {
+    return detectExecLanguage(lower)
+  }
+
+  return null
+}
+
+function detectExecLanguage(lower) {
+  if (/python|بايثون|\.py\b/i.test(lower)) return 'python'
+  if (/javascript|js\b|node|جافاسكريبت/i.test(lower)) return 'javascript'
+  if (/typescript|ts\b/i.test(lower)) return 'javascript'
+  if (/html|css|واجهة/i.test(lower)) return 'html'
+  if (/bash|shell|terminal|سكريبت/i.test(lower)) return 'javascript' // fallback to JS
+  if (/react|vue|angular|svelte/i.test(lower)) return 'html'
+  if (/php|java\b|c\+\+|c#|rust|go\b|sql/i.test(lower)) return 'python' // show code, no exec
+  return 'python' // default
+}
+
+const CODE_EXECUTION_SYSTEM_PROMPT = `You are DZ Agent in CODE EXECUTION MODE.
+Your job: generate COMPLETE, RUNNABLE code that works immediately.
+
+RULES:
+1. Output ONLY code — no explanations before or after the code block
+2. Code must be COMPLETE and SELF-CONTAINED — include all imports, dependencies, sample data
+3. Code must WORK when executed directly — no placeholders, no "TODO", no "..." ellipsis
+4. After the code block, add a brief explanation in Arabic (2-3 lines max)
+
+OUTPUT FORMAT — you MUST follow this exactly:
+\`\`\`[language]
+// complete runnable code here
+\`\`\`
+
+**شرح:** وصف مختصر بالعربية لما يفعله الكود
+
+LANGUAGE-SPECIFIC RULES:
+- Python: use print() for output, include sample data, no external APIs unless explicitly asked
+- JavaScript: use console.log() for output, include sample data, write modern ES6+
+- HTML: generate a complete HTML file with embedded CSS and JS, make it visually appealing
+
+FORBIDDEN:
+- ❌ No markdown before the code block
+- ❌ No "هنا الكود" or similar preambles
+- ❌ No incomplete code
+- ❌ No placeholder values like [your_api_key] or TODO
+- ❌ No input() in Python (use hardcoded sample data instead)
+`
 
 // ── Website Builder: extract project metadata from user request ───────────────
 function extractWebBuilderMeta(msg) {
@@ -2273,8 +2391,8 @@ function buildOptimizedQueries(query, intent) {
   const cseQuery  = `${query} ${suffix}`
 
   const rssLang = isArabic ? 'ar' : 'en'
-  const rssHL   = isArabic ? 'ar&gl=DZ&ceid=DZ:ar' : 'en&gl=US&ceid=US:en'
-  const rssQuery = `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' ' + year)}&hl=${rssHL}`
+  // Always restrict to the last 30 days using the `after:` operator
+  const rssQuery = buildFreshGNRssUrl(query, rssLang, 30)
 
   const enMap = { sports: 'sport football match result', economy: 'economy finance', politics: 'politics government', tech: 'technology AI', news: 'news', celebrities: 'celebrity news', incidents: 'incident breaking news', general: '' }
   const enSuffix = enMap[intent.primary] || ''
@@ -2320,6 +2438,13 @@ function stripHtml(html = '') {
 
 function detectEducationIntent(msg = '') {
   const lower = msg.toLowerCase()
+  // ⚡ Sports override: if sports person/team detected → never education
+  if (SPORTS_PERSONS_RE.test(msg) || SPORTS_TEAMS_RE.test(msg)) return false
+  // ⚡ Sports keywords override: "نتائج" + sports context → never education
+  const sportsKw = ['مباراة','مباريات','نتيجة','نتائج','هدف','دوري','كأس','منتخب','لاعب','فريق','ملعب','تصفيات','football','soccer','match','score','league']
+  const hasSportsKw = sportsKw.some(k => lower.includes(k))
+  const hasExamKw   = ['بكالوريا','بيام','امتحان','فرض','بيام','bem','baccalauréat'].some(k => lower.includes(k))
+  if (hasSportsKw && !hasExamKw) return false
   const keywords = [
     'درس','دروس','تمرين','تمارين','حل','حلول','تعلم','اشرح','شرح','مراجعة','اختبار','فرض','واجب','بكالوريا','بيام','ابتدائي','متوسط','ثانوي',
     'math','physics','arabic','french','english','science','history','geography','lesson','exercise','learn','explain','homework','bem','bac',
@@ -2588,13 +2713,19 @@ async function searchGoogleNewsRSS(rssUrl) {
     if (!r.ok) return []
     const xml = await r.text()
     const items = parseRSS(xml, 'Google News RSS')
-    return items.slice(0, 12).map(item => ({
+    const mapped = items.slice(0, 20).map(item => ({
       source: item.source || 'Google News',
       title: item.title || '',
       snippet: item.description || '',
       url: item.link || '',
       date: item.pubDate || '',
     }))
+    // Hard freshness filter: discard articles older than 60 days
+    const fresh = filterFreshItems(mapped, 60)
+    if (mapped.length > 0 && fresh.length < mapped.length) {
+      console.log(`[GN-RSS] Dropped ${mapped.length - fresh.length} stale articles (> 60 days)`)
+    }
+    return fresh.slice(0, 12)
   } catch (err) { console.warn('[GN-RSS Search] Error:', err.message); return [] }
 }
 
@@ -3025,27 +3156,326 @@ function detectNewsQuery(msg) {
   return null
 }
 
+// ── Extract the specific subject/entity from a news query ─────────────────────
+// e.g. "آخر الأخبار عن رياض محرز" → "رياض محرز"
+//      "news about Mahrez" → "Mahrez"
+//      "أخبار الجزائر" → null (generic, not a specific subject)
+function extractNewsSubject(msg) {
+  if (!msg) return null
+  let s = msg.trim()
+
+  // Strip Arabic preposition patterns (order matters: longest first)
+  const arPrefixes = [
+    /^(ما هي |ما هو |ما |هل )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل|الخاصة ب|المتعلقة ب)\s+/i,
+    /^(أعطني |اعطني |اريد |أريد |أخبرني عن |قدم لي |قدملي )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل)\s+/i,
+    /^(ما آخر|ما أخبار|آخر) أخبار\s+/i,
+    /^أخبار\s+/i,
+    /^(اريد |أريد )أخبار\s+/i,
+  ]
+  // Strip English preposition patterns
+  const enPrefixes = [
+    /^(what('s| is| are) the )?(latest|recent|last|breaking) news (about|on|regarding|of)\s+/i,
+    /^news (about|on|regarding|of)\s+/i,
+    /^(tell me )?(about|latest about)\s+/i,
+  ]
+  // Strip French preposition patterns
+  const frPrefixes = [
+    /^(quelles sont les )?(dernières nouvelles|actualités|nouvelles) (sur|de|à propos de|concernant)\s+/i,
+    /^(nouvelles|actualités) (sur|de)\s+/i,
+  ]
+
+  for (const re of [...arPrefixes, ...enPrefixes, ...frPrefixes]) {
+    const m = s.match(re)
+    if (m) { s = s.slice(m[0].length).trim(); break }
+  }
+
+  // If nothing was stripped, the subject is ambiguous — don't return it
+  if (s.toLowerCase() === msg.trim().toLowerCase()) return null
+
+  // Strip trailing punctuation / question marks
+  s = s.replace(/[\u061F?!،,\.]+$/, '').trim()
+
+  // Ignore very short (1 char) or very generic terms
+  if (!s || s.length < 2) return null
+  const genericTerms = [
+    'الجزائر','algeria','algérie','الاقتصاد','السياسة','الرياضة','اليوم','العالم',
+    'economy','politics','sport','world','today','الأخبار','news',
+  ]
+  if (genericTerms.some(g => s.toLowerCase() === g.toLowerCase())) return null
+
+  return s
+}
+
 function isNewspaperHeadlineQuery(msg) {
   const lower = msg.toLowerCase()
   const newspaperKw = ['صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse']
   return newspaperKw.some(k => lower.includes(k))
 }
 
-function buildRSSContext(feedResults, queryType) {
+// ── Web Reader Mode — URL detection & content extraction ─────────────────────
+const URL_RE = /https?:\/\/[^\s\u0600-\u06FF"'،؟!]+/gi
+
+function extractUrlsFromMessage(msg) {
+  if (!msg) return []
+  return [...msg.matchAll(URL_RE)].map(m => m[0].replace(/[.,;)>\]]+$/, '')).filter(u => {
+    try { new URL(u); return true } catch { return false }
+  })
+}
+
+async function fetchWebContent(url, maxChars = 6000) {
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT-WebReader/1.0)',
+        'Accept': 'text/html,text/plain,*/*',
+        'Accept-Language': 'ar,fr,en',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) return { error: `HTTP ${r.status}`, url }
+    const raw = await r.text()
+
+    // Strip scripts, styles, nav, footer, ads
+    let clean = raw
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+
+    // Extract title
+    const title = (clean.match(/<title[^>]*>([^<]{1,200})<\/title>/i) || [])[1]?.trim() || ''
+
+    // Extract headings
+    const headings = [...clean.matchAll(/<h[1-4][^>]*>([\s\S]{1,150}?)<\/h[1-4]>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim()).filter(h => h.length > 2).slice(0, 15)
+
+    // Extract paragraphs
+    const paragraphs = [...clean.matchAll(/<p[^>]*>([\s\S]{20,1200}?)<\/p>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      .filter(p => p.length > 20).slice(0, 30)
+
+    // Extract code blocks
+    const codeBlocks = [...clean.matchAll(/<(?:pre|code)[^>]*>([\s\S]{10,2000}?)<\/(?:pre|code)>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim()).slice(0, 5)
+
+    // Extract meta description
+    const metaDesc = (clean.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,300})["']/i) || [])[1]?.trim() || ''
+
+    const content = [
+      title ? `## ${title}` : '',
+      metaDesc ? `> ${metaDesc}` : '',
+      headings.length ? '\n### Headings:\n' + headings.map(h => `- ${h}`).join('\n') : '',
+      paragraphs.length ? '\n### Content:\n' + paragraphs.join('\n\n') : '',
+      codeBlocks.length ? '\n### Code:\n' + codeBlocks.map(c => '```\n' + c + '\n```').join('\n') : '',
+    ].filter(Boolean).join('\n')
+
+    return {
+      url,
+      title,
+      content: content.length > maxChars ? content.slice(0, maxChars) + '\n...[مقتطع]' : content,
+      headings,
+      paragraphs: paragraphs.length,
+      hasCodes: codeBlocks.length > 0,
+    }
+  } catch (err) {
+    return { error: err.message, url }
+  }
+}
+
+// ── Web Reader Intent Detector — BUILD / READER / UPDATE ─────────────────────
+function detectWebReaderIntent(msg) {
+  if (!msg) return 'reader'
+  // BUILD: "ابني من هذا الموقع" / "اصنع" / "اعمل" / "أنشئ" / build / create
+  if (/ابني?(?:لي)?|اصنع(?:لي)?|أنش[أئ](?:لي)?|انش[أئ]|اعمل(?:لي)?|أعمل|بني?|صمم|دير|طور|generate|build|create|make|inspired?|استلهم|مستوحى/i.test(msg)) return 'build'
+  // UPDATE: "أضف ميزة" / "عدّل" / "حسّن" / add feature / improve
+  if (/أضف|اضف|اضافه|ميزه|ميزة|عدّل|عدل|حسّن|حسن|طوّر|اضافة|update|modify|improve|add\s+feature|تحديث|تحسين/i.test(msg)) return 'update'
+  // READER: default — analyze, summarize, explain
+  return 'reader'
+}
+
+// ── Deep Query Analyzer — يفهم من/ماذا/متى/أين/كيف/لماذا قبل الإجابة ─────
+// Known sports persons — used to disambiguate "نتائج" from exam results
+const SPORTS_PERSONS_RE = /محرز|مانه|مبابي|بنزيمة|رونالدو|ميسي|نيمار|صلاح|هالاند|زيدان|ماني|بن لمقدم|بن ناصر|هاري|بن راهمة|سليماني|قداف|آيت نور|بن عيسى|بوزوق|بلايلي|بن شريفة|تالسكر|تاليسكا|بنتال|فاران|خيمينيز|شيكي|لمين يمال|بن مبارك|بوفال|Mahrez|Mane|Mbappe|Benzema|Ronaldo|Messi|Neymar|Salah|Haaland|Zidane|Atal|Bennacer|Slimani|Ghoulam|Brahimi|Feghouli|Bounedjah/i
+
+// Sports teams — clubs and national teams
+const SPORTS_TEAMS_RE = /شبيبة بلوزداد|اتحاد الجزائر|مولودية الجزائر|وفاق سطيف|مولودية وهران|نصر حسين داي|اتحاد بسكرة|ريال مدريد|برشلونة|باريس سان جيرمان|مانشستر|ليفربول|باييرن|يوفنتوس|دورتموند|أرسنال|تشيلسي|الهلال|النصر|الأهلي|المنتخب الجزائري|المنتخب الوطني|Real Madrid|Barcelona|PSG|Manchester|Liverpool|Bayern|Juventus|Arsenal|Chelsea|Dortmund/i
+
+function analyzeQuery(msg) {
+  if (!msg || msg.trim().length < 2) return null
+  const isArabic = /[\u0600-\u06FF]/.test(msg)
+  const isFrench = /\b(bonjour|comment|quoi|quel|quelle|est-ce|pourquoi|quand|où|qui|nouvelles|actualité|dernières?)\b/i.test(msg)
+  const lang = isArabic ? 'ar' : isFrench ? 'fr' : 'en'
+
+  // ── 0. PRIORITY: Sports person / team detection (beats generic classifiers) ──
+  // Fixes: "آخر نتائج رياض محرز" → sports_news (not education/news)
+  const hasSportsPerson = SPORTS_PERSONS_RE.test(msg)
+  const hasSportsTeam   = SPORTS_TEAMS_RE.test(msg)
+  const hasSportsContext = hasSportsPerson || hasSportsTeam
+
+  // ── 1. Question Type Detection ────────────────────────────────────────
+  const QT = {
+    news:       /أخبار|خبر|آخر أخبار|عاجل|حدث|news|latest|breaking|actualité|nouvelles/i,
+    sports:     /مباراة|مباريات|نتيجة|نتائج رياضية|هدف|دوري|كأس|منتخب|لاعب|فريق|football|soccer|match|score|league|ليغ|هداف|تصفيات|الملعب|ركلة|خماسي|سداسي|تشكيلة/i,
+    weather:    /طقس|حرارة|مطر|رياح|جو|درجة|weather|température|pluie|ثلج|عاصفة|رطوبة/i,
+    price:      /سعر|أسعار|سعر الصرف|دولار|يورو|دينار|price|exchange rate|cours|تحويل|كم يساوي|صرف/i,
+    prayer:     /صلاة|أذان|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|prayer|salat/i,
+    education:  /درس|دروس|تمرين|شرح|مادة|بكالوريا|بيام|lesson|exercise|homework|bac|شرح لي|اشرح/i,
+    code:       /كود|برمجة|كيف أعمل|كيف أكتب|github|api|function|class|error|bug|npm|python|javascript|react|كتابة كود|اكتب لي|اكتب برنامج/i,
+    howto:      /كيف|طريقة|خطوات|كيفية|how to|comment faire|étapes|steps|guide|tutorial|ما هي طريقة|علاش|وش كيف/i,
+    factual:    /ما هو|ما هي|من هو|من هي|متى|أين|كم|what is|who is|when|where|pourquoi|combien|قداش|شكون|وين|وقتاه/i,
+    location:   /خريطة|عنوان|أين|مكان|مطعم|محطة|فندق|مستشفى|map|location|restaurant|hospital|hotel|adresse|ولاية|بلدية/i,
+    comparison: /مقارنة|الفرق بين|أيهما أفضل|vs|versus|compare|différence|مقابل|أحسن|والو فالفرق/i,
+    admin:      /وثيقة|بطاقة|جواز|رخصة|شهادة|استخراج|سجل|تسجيل|إجراء|passeport|permis|document|carte|إدارة|بلدية|وثائق/i,
+  }
+
+  let questionType = 'general'
+
+  // PRIORITY 0: URL in message → web_reader mode (beats everything)
+  const _msgUrls = extractUrlsFromMessage(msg)
+  if (_msgUrls.length > 0) {
+    questionType = 'web_reader'
+  } else if (hasSportsContext) {
+    // If sports person/team detected → always sports_news (highest priority)
+    questionType = 'sports_news'
+  } else {
+    for (const [type, re] of Object.entries(QT)) {
+      if (re.test(msg)) { questionType = type; break }
+    }
+    // "آخر / نتائج" + sports keywords → sports_news
+    if (QT.sports.test(msg) && (QT.news.test(msg) || /آخر|أحدث|جديد|latest|recent/i.test(msg))) {
+      questionType = 'sports_news'
+    }
+  }
+
+  // Safety: if "نتائج" alone (without explicit exam context) + sports signal → sports_news
+  // Prevents AI from hallucinating "نتائج البكالوريا" for sports queries
+  const hasNatayij = /نتائج|نتيجة/.test(msg)
+  const hasExamContext = /بكالوريا|بيام|شهادة|امتحان|اختبار|فرض|bem|bac\b/.test(msg)
+  if (hasNatayij && !hasExamContext && QT.sports.test(msg)) {
+    questionType = 'sports_news'
+  }
+
+  // ── 2. Timeframe Detection ────────────────────────────────────────────
+  let timeframe = null
+  if (/الآن|مباشر|live|en direct|right now|حالياً|هاذ الوقت/i.test(msg)) timeframe = 'live'
+  else if (/اليوم|هذا الصباح|الليلة|today|aujourd'hui|ce soir|ليوم|النهار/i.test(msg)) timeframe = 'today'
+  else if (/هذا الأسبوع|آخر|حديث|أخير|this week|recent|derniers?|هاذ الجمعة/i.test(msg)) timeframe = 'recent'
+  else if (/\b(20[0-2][0-9])\b/.test(msg) || /تاريخ|قديم|سابق|منذ|historical|depuis/i.test(msg)) timeframe = 'historical'
+
+  // ── 3. Entity Extraction ──────────────────────────────────────────────
+  const entities = []
+
+  // Priority: detect known sports person/team names first
+  const sportsPersonMatch = msg.match(SPORTS_PERSONS_RE)
+  const sportsTeamMatch   = msg.match(SPORTS_TEAMS_RE)
+  if (sportsPersonMatch) entities.push(sportsPersonMatch[0])
+  else if (sportsTeamMatch) entities.push(sportsTeamMatch[0])
+
+  // Arabic entity patterns (prep phrases + contextual nouns)
+  const arEntityPatterns = [
+    /(?:عن|حول|بخصوص|بشأن|لـ|لل|خاص بـ?)\s+([\u0600-\u06FF][\u0600-\u06FF\s]{2,28}?)(?:\s*[؟?!،,]|$)/,
+    /(?:أخبار|خبر|معلومات|تفاصيل|نتائج|وضع|حال|قصة|مسيرة|إحصائيات)\s+([\u0600-\u06FF]{2,}(?:\s+[\u0600-\u06FF]{2,}){0,3})/,
+  ]
+  for (const re of arEntityPatterns) {
+    const m = msg.match(re)
+    if (m && m[1]) {
+      const candidate = m[1].trim().replace(/[\u061F?!،,\.]+$/, '').replace(/\s+/g, ' ')
+      const genericTerms = new Set(['الجزائر','اليوم','العالم','الأخبار','الرياضة','السياسة','المباريات'])
+      if (candidate.length > 2 && !genericTerms.has(candidate) && !entities.includes(candidate)) {
+        entities.push(candidate); break
+      }
+    }
+  }
+
+  // Latin proper names (capitalized sequences)
+  const latinEntities = msg.match(/(?<![.!?]\s)\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*/g) || []
+  const skipWords = new Set(['The','This','What','When','Who','How','Where','Why','Latest','News','Tell','Are','Does','Did','Can'])
+  for (const e of latinEntities) {
+    if (!skipWords.has(e) && !entities.includes(e)) entities.push(e)
+  }
+
+  // ── 4. Main Subject (reuses existing extractor) ───────────────────────
+  const subject = extractNewsSubject(msg) || entities[0] || null
+
+  // ── 5. Expected Response Format ───────────────────────────────────────
+  let expectedFormat = 'summary'
+  if (['howto', 'education', 'code', 'admin'].includes(questionType)) expectedFormat = 'steps'
+  else if (['news', 'sports', 'sports_news'].includes(questionType)) expectedFormat = 'list'
+  else if (questionType === 'comparison') expectedFormat = 'table'
+  else if (questionType === 'factual') expectedFormat = 'explanation'
+  else if (['weather', 'price'].includes(questionType)) expectedFormat = 'table'
+
+  // ── 6. Contextual Follow-up Suggestions ──────────────────────────────
+  const suggestionsMap = {
+    news:        subject
+      ? [`آخر أخبار ${subject} هذا الأسبوع`, `تاريخ ${subject}`, `${subject} في الجزائر`]
+      : ['أبرز أخبار الجزائر اليوم', 'آخر أخبار العالم', 'الأخبار الرياضية'],
+    sports:      subject
+      ? [`إحصائيات ${subject} هذا الموسم`, `مباريات ${subject} القادمة`, `آخر أخبار ${subject}`]
+      : ['نتائج مباريات اليوم', 'ترتيب الدوري الجزائري', 'نتائج دوري الأبطال'],
+    sports_news: subject
+      ? [`مسيرة ${subject}`, `إحصائيات ${subject} هذا الموسم`, `أحدث تصريحات ${subject}`]
+      : ['أخبار المنتخب الوطني', 'انتقالات الصيف', 'نتائج دوري الأبطال'],
+    weather:     ['توقعات الطقس لهذا الأسبوع', 'الطقس في مدن أخرى بالجزائر', 'هل سيكون غداً ممطراً؟'],
+    price:       ['سعر الدولار اليوم بالجزائر', 'سعر اليورو مقابل الدينار', 'أسعار العملات الخليجية'],
+    prayer:      ['مواقيت الصلاة في مدينة أخرى', 'قبلة الصلاة', 'أوقات الإفطار والسحور'],
+    education:   ['تمارين مماثلة من eddirasa', 'شرح الدرس التالي', 'نماذج بكالوريا 2025'],
+    code:        ['كيف أحسّن أداء الكود؟', 'أفضل ممارسات الأمان', 'مكتبات مفيدة لهذا المشروع'],
+    howto:       ['خطوات أكثر تفصيلاً', 'بدائل لهذه الطريقة', 'نصائح للمبتدئين'],
+    factual:     subject
+      ? [`تاريخ ${subject}`, `${subject} في الجزائر`, `أهم ${subject} في العالم`]
+      : ['معلومات عن الجزائر', 'تاريخ الجزائر', 'ثقافة وتقاليد جزائرية'],
+    location:    ['أقرب مستشفى', 'مواصلات عامة', 'خريطة الجزائر العاصمة'],
+    comparison:  ['مزايا وعيوب كل خيار', 'تجارب المستخدمين', 'الأنسب للسياق الجزائري'],
+    admin:       ['الوثائق المطلوبة كاملاً', 'المواعيد والأوقات الرسمية', 'خدمات الكترونية متاحة'],
+    general:     ['أخبار الجزائر اليوم', 'مباريات اليوم', 'سعر الدولار اليوم'],
+  }
+  const suggestions = suggestionsMap[questionType] || suggestionsMap.general
+
+  // ── 7. Confidence score (how well understood is the query) ────────────
+  let confidence = 'medium'
+  if (subject && timeframe) confidence = 'high'
+  else if (!subject && questionType === 'general') confidence = 'low'
+
+  return { questionType, lang, timeframe, entities, subject, expectedFormat, suggestions, isArabic, confidence }
+}
+
+function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 60) {
   if (!feedResults.length) return ''
   const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const label = queryType === 'sports' ? '⚽ نتائج وأخبار رياضية' : '📰 أخبار'
-  let ctx = `\n\n--- ${label} — ${date} ---\n`
+
+  // Build subject keywords for filtering (split multi-word subject into tokens)
+  const subjectTokens = subject
+    ? subject.toLowerCase().split(/\s+/).filter(t => t.length > 1)
+    : null
+
+  function itemMatchesSubject(item) {
+    if (!subjectTokens || subjectTokens.length === 0) return true
+    const haystack = ((item.title || '') + ' ' + (item.description || '')).toLowerCase()
+    return subjectTokens.some(tok => haystack.includes(tok))
+  }
+
+  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} ---\n`
+  let totalItems = 0
   for (const feed of feedResults) {
     if (!feed.items?.length) continue
+    // Apply hard freshness filter + subject filter
+    const freshItems = filterFreshItems(feed.items, maxAgeDays)
+    const items = freshItems.filter(itemMatchesSubject).slice(0, 4)
+    if (!items.length) continue
     ctx += `\n**${feed.name}:**\n`
-    for (const item of feed.items.slice(0, 4)) {
+    for (const item of items) {
       ctx += `• ${item.title}`
       if (item.link) ctx += ` — ${item.link}`
       if (item.description) ctx += `\n  ${item.description}`
       ctx += '\n'
+      totalItems++
     }
   }
+  if (totalItems === 0) return ''
   ctx += '\n---\n'
   return ctx
 }
@@ -5820,11 +6250,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
   }
   const lowerMsg = lastUserMessage.toLowerCase()
+
+  // ── Deep Query Analysis — فهم السؤال قبل الإجابة ──────────────────────
+  const queryAnalysis = analyzeQuery(lastUserMessage)
+
   const educationSubject = detectEducationSubject(lastUserMessage)
   const educationLevel = detectAcademicLevel(lastUserMessage)
   const isEducationQuery = detectEducationIntent(lastUserMessage)
   let educationalContext = ''
   let weatherPriorityContext = ''
+
+  // ── Web Reader Mode — URL detection ──────────────────────────────────────
+  const _detectedUrls = extractUrlsFromMessage(lastUserMessage)
+  const isWebReaderQuery = _detectedUrls.length > 0
+  let webReaderContext = ''
 
   // ══════════════════════════════════════════════════════════════════════
   // DZ LANGUAGE LAYER V2 — Algerian Darja Understanding System
@@ -5941,16 +6380,94 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Web Reader Mode — fetch & extract content from URLs in message ───────
+  const _webReaderIntent = isWebReaderQuery ? detectWebReaderIntent(lastUserMessage) : 'reader'
+  if (isWebReaderQuery && _detectedUrls.length > 0) {
+    console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
+    const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
+    const fetched = results
+      .filter(r => r.status === 'fulfilled' && !r.value.error)
+      .map(r => r.value)
+    const failed = results
+      .filter(r => r.status === 'fulfilled' && r.value.error)
+      .map(r => r.value)
+
+    if (fetched.length > 0) {
+      webReaderContext = fetched.map(f =>
+        `🌐 [${f.title || f.url}](${f.url})\n${f.content}`
+      ).join('\n\n---\n\n')
+      console.log(`[WebReader] Extracted ${fetched.length} pages, total chars: ${webReaderContext.length}`)
+
+      // ── BUILD MODE: route to website builder with extracted content as inspiration ──
+      if (_webReaderIntent === 'build') {
+        console.log('[WebReader:BUILD] Routing to Website Builder with web content as inspiration')
+        const wbMeta = extractWebBuilderMeta(lastUserMessage) || {
+          type: 'landing', style: 'modern', title: 'موقع مستوحى من الرابط',
+          description: 'website inspired by provided URL', icon: '🌐',
+        }
+        const webInspirationBlock = `\n\n════════════════════════════════════════════\nWEB READER INSPIRATION — محتوى الموقع المُقدَّم (استلهم منه فقط — لا تنسخه):\n${webReaderContext.slice(0, 3000)}\n\nINSTRUCTION: Study the design concept, structure and purpose of this page, then BUILD something original and superior inspired by it.\n════════════════════════════════════════════`
+        let _buildHandled = false
+        try {
+          const wbMessages = [
+            { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
+            { role: 'user', content: lastUserMessage },
+          ]
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+          const rawHtml = wbResult.content || ''
+          const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
+          const validation = validateHtmlOutput(htmlCode)
+          _buildHandled = true
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
+          // Return best-effort HTML even if validation fails (partial HTML is better than no HTML)
+          if (htmlCode && htmlCode.length > 100) {
+            return res.status(200).json({
+              content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو استخدم **⬇ تحميل** للحفظ.${!validation.ok ? '\n\n⚠️ ملاحظة: الكود قد يحتاج تعديلاً طفيفاً.' : ''}`,
+              isWebsite: true,
+              htmlCode,
+              cssCode: cssCode || '',
+              jsCode:  jsCode  || '',
+              webBuilderMeta: { ...wbMeta, title: `🌐 ${wbMeta.title}` },
+              webReaderIntent: 'build',
+            })
+          }
+        } catch (err) {
+          console.error('[WebReader:BUILD] Website builder failed:', err.message)
+        }
+        // BUILD was handled (even if failed) — skip normal website builder below
+        if (_buildHandled) {
+          return res.status(200).json({
+            content: `⚠️ لم أتمكن من توليد موقع من الرابط. يمكنك وصف التصميم المطلوب بشكل أكثر تفصيلاً.`,
+            webReaderIntent: 'build',
+          })
+        }
+      }
+
+      // ── UPDATE MODE: inject update instruction into system prompt ──────────
+      if (_webReaderIntent === 'update') {
+        webReaderContext = `[UPDATE MODE] المستخدم يريد إضافة ميزة أو تحسين:\n${webReaderContext}`
+      }
+    }
+
+    if (failed.length > 0 && fetched.length === 0) {
+      webReaderContext = `⚠️ لم يتمكن DZ Agent من قراءة الصفحة: ${failed.map(f => `${f.url} (${f.error})`).join(', ')}`
+    }
+  }
+
   // ── DZ Place Search (OSM Nominatim) ─────────────────────────────────────
   // Triggered when Darja V2 detects search_places / search_pharmacy / search_hospital
   // AND entities contain a serviceType or the intent is clearly pharmacy/hospital.
   // Guard: skip place search when user is clearly asking to CREATE a website/app.
   // Guard: skip place search for doctor queries — handled by dedicated doctor search below.
+  // Guard: skip place search for news/newspaper queries — handled by news/RSS handler.
   const _doctorGuard = detectDoctorIntent(lastUserMessage)
+  const _isNewsQuery = isNewspaperHeadlineQuery(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
     && !_doctorGuard.isDoctorQuery
+    && !_isNewsQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
+    && !detectCodeExecutionQuery(lastUserMessage)
     && (dzEntities.serviceType || dzEntities.location || dzIntent.type !== 'search_places')) {
     const intentService = INTENT_TO_SERVICE[dzIntent.type]
     const serviceType   = intentService || dzEntities.serviceType || 'restaurant'
@@ -6067,8 +6584,58 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد موقع الخريطة. يرجى تفصيل طلبك (مثلاً: "أنشئ موقع خريطة لمطاعم وهران").' })
   }
 
+  // ── Code Execution Mode (Programming Section ONLY) ─────────────────────────
+  const execLang = detectCodeExecutionQuery(lastUserMessage)
+  if (execLang) {
+    console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
+
+    try {
+      const execMessages = [
+        { role: 'system', content: CODE_EXECUTION_SYSTEM_PROMPT },
+        { role: 'user', content: lastUserMessage },
+      ]
+
+      const execResult = await safeGenerateAI({ messages: execMessages, query: lastUserMessage, max_tokens: 4000 })
+      const rawOutput = execResult.content || ''
+
+      // Extract code block
+      const codeMatch = rawOutput.match(/```(\w*)\n([\s\S]*?)```/)
+      const code = codeMatch ? codeMatch[2].trim() : rawOutput.trim()
+      const detectedLang = codeMatch?.[1] || execLang
+
+      // Extract explanation (everything after the code block)
+      const explanation = rawOutput.replace(/```[\s\S]*?```/, '').trim()
+
+      // For HTML: return as website (reuse WebsitePreview)
+      if (detectedLang === 'html' || (code.includes('<html') && code.includes('</html>'))) {
+        const cssCode = extractCssFromHtml(code)
+        const jsCode  = extractJsFromHtml(code)
+        return res.status(200).json({
+          content: explanation || '✅ تم إنشاء الكود بنجاح!',
+          isWebsite: true,
+          htmlCode: code,
+          cssCode: cssCode || '',
+          jsCode: jsCode || '',
+          webBuilderMeta: { type: 'code', style: 'modern', title: '💻 تنفيذ كود', description: 'كود قابل للتشغيل', icon: '💻' },
+        })
+      }
+
+      // For Python/JavaScript: return as execution
+      return res.status(200).json({
+        content: explanation || '✅ تم إنشاء الكود بنجاح!',
+        isExecution: true,
+        executionLang: detectedLang === 'python' || detectedLang === 'py' ? 'python' : 'javascript',
+        executionCode: code,
+      })
+    } catch (err) {
+      console.error('[Code Execution] Error:', err.message)
+      return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الكود. يرجى المحاولة مرة أخرى.' })
+    }
+  }
+
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
-  if (detectWebsiteBuilderQuery(lastUserMessage)) {
+  // Guard: skip if this was already handled as a Web Reader BUILD mode query
+  if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
     console.log(`[Website Builder v6] Detected: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
@@ -6318,6 +6885,32 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'commit changes', 'commit the file', 'save to github', 'push commit',
     'commit and push', 'اعمل commit', 'ارفع التعديلات',
   ].some(p => lowerMsg.includes(p))
+
+  // Detect: smart-push (update repo + PR + Vercel deploy) intent
+  const isSmartPushIntent = [
+    'صدّر', 'صدر التغييرات', 'تصدير التغييرات', 'تصدير إلى github',
+    'ارفع وأنشئ pr', 'ارفع التعديلات وأنشئ pr', 'انشر على vercel',
+    'export to github', 'push and create pr', 'deploy to vercel', 'push to vercel',
+    'smart push', 'تصدير + pr', 'commit + pr', 'commit and pr',
+    'حدّث المستودع وأنشئ pr', 'حدث المستودع وانشئ pr',
+    'update repo and create pr', 'update and deploy', 'تحديث ونشر',
+    'فرع جديد وpr', 'branch and pr', 'create branch and pr',
+  ].some(p => lowerMsg.includes(p))
+
+  if (isSmartPushIntent && currentRepo && githubToken) {
+    return res.status(200).json({
+      content: `سأقوم بتنفيذ **خط النشر الكامل** في مستودع **${currentRepo}**:\n\n1. 🌿 إنشاء فرع جديد \`dz-agent/auto\`\n2. 💾 Commit التعديلات على الفرع\n3. 🔀 إنشاء Pull Request → \`main\`\n4. 🚀 Vercel سيبدأ النشر تلقائياً\n\n⚠️ **يرجى تحديد الملف/الملفات ومحتواها قبل التأكيد.** هل تريد المتابعة؟`,
+      pendingAction: {
+        type: 'smart-push',
+        repo: currentRepo,
+        prTitle: `DZ Agent: تحديثات تلقائية — ${new Date().toLocaleDateString('ar-DZ')}`,
+        prBody: `Pull Request تلقائي من DZ Agent\n\nطُلب بواسطة: ${lastUserMessage}`,
+        baseBranch: 'main',
+        deployVercel: true,
+        files: [],
+      },
+    })
+  }
 
   if (isPRIntent && currentRepo && githubToken) {
     const branch = `dz-agent/${Date.now()}`
@@ -6734,8 +7327,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── RSS News/Sports detection and fetch ───────────────────────────────────
   let rssContext = ''
   const newsQueryType = detectNewsQuery(lastUserMessage)
+  // Extract specific subject/entity from the query (e.g. "رياض محرز" from "آخر الأخبار عن رياض محرز")
+  const newsSubject = extractNewsSubject(lastUserMessage)
+  if (newsSubject) console.log(`[DZ Agent] News subject extracted: "${newsSubject}"`)
+
   if (newsQueryType && !isPrayerQuery && !isFootballQuery) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
+
+    // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
+    if (newsSubject) {
+      try {
+        const isArabic = /[\u0600-\u06FF]/.test(newsSubject)
+        const lang = isArabic ? 'ar' : 'en'
+        // Use fresh URL with after: operator (30 days) for targeted subject search
+        const targetedRssUrl = buildFreshGNRssUrl(newsSubject, lang, 30)
+        const targetedArticles = await searchGoogleNewsRSS(targetedRssUrl)
+        if (targetedArticles.length > 0) {
+          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
+          for (const art of targetedArticles.slice(0, 8)) {
+            targeted += `• ${art.title || art.headline || ''}`
+            if (art.link || art.url) targeted += ` — ${art.link || art.url}`
+            targeted += '\n'
+          }
+          targeted += '\n---\n'
+          rssContext = targeted
+          console.log(`[DZ Agent] Targeted GN-RSS: ${targetedArticles.length} articles for "${newsSubject}"`)
+        }
+      } catch (err) {
+        console.error('[DZ Agent] Targeted GN-RSS search failed:', err.message)
+      }
+    }
+
+    // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
@@ -6743,12 +7367,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     const feedResults = await fetchMultipleFeeds(feedsToFetch)
     if (feedResults.length > 0) {
-      rssContext = buildRSSContext(feedResults, newsQueryType)
-      console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+      // Pass newsSubject so buildRSSContext filters articles to only those mentioning the subject
+      const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
+      if (generalCtx) {
+        rssContext = rssContext ? rssContext + generalCtx : generalCtx
+        console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+      }
     }
 
-    // ── GN-RSS ADD-ON: augment news context with Google News RSS ─────────────
-    if (newsQueryType === 'news' || newsQueryType === 'both') {
+    // ── GN-RSS ADD-ON: augment with general Google News RSS only when no specific subject ──
+    if (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both')) {
       try {
         const queryLang = detectQueryLanguage(lastUserMessage)
         const gnFeeds = GN_RSS_FEEDS[queryLang] || GN_RSS_FEEDS.ar
@@ -6771,17 +7399,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let hasNewsResults = false
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
-  const skipSearch = isPrayerQuery || isFootballQuery || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
+  const isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
 
   if (!skipSearch) {
     try {
-      const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(lastUserMessage, msgIntent)
+      // If a specific subject was extracted (e.g. "رياض محرز"), use it as the search query
+      // so CSE and GN-RSS search precisely for that subject rather than the full sentence
+      const retrievalQuery = newsSubject || lastUserMessage
+      const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(retrievalQuery, msgIntent)
       const mustSearch = msgIntent.isTemporal
         || ['news','sports','economy','politics','tech','celebrities','incidents'].includes(msgIntent.primary)
         || msgIntent.all.some(i => ['celebrities','incidents','news','politics'].includes(i))
         || !!newsQueryType
 
-      console.log(`[DZ Retrieval] Query: "${cseQuery}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
+      console.log(`[DZ Retrieval] Query: "${cseQuery}" | subject="${newsSubject || ''}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + legacy web fallback
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
@@ -6812,22 +7444,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ...r, _score: scoreResult(r, lastUserMessage)
       })).sort((a, b) => b._score - a._score).slice(0, 8)
 
-      // Staleness re-search: if mustSearch and ALL top results are > 30 days old, try broader query
+      // Staleness re-search: if mustSearch and ALL top results are > 14 days old, try broader query
       if (mustSearch && scoredResults.length > 0) {
-        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+        const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
         const allStale = scoredResults.every(r => {
           const d = r.date || r.pubDate || r.publishedDate
           if (!d) return true
           const ts = new Date(d).getTime()
-          return isNaN(ts) || ts < thirtyDaysAgo
+          return isNaN(ts) || ts < fourteenDaysAgo
         })
         if (allStale) {
-          console.warn(`[DZ Retrieval] All results stale — forcing re-search with broader query`)
-          const year = new Date().getFullYear()
-          const broaderQuery = `${lastUserMessage} ${year} أخبار`
+          console.warn(`[DZ Retrieval] All results stale (> 14 days) — forcing re-search with broader query`)
+          const broaderQuery = newsSubject || lastUserMessage
+          const isArabicQ = /[\u0600-\u06FF]/.test(broaderQuery)
           const [freshCse, freshGn] = await Promise.allSettled([
             searchGoogleCSE(broaderQuery),
-            searchGoogleNewsRSS(`https://news.google.com/rss/search?q=${encodeURIComponent(lastUserMessage + ' ' + year)}&hl=ar&gl=DZ&ceid=DZ:ar`),
+            searchGoogleNewsRSS(buildFreshGNRssUrl(broaderQuery, isArabicQ ? 'ar' : 'en', 30)),
           ])
           const freshResults = [
             ...(freshCse.status === 'fulfilled' ? freshCse.value : []),
@@ -6889,11 +7521,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
         function formatResult(r, idx) {
           const rawDate = r.date || r.pubDate || r.publishedDate
-          const dateStr = rawDate ? ` [${rawDate.slice(0,10)}]` : ''
+          const dateStr = rawDate ? new Date(rawDate).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'long' }) : ''
           const url = r.url || r.link || ''
           const label = getSourceLabel(url, r.source)
-          const srcLink = url ? `[${label}](${url})` : label
-          return `${idx}. **${r.title || ''}**${dateStr}\n   ${(r.snippet || r.description || '').slice(0, 220)}\n   📰 ${srcLink}`
+          // Remove source suffix from title (Google News format: "Title - Source")
+          let cleanTitle = (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || ''
+          return `• [${cleanTitle}](${url}) — ${label}${dateStr ? ` (${dateStr})` : ''}`
         }
 
         const sections = []
@@ -6915,6 +7548,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── AI response with GitHub-aware system prompt ───────────────────────────
+
+  // Build compact QUERY UNDERSTANDING block (token-efficient single line)
+  const queryAnalysisBlock = queryAnalysis ? (() => {
+    const parts = [
+      `[QUERY_ANALYSIS`,
+      `type=${queryAnalysis.questionType}`,
+      queryAnalysis.subject   ? `subject="${queryAnalysis.subject}"` : '',
+      queryAnalysis.timeframe ? `time=${queryAnalysis.timeframe}` : '',
+      `format=${queryAnalysis.expectedFormat}`,
+      `lang=${queryAnalysis.lang}`,
+      queryAnalysis.confidence !== 'low' && queryAnalysis.subject
+        ? `focus=subject`
+        : 'focus=general',
+      queryAnalysis.suggestions?.length
+        ? `suggest:${queryAnalysis.suggestions.join(' · ')}`
+        : '',
+      `]`,
+    ].filter(Boolean)
+
+    return [
+      `🧠 QUERY: ${parts.join(' | ')}`,
+      queryAnalysis.subject
+        ? `→ Focus strictly on "${queryAnalysis.subject}". End reply with: 💡 قد يهمك أيضاً: ${queryAnalysis.suggestions?.join(' / ')}`
+        : `→ General query. End reply with: 💡 قد يهمك أيضاً: ${queryAnalysis.suggestions?.join(' / ')}`,
+    ].join('\n')
+  })() : ''
+
   const invocationInstruction = invocationMode === '@dz-gpt'
     ? 'وضع الاستدعاء الحالي: @dz-gpt — أجب كمساعد DZ GPT عام للشرح والكتابة والتفكير، بدون فرض قالب الأخبار إلا إذا كان السؤال حديثاً.'
     : invocationMode === '/github'
@@ -6923,368 +7583,99 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const systemPrompt = `أنت DZ Agent — وكيل بحث ذكاء اصطناعي متخصص أنشأه **Nadir Houamria (Nadir Infograph)**، خبير في الذكاء الاصطناعي 🇩🇿.
-
-━━━━━━━━━━━━━━━━━━━━━━
-🕒 REAL-TIME CONTEXT (تحقق إجباري)
-━━━━━━━━━━━━━━━━━━━━━━
-- اليوم: **${_todayHuman}**
-- السنة الحالية: **${_yearNow}**
-- ❌ لا تُجب بأي معلومة مؤرَّخة قبل سنة ${_yearNow - 1} على أنها حديثة. إذا كانت النتائج المسترجعة قديمة → صرّح بذلك أو ارفضها.
-- ✅ عند الإجابة عن أي حدث أو رياضة أو خبر، استعمل عبارات الحاضر مثل "اليوم"، "هذا الأسبوع"، "آخر الأخبار في ${_yearNow}".
-- ✅ إذا لم تتوفر بيانات حديثة من المصادر → قُل صراحة: «لا تتوفر بيانات حديثة الآن، يرجى المحاولة لاحقاً». لا تُولّد إجابة فارغة أبداً.
-- ⛔ لا تستعمل المعرفة الداخلية للنموذج للأحداث الزمنية الحديثة — فقط ما تَرِد في كتلة الاسترجاع أدناه.
-- 🔴 HARD GUARDRAIL: عند وجود تعارض بين نتائج البحث الحي ومعرفتك الداخلية → نتائج البحث الحي تتقدم دائماً بلا استثناء. المعرفة الداخلية للنموذج محظورة للأحداث الزمنية والأخبار والشخصيات والحوادث.
-- 🔴 للأخبار والسياسة والمشاهير والحوادث: البحث الحي إلزامي — لا تجب من المعرفة الداخلية أبداً. إذا لم تجد نتائج → قُل ذلك بوضوح ولا تخترع معلومات.
-
-${invocationInstruction}
-
-أكواد الاستدعاء المدعومة داخل الشات:
-- @dz-agent: DZ Agent للأخبار والبحث والطقس والرياضة وGitHub.
-- @dz-gpt: DZ GPT للأسئلة العامة والشرح والكتابة.
-- /github: أوامر GitHub والمستودعات والكود.
-
-أنت لست نموذج إجابة معرفية. أنت **نظام بحث واسترجاع** (Retrieval-Based AI).
-قاعدة الذهب: **إذا لم يكن لديك مصدر حقيقي → قل "لا توجد نتائج حديثة مؤكدة"**.
-
-━━━━━━━━━━━━━━━━━━━━━━
-🔎 RETRIEVAL PIPELINE (MANDATORY ORDER)
-━━━━━━━━━━━━━━━━━━━━━━
-
-لكل طلب يخص أخباراً أو أحداثاً أو رياضة أو اقتصاداً أو سياسة أو تقنية:
-
-1. **تحليل النية (Intent)** — نوع السؤال + الزمن + الكيانات
-2. **بحث Google CSE** (PRIMARY) — أول مصدر يُفحص دائماً
-3. **Google News RSS** (REAL-TIME) — للأخبار العاجلة والرياضة
-4. **Fallback Web** — إذا لم ينجح CSE + RSS
-5. **تقييم النتائج** (Scoring) — حداثة 45% · ثقة 25% · صلة 20% · مقتطف 10%
-6. **توليد الإجابة** — مبنية على النتائج فقط، لا على المعرفة الداخلية
-
-━━━━━━━━━━━━━━━━━━━━━━
-⛔ ANTI-HALLUCINATION RULES (STRICT — NO EXCEPTIONS)
-━━━━━━━━━━━━━━━━━━━━━━
-
-- ❌ لا تخترع أي خبر أو نتيجة رياضية أو سعر أو حدث سياسي
-- ❌ لا تستخدم معلوماتك الداخلية عند الإجابة عن أحداث زمنية
-- ❌ لا تقدّم بيانات تخمينية كأنها حقائق
-- ✅ إذا لم توجد نتائج → قل بوضوح: **"لا توجد نتائج حديثة مؤكدة من المصادر المتاحة"**
-- ✅ أي سؤال يحتوي على: آخر / جديد / اليوم / نتائج / مباريات / ${_yearNow - 1} / ${_yearNow} → بحث إلزامي
-
-━━━━━━━━━━━━━━━━━━━━━━
-📊 SCORING SYSTEM (Applied to all retrieved results)
-━━━━━━━━━━━━━━━━━━━━━━
-
-FINAL_SCORE = Freshness(45%) + Trust(25%) + Relevance(20%) + Snippet(10%)
-
-| Freshness     | Score |
-|---------------|-------|
-| < 6 hours     | 100   |
-| < 24 hours    | 90    |
-| < 48 hours    | 80    |
-| < 7 days      | 65    |
-| < 30 days     | 45    |
-| Older         | 25    |
-
-Trust scores: Reuters(95) · BBC(92) · APS.dz(90) · Aljazeera(88) · LFP.dz(88) · Echorouk(80)
-
-━━━━━━━━━━━━━━━━━━━━━━
-🌐 TRUSTED SOURCES
-━━━━━━━━━━━━━━━━━━━━━━
-
-🇩🇿 الجزائر: aps.dz · echoroukonline.com · elbilad.net · ennaharonline.com · elkhabar.com · djazairess.com
-🌍 دولي: reuters.com · bbc.com · aljazeera.net · cnn.com
-💻 تقنية: techcrunch.com · theverge.com · wired.com
-⚽ رياضة: fifa.com · sofascore.com · lfp.dz · goal.com · kooora.com
-🛡️ برمجة وأمان: owasp.org · developer.mozilla.org · nodejs.org · react.dev · vite.dev · expressjs.com · docs.github.com · vercel.com · npmjs.com
-
-━━━━━━━━━━━━━━━━━━━━━━
-🧠 PROFESSIONAL PROGRAMMING EXPERTISE MODE
-━━━━━━━━━━━━━━━━━━━━━━
-
-عندما يسأل المستخدم عن برمجة أو أمان أو بنية مشروع:
-1. ابدأ بتشخيص عملي مختصر: الهدف، المخاطر، الملفات/الأجزاء المتأثرة
-2. قدّم حلولاً قابلة للتنفيذ، لا تنظيراً عاماً
-3. للأمان اتبع ترتيب OWASP: التحقق من الإدخال، المصادقة، الصلاحيات، الأسرار، XSS/CSRF، SSRF، Rate limiting، السجلات
-4. لا تقترح تخزين tokens في المتصفح إلا كحل مؤقت؛ فضّل OAuth أو أسرار الخادم أو sessionStorage قصير العمر
-5. إذا كان السؤال حديثاً أو عن مكتبة/إصدار/API: استعمل البحث الحي واذكر الرابط والتاريخ عندما يتوفران
-6. في مراجعة الكود اكتب: المشكلة → الأثر → الإصلاح → مثال كود صغير → طريقة التحقق
-7. لا تعدّل أو تقترح عمليات مدمرة بدون موافقة صريحة
-8. رتّب المصادر والنتائج التقنية الحديثة من الأحدث إلى الأقدم عندما تحمل تواريخ
-
-━━━━━━━━━━━━━━━━━━━━━━
-📚 EDUCATION MODE — EDDIRASA FIRST
-━━━━━━━━━━━━━━━━━━━━━━
-
-عند أي سؤال دراسي أو تمرين أو طلب شرح:
-1. حدّد المادة: Math · Physics · Arabic · French · English · Science · History / Geography
-2. حدّد المستوى: Primary 1-5 · Middle 1-4/BEM · Secondary 1-3/Baccalaureate
-3. ابحث أولاً في eddirasa.com واستخدم النتائج المستخرجة إن توفرت
-4. إذا لم توجد نتائج من eddirasa.com، انتقل إلى المعرفة التعليمية العامة مع التصريح بأن المصدر غير متوفر
-5. عند حل التمارين اتبع دائماً: فهم السؤال → تحديد الموضوع → ربطه بالمصدر → حل خطوة بخطوة → شرح مبسط
-6. إذا قال المستخدم learn أو explain أو اشرح أو تعلم: لخّص الدرس، أعط أمثلة، أنشئ 3 تمارين تدريبية، ثم اختباراً صغيراً
-7. اجعل الشرح بسيطاً ومناسباً لتلميذ في المنهاج الجزائري
-
-━━━━━━━━━━━━━━━━━━━━━━
-⚽ SPORTS MODULE (STRICT)
-━━━━━━━━━━━━━━━━━━━━━━
-
-1. **NEVER invent, guess, or hallucinate match scores, results, or fixtures**
-2. Source hierarchy: SofaScore → LFP.dz → FlashScore → RSS → Official sites
-3. Match display format:
-   - 🔴 LIVE: **Team A [score] - [score] Team B** | Competition | Source
-   - ✅ RESULT: **Team A [score] - [score] Team B** | Competition | Date | Source
-   - 📅 UPCOMING: Team A vs Team B | Time | Competition | Source
-4. If data unavailable: *"لا تتوفر بيانات مباشرة الآن — يرجى التحقق من SofaScore أو FlashScore"*
-
-━━━━━━━━━━━━━━━━━━━━━━
-📰 NEWS MODULE — UP-TO-DATE TEMPORAL ORDERING (MANDATORY)
-━━━━━━━━━━━━━━━━━━━━━━
-
-عند أي سؤال يتعلق بـ: أخبار · أحداث · حوادث · نتائج رياضية · تواريخ (إصدار، مباريات، قرارات):
-
-🧠 تحليل النية (MANDATORY):
-1. هل السؤال يتعلق بحدث جارٍ أو نتيجة حديثة؟ → وضع "البحث الحديث"
-2. هل يحتاج آخر الأخبار؟ → اجلب من Google CSE + Google News RSS أولاً
-3. هل يتعلق بتاريخ معين؟ → رتّب زمنياً من الأحدث للأقدم
-
-📅 ترتيب الإجابة (MANDATORY FORMAT — لا تتجاوزه):
-
-1. 🟢 **الأحدث** — اليوم أو آخر 24 ساعة
-2. 🟡 **هذا الأسبوع**
-3. 🟠 **هذا الشهر**
-4. 🔵 **الشهر السابق** (إن لزم)
-5. ⚫ **معلومات أقدم** (فقط للسياق)
-
-📌 قواعد إضافية إلزامية:
-- صنّف: أخبار الجزائر 🇩🇿 / دولية 🌍 / تقنية 💻 / اقتصاد 💰 / رياضة ⚽
-- أدرج دائماً: التاريخ الدقيق + رابط المصدر لكل خبر
-- رتّب من الأحدث إلى الأقدم داخل كل فئة زمنية
-- لا تدمج بيانات الملاعب مع أخبار الوكالات
-- ❌ لا تعتمد على معلومات قديمة إذا توفر تحديث أحدث
-- ❌ إذا لم توجد معلومات حديثة → قُل ذلك بوضوح، لا تخترع
-- ✅ إذا كان هناك تحديث مستمر → أشر إلى ذلك
-
-🏆 مثال تطبيقي (اتبع هذا الهيكل دائماً):
-سؤال: "نتيجة مباراة ريال مدريد اليوم"
-الإجابة:
-🟢 اليوم:
-- فاز ريال مدريد على برشلونة 2-1 (المصدر: SofaScore | ${_todayHuman})
-🟡 هذا الأسبوع:
-- تعادل مع أتلتيكو مدريد 1-1
-🟠 هذا الشهر:
-- فاز على إشبيلية 3-0
-
-━━━━━━━━━━━━━━━━━━━━━━
-🧾 OUTPUT FORMAT
-━━━━━━━━━━━━━━━━━━━━━━
-
-الإجابة يجب أن تكون:
-
-✔ **ملخص البحث** — جملتان تلخصان ما وجدته
-✔ **النتيجة الرئيسية 1** — بمصدر + تاريخ
-✔ **النتيجة الرئيسية 2** — بمصدر + تاريخ
-✔ **مصادر المرجع** — روابط المصادر المستخدمة
-
-استخدم Markdown دائماً. اقرأ لغة المستخدم وأجب بنفس اللغة (العربية RTL، الفرنسية، الإنجليزية).
-
-━━━━━━━━━━━━━━━━━━━━━━
-💻 GITHUB SMART DEVELOPMENT MODE
-━━━━━━━━━━━━━━━━━━━━━━
-
-عندما يشارك المستخدم رابط GitHub:
-1. تفعيل Smart Dev Mode تلقائياً
-2. تحليل: هيكل المشروع · README · المكتبات · اللغة · النمط المعماري
-3. عرض 8 خيارات فحص: أخطاء · أداء · أمان · dependencies · structure · اقتراحات · features · اختبارات
-4. لكل مشكلة: ❌ المشكلة + 📍 الموقع + 💡 الحل + 🧾 كود جاهز
-5. تقييم المشروع: كودة /10 · structure /10 · أمان /10 · أداء /10
-
----
-
-## 💻 GITHUB SMART DEVELOPMENT MODE (DZ Agent Dev Assistant)
-
-When a user links a GitHub repository or asks about code, you enter **GitHub Smart Dev Mode** automatically.
-
-### 🧠 1. PROJECT UNDERSTANDING ENGINE
-When a GitHub repo is provided:
-1. Fetch: project tree, README, package.json/requirements.txt, languages used, frameworks
-2. Analyze: project type (Web/API/Mobile/AI/Script), architecture (MVC/Monolith/Microservices), organization quality
-3. If project is unclear: make an intelligent guess + ask for clarification + provide approximate analysis
-
-### 🔍 2. SMART SCAN MODE — Interactive Buttons
-Offer these analysis options to the user (present as labeled actions):
-- 🔎 البحث عن الأخطاء — Find bugs (syntax, logic, performance, security)
-- ⚡ تحسين الأداء — Performance optimization
-- 🧠 اقتراحات ذكية — Smart suggestions
-- 📦 تحليل Dependencies — Dependencies analysis
-- 🛡️ فحص الأمان — Security scan
-- 📐 تحسين Structure — Structure improvement
-- ➕ اقتراح ميزات جديدة — Feature suggestions
-- 🧪 اقتراح Tests — Test suggestions
-
-Each action returns:
-- ❌ المشكلة (The issue)
-- 📍 مكانها (Location in code)
-- 💡 الحل (Solution)
-- 🧾 كود مقترح (Ready-to-use code)
-
-### 💡 3. AI SUGGESTIONS ENGINE
-Provide:
-- Code refactoring suggestions
-- Logic simplification
-- Duplicate code removal
-- Better naming conventions
-- Design pattern recommendations
-
-### 🛠️ 4. ACTION MODE — Direct Commands
-Offer these actions:
-- ✍️ إنشاء Commit — Create commit with professional message + diff + explanation
-- 🔀 إنشاء Pull Request — Create PR
-- 🧩 إصلاح تلقائي — Auto-fix: fix bugs, improve code, rewrite weak sections with explanation
-- 📄 إنشاء README — Generate professional README
-- 📊 إنشاء Documentation — Generate full documentation
-
-### 📊 5. PROJECT SCORING
-Always provide a project score when analyzing:
-- Code Quality: /10
-- Structure: /10
-- Security: /10
-- Performance: /10
-With detailed explanation.
-
-### ⚠️ GITHUB DEV MODE RULES
-- NEVER say "I can't"
-- For large projects: analyze progressively
-- Always provide practical, actionable results — not theory
-- Code suggestions must ALWAYS be ready-to-use
-- Analyze file-by-file if needed, output structured git diff suggestions
-
----
-
-## 🌍 قواعد متعددة اللغات
-- أجب دائماً بلغة المستخدم (العربية → RTL، الفرنسية، الإنجليزية)
-- وسّع استعلامات البحث بالثلاث لغات للحصول على نتائج أفضل
-
----
-
-━━━━━━━━━━━━━━━━━━━━━━
-🇩🇿 ALGERIAN ADMINISTRATIVE SERVICES MODULE
-━━━━━━━━━━━━━━━━━━━━━━
-
-## قاعدة المصادر الرسمية (MANDATORY — USE FIRST)
-
-### الإدارة والخدمات:
-- وزارة الداخلية: https://www.interieur.gov.dz
-- بوابة الإجراءات الإدارية: https://demarches.interieur.gov.dz
-- خدمات الداخلية الإلكترونية: https://services.interieur.gov.dz
-
-### الهوية والجوازات:
-- جوازات السفر: https://passeport.interieur.gov.dz
-
-### العدالة:
-- صحيفة السوابق القضائية: https://casier-judiciaire.justice.dz
-
-### البريد:
-- بريد الجزائر: https://www.poste.dz
-
-### الأخبار الرسمية (RSS):
-- وكالة الأنباء الجزائرية APS: https://www.aps.dz/ar/rss
-- النهار أونلاين: https://www.ennaharonline.com/feed
-- الشروق أونلاين: https://www.echoroukonline.com/feed
-
-### الطقس:
-- OpenWeather API (فقط — لا تخمّن)
-
----
-
-## 🧠 نظام مطابقة المصادر (SOURCE MATCHING)
-
-عند استقبال طلب، طابقه مع المصدر الصحيح:
-
-| الطلب | المصدر |
-|-------|--------|
-| جواز السفر / بطاقة الهوية الوطنية | interieur.gov.dz / passeport.interieur.gov.dz |
-| صحيفة السوابق القضائية | casier-judiciaire.justice.dz |
-| بطاقة الرمادية / رخصة السياقة | interieur.gov.dz |
-| التسجيل في الجامعة / البكالوريا | وزارة التعليم العالي |
-| أخبار | RSS feeds (APS، النهار، الشروق) |
-| الطقس | OpenWeather API فقط |
-| البريد / الطرود | poste.dz |
-
-⛔ لا تخلط المصادر أبداً — لكل طلب مصدره الصحيح.
-
----
-
-## 📋 وضع الخدمة الإدارية (SERVICE MODE)
-
-عندما يسأل المستخدم عن إجراء إداري جزائري، أجب بهذا الهيكل:
-
-📌 **اسم الخدمة**
-
-📍 **أين:**
-(البلدية / الدائرة / عبر الإنترنت)
-
-📄 **الوثائق المطلوبة:**
-- ...
-
-🪜 **الخطوات:**
-1. ...
-2. ...
-
-🌐 **الرابط الرسمي:**
-(من قاعدة المصادر أعلاه فقط)
-
-💡 **نصائح:**
-- ...
-
-⛔ إذا لم تجد المعلومة في المصادر الرسمية:
-→ قل: "لم أجد مصدراً رسمياً لهذه المعلومة — يُرجى مراجعة الموقع الرسمي مباشرة."
-⛔ لا تخترع روابط أبداً.
-
----
-
-## 📰 قاعدة الأخبار (NEWS RULE)
-
-- استخدم RSS feeds فقط (APS، النهار، الشروق)
-- الأخبار الصالحة: آخر 15 يوماً فقط
-- لا تنشر أخباراً قديمة
-- أضف دائماً: التاريخ + المصدر + الرابط
-
----
-
-## 🌤️ قاعدة الطقس (WEATHER RULE)
-
-- المصادر: open-meteo.com (أساسي، بلا مفتاح) → wttr.in (ثانوي) → OpenWeather (اختياري)
-- أجب ببيانات حقيقية من المصدر المحدد في البيانات
-- لا تخمّن أي درجة حرارة أو حالة جوية
-- اذكر دائماً المصدر الفعلي (open-meteo / wttr.in / openweather)
-
----
-
-${prayerContext ? `## 🕌 مواقيت الصلاة — بيانات فعلية (aladhan.com)\n${prayerContext}\n\n> اعرض مواقيت الصلاة في جدول. لا تخمّن المواقيت — استخدم البيانات أعلاه فقط.` : ''}
-
-${lfpContext ? `## 🏆 الدوري الجزائري المحترف (LFP) — بيانات مباشرة من lfp.dz\n${lfpContext}\n\n> اعرض النتائج بتنسيق واضح مع الأرقام. لا تختلق نتائج — استخدم البيانات أعلاه فقط.` : ''}
-
-${footballContext ? `## ⚽ ذكاء كرة القدم — SofaScore + RSS دولية\n${footballContext}\n\n> اعرض جميع بيانات المباريات المتاحة بوضوح. لا تخترع نتائج أبداً.` : ''}
-
-${standingsContext ? `## 🏆 جدول ترتيب الدوري الجزائري — بيانات مباشرة\n${standingsContext}\n\n**قواعد الترتيب:**\n1. اعرض الجدول كاملاً بتنسيق جدول أو قائمة مرقمة\n2. أبرز المتصدر والمتراجع لمنطقة الهبوط\n3. اذكر المصدر (kooora.com أو lfp.dz)\n4. لا تخترع أي نقاط أو ترتيب` : ''}
-
-${globalLeaguesContext ? `## 🌍 الدوريات العالمية — بيانات مباشرة\n${globalLeaguesContext}\n\n**قواعد الدوريات العالمية:**\n1. اعرض النتائج مع تمييز المباريات الحية 🔴 والمنتهية ✅ والقادمة 📅\n2. لا تخترع نتائج — استخدم البيانات أعلاه فقط\n3. إذا لم تتوفر بيانات: وجّه المستخدم إلى sofascore.com` : ''}
-
-${currencyContext ? `## 💱 أسعار الصرف — بيانات فعلية (بدون مفتاح API)\n${currencyContext}\n\n**قواعد العملة:**\n1. لا تخترع أسعار الصرف — استخدم البيانات أعلاه فقط\n2. اعرض الأسعار في جدول بالاتجاهين\n3. للتحويل: احسب باستخدام الأسعار المقدمة\n4. اذكر المصدر ووقت التحديث\n5. ملاحظة: الأسعار رسمية — قد تختلف أسعار السوق الموازي` : ''}
-
-${rssContext ? `## 📰 أخبار ورياضة حية (RSS Feeds)\n${rssContext}\n\n> لخّص مع روابط المصادر. رتّب من الأحدث. لا تخترع محتوى.${isNewspaperHeadlineQuery(lastUserMessage) ? '\n\n📰 **تعليمات خاصة — عناوين الصحف الجزائرية:**\n1. اعرض أبرز العناوين من كل صحيفة جزائرية (الشروق، النهار، الخبر، البلاد، الوطن، الشعب...)\n2. رتّب العناوين حسب الصحيفة — اذكر اسم الصحيفة كعنوان فرعي\n3. لكل عنوان: اذكر العنوان + الرابط\n4. استخدم فقط العناوين الموجودة في بيانات RSS أعلاه — لا تخترع عناوين\n5. اذكر تاريخ اليوم في بداية الإجابة' : ''}` : ''}
-
-${webSearchContext ? `## 🔍 نتائج الاسترجاع الحية — Google CSE + Google News RSS\n${webSearchContext}\n\n**⛔ قواعد الاسترجاع (MANDATORY):**\n1. هذه النتائج هي مصدرك الوحيد للمعلومات الآنية — اذكر المصادر والروابط دائماً\n2. رتّب إجابتك من الأحدث إلى الأقدم\n3. ❌ لا تخترع أي معلومة — استخدم فقط ما في النتائج أعلاه\n4. ❌ إذا لم تجد نتائج حديثة كافية → قل صراحة: "لا توجد نتائج حديثة مؤكدة"\n5. ✔ أشر دائماً إلى: المصدر + التاريخ + الرابط` : ''}
-
-${weatherPriorityContext ? `## 🌤️ أولوية الطقس — OpenWeather API\n${weatherPriorityContext}\n\n**قواعد أولوية الطقس:**\n1. ابدأ الإجابة ببيانات الطقس أعلاه\n2. اذكر المصدر OpenWeather API\n3. لا تخمّن أي قيمة غير موجودة\n4. إذا فشل الجلب، أعط رسالة fallback واضحة ومختصرة` : ''}
-
-${educationalContext ? `## 📚 سياق تعليمي من eddirasa.com أولاً\n${educationalContext}\n\n**قواعد التعليم:**\n1. ابدأ بتحديد المادة والمستوى\n2. إذا وجدت نتيجة من eddirasa.com: لخّصها وفسّرها بلغة بسيطة واذكر الرابط\n3. إذا لم تجد نتيجة: قل إن eddirasa.com لم يرجع نتيجة مطابقة، ثم استخدم المعرفة التعليمية العامة\n4. للتمارين: افهم السؤال، حدّد الموضوع، حل خطوة بخطوة، ثم أعط طريقة تحقق\n5. للتعلم والشرح: ملخص + أمثلة + 3 تمارين تدريبية + اختبار صغير` : ''}
-
-${githubToken ? `## 🐙 حالة GitHub\nGitHub متصل ✓ | المستودع الحالي: ${currentRepo || 'لم يُحدد'}\nالقدرات: عرض الملفات · قراءة الكود · تحليل · إنشاء commits · فتح Pull Requests\n\nعند مشاركة رابط GitHub (مثل https://github.com/user/repo):\n1. استقبل المستودع\n2. فعّل GitHub Smart Dev Mode\n3. اعرض خيارات الفحص التفاعلية\n4. جلب هيكل المستودع تلقائياً` : `## 🐙 حالة GitHub\nGitHub غير متصل. ذكّر المستخدم بالربط إذا سأل عن المستودعات أو الكود.`}
-
-${clientBehaviorContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🧠 BEHAVIOR INTELLIGENCE (استخبارات المستخدم)\n━━━━━━━━━━━━━━━━━━━━━━\n${clientBehaviorContext}\n> استخدم هذا السياق لتكييف أسلوبك وترتيب أولويات إجابتك دون الإشارة إليه صراحةً.` : ''}
-
-${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━━━━━\n🗣️ LANGUAGE LAYER (طبقة اللغة)\n━━━━━━━━━━━━━━━━━━━━━━\n${dzLanguageContext}\n> طبّق هذا التلميح بصمت دون إعلام المستخدم بأي معالجة لغوية.` : ''}`
+  const _qType = queryAnalysis?.questionType || 'general'
+  const _isCode      = ['code'].includes(_qType) || !!githubToken
+  const _isEdu       = _qType === 'education'
+  const _isSports    = ['sports', 'sports_news'].includes(_qType)
+  const _isNews      = ['news', 'sports_news'].includes(_qType)
+  const _isAdmin     = ['admin', 'howto'].includes(_qType)
+  const _isWeather   = _qType === 'weather'
+  const _isWebReader = _qType === 'web_reader' || isWebReaderQuery
+
+  // Compress + trim contexts to prevent TPM exhaustion (Groq free tier limits)
+  // GN article URLs can be 400-600 chars each — strip to save tokens
+  function _compress(s) {
+    if (!s) return s
+    return s
+      .replace(/https:\/\/news\.google\.com\/rss\/articles\/[A-Za-z0-9_=+/-]{30,}\?oc=\d+/g, 'https://news.google.com')
+      .replace(/https?:\/\/[^\s\]]{100,}/g, (url) => url.slice(0, 60) + '…')
+  }
+  const _trim = (s, max = 2500) => {
+    if (!s) return s
+    const compressed = _compress(s)
+    return compressed.length > max ? compressed.slice(0, max) + '\n...[مقتطع]' : compressed
+  }
+
+  const systemPrompt = [
+    // ── CORE (always) ─────────────────────────────────────────────────────
+    `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
+    `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
+    queryAnalysisBlock,
+    `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
+    `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL كنص. استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
+    queryAnalysis?.suggestions?.length
+      ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`
+      : '',
+
+    // ── NEWS MODULE (news / sports_news queries only) ─────────────────────
+    _isNews ? [
+      `📰 NEWS: رتّب الإجابة زمنياً: 🟢 اليوم · 🟡 الأسبوع · 🟠 الشهر. أدرج التاريخ + رابط المصدر لكل خبر. لا تدمج بيانات الملاعب مع الأخبار.`,
+      `مصادر موثوقة: aps.dz · echoroukonline.com · ennaharonline.com · elkhabar.com · reuters.com · aljazeera.net`,
+    ].join('\n') : '',
+
+    // ── SPORTS MODULE (sports / sports_news only) ─────────────────────────
+    _isSports ? [
+      `⚽ SPORTS: لا تخترع نتائج المباريات أبداً. تنسيق: 🔴 LIVE · ✅ نتيجة · 📅 قادم. إذا لم تتوفر بيانات → وجّه إلى sofascore.com أو flashscore.com.`,
+      `⚠️ DISAMBIGUATION CRITIQUE: "نتائج" + اسم لاعب أو فريق = **نتائج رياضية** (مباريات / إحصائيات / أهداف). ليست نتائج امتحانات أو بكالوريا. لا تذكر ONEC أو البكالوريا أبداً في هذا السياق.`,
+      `⚠️ DISAMBIGUATION: "آخر نتائج رياض محرز" = آخر مباريات ومعلومات اللاعب رياض محرز. ليس نتائج بكالوريا.`,
+    ].join('\n') : '',
+
+    // ── EDUCATION MODE (education queries only) ───────────────────────────
+    _isEdu ? `📚 EDUCATION: حدّد المادة والمستوى (ابتدائي/متوسط/ثانوي/بكالوريا). ابحث أولاً في eddirasa.com. للتمارين: فهم → موضوع → حل خطوة بخطوة → شرح مبسط. للشرح: ملخص + أمثلة + 3 تمارين + اختبار صغير.` : '',
+
+    // ── CODE / GITHUB MODE (code queries or github connected) ────────────
+    _isCode ? [
+      `💻 CODE/GITHUB: عند رابط GitHub → تفعيل Smart Dev Mode تلقائياً. حلّل: هيكل المشروع · المكتبات · الأمان (OWASP). لكل مشكلة: ❌ المشكلة + 📍 الموقع + 💡 الحل + 🧾 كود جاهز. قيّم المشروع /10 في: جودة · هيكل · أمان · أداء.`,
+      githubToken ? `GitHub: متصل ✓ | مستودع: ${currentRepo || 'لم يُحدد'}` : `GitHub: غير متصل.`,
+    ].join('\n') : '',
+
+    // ── ALGERIAN ADMIN (admin / howto queries only) ───────────────────────
+    _isAdmin ? [
+      `🏛️ ADMIN: مصادر رسمية إلزامية: interieur.gov.dz · passeport.interieur.gov.dz · casier-judiciaire.justice.dz · poste.dz`,
+      `أجب بهذا الهيكل: 📌 اسم الخدمة · 📍 المكان · 📄 الوثائق · 🪜 الخطوات · 🌐 الرابط الرسمي · 💡 نصائح. ❌ لا تخترع روابط.`,
+    ].join('\n') : '',
+
+    // ── WEATHER RULE (weather queries only) ──────────────────────────────
+    _isWeather ? `🌤️ WEATHER: استخدم فقط البيانات المسترجعة (open-meteo / wttr.in / openweather). لا تخمّن أي قيمة. اذكر المصدر دائماً.` : '',
+
+    // ── WEB READER MODULE (activated when URL detected in message) ────────
+    _isWebReader ? [
+      `🌐 WEB READER MODE: المستخدم أرسل رابطاً. لقد قرأت محتواه وأرسلته إليك في "محتوى الموقع" أدناه.`,
+      `أجب بهذا الهيكل الإلزامي:`,
+      `### 🌐 تحليل المصدر\n(ما هو هذا الموقع/الصفحة)`,
+      `### 🧠 المعلومات الرئيسية\n- نقطة 1\n- نقطة 2`,
+      `### 📊 التفاصيل المستخرجة\n(أرقام / بيانات / كود مهم)`,
+      `### 💡 تحليل ذكي\n(تفسيرك كوكيل خبير)`,
+      `### ✅ الإجابة النهائية\n(الإجابة المباشرة على سؤال المستخدم)`,
+      `قواعد صارمة: ❌ لا تخترع معلومات غير موجودة في الصفحة | ✅ استند فقط للمحتوى المستخرج | إذا لم يُقرأ الموقع → أخبر المستخدم صراحةً`,
+      `إذا طلب المستخدم "ابني من هذا الموقع" → استخرج الفكرة واقترح خطة تنفيذ + كود.`,
+    ].join('\n') : '',
+
+    // ── LIVE DATA BLOCKS (conditional, trimmed) ───────────────────────────
+    webReaderContext ? `🌐 محتوى الموقع (مُستخرج تلقائياً):\n${_trim(webReaderContext, 5000)}\n> أجب بناءً على هذا المحتوى فقط.` : '',
+    prayerContext    ? `🕌 مواقيت الصلاة (aladhan.com):\n${_trim(prayerContext, 800)}\n> اعرض في جدول. لا تخمّن.` : '',
+    lfpContext       ? `🏆 LFP (lfp.dz):\n${_trim(lfpContext, 1500)}\n> لا تختلق نتائج.` : '',
+    footballContext  ? `⚽ كرة القدم:\n${_trim(footballContext, 1500)}\n> لا تخترع نتائج.` : '',
+    standingsContext ? `🏆 ترتيب الدوري:\n${_trim(standingsContext, 1000)}\n> لا تخترع نقاطاً.` : '',
+    globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1000)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.` : '',
+    currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
+    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
+    webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
+    weatherPriorityContext ? `🌤️ بيانات الطقس:\n${_trim(weatherPriorityContext, 500)}\n> ابدأ الإجابة بهذه البيانات.` : '',
+    educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
+    clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
+    dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
+  ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },
@@ -7305,6 +7696,7 @@ ${dzLanguageContext ? `\n━━━━━━━━━━━━━━━━━━�
       fallbackModel: aiResult.model,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
+      webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
     })
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
@@ -7956,6 +8348,105 @@ app.post('/api/dz-agent/github/pr', async (req, res) => {
   }
 })
 
+// ===== SMART PUSH: create branch + commit file(s) + open PR =====
+app.post('/api/dz-agent/github/smart-push', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, files, commitMessage, prTitle, prBody, baseBranch = 'main' } = req.body
+
+  if (!token) return res.status(400).json({ error: 'GitHub token required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  if (!Array.isArray(files) || files.length === 0) return res.status(400).json({ error: 'files array is required (at least one file).' })
+  if (!commitMessage || typeof commitMessage !== 'string') return res.status(400).json({ error: 'commitMessage is required.' })
+  if (!prTitle || typeof prTitle !== 'string') return res.status(400).json({ error: 'prTitle is required.' })
+
+  try {
+    // 1. Get SHA of the base branch HEAD
+    const refRes = await ghFetch(`/repos/${repo}/git/ref/heads/${encodeURIComponent(baseBranch)}`, token)
+    const refData = await refRes.json()
+    if (!refRes.ok) throw new Error(refData.message || `Cannot access branch "${baseBranch}" in ${repo}`)
+    const baseSha = refData.object?.sha
+    if (!baseSha) throw new Error('Could not determine base branch SHA')
+
+    // 2. Create a new feature branch from base SHA
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const newBranch = `dz-agent/${timestamp}`
+    const createBranchRes = await ghFetch(`/repos/${repo}/git/refs`, token, {
+      method: 'POST',
+      body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: baseSha }),
+    })
+    const createBranchData = await createBranchRes.json()
+    if (!createBranchRes.ok) throw new Error(createBranchData.message || 'Failed to create branch')
+
+    // 3. Commit each file to the new branch
+    const committedFiles = []
+    for (const file of files) {
+      if (!file.path || !file.content) continue
+      if (!isValidGithubPath(file.path)) {
+        console.warn(`[smart-push] skipping invalid path: ${file.path}`)
+        continue
+      }
+
+      // Fetch existing SHA (needed to update an existing file)
+      let existingSha
+      const existingRes = await ghFetch(`/repos/${repo}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(newBranch)}`, token)
+      if (existingRes.ok) {
+        const existing = await existingRes.json()
+        existingSha = existing.sha
+      }
+
+      const commitBody = {
+        message: sanitizeString(file.message || commitMessage, 500),
+        content: Buffer.from(file.content).toString('base64'),
+        branch: newBranch,
+        ...(existingSha ? { sha: existingSha } : {}),
+      }
+
+      const commitRes = await ghFetch(`/repos/${repo}/contents/${encodeURIComponent(file.path)}`, token, {
+        method: 'PUT',
+        body: JSON.stringify(commitBody),
+      })
+      const commitData = await commitRes.json()
+      if (!commitRes.ok) throw new Error(commitData.message || `Failed to commit "${file.path}"`)
+      committedFiles.push({ path: file.path, url: commitData.content?.html_url })
+    }
+
+    if (committedFiles.length === 0) throw new Error('No valid files were committed. Check file paths and contents.')
+
+    // 4. Create a pull request: newBranch → baseBranch
+    const prBodyText = sanitizeString(
+      prBody || `Pull Request تلقائي من **DZ Agent**\n\nالملفات المُعدَّلة (${committedFiles.length}):\n${committedFiles.map(f => `- \`${f.path}\``).join('\n')}\n\n> سيبدأ Vercel تلقائياً في نشر معاينة هذا الـ PR.`,
+      5000
+    )
+
+    const prRes = await ghFetch(`/repos/${repo}/pulls`, token, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: sanitizeString(prTitle, 200),
+        body: prBodyText,
+        head: newBranch,
+        base: baseBranch,
+      }),
+    })
+    const prData = await prRes.json()
+    if (!prRes.ok) throw new Error(prData.message || 'PR creation failed')
+
+    return res.json({
+      success: true,
+      branch: newBranch,
+      baseBranch,
+      prUrl: prData.html_url,
+      prTitle: prData.title,
+      prNumber: prData.number,
+      committedFiles,
+      repo,
+      vercelNote: '🚀 إذا كان Vercel مرتبطاً بهذا المستودع، سيبدأ نشر معاينة الـ PR تلقائياً خلال دقيقتين.',
+    })
+  } catch (err) {
+    console.error('[smart-push] error:', err.message)
+    return res.status(500).json({ error: err.message || 'Smart push failed.' })
+  }
+})
+
 // ===== REPO FULL SCAN (AI analysis of entire repository) =====
 app.post('/api/dz-agent/github/repo-scan', async (req, res) => {
   const { token, repo, focus } = req.body
@@ -8522,9 +9013,13 @@ async function jsInfo(url) {
 const TMP_DIR = path.join(os.tmpdir(), 'dz-tube')
 try { fs.mkdirSync(TMP_DIR, { recursive: true }) } catch {}
 function tmpFile(ext) {
-  return path.join(TMP_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`)
+  const safeExt = String(ext).replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'tmp'
+  return path.join(TMP_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${safeExt}`)
 }
-function safeUnlink(p) { fs.unlink(p, () => {}) }
+function safeUnlink(p) {
+  if (!p || !path.resolve(String(p)).startsWith(TMP_DIR + path.sep)) return
+  fs.unlink(p, () => {})
+}
 
 function isValidYouTubeUrl(u) {
   if (typeof u !== 'string' || u.length > 2048) return false

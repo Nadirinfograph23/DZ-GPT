@@ -72,6 +72,40 @@ The system is built as a layered architecture, with V1, V2, V3, and V4 represent
     - **Reasoner**: Deep-research orchestrator: `plan → parallel multi-fetch → fuse + rank → self-critique → render with citations → memory`.
 - **Live Sports Cards**: Implemented a fix for `jdwel.com` data sourcing on Vercel by using Jina AI Reader as a reverse-proxy for Cloudflare-protected sites.
 
+## Security Hardening (May 2026)
+
+A full security audit was performed and the following fixes were applied:
+
+- **ReDoS Prevention**: Escaped regex special characters in user-supplied labels before `new RegExp()` in `modules/dz-maps/intent.js` and `lib/news.js`
+- **Template Injection / XSS**: Added `escapeHtml()` sanitization for user-supplied values embedded in HTML templates in `lib/dzPlaceSearch.js` and `lib/dz-v4/generator.js`
+- **Prototype Pollution Guard**: Added explicit Set-based whitelist validation for `templateId` in `lib/dz-v3/webapp-generator.js` before property lookup on `TEMPLATES` object
+- **Path Traversal Prevention**: Hardened `tmpFile()` in `server.js` to only accept alphanumeric file extensions; `safeUnlink()` now verifies paths stay within the `TMP_DIR` sandbox before unlinking
+- **Command Injection**: Replaced `execSync(cmd)` with `spawnSync(bin, args[])` in `scripts/update-changelog.mjs` to eliminate shell injection risk
+- **Dependency Audit**: 0 vulnerabilities found across all 537 packages
+
+## Rating System (May 2026)
+
+Added 👍/👎 rating buttons to DZ Agent assistant responses, next to the copy button:
+
+- **Per-message rating**: Each assistant message has thumbs-up/thumbs-down toggle buttons. Clicking the same button again removes the rating.
+- **Global counter**: A persistent counter in `localStorage` (`dz-agent-ratings-stats`) tracks total 👍 and 👎 across all sessions. Displayed in the footer bar when at least one rating exists.
+- **AI context injection**: The rating of the last rated message is injected into the next outgoing request so the model adjusts its style — more detailed on 👎, consistent on 👍.
+- **CSS**: New classes `.dz-rating-btn`, `.dz-rating-btn--up/--down`, `.dz-rating-btn--active`, `.dz-ratings-bar`, `.dz-ratings-up/down` added in `src/styles/dz-agent.css`.
+- **Files modified**: `src/components/DZChatBox.tsx`, `src/styles/dz-agent.css`.
+
+## GitHub Smart Push / Export Pipeline (May 2026)
+
+Added a full "export to GitHub and deploy to Vercel" pipeline accessible from DZ Agent:
+
+- **New endpoint** `POST /api/dz-agent/github/smart-push` in `server.js`: atomically creates a new branch (`dz-agent/YYYY-MM-DDTHH-mm-ss`), commits one or more files to it, creates a PR (`branch → main`), and returns the PR URL. Vercel picks up the PR automatically if the repo is connected.
+- **Intent detection**: Natural-language phrases like "صدّر التغييرات", "تصدير + PR", "commit and PR", "deploy to vercel", etc. trigger the smart-push pipeline from the `/api/dz-agent-chat` handler.
+- **UI approval dialog**: Extended `ApprovalDialog` in `DZChatBox.tsx` to show a visual pipeline `Branch → Commit → PR → ▲ Vercel` before execution. User must confirm before any GitHub action is taken.
+- **executeApprovedAction**: Added `smart-push` handler that calls `/api/dz-agent/github/smart-push` and displays the PR URL on success.
+- **RepoActionPanel**: Added "تصدير + PR + Vercel" button (🔨 icon, green) to `REPO_ACTIONS` array. Triggers `smart-push` intent prefill in the chat input.
+- **PendingAction interface**: Extended with `type: 'smart-push'`, `files`, `prTitle`, `prBody`, `baseBranch`, `deployVercel` fields.
+- **CSS**: New classes `.gh-approval-value--pipeline`, `.gh-pipeline-arrow`, `.gh-pipeline-vercel`, `.gh-approval-files`, `.gh-approval-file-row` in `src/styles/dz-agent.css`.
+- **Files modified**: `src/components/DZChatBox.tsx`, `server.js`, `src/styles/dz-agent.css`.
+
 ## External Dependencies
 
 - **AI Providers**: Groq (default), DeepSeek, Ollama.

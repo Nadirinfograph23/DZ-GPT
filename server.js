@@ -16,6 +16,7 @@ import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
+import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
@@ -11148,6 +11149,17 @@ try {
   mountDzTubeAnalytics(app)
 } catch (err) {
   console.warn('[dz-tube-analytics] mount failed:', err.message)
+}
+
+// ===== YOUTUBE INSIGHT MODULE (plugin — additive only) =====
+// New endpoints: /api/youtube-insight/{health,analyze,search,discuss,video/:id}
+try {
+  mountYouTubeInsight(app, {
+    aiGenerate: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[youtube-insight] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

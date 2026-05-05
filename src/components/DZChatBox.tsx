@@ -9,6 +9,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
+  ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -16,6 +17,25 @@ import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
+
+// ===== RATING PERSISTENCE =====
+const RATINGS_KEY = 'dz-msg-ratings'
+type RatingVote = 'up' | 'down'
+type RatingsStore = Record<string, RatingVote>
+
+function loadRatings(): RatingsStore {
+  try { return JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}') } catch { return {} }
+}
+function persistRating(msgId: string, vote: RatingVote): RatingsStore {
+  const store = loadRatings()
+  if (store[msgId] === vote) {
+    delete store[msgId]
+  } else {
+    store[msgId] = vote
+  }
+  localStorage.setItem(RATINGS_KEY, JSON.stringify(store))
+  return store
+}
 
 // ===== TYPES =====
 type RichType =
@@ -177,7 +197,7 @@ interface DZMessage {
   newsQuery?: string
   executionLang?: string
   executionCode?: string
-  webReaderIntent?: 'build' | 'reader' | 'update'
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }
 
 interface ActionLogEntry {
@@ -681,11 +701,12 @@ function CodeAnalysisPanel({
 
 // ===== CODE BLOCK =====
 // ── Web Reader Intent Badge ────────────────────────────────────────────────
-function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' }) {
+function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' | 'extract' }) {
   const config = {
-    build:  { icon: <Hammer size={12} />,  label: 'Build Mode',  color: '#22c55e', bg: '#052e16' },
-    reader: { icon: <Monitor size={12} />, label: 'Reader Mode', color: '#38bdf8', bg: '#082f49' },
-    update: { icon: <Layers size={12} />,  label: 'Update Mode', color: '#f59e0b', bg: '#1c1008' },
+    build:   { icon: <Hammer size={12} />,   label: 'Build Mode',   color: '#22c55e', bg: '#052e16' },
+    reader:  { icon: <Monitor size={12} />,  label: 'Reader Mode',  color: '#38bdf8', bg: '#082f49' },
+    update:  { icon: <Layers size={12} />,   label: 'Update Mode',  color: '#f59e0b', bg: '#1c1008' },
+    extract: { icon: <FileText size={12} />, label: 'Extract HTML', color: '#a855f7', bg: '#2e1065' },
   }[intent]
   return (
     <span style={{
@@ -963,18 +984,49 @@ try {
 
 type WPCodeTab = 'html' | 'css' | 'js'
 
+// ── BlobIframe: renders HTML via blob URL to avoid CSP srcDoc issues ──────────
+function BlobIframe({
+  html,
+  className,
+  style,
+}: {
+  html: string
+  className?: string
+  style?: React.CSSProperties
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [html])
+  if (!blobUrl) return null
+  return (
+    <iframe
+      src={blobUrl}
+      className={className}
+      style={style}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+      title="Website Live Preview"
+    />
+  )
+}
+
 function WebsitePreview({
   htmlCode,
   cssCode: cssCodeProp = '',
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
   webBuilderMeta,
+  webReaderIntent,
 }: {
   htmlCode: string
   cssCode?: string
   jsCode?: string
   onInsertPrompt?: (p: string) => void
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }) {
   const [view, setView]               = useState<'preview' | 'code'>('preview')
   const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
@@ -1107,9 +1159,9 @@ function WebsitePreview({
         </div>
         <div className="dz-wp-actions">
           <span className="dz-wp-size">{sizeKb} KB</span>
-          <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
+          <button className="dz-wp-btn" onClick={() => { navigator.clipboard.writeText(htmlCode); setCopied(true); setTimeout(() => setCopied(false), 2000) }} title="نسخ كامل HTML">
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'تم النسخ ✓' : 'نسخ'}
+            {copied ? 'تم ✓' : 'Copy HTML'}
           </button>
           <button
             className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`}
@@ -1214,12 +1266,10 @@ function WebsitePreview({
             <span className="dz-wp-url">dz-agent-site.html</span>
           </div>
           <div className="dz-wp-frame-scroller">
-            <iframe
-              srcDoc={previewSrc}
+            <BlobIframe
+              html={previewSrc}
               className="dz-wp-frame"
               style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title="Website Live Preview"
             />
           </div>
         </div>
@@ -2319,6 +2369,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
+  const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
+
+  const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
+    const updated = persistRating(msgId, vote)
+    setRatings(updated)
+    const actualVote = updated[msgId]
+    if (actualVote) {
+      fetch('/api/dz-agent/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msgId, vote: actualVote, query }),
+      }).catch(() => {})
+    }
+  }, [])
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -3058,7 +3122,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           cssCode: (data.cssCode as string) || '',
           jsCode:  (data.jsCode  as string) || '',
           webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
-          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       } else {
         addAssistantMessage({
@@ -3067,7 +3131,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
-          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       }
     } catch (err: unknown) {
@@ -3390,6 +3454,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           jsCode={msg.jsCode}
                           onInsertPrompt={p => setInput(p)}
                           webBuilderMeta={msg.webBuilderMeta}
+                          webReaderIntent={msg.webReaderIntent}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
@@ -3424,6 +3489,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       إعادة المحاولة
                     </button>
                   )}
+                  <button
+                    className={`dz-action-btn dz-action-btn--up${ratings[msg.id] === 'up' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة جيدة"
+                    onClick={() => sendRating(msg.id, 'up', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsUp size={13} />
+                  </button>
+                  <button
+                    className={`dz-action-btn dz-action-btn--down${ratings[msg.id] === 'down' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة سيئة"
+                    onClick={() => sendRating(msg.id, 'down', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsDown size={13} />
+                  </button>
                 </div>
               )}
             </div>

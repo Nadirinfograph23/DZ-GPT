@@ -8,7 +8,8 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain, MapPin,
+  Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
+  ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -16,6 +17,25 @@ import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
+
+// ===== RATING PERSISTENCE =====
+const RATINGS_KEY = 'dz-msg-ratings'
+type RatingVote = 'up' | 'down'
+type RatingsStore = Record<string, RatingVote>
+
+function loadRatings(): RatingsStore {
+  try { return JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}') } catch { return {} }
+}
+function persistRating(msgId: string, vote: RatingVote): RatingsStore {
+  const store = loadRatings()
+  if (store[msgId] === vote) {
+    delete store[msgId]
+  } else {
+    store[msgId] = vote
+  }
+  localStorage.setItem(RATINGS_KEY, JSON.stringify(store))
+  return store
+}
 
 // ===== TYPES =====
 type RichType =
@@ -33,6 +53,7 @@ type RichType =
   | 'stats'
   | 'website'
   | 'map'
+  | 'execution'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -174,6 +195,9 @@ interface DZMessage {
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
   hasMoreNews?: boolean
   newsQuery?: string
+  executionLang?: string
+  executionCode?: string
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }
 
 interface ActionLogEntry {
@@ -676,10 +700,34 @@ function CodeAnalysisPanel({
 }
 
 // ===== CODE BLOCK =====
+// ── Web Reader Intent Badge ────────────────────────────────────────────────
+function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' | 'extract' }) {
+  const config = {
+    build:   { icon: <Hammer size={12} />,   label: 'Build Mode',   color: '#22c55e', bg: '#052e16' },
+    reader:  { icon: <Monitor size={12} />,  label: 'Reader Mode',  color: '#38bdf8', bg: '#082f49' },
+    update:  { icon: <Layers size={12} />,   label: 'Update Mode',  color: '#f59e0b', bg: '#1c1008' },
+    extract: { icon: <FileText size={12} />, label: 'Extract HTML', color: '#a855f7', bg: '#2e1065' },
+  }[intent]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+      color: config.color, background: config.bg, border: `1px solid ${config.color}40`,
+      marginBottom: 6,
+    }}>
+      {config.icon} 🌐 {config.label}
+    </span>
+  )
+}
+
 function DZCodeBlock({ children, className }: { children: React.ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const language = className?.replace('language-', '') || ''
   const codeText = String(children).replace(/\n$/, '')
+  const isHtml = language === 'html' || language === 'htm' ||
+    (codeText.includes('<html') && codeText.includes('</html>'))
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeText)
@@ -687,16 +735,48 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownload = () => {
+    const ext = language || 'txt'
+    const mime = language === 'html' ? 'text/html' : language === 'css' ? 'text/css' :
+      language === 'js' || language === 'javascript' ? 'text/javascript' :
+      language === 'python' || language === 'py' ? 'text/x-python' : 'text/plain'
+    const blob = new Blob([codeText], { type: mime })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a); a.click()
+    document.body.removeChild(a); URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
   return (
     <div className="dz-code-block">
       <div className="dz-code-block-header">
         <span className="dz-code-lang">{language || 'code'}</span>
-        <button className="dz-code-copy-btn" onClick={handleCopy}>
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {isHtml && (
+            <button className="dz-code-copy-btn" onClick={() => setShowPreview(p => !p)} title="معاينة في الإطار">
+              <Monitor size={13} />
+              {showPreview ? 'إخفاء' : 'معاينة'}
+            </button>
+          )}
+          <button className="dz-code-copy-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? <Check size={13} /> : <Download size={13} />}
+            {downloaded ? 'تم' : 'تحميل'}
+          </button>
+          <button className="dz-code-copy-btn" onClick={handleCopy}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </div>
       <pre><code className={className}>{children}</code></pre>
+      {isHtml && showPreview && (
+        <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a3e' }}>
+          <WebsitePreview htmlCode={codeText} />
+        </div>
+      )}
     </div>
   )
 }
@@ -746,7 +826,192 @@ function buildHtmlShellClient(html: string, _css: string, _js: string): string {
   return result
 }
 
+// ── Code Execution Preview Component (Programming Section ONLY) ──────────────
+function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
+  const [view, setView] = useState<'output' | 'code'>('output')
+  const [running, setRunning] = useState(false)
+  const [hasRun, setHasRun] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const runCode = useCallback(() => {
+    setRunning(true)
+    setHasRun(true)
+
+    if (lang === 'python') {
+      // Python execution via Pyodide in sandboxed iframe
+      const pyHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"><\/script></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+async function main() {
+  try {
+    out.textContent = '⏳ جاري تحميل Python...\\n';
+    const pyodide = await loadPyodide();
+    out.textContent = '▶ جاري التنفيذ...\\n\\n';
+    pyodide.setStdout({ batched: (text) => { logs.push(text); out.textContent += text + '\\n'; } });
+    pyodide.setStderr({ batched: (text) => { logs.push('⚠️ ' + text); out.textContent += '⚠️ ' + text + '\\n'; } });
+    await pyodide.runPythonAsync(${JSON.stringify(code)});
+    if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+    else out.textContent += '\\n✅ انتهى التنفيذ';
+    window.parent.postMessage({ type: 'exec-done', logs }, '*');
+  } catch (e) {
+    out.textContent += '\\n❌ خطأ: ' + e.message;
+    window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+  }
+}
+main();
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = pyHtml
+      }
+    } else {
+      // JavaScript execution via sandboxed iframe
+      const jsHtml = `<!DOCTYPE html><html><head></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+const origLog = console.log;
+const origErr = console.error;
+const origWarn = console.warn;
+console.log = (...args) => { const t = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.error = (...args) => { const t = '❌ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.warn = (...args) => { const t = '⚠️ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+try {
+  out.textContent = '▶ جاري التنفيذ...\\n\\n';
+  ${code}
+  if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+  else out.textContent += '\\n✅ انتهى التنفيذ';
+  window.parent.postMessage({ type: 'exec-done', logs }, '*');
+} catch (e) {
+  out.textContent += '\\n❌ خطأ: ' + e.message;
+  window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+}
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = jsHtml
+      }
+    }
+
+    // Listen for completion
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'exec-done') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      } else if (e.data?.type === 'exec-error') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      }
+    }
+    window.addEventListener('message', handler)
+
+    // Timeout after 30s
+    setTimeout(() => {
+      setRunning(false)
+      window.removeEventListener('message', handler)
+    }, 30000)
+  }, [code, lang])
+
+  // Auto-run on mount
+  useEffect(() => {
+    if (!hasRun) runCode()
+  }, [runCode, hasRun])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleDownload = () => {
+    const ext = lang === 'python' ? 'py' : 'js'
+    const blob = new Blob([code], { type: 'text/plain' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
+  const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
+
+  return (
+    <div className="dz-exec-root">
+      <div className="dz-exec-header">
+        <span className="dz-exec-lang">{langLabel}</span>
+        <div className="dz-exec-tabs">
+          <button className={`dz-exec-tab${view === 'output' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('output')}>
+            ▶ المخرجات
+          </button>
+          <button className={`dz-exec-tab${view === 'code' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('code')}>
+            {'</>'} الكود
+          </button>
+        </div>
+        <div className="dz-exec-actions">
+          <button className="dz-exec-btn" onClick={runCode} disabled={running} title="إعادة التشغيل">
+            {running ? '⏳' : '▶'} {running ? 'جارٍ...' : 'تشغيل'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleCopy} title="نسخ الكود">
+            {copied ? '✓ تم' : '📋 نسخ'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? '✓ تم' : '⬇ تحميل'}
+          </button>
+        </div>
+      </div>
+      <div className="dz-exec-body">
+        {view === 'output' ? (
+          <iframe
+            ref={iframeRef}
+            className="dz-exec-iframe"
+            sandbox="allow-scripts allow-same-origin"
+            title="Code Execution Output"
+          />
+        ) : (
+          <pre className="dz-exec-code"><code>{code}</code></pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type WPCodeTab = 'html' | 'css' | 'js'
+
+// ── BlobIframe: renders HTML via blob URL to avoid CSP srcDoc issues ──────────
+function BlobIframe({
+  html,
+  className,
+  style,
+}: {
+  html: string
+  className?: string
+  style?: React.CSSProperties
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [html])
+  if (!blobUrl) return null
+  return (
+    <iframe
+      src={blobUrl}
+      className={className}
+      style={style}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+      title="Website Live Preview"
+    />
+  )
+}
 
 function WebsitePreview({
   htmlCode,
@@ -754,12 +1019,14 @@ function WebsitePreview({
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
   webBuilderMeta,
+  webReaderIntent,
 }: {
   htmlCode: string
   cssCode?: string
   jsCode?: string
   onInsertPrompt?: (p: string) => void
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }) {
   const [view, setView]               = useState<'preview' | 'code'>('preview')
   const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
@@ -892,9 +1159,9 @@ function WebsitePreview({
         </div>
         <div className="dz-wp-actions">
           <span className="dz-wp-size">{sizeKb} KB</span>
-          <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
+          <button className="dz-wp-btn" onClick={() => { navigator.clipboard.writeText(htmlCode); setCopied(true); setTimeout(() => setCopied(false), 2000) }} title="نسخ كامل HTML">
             {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? 'تم النسخ ✓' : 'نسخ'}
+            {copied ? 'تم ✓' : 'Copy HTML'}
           </button>
           <button
             className={`dz-wp-btn dz-wp-btn--dl${downloaded ? ' dz-wp-btn--ok' : ''}`}
@@ -999,12 +1266,10 @@ function WebsitePreview({
             <span className="dz-wp-url">dz-agent-site.html</span>
           </div>
           <div className="dz-wp-frame-scroller">
-            <iframe
-              srcDoc={previewSrc}
+            <BlobIframe
+              html={previewSrc}
               className="dz-wp-frame"
               style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title="Website Live Preview"
             />
           </div>
         </div>
@@ -2104,6 +2369,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
+  const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
+
+  const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
+    const updated = persistRating(msgId, vote)
+    setRatings(updated)
+    const actualVote = updated[msgId]
+    if (actualVote) {
+      fetch('/api/dz-agent/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msgId, vote: actualVote, query }),
+      }).catch(() => {})
+    }
+  }, [])
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -2826,6 +3105,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           mapHtml: data.mapHtml as string,
           mapMeta: (data.mapMeta as Record<string, unknown>) || {},
         })
+      } else if (data.isExecution && typeof data.executionCode === 'string' && data.executionCode.length > 5) {
+        trackFeatureUsage('code-execution')
+        addAssistantMessage({
+          content: (data.content as string) || '✅ تم إنشاء الكود بنجاح!',
+          richType: 'execution',
+          executionLang: (data.executionLang as string) || 'javascript',
+          executionCode: data.executionCode as string,
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -2835,6 +3122,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           cssCode: (data.cssCode as string) || '',
           jsCode:  (data.jsCode  as string) || '',
           webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       } else {
         addAssistantMessage({
@@ -2843,6 +3131,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       }
     } catch (err: unknown) {
@@ -3062,6 +3351,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />
                   ) : (
                     <>
+                      {msg.webReaderIntent && (
+                        <div style={{ marginBottom: 6 }}>
+                          <WebReaderIntentBadge intent={msg.webReaderIntent} />
+                        </div>
+                      )}
                       {msg.content && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -3147,6 +3441,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
                           : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
                       )}
+                      {msg.richType === 'execution' && msg.executionCode && (
+                        <CodeExecutionPreview
+                          code={msg.executionCode}
+                          lang={msg.executionLang || 'javascript'}
+                        />
+                      )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview
                           htmlCode={msg.htmlCode}
@@ -3154,6 +3454,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           jsCode={msg.jsCode}
                           onInsertPrompt={p => setInput(p)}
                           webBuilderMeta={msg.webBuilderMeta}
+                          webReaderIntent={msg.webReaderIntent}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
@@ -3188,6 +3489,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       إعادة المحاولة
                     </button>
                   )}
+                  <button
+                    className={`dz-action-btn dz-action-btn--up${ratings[msg.id] === 'up' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة جيدة"
+                    onClick={() => sendRating(msg.id, 'up', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsUp size={13} />
+                  </button>
+                  <button
+                    className={`dz-action-btn dz-action-btn--down${ratings[msg.id] === 'down' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة سيئة"
+                    onClick={() => sendRating(msg.id, 'down', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsDown size={13} />
+                  </button>
                 </div>
               )}
             </div>

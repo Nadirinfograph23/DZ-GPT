@@ -55,6 +55,7 @@ type RichType =
   | 'map'
   | 'execution'
   | 'youtube'
+  | 'web-reader'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -240,6 +241,7 @@ interface DZMessage {
   youtubeSuggestions?: string[]
   captionNote?: string
   captionText?: string
+  webReaderSiteInfo?: { url: string; title: string; domain: string; description: string; headings: string[] }
 }
 
 interface ActionLogEntry {
@@ -819,6 +821,60 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
           <WebsitePreview htmlCode={codeText} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ===== WEB READER DETECT PANEL =====
+function WebReaderPanel({
+  siteInfo,
+  onAnalyze,
+  onClone,
+}: {
+  siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
+  onAnalyze: () => void
+  onClone: () => void
+}) {
+  return (
+    <div className="dzc-wr-panel">
+      <div className="dzc-wr-site-row">
+        <span className="dzc-wr-site-globe">🌐</span>
+        <div className="dzc-wr-site-meta">
+          <div className="dzc-wr-site-title">{siteInfo.title || siteInfo.domain}</div>
+          <div className="dzc-wr-site-domain">{siteInfo.domain}</div>
+        </div>
+        <a href={siteInfo.url} target="_blank" rel="noopener noreferrer" className="dzc-wr-site-link">↗</a>
+      </div>
+      {siteInfo.description && (
+        <p className="dzc-wr-desc">
+          {siteInfo.description.slice(0, 180)}{siteInfo.description.length > 180 ? '…' : ''}
+        </p>
+      )}
+      {siteInfo.headings.length > 0 && (
+        <div className="dzc-wr-headings">
+          {siteInfo.headings.map((h, i) => (
+            <span key={i} className="dzc-wr-heading-tag">{h.slice(0, 55)}</span>
+          ))}
+        </div>
+      )}
+      <hr className="dzc-wr-divider" />
+      <p className="dzc-wr-hint">اختر ما تريد فعله بهذا الموقع:</p>
+      <div className="dzc-wr-actions">
+        <button className="dzc-wr-btn dzc-wr-btn--analyze" onClick={onAnalyze}>
+          <span className="dzc-wr-btn-icon">🔍</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">تحليل الموقع</span>
+            <span className="dzc-wr-btn-desc">تلخيص المحتوى والهيكل والغرض</span>
+          </div>
+        </button>
+        <button className="dzc-wr-btn dzc-wr-btn--clone" onClick={onClone}>
+          <span className="dzc-wr-btn-icon">🧱</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">استنساخ الموقع</span>
+            <span className="dzc-wr-btn-desc">إنشاء نسخة مشابهة بـ HTML + CSS + JS</span>
+          </div>
+        </button>
+      </div>
     </div>
   )
 }
@@ -3421,6 +3477,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           captionNote: data.captionNote as string | undefined,
           captionText: data.captionText as string | undefined,
         })
+      } else if (data.isWebReader && data.webSiteInfo) {
+        trackFeatureUsage('web-reader')
+        addAssistantMessage({
+          content: (data.content as string) || '🌐 تم اكتشاف الموقع',
+          richType: 'web-reader',
+          webReaderSiteInfo: data.webSiteInfo as { url: string; title: string; domain: string; description: string; headings: string[] },
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -3764,6 +3827,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           onInsertPrompt={p => setInput(p)}
                           webBuilderMeta={msg.webBuilderMeta}
                           webReaderIntent={msg.webReaderIntent}
+                        />
+                      )}
+                      {msg.richType === 'web-reader' && msg.webReaderSiteInfo && (
+                        <WebReaderPanel
+                          siteInfo={msg.webReaderSiteInfo}
+                          onAnalyze={() => sendMessage(`حلل هذا الموقع وأعطني تحليلاً شاملاً للمحتوى والأقسام والهدف والجمهور المستهدف: ${msg.webReaderSiteInfo!.url}`)}
+                          onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
                         />
                       )}
                       {msg.richType === 'youtube' && (msg.youtubeVideo || msg.youtubeResults) && (

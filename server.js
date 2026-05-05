@@ -1042,6 +1042,71 @@ async function runGit(args, opts = {}) {
   })
 }
 
+// ===== YOUTUBE SMART VIDEO SELECTION — resolveVideoSelection() =====
+// Maps user ordinal/keyword intent to a specific video from candidates list.
+const YT_ORDINALS = [
+  // index 0 → position 1
+  ['الأول','اول','أول','الاول','1','رقم 1','رقم واحد','واحد','first','premier','الأولى','الاولى'],
+  // index 1 → position 2
+  ['الثاني','ثاني','2','رقم 2','رقم اثنين','اثنين','second','deuxième','الثانية'],
+  // index 2 → position 3
+  ['الثالث','ثالث','3','رقم 3','رقم ثلاثة','ثلاثة','third','troisième','الثالثة'],
+  // index 3 → position 4
+  ['الرابع','رابع','4','رقم 4','رقم أربعة','أربعة','fourth','quatrième','الرابعة'],
+  // index 4 → position 5
+  ['الخامس','خامس','5','رقم 5','رقم خمسة','خمسة','fifth','cinquième','الخامسة'],
+  // index 5 → position 6
+  ['السادس','سادس','6','رقم 6','سادسة'],
+  // index 6 → position 7
+  ['السابع','سابع','7','رقم 7','سابعة'],
+  // index 7 → position 8
+  ['الثامن','ثامن','8','رقم 8','ثامنة'],
+]
+
+function resolveVideoSelection(userMessage, candidates) {
+  if (!candidates || candidates.length === 0) return null
+  const norm = String(userMessage || '')
+    .toLowerCase()
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    .replace(/[؟?!.,،:;]/g, ' ')
+    .trim()
+
+  // 1) Ordinal match — "الأول", "رقم 2", etc.
+  for (let i = 0; i < YT_ORDINALS.length; i++) {
+    for (const kw of YT_ORDINALS[i]) {
+      const pattern = new RegExp(`(^|\\s)${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'i')
+      if (pattern.test(norm) && i < candidates.length) {
+        return candidates[i]
+      }
+    }
+  }
+
+  // 2) "هذا الفيديو" / "هذا" / "this one" when only 1 candidate
+  if (/هذا|هذه|this one|this video|celui[- ]ci/i.test(norm) && candidates.length === 1) {
+    return candidates[0]
+  }
+
+  // 3) Keyword partial-title match (top-scored)
+  const words = norm.split(/\s+/).filter(w => w.length >= 3)
+  if (words.length === 0) return null
+
+  let bestScore = 0
+  let bestCandidate = null
+  for (const c of candidates) {
+    const titleNorm = String(c.title || '').toLowerCase()
+      .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    let score = 0
+    for (const w of words) {
+      if (titleNorm.includes(w)) score += w.length
+    }
+    if (score > bestScore) { bestScore = score; bestCandidate = c }
+  }
+  // Only use title-match if meaningful overlap (>= 6 chars worth)
+  if (bestScore >= 6) return bestCandidate
+
+  return null
+}
+
 // ===== GROQ SMART KEY ROTATION SYSTEM =====
 const KEY_COOLDOWN_MS = 60 * 1000        // 60s cooldown after rate-limit
 const KEY_ERROR_COOLDOWN_MS = 30 * 1000  // 30s cooldown after generic error
@@ -6433,6 +6498,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     } catch (ytDiscErr) {
       console.error('[YouTube Discussion] Error:', ytDiscErr.message)
       return res.status(200).json({ content: '⚠️ خطأ في معالجة سؤالك عن الفيديو. يرجى المحاولة مرة أخرى.' })
+    }
+  }
+
+  // ── YouTube Smart Selection — Non-Invasive Plugin ─────────────────────────
+  // Resolves ordinal/keyword user intent to a previously shown video candidate.
+  const youtubeCandidates = Array.isArray(req.body.youtubeCandidates)
+    ? req.body.youtubeCandidates
+        .slice(0, 20)
+        .filter(c => c && typeof c.id === 'string' && typeof c.url === 'string' && typeof c.title === 'string')
+    : []
+
+  if (youtubeCandidates.length > 0 && !youtubeContext?.videoId) {
+    const selectedVideo = resolveVideoSelection(lastUserMessage, youtubeCandidates)
+    if (selectedVideo) {
+      console.log(`[YouTube:SmartSelect] Auto-selected index=${youtubeCandidates.indexOf(selectedVideo) + 1} title="${selectedVideo.title.slice(0, 60)}"`)
+      try {
+        const ytSmartResult = await handleYouTubeInput(selectedVideo.url, {
+          aiGenerate: (params) => safeGenerateAI({ ...params }),
+        })
+        if (ytSmartResult.flow === 'url') {
+          return res.status(200).json({
+            content: ytSmartResult.message || `🎬 تم تحليل **"${selectedVideo.title}"** بنجاح!`,
+            isYouTube: true,
+            youtubeFlow: 'url',
+            youtubeVideo: ytSmartResult.video || null,
+            youtubeAnalysis: ytSmartResult.analysis || null,
+            youtubeSuggestions: ytSmartResult.suggestions || [],
+            captionNote: ytSmartResult.captionNote || null,
+          })
+        }
+      } catch (ytSmartErr) {
+        console.error('[YouTube:SmartSelect] Error:', ytSmartErr.message)
+        // Non-fatal — fall through to normal YouTube engine
+      }
     }
   }
 

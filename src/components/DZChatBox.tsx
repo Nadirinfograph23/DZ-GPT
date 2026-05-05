@@ -1448,9 +1448,11 @@ function YouTubePanel({
   }
 
   if (flow === 'search' && results && results.length > 0) {
+    const ORDINAL_LABELS = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن']
+
     return (
       <div className="dzc-yt">
-        {/* Embed active video */}
+        {/* Embed active video (preview only — click card to fully analyze) */}
         {activeId && (
           <div className="dzc-yt-embed-wrap">
             <iframe
@@ -1468,14 +1470,24 @@ function YouTubePanel({
           <span className="dzc-yt-results-count">{results.length} نتيجة</span>
         </div>
 
+        {/* Smart-select hint */}
+        <p className="dzc-yt-select-hint">انقر على فيديو لتحليله، أو اكتب "الأول" / "الثاني" للاختيار</p>
+
         {/* Results grid */}
         <div className="dzc-yt-grid">
-          {results.map(r => (
+          {results.map((r, idx) => (
             <button
               key={r.id}
               className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
-              onClick={() => setActiveId(r.id)}
+              onClick={() => {
+                setActiveId(r.id)
+                // Trigger full AI analysis when user clicks a card
+                onAsk?.(r.url)
+              }}
             >
+              {/* Numbered index badge */}
+              <span className="dzc-yt-card-index">{idx + 1}</span>
+
               <div className="dzc-yt-card-thumb-wrap">
                 <img
                   src={r.thumbnail || `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
@@ -1487,13 +1499,27 @@ function YouTubePanel({
                   <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
                 )}
                 <div className="dzc-yt-card-play">
-                  <div className="dzc-yt-play-circle">▶</div>
+                  <div className="dzc-yt-play-circle">▶ تحليل</div>
                 </div>
               </div>
               <div className="dzc-yt-card-body">
                 <p className="dzc-yt-card-title">{r.title}</p>
                 <p className="dzc-yt-card-meta">{r.channel}</p>
               </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Quick-pick ordinal buttons */}
+        <div className="dzc-yt-quickpick">
+          {results.slice(0, 5).map((r, idx) => (
+            <button
+              key={r.id}
+              className="dzc-yt-qp-btn"
+              onClick={() => onAsk?.(r.url)}
+              title={r.title}
+            >
+              {idx + 1}️⃣ {ORDINAL_LABELS[idx] || `رقم ${idx + 1}`}
             </button>
           ))}
         </div>
@@ -2573,6 +2599,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
   const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
+  // Smart Video Selection — stores last search results so they can be sent as candidates
+  const youtubeCandidatesRef = useRef<YouTubeResult[]>([])
 
   const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
     const updated = persistRating(msgId, vote)
@@ -2697,6 +2725,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
     if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
       setActiveYouTubeVideo(msg.youtubeVideo)
+      // Clear candidates once a video is selected and analyzed
+      youtubeCandidatesRef.current = []
+    }
+    // Smart Video Selection — cache search candidates for ordinal resolution
+    if (msg.richType === 'youtube' && msg.youtubeFlow === 'search' && Array.isArray(msg.youtubeResults) && msg.youtubeResults.length > 0) {
+      youtubeCandidatesRef.current = msg.youtubeResults
     }
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
     // Auto-speak the full text reply via the voice system (no-op if muted).
@@ -3210,6 +3244,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               currentRepo: currentRepo || undefined,
               dashboardContext,
               youtubeContext: activeYouTubeVideo || undefined,
+              youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
             }),
             signal,
           })

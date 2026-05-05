@@ -53,14 +53,20 @@ export async function handleYouTubeInput(input, options = {}) {
       }
     }
 
-    if (!videoData.title && !videoData.description) {
+    // Only fail hard if we have absolutely nothing — no title, description, or captions
+    if (!videoData.title && !videoData.description && !videoData.captions) {
       return {
         ok: false,
         flow: 'url',
         videoId: detection.videoId,
         error: 'empty_video_data',
-        message: '⚠️ لم يتم العثور على بيانات لهذا الفيديو. قد يكون خاصاً أو محذوفاً.',
+        message: '⚠️ لم يتمكن DZ Agent من جلب بيانات هذا الفيديو. قد يكون محمياً أو تعذّر الوصول إليه. جرّب رابطاً آخر.',
       }
+    }
+
+    // If yt-dlp failed but we have captions, use a safe fallback title
+    if (!videoData.title && videoData.captions) {
+      videoData.title = 'فيديو YouTube'
     }
 
     // Run AI analysis if we have an aiGenerate function

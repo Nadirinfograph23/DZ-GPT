@@ -142,6 +142,25 @@ export async function searchVideos(query, limit = 8) {
  * @param {string} videoId
  * @returns {Promise<Object>}
  */
+/**
+ * Fetch minimal title + channel from YouTube's public oEmbed endpoint.
+ * No auth required, very fast, works even when yt-dlp is blocked.
+ */
+async function fetchOEmbed(videoId) {
+  try {
+    const r = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+      { headers: { 'User-Agent': YTDLP_UA }, signal: AbortSignal.timeout(6000) }
+    )
+    if (!r.ok) return null
+    const j = await r.json().catch(() => null)
+    if (!j?.title) return null
+    return { title: j.title, channel: j.author_name || '' }
+  } catch {
+    return null
+  }
+}
+
 export async function fetchVideoData(videoId) {
   const url = `https://www.youtube.com/watch?v=${videoId}`
   let raw = null
@@ -181,16 +200,20 @@ export async function fetchVideoData(videoId) {
       publishDate: raw.upload_date ? formatUploadDate(raw.upload_date) : '',
       isLive: raw.is_live || false,
       language: raw.language || null,
-      // Caption track maps — we'll resolve these next
       _subtitles: raw.subtitles || {},
       _autoCaptions: raw.automatic_captions || {},
     }
   } else {
-    // Minimal fallback
+    // yt-dlp failed — try oEmbed for at least title + channel
+    const oembed = await fetchOEmbed(videoId)
+    console.log(`[YouTubeInsight:Extractor] oEmbed fallback: ${oembed ? oembed.title : 'failed'}`)
     data = {
       id: videoId,
       url,
-      title: '', description: '', channel: '', channelId: '',
+      title: oembed?.title || '',
+      description: '',
+      channel: oembed?.channel || '',
+      channelId: '',
       duration: '', durationSeconds: 0, views: 0, likes: 0,
       thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       tags: [], categories: [], publishDate: '', isLive: false, language: null,
@@ -198,9 +221,10 @@ export async function fetchVideoData(videoId) {
     }
   }
 
-  // Fetch captions using the track URLs from yt-dlp JSON
+  // Fetch captions — works independently of yt-dlp via timedtext API
   data.captions = await fetchCaptionsFromTracks(data._subtitles, data._autoCaptions, videoId)
-  data.captionSource = data.captions ? 'yt-dlp-tracks' : 'none'
+  data.captionSource = data.captions ? 'fetched' : 'none'
+  console.log(`[YouTubeInsight:Extractor] videoId=${videoId} title="${data.title.slice(0,40)}" captions=${data.captions ? data.captions.length + ' chars' : 'none'}`)
 
   // Clean up internal fields
   delete data._subtitles
@@ -280,26 +304,71 @@ async function fetchAndParseCaption(url) {
 }
 
 async function fetchCaptionsTimedtext(videoId) {
-  const langs = ['ar', 'fr', 'en', 'en-US']
-  for (const lang of langs) {
+  // Include both manual and auto-generated (asr) track variants for major languages
+  const candidates = [
+    'ar', 'fr', 'en', 'en-US', 'en-GB',
+    'a.ar', 'a.fr', 'a.en',  // auto-generated prefix used by YouTube
+  ]
+  for (const lang of candidates) {
     try {
+      // Some auto-generated tracks use "asr" kind parameter
       const capUrl = `https://www.youtube.com/api/timedtext?lang=${lang}&v=${videoId}&fmt=json3`
       const r = await fetch(capUrl, {
         headers: { 'User-Agent': YTDLP_UA, 'Accept-Language': 'ar,en;q=0.9,fr;q=0.8' },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(8000),
       })
       if (!r.ok) continue
       const json = await r.json().catch(() => null)
-      if (!json?.events) continue
+      if (!json?.events?.length) continue
       const text = json.events
         .filter(e => e.segs)
         .map(e => e.segs.map(s => s.utf8 || '').join(''))
         .join(' ')
         .replace(/\s+/g, ' ')
         .trim()
-      if (text.length > 50) return text.slice(0, 8000)
+      if (text.length > 50) {
+        console.log(`[YouTubeInsight:Extractor] timedtext found lang=${lang} len=${text.length}`)
+        return text.slice(0, 8000)
+      }
     } catch { /* try next lang */ }
   }
+
+  // Last attempt: fetch the available captions list from YouTube's timedtext API
+  try {
+    const listUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&type=list`
+    const lr = await fetch(listUrl, {
+      headers: { 'User-Agent': YTDLP_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (lr.ok) {
+      const xml = await lr.text()
+      // Extract lang codes from XML e.g. <track id="0" name="" lang_code="ar" .../>
+      const langMatches = [...xml.matchAll(/lang_code="([^"]+)"/g)].map(m => m[1])
+      for (const lang of langMatches.slice(0, 5)) {
+        try {
+          const capUrl = `https://www.youtube.com/api/timedtext?lang=${lang}&v=${videoId}&fmt=json3`
+          const r = await fetch(capUrl, {
+            headers: { 'User-Agent': YTDLP_UA },
+            signal: AbortSignal.timeout(8000),
+          })
+          if (!r.ok) continue
+          const json = await r.json().catch(() => null)
+          if (!json?.events?.length) continue
+          const text = json.events
+            .filter(e => e.segs)
+            .map(e => e.segs.map(s => s.utf8 || '').join(''))
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (text.length > 50) {
+            console.log(`[YouTubeInsight:Extractor] timedtext list-found lang=${lang} len=${text.length}`)
+            return text.slice(0, 8000)
+          }
+        } catch { /* continue */ }
+      }
+    }
+  } catch { /* ignore */ }
+
   return null
 }
 

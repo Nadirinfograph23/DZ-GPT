@@ -53,9 +53,15 @@ const ANALYSIS_SCHEMA = `{
  */
 export async function analyzeVideo(videoData, aiGenerate) {
   const context = buildVideoContext(videoData)
-  const captionNote = videoData.captions
-    ? '✅ النص الكامل للفيديو متوفر.'
-    : '⚠️ لا تتوفر ترجمة نصية — التحليل مبني على العنوان والوصف فقط.'
+
+  let captionNote
+  if (videoData.captions && videoData.title && videoData.title !== 'فيديو YouTube') {
+    captionNote = '✅ النص الكامل للفيديو متوفر — استخدمه كمصدر رئيسي للتحليل.'
+  } else if (videoData.captions) {
+    captionNote = '✅ النص الكامل للفيديو متوفر — استخدمه كمصدر رئيسي للتحليل (بيانات العنوان غير مكتملة).'
+  } else {
+    captionNote = '⚠️ لا تتوفر ترجمة نصية — التحليل مبني على العنوان والوصف فقط.'
+  }
 
   const userMessage = `بيانات الفيديو:
 ${context}
@@ -118,10 +124,18 @@ ${ANALYSIS_SCHEMA}`
  */
 export async function discussVideo(videoData, userMessage, history, aiGenerate) {
   const context = buildVideoContext(videoData)
-  const captionNote = videoData.captions ? '' : '\n(ملاحظة: لا تتوفر ترجمة نصية كاملة، التحليل مبني على الوصف)'
+
+  let sourceNote
+  if (videoData.captions && videoData.title && videoData.title !== 'فيديو YouTube') {
+    sourceNote = '\n\nالنص الكامل للفيديو متوفر — استنِد إليه أساساً في إجاباتك.'
+  } else if (videoData.captions) {
+    sourceNote = '\n\nالنص الكامل للفيديو متوفر لكن بيانات العنوان غير مكتملة — استخدم النص كمصدر رئيسي.'
+  } else {
+    sourceNote = '\n\n(ملاحظة: لا تتوفر ترجمة نصية، أجب بناءً على العنوان والوصف المتاح)'
+  }
 
   const systemPrompt = `أنت مساعد محادثة داخل DZ Agent تتحدث عن هذا الفيديو على YouTube:
-${context}${captionNote}
+${context}${sourceNote}
 
 تصرف كمحلل محتوى ذكي. أجب بلغة المستخدم (عربية، دارجة جزائرية، فرنسية، أو إنجليزية).
 كن محادثياً، موجزاً، ومفيداً. إذا طُلب منك مهام أو أفكار مشاريع، قدّمها في نقاط واضحة.`

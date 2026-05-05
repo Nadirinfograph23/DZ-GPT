@@ -830,10 +830,12 @@ function WebReaderPanel({
   siteInfo,
   onAnalyze,
   onClone,
+  onExtract,
 }: {
   siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
   onAnalyze: () => void
   onClone: () => void
+  onExtract: () => void
 }) {
   return (
     <div className="dzc-wr-panel">
@@ -859,7 +861,7 @@ function WebReaderPanel({
       )}
       <hr className="dzc-wr-divider" />
       <p className="dzc-wr-hint">اختر ما تريد فعله بهذا الموقع:</p>
-      <div className="dzc-wr-actions">
+      <div className="dzc-wr-actions dzc-wr-actions--3">
         <button className="dzc-wr-btn dzc-wr-btn--analyze" onClick={onAnalyze}>
           <span className="dzc-wr-btn-icon">🔍</span>
           <div className="dzc-wr-btn-text">
@@ -872,6 +874,13 @@ function WebReaderPanel({
           <div className="dzc-wr-btn-text">
             <span className="dzc-wr-btn-title">استنساخ الموقع</span>
             <span className="dzc-wr-btn-desc">إنشاء نسخة مشابهة بـ HTML + CSS + JS</span>
+          </div>
+        </button>
+        <button className="dzc-wr-btn dzc-wr-btn--extract" onClick={onExtract}>
+          <span className="dzc-wr-btn-icon">📋</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">استخراج المحتوى</span>
+            <span className="dzc-wr-btn-desc">عناوين، نصوص، وروابط منظمة قابلة للنسخ</span>
           </div>
         </button>
       </div>
@@ -3834,6 +3843,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           siteInfo={msg.webReaderSiteInfo}
                           onAnalyze={() => sendMessage(`حلل هذا الموقع وأعطني تحليلاً شاملاً للمحتوى والأقسام والهدف والجمهور المستهدف: ${msg.webReaderSiteInfo!.url}`)}
                           onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
+                          onExtract={() => sendMessage(`استخرج كل محتوى هذا الموقع وقدمه بشكل منظم ومنسق: العناوين الرئيسية، الفقرات المهمة، والروابط الأساسية — اجعله قابلاً للنسخ والاستخدام: ${msg.webReaderSiteInfo!.url}`)}
                         />
                       )}
                       {msg.richType === 'youtube' && (msg.youtubeVideo || msg.youtubeResults) && (

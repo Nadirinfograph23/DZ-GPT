@@ -1019,7 +1019,7 @@ function WebsitePreview({
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
   webBuilderMeta,
-  webReaderIntent,
+  webReaderIntent: _webReaderIntent,
 }: {
   htmlCode: string
   cssCode?: string
@@ -1107,11 +1107,6 @@ function WebsitePreview({
     }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(activeCode || previewSrc)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
 

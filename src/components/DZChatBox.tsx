@@ -8,7 +8,8 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain, MapPin,
+  Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
+  ThumbsUp, ThumbsDown, Code2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -33,6 +34,7 @@ type RichType =
   | 'stats'
   | 'website'
   | 'map'
+  | 'execution'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -136,8 +138,14 @@ interface FileItem {
   size?: number
 }
 
+interface SmartPushFile {
+  path: string
+  content: string
+  message?: string
+}
+
 interface PendingAction {
-  type: 'commit' | 'pr'
+  type: 'commit' | 'pr' | 'smart-push'
   repo: string
   path?: string
   content?: string
@@ -146,12 +154,19 @@ interface PendingAction {
   title?: string
   body?: string
   base?: string
+  // smart-push specific
+  files?: SmartPushFile[]
+  prTitle?: string
+  prBody?: string
+  baseBranch?: string
+  deployVercel?: boolean
 }
 
 interface DZMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  rating?: 'up' | 'down' | null
   richType?: RichType
   repos?: RepoItem[]
   files?: FileItem[]
@@ -174,6 +189,9 @@ interface DZMessage {
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
   hasMoreNews?: boolean
   newsQuery?: string
+  executionLang?: string
+  executionCode?: string
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }
 
 interface ActionLogEntry {
@@ -676,10 +694,34 @@ function CodeAnalysisPanel({
 }
 
 // ===== CODE BLOCK =====
+// ── Web Reader Intent Badge ────────────────────────────────────────────────
+function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' | 'extract' }) {
+  const config = {
+    build:   { icon: <Hammer size={12} />,    label: 'Build Mode',    color: '#22c55e', bg: '#052e16' },
+    reader:  { icon: <Monitor size={12} />,   label: 'Reader Mode',   color: '#38bdf8', bg: '#082f49' },
+    update:  { icon: <Layers size={12} />,    label: 'Update Mode',   color: '#f59e0b', bg: '#1c1008' },
+    extract: { icon: <FileText size={12} />,  label: 'Extract HTML',  color: '#a78bfa', bg: '#1e1040' },
+  }[intent]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+      color: config.color, background: config.bg, border: `1px solid ${config.color}40`,
+      marginBottom: 6,
+    }}>
+      {config.icon} 🌐 {config.label}
+    </span>
+  )
+}
+
 function DZCodeBlock({ children, className }: { children: React.ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const language = className?.replace('language-', '') || ''
   const codeText = String(children).replace(/\n$/, '')
+  const isHtml = language === 'html' || language === 'htm' ||
+    (codeText.includes('<html') && codeText.includes('</html>'))
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeText)
@@ -687,16 +729,48 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownload = () => {
+    const ext = language || 'txt'
+    const mime = language === 'html' ? 'text/html' : language === 'css' ? 'text/css' :
+      language === 'js' || language === 'javascript' ? 'text/javascript' :
+      language === 'python' || language === 'py' ? 'text/x-python' : 'text/plain'
+    const blob = new Blob([codeText], { type: mime })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a); a.click()
+    document.body.removeChild(a); URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
   return (
     <div className="dz-code-block">
       <div className="dz-code-block-header">
         <span className="dz-code-lang">{language || 'code'}</span>
-        <button className="dz-code-copy-btn" onClick={handleCopy}>
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {isHtml && (
+            <button className="dz-code-copy-btn" onClick={() => setShowPreview(p => !p)} title="معاينة في الإطار">
+              <Monitor size={13} />
+              {showPreview ? 'إخفاء' : 'معاينة'}
+            </button>
+          )}
+          <button className="dz-code-copy-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? <Check size={13} /> : <Download size={13} />}
+            {downloaded ? 'تم' : 'تحميل'}
+          </button>
+          <button className="dz-code-copy-btn" onClick={handleCopy}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
       </div>
       <pre><code className={className}>{children}</code></pre>
+      {isHtml && showPreview && (
+        <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2a3e' }}>
+          <WebsitePreview htmlCode={codeText} />
+        </div>
+      )}
     </div>
   )
 }
@@ -746,6 +820,162 @@ function buildHtmlShellClient(html: string, _css: string, _js: string): string {
   return result
 }
 
+// ── Code Execution Preview Component (Programming Section ONLY) ──────────────
+function CodeExecutionPreview({ code, lang }: { code: string; lang: string }) {
+  const [view, setView] = useState<'output' | 'code'>('output')
+  const [running, setRunning] = useState(false)
+  const [hasRun, setHasRun] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  const runCode = useCallback(() => {
+    setRunning(true)
+    setHasRun(true)
+
+    if (lang === 'python') {
+      // Python execution via Pyodide in sandboxed iframe
+      const pyHtml = `<!DOCTYPE html><html><head><script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"><\/script></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+async function main() {
+  try {
+    out.textContent = '⏳ جاري تحميل Python...\\n';
+    const pyodide = await loadPyodide();
+    out.textContent = '▶ جاري التنفيذ...\\n\\n';
+    pyodide.setStdout({ batched: (text) => { logs.push(text); out.textContent += text + '\\n'; } });
+    pyodide.setStderr({ batched: (text) => { logs.push('⚠️ ' + text); out.textContent += '⚠️ ' + text + '\\n'; } });
+    await pyodide.runPythonAsync(${JSON.stringify(code)});
+    if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+    else out.textContent += '\\n✅ انتهى التنفيذ';
+    window.parent.postMessage({ type: 'exec-done', logs }, '*');
+  } catch (e) {
+    out.textContent += '\\n❌ خطأ: ' + e.message;
+    window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+  }
+}
+main();
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = pyHtml
+      }
+    } else {
+      // JavaScript execution via sandboxed iframe
+      const jsHtml = `<!DOCTYPE html><html><head></head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+const origLog = console.log;
+const origErr = console.error;
+const origWarn = console.warn;
+console.log = (...args) => { const t = args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.error = (...args) => { const t = '❌ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.warn = (...args) => { const t = '⚠️ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+try {
+  out.textContent = '▶ جاري التنفيذ...\\n\\n';
+  ${code}
+  if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+  else out.textContent += '\\n✅ انتهى التنفيذ';
+  window.parent.postMessage({ type: 'exec-done', logs }, '*');
+} catch (e) {
+  out.textContent += '\\n❌ خطأ: ' + e.message;
+  window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+}
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = jsHtml
+      }
+    }
+
+    // Listen for completion
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'exec-done') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      } else if (e.data?.type === 'exec-error') {
+        setRunning(false)
+        window.removeEventListener('message', handler)
+      }
+    }
+    window.addEventListener('message', handler)
+
+    // Timeout after 30s
+    setTimeout(() => {
+      setRunning(false)
+      window.removeEventListener('message', handler)
+    }, 30000)
+  }, [code, lang])
+
+  // Auto-run on mount
+  useEffect(() => {
+    if (!hasRun) runCode()
+  }, [runCode, hasRun])
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleDownload = () => {
+    const ext = lang === 'python' ? 'py' : 'js'
+    const blob = new Blob([code], { type: 'text/plain' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `dz-agent-code.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+    setDownloaded(true)
+    setTimeout(() => setDownloaded(false), 2500)
+  }
+
+  const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
+
+  return (
+    <div className="dz-exec-root">
+      <div className="dz-exec-header">
+        <span className="dz-exec-lang">{langLabel}</span>
+        <div className="dz-exec-tabs">
+          <button className={`dz-exec-tab${view === 'output' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('output')}>
+            ▶ المخرجات
+          </button>
+          <button className={`dz-exec-tab${view === 'code' ? ' dz-exec-tab--active' : ''}`} onClick={() => setView('code')}>
+            {'</>'} الكود
+          </button>
+        </div>
+        <div className="dz-exec-actions">
+          <button className="dz-exec-btn" onClick={runCode} disabled={running} title="إعادة التشغيل">
+            {running ? '⏳' : '▶'} {running ? 'جارٍ...' : 'تشغيل'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleCopy} title="نسخ الكود">
+            {copied ? '✓ تم' : '📋 نسخ'}
+          </button>
+          <button className="dz-exec-btn" onClick={handleDownload} title="تحميل الملف">
+            {downloaded ? '✓ تم' : '⬇ تحميل'}
+          </button>
+        </div>
+      </div>
+      <div className="dz-exec-body">
+        {view === 'output' ? (
+          <iframe
+            ref={iframeRef}
+            className="dz-exec-iframe"
+            sandbox="allow-scripts allow-same-origin"
+            title="Code Execution Output"
+          />
+        ) : (
+          <pre className="dz-exec-code"><code>{code}</code></pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type WPCodeTab = 'html' | 'css' | 'js'
 
 function WebsitePreview({
@@ -754,12 +984,14 @@ function WebsitePreview({
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
   webBuilderMeta,
+  webReaderIntent,
 }: {
   htmlCode: string
   cssCode?: string
   jsCode?: string
   onInsertPrompt?: (p: string) => void
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
 }) {
   const [view, setView]               = useState<'preview' | 'code'>('preview')
   const [codeTab, setCodeTab]         = useState<WPCodeTab>('html')
@@ -780,6 +1012,15 @@ function WebsitePreview({
   const [editedJs,   setEditedJs]   = useState(jsCode)
   const [previewSrc, setPreviewSrc] = useState(htmlCode)
   const [editApplied, setEditApplied] = useState(false)
+
+  // Use blob URL for iframe to avoid CSP issues and improve rendering
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const blob = new Blob([previewSrc], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [previewSrc])
 
   const activeRaw = codeTab === 'html' ? editedHtml : codeTab === 'css' ? editedCss : editedJs
   const setActiveRaw = (v: string) => {
@@ -846,6 +1087,13 @@ function WebsitePreview({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const [copiedHtml, setCopiedHtml] = useState(false)
+  const handleCopyHtml = () => {
+    navigator.clipboard.writeText(previewSrc)
+    setCopiedHtml(true)
+    setTimeout(() => setCopiedHtml(false), 2000)
+  }
+
   const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
 
   return (
@@ -892,6 +1140,14 @@ function WebsitePreview({
         </div>
         <div className="dz-wp-actions">
           <span className="dz-wp-size">{sizeKb} KB</span>
+          <button
+            className={`dz-wp-btn dz-wp-btn--copyhtml${copiedHtml ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleCopyHtml}
+            title="نسخ كامل كود HTML"
+          >
+            {copiedHtml ? <Check size={13} /> : <Code2 size={13} />}
+            {copiedHtml ? 'تم ✓' : 'نسخ HTML'}
+          </button>
           <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
             {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? 'تم النسخ ✓' : 'نسخ'}
@@ -1000,11 +1256,13 @@ function WebsitePreview({
           </div>
           <div className="dz-wp-frame-scroller">
             <iframe
-              srcDoc={previewSrc}
+              key={blobUrl || previewSrc}
+              src={blobUrl || undefined}
+              srcDoc={blobUrl ? undefined : previewSrc}
               className="dz-wp-frame"
               style={{ width: frameWidth, maxWidth: '100%', margin: '0 auto', display: 'block' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title="Website Live Preview"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+              title={webReaderIntent === 'extract' ? 'معاينة موقع مستخرج' : 'Website Live Preview'}
             />
           </div>
         </div>
@@ -1257,7 +1515,7 @@ function ApprovalDialog({
     <div className="gh-approval">
       <div className="gh-approval-header">
         <AlertCircle size={16} className="gh-approval-icon" />
-        <span>Approval Required</span>
+        <span>{action.type === 'smart-push' ? 'تأكيد التصدير والنشر' : 'Approval Required'}</span>
       </div>
       <div className="gh-approval-body">
         {action.type === 'commit' ? (
@@ -1291,6 +1549,43 @@ function ApprovalDialog({
               </div>
             )}
           </>
+        ) : action.type === 'smart-push' ? (
+          <>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">الإجراء:</span>
+              <span className="gh-approval-value gh-approval-value--pipeline">
+                <GitBranch size={12} /> فرع جديد
+                <span className="gh-pipeline-arrow">→</span>
+                <GitCommit size={12} /> Commit
+                <span className="gh-pipeline-arrow">→</span>
+                <GitPullRequest size={12} /> Pull Request
+                {action.deployVercel && <><span className="gh-pipeline-arrow">→</span><span className="gh-pipeline-vercel">▲ Vercel</span></>}
+              </span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">المستودع:</span>
+              <span className="gh-approval-value">{action.repo}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">الفرع الهدف:</span>
+              <span className="gh-approval-value">dz-agent/auto → {action.baseBranch || 'main'}</span>
+            </div>
+            <div className="gh-approval-row">
+              <span className="gh-approval-label">عنوان PR:</span>
+              <span className="gh-approval-value">{action.prTitle}</span>
+            </div>
+            {action.files && action.files.length > 0 && (
+              <div className="gh-approval-files">
+                <div className="gh-approval-preview-title">الملفات المُعدَّلة ({action.files.length}):</div>
+                {action.files.map((f, i) => (
+                  <div key={i} className="gh-approval-file-row">
+                    <FileText size={11} />
+                    <span>{f.path}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <>
             <div className="gh-approval-row">
@@ -1317,11 +1612,11 @@ function ApprovalDialog({
       <div className="gh-approval-actions">
         <button className="gh-approve-btn" onClick={onApprove}>
           <CheckCircle2 size={15} />
-          Approve & Execute
+          {action.type === 'smart-push' ? 'تأكيد التصدير' : 'Approve & Execute'}
         </button>
         <button className="gh-cancel-btn" onClick={onCancel}>
           <XCircle size={15} />
-          Cancel
+          {action.type === 'smart-push' ? 'إلغاء' : 'Cancel'}
         </button>
       </div>
     </div>
@@ -1366,9 +1661,10 @@ const REPO_ACTIONS: { id: string; Icon: React.ElementType; label: string; desc: 
   { id: 'branches', Icon: GitBranch,      label: 'الفروع',          desc: 'إدارة فروع المستودع',     color: '#c084fc' },
   { id: 'issues',   Icon: AlertCircle,    label: 'المشاكل',         desc: 'Issues المفتوحة',          color: '#fb923c' },
   { id: 'pulls',    Icon: GitPullRequest, label: 'Pull Requests',   desc: 'طلبات الدمج النشطة',      color: '#38bdf8' },
-  { id: 'commit',   Icon: GitCommit,      label: 'Commit',          desc: 'حفظ تعديل مباشر',         color: '#06b6d4' },
-  { id: 'pr',       Icon: GitMerge,       label: 'إنشاء PR',        desc: 'Pull Request جديد',        color: '#f97316' },
-  { id: 'stats',    Icon: BarChart2,      label: 'إحصائيات',        desc: 'إحصائيات ومساهمون',       color: '#a78bfa' },
+  { id: 'commit',      Icon: GitCommit,      label: 'Commit',              desc: 'حفظ تعديل مباشر',              color: '#06b6d4' },
+  { id: 'pr',          Icon: GitMerge,       label: 'إنشاء PR',            desc: 'Pull Request جديد',            color: '#f97316' },
+  { id: 'smart-push',  Icon: Hammer,         label: 'تصدير + PR + Vercel', desc: 'فرع → Commit → PR → Deploy',  color: '#00ff88' },
+  { id: 'stats',       Icon: BarChart2,      label: 'إحصائيات',            desc: 'إحصائيات ومساهمون',           color: '#a78bfa' },
 ]
 
 function RepoActionPanel({
@@ -2098,6 +2394,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [showGhMenu, setShowGhMenu] = useState(false)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
+  const [ratingsStats, setRatingsStats] = useState<{ up: number; down: number }>(() => {
+    try {
+      const saved = localStorage.getItem('dz-agent-ratings-stats')
+      return saved ? JSON.parse(saved) : { up: 0, down: 0 }
+    } catch { return { up: 0, down: 0 } }
+  })
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -2208,6 +2510,35 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     navigator.clipboard.writeText(content)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
+  }, [])
+
+  const rateMessage = useCallback((msgId: string, newRating: 'up' | 'down') => {
+    setMessages(prev => {
+      const existing = prev.find(m => m.id === msgId)
+      const prevRating = existing?.rating ?? null
+      const updated = prev.map(m =>
+        m.id === msgId
+          ? { ...m, rating: m.rating === newRating ? null : newRating }
+          : m
+      )
+
+      // Update global stats counter
+      setRatingsStats(stats => {
+        const next = { ...stats }
+        // Reverse previous rating if switching
+        if (prevRating === 'up') next.up = Math.max(0, next.up - 1)
+        if (prevRating === 'down') next.down = Math.max(0, next.down - 1)
+        // Apply new rating (toggle off if same)
+        if (prevRating !== newRating) {
+          if (newRating === 'up') next.up += 1
+          if (newRating === 'down') next.down += 1
+        }
+        try { localStorage.setItem('dz-agent-ratings-stats', JSON.stringify(next)) } catch {}
+        return next
+      })
+
+      return updated
+    })
   }, [])
 
   const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
@@ -2619,6 +2950,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         setInput(`قم بعمل Commit في مستودع ${repo.name} — صف التعديل الذي تريد حفظه`)
         textareaRef.current?.focus()
         break
+      case 'smart-push':
+        setInput(`صدّر التغييرات إلى مستودع ${repo.name} وأنشئ PR لـ Vercel — صف ما تريد تحديثه`)
+        textareaRef.current?.focus()
+        break
     }
   }, [scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
 
@@ -2660,6 +2995,50 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         addAssistantMessage({ content: `PR creation failed: ${msg}`, richType: 'text', isError: true })
         addToLog({ type: 'create-pr', description: `PR error: ${msg}`, status: 'error', repo: action.repo })
       }
+    } else if (action.type === 'smart-push') {
+      addToLog({ type: 'commit', description: `Smart push: branch + commit + PR in ${action.repo}`, status: 'pending', repo: action.repo })
+      setThinkingStep({ type: 'commit', label: 'إنشاء فرع جديد وحفظ التغييرات...' })
+      try {
+        const res = await fetch('/api/dz-agent/github/smart-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: githubToken,
+            repo: action.repo,
+            files: action.files || (action.path && action.content ? [{ path: action.path, content: action.content }] : []),
+            commitMessage: action.message || action.prTitle || 'تحديث من DZ Agent',
+            prTitle: action.prTitle || action.title || 'تحديث تلقائي من DZ Agent',
+            prBody: action.prBody || action.body || '',
+            baseBranch: action.baseBranch || action.base || 'main',
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Smart push failed')
+
+        const filesCount = data.committedFiles?.length || 0
+        const content = [
+          `✅ **تم تصدير التغييرات بنجاح!**`,
+          ``,
+          `**المستودع:** \`${action.repo}\``,
+          `**الفرع الجديد:** \`${data.branch}\` ← \`${data.baseBranch}\``,
+          `**الملفات المُحدَّثة:** ${filesCount} ملف`,
+          ``,
+          `### Pull Request`,
+          `**${data.prTitle || action.prTitle}**`,
+          `[فتح الـ PR على GitHub ↗](${data.prUrl})`,
+          ``,
+          data.vercelNote || '',
+        ].filter(Boolean).join('\n')
+
+        addAssistantMessage({ content, richType: 'text' })
+        addToLog({ type: 'commit', description: `Smart push done — PR #${data.prNumber} created`, status: 'success', repo: action.repo })
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        addAssistantMessage({ content: `❌ فشل التصدير: ${msg}`, richType: 'text', isError: true })
+        addToLog({ type: 'commit', description: `Smart push error: ${msg}`, status: 'error', repo: action.repo })
+      } finally {
+        setThinkingStep(null)
+      }
     }
 
     setIsLoading(false)
@@ -2696,6 +3075,21 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         outboundMessages[outboundMessages.length - 1] = {
           ...last,
           content: last.content + behaviorCtx,
+        }
+      }
+    }
+
+    // Inject rating context from the last rated assistant message
+    const lastRated = [...messages].reverse().find(m => m.role === 'assistant' && m.rating)
+    if (lastRated?.rating && outboundMessages.length > 0) {
+      const last = outboundMessages[outboundMessages.length - 1]
+      if (last.role === 'user') {
+        const ratingHint = lastRated.rating === 'down'
+          ? '\n[ملاحظة نظام: الإجابة السابقة تلقت تقييماً سلبياً من المستخدم، يرجى تقديم إجابة أكثر دقةً وتفصيلاً وفائدةً.]'
+          : '\n[ملاحظة نظام: الإجابة السابقة تلقت تقييماً إيجابياً، واصل نفس الأسلوب.]'
+        outboundMessages[outboundMessages.length - 1] = {
+          ...last,
+          content: last.content + ratingHint,
         }
       }
     }
@@ -2826,6 +3220,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           mapHtml: data.mapHtml as string,
           mapMeta: (data.mapMeta as Record<string, unknown>) || {},
         })
+      } else if (data.isExecution && typeof data.executionCode === 'string' && data.executionCode.length > 5) {
+        trackFeatureUsage('code-execution')
+        addAssistantMessage({
+          content: (data.content as string) || '✅ تم إنشاء الكود بنجاح!',
+          richType: 'execution',
+          executionLang: (data.executionLang as string) || 'javascript',
+          executionCode: data.executionCode as string,
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -2835,6 +3237,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           cssCode: (data.cssCode as string) || '',
           jsCode:  (data.jsCode  as string) || '',
           webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       } else {
         addAssistantMessage({
@@ -2843,6 +3246,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
+          webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       }
     } catch (err: unknown) {
@@ -3062,6 +3466,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />
                   ) : (
                     <>
+                      {msg.webReaderIntent && (
+                        <div style={{ marginBottom: 6 }}>
+                          <WebReaderIntentBadge intent={msg.webReaderIntent} />
+                        </div>
+                      )}
                       {msg.content && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -3147,6 +3556,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
                           : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
                       )}
+                      {msg.richType === 'execution' && msg.executionCode && (
+                        <CodeExecutionPreview
+                          code={msg.executionCode}
+                          lang={msg.executionLang || 'javascript'}
+                        />
+                      )}
                       {msg.richType === 'website' && msg.htmlCode && (
                         <WebsitePreview
                           htmlCode={msg.htmlCode}
@@ -3154,6 +3569,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           jsCode={msg.jsCode}
                           onInsertPrompt={p => setInput(p)}
                           webBuilderMeta={msg.webBuilderMeta}
+                          webReaderIntent={msg.webReaderIntent}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
@@ -3188,6 +3604,21 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       إعادة المحاولة
                     </button>
                   )}
+                  <div className="dz-rating-divider" />
+                  <button
+                    className={`dz-action-btn dz-rating-btn dz-rating-btn--up ${msg.rating === 'up' ? 'dz-rating-btn--active' : ''}`}
+                    onClick={() => rateMessage(msg.id, 'up')}
+                    title="إجابة جيدة"
+                  >
+                    <ThumbsUp size={13} />
+                  </button>
+                  <button
+                    className={`dz-action-btn dz-rating-btn dz-rating-btn--down ${msg.rating === 'down' ? 'dz-rating-btn--active' : ''}`}
+                    onClick={() => rateMessage(msg.id, 'down')}
+                    title="إجابة سيئة"
+                  >
+                    <ThumbsDown size={13} />
+                  </button>
                 </div>
               )}
             </div>
@@ -3268,7 +3699,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             )}
           </div>
         </div>
-        <p className="dz-disclaimer">قد يُخطئ DZ Agent. راجع دائماً قبل الموافقة على إجراءات GitHub.</p>
+        <div className="dz-ratings-bar">
+          {(ratingsStats.up > 0 || ratingsStats.down > 0) && (
+            <>
+              <span className="dz-ratings-label">تقييمات الجلسة:</span>
+              <span className="dz-ratings-up">
+                <ThumbsUp size={11} /> {ratingsStats.up}
+              </span>
+              <span className="dz-ratings-down">
+                <ThumbsDown size={11} /> {ratingsStats.down}
+              </span>
+            </>
+          )}
+          <p className="dz-disclaimer">قد يُخطئ DZ Agent. راجع دائماً قبل الموافقة على إجراءات GitHub.</p>
+        </div>
       </div>
     </div>
   )

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DZ GPT - AI Chat</title>
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#22c55e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="DZ GPT" />
+
+    <!-- SEO -->
+    <meta name="description" content="DZ GPT — AI Chat powered by LLaMA, ChatGPT and more. By Nadir Houamria." />
+    <script type="module" crossorigin src="/assets/index-BOdRpPES.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CRtTIjhu.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // ── Capture PWA install prompt before React mounts ──────────
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+      });
+
+      // ── Service Worker registration + auto-update ────────────────
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').then(function(reg) {
+
+            // Poll for updates every 60 s while the page is open
+            setInterval(function() { reg.update(); }, 60000);
+
+            // When a NEW SW finishes installing, reload all tabs
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener('statechange', function() {
+                // 'activated' means skipWaiting + clients.claim() ran
+                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                  window.location.reload();
+                }
+              });
+            });
+          });
+
+          // Guard: avoid infinite reload loop
+          var reloading = false;
+          // controllerchange fires when the SW that controls this page changes
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (reloading) return;
+            reloading = true;
+            window.location.reload();
+          });
+
+          // Also listen for direct message from SW after activation
+          navigator.serviceWorker.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'SW_UPDATED') {
+              if (!reloading) {
+                reloading = true;
+                window.location.reload();
+              }
+            }
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

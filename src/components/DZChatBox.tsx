@@ -1565,7 +1565,7 @@ function YouTubePanel({
 
         {/* Quick-pick ordinal buttons */}
         <div className="dzc-yt-quickpick">
-          {results.slice(0, 5).map((r, idx) => (
+          {results.slice(0, 8).map((r, idx) => (
             <button
               key={r.id}
               className={`dzc-yt-qp-btn${activeId === r.id ? ' active' : ''}`}

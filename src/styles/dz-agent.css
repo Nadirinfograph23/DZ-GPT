@@ -3730,6 +3730,20 @@
   white-space: nowrap;
 }
 .dz-wp-btn:hover { background: rgba(124, 58, 237, 0.18); color: #fff; }
+
+/* Copy full HTML button */
+.dz-wp-btn--copyhtml {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.35);
+  color: #fbbf24;
+  font-weight: 600;
+}
+.dz-wp-btn--copyhtml:hover {
+  background: rgba(234, 179, 8, 0.18);
+  border-color: rgba(234, 179, 8, 0.6);
+  color: #fef08a;
+}
+
 .dz-wp-btn--dl {
   background: linear-gradient(135deg, #7c3aed, #4f46e5);
   color: #fff;

@@ -9,7 +9,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
-  ThumbsUp, ThumbsDown,
+  ThumbsUp, ThumbsDown, Code2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1087,6 +1087,13 @@ function WebsitePreview({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const [copiedHtml, setCopiedHtml] = useState(false)
+  const handleCopyHtml = () => {
+    navigator.clipboard.writeText(previewSrc)
+    setCopiedHtml(true)
+    setTimeout(() => setCopiedHtml(false), 2000)
+  }
+
   const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
 
   return (
@@ -1133,6 +1140,14 @@ function WebsitePreview({
         </div>
         <div className="dz-wp-actions">
           <span className="dz-wp-size">{sizeKb} KB</span>
+          <button
+            className={`dz-wp-btn dz-wp-btn--copyhtml${copiedHtml ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleCopyHtml}
+            title="نسخ كامل كود HTML"
+          >
+            {copiedHtml ? <Check size={13} /> : <Code2 size={13} />}
+            {copiedHtml ? 'تم ✓' : 'نسخ HTML'}
+          </button>
           <button className="dz-wp-btn" onClick={handleCopy} title="نسخ الكود الحالي">
             {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? 'تم النسخ ✓' : 'نسخ'}

@@ -6582,6 +6582,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Web Reader Mode — fetch & extract content from URLs in message ───────
   const _webReaderIntent = isWebReaderQuery ? detectWebReaderIntent(lastUserMessage) : 'reader'
   if (isWebReaderQuery && _detectedUrls.length > 0) {
+    // ── WEBSITE DETECT MODE: pure URL with no explicit intent → show action panel ──
+    const _msgStripped = lastUserMessage.replace(URL_RE, '').trim()
+    const _hasExplicitIntent = /(ابني|اصنع|أنشئ|حلل|analyze|clone|build|create|استخرج|اقرأ|شرح|explain|مستوحى|inspired|اشرح|ماهو|ما هو|ما هي|اخبرني|تكلم|ناقش|كلمني|صف|describe|summarize|لخص)/i.test(lastUserMessage)
+    if (_msgStripped.length < 15 && !_hasExplicitIntent) {
+      console.log(`[WebReader:DETECT] Pure URL → action panel for: ${_detectedUrls[0]}`)
+      try {
+        const _qi = await fetchWebContent(_detectedUrls[0], 800)
+        const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
+        const _rawDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
+        return res.status(200).json({
+          content: `🌐 تم اكتشاف الموقع: **${_qi.title || _domain}**`,
+          isWebReader: true,
+          webSiteInfo: {
+            url: _detectedUrls[0],
+            title: _qi.title || _domain,
+            domain: _domain,
+            description: _rawDesc.slice(0, 220),
+            headings: (_qi.headings || []).slice(0, 4),
+          },
+        })
+      } catch (_e) {
+        console.error('[WebReader:DETECT] quick fetch failed:', _e.message)
+        // Fall through to normal web reader processing
+      }
+    }
     console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
     const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
     const fetched = results

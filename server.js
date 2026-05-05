@@ -17,6 +17,7 @@ import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
+import { handleYouTubeInput } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
@@ -6407,6 +6408,48 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         role: 'system',
         content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
       })
+    }
+  }
+
+  // ── YouTube Insight Engine ─────────────────────────────────────────────────
+  // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
+  const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
+  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|درس[\s]+بالفيديو|شرح[\s]+بالفيديو)/
+  const _isYouTubeQuery = !!_ytUrlInMsg
+    || (_ytKwRe.test(lastUserMessage)
+        && !detectWebsiteBuilderQuery(lastUserMessage)
+        && !detectCodeExecutionQuery(lastUserMessage)
+        && !isMapQuery(lastUserMessage))
+
+  if (_isYouTubeQuery) {
+    console.log(`[YouTube Insight] Detected: flow=${_ytUrlInMsg ? 'url' : 'search'} input="${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const ytInput = _ytUrlInMsg || lastUserMessage
+      const ytResult = await handleYouTubeInput(ytInput, {
+        aiGenerate: (params) => safeGenerateAI({ ...params }),
+      })
+      if (ytResult.flow === 'url') {
+        return res.status(200).json({
+          content: ytResult.message || '🎬 تم تحليل الفيديو بنجاح!',
+          isYouTube: true,
+          youtubeFlow: 'url',
+          youtubeVideo: ytResult.video || null,
+          youtubeAnalysis: ytResult.analysis || null,
+          youtubeSuggestions: ytResult.suggestions || [],
+          captionNote: ytResult.captionNote || null,
+        })
+      } else {
+        return res.status(200).json({
+          content: ytResult.message || '🔍 نتائج البحث على YouTube:',
+          isYouTube: true,
+          youtubeFlow: 'search',
+          youtubeResults: ytResult.results || [],
+          youtubeSuggestions: ytResult.suggestions || [],
+        })
+      }
+    } catch (ytErr) {
+      console.error('[YouTube Insight] Error:', ytErr.message)
+      // Non-fatal — fall through to general AI handler
     }
   }
 

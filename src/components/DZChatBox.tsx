@@ -54,6 +54,7 @@ type RichType =
   | 'website'
   | 'map'
   | 'execution'
+  | 'youtube'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -169,6 +170,40 @@ interface PendingAction {
   base?: string
 }
 
+interface YouTubeVideoData {
+  id: string
+  url: string
+  title: string
+  channel: string
+  duration: number
+  views: number
+  thumbnail: string
+  publishDate?: string
+  tags?: string[]
+}
+
+interface YouTubeResult {
+  id: string
+  url: string
+  title: string
+  channel: string
+  duration: number
+  views: number
+  thumbnail: string
+}
+
+interface YouTubeAnalysis {
+  ok: boolean
+  summary?: string
+  keyIdeas?: string[]
+  category?: string
+  language?: string
+  conversationStarters?: string[]
+  taskSuggestions?: string[]
+  openingMessage?: string
+  captionAvailable?: boolean
+}
+
 interface DZMessage {
   id: string
   role: 'user' | 'assistant'
@@ -198,6 +233,12 @@ interface DZMessage {
   executionLang?: string
   executionCode?: string
   webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
+  youtubeVideo?: YouTubeVideoData
+  youtubeResults?: YouTubeResult[]
+  youtubeFlow?: 'url' | 'search'
+  youtubeAnalysis?: YouTubeAnalysis
+  youtubeSuggestions?: string[]
+  captionNote?: string
 }
 
 interface ActionLogEntry {
@@ -1304,6 +1345,172 @@ function WebsitePreview({
       )}
     </div>
   )
+}
+
+// ===== YOUTUBE HELPERS =====
+function fmtDuration(secs: number): string {
+  if (!secs || secs <= 0) return ''
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+function fmtViews(n: number): string {
+  if (!n) return ''
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M مشاهدة`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K مشاهدة`
+  return `${n} مشاهدة`
+}
+
+// ===== YOUTUBE PANEL COMPONENT =====
+function YouTubePanel({
+  video,
+  results,
+  flow,
+  analysis,
+  suggestions,
+  captionNote,
+  onAsk,
+}: {
+  video?: YouTubeVideoData
+  results?: YouTubeResult[]
+  flow?: 'url' | 'search'
+  analysis?: YouTubeAnalysis
+  suggestions?: string[]
+  captionNote?: string
+  onAsk?: (q: string) => void
+}) {
+  const [activeId, setActiveId] = useState<string | null>(
+    flow === 'url' && video?.id ? video.id : null,
+  )
+
+  if (flow === 'url' && video) {
+    const embedId = activeId || video.id
+    return (
+      <div className="dzc-yt">
+        {/* iframe embed */}
+        <div className="dzc-yt-embed-wrap">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${embedId}?rel=0&modestbranding=1`}
+            title={video.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+
+        {/* Meta */}
+        <div className="dzc-yt-meta">
+          <div className="dzc-yt-now-badge">
+            <span className="dzc-yt-live-dot" />
+            الآن يُعرض
+          </div>
+          <h3 className="dzc-yt-title">{video.title}</h3>
+          <div className="dzc-yt-info">
+            {video.channel && <span>📺 {video.channel}</span>}
+            {video.duration > 0 && <span>⏱ {fmtDuration(video.duration)}</span>}
+            {video.views > 0 && <span>👁 {fmtViews(video.views)}</span>}
+          </div>
+        </div>
+
+        {/* AI Analysis */}
+        {analysis && (analysis.summary || (analysis.keyIdeas && analysis.keyIdeas.length > 0)) && (
+          <div className="dzc-yt-analysis">
+            <div className="dzc-yt-analysis-header">🤖 تحليل DZ Agent</div>
+            {analysis.summary && <p className="dzc-yt-summary">{analysis.summary}</p>}
+            {analysis.keyIdeas && analysis.keyIdeas.length > 0 && (
+              <ul className="dzc-yt-key-ideas">
+                {analysis.keyIdeas.map((idea, i) => <li key={i}>{idea}</li>)}
+              </ul>
+            )}
+            {(analysis.category || analysis.language) && (
+              <div className="dzc-yt-tags">
+                {analysis.category && <span className="dzc-yt-tag">📂 {analysis.category}</span>}
+                {analysis.language && <span className="dzc-yt-tag">🌐 {analysis.language}</span>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Caption warning */}
+        {captionNote && <p className="dzc-yt-caption-note">{captionNote}</p>}
+
+        {/* Suggestion strip */}
+        {suggestions && suggestions.length > 0 && (
+          <div className="dzc-yt-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="dzc-yt-sugg-btn" onClick={() => onAsk?.(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (flow === 'search' && results && results.length > 0) {
+    return (
+      <div className="dzc-yt">
+        {/* Embed active video */}
+        {activeId && (
+          <div className="dzc-yt-embed-wrap">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0&autoplay=1`}
+              title="YouTube Player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+
+        {/* Results header */}
+        <div className="dzc-yt-results-hdr">
+          <span>🔍 نتائج YouTube</span>
+          <span className="dzc-yt-results-count">{results.length} نتيجة</span>
+        </div>
+
+        {/* Results grid */}
+        <div className="dzc-yt-grid">
+          {results.map(r => (
+            <button
+              key={r.id}
+              className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
+              onClick={() => setActiveId(r.id)}
+            >
+              <div className="dzc-yt-card-thumb-wrap">
+                <img
+                  src={r.thumbnail || `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
+                  alt={r.title}
+                  className="dzc-yt-card-thumb"
+                  loading="lazy"
+                />
+                {r.duration > 0 && (
+                  <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
+                )}
+                <div className="dzc-yt-card-play">
+                  <div className="dzc-yt-play-circle">▶</div>
+                </div>
+              </div>
+              <div className="dzc-yt-card-body">
+                <p className="dzc-yt-card-title">{r.title}</p>
+                <p className="dzc-yt-card-meta">{r.channel}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Suggestion strip */}
+        {suggestions && suggestions.length > 0 && (
+          <div className="dzc-yt-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="dzc-yt-sugg-btn" onClick={() => onAsk?.(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ===== TYPING EFFECT =====
@@ -3108,6 +3315,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           executionLang: (data.executionLang as string) || 'javascript',
           executionCode: data.executionCode as string,
         })
+      } else if (data.isYouTube) {
+        trackFeatureUsage('youtube-insight')
+        addAssistantMessage({
+          content: (data.content as string) || '🎬 YouTube',
+          richType: 'youtube',
+          youtubeFlow: (data.youtubeFlow as 'url' | 'search') || 'search',
+          youtubeVideo: data.youtubeVideo as YouTubeVideoData | undefined,
+          youtubeResults: data.youtubeResults as YouTubeResult[] | undefined,
+          youtubeAnalysis: data.youtubeAnalysis as YouTubeAnalysis | undefined,
+          youtubeSuggestions: (data.youtubeSuggestions as string[]) || [],
+          captionNote: data.captionNote as string | undefined,
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -3450,6 +3669,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           onInsertPrompt={p => setInput(p)}
                           webBuilderMeta={msg.webBuilderMeta}
                           webReaderIntent={msg.webReaderIntent}
+                        />
+                      )}
+                      {msg.richType === 'youtube' && (msg.youtubeVideo || msg.youtubeResults) && (
+                        <YouTubePanel
+                          video={msg.youtubeVideo}
+                          results={msg.youtubeResults}
+                          flow={msg.youtubeFlow}
+                          analysis={msg.youtubeAnalysis}
+                          suggestions={msg.youtubeSuggestions}
+                          captionNote={msg.captionNote}
+                          onAsk={(q) => sendMessage(q)}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (

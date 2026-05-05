@@ -1,0 +1,321 @@
+/* ============================================================
+   DZC YouTube — Chat-embedded YouTube Player & Results Panel
+   ============================================================ */
+
+.dzc-yt {
+  margin-top: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #111114;
+  border: 1px solid #23232a;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* ── Embed (iframe) ─────────────────────────────────────── */
+.dzc-yt-embed-wrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  background: #000;
+}
+.dzc-yt-embed-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* ── Video Meta Header ─────────────────────────────────── */
+.dzc-yt-meta {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #1e1e26;
+}
+.dzc-yt-title {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #ececf1;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dzc-yt-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #8a8a9a;
+}
+.dzc-yt-info span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ── Now Playing badge ────────────────────────────────── */
+.dzc-yt-now-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  background: rgba(255,59,59,0.12);
+  border: 1px solid rgba(255,59,59,0.35);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff7070;
+  margin-bottom: 8px;
+}
+.dzc-yt-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff3b3b;
+  animation: dzc-yt-pulse 1.4s infinite;
+}
+@keyframes dzc-yt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,59,59,0.55); }
+  50%       { box-shadow: 0 0 0 7px rgba(255,59,59,0); }
+}
+
+/* ── AI Analysis card ──────────────────────────────────── */
+.dzc-yt-analysis {
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e1e26;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #c8c8d4;
+}
+.dzc-yt-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b6f7d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.dzc-yt-summary {
+  margin: 0 0 10px;
+  color: #c8c8d4;
+}
+.dzc-yt-key-ideas {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dzc-yt-key-ideas li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: #a8a8b8;
+}
+.dzc-yt-key-ideas li::before {
+  content: '▸';
+  color: #ff5c5c;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Category + Language tags ─────────────────────────── */
+.dzc-yt-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.dzc-yt-tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #1a1a22;
+  border: 1px solid #28282f;
+  color: #8a8a9a;
+}
+
+/* ── Suggestions strip ─────────────────────────────────── */
+.dzc-yt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid #1e1e26;
+}
+.dzc-yt-sugg-btn {
+  padding: 7px 13px;
+  border-radius: 9px;
+  border: 1px solid #2a2a34;
+  background: #16161c;
+  color: #a8a8b8;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.16s;
+  text-align: right;
+}
+.dzc-yt-sugg-btn:hover {
+  background: rgba(255,59,59,0.1);
+  border-color: rgba(255,59,59,0.35);
+  color: #ff7070;
+}
+
+/* ── Caption warning ───────────────────────────────────── */
+.dzc-yt-caption-note {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 11.5px;
+  color: #7a6f3a;
+  background: rgba(255,200,60,0.06);
+  border-top: 1px solid rgba(255,200,60,0.15);
+}
+
+/* ── Search results header ─────────────────────────────── */
+.dzc-yt-results-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px 9px;
+  border-bottom: 1px solid #1e1e26;
+  font-size: 13px;
+  font-weight: 700;
+  color: #9ca0ad;
+}
+.dzc-yt-results-count {
+  margin-inline-start: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #1c1c22;
+  border: 1px solid #28282f;
+  color: #6b6f7d;
+}
+
+/* ── Results grid ──────────────────────────────────────── */
+.dzc-yt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+/* ── Result card ───────────────────────────────────────── */
+.dzc-yt-card {
+  display: flex;
+  flex-direction: column;
+  background: #16161c;
+  border: 1px solid #22222a;
+  border-radius: 11px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: right;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.dzc-yt-card:hover {
+  border-color: #ff5c5c;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255,59,59,0.18);
+}
+.dzc-yt-card-thumb-wrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  background: #000;
+  overflow: hidden;
+}
+.dzc-yt-card-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+.dzc-yt-card:hover .dzc-yt-card-thumb {
+  transform: scale(1.06);
+}
+.dzc-yt-card-dur {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background: rgba(0,0,0,0.82);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  backdrop-filter: blur(4px);
+}
+.dzc-yt-card-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.dzc-yt-card:hover .dzc-yt-card-play { opacity: 1; }
+.dzc-yt-play-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#ff3b3b,#ff7a3b);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(255,59,59,0.5);
+}
+
+.dzc-yt-card-body {
+  padding: 9px 11px 11px;
+}
+.dzc-yt-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0ea;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.8em;
+  margin: 0 0 5px;
+}
+.dzc-yt-card-meta {
+  font-size: 11px;
+  color: #6b6f7d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Active card (currently playing) ─────────────────── */
+.dzc-yt-card.active {
+  border-color: #ff5c5c;
+  box-shadow: 0 0 0 2px rgba(255,59,59,0.25);
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 520px) {
+  .dzc-yt-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+  }
+  .dzc-yt-suggestions {
+    flex-direction: column;
+  }
+  .dzc-yt-sugg-btn {
+    width: 100%;
+  }
+}

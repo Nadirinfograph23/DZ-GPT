@@ -52,8 +52,8 @@ app.use(helmet({
       mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
-      frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com'],
-      childSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com'],
+      frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
+      childSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
       frameAncestors: isProd
         ? ["'none'"]
         : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev'],
@@ -702,6 +702,34 @@ async function preloadEssentialData() {
   console.log('[Preload] Essential data preloaded:', results)
   return results
 }
+
+// ── Message Ratings ─────────────────────────────────────────────
+const MESSAGE_RATINGS = new Map() // msgId → { vote, query, ts }
+
+app.post('/api/dz-agent/ratings', (req, res) => {
+  const { messageId, vote, query } = req.body || {}
+  if (!messageId || !['up', 'down'].includes(vote)) {
+    return res.status(400).json({ error: 'messageId and vote (up|down) required' })
+  }
+  MESSAGE_RATINGS.set(String(messageId), {
+    vote,
+    query: (query || '').slice(0, 300),
+    ts: Date.now(),
+  })
+  res.json({ ok: true, total: MESSAGE_RATINGS.size })
+})
+
+app.get('/api/dz-agent/ratings/stats', (_req, res) => {
+  const all = [...MESSAGE_RATINGS.values()]
+  const up   = all.filter(r => r.vote === 'up').length
+  const down = all.filter(r => r.vote === 'down').length
+  const total = all.length
+  const recent = [...MESSAGE_RATINGS.entries()]
+    .sort((a, b) => b[1].ts - a[1].ts)
+    .slice(0, 20)
+    .map(([id, r]) => ({ id, ...r, tsIso: new Date(r.ts).toISOString() }))
+  res.json({ total, up, down, ratio: total ? Math.round((up / total) * 100) : 0, recent })
+})
 
 // ── Task 22: Smart Preloading endpoint ─────────────────────────
 app.get('/api/dz-agent/preload-status', (_req, res) => {

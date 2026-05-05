@@ -1180,7 +1180,7 @@
   align-items: center;
   gap: 4px;
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: #555;
   cursor: pointer;
   font-size: 12px;
@@ -1192,6 +1192,37 @@
 .dz-action-btn:hover {
   background: #151515;
   color: #888;
+  border-color: #2a2a2a;
+}
+
+.dz-action-btn--up {
+  color: rgba(74, 222, 128, 0.5);
+}
+.dz-action-btn--up:hover,
+.dz-action-btn--up:active {
+  background: rgba(74, 222, 128, 0.08);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+.dz-action-btn--up.dz-action-btn--rated {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.4);
+}
+
+.dz-action-btn--down {
+  color: rgba(248, 113, 113, 0.5);
+}
+.dz-action-btn--down:hover,
+.dz-action-btn--down:active {
+  background: rgba(248, 113, 113, 0.08);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+.dz-action-btn--down.dz-action-btn--rated {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
 }
 
 /* ===== LOAD MORE NEWS BUTTON ===== */

@@ -16,7 +16,6 @@ import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
-import { fullPipeline, normalize, understand_dz, detectIntent as dzDetectIntent, toDarija, learnWord, isDarijaText, buildDialectContext } from './dialect/dzEngine.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
 import { queryNearby, formatDistance } from './modules/dz-maps/overpass.js'
@@ -3285,11 +3284,9 @@ async function fetchWebContent(url, maxChars = 6000) {
   }
 }
 
-// ── Web Reader Intent Detector — BUILD / READER / UPDATE / EXTRACT ───────────
+// ── Web Reader Intent Detector — BUILD / READER / UPDATE ─────────────────────
 function detectWebReaderIntent(msg) {
   if (!msg) return 'reader'
-  // EXTRACT: "استخرج كود" / "extract html" / "كود الموقع" / "view source"
-  if (/استخرج\s*(كود|html|source|الكود|صفحة)|استخراج\s*(كود|html|الكود)|كود\s*(ال)?موقع|html\s*(ال)?موقع|أظهر\s*كود|عرض\s*كود|اعطيني\s*كود|extract\s*(html|code|source)|show\s*(html|source)|view\s*source|source\s*code|html\s*code|get\s*html|أريد\s*كود|الكود\s*(ال)?كامل|full\s*html/i.test(msg)) return 'extract'
   // BUILD: "ابني من هذا الموقع" / "اصنع" / "اعمل" / "أنشئ" / build / create
   if (/ابني?(?:لي)?|اصنع(?:لي)?|أنش[أئ](?:لي)?|انش[أئ]|اعمل(?:لي)?|أعمل|بني?|صمم|دير|طور|generate|build|create|make|inspired?|استلهم|مستوحى/i.test(msg)) return 'build'
   // UPDATE: "أضف ميزة" / "عدّل" / "حسّن" / add feature / improve
@@ -5542,81 +5539,6 @@ app.post('/api/dz-agent/detect-intent', (req, res) => {
   return res.json({ intent: detectedIntent, dashboardTarget, message, normalized: lower })
 })
 
-// ===== ALGERIAN DIALECT INTELLIGENCE API =====
-
-// POST /api/dz-dialect/understand — full NLU pipeline
-app.post('/api/dz-dialect/understand', (req, res) => {
-  try {
-    const text = sanitizeString(req.body.text || '', 2000)
-    if (!text) return res.status(400).json({ error: 'text required' })
-    const result = fullPipeline(text)
-    return res.json(result)
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// POST /api/dz-dialect/respond — convert Arabic response to Darija
-app.post('/api/dz-dialect/respond', (req, res) => {
-  try {
-    const text = sanitizeString(req.body.text || '', 5000)
-    if (!text) return res.status(400).json({ error: 'text required' })
-    const darija = toDarija(text)
-    return res.json({ original: text, darija, isDifferent: darija !== text })
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// POST /api/dz-dialect/learn — manually teach a new Darija word
-app.post('/api/dz-dialect/learn', (req, res) => {
-  try {
-    const word    = sanitizeString(req.body.word || '', 100)
-    const meaning = sanitizeString(req.body.meaning || '', 200)
-    const context = sanitizeString(req.body.context || '', 500)
-    if (!word || !meaning) return res.status(400).json({ error: 'word and meaning required' })
-    const isNew = learnWord(word, context, meaning)
-    return res.json({ word, meaning, context, isNew, message: isNew ? 'تعلمت كلمة جديدة ✅' : 'الكلمة موجودة مسبقاً' })
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// GET /api/dz-dialect/stats — return dictionary stats + learned words
-app.get('/api/dz-dialect/stats', async (req, res) => {
-  try {
-    const { readFileSync } = await import('fs')
-    const dict    = JSON.parse(readFileSync('./data/dz_dialect.json', 'utf8'))
-    const learned = JSON.parse(readFileSync('./data/dz_learned.json', 'utf8'))
-    return res.json({
-      dictionary: {
-        total_words:   dict.words?.length || 0,
-        slang_entries: Object.keys(dict.slang_map || {}).length,
-        response_map:  Object.keys(dict.response_map || {}).length,
-        categories:    [...new Set((dict.words || []).map(w => w.category))],
-      },
-      learned: {
-        total_learned: learned.learned?.length || 0,
-        recent:        (learned.learned || []).slice(-10),
-      },
-    })
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// GET /api/dz-dialect/normalize?text=... — normalize a Darija sentence
-app.get('/api/dz-dialect/normalize', (req, res) => {
-  try {
-    const text = sanitizeString(req.query.text || '', 2000)
-    if (!text) return res.status(400).json({ error: 'text query param required' })
-    const result = normalize(text)
-    return res.json(result)
-  } catch (err) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
 // ===== FOOTBALL INTELLIGENCE ENDPOINT =====
 app.get('/api/dz-agent/football', async (req, res) => {
   const dateStr = req.query.date || new Date().toISOString().split('T')[0]
@@ -6476,51 +6398,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       ).join('\n\n---\n\n')
       console.log(`[WebReader] Extracted ${fetched.length} pages, total chars: ${webReaderContext.length}`)
 
-      // ── EXTRACT MODE: return full raw HTML for preview ─────────────────────
-      if (_webReaderIntent === 'extract') {
-        console.log(`[WebReader:EXTRACT] Fetching raw HTML from ${_detectedUrls[0]}`)
-        try {
-          const targetUrl = _detectedUrls[0]
-          const rawRes = await fetch(targetUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              'Accept': 'text/html,*/*',
-              'Accept-Language': 'ar,en;q=0.9',
-            },
-            signal: AbortSignal.timeout(12000),
-            redirect: 'follow',
-          })
-          if (!rawRes.ok) throw new Error(`HTTP ${rawRes.status}`)
-          let rawHtml = await rawRes.text()
-          // Inject <base href> so relative URLs (images, CSS, JS) resolve correctly
-          const baseTag = `<base href="${targetUrl.replace(/([^/]*\/\/[^/]*\/).*/, '$1')}">`
-          rawHtml = rawHtml.replace(/(<head[^>]*>)/i, `$1\n  ${baseTag}`)
-          if (!rawHtml.includes('<base')) rawHtml = baseTag + rawHtml
-          const pageTitle = (rawHtml.match(/<title[^>]*>([^<]{1,200})<\/title>/i) || [])[1]?.trim() || targetUrl
-          console.log(`[WebReader:EXTRACT] Got ${rawHtml.length} chars — title: ${pageTitle}`)
-          return res.status(200).json({
-            content: `✅ **تم استخراج كود HTML الموقع بنجاح!**\n\n🌐 **الموقع:** [${pageTitle}](${targetUrl})\n📦 **الحجم:** ${Math.round(rawHtml.length / 1024)} KB\n\n▶️ انقر **معاينة مباشرة** لرؤية الموقع كما هو، أو اضغط على **الكود** لدراسة المصدر كاملاً.`,
-            isWebsite: true,
-            htmlCode: rawHtml,
-            cssCode: '',
-            jsCode: '',
-            webBuilderMeta: {
-              type: 'landing',
-              style: 'modern',
-              title: pageTitle,
-              description: `كود HTML مستخرج من: ${targetUrl}`,
-              icon: '🌐',
-            },
-            webReaderIntent: 'extract',
-          })
-        } catch (err) {
-          console.error('[WebReader:EXTRACT] Failed:', err.message)
-          return res.status(200).json({
-            content: `⚠️ لم أتمكن من استخراج كود HTML الموقع:\n\n**السبب:** ${err.message}\n\nيمكنني **تحليل محتوى الموقع** بدلاً من ذلك. هل تريد؟`,
-          })
-        }
-      }
-
       // ── BUILD MODE: route to website builder with extracted content as inspiration ──
       if (_webReaderIntent === 'build') {
         console.log('[WebReader:BUILD] Routing to Website Builder with web content as inspiration')
@@ -7008,32 +6885,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'commit changes', 'commit the file', 'save to github', 'push commit',
     'commit and push', 'اعمل commit', 'ارفع التعديلات',
   ].some(p => lowerMsg.includes(p))
-
-  // Detect: smart-push (update repo + PR + Vercel deploy) intent
-  const isSmartPushIntent = [
-    'صدّر', 'صدر التغييرات', 'تصدير التغييرات', 'تصدير إلى github',
-    'ارفع وأنشئ pr', 'ارفع التعديلات وأنشئ pr', 'انشر على vercel',
-    'export to github', 'push and create pr', 'deploy to vercel', 'push to vercel',
-    'smart push', 'تصدير + pr', 'commit + pr', 'commit and pr',
-    'حدّث المستودع وأنشئ pr', 'حدث المستودع وانشئ pr',
-    'update repo and create pr', 'update and deploy', 'تحديث ونشر',
-    'فرع جديد وpr', 'branch and pr', 'create branch and pr',
-  ].some(p => lowerMsg.includes(p))
-
-  if (isSmartPushIntent && currentRepo && githubToken) {
-    return res.status(200).json({
-      content: `سأقوم بتنفيذ **خط النشر الكامل** في مستودع **${currentRepo}**:\n\n1. 🌿 إنشاء فرع جديد \`dz-agent/auto\`\n2. 💾 Commit التعديلات على الفرع\n3. 🔀 إنشاء Pull Request → \`main\`\n4. 🚀 Vercel سيبدأ النشر تلقائياً\n\n⚠️ **يرجى تحديد الملف/الملفات ومحتواها قبل التأكيد.** هل تريد المتابعة؟`,
-      pendingAction: {
-        type: 'smart-push',
-        repo: currentRepo,
-        prTitle: `DZ Agent: تحديثات تلقائية — ${new Date().toLocaleDateString('ar-DZ')}`,
-        prBody: `Pull Request تلقائي من DZ Agent\n\nطُلب بواسطة: ${lastUserMessage}`,
-        baseBranch: 'main',
-        deployVercel: true,
-        files: [],
-      },
-    })
-  }
 
   if (isPRIntent && currentRepo && githubToken) {
     const branch = `dz-agent/${Date.now()}`
@@ -7798,15 +7649,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
-
-    // ── ALGERIAN DIALECT LAYER (injected when Darija detected) ───────────────
-    (() => {
-      try {
-        const dialectCtx = buildDialectContext(lastUserMessage)
-        if (dialectCtx) return `🇩🇿 ${dialectCtx}`
-      } catch {}
-      return ''
-    })(),
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -8480,105 +8322,6 @@ app.post('/api/dz-agent/github/pr', async (req, res) => {
   }
 })
 
-// ===== SMART PUSH: create branch + commit file(s) + open PR =====
-app.post('/api/dz-agent/github/smart-push', async (req, res) => {
-  const token = req.body.token || process.env.GITHUB_TOKEN || ''
-  const { repo, files, commitMessage, prTitle, prBody, baseBranch = 'main' } = req.body
-
-  if (!token) return res.status(400).json({ error: 'GitHub token required.' })
-  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
-  if (!Array.isArray(files) || files.length === 0) return res.status(400).json({ error: 'files array is required (at least one file).' })
-  if (!commitMessage || typeof commitMessage !== 'string') return res.status(400).json({ error: 'commitMessage is required.' })
-  if (!prTitle || typeof prTitle !== 'string') return res.status(400).json({ error: 'prTitle is required.' })
-
-  try {
-    // 1. Get SHA of the base branch HEAD
-    const refRes = await ghFetch(`/repos/${repo}/git/ref/heads/${encodeURIComponent(baseBranch)}`, token)
-    const refData = await refRes.json()
-    if (!refRes.ok) throw new Error(refData.message || `Cannot access branch "${baseBranch}" in ${repo}`)
-    const baseSha = refData.object?.sha
-    if (!baseSha) throw new Error('Could not determine base branch SHA')
-
-    // 2. Create a new feature branch from base SHA
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const newBranch = `dz-agent/${timestamp}`
-    const createBranchRes = await ghFetch(`/repos/${repo}/git/refs`, token, {
-      method: 'POST',
-      body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: baseSha }),
-    })
-    const createBranchData = await createBranchRes.json()
-    if (!createBranchRes.ok) throw new Error(createBranchData.message || 'Failed to create branch')
-
-    // 3. Commit each file to the new branch
-    const committedFiles = []
-    for (const file of files) {
-      if (!file.path || !file.content) continue
-      if (!isValidGithubPath(file.path)) {
-        console.warn(`[smart-push] skipping invalid path: ${file.path}`)
-        continue
-      }
-
-      // Fetch existing SHA (needed to update an existing file)
-      let existingSha
-      const existingRes = await ghFetch(`/repos/${repo}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(newBranch)}`, token)
-      if (existingRes.ok) {
-        const existing = await existingRes.json()
-        existingSha = existing.sha
-      }
-
-      const commitBody = {
-        message: sanitizeString(file.message || commitMessage, 500),
-        content: Buffer.from(file.content).toString('base64'),
-        branch: newBranch,
-        ...(existingSha ? { sha: existingSha } : {}),
-      }
-
-      const commitRes = await ghFetch(`/repos/${repo}/contents/${encodeURIComponent(file.path)}`, token, {
-        method: 'PUT',
-        body: JSON.stringify(commitBody),
-      })
-      const commitData = await commitRes.json()
-      if (!commitRes.ok) throw new Error(commitData.message || `Failed to commit "${file.path}"`)
-      committedFiles.push({ path: file.path, url: commitData.content?.html_url })
-    }
-
-    if (committedFiles.length === 0) throw new Error('No valid files were committed. Check file paths and contents.')
-
-    // 4. Create a pull request: newBranch → baseBranch
-    const prBodyText = sanitizeString(
-      prBody || `Pull Request تلقائي من **DZ Agent**\n\nالملفات المُعدَّلة (${committedFiles.length}):\n${committedFiles.map(f => `- \`${f.path}\``).join('\n')}\n\n> سيبدأ Vercel تلقائياً في نشر معاينة هذا الـ PR.`,
-      5000
-    )
-
-    const prRes = await ghFetch(`/repos/${repo}/pulls`, token, {
-      method: 'POST',
-      body: JSON.stringify({
-        title: sanitizeString(prTitle, 200),
-        body: prBodyText,
-        head: newBranch,
-        base: baseBranch,
-      }),
-    })
-    const prData = await prRes.json()
-    if (!prRes.ok) throw new Error(prData.message || 'PR creation failed')
-
-    return res.json({
-      success: true,
-      branch: newBranch,
-      baseBranch,
-      prUrl: prData.html_url,
-      prTitle: prData.title,
-      prNumber: prData.number,
-      committedFiles,
-      repo,
-      vercelNote: '🚀 إذا كان Vercel مرتبطاً بهذا المستودع، سيبدأ نشر معاينة الـ PR تلقائياً خلال دقيقتين.',
-    })
-  } catch (err) {
-    console.error('[smart-push] error:', err.message)
-    return res.status(500).json({ error: err.message || 'Smart push failed.' })
-  }
-})
-
 // ===== REPO FULL SCAN (AI analysis of entire repository) =====
 app.post('/api/dz-agent/github/repo-scan', async (req, res) => {
   const { token, repo, focus } = req.body
@@ -9145,13 +8888,9 @@ async function jsInfo(url) {
 const TMP_DIR = path.join(os.tmpdir(), 'dz-tube')
 try { fs.mkdirSync(TMP_DIR, { recursive: true }) } catch {}
 function tmpFile(ext) {
-  const safeExt = String(ext).replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'tmp'
-  return path.join(TMP_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${safeExt}`)
+  return path.join(TMP_DIR, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`)
 }
-function safeUnlink(p) {
-  if (!p || !path.resolve(String(p)).startsWith(TMP_DIR + path.sep)) return
-  fs.unlink(p, () => {})
-}
+function safeUnlink(p) { fs.unlink(p, () => {}) }
 
 function isValidYouTubeUrl(u) {
   if (typeof u !== 'string' || u.length > 2048) return false

@@ -9,6 +9,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
+  ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -16,6 +17,25 @@ import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
+
+// ===== RATING PERSISTENCE =====
+const RATINGS_KEY = 'dz-msg-ratings'
+type RatingVote = 'up' | 'down'
+type RatingsStore = Record<string, RatingVote>
+
+function loadRatings(): RatingsStore {
+  try { return JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}') } catch { return {} }
+}
+function persistRating(msgId: string, vote: RatingVote): RatingsStore {
+  const store = loadRatings()
+  if (store[msgId] === vote) {
+    delete store[msgId]
+  } else {
+    store[msgId] = vote
+  }
+  localStorage.setItem(RATINGS_KEY, JSON.stringify(store))
+  return store
+}
 
 // ===== TYPES =====
 type RichType =
@@ -2349,6 +2369,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
+  const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
+
+  const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
+    const updated = persistRating(msgId, vote)
+    setRatings(updated)
+    const actualVote = updated[msgId]
+    if (actualVote) {
+      fetch('/api/dz-agent/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msgId, vote: actualVote, query }),
+      }).catch(() => {})
+    }
+  }, [])
 
   // Handle OAuth callback from URL hash & auth errors from URL params
   useEffect(() => {
@@ -3455,6 +3489,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       إعادة المحاولة
                     </button>
                   )}
+                  <button
+                    className={`dz-action-btn dz-action-btn--up${ratings[msg.id] === 'up' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة جيدة"
+                    onClick={() => sendRating(msg.id, 'up', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsUp size={13} />
+                  </button>
+                  <button
+                    className={`dz-action-btn dz-action-btn--down${ratings[msg.id] === 'down' ? ' dz-action-btn--rated' : ''}`}
+                    title="إجابة سيئة"
+                    onClick={() => sendRating(msg.id, 'down', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
+                  >
+                    <ThumbsDown size={13} />
+                  </button>
                 </div>
               )}
             </div>

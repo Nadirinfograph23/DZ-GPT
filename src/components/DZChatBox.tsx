@@ -2572,6 +2572,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
+  const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
 
   const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
     const updated = persistRating(msgId, vote)
@@ -2694,6 +2695,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
     const id = generateId()
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
+    if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
+      setActiveYouTubeVideo(msg.youtubeVideo)
+    }
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
     // Auto-speak the full text reply via the voice system (no-op if muted).
     // The TTS engine chunks long replies into sentences so nothing is truncated.
@@ -3205,6 +3209,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               githubToken: githubToken || undefined,
               currentRepo: currentRepo || undefined,
               dashboardContext,
+              youtubeContext: activeYouTubeVideo || undefined,
             }),
             signal,
           })
@@ -3356,7 +3361,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
@@ -3420,6 +3425,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setMessages([])
     setIsLoading(false)
     setTypingId(null)
+    setActiveYouTubeVideo(null)
   }
 
   const isGithubConnected = serverGithubConnected || !!githubToken
@@ -3778,6 +3784,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       <div className="dz-input-area">
         {messages.length > 0 && (
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
+        )}
+        {activeYouTubeVideo && (
+          <div className="dzc-yt-ctx-bar">
+            <span className="dzc-yt-ctx-icon">🎬</span>
+            <span className="dzc-yt-ctx-label">
+              نقاش حول: <strong>{activeYouTubeVideo.title.slice(0, 50)}{activeYouTubeVideo.title.length > 50 ? '…' : ''}</strong>
+            </span>
+            <button
+              className="dzc-yt-ctx-close"
+              title="إنهاء وضع النقاش"
+              onClick={() => setActiveYouTubeVideo(null)}
+            >✕</button>
+          </div>
         )}
         <div className="dz-input-container">
           <textarea

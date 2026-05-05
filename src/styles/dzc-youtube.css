@@ -305,6 +305,54 @@
   box-shadow: 0 0 0 2px rgba(255,59,59,0.25);
 }
 
+/* ── Discussion context bar (above input) ─────────────── */
+.dzc-yt-ctx-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  margin-bottom: 6px;
+  background: rgba(255, 59, 59, 0.07);
+  border: 1px solid rgba(255, 59, 59, 0.22);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #c0c0cc;
+  direction: rtl;
+}
+.dzc-yt-ctx-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+.dzc-yt-ctx-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dzc-yt-ctx-label strong {
+  color: #ff7070;
+  font-weight: 600;
+}
+.dzc-yt-ctx-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid rgba(255,59,59,0.3);
+  color: #9a9aaa;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s;
+}
+.dzc-yt-ctx-close:hover {
+  background: rgba(255,59,59,0.18);
+  border-color: rgba(255,59,59,0.6);
+  color: #ff7070;
+}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 520px) {
   .dzc-yt-grid {

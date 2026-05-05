@@ -17,7 +17,7 @@ import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
-import { handleYouTubeInput } from './modules/youtube_insight_module/controller.js'
+import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
@@ -6408,6 +6408,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         role: 'system',
         content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
       })
+    }
+  }
+
+  // ── YouTube Discussion Mode ───────────────────────────────────────────────
+  // When the client sends youtubeContext (active video), route to AI discussion.
+  const youtubeContext = req.body.youtubeContext && typeof req.body.youtubeContext === 'object'
+    ? req.body.youtubeContext
+    : null
+
+  if (youtubeContext?.videoId && lastUserMessage) {
+    console.log(`[YouTube Discussion] videoId=${youtubeContext.videoId} query="${lastUserMessage.slice(0, 60)}"`)
+    try {
+      const history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+      const result = await handleVideoDiscussion(
+        youtubeContext,
+        lastUserMessage,
+        history,
+        (params) => safeGenerateAI({ ...params }),
+      )
+      return res.status(200).json({
+        content: result.reply || 'لم أتمكن من الإجابة. يرجى المحاولة مرة أخرى.',
+      })
+    } catch (ytDiscErr) {
+      console.error('[YouTube Discussion] Error:', ytDiscErr.message)
+      return res.status(200).json({ content: '⚠️ خطأ في معالجة سؤالك عن الفيديو. يرجى المحاولة مرة أخرى.' })
     }
   }
 

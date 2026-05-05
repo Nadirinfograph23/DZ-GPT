@@ -1,7 +1,41 @@
 # DZ-GPT
 
 ## Overview
-DZ-GPT is a comprehensive AI chat application built with Vite, React, and Express, designed to offer multi-model AI capabilities and a rich user experience. The project aims to provide an advanced, multi-functional AI agent that can handle diverse queries, generate code, provide real-time information, and offer voice-based interactions. Key features include autonomous multi-agent task execution, full-stack web application generation, and intelligent conversational abilities with multi-language support (Arabic, French, English). The project emphasizes reliability, performance, and user-centric design, ensuring robust responses and a seamless experience across various functionalities like news aggregation, weather updates, GitHub integration, and specialized Quranic AI.
+DZ-GPT is a comprehensive AI chat application built with Vite, React, and Express, designed to offer multi-model AI capabilities and a rich user experience. Includes a full **Algerian Dialect Intelligence Layer** for understanding and responding in Darija.
+
+## Algerian Dialect Understanding System (DZ Dialect Layer)
+
+### Architecture — 4 Core Modules (`/dialect/dzEngine.js`)
+1. **Normalizer** (`normalize(text)`) — strips diacritics, normalizes Arabic letter variants, collapses repeated letters for fuzzy matching, replaces Darija slang with standard Arabic using the dictionary + learned words
+2. **Semantic NLU** (`understand_dz(text)`) — tokenizes, matches words against the dictionary (exact + fuzzy Levenshtein), reconstructs standard Arabic, detects mixed languages
+3. **Intent Engine** (`detectIntent(text)`) — classifies: `question | request | command | greeting | farewell | gratitude | build_web_app | code_help | statement`
+4. **Darija Response Generator** (`toDarija(text)`) — converts standard Arabic responses back to Algerian Darija using the response map
+5. **Context Learner** (`learnWord(word, context, meaning)`) — dynamically stores new discovered words in `/data/dz_learned.json`
+6. **Full Pipeline** (`fullPipeline(text)`) — runs all modules, returns structured NLU result
+
+### Dictionary (`/data/dz_dialect.json`)
+- 190+ curated Algerian Darija words with: `meaning_ar | meaning_fr | meaning_en | synonyms | variants | usage | category`
+- 80+ slang_map entries (Darija → Standard Arabic)
+- 80+ response_map entries (Standard Arabic → Darija)
+- Intent pattern sets for all intent types
+- Categories: question, greeting, verb, pronoun, noun, evaluation, quantity, time, connective, modal, place, state, slang, address, exclamation, gratitude, wish
+
+### Learned Words (`/data/dz_learned.json`)
+- Auto-populated when users send unknown Darija tokens
+- Manually teachable via `POST /api/dz-dialect/learn`
+
+### API Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/dz-dialect/understand` | Full NLU pipeline: intent, standard text, tokens, replacements |
+| POST | `/api/dz-dialect/respond` | Convert Arabic text → Darija |
+| POST | `/api/dz-dialect/learn` | Teach a new Darija word |
+| GET | `/api/dz-dialect/stats` | Dictionary + learned words stats |
+| GET | `/api/dz-dialect/normalize?text=` | Normalize a Darija sentence |
+
+### Integration
+- Dialect context is automatically injected into every DZ Agent system prompt when Darija is detected in the user message (`buildDialectContext()`)
+- AI is instructed to understand Darija naturally and respond in Darija when the user writes in Darija The project aims to provide an advanced, multi-functional AI agent that can handle diverse queries, generate code, provide real-time information, and offer voice-based interactions. Key features include autonomous multi-agent task execution, full-stack web application generation, and intelligent conversational abilities with multi-language support (Arabic, French, English). The project emphasizes reliability, performance, and user-centric design, ensuring robust responses and a seamless experience across various functionalities like news aggregation, weather updates, GitHub integration, and specialized Quranic AI.
 
 ## User Preferences
 (No explicit user preferences were found in the provided document.)
@@ -71,6 +105,40 @@ The system is built as a layered architecture, with V1, V2, V3, and V4 represent
     - **Responder**: Renders router payloads as clean Markdown with citations.
     - **Reasoner**: Deep-research orchestrator: `plan → parallel multi-fetch → fuse + rank → self-critique → render with citations → memory`.
 - **Live Sports Cards**: Implemented a fix for `jdwel.com` data sourcing on Vercel by using Jina AI Reader as a reverse-proxy for Cloudflare-protected sites.
+
+## Security Hardening (May 2026)
+
+A full security audit was performed and the following fixes were applied:
+
+- **ReDoS Prevention**: Escaped regex special characters in user-supplied labels before `new RegExp()` in `modules/dz-maps/intent.js` and `lib/news.js`
+- **Template Injection / XSS**: Added `escapeHtml()` sanitization for user-supplied values embedded in HTML templates in `lib/dzPlaceSearch.js` and `lib/dz-v4/generator.js`
+- **Prototype Pollution Guard**: Added explicit Set-based whitelist validation for `templateId` in `lib/dz-v3/webapp-generator.js` before property lookup on `TEMPLATES` object
+- **Path Traversal Prevention**: Hardened `tmpFile()` in `server.js` to only accept alphanumeric file extensions; `safeUnlink()` now verifies paths stay within the `TMP_DIR` sandbox before unlinking
+- **Command Injection**: Replaced `execSync(cmd)` with `spawnSync(bin, args[])` in `scripts/update-changelog.mjs` to eliminate shell injection risk
+- **Dependency Audit**: 0 vulnerabilities found across all 537 packages
+
+## Rating System (May 2026)
+
+Added 👍/👎 rating buttons to DZ Agent assistant responses, next to the copy button:
+
+- **Per-message rating**: Each assistant message has thumbs-up/thumbs-down toggle buttons. Clicking the same button again removes the rating.
+- **Global counter**: A persistent counter in `localStorage` (`dz-agent-ratings-stats`) tracks total 👍 and 👎 across all sessions. Displayed in the footer bar when at least one rating exists.
+- **AI context injection**: The rating of the last rated message is injected into the next outgoing request so the model adjusts its style — more detailed on 👎, consistent on 👍.
+- **CSS**: New classes `.dz-rating-btn`, `.dz-rating-btn--up/--down`, `.dz-rating-btn--active`, `.dz-ratings-bar`, `.dz-ratings-up/down` added in `src/styles/dz-agent.css`.
+- **Files modified**: `src/components/DZChatBox.tsx`, `src/styles/dz-agent.css`.
+
+## GitHub Smart Push / Export Pipeline (May 2026)
+
+Added a full "export to GitHub and deploy to Vercel" pipeline accessible from DZ Agent:
+
+- **New endpoint** `POST /api/dz-agent/github/smart-push` in `server.js`: atomically creates a new branch (`dz-agent/YYYY-MM-DDTHH-mm-ss`), commits one or more files to it, creates a PR (`branch → main`), and returns the PR URL. Vercel picks up the PR automatically if the repo is connected.
+- **Intent detection**: Natural-language phrases like "صدّر التغييرات", "تصدير + PR", "commit and PR", "deploy to vercel", etc. trigger the smart-push pipeline from the `/api/dz-agent-chat` handler.
+- **UI approval dialog**: Extended `ApprovalDialog` in `DZChatBox.tsx` to show a visual pipeline `Branch → Commit → PR → ▲ Vercel` before execution. User must confirm before any GitHub action is taken.
+- **executeApprovedAction**: Added `smart-push` handler that calls `/api/dz-agent/github/smart-push` and displays the PR URL on success.
+- **RepoActionPanel**: Added "تصدير + PR + Vercel" button (🔨 icon, green) to `REPO_ACTIONS` array. Triggers `smart-push` intent prefill in the chat input.
+- **PendingAction interface**: Extended with `type: 'smart-push'`, `files`, `prTitle`, `prBody`, `baseBranch`, `deployVercel` fields.
+- **CSS**: New classes `.gh-approval-value--pipeline`, `.gh-pipeline-arrow`, `.gh-pipeline-vercel`, `.gh-approval-files`, `.gh-approval-file-row` in `src/styles/dz-agent.css`.
+- **Files modified**: `src/components/DZChatBox.tsx`, `server.js`, `src/styles/dz-agent.css`.
 
 ## External Dependencies
 

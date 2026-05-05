@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "description": "Dynamically learned Algerian dialect words from user conversations",
+    "version": "1.0.0"
+  },
+  "learned": [
+    {
+      "word": "مشاكل",
+      "context": "واش كاين بزاف مشاكل؟",
+      "guessed_meaning": "",
+      "seen_count": 1,
+      "learned_at": "2026-05-05T01:41:41.995Z",
+      "last_seen": "2026-05-05T01:41:41.995Z"
+    },
+    {
+      "word": "حنكورة",
+      "context": "ارجع حنكورة من الحانوت",
+      "guessed_meaning": "طماطم (Tomato)",
+      "seen_count": 1,
+      "learned_at": "2026-05-05T01:42:06.205Z",
+      "last_seen": "2026-05-05T01:42:06.205Z"
+    }
+  ]
+}

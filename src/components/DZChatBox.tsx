@@ -1483,42 +1483,6 @@ function YouTubePanel({
 
     return (
       <div className="dzc-yt">
-        {/* Embed preview of selected video */}
-        {activeId && (
-          <div className="dzc-yt-embed-wrap">
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0`}
-              title="YouTube Player"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
-
-        {/* Action panel — shown when a video is selected */}
-        {selectedVideo && (
-          <div className="dzc-yt-action-panel">
-            <p className="dzc-yt-action-title">
-              <span className="dzc-yt-action-icon">🎬</span>
-              {selectedVideo.title.length > 55 ? selectedVideo.title.slice(0, 55) + '…' : selectedVideo.title}
-            </p>
-            <div className="dzc-yt-action-btns">
-              <button
-                className="dzc-yt-action-btn dzc-yt-action-btn--analyze"
-                onClick={() => onAsk?.(selectedVideo.url)}
-              >
-                🔍 حلل هذا الفيديو
-              </button>
-              <button
-                className="dzc-yt-action-btn dzc-yt-action-btn--discuss"
-                onClick={() => onDiscuss?.(selectedVideo)}
-              >
-                💬 ناقش هذا الفيديو
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Results header */}
         <div className="dzc-yt-results-hdr">
           <span>🔍 نتائج YouTube</span>
@@ -1527,7 +1491,7 @@ function YouTubePanel({
 
         {/* Smart-select hint */}
         <p className="dzc-yt-select-hint">
-          {selectedVideo ? 'اختر إجراءً أعلاه، أو انقر على فيديو آخر' : 'انقر على فيديو لاختياره'}
+          {selectedVideo ? 'اختر إجراءً أسفله، أو انقر على فيديو آخر' : 'انقر على فيديو لاختياره'}
         </p>
 
         {/* Results grid */}
@@ -1576,6 +1540,42 @@ function YouTubePanel({
             </button>
           ))}
         </div>
+
+        {/* Embed preview of selected video — shown below results */}
+        {activeId && (
+          <div className="dzc-yt-embed-wrap">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0`}
+              title="YouTube Player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+
+        {/* Action panel — shown when a video is selected */}
+        {selectedVideo && (
+          <div className="dzc-yt-action-panel">
+            <p className="dzc-yt-action-title">
+              <span className="dzc-yt-action-icon">🎬</span>
+              {selectedVideo.title.length > 55 ? selectedVideo.title.slice(0, 55) + '…' : selectedVideo.title}
+            </p>
+            <div className="dzc-yt-action-btns">
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--analyze"
+                onClick={() => onAsk?.(selectedVideo.url)}
+              >
+                🔍 حلل هذا الفيديو
+              </button>
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--discuss"
+                onClick={() => onDiscuss?.(selectedVideo)}
+              >
+                💬 ناقش هذا الفيديو
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Suggestion strip */}
         {suggestions && suggestions.length > 0 && (

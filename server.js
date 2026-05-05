@@ -6526,6 +6526,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             youtubeAnalysis: ytSmartResult.analysis || null,
             youtubeSuggestions: ytSmartResult.suggestions || [],
             captionNote: ytSmartResult.captionNote || null,
+            captionText: ytSmartResult.captionText || null,
           })
         }
       } catch (ytSmartErr) {
@@ -6561,6 +6562,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           youtubeAnalysis: ytResult.analysis || null,
           youtubeSuggestions: ytResult.suggestions || [],
           captionNote: ytResult.captionNote || null,
+          captionText: ytResult.captionText || null,
         })
       } else {
         return res.status(200).json({

@@ -89,6 +89,9 @@ export async function handleYouTubeInput(input, options = {}) {
         tags: videoData.tags,
       },
       captionAvailable: !!videoData.captions,
+      captionText: videoData.captions
+        ? videoData.captions.slice(0, 6000)
+        : null,
       captionNote: videoData.captions
         ? null
         : '⚠️ الترجمة النصية غير متوفرة — التحليل مبني على العنوان والوصف فقط.',

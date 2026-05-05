@@ -239,6 +239,7 @@ interface DZMessage {
   youtubeAnalysis?: YouTubeAnalysis
   youtubeSuggestions?: string[]
   captionNote?: string
+  captionText?: string
 }
 
 interface ActionLogEntry {
@@ -1371,6 +1372,7 @@ function YouTubePanel({
   analysis,
   suggestions,
   captionNote,
+  captionText,
   onAsk,
   onDiscuss,
 }: {
@@ -1380,6 +1382,7 @@ function YouTubePanel({
   analysis?: YouTubeAnalysis
   suggestions?: string[]
   captionNote?: string
+  captionText?: string
   onAsk?: (q: string) => void
   onDiscuss?: (video: YouTubeResult) => void
 }) {
@@ -1387,6 +1390,7 @@ function YouTubePanel({
     flow === 'url' && video?.id ? video.id : null,
   )
   const [selectedVideo, setSelectedVideo] = useState<YouTubeResult | null>(null)
+  const [showTranscript, setShowTranscript] = useState(false)
 
   if (flow === 'url' && video) {
     const embedId = activeId || video.id
@@ -1437,6 +1441,25 @@ function YouTubePanel({
 
         {/* Caption warning */}
         {captionNote && <p className="dzc-yt-caption-note">{captionNote}</p>}
+
+        {/* Transcript viewer */}
+        {captionText && (
+          <div className="dzc-yt-transcript-wrap">
+            <button
+              className="dzc-yt-transcript-toggle"
+              onClick={() => setShowTranscript(v => !v)}
+            >
+              <span className="dzc-yt-transcript-icon">📄</span>
+              <span>نص الفيديو (النسخة النصية)</span>
+              <span className={`dzc-yt-transcript-chevron${showTranscript ? ' open' : ''}`}>▾</span>
+            </button>
+            {showTranscript && (
+              <div className="dzc-yt-transcript-body">
+                <pre className="dzc-yt-transcript-text">{captionText}</pre>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Suggestion strip */}
         {suggestions && suggestions.length > 0 && (
@@ -3396,6 +3419,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           youtubeAnalysis: data.youtubeAnalysis as YouTubeAnalysis | undefined,
           youtubeSuggestions: (data.youtubeSuggestions as string[]) || [],
           captionNote: data.captionNote as string | undefined,
+          captionText: data.captionText as string | undefined,
         })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
@@ -3750,6 +3774,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           analysis={msg.youtubeAnalysis}
                           suggestions={msg.youtubeSuggestions}
                           captionNote={msg.captionNote}
+                          captionText={msg.captionText}
                           onAsk={(q) => sendMessage(q)}
                           onDiscuss={(ytResult) => {
                             const videoData: YouTubeVideoData = {

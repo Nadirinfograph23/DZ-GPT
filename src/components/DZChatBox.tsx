@@ -1372,6 +1372,7 @@ function YouTubePanel({
   suggestions,
   captionNote,
   onAsk,
+  onDiscuss,
 }: {
   video?: YouTubeVideoData
   results?: YouTubeResult[]
@@ -1380,10 +1381,12 @@ function YouTubePanel({
   suggestions?: string[]
   captionNote?: string
   onAsk?: (q: string) => void
+  onDiscuss?: (video: YouTubeResult) => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(
     flow === 'url' && video?.id ? video.id : null,
   )
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeResult | null>(null)
 
   if (flow === 'url' && video) {
     const embedId = activeId || video.id
@@ -1450,17 +1453,46 @@ function YouTubePanel({
   if (flow === 'search' && results && results.length > 0) {
     const ORDINAL_LABELS = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن']
 
+    const selectVideo = (r: YouTubeResult) => {
+      setActiveId(r.id)
+      setSelectedVideo(r)
+    }
+
     return (
       <div className="dzc-yt">
-        {/* Embed active video (preview only — click card to fully analyze) */}
+        {/* Embed preview of selected video */}
         {activeId && (
           <div className="dzc-yt-embed-wrap">
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0&autoplay=1`}
+              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0`}
               title="YouTube Player"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
+          </div>
+        )}
+
+        {/* Action panel — shown when a video is selected */}
+        {selectedVideo && (
+          <div className="dzc-yt-action-panel">
+            <p className="dzc-yt-action-title">
+              <span className="dzc-yt-action-icon">🎬</span>
+              {selectedVideo.title.length > 55 ? selectedVideo.title.slice(0, 55) + '…' : selectedVideo.title}
+            </p>
+            <div className="dzc-yt-action-btns">
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--analyze"
+                onClick={() => onAsk?.(selectedVideo.url)}
+              >
+                🔍 حلل هذا الفيديو
+              </button>
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--discuss"
+                onClick={() => onDiscuss?.(selectedVideo)}
+              >
+                💬 ناقش هذا الفيديو
+              </button>
+            </div>
           </div>
         )}
 
@@ -1471,7 +1503,9 @@ function YouTubePanel({
         </div>
 
         {/* Smart-select hint */}
-        <p className="dzc-yt-select-hint">انقر على فيديو لتحليله، أو اكتب "الأول" / "الثاني" للاختيار</p>
+        <p className="dzc-yt-select-hint">
+          {selectedVideo ? 'اختر إجراءً أعلاه، أو انقر على فيديو آخر' : 'انقر على فيديو لاختياره'}
+        </p>
 
         {/* Results grid */}
         <div className="dzc-yt-grid">
@@ -1479,11 +1513,7 @@ function YouTubePanel({
             <button
               key={r.id}
               className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
-              onClick={() => {
-                setActiveId(r.id)
-                // Trigger full AI analysis when user clicks a card
-                onAsk?.(r.url)
-              }}
+              onClick={() => selectVideo(r)}
             >
               {/* Numbered index badge */}
               <span className="dzc-yt-card-index">{idx + 1}</span>
@@ -1499,7 +1529,7 @@ function YouTubePanel({
                   <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
                 )}
                 <div className="dzc-yt-card-play">
-                  <div className="dzc-yt-play-circle">▶ تحليل</div>
+                  <div className="dzc-yt-play-circle">▶ اختر</div>
                 </div>
               </div>
               <div className="dzc-yt-card-body">
@@ -1515,8 +1545,8 @@ function YouTubePanel({
           {results.slice(0, 5).map((r, idx) => (
             <button
               key={r.id}
-              className="dzc-yt-qp-btn"
-              onClick={() => onAsk?.(r.url)}
+              className={`dzc-yt-qp-btn${activeId === r.id ? ' active' : ''}`}
+              onClick={() => selectVideo(r)}
               title={r.title}
             >
               {idx + 1}️⃣ {ORDINAL_LABELS[idx] || `رقم ${idx + 1}`}
@@ -3721,6 +3751,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           suggestions={msg.youtubeSuggestions}
                           captionNote={msg.captionNote}
                           onAsk={(q) => sendMessage(q)}
+                          onDiscuss={(ytResult) => {
+                            const videoData: YouTubeVideoData = {
+                              id: ytResult.id,
+                              url: ytResult.url,
+                              title: ytResult.title,
+                              channel: ytResult.channel,
+                              duration: ytResult.duration,
+                              views: ytResult.views,
+                              thumbnail: ytResult.thumbnail,
+                            }
+                            setActiveYouTubeVideo(videoData)
+                            sendMessage(`أريد مناقشة هذا الفيديو: ${ytResult.url}`)
+                          }}
                         />
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (

@@ -1194,6 +1194,96 @@
   color: #888;
 }
 
+/* ===== RATING BUTTONS ===== */
+.dz-rating-divider {
+  width: 1px;
+  height: 14px;
+  background: #2a2a2a;
+  margin: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.dz-rating-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.18s;
+  color: #444;
+  border: 1px solid transparent;
+}
+
+.dz-rating-btn--up {
+  color: #4a7c59;
+}
+
+.dz-rating-btn--up:hover {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+.dz-rating-btn--down {
+  color: #7c4a4a;
+}
+
+.dz-rating-btn--down:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.dz-rating-btn--up.dz-rating-btn--active {
+  background: rgba(74, 222, 128, 0.18);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.dz-rating-btn--down.dz-rating-btn--active {
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+/* ===== RATINGS BAR (footer) ===== */
+.dz-ratings-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dz-ratings-label {
+  font-size: 11px;
+  color: #444;
+}
+
+.dz-ratings-up,
+.dz-ratings-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.dz-ratings-up {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.dz-ratings-down {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.dz-ratings-bar .dz-disclaimer {
+  margin: 0;
+  flex: 1;
+  text-align: right;
+}
+
 /* ===== LOAD MORE NEWS BUTTON ===== */
 .dz-load-more-news-btn {
   display: inline-flex;
@@ -1940,6 +2030,46 @@
   transition: all 0.2s;
 }
 .gh-cancel-btn:hover { background: rgba(239, 68, 68, 0.15); }
+
+/* ===== SMART PUSH PIPELINE UI ===== */
+.gh-approval-value--pipeline {
+  flex-wrap: wrap;
+  gap: 5px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: #00ff88;
+}
+
+.gh-pipeline-arrow {
+  color: #444;
+  font-size: 11px;
+}
+
+.gh-pipeline-vercel {
+  color: #000;
+  background: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.gh-approval-files {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gh-approval-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+  font-family: monospace;
+}
 
 /* ===== ACTION LOG ===== */
 .gh-action-log {
@@ -3932,6 +4062,107 @@
 .dz-wp-btn--apply:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(124,58,237,.35);
+}
+
+/* ===== CODE EXECUTION PREVIEW ===== */
+.dz-exec-root {
+  margin-top: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0d0d14;
+}
+.dz-exec-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.05));
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+  flex-wrap: wrap;
+}
+.dz-exec-lang {
+  font-size: 12px;
+  font-weight: 600;
+  color: #22c55e;
+  padding: 3px 10px;
+  background: rgba(34, 197, 94, 0.12);
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  white-space: nowrap;
+}
+.dz-exec-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+.dz-exec-tab {
+  padding: 5px 12px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+.dz-exec-tab:hover { color: #e0e0e0; background: rgba(255,255,255,0.05); }
+.dz-exec-tab--active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  font-weight: 600;
+}
+.dz-exec-actions {
+  display: flex;
+  gap: 4px;
+}
+.dz-exec-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.08);
+  color: #a3e635;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dz-exec-btn:hover {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.dz-exec-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dz-exec-body {
+  min-height: 220px;
+  max-height: 500px;
+  overflow: auto;
+}
+.dz-exec-iframe {
+  width: 100%;
+  min-height: 220px;
+  height: 300px;
+  border: none;
+  background: #1a1a2e;
+  display: block;
+}
+.dz-exec-code {
+  margin: 0;
+  padding: 16px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e0e0e0;
+  background: #1a1a2e;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dz-exec-code code {
+  font-family: inherit;
+  color: inherit;
 }
 
 /* ===== MAP CARD COMPONENT ===== */

@@ -11,6 +11,34 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
+
+// ── Resilience layer (must import before anything else uses AI) ──────────────
+import {
+  aiSemaphore,
+  aiDeduplicator,
+  groqCircuit,
+  deepseekCircuit,
+  ollamaCircuit,
+  agentMonitor,
+  chatMonitor,
+  fetchDeduplicator,
+  stallGuard,
+  withTimeout,
+  autoCleanMap,
+  scheduleOnce,
+  systemHealthSnapshot,
+  getOverloadMessage,
+} from './lib/resilience.js'
+
+// ── Process-level crash prevention ──────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH GUARD] uncaughtException (server kept alive):', err?.stack || err?.message || err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH GUARD] unhandledRejection (server kept alive):', reason?.stack || reason?.message || reason)
+})
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { mountSmartAgent } from './lib/agent-mount.js'
 import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
@@ -275,6 +303,8 @@ function randomDelay(minMs = 300, maxMs = 1200) {
 // ── Task 18: Request Throttle Queue (max 3 req/sec per domain) ─
 const THROTTLE_MAP = new Map() // domain → { count, resetAt }
 const MAX_REQ_PER_SEC = 3
+// Auto-prune THROTTLE_MAP every 5 min to prevent memory leak
+autoCleanMap(THROTTLE_MAP, { ttlMs: 10_000, label: 'throttle' })
 
 function throttleCheck(url) {
   const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
@@ -1472,10 +1502,15 @@ function balanceNewsCategories(items, target = 18) {
   return out.slice(0, target).map(({ _cat, _score, ...rest }) => ({ ...rest, category: _cat }))
 }
 
-// Calls DeepSeek with timeout protection. Returns content string or null.
+// Calls DeepSeek with timeout protection + circuit breaker. Returns content string or null.
 async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } = {}) {
   const key = process.env.DEEPSEEK_API_KEY
   if (!key) return null
+  if (!deepseekCircuit.isAvailable()) {
+    console.warn('[DeepSeek] circuit open — skipping')
+    return null
+  }
+  const t0 = Date.now()
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1488,20 +1523,29 @@ async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } =
     clearTimeout(timer)
     if (!r.ok) {
       console.warn(`[DeepSeek] HTTP ${r.status}`)
+      deepseekCircuit.recordFailure(`HTTP ${r.status}`)
       return null
     }
     const d = await r.json()
-    return d.choices?.[0]?.message?.content || null
+    const content = d.choices?.[0]?.message?.content || null
+    if (content) deepseekCircuit.recordSuccess()
+    else deepseekCircuit.recordFailure('empty response')
+    return content
   } catch (err) {
     console.warn('[DeepSeek] error:', err.message)
+    deepseekCircuit.recordFailure(err.message)
     return null
   }
 }
 
-// Calls Ollama proxy with timeout protection. Returns content string or null.
+// Calls Ollama proxy with timeout protection + circuit breaker. Returns content string or null.
 async function callOllama(messages, { timeoutMs = 25000 } = {}) {
   const url = process.env.OLLAMA_PROXY_URL
   if (!url) return null
+  if (!ollamaCircuit.isAvailable()) {
+    console.warn('[Ollama] circuit open — skipping')
+    return null
+  }
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1512,18 +1556,23 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
       signal: controller.signal,
     })
     clearTimeout(timer)
-    if (!r.ok) return null
+    if (!r.ok) { ollamaCircuit.recordFailure(`HTTP ${r.ok}`); return null }
     const d = await r.json()
-    return d.message?.content || null
+    const content = d.message?.content || null
+    if (content) ollamaCircuit.recordSuccess()
+    else ollamaCircuit.recordFailure('empty response')
+    return content
   } catch (err) {
     console.warn('[Ollama] error:', err.message)
+    ollamaCircuit.recordFailure(err.message)
     return null
   }
 }
 
 // Master fallback: tries DeepSeek → Ollama → multiple Groq models.
 // Returns { content, model } where content is validated, or { content: null }.
-async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+// ── Wrapped with: concurrency semaphore + in-flight deduplication ──────────
+async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000 }) {
   const trimmed = trimRelevantContext(messages, 8)
 
   // 1. DeepSeek
@@ -1550,6 +1599,31 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
   }
 
   return { content: null, model: null }
+}
+
+async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+  // Build a stable dedup key from the last user message + query
+  const lastMsg = [...(messages || [])].reverse().find(m => m?.role === 'user')?.content || ''
+  const dedupKey = `ai:${String(query || lastMsg).slice(0, 120).trim()}`
+
+  const t0 = Date.now()
+  try {
+    // Semaphore limits max concurrent AI calls to 6; deduplicator collapses parallel identical queries
+    const result = await aiDeduplicator.run(dedupKey, () =>
+      aiSemaphore.run(() =>
+        stallGuard(
+          () => _safeGenerateAI_inner({ messages, query, max_tokens }),
+          { maxMs: 55_000, fallbackValue: { content: null, model: null }, label: 'safeGenerateAI' }
+        ).then(r => r.value)
+      )
+    )
+    agentMonitor.record(!!result?.content, Date.now() - t0)
+    return result || { content: null, model: null }
+  } catch (err) {
+    agentMonitor.record(false, Date.now() - t0)
+    console.warn('[safeGenerateAI] error:', err.message)
+    return { content: null, model: null }
+  }
 }
 
 async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
@@ -1608,12 +1682,14 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
       }
       const elapsed = Date.now() - t0
       recordSuccess(key, elapsed)
+      groqCircuit.recordSuccess()
       console.log(`[Groq:Rotation] K${keyIndex} ✓ ${elapsed}ms | model:${model}`)
       if (Math.random() < 0.1) logKeyStats() // log stats 10% of the time
       return { content }
 
     } catch (err) {
       recordError(key, 'network')
+      groqCircuit.recordFailure(err.message)
       const s = getKeyStats(key)
       if (s.consecutiveErrors >= KEY_MAX_ERRORS) {
         setCooldown(key, KEY_ERROR_COOLDOWN_MS, `network error: ${err.message}`)
@@ -1644,6 +1720,15 @@ app.get('/api/groq-key-stats', (_req, res) => {
     }
   })
   res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
+})
+
+// ===== SYSTEM HEALTH API (resilience layer) =====
+app.get('/api/system-health', (_req, res) => {
+  try {
+    res.json(systemHealthSnapshot())
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
 })
 
 // ===== API ROUTE =====
@@ -1685,11 +1770,13 @@ app.post('/api/chat', async (req, res) => {
 
   const actualModel = groqModelMap[model] || model
 
+  const _chatT0 = Date.now()
   try {
     const trimmed = trimRelevantContext(messages, 8)
     const lastQuery = [...trimmed].reverse().find(m => m.role === 'user')?.content || ''
     const { content, error } = await callGroqWithFallback({ model: actualModel, messages: trimmed })
     if (validateAIContent(content, lastQuery)) {
+      chatMonitor.record(true, Date.now() - _chatT0)
       return res.status(200).json({ content })
     }
     if (content) logInvalidResponse(`chat:${actualModel}`, lastQuery, content)
@@ -1700,12 +1787,15 @@ app.post('/api/chat', async (req, res) => {
       : 'llama-3.3-70b-versatile'
     const retry = await callGroqWithFallback({ model: secondaryModel, messages: trimmed })
     if (validateAIContent(retry.content, lastQuery)) {
+      chatMonitor.record(true, Date.now() - _chatT0)
       return res.status(200).json({ content: retry.content, fallbackModel: secondaryModel })
     }
     if (retry.content) logInvalidResponse(`chat:${secondaryModel}`, lastQuery, retry.content)
 
+    chatMonitor.record(false, Date.now() - _chatT0)
     return res.status(500).json({ error: error || retry.error || 'No response generated.' })
   } catch (error) {
+    chatMonitor.record(false, Date.now() - _chatT0)
     console.error('Chat API error:', error)
     return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
   }
@@ -11470,61 +11560,79 @@ export { app }
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
-  setInterval(() => {
-    updateEddirasaIndex()
-      .then(index => console.log(`[Eddirasa] Scheduled index update complete: ${index.lessons.length} lessons`))
-      .catch(err => console.warn('[Eddirasa] Scheduled index update failed:', err.message))
-  }, 24 * 60 * 60 * 1000)
+  // ── Resilience: scheduleOnce prevents overlapping background jobs ─────────
+  scheduleOnce(
+    () => updateEddirasaIndex()
+      .then(index => console.log(`[Eddirasa] index update: ${index.lessons.length} lessons`))
+      .catch(err => console.warn('[Eddirasa] index update failed:', err.message)),
+    24 * 60 * 60 * 1000,
+    { label: 'eddirasa-index' }
+  )
 
-  // Task 6 — Resource Injection Layer: weekly cron
+  // Task 6 — Resource Injection Layer: weekly cron (no-overlap)
   fetchAndCacheResources()
     .then(r => console.log(`[Resources] Initial injection: ${Object.keys(r).length} categories`))
     .catch(err => console.warn('[Resources] Initial injection failed:', err.message))
-  setInterval(() => {
-    RESOURCE_CACHE.ts = 0 // force refresh
-    fetchAndCacheResources()
-      .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
-      .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
-  }, 7 * 24 * 60 * 60 * 1000)
+  scheduleOnce(
+    () => {
+      RESOURCE_CACHE.ts = 0
+      return fetchAndCacheResources()
+        .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
+        .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
+    },
+    7 * 24 * 60 * 60 * 1000,
+    { label: 'resources-refresh' }
+  )
 
   // ── Task 22: Smart Preloading — warm caches on startup ──────────
   setTimeout(() => {
     preloadEssentialData().catch(err => console.warn('[Preload] Startup preload error:', err.message))
   }, 2000)
 
-  // ── Task 16: Auto-Refresh — silent background refresh (5-10 min) ─
+  // ── Task 16: Auto-Refresh — silent background refresh using scheduleOnce ──
+  // scheduleOnce ensures next run only starts AFTER previous completes — no pile-up
   const AUTO_REFRESH_INTERVAL = 7 * 60 * 1000 // 7 minutes
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing weather caches...')
     const cities = ['Algiers', 'Oran', 'Constantine', 'Annaba', 'Setif']
-    for (const city of cities) {
+    await Promise.allSettled(cities.map(city => {
       WEATHER_CACHE_V2.invalidate(city.toLowerCase())
-      fetchCityWeatherResilient(city)
+      return fetchCityWeatherResilient(city)
         .then(d => console.log(`[AutoRefresh] Weather ${city}: ${d?.temp}°C`))
         .catch(err => console.warn(`[AutoRefresh] Weather ${city} failed:`, err.message))
-    }
-  }, AUTO_REFRESH_INTERVAL)
+    }))
+  }, AUTO_REFRESH_INTERVAL, { label: 'weather-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing currency...')
-    fetchCurrencyResilient(true)
+    await fetchCurrencyResilient(true)
       .then(d => console.log(`[AutoRefresh] Currency: ${d?.provider} (${Object.keys(d?.rates || {}).length} pairs)`))
       .catch(err => console.warn('[AutoRefresh] Currency failed:', err.message))
-  }, AUTO_REFRESH_INTERVAL + 60000) // offset by 1 min from weather
+  }, AUTO_REFRESH_INTERVAL + 60000, { label: 'currency-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing LFP matches...')
     SPORTS_CACHE_V2.invalidate('lfp')
-    fetchLFPData()
+    await fetchLFPData()
       .then(d => console.log(`[AutoRefresh] LFP: ${d?.matches?.length} matches`))
       .catch(err => console.warn('[AutoRefresh] LFP failed:', err.message))
-  }, 10 * 60 * 1000) // 10 min
+  }, 10 * 60 * 1000, { label: 'lfp-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(() => {
     console.log('[AutoRefresh] Refreshing standings...')
-    STANDINGS_CACHE.ts = 0 // force refresh on next request
-  }, 25 * 60 * 1000) // 25 min
+    STANDINGS_CACHE.ts = 0
+  }, 25 * 60 * 1000, { label: 'standings-refresh' })
+
+  // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
+  scheduleOnce(() => {
+    aiDeduplicator.prune()
+    fetchDeduplicator.prune()
+    if (Math.random() < 0.3) { // log health snapshot 30% of the time
+      const snap = systemHealthSnapshot()
+      console.log(`[Health] mem:${snap.memory.heapUsedMB}MB | ai-sem:${snap.semaphores[0]?.running}/${snap.semaphores[0]?.max} | groq:${snap.circuits[0]?.state}`)
+    }
+  }, 10 * 60 * 1000, { label: 'resilience-housekeeping' })
 
   // (mountSmartAgent + mountDzAgentV2 already mounted above so they also
   // attach on Vercel serverless. Keeping background-refresh / intervals here.)

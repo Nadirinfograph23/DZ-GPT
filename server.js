@@ -10850,6 +10850,105 @@ async function resolveYtdownDirectUrl(item) {
   return { url: polled.fileUrl, size: polled.fileSize || item.size }
 }
 
+// ── PRIMARY yt-dlp downloader ─────────────────────────────────────────────────
+// Downloads to a temp file via yt-dlp then streams it to the client.
+// Returns true  → response was fully handled (success or client disconnected).
+// Returns false → yt-dlp failed BEFORE writing any response headers so the
+//                 caller can fall through to external-service fallbacks.
+async function tryYtdlpDownloadToClient(req, res, url, format, h) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) return false
+
+  const hasFfmpeg = await ffmpegAvailable()
+  const cookies  = await ytDlpCookiesArgs()
+  const antiBot  = ytDlpAntiBotArgs()
+  const isAudio  = format === 'mp3' || format === 'audio'
+  const vid      = extractYouTubeVideoId(url) || 'video'
+
+  const initialExt = format === 'mp3' ? 'mp3' : (format === 'audio' ? 'm4a' : 'mp4')
+  const outPath    = tmpFile(initialExt)
+
+  // Resolve title in parallel with the download (oEmbed is fast: ~200ms).
+  // We use it only for the download filename — the download itself starts immediately.
+  const titlePromise = fetch(
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+    { headers: { 'User-Agent': YT_DLP_USER_AGENT }, signal: AbortSignal.timeout(6000) }
+  ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
+
+  let args, mime
+  if (format === 'mp3' && hasFfmpeg) {
+    args = ['-f', 'bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',
+            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+    mime = 'audio/mpeg'
+  } else if (isAudio && hasFfmpeg) {
+    args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-x', '--audio-format', 'm4a',
+            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+    mime = 'audio/mp4'
+  } else if (isAudio) {
+    // No ffmpeg — grab native format; serve as m4a (browsers handle it)
+    args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18',
+            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+    mime = 'audio/mp4'
+  } else if (hasFfmpeg) {
+    const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
+    args = ['-f', fmt, '--merge-output-format', 'mp4',
+            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+    mime = 'video/mp4'
+  } else {
+    // No ffmpeg — single progressive stream only
+    const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/22/18`
+    args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
+    mime = 'video/mp4'
+  }
+
+  return new Promise((resolve) => {
+    console.log(`[DZTube:dlp:primary] format=${format} h=${h}p ffmpeg=${hasFfmpeg}`)
+    const proc = spawn(dlpBin, args)
+    let stderrBuf = ''
+    proc.stderr.on('data', d => { stderrBuf += d.toString() })
+
+    let clientGone = false
+    const onClientClose = () => {
+      clientGone = true
+      if (!proc.killed) { try { proc.kill('SIGTERM') } catch {} }
+      safeUnlink(outPath)
+    }
+    req.on('close', onClientClose)
+
+    proc.on('error', err => {
+      console.error('[DZTube:dlp:primary:spawn]', err.message)
+      req.off('close', onClientClose)
+      safeUnlink(outPath)
+      resolve(false)  // caller should try fallbacks
+    })
+
+    proc.on('close', async code => {
+      req.off('close', onClientClose)
+      if (clientGone) return resolve(true)  // client left — treat as handled
+
+      if (code !== 0) {
+        console.warn('[DZTube:dlp:primary] exit', code,
+          stderrBuf.replace(/\n/g, ' ').slice(0, 400))
+        safeUnlink(outPath)
+        return resolve(false)  // caller should try fallbacks
+      }
+
+      // Title is hopefully already resolved by now
+      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
+      const safeTitle = rawTitle
+        ? rawTitle.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vid
+        : vid
+      const downloadName = isAudio
+        ? `${safeTitle}.${initialExt}`
+        : `${safeTitle}_${h}p.${initialExt}`
+
+      console.log(`[DZTube:dlp:primary] done → ${downloadName}`)
+      streamFileToClient(req, res, outPath, mime, downloadName)
+      resolve(true)
+    })
+  })
+}
+
 // Stream a buffered file to the client with Content-Length and cleanup
 function streamFileToClient(req, res, filePath, mime, downloadName) {
   fs.stat(filePath, (err, st) => {
@@ -10879,7 +10978,15 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
   const isAudio = format === 'mp3' || format === 'audio'
 
-  // ── Multi-source resolver ─────────────────────────────────────────────
+  // ── PRIMARY: yt-dlp (fastest & most reliable when available) ─────────
+  // We try this FIRST. External services (ytdown.to / Invidious / Piped)
+  // are only used when yt-dlp is not installed (e.g. serverless Vercel).
+  const primaryOk = await tryYtdlpDownloadToClient(req, res, url, format, h)
+  if (primaryOk) return
+  if (res.headersSent) return  // partial write — nothing more we can do
+  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying external services')
+
+  // ── FALLBACK: Multi-source resolver ───────────────────────────────────
   // Capability matrix (refreshed 2026-04-24):
   //   • ytdown.to  → MP4 (any height), M4A audio, MP3 audio  ✅ all formats
   //   • Piped      → ONLY audio-only streams (M4A/WebM). Their video URLs

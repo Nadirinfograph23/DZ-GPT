@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Highlighter, Copy, Check,
+  MoreVertical, Highlighter, Copy, Check, Mail,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -39,6 +39,15 @@ interface LocalUser {
   gender: 'male' | 'female'
   sessionId: string
   isAdmin: boolean
+}
+
+interface DmNotification {
+  id: string
+  from: string
+  fromId: string
+  preview: string
+  timestamp: number
+  read: boolean
 }
 
 const MALE_ICON = '♂'
@@ -91,6 +100,12 @@ export default function DZChat() {
   // Copy feedback state per message
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // DM notification state
+  const [dmNotifications, setDmNotifications] = useState<DmNotification[]>([])
+  const [dmNotifOpen, setDmNotifOpen] = useState(false)
+  const [dmToast, setDmToast] = useState<DmNotification | null>(null)
+  const dmToastTimerRef = useRef<number | null>(null)
+
   const wsRef = useRef<WebSocket | null>(null)
   const wsConnectedRef = useRef(false)
   const pollingRef = useRef<number | null>(null)
@@ -139,6 +154,15 @@ export default function DZChat() {
     if (hasBot) setAiTyping(false)
   }, [])
 
+  const showDmToast = useCallback((notif: DmNotification) => {
+    if (dmToastTimerRef.current) clearTimeout(dmToastTimerRef.current)
+    setDmToast(notif)
+    dmToastTimerRef.current = window.setTimeout(() => {
+      setDmToast(null)
+      dmToastTimerRef.current = null
+    }, 6000)
+  }, [])
+
   const handleServerEvent = useCallback((data: Record<string, unknown>) => {
     if (data.type === 'message') {
       const msg = data.msg as ChatMessage
@@ -149,6 +173,17 @@ export default function DZChat() {
           setAiTyping(true)
         }
       }
+    } else if (data.type === 'dm_notify') {
+      const notif: DmNotification = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        from: String(data.from || ''),
+        fromId: String(data.fromId || ''),
+        preview: String(data.preview || ''),
+        timestamp: Number(data.timestamp || Date.now()),
+        read: false,
+      }
+      setDmNotifications(prev => [notif, ...prev].slice(0, 50))
+      showDmToast(notif)
     } else if (data.type === 'update') {
       const msg = data.msg as ChatMessage
       if (msg) setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m))
@@ -164,7 +199,7 @@ export default function DZChat() {
         handleLogout()
       }
     }
-  }, [addMessages])
+  }, [addMessages, showDmToast])
 
   const startPolling = useCallback(() => {
     if (pollingRef.current) return
@@ -464,6 +499,7 @@ export default function DZChat() {
     setMsgMenu(null)
     setUserMenu(null)
     setAtDropdown(false)
+    setDmNotifOpen(false)
   }
 
   if (!localUser) {
@@ -567,6 +603,16 @@ export default function DZChat() {
               <span className="dzc-nav-badge dzc-nav-badge--notif">{unreadCount}</span>
             </button>
           )}
+          <button
+            className={`dzc-nav-btn dzc-nav-btn--dm ${dmNotifications.some(n => !n.read) ? 'dzc-nav-btn--dm-active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setDmNotifOpen(p => !p); setDmNotifications(prev => prev.map(n => ({ ...n, read: true }))) }}
+            title="الرسائل الخاصة"
+          >
+            <Mail size={15} />
+            {dmNotifications.some(n => !n.read) && (
+              <span className="dzc-nav-badge dzc-nav-badge--dm">{dmNotifications.filter(n => !n.read).length}</span>
+            )}
+          </button>
           <button className="dzc-nav-btn" onClick={clearChat} title="مسح الدردشة">
             <Trash2 size={15} />
           </button>
@@ -753,6 +799,64 @@ export default function DZChat() {
           </div>
         </main>
       </div>
+
+      {/* ===== DM NOTIFICATION PANEL ===== */}
+      {dmNotifOpen && (
+        <div className="dzc-notif-panel" onClick={e => e.stopPropagation()}>
+          <div className="dzc-notif-panel-header">
+            <Mail size={14} />
+            <span>الرسائل الخاصة</span>
+            <button className="dzc-notif-panel-close" onClick={() => setDmNotifOpen(false)}><X size={14} /></button>
+          </div>
+          {dmNotifications.length === 0 ? (
+            <div className="dzc-notif-panel-empty">لا توجد رسائل خاصة بعد</div>
+          ) : (
+            <div className="dzc-notif-panel-list">
+              {dmNotifications.map(n => (
+                <button
+                  key={n.id}
+                  className={`dzc-notif-item ${n.read ? '' : 'dzc-notif-item--unread'}`}
+                  onClick={() => {
+                    const user = onlineUsers.find(u => u.id === n.fromId)
+                    if (user) setDmTarget(user)
+                    else setDmTarget({ id: n.fromId, name: n.from, gender: 'male' })
+                    setDmNotifOpen(false)
+                    setTimeout(() => inputRef.current?.focus(), 50)
+                  }}
+                >
+                  <div className="dzc-notif-item-from">
+                    <Mail size={11} />
+                    <strong>{n.from}</strong>
+                    <span className="dzc-notif-item-time">{formatTime(n.timestamp)}</span>
+                  </div>
+                  <div className="dzc-notif-item-preview">{n.preview}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== DM TOAST NOTIFICATION ===== */}
+      {dmToast && (
+        <div className="dzc-dm-toast" onClick={() => {
+          const user = onlineUsers.find(u => u.id === dmToast.fromId)
+          if (user) setDmTarget(user)
+          else setDmTarget({ id: dmToast.fromId, name: dmToast.from, gender: 'male' })
+          setDmToast(null)
+          if (dmToastTimerRef.current) { clearTimeout(dmToastTimerRef.current); dmToastTimerRef.current = null }
+          setTimeout(() => inputRef.current?.focus(), 50)
+        }}>
+          <div className="dzc-dm-toast-icon"><Mail size={14} /></div>
+          <div className="dzc-dm-toast-content">
+            <div className="dzc-dm-toast-from">رسالة خاصة من <strong>{dmToast.from}</strong></div>
+            <div className="dzc-dm-toast-preview">{dmToast.preview}</div>
+          </div>
+          <button className="dzc-dm-toast-close" onClick={(e) => { e.stopPropagation(); setDmToast(null); if (dmToastTimerRef.current) { clearTimeout(dmToastTimerRef.current); dmToastTimerRef.current = null } }}>
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* ===== SIDEBAR OVERLAY on mobile ===== */}
       {sidebarOpen && <div className="dzc-overlay" onClick={() => setSidebarOpen(false)} />}

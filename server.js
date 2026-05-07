@@ -8955,72 +8955,112 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   const question = rawText.slice(trigger.length).trim()
   if (!question) return null
 
-  const systemPrompt = isAgent
-    ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس).
-
-قواعد الإجابة — اتبعها بدقة:
-
-1. افتراضك الأساسي هو الإجابة المباشرة. أجب فوراً على أي سؤال يحتوي على معلومة كافية.
-   مثال: "سعر الدينار اليوم" → أعطِ أسعار الصرف مقابل الدولار واليورو والجنيه مباشرة.
-
-2. لا تطرح سؤالاً توضيحياً إلا إذا كان السؤال مبهماً تماماً بحيث تصبح الإجابة مستحيلة.
-   الأمثلة الوحيدة المقبولة للتوضيح:
-   - "ما هو الطقس؟" بدون ذكر أي مدينة أو منطقة.
-   - "ما نتيجة المباراة؟" بدون ذكر أي فريق.
-   أما "ما الطقس في الجزائر العاصمة؟" أو "سعر الدولار في الجزائر؟" فهي أسئلة واضحة تستحق إجابة فورية.
-
-3. أسلوب الإجابة:
-   - ابدأ بالمعلومة مباشرة، بدون مقدمات أو "بالطبع" أو "سؤال ممتاز".
-   - استخدم أرقاماً وحقائق محددة قدر الإمكان.
-   - اذكر المصدر باختصار في نهاية الإجابة (مثال: المصدر: بنك الجزائر / الرابطة المحترفة الأولى).
-   - أضف ملاحظة مختصرة إن كان هناك فرق بين السعر الرسمي والسوق الموازية، أو أي تحفظ مهم.
-
-4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. لا تتجاوز 5-6 جمل بما فيها المصدر والملاحظة.`
-    : `أنت DZ GPT، مساعد ذكي عام ومفيد.
-
-قواعد الإجابة — اتبعها بدقة:
-
-1. افتراضك الأساسي هو الإجابة المباشرة. أجب فوراً على أي سؤال واضح دون طلب توضيح.
-2. لا تطرح سؤالاً توضيحياً إلا إذا كان السؤال مبهماً تماماً ولا يمكن الإجابة عليه دون معلومة أساسية مفقودة.
-3. أسلوب الإجابة:
-   - ابدأ بالمعلومة مباشرة، بدون مقدمات.
-   - استخدم أرقاماً وحقائق محددة حيثما أمكن.
-   - اذكر المصدر باختصار إن كانت الإجابة تعتمد على بيانات (مثال: المصدر: Wikipedia / البنك الدولي).
-   - أضف ملاحظة مختصرة عند الحاجة.
-4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. لا تتجاوز 5-6 جمل بما فيها المصدر والملاحظة.`
-
   try {
+    // ── Breaking news broadcast (agent only) ─────────────────────────────
     if (isAgent) {
       const breakingArticles = getBreakingNewsFromCache()
       if (breakingArticles.length > 0) {
         const breakingText = '🔴 عاجل: ' + breakingArticles.map(a => a.title).join(' | ')
         const breakingMsg = pushChatMsg({
-          id: chatId(),
-          from: 'DZ Agent',
-          fromId: 'bot',
-          gender: 'bot',
-          text: breakingText,
-          timestamp: Date.now(),
-          isBot: true,
-          botType: 'agent',
-          isBreaking: true,
-          triggeredBy: authorSession.name,
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: breakingText, timestamp: Date.now(), isBot: true, botType: 'agent',
+          isBreaking: true, triggeredBy: authorSession.name,
         })
         broadcastChat({ type: 'message', msg: breakingMsg })
       }
     }
 
-    const result = await callGroqWithFallback({
-      model: 'llama-3.3-70b-versatile',
+    // ── Algeria knowledge system (agent only) ────────────────────────────
+    if (isAgent && isAlgerianCitizenQuery(question)) {
+      const algeriaResult = searchAlgeria(question)
+      if (algeriaResult) {
+        const content = formatAlgeriaResponse(algeriaResult)
+        const botMsg = pushChatMsg({
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: content, timestamp: Date.now(), isBot: true, botType: 'agent',
+          triggeredBy: authorSession.name,
+        })
+        broadcastChat({ type: 'message', msg: botMsg })
+        return botMsg
+      }
+    }
+
+    // ── Live context injection (agent only) ──────────────────────────────
+    let liveContext = ''
+    if (isAgent) {
+      const lowerQ = question.toLowerCase()
+
+      // News context — inject when question is about news/events/Algeria
+      const newsKw = ['خبر', 'أخبار', 'news', 'actu', 'حوادث', 'اليوم', 'الآن', 'الجزائر', 'جديد', 'حدث']
+      if (newsKw.some(k => lowerQ.includes(k))) {
+        const allArticles = []
+        for (const [, cached] of GN_RSS_CACHE.entries()) {
+          if (cached?.data) allArticles.push(...cached.data)
+        }
+        if (allArticles.length > 0) {
+          liveContext += '\n\n📰 آخر الأخبار المتاحة:\n' +
+            allArticles.slice(0, 6).map(a => `• ${a.title}${a.source ? ` (${a.source})` : ''}`).join('\n')
+        }
+      }
+
+      // Weather context
+      const weatherKw = ['طقس', 'weather', 'météo', 'درجة حرارة', 'مطر', 'رياح', 'تساقط', 'حار', 'بارد']
+      if (weatherKw.some(k => lowerQ.includes(k))) {
+        const cached = WEATHER_CACHE_V2.getStale('algiers')
+        if (cached?.data) {
+          const w = cached.data
+          liveContext += `\n\n🌤️ الطقس الآن (الجزائر العاصمة): ${w.temp}°C — ${w.condition || ''}`
+          if (w.humidity) liveContext += ` — رطوبة ${w.humidity}%`
+          if (w.wind) liveContext += ` — رياح ${w.wind} كم/س`
+        }
+      }
+
+      // Currency/exchange context
+      const currKw = ['صرف', 'دينار', 'دولار', 'يورو', 'currency', 'taux', 'dzd', 'دج', 'eur', 'usd']
+      if (currKw.some(k => lowerQ.includes(k))) {
+        const cached = CURRENCY_CACHE_V2.getStale('dzd_rates')
+        if (cached?.data?.rates) {
+          const r = cached.data.rates
+          const usd = r.USD ? (1 / r.USD).toFixed(2) : null
+          const eur = r.EUR ? (1 / r.EUR).toFixed(2) : null
+          const sar = r.SAR ? (1 / r.SAR).toFixed(2) : null
+          const parts = []
+          if (usd) parts.push(`1 دولار ≈ ${usd} دج`)
+          if (eur) parts.push(`1 يورو ≈ ${eur} دج`)
+          if (sar) parts.push(`1 ريال ≈ ${sar} دج`)
+          if (parts.length) liveContext += `\n\n💱 أسعار الصرف (رسمي — بنك الجزائر): ${parts.join(' | ')}`
+        }
+      }
+    }
+
+    // ── System prompt ────────────────────────────────────────────────────
+    const systemPrompt = isAgent
+      ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
+
+قواعد الإجابة (إلزامية):
+1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".
+2. استخدم أرقاماً وحقائق محددة. اذكر المصدر باختصار في النهاية.
+3. إذا كانت البيانات المباشرة متاحة أدناه، استخدمها أولاً ولا تتجاهلها.
+4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
+5. لا تتجاوز 6 جمل بما فيها المصدر.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
+      : `أنت DZ GPT، مساعد ذكي عام ومفيد.
+
+قواعد الإجابة (إلزامية):
+1. أجب فوراً بدون مقدمات أو عبارات تمهيدية.
+2. استخدم حقائق ومصادر محددة حيثما أمكن.
+3. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
+4. لا تتجاوز 6 جمل.`
+
+    // ── Call full AI router (Groq → Gemini → Mistral → NVIDIA → Cohere → ...) ──
+    const result = await safeGenerateAI({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: question },
       ],
-      max_tokens: 600,
-      temperature: 0.3,
+      query: question,
+      max_tokens: 700,
     })
+
     const botMsg = pushChatMsg({
       id: chatId(),
       from: isAgent ? 'DZ Agent' : 'DZ GPT',
@@ -9037,6 +9077,22 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   } catch (err) {
     console.error('[ChatAI]', err.message)
     return null
+  }
+}
+
+// ── Helper: send DM notification to a specific WebSocket session ──────────────
+function sendDmNotify(recipSession, senderName, senderId, preview, timestamp, msgId) {
+  if (recipSession?.ws?.readyState === 1) {
+    try {
+      recipSession.ws.send(JSON.stringify({
+        type: 'dm_notify',
+        from: senderName,
+        fromId: senderId,
+        preview: String(preview || '').slice(0, 100),
+        timestamp,
+        msgId,
+      }))
+    } catch {}
   }
 }
 
@@ -11401,7 +11457,10 @@ app.post('/api/chat-room/send', async (req, res) => {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
     const json = JSON.stringify({ type: 'message', msg })
     if (session.ws?.readyState === 1) session.ws.send(json)
-    if (recip?.ws?.readyState === 1) recip.ws.send(json)
+    if (recip?.ws?.readyState === 1) {
+      recip.ws.send(json)
+      sendDmNotify(recip, session.name, session.id, cleanText, msg.timestamp, msg.id)
+    }
   } else {
     broadcastChat({ type: 'message', msg })
   }
@@ -11479,7 +11538,10 @@ function setupChatWebSocket(httpServer) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
             const json = JSON.stringify({ type: 'message', msg })
             ws.send(json)
-            if (recip?.ws?.readyState === 1) recip.ws.send(json)
+            if (recip?.ws?.readyState === 1) {
+              recip.ws.send(json)
+              sendDmNotify(recip, session.name, session.id, cleanText, msg.timestamp, msg.id)
+            }
           } else {
             broadcastChat({ type: 'message', msg })
           }

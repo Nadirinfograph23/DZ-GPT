@@ -1,13 +1,17 @@
 import { monitor } from './monitor.js'
 
+// Updated to 2025/2026 browser versions
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.6478.72 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 YaBrowser/24.6.0.0 Safari/537.36',
 ]
 
 let _uaIndex = Math.floor(Math.random() * USER_AGENTS.length)
@@ -31,6 +35,17 @@ export function antiBotArgs(opts = {}) {
     '--min-sleep-interval', '1',
     '--max-sleep-interval', '3',
   ]
+}
+
+// ── Per-domain throttle map to avoid hammering YouTube ────────────
+const _lastRequestMs = new Map()
+const MIN_INTERVAL_MS = 800
+
+export async function throttledRequest(domain = 'youtube.com') {
+  const last = _lastRequestMs.get(domain) || 0
+  const wait = MIN_INTERVAL_MS - (Date.now() - last)
+  if (wait > 0) await sleep(wait)
+  _lastRequestMs.set(domain, Date.now())
 }
 
 export async function sleep(ms) {
@@ -80,6 +95,11 @@ export function isSignatureError(err) {
   return m.includes('signature') || m.includes('nsig') || m.includes('decipher') || m.includes('js player')
 }
 
+export function isNetworkError(err) {
+  const m = String(err?.message || '').toLowerCase()
+  return m.includes('network') || m.includes('timeout') || m.includes('econnreset') || m.includes('econnrefused')
+}
+
 export function friendlyError(rawError) {
   const m = String(rawError?.message || rawError || '').toLowerCase()
   if (m.includes('429') || m.includes('too many requests')) return 'يوتيوب رفض الطلب مؤقتاً بسبب كثرة الطلبات، جاري إعادة المحاولة...'
@@ -91,6 +111,8 @@ export function friendlyError(rawError) {
   if (m.includes('region') || m.includes('country') || m.includes('geo')) return 'هذا الفيديو محظور في منطقة الخادم'
   if (m.includes('live') || m.includes('stream')) return 'البث المباشر لا يدعم التحميل حالياً'
   if (m.includes('premiere')) return 'العرض المجدول لم يُنشر بعد'
-  if (m.includes('signature') || m.includes('decipher')) return 'انتهت صلاحية التوقيع، جاري إعادة الاستخراج...'
+  if (m.includes('signature') || m.includes('decipher') || m.includes('nsig')) return 'انتهت صلاحية التوقيع، جاري إعادة الاستخراج بإصدار محدّث...'
+  if (m.includes('timeout') || m.includes('timed out')) return 'انتهت مهلة الاتصال، جاري إعادة المحاولة...'
+  if (m.includes('yt-dlp') && m.includes('not found')) return 'محرك التحميل غير متوفر مؤقتاً'
   return null
 }

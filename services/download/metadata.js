@@ -3,19 +3,30 @@ import { metadataCache } from './cache.js'
 import { extractVideoId } from './security.js'
 import { monitor } from './monitor.js'
 import { checkFfmpeg } from './ffmpeg.js'
+import { randomUserAgent } from './antiBot.js'
 
+// Updated working Invidious instances (2025)
 const INVIDIOUS_INSTANCES = [
-  'https://invidious.snopyta.org',
-  'https://vid.puffyan.us',
-  'https://invidious.kavin.rocks',
-  'https://inv.riverside.rocks',
+  'https://invidious.privacyredirect.com',
+  'https://invidious.fdn.fr',
+  'https://iv.datura.network',
+  'https://invidious.nerdvpn.de',
+  'https://invidious.lunar.icu',
+]
+
+// Working Piped API instances (2025)
+const PIPED_API_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://api.piped.projectsegfau.lt',
+  'https://piped-api.garudalinux.org',
+  'https://pipedapi.adminforge.de',
 ]
 
 async function fetchOEmbed(url) {
   try {
     const r = await fetch(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-      { signal: AbortSignal.timeout(5000), headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { signal: AbortSignal.timeout(5000), headers: { 'User-Agent': randomUserAgent() } }
     )
     if (!r.ok) return null
     const j = await r.json()
@@ -26,12 +37,17 @@ async function fetchOEmbed(url) {
 async function fetchInvidiousInfo(videoId) {
   for (const base of INVIDIOUS_INSTANCES) {
     try {
-      const r = await fetch(`${base}/api/v1/videos/${videoId}?fields=title,author,viewCount,lengthSeconds,published,videoThumbnails`, {
-        signal: AbortSignal.timeout(6000),
-      })
+      const r = await fetch(
+        `${base}/api/v1/videos/${videoId}?fields=title,author,viewCount,lengthSeconds,published,videoThumbnails`,
+        { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': randomUserAgent() } }
+      )
       if (!r.ok) continue
       const j = await r.json()
-      const thumb = (j.videoThumbnails || []).find(t => t.quality === 'maxres') || j.videoThumbnails?.[0]
+      if (j.error) continue
+      const thumb = (j.videoThumbnails || []).find(t => t.quality === 'maxres')
+        || (j.videoThumbnails || []).find(t => t.quality === 'high')
+        || j.videoThumbnails?.[0]
+      monitor.info(`[metadata:invidious] Got info from ${base}`)
       return {
         title: j.title,
         channel: j.author,
@@ -40,6 +56,31 @@ async function fetchInvidiousInfo(videoId) {
         uploadDate: j.published ? new Date(j.published * 1000).toISOString().slice(0, 10).replace(/-/g, '') : null,
         thumbnail: thumb?.url || null,
         _source: 'invidious',
+      }
+    } catch {}
+  }
+  return null
+}
+
+async function fetchPipedInfo(videoId) {
+  for (const base of PIPED_API_INSTANCES) {
+    try {
+      const r = await fetch(`${base}/streams/${videoId}`, {
+        signal: AbortSignal.timeout(6000),
+        headers: { 'User-Agent': randomUserAgent() },
+      })
+      if (!r.ok) continue
+      const j = await r.json()
+      if (j.error) continue
+      monitor.info(`[metadata:piped] Got info from ${base}`)
+      return {
+        title: j.title,
+        channel: j.uploader,
+        views: j.views,
+        duration: j.duration,
+        uploadDate: j.uploadedDate ? j.uploadedDate.replace(/-/g, '') : null,
+        thumbnail: j.thumbnailUrl || null,
+        _source: 'piped',
       }
     } catch {}
   }
@@ -63,24 +104,30 @@ export async function getVideoMetadata(url, opts = {}) {
     monitor.warn('[metadata] yt-dlp extraction failed: ' + e.message.slice(0, 100))
 
     if (videoId) {
-      const [oembed, invidious] = await Promise.allSettled([
+      // Try all fallbacks in parallel for speed
+      const [oembed, invidious, piped] = await Promise.allSettled([
         fetchOEmbed(url),
         fetchInvidiousInfo(videoId),
+        fetchPipedInfo(videoId),
       ])
       const o = oembed.status === 'fulfilled' ? oembed.value : null
       const iv = invidious.status === 'fulfilled' ? invidious.value : null
-      if (o || iv) {
+      const pd = piped.status === 'fulfilled' ? piped.value : null
+
+      const best = iv || pd || o
+      if (best || o) {
         result = {
           id: videoId,
-          title: iv?.title || o?.title || 'بدون عنوان',
-          thumbnail: iv?.thumbnail || o?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-          duration: iv?.duration || 0,
-          channel: iv?.channel || o?.channel || '',
-          views: iv?.views || 0,
-          uploadDate: iv?.uploadDate || null,
+          title: best?.title || o?.title || 'بدون عنوان',
+          thumbnail: best?.thumbnail || o?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          duration: best?.duration || 0,
+          channel: best?.channel || o?.channel || '',
+          views: best?.views || 0,
+          uploadDate: best?.uploadDate || null,
+          description: '',
           formats: [],
           audioFormats: [],
-          _source: iv ? 'invidious' : 'oembed',
+          _source: best?._source || (o ? 'oembed' : 'unknown'),
           _cachedAt: Date.now(),
         }
         metadataCache.set(cacheKey, result)
@@ -100,7 +147,7 @@ export async function getVideoMetadata(url, opts = {}) {
     heights: uniqueHeights,
     downloadableHeights: computeDownloadableHeights(uniqueHeights, hasFfmpeg),
     available: {
-      mp4: uniqueHeights.length > 0,
+      mp4: uniqueHeights.length > 0 || result._source !== undefined,
       mp3: true,
       audio: true,
     },

@@ -131,7 +131,8 @@ async function _doDownload(req, res, url, format, height, bitrate, videoId) {
         clientArg: clientConfig.name,
       })
       const outPath = tmpFile(ext)
-      const fullArgs = [...args, '-o', outPath]
+      // URL must be the last argument for yt-dlp
+      const fullArgs = [...args, '-o', outPath, url]
 
       monitor.info(`[DLv2:download] attempt client=${clientConfig.name} format=${format} h=${height} ffmpeg=${hasFfmpeg}`)
 

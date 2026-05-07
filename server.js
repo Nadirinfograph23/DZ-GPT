@@ -44,6 +44,7 @@ import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
+import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
@@ -11540,6 +11541,14 @@ try {
   mountDzTubeAnalytics(app)
 } catch (err) {
   console.warn('[dz-tube-analytics] mount failed:', err.message)
+}
+
+// ===== DZ TUBE DOWNLOAD V2 (stable download engine — additive only) =====
+// New endpoints: /api/dz-tube/v2/{health,info,download,mp3,audio-url,audio-proxy,queue,logs,cache/purge}
+try {
+  mountDownloadV2(app)
+} catch (err) {
+  console.warn('[dz-tube-v2] mount failed:', err.message)
 }
 
 // ===== YOUTUBE INSIGHT MODULE (plugin — additive only) =====

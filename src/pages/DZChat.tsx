@@ -53,6 +53,29 @@ interface DmNotification {
 const MALE_ICON = '♂'
 const FEMALE_ICON = '♀'
 const ADMIN_NAME = 'Nadir Infograph | نذير حوامرية'
+
+function VerifiedBadge({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      className="dzc-verified-badge"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-label="موثق"
+      title="مشرف موثق"
+    >
+      <circle cx="12" cy="12" r="12" fill="#1877F2" />
+      <path
+        d="M7 12.5l3.5 3.5 6.5-7"
+        stroke="#fff"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 const AT_SUGGESTIONS = ['@dzagent', '@dzgpt']
 
 function genderIcon(gender: string) {
@@ -643,9 +666,9 @@ export default function DZChat() {
                 }}
               >
                 {genderIcon(u.gender)}
-                <span className="dzc-user-name">{u.name}</span>
+                <span className={`dzc-user-name ${u.isAdmin ? 'dzc-user-name--admin' : ''}`}>{u.name}</span>
                 {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
-                {u.isAdmin && <Shield size={11} className="dzc-user-admin-icon" />}
+                {u.isAdmin && <VerifiedBadge size={13} />}
                 {localUser.isAdmin && u.id !== sessionIdRef.current && (
                   <ChevronRight size={12} className="dzc-user-arrow" />
                 )}
@@ -701,11 +724,12 @@ export default function DZChat() {
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
                     <span
-                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
+                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''} ${msg.isAdmin || msg.isHighlighted ? 'dzc-msg-from--admin' : ''}`}
                       onClick={(e) => handleMsgSenderClick(e, msg)}
                       title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
                     >
                       {msg.isHighlighted ? ADMIN_NAME : msg.from}
+                      {(msg.isAdmin || msg.isHighlighted) && !msg.isBot && <VerifiedBadge size={14} />}
                     </span>
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}

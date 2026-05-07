@@ -11452,6 +11452,7 @@ app.post('/api/chat-room/send', async (req, res) => {
     id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
+    isAdmin: !!session.isAdmin,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -11533,6 +11534,7 @@ function setupChatWebSocket(httpServer) {
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
+            isAdmin: !!session.isAdmin,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)

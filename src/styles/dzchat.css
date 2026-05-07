@@ -1004,3 +1004,27 @@
   transition: color 0.15s;
 }
 .dzc-dm-toast-close:hover { color: #ff6b6b; }
+
+/* ===== VERIFIED BADGE (admin blue checkmark) ===== */
+.dzc-verified-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-inline-start: 4px;
+  margin-top: -2px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(24, 119, 242, 0.5));
+  transition: transform 0.15s ease;
+}
+.dzc-verified-badge:hover {
+  transform: scale(1.15);
+}
+
+.dzc-msg-from--admin {
+  color: #4fa3ff !important;
+  font-weight: 700;
+}
+
+.dzc-user-name--admin {
+  color: #4fa3ff;
+  font-weight: 600;
+}

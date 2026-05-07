@@ -60,6 +60,8 @@ import {
   updateEddirasaIndex,
 } from './eddirasa_rss_crawler.js'
 
+import { callAIRouter, getRouterHealthSnapshot, getProviderStatus } from './lib/ai-router/index.js'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
 const PORT = 5000
@@ -1599,6 +1601,14 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000 }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
 
+  // 4. Multi-provider fallback (Gemini → Mistral → GitHub → NVIDIA → Cohere → OpenRouter)
+  console.warn('[AI] Groq/DeepSeek/Ollama all failed — escalating to multi-provider router')
+  const routerResult = await callAIRouter(trimmed, { max_tokens })
+  if (validateAIContent(routerResult?.content, query)) {
+    console.log(`[AI] ✓ Router succeeded via ${routerResult.model}`)
+    return routerResult
+  }
+
   return { content: null, model: null }
 }
 
@@ -1727,6 +1737,20 @@ app.get('/api/groq-key-stats', (_req, res) => {
 app.get('/api/system-health', (_req, res) => {
   try {
     res.json(systemHealthSnapshot())
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== AI ROUTER HEALTH API =====
+app.get('/api/ai-router/health', (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      providers: getProviderStatus(),
+      metrics: getRouterHealthSnapshot(),
+      ts: new Date().toISOString(),
+    })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }

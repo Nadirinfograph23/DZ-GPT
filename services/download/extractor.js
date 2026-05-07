@@ -21,11 +21,12 @@ const PLAYER_CLIENTS = [
   { name: 'web_safari',         args: 'youtube:player_client=web_safari' },
 ]
 
-// Download clients — ordered by stability for file downloads
+// Download clients — ordered by stability for file downloads.
+// Combined multi-client first (yt-dlp tries all internally on one call).
 const DOWNLOAD_CLIENTS = [
-  { name: 'android',         args: 'youtube:player_client=android' },
   { name: 'android,ios,web', args: 'youtube:player_client=android,ios,web' },
   { name: 'tv_embedded',     args: 'youtube:player_client=tv_embedded' },
+  { name: 'android',         args: 'youtube:player_client=android' },
   { name: 'web_creator',     args: 'youtube:player_client=web_creator' },
   { name: 'ios',             args: 'youtube:player_client=ios' },
 ]
@@ -71,7 +72,6 @@ export function resetBinCache() {
 
 // ── Core yt-dlp runner ─────────────────────────────────────────────
 async function runYtDlpWithClient(bin, url, extraArgs, clientConfig, timeoutMs = 50000) {
-  await throttledRequest('youtube.com')
   const cookies = await cookiesArgs()
   const ua = randomUserAgent()
   const baseArgs = [

@@ -25,3 +25,21 @@ dist-ssr
 
 # DZ Agent V4 generated user projects (not committed)
 data/dz-v4/
+
+# Large binary / generated files — keep repo lean
+bin/
+*.js.map
+1777*.js
+1778*.js
+.cache/
+tmp/
+temp/
+*.tmp
+cookies.txt
+
+# yt-dlp binary (auto-downloaded at runtime)
+bin/yt-dlp
+bin/yt-dlp.exe
+
+# TypeScript cache
+.cache/typescript/

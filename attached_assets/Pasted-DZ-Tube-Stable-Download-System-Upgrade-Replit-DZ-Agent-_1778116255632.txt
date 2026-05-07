@@ -1,0 +1,319 @@
+DZ Tube Stable Download System Upgrade (Replit)
+
+أنت تعمل كتحديث داخل مشروع DZ Agent / DZ Tube الحالي.
+
+مهمتك:
+إصلاح وتحسين نظام تحميل الفيديوهات و MP3 بدون كسر أي جزء من النظام الحالي.
+
+الهدف الرئيسي
+
+بناء YouTube Downloader Engine مستقر يتحمل:
+
+- تغييرات YouTube
+- Anti-Bot Detection
+- Rate Limiting
+- انتهاء صلاحية signatures
+- مشاكل ffmpeg
+- مشاكل Replit networking
+- مشاكل audio extraction
+
+النظام يجب أن:
+
+- يحمل MP3
+- يحمل فيديو MP4
+- يدعم الجودات المختلفة
+- يدعم background audio mode
+- يستمر بالعمل حتى مع تحديثات YouTube
+
+---
+
+Architecture المطلوبة
+
+إنشاء طبقة جديدة:
+
+/services/download/
+youtube.ts
+extractor.ts
+ffmpeg.ts
+cookies.ts
+antiBot.ts
+queue.ts
+cache.ts
+
+بدون حذف أي كود قديم.
+
+النظام الجديد يعمل كـ abstraction layer فوق yt-dlp.
+
+---
+
+المطلوب تقنيا
+
+1. تحديث yt-dlp تلقائيا
+
+عند startup:
+
+- تحقق من إصدار yt-dlp
+- إذا كان قديم قم بالتحديث تلقائيا
+
+مثال:
+pip install -U yt-dlp
+
+مع fallback protection إذا فشل التحديث.
+
+---
+
+2. Smart Extractor Strategy
+
+أنشئ extractor متعدد الأنماط:
+
+Priority:
+
+1. android client
+2. web_creator client
+3. ios client
+4. mweb client
+
+إذا فشل extractor:
+
+- ينتقل تلقائيا للثاني
+- بدون إظهار خطأ للمستخدم
+
+استخدم:
+
+--extractor-args "youtube:player_client=android"
+
+ثم fallback تلقائي.
+
+---
+
+3. Anti-Bot Layer
+
+أضف:
+
+- randomized user agents
+- sleep intervals
+- request throttling
+- retry system
+- exponential backoff
+
+المطلوب:
+منع:
+HTTP 429
+403 Forbidden
+Signatures failure
+
+---
+
+4. Cookies System
+
+إنشاء cookies manager.
+
+يدعم:
+
+- Chrome cookies
+- Firefox cookies
+- uploaded cookies.txt
+
+إذا الفيديو age restricted:
+استخدم cookies تلقائيا.
+
+---
+
+5. FFmpeg Integration
+
+تحقق من ffmpeg عند startup.
+
+إذا غير موجود:
+
+- install تلقائي داخل Replit environment
+- أو تحميل static binary
+
+النظام يجب أن:
+
+- يدمج الفيديو والصوت
+- يحول لـ MP3
+- يدعم AAC / Opus / MP3
+
+---
+
+6. MP3 Extraction Pipeline
+
+أنشئ pipeline احترافي:
+
+video stream
+→ audio extraction
+→ normalize audio
+→ convert bitrate
+→ export mp3
+
+الجودات:
+
+- 128kbps
+- 192kbps
+- 320kbps
+
+---
+
+7. Adaptive Format Selection
+
+إذا الجودة غير متوفرة:
+
+- اختر أقرب جودة تلقائيا
+
+أولوية:
+MP4 + AAC
+
+fallback:
+webm + opus
+
+---
+
+8. Queue System
+
+أنشئ download queue.
+
+الميزات:
+
+- max concurrent downloads
+- priority queue
+- cancellation
+- retry failed jobs
+
+لمنع crash داخل Replit.
+
+---
+
+9. Cache Layer
+
+أنشئ caching:
+
+- video metadata cache
+- thumbnails cache
+- extracted audio cache
+
+لتقليل requests نحو YouTube.
+
+---
+
+10. Streaming Mode
+
+إضافة:
+Audio-only streaming mode
+
+يعمل مثل:
+NewPipe background audio.
+
+بدون تحميل الفيديو كاملا.
+
+---
+
+11. Metadata Engine
+
+استخرج:
+
+- title
+- duration
+- thumbnail
+- channel
+- views
+- upload date
+
+قبل التحميل.
+
+---
+
+12. Error Recovery System
+
+حول الأخطاء التقنية إلى رسائل مفهومة:
+
+بدل:
+HTTP Error 403
+
+أظهر:
+"يوتيوب رفض الطلب مؤقتا، جاري إعادة المحاولة..."
+
+---
+
+13. Replit Stability Optimizations
+
+مهم جدا:
+
+- منع memory leaks
+- حذف الملفات المؤقتة تلقائيا
+- استعمال temp directories
+- timeout protection
+- process cleanup
+
+---
+
+14. Security Layer
+
+تحقق من:
+
+- الروابط المزيفة
+- command injection
+- malformed URLs
+- malicious ffmpeg args
+
+---
+
+15. Smart Fallback Providers
+
+إذا فشل yt-dlp:
+استعمل fallback providers:
+
+- Piped
+- Invidious
+- yt API mirrors
+
+بدون كسر النظام.
+
+---
+
+16. Logs & Monitoring
+
+أنشئ:
+
+- download logs
+- extractor logs
+- failed jobs logs
+
+مع debug mode.
+
+---
+
+17. الأداء
+
+الهدف:
+
+- startup سريع
+- استهلاك RAM منخفض
+- retries ذكية
+- تحميل مستقر
+
+---
+
+18. ممنوعات
+
+ممنوع:
+
+- كسر النظام الحالي
+- حذف APIs القديمة
+- تغيير architecture الأساسية
+- حذف UI الحالية
+
+التحديث additive فقط.
+
+---
+
+19. النتيجة النهائية المطلوبة
+
+DZ Tube يجب أن يصبح:
+
+- مستقر
+- مقاوم لتحديثات YouTube
+- يدعم MP3 و MP4
+- يدعم التشغيل بالخلفية
+- يعمل داخل Replit بأقل نسبة فشل ممكنة
+
+مع clean scalable architecture قابلة للتوسعة مستقبلا.

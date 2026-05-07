@@ -1,16 +1,33 @@
 import { spawn } from 'child_process'
-import { antiBotArgs, randomUserAgent, withExponentialBackoff } from './antiBot.js'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { antiBotArgs, randomUserAgent, withExponentialBackoff, throttledRequest, isSignatureError } from './antiBot.js'
 import { cookiesArgs } from './cookies.js'
 import { metadataCache, urlCache } from './cache.js'
 import { extractVideoId } from './security.js'
 import { monitor } from './monitor.js'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const BUNDLED_BIN = path.resolve(__dirname, '../../bin/yt-dlp')
+
+// Priority order: tv_embedded and web_safari are most bot-resistant
 const PLAYER_CLIENTS = [
-  { name: 'android', args: 'youtube:player_client=android' },
-  { name: 'web_creator', args: 'youtube:player_client=web_creator' },
-  { name: 'ios', args: 'youtube:player_client=ios' },
-  { name: 'mweb', args: 'youtube:player_client=mweb' },
+  { name: 'android',            args: 'youtube:player_client=android' },
+  { name: 'tv_embedded',        args: 'youtube:player_client=tv_embedded' },
+  { name: 'web_creator',        args: 'youtube:player_client=web_creator' },
+  { name: 'ios',                args: 'youtube:player_client=ios' },
+  { name: 'mweb',               args: 'youtube:player_client=mweb' },
+  { name: 'android,ios,web',    args: 'youtube:player_client=android,ios,web' },
+  { name: 'web_safari',         args: 'youtube:player_client=web_safari' },
+]
+
+// Download clients — ordered by stability for file downloads
+const DOWNLOAD_CLIENTS = [
+  { name: 'android',         args: 'youtube:player_client=android' },
   { name: 'android,ios,web', args: 'youtube:player_client=android,ios,web' },
+  { name: 'tv_embedded',     args: 'youtube:player_client=tv_embedded' },
+  { name: 'web_creator',     args: 'youtube:player_client=web_creator' },
+  { name: 'ios',             args: 'youtube:player_client=ios' },
 ]
 
 let _ytDlpBin = null
@@ -19,10 +36,14 @@ let _binChecked = false
 export async function resolveYtDlpBin() {
   if (_binChecked) return _ytDlpBin
   _binChecked = true
+
+  // Try bundled binary first, then env override, then system yt-dlp
   const candidates = [
+    BUNDLED_BIN,
     process.env.YTDLP_BIN,
     'yt-dlp',
   ].filter(Boolean)
+
   for (const c of candidates) {
     const ok = await new Promise(resolve => {
       try {
@@ -32,9 +53,14 @@ export async function resolveYtDlpBin() {
         p.on('close', code => { clearTimeout(t); resolve(code === 0) })
       } catch { resolve(false) }
     })
-    if (ok) { _ytDlpBin = c; monitor.info(`[extractor] yt-dlp binary: ${c}`); return c }
+    if (ok) {
+      _ytDlpBin = c
+      monitor.info(`[extractor] yt-dlp binary: ${c}`)
+      return c
+    }
   }
-  monitor.warn('[extractor] yt-dlp not found on PATH')
+
+  monitor.warn('[extractor] yt-dlp not found on PATH or bundled location')
   return null
 }
 
@@ -43,7 +69,9 @@ export function resetBinCache() {
   _binChecked = false
 }
 
-async function runYtDlpWithClient(bin, url, extraArgs, clientConfig, timeoutMs = 45000) {
+// ── Core yt-dlp runner ─────────────────────────────────────────────
+async function runYtDlpWithClient(bin, url, extraArgs, clientConfig, timeoutMs = 50000) {
+  await throttledRequest('youtube.com')
   const cookies = await cookiesArgs()
   const ua = randomUserAgent()
   const baseArgs = [
@@ -55,6 +83,7 @@ async function runYtDlpWithClient(bin, url, extraArgs, clientConfig, timeoutMs =
     '--fragment-retries', '3',
     '--socket-timeout', '25',
     '--no-warnings',
+    '--no-playlist',
   ]
   const args = [...baseArgs, ...cookies, ...extraArgs, url]
 
@@ -82,6 +111,7 @@ async function runYtDlpWithClient(bin, url, extraArgs, clientConfig, timeoutMs =
   })
 }
 
+// ── Metadata extraction ────────────────────────────────────────────
 export async function extractMetadata(url, opts = {}) {
   const cacheKey = 'meta:' + url
   if (!opts.bypassCache) {
@@ -128,11 +158,17 @@ export async function extractMetadata(url, opts = {}) {
     } catch (e) {
       monitor.warn(`[extractor:meta] client=${client.name} failed: ${e.message.slice(0, 100)}`)
       lastErr = e
+      // For signature errors, skip remaining clients (needs update) and throw immediately
+      if (isSignatureError(e)) {
+        monitor.warn('[extractor:meta] Signature error — all clients likely affected')
+        break
+      }
     }
   }
   throw lastErr || new Error('All extractor clients failed for metadata')
 }
 
+// ── Audio URL extraction (for streaming mode) ─────────────────────
 export async function extractDirectAudioUrl(url, opts = {}) {
   const videoId = extractVideoId(url)
   const cacheKey = 'audio_url:' + (videoId || url)
@@ -145,7 +181,7 @@ export async function extractDirectAudioUrl(url, opts = {}) {
   const bin = await resolveYtDlpBin()
   if (!bin) throw new Error('yt-dlp غير متوفر')
 
-  const formatStr = 'bestaudio[ext=m4a]/bestaudio/best'
+  const formatStr = 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best'
 
   let lastErr = null
   for (const client of PLAYER_CLIENTS) {
@@ -155,7 +191,7 @@ export async function extractDirectAudioUrl(url, opts = {}) {
         { maxAttempts: 2, baseDelay: 1000, label: `audio-url:${client.name}` }
       )
       const resolved = stdout.trim().split('\n')[0]
-      if (!resolved) throw new Error('No URL returned')
+      if (!resolved || !resolved.startsWith('http')) throw new Error('No valid URL returned')
       urlCache.set(cacheKey, resolved)
       monitor.info(`[extractor] Audio URL resolved via client=${client.name}`)
       return resolved
@@ -164,13 +200,59 @@ export async function extractDirectAudioUrl(url, opts = {}) {
       lastErr = e
     }
   }
+
+  // Last resort: try Piped API for audio URL
+  if (videoId) {
+    const pipedUrl = await extractAudioUrlPiped(videoId)
+    if (pipedUrl) {
+      urlCache.set(cacheKey, pipedUrl, 10 * 60 * 1000) // shorter TTL for piped
+      monitor.info('[extractor] Audio URL resolved via Piped fallback')
+      return pipedUrl
+    }
+  }
+
   throw lastErr || new Error('All extractor clients failed for audio URL')
 }
 
+// ── Piped API fallback for audio URL ──────────────────────────────
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://api.piped.projectsegfau.lt',
+  'https://piped-api.garudalinux.org',
+  'https://pipedapi.adminforge.de',
+]
+
+async function extractAudioUrlPiped(videoId) {
+  for (const base of PIPED_INSTANCES) {
+    try {
+      const r = await fetch(`${base}/streams/${videoId}`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': randomUserAgent() },
+      })
+      if (!r.ok) continue
+      const data = await r.json()
+      const streams = data.audioStreams || []
+      // Prefer m4a/aac, then webm/opus
+      const best = streams.find(s => s.mimeType?.includes('audio/mp4'))
+        || streams.find(s => s.mimeType?.includes('audio/webm'))
+        || streams[0]
+      if (best?.url) {
+        monitor.info(`[extractor:piped] Got audio URL from ${base}`)
+        return best.url
+      }
+    } catch (e) {
+      monitor.warn(`[extractor:piped] ${base} failed: ${e.message.slice(0, 80)}`)
+    }
+  }
+  return null
+}
+
+// ── Download args builder ─────────────────────────────────────────
 export async function extractDownloadArgs(url, format, height, bitrate, hasFfmpeg, opts = {}) {
   const cookies = await cookiesArgs()
   const ua = randomUserAgent()
-  const clientArg = 'android,ios,web'
+  // Use the best multi-client combo for downloads
+  const clientArg = opts.clientArg || 'android,ios,web'
 
   const baseArgs = [
     '--extractor-args', `youtube:player_client=${clientArg}`,
@@ -189,32 +271,35 @@ export async function extractDownloadArgs(url, format, height, bitrate, hasFfmpe
   const isAudio = format === 'mp3' || format === 'audio' || format === 'm4a'
 
   if (format === 'mp3' && hasFfmpeg) {
-    formatStr = 'bestaudio/18'
+    formatStr = 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18'
     ext = 'mp3'; mime = 'audio/mpeg'
     return {
       args: [...baseArgs, '-f', formatStr, '-x', '--audio-format', 'mp3', '--audio-quality', `${bitrate}k`],
-      ext, mime
+      ext, mime, clientArg
     }
   }
   if (isAudio && hasFfmpeg) {
-    formatStr = 'bestaudio[ext=m4a]/bestaudio/18'
+    formatStr = 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18'
     ext = 'm4a'; mime = 'audio/mp4'
     return {
       args: [...baseArgs, '-f', formatStr, '-x', '--audio-format', 'm4a'],
-      ext, mime
+      ext, mime, clientArg
     }
   }
   if (isAudio) {
-    formatStr = 'bestaudio[ext=m4a]/bestaudio/18'
+    formatStr = 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18'
     ext = 'm4a'; mime = 'audio/mp4'
-    return { args: [...baseArgs, '-f', formatStr], ext, mime }
+    return { args: [...baseArgs, '-f', formatStr], ext, mime, clientArg }
   }
   if (hasFfmpeg) {
-    formatStr = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${height}][ext=mp4]/best[height<=${height}]/22/18`
+    formatStr = `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}][ext=mp4]/best[height<=${height}]/22/18`
     ext = 'mp4'; mime = 'video/mp4'
-    return { args: [...baseArgs, '-f', formatStr, '--merge-output-format', 'mp4'], ext, mime }
+    return { args: [...baseArgs, '-f', formatStr, '--merge-output-format', 'mp4'], ext, mime, clientArg }
   }
-  formatStr = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${height}]/22/18`
+  formatStr = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${height}]/best[height<=${height}]/22/18`
   ext = 'mp4'; mime = 'video/mp4'
-  return { args: [...baseArgs, '-f', formatStr], ext, mime }
+  return { args: [...baseArgs, '-f', formatStr], ext, mime, clientArg }
 }
+
+// Export DOWNLOAD_CLIENTS for use in index.js retry loop
+export { DOWNLOAD_CLIENTS }

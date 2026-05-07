@@ -5,22 +5,97 @@ import { monitor } from './monitor.js'
 import { checkFfmpeg } from './ffmpeg.js'
 import { randomUserAgent } from './antiBot.js'
 
-// Updated working Invidious instances (2025)
+// Invidious instances (live-probed 2026-05)
 const INVIDIOUS_INSTANCES = [
+  'https://invidious.materialio.us',
+  'https://iv.ggtyler.dev',
+  'https://invidious.protokolla.fi',
+  'https://inv.in.projectsegfau.lt',
   'https://invidious.privacyredirect.com',
   'https://invidious.fdn.fr',
-  'https://iv.datura.network',
-  'https://invidious.nerdvpn.de',
-  'https://invidious.lunar.icu',
 ]
 
-// Working Piped API instances (2025)
+// Piped API instances (live-probed 2026-05)
 const PIPED_API_INSTANCES = [
+  'https://api.piped.private.coffee',
+  'https://piapi.ggtyler.dev',
   'https://pipedapi.kavin.rocks',
-  'https://api.piped.projectsegfau.lt',
-  'https://piped-api.garudalinux.org',
+  'https://api.piped.privacydev.net',
   'https://pipedapi.adminforge.de',
 ]
+
+// ytdown.to UA and endpoints
+const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+
+// ── ytdown.to fallback stream resolver ───────────────────────────
+// Polls ytdown.to's worker API to get a direct download URL.
+// Returns { url, ext, mime } or null if unavailable.
+export async function fetchYtdownStream(youtubeUrl, format = 'mp3') {
+  try {
+    const body = new URLSearchParams({ url: youtubeUrl }).toString()
+    const headers = {
+      'User-Agent': _YTDOWN_UA,
+      'Origin': 'https://app.ytdown.to',
+      'Referer': 'https://app.ytdown.to/fr23/',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': '*/*',
+    }
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 18000)
+    let data
+    try {
+      const r = await fetch('https://app.ytdown.to/proxy.php', { method: 'POST', headers, body, signal: ctrl.signal })
+      clearTimeout(t)
+      if (!r.ok) return null
+      data = await r.json().catch(() => null)
+    } catch { clearTimeout(t); return null }
+
+    const api = data?.api
+    if (!api || String(api.status || '').toLowerCase() !== 'ok') return null
+    const items = Array.isArray(api.mediaItems) ? api.mediaItems : []
+
+    // Pick item based on format
+    let item
+    if (format === 'mp3') {
+      item = items.find(m => m.type === 'Audio' && String(m.mediaExtension || '').toUpperCase() === 'MP3')
+    } else if (format === 'audio' || format === 'm4a') {
+      const audios = items.filter(m => m.type === 'Audio' && String(m.mediaExtension || '').toUpperCase() === 'M4A')
+      audios.sort((a, b) => parseInt(b.mediaQuality || 0) - parseInt(a.mediaQuality || 0))
+      item = audios[0]
+    } else {
+      const videos = items.filter(m => m.type === 'Video' && String(m.mediaExtension || '').toUpperCase() === 'MP4')
+      item = videos[0]
+    }
+    if (!item?.mediaUrl) return null
+
+    // Poll for direct download URL
+    const pollUrl = item.mediaUrl
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, i === 0 ? 200 : 1200))
+      try {
+        const pr = await fetch(pollUrl, {
+          headers: { 'User-Agent': _YTDOWN_UA, 'Referer': 'https://app.ytdown.to/', 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (!pr.ok) continue
+        const pd = await pr.json().catch(() => null)
+        if (!pd) continue
+        const status = String(pd.status || '').toLowerCase()
+        const fileUrl = pd.fileUrl || pd.file_url || pd.url
+        if ((status === 'completed' || status === 'done' || fileUrl) && fileUrl) {
+          const ext = format === 'mp3' ? 'mp3' : (format === 'audio' || format === 'm4a') ? 'm4a' : 'mp4'
+          const mime = format === 'mp3' ? 'audio/mpeg' : (ext === 'm4a' ? 'audio/mp4' : 'video/mp4')
+          return { url: fileUrl, ext, mime, source: 'ytdown' }
+        }
+        if (status === 'error' || status === 'failed') return null
+      } catch {}
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 async function fetchOEmbed(url) {
   try {
@@ -85,6 +160,92 @@ async function fetchPipedInfo(videoId) {
     } catch {}
   }
   return null
+}
+
+// ── Stream URL fetchers (fallback when yt-dlp is blocked) ─────────
+
+export async function fetchInvidiousStream(videoId, { isAudio = true, height = 720 } = {}) {
+  const results = INVIDIOUS_INSTANCES.map(async (base) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
+    try {
+      const r = await fetch(
+        `${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`,
+        { signal: ctrl.signal, headers: { 'User-Agent': randomUserAgent() } }
+      )
+      clearTimeout(t)
+      if (!r.ok) return null
+      const j = await r.json()
+      if (j.error) return null
+
+      if (isAudio) {
+        const audios = (j.adaptiveFormats || []).filter(a => a?.type?.startsWith('audio/'))
+        if (!audios.length) return null
+        const m4a = audios.filter(a => a.type.includes('mp4') || a.type.includes('m4a'))
+        const pool = m4a.length ? m4a : audios
+        pool.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+        const pick = pool[0]
+        if (!pick?.itag) return null
+        return {
+          url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+          mime: pick.type.includes('webm') ? 'audio/webm' : 'audio/mp4',
+          ext: pick.type.includes('webm') ? 'webm' : 'm4a',
+          source: 'invidious',
+        }
+      } else {
+        const combined = (j.formatStreams || []).filter(v => v?.itag && (!v.type || v.type.includes('mp4')))
+        combined.sort((a, b) => (parseInt(b.resolution || 0) || 0) - (parseInt(a.resolution || 0) || 0))
+        const pick = combined.find(v => (parseInt(v.resolution || 0) || 0) <= height) || combined[0]
+        if (!pick?.itag) return null
+        return {
+          url: `${base}/latest_version?id=${encodeURIComponent(videoId)}&itag=${pick.itag}&local=true`,
+          mime: 'video/mp4',
+          ext: 'mp4',
+          source: 'invidious',
+        }
+      }
+    } catch { clearTimeout(t); return null }
+  })
+  try {
+    return await Promise.any(results.map(p => p.then(v => v || Promise.reject(new Error('null')))))
+  } catch { return null }
+}
+
+export async function fetchPipedStream(videoId, { isAudio = true, height = 720 } = {}) {
+  const results = PIPED_API_INSTANCES.map(async (base) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
+    try {
+      const r = await fetch(`${base}/streams/${videoId}`, {
+        signal: ctrl.signal,
+        headers: { 'User-Agent': randomUserAgent() },
+      })
+      clearTimeout(t)
+      if (!r.ok) return null
+      const j = await r.json()
+      if (j.error) return null
+
+      if (isAudio) {
+        const audios = (j.audioStreams || []).filter(a => a?.url)
+        if (!audios.length) return null
+        const m4a = audios.filter(a => !(a.format || '').toLowerCase().includes('webm'))
+        const pool = m4a.length ? m4a : audios
+        pool.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+        const pick = pool[0]
+        return { url: pick.url, mime: pick.mimeType || 'audio/mp4', ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a', source: 'piped' }
+      } else {
+        const videos = (j.videoStreams || []).filter(v => v?.url && v.videoOnly === false)
+        const pool = videos.length ? videos : (j.videoStreams || []).filter(v => v?.url)
+        if (!pool.length) return null
+        pool.sort((a, b) => (b.height || 0) - (a.height || 0))
+        const pick = pool.find(v => (v.height || 0) <= height) || pool[pool.length - 1]
+        return { url: pick.url, mime: pick.mimeType || 'video/mp4', ext: (pick.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4', source: 'piped' }
+      }
+    } catch { clearTimeout(t); return null }
+  })
+  try {
+    return await Promise.any(results.map(p => p.then(v => v || Promise.reject(new Error('null')))))
+  } catch { return null }
 }
 
 export async function getVideoMetadata(url, opts = {}) {

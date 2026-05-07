@@ -1,5 +1,10 @@
 import { spawn } from 'child_process'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { monitor } from './monitor.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const BUNDLED_BIN = path.resolve(__dirname, '../../bin/yt-dlp')
 
 let _lastCheckTs = 0
 let _currentVersion = null
@@ -19,7 +24,7 @@ async function getYtDlpVersion(bin) {
 async function selfUpdateYtDlp(bin) {
   return new Promise((resolve) => {
     monitor.info('[updater] Trying yt-dlp -U (self-update)...')
-    const proc = spawn(bin || 'yt-dlp', ['-U'], { timeout: 60000 })
+    const proc = spawn(bin || 'yt-dlp', ['-U'], { timeout: 120000 })
     let out = '', err = ''
     proc.stdout.on('data', d => { out += d.toString() })
     proc.stderr.on('data', d => { err += d.toString() })
@@ -58,6 +63,34 @@ async function pipUpdateYtDlp() {
   })
 }
 
+// Try to update the bundled binary via GitHub releases
+async function downloadLatestBundledBin() {
+  try {
+    monitor.info('[updater] Checking latest yt-dlp release from GitHub...')
+    const r = await fetch('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest', {
+      signal: AbortSignal.timeout(10000),
+      headers: { 'User-Agent': 'DZ-GPT-yt-dlp-updater' },
+    })
+    if (!r.ok) return false
+    const release = await r.json()
+    const asset = (release.assets || []).find(a => a.name === 'yt-dlp')
+    if (!asset) return false
+
+    monitor.info(`[updater] Downloading yt-dlp ${release.tag_name} to bundled location...`)
+    const bin = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(60000) })
+    if (!bin.ok) return false
+
+    const fs = await import('fs')
+    const buffer = await bin.arrayBuffer()
+    fs.writeFileSync(BUNDLED_BIN, Buffer.from(buffer), { mode: 0o755 })
+    monitor.info(`[updater] Bundled yt-dlp updated to ${release.tag_name}`)
+    return release.tag_name
+  } catch (e) {
+    monitor.warn('[updater] Failed to download latest binary: ' + e.message)
+    return false
+  }
+}
+
 export async function checkAndUpdateYtDlp(bin) {
   if (_updateInProgress) return { status: 'in_progress', version: _currentVersion }
   const now = Date.now()
@@ -77,6 +110,7 @@ export async function checkAndUpdateYtDlp(bin) {
     _currentVersion = version
     monitor.info(`[updater] yt-dlp current version: ${version}`)
 
+    // Try self-update first (works when not Nix-managed)
     const selfResult = await selfUpdateYtDlp(bin)
 
     if (selfResult.ok) {
@@ -101,7 +135,18 @@ export async function checkAndUpdateYtDlp(bin) {
         }
         return { status: 'pip_already_latest', version: _currentVersion }
       }
-      monitor.info(`[updater] yt-dlp is Nix-managed (${version}) — skipping update, version is current`)
+
+      // Try downloading the bundled binary as last resort
+      monitor.info(`[updater] yt-dlp is Nix-managed (${version}) — attempting bundled binary update`)
+      const newTag = await downloadLatestBundledBin()
+      if (newTag) {
+        // Reset bin cache so next call picks up the new bundled binary
+        const { resetBinCache } = await import('./extractor.js')
+        resetBinCache()
+        return { status: 'bundled_updated', version: newTag }
+      }
+
+      monitor.info(`[updater] yt-dlp Nix-managed (${version}) — using as-is`)
       return { status: 'managed_by_nix', version: _currentVersion }
     }
 

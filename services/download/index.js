@@ -11,7 +11,7 @@ import {
   DOWNLOAD_CLIENTS,
 } from './extractor.js'
 import { checkFfmpeg } from './ffmpeg.js'
-import { getVideoMetadata } from './metadata.js'
+import { getVideoMetadata, fetchInvidiousStream, fetchPipedStream, fetchYtdownStream } from './metadata.js'
 import { cookiesArgs } from './cookies.js'
 import { friendlyError, withExponentialBackoff, sleep } from './antiBot.js'
 import { urlCache } from './cache.js'
@@ -166,10 +166,81 @@ async function _doDownload(req, res, url, format, height, bitrate, videoId) {
     }
   }
 
-  // All clients failed
+  // ── Fallback: Invidious + Piped stream proxy ─────────────────────
+  // When yt-dlp is blocked by YouTube (bot detection / 429), these public
+  // proxy networks can still serve the stream. Race them in parallel.
+  if (videoId && videoId !== 'video') {
+    monitor.info(`[DLv2:download] yt-dlp failed, trying Invidious/Piped for ${videoId}`)
+    const isAudio = format === 'mp3' || format === 'audio' || format === 'm4a'
+    const [invRes, pipedRes] = await Promise.allSettled([
+      fetchInvidiousStream(videoId, { isAudio, height }),
+      fetchPipedStream(videoId, { isAudio, height }),
+    ])
+    const stream = (invRes.status === 'fulfilled' && invRes.value)
+                || (pipedRes.status === 'fulfilled' && pipedRes.value)
+
+    if (stream) {
+      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
+      const safeTitle = sanitizeFilename(rawTitle || videoId)
+      const downloadName = isAudio
+        ? `${safeTitle}.${stream.ext}`
+        : `${safeTitle}_${height}p.${stream.ext}`
+      monitor.info(`[DLv2:download] ${stream.source} fallback → ${downloadName}`)
+      return proxyStreamToClient(req, res, stream.url, stream.mime, downloadName)
+    }
+
+    // ── Final fallback: ytdown.to (handles bot-blocked videos) ─────
+    monitor.info(`[DLv2:download] Invidious/Piped failed, trying ytdown.to for ${videoId}`)
+    const ytdownStream = await fetchYtdownStream(url, format)
+    if (ytdownStream) {
+      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
+      const safeTitle = sanitizeFilename(rawTitle || videoId)
+      const downloadName = isAudio
+        ? `${safeTitle}.${ytdownStream.ext}`
+        : `${safeTitle}_${height}p.${ytdownStream.ext}`
+      monitor.info(`[DLv2:download] ytdown.to fallback → ${downloadName}`)
+      return proxyStreamToClient(req, res, ytdownStream.url, ytdownStream.mime, downloadName)
+    }
+    monitor.warn(`[DLv2:download] ytdown.to also failed for ${videoId}`)
+  }
+
   const msg = friendlyError(lastErr) || 'فشل التحميل من جميع المصادر. تأكد من الرابط أو حاول مجدداً.'
-  monitor.error(`[DLv2:download] all clients failed for ${videoId}: ${lastErr?.message?.slice(0, 200)}`)
+  monitor.error(`[DLv2:download] all sources failed for ${videoId}: ${lastErr?.message?.slice(0, 200)}`)
   if (!res.headersSent) res.status(500).end(msg)
+}
+
+// ── Upstream proxy (for Invidious/Piped stream URLs) ─────────────
+async function proxyStreamToClient(req, res, upstreamUrl, mime, downloadName) {
+  try {
+    const fwdHeaders = { 'User-Agent': 'Mozilla/5.0 DZ-GPT/2.0' }
+    if (req.headers.range) fwdHeaders['Range'] = req.headers.range
+    const upstream = await fetch(upstreamUrl, { headers: fwdHeaders })
+    if (!upstream.ok && upstream.status !== 206) {
+      monitor.warn(`[DLv2:proxy] upstream ${upstream.status}`)
+      if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
+      return
+    }
+    res.setHeader('Content-Type', mime)
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`)
+    res.setHeader('X-DL-Engine', 'dz-v2-proxy')
+    const passHeaders = ['content-length', 'content-range', 'accept-ranges']
+    for (const h of passHeaders) { const v = upstream.headers.get(h); if (v) res.setHeader(h, v) }
+    res.status(upstream.status === 206 ? 206 : 200)
+    if (!upstream.body) { res.end(); return }
+    const reader = upstream.body.getReader()
+    let cancelled = false
+    req.on('close', () => { cancelled = true; try { reader.cancel() } catch {} })
+    while (!cancelled) {
+      const { done, value } = await reader.read()
+      if (done || cancelled) break
+      if (value && !res.write(value)) await new Promise(r => res.once('drain', r))
+    }
+    res.end()
+  } catch (e) {
+    monitor.error('[DLv2:proxy] ' + e.message)
+    if (!res.headersSent) res.status(502).end('فشل تحميل الملف من المصدر البديل')
+    else { try { res.end() } catch {} }
+  }
 }
 
 // ── yt-dlp process runner ─────────────────────────────────────────

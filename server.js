@@ -9093,21 +9093,36 @@ async function ytDlpCookiesArgs() {
 }
 
 // Anti-bot / anti-IP-block args for yt-dlp.
-// YouTube actively blocks data-center IPs (Vercel/AWS) with "Sign in to
-// confirm" challenges. These flags rotate player clients (android first,
-// then ios, then web — android usually bypasses sign-in), spoof a recent
-// browser User-Agent, retry transient errors, and avoid HLS-only formats
-// where possible. Applied to every yt-dlp invocation.
-const YT_DLP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-function ytDlpAntiBotArgs() {
+// Updated to 2026 browser versions. Combined multi-client is most reliable:
+// yt-dlp tries android→ios→web internally for one request.
+const YT_DLP_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+]
+let _uaIdx = 0
+const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
+function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
+
+// Client rotation order for multi-attempt retry
+const YT_DLP_CLIENTS = [
+  'android,ios,web',
+  'tv_embedded',
+  'web_creator',
+]
+
+function ytDlpAntiBotArgs(clientIdx = 0) {
+  const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
   return [
-    '--extractor-args', 'youtube:player_client=android,ios,web',
-    '--user-agent', YT_DLP_USER_AGENT,
+    '--extractor-args', `youtube:player_client=${client}`,
+    '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
     '--retries', '3',
     '--fragment-retries', '3',
-    '--socket-timeout', '20',
+    '--socket-timeout', '25',
+    '--sleep-requests', '0.5',
   ]
 }
 
@@ -10837,7 +10852,7 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
 // nadir-downloader.vercel.app). Bypasses YouTube bot detection on
 // serverless because the actual extraction runs on ytdown.to's workers.
 // Returns: { title, thumbnail, items: [{ type, quality, format, url, size, task, mediaUrl }] }
-const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
 const _YTDOWN_MAX_API_RETRIES = 2
 const _YTDOWN_MAX_POLL_ATTEMPTS = 12
 const _YTDOWN_POLL_DELAY_MS = 1500
@@ -10975,93 +10990,108 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   if (!dlpBin) return false
 
   const hasFfmpeg = await ffmpegAvailable()
-  const cookies  = await ytDlpCookiesArgs()
-  const antiBot  = ytDlpAntiBotArgs()
-  const isAudio  = format === 'mp3' || format === 'audio'
-  const vid      = extractYouTubeVideoId(url) || 'video'
-
+  const cookies   = await ytDlpCookiesArgs()
+  const isAudio   = format === 'mp3' || format === 'audio'
+  const vid       = extractYouTubeVideoId(url) || 'video'
   const initialExt = format === 'mp3' ? 'mp3' : (format === 'audio' ? 'm4a' : 'mp4')
-  const outPath    = tmpFile(initialExt)
 
-  // Resolve title in parallel with the download (oEmbed is fast: ~200ms).
-  // We use it only for the download filename — the download itself starts immediately.
+  // Resolve title in background (only for filename, doesn't block download)
   const titlePromise = fetch(
     `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
     { headers: { 'User-Agent': YT_DLP_USER_AGENT }, signal: AbortSignal.timeout(6000) }
   ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
 
-  let args, mime
-  if (format === 'mp3' && hasFfmpeg) {
-    args = ['-f', 'bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',
-            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
-    mime = 'audio/mpeg'
-  } else if (isAudio && hasFfmpeg) {
-    args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-x', '--audio-format', 'm4a',
-            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
-    mime = 'audio/mp4'
-  } else if (isAudio) {
-    // No ffmpeg — grab native format; serve as m4a (browsers handle it)
-    args = ['-f', 'bestaudio[ext=m4a]/bestaudio/18',
-            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
-    mime = 'audio/mp4'
-  } else if (hasFfmpeg) {
-    const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
-    args = ['-f', fmt, '--merge-output-format', 'mp4',
-            '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
-    mime = 'video/mp4'
-  } else {
-    // No ffmpeg — single progressive stream only
-    const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/22/18`
-    args = ['-f', fmt, '-o', outPath, '--no-playlist', '--no-warnings', ...antiBot, ...cookies, url]
-    mime = 'video/mp4'
+  function buildArgs(clientIdx) {
+    const antiBot = ytDlpAntiBotArgs(clientIdx)
+    let args, mime
+    if (format === 'mp3' && hasFfmpeg) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mpeg'
+    } else if (isAudio && hasFfmpeg) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'm4a',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mp4'
+    } else if (isAudio) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mp4'
+    } else if (hasFfmpeg) {
+      const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${h}]+bestaudio/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
+      args = ['-f', fmt, '--merge-output-format', 'mp4',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'video/mp4'
+    } else {
+      const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/22/18`
+      args = ['-f', fmt, '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'video/mp4'
+    }
+    return { args, mime }
   }
 
-  return new Promise((resolve) => {
-    console.log(`[DZTube:dlp:primary] format=${format} h=${h}p ffmpeg=${hasFfmpeg}`)
-    const proc = spawn(dlpBin, args)
-    let stderrBuf = ''
-    proc.stderr.on('data', d => { stderrBuf += d.toString() })
+  // ── Multi-client retry loop ─────────────────────────────────────
+  for (let ci = 0; ci < YT_DLP_CLIENTS.length; ci++) {
+    if (res.writableEnded || res.headersSent) return true
+    const outPath = tmpFile(initialExt)
+    const { args, mime } = buildArgs(ci)
+    const fullArgs = [...args, '-o', outPath, url]
 
-    let clientGone = false
-    const onClientClose = () => {
-      clientGone = true
-      if (!proc.killed) { try { proc.kill('SIGTERM') } catch {} }
-      safeUnlink(outPath)
-    }
-    req.on('close', onClientClose)
+    console.log(`[DZTube:dlp] attempt ci=${ci} client=${YT_DLP_CLIENTS[ci]} format=${format} ffmpeg=${hasFfmpeg}`)
 
-    proc.on('error', err => {
-      console.error('[DZTube:dlp:primary:spawn]', err.message)
-      req.off('close', onClientClose)
-      safeUnlink(outPath)
-      resolve(false)  // caller should try fallbacks
-    })
+    const result = await new Promise((resolve) => {
+      const TIMEOUT_MS = 5 * 60 * 1000
+      const proc = spawn(dlpBin, fullArgs)
+      let stderrBuf = '', clientGone = false
 
-    proc.on('close', async code => {
-      req.off('close', onClientClose)
-      if (clientGone) return resolve(true)  // client left — treat as handled
-
-      if (code !== 0) {
-        console.warn('[DZTube:dlp:primary] exit', code,
-          stderrBuf.replace(/\n/g, ' ').slice(0, 400))
+      const timer = setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch {}
         safeUnlink(outPath)
-        return resolve(false)  // caller should try fallbacks
+        resolve({ ok: false, stderr: 'timeout', clientGone: false })
+      }, TIMEOUT_MS)
+
+      const onClose = () => {
+        clientGone = true
+        try { proc.kill('SIGTERM') } catch {}
+        safeUnlink(outPath)
       }
+      req.on('close', onClose)
 
-      // Title is hopefully already resolved by now
-      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
-      const safeTitle = rawTitle
-        ? rawTitle.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vid
-        : vid
-      const downloadName = isAudio
-        ? `${safeTitle}.${initialExt}`
-        : `${safeTitle}_${h}p.${initialExt}`
-
-      console.log(`[DZTube:dlp:primary] done → ${downloadName}`)
-      streamFileToClient(req, res, outPath, mime, downloadName)
-      resolve(true)
+      proc.stderr.on('data', d => { stderrBuf += d.toString() })
+      proc.on('error', err => {
+        clearTimeout(timer); req.off('close', onClose); safeUnlink(outPath)
+        resolve({ ok: false, stderr: err.message, clientGone: false })
+      })
+      proc.on('close', async code => {
+        clearTimeout(timer); req.off('close', onClose)
+        if (clientGone) return resolve({ ok: false, clientGone: true })
+        if (code !== 0) {
+          safeUnlink(outPath)
+          return resolve({ ok: false, stderr: stderrBuf, clientGone: false })
+        }
+        try {
+          const st = fs.statSync(outPath)
+          if (st.size === 0) { safeUnlink(outPath); return resolve({ ok: false, stderr: 'empty file', clientGone: false }) }
+        } catch { return resolve({ ok: false, stderr: 'missing output', clientGone: false }) }
+        resolve({ ok: true, stderr: '' })
+      })
     })
-  })
+
+    if (result.clientGone) return true  // client left, treated as handled
+    if (result.ok) {
+      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
+      const safeTitle = (rawTitle || vid).replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vid
+      const downloadName = isAudio ? `${safeTitle}.${initialExt}` : `${safeTitle}_${h}p.${initialExt}`
+      console.log(`[DZTube:dlp] ✓ ci=${ci} → ${downloadName}`)
+      streamFileToClient(req, res, outPath, mime, downloadName)
+      return true
+    }
+
+    console.warn(`[DZTube:dlp] ci=${ci} failed: ${result.stderr?.replace(/\n/g, ' ').slice(0, 300)}`)
+    // Back off before next client (except last)
+    if (ci < YT_DLP_CLIENTS.length - 1) await new Promise(r => setTimeout(r, 1500 + ci * 1000))
+  }
+
+  return false  // all clients failed — caller tries external fallbacks
 }
 
 // Stream a buffered file to the client with Content-Length and cleanup

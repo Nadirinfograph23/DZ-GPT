@@ -43,6 +43,7 @@ Required env secrets (all optional — agent degrades gracefully without them):
 - Multi-model AI chat (ChatGPT/LLaMA/Qwen/GPT-OSS modes via Groq)
 - **FreeDZ Agent** (V1-V4): news, GitHub intelligence, web builder, autonomous research, code generation
 - **DZ Tube**: YouTube audio streaming with multi-extractor fallback chain
+- **DZ Tube Download V2** (`services/download/`): Stable download engine — multi-client extractor (android→web_creator→ios→mweb), anti-bot, queue, cache, MP3 pipeline (128/192/320kbps), logs, yt-dlp auto-update
 - **AI Quran**: Quran.com API v4, reading/tafsir/audio, ayah interaction
 - **OCR DZ**: Image + PDF text extraction (AR/EN/FR) with AI correction
 - **Voice**: Browser Web Speech API STT/TTS + wake word ("hey dz")
@@ -68,3 +69,5 @@ Required env secrets (all optional — agent degrades gracefully without them):
 - Cache: `lib/cache.js` (LRU+TTL singletons)
 - Memory: `lib/memory.js` (file-backed Jaccard similarity)
 - Prompts: `lib/prompts.js`
+- **DZ Tube V2 service**: `services/download/` — antiBot.js, cookies.js, extractor.js, ffmpeg.js, queue.js, cache.js, metadata.js, monitor.js, updater.js, security.js, index.js, mount.js
+- **DZ Tube V2 API routes**: `GET /api/dz-tube/v2/health` | `POST /api/dz-tube/v2/info` | `GET /api/dz-tube/v2/download?url&format&quality&bitrate` | `GET /api/dz-tube/v2/mp3?url&bitrate` | `GET /api/dz-tube/v2/audio-url` | `GET /api/dz-tube/v2/audio-proxy` | `GET /api/dz-tube/v2/queue` | `GET /api/dz-tube/v2/logs` | `POST /api/dz-tube/v2/cache/purge`

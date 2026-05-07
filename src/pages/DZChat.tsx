@@ -32,6 +32,7 @@ interface ChatMessage {
   triggeredBy?: string
   localDeleted?: boolean
   isBreaking?: boolean
+  isAdmin?: boolean
 }
 
 interface LocalUser {
@@ -63,8 +64,8 @@ function VerifiedBadge({ size = 15 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       aria-label="موثق"
-      title="مشرف موثق"
     >
+      <title>مشرف موثق</title>
       <circle cx="12" cy="12" r="12" fill="#1877F2" />
       <path
         d="M7 12.5l3.5 3.5 6.5-7"

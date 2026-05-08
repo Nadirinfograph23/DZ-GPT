@@ -49,6 +49,7 @@ import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
+import { mountDzManus } from './lib/dz-manus/mount.js'
 import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
@@ -12218,6 +12219,17 @@ try {
   )
 } catch (err) {
   console.warn('[clone-engine-v2] mount failed:', err.message)
+}
+
+// ===== DZ-MANUS — Autonomous AI Operating System (Manus/Devin/OpenHands level) =====
+// Additive endpoints: /api/dz-manus/{health,task,tasks,stream/:id,agents,tools,stats,research,tool}
+try {
+  mountDzManus(app, {
+    safeGenerateAI: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-manus] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

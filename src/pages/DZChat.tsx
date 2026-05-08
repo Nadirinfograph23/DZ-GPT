@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Highlighter, Copy, Check,
+  MoreVertical, Highlighter, Copy, Check, Mail, VolumeX, Volume2, Pin, PinOff,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -32,6 +32,8 @@ interface ChatMessage {
   triggeredBy?: string
   localDeleted?: boolean
   isBreaking?: boolean
+  isAdmin?: boolean
+  isAdminAnnounce?: boolean
 }
 
 interface LocalUser {
@@ -41,9 +43,49 @@ interface LocalUser {
   isAdmin: boolean
 }
 
+interface DmNotification {
+  id: string
+  from: string
+  fromId: string
+  preview: string
+  timestamp: number
+  read: boolean
+}
+
 const MALE_ICON = '♂'
 const FEMALE_ICON = '♀'
 const ADMIN_NAME = 'Nadir Infograph | نذير حوامرية'
+
+function VerifiedBadge({ size = 15 }: { size?: number }) {
+  return (
+    <span className="dzc-verified-badge-wrap" title="مشرف موثق ✓" aria-label="مشرف موثق">
+      <svg
+        className="dzc-verified-badge"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <defs>
+          <radialGradient id="vbg" cx="38%" cy="32%" r="65%">
+            <stop offset="0%" stopColor="#42a6ff" />
+            <stop offset="100%" stopColor="#0d6efd" />
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="12" fill="url(#vbg)" />
+        <circle cx="12" cy="12" r="12" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8" />
+        <path
+          d="M7 12.2l3.6 3.8 6.4-7.2"
+          stroke="#fff"
+          strokeWidth="2.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <ellipse cx="9" cy="9" rx="3.5" ry="2" fill="rgba(255,255,255,0.12)" transform="rotate(-30 9 9)" />
+      </svg>
+    </span>
+  )
+}
 const AT_SUGGESTIONS = ['@dzagent', '@dzgpt']
 
 function genderIcon(gender: string) {
@@ -82,6 +124,11 @@ export default function DZChat() {
 
   const [msgMenu, setMsgMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
   const [userMenu, setUserMenu] = useState<{ user: ChatUser; x: number; y: number } | null>(null)
+  const [muteMenu, setMuteMenu] = useState<{ targetId: string; targetName: string } | null>(null)
+  const [mutedMap, setMutedMap] = useState<Record<string, number>>({})  // userId → until timestamp
+  const [muteToast, setMuteToast] = useState<{ until: number } | null>(null)
+  const muteToastTimerRef = useRef<number | null>(null)
+  const [pinnedMsg, setPinnedMsg] = useState<{ id: string; text: string; from: string; timestamp: number } | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
 
   // @ mention suggestion state
@@ -90,6 +137,12 @@ export default function DZChat() {
 
   // Copy feedback state per message
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // DM notification state
+  const [dmNotifications, setDmNotifications] = useState<DmNotification[]>([])
+  const [dmNotifOpen, setDmNotifOpen] = useState(false)
+  const [dmToast, setDmToast] = useState<DmNotification | null>(null)
+  const dmToastTimerRef = useRef<number | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const wsConnectedRef = useRef(false)
@@ -139,6 +192,15 @@ export default function DZChat() {
     if (hasBot) setAiTyping(false)
   }, [])
 
+  const showDmToast = useCallback((notif: DmNotification) => {
+    if (dmToastTimerRef.current) clearTimeout(dmToastTimerRef.current)
+    setDmToast(notif)
+    dmToastTimerRef.current = window.setTimeout(() => {
+      setDmToast(null)
+      dmToastTimerRef.current = null
+    }, 6000)
+  }, [])
+
   const handleServerEvent = useCallback((data: Record<string, unknown>) => {
     if (data.type === 'message') {
       const msg = data.msg as ChatMessage
@@ -149,6 +211,17 @@ export default function DZChat() {
           setAiTyping(true)
         }
       }
+    } else if (data.type === 'dm_notify') {
+      const notif: DmNotification = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        from: String(data.from || ''),
+        fromId: String(data.fromId || ''),
+        preview: String(data.preview || ''),
+        timestamp: Number(data.timestamp || Date.now()),
+        read: false,
+      }
+      setDmNotifications(prev => [notif, ...prev].slice(0, 50))
+      showDmToast(notif)
     } else if (data.type === 'update') {
       const msg = data.msg as ChatMessage
       if (msg) setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m))
@@ -163,8 +236,21 @@ export default function DZChat() {
         alert('تم حظرك من غرفة الدردشة.')
         handleLogout()
       }
+    } else if (data.type === 'muted') {
+      if (muteToastTimerRef.current) clearTimeout(muteToastTimerRef.current)
+      setMuteToast({ until: Number(data.until) })
+      muteToastTimerRef.current = window.setTimeout(() => setMuteToast(null), 8000)
+    } else if (data.type === 'muteUpdate') {
+      const uid = data.userId as string
+      const until = Number(data.until)
+      setMutedMap(prev => {
+        if (until === 0) { const next = { ...prev }; delete next[uid]; return next }
+        return { ...prev, [uid]: until }
+      })
+    } else if (data.type === 'pinUpdate') {
+      setPinnedMsg(data.pinnedMessage as typeof pinnedMsg ?? null)
     }
-  }, [addMessages])
+  }, [addMessages, showDmToast])
 
   const startPolling = useCallback(() => {
     if (pollingRef.current) return
@@ -203,10 +289,13 @@ export default function DZChat() {
       try {
         const data = JSON.parse(e.data)
         if (data.type === 'welcome') {
+          // ← Update sessionIdRef to the WS session ID (server creates a NEW ID for WS)
+          if (data.sessionId) sessionIdRef.current = data.sessionId
           const histIds = new Set(historyMessages.map(m => m.id))
           const fresh = (data.messages || []).filter((m: ChatMessage) => !histIds.has(m.id))
           addMessages([...historyMessages, ...fresh])
           if (Array.isArray(data.users)) setOnlineUsers(data.users)
+          if (data.pinnedMessage) setPinnedMsg(data.pinnedMessage as { id: string; text: string; from: string; timestamp: number })
           stopPolling()
         } else {
           handleServerEvent(data)
@@ -394,6 +483,7 @@ export default function DZChat() {
             isDM: isDmSend,
             dmTo: dmTarget?.id,
             dmToName: dmTarget?.name,
+            isAdmin: !!localUser!.isAdmin,
           }
           const toAdd: ChatMessage[] = [myMsg]
           if (d.botMsg) {
@@ -414,21 +504,34 @@ export default function DZChat() {
 
   const clearChat = () => setMessages([])
 
-  const adminAction = async (action: string, targetId?: string, msgId?: string) => {
+  const adminAction = async (action: string, targetId?: string, msgId?: string, durationMs?: number) => {
     if (!sessionIdRef.current) return
     try {
       if (wsRef.current?.readyState === 1) {
-        wsRef.current.send(JSON.stringify({ type: 'admin', action, targetId, msgId }))
+        wsRef.current.send(JSON.stringify({ type: 'admin', action, targetId, msgId, durationMs }))
       } else {
         await fetch('/api/chat-room/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionIdRef.current, action, targetId, msgId }),
+          body: JSON.stringify({ sessionId: sessionIdRef.current, action, targetId, msgId, durationMs }),
         })
       }
     } catch {}
     setMsgMenu(null)
     setUserMenu(null)
+    setMuteMenu(null)
+  }
+
+  const handleMuteClick = (targetId: string, targetName: string) => {
+    setUserMenu(null)
+    setMsgMenu(null)
+    setMuteMenu({ targetId, targetName })
+  }
+
+  const applyMute = (durationMs: number) => {
+    if (!muteMenu) return
+    adminAction('mute', muteMenu.targetId, undefined, durationMs)
+    setMuteMenu(null)
   }
 
   // Copy bot message to clipboard
@@ -463,7 +566,16 @@ export default function DZChat() {
   const handleRootClick = () => {
     setMsgMenu(null)
     setUserMenu(null)
+    setMuteMenu(null)
     setAtDropdown(false)
+    setDmNotifOpen(false)
+  }
+
+  const formatMuteRemain = (until: number) => {
+    const sec = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+    if (sec >= 3600) return `${Math.ceil(sec / 3600)} ساعة`
+    if (sec >= 60) return `${Math.ceil(sec / 60)} دقيقة`
+    return `${sec} ثانية`
   }
 
   if (!localUser) {
@@ -567,6 +679,16 @@ export default function DZChat() {
               <span className="dzc-nav-badge dzc-nav-badge--notif">{unreadCount}</span>
             </button>
           )}
+          <button
+            className={`dzc-nav-btn dzc-nav-btn--dm ${dmNotifications.some(n => !n.read) ? 'dzc-nav-btn--dm-active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setDmNotifOpen(p => !p); setDmNotifications(prev => prev.map(n => ({ ...n, read: true }))) }}
+            title="الرسائل الخاصة"
+          >
+            <Mail size={15} />
+            {dmNotifications.some(n => !n.read) && (
+              <span className="dzc-nav-badge dzc-nav-badge--dm">{dmNotifications.filter(n => !n.read).length}</span>
+            )}
+          </button>
           <button className="dzc-nav-btn" onClick={clearChat} title="مسح الدردشة">
             <Trash2 size={15} />
           </button>
@@ -586,30 +708,50 @@ export default function DZChat() {
           </div>
           <div className="dzc-sidebar-count">{onlineCount || onlineUsers.length} متصل</div>
           <div className="dzc-users-list">
-            {onlineUsers.map(u => (
-              <div
-                key={u.id}
-                className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''}`}
-                onClick={(e) => {
-                  if (u.id === sessionIdRef.current) return
-                  e.stopPropagation()
-                  setUserMenu({ user: u, x: e.clientX, y: e.clientY })
-                }}
-              >
-                {genderIcon(u.gender)}
-                <span className="dzc-user-name">{u.name}</span>
-                {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
-                {u.isAdmin && <Shield size={11} className="dzc-user-admin-icon" />}
-                {localUser.isAdmin && u.id !== sessionIdRef.current && (
-                  <ChevronRight size={12} className="dzc-user-arrow" />
-                )}
-              </div>
-            ))}
+            {onlineUsers.map(u => {
+              const isMuted = mutedMap[u.id] && mutedMap[u.id] > Date.now()
+              return (
+                <div
+                  key={u.id}
+                  className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''} ${isMuted ? 'dzc-user-item--muted' : ''}`}
+                  onClick={(e) => {
+                    if (u.id === sessionIdRef.current) return
+                    e.stopPropagation()
+                    setUserMenu({ user: u, x: e.clientX, y: e.clientY })
+                  }}
+                >
+                  {genderIcon(u.gender)}
+                  <span className={`dzc-user-name ${u.isAdmin ? 'dzc-user-name--admin' : ''}`}>{u.name}</span>
+                  {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
+                  {u.isAdmin && <VerifiedBadge size={13} />}
+                  {isMuted && <span className="dzc-user-muted-badge" title={`مكتوم — ${formatMuteRemain(mutedMap[u.id])}`}><VolumeX size={11} /></span>}
+                  {localUser.isAdmin && u.id !== sessionIdRef.current && (
+                    <ChevronRight size={12} className="dzc-user-arrow" />
+                  )}
+                </div>
+              )
+            })}
           </div>
         </aside>
 
         {/* ===== MAIN CHAT AREA ===== */}
         <main className="dzc-main" onClick={() => setSidebarOpen(false)}>
+
+          {/* Pinned message banner */}
+          {pinnedMsg && (
+            <div className="dzc-pinned-banner">
+              <Pin size={13} className="dzc-pinned-icon" />
+              <div className="dzc-pinned-content">
+                <span className="dzc-pinned-from">{pinnedMsg.from}</span>
+                <span className="dzc-pinned-text">{pinnedMsg.text.length > 120 ? pinnedMsg.text.slice(0, 120) + '…' : pinnedMsg.text}</span>
+              </div>
+              {localUser?.isAdmin && (
+                <button className="dzc-pinned-unpin" onClick={() => adminAction('unpin')} title="إلغاء التثبيت">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* DM banner */}
           {dmTarget && (
@@ -624,6 +766,16 @@ export default function DZChat() {
           <div className="dzc-messages">
             {visibleMessages.map(msg => {
               if (msg.isSystem) {
+                if (msg.isAdminAnnounce) {
+                  return (
+                    <div key={msg.id} className="dzc-msg-system dzc-msg-system--admin-announce">
+                      <span className="dzc-announce-shield">🛡️</span>
+                      <span className="dzc-announce-name">{ADMIN_NAME}</span>
+                      <VerifiedBadge size={13} />
+                      <span className="dzc-announce-text">{msg.text}</span>
+                    </div>
+                  )
+                }
                 return (
                   <div key={msg.id} className={`dzc-msg-system ${msg.isHighlighted ? 'dzc-msg-system--highlighted' : ''}`}>
                     {msg.isHighlighted
@@ -654,13 +806,28 @@ export default function DZChat() {
                 >
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
-                    <span
-                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
-                      onClick={(e) => handleMsgSenderClick(e, msg)}
-                      title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
-                    >
-                      {msg.isHighlighted ? ADMIN_NAME : msg.from}
-                    </span>
+                    {(() => {
+                      // isMsgAdmin: true when the sender is an admin
+                      // After sessionIdRef fix, isMe is now accurate for WS sessions too
+                      const isMsgAdmin = !!(
+                        msg.isAdmin ||
+                        msg.isHighlighted ||
+                        (isMe && localUser?.isAdmin) ||
+                        onlineUsers.find(u => u.id === msg.fromId)?.isAdmin
+                      ) && !msg.isBot
+                      return (
+                        <>
+                          <span
+                            className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''} ${isMsgAdmin ? 'dzc-msg-from--admin' : ''}`}
+                            onClick={(e) => handleMsgSenderClick(e, msg)}
+                            title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
+                          >
+                            {msg.isHighlighted ? ADMIN_NAME : msg.from}
+                          </span>
+                          {isMsgAdmin && <VerifiedBadge size={14} />}
+                        </>
+                      )
+                    })()}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}
                     {msg.triggeredBy && <span className="dzc-msg-triggered">↩ {msg.triggeredBy}</span>}
@@ -754,6 +921,64 @@ export default function DZChat() {
         </main>
       </div>
 
+      {/* ===== DM NOTIFICATION PANEL ===== */}
+      {dmNotifOpen && (
+        <div className="dzc-notif-panel" onClick={e => e.stopPropagation()}>
+          <div className="dzc-notif-panel-header">
+            <Mail size={14} />
+            <span>الرسائل الخاصة</span>
+            <button className="dzc-notif-panel-close" onClick={() => setDmNotifOpen(false)}><X size={14} /></button>
+          </div>
+          {dmNotifications.length === 0 ? (
+            <div className="dzc-notif-panel-empty">لا توجد رسائل خاصة بعد</div>
+          ) : (
+            <div className="dzc-notif-panel-list">
+              {dmNotifications.map(n => (
+                <button
+                  key={n.id}
+                  className={`dzc-notif-item ${n.read ? '' : 'dzc-notif-item--unread'}`}
+                  onClick={() => {
+                    const user = onlineUsers.find(u => u.id === n.fromId)
+                    if (user) setDmTarget(user)
+                    else setDmTarget({ id: n.fromId, name: n.from, gender: 'male' })
+                    setDmNotifOpen(false)
+                    setTimeout(() => inputRef.current?.focus(), 50)
+                  }}
+                >
+                  <div className="dzc-notif-item-from">
+                    <Mail size={11} />
+                    <strong>{n.from}</strong>
+                    <span className="dzc-notif-item-time">{formatTime(n.timestamp)}</span>
+                  </div>
+                  <div className="dzc-notif-item-preview">{n.preview}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== DM TOAST NOTIFICATION ===== */}
+      {dmToast && (
+        <div className="dzc-dm-toast" onClick={() => {
+          const user = onlineUsers.find(u => u.id === dmToast.fromId)
+          if (user) setDmTarget(user)
+          else setDmTarget({ id: dmToast.fromId, name: dmToast.from, gender: 'male' })
+          setDmToast(null)
+          if (dmToastTimerRef.current) { clearTimeout(dmToastTimerRef.current); dmToastTimerRef.current = null }
+          setTimeout(() => inputRef.current?.focus(), 50)
+        }}>
+          <div className="dzc-dm-toast-icon"><Mail size={14} /></div>
+          <div className="dzc-dm-toast-content">
+            <div className="dzc-dm-toast-from">رسالة خاصة من <strong>{dmToast.from}</strong></div>
+            <div className="dzc-dm-toast-preview">{dmToast.preview}</div>
+          </div>
+          <button className="dzc-dm-toast-close" onClick={(e) => { e.stopPropagation(); setDmToast(null); if (dmToastTimerRef.current) { clearTimeout(dmToastTimerRef.current); dmToastTimerRef.current = null } }}>
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {/* ===== SIDEBAR OVERLAY on mobile ===== */}
       {sidebarOpen && <div className="dzc-overlay" onClick={() => setSidebarOpen(false)} />}
 
@@ -761,16 +986,27 @@ export default function DZChat() {
       {userMenu && (
         <div
           className="dzc-context-menu"
-          style={{ top: Math.min(userMenu.y, window.innerHeight - 140), left: Math.max(8, Math.min(userMenu.x, window.innerWidth - 200)) }}
+          style={{ top: Math.min(userMenu.y, window.innerHeight - 180), left: Math.max(8, Math.min(userMenu.x, window.innerWidth - 200)) }}
           onClick={e => e.stopPropagation()}
         >
           <button className="dzc-context-item" onClick={() => { setDmTarget(userMenu.user); setSidebarOpen(false); setUserMenu(null); inputRef.current?.focus() }}>
             <MessageCircle size={13} /> إرسال رسالة خاصة
           </button>
           {localUser.isAdmin && (
-            <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', userMenu.user.id)}>
-              <Shield size={13} /> حظر المستخدم
-            </button>
+            <>
+              {mutedMap[userMenu.user.id] && mutedMap[userMenu.user.id] > Date.now() ? (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => adminAction('unmute', userMenu.user.id)}>
+                  <Volume2 size={13} /> رفع الكتم
+                </button>
+              ) : (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => handleMuteClick(userMenu.user.id, userMenu.user.name)}>
+                  <VolumeX size={13} /> كتم مؤقت
+                </button>
+              )}
+              <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', userMenu.user.id)}>
+                <Shield size={13} /> حظر دائم
+              </button>
+            </>
           )}
         </div>
       )}
@@ -779,20 +1015,65 @@ export default function DZChat() {
       {msgMenu && localUser.isAdmin && (
         <div
           className="dzc-context-menu"
-          style={{ top: Math.min(msgMenu.y, window.innerHeight - 150), left: Math.max(8, Math.min(msgMenu.x, window.innerWidth - 210)) }}
+          style={{ top: Math.min(msgMenu.y, window.innerHeight - 180), left: Math.max(8, Math.min(msgMenu.x, window.innerWidth - 210)) }}
           onClick={e => e.stopPropagation()}
         >
           <button className="dzc-context-item" onClick={() => adminAction('highlight', undefined, msgMenu.msg.id)}>
             <Highlighter size={13} /> تمييز الرسالة (إعلان)
           </button>
+          {pinnedMsg?.id === msgMenu.msg.id ? (
+            <button className="dzc-context-item dzc-context-item--pin" onClick={() => adminAction('unpin')}>
+              <PinOff size={13} /> إلغاء التثبيت
+            </button>
+          ) : (
+            <button className="dzc-context-item dzc-context-item--pin" onClick={() => adminAction('pin', undefined, msgMenu.msg.id)}>
+              <Pin size={13} /> تثبيت الرسالة
+            </button>
+          )}
           <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('delete', undefined, msgMenu.msg.id)}>
             <Trash2 size={13} /> حذف الرسالة
           </button>
           {msgMenu.msg.fromId !== 'bot' && msgMenu.msg.fromId !== 'system' && (
-            <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', msgMenu.msg.fromId)}>
-              <Shield size={13} /> حظر المرسل
-            </button>
+            <>
+              {mutedMap[msgMenu.msg.fromId] && mutedMap[msgMenu.msg.fromId] > Date.now() ? (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => adminAction('unmute', msgMenu.msg.fromId)}>
+                  <Volume2 size={13} /> رفع الكتم
+                </button>
+              ) : (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => handleMuteClick(msgMenu.msg.fromId, msgMenu.msg.from)}>
+                  <VolumeX size={13} /> كتم مؤقت
+                </button>
+              )}
+              <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', msgMenu.msg.fromId)}>
+                <Shield size={13} /> حظر دائم
+              </button>
+            </>
           )}
+        </div>
+      )}
+
+      {/* ===== MUTE DURATION PICKER ===== */}
+      {muteMenu && (
+        <div className="dzc-mute-picker" onClick={e => e.stopPropagation()}>
+          <div className="dzc-mute-picker-title">
+            <VolumeX size={14} /> كتم: <strong>{muteMenu.targetName}</strong>
+          </div>
+          <div className="dzc-mute-picker-label">اختر مدة الكتم</div>
+          <div className="dzc-mute-durations">
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(5 * 60 * 1000)}>5 دقائق</button>
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(30 * 60 * 1000)}>30 دقيقة</button>
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(60 * 60 * 1000)}>ساعة</button>
+          </div>
+          <button className="dzc-mute-cancel" onClick={() => setMuteMenu(null)}>إلغاء</button>
+        </div>
+      )}
+
+      {/* ===== MUTE TOAST (shown to muted user) ===== */}
+      {muteToast && (
+        <div className="dzc-mute-toast">
+          <VolumeX size={15} />
+          <span>أنت مكتوم — ينتهي خلال {formatMuteRemain(muteToast.until)}</span>
+          <button onClick={() => setMuteToast(null)}><X size={12} /></button>
         </div>
       )}
     </div>

@@ -2838,6 +2838,349 @@ app.post('/api/dz-agent/education/index', async (req, res) => {
   }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HYBRID INTELLIGENT WEBSITE RECONSTRUCTION ENGINE
+// DOM-first approach: extract design tokens → reconstruct pixel-perfect clone
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PIXEL_PERFECT_CLONE_PROMPT = `You are a PIXEL-PERFECT WEBSITE RECONSTRUCTION ENGINEER.
+Your mission: reproduce the target website as a near-identical standalone HTML file.
+
+════════════════════════════════════════════
+ABSOLUTE OUTPUT RULE:
+Output ONLY raw HTML — NOTHING ELSE.
+No markdown fences. No explanations. No comments outside code.
+Response = ONE complete file: <!DOCTYPE html> … </html>
+════════════════════════════════════════════
+
+RECONSTRUCTION STRATEGY (follow this order):
+1. LAYOUT FIRST — reproduce the exact section order, grid/flex structure, and spacing
+2. DESIGN TOKENS — use the EXACT colors, fonts, border-radius, shadows provided below
+3. TYPOGRAPHY — match font families, sizes, weights, line-heights exactly
+4. COMPONENTS — recreate each detected section (navbar, hero, cards, footer, etc.)
+5. ANIMATIONS — preserve scroll animations, hover effects, transitions
+6. RESPONSIVE — maintain the same breakpoints and mobile layout
+
+CRITICAL RULES:
+✅ Use the EXACT color palette extracted from the site (provided below)
+✅ Use the EXACT font families detected (load via Google Fonts CDN)
+✅ Reproduce the EXACT section structure in the same order
+✅ Use Font Awesome 6 for icons: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+✅ All CSS inside <style> block — no external files
+✅ All JS inside <script> block — no external files
+✅ Use realistic content from the page (not Lorem ipsum)
+✅ Preserve all interactive behaviors (hamburger menu, dropdowns, tabs, accordions)
+✅ Include responsive breakpoints matching the original
+
+QUALITY TARGET: The output must be visually indistinguishable from the original at first glance.
+
+START OUTPUT NOW — PURE HTML ONLY:`
+
+async function extractDesignTokens(rawHtml, url) {
+  const tokens = {
+    colors: [],
+    fonts: [],
+    sections: [],
+    animations: [],
+    hasNavbar: false,
+    hasHero: false,
+    hasFooter: false,
+    hasPricing: false,
+    hasTestimonials: false,
+    hasForms: false,
+    hasCards: false,
+    iconLibrary: null,
+    title: '',
+    domain: '',
+    description: '',
+    headings: [],
+    textContent: '',
+    layoutType: 'landing',
+    colorScheme: 'dark',
+    primaryColor: null,
+    bgColor: null,
+    fontFamily: null,
+    rawStyleSample: '',
+  }
+
+  try {
+    tokens.domain = (() => { try { return new URL(url).hostname } catch { return url } })()
+
+    // Title
+    const titleMatch = rawHtml.match(/<title[^>]*>([^<]{1,200})<\/title>/i)
+    tokens.title = titleMatch ? titleMatch[1].trim() : ''
+
+    // Meta description
+    const metaMatch = rawHtml.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,300})["']/i)
+    tokens.description = metaMatch ? metaMatch[1].trim() : ''
+
+    // Headings
+    tokens.headings = [...rawHtml.matchAll(/<h[1-3][^>]*>([\s\S]{1,150}?)<\/h[1-3]>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim())
+      .filter(h => h.length > 2).slice(0, 12)
+
+    // Text content for content reconstruction
+    const textBlocks = [...rawHtml.matchAll(/<p[^>]*>([\s\S]{20,800}?)<\/p>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      .filter(p => p.length > 20).slice(0, 20)
+    tokens.textContent = textBlocks.join('\n')
+
+    // Extract all CSS from style tags
+    const styleTags = [...rawHtml.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+      .map(m => m[1]).join('\n')
+    tokens.rawStyleSample = styleTags.slice(0, 5000)
+
+    // Color extraction (hex, rgb, hsl, CSS vars)
+    const colorPatterns = [
+      /#([0-9a-f]{6}|[0-9a-f]{3})\b/gi,
+      /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/gi,
+      /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*\)/gi,
+      /hsl\(\s*\d+\s*,\s*[\d.]+%\s*,\s*[\d.]+%\s*\)/gi,
+    ]
+    const colorSet = new Set()
+    const fullCssSource = styleTags + rawHtml.slice(0, 20000)
+    for (const pattern of colorPatterns) {
+      for (const m of fullCssSource.matchAll(pattern)) {
+        colorSet.add(m[0].toLowerCase())
+      }
+    }
+    tokens.colors = [...colorSet].slice(0, 24)
+
+    // CSS custom properties (design tokens)
+    const cssVars = {}
+    for (const m of styleTags.matchAll(/--([\w-]+)\s*:\s*([^;}{]+)/g)) {
+      cssVars[`--${m[1]}`] = m[2].trim()
+    }
+    tokens.cssVars = cssVars
+
+    // Background color detection
+    const bgMatch = styleTags.match(/body[^{]*\{[^}]*background(?:-color)?\s*:\s*([^;}\n]+)/i)
+      || fullCssSource.match(/--bg[^:]*:\s*([^;}\n]+)/i)
+    if (bgMatch) tokens.bgColor = bgMatch[1].trim().slice(0, 40)
+
+    // Primary color detection
+    const primaryMatch = styleTags.match(/--primary[^:]*:\s*([^;}\n]+)/i)
+      || styleTags.match(/--accent[^:]*:\s*([^;}\n]+)/i)
+      || styleTags.match(/--color-primary[^:]*:\s*([^;}\n]+)/i)
+    if (primaryMatch) tokens.primaryColor = primaryMatch[1].trim().slice(0, 40)
+
+    // Color scheme detection
+    const darkIndicators = (styleTags + rawHtml.slice(0, 5000)).match(/#0[0-3][0-9a-f]{4}|#1[0-1][0-9a-f]{4}|#2[0-1][0-9a-f]{4}|dark-theme|dark-mode|prefers-color-scheme.*dark/gi)
+    tokens.colorScheme = darkIndicators && darkIndicators.length > 2 ? 'dark' : 'light'
+
+    // Font detection from Google Fonts links
+    const gfMatch = rawHtml.match(/fonts\.googleapis\.com\/css[^"']*family=([^"'&]+)/gi)
+    if (gfMatch) {
+      tokens.fonts = gfMatch.flatMap(m => {
+        const f = m.match(/family=([^"'&:]+)/i)
+        return f ? f[1].replace(/\+/g, ' ').split('|').map(s => s.split(':')[0].trim()) : []
+      }).filter(Boolean).slice(0, 4)
+    }
+    // Font-family from CSS
+    const ffMatches = [...styleTags.matchAll(/font-family\s*:\s*([^;}{]+)/gi)]
+      .map(m => m[1].split(',')[0].replace(/["']/g, '').trim()).filter(f => f && !f.startsWith('var('))
+    if (tokens.fonts.length === 0 && ffMatches.length > 0) {
+      tokens.fonts = [...new Set(ffMatches)].slice(0, 3)
+    }
+    if (tokens.fonts.length > 0) tokens.fontFamily = tokens.fonts[0]
+
+    // Icon library detection
+    if (/font-awesome|fa-[a-z]|fas |far |fab /i.test(rawHtml)) tokens.iconLibrary = 'font-awesome'
+    else if (/heroicons|lucide|feather/i.test(rawHtml)) tokens.iconLibrary = 'heroicons'
+    else if (/material.*icon|mdi-/i.test(rawHtml)) tokens.iconLibrary = 'material'
+
+    // Section detection
+    const lcHtml = rawHtml.toLowerCase()
+    tokens.hasNavbar = /<nav[\s>]|navbar|nav-bar|header.*nav|class="nav/i.test(rawHtml)
+    tokens.hasHero = /hero|banner|jumbotron|class="hero|id="hero|data-section="hero/i.test(rawHtml)
+    tokens.hasFooter = /<footer[\s>]|class="footer|id="footer/i.test(rawHtml)
+    tokens.hasPricing = /pricing|price|plan|subscription|tarif/i.test(rawHtml)
+    tokens.hasTestimonials = /testimonial|review|rating|témoignage|avis/i.test(rawHtml)
+    tokens.hasForms = /<form[\s>]|<input[\s>]|<textarea/i.test(rawHtml)
+    tokens.hasCards = /card|tile|grid-item|feature-item/i.test(rawHtml)
+
+    // Detected sections list
+    const detectedSections = []
+    if (tokens.hasNavbar) detectedSections.push('navbar')
+    if (tokens.hasHero) detectedSections.push('hero')
+    if (/feature|service|benefit|about/i.test(rawHtml)) detectedSections.push('features')
+    if (tokens.hasCards) detectedSections.push('cards')
+    if (tokens.hasPricing) detectedSections.push('pricing')
+    if (tokens.hasTestimonials) detectedSections.push('testimonials')
+    if (tokens.hasForms) detectedSections.push('contact-form')
+    if (tokens.hasFooter) detectedSections.push('footer')
+    tokens.sections = detectedSections
+
+    // Animation detection
+    const animKeywords = []
+    if (/animation:|@keyframes/i.test(styleTags)) animKeywords.push('CSS animations')
+    if (/transition:/i.test(styleTags)) animKeywords.push('transitions')
+    if (/scroll.*animation|intersection.*observer|aos-|wow\.js|gsap|framer/i.test(rawHtml)) animKeywords.push('scroll animations')
+    if (/parallax/i.test(lcHtml)) animKeywords.push('parallax')
+    tokens.animations = animKeywords
+
+    // Layout type detection
+    if (/e-commerce|shop|store|product|cart|panier/i.test(rawHtml)) tokens.layoutType = 'ecommerce'
+    else if (/portfolio|work|project|case.*study/i.test(rawHtml)) tokens.layoutType = 'portfolio'
+    else if (/dashboard|admin|analytics|panel/i.test(rawHtml)) tokens.layoutType = 'dashboard'
+    else if (/blog|article|post|news/i.test(rawHtml)) tokens.layoutType = 'blog'
+    else if (/restaurant|menu|food|café|cafe/i.test(rawHtml)) tokens.layoutType = 'restaurant'
+    else if (/agency|studio|creative/i.test(rawHtml)) tokens.layoutType = 'agency'
+
+    // Responsive breakpoints
+    const bpMatches = [...styleTags.matchAll(/@media[^{]*\(max-width:\s*(\d+)px\)/gi)].map(m => parseInt(m[1]))
+    tokens.breakpoints = [...new Set(bpMatches)].sort((a, b) => a - b).slice(0, 5)
+
+  } catch (err) {
+    console.warn('[CloneEngine] extractDesignTokens error:', err.message)
+  }
+
+  return tokens
+}
+
+async function fetchRawHtml(url) {
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8,ar;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+    },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return await r.text()
+}
+
+app.post('/api/dz-agent/clone-advanced', async (req, res) => {
+  const { url, section } = req.body
+  if (!url) return res.status(400).json({ error: 'URL required' })
+
+  let targetUrl = url.trim()
+  if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl
+
+  console.log(`[CloneEngine] Advanced clone requested: ${targetUrl} | section=${section || 'full'}`)
+
+  try {
+    // Phase 1: Deep Website Recon — fetch raw HTML & extract design tokens
+    let rawHtml = ''
+    try {
+      rawHtml = await fetchRawHtml(targetUrl)
+    } catch (fetchErr) {
+      console.warn('[CloneEngine] Primary fetch failed, trying fallback:', fetchErr.message)
+      // Fallback: try fetchWebContent for partial data
+      const fallback = await fetchWebContent(targetUrl, 8000)
+      if (fallback.error) {
+        return res.status(200).json({
+          ok: false,
+          error: `لم أتمكن من الوصول إلى الموقع: ${fallback.error}`,
+          tokens: null,
+        })
+      }
+      rawHtml = fallback.content || ''
+    }
+
+    // Phase 2: Design Token Extraction
+    const tokens = await extractDesignTokens(rawHtml, targetUrl)
+    console.log(`[CloneEngine] Tokens extracted — colors:${tokens.colors.length}, fonts:${tokens.fonts.length}, sections:[${tokens.sections.join(',')}]`)
+
+    // Phase 3: Build Pixel-Perfect Reconstruction Prompt
+    const sectionTarget = section && section !== 'full'
+      ? `\n\nSECTION MODE: Clone ONLY the "${section}" section. Output a complete standalone HTML file that contains just this component, fully styled and functional.`
+      : ''
+
+    const designContext = `
+════════════════════════════════════════════
+EXTRACTED DESIGN TOKENS FROM TARGET SITE: ${targetUrl}
+════════════════════════════════════════════
+
+SITE INFO:
+- Title: ${tokens.title || 'Unknown'}
+- Domain: ${tokens.domain}
+- Description: ${tokens.description || 'N/A'}
+- Layout Type: ${tokens.layoutType}
+- Color Scheme: ${tokens.colorScheme}
+
+DETECTED SECTIONS (reproduce in this order):
+${tokens.sections.length > 0 ? tokens.sections.map((s, i) => `${i + 1}. ${s}`).join('\n') : '- navbar\n- hero\n- features\n- footer'}
+
+COLOR PALETTE (use EXACTLY these colors):
+${tokens.colors.slice(0, 16).join(', ') || '#0f172a, #7c3aed, #ffffff, #e2e8f0'}
+
+${tokens.primaryColor ? `PRIMARY COLOR: ${tokens.primaryColor}` : ''}
+${tokens.bgColor ? `BACKGROUND: ${tokens.bgColor}` : ''}
+${tokens.colorScheme === 'dark' ? 'THEME: Dark background with light text' : 'THEME: Light background with dark text'}
+
+TYPOGRAPHY:
+${tokens.fonts.length > 0 ? `Font families: ${tokens.fonts.join(', ')}` : 'Detect and use appropriate professional fonts'}
+${tokens.fontFamily ? `Primary font: ${tokens.fontFamily}` : ''}
+
+${tokens.cssVars && Object.keys(tokens.cssVars).length > 0 ? `CSS CUSTOM PROPERTIES DETECTED:\n${Object.entries(tokens.cssVars).slice(0, 20).map(([k, v]) => `  ${k}: ${v}`).join('\n')}` : ''}
+
+ANIMATIONS DETECTED: ${tokens.animations.length > 0 ? tokens.animations.join(', ') : 'standard CSS transitions'}
+ICON LIBRARY: ${tokens.iconLibrary || 'Font Awesome 6 (always use this as fallback)'}
+RESPONSIVE BREAKPOINTS: ${tokens.breakpoints?.length > 0 ? tokens.breakpoints.join('px, ') + 'px' : '768px, 1024px'}
+
+CONTENT TO RECONSTRUCT:
+Headings: ${tokens.headings.slice(0, 8).join(' | ')}
+${tokens.textContent ? `Text content:\n${tokens.textContent.slice(0, 2000)}` : ''}
+${tokens.rawStyleSample ? `\nRAW CSS SAMPLE (study patterns & replicate):\n${tokens.rawStyleSample.slice(0, 3000)}` : ''}
+${sectionTarget}
+════════════════════════════════════════════
+`
+
+    // Phase 4: Pixel-Perfect Reconstruction via AI
+    const cloneMessages = [
+      { role: 'system', content: PIXEL_PERFECT_CLONE_PROMPT + designContext },
+      {
+        role: 'user',
+        content: section && section !== 'full'
+          ? `Clone ONLY the "${section}" section of ${targetUrl}. Use the extracted design tokens above. Output complete standalone HTML.`
+          : `Reconstruct a pixel-perfect clone of ${targetUrl}. Use ALL the extracted design tokens, color palette, typography, and section structure above. The result must be visually near-identical to the original.`
+      },
+    ]
+
+    const result = await safeGenerateAI({ messages: cloneMessages, query: `clone ${targetUrl}`, max_tokens: 10000 })
+    const rawResult = result.content || ''
+    const htmlCode = extractHtmlFromResponse(rawResult) || rawResult
+
+    if (!htmlCode || htmlCode.length < 200) {
+      return res.status(200).json({
+        ok: false,
+        error: 'فشل في توليد الكود. جرّب مجدداً أو استخدم الاستنساخ البسيط.',
+        tokens,
+      })
+    }
+
+    // Phase 5: Extract CSS/JS for tabs
+    const cssCode = extractCssFromHtml(htmlCode)
+    const jsCode  = extractJsFromHtml(htmlCode)
+
+    const sectionLabel = section && section !== 'full' ? ` — قسم: ${section}` : ''
+    return res.status(200).json({
+      ok: true,
+      isWebsite: true,
+      htmlCode,
+      cssCode: cssCode || '',
+      jsCode:  jsCode  || '',
+      tokens,
+      content: `🧬 **استنساخ متقدم${sectionLabel} — ${tokens.title || tokens.domain}**\n\n✅ تم استخراج ${tokens.colors.length} لون، ${tokens.fonts.length} خط، ${tokens.sections.length} قسم\n🎨 النظام اللوني: ${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'} | النوع: ${tokens.layoutType}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو **⬇ تحميل** للحفظ.`,
+      webBuilderMeta: {
+        type: tokens.layoutType,
+        style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
+        title: `🧬 ${tokens.title || tokens.domain}${sectionLabel}`,
+        description: `استنساخ متقدم لـ ${tokens.domain}`,
+        icon: '🧬',
+      },
+      webReaderIntent: 'build',
+    })
+  } catch (err) {
+    console.error('[CloneEngine] clone-advanced error:', err.message)
+    return res.status(500).json({ ok: false, error: 'خطأ داخلي في محرك الاستنساخ. يرجى المحاولة مرة أخرى.' })
+  }
+})
+
 async function buildAiEducationalFallback({ title = '', level = '', year = '', subject = '' }) {
   const fallback = createStaticEducationalFallback({ title, level, year, subject })
   if (getGroqKeys().length === 0) return fallback

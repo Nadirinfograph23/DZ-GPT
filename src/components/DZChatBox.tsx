@@ -826,17 +826,30 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
 }
 
 // ===== WEB READER DETECT PANEL =====
+const CLONE_SECTIONS = [
+  { id: 'navbar',       icon: '🔲', label: 'Navbar فقط' },
+  { id: 'hero',         icon: '🚀', label: 'Hero فقط' },
+  { id: 'features',     icon: '✨', label: 'الميزات فقط' },
+  { id: 'footer',       icon: '🔻', label: 'Footer فقط' },
+]
+
 function WebReaderPanel({
   siteInfo,
   onAnalyze,
   onClone,
   onExtract,
+  onAdvancedClone,
+  isAdvancedLoading,
 }: {
   siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
   onAnalyze: () => void
   onClone: () => void
   onExtract: () => void
+  onAdvancedClone: (section?: string) => void
+  isAdvancedLoading: boolean
 }) {
+  const [showSections, setShowSections] = useState(false)
+
   return (
     <div className="dzc-wr-panel">
       <div className="dzc-wr-site-row">
@@ -872,17 +885,63 @@ function WebReaderPanel({
         <button className="dzc-wr-btn dzc-wr-btn--clone" onClick={onClone}>
           <span className="dzc-wr-btn-icon">🧱</span>
           <div className="dzc-wr-btn-text">
-            <span className="dzc-wr-btn-title">استنساخ الموقع</span>
-            <span className="dzc-wr-btn-desc">إنشاء نسخة مشابهة بـ HTML + CSS + JS</span>
+            <span className="dzc-wr-btn-title">استنساخ سريع</span>
+            <span className="dzc-wr-btn-desc">نسخة مشابهة بـ HTML + CSS + JS</span>
           </div>
         </button>
         <button className="dzc-wr-btn dzc-wr-btn--extract" onClick={onExtract}>
           <span className="dzc-wr-btn-icon">📋</span>
           <div className="dzc-wr-btn-text">
             <span className="dzc-wr-btn-title">استخراج المحتوى</span>
-            <span className="dzc-wr-btn-desc">عناوين، نصوص، وروابط منظمة قابلة للنسخ</span>
+            <span className="dzc-wr-btn-desc">عناوين، نصوص، وروابط منظمة</span>
           </div>
         </button>
+      </div>
+
+      {/* ── Advanced Clone Engine ── */}
+      <div className="dzc-wr-advanced-block">
+        <div className="dzc-wr-advanced-header">
+          <span className="dzc-wr-advanced-badge">🧬 NEW</span>
+          <span className="dzc-wr-advanced-title">Hybrid Intelligent Reconstruction Engine</span>
+          <span className="dzc-wr-advanced-sub">استنساخ متقدم بدقة شبه مثالية — يستخرج الألوان، الخطوط، التخطيط والأقسام</span>
+        </div>
+        <div className="dzc-wr-advanced-actions">
+          <button
+            className="dzc-wr-btn dzc-wr-btn--advanced"
+            onClick={() => onAdvancedClone('full')}
+            disabled={isAdvancedLoading}
+          >
+            {isAdvancedLoading
+              ? <><Loader2 size={14} className="dz-spin" /><div className="dzc-wr-btn-text"><span className="dzc-wr-btn-title">جارٍ الاستنساخ...</span><span className="dzc-wr-btn-desc">استخراج التوكنات والتصميم</span></div></>
+              : <><span className="dzc-wr-btn-icon">🎯</span><div className="dzc-wr-btn-text"><span className="dzc-wr-btn-title">استنساخ متقدم (كامل)</span><span className="dzc-wr-btn-desc">دقة عالية — DOM + CSS + ألوان + خطوط</span></div></>
+            }
+          </button>
+          <button
+            className="dzc-wr-btn dzc-wr-btn--sections-toggle"
+            onClick={() => setShowSections(p => !p)}
+            disabled={isAdvancedLoading}
+          >
+            <span className="dzc-wr-btn-icon">🧩</span>
+            <div className="dzc-wr-btn-text">
+              <span className="dzc-wr-btn-title">استنساخ قسم محدد</span>
+              <span className="dzc-wr-btn-desc">{showSections ? 'إخفاء الأقسام ↑' : 'Navbar / Hero / Footer ↓'}</span>
+            </div>
+          </button>
+        </div>
+        {showSections && (
+          <div className="dzc-wr-section-pills">
+            {CLONE_SECTIONS.map(s => (
+              <button
+                key={s.id}
+                className="dzc-wr-section-pill"
+                onClick={() => { onAdvancedClone(s.id); setShowSections(false) }}
+                disabled={isAdvancedLoading}
+              >
+                {s.icon} {s.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -2691,6 +2750,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
@@ -3302,6 +3362,63 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setIsLoading(false)
   }, [githubToken, addToLog, addAssistantMessage])
 
+  // ===== ADVANCED CLONE ENGINE =====
+  const handleAdvancedClone = useCallback(async (url: string, section?: string) => {
+    if (isAdvancedCloneLoading) return
+    setIsAdvancedCloneLoading(true)
+
+    const sectionLabel = section && section !== 'full' ? ` — قسم: ${section}` : ''
+    addAssistantMessage({
+      content: `🧬 **جارٍ الاستنساخ المتقدم${sectionLabel}...**\n\n⏳ استخراج الألوان · الخطوط · التخطيط · الأقسام من \`${url}\``,
+      richType: 'text',
+    })
+
+    try {
+      const res = await fetch('/api/dz-agent/clone-advanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, section: section || 'full' }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data.ok) {
+        addAssistantMessage({
+          content: `⚠️ ${data.error || 'فشل الاستنساخ المتقدم. جرّب الاستنساخ السريع بدلاً من ذلك.'}`,
+          richType: 'text',
+          isError: true,
+        })
+        return
+      }
+
+      if (data.isWebsite && data.htmlCode && data.htmlCode.length > 100) {
+        trackFeatureUsage('advanced-clone')
+        addAssistantMessage({
+          content: data.content || `✅ تم الاستنساخ المتقدم${sectionLabel}!`,
+          richType: 'website',
+          htmlCode: data.htmlCode,
+          cssCode: data.cssCode || '',
+          jsCode: data.jsCode || '',
+          webBuilderMeta: data.webBuilderMeta,
+          webReaderIntent: 'build',
+        })
+      } else {
+        addAssistantMessage({
+          content: data.error || '⚠️ لم يتمكن المحرك من توليد الكود. يرجى المحاولة مجدداً.',
+          richType: 'text',
+          isError: true,
+        })
+      }
+    } catch (err) {
+      addAssistantMessage({
+        content: '⚠️ خطأ في الشبكة أثناء الاستنساخ المتقدم. يرجى المحاولة مرة أخرى.',
+        richType: 'text',
+        isError: true,
+      })
+    } finally {
+      setIsAdvancedCloneLoading(false)
+    }
+  }, [isAdvancedCloneLoading, addAssistantMessage])
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -3844,6 +3961,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           onAnalyze={() => sendMessage(`حلل هذا الموقع وأعطني تحليلاً شاملاً للمحتوى والأقسام والهدف والجمهور المستهدف: ${msg.webReaderSiteInfo!.url}`)}
                           onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
                           onExtract={() => sendMessage(`استخرج كل محتوى هذا الموقع وقدمه بشكل منظم ومنسق: العناوين الرئيسية، الفقرات المهمة، والروابط الأساسية — اجعله قابلاً للنسخ والاستخدام: ${msg.webReaderSiteInfo!.url}`)}
+                          onAdvancedClone={(section) => handleAdvancedClone(msg.webReaderSiteInfo!.url, section)}
+                          isAdvancedLoading={isAdvancedCloneLoading}
                         />
                       )}
                       {msg.richType === 'youtube' && (msg.youtubeVideo || msg.youtubeResults) && (

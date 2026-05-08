@@ -41,4 +41,3 @@ externalPort = 3000
 [userenv]
 
 [userenv.shared]
-DEPLOY_ADMIN_TOKEN = "dz-replit-sync-2024"

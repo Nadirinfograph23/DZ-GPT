@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
+import '../styles/dzc-youtube.css'
 
 type Lang = 'ar' | 'en' | 'fr'
 

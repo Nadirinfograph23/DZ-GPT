@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
@@ -54,6 +55,8 @@ type RichType =
   | 'website'
   | 'map'
   | 'execution'
+  | 'youtube'
+  | 'web-reader'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -169,6 +172,40 @@ interface PendingAction {
   base?: string
 }
 
+interface YouTubeVideoData {
+  id: string
+  url: string
+  title: string
+  channel: string
+  duration: number
+  views: number
+  thumbnail: string
+  publishDate?: string
+  tags?: string[]
+}
+
+interface YouTubeResult {
+  id: string
+  url: string
+  title: string
+  channel: string
+  duration: number
+  views: number
+  thumbnail: string
+}
+
+interface YouTubeAnalysis {
+  ok: boolean
+  summary?: string
+  keyIdeas?: string[]
+  category?: string
+  language?: string
+  conversationStarters?: string[]
+  taskSuggestions?: string[]
+  openingMessage?: string
+  captionAvailable?: boolean
+}
+
 interface DZMessage {
   id: string
   role: 'user' | 'assistant'
@@ -198,6 +235,14 @@ interface DZMessage {
   executionLang?: string
   executionCode?: string
   webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
+  youtubeVideo?: YouTubeVideoData
+  youtubeResults?: YouTubeResult[]
+  youtubeFlow?: 'url' | 'search'
+  youtubeAnalysis?: YouTubeAnalysis
+  youtubeSuggestions?: string[]
+  captionNote?: string
+  captionText?: string
+  webReaderSiteInfo?: { url: string; title: string; domain: string; description: string; headings: string[] }
 }
 
 interface ActionLogEntry {
@@ -781,6 +826,137 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
   )
 }
 
+// ===== WEB READER DETECT PANEL =====
+
+function WebReaderPanel({
+  siteInfo,
+  onAnalyze,
+  onClone,
+  onExtract,
+  onAdvancedClone,
+  isAdvancedLoading,
+}: {
+  siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
+  onAnalyze: () => void
+  onClone: () => void
+  onExtract: () => void
+  onAdvancedClone: (section?: string) => void
+  isAdvancedLoading: boolean
+}) {
+  const [showSections, setShowSections] = useState(false)
+
+  return (
+    <div className="dzc-wr-panel">
+      <div className="dzc-wr-site-row">
+        <span className="dzc-wr-site-globe">🌐</span>
+        <div className="dzc-wr-site-meta">
+          <div className="dzc-wr-site-title">{siteInfo.title || siteInfo.domain}</div>
+          <div className="dzc-wr-site-domain">{siteInfo.domain}</div>
+        </div>
+        <a href={siteInfo.url} target="_blank" rel="noopener noreferrer" className="dzc-wr-site-link">↗</a>
+      </div>
+      {siteInfo.description && (
+        <p className="dzc-wr-desc">
+          {siteInfo.description.slice(0, 180)}{siteInfo.description.length > 180 ? '…' : ''}
+        </p>
+      )}
+      {siteInfo.headings.length > 0 && (
+        <div className="dzc-wr-headings">
+          {siteInfo.headings.map((h, i) => (
+            <span key={i} className="dzc-wr-heading-tag">{h.slice(0, 55)}</span>
+          ))}
+        </div>
+      )}
+      <hr className="dzc-wr-divider" />
+      <p className="dzc-wr-hint">اختر ما تريد فعله بهذا الموقع:</p>
+      <div className="dzc-wr-actions dzc-wr-actions--3">
+        <button className="dzc-wr-btn dzc-wr-btn--analyze" onClick={onAnalyze}>
+          <span className="dzc-wr-btn-icon">🔍</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">تحليل الموقع</span>
+            <span className="dzc-wr-btn-desc">تلخيص المحتوى والهيكل والغرض</span>
+          </div>
+        </button>
+        <button className="dzc-wr-btn dzc-wr-btn--clone" onClick={onClone}>
+          <span className="dzc-wr-btn-icon">🧱</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">استنساخ سريع</span>
+            <span className="dzc-wr-btn-desc">نسخة مشابهة بـ HTML + CSS + JS</span>
+          </div>
+        </button>
+        <button className="dzc-wr-btn dzc-wr-btn--extract" onClick={onExtract}>
+          <span className="dzc-wr-btn-icon">📋</span>
+          <div className="dzc-wr-btn-text">
+            <span className="dzc-wr-btn-title">استخراج المحتوى</span>
+            <span className="dzc-wr-btn-desc">عناوين، نصوص، وروابط منظمة</span>
+          </div>
+        </button>
+      </div>
+
+      {/* ── Advanced Clone Engine V2 ── */}
+      <div className="dzc-wr-advanced-block">
+        <div className="dzc-wr-advanced-header">
+          <span className="dzc-wr-advanced-badge">🧬 V2</span>
+          <span className="dzc-wr-advanced-title">Ultra Website Cloning System</span>
+          <span className="dzc-wr-advanced-sub">
+            استنساخ شبه مثالي — كشف Stack تقني · جلب متعدد الاستراتيجيات · دقة 90–98% · إصلاح تلقائي
+          </span>
+        </div>
+        <div className="dzc-wr-v2-features">
+          <span className="dzc-wr-v2-chip">🔬 كشف Framework</span>
+          <span className="dzc-wr-v2-chip">🌐 3 مصادر جلب</span>
+          <span className="dzc-wr-v2-chip">📡 تقدم لحظي</span>
+          <span className="dzc-wr-v2-chip">🔧 إصلاح تلقائي</span>
+        </div>
+        <div className="dzc-wr-advanced-actions">
+          <button
+            className="dzc-wr-btn dzc-wr-btn--advanced"
+            onClick={() => onAdvancedClone('full')}
+            disabled={isAdvancedLoading}
+          >
+            {isAdvancedLoading
+              ? <><Loader2 size={14} className="dz-spin" /><div className="dzc-wr-btn-text"><span className="dzc-wr-btn-title">جارٍ الاستنساخ...</span><span className="dzc-wr-btn-desc">تحليل الموقع وبناء الاستنساخ</span></div></>
+              : <><span className="dzc-wr-btn-icon">🎯</span><div className="dzc-wr-btn-text"><span className="dzc-wr-btn-title">استنساخ V2 (كامل)</span><span className="dzc-wr-btn-desc">دقة شبه مثالية — DOM + CSS + Stack + ألوان</span></div></>
+            }
+          </button>
+          <button
+            className="dzc-wr-btn dzc-wr-btn--sections-toggle"
+            onClick={() => setShowSections(p => !p)}
+            disabled={isAdvancedLoading}
+          >
+            <span className="dzc-wr-btn-icon">🧩</span>
+            <div className="dzc-wr-btn-text">
+              <span className="dzc-wr-btn-title">استنساخ قسم محدد</span>
+              <span className="dzc-wr-btn-desc">{showSections ? 'إخفاء الأقسام ↑' : 'Navbar / Hero / Footer / Features ↓'}</span>
+            </div>
+          </button>
+        </div>
+        {showSections && (
+          <div className="dzc-wr-section-pills">
+            {[
+              { id: 'navbar',       icon: '🔲', label: 'Navbar فقط' },
+              { id: 'hero',         icon: '🚀', label: 'Hero فقط' },
+              { id: 'features',     icon: '✨', label: 'الميزات' },
+              { id: 'pricing',      icon: '💰', label: 'الأسعار' },
+              { id: 'testimonials', icon: '⭐', label: 'الآراء' },
+              { id: 'footer',       icon: '🔻', label: 'Footer فقط' },
+            ].map(s => (
+              <button
+                key={s.id}
+                className="dzc-wr-section-pill"
+                onClick={() => { onAdvancedClone(s.id); setShowSections(false) }}
+                disabled={isAdvancedLoading}
+              >
+                {s.icon} {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ===== WEBSITE PREVIEW =====
 type WPViewport = 'mobile' | 'tablet' | 'desktop'
 const WP_VIEWPORTS: { id: WPViewport; label: string; icon: string; width: string }[] = [
@@ -1019,7 +1195,7 @@ function WebsitePreview({
   jsCode:  jsCodeProp  = '',
   onInsertPrompt,
   webBuilderMeta,
-  webReaderIntent,
+  webReaderIntent: _webReaderIntent,
 }: {
   htmlCode: string
   cssCode?: string
@@ -1107,15 +1283,23 @@ function WebsitePreview({
     }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(activeCode || previewSrc)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const frameWidth = WP_VIEWPORTS.find(v => v.id === viewport)?.width ?? '100%'
 
-  return (
+  // Lock body scroll + ESC key when fullscreen
+  useEffect(() => {
+    if (!fullscreen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [fullscreen])
+
+  const panel = (
     <div className={`dz-wp-root${fullscreen ? ' dz-wp-root--fs' : ''}`}>
 
       {/* ── Project card header ── */}
@@ -1190,9 +1374,9 @@ function WebsitePreview({
             </button>
           )}
           <button
-            className="dz-wp-btn dz-wp-btn--fs"
+            className={`dz-wp-btn dz-wp-btn--fs${fullscreen ? ' dz-wp-btn--fs-active' : ''}`}
             onClick={() => setFullscreen(f => !f)}
-            title={fullscreen ? 'خروج من ملء الشاشة' : 'ملء الشاشة'}
+            title={fullscreen ? 'خروج من ملء الشاشة (ESC)' : 'ملء الشاشة'}
           >
             {fullscreen ? '⊠' : '⊡'}
           </button>
@@ -1264,6 +1448,11 @@ function WebsitePreview({
             <span className="dz-wp-dot dz-wp-dot--y" />
             <span className="dz-wp-dot dz-wp-dot--g" />
             <span className="dz-wp-url">dz-agent-site.html</span>
+            {fullscreen && (
+              <button className="dz-wp-esc-hint" onClick={() => setFullscreen(false)}>
+                ESC / ✕ إغلاق
+              </button>
+            )}
           </div>
           <div className="dz-wp-frame-scroller">
             <BlobIframe
@@ -1301,14 +1490,255 @@ function WebsitePreview({
           )}
         </div>
       )}
-
-      {fullscreen && (
-        <button className="dz-wp-close-fs" onClick={() => setFullscreen(false)}>
-          ✕ إغلاق
-        </button>
-      )}
     </div>
   )
+
+  // Portal: renders outside any stacking context so position:fixed works correctly
+  return fullscreen ? createPortal(panel, document.body) : panel
+}
+
+// ===== YOUTUBE HELPERS =====
+function fmtDuration(secs: number): string {
+  if (!secs || secs <= 0) return ''
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+function fmtViews(n: number): string {
+  if (!n) return ''
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M مشاهدة`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K مشاهدة`
+  return `${n} مشاهدة`
+}
+
+// ===== YOUTUBE PANEL COMPONENT =====
+function YouTubePanel({
+  video,
+  results,
+  flow,
+  analysis,
+  suggestions,
+  captionNote,
+  captionText,
+  onAsk,
+  onDiscuss,
+}: {
+  video?: YouTubeVideoData
+  results?: YouTubeResult[]
+  flow?: 'url' | 'search'
+  analysis?: YouTubeAnalysis
+  suggestions?: string[]
+  captionNote?: string
+  captionText?: string
+  onAsk?: (q: string) => void
+  onDiscuss?: (video: YouTubeResult) => void
+}) {
+  const [activeId, setActiveId] = useState<string | null>(
+    flow === 'url' && video?.id ? video.id : null,
+  )
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeResult | null>(null)
+  const [showTranscript, setShowTranscript] = useState(false)
+
+  if (flow === 'url' && video) {
+    const embedId = activeId || video.id
+    return (
+      <div className="dzc-yt">
+        {/* iframe embed */}
+        <div className="dzc-yt-embed-wrap">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${embedId}?rel=0&modestbranding=1`}
+            title={video.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+
+        {/* Meta */}
+        <div className="dzc-yt-meta">
+          <div className="dzc-yt-now-badge">
+            <span className="dzc-yt-live-dot" />
+            الآن يُعرض
+          </div>
+          <h3 className="dzc-yt-title">{video.title}</h3>
+          <div className="dzc-yt-info">
+            {video.channel && <span>📺 {video.channel}</span>}
+            {video.duration > 0 && <span>⏱ {fmtDuration(video.duration)}</span>}
+            {video.views > 0 && <span>👁 {fmtViews(video.views)}</span>}
+          </div>
+        </div>
+
+        {/* AI Analysis */}
+        {analysis && (analysis.summary || (analysis.keyIdeas && analysis.keyIdeas.length > 0)) && (
+          <div className="dzc-yt-analysis">
+            <div className="dzc-yt-analysis-header">🤖 تحليل DZ Agent</div>
+            {analysis.summary && <p className="dzc-yt-summary">{analysis.summary}</p>}
+            {analysis.keyIdeas && analysis.keyIdeas.length > 0 && (
+              <ul className="dzc-yt-key-ideas">
+                {analysis.keyIdeas.map((idea, i) => <li key={i}>{idea}</li>)}
+              </ul>
+            )}
+            {(analysis.category || analysis.language) && (
+              <div className="dzc-yt-tags">
+                {analysis.category && <span className="dzc-yt-tag">📂 {analysis.category}</span>}
+                {analysis.language && <span className="dzc-yt-tag">🌐 {analysis.language}</span>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Caption warning */}
+        {captionNote && <p className="dzc-yt-caption-note">{captionNote}</p>}
+
+        {/* Transcript viewer */}
+        {captionText && (
+          <div className="dzc-yt-transcript-wrap">
+            <button
+              className="dzc-yt-transcript-toggle"
+              onClick={() => setShowTranscript(v => !v)}
+            >
+              <span className="dzc-yt-transcript-icon">📄</span>
+              <span>نص الفيديو (النسخة النصية)</span>
+              <span className={`dzc-yt-transcript-chevron${showTranscript ? ' open' : ''}`}>▾</span>
+            </button>
+            {showTranscript && (
+              <div className="dzc-yt-transcript-body">
+                <pre className="dzc-yt-transcript-text">{captionText}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Suggestion strip */}
+        {suggestions && suggestions.length > 0 && (
+          <div className="dzc-yt-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="dzc-yt-sugg-btn" onClick={() => onAsk?.(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (flow === 'search' && results && results.length > 0) {
+    const ORDINAL_LABELS = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن']
+
+    const selectVideo = (r: YouTubeResult) => {
+      setActiveId(r.id)
+      setSelectedVideo(r)
+    }
+
+    return (
+      <div className="dzc-yt">
+        {/* Results header */}
+        <div className="dzc-yt-results-hdr">
+          <span>🔍 نتائج YouTube</span>
+          <span className="dzc-yt-results-count">{results.length} نتيجة</span>
+        </div>
+
+        {/* Smart-select hint */}
+        <p className="dzc-yt-select-hint">
+          {selectedVideo ? 'اختر إجراءً أسفله، أو انقر على فيديو آخر' : 'انقر على فيديو لاختياره'}
+        </p>
+
+        {/* Results grid */}
+        <div className="dzc-yt-grid">
+          {results.map((r, idx) => (
+            <button
+              key={r.id}
+              className={`dzc-yt-card${activeId === r.id ? ' active' : ''}`}
+              onClick={() => selectVideo(r)}
+            >
+              {/* Numbered index badge */}
+              <span className="dzc-yt-card-index">{idx + 1}</span>
+
+              <div className="dzc-yt-card-thumb-wrap">
+                <img
+                  src={r.thumbnail || `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
+                  alt={r.title}
+                  className="dzc-yt-card-thumb"
+                  loading="lazy"
+                />
+                {r.duration > 0 && (
+                  <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>
+                )}
+                <div className="dzc-yt-card-play">
+                  <div className="dzc-yt-play-circle">▶ اختر</div>
+                </div>
+              </div>
+              <div className="dzc-yt-card-body">
+                <p className="dzc-yt-card-title">{r.title}</p>
+                <p className="dzc-yt-card-meta">{r.channel}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Quick-pick ordinal buttons */}
+        <div className="dzc-yt-quickpick">
+          {results.slice(0, 8).map((r, idx) => (
+            <button
+              key={r.id}
+              className={`dzc-yt-qp-btn${activeId === r.id ? ' active' : ''}`}
+              onClick={() => selectVideo(r)}
+              title={r.title}
+            >
+              {idx + 1}️⃣ {ORDINAL_LABELS[idx] || `رقم ${idx + 1}`}
+            </button>
+          ))}
+        </div>
+
+        {/* Embed preview of selected video — shown below results */}
+        {activeId && (
+          <div className="dzc-yt-embed-wrap">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${activeId}?rel=0`}
+              title="YouTube Player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+
+        {/* Action panel — shown when a video is selected */}
+        {selectedVideo && (
+          <div className="dzc-yt-action-panel">
+            <p className="dzc-yt-action-title">
+              <span className="dzc-yt-action-icon">🎬</span>
+              {selectedVideo.title.length > 55 ? selectedVideo.title.slice(0, 55) + '…' : selectedVideo.title}
+            </p>
+            <div className="dzc-yt-action-btns">
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--analyze"
+                onClick={() => onAsk?.(selectedVideo.url)}
+              >
+                🔍 حلل هذا الفيديو
+              </button>
+              <button
+                className="dzc-yt-action-btn dzc-yt-action-btn--discuss"
+                onClick={() => onDiscuss?.(selectedVideo)}
+              >
+                💬 ناقش هذا الفيديو
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Suggestion strip */}
+        {suggestions && suggestions.length > 0 && (
+          <div className="dzc-yt-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="dzc-yt-sugg-btn" onClick={() => onAsk?.(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ===== TYPING EFFECT =====
@@ -2161,7 +2591,7 @@ function GitHubTokenPanel({
     <div className="gh-token-panel">
       <button className="gh-token-toggle" onClick={() => setShow(!show)}>
         <Github size={14} />
-        Connect GitHub Token
+        ربط GitHub (اختياري)
         <ChevronDown size={13} className={show ? 'rotated' : ''} />
       </button>
       {show && (
@@ -2175,12 +2605,12 @@ function GitHubTokenPanel({
             onKeyDown={e => e.key === 'Enter' && handleSave()}
           />
           <button className="gh-token-save" onClick={handleSave}>
-            Connect
+            ربط
           </button>
         </div>
       )}
       <p className="gh-token-hint">
-        Token stored locally only. Never sent to third parties.
+        يُحفظ الـ Token محلياً فقط · لا يُرسل لأي طرف خارجي
       </p>
     </div>
   )
@@ -2345,6 +2775,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
@@ -2370,6 +2801,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
+  const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
+  // Smart Video Selection — stores last search results so they can be sent as candidates
+  const youtubeCandidatesRef = useRef<YouTubeResult[]>([])
 
   const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
     const updated = persistRating(msgId, vote)
@@ -2492,6 +2926,15 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
     const id = generateId()
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
+    if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
+      setActiveYouTubeVideo(msg.youtubeVideo)
+      // Clear candidates once a video is selected and analyzed
+      youtubeCandidatesRef.current = []
+    }
+    // Smart Video Selection — cache search candidates for ordinal resolution
+    if (msg.richType === 'youtube' && msg.youtubeFlow === 'search' && Array.isArray(msg.youtubeResults) && msg.youtubeResults.length > 0) {
+      youtubeCandidatesRef.current = msg.youtubeResults
+    }
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
     // Auto-speak the full text reply via the voice system (no-op if muted).
     // The TTS engine chunks long replies into sentences so nothing is truncated.
@@ -2944,6 +3387,177 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setIsLoading(false)
   }, [githubToken, addToLog, addAssistantMessage])
 
+  // ===== ADVANCED CLONE ENGINE V2 (SSE streaming with progress stages) =====
+  const handleAdvancedClone = useCallback(async (url: string, section?: string) => {
+    if (isAdvancedCloneLoading) return
+    setIsAdvancedCloneLoading(true)
+
+    const sectionLabel = section && section !== 'full' ? ` — قسم: ${section}` : ''
+
+    // Optimistic loading message
+    const loadingMsgId = generateId()
+    setMessages(prev => [...prev, {
+      id: loadingMsgId,
+      role: 'assistant' as const,
+      richType: 'text' as const,
+      content: `🧬 **محرك الاستنساخ V2${sectionLabel}**\n\n⏳ **جارٍ الجلب...** تحليل \`${url}\``,
+    }])
+
+    const updateLoadingMsg = (content: string) => {
+      setMessages(prev => prev.map(m => m.id === loadingMsgId ? { ...m, content } : m))
+    }
+
+    const STAGE_LABELS: Record<string, string> = {
+      fetch:    '🌐 جارٍ جلب الموقع',
+      extract:  '🔬 استخراج التصميم والهيكل',
+      generate: '🤖 بناء الاستنساخ بالذكاء الاصطناعي',
+      repair:   '🔧 إصلاح تلقائي',
+      done:     '✅ اكتمل',
+    }
+
+    try {
+      // Use SSE streaming endpoint for real-time progress
+      const res = await fetch('/api/dz-agent/clone-v2/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, section: section || 'full' }),
+      })
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalData: Record<string, unknown> | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) continue
+          if (!line.startsWith('data: ')) continue
+          try {
+            const parsed = JSON.parse(line.slice(6))
+
+            if (parsed.stage) {
+              // Progress update
+              const label = STAGE_LABELS[parsed.stage] || parsed.message || parsed.stage
+              const techBadge = parsed.tech?.length > 0
+                ? `\n🔬 **Stack:** ${(parsed.tech as string[]).slice(0, 4).join(' · ')}`
+                : ''
+              const sectionsBadge = parsed.sections?.length > 0
+                ? `\n📐 **أقسام:** ${(parsed.sections as string[]).slice(0, 5).join(' · ')}`
+                : ''
+              const pct = parsed.pct ? ` (${parsed.pct}%)` : ''
+              updateLoadingMsg(
+                `🧬 **محرك الاستنساخ V2${sectionLabel}**\n\n${label}${pct}...${techBadge}${sectionsBadge}`
+              )
+            } else if (parsed.ok !== undefined) {
+              // Final result
+              finalData = parsed
+            } else if (parsed.error) {
+              // Error event
+              setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+              addAssistantMessage({
+                content: `⚠️ ${parsed.error}`,
+                richType: 'text',
+                isError: true,
+              })
+              return
+            }
+          } catch {
+            // skip malformed SSE line
+          }
+        }
+      }
+
+      // Remove the loading message
+      setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+
+      if (!finalData) throw new Error('No result received')
+
+      if (!finalData.ok) {
+        addAssistantMessage({
+          content: `⚠️ ${finalData.error || 'فشل الاستنساخ. جرّب الاستنساخ السريع بدلاً من ذلك.'}`,
+          richType: 'text',
+          isError: true,
+        })
+        return
+      }
+
+      const data = finalData as Record<string, unknown>
+      if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
+        trackFeatureUsage('advanced-clone-v2')
+        addAssistantMessage({
+          content: (data.content as string) || `✅ تم الاستنساخ المتقدم V2${sectionLabel}!`,
+          richType: 'website',
+          htmlCode: data.htmlCode as string,
+          cssCode: (data.cssCode as string) || '',
+          jsCode:  (data.jsCode  as string) || '',
+          webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
+          webReaderIntent: 'build',
+        })
+      } else {
+        addAssistantMessage({
+          content: (data.error as string) || '⚠️ لم يتمكن المحرك من توليد الكود.',
+          richType: 'text',
+          isError: true,
+        })
+      }
+    } catch (err) {
+      // SSE failed — fallback to old clone-advanced endpoint
+      setMessages(prev => prev.map(m =>
+        m.id === loadingMsgId
+          ? { ...m, content: `🧬 **محرك الاستنساخ${sectionLabel}**\n\n⏳ جارٍ الاستنساخ (وضع احتياطي)...` }
+          : m
+      ))
+      try {
+        const fallbackRes = await fetch('/api/dz-agent/clone-advanced', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, section: section || 'full' }),
+        })
+        const fallbackData = await fallbackRes.json()
+        setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+
+        if (fallbackData.ok && fallbackData.htmlCode) {
+          trackFeatureUsage('advanced-clone')
+          addAssistantMessage({
+            content: fallbackData.content || `✅ تم الاستنساخ${sectionLabel}!`,
+            richType: 'website',
+            htmlCode: fallbackData.htmlCode,
+            cssCode: fallbackData.cssCode || '',
+            jsCode:  fallbackData.jsCode  || '',
+            webBuilderMeta: fallbackData.webBuilderMeta,
+            webReaderIntent: 'build',
+          })
+        } else {
+          addAssistantMessage({
+            content: `⚠️ ${fallbackData.error || 'فشل الاستنساخ. يرجى المحاولة مرة أخرى.'}`,
+            richType: 'text',
+            isError: true,
+          })
+        }
+      } catch {
+        setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+        addAssistantMessage({
+          content: '⚠️ خطأ في الشبكة أثناء الاستنساخ. يرجى المحاولة مرة أخرى.',
+          richType: 'text',
+          isError: true,
+        })
+      }
+    } finally {
+      setIsAdvancedCloneLoading(false)
+    }
+  }, [isAdvancedCloneLoading, addAssistantMessage, setMessages])
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -3003,6 +3617,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               githubToken: githubToken || undefined,
               currentRepo: currentRepo || undefined,
               dashboardContext,
+              youtubeContext: activeYouTubeVideo || undefined,
+              youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
             }),
             signal,
           })
@@ -3113,6 +3729,26 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           executionLang: (data.executionLang as string) || 'javascript',
           executionCode: data.executionCode as string,
         })
+      } else if (data.isYouTube) {
+        trackFeatureUsage('youtube-insight')
+        addAssistantMessage({
+          content: (data.content as string) || '🎬 YouTube',
+          richType: 'youtube',
+          youtubeFlow: (data.youtubeFlow as 'url' | 'search') || 'search',
+          youtubeVideo: data.youtubeVideo as YouTubeVideoData | undefined,
+          youtubeResults: data.youtubeResults as YouTubeResult[] | undefined,
+          youtubeAnalysis: data.youtubeAnalysis as YouTubeAnalysis | undefined,
+          youtubeSuggestions: (data.youtubeSuggestions as string[]) || [],
+          captionNote: data.captionNote as string | undefined,
+          captionText: data.captionText as string | undefined,
+        })
+      } else if (data.isWebReader && data.webSiteInfo) {
+        trackFeatureUsage('web-reader')
+        addAssistantMessage({
+          content: (data.content as string) || '🌐 تم اكتشاف الموقع',
+          richType: 'web-reader',
+          webReaderSiteInfo: data.webSiteInfo as { url: string; title: string; domain: string; description: string; headings: string[] },
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -3142,7 +3778,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
@@ -3206,6 +3842,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setMessages([])
     setIsLoading(false)
     setTypingId(null)
+    setActiveYouTubeVideo(null)
   }
 
   const isGithubConnected = serverGithubConnected || !!githubToken
@@ -3457,6 +4094,41 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           webReaderIntent={msg.webReaderIntent}
                         />
                       )}
+                      {msg.richType === 'web-reader' && msg.webReaderSiteInfo && (
+                        <WebReaderPanel
+                          siteInfo={msg.webReaderSiteInfo}
+                          onAnalyze={() => sendMessage(`حلل هذا الموقع وأعطني تحليلاً شاملاً للمحتوى والأقسام والهدف والجمهور المستهدف: ${msg.webReaderSiteInfo!.url}`)}
+                          onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
+                          onExtract={() => sendMessage(`استخرج كل محتوى هذا الموقع وقدمه بشكل منظم ومنسق: العناوين الرئيسية، الفقرات المهمة، والروابط الأساسية — اجعله قابلاً للنسخ والاستخدام: ${msg.webReaderSiteInfo!.url}`)}
+                          onAdvancedClone={(section) => handleAdvancedClone(msg.webReaderSiteInfo!.url, section)}
+                          isAdvancedLoading={isAdvancedCloneLoading}
+                        />
+                      )}
+                      {msg.richType === 'youtube' && (msg.youtubeVideo || msg.youtubeResults) && (
+                        <YouTubePanel
+                          video={msg.youtubeVideo}
+                          results={msg.youtubeResults}
+                          flow={msg.youtubeFlow}
+                          analysis={msg.youtubeAnalysis}
+                          suggestions={msg.youtubeSuggestions}
+                          captionNote={msg.captionNote}
+                          captionText={msg.captionText}
+                          onAsk={(q) => sendMessage(q)}
+                          onDiscuss={(ytResult) => {
+                            const videoData: YouTubeVideoData = {
+                              id: ytResult.id,
+                              url: ytResult.url,
+                              title: ytResult.title,
+                              channel: ytResult.channel,
+                              duration: ytResult.duration,
+                              views: ytResult.views,
+                              thumbnail: ytResult.thumbnail,
+                            }
+                            setActiveYouTubeVideo(videoData)
+                            sendMessage(`أريد مناقشة هذا الفيديو: ${ytResult.url}`)
+                          }}
+                        />
+                      )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog
                           action={msg.pendingAction}
@@ -3553,6 +4225,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       <div className="dz-input-area">
         {messages.length > 0 && (
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
+        )}
+        {activeYouTubeVideo && (
+          <div className="dzc-yt-ctx-bar">
+            <span className="dzc-yt-ctx-icon">🎬</span>
+            <span className="dzc-yt-ctx-label">
+              نقاش حول: <strong>{activeYouTubeVideo.title.slice(0, 50)}{activeYouTubeVideo.title.length > 50 ? '…' : ''}</strong>
+            </span>
+            <button
+              className="dzc-yt-ctx-close"
+              title="إنهاء وضع النقاش"
+              onClick={() => setActiveYouTubeVideo(null)}
+            >✕</button>
+          </div>
         )}
         <div className="dz-input-container">
           <textarea

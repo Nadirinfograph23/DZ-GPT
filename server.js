@@ -1,3 +1,4 @@
+// build: 2026-05-05T03:24:25Z
 import express from 'express'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -10,11 +11,45 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
+
+// ── Resilience layer (must import before anything else uses AI) ──────────────
+import {
+  aiSemaphore,
+  aiDeduplicator,
+  groqCircuit,
+  deepseekCircuit,
+  ollamaCircuit,
+  agentMonitor,
+  chatMonitor,
+  fetchDeduplicator,
+  stallGuard,
+  withTimeout,
+  autoCleanMap,
+  scheduleOnce,
+  systemHealthSnapshot,
+  getOverloadMessage,
+} from './lib/resilience.js'
+
+// ── Process-level crash prevention ──────────────────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH GUARD] uncaughtException (server kept alive):', err?.stack || err?.message || err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH GUARD] unhandledRejection (server kept alive):', reason?.stack || reason?.message || reason)
+})
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { mountSmartAgent } from './lib/agent-mount.js'
 import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
+import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
+import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
+import { mountDownloadV2 } from './services/download/mount.js'
+import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
+import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
+import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
@@ -27,6 +62,8 @@ import {
   readEddirasaIndex,
   updateEddirasaIndex,
 } from './eddirasa_rss_crawler.js'
+
+import { callAIRouter, getRouterHealthSnapshot, getProviderStatus } from './lib/ai-router/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -272,6 +309,8 @@ function randomDelay(minMs = 300, maxMs = 1200) {
 // ── Task 18: Request Throttle Queue (max 3 req/sec per domain) ─
 const THROTTLE_MAP = new Map() // domain → { count, resetAt }
 const MAX_REQ_PER_SEC = 3
+// Auto-prune THROTTLE_MAP every 5 min to prevent memory leak
+autoCleanMap(THROTTLE_MAP, { ttlMs: 10_000, label: 'throttle' })
 
 function throttleCheck(url) {
   const domain = (() => { try { return new URL(url).hostname } catch { return 'unknown' } })()
@@ -1039,6 +1078,71 @@ async function runGit(args, opts = {}) {
   })
 }
 
+// ===== YOUTUBE SMART VIDEO SELECTION — resolveVideoSelection() =====
+// Maps user ordinal/keyword intent to a specific video from candidates list.
+const YT_ORDINALS = [
+  // index 0 → position 1
+  ['الأول','اول','أول','الاول','1','رقم 1','رقم واحد','واحد','first','premier','الأولى','الاولى'],
+  // index 1 → position 2
+  ['الثاني','ثاني','2','رقم 2','رقم اثنين','اثنين','second','deuxième','الثانية'],
+  // index 2 → position 3
+  ['الثالث','ثالث','3','رقم 3','رقم ثلاثة','ثلاثة','third','troisième','الثالثة'],
+  // index 3 → position 4
+  ['الرابع','رابع','4','رقم 4','رقم أربعة','أربعة','fourth','quatrième','الرابعة'],
+  // index 4 → position 5
+  ['الخامس','خامس','5','رقم 5','رقم خمسة','خمسة','fifth','cinquième','الخامسة'],
+  // index 5 → position 6
+  ['السادس','سادس','6','رقم 6','سادسة'],
+  // index 6 → position 7
+  ['السابع','سابع','7','رقم 7','سابعة'],
+  // index 7 → position 8
+  ['الثامن','ثامن','8','رقم 8','ثامنة'],
+]
+
+function resolveVideoSelection(userMessage, candidates) {
+  if (!candidates || candidates.length === 0) return null
+  const norm = String(userMessage || '')
+    .toLowerCase()
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    .replace(/[؟?!.,،:;]/g, ' ')
+    .trim()
+
+  // 1) Ordinal match — "الأول", "رقم 2", etc.
+  for (let i = 0; i < YT_ORDINALS.length; i++) {
+    for (const kw of YT_ORDINALS[i]) {
+      const pattern = new RegExp(`(^|\\s)${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'i')
+      if (pattern.test(norm) && i < candidates.length) {
+        return candidates[i]
+      }
+    }
+  }
+
+  // 2) "هذا الفيديو" / "هذا" / "this one" when only 1 candidate
+  if (/هذا|هذه|this one|this video|celui[- ]ci/i.test(norm) && candidates.length === 1) {
+    return candidates[0]
+  }
+
+  // 3) Keyword partial-title match (top-scored)
+  const words = norm.split(/\s+/).filter(w => w.length >= 3)
+  if (words.length === 0) return null
+
+  let bestScore = 0
+  let bestCandidate = null
+  for (const c of candidates) {
+    const titleNorm = String(c.title || '').toLowerCase()
+      .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
+    let score = 0
+    for (const w of words) {
+      if (titleNorm.includes(w)) score += w.length
+    }
+    if (score > bestScore) { bestScore = score; bestCandidate = c }
+  }
+  // Only use title-match if meaningful overlap (>= 6 chars worth)
+  if (bestScore >= 6) return bestCandidate
+
+  return null
+}
+
 // ===== GROQ SMART KEY ROTATION SYSTEM =====
 const KEY_COOLDOWN_MS = 60 * 1000        // 60s cooldown after rate-limit
 const KEY_ERROR_COOLDOWN_MS = 30 * 1000  // 30s cooldown after generic error
@@ -1404,10 +1508,15 @@ function balanceNewsCategories(items, target = 18) {
   return out.slice(0, target).map(({ _cat, _score, ...rest }) => ({ ...rest, category: _cat }))
 }
 
-// Calls DeepSeek with timeout protection. Returns content string or null.
+// Calls DeepSeek with timeout protection + circuit breaker. Returns content string or null.
 async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } = {}) {
   const key = process.env.DEEPSEEK_API_KEY
   if (!key) return null
+  if (!deepseekCircuit.isAvailable()) {
+    console.warn('[DeepSeek] circuit open — skipping')
+    return null
+  }
+  const t0 = Date.now()
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1420,20 +1529,29 @@ async function callDeepSeek(messages, { timeoutMs = 25000, max_tokens = 3000 } =
     clearTimeout(timer)
     if (!r.ok) {
       console.warn(`[DeepSeek] HTTP ${r.status}`)
+      deepseekCircuit.recordFailure(`HTTP ${r.status}`)
       return null
     }
     const d = await r.json()
-    return d.choices?.[0]?.message?.content || null
+    const content = d.choices?.[0]?.message?.content || null
+    if (content) deepseekCircuit.recordSuccess()
+    else deepseekCircuit.recordFailure('empty response')
+    return content
   } catch (err) {
     console.warn('[DeepSeek] error:', err.message)
+    deepseekCircuit.recordFailure(err.message)
     return null
   }
 }
 
-// Calls Ollama proxy with timeout protection. Returns content string or null.
+// Calls Ollama proxy with timeout protection + circuit breaker. Returns content string or null.
 async function callOllama(messages, { timeoutMs = 25000 } = {}) {
   const url = process.env.OLLAMA_PROXY_URL
   if (!url) return null
+  if (!ollamaCircuit.isAvailable()) {
+    console.warn('[Ollama] circuit open — skipping')
+    return null
+  }
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -1444,18 +1562,23 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
       signal: controller.signal,
     })
     clearTimeout(timer)
-    if (!r.ok) return null
+    if (!r.ok) { ollamaCircuit.recordFailure(`HTTP ${r.ok}`); return null }
     const d = await r.json()
-    return d.message?.content || null
+    const content = d.message?.content || null
+    if (content) ollamaCircuit.recordSuccess()
+    else ollamaCircuit.recordFailure('empty response')
+    return content
   } catch (err) {
     console.warn('[Ollama] error:', err.message)
+    ollamaCircuit.recordFailure(err.message)
     return null
   }
 }
 
 // Master fallback: tries DeepSeek → Ollama → multiple Groq models.
 // Returns { content, model } where content is validated, or { content: null }.
-async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+// ── Wrapped with: concurrency semaphore + in-flight deduplication ──────────
+async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000 }) {
   const trimmed = trimRelevantContext(messages, 8)
 
   // 1. DeepSeek
@@ -1481,7 +1604,40 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
 
+  // 4. Multi-provider fallback (Gemini → Mistral → GitHub → NVIDIA → Cohere → OpenRouter)
+  console.warn('[AI] Groq/DeepSeek/Ollama all failed — escalating to multi-provider router')
+  const routerResult = await callAIRouter(trimmed, { max_tokens })
+  if (validateAIContent(routerResult?.content, query)) {
+    console.log(`[AI] ✓ Router succeeded via ${routerResult.model}`)
+    return routerResult
+  }
+
   return { content: null, model: null }
+}
+
+async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+  // Build a stable dedup key from the last user message + query
+  const lastMsg = [...(messages || [])].reverse().find(m => m?.role === 'user')?.content || ''
+  const dedupKey = `ai:${String(query || lastMsg).slice(0, 120).trim()}`
+
+  const t0 = Date.now()
+  try {
+    // Semaphore limits max concurrent AI calls to 6; deduplicator collapses parallel identical queries
+    const result = await aiDeduplicator.run(dedupKey, () =>
+      aiSemaphore.run(() =>
+        stallGuard(
+          () => _safeGenerateAI_inner({ messages, query, max_tokens }),
+          { maxMs: 55_000, fallbackValue: { content: null, model: null }, label: 'safeGenerateAI' }
+        ).then(r => r.value)
+      )
+    )
+    agentMonitor.record(!!result?.content, Date.now() - t0)
+    return result || { content: null, model: null }
+  } catch (err) {
+    agentMonitor.record(false, Date.now() - t0)
+    console.warn('[safeGenerateAI] error:', err.message)
+    return { content: null, model: null }
+  }
 }
 
 async function callGroqWithFallback({ model, messages, max_tokens = 4096, temperature = 0.7 }) {
@@ -1540,12 +1696,14 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
       }
       const elapsed = Date.now() - t0
       recordSuccess(key, elapsed)
+      groqCircuit.recordSuccess()
       console.log(`[Groq:Rotation] K${keyIndex} ✓ ${elapsed}ms | model:${model}`)
       if (Math.random() < 0.1) logKeyStats() // log stats 10% of the time
       return { content }
 
     } catch (err) {
       recordError(key, 'network')
+      groqCircuit.recordFailure(err.message)
       const s = getKeyStats(key)
       if (s.consecutiveErrors >= KEY_MAX_ERRORS) {
         setCooldown(key, KEY_ERROR_COOLDOWN_MS, `network error: ${err.message}`)
@@ -1576,6 +1734,29 @@ app.get('/api/groq-key-stats', (_req, res) => {
     }
   })
   res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
+})
+
+// ===== SYSTEM HEALTH API (resilience layer) =====
+app.get('/api/system-health', (_req, res) => {
+  try {
+    res.json(systemHealthSnapshot())
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== AI ROUTER HEALTH API =====
+app.get('/api/ai-router/health', (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      providers: getProviderStatus(),
+      metrics: getRouterHealthSnapshot(),
+      ts: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
 })
 
 // ===== API ROUTE =====
@@ -1617,11 +1798,13 @@ app.post('/api/chat', async (req, res) => {
 
   const actualModel = groqModelMap[model] || model
 
+  const _chatT0 = Date.now()
   try {
     const trimmed = trimRelevantContext(messages, 8)
     const lastQuery = [...trimmed].reverse().find(m => m.role === 'user')?.content || ''
     const { content, error } = await callGroqWithFallback({ model: actualModel, messages: trimmed })
     if (validateAIContent(content, lastQuery)) {
+      chatMonitor.record(true, Date.now() - _chatT0)
       return res.status(200).json({ content })
     }
     if (content) logInvalidResponse(`chat:${actualModel}`, lastQuery, content)
@@ -1632,12 +1815,15 @@ app.post('/api/chat', async (req, res) => {
       : 'llama-3.3-70b-versatile'
     const retry = await callGroqWithFallback({ model: secondaryModel, messages: trimmed })
     if (validateAIContent(retry.content, lastQuery)) {
+      chatMonitor.record(true, Date.now() - _chatT0)
       return res.status(200).json({ content: retry.content, fallbackModel: secondaryModel })
     }
     if (retry.content) logInvalidResponse(`chat:${secondaryModel}`, lastQuery, retry.content)
 
+    chatMonitor.record(false, Date.now() - _chatT0)
     return res.status(500).json({ error: error || retry.error || 'No response generated.' })
   } catch (error) {
+    chatMonitor.record(false, Date.now() - _chatT0)
     console.error('Chat API error:', error)
     return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
   }
@@ -2650,6 +2836,349 @@ app.post('/api/dz-agent/education/index', async (req, res) => {
   } catch (err) {
     console.error('[Eddirasa] Index endpoint error:', err.message)
     return res.status(500).json({ error: 'فشل في جلب الفهرس من eddirasa.com' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HYBRID INTELLIGENT WEBSITE RECONSTRUCTION ENGINE
+// DOM-first approach: extract design tokens → reconstruct pixel-perfect clone
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PIXEL_PERFECT_CLONE_PROMPT = `You are an ELITE WEBSITE RECONSTRUCTION ENGINEER — the world's best at reverse-engineering websites into pixel-perfect standalone HTML clones.
+
+════════════════════════════════════════════
+ABSOLUTE OUTPUT RULE:
+Output ONLY raw HTML — NO markdown fences, NO explanations, NO code comments outside HTML/CSS/JS.
+Response = ONE complete file: <!DOCTYPE html>…</html>
+════════════════════════════════════════════
+
+RECONSTRUCTION STRATEGY (follow this exact order):
+1. LAYOUT FIRST — reproduce the exact section order, grid/flex structure, z-index layers, and spacing
+2. DESIGN TOKENS — use the EXACT extracted colors, fonts, border-radius, shadows, CSS variables
+3. TYPOGRAPHY — match font families, sizes (px/rem/vw), weights, line-heights, letter-spacing
+4. COMPONENTS — recreate each detected section with full fidelity (navbar, hero, cards, footer, etc.)
+5. ANIMATIONS — CSS transitions (0.2–0.4s ease), scroll-reveal via IntersectionObserver, hover effects
+6. RESPONSIVE — reproduce exact breakpoints; hamburger menu on mobile; fluid images; fluid type
+7. INTERACTIONS — dropdowns, accordions, tabs, modals, form validation — all functional
+
+CRITICAL RULES:
+✅ Use EXACTLY the extracted color palette (hex/rgb values provided below)
+✅ Load detected fonts via Google Fonts CDN with correct weights
+✅ Reproduce the EXACT section structure in the same order as detected
+✅ Load the correct icon CDN (specified below)
+✅ All CSS inside <style> — no external files; all JS inside <script> — no external files
+✅ Use REAL extracted content (headings, paragraphs, nav links, CTAs) — zero Lorem ipsum
+✅ Preserve all interactive behaviors with working JavaScript
+✅ Include @media queries matching the original breakpoints
+✅ Dark/light theme must match the original site's scheme exactly
+✅ Minimum output: 300 lines of detailed, production-quality HTML
+
+QUALITY TARGET: 90–98% visual accuracy at first glance — indistinguishable from the original.
+
+START OUTPUT NOW — RAW HTML ONLY:`
+
+async function extractDesignTokens(rawHtml, url) {
+  const tokens = {
+    colors: [],
+    fonts: [],
+    sections: [],
+    animations: [],
+    hasNavbar: false,
+    hasHero: false,
+    hasFooter: false,
+    hasPricing: false,
+    hasTestimonials: false,
+    hasForms: false,
+    hasCards: false,
+    iconLibrary: null,
+    title: '',
+    domain: '',
+    description: '',
+    headings: [],
+    textContent: '',
+    layoutType: 'landing',
+    colorScheme: 'dark',
+    primaryColor: null,
+    bgColor: null,
+    fontFamily: null,
+    rawStyleSample: '',
+  }
+
+  try {
+    tokens.domain = (() => { try { return new URL(url).hostname } catch { return url } })()
+
+    // Title
+    const titleMatch = rawHtml.match(/<title[^>]*>([^<]{1,200})<\/title>/i)
+    tokens.title = titleMatch ? titleMatch[1].trim() : ''
+
+    // Meta description
+    const metaMatch = rawHtml.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']{1,300})["']/i)
+    tokens.description = metaMatch ? metaMatch[1].trim() : ''
+
+    // Headings
+    tokens.headings = [...rawHtml.matchAll(/<h[1-3][^>]*>([\s\S]{1,150}?)<\/h[1-3]>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim())
+      .filter(h => h.length > 2).slice(0, 12)
+
+    // Text content for content reconstruction
+    const textBlocks = [...rawHtml.matchAll(/<p[^>]*>([\s\S]{20,800}?)<\/p>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      .filter(p => p.length > 20).slice(0, 20)
+    tokens.textContent = textBlocks.join('\n')
+
+    // Extract all CSS from style tags
+    const styleTags = [...rawHtml.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+      .map(m => m[1]).join('\n')
+    tokens.rawStyleSample = styleTags.slice(0, 5000)
+
+    // Color extraction (hex, rgb, hsl, CSS vars)
+    const colorPatterns = [
+      /#([0-9a-f]{6}|[0-9a-f]{3})\b/gi,
+      /rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/gi,
+      /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*\)/gi,
+      /hsl\(\s*\d+\s*,\s*[\d.]+%\s*,\s*[\d.]+%\s*\)/gi,
+    ]
+    const colorSet = new Set()
+    const fullCssSource = styleTags + rawHtml.slice(0, 20000)
+    for (const pattern of colorPatterns) {
+      for (const m of fullCssSource.matchAll(pattern)) {
+        colorSet.add(m[0].toLowerCase())
+      }
+    }
+    tokens.colors = [...colorSet].slice(0, 24)
+
+    // CSS custom properties (design tokens)
+    const cssVars = {}
+    for (const m of styleTags.matchAll(/--([\w-]+)\s*:\s*([^;}{]+)/g)) {
+      cssVars[`--${m[1]}`] = m[2].trim()
+    }
+    tokens.cssVars = cssVars
+
+    // Background color detection
+    const bgMatch = styleTags.match(/body[^{]*\{[^}]*background(?:-color)?\s*:\s*([^;}\n]+)/i)
+      || fullCssSource.match(/--bg[^:]*:\s*([^;}\n]+)/i)
+    if (bgMatch) tokens.bgColor = bgMatch[1].trim().slice(0, 40)
+
+    // Primary color detection
+    const primaryMatch = styleTags.match(/--primary[^:]*:\s*([^;}\n]+)/i)
+      || styleTags.match(/--accent[^:]*:\s*([^;}\n]+)/i)
+      || styleTags.match(/--color-primary[^:]*:\s*([^;}\n]+)/i)
+    if (primaryMatch) tokens.primaryColor = primaryMatch[1].trim().slice(0, 40)
+
+    // Color scheme detection
+    const darkIndicators = (styleTags + rawHtml.slice(0, 5000)).match(/#0[0-3][0-9a-f]{4}|#1[0-1][0-9a-f]{4}|#2[0-1][0-9a-f]{4}|dark-theme|dark-mode|prefers-color-scheme.*dark/gi)
+    tokens.colorScheme = darkIndicators && darkIndicators.length > 2 ? 'dark' : 'light'
+
+    // Font detection from Google Fonts links
+    const gfMatch = rawHtml.match(/fonts\.googleapis\.com\/css[^"']*family=([^"'&]+)/gi)
+    if (gfMatch) {
+      tokens.fonts = gfMatch.flatMap(m => {
+        const f = m.match(/family=([^"'&:]+)/i)
+        return f ? f[1].replace(/\+/g, ' ').split('|').map(s => s.split(':')[0].trim()) : []
+      }).filter(Boolean).slice(0, 4)
+    }
+    // Font-family from CSS
+    const ffMatches = [...styleTags.matchAll(/font-family\s*:\s*([^;}{]+)/gi)]
+      .map(m => m[1].split(',')[0].replace(/["']/g, '').trim()).filter(f => f && !f.startsWith('var('))
+    if (tokens.fonts.length === 0 && ffMatches.length > 0) {
+      tokens.fonts = [...new Set(ffMatches)].slice(0, 3)
+    }
+    if (tokens.fonts.length > 0) tokens.fontFamily = tokens.fonts[0]
+
+    // Icon library detection
+    if (/font-awesome|fa-[a-z]|fas |far |fab /i.test(rawHtml)) tokens.iconLibrary = 'font-awesome'
+    else if (/heroicons|lucide|feather/i.test(rawHtml)) tokens.iconLibrary = 'heroicons'
+    else if (/material.*icon|mdi-/i.test(rawHtml)) tokens.iconLibrary = 'material'
+
+    // Section detection
+    const lcHtml = rawHtml.toLowerCase()
+    tokens.hasNavbar = /<nav[\s>]|navbar|nav-bar|header.*nav|class="nav/i.test(rawHtml)
+    tokens.hasHero = /hero|banner|jumbotron|class="hero|id="hero|data-section="hero/i.test(rawHtml)
+    tokens.hasFooter = /<footer[\s>]|class="footer|id="footer/i.test(rawHtml)
+    tokens.hasPricing = /pricing|price|plan|subscription|tarif/i.test(rawHtml)
+    tokens.hasTestimonials = /testimonial|review|rating|témoignage|avis/i.test(rawHtml)
+    tokens.hasForms = /<form[\s>]|<input[\s>]|<textarea/i.test(rawHtml)
+    tokens.hasCards = /card|tile|grid-item|feature-item/i.test(rawHtml)
+
+    // Detected sections list
+    const detectedSections = []
+    if (tokens.hasNavbar) detectedSections.push('navbar')
+    if (tokens.hasHero) detectedSections.push('hero')
+    if (/feature|service|benefit|about/i.test(rawHtml)) detectedSections.push('features')
+    if (tokens.hasCards) detectedSections.push('cards')
+    if (tokens.hasPricing) detectedSections.push('pricing')
+    if (tokens.hasTestimonials) detectedSections.push('testimonials')
+    if (tokens.hasForms) detectedSections.push('contact-form')
+    if (tokens.hasFooter) detectedSections.push('footer')
+    tokens.sections = detectedSections
+
+    // Animation detection
+    const animKeywords = []
+    if (/animation:|@keyframes/i.test(styleTags)) animKeywords.push('CSS animations')
+    if (/transition:/i.test(styleTags)) animKeywords.push('transitions')
+    if (/scroll.*animation|intersection.*observer|aos-|wow\.js|gsap|framer/i.test(rawHtml)) animKeywords.push('scroll animations')
+    if (/parallax/i.test(lcHtml)) animKeywords.push('parallax')
+    tokens.animations = animKeywords
+
+    // Layout type detection
+    if (/e-commerce|shop|store|product|cart|panier/i.test(rawHtml)) tokens.layoutType = 'ecommerce'
+    else if (/portfolio|work|project|case.*study/i.test(rawHtml)) tokens.layoutType = 'portfolio'
+    else if (/dashboard|admin|analytics|panel/i.test(rawHtml)) tokens.layoutType = 'dashboard'
+    else if (/blog|article|post|news/i.test(rawHtml)) tokens.layoutType = 'blog'
+    else if (/restaurant|menu|food|café|cafe/i.test(rawHtml)) tokens.layoutType = 'restaurant'
+    else if (/agency|studio|creative/i.test(rawHtml)) tokens.layoutType = 'agency'
+
+    // Responsive breakpoints
+    const bpMatches = [...styleTags.matchAll(/@media[^{]*\(max-width:\s*(\d+)px\)/gi)].map(m => parseInt(m[1]))
+    tokens.breakpoints = [...new Set(bpMatches)].sort((a, b) => a - b).slice(0, 5)
+
+  } catch (err) {
+    console.warn('[CloneEngine] extractDesignTokens error:', err.message)
+  }
+
+  return tokens
+}
+
+async function fetchRawHtml(url) {
+  const r = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8,ar;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+    },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return await r.text()
+}
+
+app.post('/api/dz-agent/clone-advanced', async (req, res) => {
+  const { url, section } = req.body
+  if (!url) return res.status(400).json({ error: 'URL required' })
+
+  let targetUrl = url.trim()
+  if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl
+
+  console.log(`[CloneEngine] Advanced clone requested: ${targetUrl} | section=${section || 'full'}`)
+
+  try {
+    // Phase 1: Deep Website Recon — fetch raw HTML & extract design tokens
+    let rawHtml = ''
+    try {
+      rawHtml = await fetchRawHtml(targetUrl)
+    } catch (fetchErr) {
+      console.warn('[CloneEngine] Primary fetch failed, trying fallback:', fetchErr.message)
+      // Fallback: try fetchWebContent for partial data
+      const fallback = await fetchWebContent(targetUrl, 8000)
+      if (fallback.error) {
+        return res.status(200).json({
+          ok: false,
+          error: `لم أتمكن من الوصول إلى الموقع: ${fallback.error}`,
+          tokens: null,
+        })
+      }
+      rawHtml = fallback.content || ''
+    }
+
+    // Phase 2: Design Token Extraction
+    const tokens = await extractDesignTokens(rawHtml, targetUrl)
+    console.log(`[CloneEngine] Tokens extracted — colors:${tokens.colors.length}, fonts:${tokens.fonts.length}, sections:[${tokens.sections.join(',')}]`)
+
+    // Phase 3: Build Pixel-Perfect Reconstruction Prompt
+    const sectionTarget = section && section !== 'full'
+      ? `\n\nSECTION MODE: Clone ONLY the "${section}" section. Output a complete standalone HTML file that contains just this component, fully styled and functional.`
+      : ''
+
+    const designContext = `
+════════════════════════════════════════════
+EXTRACTED DESIGN TOKENS FROM TARGET SITE: ${targetUrl}
+════════════════════════════════════════════
+
+SITE INFO:
+- Title: ${tokens.title || 'Unknown'}
+- Domain: ${tokens.domain}
+- Description: ${tokens.description || 'N/A'}
+- Layout Type: ${tokens.layoutType}
+- Color Scheme: ${tokens.colorScheme}
+
+DETECTED SECTIONS (reproduce in this order):
+${tokens.sections.length > 0 ? tokens.sections.map((s, i) => `${i + 1}. ${s}`).join('\n') : '- navbar\n- hero\n- features\n- footer'}
+
+COLOR PALETTE (use EXACTLY these colors):
+${tokens.colors.slice(0, 16).join(', ') || '#0f172a, #7c3aed, #ffffff, #e2e8f0'}
+
+${tokens.primaryColor ? `PRIMARY COLOR: ${tokens.primaryColor}` : ''}
+${tokens.bgColor ? `BACKGROUND: ${tokens.bgColor}` : ''}
+${tokens.colorScheme === 'dark' ? 'THEME: Dark background with light text' : 'THEME: Light background with dark text'}
+
+TYPOGRAPHY:
+${tokens.fonts.length > 0 ? `Font families: ${tokens.fonts.join(', ')}` : 'Detect and use appropriate professional fonts'}
+${tokens.fontFamily ? `Primary font: ${tokens.fontFamily}` : ''}
+
+${tokens.cssVars && Object.keys(tokens.cssVars).length > 0 ? `CSS CUSTOM PROPERTIES DETECTED:\n${Object.entries(tokens.cssVars).slice(0, 20).map(([k, v]) => `  ${k}: ${v}`).join('\n')}` : ''}
+
+ANIMATIONS DETECTED: ${tokens.animations.length > 0 ? tokens.animations.join(', ') : 'standard CSS transitions'}
+ICON LIBRARY: ${tokens.iconLibrary || 'Font Awesome 6 (always use this as fallback)'}
+RESPONSIVE BREAKPOINTS: ${tokens.breakpoints?.length > 0 ? tokens.breakpoints.join('px, ') + 'px' : '768px, 1024px'}
+
+CONTENT TO RECONSTRUCT:
+Headings: ${tokens.headings.slice(0, 8).join(' | ')}
+${tokens.textContent ? `Text content:\n${tokens.textContent.slice(0, 2000)}` : ''}
+${tokens.rawStyleSample ? `\nRAW CSS SAMPLE (study patterns & replicate):\n${tokens.rawStyleSample.slice(0, 3000)}` : ''}
+${sectionTarget}
+════════════════════════════════════════════
+`
+
+    // Phase 4: Pixel-Perfect Reconstruction via AI
+    const cloneMessages = [
+      { role: 'system', content: PIXEL_PERFECT_CLONE_PROMPT + designContext },
+      {
+        role: 'user',
+        content: section && section !== 'full'
+          ? `Clone ONLY the "${section}" section of ${targetUrl}. Use the extracted design tokens above. Output complete standalone HTML.`
+          : `Reconstruct a pixel-perfect clone of ${targetUrl}. Use ALL the extracted design tokens, color palette, typography, and section structure above. The result must be visually near-identical to the original.`
+      },
+    ]
+
+    const result = await safeGenerateAI({ messages: cloneMessages, query: `clone ${targetUrl}`, max_tokens: 10000 })
+    const rawResult = result.content || ''
+    const htmlCode = extractHtmlFromResponse(rawResult) || rawResult
+
+    if (!htmlCode || htmlCode.length < 200) {
+      return res.status(200).json({
+        ok: false,
+        error: 'فشل في توليد الكود. جرّب مجدداً أو استخدم الاستنساخ البسيط.',
+        tokens,
+      })
+    }
+
+    // Phase 5: Extract CSS/JS for tabs
+    const cssCode = extractCssFromHtml(htmlCode)
+    const jsCode  = extractJsFromHtml(htmlCode)
+
+    const sectionLabel = section && section !== 'full' ? ` — قسم: ${section}` : ''
+    return res.status(200).json({
+      ok: true,
+      isWebsite: true,
+      htmlCode,
+      cssCode: cssCode || '',
+      jsCode:  jsCode  || '',
+      tokens,
+      content: `🧬 **استنساخ متقدم${sectionLabel} — ${tokens.title || tokens.domain}**\n\n✅ تم استخراج ${tokens.colors.length} لون، ${tokens.fonts.length} خط، ${tokens.sections.length} قسم\n🎨 النظام اللوني: ${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'} | النوع: ${tokens.layoutType}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو **⬇ تحميل** للحفظ.`,
+      webBuilderMeta: {
+        type: tokens.layoutType,
+        style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
+        title: `🧬 ${tokens.title || tokens.domain}${sectionLabel}`,
+        description: `استنساخ متقدم لـ ${tokens.domain}`,
+        icon: '🧬',
+      },
+      webReaderIntent: 'build',
+    })
+  } catch (err) {
+    console.error('[CloneEngine] clone-advanced error:', err.message)
+    return res.status(500).json({ ok: false, error: 'خطأ داخلي في محرك الاستنساخ. يرجى المحاولة مرة أخرى.' })
   }
 })
 
@@ -6408,9 +6937,137 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── YouTube Discussion Mode ───────────────────────────────────────────────
+  // When the client sends youtubeContext (active video), route to AI discussion.
+  const youtubeContext = req.body.youtubeContext && typeof req.body.youtubeContext === 'object'
+    ? req.body.youtubeContext
+    : null
+
+  if (youtubeContext?.videoId && lastUserMessage) {
+    console.log(`[YouTube Discussion] videoId=${youtubeContext.videoId} query="${lastUserMessage.slice(0, 60)}"`)
+    try {
+      const history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+      const result = await handleVideoDiscussion(
+        youtubeContext,
+        lastUserMessage,
+        history,
+        (params) => safeGenerateAI({ ...params }),
+      )
+      return res.status(200).json({
+        content: result.reply || 'لم أتمكن من الإجابة. يرجى المحاولة مرة أخرى.',
+      })
+    } catch (ytDiscErr) {
+      console.error('[YouTube Discussion] Error:', ytDiscErr.message)
+      return res.status(200).json({ content: '⚠️ خطأ في معالجة سؤالك عن الفيديو. يرجى المحاولة مرة أخرى.' })
+    }
+  }
+
+  // ── YouTube Smart Selection — Non-Invasive Plugin ─────────────────────────
+  // Resolves ordinal/keyword user intent to a previously shown video candidate.
+  const youtubeCandidates = Array.isArray(req.body.youtubeCandidates)
+    ? req.body.youtubeCandidates
+        .slice(0, 20)
+        .filter(c => c && typeof c.id === 'string' && typeof c.url === 'string' && typeof c.title === 'string')
+    : []
+
+  if (youtubeCandidates.length > 0 && !youtubeContext?.videoId) {
+    const selectedVideo = resolveVideoSelection(lastUserMessage, youtubeCandidates)
+    if (selectedVideo) {
+      console.log(`[YouTube:SmartSelect] Auto-selected index=${youtubeCandidates.indexOf(selectedVideo) + 1} title="${selectedVideo.title.slice(0, 60)}"`)
+      try {
+        const ytSmartResult = await handleYouTubeInput(selectedVideo.url, {
+          aiGenerate: (params) => safeGenerateAI({ ...params }),
+        })
+        if (ytSmartResult.flow === 'url') {
+          return res.status(200).json({
+            content: ytSmartResult.message || `🎬 تم تحليل **"${selectedVideo.title}"** بنجاح!`,
+            isYouTube: true,
+            youtubeFlow: 'url',
+            youtubeVideo: ytSmartResult.video || null,
+            youtubeAnalysis: ytSmartResult.analysis || null,
+            youtubeSuggestions: ytSmartResult.suggestions || [],
+            captionNote: ytSmartResult.captionNote || null,
+            captionText: ytSmartResult.captionText || null,
+          })
+        }
+      } catch (ytSmartErr) {
+        console.error('[YouTube:SmartSelect] Error:', ytSmartErr.message)
+        // Non-fatal — fall through to normal YouTube engine
+      }
+    }
+  }
+
+  // ── YouTube Insight Engine ─────────────────────────────────────────────────
+  // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
+  const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
+  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|درس[\s]+بالفيديو|شرح[\s]+بالفيديو)/
+  const _isYouTubeQuery = !!_ytUrlInMsg
+    || (_ytKwRe.test(lastUserMessage)
+        && !detectWebsiteBuilderQuery(lastUserMessage)
+        && !detectCodeExecutionQuery(lastUserMessage)
+        && !isMapQuery(lastUserMessage))
+
+  if (_isYouTubeQuery) {
+    console.log(`[YouTube Insight] Detected: flow=${_ytUrlInMsg ? 'url' : 'search'} input="${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const ytInput = _ytUrlInMsg || lastUserMessage
+      const ytResult = await handleYouTubeInput(ytInput, {
+        aiGenerate: (params) => safeGenerateAI({ ...params }),
+      })
+      if (ytResult.flow === 'url') {
+        return res.status(200).json({
+          content: ytResult.message || '🎬 تم تحليل الفيديو بنجاح!',
+          isYouTube: true,
+          youtubeFlow: 'url',
+          youtubeVideo: ytResult.video || null,
+          youtubeAnalysis: ytResult.analysis || null,
+          youtubeSuggestions: ytResult.suggestions || [],
+          captionNote: ytResult.captionNote || null,
+          captionText: ytResult.captionText || null,
+        })
+      } else {
+        return res.status(200).json({
+          content: ytResult.message || '🔍 نتائج البحث على YouTube:',
+          isYouTube: true,
+          youtubeFlow: 'search',
+          youtubeResults: ytResult.results || [],
+          youtubeSuggestions: ytResult.suggestions || [],
+        })
+      }
+    } catch (ytErr) {
+      console.error('[YouTube Insight] Error:', ytErr.message)
+      // Non-fatal — fall through to general AI handler
+    }
+  }
+
   // ── Web Reader Mode — fetch & extract content from URLs in message ───────
   const _webReaderIntent = isWebReaderQuery ? detectWebReaderIntent(lastUserMessage) : 'reader'
   if (isWebReaderQuery && _detectedUrls.length > 0) {
+    // ── WEBSITE DETECT MODE: pure URL with no explicit intent → show action panel ──
+    const _msgStripped = lastUserMessage.replace(URL_RE, '').trim()
+    const _hasExplicitIntent = /(ابني|اصنع|أنشئ|حلل|analyze|clone|build|create|استخرج|اقرأ|شرح|explain|مستوحى|inspired|اشرح|ماهو|ما هو|ما هي|اخبرني|تكلم|ناقش|كلمني|صف|describe|summarize|لخص)/i.test(lastUserMessage)
+    if (_msgStripped.length < 15 && !_hasExplicitIntent) {
+      console.log(`[WebReader:DETECT] Pure URL → action panel for: ${_detectedUrls[0]}`)
+      try {
+        const _qi = await fetchWebContent(_detectedUrls[0], 800)
+        const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
+        const _rawDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
+        return res.status(200).json({
+          content: `🌐 تم اكتشاف الموقع: **${_qi.title || _domain}**`,
+          isWebReader: true,
+          webSiteInfo: {
+            url: _detectedUrls[0],
+            title: _qi.title || _domain,
+            domain: _domain,
+            description: _rawDesc.slice(0, 220),
+            headings: (_qi.headings || []).slice(0, 4),
+          },
+        })
+      } catch (_e) {
+        console.error('[WebReader:DETECT] quick fetch failed:', _e.message)
+        // Fall through to normal web reader processing
+      }
+    }
     console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
     const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
     const fetched = results
@@ -8597,6 +9254,8 @@ app.post('/api/dz-agent/github/stats', async (req, res) => {
 // ===== CHAT ROOM — IN-MEMORY STATE =====
 const chatMessages = []
 const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
+const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
+let pinnedMessage = null        // { id, text, from, timestamp } | null
 const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
 
@@ -8644,72 +9303,112 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   const question = rawText.slice(trigger.length).trim()
   if (!question) return null
 
-  const systemPrompt = isAgent
-    ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس).
-
-قواعد الإجابة — اتبعها بدقة:
-
-1. افتراضك الأساسي هو الإجابة المباشرة. أجب فوراً على أي سؤال يحتوي على معلومة كافية.
-   مثال: "سعر الدينار اليوم" → أعطِ أسعار الصرف مقابل الدولار واليورو والجنيه مباشرة.
-
-2. لا تطرح سؤالاً توضيحياً إلا إذا كان السؤال مبهماً تماماً بحيث تصبح الإجابة مستحيلة.
-   الأمثلة الوحيدة المقبولة للتوضيح:
-   - "ما هو الطقس؟" بدون ذكر أي مدينة أو منطقة.
-   - "ما نتيجة المباراة؟" بدون ذكر أي فريق.
-   أما "ما الطقس في الجزائر العاصمة؟" أو "سعر الدولار في الجزائر؟" فهي أسئلة واضحة تستحق إجابة فورية.
-
-3. أسلوب الإجابة:
-   - ابدأ بالمعلومة مباشرة، بدون مقدمات أو "بالطبع" أو "سؤال ممتاز".
-   - استخدم أرقاماً وحقائق محددة قدر الإمكان.
-   - اذكر المصدر باختصار في نهاية الإجابة (مثال: المصدر: بنك الجزائر / الرابطة المحترفة الأولى).
-   - أضف ملاحظة مختصرة إن كان هناك فرق بين السعر الرسمي والسوق الموازية، أو أي تحفظ مهم.
-
-4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. لا تتجاوز 5-6 جمل بما فيها المصدر والملاحظة.`
-    : `أنت DZ GPT، مساعد ذكي عام ومفيد.
-
-قواعد الإجابة — اتبعها بدقة:
-
-1. افتراضك الأساسي هو الإجابة المباشرة. أجب فوراً على أي سؤال واضح دون طلب توضيح.
-2. لا تطرح سؤالاً توضيحياً إلا إذا كان السؤال مبهماً تماماً ولا يمكن الإجابة عليه دون معلومة أساسية مفقودة.
-3. أسلوب الإجابة:
-   - ابدأ بالمعلومة مباشرة، بدون مقدمات.
-   - استخدم أرقاماً وحقائق محددة حيثما أمكن.
-   - اذكر المصدر باختصار إن كانت الإجابة تعتمد على بيانات (مثال: المصدر: Wikipedia / البنك الدولي).
-   - أضف ملاحظة مختصرة عند الحاجة.
-4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. لا تتجاوز 5-6 جمل بما فيها المصدر والملاحظة.`
-
   try {
+    // ── Breaking news broadcast (agent only) ─────────────────────────────
     if (isAgent) {
       const breakingArticles = getBreakingNewsFromCache()
       if (breakingArticles.length > 0) {
         const breakingText = '🔴 عاجل: ' + breakingArticles.map(a => a.title).join(' | ')
         const breakingMsg = pushChatMsg({
-          id: chatId(),
-          from: 'DZ Agent',
-          fromId: 'bot',
-          gender: 'bot',
-          text: breakingText,
-          timestamp: Date.now(),
-          isBot: true,
-          botType: 'agent',
-          isBreaking: true,
-          triggeredBy: authorSession.name,
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: breakingText, timestamp: Date.now(), isBot: true, botType: 'agent',
+          isBreaking: true, triggeredBy: authorSession.name,
         })
         broadcastChat({ type: 'message', msg: breakingMsg })
       }
     }
 
-    const result = await callGroqWithFallback({
-      model: 'llama-3.3-70b-versatile',
+    // ── Algeria knowledge system (agent only) ────────────────────────────
+    if (isAgent && isAlgerianCitizenQuery(question)) {
+      const algeriaResult = searchAlgeria(question)
+      if (algeriaResult) {
+        const content = formatAlgeriaResponse(algeriaResult)
+        const botMsg = pushChatMsg({
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: content, timestamp: Date.now(), isBot: true, botType: 'agent',
+          triggeredBy: authorSession.name,
+        })
+        broadcastChat({ type: 'message', msg: botMsg })
+        return botMsg
+      }
+    }
+
+    // ── Live context injection (agent only) ──────────────────────────────
+    let liveContext = ''
+    if (isAgent) {
+      const lowerQ = question.toLowerCase()
+
+      // News context — inject when question is about news/events/Algeria
+      const newsKw = ['خبر', 'أخبار', 'news', 'actu', 'حوادث', 'اليوم', 'الآن', 'الجزائر', 'جديد', 'حدث']
+      if (newsKw.some(k => lowerQ.includes(k))) {
+        const allArticles = []
+        for (const [, cached] of GN_RSS_CACHE.entries()) {
+          if (cached?.data) allArticles.push(...cached.data)
+        }
+        if (allArticles.length > 0) {
+          liveContext += '\n\n📰 آخر الأخبار المتاحة:\n' +
+            allArticles.slice(0, 6).map(a => `• ${a.title}${a.source ? ` (${a.source})` : ''}`).join('\n')
+        }
+      }
+
+      // Weather context
+      const weatherKw = ['طقس', 'weather', 'météo', 'درجة حرارة', 'مطر', 'رياح', 'تساقط', 'حار', 'بارد']
+      if (weatherKw.some(k => lowerQ.includes(k))) {
+        const cached = WEATHER_CACHE_V2.getStale('algiers')
+        if (cached?.data) {
+          const w = cached.data
+          liveContext += `\n\n🌤️ الطقس الآن (الجزائر العاصمة): ${w.temp}°C — ${w.condition || ''}`
+          if (w.humidity) liveContext += ` — رطوبة ${w.humidity}%`
+          if (w.wind) liveContext += ` — رياح ${w.wind} كم/س`
+        }
+      }
+
+      // Currency/exchange context
+      const currKw = ['صرف', 'دينار', 'دولار', 'يورو', 'currency', 'taux', 'dzd', 'دج', 'eur', 'usd']
+      if (currKw.some(k => lowerQ.includes(k))) {
+        const cached = CURRENCY_CACHE_V2.getStale('dzd_rates')
+        if (cached?.data?.rates) {
+          const r = cached.data.rates
+          const usd = r.USD ? (1 / r.USD).toFixed(2) : null
+          const eur = r.EUR ? (1 / r.EUR).toFixed(2) : null
+          const sar = r.SAR ? (1 / r.SAR).toFixed(2) : null
+          const parts = []
+          if (usd) parts.push(`1 دولار ≈ ${usd} دج`)
+          if (eur) parts.push(`1 يورو ≈ ${eur} دج`)
+          if (sar) parts.push(`1 ريال ≈ ${sar} دج`)
+          if (parts.length) liveContext += `\n\n💱 أسعار الصرف (رسمي — بنك الجزائر): ${parts.join(' | ')}`
+        }
+      }
+    }
+
+    // ── System prompt ────────────────────────────────────────────────────
+    const systemPrompt = isAgent
+      ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
+
+قواعد الإجابة (إلزامية):
+1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".
+2. استخدم أرقاماً وحقائق محددة. اذكر المصدر باختصار في النهاية.
+3. إذا كانت البيانات المباشرة متاحة أدناه، استخدمها أولاً ولا تتجاهلها.
+4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
+5. لا تتجاوز 6 جمل بما فيها المصدر.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
+      : `أنت DZ GPT، مساعد ذكي عام ومفيد.
+
+قواعد الإجابة (إلزامية):
+1. أجب فوراً بدون مقدمات أو عبارات تمهيدية.
+2. استخدم حقائق ومصادر محددة حيثما أمكن.
+3. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
+4. لا تتجاوز 6 جمل.`
+
+    // ── Call full AI router (Groq → Gemini → Mistral → NVIDIA → Cohere → ...) ──
+    const result = await safeGenerateAI({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: question },
       ],
-      max_tokens: 600,
-      temperature: 0.3,
+      query: question,
+      max_tokens: 700,
     })
+
     const botMsg = pushChatMsg({
       id: chatId(),
       from: isAgent ? 'DZ Agent' : 'DZ GPT',
@@ -8726,6 +9425,22 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   } catch (err) {
     console.error('[ChatAI]', err.message)
     return null
+  }
+}
+
+// ── Helper: send DM notification to a specific WebSocket session ──────────────
+function sendDmNotify(recipSession, senderName, senderId, preview, timestamp, msgId) {
+  if (recipSession?.ws?.readyState === 1) {
+    try {
+      recipSession.ws.send(JSON.stringify({
+        type: 'dm_notify',
+        from: senderName,
+        fromId: senderId,
+        preview: String(preview || '').slice(0, 100),
+        timestamp,
+        msgId,
+      }))
+    } catch {}
   }
 }
 
@@ -8782,21 +9497,36 @@ async function ytDlpCookiesArgs() {
 }
 
 // Anti-bot / anti-IP-block args for yt-dlp.
-// YouTube actively blocks data-center IPs (Vercel/AWS) with "Sign in to
-// confirm" challenges. These flags rotate player clients (android first,
-// then ios, then web — android usually bypasses sign-in), spoof a recent
-// browser User-Agent, retry transient errors, and avoid HLS-only formats
-// where possible. Applied to every yt-dlp invocation.
-const YT_DLP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-function ytDlpAntiBotArgs() {
+// Updated to 2026 browser versions. Combined multi-client is most reliable:
+// yt-dlp tries android→ios→web internally for one request.
+const YT_DLP_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+]
+let _uaIdx = 0
+const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
+function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
+
+// Client rotation order for multi-attempt retry
+const YT_DLP_CLIENTS = [
+  'android,ios,web',
+  'tv_embedded',
+  'web_creator',
+]
+
+function ytDlpAntiBotArgs(clientIdx = 0) {
+  const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
   return [
-    '--extractor-args', 'youtube:player_client=android,ios,web',
-    '--user-agent', YT_DLP_USER_AGENT,
+    '--extractor-args', `youtube:player_client=${client}`,
+    '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
     '--retries', '3',
     '--fragment-retries', '3',
-    '--socket-timeout', '20',
+    '--socket-timeout', '25',
+    '--sleep-requests', '0.5',
   ]
 }
 
@@ -10526,7 +11256,7 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
 // nadir-downloader.vercel.app). Bypasses YouTube bot detection on
 // serverless because the actual extraction runs on ytdown.to's workers.
 // Returns: { title, thumbnail, items: [{ type, quality, format, url, size, task, mediaUrl }] }
-const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+const _YTDOWN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
 const _YTDOWN_MAX_API_RETRIES = 2
 const _YTDOWN_MAX_POLL_ATTEMPTS = 12
 const _YTDOWN_POLL_DELAY_MS = 1500
@@ -10654,6 +11384,120 @@ async function resolveYtdownDirectUrl(item) {
   return { url: polled.fileUrl, size: polled.fileSize || item.size }
 }
 
+// ── PRIMARY yt-dlp downloader ─────────────────────────────────────────────────
+// Downloads to a temp file via yt-dlp then streams it to the client.
+// Returns true  → response was fully handled (success or client disconnected).
+// Returns false → yt-dlp failed BEFORE writing any response headers so the
+//                 caller can fall through to external-service fallbacks.
+async function tryYtdlpDownloadToClient(req, res, url, format, h) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) return false
+
+  const hasFfmpeg = await ffmpegAvailable()
+  const cookies   = await ytDlpCookiesArgs()
+  const isAudio   = format === 'mp3' || format === 'audio'
+  const vid       = extractYouTubeVideoId(url) || 'video'
+  const initialExt = format === 'mp3' ? 'mp3' : (format === 'audio' ? 'm4a' : 'mp4')
+
+  // Resolve title in background (only for filename, doesn't block download)
+  const titlePromise = fetch(
+    `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+    { headers: { 'User-Agent': YT_DLP_USER_AGENT }, signal: AbortSignal.timeout(6000) }
+  ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
+
+  function buildArgs(clientIdx) {
+    const antiBot = ytDlpAntiBotArgs(clientIdx)
+    let args, mime
+    if (format === 'mp3' && hasFfmpeg) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mpeg'
+    } else if (isAudio && hasFfmpeg) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'm4a',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mp4'
+    } else if (isAudio) {
+      args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'audio/mp4'
+    } else if (hasFfmpeg) {
+      const fmt = `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${h}]+bestaudio/best[height<=${h}][ext=mp4]/best[height<=${h}]/22/18`
+      args = ['-f', fmt, '--merge-output-format', 'mp4',
+              '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'video/mp4'
+    } else {
+      const fmt = `best[ext=mp4][acodec!=none][vcodec!=none][height<=${h}]/best[ext=mp4][acodec!=none][vcodec!=none]/22/18`
+      args = ['-f', fmt, '--no-playlist', '--no-warnings', ...antiBot, ...cookies]
+      mime = 'video/mp4'
+    }
+    return { args, mime }
+  }
+
+  // ── Multi-client retry loop ─────────────────────────────────────
+  for (let ci = 0; ci < YT_DLP_CLIENTS.length; ci++) {
+    if (res.writableEnded || res.headersSent) return true
+    const outPath = tmpFile(initialExt)
+    const { args, mime } = buildArgs(ci)
+    const fullArgs = [...args, '-o', outPath, url]
+
+    console.log(`[DZTube:dlp] attempt ci=${ci} client=${YT_DLP_CLIENTS[ci]} format=${format} ffmpeg=${hasFfmpeg}`)
+
+    const result = await new Promise((resolve) => {
+      const TIMEOUT_MS = 5 * 60 * 1000
+      const proc = spawn(dlpBin, fullArgs)
+      let stderrBuf = '', clientGone = false
+
+      const timer = setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch {}
+        safeUnlink(outPath)
+        resolve({ ok: false, stderr: 'timeout', clientGone: false })
+      }, TIMEOUT_MS)
+
+      const onClose = () => {
+        clientGone = true
+        try { proc.kill('SIGTERM') } catch {}
+        safeUnlink(outPath)
+      }
+      req.on('close', onClose)
+
+      proc.stderr.on('data', d => { stderrBuf += d.toString() })
+      proc.on('error', err => {
+        clearTimeout(timer); req.off('close', onClose); safeUnlink(outPath)
+        resolve({ ok: false, stderr: err.message, clientGone: false })
+      })
+      proc.on('close', async code => {
+        clearTimeout(timer); req.off('close', onClose)
+        if (clientGone) return resolve({ ok: false, clientGone: true })
+        if (code !== 0) {
+          safeUnlink(outPath)
+          return resolve({ ok: false, stderr: stderrBuf, clientGone: false })
+        }
+        try {
+          const st = fs.statSync(outPath)
+          if (st.size === 0) { safeUnlink(outPath); return resolve({ ok: false, stderr: 'empty file', clientGone: false }) }
+        } catch { return resolve({ ok: false, stderr: 'missing output', clientGone: false }) }
+        resolve({ ok: true, stderr: '' })
+      })
+    })
+
+    if (result.clientGone) return true  // client left, treated as handled
+    if (result.ok) {
+      const rawTitle = await Promise.race([titlePromise, Promise.resolve(null)])
+      const safeTitle = (rawTitle || vid).replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vid
+      const downloadName = isAudio ? `${safeTitle}.${initialExt}` : `${safeTitle}_${h}p.${initialExt}`
+      console.log(`[DZTube:dlp] ✓ ci=${ci} → ${downloadName}`)
+      streamFileToClient(req, res, outPath, mime, downloadName)
+      return true
+    }
+
+    console.warn(`[DZTube:dlp] ci=${ci} failed: ${result.stderr?.replace(/\n/g, ' ').slice(0, 300)}`)
+    // Back off before next client (except last)
+    if (ci < YT_DLP_CLIENTS.length - 1) await new Promise(r => setTimeout(r, 1500 + ci * 1000))
+  }
+
+  return false  // all clients failed — caller tries external fallbacks
+}
+
 // Stream a buffered file to the client with Content-Length and cleanup
 function streamFileToClient(req, res, filePath, mime, downloadName) {
   fs.stat(filePath, (err, st) => {
@@ -10683,7 +11527,15 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const h = DZ_TUBE_QUALITY_MAP[quality] || 720
   const isAudio = format === 'mp3' || format === 'audio'
 
-  // ── Multi-source resolver ─────────────────────────────────────────────
+  // ── PRIMARY: yt-dlp (fastest & most reliable when available) ─────────
+  // We try this FIRST. External services (ytdown.to / Invidious / Piped)
+  // are only used when yt-dlp is not installed (e.g. serverless Vercel).
+  const primaryOk = await tryYtdlpDownloadToClient(req, res, url, format, h)
+  if (primaryOk) return
+  if (res.headersSent) return  // partial write — nothing more we can do
+  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying external services')
+
+  // ── FALLBACK: Multi-source resolver ───────────────────────────────────
   // Capability matrix (refreshed 2026-04-24):
   //   • ytdown.to  → MP4 (any height), M4A audio, MP3 audio  ✅ all formats
   //   • Piped      → ONLY audio-only streams (M4A/WebM). Their video URLs
@@ -10941,6 +11793,12 @@ app.post('/api/chat-room/send', async (req, res) => {
   const { sessionId, text, dmTo, dmToName } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
+  const muteInfo = mutedUsers.get(sessionId)
+  if (muteInfo && Date.now() < muteInfo.until) {
+    const remainSec = Math.ceil((muteInfo.until - Date.now()) / 1000)
+    return res.status(403).json({ error: 'muted', remainSec })
+  }
+  if (muteInfo && Date.now() >= muteInfo.until) mutedUsers.delete(sessionId)
   const cleanText = sanitizeString(text, 1000).trim()
   if (!cleanText) return res.status(400).json({ error: 'Empty message' })
   session.lastSeen = Date.now()
@@ -10948,12 +11806,16 @@ app.post('/api/chat-room/send', async (req, res) => {
     id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
+    isAdmin: !!session.isAdmin,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
     const json = JSON.stringify({ type: 'message', msg })
     if (session.ws?.readyState === 1) session.ws.send(json)
-    if (recip?.ws?.readyState === 1) recip.ws.send(json)
+    if (recip?.ws?.readyState === 1) {
+      recip.ws.send(json)
+      sendDmNotify(recip, session.name, session.id, cleanText, msg.timestamp, msg.id)
+    }
   } else {
     broadcastChat({ type: 'message', msg })
   }
@@ -10986,11 +11848,31 @@ app.post('/api/chat-room/admin', (req, res) => {
     const target = chatSessions.get(targetId)
     if (target?.ws?.readyState === 1) target.ws.close()
     chatSessions.delete(targetId)
+    mutedUsers.delete(targetId)
     broadcastChat({ type: 'blocked', userId: targetId })
     broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  } else if (action === 'mute' && targetId) {
+    const durationMs = Number(req.body.durationMs) || 5 * 60 * 1000
+    const until = Date.now() + durationMs
+    mutedUsers.set(targetId, { until, durationMs })
+    const target = chatSessions.get(targetId)
+    if (target?.ws?.readyState === 1) target.ws.send(JSON.stringify({ type: 'muted', until, durationMs }))
+    broadcastChat({ type: 'muteUpdate', userId: targetId, until })
+  } else if (action === 'unmute' && targetId) {
+    mutedUsers.delete(targetId)
+    broadcastChat({ type: 'muteUpdate', userId: targetId, until: 0 })
   } else if (action === 'highlight' && msgId) {
     const m = chatMessages.find(m => m.id === msgId)
     if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+  } else if (action === 'pin' && msgId) {
+    const m = chatMessages.find(m => m.id === msgId)
+    if (m) {
+      pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+      broadcastChat({ type: 'pinUpdate', pinnedMessage })
+    }
+  } else if (action === 'unpin') {
+    pinnedMessage = null
+    broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
   }
   res.json({ ok: true })
 })
@@ -11011,14 +11893,21 @@ function setupChatWebSocket(httpServer) {
           const isAdmin = adminSecret === CHAT_ADMIN_SECRET
           chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws })
           const session = chatSessions.get(id)
-          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() }))
-          const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} joined the chat.`, timestamp: Date.now(), isSystem: true })
+          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers(), pinnedMessage }))
+          const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: isAdmin ? 'انضم إلى الدردشة' : `${session.name} انضم إلى الدردشة`, timestamp: Date.now(), isSystem: true, isAdminAnnounce: !!isAdmin })
           broadcastChat({ type: 'message', msg: joinMsg }, ws)
           ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
         } else if (data.type === 'message') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session) return
+          const muteEntry = mutedUsers.get(sid)
+          if (muteEntry && Date.now() < muteEntry.until) {
+            const remainSec = Math.ceil((muteEntry.until - Date.now()) / 1000)
+            ws.send(JSON.stringify({ type: 'muted', until: muteEntry.until, remainSec }))
+            return
+          }
+          if (muteEntry && Date.now() >= muteEntry.until) mutedUsers.delete(sid)
           session.lastSeen = Date.now()
           const cleanText = sanitizeString(data.text, 1000).trim()
           if (!cleanText) return
@@ -11026,12 +11915,16 @@ function setupChatWebSocket(httpServer) {
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
+            isAdmin: !!session.isAdmin,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
             const json = JSON.stringify({ type: 'message', msg })
             ws.send(json)
-            if (recip?.ws?.readyState === 1) recip.ws.send(json)
+            if (recip?.ws?.readyState === 1) {
+              recip.ws.send(json)
+              sendDmNotify(recip, session.name, session.id, cleanText, msg.timestamp, msg.id)
+            }
           } else {
             broadcastChat({ type: 'message', msg })
           }
@@ -11053,11 +11946,31 @@ function setupChatWebSocket(httpServer) {
             const target = chatSessions.get(data.targetId)
             if (target?.ws?.readyState === 1) target.ws.close()
             chatSessions.delete(data.targetId)
+            mutedUsers.delete(data.targetId)
             broadcastChat({ type: 'blocked', userId: data.targetId })
             broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+          } else if (data.action === 'mute' && data.targetId) {
+            const durationMs = Number(data.durationMs) || 5 * 60 * 1000
+            const until = Date.now() + durationMs
+            mutedUsers.set(data.targetId, { until, durationMs })
+            const target = chatSessions.get(data.targetId)
+            if (target?.ws?.readyState === 1) target.ws.send(JSON.stringify({ type: 'muted', until, durationMs }))
+            broadcastChat({ type: 'muteUpdate', userId: data.targetId, until })
+          } else if (data.action === 'unmute' && data.targetId) {
+            mutedUsers.delete(data.targetId)
+            broadcastChat({ type: 'muteUpdate', userId: data.targetId, until: 0 })
           } else if (data.action === 'highlight' && data.msgId) {
             const m = chatMessages.find(m => m.id === data.msgId)
             if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+          } else if (data.action === 'pin' && data.msgId) {
+            const m = chatMessages.find(m => m.id === data.msgId)
+            if (m) {
+              pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+              broadcastChat({ type: 'pinUpdate', pinnedMessage })
+            }
+          } else if (data.action === 'unpin') {
+            pinnedMessage = null
+            broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }
@@ -11067,7 +11980,7 @@ function setupChatWebSocket(httpServer) {
         const session = chatSessions.get(sid)
         if (session) {
           chatSessions.delete(sid)
-          const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} left the chat.`, timestamp: Date.now(), isSystem: true })
+          const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} غادر الدردشة`, timestamp: Date.now(), isSystem: true })
           broadcastChat({ type: 'message', msg: leaveMsg })
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
         }
@@ -11141,12 +12054,63 @@ try {
   console.warn('[dz-agent-v4] mount failed:', err.message)
 }
 
+// ===== DESIGN INTELLIGENCE LAYER (additive — no existing routes changed) =====
+// Endpoints: /api/dz-design/{health,analyze,tokens,generate-design-md,generate-page,improve,memory}
+try {
+  mountDesignIntelligence(app, {
+    safeGenerateAI: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-design] mount failed:', err.message)
+}
+
+// ===== DZ AGENT V5 — AUTONOMOUS AI OPERATING SYSTEM =====
+// Additive endpoints: /api/dz-v5/{health,task,chat,tasks,memory,models,tools,workspace}
+try {
+  mountDzAgentV5(app, {
+    safeGenerateAI: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-v5] mount failed:', err.message)
+}
+
 // ===== DZ TUBE ANALYTICS (mini-player events) =====
 // Additive endpoints: /api/dz-tube/analytics/{event,recent,stats}.
 try {
   mountDzTubeAnalytics(app)
 } catch (err) {
   console.warn('[dz-tube-analytics] mount failed:', err.message)
+}
+
+// ===== DZ TUBE DOWNLOAD V2 (stable download engine — additive only) =====
+// New endpoints: /api/dz-tube/v2/{health,info,download,mp3,audio-url,audio-proxy,queue,logs,cache/purge}
+try {
+  mountDownloadV2(app)
+} catch (err) {
+  console.warn('[dz-tube-v2] mount failed:', err.message)
+}
+
+// ===== YOUTUBE INSIGHT MODULE (plugin — additive only) =====
+// New endpoints: /api/youtube-insight/{health,analyze,search,discuss,video/:id}
+try {
+  mountYouTubeInsight(app, {
+    aiGenerate: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[youtube-insight] mount failed:', err.message)
+}
+
+// ===== CLONE ENGINE V2 (ultra website cloning — additive only) =====
+// New endpoints: /api/dz-agent/clone-v2, /api/dz-agent/clone-v2/stream
+try {
+  mountCloneEngineV2(app, ({ messages, max_tokens }) =>
+    safeGenerateAI({ messages, max_tokens })
+  )
+} catch (err) {
+  console.warn('[clone-engine-v2] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====
@@ -11156,61 +12120,79 @@ export { app }
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
-  setInterval(() => {
-    updateEddirasaIndex()
-      .then(index => console.log(`[Eddirasa] Scheduled index update complete: ${index.lessons.length} lessons`))
-      .catch(err => console.warn('[Eddirasa] Scheduled index update failed:', err.message))
-  }, 24 * 60 * 60 * 1000)
+  // ── Resilience: scheduleOnce prevents overlapping background jobs ─────────
+  scheduleOnce(
+    () => updateEddirasaIndex()
+      .then(index => console.log(`[Eddirasa] index update: ${index.lessons.length} lessons`))
+      .catch(err => console.warn('[Eddirasa] index update failed:', err.message)),
+    24 * 60 * 60 * 1000,
+    { label: 'eddirasa-index' }
+  )
 
-  // Task 6 — Resource Injection Layer: weekly cron
+  // Task 6 — Resource Injection Layer: weekly cron (no-overlap)
   fetchAndCacheResources()
     .then(r => console.log(`[Resources] Initial injection: ${Object.keys(r).length} categories`))
     .catch(err => console.warn('[Resources] Initial injection failed:', err.message))
-  setInterval(() => {
-    RESOURCE_CACHE.ts = 0 // force refresh
-    fetchAndCacheResources()
-      .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
-      .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
-  }, 7 * 24 * 60 * 60 * 1000)
+  scheduleOnce(
+    () => {
+      RESOURCE_CACHE.ts = 0
+      return fetchAndCacheResources()
+        .then(r => console.log(`[Resources] Weekly refresh: ${Object.keys(r).length} categories`))
+        .catch(err => console.warn('[Resources] Weekly refresh failed:', err.message))
+    },
+    7 * 24 * 60 * 60 * 1000,
+    { label: 'resources-refresh' }
+  )
 
   // ── Task 22: Smart Preloading — warm caches on startup ──────────
   setTimeout(() => {
     preloadEssentialData().catch(err => console.warn('[Preload] Startup preload error:', err.message))
   }, 2000)
 
-  // ── Task 16: Auto-Refresh — silent background refresh (5-10 min) ─
+  // ── Task 16: Auto-Refresh — silent background refresh using scheduleOnce ──
+  // scheduleOnce ensures next run only starts AFTER previous completes — no pile-up
   const AUTO_REFRESH_INTERVAL = 7 * 60 * 1000 // 7 minutes
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing weather caches...')
     const cities = ['Algiers', 'Oran', 'Constantine', 'Annaba', 'Setif']
-    for (const city of cities) {
+    await Promise.allSettled(cities.map(city => {
       WEATHER_CACHE_V2.invalidate(city.toLowerCase())
-      fetchCityWeatherResilient(city)
+      return fetchCityWeatherResilient(city)
         .then(d => console.log(`[AutoRefresh] Weather ${city}: ${d?.temp}°C`))
         .catch(err => console.warn(`[AutoRefresh] Weather ${city} failed:`, err.message))
-    }
-  }, AUTO_REFRESH_INTERVAL)
+    }))
+  }, AUTO_REFRESH_INTERVAL, { label: 'weather-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing currency...')
-    fetchCurrencyResilient(true)
+    await fetchCurrencyResilient(true)
       .then(d => console.log(`[AutoRefresh] Currency: ${d?.provider} (${Object.keys(d?.rates || {}).length} pairs)`))
       .catch(err => console.warn('[AutoRefresh] Currency failed:', err.message))
-  }, AUTO_REFRESH_INTERVAL + 60000) // offset by 1 min from weather
+  }, AUTO_REFRESH_INTERVAL + 60000, { label: 'currency-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing LFP matches...')
     SPORTS_CACHE_V2.invalidate('lfp')
-    fetchLFPData()
+    await fetchLFPData()
       .then(d => console.log(`[AutoRefresh] LFP: ${d?.matches?.length} matches`))
       .catch(err => console.warn('[AutoRefresh] LFP failed:', err.message))
-  }, 10 * 60 * 1000) // 10 min
+  }, 10 * 60 * 1000, { label: 'lfp-refresh' })
 
-  setInterval(() => {
+  scheduleOnce(() => {
     console.log('[AutoRefresh] Refreshing standings...')
-    STANDINGS_CACHE.ts = 0 // force refresh on next request
-  }, 25 * 60 * 1000) // 25 min
+    STANDINGS_CACHE.ts = 0
+  }, 25 * 60 * 1000, { label: 'standings-refresh' })
+
+  // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
+  scheduleOnce(() => {
+    aiDeduplicator.prune()
+    fetchDeduplicator.prune()
+    if (Math.random() < 0.3) { // log health snapshot 30% of the time
+      const snap = systemHealthSnapshot()
+      console.log(`[Health] mem:${snap.memory.heapUsedMB}MB | ai-sem:${snap.semaphores[0]?.running}/${snap.semaphores[0]?.max} | groq:${snap.circuits[0]?.state}`)
+    }
+  }, 10 * 60 * 1000, { label: 'resilience-housekeeping' })
 
   // (mountSmartAgent + mountDzAgentV2 already mounted above so they also
   // attach on Vercel serverless. Keeping background-refresh / intervals here.)

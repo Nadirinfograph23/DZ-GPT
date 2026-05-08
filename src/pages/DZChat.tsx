@@ -262,6 +262,8 @@ export default function DZChat() {
       try {
         const data = JSON.parse(e.data)
         if (data.type === 'welcome') {
+          // ← Update sessionIdRef to the WS session ID (server creates a NEW ID for WS)
+          if (data.sessionId) sessionIdRef.current = data.sessionId
           const histIds = new Set(historyMessages.map(m => m.id))
           const fresh = (data.messages || []).filter((m: ChatMessage) => !histIds.has(m.id))
           addMessages([...historyMessages, ...fresh])
@@ -453,6 +455,7 @@ export default function DZChat() {
             isDM: isDmSend,
             dmTo: dmTarget?.id,
             dmToName: dmTarget?.name,
+            isAdmin: !!localUser!.isAdmin,
           }
           const toAdd: ChatMessage[] = [myMsg]
           if (d.botMsg) {
@@ -724,14 +727,28 @@ export default function DZChat() {
                 >
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
-                    <span
-                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''} ${msg.isAdmin || msg.isHighlighted ? 'dzc-msg-from--admin' : ''}`}
-                      onClick={(e) => handleMsgSenderClick(e, msg)}
-                      title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
-                    >
-                      {msg.isHighlighted ? ADMIN_NAME : msg.from}
-                      {(msg.isAdmin || msg.isHighlighted) && !msg.isBot && <VerifiedBadge size={14} />}
-                    </span>
+                    {(() => {
+                      // isMsgAdmin: true when the sender is an admin
+                      // After sessionIdRef fix, isMe is now accurate for WS sessions too
+                      const isMsgAdmin = !!(
+                        msg.isAdmin ||
+                        msg.isHighlighted ||
+                        (isMe && localUser?.isAdmin) ||
+                        onlineUsers.find(u => u.id === msg.fromId)?.isAdmin
+                      ) && !msg.isBot
+                      return (
+                        <>
+                          <span
+                            className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''} ${isMsgAdmin ? 'dzc-msg-from--admin' : ''}`}
+                            onClick={(e) => handleMsgSenderClick(e, msg)}
+                            title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
+                          >
+                            {msg.isHighlighted ? ADMIN_NAME : msg.from}
+                          </span>
+                          {isMsgAdmin && <VerifiedBadge size={14} />}
+                        </>
+                      )
+                    })()}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}
                     {msg.triggeredBy && <span className="dzc-msg-triggered">↩ {msg.triggeredBy}</span>}

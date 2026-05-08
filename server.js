@@ -9253,6 +9253,7 @@ app.post('/api/dz-agent/github/stats', async (req, res) => {
 // ===== CHAT ROOM — IN-MEMORY STATE =====
 const chatMessages = []
 const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
+const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
 
@@ -11790,6 +11791,12 @@ app.post('/api/chat-room/send', async (req, res) => {
   const { sessionId, text, dmTo, dmToName } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
+  const muteInfo = mutedUsers.get(sessionId)
+  if (muteInfo && Date.now() < muteInfo.until) {
+    const remainSec = Math.ceil((muteInfo.until - Date.now()) / 1000)
+    return res.status(403).json({ error: 'muted', remainSec })
+  }
+  if (muteInfo && Date.now() >= muteInfo.until) mutedUsers.delete(sessionId)
   const cleanText = sanitizeString(text, 1000).trim()
   if (!cleanText) return res.status(400).json({ error: 'Empty message' })
   session.lastSeen = Date.now()
@@ -11839,8 +11846,19 @@ app.post('/api/chat-room/admin', (req, res) => {
     const target = chatSessions.get(targetId)
     if (target?.ws?.readyState === 1) target.ws.close()
     chatSessions.delete(targetId)
+    mutedUsers.delete(targetId)
     broadcastChat({ type: 'blocked', userId: targetId })
     broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  } else if (action === 'mute' && targetId) {
+    const durationMs = Number(req.body.durationMs) || 5 * 60 * 1000
+    const until = Date.now() + durationMs
+    mutedUsers.set(targetId, { until, durationMs })
+    const target = chatSessions.get(targetId)
+    if (target?.ws?.readyState === 1) target.ws.send(JSON.stringify({ type: 'muted', until, durationMs }))
+    broadcastChat({ type: 'muteUpdate', userId: targetId, until })
+  } else if (action === 'unmute' && targetId) {
+    mutedUsers.delete(targetId)
+    broadcastChat({ type: 'muteUpdate', userId: targetId, until: 0 })
   } else if (action === 'highlight' && msgId) {
     const m = chatMessages.find(m => m.id === msgId)
     if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
@@ -11872,6 +11890,13 @@ function setupChatWebSocket(httpServer) {
         } else if (data.type === 'message') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session) return
+          const muteEntry = mutedUsers.get(sid)
+          if (muteEntry && Date.now() < muteEntry.until) {
+            const remainSec = Math.ceil((muteEntry.until - Date.now()) / 1000)
+            ws.send(JSON.stringify({ type: 'muted', until: muteEntry.until, remainSec }))
+            return
+          }
+          if (muteEntry && Date.now() >= muteEntry.until) mutedUsers.delete(sid)
           session.lastSeen = Date.now()
           const cleanText = sanitizeString(data.text, 1000).trim()
           if (!cleanText) return
@@ -11910,8 +11935,19 @@ function setupChatWebSocket(httpServer) {
             const target = chatSessions.get(data.targetId)
             if (target?.ws?.readyState === 1) target.ws.close()
             chatSessions.delete(data.targetId)
+            mutedUsers.delete(data.targetId)
             broadcastChat({ type: 'blocked', userId: data.targetId })
             broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+          } else if (data.action === 'mute' && data.targetId) {
+            const durationMs = Number(data.durationMs) || 5 * 60 * 1000
+            const until = Date.now() + durationMs
+            mutedUsers.set(data.targetId, { until, durationMs })
+            const target = chatSessions.get(data.targetId)
+            if (target?.ws?.readyState === 1) target.ws.send(JSON.stringify({ type: 'muted', until, durationMs }))
+            broadcastChat({ type: 'muteUpdate', userId: data.targetId, until })
+          } else if (data.action === 'unmute' && data.targetId) {
+            mutedUsers.delete(data.targetId)
+            broadcastChat({ type: 'muteUpdate', userId: data.targetId, until: 0 })
           } else if (data.action === 'highlight' && data.msgId) {
             const m = chatMessages.find(m => m.id === data.msgId)
             if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Highlighter, Copy, Check, Mail,
+  MoreVertical, Highlighter, Copy, Check, Mail, VolumeX, Volume2,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -124,6 +124,10 @@ export default function DZChat() {
 
   const [msgMenu, setMsgMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null)
   const [userMenu, setUserMenu] = useState<{ user: ChatUser; x: number; y: number } | null>(null)
+  const [muteMenu, setMuteMenu] = useState<{ targetId: string; targetName: string } | null>(null)
+  const [mutedMap, setMutedMap] = useState<Record<string, number>>({})  // userId → until timestamp
+  const [muteToast, setMuteToast] = useState<{ until: number } | null>(null)
+  const muteToastTimerRef = useRef<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
 
   // @ mention suggestion state
@@ -231,6 +235,17 @@ export default function DZChat() {
         alert('تم حظرك من غرفة الدردشة.')
         handleLogout()
       }
+    } else if (data.type === 'muted') {
+      if (muteToastTimerRef.current) clearTimeout(muteToastTimerRef.current)
+      setMuteToast({ until: Number(data.until) })
+      muteToastTimerRef.current = window.setTimeout(() => setMuteToast(null), 8000)
+    } else if (data.type === 'muteUpdate') {
+      const uid = data.userId as string
+      const until = Number(data.until)
+      setMutedMap(prev => {
+        if (until === 0) { const next = { ...prev }; delete next[uid]; return next }
+        return { ...prev, [uid]: until }
+      })
     }
   }, [addMessages, showDmToast])
 
@@ -485,21 +500,34 @@ export default function DZChat() {
 
   const clearChat = () => setMessages([])
 
-  const adminAction = async (action: string, targetId?: string, msgId?: string) => {
+  const adminAction = async (action: string, targetId?: string, msgId?: string, durationMs?: number) => {
     if (!sessionIdRef.current) return
     try {
       if (wsRef.current?.readyState === 1) {
-        wsRef.current.send(JSON.stringify({ type: 'admin', action, targetId, msgId }))
+        wsRef.current.send(JSON.stringify({ type: 'admin', action, targetId, msgId, durationMs }))
       } else {
         await fetch('/api/chat-room/admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionIdRef.current, action, targetId, msgId }),
+          body: JSON.stringify({ sessionId: sessionIdRef.current, action, targetId, msgId, durationMs }),
         })
       }
     } catch {}
     setMsgMenu(null)
     setUserMenu(null)
+    setMuteMenu(null)
+  }
+
+  const handleMuteClick = (targetId: string, targetName: string) => {
+    setUserMenu(null)
+    setMsgMenu(null)
+    setMuteMenu({ targetId, targetName })
+  }
+
+  const applyMute = (durationMs: number) => {
+    if (!muteMenu) return
+    adminAction('mute', muteMenu.targetId, undefined, durationMs)
+    setMuteMenu(null)
   }
 
   // Copy bot message to clipboard
@@ -534,8 +562,16 @@ export default function DZChat() {
   const handleRootClick = () => {
     setMsgMenu(null)
     setUserMenu(null)
+    setMuteMenu(null)
     setAtDropdown(false)
     setDmNotifOpen(false)
+  }
+
+  const formatMuteRemain = (until: number) => {
+    const sec = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+    if (sec >= 3600) return `${Math.ceil(sec / 3600)} ساعة`
+    if (sec >= 60) return `${Math.ceil(sec / 60)} دقيقة`
+    return `${sec} ثانية`
   }
 
   if (!localUser) {
@@ -668,25 +704,29 @@ export default function DZChat() {
           </div>
           <div className="dzc-sidebar-count">{onlineCount || onlineUsers.length} متصل</div>
           <div className="dzc-users-list">
-            {onlineUsers.map(u => (
-              <div
-                key={u.id}
-                className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''}`}
-                onClick={(e) => {
-                  if (u.id === sessionIdRef.current) return
-                  e.stopPropagation()
-                  setUserMenu({ user: u, x: e.clientX, y: e.clientY })
-                }}
-              >
-                {genderIcon(u.gender)}
-                <span className={`dzc-user-name ${u.isAdmin ? 'dzc-user-name--admin' : ''}`}>{u.name}</span>
-                {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
-                {u.isAdmin && <VerifiedBadge size={13} />}
-                {localUser.isAdmin && u.id !== sessionIdRef.current && (
-                  <ChevronRight size={12} className="dzc-user-arrow" />
-                )}
-              </div>
-            ))}
+            {onlineUsers.map(u => {
+              const isMuted = mutedMap[u.id] && mutedMap[u.id] > Date.now()
+              return (
+                <div
+                  key={u.id}
+                  className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''} ${isMuted ? 'dzc-user-item--muted' : ''}`}
+                  onClick={(e) => {
+                    if (u.id === sessionIdRef.current) return
+                    e.stopPropagation()
+                    setUserMenu({ user: u, x: e.clientX, y: e.clientY })
+                  }}
+                >
+                  {genderIcon(u.gender)}
+                  <span className={`dzc-user-name ${u.isAdmin ? 'dzc-user-name--admin' : ''}`}>{u.name}</span>
+                  {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
+                  {u.isAdmin && <VerifiedBadge size={13} />}
+                  {isMuted && <span className="dzc-user-muted-badge" title={`مكتوم — ${formatMuteRemain(mutedMap[u.id])}`}><VolumeX size={11} /></span>}
+                  {localUser.isAdmin && u.id !== sessionIdRef.current && (
+                    <ChevronRight size={12} className="dzc-user-arrow" />
+                  )}
+                </div>
+              )
+            })}
           </div>
         </aside>
 
@@ -926,16 +966,27 @@ export default function DZChat() {
       {userMenu && (
         <div
           className="dzc-context-menu"
-          style={{ top: Math.min(userMenu.y, window.innerHeight - 140), left: Math.max(8, Math.min(userMenu.x, window.innerWidth - 200)) }}
+          style={{ top: Math.min(userMenu.y, window.innerHeight - 180), left: Math.max(8, Math.min(userMenu.x, window.innerWidth - 200)) }}
           onClick={e => e.stopPropagation()}
         >
           <button className="dzc-context-item" onClick={() => { setDmTarget(userMenu.user); setSidebarOpen(false); setUserMenu(null); inputRef.current?.focus() }}>
             <MessageCircle size={13} /> إرسال رسالة خاصة
           </button>
           {localUser.isAdmin && (
-            <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', userMenu.user.id)}>
-              <Shield size={13} /> حظر المستخدم
-            </button>
+            <>
+              {mutedMap[userMenu.user.id] && mutedMap[userMenu.user.id] > Date.now() ? (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => adminAction('unmute', userMenu.user.id)}>
+                  <Volume2 size={13} /> رفع الكتم
+                </button>
+              ) : (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => handleMuteClick(userMenu.user.id, userMenu.user.name)}>
+                  <VolumeX size={13} /> كتم مؤقت
+                </button>
+              )}
+              <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', userMenu.user.id)}>
+                <Shield size={13} /> حظر دائم
+              </button>
+            </>
           )}
         </div>
       )}
@@ -944,7 +995,7 @@ export default function DZChat() {
       {msgMenu && localUser.isAdmin && (
         <div
           className="dzc-context-menu"
-          style={{ top: Math.min(msgMenu.y, window.innerHeight - 150), left: Math.max(8, Math.min(msgMenu.x, window.innerWidth - 210)) }}
+          style={{ top: Math.min(msgMenu.y, window.innerHeight - 180), left: Math.max(8, Math.min(msgMenu.x, window.innerWidth - 210)) }}
           onClick={e => e.stopPropagation()}
         >
           <button className="dzc-context-item" onClick={() => adminAction('highlight', undefined, msgMenu.msg.id)}>
@@ -954,10 +1005,46 @@ export default function DZChat() {
             <Trash2 size={13} /> حذف الرسالة
           </button>
           {msgMenu.msg.fromId !== 'bot' && msgMenu.msg.fromId !== 'system' && (
-            <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', msgMenu.msg.fromId)}>
-              <Shield size={13} /> حظر المرسل
-            </button>
+            <>
+              {mutedMap[msgMenu.msg.fromId] && mutedMap[msgMenu.msg.fromId] > Date.now() ? (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => adminAction('unmute', msgMenu.msg.fromId)}>
+                  <Volume2 size={13} /> رفع الكتم
+                </button>
+              ) : (
+                <button className="dzc-context-item dzc-context-item--warn" onClick={() => handleMuteClick(msgMenu.msg.fromId, msgMenu.msg.from)}>
+                  <VolumeX size={13} /> كتم مؤقت
+                </button>
+              )}
+              <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('block', msgMenu.msg.fromId)}>
+                <Shield size={13} /> حظر دائم
+              </button>
+            </>
           )}
+        </div>
+      )}
+
+      {/* ===== MUTE DURATION PICKER ===== */}
+      {muteMenu && (
+        <div className="dzc-mute-picker" onClick={e => e.stopPropagation()}>
+          <div className="dzc-mute-picker-title">
+            <VolumeX size={14} /> كتم: <strong>{muteMenu.targetName}</strong>
+          </div>
+          <div className="dzc-mute-picker-label">اختر مدة الكتم</div>
+          <div className="dzc-mute-durations">
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(5 * 60 * 1000)}>5 دقائق</button>
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(30 * 60 * 1000)}>30 دقيقة</button>
+            <button className="dzc-mute-dur-btn" onClick={() => applyMute(60 * 60 * 1000)}>ساعة</button>
+          </div>
+          <button className="dzc-mute-cancel" onClick={() => setMuteMenu(null)}>إلغاء</button>
+        </div>
+      )}
+
+      {/* ===== MUTE TOAST (shown to muted user) ===== */}
+      {muteToast && (
+        <div className="dzc-mute-toast">
+          <VolumeX size={15} />
+          <span>أنت مكتوم — ينتهي خلال {formatMuteRemain(muteToast.until)}</span>
+          <button onClick={() => setMuteToast(null)}><X size={12} /></button>
         </div>
       )}
     </div>

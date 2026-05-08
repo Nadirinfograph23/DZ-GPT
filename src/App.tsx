@@ -895,6 +895,10 @@ function App() {
                 <Wand2 size={14} />
                 <span>Design Intelligence</span>
               </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/agent-v5'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <Bot size={14} />
+                <span>DZ Agent V5</span>
+              </button>
             </div>
           )}
         </div>

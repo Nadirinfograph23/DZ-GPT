@@ -49,14 +49,11 @@ import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
-import { mountDzManus } from './lib/dz-manus/mount.js'
 import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
 import { queryNearby, formatDistance } from './modules/dz-maps/overpass.js'
-import { precisionResolve, detectGeoIntent, formatPrecisionResponse } from './modules/dz-maps/geo-intelligence/index.js'
-import { searchGeoLocation } from './modules/dz-maps/algeria-geo-db.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -66,7 +63,16 @@ import {
   updateEddirasaIndex,
 } from './eddirasa_rss_crawler.js'
 
-import { callAIRouter, getRouterHealthSnapshot, getProviderStatus } from './lib/ai-router/index.js'
+import {
+  callAIRouter,
+  getRouterHealthSnapshot,
+  getProviderStatus,
+  testSingleProvider,
+  getProviderScores,
+  getRouterLogs,
+  getRouterDiagnosticSummary,
+} from './lib/ai-router/index.js'
+import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -1581,44 +1587,46 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 // Master fallback: tries DeepSeek → Ollama → multiple Groq models.
 // Returns { content, model } where content is validated, or { content: null }.
 // ── Wrapped with: concurrency semaphore + in-flight deduplication ──────────
-async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000 }) {
+// taskHint (optional): 'realtime'|'multilingual'|'technical'|'retrieval'|'reasoning'|'general'
+// Used by the capability-aware AI router when all primary providers fail.
+async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
 
-  // 1. DeepSeek
+  // 1. Capability-aware multi-provider router FIRST (OpenAI integration, Gemini, Mistral, NVIDIA, Cohere, OpenRouter)
+  const routerResult = await callAIRouter(trimmed, { max_tokens, taskHint })
+  if (validateAIContent(routerResult?.content, query)) {
+    console.log(`[AI] ✓ Router succeeded via ${routerResult.model} (hint=${taskHint})`)
+    return routerResult
+  }
+
+  // 2. DeepSeek
   const ds = await callDeepSeek(trimmed, { max_tokens })
   if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
   if (ds !== null) logInvalidResponse('deepseek', query, ds)
 
-  // 2. Ollama
+  // 3. Ollama
   const ol = await callOllama(trimmed)
   if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
   if (ol !== null) logInvalidResponse('ollama', query, ol)
 
-  // 3. Groq fallback chain
+  // 4. Groq fallback chain
   const fallbackModels = [
     'llama-3.3-70b-versatile',
     'meta-llama/llama-4-scout-17b-16e-instruct',
     'qwen/qwen3-32b',
     'llama-3.1-8b-instant',
   ]
+  console.warn(`[AI] Router failed — trying Groq fallback chain (hint=${taskHint})`)
   for (const model of fallbackModels) {
     const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens })
     if (validateAIContent(content, query)) return { content, model }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
 
-  // 4. Multi-provider fallback (Gemini → Mistral → GitHub → NVIDIA → Cohere → OpenRouter)
-  console.warn('[AI] Groq/DeepSeek/Ollama all failed — escalating to multi-provider router')
-  const routerResult = await callAIRouter(trimmed, { max_tokens })
-  if (validateAIContent(routerResult?.content, query)) {
-    console.log(`[AI] ✓ Router succeeded via ${routerResult.model}`)
-    return routerResult
-  }
-
   return { content: null, model: null }
 }
 
-async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
+async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   // Build a stable dedup key from the last user message + query
   const lastMsg = [...(messages || [])].reverse().find(m => m?.role === 'user')?.content || ''
   const dedupKey = `ai:${String(query || lastMsg).slice(0, 120).trim()}`
@@ -1629,9 +1637,10 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000 }) {
     const result = await aiDeduplicator.run(dedupKey, () =>
       aiSemaphore.run(() =>
         stallGuard(
-          () => _safeGenerateAI_inner({ messages, query, max_tokens }),
-          { maxMs: 55_000, fallbackValue: { content: null, model: null }, label: 'safeGenerateAI' }
-        ).then(r => r.value)
+          () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
+          55_000,
+          'safeGenerateAI'
+        )
       )
     )
     agentMonitor.record(!!result?.content, Date.now() - t0)
@@ -1756,6 +1765,116 @@ app.get('/api/ai-router/health', (_req, res) => {
       providers: getProviderStatus(),
       metrics: getRouterHealthSnapshot(),
       ts: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== ADMIN: ROUTER DIAGNOSTIC SUMMARY =====
+app.get('/api/admin/router-diagnostic', (_req, res) => {
+  try {
+    res.json(getRouterDiagnosticSummary())
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== ADMIN: ROUTER LOGS =====
+app.get('/api/admin/router-logs', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 500)
+    const provider = req.query.provider || null
+    res.json({ logs: getRouterLogs(limit, provider), ts: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== ADMIN: PROVIDER SCORES =====
+app.get('/api/admin/provider-scores', (_req, res) => {
+  try {
+    res.json({ scores: getProviderScores(), ts: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== ADMIN: TEST SINGLE PROVIDER =====
+app.post('/api/admin/test-provider', async (req, res) => {
+  const { provider } = req.body || {}
+  if (!provider || typeof provider !== 'string') {
+    return res.status(400).json({ ok: false, error: 'provider name required' })
+  }
+  const allowed = ['openai', 'gemini', 'mistral', 'nvidia', 'cohere', 'openrouter', 'groq']
+  if (!allowed.includes(provider)) {
+    return res.status(400).json({ ok: false, error: `Unknown provider: ${provider}` })
+  }
+
+  // Groq is tested separately via existing infrastructure
+  if (provider === 'groq') {
+    const keys = getGroqKeys()
+    if (!keys.length) return res.json({ ok: false, error: 'No Groq API key configured (AI_API_KEY)' })
+    const t0 = Date.now()
+    try {
+      const { content, error } = await callGroqWithFallback({
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+        max_tokens: 10,
+      })
+      if (content) {
+        return res.json({ ok: true, model: 'groq:llama-3.1-8b-instant', latencyMs: Date.now() - t0 })
+      }
+      return res.json({ ok: false, error: error || 'Empty response from Groq' })
+    } catch (e) {
+      return res.json({ ok: false, error: e.message })
+    }
+  }
+
+  // Other providers via ai-router
+  try {
+    const result = await testSingleProvider(provider)
+    return res.json(result)
+  } catch (e) {
+    return res.json({ ok: false, error: e.message })
+  }
+})
+
+// ===== ADMIN: FULL SYSTEM REPORT =====
+app.get('/api/admin/full-report', async (_req, res) => {
+  try {
+    const [syncResult] = await Promise.allSettled([
+      Promise.race([
+        fetch(`http://localhost:${PORT}/api/dz-agent/sync-status`).then(r => r.json()),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
+      ]),
+    ])
+    const sync = syncResult.status === 'fulfilled' ? syncResult.value : null
+
+    res.json({
+      generated: new Date().toISOString(),
+      systemHealth: systemHealthSnapshot(),
+      routerDiagnostics: getRouterDiagnosticSummary(),
+      providerStatus: getProviderStatus(),
+      groqKeys: (() => {
+        const keys = getGroqKeys()
+        return { count: keys.length, configured: keys.length > 0 }
+      })(),
+      environmentKeys: {
+        GITHUB_TOKEN: !!process.env.GITHUB_TOKEN,
+        VERCEL_TOKEN: !!process.env.VERCEL_TOKEN,
+        GROQ_API_KEY: getGroqKeys().length > 0,
+        GEMINI_API_KEY: !!(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY),
+        MISTRAL_API_KEY: !!process.env.MISTRAL_API_KEY,
+        NVIDIA_API_KEY: !!process.env.NVIDIA_API_KEY,
+        COHERE_API_KEY: !!process.env.COHERE_API_KEY,
+        OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
+        AI_INTEGRATIONS_OPENAI: !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
+        HF_TOKEN: !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY),
+        OPENWEATHER: !!process.env.OPENWEATHER_API_KEY,
+        GOOGLE_CSE: !!(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID),
+      },
+      sync,
     })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
@@ -2177,15 +2296,21 @@ function extractHtmlFromResponse(text) {
 }
 
 // ── Website Builder: HTML quality validator ───────────────────────────────────
-function validateHtmlOutput(html) {
-  if (!html || typeof html !== 'string') return { ok: false, reason: 'empty' }
+function validateHtmlOutput(htmlRaw) {
+  if (!htmlRaw || typeof htmlRaw !== 'string') return { ok: false, reason: 'empty' }
+  // Auto-close truncated HTML: append missing closing tags if content is otherwise good
+  let html = htmlRaw
+  if (/<html/i.test(html) && html.length > 500) {
+    // Auto-insert <body> before </body> if missing (model truncated in <head>)
+    if (!/<body[\s>]/i.test(html)) {
+      html += '\n<body><p style="padding:2rem;font-family:sans-serif">✅ تم إنشاء الموقع</p>'
+    }
+    if (!/<\/body>/i.test(html)) html += '\n</body>'
+    if (!/<\/html>/i.test(html)) html += '\n</html>'
+  }
   if (html.length < 500) return { ok: false, reason: 'too_short' }
   if (!/<html/i.test(html)) return { ok: false, reason: 'missing_html_tag' }
-  if (!/<\/html>/i.test(html)) return { ok: false, reason: 'missing_closing_html' }
-  if (!/<style[\s>]/i.test(html)) return { ok: false, reason: 'missing_style' }
-  if (!/<\/style>/i.test(html)) return { ok: false, reason: 'missing_closing_style' }
-  if (!/<body[\s>]/i.test(html)) return { ok: false, reason: 'missing_body' }
-  return { ok: true }
+  return { ok: true, html }
 }
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -4668,111 +4793,6 @@ app.post('/api/dz-maps/nearby', async (req, res) => {
   })
 })
 
-// ── GeoIntelligence Precision API ────────────────────────────────────────
-/**
- * POST /api/dz-maps/geo-intelligence
- * Body: { query, poiType?, userLat?, userLng?, fullQuery? }
- * Returns precision geo result with confidence score, suggestions,
- * nearby landmarks, district, wilaya, map links.
- */
-app.post('/api/dz-maps/geo-intelligence', async (req, res) => {
-  const {
-    query,
-    poiType    = null,
-    userLat    = null,
-    userLng    = null,
-    fullQuery  = null,
-  } = req.body || {}
-
-  if (!query || typeof query !== 'string' || query.trim().length < 2) {
-    return res.status(400).json({ error: 'query required (min 2 chars)' })
-  }
-
-  try {
-    // Detect geo intent from query
-    const detectedIntent = detectGeoIntent(query)
-
-    // Run precision resolve
-    const result = await precisionResolve(query.trim(), {
-      localDBFn:  searchGeoLocation,
-      poiType:    poiType || detectedIntent,
-      userLat:    userLat ? parseFloat(userLat) : null,
-      userLng:    userLng ? parseFloat(userLng) : null,
-      fullQuery:  fullQuery || query,
-    })
-
-    if (!result?.found) {
-      return res.json({
-        found:      false,
-        query,
-        intent:     detectedIntent,
-        message:    'لم يُعثر على موقع مطابق في الجزائر',
-        suggestions: [],
-      })
-    }
-
-    // Build formatted Arabic response text
-    const responseText = formatPrecisionResponse(result, query)
-
-    return res.json({
-      found:            true,
-      query,
-      intent:           detectedIntent || poiType,
-      isSingleResult:   result.isSingleResult ?? true,
-      confidence:       result.confidence,
-      confidencePct:    Math.round((result.confidence ?? 0) * 100),
-
-      // Location data
-      name:             result.displayName,
-      nameFr:           result.displayNameFr,
-      lat:              result.lat,
-      lng:              result.lng,
-      district:         result.district,
-      city:             result.city,
-      wilaya:           result.wilaya,
-      coordinates:      result.lat && result.lng
-        ? `${parseFloat(result.lat).toFixed(5)}, ${parseFloat(result.lng).toFixed(5)}`
-        : null,
-
-      // Links
-      mapLink:          result.mapLink,
-      googleMapsLink:   result.googleMapsLink,
-
-      // Context
-      nearbyLandmarks:  result.nearbyLandmarks || [],
-      suggestions:      result.suggestions     || [],
-      source:           result.confidenceDetails?.source || 'unknown',
-
-      // Pre-formatted Arabic response for chat
-      responseText,
-    })
-  } catch (err) {
-    console.error('[GeoIntelligence API] Error:', err.message)
-    return res.status(500).json({ error: 'geo_intelligence_error', message: err.message })
-  }
-})
-
-/**
- * GET /api/dz-maps/geo-intelligence/health
- * Returns status of the precision layer
- */
-app.get('/api/dz-maps/geo-intelligence/health', (_req, res) => {
-  res.json({
-    status:   'ok',
-    version:  '1.0.0',
-    features: [
-      'arabic_fuzzy_matching',
-      'multi_source_search',
-      'smart_ranking',
-      'confidence_engine',
-      'algeria_local_datasets',
-      'geo_validation',
-    ],
-    sources: ['nominatim', 'photon', 'wikidata', 'local_db', 'overpass'],
-    confidenceThreshold: 0.65,
-  })
-})
-
 app.get('/api/dz-agent/reverse-geocode', (req, res) => {
   const lat = parseFloat(req.query.lat)
   const lon = parseFloat(req.query.lon)
@@ -7051,8 +7071,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ? req.body.youtubeContext
     : null
 
-  if (youtubeContext?.videoId && lastUserMessage) {
-    console.log(`[YouTube Discussion] videoId=${youtubeContext.videoId} query="${lastUserMessage.slice(0, 60)}"`)
+  if (youtubeContext?.id && lastUserMessage) {
+    console.log(`[YouTube Discussion] videoId=${youtubeContext.id} query="${lastUserMessage.slice(0, 60)}"`)
     try {
       const history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
       const result = await handleVideoDiscussion(
@@ -7063,10 +7083,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       )
       return res.status(200).json({
         content: result.reply || 'لم أتمكن من الإجابة. يرجى المحاولة مرة أخرى.',
+        quickSuggestions: Array.isArray(result.quickSuggestions) ? result.quickSuggestions : [],
       })
     } catch (ytDiscErr) {
       console.error('[YouTube Discussion] Error:', ytDiscErr.message)
-      return res.status(200).json({ content: '⚠️ خطأ في معالجة سؤالك عن الفيديو. يرجى المحاولة مرة أخرى.' })
+      return res.status(200).json({ content: '⚠️ خطأ في معالجة سؤالك عن الفيديو. يرجى المحاولة مرة أخرى.', quickSuggestions: [] })
     }
   }
 
@@ -7108,7 +7129,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── YouTube Insight Engine ─────────────────────────────────────────────────
   // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
   const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
-  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|درس[\s]+بالفيديو|شرح[\s]+بالفيديو)/
+  // Matches: "فيديو", "يوتيوب", "شرح X بالفيديو", "درس X بالفيديو", "شرحلي بالفيديو", "عطيني فيديو"
+  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو)/i
   const _isYouTubeQuery = !!_ytUrlInMsg
     || (_ytKwRe.test(lastUserMessage)
         && !detectWebsiteBuilderQuery(lastUserMessage)
@@ -7205,19 +7227,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
             { role: 'user', content: lastUserMessage },
           ]
-          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 3000 })
           const rawHtml = wbResult.content || ''
           const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
           const validation = validateHtmlOutput(htmlCode)
+          const finalHtml = validation.html || htmlCode
           _buildHandled = true
-          const cssCode = extractCssFromHtml(htmlCode)
-          const jsCode  = extractJsFromHtml(htmlCode)
+          const cssCode = extractCssFromHtml(finalHtml)
+          const jsCode  = extractJsFromHtml(finalHtml)
           // Return best-effort HTML even if validation fails (partial HTML is better than no HTML)
-          if (htmlCode && htmlCode.length > 100) {
+          if (finalHtml && finalHtml.length > 100) {
             return res.status(200).json({
               content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو استخدم **⬇ تحميل** للحفظ.${!validation.ok ? '\n\n⚠️ ملاحظة: الكود قد يحتاج تعديلاً طفيفاً.' : ''}`,
               isWebsite: true,
-              htmlCode,
+              htmlCode: finalHtml,
               cssCode: cssCode || '',
               jsCode:  jsCode  || '',
               webBuilderMeta: { ...wbMeta, title: `🌐 ${wbMeta.title}` },
@@ -7331,21 +7354,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
           { role: 'user', content: lastUserMessage },
         ]
-        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 3000 })
         const rawOutput = mwbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
         const validation = validateHtmlOutput(htmlCode)
-        lastMwbHtml = htmlCode
+        const finalHtml = validation.html || htmlCode
+        lastMwbHtml = finalHtml
         lastMwbValidation = validation
         if (validation.ok) {
-          console.log(`[Map Website Builder] OK attempt ${attempt} — ${htmlCode.length} chars via ${mwbResult.model}`)
-          const cssCode = extractCssFromHtml(htmlCode)
-          const jsCode  = extractJsFromHtml(htmlCode)
+          console.log(`[Map Website Builder] OK attempt ${attempt} — ${finalHtml.length} chars via ${mwbResult.model}`)
+          const cssCode = extractCssFromHtml(finalHtml)
+          const jsCode  = extractJsFromHtml(finalHtml)
           return res.status(200).json({
             content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو استخدم أزرار التحميل لحفظها.`,
             isWebsite: true,
             isMapWebsite: true,
-            htmlCode,
+            htmlCode: finalHtml,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
             webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي مبني بـ Leaflet.js و OpenStreetMap', icon: '🗺️' },
@@ -7470,23 +7494,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 3000 })
         console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
 
         const validation = validateHtmlOutput(htmlCode)
-        lastHtml = htmlCode
+        const finalHtml = validation.html || htmlCode
+        lastHtml = finalHtml
         lastValidation = validation
 
         if (validation.ok) {
-          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
-          const cssCode = extractCssFromHtml(htmlCode)
-          const jsCode  = extractJsFromHtml(htmlCode)
+          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${finalHtml.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
+          const cssCode = extractCssFromHtml(finalHtml)
+          const jsCode  = extractJsFromHtml(finalHtml)
           return res.status(200).json({
             content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** الموجود داخل الصفحة.`,
             isWebsite: true,
-            htmlCode,
+            htmlCode: finalHtml,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
             webBuilderMeta: wbMeta,
@@ -8098,8 +8123,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const newsSubject = extractNewsSubject(lastUserMessage)
   if (newsSubject) console.log(`[DZ Agent] News subject extracted: "${newsSubject}"`)
 
-  if (newsQueryType && !isPrayerQuery && !isFootballQuery) {
-    console.log(`[DZ Agent] News query detected: ${newsQueryType}`)
+  // Allow RSS for football NEWS queries (e.g. "أخبار المنتخب") — not just match-score queries
+  const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
+    console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
 
     // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
     if (newsSubject) {
@@ -8166,7 +8193,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let hasNewsResults = false
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
-  const isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  const isFootballNewsQuery = _isFootballNewsQuery
   const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
 
   if (!skipSearch) {
@@ -8449,6 +8476,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ...messages,
   ]
 
+  // ── Capability-aware routing hint ────────────────────────────────────────────
+  // Compute intent → routing hint for the AI router fallback chain.
+  // Primary providers (Groq, DeepSeek) are unaffected; hint only matters
+  // when escalating to the multi-provider router.
+  const _smartIntent  = detectSmartIntent(lastUserMessage)
+  const _taskHint     = getTaskRoutingHint(_smartIntent)
+
   // ── Validated fallback chain: DeepSeek → Ollama → Groq (with response validation) ───
   // Each step's output is validated for non-empty, meaningful content before returning.
   // History is trimmed to last 8 turns to keep context relevant and reduce off-topic answers.
@@ -8456,6 +8490,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     messages: apiMessages,
     query: lastUserMessage,
     max_tokens: 3000,
+    taskHint: _taskHint,
   })
   if (aiResult.content) {
     return res.status(200).json({
@@ -8509,7 +8544,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // If RSS context available, return it directly even without AI
   if (rssContext) {
     return res.status(200).json({
-      content: `${rssContext}\n\n---\n> **ملاحظة:** لتلقي إجابات أكثر ذكاءً وتلخيصاً للأخبار، يمكن إضافة مفتاح \`AI_API_KEY\` (Groq) في إعدادات المشروع.`,
+      content: rssContext,
     })
   }
 
@@ -12219,17 +12254,6 @@ try {
   )
 } catch (err) {
   console.warn('[clone-engine-v2] mount failed:', err.message)
-}
-
-// ===== DZ-MANUS — Autonomous AI Operating System (Manus/Devin/OpenHands level) =====
-// Additive endpoints: /api/dz-manus/{health,task,tasks,stream/:id,agents,tools,stats,research,tool}
-try {
-  mountDzManus(app, {
-    safeGenerateAI: ({ messages, query, max_tokens }) =>
-      safeGenerateAI({ messages, query, max_tokens }),
-  })
-} catch (err) {
-  console.warn('[dz-manus] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

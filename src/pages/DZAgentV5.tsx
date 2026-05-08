@@ -114,7 +114,7 @@ export default function DZAgentV5() {
   const [plan, setPlan] = useState<PlanStep[]>([])
   const [currentGoal, setCurrentGoal] = useState('')
   const [taskResult, setTaskResult] = useState<string>('')
-  const [taskReflection, setTaskReflection] = useState<ExecutionEvent['reflection']>(null)
+  const [taskReflection, setTaskReflection] = useState<ExecutionEvent['reflection'] | null>(null)
   const [currentTaskId, setCurrentTaskId] = useState<string>('')
 
   // Sidebar state
@@ -160,9 +160,6 @@ export default function DZAgentV5() {
     sseRef.current?.close()
 
     if (mode === 'chat') {
-      // Simple chat mode via SSE
-      const es = new EventSource(`/api/dz-v5/chat?_t=${Date.now()}`)
-      // Actually, chat uses POST, so we'll do it differently
       setEvents([{ type: 'thinking', message: 'Thinking...' }])
       try {
         const res = await fetch('/api/dz-v5/chat', {

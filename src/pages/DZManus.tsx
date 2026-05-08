@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 interface AgentDef { id: string; name: string; role: string; icon: string; status: string }
 interface StepEvent {
@@ -6,7 +6,7 @@ interface StepEvent {
   preview?: string; durationMs?: number; error?: string; phase?: string
   message?: string; params?: any; planTitle?: string; totalSteps?: number
   score?: number; completed?: boolean; iterations?: number; model?: string
-  ts?: number
+  ts?: number; goal?: string; complexity?: string
 }
 interface TaskInfo {
   id: string; goal: string; status: string; startTs: number; endTs?: number
@@ -63,11 +63,10 @@ function AgentCard({ agent, active }: { agent: AgentDef; active: boolean }) {
   )
 }
 
-function StepCard({ event, index }: { event: StepEvent; index: number }) {
+function StepCard({ event }: { event: StepEvent }) {
   const isPhase = event.type === 'phase'
   const isDone  = event.type === 'step_done'
   const isError = event.type === 'step_error'
-  const isBlock = event.type === 'step_blocked'
 
   if (event.type === 'task_created') {
     return (
@@ -505,7 +504,7 @@ export default function DZManus() {
                 </div>
               )}
               {events.map((e, i) => (
-                <StepCard key={i} event={e} index={i} />
+                <StepCard key={i} event={e} />
               ))}
             </div>
           </div>

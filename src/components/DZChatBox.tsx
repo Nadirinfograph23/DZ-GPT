@@ -2507,7 +2507,7 @@ function GitHubTokenPanel({
     <div className="gh-token-panel">
       <button className="gh-token-toggle" onClick={() => setShow(!show)}>
         <Github size={14} />
-        Connect GitHub Token
+        ربط GitHub (اختياري)
         <ChevronDown size={13} className={show ? 'rotated' : ''} />
       </button>
       {show && (
@@ -2521,12 +2521,12 @@ function GitHubTokenPanel({
             onKeyDown={e => e.key === 'Enter' && handleSave()}
           />
           <button className="gh-token-save" onClick={handleSave}>
-            Connect
+            ربط
           </button>
         </div>
       )}
       <p className="gh-token-hint">
-        Token stored locally only. Never sent to third parties.
+        يُحفظ الـ Token محلياً فقط · لا يُرسل لأي طرف خارجي
       </p>
     </div>
   )

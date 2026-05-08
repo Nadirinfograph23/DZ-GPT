@@ -1,9 +1,12 @@
 /**
- * DZ Maps — Main Entry Point v5
+ * DZ Maps — Main Entry Point v6
  * Smart Map Intelligence Engine for DZ Agent
  * Uses OpenStreetMap embed (no API key) + Algeria local geo DB
  * GOLDEN RULE: No map shown without verified Algerian location
  *              EXCEPT for GPS nearby queries (needsGps: true)
+ *
+ * v6: GeoIntelligence Precision Layer integrated as a transparent upgrade
+ *     to resolveLocation(). All existing routes and exports unchanged.
  */
 
 export { isMapQuery, detectPoiType, isRoutingQuery, parseRouting, extractLocationFromMsg, hasGpsIntent, GPS_PROXIMITY_WORDS, POI_TYPES } from './intent.js'
@@ -15,15 +18,72 @@ import { buildPoiEmbedUrl, buildLocationEmbedUrl, buildRouteEmbedUrl } from './l
 import { searchGeoLocation } from './algeria-geo-db.js'
 import { geocode, getRoute, searchPOI } from './geo.js'
 
+// ── GeoIntelligence Precision Layer ──────────────────────────────────────
+// Loaded lazily — if it fails for any reason, existing logic takes over.
+let _geoIntel = null
+async function getGeoIntel() {
+  if (_geoIntel) return _geoIntel
+  try {
+    const mod = await import('./geo-intelligence/index.js')
+    _geoIntel = mod
+    return _geoIntel
+  } catch (e) {
+    console.warn('[GeoIntel] Precision layer unavailable, using legacy resolve:', e.message)
+    return null
+  }
+}
+
 /**
  * Resolve a location string → {lat, lng, displayName, displayNameFr, ...}
- * 1. Local Algeria geo DB (fast, fuzzy)
- * 2. Nominatim geocode fallback (Algeria only)
+ * 1. GeoIntelligence Precision Layer (multi-source, fuzzy, ranked)
+ * 2. Local Algeria geo DB (fast, fuzzy) — legacy fallback
+ * 3. Nominatim geocode fallback (Algeria only) — last resort
  * NEVER returns Algiers as default — returns null if unknown
  */
-async function resolveLocation(locationStr) {
+async function resolveLocation(locationStr, opts = {}) {
   if (!locationStr || !locationStr.trim()) return null
 
+  // ── Try GeoIntelligence Precision Layer first ─────────────────────────
+  try {
+    const gi = await getGeoIntel()
+    if (gi?.precisionResolve) {
+      const result = await gi.precisionResolve(locationStr, {
+        localDBFn:  searchGeoLocation,
+        nominatimFn: geocode,
+        poiType:    opts.poiType   || null,
+        userLat:    opts.userLat   || null,
+        userLng:    opts.userLng   || null,
+        fullQuery:  opts.fullQuery || null,
+      })
+      if (result?.found && result.lat && result.lng) {
+        return {
+          lat:            result.lat,
+          lng:            result.lng,
+          displayName:    result.displayName,
+          displayNameFr:  result.displayNameFr,
+          type:           result.type,
+          parent:         result.parent,
+          parentFr:       result.parentFr,
+          confidence:     Math.round((result.confidence ?? 0) * 100),
+          fromLocalDB:    result.fromLocalDB ?? false,
+          // Precision-layer bonus fields
+          district:       result.district   || null,
+          city:           result.city       || null,
+          wilaya:         result.wilaya     || null,
+          mapLink:        result.mapLink    || null,
+          googleMapsLink: result.googleMapsLink || null,
+          nearbyLandmarks: result.nearbyLandmarks || [],
+          isSingleResult: result.isSingleResult ?? true,
+          suggestions:    result.suggestions || [],
+          confidenceDetails: result.confidenceDetails || null,
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[GeoIntel] Precision resolve error, falling back:', e.message)
+  }
+
+  // ── Legacy fallback: local DB ─────────────────────────────────────────
   const result = searchGeoLocation(locationStr)
   if (result.found && result.entry) {
     const e = result.entry
@@ -40,6 +100,7 @@ async function resolveLocation(locationStr) {
     }
   }
 
+  // ── Legacy fallback: Nominatim ────────────────────────────────────────
   try {
     const geo = await geocode(locationStr, true)
     if (geo) {

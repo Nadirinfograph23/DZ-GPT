@@ -891,6 +891,10 @@ function App() {
                 <Video size={14} />
                 <span>DZ Tube</span>
               </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/design'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <Wand2 size={14} />
+                <span>Design Intelligence</span>
+              </button>
             </div>
           )}
         </div>

@@ -44,6 +44,7 @@ import { mountDzAgentV2 } from './lib/dz-v2/mount.js'
 import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
+import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
@@ -11663,6 +11664,17 @@ try {
   })
 } catch (err) {
   console.warn('[dz-design] mount failed:', err.message)
+}
+
+// ===== DZ AGENT V5 — AUTONOMOUS AI OPERATING SYSTEM =====
+// Additive endpoints: /api/dz-v5/{health,task,chat,tasks,memory,models,tools,workspace}
+try {
+  mountDzAgentV5(app, {
+    safeGenerateAI: ({ messages, query, max_tokens }) =>
+      safeGenerateAI({ messages, query, max_tokens }),
+  })
+} catch (err) {
+  console.warn('[dz-v5] mount failed:', err.message)
 }
 
 // ===== DZ TUBE ANALYTICS (mini-player events) =====

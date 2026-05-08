@@ -9254,6 +9254,7 @@ app.post('/api/dz-agent/github/stats', async (req, res) => {
 const chatMessages = []
 const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
+let pinnedMessage = null        // { id, text, from, timestamp } | null
 const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
 
@@ -11862,6 +11863,15 @@ app.post('/api/chat-room/admin', (req, res) => {
   } else if (action === 'highlight' && msgId) {
     const m = chatMessages.find(m => m.id === msgId)
     if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+  } else if (action === 'pin' && msgId) {
+    const m = chatMessages.find(m => m.id === msgId)
+    if (m) {
+      pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+      broadcastChat({ type: 'pinUpdate', pinnedMessage })
+    }
+  } else if (action === 'unpin') {
+    pinnedMessage = null
+    broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
   }
   res.json({ ok: true })
 })
@@ -11882,7 +11892,7 @@ function setupChatWebSocket(httpServer) {
           const isAdmin = adminSecret === CHAT_ADMIN_SECRET
           chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws })
           const session = chatSessions.get(id)
-          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() }))
+          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers(), pinnedMessage }))
           const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: isAdmin ? 'انضم إلى الدردشة' : `${session.name} انضم إلى الدردشة`, timestamp: Date.now(), isSystem: true, isAdminAnnounce: !!isAdmin })
           broadcastChat({ type: 'message', msg: joinMsg }, ws)
           ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
@@ -11951,6 +11961,15 @@ function setupChatWebSocket(httpServer) {
           } else if (data.action === 'highlight' && data.msgId) {
             const m = chatMessages.find(m => m.id === data.msgId)
             if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
+          } else if (data.action === 'pin' && data.msgId) {
+            const m = chatMessages.find(m => m.id === data.msgId)
+            if (m) {
+              pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+              broadcastChat({ type: 'pinUpdate', pinnedMessage })
+            }
+          } else if (data.action === 'unpin') {
+            pinnedMessage = null
+            broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

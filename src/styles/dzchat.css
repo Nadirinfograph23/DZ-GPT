@@ -740,6 +740,55 @@
 .dzc-context-item--danger:hover { background: rgba(200, 50, 50, 0.1); }
 .dzc-context-item--warn { color: #f59e0b; }
 .dzc-context-item--warn:hover { background: rgba(245, 158, 11, 0.1); }
+.dzc-context-item--pin { color: #818cf8; }
+.dzc-context-item--pin:hover { background: rgba(129, 140, 248, 0.1); }
+
+/* ===== PINNED MESSAGE BANNER ===== */
+.dzc-pinned-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 14px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+  direction: rtl;
+  flex-shrink: 0;
+}
+.dzc-pinned-icon {
+  color: #818cf8;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.dzc-pinned-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.dzc-pinned-from {
+  font-size: 11px;
+  color: #818cf8;
+  font-weight: 600;
+}
+.dzc-pinned-text {
+  font-size: 12px;
+  color: #8899aa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dzc-pinned-unpin {
+  background: none;
+  border: none;
+  color: #445566;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.dzc-pinned-unpin:hover { color: #ff6b6b; }
 
 /* ===== MUTED USER BADGE in sidebar ===== */
 .dzc-user-item--muted { opacity: 0.6; }

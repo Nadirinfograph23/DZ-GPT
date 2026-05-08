@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
-  MoreVertical, Highlighter, Copy, Check, Mail, VolumeX, Volume2,
+  MoreVertical, Highlighter, Copy, Check, Mail, VolumeX, Volume2, Pin, PinOff,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -128,6 +128,7 @@ export default function DZChat() {
   const [mutedMap, setMutedMap] = useState<Record<string, number>>({})  // userId → until timestamp
   const [muteToast, setMuteToast] = useState<{ until: number } | null>(null)
   const muteToastTimerRef = useRef<number | null>(null)
+  const [pinnedMsg, setPinnedMsg] = useState<{ id: string; text: string; from: string; timestamp: number } | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
 
   // @ mention suggestion state
@@ -246,6 +247,8 @@ export default function DZChat() {
         if (until === 0) { const next = { ...prev }; delete next[uid]; return next }
         return { ...prev, [uid]: until }
       })
+    } else if (data.type === 'pinUpdate') {
+      setPinnedMsg(data.pinnedMessage as typeof pinnedMsg ?? null)
     }
   }, [addMessages, showDmToast])
 
@@ -292,6 +295,7 @@ export default function DZChat() {
           const fresh = (data.messages || []).filter((m: ChatMessage) => !histIds.has(m.id))
           addMessages([...historyMessages, ...fresh])
           if (Array.isArray(data.users)) setOnlineUsers(data.users)
+          if (data.pinnedMessage) setPinnedMsg(data.pinnedMessage as { id: string; text: string; from: string; timestamp: number })
           stopPolling()
         } else {
           handleServerEvent(data)
@@ -733,6 +737,22 @@ export default function DZChat() {
         {/* ===== MAIN CHAT AREA ===== */}
         <main className="dzc-main" onClick={() => setSidebarOpen(false)}>
 
+          {/* Pinned message banner */}
+          {pinnedMsg && (
+            <div className="dzc-pinned-banner">
+              <Pin size={13} className="dzc-pinned-icon" />
+              <div className="dzc-pinned-content">
+                <span className="dzc-pinned-from">{pinnedMsg.from}</span>
+                <span className="dzc-pinned-text">{pinnedMsg.text.length > 120 ? pinnedMsg.text.slice(0, 120) + '…' : pinnedMsg.text}</span>
+              </div>
+              {localUser?.isAdmin && (
+                <button className="dzc-pinned-unpin" onClick={() => adminAction('unpin')} title="إلغاء التثبيت">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* DM banner */}
           {dmTarget && (
             <div className="dzc-dm-banner">
@@ -1001,6 +1021,15 @@ export default function DZChat() {
           <button className="dzc-context-item" onClick={() => adminAction('highlight', undefined, msgMenu.msg.id)}>
             <Highlighter size={13} /> تمييز الرسالة (إعلان)
           </button>
+          {pinnedMsg?.id === msgMenu.msg.id ? (
+            <button className="dzc-context-item dzc-context-item--pin" onClick={() => adminAction('unpin')}>
+              <PinOff size={13} /> إلغاء التثبيت
+            </button>
+          ) : (
+            <button className="dzc-context-item dzc-context-item--pin" onClick={() => adminAction('pin', undefined, msgMenu.msg.id)}>
+              <Pin size={13} /> تثبيت الرسالة
+            </button>
+          )}
           <button className="dzc-context-item dzc-context-item--danger" onClick={() => adminAction('delete', undefined, msgMenu.msg.id)}>
             <Trash2 size={13} /> حذف الرسالة
           </button>

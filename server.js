@@ -11865,7 +11865,7 @@ function setupChatWebSocket(httpServer) {
           chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws })
           const session = chatSessions.get(id)
           ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() }))
-          const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} joined the chat.`, timestamp: Date.now(), isSystem: true })
+          const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: isAdmin ? 'انضم إلى الدردشة' : `${session.name} انضم إلى الدردشة`, timestamp: Date.now(), isSystem: true, isAdminAnnounce: !!isAdmin })
           broadcastChat({ type: 'message', msg: joinMsg }, ws)
           ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
@@ -11924,7 +11924,7 @@ function setupChatWebSocket(httpServer) {
         const session = chatSessions.get(sid)
         if (session) {
           chatSessions.delete(sid)
-          const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} left the chat.`, timestamp: Date.now(), isSystem: true })
+          const leaveMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: `${session.name} غادر الدردشة`, timestamp: Date.now(), isSystem: true })
           broadcastChat({ type: 'message', msg: leaveMsg })
           broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
         }

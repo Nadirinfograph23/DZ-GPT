@@ -33,6 +33,7 @@ interface ChatMessage {
   localDeleted?: boolean
   isBreaking?: boolean
   isAdmin?: boolean
+  isAdminAnnounce?: boolean
 }
 
 interface LocalUser {
@@ -57,24 +58,32 @@ const ADMIN_NAME = 'Nadir Infograph | نذير حوامرية'
 
 function VerifiedBadge({ size = 15 }: { size?: number }) {
   return (
-    <svg
-      className="dzc-verified-badge"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-label="موثق"
-    >
-      <title>مشرف موثق</title>
-      <circle cx="12" cy="12" r="12" fill="#1877F2" />
-      <path
-        d="M7 12.5l3.5 3.5 6.5-7"
-        stroke="#fff"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <span className="dzc-verified-badge-wrap" title="مشرف موثق ✓" aria-label="مشرف موثق">
+      <svg
+        className="dzc-verified-badge"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <defs>
+          <radialGradient id="vbg" cx="38%" cy="32%" r="65%">
+            <stop offset="0%" stopColor="#42a6ff" />
+            <stop offset="100%" stopColor="#0d6efd" />
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="12" fill="url(#vbg)" />
+        <circle cx="12" cy="12" r="12" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8" />
+        <path
+          d="M7 12.2l3.6 3.8 6.4-7.2"
+          stroke="#fff"
+          strokeWidth="2.3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <ellipse cx="9" cy="9" rx="3.5" ry="2" fill="rgba(255,255,255,0.12)" transform="rotate(-30 9 9)" />
+      </svg>
+    </span>
   )
 }
 const AT_SUGGESTIONS = ['@dzagent', '@dzgpt']
@@ -697,6 +706,16 @@ export default function DZChat() {
           <div className="dzc-messages">
             {visibleMessages.map(msg => {
               if (msg.isSystem) {
+                if (msg.isAdminAnnounce) {
+                  return (
+                    <div key={msg.id} className="dzc-msg-system dzc-msg-system--admin-announce">
+                      <span className="dzc-announce-shield">🛡️</span>
+                      <span className="dzc-announce-name">{ADMIN_NAME}</span>
+                      <VerifiedBadge size={13} />
+                      <span className="dzc-announce-text">{msg.text}</span>
+                    </div>
+                  )
+                }
                 return (
                   <div key={msg.id} className={`dzc-msg-system ${msg.isHighlighted ? 'dzc-msg-system--highlighted' : ''}`}>
                     {msg.isHighlighted

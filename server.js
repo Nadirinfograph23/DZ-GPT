@@ -54,6 +54,8 @@ import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
 import { handleMapQuery, isMapQuery, buildNearbyEmbedUrl, POI_EN_SEARCH, POI_TYPES } from './modules/dz-maps/index.js'
 import { queryNearby, formatDistance } from './modules/dz-maps/overpass.js'
+import { precisionResolve, detectGeoIntent, formatPrecisionResponse } from './modules/dz-maps/geo-intelligence/index.js'
+import { searchGeoLocation } from './modules/dz-maps/algeria-geo-db.js'
 import {
   createStaticEducationalFallback,
   filterLessons,
@@ -4662,6 +4664,111 @@ app.post('/api/dz-maps/nearby', async (req, res) => {
       lng:          numLng,
       fromGps:      true,
     },
+  })
+})
+
+// ── GeoIntelligence Precision API ────────────────────────────────────────
+/**
+ * POST /api/dz-maps/geo-intelligence
+ * Body: { query, poiType?, userLat?, userLng?, fullQuery? }
+ * Returns precision geo result with confidence score, suggestions,
+ * nearby landmarks, district, wilaya, map links.
+ */
+app.post('/api/dz-maps/geo-intelligence', async (req, res) => {
+  const {
+    query,
+    poiType    = null,
+    userLat    = null,
+    userLng    = null,
+    fullQuery  = null,
+  } = req.body || {}
+
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return res.status(400).json({ error: 'query required (min 2 chars)' })
+  }
+
+  try {
+    // Detect geo intent from query
+    const detectedIntent = detectGeoIntent(query)
+
+    // Run precision resolve
+    const result = await precisionResolve(query.trim(), {
+      localDBFn:  searchGeoLocation,
+      poiType:    poiType || detectedIntent,
+      userLat:    userLat ? parseFloat(userLat) : null,
+      userLng:    userLng ? parseFloat(userLng) : null,
+      fullQuery:  fullQuery || query,
+    })
+
+    if (!result?.found) {
+      return res.json({
+        found:      false,
+        query,
+        intent:     detectedIntent,
+        message:    'لم يُعثر على موقع مطابق في الجزائر',
+        suggestions: [],
+      })
+    }
+
+    // Build formatted Arabic response text
+    const responseText = formatPrecisionResponse(result, query)
+
+    return res.json({
+      found:            true,
+      query,
+      intent:           detectedIntent || poiType,
+      isSingleResult:   result.isSingleResult ?? true,
+      confidence:       result.confidence,
+      confidencePct:    Math.round((result.confidence ?? 0) * 100),
+
+      // Location data
+      name:             result.displayName,
+      nameFr:           result.displayNameFr,
+      lat:              result.lat,
+      lng:              result.lng,
+      district:         result.district,
+      city:             result.city,
+      wilaya:           result.wilaya,
+      coordinates:      result.lat && result.lng
+        ? `${parseFloat(result.lat).toFixed(5)}, ${parseFloat(result.lng).toFixed(5)}`
+        : null,
+
+      // Links
+      mapLink:          result.mapLink,
+      googleMapsLink:   result.googleMapsLink,
+
+      // Context
+      nearbyLandmarks:  result.nearbyLandmarks || [],
+      suggestions:      result.suggestions     || [],
+      source:           result.confidenceDetails?.source || 'unknown',
+
+      // Pre-formatted Arabic response for chat
+      responseText,
+    })
+  } catch (err) {
+    console.error('[GeoIntelligence API] Error:', err.message)
+    return res.status(500).json({ error: 'geo_intelligence_error', message: err.message })
+  }
+})
+
+/**
+ * GET /api/dz-maps/geo-intelligence/health
+ * Returns status of the precision layer
+ */
+app.get('/api/dz-maps/geo-intelligence/health', (_req, res) => {
+  res.json({
+    status:   'ok',
+    version:  '1.0.0',
+    features: [
+      'arabic_fuzzy_matching',
+      'multi_source_search',
+      'smart_ranking',
+      'confidence_engine',
+      'algeria_local_datasets',
+      'geo_validation',
+    ],
+    sources: ['nominatim', 'photon', 'wikidata', 'local_db', 'overpass'],
+    confidenceThreshold: 0.65,
   })
 })
 

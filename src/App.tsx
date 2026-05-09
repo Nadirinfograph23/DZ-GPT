@@ -890,6 +890,9 @@ function App() {
               <button className="sidebar-nav-item" onClick={() => { navigate('/dz-tube'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
                 <Video size={14} />
                 <span>DZ Tube</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <button className="new-chat-btn" onClick={createNewChat}>

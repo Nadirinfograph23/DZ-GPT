@@ -35,6 +35,7 @@ interface ChatMessage {
   localDeleted?: boolean
   isBreaking?: boolean
   isBroadcast?: boolean
+  reactions?: Record<string, string[]>
 }
 
 interface LocalUser {
@@ -213,6 +214,9 @@ export default function DZChat() {
           setMuteUntil(0)
         }
       }
+    } else if (data.type === 'reaction') {
+      const { msgId, reactions } = data as { msgId: string; reactions: Record<string, string[]> }
+      if (msgId) setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m))
     } else if (data.type === 'blocked') {
       if (data.userId === sessionIdRef.current) {
         alert('تم حظرك من غرفة الدردشة.')
@@ -519,6 +523,23 @@ export default function DZChat() {
     } catch {}
     setMsgMenu(null)
     setUserMenu(null)
+  }
+
+  const REACT_EMOJIS = ['❤️', '😂', '👍', '😮', '😢', '🔥']
+
+  const handleReact = async (msgId: string, emoji: string) => {
+    if (!sessionIdRef.current) return
+    try {
+      if (wsRef.current?.readyState === 1) {
+        wsRef.current.send(JSON.stringify({ type: 'react', msgId, emoji }))
+      } else {
+        await fetch('/api/chat-room/react', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sessionIdRef.current, msgId, emoji }),
+        })
+      }
+    } catch {}
   }
 
   const adminBroadcast = async () => {
@@ -855,6 +876,28 @@ export default function DZChat() {
                     )}
                   </div>
                   <div className="dzc-msg-text">{msg.text}</div>
+                  {/* Emoji reaction picker — appears on hover */}
+                  <div className="dzc-emoji-picker">
+                    {REACT_EMOJIS.map(emoji => (
+                      <button key={emoji} className="dzc-emoji-btn" onClick={e => { e.stopPropagation(); handleReact(msg.id, emoji) }}>
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Reaction pills */}
+                  {msg.reactions && Object.keys(msg.reactions).some(k => msg.reactions![k].length > 0) && (
+                    <div className="dzc-reactions">
+                      {Object.entries(msg.reactions).filter(([, ids]) => ids.length > 0).map(([emoji, ids]) => (
+                        <button
+                          key={emoji}
+                          className={`dzc-reaction-pill${ids.includes(sessionIdRef.current || '') ? ' dzc-reaction-pill--mine' : ''}`}
+                          onClick={e => { e.stopPropagation(); handleReact(msg.id, emoji) }}
+                        >
+                          {emoji}<span>{ids.length}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}

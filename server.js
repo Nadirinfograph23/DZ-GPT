@@ -12294,6 +12294,24 @@ app.post('/api/chat-room/admin', (req, res) => {
   res.json({ ok: true })
 })
 
+const ALLOWED_REACT_EMOJIS = ['❤️','😂','👍','😮','😢','🔥']
+
+app.post('/api/chat-room/react', (req, res) => {
+  const { sessionId, msgId, emoji } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session || !msgId || !emoji) return res.status(400).json({ error: 'Invalid' })
+  if (!ALLOWED_REACT_EMOJIS.includes(emoji)) return res.status(400).json({ error: 'Invalid emoji' })
+  const msg = chatMessages.find(m => m.id === msgId)
+  if (!msg) return res.status(404).json({ error: 'Not found' })
+  if (!msg.reactions) msg.reactions = {}
+  if (!msg.reactions[emoji]) msg.reactions[emoji] = []
+  const idx = msg.reactions[emoji].indexOf(sessionId)
+  if (idx === -1) { msg.reactions[emoji].push(sessionId) }
+  else { msg.reactions[emoji].splice(idx, 1); if (!msg.reactions[emoji].length) delete msg.reactions[emoji] }
+  broadcastChat({ type: 'reaction', msgId, reactions: msg.reactions })
+  res.json({ ok: true })
+})
+
 // ===== WEBSOCKET CHAT SERVER =====
 function setupChatWebSocket(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/chat' })
@@ -12352,6 +12370,18 @@ function setupChatWebSocket(httpServer) {
         } else if (data.type === 'ping') {
           const session = sid ? chatSessions.get(sid) : null
           if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }
+        } else if (data.type === 'react') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session || !data.msgId || !data.emoji) return
+          if (!ALLOWED_REACT_EMOJIS.includes(data.emoji)) return
+          const msg = chatMessages.find(m => m.id === data.msgId)
+          if (!msg) return
+          if (!msg.reactions) msg.reactions = {}
+          if (!msg.reactions[data.emoji]) msg.reactions[data.emoji] = []
+          const idx = msg.reactions[data.emoji].indexOf(sid)
+          if (idx === -1) { msg.reactions[data.emoji].push(sid) }
+          else { msg.reactions[data.emoji].splice(idx, 1); if (!msg.reactions[data.emoji].length) delete msg.reactions[data.emoji] }
+          broadcastChat({ type: 'reaction', msgId: data.msgId, reactions: msg.reactions })
         } else if (data.type === 'admin') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session?.isAdmin) return

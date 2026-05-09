@@ -516,6 +516,70 @@
   transition: opacity 0.15s;
 }
 .dzc-msg:hover .dzc-msg-admin-btn { opacity: 1; }
+
+/* ===== EMOJI REACTION PICKER ===== */
+.dzc-emoji-picker {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background: #1a1a1a;
+  border: 1px solid #2e2e2e;
+  border-radius: 22px;
+  padding: 4px 6px;
+  gap: 1px;
+  z-index: 20;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  flex-direction: row;
+  animation: dzc-picker-in 0.12s ease;
+}
+.dzc-msg:hover .dzc-emoji-picker { display: flex; }
+@keyframes dzc-picker-in {
+  from { opacity: 0; transform: scale(0.85) translateY(5px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.dzc-emoji-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 17px;
+  padding: 3px 5px;
+  border-radius: 10px;
+  transition: background 0.1s, transform 0.12s;
+  line-height: 1;
+}
+.dzc-emoji-btn:hover {
+  background: rgba(255,255,255,0.1);
+  transform: scale(1.28);
+}
+
+/* ===== REACTION PILLS ===== */
+.dzc-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+.dzc-reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid #252525;
+  border-radius: 14px;
+  padding: 2px 9px 2px 7px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  color: #94a3b8;
+}
+.dzc-reaction-pill:hover { background: rgba(255,255,255,0.1); transform: scale(1.06); }
+.dzc-reaction-pill--mine {
+  background: rgba(200,255,0,0.1);
+  border-color: rgba(200,255,0,0.3);
+  color: #c8ff00;
+}
+.dzc-reaction-pill span { font-size: 11px; font-weight: 700; }
 .dzc-msg-admin-btn:hover { color: #cc4444; }
 
 /* Clickable sender name in messages */

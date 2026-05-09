@@ -7566,6 +7566,404 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
+  // ── Website Builder Fallback Templates ───────────────────────────────────────
+  function getWebsiteTemplate(type, title, userMsg) {
+    const siteName = title.replace(/^[^\u0600-\u06FFa-zA-Z]*/, '').replace(/^.*?:\s*/, '').trim() || title
+    const colors = {
+      restaurant: { primary: '#c0392b', secondary: '#e74c3c', bg: '#1a0a08', card: '#2c1310' },
+      hotel:      { primary: '#c9a84c', secondary: '#f0c040', bg: '#0d1117', card: '#1a1f2e' },
+      store:      { primary: '#27ae60', secondary: '#2ecc71', bg: '#0f1a15', card: '#1a2e20' },
+      portfolio:  { primary: '#8e44ad', secondary: '#9b59b6', bg: '#0d0d1a', card: '#1a1a2e' },
+      agency:     { primary: '#e67e22', secondary: '#f39c12', bg: '#0d0a00', card: '#1f1700' },
+      business:   { primary: '#2980b9', secondary: '#3498db', bg: '#080d1a', card: '#0f1930' },
+      education:  { primary: '#16a085', secondary: '#1abc9c', bg: '#050f0d', card: '#0a1f1c' },
+      dashboard:  { primary: '#2980b9', secondary: '#3498db', bg: '#0d1117', card: '#161b22' },
+      blog:       { primary: '#c0392b', secondary: '#e74c3c', bg: '#0f0f0f', card: '#1a1a1a' },
+      landing:    { primary: '#8e44ad', secondary: '#9b59b6', bg: '#0a0010', card: '#150020' },
+    }
+    const c = colors[type] || colors.landing
+
+    const TEMPLATES = {
+      restaurant: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f5f5f5;direction:rtl}
+nav{background:rgba(0,0,0,0.9);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}}
+.logo{color:${c.secondary};font-size:1.6rem;font-weight:900}
+nav ul{list-style:none;display:flex;gap:2rem}
+nav ul a{color:#f5f5f5;text-decoration:none;font-size:1rem;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.hero{background:linear-gradient(135deg,${c.bg} 0%,${c.card} 50%,${c.bg} 100%);padding:6rem 2rem;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'🍽️';position:absolute;font-size:20rem;opacity:0.04;top:50%;left:50%;transform:translate(-50%,-50%)}
+.hero h1{font-size:3.5rem;color:${c.secondary};margin-bottom:1rem;text-shadow:0 0 30px ${c.primary}40}
+.hero p{font-size:1.3rem;color:#ccc;max-width:600px;margin:0 auto 2rem}
+.btn{background:${c.primary};color:#fff;padding:1rem 2.5rem;border:none;border-radius:50px;font-size:1.1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block}
+.btn:hover{background:${c.secondary};transform:translateY(-3px);box-shadow:0 10px 30px ${c.primary}60}
+.section{padding:5rem 2rem;max-width:1200px;margin:0 auto}
+.section-title{text-align:center;font-size:2.2rem;color:${c.secondary};margin-bottom:3rem}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2rem}
+.menu-card{background:${c.card};border-radius:16px;overflow:hidden;border:1px solid ${c.primary}30;transition:transform .3s,box-shadow .3s}
+.menu-card:hover{transform:translateY(-8px);box-shadow:0 20px 40px ${c.primary}30}
+.card-emoji{font-size:4rem;text-align:center;padding:1.5rem;background:${c.bg}}
+.card-body{padding:1.5rem}
+.card-body h3{color:${c.secondary};font-size:1.2rem;margin-bottom:.5rem}
+.card-body p{color:#aaa;font-size:.95rem;margin-bottom:1rem}
+.price{color:${c.primary};font-size:1.4rem;font-weight:900}
+.contact{background:${c.card};padding:5rem 2rem;text-align:center;border-top:2px solid ${c.primary}30}
+.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;max-width:800px;margin:2rem auto}
+.contact-item{background:${c.bg};padding:2rem;border-radius:12px;border:1px solid ${c.primary}30}
+.contact-item .icon{font-size:2.5rem;margin-bottom:1rem}
+footer{background:#000;padding:2rem;text-align:center;color:#555;border-top:1px solid ${c.primary}20}
+@media(max-width:768px){.hero h1{font-size:2rem}.contact-grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+<nav><div class="logo">🍽️ ${siteName}</div><ul><li><a href="#menu">القائمة</a></li><li><a href="#contact">تواصل</a></li><li><a href="#reservation">احجز</a></li></ul></nav>
+<section class="hero">
+  <h1>${siteName}</h1>
+  <p>تذوّق أشهى الوجبات المُعدّة بأجود المكونات في أجواء لا تُنسى</p>
+  <a href="#menu" class="btn">اكتشف القائمة</a>
+</section>
+<section class="section" id="menu">
+  <h2 class="section-title">🍴 قائمة الطعام</h2>
+  <div class="menu-grid">
+    <div class="menu-card"><div class="card-emoji">🥩</div><div class="card-body"><h3>مشاوي فاخرة</h3><p>لحم مشوي على الفحم مع صلصة خاصة وخضار طازجة</p><div class="price">1200 دج</div></div></div>
+    <div class="menu-card"><div class="card-emoji">🍗</div><div class="card-body"><h3>دجاج محمّر</h3><p>دجاج مُتبّل بتوابل بيت وتُقدّم مع بطاطا مقلية</p><div class="price">900 دج</div></div></div>
+    <div class="menu-card"><div class="card-emoji">🥗</div><div class="card-body"><h3>سلطات طازجة</h3><p>تشكيلة سلطات موسمية بزيت زيتون بكر ممتاز</p><div class="price">400 دج</div></div></div>
+    <div class="menu-card"><div class="card-emoji">🍰</div><div class="card-body"><h3>حلويات شرقية</h3><p>بقلاوة وقطايف وكنافة محضّرة يومياً</p><div class="price">350 دج</div></div></div>
+    <div class="menu-card"><div class="card-emoji">🥘</div><div class="card-body"><h3>طاجين لحم</h3><p>طاجين بالخضار والبرقوق على الطريقة الجزائرية الأصيلة</p><div class="price">1400 دج</div></div></div>
+    <div class="menu-card"><div class="card-emoji">🧃</div><div class="card-body"><h3>عصائر طازجة</h3><p>عصير برتقال وليمون وجوز هند طازج يومياً</p><div class="price">250 دج</div></div></div>
+  </div>
+</section>
+<section class="contact" id="contact">
+  <h2 class="section-title">📞 تواصل معنا</h2>
+  <div class="contact-grid">
+    <div class="contact-item"><div class="icon">📍</div><h3>العنوان</h3><p>شارع الاستقلال — الجزائر العاصمة</p></div>
+    <div class="contact-item"><div class="icon">📱</div><h3>الهاتف</h3><p>+213 5 00 00 00 00</p></div>
+    <div class="contact-item"><div class="icon">🕐</div><h3>أوقات العمل</h3><p>كل يوم: 12:00 — 23:00</p></div>
+  </div>
+</section>
+<footer><p>© 2025 ${siteName} — جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+
+      hotel: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f0e6d3;direction:rtl}
+nav{background:rgba(0,0,0,0.95);padding:1rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:1px solid ${c.primary}50}
+.logo{color:${c.secondary};font-size:1.8rem;font-weight:900;letter-spacing:2px}
+nav ul{list-style:none;display:flex;gap:2.5rem}
+nav ul a{color:#e0d0b0;text-decoration:none;font-size:.95rem;letter-spacing:1px;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.hero{background:linear-gradient(160deg,#0a0c18 0%,#1a1530 40%,${c.card} 100%);min-height:85vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem;position:relative}
+.hero::before{content:'🏨';position:absolute;font-size:25rem;opacity:0.03;top:50%;left:50%;transform:translate(-50%,-50%)}
+.hero h1{font-size:4rem;color:${c.secondary};margin-bottom:1.5rem;letter-spacing:3px;text-shadow:0 0 40px ${c.primary}50}
+.hero p{font-size:1.2rem;color:#c0a870;max-width:600px;margin:0 auto 2.5rem;line-height:1.8}
+.btn{background:${c.primary};color:#000;padding:1rem 3rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;font-weight:700;letter-spacing:2px;transition:all .3s;text-decoration:none;display:inline-block}
+.btn:hover{background:${c.secondary};transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
+.section{padding:6rem 2rem;max-width:1200px;margin:0 auto}
+.section-title{text-align:center;font-size:2rem;color:${c.secondary};margin-bottom:.5rem;letter-spacing:3px}
+.section-sub{text-align:center;color:#888;margin-bottom:3rem;font-size:.95rem}
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:2rem}
+.room-card{background:${c.card};border-radius:8px;overflow:hidden;border:1px solid ${c.primary}30;transition:transform .3s,box-shadow .3s}
+.room-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}30}
+.room-img{background:linear-gradient(135deg,${c.bg},${c.card});height:200px;display:flex;align-items:center;justify-content:center;font-size:5rem}
+.room-body{padding:1.5rem}
+.room-body h3{color:${c.secondary};margin-bottom:.5rem;font-size:1.1rem;letter-spacing:1px}
+.room-body p{color:#999;font-size:.9rem;margin-bottom:1rem;line-height:1.6}
+.room-price{color:${c.secondary};font-size:1.5rem;font-weight:900}
+.amenities{background:${c.card};padding:5rem 2rem;border-top:1px solid ${c.primary}20;border-bottom:1px solid ${c.primary}20}
+.amenities-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;max-width:1000px;margin:2rem auto 0}
+.amenity{text-align:center;padding:1.5rem;background:${c.bg};border-radius:8px;border:1px solid ${c.primary}20}
+.amenity .icon{font-size:2.5rem;margin-bottom:.75rem}
+.amenity p{color:#aaa;font-size:.9rem}
+footer{background:#000;padding:3rem;text-align:center;color:#555;border-top:1px solid ${c.primary}20}
+@media(max-width:768px){.hero h1{font-size:2.2rem}.amenities-grid{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body>
+<nav><div class="logo">✦ ${siteName} ✦</div><ul><li><a href="#rooms">الغرف</a></li><li><a href="#amenities">الخدمات</a></li><li><a href="#booking">احجز</a></li></ul></nav>
+<section class="hero">
+  <div><h1>${siteName}</h1><p>تجربة إقامة فاخرة بمعايير عالمية في قلب الجزائر — راحة لا مثيل لها وضيافة أصيلة</p><a href="#booking" class="btn">احجز الآن</a></div>
+</section>
+<section class="section" id="rooms">
+  <h2 class="section-title">CHAMBRES</h2><p class="section-sub">غرفنا الفاخرة</p>
+  <div class="rooms-grid">
+    <div class="room-card"><div class="room-img">🛏️</div><div class="room-body"><h3>غرفة ستاندرد</h3><p>غرفة مريحة بسرير مزدوج وإطلالة جميلة على الحديقة الداخلية</p><div class="room-price">6,500 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
+    <div class="room-card"><div class="room-img">🛏️✨</div><div class="room-body"><h3>غرفة ديلوكس</h3><p>مساحة رحبة مع حمام فاخر وإطلالة بانورامية ومنطقة جلوس</p><div class="room-price">11,000 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
+    <div class="room-card"><div class="room-img">🏰</div><div class="room-body"><h3>جناح فاخر</h3><p>جناح ملكي بغرفتي نوم وصالة خاصة وخدمة على مدار الساعة</p><div class="room-price">22,000 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
+  </div>
+</section>
+<section class="amenities" id="amenities">
+  <h2 class="section-title" style="text-align:center">SERVICES</h2><p class="section-sub">خدماتنا المتميزة</p>
+  <div class="amenities-grid">
+    <div class="amenity"><div class="icon">🏊</div><p>مسبح مع إطلالة</p></div>
+    <div class="amenity"><div class="icon">🍽️</div><p>مطعم فاخر</p></div>
+    <div class="amenity"><div class="icon">💆</div><p>مركز سبا</p></div>
+    <div class="amenity"><div class="icon">🚗</div><p>خدمة المطار</p></div>
+    <div class="amenity"><div class="icon">💪</div><p>نادي رياضي</p></div>
+    <div class="amenity"><div class="icon">📶</div><p>واي فاي مجاني</p></div>
+    <div class="amenity"><div class="icon">🎭</div><p>قاعة مؤتمرات</p></div>
+    <div class="amenity"><div class="icon">🔒</div><p>أمن 24/7</p></div>
+  </div>
+</section>
+<footer><p>✦ ${siteName} ✦</p><p style="margin-top:.5rem;font-size:.85rem">الجزائر — هاتف: +213 5 00 00 00 00</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+
+      store: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f0f0f0;direction:rtl}
+nav{background:#000;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}}
+.logo{color:${c.secondary};font-size:1.7rem;font-weight:900}
+nav ul{list-style:none;display:flex;gap:2rem;align-items:center}
+nav ul a{color:#eee;text-decoration:none;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.cart-icon{background:${c.primary};color:#fff;padding:.4rem .9rem;border-radius:20px;font-size:.9rem}
+.hero{background:linear-gradient(135deg,${c.card} 0%,${c.bg} 100%);padding:5rem 2rem;text-align:center}
+.hero h1{font-size:3rem;color:${c.secondary};margin-bottom:1rem}
+.hero p{color:#aaa;max-width:550px;margin:0 auto 2rem;font-size:1.1rem}
+.btn{background:${c.primary};color:#fff;padding:.9rem 2.5rem;border:none;border-radius:8px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block}
+.btn:hover{background:${c.secondary};transform:translateY(-2px)}
+.offers{background:${c.primary}15;padding:1rem 2rem;text-align:center;border-top:1px solid ${c.primary}30;border-bottom:1px solid ${c.primary}30}
+.offers span{color:${c.secondary};font-weight:700;margin:0 2rem}
+.section{padding:4rem 2rem;max-width:1200px;margin:0 auto}
+.section-title{font-size:1.8rem;color:${c.secondary};margin-bottom:2rem;padding-bottom:.5rem;border-bottom:2px solid ${c.primary}40}
+.products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5rem}
+.product-card{background:${c.card};border-radius:12px;overflow:hidden;border:1px solid ${c.primary}20;transition:transform .3s,box-shadow .3s;cursor:pointer}
+.product-card:hover{transform:translateY(-6px);box-shadow:0 15px 40px ${c.primary}25}
+.product-img{background:linear-gradient(135deg,${c.bg},${c.card});height:200px;display:flex;align-items:center;justify-content:center;font-size:5rem}
+.product-body{padding:1.2rem}
+.product-body h3{font-size:1rem;margin-bottom:.4rem;color:#fff}
+.product-body p{color:#888;font-size:.85rem;margin-bottom:.8rem}
+.product-footer{display:flex;justify-content:space-between;align-items:center}
+.product-price{color:${c.secondary};font-size:1.2rem;font-weight:900}
+.add-btn{background:${c.primary};color:#fff;border:none;padding:.4rem .9rem;border-radius:6px;cursor:pointer;font-size:.85rem;transition:background .3s}
+.add-btn:hover{background:${c.secondary}}
+footer{background:#000;padding:3rem 2rem;border-top:1px solid ${c.primary}20;text-align:center;color:#555}
+@media(max-width:600px){.hero h1{font-size:2rem}.products-grid{grid-template-columns:repeat(2,1fr)}}
+</style></head>
+<body>
+<nav><div class="logo">🛒 ${siteName}</div><ul><li><a href="#products">المنتجات</a></li><li><a href="#offers">العروض</a></li><li><a href="#contact">تواصل</a></li><li><a class="cart-icon" href="#">🛒 0</a></li></ul></nav>
+<section class="hero"><h1>${siteName}</h1><p>تسوّق بذكاء — جودة عالية بأسعار تنافسية مع توصيل سريع لكل ولايات الجزائر</p><a href="#products" class="btn">تسوّق الآن</a></section>
+<div class="offers"><span>🚚 توصيل مجاني فوق 5000 دج</span><span>⚡ عروض يومية حصرية</span><span>✅ ضمان الجودة أو استرداد الأموال</span></div>
+<section class="section" id="products">
+  <h2 class="section-title">🔥 أبرز المنتجات</h2>
+  <div class="products-grid">
+    <div class="product-card"><div class="product-img">📱</div><div class="product-body"><h3>هاتف ذكي 5G</h3><p>أحدث تقنية بطارية قوية وكاميرا احترافية</p><div class="product-footer"><span class="product-price">45,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+    <div class="product-card"><div class="product-img">💻</div><div class="product-body"><h3>لابتوب احترافي</h3><p>معالج سريع — RAM 16GB — SSD 512GB</p><div class="product-footer"><span class="product-price">120,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+    <div class="product-card"><div class="product-img">🎧</div><div class="product-body"><h3>سماعات لاسلكية</h3><p>صوت نقي — عزل الضجيج — 30 ساعة بطارية</p><div class="product-footer"><span class="product-price">8,500 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+    <div class="product-card"><div class="product-img">⌚</div><div class="product-body"><h3>ساعة ذكية</h3><p>تتبع الصحة — إشعارات — مقاومة الماء</p><div class="product-footer"><span class="product-price">15,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+    <div class="product-card"><div class="product-img">📷</div><div class="product-body"><h3>كاميرا احترافية</h3><p>دقة 4K — عدسات متعددة — حقيبة مجانية</p><div class="product-footer"><span class="product-price">85,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+    <div class="product-card"><div class="product-img">🎮</div><div class="product-body"><h3>جهاز ألعاب</h3><p>ألعاب حصرية — جرافيك خارق — 4K HDR</p><div class="product-footer"><span class="product-price">65,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
+  </div>
+</section>
+<footer><p>🛒 ${siteName} — التسوق الذكي في الجزائر</p><p style="margin-top:.5rem">📱 +213 5 00 00 00 00 | 📧 contact@store.dz</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+
+      portfolio: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#e0e0e0;direction:rtl}
+nav{background:rgba(13,0,26,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);border-bottom:1px solid ${c.primary}30}
+.logo{color:${c.secondary};font-size:1.5rem;font-weight:900}
+nav ul{list-style:none;display:flex;gap:2rem}
+nav ul a{color:#ccc;text-decoration:none;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem;background:radial-gradient(ellipse at center,${c.card} 0%,${c.bg} 70%);position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;border:1px solid ${c.primary}20;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulse 4s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.3}50%{transform:translate(-50%,-50%) scale(1.1);opacity:.1}}
+.avatar{width:140px;height:140px;border-radius:50%;background:linear-gradient(135deg,${c.primary},${c.secondary});display:flex;align-items:center;justify-content:center;font-size:4rem;margin:0 auto 2rem;border:3px solid ${c.primary}60;box-shadow:0 0 40px ${c.primary}40}
+.hero h1{font-size:3rem;margin-bottom:.5rem;background:linear-gradient(135deg,${c.secondary},#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero .role{color:${c.primary};font-size:1.2rem;margin-bottom:1.5rem}
+.hero p{color:#999;max-width:550px;margin:0 auto 2.5rem;line-height:1.8}
+.btn{background:linear-gradient(135deg,${c.primary},${c.secondary});color:#fff;padding:1rem 2.5rem;border:none;border-radius:50px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block;margin:.5rem}
+.btn:hover{transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
+.btn-outline{background:transparent;border:2px solid ${c.primary};color:${c.secondary}}
+.btn-outline:hover{background:${c.primary};color:#fff}
+.skills{padding:6rem 2rem;max-width:1100px;margin:0 auto}
+.section-title{text-align:center;font-size:2rem;margin-bottom:3rem;color:${c.secondary}}
+.skills-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1.5rem}
+.skill-card{background:${c.card};border-radius:12px;padding:2rem;text-align:center;border:1px solid ${c.primary}20;transition:border-color .3s,transform .3s}
+.skill-card:hover{border-color:${c.primary};transform:translateY(-4px)}
+.skill-card .icon{font-size:3rem;margin-bottom:1rem}
+.skill-card h3{color:${c.secondary};margin-bottom:.5rem}
+.skill-card p{color:#777;font-size:.85rem}
+.projects{background:${c.card};padding:6rem 2rem;border-top:1px solid ${c.primary}20}
+.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2rem;max-width:1100px;margin:2rem auto 0}
+.project-card{background:${c.bg};border-radius:12px;overflow:hidden;border:1px solid ${c.primary}20;transition:transform .3s,box-shadow .3s}
+.project-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}30}
+.project-img{height:180px;background:linear-gradient(135deg,${c.card},${c.primary}30);display:flex;align-items:center;justify-content:center;font-size:5rem}
+.project-body{padding:1.5rem}
+.project-body h3{color:${c.secondary};margin-bottom:.5rem}
+.project-body p{color:#888;font-size:.9rem;line-height:1.6}
+.contact{padding:6rem 2rem;text-align:center;max-width:600px;margin:0 auto}
+footer{background:#000;padding:2rem;text-align:center;color:#444;border-top:1px solid ${c.primary}20;font-size:.85rem}
+@media(max-width:768px){.hero h1{font-size:2rem}}
+</style></head>
+<body>
+<nav><div class="logo">&lt;${siteName}/&gt;</div><ul><li><a href="#skills">مهاراتي</a></li><li><a href="#projects">أعمالي</a></li><li><a href="#contact">تواصل</a></li></ul></nav>
+<section class="hero">
+  <div><div class="avatar">👨‍💻</div><h1>${siteName}</h1><p class="role">مطوّر ويب متكامل | مصمم UI/UX</p><p>أبني تجارب رقمية استثنائية تجمع بين الجماليات والأداء العالي. متخصص في React, Node.js والتصميم الإبداعي.</p><a href="#projects" class="btn">اكتشف أعمالي</a><a href="#contact" class="btn btn-outline">تواصل معي</a></div>
+</section>
+<section class="skills" id="skills">
+  <h2 class="section-title">🛠️ مهاراتي</h2>
+  <div class="skills-grid">
+    <div class="skill-card"><div class="icon">⚛️</div><h3>React.js</h3><p>تطوير واجهات تفاعلية حديثة ومتجاوبة</p></div>
+    <div class="skill-card"><div class="icon">🟩</div><h3>Node.js</h3><p>بناء APIs قوية وخوادم عالية الأداء</p></div>
+    <div class="skill-card"><div class="icon">🎨</div><h3>UI/UX Design</h3><p>تصميم تجارب مستخدم احترافية وجذابة</p></div>
+    <div class="skill-card"><div class="icon">🗄️</div><h3>قواعد البيانات</h3><p>MongoDB, PostgreSQL, Firebase</p></div>
+    <div class="skill-card"><div class="icon">📱</div><h3>تطبيقات موبايل</h3><p>React Native للـ iOS والأندرويد</p></div>
+    <div class="skill-card"><div class="icon">☁️</div><h3>Cloud & DevOps</h3><p>AWS, Docker, CI/CD pipelines</p></div>
+  </div>
+</section>
+<section class="projects" id="projects">
+  <h2 class="section-title">🚀 أبرز الأعمال</h2>
+  <div class="projects-grid">
+    <div class="project-card"><div class="project-img">🛒</div><div class="project-body"><h3>منصة تجارة إلكترونية</h3><p>متجر متكامل مع لوحة تحكم، مدفوعات إلكترونية، وتتبع الطلبات.</p></div></div>
+    <div class="project-card"><div class="project-img">📊</div><div class="project-body"><h3>لوحة تحليلات بيانات</h3><p>منصة مخصصة لعرض البيانات بشكل مرئي وتفاعلي في الوقت الفعلي.</p></div></div>
+    <div class="project-card"><div class="project-img">🤖</div><div class="project-body"><h3>تطبيق ذكاء اصطناعي</h3><p>chatbot ذكي مدمج مع GPT-4 يخدم آلاف المستخدمين يومياً.</p></div></div>
+  </div>
+</section>
+<section class="contact" id="contact">
+  <h2 class="section-title">📬 تواصل معي</h2>
+  <p style="color:#888;margin-bottom:2rem">مستعد لمشاريع جديدة ومتحمس للتعاون معك!</p>
+  <a href="mailto:contact@portfolio.dz" class="btn">📧 راسلني الآن</a>
+</section>
+<footer><p>&lt;${siteName}/&gt; — مطوّر جزائري محترف | © 2025 جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+
+      business: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#e8f0ff;direction:rtl}
+nav{background:rgba(8,13,26,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:1px solid ${c.primary}40}
+.logo{color:${c.secondary};font-size:1.7rem;font-weight:900}
+nav ul{list-style:none;display:flex;gap:2rem;align-items:center}
+nav ul a{color:#b0c4e8;text-decoration:none;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.cta-nav{background:${c.primary};color:#fff;padding:.5rem 1.5rem;border-radius:6px}
+.cta-nav:hover{background:${c.secondary}!important;color:#fff!important}
+.hero{padding:7rem 2rem;text-align:center;background:linear-gradient(160deg,${c.bg} 0%,${c.card} 50%,${c.bg} 100%)}
+.hero h1{font-size:3.5rem;margin-bottom:1.5rem;line-height:1.2;background:linear-gradient(135deg,#fff,${c.secondary});-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:#89a0c0;max-width:650px;margin:0 auto 2.5rem;font-size:1.1rem;line-height:1.8}
+.btn{background:${c.primary};color:#fff;padding:1rem 2.5rem;border:none;border-radius:8px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block;margin:.5rem}
+.btn:hover{background:${c.secondary};transform:translateY(-2px);box-shadow:0 10px 30px ${c.primary}50}
+.stats{display:flex;justify-content:center;gap:4rem;padding:4rem 2rem;background:${c.card};border-top:1px solid ${c.primary}20;border-bottom:1px solid ${c.primary}20}
+.stat{text-align:center}
+.stat .number{font-size:3rem;font-weight:900;color:${c.secondary}}
+.stat p{color:#89a0c0;margin-top:.25rem}
+.services{padding:6rem 2rem;max-width:1200px;margin:0 auto}
+.section-title{text-align:center;font-size:2rem;color:${c.secondary};margin-bottom:.5rem}
+.section-sub{text-align:center;color:#778;margin-bottom:3rem}
+.services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2rem}
+.service-card{background:${c.card};border-radius:12px;padding:2.5rem;border:1px solid ${c.primary}20;border-top:3px solid ${c.primary};transition:transform .3s,box-shadow .3s}
+.service-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}20}
+.service-card .icon{font-size:3rem;margin-bottom:1.5rem}
+.service-card h3{color:${c.secondary};margin-bottom:.75rem;font-size:1.1rem}
+.service-card p{color:#89a0c0;line-height:1.7;font-size:.95rem}
+.contact{background:${c.card};padding:5rem 2rem;text-align:center;border-top:1px solid ${c.primary}20}
+.contact-info{display:flex;justify-content:center;gap:3rem;margin-top:2rem;flex-wrap:wrap}
+.contact-item{display:flex;align-items:center;gap:.75rem;color:#89a0c0}
+footer{background:#000;padding:2.5rem;text-align:center;color:#445;border-top:1px solid ${c.primary}20}
+@media(max-width:768px){.hero h1{font-size:2.2rem}.stats{flex-direction:column;gap:2rem}}
+</style></head>
+<body>
+<nav><div class="logo">🏢 ${siteName}</div><ul><li><a href="#services">الخدمات</a></li><li><a href="#about">عنّا</a></li><li><a href="#contact" class="cta-nav">تواصل</a></li></ul></nav>
+<section class="hero"><h1>${siteName}</h1><p>شريكك الموثوق لتحقيق النجاح — نقدّم حلولاً مبتكرة وخبرة راسخة لمساعدة عملك على النمو والتطور في عالم رقمي متسارع</p><a href="#services" class="btn">اكتشف خدماتنا</a><a href="#contact" class="btn" style="background:transparent;border:2px solid ${c.primary};color:${c.secondary}">تواصل معنا</a></section>
+<div class="stats"><div class="stat"><div class="number">500+</div><p>عميل راضٍ</p></div><div class="stat"><div class="number">10+</div><p>سنوات خبرة</p></div><div class="stat"><div class="number">1000+</div><p>مشروع منجز</p></div><div class="stat"><div class="number">24/7</div><p>دعم فني</p></div></div>
+<section class="services" id="services">
+  <h2 class="section-title">خدماتنا</h2><p class="section-sub">نقدّم حلولاً شاملة لأعمالك</p>
+  <div class="services-grid">
+    <div class="service-card"><div class="icon">💡</div><h3>الاستشارات الاستراتيجية</h3><p>نساعدك على رسم خارطة طريق واضحة لنمو مؤسستك وتحقيق أهدافك التجارية</p></div>
+    <div class="service-card"><div class="icon">📊</div><h3>تحليل البيانات</h3><p>نحوّل بياناتك الخام إلى رؤى استراتيجية قابلة للتنفيذ لدعم قراراتك</p></div>
+    <div class="service-card"><div class="icon">🚀</div><h3>التسويق الرقمي</h3><p>استراتيجيات تسويقية مبتكرة تضمن وصول علامتك التجارية لأوسع شريحة</p></div>
+    <div class="service-card"><div class="icon">🔧</div><h3>الحلول التقنية</h3><p>نبني أنظمة وتطبيقات مخصصة تلائم احتياجات مؤسستك بدقة</p></div>
+    <div class="service-card"><div class="icon">🛡️</div><h3>الأمن المعلوماتي</h3><p>نحمي أصولك الرقمية بأحدث حلول الأمن السيبراني</p></div>
+    <div class="service-card"><div class="icon">🤝</div><h3>الشراكات الاستراتيجية</h3><p>نفتح لك أبواب الشبكات التجارية والتعاون مع شركاء نجاح موثوقين</p></div>
+  </div>
+</section>
+<section class="contact" id="contact">
+  <h2 class="section-title">تواصل معنا</h2>
+  <p style="color:#778;margin-top:.5rem">نحن هنا لمساعدتك في تحقيق أهدافك التجارية</p>
+  <div class="contact-info"><div class="contact-item"><span>📍</span><span>الجزائر العاصمة، الجزائر</span></div><div class="contact-item"><span>📱</span><span>+213 5 00 00 00 00</span></div><div class="contact-item"><span>📧</span><span>contact@company.dz</span></div></div>
+</section>
+<footer><p>🏢 ${siteName} — شريكك للنجاح | © 2025 جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+
+      agency: `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f5e6d0;direction:rtl}
+nav{background:rgba(13,10,0,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}50}
+.logo{color:${c.secondary};font-size:1.8rem;font-weight:900}
+nav ul{list-style:none;display:flex;gap:2rem}
+nav ul a{color:#d4c4a0;text-decoration:none;transition:color .3s}
+nav ul a:hover{color:${c.secondary}}
+.hero{min-height:100vh;display:grid;place-items:center;text-align:center;padding:4rem 2rem;background:linear-gradient(135deg,${c.bg} 0%,#1f1200 50%,${c.bg} 100%);position:relative;overflow:hidden}
+.hero::before{content:'✦';position:absolute;font-size:30rem;opacity:0.03;color:${c.primary};top:0;right:-5rem}
+.hero::after{content:'✦';position:absolute;font-size:20rem;opacity:0.03;color:${c.secondary};bottom:0;left:-3rem}
+.hero h1{font-size:4rem;line-height:1.1;margin-bottom:1.5rem;background:linear-gradient(135deg,${c.secondary},#fff,${c.primary});-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:#b0a080;font-size:1.15rem;max-width:600px;margin:0 auto 2.5rem;line-height:1.8}
+.btn{background:linear-gradient(135deg,${c.primary},${c.secondary});color:#000;padding:1rem 3rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;font-weight:800;letter-spacing:1px;transition:all .3s;text-decoration:none;display:inline-block}
+.btn:hover{transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
+.works{padding:6rem 2rem;max-width:1200px;margin:0 auto}
+.section-title{font-size:2rem;color:${c.secondary};margin-bottom:.5rem;text-align:center}
+.section-sub{text-align:center;color:#806040;margin-bottom:3rem}
+.works-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.work-card{background:${c.card};border-radius:8px;overflow:hidden;border:1px solid ${c.primary}20;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative;cursor:pointer;transition:transform .3s}
+.work-card:hover{transform:scale(1.03)}
+.work-card:nth-child(1){grid-column:span 2}
+.work-overlay{position:absolute;inset:0;background:${c.primary}cc;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem;font-weight:700;opacity:0;transition:opacity .3s;text-align:center;padding:1rem}
+.work-card:hover .work-overlay{opacity:1}
+.services{background:${c.card};padding:6rem 2rem;border-top:1px solid ${c.primary}20}
+.services-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2rem;max-width:1100px;margin:2rem auto 0}
+.service{padding:2rem;border-right:3px solid ${c.primary};padding-right:2rem}
+.service h3{color:${c.secondary};margin-bottom:.75rem}
+.service p{color:#806040;font-size:.95rem;line-height:1.7}
+footer{background:#000;padding:3rem;text-align:center;color:#504030;border-top:1px solid ${c.primary}20}
+@media(max-width:768px){.hero h1{font-size:2.2rem}.works-grid{grid-template-columns:1fr}.work-card:nth-child(1){grid-column:span 1}}
+</style></head>
+<body>
+<nav><div class="logo">✦ ${siteName}</div><ul><li><a href="#works">أعمالنا</a></li><li><a href="#services">خدماتنا</a></li><li><a href="#contact">تواصل</a></li></ul></nav>
+<section class="hero"><div><h1>${siteName}<br>وكالة إبداعية</h1><p>نصنع تجارب رقمية تذهل الجمهور وتحقق النتائج — استراتيجية، تصميم، وتنفيذ لا تُنسى</p><a href="#works" class="btn">اكتشف أعمالنا</a></div></section>
+<section class="works" id="works">
+  <h2 class="section-title">أعمالنا</h2><p class="section-sub">مختارات من أبرز مشاريعنا</p>
+  <div class="works-grid">
+    <div class="work-card">🎨<div class="work-overlay">هوية بصرية — علامة تجارية متكاملة</div></div>
+    <div class="work-card">🌐<div class="work-overlay">موقع ويب — تجربة مستخدم استثنائية</div></div>
+    <div class="work-card">📱<div class="work-overlay">تطبيق موبايل — تصميم وتطوير</div></div>
+    <div class="work-card">🎬<div class="work-overlay">إنتاج فيديو — محتوى تسويقي</div></div>
+    <div class="work-card">📊<div class="work-overlay">حملة تسويقية — نتائج استثنائية</div></div>
+  </div>
+</section>
+<section class="services" id="services">
+  <h2 class="section-title" style="text-align:center">خدماتنا</h2><p class="section-sub" style="text-align:center;color:#806040;margin-bottom:2rem">كل ما تحتاجه في مكان واحد</p>
+  <div class="services-row">
+    <div class="service"><h3>🎨 الهوية البصرية</h3><p>نبني علامتك التجارية من الصفر — شعار، ألوان، خطوط، وكل ما يجعلك لا تُنسى</p></div>
+    <div class="service"><h3>🌐 تطوير الويب</h3><p>مواقع استثنائية بسرعة خاطفة وتجربة مستخدم تحوّل الزوار إلى عملاء</p></div>
+    <div class="service"><h3>📱 تطبيقات الموبايل</h3><p>تطبيقات iOS وأندرويد بتصميم أنيق وأداء عالٍ يفوق التوقعات</p></div>
+    <div class="service"><h3>📣 التسويق الرقمي</h3><p>استراتيجيات إبداعية على السوشيال ميديا، SEO، وإعلانات مدفوعة</p></div>
+  </div>
+</section>
+<footer><p>✦ ${siteName} — وكالة إبداعية جزائرية ✦</p><p style="margin-top:.5rem">📧 hello@agency.dz | 📱 +213 5 00 00 00 00</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
+</body></html>`,
+    }
+
+    const tpl = TEMPLATES[type] || TEMPLATES.business
+    return tpl.replace(/\$\{siteName\}/g, siteName).replace(/\$\{c\.(primary|secondary|bg|card)\}/g, (m, k) => c[k] || m)
+  }
+
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
   // Guard: skip if this was already handled as a Web Reader BUILD mode query
   if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
@@ -7658,8 +8056,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         webBuilderMeta: wbMeta,
       })
     }
+    // AI failed entirely — use built-in fallback template
+    console.warn('[Website Builder v6] AI unavailable — serving fallback template for type:', wbMeta.type)
+    const fallbackHtml = getWebsiteTemplate(wbMeta.type, wbMeta.title, lastUserMessage)
+    const cssCode = extractCssFromHtml(fallbackHtml)
+    const jsCode  = extractJsFromHtml(fallbackHtml)
     return res.status(200).json({
-      content: '⚠️ لم يتمكن النظام من توليد كود HTML صحيح. يرجى تفصيل طلبك أكثر وإعادة المحاولة.',
+      content: `✅ **تم إنشاء ${wbMeta.title}!**\n\n🎨 قالب جاهز وكامل — يمكنك تعديله وتخصيصه.\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** لحفظه.`,
+      isWebsite: true,
+      htmlCode: fallbackHtml,
+      cssCode: cssCode || '',
+      jsCode:  jsCode  || '',
+      webBuilderMeta: wbMeta,
     })
   }
 

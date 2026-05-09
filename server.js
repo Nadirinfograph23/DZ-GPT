@@ -12201,7 +12201,7 @@ app.post('/api/chat-room/leave', (req, res) => {
 })
 
 app.post('/api/chat-room/send', async (req, res) => {
-  const { sessionId, text, dmTo, dmToName } = req.body || {}
+  const { sessionId, text, dmTo, dmToName, replyTo } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
   const muteInfo = mutedUsers.get(sessionId)
@@ -12213,11 +12213,14 @@ app.post('/api/chat-room/send', async (req, res) => {
   const cleanText = sanitizeString(text, 1000).trim()
   if (!cleanText) return res.status(400).json({ error: 'Empty message' })
   session.lastSeen = Date.now()
+  const safeReply = (replyTo && typeof replyTo.id === 'string' && typeof replyTo.from === 'string' && typeof replyTo.text === 'string')
+    ? { id: replyTo.id, from: sanitizeString(replyTo.from, 40), text: sanitizeString(replyTo.text, 200) } : null
   const msg = pushChatMsg({
     id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
+    replyTo: safeReply || undefined,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -12346,11 +12349,14 @@ function setupChatWebSocket(httpServer) {
           session.lastSeen = Date.now()
           const cleanText = sanitizeString(data.text, 1000).trim()
           if (!cleanText) return
+          const safeReplyWs = (data.replyTo && typeof data.replyTo.id === 'string' && typeof data.replyTo.from === 'string' && typeof data.replyTo.text === 'string')
+            ? { id: data.replyTo.id, from: sanitizeString(data.replyTo.from, 40), text: sanitizeString(data.replyTo.text, 200) } : null
           const msg = pushChatMsg({
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
+            replyTo: safeReplyWs || undefined,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)

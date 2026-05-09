@@ -4,7 +4,7 @@ import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
-  VolumeX, Clock, Megaphone,
+  VolumeX, Clock, Megaphone, CornerUpLeft,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -36,6 +36,7 @@ interface ChatMessage {
   isBreaking?: boolean
   isBroadcast?: boolean
   reactions?: Record<string, string[]>
+  replyTo?: { id: string; from: string; text: string }
 }
 
 interface LocalUser {
@@ -105,6 +106,9 @@ export default function DZChat() {
   const [isMuted, setIsMuted] = useState(false)
   const [muteUntil, setMuteUntil] = useState(0)
   const [muteRemainSec, setMuteRemainSec] = useState(0)
+
+  // Reply state
+  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null)
 
   // Broadcast modal state
   const [showBroadcast, setShowBroadcast] = useState(false)
@@ -417,12 +421,23 @@ export default function DZChat() {
     }
   }
 
+  const scrollToMsg = (msgId: string) => {
+    const el = document.querySelector(`[data-msg-id="${msgId}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('dzc-msg--highlight-flash')
+      setTimeout(() => el.classList.remove('dzc-msg--highlight-flash'), 1200)
+    }
+  }
+
   const sendMessage = useCallback(async () => {
     const text = inputText.trim()
     if (!text || !sessionIdRef.current || sending) return
     setSending(true)
     setInputText('')
     setAtDropdown(false)
+    const replySnap = replyTarget ? { id: replyTarget.id, from: replyTarget.isHighlighted ? 'المشرف' : replyTarget.from, text: replyTarget.text } : null
+    setReplyTarget(null)
     try {
       const isDmSend = !!dmTarget
       if (wsRef.current?.readyState === 1) {
@@ -431,6 +446,7 @@ export default function DZChat() {
           text,
           dmTo: dmTarget?.id || null,
           dmToName: dmTarget?.name || null,
+          replyTo: replySnap || undefined,
         }))
         if (isDmSend) setDmTarget(null)
       } else {
@@ -440,7 +456,7 @@ export default function DZChat() {
         const r = await fetch('/api/chat-room/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: sessionIdRef.current, text, dmTo: dmTarget?.id, dmToName: dmTarget?.name }),
+          body: JSON.stringify({ sessionId: sessionIdRef.current, text, dmTo: dmTarget?.id, dmToName: dmTarget?.name, replyTo: replySnap }),
         })
         const d = await r.json()
         if (d.ok) {
@@ -454,6 +470,7 @@ export default function DZChat() {
             isDM: isDmSend,
             dmTo: dmTarget?.id,
             dmToName: dmTarget?.name,
+            replyTo: replySnap ?? undefined,
           }
           const toAdd: ChatMessage[] = [myMsg]
           if (d.botMsg) {
@@ -826,6 +843,7 @@ export default function DZChat() {
               return (
                 <div
                   key={msg.id}
+                  data-msg-id={msg.id}
                   className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
                   onContextMenu={(e) => {
                     if (!localUser.isAdmin) return
@@ -834,6 +852,14 @@ export default function DZChat() {
                     setMsgMenu({ msg, x: e.clientX, y: e.clientY })
                   }}
                 >
+                  {/* Reply quote preview */}
+                  {msg.replyTo && (
+                    <button className="dzc-reply-quote" onClick={e => { e.stopPropagation(); scrollToMsg(msg.replyTo!.id) }}>
+                      <CornerUpLeft size={11} className="dzc-reply-quote-icon" />
+                      <span className="dzc-reply-quote-from">{msg.replyTo.from}</span>
+                      <span className="dzc-reply-quote-text">{msg.replyTo.text.slice(0, 80)}{msg.replyTo.text.length > 80 ? '…' : ''}</span>
+                    </button>
+                  )}
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
                     <span
@@ -876,6 +902,16 @@ export default function DZChat() {
                     )}
                   </div>
                   <div className="dzc-msg-text">{msg.text}</div>
+                  {/* Reply button — appears on hover */}
+                  {!msg.isSystem && !msg.isDeleted && (
+                    <button
+                      className="dzc-reply-btn"
+                      title="رد على هذه الرسالة"
+                      onClick={e => { e.stopPropagation(); setReplyTarget(msg); inputRef.current?.focus() }}
+                    >
+                      <CornerUpLeft size={13} />
+                    </button>
+                  )}
                   {/* Emoji reaction picker — appears on hover */}
                   <div className="dzc-emoji-picker">
                     {REACT_EMOJIS.map(emoji => (
@@ -917,6 +953,19 @@ export default function DZChat() {
 
           {/* ===== INPUT AREA ===== */}
           <div className="dzc-input-wrap">
+            {/* Reply preview bar */}
+            {replyTarget && (
+              <div className="dzc-reply-bar">
+                <CornerUpLeft size={13} className="dzc-reply-bar-icon" />
+                <div className="dzc-reply-bar-content">
+                  <span className="dzc-reply-bar-from">{replyTarget.isHighlighted ? 'المشرف' : replyTarget.from}</span>
+                  <span className="dzc-reply-bar-text">{replyTarget.text.slice(0, 100)}{replyTarget.text.length > 100 ? '…' : ''}</span>
+                </div>
+                <button className="dzc-reply-bar-cancel" onClick={() => setReplyTarget(null)} title="إلغاء الرد">
+                  <X size={13} />
+                </button>
+              </div>
+            )}
             {/* Muted banner */}
             {isMuted && (
               <div className="dzc-muted-bar">

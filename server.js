@@ -1592,35 +1592,37 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
 
-  // 1. Capability-aware multi-provider router FIRST (OpenAI integration, Gemini, Mistral, NVIDIA, Cohere, OpenRouter)
-  const routerResult = await callAIRouter(trimmed, { max_tokens, taskHint })
-  if (validateAIContent(routerResult?.content, query)) {
-    console.log(`[AI] ✓ Router succeeded via ${routerResult.model} (hint=${taskHint})`)
-    return routerResult
-  }
-
-  // 2. DeepSeek
+  // 1. DeepSeek
   const ds = await callDeepSeek(trimmed, { max_tokens })
   if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
   if (ds !== null) logInvalidResponse('deepseek', query, ds)
 
-  // 3. Ollama
+  // 2. Ollama
   const ol = await callOllama(trimmed)
   if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
   if (ol !== null) logInvalidResponse('ollama', query, ol)
 
-  // 4. Groq fallback chain
+  // 3. Groq fallback chain
   const fallbackModels = [
     'llama-3.3-70b-versatile',
     'meta-llama/llama-4-scout-17b-16e-instruct',
     'qwen/qwen3-32b',
     'llama-3.1-8b-instant',
   ]
-  console.warn(`[AI] Router failed — trying Groq fallback chain (hint=${taskHint})`)
   for (const model of fallbackModels) {
     const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens })
     if (validateAIContent(content, query)) return { content, model }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
+  }
+
+  // 4. Capability-aware multi-provider fallback
+  // taskHint routes to the best-suited provider for the task type.
+  // e.g. 'multilingual' → Gemini first, 'technical' → NVIDIA first, etc.
+  console.warn(`[AI] Groq/DeepSeek/Ollama all failed — escalating to capability-aware router (hint=${taskHint})`)
+  const routerResult = await callAIRouter(trimmed, { max_tokens, taskHint })
+  if (validateAIContent(routerResult?.content, query)) {
+    console.log(`[AI] ✓ Router succeeded via ${routerResult.model} (hint=${taskHint}, reason=${routerResult.routingReason || 'n/a'})`)
+    return routerResult
   }
 
   return { content: null, model: null }
@@ -1638,9 +1640,8 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          55_000,
-          'safeGenerateAI'
-        )
+          { maxMs: 55_000, fallbackValue: { content: null, model: null }, label: 'safeGenerateAI' }
+        ).then(r => r.value)
       )
     )
     agentMonitor.record(!!result?.content, Date.now() - t0)
@@ -2106,6 +2107,9 @@ function detectWebsiteBuilderQuery(msg) {
     'web app', 'web application', 'single page', 'one page website',
     'portfolio page', 'restaurant website', 'hotel website', 'agency website',
     'make me a website', 'create me a website', 'build me a website',
+    // Web editor / CodePen-like
+    'محرر ويب', 'محرر كود', 'web editor', 'code editor', 'codepen', 'code pen',
+    'محرر html', 'محرر برمجي', 'بيئة برمجة', 'playground',
     // French
     'crée un site', 'créer un site', 'faire un site', 'site web', 'page web',
     'construire un site', 'générer un site', 'design un site', 'tableau de bord',
@@ -2296,21 +2300,15 @@ function extractHtmlFromResponse(text) {
 }
 
 // ── Website Builder: HTML quality validator ───────────────────────────────────
-function validateHtmlOutput(htmlRaw) {
-  if (!htmlRaw || typeof htmlRaw !== 'string') return { ok: false, reason: 'empty' }
-  // Auto-close truncated HTML: append missing closing tags if content is otherwise good
-  let html = htmlRaw
-  if (/<html/i.test(html) && html.length > 500) {
-    // Auto-insert <body> before </body> if missing (model truncated in <head>)
-    if (!/<body[\s>]/i.test(html)) {
-      html += '\n<body><p style="padding:2rem;font-family:sans-serif">✅ تم إنشاء الموقع</p>'
-    }
-    if (!/<\/body>/i.test(html)) html += '\n</body>'
-    if (!/<\/html>/i.test(html)) html += '\n</html>'
-  }
+function validateHtmlOutput(html) {
+  if (!html || typeof html !== 'string') return { ok: false, reason: 'empty' }
   if (html.length < 500) return { ok: false, reason: 'too_short' }
   if (!/<html/i.test(html)) return { ok: false, reason: 'missing_html_tag' }
-  return { ok: true, html }
+  if (!/<\/html>/i.test(html)) return { ok: false, reason: 'missing_closing_html' }
+  if (!/<style[\s>]/i.test(html)) return { ok: false, reason: 'missing_style' }
+  if (!/<\/style>/i.test(html)) return { ok: false, reason: 'missing_closing_style' }
+  if (!/<body[\s>]/i.test(html)) return { ok: false, reason: 'missing_body' }
+  return { ok: true }
 }
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -7178,25 +7176,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _hasExplicitIntent = /(ابني|اصنع|أنشئ|حلل|analyze|clone|build|create|استخرج|اقرأ|شرح|explain|مستوحى|inspired|اشرح|ماهو|ما هو|ما هي|اخبرني|تكلم|ناقش|كلمني|صف|describe|summarize|لخص)/i.test(lastUserMessage)
     if (_msgStripped.length < 15 && !_hasExplicitIntent) {
       console.log(`[WebReader:DETECT] Pure URL → action panel for: ${_detectedUrls[0]}`)
+      const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
+      let _siteTitle = _domain
+      let _siteDesc = ''
+      let _siteHeadings = []
       try {
-        const _qi = await fetchWebContent(_detectedUrls[0], 800)
-        const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
-        const _rawDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
-        return res.status(200).json({
-          content: `🌐 تم اكتشاف الموقع: **${_qi.title || _domain}**`,
-          isWebReader: true,
-          webSiteInfo: {
-            url: _detectedUrls[0],
-            title: _qi.title || _domain,
-            domain: _domain,
-            description: _rawDesc.slice(0, 220),
-            headings: (_qi.headings || []).slice(0, 4),
-          },
-        })
+        const _qi = await fetchWebContent(_detectedUrls[0], 3000)
+        if (!_qi.error) {
+          _siteTitle = _qi.title || _domain
+          _siteDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
+          _siteHeadings = (_qi.headings || []).slice(0, 4)
+        }
       } catch (_e) {
         console.error('[WebReader:DETECT] quick fetch failed:', _e.message)
-        // Fall through to normal web reader processing
       }
+      return res.status(200).json({
+        content: `🌐 تم اكتشاف الموقع: **${_siteTitle}**`,
+        isWebReader: true,
+        webSiteInfo: {
+          url: _detectedUrls[0],
+          title: _siteTitle,
+          domain: _domain,
+          description: _siteDesc.slice(0, 220),
+          headings: _siteHeadings,
+        },
+      })
     }
     console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
     const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
@@ -7227,20 +7231,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
             { role: 'user', content: lastUserMessage },
           ]
-          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 3000 })
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
           const rawHtml = wbResult.content || ''
           const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
           const validation = validateHtmlOutput(htmlCode)
-          const finalHtml = validation.html || htmlCode
           _buildHandled = true
-          const cssCode = extractCssFromHtml(finalHtml)
-          const jsCode  = extractJsFromHtml(finalHtml)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
           // Return best-effort HTML even if validation fails (partial HTML is better than no HTML)
-          if (finalHtml && finalHtml.length > 100) {
+          if (htmlCode && htmlCode.length > 100) {
             return res.status(200).json({
               content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** للمشاهدة أو استخدم **⬇ تحميل** للحفظ.${!validation.ok ? '\n\n⚠️ ملاحظة: الكود قد يحتاج تعديلاً طفيفاً.' : ''}`,
               isWebsite: true,
-              htmlCode: finalHtml,
+              htmlCode,
               cssCode: cssCode || '',
               jsCode:  jsCode  || '',
               webBuilderMeta: { ...wbMeta, title: `🌐 ${wbMeta.title}` },
@@ -7267,6 +7270,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     if (failed.length > 0 && fetched.length === 0) {
       webReaderContext = `⚠️ لم يتمكن DZ Agent من قراءة الصفحة: ${failed.map(f => `${f.url} (${f.error})`).join(', ')}`
+      // Even if fetch failed, still attempt BUILD mode based on URL info alone
+      if (_webReaderIntent === 'build') {
+        console.log('[WebReader:BUILD:NoFetch] Attempting build from URL info (fetch failed)')
+        try {
+          const _urlInfo = `Target URL: ${_detectedUrls[0]}\nDomain: ${(() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()}\nNote: Page fetch was blocked — build a creative, modern version inspired by the domain/URL structure.`
+          const _wbMeta = extractWebBuilderMeta(lastUserMessage) || { type: 'landing', style: 'modern', title: 'موقع مستوحى من الرابط', description: 'website inspired by URL', icon: '🌐' }
+          const _wbMessages = [
+            { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + `\n\n════════════\nURL CONTEXT:\n${_urlInfo}\n════════════` },
+            { role: 'user', content: lastUserMessage },
+          ]
+          const _wbResult = await safeGenerateAI({ messages: _wbMessages, query: lastUserMessage, max_tokens: 8000 })
+          const _rawHtml = _wbResult.content || ''
+          const _htmlCode = extractHtmlFromResponse(_rawHtml) || _rawHtml
+          if (_htmlCode && _htmlCode.length > 200) {
+            const _cssCode = extractCssFromHtml(_htmlCode)
+            const _jsCode = extractJsFromHtml(_htmlCode)
+            return res.status(200).json({
+              content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدة الموقع — أو **⬇ تحميل** للحفظ.`,
+              isWebsite: true,
+              htmlCode: _htmlCode,
+              cssCode: _cssCode || '',
+              jsCode: _jsCode || '',
+              webBuilderMeta: { ..._wbMeta, title: `🌐 ${_wbMeta.title}` },
+              webReaderIntent: 'build',
+            })
+          }
+        } catch (_buildErr) {
+          console.error('[WebReader:BUILD:NoFetch] error:', _buildErr.message)
+        }
+        return res.status(200).json({
+          content: `⚠️ تعذّر الاستنساخ — الموقع يرفض الوصول الآلي. جرّب وصف التصميم بنفسك وسأبنيه لك.`,
+          webReaderIntent: 'build',
+        })
+      }
     }
   }
 
@@ -7354,22 +7391,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
           { role: 'user', content: lastUserMessage },
         ]
-        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 3000 })
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 8000 })
         const rawOutput = mwbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
         const validation = validateHtmlOutput(htmlCode)
-        const finalHtml = validation.html || htmlCode
-        lastMwbHtml = finalHtml
+        lastMwbHtml = htmlCode
         lastMwbValidation = validation
         if (validation.ok) {
-          console.log(`[Map Website Builder] OK attempt ${attempt} — ${finalHtml.length} chars via ${mwbResult.model}`)
-          const cssCode = extractCssFromHtml(finalHtml)
-          const jsCode  = extractJsFromHtml(finalHtml)
+          console.log(`[Map Website Builder] OK attempt ${attempt} — ${htmlCode.length} chars via ${mwbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
           return res.status(200).json({
             content: `🗺️ **تم إنشاء موقع الخريطة التفاعلية بنجاح!**\n\n✅ **التقنيات المستخدمة:** Leaflet.js + OpenStreetMap (مجاني 100%)\n\n👁 انقر **"معاينة مباشرة"** لمشاهدتها، أو استخدم أزرار التحميل لحفظها.`,
             isWebsite: true,
             isMapWebsite: true,
-            htmlCode: finalHtml,
+            htmlCode,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
             webBuilderMeta: { type: 'map', style: 'modern', title: '🗺️ خريطة تفاعلية', description: 'موقع خريطة تفاعلي مبني بـ Leaflet.js و OpenStreetMap', icon: '🗺️' },
@@ -7450,6 +7486,86 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── CodePen-like Blank Web Editor: return starter template immediately ───────
+  // Triggered when user asks for a plain web editor / CodePen playground.
+  // Returns a starter HTML template; user edits in the HTML/CSS/JS tabs.
+  if (/\b(?:محرر\s*(?:ويب|كود|html|برمجي)|web\s*editor|codepen|code\s*pen|playground|بيئة\s*برمجة)\b/i.test(lastUserMessage)
+      && !/(?:موقع\s+(?:شركة|مطعم|متجر|فندق|احتراف)|landing|dashboard|portfolio)/i.test(lastUserMessage)
+      && !isWebReaderQuery) {
+    console.log('[WebEditor] Blank CodePen starter requested')
+    const _starterHtml = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>محرر ويب — DZ Agent</title>
+  <style>
+    /* ── أضف CSS هنا ── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      text-align: center;
+      padding: 48px 40px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      max-width: 500px;
+    }
+    h1 { font-size: 2.2rem; color: #c8ff00; margin-bottom: 12px; }
+    p  { color: #888; font-size: 1rem; line-height: 1.6; }
+    .btn {
+      display: inline-block;
+      margin-top: 24px;
+      padding: 12px 32px;
+      background: #c8ff00;
+      color: #000;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      font-size: 1rem;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #b0e000; }
+    .counter { margin-top: 16px; font-size: 2rem; color: #c8ff00; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>محرر ويب ✏️</h1>
+    <p>عدّل الكود في ألسنة <strong>HTML · CSS · JS</strong> أعلاه<br>وشاهد النتيجة فوراً في المعاينة</p>
+    <button class="btn" onclick="increment()">اضغط هنا 👆</button>
+    <div class="counter" id="cnt">0</div>
+  </div>
+  <script>
+    // ── أضف JavaScript هنا ──
+    let count = 0
+    function increment() {
+      count++
+      document.getElementById('cnt').textContent = count
+    }
+    console.log('DZ Agent Web Editor — جاهز! 🚀')
+  </script>
+</body>
+</html>`
+    return res.status(200).json({
+      content: `✅ **محرر الويب جاهز!**\n\n🎨 عدّل في الألسنة **HTML · CSS · JS** ثم انقر **"معاينة مباشرة"** لترى النتيجة فوراً.\n\n💡 يمكنك أيضاً تحميل الملف بصيغة HTML أو ZIP.`,
+      isWebsite: true,
+      htmlCode: _starterHtml,
+      cssCode: '',
+      jsCode: '',
+      webBuilderMeta: { type: 'editor', style: 'dark', title: '✏️ محرر الويب', description: 'blank CodePen-like web editor', icon: '✏️' },
+    })
+  }
+
   // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
   // Guard: skip if this was already handled as a Web Reader BUILD mode query
   if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
@@ -7494,24 +7610,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 3000 })
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
         console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
 
         const validation = validateHtmlOutput(htmlCode)
-        const finalHtml = validation.html || htmlCode
-        lastHtml = finalHtml
+        lastHtml = htmlCode
         lastValidation = validation
 
         if (validation.ok) {
-          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${finalHtml.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
-          const cssCode = extractCssFromHtml(finalHtml)
-          const jsCode  = extractJsFromHtml(finalHtml)
+          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
+          const cssCode = extractCssFromHtml(htmlCode)
+          const jsCode  = extractJsFromHtml(htmlCode)
           return res.status(200).json({
             content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** الموجود داخل الصفحة.`,
             isWebsite: true,
-            htmlCode: finalHtml,
+            htmlCode,
             cssCode: cssCode || '',
             jsCode:  jsCode  || '',
             webBuilderMeta: wbMeta,
@@ -8544,7 +8659,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // If RSS context available, return it directly even without AI
   if (rssContext) {
     return res.status(200).json({
-      content: rssContext,
+      content: `${rssContext}\n\n---\n> **ملاحظة:** لتلقي إجابات أكثر ذكاءً وتلخيصاً للأخبار، يمكن إضافة مفتاح \`AI_API_KEY\` (Groq) في إعدادات المشروع.`,
     })
   }
 

@@ -1,0 +1,32 @@
+/* System Health Page Styles */
+.system-health {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e0e0e0;
+  font-family: 'Inter', monospace, sans-serif;
+  padding: 24px;
+}
+
+.system-health h1 {
+  color: #9acd32;
+  font-size: 1.4rem;
+  margin-bottom: 24px;
+}
+
+.system-health .provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.system-health .provider-card {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.system-health .provider-card.ok { border-color: #22c55e; }
+.system-health .provider-card.warn { border-color: #eab308; }
+.system-health .provider-card.error { border-color: #ef4444; }
+.system-health .provider-card.offline { border-color: #555; }

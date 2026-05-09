@@ -9,7 +9,6 @@ import DZAgentV3 from './pages/DZAgentV3.tsx'
 import AIQuran from './pages/AIQuran.tsx'
 import DZChat from './pages/DZChat.tsx'
 import DZTube from './pages/DZTube.tsx'
-import SystemHealth from './pages/SystemHealth.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 
@@ -21,8 +20,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   static getDerivedStateFromError(error: Error) {
     return { error }
   }
-  componentDidCatch(error: Error, info: any) {
-    console.error('[ErrorBoundary] caught:', error.message, error.stack, info?.componentStack)
+  componentDidCatch(error: Error, info: unknown) {
+    console.error('[ErrorBoundary] caught:', error.message, info)
   }
   render() {
     if (this.state.error) {
@@ -52,7 +51,6 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/dz-tube" element={<DZTube />} />
             <Route path="/dztube" element={<Navigate to="/dz-tube" replace />} />
             <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
-            <Route path="/health" element={<SystemHealth />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <MiniPlayer />

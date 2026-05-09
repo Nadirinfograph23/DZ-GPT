@@ -738,7 +738,43 @@
   white-space: pre-wrap;
 }
 
-/* ===== TYPING INDICATOR ===== */
+/* ===== USERS TYPING BAR ===== */
+.dzc-typing-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 18px 2px;
+  min-height: 22px;
+  flex-shrink: 0;
+}
+.dzc-typing-bar-placeholder { height: 0; flex-shrink: 0; }
+.dzc-typing-bar-label {
+  font-size: 11px;
+  color: #475569;
+  font-style: italic;
+}
+.dzc-typing-bar-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.dzc-typing-bar-dots span {
+  width: 5px;
+  height: 5px;
+  background: #475569;
+  border-radius: 50%;
+  display: block;
+  animation: dzc-typing-bounce 1.2s ease-in-out infinite;
+}
+.dzc-typing-bar-dots span:nth-child(1) { animation-delay: 0s; }
+.dzc-typing-bar-dots span:nth-child(2) { animation-delay: 0.2s; }
+.dzc-typing-bar-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dzc-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%            { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ===== TYPING INDICATOR (AI bot bubble) ===== */
 .dzc-msg-typing .dzc-msg-text { display: none; }
 
 .dzc-typing-dots {

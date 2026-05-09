@@ -110,6 +110,11 @@ export default function DZChat() {
   // Reply state
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null)
 
+  // Typing indicator state: userId → name
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const lastTypingSentRef = useRef<number>(0)
+
   // Broadcast modal state
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [broadcastText, setBroadcastText] = useState('')
@@ -217,6 +222,18 @@ export default function DZChat() {
           setIsMuted(false)
           setMuteUntil(0)
         }
+      }
+    } else if (data.type === 'typing') {
+      const { userId, name } = data as { userId: string; name: string }
+      if (userId && name && userId !== sessionIdRef.current) {
+        setTypingUsers(prev => { const m = new Map(prev); m.set(userId, name); return m })
+        const existing = typingTimersRef.current.get(userId)
+        if (existing) clearTimeout(existing)
+        const timer = setTimeout(() => {
+          setTypingUsers(prev => { const m = new Map(prev); m.delete(userId); return m })
+          typingTimersRef.current.delete(userId)
+        }, 3000)
+        typingTimersRef.current.set(userId, timer)
       }
     } else if (data.type === 'reaction') {
       const { msgId, reactions } = data as { msgId: string; reactions: Record<string, string[]> }
@@ -374,6 +391,15 @@ export default function DZChat() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setInputText(val)
+
+    // Send typing event via WS (debounced: max once per 2s)
+    if (val.trim() && wsRef.current?.readyState === 1) {
+      const now = Date.now()
+      if (now - lastTypingSentRef.current > 2000) {
+        lastTypingSentRef.current = now
+        wsRef.current.send(JSON.stringify({ type: 'typing' }))
+      }
+    }
 
     // Detect @ mention
     const cursor = e.target.selectionStart ?? val.length
@@ -950,6 +976,27 @@ export default function DZChat() {
 
             <div ref={messagesEndRef} />
           </div>
+
+          {/* ===== TYPING INDICATOR ===== */}
+          {typingUsers.size > 0 && (() => {
+            const names = [...typingUsers.values()]
+            const label = names.length === 1
+              ? `${names[0]} يكتب...`
+              : names.length === 2
+              ? `${names[0]} و ${names[1]} يكتبان...`
+              : `${names[0]} و ${names.length - 1} آخرون يكتبون...`
+            return (
+              <div className="dzc-typing-bar">
+                <span className="dzc-typing-bar-dots">
+                  <span /><span /><span />
+                </span>
+                <span className="dzc-typing-bar-label">{label}</span>
+              </div>
+            )
+          })()}
+
+          {/* placeholder so the real messages div ends here */}
+          <div className="dzc-typing-bar-placeholder" />
 
           {/* ===== INPUT AREA ===== */}
           <div className="dzc-input-wrap">

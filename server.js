@@ -12376,6 +12376,10 @@ function setupChatWebSocket(httpServer) {
         } else if (data.type === 'ping') {
           const session = sid ? chatSessions.get(sid) : null
           if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }
+        } else if (data.type === 'typing') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session) return
+          broadcastChat({ type: 'typing', userId: sid, name: session.name }, ws)
         } else if (data.type === 'react') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session || !data.msgId || !data.emoji) return

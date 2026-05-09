@@ -1640,8 +1640,9 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          { maxMs: 55_000, fallbackValue: { content: null, model: null }, label: 'safeGenerateAI' }
-        ).then(r => r.value)
+          55_000,
+          'safeGenerateAI'
+        )
       )
     )
     agentMonitor.record(!!result?.content, Date.now() - t0)
@@ -2223,6 +2224,212 @@ FORBIDDEN:
 - ❌ No input() in Python (use hardcoded sample data instead)
 `
 
+// ── Code Template Generator (AI-free fallback for common patterns) ────────────
+function generateCodeTemplate(query, lang = 'python') {
+  const q = query.toLowerCase()
+  const isPython = lang === 'python' || lang === 'py'
+
+  // ── Python templates ───────────────────────────────────────────────────────
+  if (isPython) {
+    // Hello world / print
+    if (/مرحبا|hello|print.*مرحبا|اطبع|طباعة|print/i.test(q)) {
+      return `# برنامج مرحبا بالعالم
+print("مرحبا بالعالم!")
+print("Hello, World!")
+print("Bonjour le monde!")`
+    }
+    // Calculator
+    if (/حساب|آلة حاسبة|calculator|جمع|طرح|ضرب|قسمة/i.test(q)) {
+      return `# آلة حاسبة بسيطة
+def calculator(a, op, b):
+    if op == '+': return a + b
+    if op == '-': return a - b
+    if op == '*': return a * b
+    if op == '/': return a / b if b != 0 else "خطأ: لا يمكن القسمة على صفر"
+    return "عملية غير معروفة"
+
+# أمثلة
+print(f"10 + 5 = {calculator(10, '+', 5)}")
+print(f"20 - 8 = {calculator(20, '-', 8)}")
+print(f"6 × 7 = {calculator(6, '*', 7)}")
+print(f"15 ÷ 3 = {calculator(15, '/', 3)}")`
+    }
+    // List / array
+    if (/قائمة|list|مصفوفة|array|ترتيب|sort/i.test(q)) {
+      return `# العمليات على القوائم في بايثون
+fruits = ["تفاح", "موز", "برتقال", "عنب", "مانجو"]
+
+print("القائمة الأصلية:", fruits)
+print("عدد العناصر:", len(fruits))
+print("أول عنصر:", fruits[0])
+print("آخر عنصر:", fruits[-1])
+
+# إضافة عنصر
+fruits.append("فراولة")
+print("بعد الإضافة:", fruits)
+
+# ترتيب القائمة
+fruits.sort()
+print("بعد الترتيب:", fruits)
+
+# البحث في القائمة
+if "موز" in fruits:
+    print("الموز موجود في القائمة")`
+    }
+    // Loop / for loop
+    if (/حلقة|loop|for|تكرار|كرر/i.test(q)) {
+      return `# أمثلة على الحلقات في بايثون
+
+# حلقة for بسيطة
+print("الأعداد من 1 إلى 10:")
+for i in range(1, 11):
+    print(i, end=" ")
+print()
+
+# حلقة for على قائمة
+cities = ["الجزائر", "وهران", "قسنطينة", "عنابة", "سطيف"]
+print("\\nمدن الجزائر:")
+for i, city in enumerate(cities, 1):
+    print(f"{i}. {city}")
+
+# حلقة while
+print("\\nجدول الضرب للعدد 5:")
+n = 1
+while n <= 10:
+    print(f"5 × {n} = {5*n}")
+    n += 1`
+    }
+    // Function / def
+    if (/دالة|function|def|وظيفة/i.test(q)) {
+      return `# أمثلة على الدوال في بايثون
+
+def greet(name, lang="ar"):
+    """دالة ترحيب بعدة لغات"""
+    greetings = {
+        "ar": f"مرحباً يا {name}!",
+        "fr": f"Bonjour {name}!",
+        "en": f"Hello, {name}!"
+    }
+    return greetings.get(lang, f"مرحبا {name}!")
+
+def factorial(n):
+    """حساب مضروب عدد"""
+    if n <= 1: return 1
+    return n * factorial(n - 1)
+
+def is_prime(n):
+    """التحقق من أن عدداً أولياً"""
+    if n < 2: return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0: return False
+    return True
+
+# استدعاء الدوال
+print(greet("رياض", "ar"))
+print(greet("Ahmed", "en"))
+print(f"5! = {factorial(5)}")
+print(f"7 عدد أولي: {is_prime(7)}")
+print(f"10 عدد أولي: {is_prime(10)}")`
+    }
+    // File / ملف
+    if (/ملف|file|قراءة|كتابة|read|write/i.test(q)) {
+      return `# التعامل مع الملفات في بايثون
+import os
+
+filename = "test_file.txt"
+
+# كتابة في ملف
+with open(filename, 'w', encoding='utf-8') as f:
+    f.write("مرحبا من DZ Agent!\\n")
+    f.write("هذا ملف اختبار.\\n")
+    f.write("Python رائع!\\n")
+
+print(f"تم إنشاء الملف: {filename}")
+
+# قراءة الملف
+with open(filename, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+print("محتوى الملف:")
+print(content)
+
+# حذف الملف (تنظيف)
+os.remove(filename)
+print("تم حذف الملف.")`
+    }
+    // Default Python template
+    return `# كود بايثون — DZ Agent
+# ملاحظة: لم أتمكن من توليد كود مخصص لطلبك بسبب غياب مفتاح AI.
+# هذا مثال عام يمكنك تعديله:
+
+def main():
+    print("=" * 40)
+    print("  مرحبا من DZ Agent 🇩🇿")
+    print("=" * 40)
+    
+    # بيانات نموذجية
+    data = {
+        "اسم": "DZ-GPT",
+        "إصدار": "2026",
+        "لغة": "Python",
+        "المطور": "Nadir Houamria"
+    }
+    
+    for key, value in data.items():
+        print(f"  {key}: {value}")
+
+if __name__ == "__main__":
+    main()`
+  }
+
+  // ── JavaScript templates ───────────────────────────────────────────────────
+  // Hello world
+  if (/مرحبا|hello|console\.log|اطبع|طباعة/i.test(q)) {
+    return `// برنامج مرحبا بالعالم - JavaScript
+console.log("مرحبا بالعالم! 🇩🇿");
+console.log("Hello, World!");
+
+// متغيرات
+const name = "DZ Agent";
+const year = 2026;
+console.log(\`\${name} — \${year}\`);
+
+// مصفوفة
+const cities = ["الجزائر", "وهران", "قسنطينة"];
+cities.forEach((city, i) => console.log(\`\${i+1}. \${city}\`));`
+  }
+  // Array / list
+  if (/مصفوفة|array|قائمة|list|sort|ترتيب/i.test(q)) {
+    return `// العمليات على المصفوفات في JavaScript
+const numbers = [5, 2, 8, 1, 9, 3, 7, 4, 6];
+console.log("الأصلية:", numbers);
+console.log("مرتبة:", [...numbers].sort((a, b) => a - b));
+console.log("مجموع:", numbers.reduce((s, n) => s + n, 0));
+console.log("متوسط:", numbers.reduce((s, n) => s + n, 0) / numbers.length);
+console.log("أكبر:", Math.max(...numbers));
+console.log("أصغر:", Math.min(...numbers));
+console.log("مضاعفة:", numbers.map(n => n * 2));
+console.log("الأزواج:", numbers.filter(n => n % 2 === 0));`
+  }
+  // Default JS template
+  return `// كود JavaScript — DZ Agent
+function greet(name) {
+  return \`مرحباً يا \${name}! 🇩🇿\`;
+}
+
+function factorial(n) {
+  return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+// تشغيل
+console.log(greet("رياض"));
+console.log("5! =", factorial(5));
+
+const data = [1, 2, 3, 4, 5];
+console.log("المجموع:", data.reduce((a, b) => a + b, 0));
+console.log("المتوسط:", data.reduce((a, b) => a + b, 0) / data.length);`
+}
+
 // ── Website Builder: extract project metadata from user request ───────────────
 function extractWebBuilderMeta(msg) {
   // Detect site type
@@ -2312,201 +2519,241 @@ function validateHtmlOutput(html) {
 }
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
-const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER with deep knowledge of the best patterns on CodePen, GitHub, Uiverse, Tailwind UI, and Flowbite. You build production-quality websites that look like they cost $15,000.
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER operating in WEB_BUILDER_MODE V2.
+You have mastery of Dribbble, Awwwards, Tailwind UI, Flowbite, CodePen, Uiverse, and Framer design patterns.
+You build production-quality websites indistinguishable from $25,000 agency work.
 
 ════════════════════════════════════════════
 ABSOLUTE OUTPUT RULE:
 Output ONLY raw HTML — NOTHING ELSE.
-No markdown fences. No explanations. No comments outside code.
+No markdown fences. No explanations. No comments outside HTML tags.
 Response = ONE complete file: <!DOCTYPE html> … </html>
+All CSS inside <style>. All JS inside <script>. ZERO external files except CDN links.
 ════════════════════════════════════════════
 
-DESIGN INTELLIGENCE (auto-detect from request):
-- restaurant / مطعم / café    → Elegant food site: dark hero, menu grid, booking form, warm amber palette
-- hotel / فندق / resort       → Luxury hotel: full-screen video-bg hero, rooms gallery, amenities, booking CTA
-- store / متجر / shop         → E-commerce: product grid cards, cart sidebar, filter bar, badge ribbons
-- portfolio / personal / cv   → Creative dev/designer portfolio: split hero, animated skills bar, project cards
-- dashboard / admin / analytics → Dark analytics: sidebar nav, chart placeholders (CSS-drawn), KPI cards, data table
-- agency / وكالة / studio     → Bold creative agency: full-screen type hero, work grid, team section, neon accents
-- business / company / startup → Premium SaaS landing: gradient mesh hero, feature bento grid, pricing table, testimonials
-- blog / مدونة                → Editorial: clean typographic layout, article cards, category filters, newsletter
-- education / school / دورة   → E-learning platform: course cards, progress bars, instructor section, FAQ accordion
-- default                     → Premium startup landing: animated gradient hero + feature grid
-
-════════════════════════════════════════════
-MANDATORY HTML STRUCTURE:
-1. <head>
-   - charset + viewport + title (contextual, not generic)
-   - Google Fonts @import (2 fonts max, well-paired)
-   - Font Awesome 6 CDN: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-   - <style> block with ALL CSS
-
-2. <body> sections (ALL required):
-   a. Sticky navbar — logo + nav links + CTA button + hamburger (mobile)
-   b. Hero — full-viewport, animated headline, subtext, 2 CTAs, decorative SVG/shape
-   c. Features/Services — 3–6 bento-style cards with Font Awesome icons
-   d. Social proof — animated stat counters (3 numbers) + testimonial cards
-   e. How it works / About — 3-step process or split-screen with visual
-   f. CTA section — gradient background, email input + submit button
-   g. Footer — logo + 3 link columns + social icons + copyright
-
-3. <script> block with all JS logic
+CDN TOOLKIT (use all that apply):
+- Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
+- Font Awesome 6: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+- AOS animations: <link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet"><script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+- Chart.js (dashboards): <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+- Swiper (sliders): <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/><script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+- GSAP (premium animations): <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+- Google Fonts: @import url('https://fonts.googleapis.com/css2?family=...')
 ════════════════════════════════════════════
 
-CSS PATTERNS (MANDATORY — from Tailwind UI / Flowbite / CodePen):
+DESIGN INTELLIGENCE V2 (auto-detect + execute):
+- restaurant / مطعم / café    → Elegant food: parallax hero with food imagery gradient, menu card grid, reservation form, warm amber+dark palette, Playfair Display font
+- hotel / فندق / resort       → Luxury hotel: full-screen gradient hero simulating video-bg, rooms gallery with hover zoom, amenities icons, booking CTA, gold+navy palette
+- store / متجر / shop         → E-commerce: product grid with hover zoom + quick-buy overlay, filter bar, cart icon badge, sale ribbons, trust badges
+- portfolio / personal / cv   → Creative portfolio: split-screen hero, magnetic cursor effect (CSS), project cards with overlay, skills progress bars, timeline
+- dashboard / admin / analytics → Dark analytics: collapsible sidebar nav, real Chart.js charts (line/bar/doughnut), KPI cards with trend arrows, data table with sort
+- agency / وكالة / studio     → Bold agency: full-bleed type hero, magnetic hover cards, work grid with overlay, team section, awards badges, neon accents
+- business / company / startup → Premium SaaS: mesh gradient hero, feature bento grid, pricing table with toggle (monthly/annual), testimonial carousel, logo cloud
+- blog / مدونة                → Editorial: hero article card + grid, category filter tabs, reading time badge, author avatar, newsletter with animated input
+- education / school / دورة   → E-learning: course cards with progress rings, instructor profiles, curriculum accordion, certificate badge, student testimonials
+- landing / default           → Conversion-focused: animated headline with word swap, social proof logos, feature comparison table, FAQ accordion, exit-intent CTA
 
-Variables (always define these):
+════════════════════════════════════════════
+MANDATORY SECTION STRUCTURE V2:
+
+<head>
+  - charset + viewport + title (specific, not generic — match the request)
+  - Google Fonts (2 fonts, well-paired for the site type)
+  - Font Awesome 6 CDN
+  - Relevant CDNs for the site type (AOS always, Swiper if gallery/carousel, Chart.js if dashboard)
+  - <style> with ALL CSS including :root vars, keyframes, components, responsive
+
+<body> — ALL sections required:
+  1. NAVBAR: sticky/fixed, logo + nav links + CTA button + hamburger (mobile), glass morphism on scroll
+  2. HERO: full-viewport (min-height:100vh), animated headline (word-by-word or typing), subtext, 2 CTAs, floating decorative element
+  3. FEATURES/SERVICES: 3–6 bento cards — each with icon, title, description, hover elevation
+  4. SHOWCASE: gallery, product grid, or case studies — with hover zoom/overlay effects
+  5. STATS: animated counters (3–4 numbers), triggered by IntersectionObserver
+  6. TESTIMONIALS: card carousel or grid with avatar, name, rating stars
+  7. PROCESS/HOW IT WORKS: 3-step horizontal flow with connector line, or timeline
+  8. PRICING (if SaaS/business): 3-tier cards, popular badge, feature list with checkmarks
+  9. CTA SECTION: gradient bg, compelling headline, email input + submit button
+  10. FOOTER: logo + tagline + 4 link columns + social icons + newsletter mini-form + copyright
+
+<script> — ALL JS required
+
+════════════════════════════════════════════
+CSS ARCHITECTURE V2 (MANDATORY):
+
 :root {
-  --primary: <contextual>;
+  --primary: <bold contextual color>;
+  --primary-rgb: <r,g,b values>;
   --secondary: <contextual>;
-  --accent: <contextual>;
-  --bg: <contextual>;
-  --surface: <contextual>;
-  --text: <contextual>;
-  --text-muted: <contextual>;
+  --accent: <vibrant contrast color>;
+  --bg: <deep background>;
+  --surface: <card/panel background>;
+  --surface-2: <slightly lighter surface>;
+  --text: <primary text color>;
+  --text-muted: <secondary text color>;
+  --border: rgba(255,255,255,.08);
   --radius: 16px;
-  --shadow: 0 25px 50px -12px rgba(0,0,0,.25);
+  --radius-sm: 8px;
+  --shadow: 0 25px 50px -12px rgba(0,0,0,.4);
+  --shadow-sm: 0 4px 20px rgba(0,0,0,.2);
   --transition: all .3s cubic-bezier(.4,0,.2,1);
+  --transition-fast: all .15s ease;
 }
 
-Layout:
-- html { scroll-behavior: smooth }
-- *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
-- CSS Grid for page sections (display:grid; gap:2rem)
-- Flexbox for nav, cards row, footer columns
-
-Animations (ALL required — CodePen-inspired):
+KEYFRAMES (ALL required):
 @keyframes fadeInUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
-@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
-@keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
-@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.4)} 70%{box-shadow:0 0 0 12px transparent} }
+@keyframes fadeInDown { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
 @keyframes slideInLeft { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:translateX(0)} }
-@keyframes countUp { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
+@keyframes slideInRight { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:translateX(0)} }
+@keyframes float { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-14px) rotate(2deg)} }
+@keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.5)} 70%{box-shadow:0 0 0 15px transparent} }
+@keyframes shimmer { from{background-position:-200% 0} to{background-position:200% 0} }
+@keyframes scaleIn { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
+@keyframes wordSwap { 0%,45%{opacity:1;transform:translateY(0)} 50%,95%{opacity:0;transform:translateY(-20px)} }
 
-Hero:
-- background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%)
-- background-size: 400% 400%; animation: gradientShift 8s ease infinite
-- Headline: font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1
-- Decorative element: absolute-positioned SVG blob or geometric shape (float animation)
-- Hero animation: .hero-content { animation: fadeInUp .8s ease both }
+HERO:
+- min-height: 100vh; display:grid; place-items:center; position:relative; overflow:hidden
+- background: linear-gradient(135deg, var(--bg), var(--surface)); background-size:400% 400%; animation: gradientShift 10s ease infinite
+- Headline: font-size:clamp(2.8rem,7vw,5.5rem); font-weight:900; line-height:1.05; letter-spacing:-.03em
+- Decorative: absolute SVG blob or geometric shape with float animation + opacity:.15
+- .hero-content { animation: fadeInUp 1s ease both }
 
-Cards (Uiverse-inspired):
-- border: 1px solid rgba(255,255,255,.08)
-- background: rgba(255,255,255,.03) or var(--surface)
-- backdrop-filter: blur(20px)
-- border-radius: var(--radius)
+GLASS MORPHISM (navbar + cards):
+background: rgba(255,255,255,.03);
+backdrop-filter: blur(20px) saturate(180%);
+-webkit-backdrop-filter: blur(20px) saturate(180%);
+border: 1px solid rgba(255,255,255,.08);
+
+CARDS:
+- background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius)
 - transition: var(--transition)
-- :hover { transform: translateY(-6px) scale(1.02); box-shadow: var(--shadow) }
+- :hover { transform:translateY(-8px) scale(1.02); box-shadow:var(--shadow); border-color:rgba(var(--primary-rgb),.3) }
 
-Buttons:
-- Primary: gradient background + border-radius:50px + padding:14px 32px + font-weight:700
-- :hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(primary,.5) }
-- :active { transform: translateY(0) }
+BUTTONS:
+- Primary: background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; border:none; border-radius:50px; padding:14px 36px; font-weight:700; font-size:1rem; cursor:pointer; transition:var(--transition)
+- :hover { transform:translateY(-3px); box-shadow:0 15px 40px rgba(var(--primary-rgb),.5) }
+- :active { transform:translateY(-1px) }
+- Ghost: background:transparent; border:2px solid rgba(var(--primary-rgb),.5); color:var(--text)
+- Ghost:hover { background:rgba(var(--primary-rgb),.1); border-color:var(--primary) }
 
-Responsive (mobile-first):
-@media (max-width: 768px) {
-  .nav-links { display:none }
-  .hamburger { display:flex }
-  .grid-3 { grid-template-columns: 1fr }
-  .hero h1 { font-size: clamp(1.8rem, 8vw, 3rem) }
-  .hero { padding: 5rem 1rem 3rem }
+NAVBAR SCROLL:
+nav { transition: var(--transition); padding: 1.5rem 2rem }
+nav.scrolled { padding:.75rem 2rem; background:rgba(var(--bg-rgb),.85); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
+
+RESPONSIVE (mobile-first, all breakpoints):
+@media (max-width:1024px) { .grid-3 { grid-template-columns: repeat(2,1fr) } }
+@media (max-width:768px) {
+  .nav-links { display:none; position:fixed; top:0; left:0; width:100%; height:100vh; background:var(--bg); flex-direction:column; justify-content:center; align-items:center; gap:2rem; z-index:999 }
+  .nav-links.open { display:flex }
+  .hamburger { display:flex; z-index:1000 }
+  .grid-3,.grid-4 { grid-template-columns:1fr }
+  .hero h1 { font-size:clamp(2rem,9vw,3.5rem) }
+  .hero { padding:6rem 1.5rem 4rem; text-align:center }
+  section { padding:4rem 1.5rem }
 }
+@media (max-width:480px) { .hero h1 { font-size:clamp(1.8rem,10vw,2.8rem) } }
 
-Scrollbar:
-::-webkit-scrollbar { width: 6px }
-::-webkit-scrollbar-track { background: var(--bg) }
-::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px }
+SCROLLBAR:
+::-webkit-scrollbar { width:5px }
+::-webkit-scrollbar-track { background:var(--bg) }
+::-webkit-scrollbar-thumb { background:var(--primary); border-radius:3px }
 
-Typography:
-- h1–h3: font-weight 700–900, tight line-height
-- Body: font-size: 1rem; line-height: 1.7; color: var(--text-muted)
-- Section labels: text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; color:var(--accent)
+SELECTION:
+::selection { background:rgba(var(--primary-rgb),.3); color:var(--text) }
 
 ════════════════════════════════════════════
-JAVASCRIPT (ALL required — from CodePen best practices):
+JAVASCRIPT V2 (ALL required — production quality):
 
-1. Navbar scroll shrink:
-window.addEventListener('scroll',()=>{
-  document.querySelector('nav').classList.toggle('scrolled', window.scrollY > 50)
-})
-nav.scrolled { padding:.5rem 2rem; background: var(--bg); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
+1. Navbar:
+const nav=document.querySelector('nav');
+window.addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>60));
+document.querySelector('.hamburger')?.addEventListener('click',function(){
+  document.querySelector('.nav-links').classList.toggle('open');
+  this.classList.toggle('active');
+});
 
-2. Mobile hamburger:
-document.querySelector('.hamburger').addEventListener('click',()=>{
-  document.querySelector('.nav-links').classList.toggle('open')
-})
+2. IntersectionObserver (scroll-in for ALL sections):
+const io=new IntersectionObserver((e)=>e.forEach(i=>{if(i.isIntersecting){i.target.classList.add('visible');io.unobserve(i.target)}}),{threshold:.12});
+document.querySelectorAll('.animate-on-scroll').forEach(el=>io.observe(el));
 
-3. Intersection Observer (scroll-in animations):
-const obs = new IntersectionObserver((entries)=>{
-  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target) }})
-},{ threshold:0.15 })
-document.querySelectorAll('.animate-on-scroll').forEach(el=>obs.observe(el))
-// CSS: .animate-on-scroll{opacity:0;transform:translateY(24px);transition:var(--transition)}
-//      .animate-on-scroll.visible{opacity:1;transform:translateY(0)}
-
-4. Counter animation for stats (count up from 0):
-function animateCounter(el){
-  const target=+el.dataset.target; const dur=1800; const step=target/dur*16;
-  let current=0; const t=setInterval(()=>{
-    current=Math.min(current+step,target);
-    el.textContent=Math.floor(current).toLocaleString()+(el.dataset.suffix||'');
-    if(current>=target)clearInterval(t)
-  },16)
+3. Counter animation:
+function runCounter(el){
+  const end=+el.dataset.target,sfx=el.dataset.suffix||'',dur=2000,step=end/dur*16;
+  let cur=0;const t=setInterval(()=>{cur=Math.min(cur+step,end);el.textContent=Math.floor(cur).toLocaleString()+sfx;if(cur>=end)clearInterval(t)},16);
 }
-new IntersectionObserver((entries)=>{
-  entries.forEach(e=>{ if(e.isIntersecting){ animateCounter(e.target); obs2.unobserve(e.target) }})
-}).observe(document.querySelectorAll('[data-target]'))
+const co=new IntersectionObserver(e=>e.forEach(i=>{if(i.isIntersecting){runCounter(i.target);co.unobserve(i.target)}}),{threshold:.5});
+document.querySelectorAll('[data-target]').forEach(el=>co.observe(el));
 
-5. Smooth active link highlight:
-const sections=document.querySelectorAll('section[id]');
-window.addEventListener('scroll',()=>{
-  sections.forEach(s=>{ if(window.scrollY>=s.offsetTop-100){ document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active')); document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active') }})
-})
+4. Active nav link on scroll:
+const secs=document.querySelectorAll('section[id]');
+window.addEventListener('scroll',()=>{secs.forEach(s=>{if(scrollY>=s.offsetTop-120){document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active')}})});
 
-6. Form validation with success state (not alert):
+5. Smooth scroll for anchor links:
+document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();document.querySelector(a.getAttribute('href'))?.scrollIntoView({behavior:'smooth'})}));
+
+6. AOS init (if AOS loaded):
+if(typeof AOS!=='undefined'){AOS.init({duration:800,once:true,offset:80});}
+
+7. Form submit (no alert — inline success):
 document.querySelector('form')?.addEventListener('submit',e=>{
-  e.preventDefault()
-  const input=e.target.querySelector('input[type="email"]')
-  if(input && input.value.includes('@')){
-    input.style.borderColor='#10b981'
-    e.target.innerHTML='<p style="color:#10b981;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</p>'
-  } else if(input){ input.style.borderColor='#ef4444'; input.placeholder='أدخل بريد إلكتروني صحيح' }
-})
+  e.preventDefault();
+  const inp=e.target.querySelector('input[type="email"]');
+  if(inp?.value.includes('@')){inp.style.borderColor='#10b981';e.target.innerHTML='<div style="text-align:center;padding:2rem;color:#10b981;font-size:1.1rem;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</div>';}
+  else if(inp){inp.style.borderColor='#ef4444';inp.style.animation='shimmer .5s ease';inp.placeholder='أدخل بريد إلكتروني صحيح';}
+});
+
+8. Pricing toggle (monthly/annual) — include if pricing section:
+const toggle=document.querySelector('.pricing-toggle');
+toggle?.addEventListener('change',()=>{
+  document.querySelectorAll('.price-monthly').forEach(p=>p.style.display=toggle.checked?'none':'block');
+  document.querySelectorAll('.price-annual').forEach(p=>p.style.display=toggle.checked?'block':'none');
+});
 
 ════════════════════════════════════════════
-FONT PAIRINGS (pick by type):
-- restaurant / hotel / luxury → Playfair Display (headings) + Lato (body)
-- portfolio / agency / creative → Space Grotesk (headings) + Inter (body)
-- saas / business / startup → Plus Jakarta Sans (all) — modern and clean
-- dashboard / analytics → JetBrains Mono (data) + Inter (UI)
-- education / blog → Merriweather (headings) + Source Sans 3 (body)
+FONT PAIRINGS V2:
+- restaurant / hotel / luxury   → Cormorant Garamond (headings) + DM Sans (body)
+- portfolio / agency / creative → Clash Display / Space Grotesk (headings) + Inter (body)
+- saas / startup / business     → Plus Jakarta Sans (all) or Outfit (all)
+- dashboard / analytics / tech  → JetBrains Mono (data/code) + Inter (UI)
+- education / blog / editorial  → Merriweather (headings) + Source Sans 3 (body)
+- default                       → Plus Jakarta Sans (headings) + Inter (body)
 
-COLOR PALETTES (pick ONE based on type, be bold and unique):
-- restaurant: #0d0d0d (bg) + #c9a84c (gold) + #8b0000 (deep red) — warm/elegant
-- hotel: #0f0f1a (bg) + #d4af37 (gold) + #f5f5dc (cream) — luxury
-- store/ecommerce: #ffffff (bg) + #111 (text) + #7c3aed (purple) — modern
-- portfolio: #09090b (bg) + #f97316 (orange) + #ffffff — bold creative
-- dashboard: #020817 (bg) + #6366f1 (indigo) + #06b6d4 (cyan) — dark analytics
-- agency: #000000 (bg) + #a855f7 (purple) + #ec4899 (pink) — bold/neon
-- startup/saas: #0f172a (bg) + #7c3aed (violet) + #38bdf8 (sky) — modern SaaS
-- blog/education: #fafafa (bg) + #1e293b (text) + #0ea5e9 (blue) — clean
+COLOR SYSTEMS V2 (bold, unique, brand-aware):
+- restaurant:  bg:#0a0a0a   primary:#d4a847  accent:#8b1a1a  surface:#141414  — warm luxury
+- hotel:       bg:#0c0d1a   primary:#c9a84c  accent:#4a90d9  surface:#131424  — ocean gold
+- ecommerce:   bg:#f8fafc   primary:#7c3aed  accent:#f59e0b  surface:#ffffff  — clean violet
+- portfolio:   bg:#050505   primary:#ff6b35  accent:#a855f7  surface:#0f0f0f  — neon creative
+- dashboard:   bg:#020b18   primary:#6366f1  accent:#22d3ee  surface:#0a1628  — deep analytics
+- agency:      bg:#000000   primary:#a855f7  accent:#ec4899  surface:#0d0d0d  — bold neon
+- saas:        bg:#0f172a   primary:#7c3aed  accent:#38bdf8  surface:#1e293b  — modern SaaS
+- blog:        bg:#fafafa   primary:#0ea5e9  accent:#f97316  surface:#ffffff  — editorial
+- education:   bg:#f0f4ff   primary:#4f46e5  accent:#10b981  surface:#ffffff  — learning
+- default:     bg:#0f172a   primary:#6366f1  accent:#06b6d4  surface:#1e293b  — premium
 
 FLOATING DOWNLOAD BUTTON (include EXACTLY):
 <button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href)})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:14px 22px;border-radius:14px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 8px 32px rgba(124,58,237,.5);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;gap:8px;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 48px rgba(124,58,237,.7)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.5)'"><i class="fa-solid fa-download"></i> تحميل الموقع</button>
 
 ════════════════════════════════════════════
-QUALITY BARS (MANDATORY — NO EXCEPTIONS):
-✅ MUST look like Dribbble / Awwwards top picks
-✅ MUST use realistic content (no "Lorem ipsum", no "Title here", no "Description...")
-✅ MUST use Font Awesome icons on every feature card
-✅ MUST have working JS (no dead buttons, no broken interactions)
-✅ MUST be fully mobile responsive
-✅ NO external CSS files (all CSS inside <style>)
-✅ NO placeholder images (use CSS gradients, SVG shapes, or emoji as visual accents)
-✅ Every section MUST have a subtle entrance animation (fadeInUp via Intersection Observer)
-✅ Content MUST be context-aware (restaurant → menu items, hotel → room types, etc.)
+QUALITY MANDATE V2 — ZERO EXCEPTIONS:
+✅ Looks like Dribbble / Awwwards / Framer showcase — not a template
+✅ Real contextual content ONLY — no Lorem ipsum, no "Title here", no "Description..."
+✅ Font Awesome 6 icons on EVERY card and feature
+✅ ALL JS functional — no dead buttons, no broken interactions
+✅ Fully mobile responsive at 320px, 480px, 768px, 1024px, 1440px
+✅ Minimum 10 distinct sections (navbar + hero + features + showcase + stats + testimonials + process + cta + footer + at least one type-specific section)
+✅ Every section has scroll-in animation via IntersectionObserver (.animate-on-scroll + .visible)
+✅ Glassmorphism on navbar and key cards
+✅ Gradient animated hero (gradientShift keyframe)
+✅ Floating decorative element in hero (SVG blob or geometric shape with float animation)
+✅ Stat counters that animate when scrolled into view
+✅ Working mobile hamburger menu (full-screen overlay)
+✅ CSS custom properties (:root vars) for all colors
+✅ Smooth scrolling + active nav link highlight
+✅ NO broken images — use CSS gradients or SVG shapes as visual placeholders
+✅ Contextual content that matches the request exactly (if restaurant → real dish names; if SaaS → real feature names)
+✅ [WEB_BUILDER_MODE V2] logged to console on load: console.log('[WEB_BUILDER_MODE V2] site type: <type>')
 
-START OUTPUT NOW — PURE HTML ONLY:`
+START OUTPUT NOW — PURE HTML ONLY — BEGIN WITH <!DOCTYPE html>:`
 
 // ── News: domain → friendly label map ─────────────────────────────────────────
 // Converts a raw URL or `source` string into a readable Arabic/French label.
@@ -7176,31 +7423,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _hasExplicitIntent = /(ابني|اصنع|أنشئ|حلل|analyze|clone|build|create|استخرج|اقرأ|شرح|explain|مستوحى|inspired|اشرح|ماهو|ما هو|ما هي|اخبرني|تكلم|ناقش|كلمني|صف|describe|summarize|لخص)/i.test(lastUserMessage)
     if (_msgStripped.length < 15 && !_hasExplicitIntent) {
       console.log(`[WebReader:DETECT] Pure URL → action panel for: ${_detectedUrls[0]}`)
-      const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
-      let _siteTitle = _domain
-      let _siteDesc = ''
-      let _siteHeadings = []
       try {
-        const _qi = await fetchWebContent(_detectedUrls[0], 3000)
-        if (!_qi.error) {
-          _siteTitle = _qi.title || _domain
-          _siteDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
-          _siteHeadings = (_qi.headings || []).slice(0, 4)
-        }
+        const _qi = await fetchWebContent(_detectedUrls[0], 800)
+        const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
+        const _rawDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
+        return res.status(200).json({
+          content: `🌐 تم اكتشاف الموقع: **${_qi.title || _domain}**`,
+          isWebReader: true,
+          webSiteInfo: {
+            url: _detectedUrls[0],
+            title: _qi.title || _domain,
+            domain: _domain,
+            description: _rawDesc.slice(0, 220),
+            headings: (_qi.headings || []).slice(0, 4),
+          },
+        })
       } catch (_e) {
         console.error('[WebReader:DETECT] quick fetch failed:', _e.message)
+        // Fall through to normal web reader processing
       }
-      return res.status(200).json({
-        content: `🌐 تم اكتشاف الموقع: **${_siteTitle}**`,
-        isWebReader: true,
-        webSiteInfo: {
-          url: _detectedUrls[0],
-          title: _siteTitle,
-          domain: _domain,
-          description: _siteDesc.slice(0, 220),
-          headings: _siteHeadings,
-        },
-      })
     }
     console.log(`[WebReader] Detected ${_detectedUrls.length} URL(s) | intent=${_webReaderIntent} | urls=${_detectedUrls.join(', ')}`)
     const results = await Promise.allSettled(_detectedUrls.slice(0, 3).map(u => fetchWebContent(u)))
@@ -7270,40 +7511,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     if (failed.length > 0 && fetched.length === 0) {
       webReaderContext = `⚠️ لم يتمكن DZ Agent من قراءة الصفحة: ${failed.map(f => `${f.url} (${f.error})`).join(', ')}`
-      // Even if fetch failed, still attempt BUILD mode based on URL info alone
-      if (_webReaderIntent === 'build') {
-        console.log('[WebReader:BUILD:NoFetch] Attempting build from URL info (fetch failed)')
-        try {
-          const _urlInfo = `Target URL: ${_detectedUrls[0]}\nDomain: ${(() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()}\nNote: Page fetch was blocked — build a creative, modern version inspired by the domain/URL structure.`
-          const _wbMeta = extractWebBuilderMeta(lastUserMessage) || { type: 'landing', style: 'modern', title: 'موقع مستوحى من الرابط', description: 'website inspired by URL', icon: '🌐' }
-          const _wbMessages = [
-            { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + `\n\n════════════\nURL CONTEXT:\n${_urlInfo}\n════════════` },
-            { role: 'user', content: lastUserMessage },
-          ]
-          const _wbResult = await safeGenerateAI({ messages: _wbMessages, query: lastUserMessage, max_tokens: 8000 })
-          const _rawHtml = _wbResult.content || ''
-          const _htmlCode = extractHtmlFromResponse(_rawHtml) || _rawHtml
-          if (_htmlCode && _htmlCode.length > 200) {
-            const _cssCode = extractCssFromHtml(_htmlCode)
-            const _jsCode = extractJsFromHtml(_htmlCode)
-            return res.status(200).json({
-              content: `✅ **تم إنشاء موقع مستوحى من الرابط!**\n\n🌐 المصدر: ${_detectedUrls[0]}\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدة الموقع — أو **⬇ تحميل** للحفظ.`,
-              isWebsite: true,
-              htmlCode: _htmlCode,
-              cssCode: _cssCode || '',
-              jsCode: _jsCode || '',
-              webBuilderMeta: { ..._wbMeta, title: `🌐 ${_wbMeta.title}` },
-              webReaderIntent: 'build',
-            })
-          }
-        } catch (_buildErr) {
-          console.error('[WebReader:BUILD:NoFetch] error:', _buildErr.message)
-        }
-        return res.status(200).json({
-          content: `⚠️ تعذّر الاستنساخ — الموقع يرفض الوصول الآلي. جرّب وصف التصميم بنفسك وسأبنيه لك.`,
-          webReaderIntent: 'build',
-        })
-      }
     }
   }
 
@@ -7453,11 +7660,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       // Extract code block
       const codeMatch = rawOutput.match(/```(\w*)\n([\s\S]*?)```/)
-      const code = codeMatch ? codeMatch[2].trim() : rawOutput.trim()
+      let code = codeMatch ? codeMatch[2].trim() : rawOutput.trim()
       const detectedLang = codeMatch?.[1] || execLang
 
       // Extract explanation (everything after the code block)
       const explanation = rawOutput.replace(/```[\s\S]*?```/, '').trim()
+
+      // ── AI failed → generate template-based code fallback ──────────────────
+      if (!code) {
+        console.warn(`[Code Execution] AI returned empty → using template generator`)
+        code = generateCodeTemplate(lastUserMessage, detectedLang || execLang)
+        const finalLang = (detectedLang || execLang) === 'python' ? 'python' : 'javascript'
+        return res.status(200).json({
+          content: `✅ **تم توليد الكود بنجاح!**\n\n> 💡 نصيحة: لتحصل على كود أكثر ذكاءً ومخصص لطلبك، أضف مفتاح Groq API مجاني في إعدادات المشروع (**AI_API_KEY**) من [console.groq.com](https://console.groq.com/keys)`,
+          isExecution: true,
+          executionLang: finalLang,
+          executionCode: code,
+        })
+      }
 
       // For HTML: return as website (reuse WebsitePreview)
       if (detectedLang === 'html' || (code.includes('<html') && code.includes('</html>'))) {
@@ -7486,488 +7706,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── CodePen-like Blank Web Editor: return starter template immediately ───────
-  // Triggered when user asks for a plain web editor / CodePen playground.
-  // Returns a starter HTML template; user edits in the HTML/CSS/JS tabs.
-  if (/\b(?:محرر\s*(?:ويب|كود|html|برمجي)|web\s*editor|codepen|code\s*pen|playground|بيئة\s*برمجة)\b/i.test(lastUserMessage)
-      && !/(?:موقع\s+(?:شركة|مطعم|متجر|فندق|احتراف)|landing|dashboard|portfolio)/i.test(lastUserMessage)
-      && !isWebReaderQuery) {
-    console.log('[WebEditor] Blank CodePen starter requested')
-    const _starterHtml = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>محرر ويب — DZ Agent</title>
-  <style>
-    /* ── أضف CSS هنا ── */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0a;
-      color: #e0e0e0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .card {
-      text-align: center;
-      padding: 48px 40px;
-      background: #141414;
-      border: 1px solid #2a2a2a;
-      border-radius: 16px;
-      max-width: 500px;
-    }
-    h1 { font-size: 2.2rem; color: #c8ff00; margin-bottom: 12px; }
-    p  { color: #888; font-size: 1rem; line-height: 1.6; }
-    .btn {
-      display: inline-block;
-      margin-top: 24px;
-      padding: 12px 32px;
-      background: #c8ff00;
-      color: #000;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      border: none;
-      font-size: 1rem;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #b0e000; }
-    .counter { margin-top: 16px; font-size: 2rem; color: #c8ff00; font-weight: 800; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>محرر ويب ✏️</h1>
-    <p>عدّل الكود في ألسنة <strong>HTML · CSS · JS</strong> أعلاه<br>وشاهد النتيجة فوراً في المعاينة</p>
-    <button class="btn" onclick="increment()">اضغط هنا 👆</button>
-    <div class="counter" id="cnt">0</div>
-  </div>
-  <script>
-    // ── أضف JavaScript هنا ──
-    let count = 0
-    function increment() {
-      count++
-      document.getElementById('cnt').textContent = count
-    }
-    console.log('DZ Agent Web Editor — جاهز! 🚀')
-  </script>
-</body>
-</html>`
-    return res.status(200).json({
-      content: `✅ **محرر الويب جاهز!**\n\n🎨 عدّل في الألسنة **HTML · CSS · JS** ثم انقر **"معاينة مباشرة"** لترى النتيجة فوراً.\n\n💡 يمكنك أيضاً تحميل الملف بصيغة HTML أو ZIP.`,
-      isWebsite: true,
-      htmlCode: _starterHtml,
-      cssCode: '',
-      jsCode: '',
-      webBuilderMeta: { type: 'editor', style: 'dark', title: '✏️ محرر الويب', description: 'blank CodePen-like web editor', icon: '✏️' },
-    })
-  }
-
-  // ── Website Builder Fallback Templates ───────────────────────────────────────
-  function getWebsiteTemplate(type, title, userMsg) {
-    const siteName = title.replace(/^[^\u0600-\u06FFa-zA-Z]*/, '').replace(/^.*?:\s*/, '').trim() || title
-    const colors = {
-      restaurant: { primary: '#c0392b', secondary: '#e74c3c', bg: '#1a0a08', card: '#2c1310' },
-      hotel:      { primary: '#c9a84c', secondary: '#f0c040', bg: '#0d1117', card: '#1a1f2e' },
-      store:      { primary: '#27ae60', secondary: '#2ecc71', bg: '#0f1a15', card: '#1a2e20' },
-      portfolio:  { primary: '#8e44ad', secondary: '#9b59b6', bg: '#0d0d1a', card: '#1a1a2e' },
-      agency:     { primary: '#e67e22', secondary: '#f39c12', bg: '#0d0a00', card: '#1f1700' },
-      business:   { primary: '#2980b9', secondary: '#3498db', bg: '#080d1a', card: '#0f1930' },
-      education:  { primary: '#16a085', secondary: '#1abc9c', bg: '#050f0d', card: '#0a1f1c' },
-      dashboard:  { primary: '#2980b9', secondary: '#3498db', bg: '#0d1117', card: '#161b22' },
-      blog:       { primary: '#c0392b', secondary: '#e74c3c', bg: '#0f0f0f', card: '#1a1a1a' },
-      landing:    { primary: '#8e44ad', secondary: '#9b59b6', bg: '#0a0010', card: '#150020' },
-    }
-    const c = colors[type] || colors.landing
-
-    const TEMPLATES = {
-      restaurant: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f5f5f5;direction:rtl}
-nav{background:rgba(0,0,0,0.9);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}}
-.logo{color:${c.secondary};font-size:1.6rem;font-weight:900}
-nav ul{list-style:none;display:flex;gap:2rem}
-nav ul a{color:#f5f5f5;text-decoration:none;font-size:1rem;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.hero{background:linear-gradient(135deg,${c.bg} 0%,${c.card} 50%,${c.bg} 100%);padding:6rem 2rem;text-align:center;position:relative;overflow:hidden}
-.hero::before{content:'🍽️';position:absolute;font-size:20rem;opacity:0.04;top:50%;left:50%;transform:translate(-50%,-50%)}
-.hero h1{font-size:3.5rem;color:${c.secondary};margin-bottom:1rem;text-shadow:0 0 30px ${c.primary}40}
-.hero p{font-size:1.3rem;color:#ccc;max-width:600px;margin:0 auto 2rem}
-.btn{background:${c.primary};color:#fff;padding:1rem 2.5rem;border:none;border-radius:50px;font-size:1.1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block}
-.btn:hover{background:${c.secondary};transform:translateY(-3px);box-shadow:0 10px 30px ${c.primary}60}
-.section{padding:5rem 2rem;max-width:1200px;margin:0 auto}
-.section-title{text-align:center;font-size:2.2rem;color:${c.secondary};margin-bottom:3rem}
-.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2rem}
-.menu-card{background:${c.card};border-radius:16px;overflow:hidden;border:1px solid ${c.primary}30;transition:transform .3s,box-shadow .3s}
-.menu-card:hover{transform:translateY(-8px);box-shadow:0 20px 40px ${c.primary}30}
-.card-emoji{font-size:4rem;text-align:center;padding:1.5rem;background:${c.bg}}
-.card-body{padding:1.5rem}
-.card-body h3{color:${c.secondary};font-size:1.2rem;margin-bottom:.5rem}
-.card-body p{color:#aaa;font-size:.95rem;margin-bottom:1rem}
-.price{color:${c.primary};font-size:1.4rem;font-weight:900}
-.contact{background:${c.card};padding:5rem 2rem;text-align:center;border-top:2px solid ${c.primary}30}
-.contact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;max-width:800px;margin:2rem auto}
-.contact-item{background:${c.bg};padding:2rem;border-radius:12px;border:1px solid ${c.primary}30}
-.contact-item .icon{font-size:2.5rem;margin-bottom:1rem}
-footer{background:#000;padding:2rem;text-align:center;color:#555;border-top:1px solid ${c.primary}20}
-@media(max-width:768px){.hero h1{font-size:2rem}.contact-grid{grid-template-columns:1fr}}
-</style></head>
-<body>
-<nav><div class="logo">🍽️ ${siteName}</div><ul><li><a href="#menu">القائمة</a></li><li><a href="#contact">تواصل</a></li><li><a href="#reservation">احجز</a></li></ul></nav>
-<section class="hero">
-  <h1>${siteName}</h1>
-  <p>تذوّق أشهى الوجبات المُعدّة بأجود المكونات في أجواء لا تُنسى</p>
-  <a href="#menu" class="btn">اكتشف القائمة</a>
-</section>
-<section class="section" id="menu">
-  <h2 class="section-title">🍴 قائمة الطعام</h2>
-  <div class="menu-grid">
-    <div class="menu-card"><div class="card-emoji">🥩</div><div class="card-body"><h3>مشاوي فاخرة</h3><p>لحم مشوي على الفحم مع صلصة خاصة وخضار طازجة</p><div class="price">1200 دج</div></div></div>
-    <div class="menu-card"><div class="card-emoji">🍗</div><div class="card-body"><h3>دجاج محمّر</h3><p>دجاج مُتبّل بتوابل بيت وتُقدّم مع بطاطا مقلية</p><div class="price">900 دج</div></div></div>
-    <div class="menu-card"><div class="card-emoji">🥗</div><div class="card-body"><h3>سلطات طازجة</h3><p>تشكيلة سلطات موسمية بزيت زيتون بكر ممتاز</p><div class="price">400 دج</div></div></div>
-    <div class="menu-card"><div class="card-emoji">🍰</div><div class="card-body"><h3>حلويات شرقية</h3><p>بقلاوة وقطايف وكنافة محضّرة يومياً</p><div class="price">350 دج</div></div></div>
-    <div class="menu-card"><div class="card-emoji">🥘</div><div class="card-body"><h3>طاجين لحم</h3><p>طاجين بالخضار والبرقوق على الطريقة الجزائرية الأصيلة</p><div class="price">1400 دج</div></div></div>
-    <div class="menu-card"><div class="card-emoji">🧃</div><div class="card-body"><h3>عصائر طازجة</h3><p>عصير برتقال وليمون وجوز هند طازج يومياً</p><div class="price">250 دج</div></div></div>
-  </div>
-</section>
-<section class="contact" id="contact">
-  <h2 class="section-title">📞 تواصل معنا</h2>
-  <div class="contact-grid">
-    <div class="contact-item"><div class="icon">📍</div><h3>العنوان</h3><p>شارع الاستقلال — الجزائر العاصمة</p></div>
-    <div class="contact-item"><div class="icon">📱</div><h3>الهاتف</h3><p>+213 5 00 00 00 00</p></div>
-    <div class="contact-item"><div class="icon">🕐</div><h3>أوقات العمل</h3><p>كل يوم: 12:00 — 23:00</p></div>
-  </div>
-</section>
-<footer><p>© 2025 ${siteName} — جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-
-      hotel: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f0e6d3;direction:rtl}
-nav{background:rgba(0,0,0,0.95);padding:1rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:1px solid ${c.primary}50}
-.logo{color:${c.secondary};font-size:1.8rem;font-weight:900;letter-spacing:2px}
-nav ul{list-style:none;display:flex;gap:2.5rem}
-nav ul a{color:#e0d0b0;text-decoration:none;font-size:.95rem;letter-spacing:1px;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.hero{background:linear-gradient(160deg,#0a0c18 0%,#1a1530 40%,${c.card} 100%);min-height:85vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem;position:relative}
-.hero::before{content:'🏨';position:absolute;font-size:25rem;opacity:0.03;top:50%;left:50%;transform:translate(-50%,-50%)}
-.hero h1{font-size:4rem;color:${c.secondary};margin-bottom:1.5rem;letter-spacing:3px;text-shadow:0 0 40px ${c.primary}50}
-.hero p{font-size:1.2rem;color:#c0a870;max-width:600px;margin:0 auto 2.5rem;line-height:1.8}
-.btn{background:${c.primary};color:#000;padding:1rem 3rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;font-weight:700;letter-spacing:2px;transition:all .3s;text-decoration:none;display:inline-block}
-.btn:hover{background:${c.secondary};transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
-.section{padding:6rem 2rem;max-width:1200px;margin:0 auto}
-.section-title{text-align:center;font-size:2rem;color:${c.secondary};margin-bottom:.5rem;letter-spacing:3px}
-.section-sub{text-align:center;color:#888;margin-bottom:3rem;font-size:.95rem}
-.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:2rem}
-.room-card{background:${c.card};border-radius:8px;overflow:hidden;border:1px solid ${c.primary}30;transition:transform .3s,box-shadow .3s}
-.room-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}30}
-.room-img{background:linear-gradient(135deg,${c.bg},${c.card});height:200px;display:flex;align-items:center;justify-content:center;font-size:5rem}
-.room-body{padding:1.5rem}
-.room-body h3{color:${c.secondary};margin-bottom:.5rem;font-size:1.1rem;letter-spacing:1px}
-.room-body p{color:#999;font-size:.9rem;margin-bottom:1rem;line-height:1.6}
-.room-price{color:${c.secondary};font-size:1.5rem;font-weight:900}
-.amenities{background:${c.card};padding:5rem 2rem;border-top:1px solid ${c.primary}20;border-bottom:1px solid ${c.primary}20}
-.amenities-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;max-width:1000px;margin:2rem auto 0}
-.amenity{text-align:center;padding:1.5rem;background:${c.bg};border-radius:8px;border:1px solid ${c.primary}20}
-.amenity .icon{font-size:2.5rem;margin-bottom:.75rem}
-.amenity p{color:#aaa;font-size:.9rem}
-footer{background:#000;padding:3rem;text-align:center;color:#555;border-top:1px solid ${c.primary}20}
-@media(max-width:768px){.hero h1{font-size:2.2rem}.amenities-grid{grid-template-columns:repeat(2,1fr)}}
-</style></head>
-<body>
-<nav><div class="logo">✦ ${siteName} ✦</div><ul><li><a href="#rooms">الغرف</a></li><li><a href="#amenities">الخدمات</a></li><li><a href="#booking">احجز</a></li></ul></nav>
-<section class="hero">
-  <div><h1>${siteName}</h1><p>تجربة إقامة فاخرة بمعايير عالمية في قلب الجزائر — راحة لا مثيل لها وضيافة أصيلة</p><a href="#booking" class="btn">احجز الآن</a></div>
-</section>
-<section class="section" id="rooms">
-  <h2 class="section-title">CHAMBRES</h2><p class="section-sub">غرفنا الفاخرة</p>
-  <div class="rooms-grid">
-    <div class="room-card"><div class="room-img">🛏️</div><div class="room-body"><h3>غرفة ستاندرد</h3><p>غرفة مريحة بسرير مزدوج وإطلالة جميلة على الحديقة الداخلية</p><div class="room-price">6,500 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
-    <div class="room-card"><div class="room-img">🛏️✨</div><div class="room-body"><h3>غرفة ديلوكس</h3><p>مساحة رحبة مع حمام فاخر وإطلالة بانورامية ومنطقة جلوس</p><div class="room-price">11,000 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
-    <div class="room-card"><div class="room-img">🏰</div><div class="room-body"><h3>جناح فاخر</h3><p>جناح ملكي بغرفتي نوم وصالة خاصة وخدمة على مدار الساعة</p><div class="room-price">22,000 دج <span style="color:#666;font-size:.8rem">/ليلة</span></div></div></div>
-  </div>
-</section>
-<section class="amenities" id="amenities">
-  <h2 class="section-title" style="text-align:center">SERVICES</h2><p class="section-sub">خدماتنا المتميزة</p>
-  <div class="amenities-grid">
-    <div class="amenity"><div class="icon">🏊</div><p>مسبح مع إطلالة</p></div>
-    <div class="amenity"><div class="icon">🍽️</div><p>مطعم فاخر</p></div>
-    <div class="amenity"><div class="icon">💆</div><p>مركز سبا</p></div>
-    <div class="amenity"><div class="icon">🚗</div><p>خدمة المطار</p></div>
-    <div class="amenity"><div class="icon">💪</div><p>نادي رياضي</p></div>
-    <div class="amenity"><div class="icon">📶</div><p>واي فاي مجاني</p></div>
-    <div class="amenity"><div class="icon">🎭</div><p>قاعة مؤتمرات</p></div>
-    <div class="amenity"><div class="icon">🔒</div><p>أمن 24/7</p></div>
-  </div>
-</section>
-<footer><p>✦ ${siteName} ✦</p><p style="margin-top:.5rem;font-size:.85rem">الجزائر — هاتف: +213 5 00 00 00 00</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-
-      store: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f0f0f0;direction:rtl}
-nav{background:#000;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}}
-.logo{color:${c.secondary};font-size:1.7rem;font-weight:900}
-nav ul{list-style:none;display:flex;gap:2rem;align-items:center}
-nav ul a{color:#eee;text-decoration:none;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.cart-icon{background:${c.primary};color:#fff;padding:.4rem .9rem;border-radius:20px;font-size:.9rem}
-.hero{background:linear-gradient(135deg,${c.card} 0%,${c.bg} 100%);padding:5rem 2rem;text-align:center}
-.hero h1{font-size:3rem;color:${c.secondary};margin-bottom:1rem}
-.hero p{color:#aaa;max-width:550px;margin:0 auto 2rem;font-size:1.1rem}
-.btn{background:${c.primary};color:#fff;padding:.9rem 2.5rem;border:none;border-radius:8px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block}
-.btn:hover{background:${c.secondary};transform:translateY(-2px)}
-.offers{background:${c.primary}15;padding:1rem 2rem;text-align:center;border-top:1px solid ${c.primary}30;border-bottom:1px solid ${c.primary}30}
-.offers span{color:${c.secondary};font-weight:700;margin:0 2rem}
-.section{padding:4rem 2rem;max-width:1200px;margin:0 auto}
-.section-title{font-size:1.8rem;color:${c.secondary};margin-bottom:2rem;padding-bottom:.5rem;border-bottom:2px solid ${c.primary}40}
-.products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5rem}
-.product-card{background:${c.card};border-radius:12px;overflow:hidden;border:1px solid ${c.primary}20;transition:transform .3s,box-shadow .3s;cursor:pointer}
-.product-card:hover{transform:translateY(-6px);box-shadow:0 15px 40px ${c.primary}25}
-.product-img{background:linear-gradient(135deg,${c.bg},${c.card});height:200px;display:flex;align-items:center;justify-content:center;font-size:5rem}
-.product-body{padding:1.2rem}
-.product-body h3{font-size:1rem;margin-bottom:.4rem;color:#fff}
-.product-body p{color:#888;font-size:.85rem;margin-bottom:.8rem}
-.product-footer{display:flex;justify-content:space-between;align-items:center}
-.product-price{color:${c.secondary};font-size:1.2rem;font-weight:900}
-.add-btn{background:${c.primary};color:#fff;border:none;padding:.4rem .9rem;border-radius:6px;cursor:pointer;font-size:.85rem;transition:background .3s}
-.add-btn:hover{background:${c.secondary}}
-footer{background:#000;padding:3rem 2rem;border-top:1px solid ${c.primary}20;text-align:center;color:#555}
-@media(max-width:600px){.hero h1{font-size:2rem}.products-grid{grid-template-columns:repeat(2,1fr)}}
-</style></head>
-<body>
-<nav><div class="logo">🛒 ${siteName}</div><ul><li><a href="#products">المنتجات</a></li><li><a href="#offers">العروض</a></li><li><a href="#contact">تواصل</a></li><li><a class="cart-icon" href="#">🛒 0</a></li></ul></nav>
-<section class="hero"><h1>${siteName}</h1><p>تسوّق بذكاء — جودة عالية بأسعار تنافسية مع توصيل سريع لكل ولايات الجزائر</p><a href="#products" class="btn">تسوّق الآن</a></section>
-<div class="offers"><span>🚚 توصيل مجاني فوق 5000 دج</span><span>⚡ عروض يومية حصرية</span><span>✅ ضمان الجودة أو استرداد الأموال</span></div>
-<section class="section" id="products">
-  <h2 class="section-title">🔥 أبرز المنتجات</h2>
-  <div class="products-grid">
-    <div class="product-card"><div class="product-img">📱</div><div class="product-body"><h3>هاتف ذكي 5G</h3><p>أحدث تقنية بطارية قوية وكاميرا احترافية</p><div class="product-footer"><span class="product-price">45,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-    <div class="product-card"><div class="product-img">💻</div><div class="product-body"><h3>لابتوب احترافي</h3><p>معالج سريع — RAM 16GB — SSD 512GB</p><div class="product-footer"><span class="product-price">120,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-    <div class="product-card"><div class="product-img">🎧</div><div class="product-body"><h3>سماعات لاسلكية</h3><p>صوت نقي — عزل الضجيج — 30 ساعة بطارية</p><div class="product-footer"><span class="product-price">8,500 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-    <div class="product-card"><div class="product-img">⌚</div><div class="product-body"><h3>ساعة ذكية</h3><p>تتبع الصحة — إشعارات — مقاومة الماء</p><div class="product-footer"><span class="product-price">15,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-    <div class="product-card"><div class="product-img">📷</div><div class="product-body"><h3>كاميرا احترافية</h3><p>دقة 4K — عدسات متعددة — حقيبة مجانية</p><div class="product-footer"><span class="product-price">85,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-    <div class="product-card"><div class="product-img">🎮</div><div class="product-body"><h3>جهاز ألعاب</h3><p>ألعاب حصرية — جرافيك خارق — 4K HDR</p><div class="product-footer"><span class="product-price">65,000 دج</span><button class="add-btn">أضف 🛒</button></div></div></div>
-  </div>
-</section>
-<footer><p>🛒 ${siteName} — التسوق الذكي في الجزائر</p><p style="margin-top:.5rem">📱 +213 5 00 00 00 00 | 📧 contact@store.dz</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-
-      portfolio: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#e0e0e0;direction:rtl}
-nav{background:rgba(13,0,26,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);border-bottom:1px solid ${c.primary}30}
-.logo{color:${c.secondary};font-size:1.5rem;font-weight:900}
-nav ul{list-style:none;display:flex;gap:2rem}
-nav ul a{color:#ccc;text-decoration:none;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem;background:radial-gradient(ellipse at center,${c.card} 0%,${c.bg} 70%);position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;width:600px;height:600px;border-radius:50%;border:1px solid ${c.primary}20;top:50%;left:50%;transform:translate(-50%,-50%);animation:pulse 4s ease-in-out infinite}
-@keyframes pulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.3}50%{transform:translate(-50%,-50%) scale(1.1);opacity:.1}}
-.avatar{width:140px;height:140px;border-radius:50%;background:linear-gradient(135deg,${c.primary},${c.secondary});display:flex;align-items:center;justify-content:center;font-size:4rem;margin:0 auto 2rem;border:3px solid ${c.primary}60;box-shadow:0 0 40px ${c.primary}40}
-.hero h1{font-size:3rem;margin-bottom:.5rem;background:linear-gradient(135deg,${c.secondary},#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hero .role{color:${c.primary};font-size:1.2rem;margin-bottom:1.5rem}
-.hero p{color:#999;max-width:550px;margin:0 auto 2.5rem;line-height:1.8}
-.btn{background:linear-gradient(135deg,${c.primary},${c.secondary});color:#fff;padding:1rem 2.5rem;border:none;border-radius:50px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block;margin:.5rem}
-.btn:hover{transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
-.btn-outline{background:transparent;border:2px solid ${c.primary};color:${c.secondary}}
-.btn-outline:hover{background:${c.primary};color:#fff}
-.skills{padding:6rem 2rem;max-width:1100px;margin:0 auto}
-.section-title{text-align:center;font-size:2rem;margin-bottom:3rem;color:${c.secondary}}
-.skills-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1.5rem}
-.skill-card{background:${c.card};border-radius:12px;padding:2rem;text-align:center;border:1px solid ${c.primary}20;transition:border-color .3s,transform .3s}
-.skill-card:hover{border-color:${c.primary};transform:translateY(-4px)}
-.skill-card .icon{font-size:3rem;margin-bottom:1rem}
-.skill-card h3{color:${c.secondary};margin-bottom:.5rem}
-.skill-card p{color:#777;font-size:.85rem}
-.projects{background:${c.card};padding:6rem 2rem;border-top:1px solid ${c.primary}20}
-.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2rem;max-width:1100px;margin:2rem auto 0}
-.project-card{background:${c.bg};border-radius:12px;overflow:hidden;border:1px solid ${c.primary}20;transition:transform .3s,box-shadow .3s}
-.project-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}30}
-.project-img{height:180px;background:linear-gradient(135deg,${c.card},${c.primary}30);display:flex;align-items:center;justify-content:center;font-size:5rem}
-.project-body{padding:1.5rem}
-.project-body h3{color:${c.secondary};margin-bottom:.5rem}
-.project-body p{color:#888;font-size:.9rem;line-height:1.6}
-.contact{padding:6rem 2rem;text-align:center;max-width:600px;margin:0 auto}
-footer{background:#000;padding:2rem;text-align:center;color:#444;border-top:1px solid ${c.primary}20;font-size:.85rem}
-@media(max-width:768px){.hero h1{font-size:2rem}}
-</style></head>
-<body>
-<nav><div class="logo">&lt;${siteName}/&gt;</div><ul><li><a href="#skills">مهاراتي</a></li><li><a href="#projects">أعمالي</a></li><li><a href="#contact">تواصل</a></li></ul></nav>
-<section class="hero">
-  <div><div class="avatar">👨‍💻</div><h1>${siteName}</h1><p class="role">مطوّر ويب متكامل | مصمم UI/UX</p><p>أبني تجارب رقمية استثنائية تجمع بين الجماليات والأداء العالي. متخصص في React, Node.js والتصميم الإبداعي.</p><a href="#projects" class="btn">اكتشف أعمالي</a><a href="#contact" class="btn btn-outline">تواصل معي</a></div>
-</section>
-<section class="skills" id="skills">
-  <h2 class="section-title">🛠️ مهاراتي</h2>
-  <div class="skills-grid">
-    <div class="skill-card"><div class="icon">⚛️</div><h3>React.js</h3><p>تطوير واجهات تفاعلية حديثة ومتجاوبة</p></div>
-    <div class="skill-card"><div class="icon">🟩</div><h3>Node.js</h3><p>بناء APIs قوية وخوادم عالية الأداء</p></div>
-    <div class="skill-card"><div class="icon">🎨</div><h3>UI/UX Design</h3><p>تصميم تجارب مستخدم احترافية وجذابة</p></div>
-    <div class="skill-card"><div class="icon">🗄️</div><h3>قواعد البيانات</h3><p>MongoDB, PostgreSQL, Firebase</p></div>
-    <div class="skill-card"><div class="icon">📱</div><h3>تطبيقات موبايل</h3><p>React Native للـ iOS والأندرويد</p></div>
-    <div class="skill-card"><div class="icon">☁️</div><h3>Cloud & DevOps</h3><p>AWS, Docker, CI/CD pipelines</p></div>
-  </div>
-</section>
-<section class="projects" id="projects">
-  <h2 class="section-title">🚀 أبرز الأعمال</h2>
-  <div class="projects-grid">
-    <div class="project-card"><div class="project-img">🛒</div><div class="project-body"><h3>منصة تجارة إلكترونية</h3><p>متجر متكامل مع لوحة تحكم، مدفوعات إلكترونية، وتتبع الطلبات.</p></div></div>
-    <div class="project-card"><div class="project-img">📊</div><div class="project-body"><h3>لوحة تحليلات بيانات</h3><p>منصة مخصصة لعرض البيانات بشكل مرئي وتفاعلي في الوقت الفعلي.</p></div></div>
-    <div class="project-card"><div class="project-img">🤖</div><div class="project-body"><h3>تطبيق ذكاء اصطناعي</h3><p>chatbot ذكي مدمج مع GPT-4 يخدم آلاف المستخدمين يومياً.</p></div></div>
-  </div>
-</section>
-<section class="contact" id="contact">
-  <h2 class="section-title">📬 تواصل معي</h2>
-  <p style="color:#888;margin-bottom:2rem">مستعد لمشاريع جديدة ومتحمس للتعاون معك!</p>
-  <a href="mailto:contact@portfolio.dz" class="btn">📧 راسلني الآن</a>
-</section>
-<footer><p>&lt;${siteName}/&gt; — مطوّر جزائري محترف | © 2025 جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-
-      business: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#e8f0ff;direction:rtl}
-nav{background:rgba(8,13,26,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:1px solid ${c.primary}40}
-.logo{color:${c.secondary};font-size:1.7rem;font-weight:900}
-nav ul{list-style:none;display:flex;gap:2rem;align-items:center}
-nav ul a{color:#b0c4e8;text-decoration:none;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.cta-nav{background:${c.primary};color:#fff;padding:.5rem 1.5rem;border-radius:6px}
-.cta-nav:hover{background:${c.secondary}!important;color:#fff!important}
-.hero{padding:7rem 2rem;text-align:center;background:linear-gradient(160deg,${c.bg} 0%,${c.card} 50%,${c.bg} 100%)}
-.hero h1{font-size:3.5rem;margin-bottom:1.5rem;line-height:1.2;background:linear-gradient(135deg,#fff,${c.secondary});-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hero p{color:#89a0c0;max-width:650px;margin:0 auto 2.5rem;font-size:1.1rem;line-height:1.8}
-.btn{background:${c.primary};color:#fff;padding:1rem 2.5rem;border:none;border-radius:8px;font-size:1rem;cursor:pointer;transition:all .3s;text-decoration:none;display:inline-block;margin:.5rem}
-.btn:hover{background:${c.secondary};transform:translateY(-2px);box-shadow:0 10px 30px ${c.primary}50}
-.stats{display:flex;justify-content:center;gap:4rem;padding:4rem 2rem;background:${c.card};border-top:1px solid ${c.primary}20;border-bottom:1px solid ${c.primary}20}
-.stat{text-align:center}
-.stat .number{font-size:3rem;font-weight:900;color:${c.secondary}}
-.stat p{color:#89a0c0;margin-top:.25rem}
-.services{padding:6rem 2rem;max-width:1200px;margin:0 auto}
-.section-title{text-align:center;font-size:2rem;color:${c.secondary};margin-bottom:.5rem}
-.section-sub{text-align:center;color:#778;margin-bottom:3rem}
-.services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2rem}
-.service-card{background:${c.card};border-radius:12px;padding:2.5rem;border:1px solid ${c.primary}20;border-top:3px solid ${c.primary};transition:transform .3s,box-shadow .3s}
-.service-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px ${c.primary}20}
-.service-card .icon{font-size:3rem;margin-bottom:1.5rem}
-.service-card h3{color:${c.secondary};margin-bottom:.75rem;font-size:1.1rem}
-.service-card p{color:#89a0c0;line-height:1.7;font-size:.95rem}
-.contact{background:${c.card};padding:5rem 2rem;text-align:center;border-top:1px solid ${c.primary}20}
-.contact-info{display:flex;justify-content:center;gap:3rem;margin-top:2rem;flex-wrap:wrap}
-.contact-item{display:flex;align-items:center;gap:.75rem;color:#89a0c0}
-footer{background:#000;padding:2.5rem;text-align:center;color:#445;border-top:1px solid ${c.primary}20}
-@media(max-width:768px){.hero h1{font-size:2.2rem}.stats{flex-direction:column;gap:2rem}}
-</style></head>
-<body>
-<nav><div class="logo">🏢 ${siteName}</div><ul><li><a href="#services">الخدمات</a></li><li><a href="#about">عنّا</a></li><li><a href="#contact" class="cta-nav">تواصل</a></li></ul></nav>
-<section class="hero"><h1>${siteName}</h1><p>شريكك الموثوق لتحقيق النجاح — نقدّم حلولاً مبتكرة وخبرة راسخة لمساعدة عملك على النمو والتطور في عالم رقمي متسارع</p><a href="#services" class="btn">اكتشف خدماتنا</a><a href="#contact" class="btn" style="background:transparent;border:2px solid ${c.primary};color:${c.secondary}">تواصل معنا</a></section>
-<div class="stats"><div class="stat"><div class="number">500+</div><p>عميل راضٍ</p></div><div class="stat"><div class="number">10+</div><p>سنوات خبرة</p></div><div class="stat"><div class="number">1000+</div><p>مشروع منجز</p></div><div class="stat"><div class="number">24/7</div><p>دعم فني</p></div></div>
-<section class="services" id="services">
-  <h2 class="section-title">خدماتنا</h2><p class="section-sub">نقدّم حلولاً شاملة لأعمالك</p>
-  <div class="services-grid">
-    <div class="service-card"><div class="icon">💡</div><h3>الاستشارات الاستراتيجية</h3><p>نساعدك على رسم خارطة طريق واضحة لنمو مؤسستك وتحقيق أهدافك التجارية</p></div>
-    <div class="service-card"><div class="icon">📊</div><h3>تحليل البيانات</h3><p>نحوّل بياناتك الخام إلى رؤى استراتيجية قابلة للتنفيذ لدعم قراراتك</p></div>
-    <div class="service-card"><div class="icon">🚀</div><h3>التسويق الرقمي</h3><p>استراتيجيات تسويقية مبتكرة تضمن وصول علامتك التجارية لأوسع شريحة</p></div>
-    <div class="service-card"><div class="icon">🔧</div><h3>الحلول التقنية</h3><p>نبني أنظمة وتطبيقات مخصصة تلائم احتياجات مؤسستك بدقة</p></div>
-    <div class="service-card"><div class="icon">🛡️</div><h3>الأمن المعلوماتي</h3><p>نحمي أصولك الرقمية بأحدث حلول الأمن السيبراني</p></div>
-    <div class="service-card"><div class="icon">🤝</div><h3>الشراكات الاستراتيجية</h3><p>نفتح لك أبواب الشبكات التجارية والتعاون مع شركاء نجاح موثوقين</p></div>
-  </div>
-</section>
-<section class="contact" id="contact">
-  <h2 class="section-title">تواصل معنا</h2>
-  <p style="color:#778;margin-top:.5rem">نحن هنا لمساعدتك في تحقيق أهدافك التجارية</p>
-  <div class="contact-info"><div class="contact-item"><span>📍</span><span>الجزائر العاصمة، الجزائر</span></div><div class="contact-item"><span>📱</span><span>+213 5 00 00 00 00</span></div><div class="contact-item"><span>📧</span><span>contact@company.dz</span></div></div>
-</section>
-<footer><p>🏢 ${siteName} — شريكك للنجاح | © 2025 جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-
-      agency: `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${siteName}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:${c.bg};color:#f5e6d0;direction:rtl}
-nav{background:rgba(13,10,0,.95);padding:1.2rem 3rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid ${c.primary}50}
-.logo{color:${c.secondary};font-size:1.8rem;font-weight:900}
-nav ul{list-style:none;display:flex;gap:2rem}
-nav ul a{color:#d4c4a0;text-decoration:none;transition:color .3s}
-nav ul a:hover{color:${c.secondary}}
-.hero{min-height:100vh;display:grid;place-items:center;text-align:center;padding:4rem 2rem;background:linear-gradient(135deg,${c.bg} 0%,#1f1200 50%,${c.bg} 100%);position:relative;overflow:hidden}
-.hero::before{content:'✦';position:absolute;font-size:30rem;opacity:0.03;color:${c.primary};top:0;right:-5rem}
-.hero::after{content:'✦';position:absolute;font-size:20rem;opacity:0.03;color:${c.secondary};bottom:0;left:-3rem}
-.hero h1{font-size:4rem;line-height:1.1;margin-bottom:1.5rem;background:linear-gradient(135deg,${c.secondary},#fff,${c.primary});-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.hero p{color:#b0a080;font-size:1.15rem;max-width:600px;margin:0 auto 2.5rem;line-height:1.8}
-.btn{background:linear-gradient(135deg,${c.primary},${c.secondary});color:#000;padding:1rem 3rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;font-weight:800;letter-spacing:1px;transition:all .3s;text-decoration:none;display:inline-block}
-.btn:hover{transform:translateY(-3px);box-shadow:0 15px 40px ${c.primary}50}
-.works{padding:6rem 2rem;max-width:1200px;margin:0 auto}
-.section-title{font-size:2rem;color:${c.secondary};margin-bottom:.5rem;text-align:center}
-.section-sub{text-align:center;color:#806040;margin-bottom:3rem}
-.works-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
-.work-card{background:${c.card};border-radius:8px;overflow:hidden;border:1px solid ${c.primary}20;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;font-size:5rem;position:relative;cursor:pointer;transition:transform .3s}
-.work-card:hover{transform:scale(1.03)}
-.work-card:nth-child(1){grid-column:span 2}
-.work-overlay{position:absolute;inset:0;background:${c.primary}cc;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem;font-weight:700;opacity:0;transition:opacity .3s;text-align:center;padding:1rem}
-.work-card:hover .work-overlay{opacity:1}
-.services{background:${c.card};padding:6rem 2rem;border-top:1px solid ${c.primary}20}
-.services-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2rem;max-width:1100px;margin:2rem auto 0}
-.service{padding:2rem;border-right:3px solid ${c.primary};padding-right:2rem}
-.service h3{color:${c.secondary};margin-bottom:.75rem}
-.service p{color:#806040;font-size:.95rem;line-height:1.7}
-footer{background:#000;padding:3rem;text-align:center;color:#504030;border-top:1px solid ${c.primary}20}
-@media(max-width:768px){.hero h1{font-size:2.2rem}.works-grid{grid-template-columns:1fr}.work-card:nth-child(1){grid-column:span 1}}
-</style></head>
-<body>
-<nav><div class="logo">✦ ${siteName}</div><ul><li><a href="#works">أعمالنا</a></li><li><a href="#services">خدماتنا</a></li><li><a href="#contact">تواصل</a></li></ul></nav>
-<section class="hero"><div><h1>${siteName}<br>وكالة إبداعية</h1><p>نصنع تجارب رقمية تذهل الجمهور وتحقق النتائج — استراتيجية، تصميم، وتنفيذ لا تُنسى</p><a href="#works" class="btn">اكتشف أعمالنا</a></div></section>
-<section class="works" id="works">
-  <h2 class="section-title">أعمالنا</h2><p class="section-sub">مختارات من أبرز مشاريعنا</p>
-  <div class="works-grid">
-    <div class="work-card">🎨<div class="work-overlay">هوية بصرية — علامة تجارية متكاملة</div></div>
-    <div class="work-card">🌐<div class="work-overlay">موقع ويب — تجربة مستخدم استثنائية</div></div>
-    <div class="work-card">📱<div class="work-overlay">تطبيق موبايل — تصميم وتطوير</div></div>
-    <div class="work-card">🎬<div class="work-overlay">إنتاج فيديو — محتوى تسويقي</div></div>
-    <div class="work-card">📊<div class="work-overlay">حملة تسويقية — نتائج استثنائية</div></div>
-  </div>
-</section>
-<section class="services" id="services">
-  <h2 class="section-title" style="text-align:center">خدماتنا</h2><p class="section-sub" style="text-align:center;color:#806040;margin-bottom:2rem">كل ما تحتاجه في مكان واحد</p>
-  <div class="services-row">
-    <div class="service"><h3>🎨 الهوية البصرية</h3><p>نبني علامتك التجارية من الصفر — شعار، ألوان، خطوط، وكل ما يجعلك لا تُنسى</p></div>
-    <div class="service"><h3>🌐 تطوير الويب</h3><p>مواقع استثنائية بسرعة خاطفة وتجربة مستخدم تحوّل الزوار إلى عملاء</p></div>
-    <div class="service"><h3>📱 تطبيقات الموبايل</h3><p>تطبيقات iOS وأندرويد بتصميم أنيق وأداء عالٍ يفوق التوقعات</p></div>
-    <div class="service"><h3>📣 التسويق الرقمي</h3><p>استراتيجيات إبداعية على السوشيال ميديا، SEO، وإعلانات مدفوعة</p></div>
-  </div>
-</section>
-<footer><p>✦ ${siteName} — وكالة إبداعية جزائرية ✦</p><p style="margin-top:.5rem">📧 hello@agency.dz | 📱 +213 5 00 00 00 00</p><p style="margin-top:.5rem">© 2025 جميع الحقوق محفوظة</p></footer>
-</body></html>`,
-    }
-
-    const tpl = TEMPLATES[type] || TEMPLATES.business
-    return tpl.replace(/\$\{siteName\}/g, siteName).replace(/\$\{c\.(primary|secondary|bg|card)\}/g, (m, k) => c[k] || m)
-  }
-
-  // ── Website Builder God Mode v6 (with UI Inspiration Search) ───────────────
+  // ── WEB_BUILDER_MODE — Website Builder God Mode v6 (with UI Inspiration Search) ──
   // Guard: skip if this was already handled as a Web Reader BUILD mode query
   if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
-    console.log(`[Website Builder v6] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    console.log(`[WEB_BUILDER_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
     // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
@@ -8018,11 +7760,11 @@ footer{background:#000;padding:3rem;text-align:center;color:#504030;border-top:1
         lastValidation = validation
 
         if (validation.ok) {
-          console.log(`[Website Builder v6] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
+          console.log(`[WEB_BUILDER_MODE] ✅ OK attempt ${attempt} — ${htmlCode.length} chars — type=${wbMeta.type} — model=${wbResult.model}`)
           const cssCode = extractCssFromHtml(htmlCode)
           const jsCode  = extractJsFromHtml(htmlCode)
           return res.status(200).json({
-            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** الموجود داخل الصفحة.`,
+            content: `✅ **تم إنشاء ${wbMeta.title} بنجاح!**\n\n🎨 **WEB_BUILDER_MODE** — مستوحى من أفضل تصاميم CodePen · GitHub · Flowbite\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ HTML** و **🗜 ZIP** للتحميل.`,
             isWebsite: true,
             htmlCode,
             cssCode: cssCode || '',
@@ -8056,18 +7798,8 @@ footer{background:#000;padding:3rem;text-align:center;color:#504030;border-top:1
         webBuilderMeta: wbMeta,
       })
     }
-    // AI failed entirely — use built-in fallback template
-    console.warn('[Website Builder v6] AI unavailable — serving fallback template for type:', wbMeta.type)
-    const fallbackHtml = getWebsiteTemplate(wbMeta.type, wbMeta.title, lastUserMessage)
-    const cssCode = extractCssFromHtml(fallbackHtml)
-    const jsCode  = extractJsFromHtml(fallbackHtml)
     return res.status(200).json({
-      content: `✅ **تم إنشاء ${wbMeta.title}!**\n\n🎨 قالب جاهز وكامل — يمكنك تعديله وتخصيصه.\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ تحميل الموقع** لحفظه.`,
-      isWebsite: true,
-      htmlCode: fallbackHtml,
-      cssCode: cssCode || '',
-      jsCode:  jsCode  || '',
-      webBuilderMeta: wbMeta,
+      content: '⚠️ لم يتمكن النظام من توليد كود HTML صحيح. يرجى تفصيل طلبك أكثر وإعادة المحاولة.',
     })
   }
 
@@ -9073,13 +8805,26 @@ footer{background:#000;padding:3rem;text-align:center;color:#504030;border-top:1
 
   // Anti-empty: DZ Agent must always respond. If the user actually asked
   // something and every source (AI models + educational + weather + RSS)
-  // failed, tell them clearly that the data couldn't be fetched right now —
-  // never return a silent welcome screen on top of a real query.
+  // failed, give a clear, actionable response — never a silent empty screen.
   const askedSomething = lastUserMessage && lastUserMessage.trim().length > 0
   if (askedSomething) {
+    // Detect if this looks like a code/programming question
+    const _isCodeQuery = /بايثون|python|javascript|كود|برمجة|دالة|script|كتابة.*كود|برنامج|اكتب.*كود|اكتب.*برنامج|react|html|css/i.test(lastUserMessage)
+    if (_isCodeQuery) {
+      const _tmplLang = /javascript|js|node/i.test(lastUserMessage) ? 'javascript' : 'python'
+      const _tmplCode = generateCodeTemplate(lastUserMessage, _tmplLang)
+      console.warn(`[DZ Agent] AI failed for code query → template fallback (lang=${_tmplLang})`)
+      return res.status(200).json({
+        content: `✅ **تم توليد الكود بنجاح!**\n\n> ⚙️ **ملاحظة:** نموذج AI غير متاح حالياً — تم استخدام مولّد القوالب كبديل.\n> 💡 لتحصل على إجابات أكثر ذكاءً، أضف مفتاح Groq مجاني: **AI_API_KEY** من [console.groq.com](https://console.groq.com/keys)`,
+        isExecution: true,
+        executionLang: _tmplLang,
+        executionCode: _tmplCode,
+      })
+    }
+
     return res.status(200).json({
-      content: `⚠️ **تعذّر جلب المعلومات حول هذا الموضوع حالياً.**\n\nلقد حاولت الاستعلام من جميع المصادر المتاحة (نماذج الذكاء الاصطناعي، الأخبار، الطقس، المعلومات التعليمية) لكنها لم تستجب في الوقت المناسب.\n\n**اقتراحات:**\n- 🔄 أعد المحاولة بعد لحظات (قد يكون انقطاع مؤقت في الشبكة).\n- ✏️ صِغ سؤالك بطريقة أخرى أو أضف تفاصيل أكثر.\n- 📰 جرّب طلب الأخبار أو سعر الصرف أو مباريات اليوم — هذه المصادر تعمل عادةً بشكل مستقل.`,
-      status: 'unavailable',
+      content: `⚠️ **نموذج الذكاء الاصطناعي غير متاح حالياً.**\n\nلا يوجد مفتاح AI مُعيَّن في البيئة — جميع النماذج (Groq، DeepSeek، OpenAI) لم تستجب.\n\n**الحل السريع (مجاني):**\n1. اذهب إلى [console.groq.com/keys](https://console.groq.com/keys) وأنشئ مفتاحاً مجانياً\n2. أضفه في إعدادات المشروع باسم **AI_API_KEY**\n\n**ما يعمل الآن بدون AI:**\n- 💱 أسعار الصرف: "سعر الدولار اليوم"\n- ⚽ مباريات اليوم: "مباريات اليوم"\n- 🕌 مواقيت الصلاة: "مواقيت الصلاة في الجزائر"\n- 📰 أخبار: "أخبار الجزائر اليوم"\n- 🌤️ الطقس: "الطقس في وهران"`,
+      status: 'no_api_key',
     })
   }
 

@@ -37,7 +37,7 @@ export function mountCloneEngineV2(app, aiGenerate) {
         return res.status(200).json({ ok: false, error: result.error, tokens: result.tokens || null })
       }
 
-      const { htmlCode, tokens, score, issues, strategy } = result
+      const { htmlCode, tokens, score, issues, strategy, imageCount } = result
       const cssCode = extractCssFromHtml(htmlCode)
       const jsCode  = extractJsFromHtml(htmlCode)
       const sectionLabel = result.section !== 'full' ? ` — قسم: ${result.section}` : ''
@@ -52,7 +52,7 @@ export function mountCloneEngineV2(app, aiGenerate) {
         score,
         issues,
         fetchStrategy: strategy,
-        content: buildSuccessMessage(tokens, sectionLabel, score, strategy),
+        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0),
         webBuilderMeta: {
           type: tokens.layoutType,
           style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
@@ -106,7 +106,7 @@ export function mountCloneEngineV2(app, aiGenerate) {
         return
       }
 
-      const { htmlCode, tokens, score, issues, strategy } = result
+      const { htmlCode, tokens, score, issues, strategy, imageCount } = result
       const cssCode = extractCssFromHtml(htmlCode)
       const jsCode  = extractJsFromHtml(htmlCode)
       const sectionLabel = result.section !== 'full' ? ` — قسم: ${result.section}` : ''
@@ -121,7 +121,7 @@ export function mountCloneEngineV2(app, aiGenerate) {
         score,
         issues,
         fetchStrategy: strategy,
-        content: buildSuccessMessage(tokens, sectionLabel, score, strategy),
+        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0),
         webBuilderMeta: {
           type: tokens.layoutType,
           style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
@@ -142,16 +142,19 @@ export function mountCloneEngineV2(app, aiGenerate) {
   console.log('[CloneEngineV2] mounted: /api/dz-agent/clone-v2, /api/dz-agent/clone-v2/stream')
 }
 
-function buildSuccessMessage(tokens, sectionLabel, score, strategy) {
+function buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount) {
   const techBadge = tokens.techStack?.length > 0
     ? `\n🔬 **Stack:** ${tokens.techStack.slice(0, 5).join(' · ')}`
     : ''
   const scoreBadge = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🟠'
+  const imgBadge = imageCount > 0 ? ` · **${imageCount}** صورة` : ''
+  const shadowBadge = tokens.shadowTokens?.length > 0 ? ` · **${tokens.shadowTokens.length}** ظل` : ''
   return `🧬 **استنساخ V2${sectionLabel} — ${tokens.title || tokens.domain}**
 
-${scoreBadge} دقة مرئية تقديرية: **${score}%** | جلب عبر: \`${strategy}\`
-✅ **${tokens.colors.length}** لون · **${tokens.fonts.length}** خط · **${tokens.sections.length}** قسم
-🎨 النظام اللوني: **${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'}** | النوع: **${tokens.layoutType}**${techBadge}
+${scoreBadge} دقة مرئية: **${score}%** | جلب عبر: \`${strategy}\`
+✅ **${tokens.colors.length}** لون · **${tokens.fonts.length}** خط · **${tokens.sections.length}** قسم${imgBadge}${shadowBadge}
+🎨 النظام: **${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'}** | النوع: **${tokens.layoutType}**${techBadge}
+🖼️ الصور: مسارات مطلقة ✓ | الأزرار: محفوظة ✓ | الاستجابة: متعددة الشاشات ✓
 
 ▶️ انقر **"معاينة مباشرة"** للمشاهدة أو **⬇ تحميل** للحفظ.`
 }

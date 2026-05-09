@@ -1,10 +1,18 @@
 /**
- * clone-engine/extractor.js
+ * clone-engine/extractor.js  — V2
  * Deep DOM extraction using cheerio + regex.
- * Detects tech stack, colors, fonts, sections, animations, layout, and more.
+ * Detects tech stack, colors, fonts, sections, animations, images,
+ * SVGs, buttons, shadows, spacing, layout, and more.
  */
 
 import * as cheerio from 'cheerio'
+import {
+  extractAllImages,
+  extractInlineSVGs,
+  extractButtonPatterns,
+  extractShadowTokens,
+  extractSpacingTokens,
+} from './asset-handler.js'
 
 // ── Tech stack signatures ────────────────────────────────────────────────────
 const TECH_SIGNATURES = {
@@ -18,7 +26,7 @@ const TECH_SIGNATURES = {
   bootstrap:    [/bootstrap(?:\.min)?\.css|bootstrap(?:\.bundle)?\.js|class="(?:col-|row |container|navbar|btn btn-|card |modal |d-flex)/i],
   bulma:        [/bulma\.css|class="(?:column |columns |tile |hero |navbar-|button is-|section )/i],
   shadcn:       [/shadcn|radix-ui|@radix|cmdk|lucide-react/i],
-  framedmotion: [/framer-motion|FramerMotion|motion\.div|variants=\{|initial=\{|animate=\{|whileHover/i],
+  framermotion: [/framer-motion|FramerMotion|motion\.div|variants=\{|initial=\{|animate=\{|whileHover/i],
   gsap:         [/gsap|TweenMax|TweenLite|ScrollTrigger|gsap\.to\(/i],
   chakra:       [/chakra-ui|@chakra|ChakraProvider/i],
   material:     [/material-ui|@mui\/|MuiButton|MuiTypography/i],
@@ -29,16 +37,17 @@ const TECH_SIGNATURES = {
   jquery:       [/jquery(?:\.min)?\.js|jQuery\.|window\.\$/i],
   alpine:       [/alpinejs|x-data=|x-bind:|x-on:|x-show=|x-if=/i],
   htmx:         [/htmx\.org|hx-get=|hx-post=|hx-trigger=/i],
+  aos:          [/aos\.js|data-aos=|AOS\.init/i],
+  swiper:       [/swiper(?:\.min)?\.js|swiper-wrapper|swiper-slide/i],
+  gsapScrollTrigger: [/ScrollTrigger|scrollTrigger/],
+  lottie:       [/lottie|bodymovin/i],
 }
 
 export function detectTechStack(html) {
   const detected = []
   for (const [tech, patterns] of Object.entries(TECH_SIGNATURES)) {
     for (const pat of patterns) {
-      if (pat.test(html)) {
-        detected.push(tech)
-        break
-      }
+      if (pat.test(html)) { detected.push(tech); break }
     }
   }
   return [...new Set(detected)]
@@ -79,19 +88,14 @@ function extractCssVars(css) {
 // ── Font extractor ───────────────────────────────────────────────────────────
 function extractFonts(html, css) {
   const fonts = []
-  // Google Fonts link tags
   for (const m of html.matchAll(/fonts\.googleapis\.com\/css[^"']*family=([^"'&]+)/gi)) {
     const fam = m[1].replace(/\+/g, ' ').split('|').map(s => s.split(':')[0].trim())
     fonts.push(...fam)
   }
-  // font-family from CSS
   for (const m of css.matchAll(/font-family\s*:\s*([^;}{]+)/gi)) {
     const primary = m[1].split(',')[0].replace(/["']/g, '').trim()
-    if (primary && !primary.startsWith('var(') && primary.length < 60) {
-      fonts.push(primary)
-    }
+    if (primary && !primary.startsWith('var(') && primary.length < 60) fonts.push(primary)
   }
-  // Typekit / Adobe Fonts
   if (/use\.typekit\.net|use\.typekit\.com/i.test(html)) fonts.push('Adobe Fonts / Typekit')
   return [...new Set(fonts)].slice(0, 6)
 }
@@ -109,6 +113,8 @@ function detectAnimations(html, css) {
   if (/swiper|slick|owl.*carousel|splide/i.test(html)) anims.push('slider/carousel')
   if (/lottie|bodymovin/i.test(html)) anims.push('Lottie animations')
   if (/three\.js|threejs|webgl/i.test(html)) anims.push('Three.js / WebGL')
+  if (/hover.*transform|transform.*hover|scale\(|translateY\(/i.test(css)) anims.push('hover transforms')
+  if (/backdrop-filter|blur\(/i.test(css)) anims.push('blur/backdrop effects')
   return anims
 }
 
@@ -155,7 +161,6 @@ function detectColorScheme(css, html) {
 function extractSections($) {
   const sections = []
   const body = $('body')
-
   const checks = [
     { sel: 'nav, header, [class*=nav], [class*=header], [role=navigation]', name: 'navbar' },
     { sel: '[class*=hero], [class*=banner], [class*=jumbotron], [id*=hero]', name: 'hero' },
@@ -172,11 +177,8 @@ function extractSections($) {
     { sel: '[class*=cta], [class*=call-to-action]', name: 'cta' },
     { sel: 'footer, [class*=footer]', name: 'footer' },
   ]
-
   for (const { sel, name } of checks) {
-    if (body.find(sel).length > 0 && !sections.includes(name)) {
-      sections.push(name)
-    }
+    if (body.find(sel).length > 0 && !sections.includes(name)) sections.push(name)
   }
   return sections
 }
@@ -186,8 +188,7 @@ function analyzeLayout(css) {
   const usesGrid = /display\s*:\s*grid|grid-template|grid-cols/i.test(css)
   const usesFlex = /display\s*:\s*flex|flex-(?:row|col|wrap)|justify-content|align-items/i.test(css)
   const breakpoints = [...css.matchAll(/@media[^{]*\((?:max|min)-width:\s*(\d+)px\)/gi)]
-    .map(m => parseInt(m[1]))
-    .filter(Boolean)
+    .map(m => parseInt(m[1])).filter(Boolean)
   const uniqueBP = [...new Set(breakpoints)].sort((a, b) => a - b)
   return { usesGrid, usesFlex, breakpoints: uniqueBP.slice(0, 6) }
 }
@@ -206,20 +207,60 @@ function extractPrimaryBgColors(css) {
   }
 }
 
+// ── Structural DOM skeleton (simplified for AI context) ───────────────────────
+function extractStructuralSkeleton($) {
+  const lines = []
+  function walk(el, depth) {
+    if (depth > 4) return
+    const tag = el.tagName?.toLowerCase()
+    if (!tag || ['script', 'style', 'noscript', 'meta', 'link', 'br', 'hr', 'img'].includes(tag)) return
+    const cls = $(el).attr('class')?.split(' ').filter(c => c.length > 1).slice(0, 3).join('.') || ''
+    const id = $(el).attr('id') ? `#${$(el).attr('id')}` : ''
+    const text = $(el).clone().children().remove().end().text().replace(/\s+/g, ' ').trim().slice(0, 40)
+    const label = `${'  '.repeat(depth)}<${tag}${cls ? ' .' + cls : ''}${id}>${text ? ` "${text}"` : ''}`
+    lines.push(label)
+    $(el).children().each((_, child) => walk(child, depth + 1))
+  }
+  $('body > *').each((_, el) => walk(el, 0))
+  return lines.slice(0, 80).join('\n')
+}
+
+// ── Extract nav structure ─────────────────────────────────────────────────────
+function extractNavStructure($) {
+  const brand = $('nav .brand, nav .logo, header .brand, header .logo, nav a:first-child').first().text().trim().slice(0, 40)
+  const links = []
+  $('nav a, header nav a').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 0 && t.length < 40) links.push(t)
+  })
+  return { brand, links: [...new Set(links)].slice(0, 10) }
+}
+
+// ── Extract hero content ──────────────────────────────────────────────────────
+function extractHeroContent($) {
+  const heroEl = $('[class*=hero], [class*=banner], [id*=hero], main > section:first-child, body > section:first-child').first()
+  if (!heroEl.length) return null
+  const h1 = heroEl.find('h1').first().text().replace(/\s+/g, ' ').trim().slice(0, 120)
+  const sub = heroEl.find('p, h2').first().text().replace(/\s+/g, ' ').trim().slice(0, 200)
+  const ctas = []
+  heroEl.find('a, button').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 0 && t.length < 50) ctas.push(t)
+  })
+  return { h1, subtext: sub, ctas: [...new Set(ctas)].slice(0, 3) }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export function deepExtract(rawHtml, url) {
   let domain = url
   try { domain = new URL(url).hostname } catch {}
 
   const $ = cheerio.load(rawHtml, { decodeEntities: false })
-
-  // Remove scripts and SVG noise for text content
   $('script[src], noscript').remove()
 
   // Extract all style content
   const styleBlocks = []
   $('style').each((_, el) => styleBlocks.push($(el).html() || ''))
-  // Also grab inline style attributes for color hints
   const inlineStyles = []
   $('[style]').each((_, el) => inlineStyles.push($(el).attr('style') || ''))
   const allCss = styleBlocks.join('\n') + '\n' + inlineStyles.join('\n')
@@ -254,18 +295,13 @@ export function deepExtract(rawHtml, url) {
     if (t.length > 0 && t.length < 40) navLinks.push(t)
   })
 
-  // Extract all linked stylesheets (for awareness)
+  // Linked stylesheets
   const linkedStyles = []
-  $('link[rel=stylesheet]').each((_, el) => {
-    linkedStyles.push($(el).attr('href') || '')
-  })
+  $('link[rel=stylesheet]').each((_, el) => { linkedStyles.push($(el).attr('href') || '') })
 
-  // Extract any inline Tailwind classes for pattern analysis
+  // Tailwind class snapshot
   const allClasses = []
-  $('[class]').each((_, el) => {
-    const cls = $(el).attr('class') || ''
-    allClasses.push(cls)
-  })
+  $('[class]').each((_, el) => allClasses.push($(el).attr('class') || ''))
   const classSnapshot = allClasses.join(' ').slice(0, 4000)
 
   const techStack = detectTechStack(rawHtml + classSnapshot)
@@ -280,10 +316,18 @@ export function deepExtract(rawHtml, url) {
   const sections = extractSections($)
   const { usesGrid, usesFlex, breakpoints } = analyzeLayout(allCss)
 
-  // Raw CSS sample for AI reference
-  const rawStyleSample = allCss.slice(0, 6000)
+  // V2 additions ───────────────────────────────────────────────────────────────
+  const images = extractAllImages(rawHtml, url)
+  const svgs = extractInlineSVGs(rawHtml, 6)
+  const buttonPatterns = extractButtonPatterns(rawHtml, 6)
+  const shadowTokens = extractShadowTokens(allCss)
+  const spacingTokens = extractSpacingTokens(allCss)
+  const structuralSkeleton = extractStructuralSkeleton($)
+  const navStructure = extractNavStructure($)
+  const heroContent = extractHeroContent($)
 
-  // Full text content
+  // Raw CSS sample
+  const rawStyleSample = allCss.slice(0, 6000)
   const textContent = paragraphs.slice(0, 20).join('\n')
 
   return {
@@ -314,5 +358,14 @@ export function deepExtract(rawHtml, url) {
     textContent,
     classSnapshot,
     linkedStyles,
+    // V2
+    images,
+    svgs,
+    buttonPatterns,
+    shadowTokens,
+    spacingTokens,
+    structuralSkeleton,
+    navStructure,
+    heroContent,
   }
 }

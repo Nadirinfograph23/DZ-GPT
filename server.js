@@ -219,7 +219,7 @@ function isValidGithubRepo(repo) {
 
 // ===== UNIFIED DEVELOPER / OWNER QUESTION DETECTION =====
 const DEVELOPER_RESPONSE = Object.freeze({
-  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
+  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي\n\n🤖 **DZ AGENT V1.0** — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر',
   showDevCard: true,
 })
 
@@ -255,6 +255,22 @@ const DEVELOPER_QUESTION_PATTERNS = [
   'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui ta crée',
   'qui vous a fait', 'qui a développé', 'qui est le propriétaire',
   'propriétaire du site', 'qui a fait ce site',
+  // Version / release date questions — Arabic
+  'ما هو إصدارك', 'ما إصدارك', 'ما نسختك', 'ما هي نسختك', 'إصدارك كم',
+  'تاريخ إصدارك', 'تاريخ نشرك', 'متى تم إصدارك', 'متى نُشرت', 'متى صدرت',
+  'ما هو تاريخ الإصدار', 'تاريخ الإصدار', 'تاريخ النشر',
+  'كم رقم نسختك', 'ما رقم الإصدار', 'رقم الإصدار', 'رقم النسخة',
+  // Version — Algerian dialect
+  'شنو نسختك', 'واش نسختك', 'شنو إصدارك', 'واش إصدارك',
+  'فاش نسخة نت', 'شنو تاريخ صدورك',
+  // Version — English
+  'what version are you', 'what is your version', 'your version', 'which version',
+  'what version is dz agent', 'dz agent version', 'version number',
+  'when were you released', 'release date', 'when was dz agent released',
+  'when was dz gpt released', 'launch date',
+  // Version — French
+  'quelle est ta version', 'quelle version', 'ta version', 'date de sortie',
+  'quand tu as été lancé', 'date de lancement',
 ]
 
 function normalizeQuery(message) {
@@ -8631,7 +8647,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const systemPrompt = [
     // ── CORE (always) ─────────────────────────────────────────────────────
-    `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
+    `أنت DZ Agent 🤖🇩🇿 V1.0 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph). الإصدار: V1.0 | تاريخ النشر: السبت 9 ماي 2026 - الجزائر. عندما يُسألك عن نسختك أو تاريخ إصدارك أجب: "DZ AGENT 🤖🇩🇿 V1.0 — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر".`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
@@ -9768,7 +9784,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     // ── System prompt ────────────────────────────────────────────────────
     const systemPrompt = isAgent
-      ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
+      ? `أنت DZ Agent 🤖🇩🇿 V1.0، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم). تاريخ إصدارك: السبت 9 ماي 2026 - الجزائر. إذا سُئلت عن نسختك أو تاريخ إصدارك أجب: "DZ AGENT 🤖🇩🇿 V1.0 — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر".
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".

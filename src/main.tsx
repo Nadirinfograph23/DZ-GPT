@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Component, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './index.css'
@@ -9,33 +9,55 @@ import DZAgentV3 from './pages/DZAgentV3.tsx'
 import AIQuran from './pages/AIQuran.tsx'
 import DZChat from './pages/DZChat.tsx'
 import DZTube from './pages/DZTube.tsx'
-import DesignIntelligence from './pages/DesignIntelligence.tsx'
-import DZAgentV5 from './pages/DZAgentV5.tsx'
-import DZManus from './pages/DZManus.tsx'
+import SystemHealth from './pages/SystemHealth.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.error('[ErrorBoundary] caught:', error.message, error.stack, info?.componentStack)
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 20, color: 'red', background: '#111', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+          <h2>React Error</h2>
+          <p>{this.state.error.message}</p>
+          <pre>{this.state.error.stack}</pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <MiniPlayerProvider>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/dz-agent" element={<DZAgent />} />
-          <Route path="/agent" element={<DZAgentV3 />} />
-          <Route path="/quran" element={<AIQuran />} />
-          <Route path="/dzchat" element={<DZChat />} />
-          <Route path="/dz-tube" element={<DZTube />} />
-          <Route path="/dztube" element={<Navigate to="/dz-tube" replace />} />
-          <Route path="/design" element={<DesignIntelligence />} />
-          <Route path="/agent-v5" element={<DZAgentV5 />} />
-          <Route path="/dz-manus" element={<DZManus />} />
-          <Route path="/manus" element={<Navigate to="/dz-manus" replace />} />
-          <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <MiniPlayer />
-      </MiniPlayerProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <MiniPlayerProvider>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/dz-agent" element={<DZAgent />} />
+            <Route path="/agent" element={<DZAgentV3 />} />
+            <Route path="/quran" element={<AIQuran />} />
+            <Route path="/dzchat" element={<DZChat />} />
+            <Route path="/dz-tube" element={<DZTube />} />
+            <Route path="/dztube" element={<Navigate to="/dz-tube" replace />} />
+            <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
+            <Route path="/health" element={<SystemHealth />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <MiniPlayer />
+        </MiniPlayerProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )

@@ -4,7 +4,7 @@ import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
-  VolumeX, Clock,
+  VolumeX, Clock, Megaphone,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -34,6 +34,7 @@ interface ChatMessage {
   triggeredBy?: string
   localDeleted?: boolean
   isBreaking?: boolean
+  isBroadcast?: boolean
 }
 
 interface LocalUser {
@@ -103,6 +104,11 @@ export default function DZChat() {
   const [isMuted, setIsMuted] = useState(false)
   const [muteUntil, setMuteUntil] = useState(0)
   const [muteRemainSec, setMuteRemainSec] = useState(0)
+
+  // Broadcast modal state
+  const [showBroadcast, setShowBroadcast] = useState(false)
+  const [broadcastText, setBroadcastText] = useState('')
+  const [broadcastSending, setBroadcastSending] = useState(false)
 
   // Copy feedback state per message
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -515,6 +521,26 @@ export default function DZChat() {
     setUserMenu(null)
   }
 
+  const adminBroadcast = async () => {
+    const text = broadcastText.trim()
+    if (!text || !sessionIdRef.current) return
+    setBroadcastSending(true)
+    try {
+      if (wsRef.current?.readyState === 1) {
+        wsRef.current.send(JSON.stringify({ type: 'admin', action: 'broadcast', text }))
+      } else {
+        await fetch('/api/chat-room/admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sessionIdRef.current, action: 'broadcast', text }),
+        })
+      }
+      setBroadcastText('')
+      setShowBroadcast(false)
+    } catch {}
+    setBroadcastSending(false)
+  }
+
   function formatMuteRemain(sec: number): string {
     if (sec >= 3600) return `${Math.floor(sec / 3600)}س ${Math.floor((sec % 3600) / 60)}د`
     if (sec >= 60) return `${Math.floor(sec / 60)}د ${sec % 60}ث`
@@ -647,6 +673,11 @@ export default function DZChat() {
           <span className="dzc-nav-title">DZ Chat</span>
         </div>
         <div className="dzc-nav-right">
+          {localUser?.isAdmin && (
+            <button className="dzc-nav-btn dzc-nav-btn--broadcast" onClick={() => setShowBroadcast(true)} title="إذاعة رسالة للجميع">
+              <Megaphone size={15} />
+            </button>
+          )}
           <button className="dzc-nav-btn dzc-nav-btn--users" onClick={() => setSidebarOpen(p => !p)} title="المستخدمون">
             <Users size={15} />
             <span className="dzc-nav-badge">{onlineCount || onlineUsers.length}</span>
@@ -741,6 +772,18 @@ export default function DZChat() {
           {/* Messages */}
           <div className="dzc-messages">
             {visibleMessages.map(msg => {
+              if (msg.isBroadcast) {
+                return (
+                  <div key={msg.id} className="dzc-broadcast-msg">
+                    <div className="dzc-broadcast-msg-header">
+                      <Megaphone size={15} className="dzc-broadcast-msg-icon" />
+                      <span className="dzc-broadcast-msg-label">إذاعة من المشرف</span>
+                      <span className="dzc-broadcast-msg-time">{formatTime(msg.timestamp)}</span>
+                    </div>
+                    <p className="dzc-broadcast-msg-text">{msg.text}</p>
+                  </div>
+                )
+              }
               if (msg.isSystem) {
                 return (
                   <div key={msg.id} className={`dzc-msg-system ${msg.isHighlighted ? 'dzc-msg-system--highlighted' : ''}`}>
@@ -886,6 +929,42 @@ export default function DZChat() {
           </div>
         </main>
       </div>
+
+      {/* ===== BROADCAST MODAL ===== */}
+      {showBroadcast && (
+        <div className="dzc-broadcast-overlay" onClick={() => { setShowBroadcast(false); setBroadcastText('') }}>
+          <div className="dzc-broadcast-modal" onClick={e => e.stopPropagation()}>
+            <div className="dzc-broadcast-modal-header">
+              <Megaphone size={18} className="dzc-broadcast-modal-icon" />
+              <span>إذاعة رسالة للجميع</span>
+              <button className="dzc-broadcast-modal-close" onClick={() => { setShowBroadcast(false); setBroadcastText('') }}>
+                <X size={14} />
+              </button>
+            </div>
+            <p className="dzc-broadcast-modal-hint">ستظهر رسالتك كإعلان بارز لجميع المستخدمين في الدردشة.</p>
+            <textarea
+              className="dzc-broadcast-textarea"
+              placeholder="اكتب إعلانك هنا..."
+              value={broadcastText}
+              onChange={e => setBroadcastText(e.target.value)}
+              maxLength={300}
+              rows={4}
+              autoFocus
+            />
+            <div className="dzc-broadcast-modal-footer">
+              <span className="dzc-broadcast-char-count">{broadcastText.length}/300</span>
+              <button
+                className="dzc-broadcast-send-btn"
+                onClick={adminBroadcast}
+                disabled={!broadcastText.trim() || broadcastSending}
+              >
+                {broadcastSending ? <Loader2 size={14} className="dzc-spin" /> : <Megaphone size={14} />}
+                إرسال الإذاعة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== SIDEBAR OVERLAY on mobile ===== */}
       {sidebarOpen && <div className="dzc-overlay" onClick={() => setSidebarOpen(false)} />}

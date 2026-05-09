@@ -12284,6 +12284,12 @@ app.post('/api/chat-room/admin', (req, res) => {
   } else if (action === 'unpin') {
     pinnedMessage = null
     broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
+  } else if (action === 'broadcast' && req.body.text) {
+    const bText = sanitizeString(req.body.text, 300).trim()
+    if (bText) {
+      const bMsg = pushChatMsg({ id: chatId(), from: session.name, fromId: session.id, gender: session.gender, text: bText, timestamp: Date.now(), isBroadcast: true, isSystem: false })
+      broadcastChat({ type: 'message', msg: bMsg })
+    }
   }
   res.json({ ok: true })
 })
@@ -12382,6 +12388,12 @@ function setupChatWebSocket(httpServer) {
           } else if (data.action === 'unpin') {
             pinnedMessage = null
             broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
+          } else if (data.action === 'broadcast' && data.text) {
+            const bText = sanitizeString(data.text, 300).trim()
+            if (bText) {
+              const bMsg = pushChatMsg({ id: chatId(), from: session.name, fromId: session.id, gender: session.gender, text: bText, timestamp: Date.now(), isBroadcast: true, isSystem: false })
+              broadcastChat({ type: 'message', msg: bMsg })
+            }
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

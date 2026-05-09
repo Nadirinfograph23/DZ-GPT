@@ -219,7 +219,7 @@ function isValidGithubRepo(repo) {
 
 // ===== UNIFIED DEVELOPER / OWNER QUESTION DETECTION =====
 const DEVELOPER_RESPONSE = Object.freeze({
-  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي\n\n🤖 **DZ AGENT V1.0** — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر',
+  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
   showDevCard: true,
 })
 
@@ -255,22 +255,6 @@ const DEVELOPER_QUESTION_PATTERNS = [
   'qui est votre développeur', 'qui vous a créé', "qui t'a créé", 'qui ta crée',
   'qui vous a fait', 'qui a développé', 'qui est le propriétaire',
   'propriétaire du site', 'qui a fait ce site',
-  // Version / release date questions — Arabic
-  'ما هو إصدارك', 'ما إصدارك', 'ما نسختك', 'ما هي نسختك', 'إصدارك كم',
-  'تاريخ إصدارك', 'تاريخ نشرك', 'متى تم إصدارك', 'متى نُشرت', 'متى صدرت',
-  'ما هو تاريخ الإصدار', 'تاريخ الإصدار', 'تاريخ النشر',
-  'كم رقم نسختك', 'ما رقم الإصدار', 'رقم الإصدار', 'رقم النسخة',
-  // Version — Algerian dialect
-  'شنو نسختك', 'واش نسختك', 'شنو إصدارك', 'واش إصدارك',
-  'فاش نسخة نت', 'شنو تاريخ صدورك',
-  // Version — English
-  'what version are you', 'what is your version', 'your version', 'which version',
-  'what version is dz agent', 'dz agent version', 'version number',
-  'when were you released', 'release date', 'when was dz agent released',
-  'when was dz gpt released', 'launch date',
-  // Version — French
-  'quelle est ta version', 'quelle version', 'ta version', 'date de sortie',
-  'quand tu as été lancé', 'date de lancement',
 ]
 
 function normalizeQuery(message) {
@@ -2979,8 +2963,7 @@ function buildOptimizedQueries(query, intent) {
 // ── Google Custom Search Engine (PRIMARY) ────────────────────────────────────
 async function searchGoogleCSE(query) {
   const apiKey = process.env.GOOGLE_API_KEY
-  const cx     = process.env.GOOGLE_CSE_ID || ''
-  if (!cx) return []
+  const cx     = process.env.GOOGLE_CSE_ID || '12e6f922595f64d35'
   if (!apiKey) return []
 
   try {
@@ -4648,14 +4631,26 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
     return res.json(DASHBOARD_CACHE.data)
   }
 
-  const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult, gnRssResult] = await Promise.allSettled([
-    fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
-    fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
-    fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
-    fetchWeatherAlgiers(),
-    fetchAlgerianLeague({ bypassCache }),
-    // GN-RSS: fetch Arabic Algeria feeds for dashboard augmentation
-    fetchGNRSSArticles(GN_RSS_FEEDS.ar),
+  // Vercel serverless: cap total fetch time to 50s to stay within the 60s function limit
+  const FETCH_TIMEOUT_MS = 50000
+  const [newsFeeds, sportsFeeds, techFeeds, weather, lfpResult, gnRssResult] = await Promise.race([
+    Promise.allSettled([
+      fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
+      fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
+      fetchMultipleFeeds(TECH_FEEDS_DASHBOARD),
+      fetchWeatherAlgiers(),
+      fetchAlgerianLeague({ bypassCache }),
+      // GN-RSS: fetch Arabic Algeria feeds for dashboard augmentation
+      fetchGNRSSArticles(GN_RSS_FEEDS.ar),
+    ]),
+    new Promise(resolve => setTimeout(() => resolve([
+      { status: 'rejected', reason: 'timeout' },
+      { status: 'rejected', reason: 'timeout' },
+      { status: 'rejected', reason: 'timeout' },
+      { status: 'rejected', reason: 'timeout' },
+      { status: 'rejected', reason: 'timeout' },
+      { status: 'rejected', reason: 'timeout' },
+    ]), FETCH_TIMEOUT_MS)),
   ])
 
   const existingNews = (newsFeeds.status === 'fulfilled' ? newsFeeds.value : [])
@@ -4748,10 +4743,10 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
 
 const SYNC_STATUS_CACHE = { data: null, ts: 0 }
 const SYNC_STATUS_TTL = 2 * 60 * 1000
-const PRODUCTION_BRANCH = process.env.PRODUCTION_BRANCH || 'main'
-const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || ''
-const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || ''
-const SYNC_VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || ''
+const PRODUCTION_BRANCH = process.env.PRODUCTION_BRANCH || 'devin/1774405518-init-dz-gpt'
+const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'Nadirinfograph23'
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'DZ-GPT'
+const SYNC_VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
 
 async function fetchGitHubBranchHead(branch) {
   const headers = {
@@ -6837,11 +6832,9 @@ app.post('/api/dz-agent/search', async (req, res) => {
 })
 
 // ===== VERCEL DEPLOY TRIGGER =====
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || ''
-const VERCEL_GITHUB_REPO = process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
-  ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
-  : ''
-const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'main'
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+const VERCEL_GITHUB_REPO = 'Nadirinfograph23/DZ-GPT'
+const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'devin/1774405518-init-dz-gpt'
 
 app.post('/api/dz-agent/doctor-search', async (req, res) => {
   try {
@@ -8647,7 +8640,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const systemPrompt = [
     // ── CORE (always) ─────────────────────────────────────────────────────
-    `أنت DZ Agent 🤖🇩🇿 V1.0 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph). الإصدار: V1.0 | تاريخ النشر: السبت 9 ماي 2026 - الجزائر. عندما يُسألك عن نسختك أو تاريخ إصدارك أجب: "DZ AGENT 🤖🇩🇿 V1.0 — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر".`,
+    `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
@@ -8913,7 +8906,11 @@ app.get('/api/auth/github/callback', async (req, res) => {
   }
 
   const cookieState = parseCookies(req).dz_github_oauth_state
-  if (!state || (!oauthStates.has(state) && cookieState !== state)) {
+  // On Vercel serverless each request may run on a different instance (oauthStates is per-instance).
+  // Accept the state if EITHER the in-memory map contains it OR the cookie matches it.
+  const stateValidInMemory = oauthStates.has(state)
+  const stateValidByCookie = cookieState && cookieState === state
+  if (!state || (!stateValidInMemory && !stateValidByCookie)) {
     console.warn('GitHub OAuth: invalid or missing state (possible CSRF)')
     clearOAuthStateCookie(res)
     return res.redirect('/dz-agent?auth_error=csrf')
@@ -9657,7 +9654,7 @@ const chatMessages = []
 const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || ''
+const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
 
 function chatId() {
@@ -9784,7 +9781,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     // ── System prompt ────────────────────────────────────────────────────
     const systemPrompt = isAgent
-      ? `أنت DZ Agent 🤖🇩🇿 V1.0، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم). تاريخ إصدارك: السبت 9 ماي 2026 - الجزائر. إذا سُئلت عن نسختك أو تاريخ إصدارك أجب: "DZ AGENT 🤖🇩🇿 V1.0 — تاريخ الإصدار والنشر على الأنترنت: يوم السبت 9 ماي 2026 - الجزائر".
+      ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".

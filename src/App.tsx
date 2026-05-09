@@ -890,17 +890,6 @@ function App() {
               <button className="sidebar-nav-item" onClick={() => { navigate('/dz-tube'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
                 <Video size={14} />
                 <span>DZ Tube</span>
-              </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/design'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <Wand2 size={14} />
-                <span>Design Intelligence</span>
-              </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/agent-v5'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <Bot size={14} />
-                <span>DZ Agent V5</span>
-              </button>
-            </div>
-          )}
         </div>
 
         <button className="new-chat-btn" onClick={createNewChat}>

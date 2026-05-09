@@ -6,7 +6,7 @@ import crypto from 'crypto'
 import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
-import { readFile, writeFile as fsWriteFile } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
@@ -2519,241 +2519,212 @@ function validateHtmlOutput(html) {
 }
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
-const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER operating in WEB_BUILDER_MODE V2.
-You have mastery of Dribbble, Awwwards, Tailwind UI, Flowbite, CodePen, Uiverse, and Framer design patterns.
-You build production-quality websites indistinguishable from $25,000 agency work.
+const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are an ELITE FRONTEND ENGINEER + UI/UX DESIGNER operating in WEB_BUILDER_MODE.
+You have deep knowledge of the best patterns on CodePen, GitHub, Uiverse, Tailwind UI, and Flowbite.
+You build production-quality websites that look like they cost $15,000.
 
 ════════════════════════════════════════════
 ABSOLUTE OUTPUT RULE:
 Output ONLY raw HTML — NOTHING ELSE.
-No markdown fences. No explanations. No comments outside HTML tags.
+No markdown fences. No explanations. No comments outside code.
 Response = ONE complete file: <!DOCTYPE html> … </html>
-All CSS inside <style>. All JS inside <script>. ZERO external files except CDN links.
+All CSS inside <style> block. All JS inside <script> block. ZERO external files.
 ════════════════════════════════════════════
 
-CDN TOOLKIT (use all that apply):
-- Tailwind CSS: <script src="https://cdn.tailwindcss.com"></script>
+OPTIONAL CDNS (use when appropriate):
+- Tailwind CSS CDN: <script src="https://cdn.tailwindcss.com"></script> (use for utility-first layouts)
 - Font Awesome 6: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-- AOS animations: <link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet"><script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
-- Chart.js (dashboards): <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-- Swiper (sliders): <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/><script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-- GSAP (premium animations): <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 - Google Fonts: @import url('https://fonts.googleapis.com/css2?family=...')
+- Chart.js (for dashboards): <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+- AOS animations: <link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet"> + <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
 ════════════════════════════════════════════
 
-DESIGN INTELLIGENCE V2 (auto-detect + execute):
-- restaurant / مطعم / café    → Elegant food: parallax hero with food imagery gradient, menu card grid, reservation form, warm amber+dark palette, Playfair Display font
-- hotel / فندق / resort       → Luxury hotel: full-screen gradient hero simulating video-bg, rooms gallery with hover zoom, amenities icons, booking CTA, gold+navy palette
-- store / متجر / shop         → E-commerce: product grid with hover zoom + quick-buy overlay, filter bar, cart icon badge, sale ribbons, trust badges
-- portfolio / personal / cv   → Creative portfolio: split-screen hero, magnetic cursor effect (CSS), project cards with overlay, skills progress bars, timeline
-- dashboard / admin / analytics → Dark analytics: collapsible sidebar nav, real Chart.js charts (line/bar/doughnut), KPI cards with trend arrows, data table with sort
-- agency / وكالة / studio     → Bold agency: full-bleed type hero, magnetic hover cards, work grid with overlay, team section, awards badges, neon accents
-- business / company / startup → Premium SaaS: mesh gradient hero, feature bento grid, pricing table with toggle (monthly/annual), testimonial carousel, logo cloud
-- blog / مدونة                → Editorial: hero article card + grid, category filter tabs, reading time badge, author avatar, newsletter with animated input
-- education / school / دورة   → E-learning: course cards with progress rings, instructor profiles, curriculum accordion, certificate badge, student testimonials
-- landing / default           → Conversion-focused: animated headline with word swap, social proof logos, feature comparison table, FAQ accordion, exit-intent CTA
+DESIGN INTELLIGENCE (auto-detect from request):
+- restaurant / مطعم / café    → Elegant food site: dark hero, menu grid, booking form, warm amber palette
+- hotel / فندق / resort       → Luxury hotel: full-screen video-bg hero, rooms gallery, amenities, booking CTA
+- store / متجر / shop         → E-commerce: product grid cards, cart sidebar, filter bar, badge ribbons
+- portfolio / personal / cv   → Creative dev/designer portfolio: split hero, animated skills bar, project cards
+- dashboard / admin / analytics → Dark analytics: sidebar nav, chart placeholders (CSS-drawn), KPI cards, data table
+- agency / وكالة / studio     → Bold creative agency: full-screen type hero, work grid, team section, neon accents
+- business / company / startup → Premium SaaS landing: gradient mesh hero, feature bento grid, pricing table, testimonials
+- blog / مدونة                → Editorial: clean typographic layout, article cards, category filters, newsletter
+- education / school / دورة   → E-learning platform: course cards, progress bars, instructor section, FAQ accordion
+- default                     → Premium startup landing: animated gradient hero + feature grid
 
 ════════════════════════════════════════════
-MANDATORY SECTION STRUCTURE V2:
+MANDATORY HTML STRUCTURE:
+1. <head>
+   - charset + viewport + title (contextual, not generic)
+   - Google Fonts @import (2 fonts max, well-paired)
+   - Font Awesome 6 CDN: <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+   - <style> block with ALL CSS
 
-<head>
-  - charset + viewport + title (specific, not generic — match the request)
-  - Google Fonts (2 fonts, well-paired for the site type)
-  - Font Awesome 6 CDN
-  - Relevant CDNs for the site type (AOS always, Swiper if gallery/carousel, Chart.js if dashboard)
-  - <style> with ALL CSS including :root vars, keyframes, components, responsive
+2. <body> sections (ALL required):
+   a. Sticky navbar — logo + nav links + CTA button + hamburger (mobile)
+   b. Hero — full-viewport, animated headline, subtext, 2 CTAs, decorative SVG/shape
+   c. Features/Services — 3–6 bento-style cards with Font Awesome icons
+   d. Social proof — animated stat counters (3 numbers) + testimonial cards
+   e. How it works / About — 3-step process or split-screen with visual
+   f. CTA section — gradient background, email input + submit button
+   g. Footer — logo + 3 link columns + social icons + copyright
 
-<body> — ALL sections required:
-  1. NAVBAR: sticky/fixed, logo + nav links + CTA button + hamburger (mobile), glass morphism on scroll
-  2. HERO: full-viewport (min-height:100vh), animated headline (word-by-word or typing), subtext, 2 CTAs, floating decorative element
-  3. FEATURES/SERVICES: 3–6 bento cards — each with icon, title, description, hover elevation
-  4. SHOWCASE: gallery, product grid, or case studies — with hover zoom/overlay effects
-  5. STATS: animated counters (3–4 numbers), triggered by IntersectionObserver
-  6. TESTIMONIALS: card carousel or grid with avatar, name, rating stars
-  7. PROCESS/HOW IT WORKS: 3-step horizontal flow with connector line, or timeline
-  8. PRICING (if SaaS/business): 3-tier cards, popular badge, feature list with checkmarks
-  9. CTA SECTION: gradient bg, compelling headline, email input + submit button
-  10. FOOTER: logo + tagline + 4 link columns + social icons + newsletter mini-form + copyright
-
-<script> — ALL JS required
-
+3. <script> block with all JS logic
 ════════════════════════════════════════════
-CSS ARCHITECTURE V2 (MANDATORY):
 
+CSS PATTERNS (MANDATORY — from Tailwind UI / Flowbite / CodePen):
+
+Variables (always define these):
 :root {
-  --primary: <bold contextual color>;
-  --primary-rgb: <r,g,b values>;
+  --primary: <contextual>;
   --secondary: <contextual>;
-  --accent: <vibrant contrast color>;
-  --bg: <deep background>;
-  --surface: <card/panel background>;
-  --surface-2: <slightly lighter surface>;
-  --text: <primary text color>;
-  --text-muted: <secondary text color>;
-  --border: rgba(255,255,255,.08);
+  --accent: <contextual>;
+  --bg: <contextual>;
+  --surface: <contextual>;
+  --text: <contextual>;
+  --text-muted: <contextual>;
   --radius: 16px;
-  --radius-sm: 8px;
-  --shadow: 0 25px 50px -12px rgba(0,0,0,.4);
-  --shadow-sm: 0 4px 20px rgba(0,0,0,.2);
+  --shadow: 0 25px 50px -12px rgba(0,0,0,.25);
   --transition: all .3s cubic-bezier(.4,0,.2,1);
-  --transition-fast: all .15s ease;
 }
 
-KEYFRAMES (ALL required):
+Layout:
+- html { scroll-behavior: smooth }
+- *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+- CSS Grid for page sections (display:grid; gap:2rem)
+- Flexbox for nav, cards row, footer columns
+
+Animations (ALL required — CodePen-inspired):
 @keyframes fadeInUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
-@keyframes fadeInDown { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
-@keyframes slideInLeft { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:translateX(0)} }
-@keyframes slideInRight { from{opacity:0;transform:translateX(40px)} to{opacity:1;transform:translateX(0)} }
-@keyframes float { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-14px) rotate(2deg)} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
 @keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
-@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.5)} 70%{box-shadow:0 0 0 15px transparent} }
-@keyframes shimmer { from{background-position:-200% 0} to{background-position:200% 0} }
-@keyframes scaleIn { from{opacity:0;transform:scale(.85)} to{opacity:1;transform:scale(1)} }
-@keyframes wordSwap { 0%,45%{opacity:1;transform:translateY(0)} 50%,95%{opacity:0;transform:translateY(-20px)} }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(var(--primary-rgb),.4)} 70%{box-shadow:0 0 0 12px transparent} }
+@keyframes slideInLeft { from{opacity:0;transform:translateX(-40px)} to{opacity:1;transform:translateX(0)} }
+@keyframes countUp { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
 
-HERO:
-- min-height: 100vh; display:grid; place-items:center; position:relative; overflow:hidden
-- background: linear-gradient(135deg, var(--bg), var(--surface)); background-size:400% 400%; animation: gradientShift 10s ease infinite
-- Headline: font-size:clamp(2.8rem,7vw,5.5rem); font-weight:900; line-height:1.05; letter-spacing:-.03em
-- Decorative: absolute SVG blob or geometric shape with float animation + opacity:.15
-- .hero-content { animation: fadeInUp 1s ease both }
+Hero:
+- background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%)
+- background-size: 400% 400%; animation: gradientShift 8s ease infinite
+- Headline: font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1
+- Decorative element: absolute-positioned SVG blob or geometric shape (float animation)
+- Hero animation: .hero-content { animation: fadeInUp .8s ease both }
 
-GLASS MORPHISM (navbar + cards):
-background: rgba(255,255,255,.03);
-backdrop-filter: blur(20px) saturate(180%);
--webkit-backdrop-filter: blur(20px) saturate(180%);
-border: 1px solid rgba(255,255,255,.08);
-
-CARDS:
-- background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius)
+Cards (Uiverse-inspired):
+- border: 1px solid rgba(255,255,255,.08)
+- background: rgba(255,255,255,.03) or var(--surface)
+- backdrop-filter: blur(20px)
+- border-radius: var(--radius)
 - transition: var(--transition)
-- :hover { transform:translateY(-8px) scale(1.02); box-shadow:var(--shadow); border-color:rgba(var(--primary-rgb),.3) }
+- :hover { transform: translateY(-6px) scale(1.02); box-shadow: var(--shadow) }
 
-BUTTONS:
-- Primary: background:linear-gradient(135deg,var(--primary),var(--accent)); color:#fff; border:none; border-radius:50px; padding:14px 36px; font-weight:700; font-size:1rem; cursor:pointer; transition:var(--transition)
-- :hover { transform:translateY(-3px); box-shadow:0 15px 40px rgba(var(--primary-rgb),.5) }
-- :active { transform:translateY(-1px) }
-- Ghost: background:transparent; border:2px solid rgba(var(--primary-rgb),.5); color:var(--text)
-- Ghost:hover { background:rgba(var(--primary-rgb),.1); border-color:var(--primary) }
+Buttons:
+- Primary: gradient background + border-radius:50px + padding:14px 32px + font-weight:700
+- :hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(primary,.5) }
+- :active { transform: translateY(0) }
 
-NAVBAR SCROLL:
-nav { transition: var(--transition); padding: 1.5rem 2rem }
-nav.scrolled { padding:.75rem 2rem; background:rgba(var(--bg-rgb),.85); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
-
-RESPONSIVE (mobile-first, all breakpoints):
-@media (max-width:1024px) { .grid-3 { grid-template-columns: repeat(2,1fr) } }
-@media (max-width:768px) {
-  .nav-links { display:none; position:fixed; top:0; left:0; width:100%; height:100vh; background:var(--bg); flex-direction:column; justify-content:center; align-items:center; gap:2rem; z-index:999 }
-  .nav-links.open { display:flex }
-  .hamburger { display:flex; z-index:1000 }
-  .grid-3,.grid-4 { grid-template-columns:1fr }
-  .hero h1 { font-size:clamp(2rem,9vw,3.5rem) }
-  .hero { padding:6rem 1.5rem 4rem; text-align:center }
-  section { padding:4rem 1.5rem }
+Responsive (mobile-first):
+@media (max-width: 768px) {
+  .nav-links { display:none }
+  .hamburger { display:flex }
+  .grid-3 { grid-template-columns: 1fr }
+  .hero h1 { font-size: clamp(1.8rem, 8vw, 3rem) }
+  .hero { padding: 5rem 1rem 3rem }
 }
-@media (max-width:480px) { .hero h1 { font-size:clamp(1.8rem,10vw,2.8rem) } }
 
-SCROLLBAR:
-::-webkit-scrollbar { width:5px }
-::-webkit-scrollbar-track { background:var(--bg) }
-::-webkit-scrollbar-thumb { background:var(--primary); border-radius:3px }
+Scrollbar:
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px }
 
-SELECTION:
-::selection { background:rgba(var(--primary-rgb),.3); color:var(--text) }
+Typography:
+- h1–h3: font-weight 700–900, tight line-height
+- Body: font-size: 1rem; line-height: 1.7; color: var(--text-muted)
+- Section labels: text-transform:uppercase; letter-spacing:.15em; font-size:.75rem; color:var(--accent)
 
 ════════════════════════════════════════════
-JAVASCRIPT V2 (ALL required — production quality):
+JAVASCRIPT (ALL required — from CodePen best practices):
 
-1. Navbar:
-const nav=document.querySelector('nav');
-window.addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>60));
-document.querySelector('.hamburger')?.addEventListener('click',function(){
-  document.querySelector('.nav-links').classList.toggle('open');
-  this.classList.toggle('active');
-});
+1. Navbar scroll shrink:
+window.addEventListener('scroll',()=>{
+  document.querySelector('nav').classList.toggle('scrolled', window.scrollY > 50)
+})
+nav.scrolled { padding:.5rem 2rem; background: var(--bg); backdrop-filter:blur(20px); box-shadow:0 4px 30px rgba(0,0,0,.3) }
 
-2. IntersectionObserver (scroll-in for ALL sections):
-const io=new IntersectionObserver((e)=>e.forEach(i=>{if(i.isIntersecting){i.target.classList.add('visible');io.unobserve(i.target)}}),{threshold:.12});
-document.querySelectorAll('.animate-on-scroll').forEach(el=>io.observe(el));
+2. Mobile hamburger:
+document.querySelector('.hamburger').addEventListener('click',()=>{
+  document.querySelector('.nav-links').classList.toggle('open')
+})
 
-3. Counter animation:
-function runCounter(el){
-  const end=+el.dataset.target,sfx=el.dataset.suffix||'',dur=2000,step=end/dur*16;
-  let cur=0;const t=setInterval(()=>{cur=Math.min(cur+step,end);el.textContent=Math.floor(cur).toLocaleString()+sfx;if(cur>=end)clearInterval(t)},16);
+3. Intersection Observer (scroll-in animations):
+const obs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target) }})
+},{ threshold:0.15 })
+document.querySelectorAll('.animate-on-scroll').forEach(el=>obs.observe(el))
+// CSS: .animate-on-scroll{opacity:0;transform:translateY(24px);transition:var(--transition)}
+//      .animate-on-scroll.visible{opacity:1;transform:translateY(0)}
+
+4. Counter animation for stats (count up from 0):
+function animateCounter(el){
+  const target=+el.dataset.target; const dur=1800; const step=target/dur*16;
+  let current=0; const t=setInterval(()=>{
+    current=Math.min(current+step,target);
+    el.textContent=Math.floor(current).toLocaleString()+(el.dataset.suffix||'');
+    if(current>=target)clearInterval(t)
+  },16)
 }
-const co=new IntersectionObserver(e=>e.forEach(i=>{if(i.isIntersecting){runCounter(i.target);co.unobserve(i.target)}}),{threshold:.5});
-document.querySelectorAll('[data-target]').forEach(el=>co.observe(el));
+new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting){ animateCounter(e.target); obs2.unobserve(e.target) }})
+}).observe(document.querySelectorAll('[data-target]'))
 
-4. Active nav link on scroll:
-const secs=document.querySelectorAll('section[id]');
-window.addEventListener('scroll',()=>{secs.forEach(s=>{if(scrollY>=s.offsetTop-120){document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active')}})});
+5. Smooth active link highlight:
+const sections=document.querySelectorAll('section[id]');
+window.addEventListener('scroll',()=>{
+  sections.forEach(s=>{ if(window.scrollY>=s.offsetTop-100){ document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active')); document.querySelector(\`.nav-link[href="#\${s.id}"]\`)?.classList.add('active') }})
+})
 
-5. Smooth scroll for anchor links:
-document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();document.querySelector(a.getAttribute('href'))?.scrollIntoView({behavior:'smooth'})}));
-
-6. AOS init (if AOS loaded):
-if(typeof AOS!=='undefined'){AOS.init({duration:800,once:true,offset:80});}
-
-7. Form submit (no alert — inline success):
+6. Form validation with success state (not alert):
 document.querySelector('form')?.addEventListener('submit',e=>{
-  e.preventDefault();
-  const inp=e.target.querySelector('input[type="email"]');
-  if(inp?.value.includes('@')){inp.style.borderColor='#10b981';e.target.innerHTML='<div style="text-align:center;padding:2rem;color:#10b981;font-size:1.1rem;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</div>';}
-  else if(inp){inp.style.borderColor='#ef4444';inp.style.animation='shimmer .5s ease';inp.placeholder='أدخل بريد إلكتروني صحيح';}
-});
-
-8. Pricing toggle (monthly/annual) — include if pricing section:
-const toggle=document.querySelector('.pricing-toggle');
-toggle?.addEventListener('change',()=>{
-  document.querySelectorAll('.price-monthly').forEach(p=>p.style.display=toggle.checked?'none':'block');
-  document.querySelectorAll('.price-annual').forEach(p=>p.style.display=toggle.checked?'block':'none');
-});
+  e.preventDefault()
+  const input=e.target.querySelector('input[type="email"]')
+  if(input && input.value.includes('@')){
+    input.style.borderColor='#10b981'
+    e.target.innerHTML='<p style="color:#10b981;font-weight:600">✅ شكراً! سنتواصل معك قريباً.</p>'
+  } else if(input){ input.style.borderColor='#ef4444'; input.placeholder='أدخل بريد إلكتروني صحيح' }
+})
 
 ════════════════════════════════════════════
-FONT PAIRINGS V2:
-- restaurant / hotel / luxury   → Cormorant Garamond (headings) + DM Sans (body)
-- portfolio / agency / creative → Clash Display / Space Grotesk (headings) + Inter (body)
-- saas / startup / business     → Plus Jakarta Sans (all) or Outfit (all)
-- dashboard / analytics / tech  → JetBrains Mono (data/code) + Inter (UI)
-- education / blog / editorial  → Merriweather (headings) + Source Sans 3 (body)
-- default                       → Plus Jakarta Sans (headings) + Inter (body)
+FONT PAIRINGS (pick by type):
+- restaurant / hotel / luxury → Playfair Display (headings) + Lato (body)
+- portfolio / agency / creative → Space Grotesk (headings) + Inter (body)
+- saas / business / startup → Plus Jakarta Sans (all) — modern and clean
+- dashboard / analytics → JetBrains Mono (data) + Inter (UI)
+- education / blog → Merriweather (headings) + Source Sans 3 (body)
 
-COLOR SYSTEMS V2 (bold, unique, brand-aware):
-- restaurant:  bg:#0a0a0a   primary:#d4a847  accent:#8b1a1a  surface:#141414  — warm luxury
-- hotel:       bg:#0c0d1a   primary:#c9a84c  accent:#4a90d9  surface:#131424  — ocean gold
-- ecommerce:   bg:#f8fafc   primary:#7c3aed  accent:#f59e0b  surface:#ffffff  — clean violet
-- portfolio:   bg:#050505   primary:#ff6b35  accent:#a855f7  surface:#0f0f0f  — neon creative
-- dashboard:   bg:#020b18   primary:#6366f1  accent:#22d3ee  surface:#0a1628  — deep analytics
-- agency:      bg:#000000   primary:#a855f7  accent:#ec4899  surface:#0d0d0d  — bold neon
-- saas:        bg:#0f172a   primary:#7c3aed  accent:#38bdf8  surface:#1e293b  — modern SaaS
-- blog:        bg:#fafafa   primary:#0ea5e9  accent:#f97316  surface:#ffffff  — editorial
-- education:   bg:#f0f4ff   primary:#4f46e5  accent:#10b981  surface:#ffffff  — learning
-- default:     bg:#0f172a   primary:#6366f1  accent:#06b6d4  surface:#1e293b  — premium
+COLOR PALETTES (pick ONE based on type, be bold and unique):
+- restaurant: #0d0d0d (bg) + #c9a84c (gold) + #8b0000 (deep red) — warm/elegant
+- hotel: #0f0f1a (bg) + #d4af37 (gold) + #f5f5dc (cream) — luxury
+- store/ecommerce: #ffffff (bg) + #111 (text) + #7c3aed (purple) — modern
+- portfolio: #09090b (bg) + #f97316 (orange) + #ffffff — bold creative
+- dashboard: #020817 (bg) + #6366f1 (indigo) + #06b6d4 (cyan) — dark analytics
+- agency: #000000 (bg) + #a855f7 (purple) + #ec4899 (pink) — bold/neon
+- startup/saas: #0f172a (bg) + #7c3aed (violet) + #38bdf8 (sky) — modern SaaS
+- blog/education: #fafafa (bg) + #1e293b (text) + #0ea5e9 (blue) — clean
 
 FLOATING DOWNLOAD BUTTON (include EXACTLY):
 <button onclick="(function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));a.download='dz-agent-site.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href)})()" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;padding:14px 22px;border-radius:14px;cursor:pointer;font-size:13px;font-weight:700;box-shadow:0 8px 32px rgba(124,58,237,.5);transition:transform .2s,box-shadow .2s;display:flex;align-items:center;gap:8px;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 16px 48px rgba(124,58,237,.7)'" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(124,58,237,.5)'"><i class="fa-solid fa-download"></i> تحميل الموقع</button>
 
 ════════════════════════════════════════════
-QUALITY MANDATE V2 — ZERO EXCEPTIONS:
-✅ Looks like Dribbble / Awwwards / Framer showcase — not a template
-✅ Real contextual content ONLY — no Lorem ipsum, no "Title here", no "Description..."
-✅ Font Awesome 6 icons on EVERY card and feature
-✅ ALL JS functional — no dead buttons, no broken interactions
-✅ Fully mobile responsive at 320px, 480px, 768px, 1024px, 1440px
-✅ Minimum 10 distinct sections (navbar + hero + features + showcase + stats + testimonials + process + cta + footer + at least one type-specific section)
-✅ Every section has scroll-in animation via IntersectionObserver (.animate-on-scroll + .visible)
-✅ Glassmorphism on navbar and key cards
-✅ Gradient animated hero (gradientShift keyframe)
-✅ Floating decorative element in hero (SVG blob or geometric shape with float animation)
-✅ Stat counters that animate when scrolled into view
-✅ Working mobile hamburger menu (full-screen overlay)
-✅ CSS custom properties (:root vars) for all colors
-✅ Smooth scrolling + active nav link highlight
-✅ NO broken images — use CSS gradients or SVG shapes as visual placeholders
-✅ Contextual content that matches the request exactly (if restaurant → real dish names; if SaaS → real feature names)
-✅ [WEB_BUILDER_MODE V2] logged to console on load: console.log('[WEB_BUILDER_MODE V2] site type: <type>')
+QUALITY BARS (MANDATORY — NO EXCEPTIONS):
+✅ MUST look like Dribbble / Awwwards top picks
+✅ MUST use realistic content (no "Lorem ipsum", no "Title here", no "Description...")
+✅ MUST use Font Awesome icons on every feature card
+✅ MUST have working JS (no dead buttons, no broken interactions)
+✅ MUST be fully mobile responsive
+✅ NO external CSS files (all CSS inside <style>)
+✅ NO placeholder images (use CSS gradients, SVG shapes, or emoji as visual accents)
+✅ Every section MUST have a subtle entrance animation (fadeInUp via Intersection Observer)
+✅ Content MUST be context-aware (restaurant → menu items, hotel → room types, etc.)
 
-START OUTPUT NOW — PURE HTML ONLY — BEGIN WITH <!DOCTYPE html>:`
+START OUTPUT NOW — PURE HTML ONLY:`
 
 // ── News: domain → friendly label map ─────────────────────────────────────────
 // Converts a raw URL or `source` string into a readable Arabic/French label.
@@ -2992,7 +2963,8 @@ function buildOptimizedQueries(query, intent) {
 // ── Google Custom Search Engine (PRIMARY) ────────────────────────────────────
 async function searchGoogleCSE(query) {
   const apiKey = process.env.GOOGLE_API_KEY
-  const cx     = process.env.GOOGLE_CSE_ID || '12e6f922595f64d35'
+  const cx     = process.env.GOOGLE_CSE_ID || ''
+  if (!cx) return []
   if (!apiKey) return []
 
   try {
@@ -4760,10 +4732,10 @@ app.get('/api/dz-agent/dashboard', async (req, res) => {
 
 const SYNC_STATUS_CACHE = { data: null, ts: 0 }
 const SYNC_STATUS_TTL = 2 * 60 * 1000
-const PRODUCTION_BRANCH = process.env.PRODUCTION_BRANCH || 'devin/1774405518-init-dz-gpt'
-const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'Nadirinfograph23'
-const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'DZ-GPT'
-const SYNC_VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+const PRODUCTION_BRANCH = process.env.PRODUCTION_BRANCH || 'main'
+const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || ''
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || ''
+const SYNC_VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || ''
 
 async function fetchGitHubBranchHead(branch) {
   const headers = {
@@ -6849,9 +6821,11 @@ app.post('/api/dz-agent/search', async (req, res) => {
 })
 
 // ===== VERCEL DEPLOY TRIGGER =====
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
-const VERCEL_GITHUB_REPO = 'Nadirinfograph23/DZ-GPT'
-const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'devin/1774405518-init-dz-gpt'
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || ''
+const VERCEL_GITHUB_REPO = process.env.GITHUB_REPO_OWNER && process.env.GITHUB_REPO_NAME
+  ? `${process.env.GITHUB_REPO_OWNER}/${process.env.GITHUB_REPO_NAME}`
+  : ''
+const VERCEL_DEPLOY_BRANCH = process.env.VERCEL_DEPLOY_BRANCH || 'main'
 
 app.post('/api/dz-agent/doctor-search', async (req, res) => {
   try {
@@ -9667,19 +9641,8 @@ const chatMessages = []
 const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
+const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || ''
 const MAX_CHAT_MSGS = 200
-
-// ── Chat Profiles (persistent) ────────────────────────────────────────────────
-const PROFILES_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'chat-profiles.json')
-let chatProfiles = {}
-;(async () => { try { chatProfiles = JSON.parse(await readFile(PROFILES_FILE, 'utf8')) } catch {} })()
-async function saveChatProfiles() {
-  try { await fsWriteFile(PROFILES_FILE, JSON.stringify(chatProfiles, null, 2)) } catch {}
-}
-function computeProfileId(name, password) {
-  return crypto.createHash('sha256').update(name.toLowerCase().trim() + ':' + password).digest('hex').slice(0, 20)
-}
 
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
@@ -9689,7 +9652,7 @@ function getOnlineUsers() {
   const now = Date.now()
   return [...chatSessions.values()]
     .filter(s => now - s.lastSeen < 40000)
-    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profileId: s.profileId || null }))
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin }))
 }
 
 function broadcastChat(data, exceptWs = null) {
@@ -12180,41 +12143,12 @@ app.get('/api/dz-tube/download', async (req, res) => {
 })
 
 // ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====
-app.get('/api/chat-room/profile/:profileId', (req, res) => {
-  const profile = chatProfiles[req.params.profileId]
-  if (!profile) return res.status(404).json({ error: 'not found' })
-  res.json({ profileId: req.params.profileId, name: profile.name, gender: profile.gender, city: profile.city || '', facebook: profile.facebook || '', instagram: profile.instagram || '', tiktok: profile.tiktok || '' })
-})
-
-app.put('/api/chat-room/profile/update', async (req, res) => {
-  const { sessionId, city, facebook, instagram, tiktok } = req.body || {}
-  const session = chatSessions.get(sessionId)
-  if (!session?.profileId) return res.status(401).json({ error: 'No profile linked to this session' })
-  const profile = chatProfiles[session.profileId]
-  if (!profile) return res.status(404).json({ error: 'Profile not found' })
-  if (city !== undefined) profile.city = sanitizeString(String(city), 100)
-  if (facebook !== undefined) profile.facebook = sanitizeString(String(facebook), 200)
-  if (instagram !== undefined) profile.instagram = sanitizeString(String(instagram), 100)
-  if (tiktok !== undefined) profile.tiktok = sanitizeString(String(tiktok), 100)
-  profile.updatedAt = Date.now()
-  await saveChatProfiles()
-  res.json({ ok: true, profile: { profileId: session.profileId, name: profile.name, gender: profile.gender, city: profile.city, facebook: profile.facebook, instagram: profile.instagram, tiktok: profile.tiktok } })
-})
-
 app.post('/api/chat-room/join', (req, res) => {
-  const { name, gender, adminSecret, profilePassword } = req.body || {}
+  const { name, gender, adminSecret } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
   const isAdmin = adminSecret === CHAT_ADMIN_SECRET
-  let profileId = null
-  if (profilePassword && typeof profilePassword === 'string' && profilePassword.length >= 4) {
-    profileId = computeProfileId(name.trim(), profilePassword)
-    if (!chatProfiles[profileId]) {
-      chatProfiles[profileId] = { name: sanitizeString(name, 30), gender, city: '', facebook: '', instagram: '', tiktok: '', createdAt: Date.now(), updatedAt: Date.now() }
-      saveChatProfiles()
-    }
-  }
-  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, profileId, lastSeen: Date.now(), ws: null }
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
     id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
@@ -12222,7 +12156,7 @@ app.post('/api/chat-room/join', (req, res) => {
   })
   broadcastChat({ type: 'message', msg: joinMsg })
   broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
-  res.json({ sessionId: id, isAdmin, profileId, messages: chatMessages.slice(-50), users: getOnlineUsers() })
+  res.json({ sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() })
 })
 
 app.post('/api/chat-room/leave', (req, res) => {
@@ -12241,7 +12175,7 @@ app.post('/api/chat-room/leave', (req, res) => {
 })
 
 app.post('/api/chat-room/send', async (req, res) => {
-  const { sessionId, text, dmTo, dmToName, replyTo } = req.body || {}
+  const { sessionId, text, dmTo, dmToName } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
   const muteInfo = mutedUsers.get(sessionId)
@@ -12253,15 +12187,11 @@ app.post('/api/chat-room/send', async (req, res) => {
   const cleanText = sanitizeString(text, 1000).trim()
   if (!cleanText) return res.status(400).json({ error: 'Empty message' })
   session.lastSeen = Date.now()
-  const safeReply = (replyTo && typeof replyTo.id === 'string' && typeof replyTo.from === 'string' && typeof replyTo.text === 'string')
-    ? { id: replyTo.id, from: sanitizeString(replyTo.from, 40), text: sanitizeString(replyTo.text, 200) } : null
   const msg = pushChatMsg({
     id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
-    replyTo: safeReply || undefined,
-    fromProfileId: session.profileId || null,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -12328,31 +12258,7 @@ app.post('/api/chat-room/admin', (req, res) => {
   } else if (action === 'unpin') {
     pinnedMessage = null
     broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
-  } else if (action === 'broadcast' && req.body.text) {
-    const bText = sanitizeString(req.body.text, 300).trim()
-    if (bText) {
-      const bMsg = pushChatMsg({ id: chatId(), from: session.name, fromId: session.id, gender: session.gender, text: bText, timestamp: Date.now(), isBroadcast: true, isSystem: false })
-      broadcastChat({ type: 'message', msg: bMsg })
-    }
   }
-  res.json({ ok: true })
-})
-
-const ALLOWED_REACT_EMOJIS = ['❤️','😂','👍','😮','😢','🔥']
-
-app.post('/api/chat-room/react', (req, res) => {
-  const { sessionId, msgId, emoji } = req.body || {}
-  const session = chatSessions.get(sessionId)
-  if (!session || !msgId || !emoji) return res.status(400).json({ error: 'Invalid' })
-  if (!ALLOWED_REACT_EMOJIS.includes(emoji)) return res.status(400).json({ error: 'Invalid emoji' })
-  const msg = chatMessages.find(m => m.id === msgId)
-  if (!msg) return res.status(404).json({ error: 'Not found' })
-  if (!msg.reactions) msg.reactions = {}
-  if (!msg.reactions[emoji]) msg.reactions[emoji] = []
-  const idx = msg.reactions[emoji].indexOf(sessionId)
-  if (idx === -1) { msg.reactions[emoji].push(sessionId) }
-  else { msg.reactions[emoji].splice(idx, 1); if (!msg.reactions[emoji].length) delete msg.reactions[emoji] }
-  broadcastChat({ type: 'reaction', msgId, reactions: msg.reactions })
   res.json({ ok: true })
 })
 
@@ -12390,15 +12296,11 @@ function setupChatWebSocket(httpServer) {
           session.lastSeen = Date.now()
           const cleanText = sanitizeString(data.text, 1000).trim()
           if (!cleanText) return
-          const safeReplyWs = (data.replyTo && typeof data.replyTo.id === 'string' && typeof data.replyTo.from === 'string' && typeof data.replyTo.text === 'string')
-            ? { id: data.replyTo.id, from: sanitizeString(data.replyTo.from, 40), text: sanitizeString(data.replyTo.text, 200) } : null
           const msg = pushChatMsg({
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
-            replyTo: safeReplyWs || undefined,
-            fromProfileId: session.profileId || null,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
@@ -12418,22 +12320,6 @@ function setupChatWebSocket(httpServer) {
         } else if (data.type === 'ping') {
           const session = sid ? chatSessions.get(sid) : null
           if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }
-        } else if (data.type === 'typing') {
-          const session = sid ? chatSessions.get(sid) : null
-          if (!session) return
-          broadcastChat({ type: 'typing', userId: sid, name: session.name }, ws)
-        } else if (data.type === 'react') {
-          const session = sid ? chatSessions.get(sid) : null
-          if (!session || !data.msgId || !data.emoji) return
-          if (!ALLOWED_REACT_EMOJIS.includes(data.emoji)) return
-          const msg = chatMessages.find(m => m.id === data.msgId)
-          if (!msg) return
-          if (!msg.reactions) msg.reactions = {}
-          if (!msg.reactions[data.emoji]) msg.reactions[data.emoji] = []
-          const idx = msg.reactions[data.emoji].indexOf(sid)
-          if (idx === -1) { msg.reactions[data.emoji].push(sid) }
-          else { msg.reactions[data.emoji].splice(idx, 1); if (!msg.reactions[data.emoji].length) delete msg.reactions[data.emoji] }
-          broadcastChat({ type: 'reaction', msgId: data.msgId, reactions: msg.reactions })
         } else if (data.type === 'admin') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session?.isAdmin) return
@@ -12470,12 +12356,6 @@ function setupChatWebSocket(httpServer) {
           } else if (data.action === 'unpin') {
             pinnedMessage = null
             broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
-          } else if (data.action === 'broadcast' && data.text) {
-            const bText = sanitizeString(data.text, 300).trim()
-            if (bText) {
-              const bMsg = pushChatMsg({ id: chatId(), from: session.name, fromId: session.id, gender: session.gender, text: bText, timestamp: Date.now(), isBroadcast: true, isSystem: false })
-              broadcastChat({ type: 'message', msg: bMsg })
-            }
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

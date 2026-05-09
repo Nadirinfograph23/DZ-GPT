@@ -4,7 +4,7 @@ import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
-  VolumeX, Clock, Megaphone, CornerUpLeft,
+  VolumeX, Clock, Megaphone, CornerUpLeft, User, MapPin, ExternalLink,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -13,6 +13,7 @@ interface ChatUser {
   name: string
   gender: 'male' | 'female'
   isAdmin?: boolean
+  profileId?: string | null
 }
 
 interface ChatMessage {
@@ -37,6 +38,7 @@ interface ChatMessage {
   isBroadcast?: boolean
   reactions?: Record<string, string[]>
   replyTo?: { id: string; from: string; text: string }
+  fromProfileId?: string | null
 }
 
 interface LocalUser {
@@ -44,6 +46,19 @@ interface LocalUser {
   gender: 'male' | 'female'
   sessionId: string
   isAdmin: boolean
+  profileId?: string | null
+}
+
+interface ProfileData {
+  profileId?: string
+  userId: string
+  name: string
+  gender: 'male' | 'female'
+  city?: string
+  facebook?: string
+  instagram?: string
+  tiktok?: string
+  loading?: boolean
 }
 
 interface PinnedMessage {
@@ -79,6 +94,8 @@ export default function DZChat() {
   const [entryAdminSecret, setEntryAdminSecret] = useState('')
   const [entryError, setEntryError] = useState('')
   const [entryLoading, setEntryLoading] = useState(false)
+  const [entryPassword, setEntryPassword] = useState('')
+  const [entrySaveProfile, setEntrySaveProfile] = useState(false)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [onlineUsers, setOnlineUsers] = useState<ChatUser[]>([])
@@ -110,6 +127,15 @@ export default function DZChat() {
   // Reply state
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null)
 
+  // Profile popup state
+  const [viewProfile, setViewProfile] = useState<ProfileData | null>(null)
+  const [profileEditMode, setProfileEditMode] = useState(false)
+  const [editCity, setEditCity] = useState('')
+  const [editFacebook, setEditFacebook] = useState('')
+  const [editInstagram, setEditInstagram] = useState('')
+  const [editTiktok, setEditTiktok] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
   // Typing indicator state: userId → name
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
@@ -130,6 +156,17 @@ export default function DZChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const sessionIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dzchat-saved-profile')
+      if (saved) {
+        const { name, password } = JSON.parse(saved)
+        if (name) setEntryName(name)
+        if (password) { setEntryPassword(password); setEntrySaveProfile(true) }
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     const onFocus = () => setWindowFocused(true)
@@ -328,6 +365,14 @@ export default function DZChat() {
         body.adminSecret = entryAdminSecret
         sessionStorage.setItem('dzc_admin_secret', entryAdminSecret)
       }
+      if (entryPassword.trim().length >= 4) {
+        body.profilePassword = entryPassword.trim()
+        if (entrySaveProfile) {
+          localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: entryName.trim(), password: entryPassword.trim() }))
+        } else {
+          localStorage.removeItem('dzchat-saved-profile')
+        }
+      }
       const r = await fetch('/api/chat-room/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -335,7 +380,7 @@ export default function DZChat() {
       })
       const d = await r.json()
       if (!r.ok) { setEntryError(d.error || 'فشل الدخول.'); return }
-      const user: LocalUser = { name: entryName.trim(), gender: entryGender, sessionId: d.sessionId, isAdmin: !!d.isAdmin }
+      const user: LocalUser = { name: entryName.trim(), gender: entryGender, sessionId: d.sessionId, isAdmin: !!d.isAdmin, profileId: d.profileId || null }
       sessionIdRef.current = d.sessionId
       setLocalUser(user)
       const history: ChatMessage[] = d.messages || []
@@ -625,12 +670,49 @@ export default function DZChat() {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, localDeleted: true } : m))
   }
 
+  // Open profile popup
+  const openProfile = async (opts: { profileId?: string | null; userId: string; name: string; gender: 'male' | 'female' }) => {
+    setProfileEditMode(false)
+    setViewProfile({ profileId: opts.profileId || undefined, userId: opts.userId, name: opts.name, gender: opts.gender, loading: !!opts.profileId })
+    if (opts.profileId) {
+      try {
+        const r = await fetch(`/api/chat-room/profile/${opts.profileId}`)
+        if (r.ok) {
+          const d = await r.json()
+          setViewProfile(prev => prev ? { ...prev, ...d, loading: false } : null)
+        } else {
+          setViewProfile(prev => prev ? { ...prev, loading: false } : null)
+        }
+      } catch {
+        setViewProfile(prev => prev ? { ...prev, loading: false } : null)
+      }
+    }
+  }
+
+  // Save profile fields
+  const saveProfileFields = async () => {
+    if (!sessionIdRef.current || !localUser?.profileId) return
+    setEditSaving(true)
+    try {
+      const r = await fetch('/api/chat-room/profile/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionIdRef.current, city: editCity, facebook: editFacebook, instagram: editInstagram, tiktok: editTiktok }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        setViewProfile(prev => prev ? { ...prev, ...d.profile, loading: false } : null)
+        setProfileEditMode(false)
+      }
+    } catch {}
+    setEditSaving(false)
+  }
+
   // Open DM from a message sender click
   const handleMsgSenderClick = (e: React.MouseEvent, msg: ChatMessage) => {
     if (msg.isBot || msg.isSystem || msg.fromId === sessionIdRef.current) return
     e.stopPropagation()
-    const user: ChatUser = { id: msg.fromId, name: msg.from, gender: msg.gender as 'male' | 'female' }
-    setUserMenu({ user, x: e.clientX, y: e.clientY })
+    openProfile({ profileId: msg.fromProfileId, userId: msg.fromId, name: msg.from, gender: msg.gender as 'male' | 'female' })
   }
 
   useEffect(() => {
@@ -688,6 +770,27 @@ export default function DZChat() {
                 <span className="dzc-gender-icon dzc-gender-icon--female">♀</span>
                 <span>أنثى</span>
               </button>
+            </div>
+
+            {/* Profile password section */}
+            <div className="dzc-entry-profile-section">
+              <div className="dzc-entry-profile-label">
+                <User size={12} /> بروفايل شخصي <span className="dzc-entry-optional">(اختياري)</span>
+              </div>
+              <input
+                className="dzc-entry-input dzc-entry-input--profile"
+                placeholder="أنشئ كلمة مرور لحفظ بروفايلك..."
+                type="password"
+                value={entryPassword}
+                onChange={e => setEntryPassword(e.target.value)}
+                maxLength={50}
+              />
+              {entryPassword.length >= 4 && (
+                <label className="dzc-entry-save-toggle">
+                  <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
+                  <span>تذكرني في هذا الجهاز</span>
+                </label>
+              )}
             </div>
 
             <div className="dzc-entry-admin-toggle">
@@ -755,6 +858,12 @@ export default function DZChat() {
           <button className="dzc-nav-btn" onClick={clearChat} title="مسح الدردشة">
             <Trash2 size={15} />
           </button>
+          {localUser?.profileId && (
+            <button className="dzc-nav-btn dzc-nav-btn--profile" title="بروفايلي"
+              onClick={() => openProfile({ profileId: localUser.profileId, userId: localUser.sessionId, name: localUser.name, gender: localUser.gender })}>
+              <User size={15} />
+            </button>
+          )}
           <button className="dzc-nav-btn dzc-nav-btn--logout" onClick={handleLogout} title="خروج">
             <LogOut size={15} /> <span className="dzc-nav-label">خروج</span>
           </button>
@@ -776,9 +885,8 @@ export default function DZChat() {
                 key={u.id}
                 className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''}`}
                 onClick={(e) => {
-                  if (u.id === sessionIdRef.current) return
                   e.stopPropagation()
-                  setUserMenu({ user: u, x: e.clientX, y: e.clientY })
+                  openProfile({ profileId: u.profileId, userId: u.id, name: u.name, gender: u.gender })
                 }}
               >
                 {genderIcon(u.gender)}
@@ -1101,6 +1209,146 @@ export default function DZChat() {
                 إرسال الإذاعة
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== PROFILE POPUP ===== */}
+      {viewProfile && (
+        <div className="dzc-profile-overlay" onClick={() => { setViewProfile(null); setProfileEditMode(false) }}>
+          <div className="dzc-profile-card" onClick={e => e.stopPropagation()}>
+            <button className="dzc-profile-close" onClick={() => { setViewProfile(null); setProfileEditMode(false) }}>
+              <X size={15} />
+            </button>
+
+            {/* Avatar */}
+            <div className={`dzc-profile-avatar dzc-profile-avatar--${viewProfile.gender}`}>
+              {viewProfile.gender === 'female' ? '♀' : '♂'}
+            </div>
+
+            {/* Name */}
+            <div className="dzc-profile-name">{viewProfile.name}</div>
+            {viewProfile.userId === sessionIdRef.current && <div className="dzc-profile-you-badge">أنت</div>}
+
+            {!profileEditMode ? (
+              <>
+                {viewProfile.loading ? (
+                  <div className="dzc-profile-loading"><Loader2 size={18} className="dzc-spin" /></div>
+                ) : (
+                  <div className="dzc-profile-fields">
+                    {!viewProfile.profileId && (
+                      <p className="dzc-profile-no-data">لم يُنشئ هذا المستخدم بروفايلاً بعد</p>
+                    )}
+                    {viewProfile.profileId && !viewProfile.city && !viewProfile.facebook && !viewProfile.instagram && !viewProfile.tiktok && viewProfile.userId !== sessionIdRef.current && (
+                      <p className="dzc-profile-no-data">لم يُضف معلومات بعد</p>
+                    )}
+                    {viewProfile.city && (
+                      <div className="dzc-profile-field">
+                        <MapPin size={13} className="dzc-profile-field-icon" />
+                        <span>{viewProfile.city}</span>
+                      </div>
+                    )}
+                    {viewProfile.facebook && (
+                      <a className="dzc-profile-field dzc-profile-field--link"
+                        href={viewProfile.facebook.startsWith('http') ? viewProfile.facebook : `https://facebook.com/${viewProfile.facebook}`}
+                        target="_blank" rel="noopener noreferrer">
+                        <span className="dzc-profile-social-icon dzc-profile-social-icon--fb">f</span>
+                        <span>{viewProfile.facebook}</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {viewProfile.instagram && (
+                      <a className="dzc-profile-field dzc-profile-field--link"
+                        href={`https://instagram.com/${viewProfile.instagram.replace('@','')}`}
+                        target="_blank" rel="noopener noreferrer">
+                        <span className="dzc-profile-social-icon dzc-profile-social-icon--ig">📷</span>
+                        <span>@{viewProfile.instagram.replace('@','')}</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {viewProfile.tiktok && (
+                      <a className="dzc-profile-field dzc-profile-field--link"
+                        href={`https://tiktok.com/@${viewProfile.tiktok.replace('@','')}`}
+                        target="_blank" rel="noopener noreferrer">
+                        <span className="dzc-profile-social-icon dzc-profile-social-icon--tt">🎵</span>
+                        <span>@{viewProfile.tiktok.replace('@','')}</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="dzc-profile-actions">
+                  {viewProfile.userId !== sessionIdRef.current && (
+                    <button className="dzc-profile-dm-btn" onClick={() => {
+                      const u = onlineUsers.find(u => u.id === viewProfile.userId)
+                      if (u) setDmTarget(u)
+                      setViewProfile(null)
+                      setTimeout(() => inputRef.current?.focus(), 50)
+                    }}>
+                      <MessageCircle size={14} /> رسالة خاصة
+                    </button>
+                  )}
+                  {localUser?.profileId && viewProfile.userId === sessionIdRef.current && (
+                    <button className="dzc-profile-edit-btn" onClick={() => {
+                      setEditCity(viewProfile.city || '')
+                      setEditFacebook(viewProfile.facebook || '')
+                      setEditInstagram(viewProfile.instagram || '')
+                      setEditTiktok(viewProfile.tiktok || '')
+                      setProfileEditMode(true)
+                    }}>
+                      ✏️ تعديل بروفايلي
+                    </button>
+                  )}
+                </div>
+
+                {/* Admin actions */}
+                {localUser?.isAdmin && viewProfile.userId !== sessionIdRef.current && (
+                  <div className="dzc-profile-admin-section">
+                    <div className="dzc-profile-admin-label"><Shield size={11} /> إجراءات المشرف</div>
+                    <div className="dzc-profile-mute-row">
+                      {[10, 20, 30, 45, 60].map(min => (
+                        <button key={min} className="dzc-profile-mute-btn"
+                          onClick={() => { adminMute(viewProfile.userId, min * 60 * 1000); setViewProfile(null) }}>
+                          {min < 60 ? `${min}د` : 'ساعة'}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="dzc-profile-block-btn"
+                      onClick={() => { adminAction('block', viewProfile.userId); setViewProfile(null) }}>
+                      <Shield size={12} /> حظر نهائي
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Edit mode */
+              <div className="dzc-profile-edit-form">
+                <div className="dzc-profile-edit-field">
+                  <label><MapPin size={11} /> المدينة / العنوان</label>
+                  <input className="dzc-profile-edit-input" placeholder="مثال: الجزائر العاصمة" value={editCity} onChange={e => setEditCity(e.target.value)} maxLength={100} />
+                </div>
+                <div className="dzc-profile-edit-field">
+                  <label><span className="dzc-profile-social-icon dzc-profile-social-icon--fb">f</span> Facebook</label>
+                  <input className="dzc-profile-edit-input" placeholder="رابط أو اسم المستخدم" value={editFacebook} onChange={e => setEditFacebook(e.target.value)} maxLength={200} />
+                </div>
+                <div className="dzc-profile-edit-field">
+                  <label><span className="dzc-profile-social-icon dzc-profile-social-icon--ig">📷</span> Instagram</label>
+                  <input className="dzc-profile-edit-input" placeholder="@username" value={editInstagram} onChange={e => setEditInstagram(e.target.value)} maxLength={100} />
+                </div>
+                <div className="dzc-profile-edit-field">
+                  <label><span className="dzc-profile-social-icon dzc-profile-social-icon--tt">🎵</span> TikTok</label>
+                  <input className="dzc-profile-edit-input" placeholder="@username" value={editTiktok} onChange={e => setEditTiktok(e.target.value)} maxLength={100} />
+                </div>
+                <div className="dzc-profile-edit-actions">
+                  <button className="dzc-profile-edit-cancel" onClick={() => setProfileEditMode(false)}>إلغاء</button>
+                  <button className="dzc-profile-save-btn" onClick={saveProfileFields} disabled={editSaving}>
+                    {editSaving ? <Loader2 size={14} className="dzc-spin" /> : '💾'} حفظ
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

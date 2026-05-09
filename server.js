@@ -6,7 +6,7 @@ import crypto from 'crypto'
 import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile as fsWriteFile } from 'fs/promises'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
@@ -9670,6 +9670,17 @@ let pinnedMessage = null        // { id, text, from, timestamp } | null
 const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
 
+// ── Chat Profiles (persistent) ────────────────────────────────────────────────
+const PROFILES_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'chat-profiles.json')
+let chatProfiles = {}
+;(async () => { try { chatProfiles = JSON.parse(await readFile(PROFILES_FILE, 'utf8')) } catch {} })()
+async function saveChatProfiles() {
+  try { await fsWriteFile(PROFILES_FILE, JSON.stringify(chatProfiles, null, 2)) } catch {}
+}
+function computeProfileId(name, password) {
+  return crypto.createHash('sha256').update(name.toLowerCase().trim() + ':' + password).digest('hex').slice(0, 20)
+}
+
 function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
 }
@@ -9678,7 +9689,7 @@ function getOnlineUsers() {
   const now = Date.now()
   return [...chatSessions.values()]
     .filter(s => now - s.lastSeen < 40000)
-    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin }))
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profileId: s.profileId || null }))
 }
 
 function broadcastChat(data, exceptWs = null) {
@@ -12169,12 +12180,41 @@ app.get('/api/dz-tube/download', async (req, res) => {
 })
 
 // ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====
+app.get('/api/chat-room/profile/:profileId', (req, res) => {
+  const profile = chatProfiles[req.params.profileId]
+  if (!profile) return res.status(404).json({ error: 'not found' })
+  res.json({ profileId: req.params.profileId, name: profile.name, gender: profile.gender, city: profile.city || '', facebook: profile.facebook || '', instagram: profile.instagram || '', tiktok: profile.tiktok || '' })
+})
+
+app.put('/api/chat-room/profile/update', async (req, res) => {
+  const { sessionId, city, facebook, instagram, tiktok } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session?.profileId) return res.status(401).json({ error: 'No profile linked to this session' })
+  const profile = chatProfiles[session.profileId]
+  if (!profile) return res.status(404).json({ error: 'Profile not found' })
+  if (city !== undefined) profile.city = sanitizeString(String(city), 100)
+  if (facebook !== undefined) profile.facebook = sanitizeString(String(facebook), 200)
+  if (instagram !== undefined) profile.instagram = sanitizeString(String(instagram), 100)
+  if (tiktok !== undefined) profile.tiktok = sanitizeString(String(tiktok), 100)
+  profile.updatedAt = Date.now()
+  await saveChatProfiles()
+  res.json({ ok: true, profile: { profileId: session.profileId, name: profile.name, gender: profile.gender, city: profile.city, facebook: profile.facebook, instagram: profile.instagram, tiktok: profile.tiktok } })
+})
+
 app.post('/api/chat-room/join', (req, res) => {
-  const { name, gender, adminSecret } = req.body || {}
+  const { name, gender, adminSecret, profilePassword } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
   const isAdmin = adminSecret === CHAT_ADMIN_SECRET
-  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null }
+  let profileId = null
+  if (profilePassword && typeof profilePassword === 'string' && profilePassword.length >= 4) {
+    profileId = computeProfileId(name.trim(), profilePassword)
+    if (!chatProfiles[profileId]) {
+      chatProfiles[profileId] = { name: sanitizeString(name, 30), gender, city: '', facebook: '', instagram: '', tiktok: '', createdAt: Date.now(), updatedAt: Date.now() }
+      saveChatProfiles()
+    }
+  }
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, profileId, lastSeen: Date.now(), ws: null }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
     id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
@@ -12182,7 +12222,7 @@ app.post('/api/chat-room/join', (req, res) => {
   })
   broadcastChat({ type: 'message', msg: joinMsg })
   broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
-  res.json({ sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() })
+  res.json({ sessionId: id, isAdmin, profileId, messages: chatMessages.slice(-50), users: getOnlineUsers() })
 })
 
 app.post('/api/chat-room/leave', (req, res) => {
@@ -12221,6 +12261,7 @@ app.post('/api/chat-room/send', async (req, res) => {
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
     replyTo: safeReply || undefined,
+    fromProfileId: session.profileId || null,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -12357,6 +12398,7 @@ function setupChatWebSocket(httpServer) {
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
             replyTo: safeReplyWs || undefined,
+            fromProfileId: session.profileId || null,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)

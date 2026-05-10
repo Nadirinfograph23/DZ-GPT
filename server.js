@@ -71,8 +71,10 @@ import {
   getProviderScores,
   getRouterLogs,
   getRouterDiagnosticSummary,
+  resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
+import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -1802,6 +1804,21 @@ app.get('/api/admin/provider-scores', (_req, res) => {
   }
 })
 
+// ===== ADMIN: RESET PROVIDER SCORE =====
+app.post('/api/admin/reset-provider/:provider', (req, res) => {
+  const ALLOWED = ['openai', 'gemini', 'mistral', 'nvidia', 'cohere', 'openrouter', 'groq', 'deepseek', 'ollama']
+  const { provider } = req.params
+  if (!ALLOWED.includes(provider)) {
+    return res.status(400).json({ ok: false, error: `Unknown provider: ${provider}` })
+  }
+  try {
+    resetProviderScore(provider)
+    res.json({ ok: true, provider, msg: `Score for ${provider} reset to 100` })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // ===== ADMIN: TEST SINGLE PROVIDER =====
 app.post('/api/admin/test-provider', async (req, res) => {
   const { provider } = req.body || {}
@@ -1874,7 +1891,7 @@ app.get('/api/admin/full-report', async (_req, res) => {
         AI_INTEGRATIONS_OPENAI: !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY),
         HF_TOKEN: !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY),
         OPENWEATHER: !!process.env.OPENWEATHER_API_KEY,
-        GOOGLE_CSE: !!(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID),
+        GOOGLE_CSE: !!((process.env.GOOGLE_API_KEY_NEW || process.env.GOOGLE_API_KEY) && process.env.GOOGLE_CSE_ID),
       },
       sync,
     })
@@ -2961,24 +2978,44 @@ function buildOptimizedQueries(query, intent) {
 }
 
 // ── Google Custom Search Engine (PRIMARY) ────────────────────────────────────
+// Key priority: GOOGLE_API_KEY_NEW (unrestricted) → GOOGLE_API_KEY (referrer-restricted)
 async function searchGoogleCSE(query) {
-  const apiKey = process.env.GOOGLE_API_KEY
-  const cx     = process.env.GOOGLE_CSE_ID || '12e6f922595f64d35'
-  if (!apiKey) return []
+  const cx = process.env.GOOGLE_CSE_ID || '12e6f922595f64d35'
 
-  try {
-    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=8&dateRestrict=m6&sort=date`
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000) })
-    if (!r.ok) { console.warn('[CSE] Error:', r.status); return [] }
-    const data = await r.json()
-    return (data.items || []).map(item => ({
-      source: 'Google CSE',
-      title: item.title || '',
-      snippet: item.snippet || '',
-      url: item.link || '',
-      date: item.pagemap?.metatags?.[0]?.['article:published_time'] || item.pagemap?.metatags?.[0]?.['og:updated_time'] || '',
-    }))
-  } catch (err) { console.warn('[CSE] Fetch error:', err.message); return [] }
+  // Try each key in order — stop at first success
+  const keys = [
+    process.env.GOOGLE_API_KEY_NEW,
+    process.env.GOOGLE_API_KEY,
+  ].filter(Boolean)
+
+  if (keys.length === 0) return []
+
+  for (const apiKey of keys) {
+    try {
+      const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=8&dateRestrict=m6&sort=date`
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'DZ-GPT-Server/1.0' }
+      })
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}))
+        const reason  = errBody?.error?.details?.[0]?.reason || errBody?.error?.status || r.status
+        console.warn('[CSE] Key failed:', reason, '— trying next key')
+        continue
+      }
+      const data = await r.json()
+      if (!data.items?.length) continue
+      return data.items.map(item => ({
+        source: 'Google CSE',
+        title:   item.title    || '',
+        snippet: item.snippet  || '',
+        url:     item.link     || '',
+        date:    item.pagemap?.metatags?.[0]?.['article:published_time']
+              || item.pagemap?.metatags?.[0]?.['og:updated_time'] || '',
+      }))
+    } catch (err) { console.warn('[CSE] Fetch error:', err.message) }
+  }
+  return []
 }
 
 function stripHtml(html = '') {
@@ -4343,7 +4380,7 @@ function analyzeQuery(msg) {
   return { questionType, lang, timeframe, entities, subject, expectedFormat, suggestions, isArabic, confidence }
 }
 
-function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 60) {
+function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14) {
   if (!feedResults.length) return ''
   const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const label = queryType === 'sports' ? '⚽ نتائج وأخبار رياضية' : '📰 أخبار'
@@ -4359,24 +4396,47 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 60
     return subjectTokens.some(tok => haystack.includes(tok))
   }
 
-  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} ---\n`
-  let totalItems = 0
+  function getItemDate(item) {
+    const d = item.pubDate || item.date || item.publishedDate || ''
+    if (!d) return 0
+    const t = new Date(d).getTime()
+    return isNaN(t) ? 0 : t
+  }
+
+  // Collect ALL items across feeds, apply filters, then sort by date newest-first
+  const allItems = []
   for (const feed of feedResults) {
     if (!feed.items?.length) continue
-    // Apply hard freshness filter + subject filter
     const freshItems = filterFreshItems(feed.items, maxAgeDays)
-    const items = freshItems.filter(itemMatchesSubject).slice(0, 4)
-    if (!items.length) continue
-    ctx += `\n**${feed.name}:**\n`
-    for (const item of items) {
-      ctx += `• ${item.title}`
-      if (item.link) ctx += ` — ${item.link}`
-      if (item.description) ctx += `\n  ${item.description}`
-      ctx += '\n'
-      totalItems++
+    for (const item of freshItems) {
+      if (itemMatchesSubject(item)) allItems.push({ ...item, _feedName: feed.name })
     }
   }
-  if (totalItems === 0) return ''
+
+  // Sort newest first
+  allItems.sort((a, b) => getItemDate(b) - getItemDate(a))
+
+  if (allItems.length === 0) return ''
+
+  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} (مرتبة من الأحدث) ---\n`
+  let count = 0
+  for (const item of allItems.slice(0, 12)) {
+    const rawDate = item.pubDate || item.date || item.publishedDate || ''
+    let dateLabel = ''
+    if (rawDate) {
+      try {
+        const ageH = (Date.now() - new Date(rawDate).getTime()) / 3600000
+        if (ageH < 1) dateLabel = ' (منذ دقائق)'
+        else if (ageH < 24) dateLabel = ` (منذ ${Math.floor(ageH)} ساعة)`
+        else dateLabel = ` (${new Date(rawDate).toLocaleDateString('ar-DZ')})`
+      } catch {}
+    }
+    ctx += `• **[${item._feedName}]** ${item.title}${dateLabel}`
+    if (item.link) ctx += ` — ${item.link}`
+    ctx += '\n'
+    count++
+  }
+  if (count === 0) return ''
   ctx += '\n---\n'
   return ctx
 }
@@ -4577,24 +4637,40 @@ function deduplicateGNArticles(articles) {
 function buildGNRSSContext(articles, label = '🌐 Google News RSS') {
   if (!articles.length) return ''
   const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  let ctx = `\n\n--- ${label} — ${date} ---\n`
 
-  // Group by category
+  // Sort all articles newest-first before grouping
+  const sorted = [...articles].sort((a, b) => {
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+    return tb - ta
+  })
+
+  let ctx = `\n\n--- ${label} — ${date} (مرتبة من الأحدث) ---\n`
+
+  // Group by category (preserving sorted order within each category)
   const byCategory = {}
-  for (const art of articles) {
+  const catOrder = []
+  for (const art of sorted) {
     const cat = art.category || 'عام'
-    if (!byCategory[cat]) byCategory[cat] = []
+    if (!byCategory[cat]) { byCategory[cat] = []; catOrder.push(cat) }
     byCategory[cat].push(art)
   }
 
-  for (const [cat, items] of Object.entries(byCategory)) {
+  for (const cat of catOrder) {
+    const items = byCategory[cat]
     ctx += `\n**${cat}:**\n`
     for (const item of items.slice(0, 4)) {
       ctx += `• ${item.title}`
-      if (item.source) ctx += ` [${item.source}]`
-      if (item.link) ctx += ` — ${item.link}`
+      if (item.link && item.source) ctx += ` — [${item.source}](${item.link})`
+      else if (item.link) ctx += ` — [المصدر](${item.link})`
+      else if (item.source) ctx += ` — ${item.source}`
       if (item.pubDate) {
-        try { ctx += ` (${new Date(item.pubDate).toLocaleDateString('ar-DZ')})` } catch {}
+        try {
+          const ageH = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
+          if (ageH < 1) ctx += ` (منذ دقائق)`
+          else if (ageH < 24) ctx += ` (منذ ${Math.floor(ageH)} ساعة)`
+          else ctx += ` (${new Date(item.pubDate).toLocaleDateString('ar-DZ')})`
+        } catch {}
       }
       ctx += '\n'
     }
@@ -6407,6 +6483,595 @@ app.post('/api/dz-agent/github/create-file', async (req, res) => {
   }
 })
 
+// ===== GITHUB AI: ANALYZE PROJECT (read key files → AI comprehensive analysis) =====
+app.post('/api/dz-agent/github/analyze-project', async (req, res) => {
+  const { repo, branch = 'main', token } = req.body
+  if (!repo) return res.status(400).json({ error: 'repo required' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'No GitHub token configured' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+  }
+
+  // Key files to attempt reading (priority order)
+  const KEY_FILES = [
+    'package.json', 'README.md', 'README',
+    'src/main.tsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.ts', 'src/index.js',
+    'index.js', 'index.ts', 'app.js', 'app.ts', 'server.js', 'server.ts',
+    'tsconfig.json', 'vite.config.ts', 'vite.config.js', 'next.config.js', 'next.config.ts',
+    'tailwind.config.js', 'tailwind.config.ts', 'webpack.config.js',
+    '.env.example', 'docker-compose.yml', 'Dockerfile',
+    'requirements.txt', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml',
+    'composer.json', 'Gemfile',
+  ]
+
+  const readFile = async (path) => {
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`,
+        { headers: ghHeaders, signal: AbortSignal.timeout(8000) }
+      )
+      if (!r.ok) return null
+      const d = await r.json()
+      if (!d.content || d.size > 60000) return null
+      return Buffer.from(d.content.replace(/\n/g, ''), 'base64').toString('utf8').slice(0, 3000)
+    } catch { return null }
+  }
+
+  // Parallel: fetch tree + meta + key files
+  const [treeRes, metaRes, ...fileReads] = await Promise.allSettled([
+    fetch(`https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, { headers: ghHeaders, signal: AbortSignal.timeout(10000) }),
+    fetch(`https://api.github.com/repos/${repo}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) }),
+    ...KEY_FILES.map(f => readFile(f)),
+  ])
+
+  const treeData = treeRes.status === 'fulfilled' && treeRes.value.ok ? await treeRes.value.json().catch(() => ({})) : {}
+  const meta = metaRes.status === 'fulfilled' && metaRes.value.ok ? await metaRes.value.json().catch(() => ({})) : {}
+  const fileTree = (treeData.tree || []).filter(f => f.type === 'blob').map(f => f.path)
+
+  const fileContents = {}
+  KEY_FILES.forEach((f, i) => {
+    const r = fileReads[i]
+    if (r.status === 'fulfilled' && r.value) fileContents[f] = r.value
+  })
+
+  // Detect tech stack from file names + package.json
+  let techStack = []
+  let dependencies = {}
+  try {
+    if (fileContents['package.json']) {
+      const pkg = JSON.parse(fileContents['package.json'])
+      dependencies = { ...pkg.dependencies, ...pkg.devDependencies }
+      const deps = Object.keys(dependencies)
+      if (deps.includes('react')) techStack.push('React')
+      if (deps.includes('vue')) techStack.push('Vue')
+      if (deps.includes('next')) techStack.push('Next.js')
+      if (deps.includes('vite') || deps.includes('@vitejs/plugin-react')) techStack.push('Vite')
+      if (deps.includes('express')) techStack.push('Express.js')
+      if (deps.includes('typescript') || deps.includes('tsx') || fileContents['tsconfig.json']) techStack.push('TypeScript')
+      if (deps.includes('tailwindcss')) techStack.push('Tailwind CSS')
+      if (deps.includes('prisma') || deps.includes('@prisma/client')) techStack.push('Prisma ORM')
+      if (deps.includes('mongoose') || deps.includes('mongodb')) techStack.push('MongoDB')
+      if (deps.includes('pg') || deps.includes('postgres')) techStack.push('PostgreSQL')
+    }
+  } catch {}
+  if (fileContents['requirements.txt']) techStack.push('Python')
+  if (fileContents['go.mod']) techStack.push('Go')
+  if (fileContents['Cargo.toml']) techStack.push('Rust')
+  if (fileContents['Gemfile']) techStack.push('Ruby')
+  if (fileContents['pom.xml']) techStack.push('Java/Maven')
+  if (meta.language && !techStack.includes(meta.language)) techStack.unshift(meta.language)
+
+  const fileCtx = Object.entries(fileContents)
+    .map(([p, c]) => `### 📄 ${p}\n\`\`\`\n${c}\n\`\`\``)
+    .join('\n\n')
+
+  const depsTop = Object.keys(dependencies).slice(0, 20).join(', ')
+
+  const prompt = [
+    {
+      role: 'system',
+      content: `أنت DZ Agent، مهندس برمجيات ومحلل خبير. تحلل مشاريع GitHub بعمق وتقدم تقارير احترافية شاملة. أجب دائماً بالعربية بتنسيق Markdown واضح ومنظم. ركّز على الجودة والدقة والاقتراحات القابلة للتنفيذ.`,
+    },
+    {
+      role: 'user',
+      content: `حلّل مشروع GitHub هذا وأعطني تقريراً شاملاً:
+
+**المستودع:** \`${repo}\`
+**اللغة الرئيسية:** ${meta.language || 'غير محددة'}
+**النجوم:** ⭐ ${meta.stargazers_count || 0} | **Forks:** 🍴 ${meta.forks_count || 0}
+**الوصف:** ${meta.description || 'لا يوجد وصف'}
+**Stack المكتشف:** ${techStack.join(', ') || 'غير محدد'}
+**التبعيات الرئيسية:** ${depsTop || 'لا يوجد package.json'}
+**إجمالي الملفات:** ${fileTree.length} ملف
+
+**هيكل المشروع (أول 60 ملف):**
+\`\`\`
+${fileTree.slice(0, 60).join('\n') || 'تعذّر جلب الهيكل'}
+\`\`\`
+
+**محتوى الملفات الرئيسية:**
+${fileCtx || 'لم يتم قراءة أي ملف'}
+
+أريد تقريراً يشمل هذه الأقسام بالترتيب:
+## 🎯 نظرة عامة
+## 🔧 Stack التقنية والمعمارية
+## 📊 جودة الكود (درجة من 100 مع تبرير)
+## ⚡ مقترحات تحسين فورية (5 إجراءات ذات أولوية عالية)
+## 🎨 تحسينات الواجهة والتصميم (إذا كان مشروع ويب)
+## 🔐 ملاحظات أمنية
+## 📦 حالة التبعيات`,
+    },
+  ]
+
+  try {
+    const analysis = await safeGenerateAI({ messages: prompt, max_tokens: 2500, taskHint: 'code' })
+    console.log(`[GitHub:analyze-project] ${repo} — ${fileTree.length} files, ${Object.keys(fileContents).length} read`)
+    return res.json({
+      success: true,
+      analysis,
+      meta: {
+        repo,
+        language: meta.language,
+        stars: meta.stargazers_count,
+        forks: meta.forks_count,
+        fileCount: fileTree.length,
+        techStack,
+        readFiles: Object.keys(fileContents),
+        topDependencies: Object.keys(dependencies).slice(0, 10),
+      },
+    })
+  } catch (err) {
+    console.error('[GitHub:analyze-project]', err.message)
+    return res.status(500).json({ error: `Project analysis failed: ${err.message}` })
+  }
+})
+
+// ===== GITHUB AI: GENERATE CODE AND PUSH (AI → GitHub → optional Vercel deploy) =====
+app.post('/api/dz-agent/github/generate-and-push', async (req, res) => {
+  const { repo, description, branch: targetBranch, token, deployToVercel = false, projectContext = '' } = req.body
+  if (!repo || !description) return res.status(400).json({ error: 'repo and description are required' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo format' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'No GitHub token configured' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  // Read package.json and main entry for context
+  let techContext = projectContext || ''
+  if (!techContext) {
+    try {
+      const pkgRes = await fetch(`https://api.github.com/repos/${repo}/contents/package.json`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+      if (pkgRes.ok) {
+        const d = await pkgRes.json()
+        const pkg = JSON.parse(Buffer.from(d.content.replace(/\n/g, ''), 'base64').toString('utf8'))
+        const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).slice(0, 20).join(', ')
+        techContext = `Stack: ${deps} | Framework: ${pkg.scripts?.dev?.includes('vite') ? 'Vite' : pkg.scripts?.dev?.includes('next') ? 'Next.js' : 'Node.js'}`
+      }
+    } catch {}
+  }
+
+  // Also try to read file structure for better context
+  let fileTreeCtx = ''
+  try {
+    const treeRes = await fetch(`https://api.github.com/repos/${repo}/git/trees/main?recursive=1`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+    if (treeRes.ok) {
+      const td = await treeRes.json()
+      fileTreeCtx = (td.tree || []).filter(f => f.type === 'blob').map(f => f.path).slice(0, 40).join('\n')
+    }
+  } catch {}
+
+  // AI generates code using FILE: /path block format
+  const genPrompt = [
+    {
+      role: 'system',
+      content: `أنت DZ Agent، مهندس برمجيات خبير. تولّد كوداً احترافياً متكاملاً جاهزاً للإنتاج.
+
+استخدم هذا التنسيق الصارم لكل ملف تريد إنشاءه أو تعديله:
+
+FILE: /path/to/file.ext
+\`\`\`lang
+// الكود الكامل هنا
+\`\`\`
+
+يمكنك إنشاء عدة ملفات. اجعل الكود كاملاً وقابلاً للتشغيل. اتبع أسلوب المشروع القائم.`,
+    },
+    {
+      role: 'user',
+      content: `المستودع: ${repo}
+${techContext ? `\n${techContext}` : ''}
+${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
+
+المطلوب: ${description}
+
+أنشئ الكود الكامل اللازم بصيغة FILE: /path مع الكود الكامل لكل ملف.`,
+    },
+  ]
+
+  let generated = ''
+  try {
+    generated = await safeGenerateAI({ messages: genPrompt, max_tokens: 4000, taskHint: 'code' })
+  } catch (err) {
+    return res.status(500).json({ error: `AI generation failed: ${err.message}` })
+  }
+
+  // Parse FILE: /path\n```lang\n...\n``` blocks
+  const fileBlocks = []
+  const fileRegex = /FILE:\s*\/?([^\n`]+)\n```[\w-]*\n([\s\S]*?)```/g
+  let match
+  while ((match = fileRegex.exec(generated)) !== null) {
+    const filePath = match[1].trim().replace(/^\/+/, '')
+    const content = match[2].trim()
+    if (filePath && content && filePath.length < 200) {
+      fileBlocks.push({ path: filePath, content })
+    }
+  }
+
+  if (!fileBlocks.length) {
+    // No FILE: blocks — return generated code without pushing
+    return res.json({
+      success: true,
+      generated,
+      pushed: false,
+      message: '🤖 الكود جاهز — لم يتم رصد ملفات للـ Push تلقائياً. اطلب نسخ الكود أو قم بإضافته يدوياً.',
+    })
+  }
+
+  // Create new branch from default branch
+  const newBranch = targetBranch || `dz-agent/${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}`
+
+  try {
+    // Get default branch SHA (try main then master)
+    let baseSha = null
+    for (const base of ['main', 'master']) {
+      try {
+        const r = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${base}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+        if (r.ok) { const d = await r.json(); baseSha = d.object?.sha; break }
+      } catch {}
+    }
+    if (!baseSha) throw new Error('لم يتم العثور على الفرع الرئيسي (main/master)')
+
+    // Create new branch
+    await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: baseSha }),
+      signal: AbortSignal.timeout(10000),
+    })
+
+    // Push each file
+    const pushedFiles = []
+    const failedFiles = []
+    for (const file of fileBlocks) {
+      try {
+        let existingSha
+        const checkR = await fetch(
+          `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(newBranch)}`,
+          { headers: ghHeaders, signal: AbortSignal.timeout(8000) }
+        )
+        if (checkR.ok) { const d = await checkR.json(); existingSha = d.sha }
+
+        const body = {
+          message: `✨ ${sanitizeString(description, 60)} [DZ Agent]`,
+          content: Buffer.from(file.content).toString('base64'),
+          branch: newBranch,
+        }
+        if (existingSha) body.sha = existingSha
+
+        const putR = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(file.path)}`, {
+          method: 'PUT',
+          headers: ghHeaders,
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(15000),
+        })
+        if (putR.ok) pushedFiles.push(file.path)
+        else { const e = await putR.json(); failedFiles.push(`${file.path}: ${e.message}`) }
+      } catch (fe) {
+        failedFiles.push(`${file.path}: ${fe.message}`)
+      }
+    }
+
+    if (!pushedFiles.length) throw new Error(`فشل رفع الملفات: ${failedFiles.join(', ')}`)
+
+    // Create PR
+    const prBody = [
+      `## ✨ ميزة جديدة بواسطة DZ Agent`,
+      ``,
+      `**الوصف:** ${description}`,
+      ``,
+      `**الملفات المُنشأة/المُعدَّلة (${pushedFiles.length}):**`,
+      ...pushedFiles.map(f => `- \`${f}\``),
+      ``,
+      failedFiles.length ? `**⚠️ ملفات فشل رفعها:** ${failedFiles.join(', ')}` : '',
+      ``,
+      `---`,
+      `🤖 Generated by [DZ-GPT](https://dz-gpt.vercel.app)`,
+    ].filter(l => l !== undefined).join('\n')
+
+    const prRes = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({
+        title: `✨ ${sanitizeString(description, 72)} [DZ Agent]`,
+        body: prBody,
+        head: newBranch,
+        base: 'main',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const prData = await prRes.json()
+
+    // Optional: trigger Vercel deployment
+    let vercelDeployment = null
+    if (deployToVercel && process.env.VERCEL_TOKEN) {
+      try {
+        const metaR = await fetch(`https://api.github.com/repos/${repo}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+        const metaD = metaR.ok ? await metaR.json() : {}
+        const vRes = await fetch('https://api.vercel.com/v13/deployments', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: repo.split('/')[1],
+            gitSource: { type: 'github', repoId: String(metaD.id || ''), ref: newBranch },
+          }),
+          signal: AbortSignal.timeout(20000),
+        })
+        const vData = await vRes.json()
+        if (vData.url) vercelDeployment = { url: `https://${vData.url}`, id: vData.id }
+      } catch (ve) {
+        console.warn('[generate-and-push] Vercel deploy optional step failed:', ve.message)
+      }
+    }
+
+    console.log(`[GitHub:generate-and-push] ${repo} → branch=${newBranch} files=${pushedFiles.length} pr=${!!prData.html_url} vercel=${!!vercelDeployment}`)
+
+    return res.json({
+      success: true,
+      generated,
+      pushed: true,
+      branch: newBranch,
+      files: pushedFiles,
+      failedFiles,
+      pr: prData.html_url ? { url: prData.html_url, number: prData.number, title: prData.title } : null,
+      vercel: vercelDeployment,
+    })
+  } catch (err) {
+    console.error('[GitHub:generate-and-push]', err.message)
+    return res.status(500).json({ error: `Push failed: ${err.message}`, generated, pushed: false })
+  }
+})
+
+// ===== GITHUB AI: IMPROVE DESIGN/THEME (reads CSS → AI rewrites → pushes PR) =====
+app.post('/api/dz-agent/github/improve-design', async (req, res) => {
+  const { repo, token, style = 'modern dark', branch = 'main' } = req.body
+  if (!repo) return res.status(400).json({ error: 'repo required' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'No GitHub token configured' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  // Scan for CSS/SCSS and Tailwind config files
+  let cssFiles = []
+  try {
+    const treeRes = await fetch(
+      `https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers: ghHeaders, signal: AbortSignal.timeout(10000) }
+    )
+    if (treeRes.ok) {
+      const td = await treeRes.json()
+      cssFiles = (td.tree || [])
+        .filter(f => f.type === 'blob' && /\.(css|scss|sass|less)$/.test(f.path) && f.size < 40000)
+        .sort((a, b) => b.size - a.size) // largest first (most important)
+        .slice(0, 4)
+        .map(f => f.path)
+    }
+  } catch {}
+
+  if (!cssFiles.length) {
+    return res.json({
+      success: false,
+      message: '⚠️ لم يتم العثور على ملفات CSS/SCSS في المستودع. هل الأنماط داخل ملفات TSX/JSX؟',
+    })
+  }
+
+  // Read CSS files in parallel
+  const reads = await Promise.allSettled(cssFiles.map(async (path) => {
+    const r = await fetch(
+      `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`,
+      { headers: ghHeaders, signal: AbortSignal.timeout(8000) }
+    )
+    if (!r.ok) return null
+    const d = await r.json()
+    return {
+      path,
+      content: Buffer.from(d.content.replace(/\n/g, ''), 'base64').toString('utf8'),
+      sha: d.sha,
+    }
+  }))
+
+  const files = reads.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+  if (!files.length) return res.json({ success: false, message: 'تعذّر قراءة ملفات CSS.' })
+
+  const cssCtx = files.map(f => `### 📄 ${f.path}\n\`\`\`css\n${f.content.slice(0, 2500)}\n\`\`\``).join('\n\n')
+
+  const designPrompt = [
+    {
+      role: 'system',
+      content: `أنت DZ Agent، مصمم UI/UX خبير متخصص في Tailwind CSS وCSS الحديث. تحسّن تصميمات المواقع لتكون احترافية وعصرية. أخرج الملفات بصيغة FILE: /path ثم الكود.`,
+    },
+    {
+      role: 'user',
+      content: `حسّن تصميم هذا الموقع بأسلوب "${style}". احتفظ بنفس هيكل الفئات (class names) لكن أضف تحسينات قوية:
+
+- 🎨 نظام ألوان متناسق وعصري (تدرجات، متغيرات CSS)
+- ✨ انتقالات وتأثيرات hover أنيقة
+- 📝 خطوط أفضل ومسافات متناسقة
+- 📱 استجابة محسّنة للجوال
+- 🌑 دعم Dark/Light mode إذا أمكن
+- 💫 تأثيرات دقيقة على البطاقات والأزرار
+- 🔲 Box shadows وborder radius عصرية
+
+${cssCtx}
+
+أخرج كل ملف بصيغة:
+FILE: /path/to/file.css
+\`\`\`css
+/* الكود المحسّن */
+\`\`\``,
+    },
+  ]
+
+  let improved = ''
+  try {
+    improved = await safeGenerateAI({ messages: designPrompt, max_tokens: 4000, taskHint: 'code' })
+  } catch (err) {
+    return res.status(500).json({ error: `Design generation failed: ${err.message}` })
+  }
+
+  // Parse FILE: blocks and push
+  const newBranch = `dz-design/${new Date().toISOString().slice(0, 10)}`
+  const pushedFiles = []
+
+  try {
+    // Get base SHA
+    let baseSha = null
+    for (const base of ['main', 'master']) {
+      try {
+        const r = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${base}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+        if (r.ok) { const d = await r.json(); baseSha = d.object?.sha; break }
+      } catch {}
+    }
+    if (!baseSha) throw new Error('Cannot find main/master branch')
+
+    await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: baseSha }),
+      signal: AbortSignal.timeout(10000),
+    })
+
+    const fileRegex = /FILE:\s*\/?([^\n`]+)\n```[\w-]*\n([\s\S]*?)```/g
+    let m
+    while ((m = fileRegex.exec(improved)) !== null) {
+      const filePath = m[1].trim().replace(/^\/+/, '')
+      const content = m[2].trim()
+      if (!filePath || !content) continue
+      const existing = files.find(f => f.path === filePath || f.path.endsWith(filePath))
+      const body = {
+        message: `🎨 improve UI/UX theme — style: ${style} [DZ Agent]`,
+        content: Buffer.from(content).toString('base64'),
+        branch: newBranch,
+      }
+      if (existing?.sha) body.sha = existing.sha
+      const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        headers: ghHeaders,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
+      })
+      if (r.ok) pushedFiles.push(filePath)
+    }
+
+    // Create PR
+    const prRes = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({
+        title: `🎨 تحسين واجهة UI — أسلوب "${style}" [DZ Agent]`,
+        body: `## 🎨 تحسين التصميم بواسطة DZ Agent\n\n**الأسلوب المطبّق:** ${style}\n\n**الملفات المُحسّنة:**\n${pushedFiles.map(f => `- \`${f}\``).join('\n') || '(لم يتم رصد ملفات بالتنسيق المطلوب — راجع الكود المولَّد)'}\n\n---\n🤖 Generated by [DZ-GPT](https://dz-gpt.vercel.app)`,
+        head: newBranch,
+        base: 'main',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const prData = prRes.ok ? await prRes.json() : {}
+
+    console.log(`[GitHub:improve-design] ${repo} → branch=${newBranch} files=${pushedFiles.length}`)
+
+    return res.json({
+      success: true,
+      improved,
+      pushed: pushedFiles.length > 0,
+      files: pushedFiles,
+      branch: newBranch,
+      pr: prData.html_url ? { url: prData.html_url, number: prData.number } : null,
+    })
+  } catch (err) {
+    console.error('[GitHub:improve-design]', err.message)
+    // Return the generated code even if push failed
+    return res.json({ success: true, improved, pushed: false, error: err.message })
+  }
+})
+
+// ===== GITHUB AI: DEPLOY & SYNC (push to GitHub + trigger Vercel in one step) =====
+app.post('/api/dz-agent/github/deploy-sync', async (req, res) => {
+  const { repo, files: filesToPush, commitMessage, branch: targetBranch = 'main', token } = req.body
+  if (!repo || !filesToPush?.length) return res.status(400).json({ error: 'repo and files[] required' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  const vercelToken = process.env.VERCEL_TOKEN
+  if (!tok) return res.status(500).json({ error: 'No GitHub token' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  const results = { pushed: [], failed: [], vercel: null }
+
+  // Push files
+  for (const file of filesToPush) {
+    if (!file.path || !file.content) continue
+    try {
+      let sha
+      const check = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(targetBranch)}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+      if (check.ok) { const d = await check.json(); sha = d.sha }
+      const body = { message: sanitizeString(commitMessage || `chore: deploy sync [DZ Agent]`, 200), content: Buffer.from(file.content).toString('base64'), branch: targetBranch }
+      if (sha) body.sha = sha
+      const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(file.path)}`, { method: 'PUT', headers: ghHeaders, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) })
+      if (r.ok) results.pushed.push(file.path)
+      else results.failed.push(file.path)
+    } catch { results.failed.push(file.path) }
+  }
+
+  // Trigger Vercel deploy
+  if (vercelToken) {
+    try {
+      const metaR = await fetch(`https://api.github.com/repos/${repo}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+      const metaD = metaR.ok ? await metaR.json() : {}
+      const vRes = await fetch('https://api.vercel.com/v13/deployments', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: repo.split('/')[1], gitSource: { type: 'github', repoId: String(metaD.id || ''), ref: targetBranch } }),
+        signal: AbortSignal.timeout(20000),
+      })
+      const vData = await vRes.json()
+      if (vData.url) results.vercel = { url: `https://${vData.url}`, id: vData.id, status: vData.status }
+    } catch (ve) {
+      console.warn('[deploy-sync] Vercel step failed:', ve.message)
+    }
+  }
+
+  return res.json({ success: results.pushed.length > 0, ...results })
+})
+
 // ===== TASK 9 — ENHANCED INTENT ENGINE (create/update/fix/optimize) =====
 // Exposed as a utility endpoint for frontend intent mapping
 app.post('/api/dz-agent/detect-intent', (req, res) => {
@@ -8076,6 +8741,63 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       return res.status(200).json({ action: 'list-files', repo: currentRepo, content: `📂 جلب ملفات **${currentRepo}**...` })
     }
+
+    // ── New AI Coding Actions ────────────────────────────────────────────────
+    const analyzeProjectTriggers = [
+      'حلل المشروع', 'تحليل المشروع', 'افهم المشروع', 'اشرح المشروع',
+      'ما هو هذا المشروع', 'ما stack', 'ما التقنية', 'ما التبعيات',
+      'analyze project', 'understand project', 'project overview', 'tech stack',
+      'analyse le projet', 'comprendre le projet',
+    ]
+    const generateAndPushTriggers = [
+      'أنشئ ميزة', 'أنشئ فيتشر', 'أضف ميزة', 'أضف مكوّن', 'أضف صفحة', 'أنشئ ملف',
+      'generate feature', 'add feature', 'create feature', 'add page', 'add component',
+      'generate and push', 'توليد وpush', 'اكتب وارفع', 'انشئ وارفع',
+      'ajouter une fonctionnalité', 'générer et pousser',
+    ]
+    const improveDesignTriggers = [
+      'حسّن التصميم', 'حسن التصميم', 'حسّن الثيم', 'حسن الثيم', 'غيّر الألوان', 'حسّن الواجهة',
+      'improve design', 'improve theme', 'redesign', 'better ui', 'modern design', 'update colors',
+      'améliorer le design', 'améliorer l\'interface', 'moderniser',
+    ]
+    const deployVercelTriggers = [
+      'انشر على vercel', 'نشر vercel', 'deploy vercel', 'deploy to vercel',
+      'انشر المستودع', 'ابني وانشر', 'build and deploy',
+      'déployer sur vercel', 'déployer le projet',
+    ]
+
+    const matchList = (list) => list.some(p => lowerMsg.includes(p.toLowerCase()))
+
+    if (matchList(analyzeProjectTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🔬 لتحليل المشروع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'analyze-project', repo: currentRepo, content: `🔬 جاري قراءة وتحليل مشروع **${currentRepo}** بالكامل...` })
+    }
+    if (matchList(generateAndPushTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '⚡ لتوليد كود ورفعه، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      // Extract the feature description (everything after the trigger phrase)
+      let description = lastUserMessage
+      for (const t of generateAndPushTriggers) {
+        const idx = lowerMsg.indexOf(t.toLowerCase())
+        if (idx !== -1) { description = lastUserMessage.slice(idx + t.length).trim(); break }
+      }
+      return res.status(200).json({ action: 'generate-and-push', repo: currentRepo, description: description || lastUserMessage, content: `⚡ جاري توليد الكود لـ **${currentRepo}**...` })
+    }
+    if (matchList(improveDesignTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🎨 لتحسين التصميم، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'improve-design', repo: currentRepo, content: `🎨 جاري تحليل وتحسين تصميم **${currentRepo}**...` })
+    }
+    if (matchList(deployVercelTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🚀 لنشر المستودع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      return res.status(200).json({ action: 'deploy-vercel', repo: currentRepo, content: `🚀 جاري النشر على Vercel لـ **${currentRepo}**...` })
+    }
   }
 
   // Detect: generate code request
@@ -8236,7 +8958,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         for (const m of played) {
           lfpContext += `• ${m.round}: ${m.home} **${m.homeScore} - ${m.awayScore}** ${m.away}`
           if (m.date) lfpContext += ` (${m.date})`
-          if (m.link) lfpContext += ` — ${m.link}`
+          if (m.link) lfpContext += ` — [التفاصيل](${m.link})`
           lfpContext += '\n'
         }
       }
@@ -8253,7 +8975,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         lfpContext += `\n**أخبار رابطة LFP:**\n`
         for (const a of lfpData.articles.slice(0, 5)) {
           lfpContext += `• ${a.title}`
-          if (a.link) lfpContext += ` — ${a.link}`
+          if (a.link) lfpContext += ` — [اقرأ المزيد](${a.link})`
           lfpContext += '\n'
         }
       }
@@ -8378,8 +9100,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
           let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
           for (const art of targetedArticles.slice(0, 8)) {
-            targeted += `• ${art.title || art.headline || ''}`
-            if (art.link || art.url) targeted += ` — ${art.link || art.url}`
+            const title = art.title || art.headline || ''
+            const url = art.link || art.url
+            const src = art.source || 'المصدر'
+            targeted += `• ${title}`
+            if (url) targeted += ` — [${src}](${url})`
             targeted += '\n'
           }
           targeted += '\n---\n'
@@ -8703,7 +9428,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
-    weatherPriorityContext ? `🌤️ بيانات الطقس:\n${_trim(weatherPriorityContext, 500)}\n> ابدأ الإجابة بهذه البيانات.` : '',
+    weatherPriorityContext ? `🌤️ بيانات الطقس:\n${_trim(weatherPriorityContext, 500)}\n> اعرض البيانات في جدول Markdown منظّم (أعمدة: العنصر، القيمة). ابدأ الإجابة بهذا الجدول.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
@@ -9651,8 +10376,9 @@ app.post('/api/dz-agent/github/stats', async (req, res) => {
 
 // ===== CHAT ROOM — IN-MEMORY STATE =====
 const chatMessages = []
-const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws }
+const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen, ws, ip, profile }
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
+const bannedIPs = new Set()     // Permanent IP bans
 let pinnedMessage = null        // { id, text, from, timestamp } | null
 const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
 const MAX_CHAT_MSGS = 200
@@ -9661,11 +10387,18 @@ function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
 }
 
+function getClientIp(reqOrHeaders) {
+  const headers = reqOrHeaders?.headers || reqOrHeaders || {}
+  const forwarded = headers['x-forwarded-for'] || headers['x-real-ip'] || ''
+  const socketAddr = reqOrHeaders?.socket?.remoteAddress || reqOrHeaders?.connection?.remoteAddress || ''
+  return (forwarded.split(',')[0] || socketAddr || '').trim()
+}
+
 function getOnlineUsers() {
   const now = Date.now()
   return [...chatSessions.values()]
     .filter(s => now - s.lastSeen < 40000)
-    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin }))
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profile: s.profile || null }))
 }
 
 function broadcastChat(data, exceptWs = null) {
@@ -9680,6 +10413,7 @@ function broadcastChat(data, exceptWs = null) {
 function pushChatMsg(msg) {
   chatMessages.push(msg)
   if (chatMessages.length > MAX_CHAT_MSGS) chatMessages.splice(0, chatMessages.length - MAX_CHAT_MSGS)
+  dbPushMsg(msg).catch(() => {})
   return msg
 }
 
@@ -9737,7 +10471,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
       const lowerQ = question.toLowerCase()
 
       // News context — inject when question is about news/events/Algeria
-      const newsKw = ['خبر', 'أخبار', 'news', 'actu', 'حوادث', 'اليوم', 'الآن', 'الجزائر', 'جديد', 'حدث']
+      const newsKw = ['خبر', 'أخبار', 'news', 'actu', 'حوادث', 'اليوم', 'الآن', 'الجزائر', 'جديد', 'حدث', 'عاجل']
       if (newsKw.some(k => lowerQ.includes(k))) {
         const allArticles = []
         for (const [, cached] of GN_RSS_CACHE.entries()) {
@@ -9745,19 +10479,75 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
         }
         if (allArticles.length > 0) {
           liveContext += '\n\n📰 آخر الأخبار المتاحة:\n' +
-            allArticles.slice(0, 6).map(a => `• ${a.title}${a.source ? ` (${a.source})` : ''}`).join('\n')
+            allArticles.slice(0, 8).map(a => {
+              const src = a.source || 'المصدر'
+              const url = a.link || a.url
+              return `• ${a.title}${url ? ` — [${src}](${url})` : src ? ` (${src})` : ''}`
+            }).join('\n')
         }
       }
 
+      // Sports context — fetch live football data
+      const sportsKw = ['رياضة', 'مباراة', 'مباريات', 'كرة', 'دوري', 'نتائج', 'هدف', 'فريق', 'منتخب', 'lfp', 'football', 'sport', 'match', 'score', 'ligue', 'رياض', 'محرز', 'بلايلي', 'بونجاح']
+      if (sportsKw.some(k => lowerQ.includes(k))) {
+        try {
+          const [lfpRes, sfRes] = await Promise.allSettled([
+            fetchLFPData(),
+            fetchSofaScoreFootball(new Date().toISOString().slice(0, 10)),
+          ])
+          if (lfpRes.status === 'fulfilled' && lfpRes.value) {
+            const lfp = lfpRes.value
+            const played = (lfp.matches || []).filter(m => m.played).slice(0, 5)
+            const upcoming = (lfp.matches || []).filter(m => !m.played).slice(0, 4)
+            if (played.length > 0) {
+              liveContext += '\n\n⚽ **نتائج LFP الأخيرة:**\n' +
+                played.map(m => `• ${m.home} **${m.homeScore} - ${m.awayScore}** ${m.away}${m.date ? ` (${m.date})` : ''}`).join('\n')
+            }
+            if (upcoming.length > 0) {
+              liveContext += '\n\n📅 **مباريات LFP القادمة:**\n' +
+                upcoming.map(m => `• ${m.home} vs ${m.away}${m.date ? ` — ${m.date}` : ''}${m.time ? ` ${m.time}` : ''}`).join('\n')
+            }
+          }
+          if (sfRes.status === 'fulfilled' && sfRes.value?.matches?.length > 0) {
+            const intlMatches = sfRes.value.matches.slice(0, 6)
+            liveContext += '\n\n🌍 **مباريات دولية اليوم:**\n' +
+              intlMatches.map(m => {
+                const score = m.statusType === 'inprogress'
+                  ? `🔴 ${m.homeScore} - ${m.awayScore}`
+                  : m.statusType === 'finished'
+                    ? `✅ ${m.homeScore} - ${m.awayScore}`
+                    : `📅 ${m.startTime || ''}`
+                return `• ${m.homeTeam} ${score} ${m.awayTeam}${m.competition ? ` (${m.competition})` : ''}`
+              }).join('\n')
+          }
+        } catch {}
+      }
+
       // Weather context
-      const weatherKw = ['طقس', 'weather', 'météo', 'درجة حرارة', 'مطر', 'رياح', 'تساقط', 'حار', 'بارد']
+      const weatherKw = ['طقس', 'weather', 'météo', 'درجة حرارة', 'مطر', 'رياح', 'تساقط', 'حار', 'بارد', 'جو']
       if (weatherKw.some(k => lowerQ.includes(k))) {
-        const cached = WEATHER_CACHE_V2.getStale('algiers')
-        if (cached?.data) {
-          const w = cached.data
-          liveContext += `\n\n🌤️ الطقس الآن (الجزائر العاصمة): ${w.temp}°C — ${w.condition || ''}`
-          if (w.humidity) liveContext += ` — رطوبة ${w.humidity}%`
-          if (w.wind) liveContext += ` — رياح ${w.wind} كم/س`
+        try {
+          const cityName = lowerQ.includes('وهران') ? 'Oran'
+            : lowerQ.includes('قسنطينة') ? 'Constantine'
+            : lowerQ.includes('عنابة') ? 'Annaba'
+            : 'Algiers'
+          const w = await fetchCityWeatherResilient(cityName)
+          if (w) {
+            liveContext += `\n\n🌤️ **الطقس الآن — ${w.city}:**\n`
+            liveContext += `| العنصر | القيمة |\n|---|---|\n`
+            liveContext += `| 🌡️ الحرارة | ${w.temp}°C (تشعر بـ ${w.feels_like}°C) |\n`
+            liveContext += `| 📊 الحالة | ${w.condition || '—'} |\n`
+            liveContext += `| 💧 الرطوبة | ${w.humidity ?? '—'}% |\n`
+            liveContext += `| 💨 الرياح | ${w.wind ?? '—'} كم/س |\n`
+            liveContext += `| 👁️ الرؤية | ${w.visibility ?? '—'} كم |\n`
+            liveContext += `_(المصدر: ${w.source || 'open-meteo.com'})_`
+          }
+        } catch {
+          const cached = WEATHER_CACHE_V2.getStale('algiers')
+          if (cached?.data) {
+            const w = cached.data
+            liveContext += `\n\n🌤️ الطقس (الجزائر): ${w.temp}°C — ${w.condition || ''}${w.humidity ? ` — رطوبة ${w.humidity}%` : ''}`
+          }
         }
       }
 
@@ -9781,14 +10571,14 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     // ── System prompt ────────────────────────────────────────────────────
     const systemPrompt = isAgent
-      ? `أنت DZ Agent، مساعد ذكي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
+      ? `أنت DZ Agent 🇩🇿، وكيل ذكاء اصطناعي متخصص في الشؤون الجزائرية (اقتصاد، رياضة، أخبار، ثقافة، طقس، إدارة، تعليم).
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".
-2. استخدم أرقاماً وحقائق محددة. اذكر المصدر باختصار في النهاية.
+2. استخدم أرقاماً وحقائق محددة. اذمج المصدر في اسمه [اسم](رابط) — لا تكتب URL كنص.
 3. إذا كانت البيانات المباشرة متاحة أدناه، استخدمها أولاً ولا تتجاهلها.
 4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. لا تتجاوز 6 جمل بما فيها المصدر.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
+5. كن موجزاً (3-5 جمل) مع الدقة والحداثة. للطقس والرياضة: استخدم جدولاً Markdown إن أمكن.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
       : `أنت DZ GPT، مساعد ذكي عام ومفيد.
 
 قواعد الإجابة (إلزامية):
@@ -9804,7 +10594,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
         { role: 'user', content: question },
       ],
       query: question,
-      max_tokens: 700,
+      max_tokens: 900,
     })
 
     const botMsg = pushChatMsg({
@@ -12156,12 +12946,19 @@ app.get('/api/dz-tube/download', async (req, res) => {
 })
 
 // ===== CHAT ROOM REST ENDPOINTS (polling fallback) =====
-app.post('/api/chat-room/join', (req, res) => {
-  const { name, gender, adminSecret } = req.body || {}
+app.post('/api/chat-room/join', async (req, res) => {
+  const clientIp = getClientIp(req)
+  if (bannedIPs.has(clientIp)) return res.status(403).json({ error: 'محظور من الدردشة.' })
+  const { name, gender, adminSecret, profile } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
   const isAdmin = adminSecret === CHAT_ADMIN_SECRET
-  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null }
+  const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
+  const cleanProfile = {}
+  for (const k of allowedProfileFields) {
+    if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
+  }
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
     id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
@@ -12169,7 +12966,8 @@ app.post('/api/chat-room/join', (req, res) => {
   })
   broadcastChat({ type: 'message', msg: joinMsg })
   broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
-  res.json({ sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers() })
+  const [messages, pinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
+  res.json({ sessionId: id, isAdmin, messages, users: getOnlineUsers(), pinnedMessage: pinned })
 })
 
 app.post('/api/chat-room/leave', (req, res) => {
@@ -12188,7 +12986,7 @@ app.post('/api/chat-room/leave', (req, res) => {
 })
 
 app.post('/api/chat-room/send', async (req, res) => {
-  const { sessionId, text, dmTo, dmToName } = req.body || {}
+  const { sessionId, text, dmTo, dmToName, replyToId, replyToText, replyToFrom } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
   const muteInfo = mutedUsers.get(sessionId)
@@ -12205,6 +13003,7 @@ app.post('/api/chat-room/send', async (req, res) => {
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
+    replyToId: replyToId || null, replyToText: replyToText || null, replyToFrom: replyToFrom || null,
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -12225,22 +13024,48 @@ app.post('/api/chat-room/send', async (req, res) => {
   res.json({ ok: true, msgId: msg.id })
 })
 
-app.get('/api/chat-room/messages', (req, res) => {
+app.get('/api/chat-room/messages', async (req, res) => {
   const since = Number(req.query.since) || 0
   const sessionId = req.query.sessionId
   const session = chatSessions.get(sessionId)
   if (session) session.lastSeen = Date.now()
-  const msgs = chatMessages.filter(m => !m.isDM && m.timestamp > since)
+  const msgs = await dbGetMessages(since, 80)
   res.json({ messages: msgs, users: getOnlineUsers(), count: chatSessions.size })
 })
 
-app.post('/api/chat-room/admin', (req, res) => {
+app.post('/api/chat-room/react', async (req, res) => {
+  const { sessionId, msgId, emoji } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session) return res.status(401).json({ error: 'Invalid session' })
+  if (!msgId || !emoji) return res.status(400).json({ error: 'msgId and emoji required' })
+  const allowed = ['👍','❤️','😂','😮','😢','🔥']
+  if (!allowed.includes(emoji)) return res.status(400).json({ error: 'Invalid emoji' })
+  try { await dbReact(msgId, emoji, session.id) } catch {}
+  const updated = await dbGetReactions(msgId)
+  broadcastChat({ type: 'reaction', msgId, emoji, count: updated[emoji]?.count || 0, users: updated[emoji]?.users || [] })
+  res.json({ ok: true, reactions: updated })
+})
+
+app.post('/api/chat-room/profile', (req, res) => {
+  const { sessionId, profile } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session) return res.status(401).json({ error: 'Invalid session' })
+  const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
+  const cleanProfile = {}
+  for (const k of allowedProfileFields) {
+    if (typeof profile?.[k] === 'string') cleanProfile[k] = profile[k].trim().slice(0, 100)
+  }
+  session.profile = cleanProfile
+  broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile })
+  res.json({ ok: true })
+})
+
+app.post('/api/chat-room/admin', async (req, res) => {
   const { sessionId, action, targetId, msgId } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session?.isAdmin) return res.status(403).json({ error: 'Unauthorized' })
   if (action === 'delete' && msgId) {
-    const m = chatMessages.find(m => m.id === msgId)
-    if (m) m.isDeleted = true
+    await dbDeleteMsg(msgId)
     broadcastChat({ type: 'delete', msgId })
   } else if (action === 'block' && targetId) {
     const target = chatSessions.get(targetId)
@@ -12249,6 +13074,16 @@ app.post('/api/chat-room/admin', (req, res) => {
     mutedUsers.delete(targetId)
     broadcastChat({ type: 'blocked', userId: targetId })
     broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+  } else if (action === 'ipban' && targetId) {
+    const target = chatSessions.get(targetId)
+    if (target) {
+      if (target.ip) bannedIPs.add(target.ip)
+      if (target.ws?.readyState === 1) target.ws.close()
+      chatSessions.delete(targetId)
+      mutedUsers.delete(targetId)
+      broadcastChat({ type: 'blocked', userId: targetId })
+      broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+    }
   } else if (action === 'mute' && targetId) {
     const durationMs = Number(req.body.durationMs) || 5 * 60 * 1000
     const until = Date.now() + durationMs
@@ -12264,12 +13099,17 @@ app.post('/api/chat-room/admin', (req, res) => {
     if (m) { m.isHighlighted = true; broadcastChat({ type: 'update', msg: m }) }
   } else if (action === 'pin' && msgId) {
     const m = chatMessages.find(m => m.id === msgId)
-    if (m) {
-      pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+    const pinData = m
+      ? { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+      : null
+    if (pinData) {
+      pinnedMessage = pinData
+      await dbSetPinned(pinData)
       broadcastChat({ type: 'pinUpdate', pinnedMessage })
     }
   } else if (action === 'unpin') {
     pinnedMessage = null
+    await dbSetPinned(null)
     broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
   }
   res.json({ ok: true })
@@ -12278,20 +13118,29 @@ app.post('/api/chat-room/admin', (req, res) => {
 // ===== WEBSOCKET CHAT SERVER =====
 function setupChatWebSocket(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/chat' })
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    const clientIp = getClientIp(req)
+    if (bannedIPs.has(clientIp)) { ws.close(); return }
     let sid = null
     ws.on('message', async (raw) => {
       try {
         const data = JSON.parse(raw.toString())
         if (data.type === 'join') {
-          const { name, gender, adminSecret } = data
+          const { name, gender, adminSecret, profile } = data
           if (!name?.trim() || !gender) return ws.close()
           const id = chatId()
           sid = id
           const isAdmin = adminSecret === CHAT_ADMIN_SECRET
-          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws })
+          const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
+          const cleanProfile = {}
+          for (const k of allowedProfileFields) {
+            if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
+          }
+          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: cleanProfile })
           const session = chatSessions.get(id)
-          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: chatMessages.slice(-50), users: getOnlineUsers(), pinnedMessage }))
+          const [wsMessages, wsPinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
+          if (pinnedMessage === null) pinnedMessage = wsPinned
+          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: wsMessages, users: getOnlineUsers(), pinnedMessage: pinnedMessage || wsPinned }))
           const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: isAdmin ? 'انضم إلى الدردشة' : `${session.name} انضم إلى الدردشة`, timestamp: Date.now(), isSystem: true, isAdminAnnounce: !!isAdmin })
           broadcastChat({ type: 'message', msg: joinMsg }, ws)
           ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
@@ -12314,6 +13163,7 @@ function setupChatWebSocket(httpServer) {
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
+            replyToId: data.replyToId || null, replyToText: data.replyToText || null, replyToFrom: data.replyToFrom || null,
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
@@ -12330,9 +13180,31 @@ function setupChatWebSocket(httpServer) {
           if (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')) {
             handleAiChatTrigger(cleanText, lower.startsWith('@dzagent'), session)
           }
+        } else if (data.type === 'typing') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session) return
+          broadcastChat({ type: 'typing', userId: session.id, name: session.name, gender: session.gender, isTyping: !!data.isTyping }, ws)
+        } else if (data.type === 'react') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session || !data.msgId || !data.emoji) return
+          const allowed = ['👍','❤️','😂','😮','😢','🔥']
+          if (!allowed.includes(data.emoji)) return
+          try { await dbReact(data.msgId, data.emoji, session.id) } catch {}
+          const updated = await dbGetReactions(data.msgId)
+          broadcastChat({ type: 'reaction', msgId: data.msgId, emoji: data.emoji, count: updated[data.emoji]?.count || 0, users: updated[data.emoji]?.users || [] })
         } else if (data.type === 'ping') {
           const session = sid ? chatSessions.get(sid) : null
           if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }
+        } else if (data.type === 'profileUpdate') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session) return
+          const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
+          const cleanProfile = {}
+          for (const k of allowedProfileFields) {
+            if (typeof data.profile?.[k] === 'string') cleanProfile[k] = data.profile[k].trim().slice(0, 100)
+          }
+          session.profile = cleanProfile
+          broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile })
         } else if (data.type === 'admin') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session?.isAdmin) return
@@ -12347,6 +13219,16 @@ function setupChatWebSocket(httpServer) {
             mutedUsers.delete(data.targetId)
             broadcastChat({ type: 'blocked', userId: data.targetId })
             broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+          } else if (data.action === 'ipban' && data.targetId) {
+            const target = chatSessions.get(data.targetId)
+            if (target) {
+              if (target.ip) bannedIPs.add(target.ip)
+              if (target.ws?.readyState === 1) target.ws.close()
+              chatSessions.delete(data.targetId)
+              mutedUsers.delete(data.targetId)
+              broadcastChat({ type: 'blocked', userId: data.targetId })
+              broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+            }
           } else if (data.action === 'mute' && data.targetId) {
             const durationMs = Number(data.durationMs) || 5 * 60 * 1000
             const until = Date.now() + durationMs

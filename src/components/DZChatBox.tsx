@@ -60,7 +60,7 @@ type RichType =
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
-type ThinkingStepType = 'read' | 'analyze' | 'write' | 'scan' | 'list' | 'search' | 'commit' | 'pr'
+type ThinkingStepType = 'read' | 'analyze' | 'write' | 'scan' | 'list' | 'search' | 'commit' | 'pr' | 'deploy'
 
 interface ThinkingStep {
   type: ThinkingStepType
@@ -240,6 +240,7 @@ interface DZMessage {
   youtubeFlow?: 'url' | 'search'
   youtubeAnalysis?: YouTubeAnalysis
   youtubeSuggestions?: string[]
+  quickSuggestions?: string[]
   captionNote?: string
   captionText?: string
   webReaderSiteInfo?: { url: string; title: string; domain: string; description: string; headings: string[] }
@@ -2051,19 +2052,23 @@ function ActionLogPanel({ entries }: { entries: ActionLogEntry[] }) {
 }
 
 // ===== REPO ACTION PANEL =====
-const REPO_ACTIONS: { id: string; Icon: React.ElementType; label: string; desc: string; color: string }[] = [
-  { id: 'scan',     Icon: ScanSearch,     label: 'فحص شامل',       desc: 'تحليل شامل للمستودع',     color: '#60a5fa' },
-  { id: 'bugs',     Icon: Bug,            label: 'إيجاد الأخطاء',   desc: 'كشف الأخطاء والثغرات',    color: '#f87171' },
-  { id: 'security', Icon: ShieldAlert,    label: 'فحص أمني',        desc: 'ثغرات أمنية وحماية',      color: '#fb923c' },
-  { id: 'suggest',  Icon: Lightbulb,      label: 'اقتراحات',        desc: 'تحسينات الكود والأداء',   color: '#fbbf24' },
-  { id: 'fix',      Icon: Wrench,         label: 'إصلاح تلقائي',    desc: 'إصلاح وCommit مباشر',     color: '#4ade80' },
-  { id: 'files',    Icon: FolderOpen,     label: 'الملفات',         desc: 'تصفح ملفات المستودع',     color: '#94a3b8' },
-  { id: 'branches', Icon: GitBranch,      label: 'الفروع',          desc: 'إدارة فروع المستودع',     color: '#c084fc' },
-  { id: 'issues',   Icon: AlertCircle,    label: 'المشاكل',         desc: 'Issues المفتوحة',          color: '#fb923c' },
-  { id: 'pulls',    Icon: GitPullRequest, label: 'Pull Requests',   desc: 'طلبات الدمج النشطة',      color: '#38bdf8' },
-  { id: 'commit',   Icon: GitCommit,      label: 'Commit',          desc: 'حفظ تعديل مباشر',         color: '#06b6d4' },
-  { id: 'pr',       Icon: GitMerge,       label: 'إنشاء PR',        desc: 'Pull Request جديد',        color: '#f97316' },
-  { id: 'stats',    Icon: BarChart2,      label: 'إحصائيات',        desc: 'إحصائيات ومساهمون',       color: '#a78bfa' },
+const REPO_ACTIONS: { id: string; Icon: React.ElementType; label: string; desc: string; color: string; badge?: string }[] = [
+  { id: 'analyze-project', Icon: Brain,         label: 'تحليل ذكي',        desc: 'قراءة المشروع كاملاً + AI', color: '#a78bfa', badge: 'AI' },
+  { id: 'generate-push',   Icon: Zap,           label: 'توليد + Push',     desc: 'كود AI ← GitHub ← Vercel', color: '#4ade80', badge: 'AI' },
+  { id: 'improve-design',  Icon: Layers,        label: 'تحسين التصميم',    desc: 'تحديث CSS/Theme احترافي',   color: '#f472b6', badge: 'AI' },
+  { id: 'deploy-vercel',   Icon: Hammer,        label: 'نشر Vercel',       desc: 'Build + Deploy فوري',       color: '#38bdf8' },
+  { id: 'scan',            Icon: ScanSearch,    label: 'فحص شامل',         desc: 'تحليل شامل للمستودع',       color: '#60a5fa' },
+  { id: 'bugs',            Icon: Bug,           label: 'إيجاد الأخطاء',    desc: 'كشف الأخطاء والثغرات',      color: '#f87171' },
+  { id: 'security',        Icon: ShieldAlert,   label: 'فحص أمني',         desc: 'ثغرات أمنية وحماية',        color: '#fb923c' },
+  { id: 'suggest',         Icon: Lightbulb,     label: 'اقتراحات',         desc: 'تحسينات الكود والأداء',     color: '#fbbf24' },
+  { id: 'fix',             Icon: Wrench,        label: 'إصلاح تلقائي',     desc: 'إصلاح وCommit مباشر',       color: '#34d399' },
+  { id: 'files',           Icon: FolderOpen,    label: 'الملفات',          desc: 'تصفح ملفات المستودع',       color: '#94a3b8' },
+  { id: 'branches',        Icon: GitBranch,     label: 'الفروع',           desc: 'إدارة فروع المستودع',       color: '#c084fc' },
+  { id: 'issues',          Icon: AlertCircle,   label: 'المشاكل',          desc: 'Issues المفتوحة',            color: '#fb923c' },
+  { id: 'pulls',           Icon: GitPullRequest,label: 'Pull Requests',    desc: 'طلبات الدمج النشطة',        color: '#38bdf8' },
+  { id: 'commit',          Icon: GitCommit,     label: 'Commit',           desc: 'حفظ تعديل مباشر',           color: '#06b6d4' },
+  { id: 'pr',              Icon: GitMerge,      label: 'إنشاء PR',         desc: 'Pull Request جديد',          color: '#f97316' },
+  { id: 'stats',           Icon: BarChart2,     label: 'إحصائيات',         desc: 'إحصائيات ومساهمون',         color: '#a78bfa' },
 ]
 
 function RepoActionPanel({
@@ -2073,6 +2078,8 @@ function RepoActionPanel({
   repo: RepoItem
   onAction: (action: string, repo: RepoItem) => void
 }) {
+  const aiActions = REPO_ACTIONS.filter(a => a.badge === 'AI')
+  const regularActions = REPO_ACTIONS.filter(a => !a.badge)
   return (
     <div className="rap-root">
       <div className="rap-header">
@@ -2087,13 +2094,44 @@ function RepoActionPanel({
         </a>
       </div>
       {repo.description && <p className="rap-desc">{repo.description}</p>}
+
+      {/* AI-Powered Actions — highlighted section */}
+      <div className="rap-section-label">
+        <Brain size={12} style={{ color: '#a78bfa' }} />
+        <span>إجراءات الذكاء الاصطناعي</span>
+      </div>
+      <div className="rap-grid rap-grid--ai">
+        {aiActions.map(a => (
+          <button
+            key={a.id}
+            className="rap-btn rap-btn--ai"
+            style={{ '--rap-color': a.color } as React.CSSProperties}
+            onClick={() => onAction(a.id, repo)}
+            title={a.desc}
+          >
+            <span className="rap-btn-icon" style={{ color: a.color }}>
+              <a.Icon size={18} />
+            </span>
+            <span className="rap-btn-label">{a.label}</span>
+            <span className="rap-btn-desc">{a.desc}</span>
+            <span className="rap-badge-ai">AI</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Standard GitHub Actions */}
+      <div className="rap-section-label">
+        <Github size={12} style={{ color: '#94a3b8' }} />
+        <span>إجراءات GitHub</span>
+      </div>
       <div className="rap-grid">
-        {REPO_ACTIONS.map(a => (
+        {regularActions.map(a => (
           <button
             key={a.id}
             className="rap-btn"
             style={{ '--rap-color': a.color } as React.CSSProperties}
             onClick={() => onAction(a.id, repo)}
+            title={a.desc}
           >
             <span className="rap-btn-icon" style={{ color: a.color }}>
               <a.Icon size={18} />
@@ -2317,10 +2355,17 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
 
   // External links
   const locationFr  = s(meta.locationFr || meta.locationName || '')
+  const fromLat = meta.fromLat ? Number(meta.fromLat) : null
+  const fromLng = meta.fromLng ? Number(meta.fromLng) : null
+  const toLat   = meta.toLat   ? Number(meta.toLat)   : null
+  const toLng   = meta.toLng   ? Number(meta.toLng)   : null
+
   const gmapsOpen   = isPoi
     ? `https://www.google.com/maps/search/${encodeURIComponent(s(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
     : isRoute
-      ? `https://www.google.com/maps/dir/${encodeURIComponent(s(meta.fromFr) + ' Algeria')}/${encodeURIComponent(s(meta.toFr) + ' Algeria')}`
+      ? (fromLat && fromLng && toLat && toLng
+          ? `https://www.google.com/maps/dir/${fromLat},${fromLng}/${toLat},${toLng}`
+          : `https://www.google.com/maps/dir/${encodeURIComponent(s(meta.fromFr) + ' Algeria')}/${encodeURIComponent(s(meta.toFr) + ' Algeria')}`)
       : `https://www.google.com/maps/search/${encodeURIComponent(locationFr + ' Algeria')}`
 
   const lat = meta.lat ? Number(meta.lat) : null
@@ -2377,7 +2422,7 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
           <MapPin size={11} /> فتح في Google Maps
         </a>
         {!isRoute && lat && lng && (
-          <a className="dz-map-action-btn dz-map-action-btn--route" href={`https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+          <a className="dz-map-action-btn dz-map-action-btn--route" href={`https://www.google.com/maps/dir//${lat},${lng}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
             🚗 إنشاء مسار
           </a>
         )}
@@ -2802,6 +2847,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
   const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
+  // Ref mirrors the state so sendMessage() always reads the latest value synchronously
+  // (React setState is async — calling sendMessage() right after setActiveYouTubeVideo()
+  //  would still read the old state value without this ref)
+  const activeYouTubeVideoRef = useRef<YouTubeVideoData | null>(null)
   // Smart Video Selection — stores last search results so they can be sent as candidates
   const youtubeCandidatesRef = useRef<YouTubeResult[]>([])
 
@@ -2928,6 +2977,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
     if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
       setActiveYouTubeVideo(msg.youtubeVideo)
+      activeYouTubeVideoRef.current = msg.youtubeVideo
       // Clear candidates once a video is selected and analyzed
       youtubeCandidatesRef.current = []
     }
@@ -3297,9 +3347,166 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
+  // ── AI: Analyze Project ───────────────────────────────────────────────────
+  const analyzeProject = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'analyze', label: 'قراءة المشروع وتحليله بالذكاء الاصطناعي...' })
+    addToLog({ type: 'repo-scan', description: `AI analyzing ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/analyze-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name, branch: 'main' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Analysis failed')
+      const techInfo = data.meta?.techStack?.length ? `\n> **Stack:** ${data.meta.techStack.join(' · ')}` : ''
+      const fileInfo = data.meta?.fileCount ? ` | 📄 ${data.meta.fileCount} ملف` : ''
+      addAssistantMessage({
+        content: `## 🔬 تحليل مشروع: \`${repo.name}\`${fileInfo}${techInfo}\n\n${data.analysis}`,
+        richType: 'text',
+      })
+      addToLog({ type: 'repo-scan', description: `Analysis complete — ${data.meta?.fileCount || 0} files`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `❌ فشل تحليل المشروع: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'repo-scan', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  // ── AI: Generate and Push ─────────────────────────────────────────────────
+  const generateAndPush = useCallback(async (repo: RepoItem, description: string, deployToVercel = false) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'write', label: 'توليد الكود بالذكاء الاصطناعي...' })
+    addToLog({ type: 'commit', description: `Generating: ${description.slice(0, 60)}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/generate-and-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: githubToken,
+          repo: repo.full_name,
+          description,
+          deployToVercel,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok && !data.generated) throw new Error(data.error || 'Generation failed')
+
+      if (!data.pushed) {
+        // AI returned code but no FILE: blocks to push
+        addAssistantMessage({
+          content: `## ⚡ كود مولَّد لـ \`${repo.name}\`\n\n${data.message || ''}\n\n${data.generated}`,
+          richType: 'text',
+        })
+      } else {
+        const filesStr = data.files?.map((f: string) => `- \`${f}\``).join('\n') || ''
+        const prLink = data.pr?.url ? `\n\n### 🔗 Pull Request\n[#${data.pr.number} ${data.pr.title}](${data.pr.url})` : ''
+        const vercelLink = data.vercel?.url ? `\n\n### 🚀 Vercel Deploy\n[${data.vercel.url}](${data.vercel.url})` : ''
+        addAssistantMessage({
+          content: `## ✅ تم توليد الكود ورفعه لـ \`${repo.name}\`\n\n**الفرع:** \`${data.branch}\`\n\n**الملفات المرفوعة:**\n${filesStr}${prLink}${vercelLink}\n\n---\n\n${data.generated}`,
+          richType: 'text',
+        })
+        addToLog({ type: 'commit', description: `Pushed ${data.files?.length || 0} files — PR ${data.pr?.number || 'N/A'}`, status: 'success', repo: repo.full_name })
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `❌ فشل توليد الكود: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'commit', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  // ── AI: Improve Design ────────────────────────────────────────────────────
+  const improveDesign = useCallback(async (repo: RepoItem, style = 'modern dark') => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'write', label: 'تحليل وتحسين التصميم بالذكاء الاصطناعي...' })
+    addToLog({ type: 'commit', description: `Improving UI design — ${repo.name}`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/improve-design', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name, style }),
+      })
+      const data = await res.json()
+      if (!data.success && data.message) {
+        addAssistantMessage({ content: `⚠️ ${data.message}`, richType: 'text' })
+        return
+      }
+      if (!res.ok) throw new Error(data.error || 'Design improvement failed')
+      const prLink = data.pr?.url ? `\n\n### 🔗 Pull Request\n[#${data.pr.number} عرض التغييرات](${data.pr.url})` : ''
+      const pushStatus = data.pushed ? `✅ تم رفع ${data.files?.length || 0} ملف` : '⚠️ تعذّر الرفع التلقائي — راجع الكود أدناه'
+      addAssistantMessage({
+        content: `## 🎨 تحسين تصميم \`${repo.name}\`\n\n${pushStatus}${prLink}\n\n${data.improved}`,
+        richType: 'text',
+      })
+      addToLog({ type: 'commit', description: `Design improved — ${data.files?.length || 0} files`, status: 'success', repo: repo.full_name })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `❌ فشل تحسين التصميم: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'commit', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
+  // ── Deploy to Vercel ──────────────────────────────────────────────────────
+  const deployToVercel = useCallback(async (repo: RepoItem) => {
+    setIsLoading(true)
+    setThinkingStep({ type: 'deploy', label: 'نشر المشروع على Vercel...' })
+    addToLog({ type: 'deploy', description: `Deploying ${repo.name} to Vercel`, status: 'pending', repo: repo.full_name })
+    try {
+      const res = await fetch('/api/dz-agent/github/deploy-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: githubToken, repo: repo.full_name, files: [], commitMessage: 'chore: vercel deploy trigger [DZ Agent]', branch: 'main' }),
+      })
+      const data = await res.json()
+      if (data.vercel?.url) {
+        addAssistantMessage({
+          content: `## 🚀 تم بدء النشر على Vercel\n\n**المستودع:** \`${repo.name}\`\n**رابط النشر:** [${data.vercel.url}](${data.vercel.url})\n**الحالة:** جاري البناء...`,
+          richType: 'text',
+        })
+        addToLog({ type: 'deploy', description: `Vercel deploy triggered — ${data.vercel.url}`, status: 'success', repo: repo.full_name })
+      } else {
+        addAssistantMessage({ content: `⚠️ تم إرسال طلب النشر لكن لم يُعاد رابط Vercel. تحقق من لوحة Vercel يدوياً.`, richType: 'text' })
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      addAssistantMessage({ content: `❌ فشل النشر: ${msg}`, richType: 'text', isError: true })
+      addToLog({ type: 'deploy', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [githubToken, addToLog, addAssistantMessage])
+
   const handleRepoAction = useCallback(async (action: string, repo: RepoItem) => {
     setCurrentRepo(repo.full_name)
     switch (action) {
+      case 'analyze-project':
+        await analyzeProject(repo)
+        break
+      case 'generate-push': {
+        // Prompt user for description inline
+        const desc = window.prompt(`صف الميزة أو الكود الذي تريد توليده لـ ${repo.name}:`)
+        if (desc?.trim()) await generateAndPush(repo, desc.trim())
+        break
+      }
+      case 'improve-design': {
+        const style = window.prompt('أسلوب التصميم المطلوب (مثال: modern dark / minimal / glassmorphism):', 'modern dark')
+        await improveDesign(repo, style || 'modern dark')
+        break
+      }
+      case 'deploy-vercel':
+        await deployToVercel(repo)
+        break
       case 'scan':
         await scanRepo(repo)
         break
@@ -3342,7 +3549,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         textareaRef.current?.focus()
         break
     }
-  }, [scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
+  }, [analyzeProject, generateAndPush, improveDesign, deployToVercel, scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
 
   const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
@@ -3617,7 +3824,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               githubToken: githubToken || undefined,
               currentRepo: currentRepo || undefined,
               dashboardContext,
-              youtubeContext: activeYouTubeVideo || undefined,
+              youtubeContext: activeYouTubeVideoRef.current || undefined,
               youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
             }),
             signal,
@@ -3707,6 +3914,37 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // ── New AI Coding Actions (triggered via chat text) ──────────────────
+      if (data.action === 'analyze-project' && data.repo) {
+        trackFeatureUsage('github-analyze')
+        addAssistantMessage({ content: (data.content as string) || '🔬 جاري التحليل...', richType: 'text' })
+        await analyzeProject(buildRepoItem(data.repo as string))
+        return
+      }
+      if (data.action === 'generate-and-push' && data.repo) {
+        trackFeatureUsage('github-generate')
+        const desc = (data.description as string) || ''
+        addAssistantMessage({ content: (data.content as string) || '⚡ جاري التوليد...', richType: 'text' })
+        if (desc) {
+          await generateAndPush(buildRepoItem(data.repo as string), desc)
+        } else {
+          addAssistantMessage({ content: '⚡ صف الميزة التي تريد إنشاءها بوضوح، مثلاً: "أضف صفحة تسجيل دخول بـ React"', richType: 'text' })
+        }
+        return
+      }
+      if (data.action === 'improve-design' && data.repo) {
+        trackFeatureUsage('github-design')
+        addAssistantMessage({ content: (data.content as string) || '🎨 جاري التحسين...', richType: 'text' })
+        await improveDesign(buildRepoItem(data.repo as string))
+        return
+      }
+      if (data.action === 'deploy-vercel' && data.repo) {
+        trackFeatureUsage('github-deploy')
+        addAssistantMessage({ content: (data.content as string) || '🚀 جاري النشر...', richType: 'text' })
+        await deployToVercel(buildRepoItem(data.repo as string))
+        return
+      }
+
       if (data.pendingAction) {
         addAssistantMessage({
           content: (data.content as string) || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
@@ -3768,6 +4006,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
+          quickSuggestions: Array.isArray(data.quickSuggestions) && (data.quickSuggestions as string[]).length > 0
+            ? (data.quickSuggestions as string[])
+            : undefined,
         })
       }
     } catch (err: unknown) {
@@ -4124,8 +4365,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                               views: ytResult.views,
                               thumbnail: ytResult.thumbnail,
                             }
+                            // Update ref BEFORE sendMessage so the request carries youtubeContext
+                            // (setState is async — ref ensures sendMessage reads the latest value)
+                            activeYouTubeVideoRef.current = videoData
                             setActiveYouTubeVideo(videoData)
-                            sendMessage(`أريد مناقشة هذا الفيديو: ${ytResult.url}`)
+                            sendMessage(`ناقش معي موضوع هذا الفيديو: "${ytResult.title}"`)
                           }}
                         />
                       )}
@@ -4147,6 +4391,22 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                   msg.content
                 )}
               </div>
+              {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
+                <div className="dzc-quick-suggestions">
+                  <span className="dzc-qs-label">💡 اقتراحات:</span>
+                  <div className="dzc-qs-chips">
+                    {msg.quickSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        className="dzc-qs-chip"
+                        onClick={() => sendMessage(s)}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {msg.role === 'assistant' && !msg.pendingAction && (
                 <div className="dz-message-actions">
                   {msg.content && (

@@ -992,7 +992,7 @@ import {
   SERVICE_CONFIG,
 } from './lib/dzPlaceSearch.js'
 
-const DOCTOR_SOURCE_COUNT = 8
+const DOCTOR_SOURCE_COUNT = 9
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'
@@ -3794,6 +3794,10 @@ const RSS_FEEDS = {
     { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
     { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
     { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
+    { name: 'الوطن', url: 'https://www.el-watan.com/feed/' },
+    { name: 'الأحداث', url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'رويترز عربي', url: 'https://feeds.reuters.com/reuters/arabicNews' },
+    { name: 'Google News الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   sports: [
     // Removed: الجزيرة الرياضة (per user request — keep Algerian league context clean)
@@ -4420,7 +4424,7 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14
 
   let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} (مرتبة من الأحدث) ---\n`
   let count = 0
-  for (const item of allItems.slice(0, 12)) {
+  for (const item of allItems.slice(0, 20)) {
     const rawDate = item.pubDate || item.date || item.publishedDate || ''
     let dateLabel = ''
     if (rawDate) {
@@ -8212,7 +8216,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
 
   // ── DZ Maps Intelligence Engine ──────────────────────────────────────────
-  if (isMapQuery(lastUserMessage)) {
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)
@@ -9099,7 +9103,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         if (targetedArticles.length > 0) {
           const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
           let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
-          for (const art of targetedArticles.slice(0, 8)) {
+          for (const art of targetedArticles.slice(0, 15)) {
             const title = art.title || art.headline || ''
             const url = art.link || art.url
             const src = art.source || 'المصدر'
@@ -9283,7 +9287,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const label = getSourceLabel(url, r.source)
           // Remove source suffix from title (Google News format: "Title - Source")
           let cleanTitle = (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || ''
-          return `• [${cleanTitle}](${url}) — ${label}${dateStr ? ` (${dateStr})` : ''}`
+          // Source title only as clickable link — no raw URLs
+          const sourceLink = url ? `[${label}](${url})` : label
+          return `• ${cleanTitle}${dateStr ? ` _(${dateStr})_` : ''} — ${sourceLink}`
         }
 
         const sections = []
@@ -9394,8 +9400,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     // ── NEWS MODULE (news / sports_news queries only) ─────────────────────
     _isNews ? [
-      `📰 NEWS: رتّب الإجابة زمنياً: 🟢 اليوم · 🟡 الأسبوع · 🟠 الشهر. أدرج التاريخ + رابط المصدر لكل خبر. لا تدمج بيانات الملاعب مع الأخبار.`,
-      `مصادر موثوقة: aps.dz · echoroukonline.com · ennaharonline.com · elkhabar.com · reuters.com · aljazeera.net`,
+      `📰 NEWS: رتّب الإجابة زمنياً: 🟢 اليوم · 🟡 الأسبوع · 🟠 الشهر. أدرج التاريخ لكل خبر. المصدر يكون رابطاً قابلاً للضغط بعنوانه فقط — لا تكتب URL خاماً أبداً. قدّم كمية وفيرة من الأخبار (10-15 خبراً على الأقل). أعطِ الأولوية للأحدث دائماً.`,
+      `مصادر موثوقة: aps.dz · echoroukonline.com · ennaharonline.com · elkhabar.com · reuters.com · aljazeera.net · djazairess.com · elbilad.net`,
+      `قاعدة المصادر: استخدم كل النتائج المتاحة من Google News + RSS + Google CSE معاً — لا تقتصر على مصدر واحد.`,
     ].join('\n') : '',
 
     // ── SPORTS MODULE (sports / sports_news only) ─────────────────────────

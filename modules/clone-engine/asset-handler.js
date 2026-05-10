@@ -139,12 +139,25 @@ function isLight(hex) {
 export function buildImagePromptBlock(images, limit = 20) {
   if (!images || images.length === 0) return ''
   const items = images.slice(0, limit)
+  // Generate theme-aware placeholder colors from the first few images' context
+  const PLACEHOLDER_COLORS = [
+    ['#1e3a5f', '#3b82f6'], // blue
+    ['#1a2e1a', '#22c55e'], // green
+    ['#3b1a1a', '#ef4444'], // red
+    ['#2d1b4e', '#a855f7'], // purple
+    ['#1a2a3a', '#06b6d4'], // cyan
+    ['#2e1f00', '#f59e0b'], // amber
+    ['#1a1a2e', '#6366f1'], // indigo
+    ['#1f2937', '#9ca3af'], // gray
+  ]
   const lines = items.map((img, i) => {
     const dim = img.width && img.height ? ` (${img.width}×${img.height})` : ''
     const type = img.isBackground ? '[BG]' : '[IMG]'
-    return `${i + 1}. ${type} src="${img.src}"${dim} alt="${img.alt || ''}"`
+    const [bg, fg] = PLACEHOLDER_COLORS[i % PLACEHOLDER_COLORS.length]
+    const label = img.alt ? img.alt.slice(0, 20) : `صورة ${i + 1}`
+    return `${i + 1}. ${type}${dim} alt="${img.alt || ''}" → PLACEHOLDER: bg="${bg}" color="${fg}" label="${label}"`
   })
-  return `\nIMAGES & ASSETS (use these EXACT absolute URLs in your output — do NOT make up image paths):\n${lines.join('\n')}`
+  return `\nIMAGES (${items.length} detected — use COLORED PLACEHOLDER DIVS, NOT <img> tags with external URLs):\n${lines.join('\n')}\n\nFOR EACH IMAGE USE THIS PATTERN:\n<div style="background:linear-gradient(135deg,[bg],[bg]dd);display:flex;align-items:center;justify-content:center;border-radius:8px;min-height:200px;color:[fg];font-size:14px;font-weight:600;flex-direction:column;gap:8px"><span style="font-size:2rem">🖼️</span><span>[label]</span></div>`
 }
 
 /**

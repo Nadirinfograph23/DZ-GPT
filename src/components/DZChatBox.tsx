@@ -2425,11 +2425,13 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
           <a
             className="dz-map-action-btn dz-map-action-btn--route"
             href={
-              meta.poiNameAr && locationFr
-                ? `https://www.google.com/maps/dir//${encodeURIComponent(String(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
-                : lat && lng
-                  ? `https://www.google.com/maps/dir//${lat},${lng}`
-                  : `https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`
+              meta.specificName && locationFr
+                ? `https://www.google.com/maps/dir//${encodeURIComponent(String(meta.specificName) + ' ' + locationFr + ' Algeria')}`
+                : meta.poiNameAr && locationFr
+                  ? `https://www.google.com/maps/dir//${encodeURIComponent(String(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
+                  : lat && lng
+                    ? `https://www.google.com/maps/dir//${lat},${lng}`
+                    : `https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`
             }
             target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
           >

@@ -312,7 +312,7 @@ export async function handleMapQuery(msg, _userLocation = null) {
       content: `${def.icon} **${def.nameAr} في ${center.displayName}**\n\n> لم أجد نتائج محددة. اضغط على الخريطة لاستكشاف ${def.nameAr} في المنطقة.\n\nالخريطة جاهزة 👇`,
       isMap:   true,
       mapHtml: '',
-      mapMeta: { type: 'poi', gmapsUrl, poiKey, poiIcon: def.icon, poiNameAr: def.nameAr, locationName: center.displayName, locationFr: center.displayNameFr, lat: center.lat, lng: center.lng },
+      mapMeta: { type: 'poi', gmapsUrl, poiKey, poiIcon: def.icon, poiNameAr: def.nameAr, locationName: center.displayName, locationFr: center.displayNameFr, lat: center.lat, lng: center.lng, specificName: specificName || null },
     }
   }
 
@@ -336,7 +336,7 @@ export async function handleMapQuery(msg, _userLocation = null) {
     content: textLines.join('\n'),
     isMap:   true,
     mapHtml,
-    mapMeta: { type: 'poi', poiKey, poiIcon: def.icon, poiNameAr: def.nameAr, locationName: center.displayName, locationFr: center.displayNameFr, lat: center.lat, lng: center.lng },
+    mapMeta: { type: 'poi', poiKey, poiIcon: def.icon, poiNameAr: def.nameAr, locationName: center.displayName, locationFr: center.displayNameFr, lat: center.lat, lng: center.lng, specificName: specificName || null },
   }
 }
 

@@ -30,12 +30,13 @@ PIXEL-PERFECT MANDATE:
 - Use real content from the extracted text — NEVER Lorem ipsum
 
 IMAGE MANDATE:
-- Use the EXACT image URLs provided in the intelligence block
-- Preserve image aspect ratios with correct width/height
-- For hero background images: use as CSS background-image with cover/center
-- For card/product images: use <img> tags with correct src and alt
-- If an image fails to load, fall back to a CSS gradient placeholder — NEVER leave broken img tags
-- Add onerror handlers: <img src="..." onerror="this.style.background='linear-gradient(135deg,#1e293b,#334155)';this.src=''">`
+- NEVER use external image URLs — they will break. Instead use COLORED PLACEHOLDER DIVS for every image slot.
+- For each image slot, use a styled div with gradient background matching the site theme:
+  <div class="img-placeholder" style="background:linear-gradient(135deg,VAR_BG,VAR_BG_LIGHT);display:flex;align-items:center;justify-content:center;border-radius:8px;min-height:200px;color:VAR_FG;font-size:14px;font-weight:600;flex-direction:column;gap:6px;aspect-ratio:16/9"><span style="font-size:2.5rem">🖼️</span><span>صورة N</span></div>
+- Replace VAR_BG with one of the site's extracted dark colors, VAR_FG with a light contrasting color
+- Use the exact number of placeholders matching the image count (صورة 1, صورة 2, etc.)
+- For hero backgrounds: use CSS background gradient instead of background-image: url()
+- NEVER generate <img> tags with src pointing to external URLs`
 
 const TAILWIND_RULES = `
 TAILWIND INSTRUCTIONS:

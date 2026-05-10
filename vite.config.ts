@@ -8,10 +8,27 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ["react", "react-dom", "react-router-dom"],
   },
   server: {
     host: "0.0.0.0",
     port: 5000,
     allowedHosts: true,
+  },
+  optimizeDeps: {
+    force: true,
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react-router-dom",
+      "lucide-react",
+      "react-markdown",
+      "remark-gfm",
+      "pdfjs-dist",
+      "tesseract.js",
+      "jszip",
+      "recharts",
+    ],
   },
 })

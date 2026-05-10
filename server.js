@@ -8919,16 +8919,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       weatherPriorityContext = [
         `context: weather_priority`,
         `city: ${w.city}`,
-        `temperature: ${w.temp}°C`,
-        `feels_like: ${w.feels_like}°C`,
-        `min_max: ${w.temp_min}°C / ${w.temp_max}°C`,
-        `condition: ${w.condition}`,
-        `humidity: ${w.humidity ?? 'N/A'}%`,
-        `wind: ${w.wind ?? 'N/A'} km/h`,
-        `visibility: ${w.visibility ?? 'غير متوفر'} km`,
-        `source: ${w.source || 'open-meteo.com'} (no API key required)`,
-        w.status === 'stale' ? `⚠️ بيانات مؤقتة (stale) — منذ ${w.staleAgeMin} دقيقة` : '',
-        `fetched_at: ${w.fetchedAt}`,
+        `| العنصر | القيمة |`,
+        `|---|---|`,
+        `| 🌡️ درجة الحرارة | ${w.temp}°C (تشعر بـ ${w.feels_like}°C) |`,
+        `| 🌡️ الحد الأدنى / الأقصى | ${w.temp_min}°C / ${w.temp_max}°C |`,
+        `| 📊 الحالة | ${w.condition} |`,
+        `| 💧 الرطوبة | ${w.humidity ?? '—'}% |`,
+        `| 💨 الرياح | ${w.wind ?? '—'} كم/س |`,
+        `| 👁️ الرؤية | ${w.visibility ?? '—'} كم |`,
+        `source: ${w.source || 'open-meteo.com'}`,
+        w.status === 'stale' ? `⚠️ بيانات مؤقتة — منذ ${w.staleAgeMin} دقيقة` : '',
       ].filter(Boolean).join('\n')
     } else {
       weatherPriorityContext = `context: weather_priority\nfallback: تعذّر جلب بيانات الطقس من جميع المصادر. يرجى التحقق يدوياً.`
@@ -9363,13 +9363,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return compressed.length > max ? compressed.slice(0, max) + '\n...[مقتطع]' : compressed
   }
 
+  // ── Post-process AI response: convert bare URLs to clickable source links ─
+  function _cleanRawUrls(text) {
+    if (!text) return text
+    // Replace bare URLs not already inside markdown links [...](...) or href="..."
+    return text.replace(
+      /(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g,
+      (fullUrl, _, domain) => {
+        // Extract readable name from domain (e.g. "elkhabar.com" → "El Khabar")
+        const name = domain
+          .replace(/^www\./, '')
+          .split('.')[0]
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase())
+        return `[${name}](${fullUrl})`
+      }
+    )
+  }
+
   const systemPrompt = [
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
-    `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL كنص. استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
+    `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`
       : '',
@@ -9428,7 +9446,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
-    weatherPriorityContext ? `🌤️ بيانات الطقس:\n${_trim(weatherPriorityContext, 500)}\n> اعرض البيانات في جدول Markdown منظّم (أعمدة: العنصر، القيمة). ابدأ الإجابة بهذا الجدول.` : '',
+    weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
@@ -9457,7 +9475,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   })
   if (aiResult.content) {
     return res.status(200).json({
-      content: aiResult.content,
+      content: _cleanRawUrls(aiResult.content),
       fallbackModel: aiResult.model,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
@@ -10575,7 +10593,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
 قواعد الإجابة (إلزامية):
 1. أجب فوراً بالمعلومة المباشرة — لا مقدمات، لا "بالطبع"، لا "سؤال ممتاز".
-2. استخدم أرقاماً وحقائق محددة. اذمج المصدر في اسمه [اسم](رابط) — لا تكتب URL كنص.
+2. استخدم أرقاماً وحقائق محددة. اذمج المصدر في اسمه [اسم](رابط) — لا تكتب URL خاماً كنص أبداً.
 3. إذا كانت البيانات المباشرة متاحة أدناه، استخدمها أولاً ولا تتجاهلها.
 4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
 5. كن موجزاً (3-5 جمل) مع الدقة والحداثة. للطقس والرياضة: استخدم جدولاً Markdown إن أمكن.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
@@ -10602,7 +10620,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
       from: isAgent ? 'DZ Agent' : 'DZ GPT',
       fromId: 'bot',
       gender: 'bot',
-      text: result.content || 'عذراً، حدث خطأ في المعالجة.',
+      text: result.content ? result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`) : 'عذراً، حدث خطأ في المعالجة.',
       timestamp: Date.now(),
       isBot: true,
       botType: isAgent ? 'agent' : 'gpt',

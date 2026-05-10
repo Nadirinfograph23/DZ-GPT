@@ -2421,8 +2421,18 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
         <a className="dz-map-action-btn dz-map-action-btn--gmaps" href={gmapsOpen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
           <MapPin size={11} /> فتح في Google Maps
         </a>
-        {!isRoute && lat && lng && (
-          <a className="dz-map-action-btn dz-map-action-btn--route" href={`https://www.google.com/maps/dir//${lat},${lng}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+        {!isRoute && (lat && lng || locationFr) && (
+          <a
+            className="dz-map-action-btn dz-map-action-btn--route"
+            href={
+              meta.poiNameAr && locationFr
+                ? `https://www.google.com/maps/dir//${encodeURIComponent(String(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
+                : lat && lng
+                  ? `https://www.google.com/maps/dir//${lat},${lng}`
+                  : `https://www.google.com/maps/dir//${encodeURIComponent(locationFr + ' Algeria')}`
+            }
+            target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+          >
             🚗 إنشاء مسار
           </a>
         )}
@@ -4244,6 +4254,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                               return <code className={className} {...props}>{children}</code>
                             },
                             pre({ children }) { return <>{children}</> },
+                            a({ href, children, ...props }) {
+                              return (
+                                <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                                  {children}
+                                </a>
+                              )
+                            },
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}

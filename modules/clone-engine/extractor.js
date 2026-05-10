@@ -1,8 +1,9 @@
 /**
- * clone-engine/extractor.js  — V2
+ * clone-engine/extractor.js  — V3
  * Deep DOM extraction using cheerio + regex.
- * Detects tech stack, colors, fonts, sections, animations, images,
- * SVGs, buttons, shadows, spacing, layout, and more.
+ * V3 adds: copyright/year extraction, full footer content, all links,
+ *          list items, background images, og:image, extended CSS (12k),
+ *          form structure, all text nodes, iframe sources.
  */
 
 import * as cheerio from 'cheerio'
@@ -56,7 +57,7 @@ export function detectTechStack(html) {
 // ── Color extractor ──────────────────────────────────────────────────────────
 function extractColors(css, html) {
   const colorSet = new Set()
-  const source = css + html.slice(0, 30000)
+  const source = css + html.slice(0, 40000)
   const patterns = [
     /#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g,
     /rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)/g,
@@ -71,7 +72,7 @@ function extractColors(css, html) {
       }
     }
   }
-  return [...colorSet].slice(0, 32)
+  return [...colorSet].slice(0, 40)
 }
 
 // ── CSS custom properties extractor ─────────────────────────────────────────
@@ -211,18 +212,18 @@ function extractPrimaryBgColors(css) {
 function extractStructuralSkeleton($) {
   const lines = []
   function walk(el, depth) {
-    if (depth > 4) return
+    if (depth > 5) return
     const tag = el.tagName?.toLowerCase()
-    if (!tag || ['script', 'style', 'noscript', 'meta', 'link', 'br', 'hr', 'img'].includes(tag)) return
-    const cls = $(el).attr('class')?.split(' ').filter(c => c.length > 1).slice(0, 3).join('.') || ''
+    if (!tag || ['script', 'style', 'noscript', 'meta', 'link', 'br', 'hr'].includes(tag)) return
+    const cls = $(el).attr('class')?.split(' ').filter(c => c.length > 1).slice(0, 4).join('.') || ''
     const id = $(el).attr('id') ? `#${$(el).attr('id')}` : ''
-    const text = $(el).clone().children().remove().end().text().replace(/\s+/g, ' ').trim().slice(0, 40)
+    const text = $(el).clone().children().remove().end().text().replace(/\s+/g, ' ').trim().slice(0, 60)
     const label = `${'  '.repeat(depth)}<${tag}${cls ? ' .' + cls : ''}${id}>${text ? ` "${text}"` : ''}`
     lines.push(label)
     $(el).children().each((_, child) => walk(child, depth + 1))
   }
   $('body > *').each((_, el) => walk(el, 0))
-  return lines.slice(0, 80).join('\n')
+  return lines.slice(0, 120).join('\n')
 }
 
 // ── Extract nav structure ─────────────────────────────────────────────────────
@@ -233,7 +234,7 @@ function extractNavStructure($) {
     const t = $(el).text().replace(/\s+/g, ' ').trim()
     if (t.length > 0 && t.length < 40) links.push(t)
   })
-  return { brand, links: [...new Set(links)].slice(0, 10) }
+  return { brand, links: [...new Set(links)].slice(0, 12) }
 }
 
 // ── Extract hero content ──────────────────────────────────────────────────────
@@ -247,7 +248,158 @@ function extractHeroContent($) {
     const t = $(el).text().replace(/\s+/g, ' ').trim()
     if (t.length > 0 && t.length < 50) ctas.push(t)
   })
-  return { h1, subtext: sub, ctas: [...new Set(ctas)].slice(0, 3) }
+  return { h1, subtext: sub, ctas: [...new Set(ctas)].slice(0, 4) }
+}
+
+// ── V3: Extract full footer content including copyright ───────────────────────
+function extractFooterContent($) {
+  const footer = $('footer, [class*=footer], [id*=footer]').first()
+  if (!footer.length) return null
+
+  const text = footer.text().replace(/\s+/g, ' ').trim().slice(0, 600)
+
+  // Extract copyright line specifically
+  const copyrightMatch = text.match(/(?:©|copyright|\(c\))\s*[\d]{4}[^\n\r.]{0,120}/i)
+    || text.match(/[\d]{4}[^\n\r.]{0,80}(?:all rights|tous droits|tous les droits|reserved|réservés)/i)
+  const copyright = copyrightMatch ? copyrightMatch[0].trim() : ''
+
+  // Extract all years found in footer
+  const years = [...text.matchAll(/\b(19|20)\d{2}\b/g)].map(m => m[0])
+
+  // Extract footer links
+  const links = []
+  footer.find('a').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 0 && t.length < 60) links.push(t)
+  })
+
+  // Extract footer columns text
+  const columns = []
+  footer.find('[class*=col], [class*=column], [class*=widget], [class*=block], ul').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 5 && t.length < 300) columns.push(t.slice(0, 200))
+  })
+
+  return {
+    text,
+    copyright,
+    years: [...new Set(years)],
+    links: [...new Set(links)].slice(0, 20),
+    columns: columns.slice(0, 6),
+  }
+}
+
+// ── V3: Extract all text with structure (list items, cards, sections) ──────────
+function extractAllTextContent($) {
+  const blocks = []
+
+  // All headings with level
+  $('h1, h2, h3, h4, h5').each((_, el) => {
+    const tag = el.tagName?.toLowerCase()
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 0 && t.length < 200) blocks.push(`[${tag.toUpperCase()}] ${t}`)
+  })
+
+  // All paragraphs
+  $('p').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 15 && t.length < 800) blocks.push(`[P] ${t}`)
+  })
+
+  // List items (important for features, pricing, etc.)
+  $('li').each((_, el) => {
+    const t = $(el).text().replace(/\s+/g, ' ').trim()
+    if (t.length > 3 && t.length < 200) blocks.push(`[LI] ${t}`)
+  })
+
+  // Spans and divs with significant text (catch text-only containers)
+  $('span, div').each((_, el) => {
+    const directText = $(el).clone().children().remove().end().text().replace(/\s+/g, ' ').trim()
+    if (directText.length > 20 && directText.length < 200) blocks.push(`[TEXT] ${directText}`)
+  })
+
+  return blocks.slice(0, 150).join('\n')
+}
+
+// ── V3: Extract all links with href and text ──────────────────────────────────
+function extractAllLinks($, baseUrl) {
+  const links = []
+  let domain = ''
+  try { domain = new URL(baseUrl).hostname } catch {}
+
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href') || ''
+    const text = $(el).text().replace(/\s+/g, ' ').trim()
+    if (text.length < 3 || text.length > 80) return
+    // Resolve relative URLs
+    let fullHref = href
+    try {
+      if (href.startsWith('/') && domain) fullHref = `https://${domain}${href}`
+      else if (!href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto:')) fullHref = href
+    } catch {}
+    links.push({ text, href: fullHref })
+  })
+  return links.slice(0, 50)
+}
+
+// ── V3: Extract inline background images from style attributes ────────────────
+function extractBgImages(rawHtml, baseUrl) {
+  const imgs = []
+  let domain = ''
+  try { domain = new URL(baseUrl).origin } catch {}
+
+  for (const m of rawHtml.matchAll(/background(?:-image)?\s*:\s*url\(['"]?([^'")]+)['"]?\)/gi)) {
+    let src = m[1].trim()
+    if (src.startsWith('data:')) continue
+    if (src.startsWith('/') && domain) src = domain + src
+    if (src.startsWith('http')) imgs.push(src)
+  }
+  return [...new Set(imgs)].slice(0, 10)
+}
+
+// ── V3: Extract all significant numbers (prices, stats, years) ───────────────
+function extractKeyNumbers($) {
+  const numbers = []
+  const text = $('body').text()
+
+  // Years
+  const years = [...text.matchAll(/\b(19|20)\d{2}\b/g)].map(m => m[0])
+  // Prices
+  const prices = [...text.matchAll(/[\$€£¥]\s*[\d,]+(?:\.\d{2})?|\d+\s*(?:DZD|DA|€|\$)/g)].map(m => m[0].trim())
+  // Stats/counters
+  const stats = [...text.matchAll(/\b\d{1,3}(?:,\d{3})*(?:\+|k|M)?\b/g)].map(m => m[0]).slice(0, 20)
+
+  return {
+    years: [...new Set(years)],
+    prices: [...new Set(prices)].slice(0, 10),
+    stats: [...new Set(stats)].slice(0, 20),
+  }
+}
+
+// ── V3: Extract form structure ────────────────────────────────────────────────
+function extractForms($) {
+  const forms = []
+  $('form').each((_, el) => {
+    const inputs = []
+    $(el).find('input, textarea, select, button[type=submit]').each((_, inp) => {
+      const type = $(inp).attr('type') || inp.tagName?.toLowerCase()
+      const placeholder = $(inp).attr('placeholder') || ''
+      const label = $(inp).closest('label').text().trim() || $(inp).attr('name') || ''
+      inputs.push({ type, placeholder: placeholder.slice(0, 60), label: label.slice(0, 40) })
+    })
+    const action = $(el).attr('action') || ''
+    forms.push({ action, inputs: inputs.slice(0, 10) })
+  })
+  return forms.slice(0, 3)
+}
+
+// ── V3: Extract CSS @keyframes for exact reproduction ────────────────────────
+function extractKeyframes(css) {
+  const frames = []
+  for (const m of css.matchAll(/@keyframes\s+[\w-]+\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}/g)) {
+    frames.push(m[0].slice(0, 400))
+  }
+  return frames.slice(0, 8)
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -268,9 +420,11 @@ export function deepExtract(rawHtml, url) {
   const title = $('title').first().text().trim()
   const metaDesc = $('meta[name=description]').attr('content')?.trim() || ''
   const ogImage = $('meta[property="og:image"]').attr('content')?.trim() || ''
+  const ogTitle = $('meta[property="og:title"]').attr('content')?.trim() || ''
+  const ogDesc  = $('meta[property="og:description"]').attr('content')?.trim() || ''
 
   const headings = []
-  $('h1, h2, h3').each((_, el) => {
+  $('h1, h2, h3, h4').each((_, el) => {
     const t = $(el).text().replace(/\s+/g, ' ').trim()
     if (t.length > 2 && t.length < 200) headings.push(t)
   })
@@ -302,7 +456,7 @@ export function deepExtract(rawHtml, url) {
   // Tailwind class snapshot
   const allClasses = []
   $('[class]').each((_, el) => allClasses.push($(el).attr('class') || ''))
-  const classSnapshot = allClasses.join(' ').slice(0, 4000)
+  const classSnapshot = allClasses.join(' ').slice(0, 5000)
 
   const techStack = detectTechStack(rawHtml + classSnapshot)
   const colors = extractColors(allCss, rawHtml)
@@ -316,7 +470,7 @@ export function deepExtract(rawHtml, url) {
   const sections = extractSections($)
   const { usesGrid, usesFlex, breakpoints } = analyzeLayout(allCss)
 
-  // V2 additions ───────────────────────────────────────────────────────────────
+  // V2 additions
   const images = extractAllImages(rawHtml, url)
   const svgs = extractInlineSVGs(rawHtml, 6)
   const buttonPatterns = extractButtonPatterns(rawHtml, 6)
@@ -326,9 +480,26 @@ export function deepExtract(rawHtml, url) {
   const navStructure = extractNavStructure($)
   const heroContent = extractHeroContent($)
 
-  // Raw CSS sample
-  const rawStyleSample = allCss.slice(0, 6000)
+  // V3 additions ───────────────────────────────────────────────────────────────
+  const footerContent = extractFooterContent($)
+  const allTextContent = extractAllTextContent($)
+  const allLinks = extractAllLinks($, url)
+  const bgImages = extractBgImages(rawHtml, url)
+  const keyNumbers = extractKeyNumbers($)
+  const forms = extractForms($)
+  const keyframes = extractKeyframes(allCss)
+
+  // Extended CSS sample — 14k chars for better reproduction
+  const rawStyleSample = allCss.slice(0, 14000)
   const textContent = paragraphs.slice(0, 20).join('\n')
+
+  // Raw HTML body snapshot (first 8000 chars) for structure reference
+  const rawBodySnapshot = (() => {
+    try {
+      const bodyHtml = $('body').html() || ''
+      return bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').slice(0, 8000)
+    } catch { return '' }
+  })()
 
   return {
     domain,
@@ -336,10 +507,12 @@ export function deepExtract(rawHtml, url) {
     title,
     metaDesc,
     ogImage,
-    headings: headings.slice(0, 16),
-    paragraphs: paragraphs.slice(0, 20),
-    ctaTexts: [...new Set(ctaTexts)].slice(0, 10),
-    navLinks: [...new Set(navLinks)].slice(0, 12),
+    ogTitle,
+    ogDesc,
+    headings: headings.slice(0, 20),
+    paragraphs: paragraphs.slice(0, 24),
+    ctaTexts: [...new Set(ctaTexts)].slice(0, 12),
+    navLinks: [...new Set(navLinks)].slice(0, 14),
     techStack,
     colors,
     cssVars,
@@ -367,5 +540,14 @@ export function deepExtract(rawHtml, url) {
     structuralSkeleton,
     navStructure,
     heroContent,
+    // V3
+    footerContent,
+    allTextContent,
+    allLinks,
+    bgImages,
+    keyNumbers,
+    forms,
+    keyframes,
+    rawBodySnapshot,
   }
 }

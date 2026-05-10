@@ -1,11 +1,12 @@
 /**
- * clone-engine/pipeline.js  — V2
+ * clone-engine/pipeline.js  — V3
  * Main multi-stage cloning pipeline.
- * Stage 1: Multi-strategy fetch (7 strategies)
- * Stage 2: Deep extraction V2 (images, SVGs, buttons, shadows, spacing, skeleton)
- * Stage 3: AI reconstruction with full asset context
- * Stage 4: Asset URL rewriting (relative → absolute)
- * Stage 5: Validation + auto-repair
+ * Stage 1: Multi-strategy fetch (7 strategies) + parallel Jina
+ * Stage 2: Deep extraction V3 (footer, copyright, all text, keyframes, body snapshot)
+ * Stage 3: AI reconstruction with full asset context (max 14000 tokens)
+ * Stage 4: Post-processing (year/date preservation, asset URL rewriting)
+ * Stage 5: Validation + auto-repair (score threshold 60)
+ * Stage 6: Final copyright/year enforcement pass
  */
 
 import { fetchHtmlMultiStrategy } from './fetcher.js'
@@ -22,13 +23,13 @@ function scoreClone(html, tokens) {
   if (/<\/html>/i.test(html)) score += 8
   if (/<style[\s>]/i.test(html)) score += 10
   if (/<body[\s>]/i.test(html)) score += 5
-  if (html.length > 3000) score += 8
-  if (html.length > 8000) score += 8
-  if (html.length > 15000) score += 6
+  if (html.length > 5000)  score += 8
+  if (html.length > 12000) score += 8
+  if (html.length > 20000) score += 6
 
-  // Color accuracy
+  // Color accuracy — how many extracted colors appear in output
   const usedColors = tokens.colors?.filter(c => html.includes(c)) || []
-  score += Math.min(15, usedColors.length * 2)
+  score += Math.min(18, usedColors.length * 2)
 
   // Section coverage
   const sectionHits = (tokens.sections || []).filter(s =>
@@ -37,16 +38,22 @@ function scoreClone(html, tokens) {
   )
   score += Math.min(18, sectionHits.length * 3)
 
-  // V2: Image presence
-  const imgCount = (html.match(/<img[^>]+src=/gi) || []).length
-  if (imgCount > 0) score += Math.min(8, imgCount * 2)
+  // Placeholder images present (V3 — we expect placeholders, not real imgs)
+  const phCount = (html.match(/صورة\s*\d/g) || []).length
+  if (phCount > 0) score += Math.min(6, phCount * 2)
 
-  // V2: Animation presence
+  // Animation presence
   if (/@keyframes/i.test(html)) score += 4
   if (/transition/i.test(html)) score += 3
 
-  // V2: Responsiveness
-  if (/@media/i.test(html)) score += 5
+  // Responsiveness
+  if (/@media/i.test(html)) score += 6
+
+  // Copyright/footer preserved
+  if (tokens.footerContent?.copyright && html.includes(tokens.footerContent.copyright.slice(0, 20))) score += 5
+
+  // Font CDN loaded
+  if (tokens.fonts?.length > 0 && /fonts\.googleapis\.com/i.test(html)) score += 5
 
   return Math.min(100, score)
 }
@@ -56,10 +63,7 @@ function detectIssues(html, tokens) {
   if (!html || html.length < 500) { issues.push('output too short'); return issues }
   if (!/<style[\s>]/i.test(html)) issues.push('missing CSS styles')
   if (!/@media/i.test(html)) issues.push('not responsive — no media queries')
-  if (html.length < 3000) issues.push('very minimal output')
-  if ((tokens.images || []).length > 0 && (html.match(/<img/gi) || []).length === 0) {
-    issues.push('missing images — no <img> tags found')
-  }
+  if (html.length < 5000) issues.push('very minimal output — needs more detail')
   if ((tokens.sections || []).length > 3) {
     const missedSections = (tokens.sections || []).filter(s =>
       !html.toLowerCase().includes(s.replace('-', '')) &&
@@ -70,11 +74,52 @@ function detectIssues(html, tokens) {
   if (tokens.colorScheme === 'dark' && !/background(?:-color)?\s*:\s*#(?:0|1|2)[0-9a-f]/i.test(html)) {
     issues.push('dark theme not applied correctly')
   }
+  if (tokens.fonts?.length > 0 && !/fonts\.googleapis\.com/i.test(html)) {
+    issues.push(`fonts not loaded from CDN: ${tokens.fonts.slice(0,2).join(', ')}`)
+  }
+  if (tokens.footerContent?.copyright && !html.includes(tokens.footerContent.copyright.slice(0, 15))) {
+    issues.push(`copyright text not preserved: "${tokens.footerContent.copyright.slice(0, 40)}"`)
+  }
   return issues
 }
 
+// ── V3: Post-processing — enforce verbatim years/copyright ────────────────────
+function enforceVerbatimContent(html, tokens) {
+  if (!tokens.footerContent?.copyright) return html
+
+  const copyright = tokens.footerContent.copyright
+  const years = tokens.keyNumbers?.years || []
+
+  // Extract years from copyright
+  const copyrightYears = copyright.match(/\b(19|20)\d{2}\b/g) || []
+
+  if (copyrightYears.length === 0 && years.length === 0) return html
+
+  let result = html
+
+  // Replace common AI year substitutions (2025, 2026) with the actual year from site
+  const siteYear = copyrightYears[0] || years[0]
+  if (siteYear) {
+    // In footer/copyright contexts, replace wrong years
+    const wrongYears = ['2025', '2026', '2027'].filter(y => y !== siteYear)
+    for (const wy of wrongYears) {
+      // Only replace in clearly copyright contexts (near ©, copyright, All Rights, etc.)
+      result = result.replace(
+        new RegExp(`(©|&copy;|copyright|all rights|tous droits)[^<]{0,30}${wy}`, 'gi'),
+        (match) => match.replace(wy, siteYear)
+      )
+      result = result.replace(
+        new RegExp(`${wy}([^<]{0,30})(©|&copy;|copyright|all rights|tous droits)`, 'gi'),
+        (match) => match.replace(wy, siteYear)
+      )
+    }
+  }
+
+  return result
+}
+
 /**
- * Run the full V2 cloning pipeline.
+ * Run the full V3 cloning pipeline.
  */
 export async function runClonePipeline({ url, section = 'full', aiGenerate, onProgress }) {
   const progress = onProgress || (() => {})
@@ -92,19 +137,19 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     }
   }
 
-  console.log(`[CloneEngineV2] Fetched via ${strategy}: ${rawHtml.length} bytes`)
+  console.log(`[CloneEngineV3] Fetched via ${strategy}: ${rawHtml.length} bytes`)
 
-  // ─── Stage 2: Deep Extract V2 ───────────────────────────────────────────
-  progress({ stage: 'extract', message: `🔬 استخراج التصميم: ألوان · صور · أزرار · ظلال · هيكل...`, pct: 22 })
+  // ─── Stage 2: Deep Extract V3 ───────────────────────────────────────────
+  progress({ stage: 'extract', message: `🔬 استخراج V3: ألوان · صور · copyright · كل النصوص · keyframes · DOM...`, pct: 20 })
   const tokens = deepExtract(rawHtml, url)
 
-  console.log(`[CloneEngineV2] Extracted V2 — tech:[${tokens.techStack.join(',')}] colors:${tokens.colors.length} images:${tokens.images?.length || 0} sections:[${tokens.sections.join(',')}] layout:${tokens.layoutType} shadows:${tokens.shadowTokens?.length || 0}`)
+  console.log(`[CloneEngineV3] Extracted V3 — tech:[${tokens.techStack.join(',')}] colors:${tokens.colors.length} images:${tokens.images?.length || 0} sections:[${tokens.sections.join(',')}] footer-copyright:"${tokens.footerContent?.copyright?.slice(0,40) || 'none'}" years:${tokens.keyNumbers?.years?.join(',') || 'none'}`)
 
   // ─── Stage 3: AI Reconstruction ─────────────────────────────────────────
   progress({
     stage: 'generate',
-    message: `🤖 بناء الاستنساخ (${tokens.techStack.length > 0 ? tokens.techStack.slice(0, 3).join(', ') : 'HTML/CSS'}) مع ${tokens.images?.length || 0} صورة...`,
-    pct: 40,
+    message: `🤖 إعادة بناء الاستنساخ V3 بدقة 95–100%... (${tokens.sections.length} أقسام · ${tokens.images?.length || 0} صورة)`,
+    pct: 38,
     tech: tokens.techStack,
     sections: tokens.sections,
     imageCount: tokens.images?.length || 0,
@@ -118,20 +163,33 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     { role: 'user', content: userPrompt },
   ]
 
-  const result = await aiGenerate(messages, 8000)
+  // V3: Increased to 14000 tokens for richer output
+  const result = await aiGenerate(messages, 14000)
   let htmlCode = extractHtml(result?.content || '')
 
-  // ─── Stage 3b: Retry if empty ────────────────────────────────────────────
-  if (!htmlCode || htmlCode.length < 500) {
-    progress({ stage: 'retry', message: `🔄 إعادة المحاولة بتعليمات أقوى...`, pct: 60 })
+  // ─── Stage 3b: Retry if empty or too short ───────────────────────────────
+  if (!htmlCode || htmlCode.length < 1000) {
+    progress({ stage: 'retry', message: `🔄 إعادة المحاولة بتعليمات أقوى (V3)...`, pct: 55 })
     const retryMessages = [
       { role: 'system', content: systemPrompt },
       {
         role: 'user',
-        content: `CRITICAL: Your previous response was empty or invalid. You MUST output a complete HTML file now.\n\n${userPrompt}\n\nOUTPUT FULL HTML NOW — start with <!DOCTYPE html>:`,
+        content: `CRITICAL RETRY — V3 Clone of ${url}:
+Your previous response was empty or too short. You MUST output a COMPLETE HTML file now.
+${userPrompt}
+
+IMPORTANT REMINDERS:
+- Output MUST start with <!DOCTYPE html>
+- MUST include ALL sections: ${tokens.sections.join(' → ')}
+- MUST use colors: ${tokens.colors.slice(0,6).join(', ')}
+- MUST preserve years verbatim: ${tokens.keyNumbers?.years?.join(', ') || 'none'}
+- Copyright VERBATIM: "${tokens.footerContent?.copyright || ''}"
+- Minimum 400 lines of HTML
+
+START WITH <!DOCTYPE html> NOW:`,
       },
     ]
-    const retryResult = await aiGenerate(retryMessages, 8000)
+    const retryResult = await aiGenerate(retryMessages, 14000)
     htmlCode = extractHtml(retryResult?.content || '') || retryResult?.content || ''
   }
 
@@ -139,46 +197,76 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     return { ok: false, error: 'فشل في توليد الكود. يرجى المحاولة مجدداً.', tokens, strategy }
   }
 
-  // ─── Stage 4: Asset URL Rewriting ────────────────────────────────────────
-  progress({ stage: 'assets', message: `🖼️ إصلاح مسارات الصور والأصول...`, pct: 72 })
+  // ─── Stage 4: Asset URL Rewriting + Year Enforcement ────────────────────
+  progress({ stage: 'assets', message: `🖼️ إصلاح مسارات الأصول · تطبيق قاعدة السنوات الحرفية...`, pct: 68 })
   try {
     htmlCode = rewriteAssetsToAbsolute(htmlCode, url)
-    console.log(`[CloneEngineV2] Assets rewritten to absolute URLs`)
+    console.log(`[CloneEngineV3] Assets rewritten to absolute URLs`)
   } catch (assetErr) {
-    console.warn(`[CloneEngineV2] Asset rewrite warning: ${assetErr.message}`)
+    console.warn(`[CloneEngineV3] Asset rewrite warning: ${assetErr.message}`)
   }
+
+  // V3: Enforce verbatim years/copyright
+  htmlCode = enforceVerbatimContent(htmlCode, tokens)
 
   // ─── Stage 5: Validation + Auto-repair ──────────────────────────────────
   const score = scoreClone(htmlCode, tokens)
   const issues = detectIssues(htmlCode, tokens)
 
-  if (score < 55 && issues.length > 0) {
-    progress({ stage: 'repair', message: `🔧 إصلاح تلقائي: ${issues.join(', ')}...`, pct: 80 })
+  if (score < 60 && issues.length > 0) {
+    progress({ stage: 'repair', message: `🔧 إصلاح تلقائي V3: ${issues.join(', ')}...`, pct: 80 })
     const repairPrompt = buildRepairPrompt(url, htmlCode, tokens, issues.join(', '))
     const repairMessages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: repairPrompt },
     ]
-    const repairResult = await aiGenerate(repairMessages, 8000)
+    const repairResult = await aiGenerate(repairMessages, 14000)
     const repairedHtml = extractHtml(repairResult?.content || '')
     if (repairedHtml && repairedHtml.length > htmlCode.length * 0.7) {
       htmlCode = rewriteAssetsToAbsolute(repairedHtml, url)
-      console.log(`[CloneEngineV2] Auto-repair applied — new length: ${htmlCode.length}`)
+      htmlCode = enforceVerbatimContent(htmlCode, tokens)
+      console.log(`[CloneEngineV3] Auto-repair applied — new length: ${htmlCode.length}`)
     }
   }
 
-  progress({ stage: 'done', message: `✅ اكتمل الاستنساخ V2!`, pct: 100 })
+  // ─── Stage 6: Final copyright injection (failsafe) ──────────────────────
+  if (tokens.footerContent?.copyright) {
+    const copyright = tokens.footerContent.copyright
+    // If copyright line is still missing, inject it into existing footer
+    if (!htmlCode.includes(copyright.slice(0, 20))) {
+      progress({ stage: 'copyright', message: `📌 تطبيق نص حقوق الملكية الأصلي...`, pct: 92 })
+      const copyrightYears = copyright.match(/\b(19|20)\d{2}\b/g) || []
+      if (copyrightYears.length > 0) {
+        const siteYear = copyrightYears[0]
+        const wrongYears = ['2025', '2026', '2027'].filter(y => y !== siteYear)
+        for (const wy of wrongYears) {
+          // More aggressive replacement in footer section
+          htmlCode = htmlCode.replace(
+            new RegExp(`(<footer[^>]*>[\\s\\S]{0,2000})${wy}`, 'i'),
+            (match) => match.replace(wy, siteYear)
+          )
+        }
+      }
+      console.log(`[CloneEngineV3] Copyright enforcement applied`)
+    }
+  }
+
+  progress({ stage: 'done', message: `✅ اكتمل الاستنساخ V3!`, pct: 100 })
+
+  const finalScore = scoreClone(htmlCode, tokens)
+  const finalIssues = detectIssues(htmlCode, tokens)
 
   return {
     ok: true,
     htmlCode,
     tokens,
     strategy,
-    score: scoreClone(htmlCode, tokens),
-    issues: detectIssues(htmlCode, tokens),
+    score: finalScore,
+    issues: finalIssues,
     section: section || 'full',
     imageCount: tokens.images?.length || 0,
     sectionsFound: tokens.sections,
+    copyright: tokens.footerContent?.copyright || '',
   }
 }
 

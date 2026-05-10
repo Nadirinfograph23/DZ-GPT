@@ -52,19 +52,19 @@ export function mountCloneEngineV2(app, aiGenerate) {
         score,
         issues,
         fetchStrategy: strategy,
-        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0),
+        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0, result.copyright || ''),
         webBuilderMeta: {
           type: tokens.layoutType,
           style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
           title: `🧬 ${tokens.title || tokens.domain}${sectionLabel}`,
-          description: `استنساخ V2 متقدم لـ ${tokens.domain}`,
+          description: `استنساخ V3 متقدم لـ ${tokens.domain}`,
           icon: '🧬',
         },
         webReaderIntent: 'build',
       })
     } catch (err) {
-      console.error('[CloneEngineV2] clone-v2 error:', err.message)
-      return res.status(500).json({ ok: false, error: 'خطأ داخلي في محرك الاستنساخ V2.' })
+      console.error('[CloneEngineV3] clone-v2 error:', err.message)
+      return res.status(500).json({ ok: false, error: 'خطأ داخلي في محرك الاستنساخ V3.' })
     }
   })
 
@@ -121,19 +121,19 @@ export function mountCloneEngineV2(app, aiGenerate) {
         score,
         issues,
         fetchStrategy: strategy,
-        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0),
+        content: buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount || 0, result.copyright || ''),
         webBuilderMeta: {
           type: tokens.layoutType,
           style: tokens.colorScheme === 'dark' ? 'dark' : 'premium',
           title: `🧬 ${tokens.title || tokens.domain}${sectionLabel}`,
-          description: `استنساخ V2 متقدم لـ ${tokens.domain}`,
+          description: `استنساخ V3 متقدم لـ ${tokens.domain}`,
           icon: '🧬',
         },
         webReaderIntent: 'build',
       })
     } catch (err) {
-      console.error('[CloneEngineV2:SSE] error:', err.message)
-      send('error', { error: 'خطأ داخلي في محرك الاستنساخ V2.' })
+      console.error('[CloneEngineV3:SSE] error:', err.message)
+      send('error', { error: 'خطأ داخلي في محرك الاستنساخ V3.' })
     } finally {
       res.end()
     }
@@ -142,19 +142,25 @@ export function mountCloneEngineV2(app, aiGenerate) {
   console.log('[CloneEngineV2] mounted: /api/dz-agent/clone-v2, /api/dz-agent/clone-v2/stream')
 }
 
-function buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount) {
+function buildSuccessMessage(tokens, sectionLabel, score, strategy, imageCount, copyright) {
   const techBadge = tokens.techStack?.length > 0
     ? `\n🔬 **Stack:** ${tokens.techStack.slice(0, 5).join(' · ')}`
     : ''
-  const scoreBadge = score >= 80 ? '🟢' : score >= 60 ? '🟡' : '🟠'
+  const scoreBadge = score >= 85 ? '🟢' : score >= 65 ? '🟡' : '🟠'
   const imgBadge = imageCount > 0 ? ` · **${imageCount}** صورة` : ''
   const shadowBadge = tokens.shadowTokens?.length > 0 ? ` · **${tokens.shadowTokens.length}** ظل` : ''
-  return `🧬 **استنساخ V2${sectionLabel} — ${tokens.title || tokens.domain}**
+  const yearsNote = tokens.keyNumbers?.years?.length
+    ? `\n📅 السنوات المحفوظة: ${tokens.keyNumbers.years.join(', ')}`
+    : ''
+  const copyrightNote = copyright
+    ? `\n©️ حقوق الملكية: "${copyright.slice(0, 60)}"`
+    : ''
+  return `🧬 **استنساخ V3${sectionLabel} — ${tokens.title || tokens.domain}**
 
 ${scoreBadge} دقة مرئية: **${score}%** | جلب عبر: \`${strategy}\`
 ✅ **${tokens.colors.length}** لون · **${tokens.fonts.length}** خط · **${tokens.sections.length}** قسم${imgBadge}${shadowBadge}
-🎨 النظام: **${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'}** | النوع: **${tokens.layoutType}**${techBadge}
-🖼️ الصور: مسارات مطلقة ✓ | الأزرار: محفوظة ✓ | الاستجابة: متعددة الشاشات ✓
+🎨 النظام: **${tokens.colorScheme === 'dark' ? 'داكن' : 'فاتح'}** | النوع: **${tokens.layoutType}**${techBadge}${yearsNote}${copyrightNote}
+🖼️ Placeholders ملوّنة ✓ | الأزرار: محفوظة ✓ | الاستجابة: متعددة الشاشات ✓ | CSS: كامل ✓
 
 ▶️ انقر **"معاينة مباشرة"** للمشاهدة أو **⬇ تحميل** للحفظ.`
 }

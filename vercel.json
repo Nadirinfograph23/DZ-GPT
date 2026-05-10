@@ -1,11 +1,11 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && cp server.js api/ && cp -r lib modules dialect data services api/",
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "bin/**,lib/**,modules/**,dialect/**,data/**,services/**"
+      "includeFiles": "bin/**"
     }
   },
   "rewrites": [

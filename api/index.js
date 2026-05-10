@@ -2,7 +2,7 @@
 let app
 
 try {
-  const mod = await import('../server.js')
+  const mod = await import('./server.js')
   app = mod.app
 } catch (err) {
   console.error('[Vercel] server.js import FAILED:', err?.message)

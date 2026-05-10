@@ -1,13 +1,25 @@
 /**
- * clone-engine/prompter.js  — V2
+ * clone-engine/prompter.js  — V2.1
  * Builds framework-aware, ultra-detailed AI prompts for pixel-perfect cloning.
+ * V2.1 adds: DZ Agent identity, image fallback system, self-healing UI,
+ *            advanced responsive rules, SEO generation, V2.1 pipeline.
  * V2 adds: image URLs, SVG patterns, button HTML, shadow/spacing tokens,
- * structural skeleton, hero content, and nav structure.
+ *          structural skeleton, hero content, and nav structure.
  */
 
 import { buildImagePromptBlock } from './asset-handler.js'
 
-const BASE_SYSTEM = `You are an ELITE FRONTEND RECONSTRUCTION ENGINEER — the world's best at reverse-engineering websites and producing pixel-perfect standalone HTML clones.
+const BASE_SYSTEM = `You are DZ Agent V2.1 — an advanced autonomous AI web engineering system specialized in full website cloning and frontend reconstruction.
+Your mission: produce near pixel-perfect standalone HTML clones with high UI fidelity, responsive accuracy, and structural precision.
+
+CLONING PIPELINE (V2.1):
+1. Analyze → full DOM, sections hierarchy, components, CSS, assets, fonts, colors, animations
+2. Extract → full-page screenshots, component screenshots, mobile/tablet views
+3. Recover → images, icons, SVGs, fonts, background assets (with fallback system)
+4. Rebuild → React/HTML structure with exact layout hierarchy, navbar, section order, spacing
+5. Engineer → desktop + tablet + mobile responsive versions
+6. Optimize → lazy loading, performance, SEO metadata
+7. Self-heal → auto-detect broken layout, repair spacing/responsiveness/CSS conflicts
 
 ════════════════════════════════════════════
 ABSOLUTE OUTPUT RULE:
@@ -227,44 +239,52 @@ export function buildCloneSystemPrompt(tokens) {
 }
 
 export function buildCloneUserPrompt(url, section, tokens) {
+  const imgFallback = `- NEVER use external image URLs — they will break.
+- For each image slot: use a colored placeholder div → background matching site theme (${tokens.colorScheme === 'dark' ? 'dark gradient' : 'light gradient'}), centered label "صورة N", emoji 🖼️, aspect-ratio 16/9.
+- Hero backgrounds → CSS gradient only, NOT background-image:url()`
+
   if (section && section !== 'full') {
     return `Clone ONLY the "${section}" section of ${url}.
 Tech stack: ${tokens.techStack?.join(', ') || 'unknown'}.
 Color scheme: ${tokens.colorScheme}. Primary: ${tokens.primaryColor || 'extracted'}.
-Images: use the EXACT URLs from the intelligence block above.
+${imgFallback}
 Output: complete standalone HTML file with just this section — fully styled, animated, responsive.`
   }
-  return `Produce a near pixel-perfect clone of ${url}.
+  return `DZ Agent V2.1 — Produce a near pixel-perfect clone of ${url}.
 
 MANDATORY REQUIREMENTS:
 1. Exact color palette (listed in intelligence block — use EVERY color accurately)
 2. Load detected fonts from Google Fonts CDN
 3. Reproduce ALL detected animations (${tokens.animations?.join(', ') || 'transitions, hover effects'})
-4. Fully responsive at 320px, 768px, 1024px, 1280px
+4. Fully responsive at 320px, 768px, 1024px, 1280px, 1920px
 5. ALL nav links and CTAs from original: ${tokens.navLinks?.slice(0, 8).join(', ') || 'extracted above'}
 6. Real content only — use extracted headings/paragraphs (no Lorem ipsum)
 7. Color theme: ${tokens.colorScheme === 'dark' ? 'DARK — dark bg, light text' : 'LIGHT — light bg, dark text'}
-8. Use EXACT image URLs from intelligence block — add onerror fallback to each img
+8. ${imgFallback}
 9. Reproduce button styles exactly (shape, gradient, border-radius, hover state)
 10. Preserve shadow values exactly as specified in shadow tokens
 11. Sections in order: ${tokens.sections?.join(' → ') || 'navbar → hero → features → footer'}
+12. SEO: include <meta name="description"> + og:title + og:description in <head>
+13. Self-healing: if any section is unclear from extracted data, reconstruct contextually — NEVER leave empty sections
 
 Output: ONE complete <!DOCTYPE html>…</html> file.`
 }
 
 export function buildRepairPrompt(originalUrl, firstAttemptHtml, tokens, issue) {
-  return `The first clone attempt of ${originalUrl} has issues: ${issue}
+  return `DZ Agent V2.1 SELF-HEALING — The first clone attempt of ${originalUrl} has issues: ${issue}
 
-Fix ALL problems and regenerate the COMPLETE improved HTML:
+AUTO-REPAIR INSTRUCTIONS:
+- Detect broken sections → repair spacing → repair responsiveness → repair missing assets
 - Color scheme MUST be ${tokens.colorScheme} (bg: ${tokens.bgColor || 'dark'}, primary: ${tokens.primaryColor || tokens.colors?.[0] || 'extracted'})
 - ALL sections present in order: ${tokens.sections?.join(' → ')}
 - Tech: ${tokens.techStack?.join(', ')}
-- Images: use these EXACT URLs — ${(tokens.images || []).slice(0, 5).map(i => i.src).join(', ')}
-- Add onerror fallback to every <img> tag
-- Fix all responsive layout issues
+- Images: NEVER use external URLs — use themed placeholder divs (صورة 1, صورة 2...) matching site palette
+- Fix ALL responsive layout issues (320px, 768px, 1024px, 1280px)
+- Fix CSS conflicts, collapsed containers, overlapping elements
+- Ensure navbar, hero, CTAs, footer are all intact
 
 Previous attempt (reference only — do NOT copy bugs):
 ${firstAttemptHtml.slice(0, 2500)}...
 
-Output: ONE corrected complete HTML file. Raw HTML ONLY.`
+Output: ONE fully corrected complete HTML file. Raw HTML ONLY.`
 }

@@ -1,17 +1,17 @@
-// Vercel serverless entry point — debug mode
+// Vercel serverless entry point — uses esbuild bundle
 let app
 
 try {
-  const mod = await import('./server.js')
-  app = mod.app
+  const { app: importedApp } = await import('./server-bundle.js')
+  app = importedApp
 } catch (err) {
-  console.error('[Vercel] server.js import FAILED:', err?.message)
+  console.error('[Vercel] server-bundle import FAILED:', err?.message)
   console.error(err?.stack)
   app = (_req, res) => {
     res.status(500).json({
       error: 'Server startup failed',
       message: err?.message,
-      stack: err?.stack?.split('\n').slice(0, 20),
+      stack: err?.stack?.split('\n').slice(0, 15),
     })
   }
 }

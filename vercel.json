@@ -1,10 +1,11 @@
 {
-  "buildCommand": "npm run build && cp server.js api/ && for d in lib modules dialect data bin; do [ -d \"$d\" ] && cp -r \"$d\" api/ || true; done",
+  "buildCommand": "npm run build && npx esbuild server.js --bundle --platform=node --target=node20 --format=esm --outfile=api/server-bundle.js --packages=external --external:fsevents --external:bufferutil --external:utf-8-validate --log-level=warning",
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "bin/**"
     }
   },
   "rewrites": [

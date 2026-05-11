@@ -8570,6 +8570,64 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── CREATE REPO (fast path — must come before GITHUB_PAGES_MODE) ──────────
+  {
+    const _createTriggers = ['أنشئ مستودع', 'انشئ مستودع', 'إنشاء مستودع', 'create repo', 'create a repo', 'new repo', 'new repository', 'create repository', 'create a new repo', 'créer un dépôt', 'créer un repo']
+    const _lm = lastUserMessage.toLowerCase()
+    if (_createTriggers.some(t => _lm.includes(t.toLowerCase()))) {
+      let _repoName = ''
+      const _nm = lastUserMessage.match(/(?:اسمه|اسم|باسم|named?|called?|nommé?)\s+["']?([\w\-\.]+)["']?/i)
+        || lastUserMessage.match(/(?:مستودع|repo|dépôt)\s+["']?([\w\-\.]+)["']?/i)
+      if (_nm) _repoName = _nm[1].replace(/[^a-zA-Z0-9\-_.]/g, '-').slice(0, 100)
+
+      const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+      if (!_tok) {
+        return res.status(200).json({
+          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلإنشاء مستودع، انقر على زر **"ربط GitHub"** في الأعلى للمصادقة بحسابك.\n\nبعد الاتصال، كرر طلبك وسيُنشئ DZ Agent المستودع مباشرةً باسم حسابك الحقيقي.',
+          githubAction: 'needs-connect',
+        })
+      }
+      try {
+        const _uRes = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!_uRes.ok) throw new Error('فشل التحقق من حساب GitHub')
+        const _ghUser = await _uRes.json()
+        const _login = _ghUser.login
+        if (!_repoName) {
+          return res.status(200).json({
+            content: `🔧 **اختر اسماً للمستودع**\n\nأنت متصل بـ GitHub كـ **@${_login}** ✅\n\nاكتب: *"أنشئ مستودع باسم my-project"*`,
+            githubAction: 'needs-name', githubUser: _login,
+          })
+        }
+        const _cRes = await fetch('https://api.github.com/user/repos', {
+          method: 'POST',
+          headers: { Authorization: `token ${_tok}`, 'Content-Type': 'application/json', 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          body: JSON.stringify({ name: _repoName, description: 'Created by DZ Agent 🇩🇿', auto_init: true, private: false }),
+          signal: AbortSignal.timeout(15000),
+        })
+        const _rd = await _cRes.json()
+        if (!_cRes.ok) {
+          const _em = _rd.errors?.[0]?.message || _rd.message || 'فشل إنشاء المستودع'
+          const _exists = _em.toLowerCase().includes('already exists') || _cRes.status === 422
+          return res.status(200).json({
+            content: _exists
+              ? `⚠️ **المستودع موجود مسبقاً**\n\n**${_login}/${_repoName}** موجود بالفعل.\n\n🔗 [افتح المستودع](https://github.com/${_login}/${_repoName})`
+              : `❌ **فشل إنشاء المستودع**\n\n${_em}`,
+          })
+        }
+        console.log(`[GitHub] ✅ Created: ${_rd.full_name} by @${_login}`)
+        return res.status(200).json({
+          content: `✅ **تم إنشاء المستودع بنجاح!**\n\n📦 **${_rd.full_name}**\n👤 [@${_login}](${_ghUser.html_url})\n🔗 [افتح المستودع](${_rd.html_url})\n📋 Clone: \`git clone ${_rd.clone_url}\`\n🌿 الفرع: \`${_rd.default_branch}\`\n\nيمكنك الآن رفع ملفات بقول: *"ارفع ملف index.html"*`,
+          githubAction: 'repo-created', githubRepo: _rd.full_name, githubUrl: _rd.html_url, githubUser: _login,
+        })
+      } catch (_e) {
+        return res.status(200).json({ content: `❌ **خطأ:** ${_e.message}` })
+      }
+    }
+  }
+
   // ── GITHUB_PAGES_MODE — Autonomous GitHub Pages Deployment ────────────────
   // Detects requests to create/publish websites directly to github.io
   if (detectGitHubPagesIntent(lastUserMessage)) {
@@ -9156,13 +9214,70 @@ MANDATORY REQUIREMENTS:
       const nameMatch = lastUserMessage.match(/(?:اسمه|اسم|باسم|named?|called?|nommé?)\s+["']?([\w\-\.]+)["']?/i)
         || lastUserMessage.match(/(?:مستودع|repo|dépôt)\s+["']?([\w\-\.]+)["']?/i)
       if (nameMatch) repoName = nameMatch[1].replace(/[^a-zA-Z0-9\-_.]/g, '-').slice(0, 100)
-      return res.status(200).json({
-        action: 'create-repo',
-        repoName: repoName || '',
-        content: repoName
-          ? `🚀 جاري إنشاء المستودع **${repoName}** على GitHub...`
-          : '🚀 جاري إنشاء مستودع جديد على GitHub...',
-      })
+
+      // Resolve token: user's OAuth token first, then server token
+      const effectiveToken = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+
+      // No token → ask user to connect GitHub
+      if (!effectiveToken) {
+        return res.status(200).json({
+          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلإنشاء مستودع، انقر على زر **"ربط GitHub"** في الأعلى للمصادقة بحسابك.\n\nبعد الاتصال، كرر طلبك وسيُنشئ DZ Agent المستودع مباشرةً باسم حسابك الحقيقي.',
+          githubAction: 'needs-connect',
+        })
+      }
+
+      // Token available → fetch real user then create repo directly
+      try {
+        // 1. Get real GitHub username
+        const userRes = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${effectiveToken}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!userRes.ok) throw new Error('فشل التحقق من حساب GitHub. تحقق من صلاحية التوكن.')
+        const ghUser = await userRes.json()
+        const login = ghUser.login
+
+        // 2. Create the repository
+        if (!repoName) {
+          return res.status(200).json({
+            content: `🔧 **اختر اسماً للمستودع**\n\nأنت متصل بـ GitHub كـ **@${login}** ✅\n\nاكتب: *"أنشئ مستودع باسم [اسم-المستودع]"*`,
+            githubAction: 'needs-name',
+            githubUser: login,
+          })
+        }
+
+        const createRes = await fetch('https://api.github.com/user/repos', {
+          method: 'POST',
+          headers: { Authorization: `token ${effectiveToken}`, 'Content-Type': 'application/json', 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          body: JSON.stringify({ name: repoName, description: 'Created by DZ Agent 🇩🇿', auto_init: true, private: false }),
+          signal: AbortSignal.timeout(15000),
+        })
+        const repoData = await createRes.json()
+
+        if (!createRes.ok) {
+          const errMsg = repoData.errors?.[0]?.message || repoData.message || 'فشل إنشاء المستودع'
+          const alreadyExists = errMsg.toLowerCase().includes('already exists') || createRes.status === 422
+          return res.status(200).json({
+            content: alreadyExists
+              ? `⚠️ **المستودع موجود مسبقاً**\n\n**${login}/${repoName}** موجود بالفعل في حسابك.\n\n🔗 [افتح المستودع](https://github.com/${login}/${repoName})`
+              : `❌ **فشل إنشاء المستودع**\n\n${errMsg}`,
+          })
+        }
+
+        console.log(`[GitHub] ✅ Created repo: ${repoData.full_name} by @${login}`)
+        return res.status(200).json({
+          content: `✅ **تم إنشاء المستودع بنجاح!**\n\n📦 **${repoData.full_name}**\n👤 الحساب: [@${login}](${ghUser.html_url})\n🔗 [افتح المستودع](${repoData.html_url})\n📋 Clone: \`git clone ${repoData.clone_url}\`\n🌿 الفرع الرئيسي: \`${repoData.default_branch}\`\n\nيمكنك الآن رفع ملفات بقول: *"ارفع ملف index.html"*`,
+          githubAction: 'repo-created',
+          githubRepo: repoData.full_name,
+          githubUrl: repoData.html_url,
+          githubUser: login,
+        })
+      } catch (err) {
+        console.error('[GitHub] create-repo in chat error:', err.message)
+        return res.status(200).json({
+          content: `❌ **خطأ في إنشاء المستودع**\n\n${err.message}\n\nتأكد أن:\n- حسابك متصل بـ GitHub\n- التوكن له صلاحية \`repo\``,
+        })
+      }
     }
 
     if (matchList(updateFileTriggers)) {

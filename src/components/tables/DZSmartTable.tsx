@@ -305,12 +305,12 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
       if (!row || typeof row !== 'object') continue
       const rowEl = row as React.ReactElement
       const cellChildren = Array.isArray(rowEl.props?.children) ? rowEl.props.children : [rowEl.props?.children]
-      const cells = cellChildren.map(extractText).map(s => s.trim())
+      const cells = cellChildren.map(extractText).map((s: string) => s.trim())
 
       if (type === 'thead') {
         headers.push(...cells)
       } else {
-        if (cells.some(c => c !== '')) rows.push(cells)
+        if (cells.some((c: string) => c !== '')) rows.push(cells)
       }
     }
   }

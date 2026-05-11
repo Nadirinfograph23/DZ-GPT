@@ -9101,6 +9101,21 @@ MANDATORY REQUIREMENTS:
       'انشر المستودع', 'ابني وانشر', 'build and deploy',
       'déployer sur vercel', 'déployer le projet',
     ]
+    const createRepoTriggers = [
+      'أنشئ مستودع', 'انشئ مستودع', 'إنشاء مستودع', 'اصنع مستودع',
+      'create repo', 'create a repo', 'new repo', 'new repository', 'create repository', 'create a new repo',
+      'créer un dépôt', 'créer un repo', 'nouveau dépôt', 'créer le dépôt',
+    ]
+    const updateFileTriggers = [
+      'عدّل ملف', 'عدل ملف', 'حدّث ملف', 'حدث ملف', 'ارفع ملف', 'أنشئ ملف في مستودع',
+      'update file', 'upload file', 'push file', 'create file in repo', 'add file to repo',
+      'modifier un fichier', 'mettre à jour un fichier', 'pousser un fichier',
+    ]
+    const deleteBranchTriggers = [
+      'احذف فرع', 'احذف الفرع', 'حذف فرع', 'امسح الفرع',
+      'delete branch', 'remove branch', 'drop branch',
+      'supprimer la branche', 'supprimer un branch',
+    ]
 
     const matchList = (list) => list.some(p => lowerMsg.includes(p.toLowerCase()))
 
@@ -9133,6 +9148,55 @@ MANDATORY REQUIREMENTS:
         return res.status(200).json({ content: '🚀 لنشر المستودع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
       return res.status(200).json({ action: 'deploy-vercel', repo: currentRepo, content: `🚀 جاري النشر على Vercel لـ **${currentRepo}**...` })
+    }
+
+    if (matchList(createRepoTriggers)) {
+      // Extract repo name from message if provided
+      let repoName = ''
+      const nameMatch = lastUserMessage.match(/(?:اسمه|اسم|باسم|named?|called?|nommé?)\s+["']?([\w\-\.]+)["']?/i)
+        || lastUserMessage.match(/(?:مستودع|repo|dépôt)\s+["']?([\w\-\.]+)["']?/i)
+      if (nameMatch) repoName = nameMatch[1].replace(/[^a-zA-Z0-9\-_.]/g, '-').slice(0, 100)
+      return res.status(200).json({
+        action: 'create-repo',
+        repoName: repoName || '',
+        content: repoName
+          ? `🚀 جاري إنشاء المستودع **${repoName}** على GitHub...`
+          : '🚀 جاري إنشاء مستودع جديد على GitHub...',
+      })
+    }
+
+    if (matchList(updateFileTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '📝 لتعديل ملف، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      const pathMatch = lastUserMessage.match(/["']([^"']+\.[a-zA-Z0-9]+)["']/)
+        || lastUserMessage.match(/ملف\s+([\w/\-.]+\.[a-zA-Z0-9]+)/i)
+        || lastUserMessage.match(/file\s+([\w/\-.]+\.[a-zA-Z0-9]+)/i)
+      const filePath = pathMatch ? pathMatch[1] : ''
+      return res.status(200).json({
+        action: 'update-file',
+        repo: currentRepo,
+        filePath: filePath || '',
+        content: filePath
+          ? `📝 جاري تحضير تعديل الملف **${filePath}** في **${currentRepo}**...`
+          : `📝 اختر الملف من القائمة لتعديله في **${currentRepo}**`,
+      })
+    }
+
+    if (matchList(deleteBranchTriggers)) {
+      if (!currentRepo) {
+        return res.status(200).json({ content: '🗑️ لحذف فرع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+      }
+      const branchMatch = lastUserMessage.match(/(?:فرع|branch)\s+["']?([\w\-/.]+)["']?/i)
+      const branchName = branchMatch ? branchMatch[1] : ''
+      return res.status(200).json({
+        action: 'delete-branch',
+        repo: currentRepo,
+        branch: branchName || '',
+        content: branchName
+          ? `🗑️ هل تريد حذف الفرع **${branchName}** من **${currentRepo}**؟ قل "نعم" للتأكيد.`
+          : `🗑️ اعرض الفروع أولاً باستخدام: "اعرض الفروع"، ثم اطلب حذف الفرع بالاسم.`,
+      })
     }
   }
 
@@ -10096,6 +10160,61 @@ app.post('/api/dz-agent/github/repos', async (req, res) => {
   } catch (err) {
     console.error('GitHub repos error:', err)
     return res.status(500).json({ error: 'Failed to fetch repositories.' })
+  }
+})
+
+// Create a new repository
+app.post('/api/dz-agent/github/create-repo', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  if (!token) return res.status(400).json({ error: 'GitHub token required.' })
+  const { name, description = '', isPrivate = false, autoInit = true } = req.body
+  if (!name || typeof name !== 'string' || !/^[\w\-\.]{1,100}$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid repository name. Use letters, numbers, hyphens, dots (max 100 chars).' })
+  }
+  try {
+    const r = await ghFetch('/user/repos', token, {
+      method: 'POST',
+      body: JSON.stringify({ name, description, private: !!isPrivate, auto_init: autoInit }),
+    })
+    const data = await r.json()
+    if (!r.ok) return res.status(r.status).json({ error: data.message || 'Failed to create repository.' })
+    console.log(`[GitHub] ✅ Created repo: ${data.full_name}`)
+    return res.status(201).json({
+      success: true,
+      full_name: data.full_name,
+      html_url: data.html_url,
+      clone_url: data.clone_url,
+      default_branch: data.default_branch || 'main',
+      private: data.private,
+    })
+  } catch (err) {
+    console.error('[GitHub] create-repo error:', err)
+    return res.status(500).json({ error: 'Failed to create repository.' })
+  }
+})
+
+// Delete a branch
+app.post('/api/dz-agent/github/delete-branch', async (req, res) => {
+  const token = req.body.token || process.env.GITHUB_TOKEN || ''
+  const { repo, branch } = req.body
+  if (!token || !repo || !branch) return res.status(400).json({ error: 'Token, repo, and branch required.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
+  if (branch === 'main' || branch === 'master') return res.status(400).json({ error: 'Cannot delete default branch.' })
+  try {
+    const r = await ghFetch(`/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, token, { method: 'DELETE' })
+    if (r.status === 422 || r.status === 404) {
+      const d = await r.json().catch(() => ({}))
+      return res.status(r.status).json({ error: d.message || `Branch "${branch}" not found.` })
+    }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}))
+      return res.status(r.status).json({ error: d.message || 'Failed to delete branch.' })
+    }
+    console.log(`[GitHub] ✅ Deleted branch ${branch} from ${repo}`)
+    return res.status(200).json({ success: true, message: `تم حذف الفرع "${branch}" من ${repo}` })
+  } catch (err) {
+    console.error('[GitHub] delete-branch error:', err)
+    return res.status(500).json({ error: 'Failed to delete branch.' })
   }
 })
 

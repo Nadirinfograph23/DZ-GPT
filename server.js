@@ -898,33 +898,54 @@ const DOCTOR_TRIGGER_PATTERNS = [
   // Arabic / Darija
   'طبيب', 'دكتور', 'دكاترة', 'أطباء', 'طبيبة', 'نحوس على طبيب', 'نقلب على طبيب',
   'حاب طبيب', 'ابغي طبيب', 'أبحث عن طبيب', 'بحث عن طبيب', 'عيادة', 'كشف طبي',
-  'موعد طبيب', 'موعد عند طبيب',
+  'موعد طبيب', 'موعد عند طبيب', 'دبيب', 'دكتوره', 'دكترة',
+  'عيادة طبية', 'مركز صحي', 'مستوصف', 'عيادات',
+  // Darija triggers
+  'نقلب', 'نحوس', 'نلقى طبيب', 'وين طبيب', 'فين طبيب',
   // French
   'médecin', 'medecin', 'docteur', 'cabinet médical', 'cherche médecin', 'cherche docteur',
-  'rendez-vous médecin',
+  'rendez-vous médecin', 'cabinet medical', 'clinique',
   // Specialty keywords (act as triggers too)
   'cardiologue', 'dentiste', 'pédiatre', 'pediatre', 'gynécologue', 'gynecologue',
   'ophtalmologue', 'dermatologue', 'généraliste', 'generaliste', 'orl', 'psychiatre',
   'rhumatologue', 'urologue', 'neurologue', 'chirurgien',
+  'pneumologue', 'gastrologue', 'endocrinologue', 'nephrologue', 'oncologue', 'radiologue',
+  // Arabic specialty triggers
+  'أسنان', 'سنان', 'ضروس', 'طب الأسنان',
+  'نسائية', 'توليد', 'نساء وتوليد',
+  'أطفال', 'طب الأطفال',
+  'عيون', 'بصريات',
+  'جلدية', 'أمراض الجلد',
+  'قلبي', 'أمراض القلب',
+  'عظام', 'كسور',
+  'أعصاب', 'الجهاز العصبي',
+  'مسالك', 'مسالك بولية',
 ]
 
 const SPECIALITIES = [
-  // [canonical_ar, canonical_fr, ...aliases]
-  { ar: 'عظام',     fr: 'orthopédiste',  search: 'orthopédiste',   aliases: ['عظام', 'العظام', 'orthopédiste', 'orthopediste', 'orthopedic'] },
-  { ar: 'قلب',      fr: 'cardiologue',   search: 'cardiologue',    aliases: ['قلب', 'القلب', 'أمراض القلب', 'cardiologue', 'cardio'] },
-  { ar: 'أسنان',    fr: 'dentiste',      search: 'dentiste',       aliases: ['أسنان', 'الأسنان', 'سنان', 'dentiste', 'dentist'] },
-  { ar: 'عيون',     fr: 'ophtalmologue', search: 'ophtalmologue',  aliases: ['عيون', 'العيون', 'بصر', 'ophtalmologue', 'ophtalmo'] },
-  { ar: 'جلدية',    fr: 'dermatologue',  search: 'dermatologue',   aliases: ['جلدية', 'الجلدية', 'جلد', 'dermatologue', 'dermato'] },
-  { ar: 'نساء وتوليد', fr: 'gynécologue', search: 'gynécologue',    aliases: ['نساء', 'توليد', 'نسائية', 'gynécologue', 'gynecologue', 'gyneco'] },
-  { ar: 'أطفال',    fr: 'pédiatre',      search: 'pédiatre',       aliases: ['أطفال', 'الأطفال', 'طب الأطفال', 'pédiatre', 'pediatre'] },
-  { ar: 'أنف وأذن وحنجرة', fr: 'ORL',    search: 'ORL',            aliases: ['أنف', 'أذن', 'حنجرة', 'orl'] },
-  { ar: 'نفسي',     fr: 'psychiatre',    search: 'psychiatre',     aliases: ['نفسي', 'النفسي', 'نفسية', 'psychiatre', 'psy'] },
-  { ar: 'باطني',    fr: 'généraliste',   search: 'généraliste',    aliases: ['باطني', 'الباطني', 'باطنية', 'généraliste', 'generaliste'] },
-  { ar: 'عام',      fr: 'généraliste',   search: 'médecin généraliste', aliases: ['عام', 'طبيب عام', 'généraliste', 'generaliste', 'medecin generaliste'] },
-  { ar: 'مفاصل',    fr: 'rhumatologue',  search: 'rhumatologue',   aliases: ['مفاصل', 'روماتيزم', 'rhumatologue'] },
-  { ar: 'مسالك',    fr: 'urologue',      search: 'urologue',       aliases: ['مسالك', 'بولية', 'urologue'] },
-  { ar: 'أعصاب',    fr: 'neurologue',    search: 'neurologue',     aliases: ['أعصاب', 'الأعصاب', 'neurologue', 'neuro'] },
-  { ar: 'جراحة',    fr: 'chirurgien',    search: 'chirurgien',     aliases: ['جراحة', 'جراح', 'chirurgien'] },
+  // [canonical_ar, canonical_fr, ...aliases] — includes Darija + FR synonyms
+  { ar: 'عظام',          fr: 'orthopédiste',    search: 'orthopédiste',        aliases: ['عظام', 'العظام', 'عضام', 'كسور', 'مفاصل العظام', 'orthopédiste', 'orthopediste', 'chirurgien orthopediste', 'orthopedic'] },
+  { ar: 'قلب',           fr: 'cardiologue',     search: 'cardiologue',         aliases: ['قلب', 'القلب', 'أمراض القلب', 'قلبي', 'cardiologue', 'cardio', 'cardiology'] },
+  { ar: 'أسنان',         fr: 'dentiste',        search: 'dentiste',            aliases: ['أسنان', 'الأسنان', 'سنان', 'ضرس', 'ضروس', 'سن', 'طب الأسنان', 'dentiste', 'dentist', 'chirurgien dentiste', 'odontologue'] },
+  { ar: 'عيون',          fr: 'ophtalmologue',   search: 'ophtalmologue',       aliases: ['عيون', 'العيون', 'بصر', 'النظر', 'طب العيون', 'ophtalmologue', 'ophtalmo', 'ophtalmologie'] },
+  { ar: 'جلدية',         fr: 'dermatologue',    search: 'dermatologue',        aliases: ['جلدية', 'الجلدية', 'جلد', 'الجلد', 'dermatologue', 'dermato', 'dermatologie'] },
+  { ar: 'نساء وتوليد',   fr: 'gynécologue',     search: 'gynécologue',         aliases: ['نساء', 'توليد', 'نسائية', 'ولادة', 'حمل', 'أمراض نسائية', 'gynécologue', 'gynecologue', 'gyneco', 'obstetricien', 'gynécologie'] },
+  { ar: 'أطفال',         fr: 'pédiatre',        search: 'pédiatre',            aliases: ['أطفال', 'الأطفال', 'طفل', 'طب الأطفال', 'pédiatre', 'pediatre', 'pediatrie'] },
+  { ar: 'أنف وأذن وحنجرة', fr: 'ORL',          search: 'ORL',                 aliases: ['أنف', 'أذن', 'حنجرة', 'انف واذن', 'الحنجرة', 'orl', 'oto-rhino', 'otorhino', 'otorhinolaryngologie'] },
+  { ar: 'نفسي',          fr: 'psychiatre',      search: 'psychiatre',          aliases: ['نفسي', 'النفسي', 'نفسية', 'الطب النفسي', 'psychiatre', 'psy', 'psychiatrie', 'psychologue'] },
+  { ar: 'باطني',         fr: 'interniste',      search: 'médecine interne',    aliases: ['باطني', 'الباطني', 'باطنية', 'طب داخلي', 'interniste', 'medecine interne'] },
+  { ar: 'عام',           fr: 'généraliste',     search: 'médecin généraliste', aliases: ['عام', 'طبيب عام', 'généraliste', 'generaliste', 'medecin generaliste', 'médecin généraliste'] },
+  { ar: 'مفاصل',         fr: 'rhumatologue',    search: 'rhumatologue',        aliases: ['مفاصل', 'روماتيزم', 'التهاب المفاصل', 'rhumatologue', 'rhumatologie'] },
+  { ar: 'مسالك بولية',   fr: 'urologue',        search: 'urologue',            aliases: ['مسالك', 'بولية', 'مسالك بولية', 'urologue', 'urologie'] },
+  { ar: 'أعصاب',         fr: 'neurologue',      search: 'neurologue',          aliases: ['أعصاب', 'الأعصاب', 'اعصاب', 'neurologue', 'neuro', 'neurologie'] },
+  { ar: 'جراحة',         fr: 'chirurgien',      search: 'chirurgien',          aliases: ['جراحة', 'جراح', 'chirurgien', 'chirurgien generaliste', 'chirurgie'] },
+  { ar: 'صدر ورئة',      fr: 'pneumologue',     search: 'pneumologue',         aliases: ['صدر', 'رئة', 'الرئة', 'ربو', 'pneumologue', 'pneumologie', 'pulmonologue'] },
+  { ar: 'جهاز هضمي',    fr: 'gastro-entérologue', search: 'gastro-entérologue', aliases: ['هضمي', 'معدة', 'الجهاز الهضمي', 'قولون', 'gastro', 'gastroenterologue', 'gastro-enterologue'] },
+  { ar: 'غدد صماء',      fr: 'endocrinologue',  search: 'endocrinologue',      aliases: ['غدد', 'السكري', 'درقية', 'endocrinologue', 'endocrinologie'] },
+  { ar: 'كلى',           fr: 'néphrologue',     search: 'néphrologue',         aliases: ['كلى', 'الكلى', 'nephrologue', 'nephrologie'] },
+  { ar: 'أورام',         fr: 'oncologue',       search: 'oncologue',           aliases: ['أورام', 'سرطان', 'الأورام', 'oncologue', 'oncologie', 'cancérologue'] },
+  { ar: 'أشعة',          fr: 'radiologue',      search: 'radiologue',          aliases: ['أشعة', 'الأشعة', 'تصوير', 'radiologue', 'radiologie'] },
+  { ar: 'تغذية',         fr: 'nutritionniste',  search: 'nutritionniste',      aliases: ['تغذية', 'التغذية', 'رجيم', 'nutritionniste', 'dieteticien', 'nutrition'] },
 ]
 
 const DOCTOR_CITIES = [
@@ -993,7 +1014,7 @@ import {
   SERVICE_CONFIG,
 } from './lib/dzPlaceSearch.js'
 
-const DOCTOR_SOURCE_COUNT = 9
+const DOCTOR_SOURCE_COUNT = 10
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'

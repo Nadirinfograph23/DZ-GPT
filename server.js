@@ -55,6 +55,9 @@ import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import {
   deployGitHubPages,
+  deployProject as ghDeployProject,
+  uploadSingleFile as ghUploadSingleFile,
+  waitForPagesActive as ghWaitForPages,
   getPagesStatus,
   detectGitHubPagesIntent,
   extractPagesRequestMeta,
@@ -64,7 +67,10 @@ import {
   enableGitHubPages as ghPagesEnable,
   generatePagesWorkflow,
   generateReadme as ghPagesReadme,
+  createRepo as ghCreateRepo,
 } from './lib/github-pages/index.js'
+import { analyzeRequest as plannerAnalyze, createDeployPlan, executeWithRecovery as plannerExecute, reflectionLoop as plannerReflect } from './lib/planner/index.js'
+import { generateProjectFiles as buildProjectFiles } from './lib/github-pages/project-builder.js'
 import { handleYouTubeInput, handleVideoDiscussion } from './modules/youtube_insight_module/controller.js'
 import { extractCssFromHtml, extractJsFromHtml, buildHtmlShell } from './modules/web-generator/generator.js'
 import { searchAlgeria, isAlgerianCitizenQuery, formatAlgeriaResponse, algeriaFallbackMessage } from './modules/algeria-knowledge-system/search.js'
@@ -7201,6 +7207,151 @@ app.get('/api/dz-agent/github/pages/status', async (req, res) => {
   }
 })
 
+// ── POST /api/dz-agent/github/pages/stream-deploy ──────────────────────────
+// SSE Streaming: Full autonomous deployment pipeline
+// Plan → Generate files → Create repo → Upload → Enable Pages → Live URL
+app.post('/api/dz-agent/github/pages/stream-deploy', async (req, res) => {
+  const token = req.body.githubToken
+    ? sanitizeString(req.body.githubToken, 300)
+    : process.env.GITHUB_TOKEN || ''
+  if (!token) {
+    return res.status(401).json({ error: 'GitHub token مطلوب. أضف GITHUB_TOKEN أو سجّل دخولك.' })
+  }
+
+  const { prompt = '', repoName: rawRepoName } = req.body
+  if (!prompt) return res.status(400).json({ error: 'prompt مطلوب' })
+
+  // ── SSE setup ──────────────────────────────────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const send = (type, payload) => {
+    try {
+      res.write(`data: ${JSON.stringify({ type, ...payload })}\n\n`)
+      res.flush?.()
+    } catch (_) {}
+  }
+
+  const steps = []
+  const onStep = (step) => {
+    steps.push(step)
+    send('step', { step })
+    console.log(`[stream-deploy] ${step.label || step.message || step.step}`)
+  }
+
+  try {
+    // ── 1. Analyze request ───────────────────────────────────────────────────
+    send('start', { message: '🧠 تحليل الطلب...' })
+    const analysis = plannerAnalyze(prompt)
+    if (rawRepoName) analysis.repoName = sanitizeRepoName(rawRepoName)
+    send('analysis', { analysis: { siteType: analysis.siteType, projectType: analysis.projectType, repoName: analysis.repoName } })
+
+    // ── 2. Create deployment plan ────────────────────────────────────────────
+    const plan = createDeployPlan(analysis)
+    send('plan', { tasks: plan.map(t => ({ id: t.id, label: t.label, icon: t.icon })) })
+
+    // ── 3. Auth ──────────────────────────────────────────────────────────────
+    onStep({ step: 'auth', label: '🔑 التحقق من هوية GitHub...' })
+    const user = await ghPagesGetUser(token)
+    const owner = user.login
+    onStep({ step: 'auth', label: `✅ مرحباً @${owner}`, done: true })
+    send('owner', { owner })
+
+    // ── 4. Generate project files via AI ─────────────────────────────────────
+    onStep({ step: 'generate', label: `🧠 توليد ملفات ${analysis.siteType} (${analysis.projectType})...` })
+    let projectFiles
+    try {
+      projectFiles = await buildProjectFiles(analysis, safeGenerateAI)
+    } catch (genErr) {
+      // Fallback: single-file HTML via WEB_BUILDER pipeline
+      onStep({ step: 'generate', label: '⚠️ تبديل إلى توليد ملف HTML واحد...', done: false })
+      const fb = await safeGenerateAI({
+        messages: [
+          { role: 'system', content: 'أنت مهندس ويب. أنتج موقع HTML/CSS/JS كامل في ملف واحد لـ GitHub Pages. لا lorem ipsum. تصميم احترافي responsive. Output ONLY the HTML.' },
+          { role: 'user', content: `موقع ${analysis.siteType}: ${prompt}` },
+        ],
+        query: prompt, max_tokens: 8000,
+      })
+      const html = extractHtmlFromResponse(fb.content || '') || fb.content || ''
+      if (!html || html.length < 200) throw new Error('فشل توليد HTML')
+      projectFiles = [
+        { path: 'index.html', content: html },
+        { path: '.github/workflows/pages.yml', content: generatePagesWorkflow() },
+      ]
+    }
+    onStep({ step: 'generate', label: `✅ تم توليد ${projectFiles.length} ملف`, done: true })
+    send('files', { files: projectFiles.map(f => f.path), count: projectFiles.length })
+
+    // ── 5. Create repository ──────────────────────────────────────────────────
+    const repoName = sanitizeRepoName(analysis.repoName || `${analysis.siteType}-site`)
+    onStep({ step: 'create_repo', label: `📦 إنشاء مستودع "${repoName}"...` })
+    let repoReused = false
+    try {
+      await ghCreateRepo(token, repoName, analysis.description || `${analysis.siteType} — by DZ Agent 🇩🇿`, false)
+      onStep({ step: 'create_repo', label: `✅ المستودع "${owner}/${repoName}" جاهز`, done: true })
+    } catch (repoErr) {
+      if (repoErr.message.includes('مسبقاً') || repoErr.message.includes('already exists') || repoErr.message.includes('422')) {
+        repoReused = true
+        onStep({ step: 'create_repo', label: `♻️ مستودع "${repoName}" موجود — سنستخدمه`, done: true })
+      } else {
+        throw repoErr
+      }
+    }
+    send('repo', { owner, repo: repoName, repoUrl: `https://github.com/${owner}/${repoName}`, reused: repoReused })
+
+    // ── 6. Upload files ───────────────────────────────────────────────────────
+    onStep({ step: 'upload', label: `⬆️ رفع ${projectFiles.length} ملف إلى GitHub...` })
+    const commitSha = await ghPagesBatchPush(
+      token, owner, repoName, projectFiles,
+      `🚀 Deploy by DZ Agent 🇩🇿 — ${analysis.siteType}`, 'main'
+    )
+    onStep({ step: 'upload', label: `✅ تم رفع ${projectFiles.length} ملف (${commitSha.slice(0, 7)})`, done: true })
+    send('upload', { commitSha, fileCount: projectFiles.length })
+
+    // ── 7. Enable GitHub Pages ────────────────────────────────────────────────
+    onStep({ step: 'pages', label: '🌐 تفعيل GitHub Pages...' })
+    let pagesEnabled = false
+    let pagesStatus = 'building'
+    try {
+      const pagesResult = await ghPagesEnable(token, owner, repoName)
+      pagesEnabled = !!pagesResult
+      pagesStatus = pagesResult?.status || 'building'
+      onStep({ step: 'pages', label: '✅ GitHub Pages مُفعَّل — يتم البناء...', done: true })
+    } catch (pErr) {
+      onStep({ step: 'pages', label: `⚠️ Pages: ${pErr.message}`, done: true })
+    }
+
+    // ── 8. Final result ───────────────────────────────────────────────────────
+    const siteUrl  = `https://${owner}.github.io/${repoName}`
+    const repoUrl  = `https://github.com/${owner}/${repoName}`
+    const htmlFile = projectFiles.find(f => f.path === 'index.html' || f.path === 'dist/index.html')
+
+    send('done', {
+      success: true,
+      owner,
+      repo: repoName,
+      repoUrl,
+      siteUrl,
+      commitSha,
+      pagesEnabled,
+      pagesStatus,
+      siteType: analysis.siteType,
+      fileCount: projectFiles.length,
+      htmlPreview: htmlFile?.content || '',
+    })
+    onStep({ step: 'done', label: `🎉 الموقع جاهز: ${siteUrl}`, done: true })
+    res.end()
+
+  } catch (err) {
+    console.error('[stream-deploy] Error:', err.message)
+    send('error', { error: err.message })
+    res.end()
+  }
+})
+
 // ── POST /api/dz-agent/github/pages/list-repos ─────────────────────────────
 // List user's GitHub repos that have Pages enabled
 app.post('/api/dz-agent/github/pages/list-repos', async (req, res) => {
@@ -8697,63 +8848,79 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── GITHUB_PAGES_MODE — Autonomous GitHub Pages Deployment ────────────────
-  // Detects requests to create/publish websites directly to github.io
+  // ── GITHUB_PAGES_MODE — Autonomous GitHub Pages Deployment (Full Planner) ──
   if (detectGitHubPagesIntent(lastUserMessage)) {
     console.log(`[GITHUB_PAGES_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)
-    const token = process.env.GITHUB_TOKEN
-    if (!token) {
+
+    const effectiveToken = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+    if (!effectiveToken) {
       return res.status(200).json({
-        content: '⚠️ **GITHUB_TOKEN غير مضبوط**\n\nلتفعيل نشر GitHub Pages، يرجى إضافة `GITHUB_TOKEN` في الأسرار (Replit Secrets) بصلاحية `repo` و `pages`.\n\n[احصل على token مجاني](https://github.com/settings/tokens)',
+        content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلنشر موقعك على GitHub Pages:\n1. انقر على زر **"ربط GitHub"** في الأعلى\n2. أو أضف `GITHUB_TOKEN` في أسرار Replit بصلاحية `repo` + `pages`\n\n[احصل على token مجاني](https://github.com/settings/tokens/new?scopes=repo,workflow)',
+        githubAction: 'needs-connect',
       })
     }
 
-    const meta = extractPagesRequestMeta(lastUserMessage)
+    // ── Run full planner pipeline ─────────────────────────────────────────────
+    const analysis  = plannerAnalyze(lastUserMessage)
+    const stepLog   = []
+    const onStep    = (s) => {
+      stepLog.push(s)
+      console.log(`[GITHUB_PAGES_MODE] ${s.label || s.message || '...'}`)
+    }
 
-    // Step 1: Generate the website HTML via AI (reuse WEB_BUILDER pipeline)
-    const PAGES_GEN_SYSTEM = `You are DZ Agent — an elite autonomous web engineer in GITHUB_PAGES_MODE.
-Generate a COMPLETE, production-quality single-file HTML website that will be deployed to GitHub Pages.
-
-MANDATORY REQUIREMENTS:
-- Full HTML5 document: <!DOCTYPE html> → </html>
-- Embedded <style> with professional, responsive CSS (mobile-first)
-- TailwindCSS CDN allowed: <script src="https://cdn.tailwindcss.com"></script>
-- Embedded <script> for interactivity if needed
-- Real professional content — NO Lorem ipsum
-- Stunning modern design with smooth animations
-- SEO tags: <title>, <meta description>, Open Graph
-- Perfect for github.io hosting (no server-side code)
-- Output: ONLY the complete HTML file — zero markdown, zero explanation`
-
+    // ── Step A: Generate project files via AI ──────────────────────────────
+    onStep({ step: 'generate', label: `🧠 توليد ملفات ${analysis.siteType}...` })
+    let projectFiles = null
     let generatedHtml = ''
+
     try {
-      const pagesAiResult = await safeGenerateAI({
-        messages: [
-          { role: 'system', content: PAGES_GEN_SYSTEM },
-          { role: 'user', content: `Create a professional ${meta.siteType} website.\n\nUser request: ${lastUserMessage}\n[Site type: ${meta.siteType} | Repo name: ${meta.repoName} | Description: ${meta.description}]` },
-        ],
-        query: lastUserMessage,
-        max_tokens: 8000,
-      })
-      generatedHtml = extractHtmlFromResponse(pagesAiResult.content || '') || pagesAiResult.content || ''
+      projectFiles = await buildProjectFiles(analysis, safeGenerateAI)
+      generatedHtml = projectFiles.find(f => f.path === 'index.html')?.content || ''
+      onStep({ step: 'generate', label: `✅ ${projectFiles.length} ملفات جاهزة`, done: true })
     } catch (genErr) {
-      console.error('[GITHUB_PAGES_MODE] HTML generation error:', genErr.message)
-      return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد محتوى الموقع. يرجى المحاولة مرة أخرى.' })
+      console.warn('[GITHUB_PAGES_MODE] Project builder failed, falling back to single HTML:', genErr.message)
+      // Fallback: single-file HTML
+      try {
+        const PAGES_GEN_SYSTEM = `أنت DZ Agent — مهندس ويب محترف. أنشئ موقع HTML/CSS/JS كاملاً في ملف واحد لـ GitHub Pages.
+قواعد:
+- HTML5 كامل: <!DOCTYPE html> → </html>
+- CSS احترافي مُدمَج في <style> — responsive، mobile-first، animations
+- TailwindCSS CDN مسموح: <script src="https://cdn.tailwindcss.com"></script>
+- محتوى حقيقي لا Lorem ipsum
+- SEO: <title>، <meta description>، Open Graph
+- Output: ONLY the complete HTML — zero markdown`
+        const pagesAiResult = await safeGenerateAI({
+          messages: [
+            { role: 'system', content: PAGES_GEN_SYSTEM },
+            { role: 'user', content: `أنشئ موقع ${analysis.siteType}:\n${lastUserMessage}` },
+          ],
+          query: lastUserMessage,
+          max_tokens: 8000,
+        })
+        generatedHtml = extractHtmlFromResponse(pagesAiResult.content || '') || pagesAiResult.content || ''
+        if (!generatedHtml || generatedHtml.length < 200) throw new Error('HTML قصير جداً')
+        projectFiles = [
+          { path: 'index.html', content: generatedHtml },
+          { path: '.github/workflows/pages.yml', content: generatePagesWorkflow() },
+        ]
+        onStep({ step: 'generate', label: `✅ HTML جاهز (fallback)`, done: true })
+      } catch (fbErr) {
+        console.error('[GITHUB_PAGES_MODE] HTML fallback error:', fbErr.message)
+        return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد محتوى الموقع. صف الموقع بشكل أوضح وأعد المحاولة.' })
+      }
     }
 
-    if (!generatedHtml || generatedHtml.length < 200) {
-      return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد HTML كامل. يرجى وصف الموقع بشكل أوضح.' })
+    if (!projectFiles || !projectFiles.length) {
+      return res.status(200).json({ content: '⚠️ لم يتمكن النظام من توليد ملفات صالحة. يرجى وصف الموقع بشكل أوضح.' })
     }
 
-    // Step 2: Deploy to GitHub Pages
+    // ── Step B: Deploy via deployProject pipeline ──────────────────────────
     try {
-      const deployResult = await deployGitHubPages({
-        token,
-        prompt: lastUserMessage,
-        siteType: meta.siteType,
-        repoName: meta.repoName,
-        description: meta.description,
-        htmlContent: generatedHtml,
+      const deployResult = await ghDeployProject({
+        token: effectiveToken,
+        analysis,
+        projectFiles,
+        onStep,
       })
 
       const cssCode = extractCssFromHtml(generatedHtml)
@@ -8763,16 +8930,20 @@ MANDATORY REQUIREMENTS:
         `✅ **تم النشر على GitHub Pages بنجاح!**`,
         ``,
         `🌐 **الموقع المباشر:** [${deployResult.siteUrl}](${deployResult.siteUrl})`,
-        `📦 **المستودع:** [${deployResult.repoUrl}](${deployResult.repoUrl})`,
+        `📦 **المستودع:** [github.com/${deployResult.owner}/${deployResult.repo}](${deployResult.repoUrl})`,
+        `👤 **الحساب:** @${deployResult.owner}`,
         ``,
-        `> ⏳ قد يستغرق الموقع 1-3 دقائق ليظهر بعد أول نشر عبر GitHub Actions.`,
+        `> ⏳ **الموقع يُبنى الآن عبر GitHub Actions** — سيكون جاهزاً خلال 1-3 دقائق.`,
         ``,
         `**ماذا تم؟**`,
-        `- ✔️ إنشاء مستودع \`${deployResult.repo}\` على حسابك`,
-        `- ✔️ رفع ملفات الموقع + GitHub Actions workflow`,
+        `- ✔️ تحليل الطلب ووضع خطة النشر`,
+        deployResult.repoReused
+          ? `- ♻️ استخدام مستودع "${deployResult.repo}" الموجود`
+          : `- ✔️ إنشاء مستودع \`${deployResult.repo}\` على حساب @${deployResult.owner}`,
+        `- ✔️ رفع ${deployResult.fileCount} ملفات (HTML + CSS + JS + GitHub Actions workflow)`,
         `- ✔️ تفعيل GitHub Pages تلقائياً`,
         ``,
-        `▶️ انقر **"معاينة مباشرة"** لمشاهدة الموقع محلياً — أو افتح الرابط أعلاه بعد دقيقتين.`,
+        `🔗 افتح الرابط بعد دقيقتين: **${deployResult.siteUrl}**`,
       ].join('\n')
 
       return res.status(200).json({
@@ -8782,10 +8953,10 @@ MANDATORY REQUIREMENTS:
         cssCode: cssCode || '',
         jsCode: jsCode || '',
         webBuilderMeta: {
-          type: meta.siteType,
+          type: analysis.siteType,
           style: 'modern',
-          title: `🚀 ${deployResult.repo} — GitHub Pages`,
-          description: meta.description || 'GitHub Pages site',
+          title: `🚀 ${deployResult.repo} — github.io`,
+          description: analysis.description || 'GitHub Pages site',
           icon: '🚀',
         },
         githubPages: {
@@ -8795,20 +8966,34 @@ MANDATORY REQUIREMENTS:
           owner: deployResult.owner,
           commitSha: deployResult.commitSha,
           pagesEnabled: deployResult.pagesEnabled,
+          fileCount: deployResult.fileCount,
         },
       })
+
     } catch (deployErr) {
       console.error('[GITHUB_PAGES_MODE] Deploy error:', deployErr.message)
-      // Return the generated HTML even if deploy failed (so user can still see preview)
+      // Reflection: analyze and report what went wrong
+      const reflection = plannerReflect('deploy', deployErr, { repoName: analysis.repoName })
       const cssCode = extractCssFromHtml(generatedHtml)
       const jsCode  = extractJsFromHtml(generatedHtml)
       return res.status(200).json({
-        content: `⚠️ **تعذّر النشر التلقائي على GitHub Pages:**\n\`${deployErr.message}\`\n\n✅ الموقع تم توليده — يمكنك مشاهدته في المعاينة أو تحميله وإنشاء المستودع يدوياً.`,
+        content: [
+          `⚠️ **تعذّر النشر التلقائي على GitHub Pages**`,
+          ``,
+          `**السبب:** ${reflection.fix}`,
+          `**تفاصيل الخطأ:** \`${deployErr.message}\``,
+          ``,
+          reflection.retry
+            ? `💡 **اقتراح:** ${reflection.fix}\nأعد المحاولة بعد لحظة.`
+            : `💡 **بديل:** يمكنك تحميل الموقع من المعاينة وإنشاء المستودع يدوياً.`,
+          ``,
+          `✅ الموقع تم توليده بنجاح — يمكنك مشاهدته في المعاينة أدناه أو تحميله.`,
+        ].join('\n'),
         isWebsite: true,
         htmlCode: generatedHtml,
         cssCode: cssCode || '',
         jsCode: jsCode || '',
-        webBuilderMeta: { type: meta.siteType, style: 'modern', title: meta.repoName, description: meta.description, icon: '🌐' },
+        webBuilderMeta: { type: analysis.siteType, style: 'modern', title: analysis.repoName, description: analysis.description, icon: '🌐' },
       })
     }
   }

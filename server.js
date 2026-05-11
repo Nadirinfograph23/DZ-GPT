@@ -6711,9 +6711,9 @@ ${fileCtx || 'لم يتم قراءة أي ملف'}
   }
 })
 
-// ===== GITHUB AI: GENERATE CODE AND PUSH (AI → GitHub → optional Vercel deploy) =====
+// ===== GITHUB AI: GENERATE CODE AND PUSH (AI → GitHub Pages) =====
 app.post('/api/dz-agent/github/generate-and-push', async (req, res) => {
-  const { repo, description, branch: targetBranch, token, deployToVercel = false, projectContext = '' } = req.body
+  const { repo, description, branch: targetBranch, token, projectContext = '' } = req.body
   if (!repo || !description) return res.status(400).json({ error: 'repo and description are required' })
   if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo format' })
   const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
@@ -6890,29 +6890,7 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
     })
     const prData = await prRes.json()
 
-    // Optional: trigger Vercel deployment
-    let vercelDeployment = null
-    if (deployToVercel && process.env.VERCEL_TOKEN) {
-      try {
-        const metaR = await fetch(`https://api.github.com/repos/${repo}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
-        const metaD = metaR.ok ? await metaR.json() : {}
-        const vRes = await fetch('https://api.vercel.com/v13/deployments', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: repo.split('/')[1],
-            gitSource: { type: 'github', repoId: String(metaD.id || ''), ref: newBranch },
-          }),
-          signal: AbortSignal.timeout(20000),
-        })
-        const vData = await vRes.json()
-        if (vData.url) vercelDeployment = { url: `https://${vData.url}`, id: vData.id }
-      } catch (ve) {
-        console.warn('[generate-and-push] Vercel deploy optional step failed:', ve.message)
-      }
-    }
-
-    console.log(`[GitHub:generate-and-push] ${repo} → branch=${newBranch} files=${pushedFiles.length} pr=${!!prData.html_url} vercel=${!!vercelDeployment}`)
+    console.log(`[GitHub:generate-and-push] ${repo} → branch=${newBranch} files=${pushedFiles.length} pr=${!!prData.html_url}`)
 
     return res.json({
       success: true,
@@ -6922,7 +6900,6 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
       files: pushedFiles,
       failedFiles,
       pr: prData.html_url ? { url: prData.html_url, number: prData.number, title: prData.title } : null,
-      vercel: vercelDeployment,
     })
   } catch (err) {
     console.error('[GitHub:generate-and-push]', err.message)
@@ -7163,24 +7140,39 @@ REQUIREMENTS:
 })
 
 // ── POST /api/dz-agent/github/pages/update ─────────────────────────────────
-// Update an existing GitHub Pages repo with new files
+// Update/redeploy a GitHub Pages repo — files optional (redeploy triggers Pages enable)
 app.post('/api/dz-agent/github/pages/update', async (req, res) => {
-  const token = process.env.GITHUB_TOKEN
-  if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
+  const tok = req.body.token
+    ? sanitizeString(req.body.token, 300)
+    : process.env.GITHUB_TOKEN || ''
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
 
-  const { owner, repo, files, commitMessage = 'Update site via DZ Agent 🤖' } = req.body
+  const { owner, repo, files, commitMessage = 'Redeploy via DZ Agent 🤖' } = req.body
   if (!owner || !repo) return res.status(400).json({ error: 'owner و repo مطلوبان.' })
-  if (!files?.length) return res.status(400).json({ error: 'files array مطلوب.' })
   if (!isValidGithubRepo(`${owner}/${repo}`)) return res.status(400).json({ error: 'Invalid repo format.' })
 
   try {
-    const commitSha = await ghPagesBatchPush(token, owner, repo, files, commitMessage, 'main')
-    const pagesInfo = await getPagesStatus(token, owner, repo)
+    let commitSha = null
+
+    // If files provided, push them first after ensuring branch is ready
+    if (files?.length) {
+      // Wait for main branch (handles newly created repos)
+      const { waitForMainBranch: waitBranch } = await import('./lib/github-pages/index.js')
+      const branchInfo = await waitBranch(tok, owner, repo)
+      const pushResult = await ghPagesBatchPush(tok, owner, repo, files, commitMessage, branchInfo.branch)
+      commitSha = typeof pushResult === 'string' ? pushResult : pushResult?.sha || null
+    }
+
+    // Enable/re-enable GitHub Pages
+    const pagesResult = await ghPagesEnable(tok, owner, repo)
+    const pagesInfo = await getPagesStatus(tok, owner, repo)
+
     return res.json({
       success: true,
       commitSha,
       siteUrl: pagesInfo?.url || `https://${owner}.github.io/${repo}`,
-      pagesStatus: pagesInfo?.status || 'building',
+      pagesStatus: pagesInfo?.status || pagesResult?.status || 'building',
+      branch: pagesInfo?.branch || 'main',
     })
   } catch (err) {
     console.error('[GH Pages:update]', err.message)
@@ -7285,7 +7277,7 @@ app.post('/api/dz-agent/github/pages/stream-deploy', async (req, res) => {
     onStep({ step: 'generate', label: `✅ تم توليد ${projectFiles.length} ملف`, done: true })
     send('files', { files: projectFiles.map(f => f.path), count: projectFiles.length })
 
-    // ── 5. Create repository ──────────────────────────────────────────────────
+    // ── 5. Create repository (auto_init=true) ─────────────────────────────────
     const repoName = sanitizeRepoName(analysis.repoName || `${analysis.siteType}-site`)
     onStep({ step: 'create_repo', label: `📦 إنشاء مستودع "${repoName}"...` })
     let repoReused = false
@@ -7302,12 +7294,19 @@ app.post('/api/dz-agent/github/pages/stream-deploy', async (req, res) => {
     }
     send('repo', { owner, repo: repoName, repoUrl: `https://github.com/${owner}/${repoName}`, reused: repoReused })
 
-    // ── 6. Upload files ───────────────────────────────────────────────────────
+    // ── 6. Wait for main branch then upload files ─────────────────────────────
+    onStep({ step: 'wait_branch', label: '⏳ انتظار تهيئة الفرع الرئيسي...' })
+    await new Promise(r => setTimeout(r, 3000))
+    const { waitForMainBranch: waitBranchFn } = await import('./lib/github-pages/index.js')
+    const branchInfo = await waitBranchFn(token, owner, repoName)
+    onStep({ step: 'wait_branch', label: `✅ الفرع "${branchInfo.branch}" جاهز`, done: true })
+
     onStep({ step: 'upload', label: `⬆️ رفع ${projectFiles.length} ملف إلى GitHub...` })
-    const commitSha = await ghPagesBatchPush(
+    const pushResult = await ghPagesBatchPush(
       token, owner, repoName, projectFiles,
-      `🚀 Deploy by DZ Agent 🇩🇿 — ${analysis.siteType}`, 'main'
+      `🚀 Deploy by DZ Agent 🇩🇿 — ${analysis.siteType}`, branchInfo.branch
     )
+    const commitSha = typeof pushResult === 'string' ? pushResult : pushResult?.sha || ''
     onStep({ step: 'upload', label: `✅ تم رفع ${projectFiles.length} ملف (${commitSha.slice(0, 7)})`, done: true })
     send('upload', { commitSha, fileCount: projectFiles.length })
 
@@ -7385,13 +7384,12 @@ app.post('/api/dz-agent/github/pages/list-repos', async (req, res) => {
   }
 })
 
-// ===== GITHUB AI: DEPLOY & SYNC (push to GitHub + trigger Vercel in one step) =====
+// ===== GITHUB AI: DEPLOY & SYNC (push files to GitHub branch) =====
 app.post('/api/dz-agent/github/deploy-sync', async (req, res) => {
   const { repo, files: filesToPush, commitMessage, branch: targetBranch = 'main', token } = req.body
   if (!repo || !filesToPush?.length) return res.status(400).json({ error: 'repo and files[] required' })
   if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo' })
   const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
-  const vercelToken = process.env.VERCEL_TOKEN
   if (!tok) return res.status(500).json({ error: 'No GitHub token' })
 
   const ghHeaders = {
@@ -7401,7 +7399,7 @@ app.post('/api/dz-agent/github/deploy-sync', async (req, res) => {
     'Content-Type': 'application/json',
   }
 
-  const results = { pushed: [], failed: [], vercel: null }
+  const results = { pushed: [], failed: [] }
 
   // Push files
   for (const file of filesToPush) {
@@ -7416,24 +7414,6 @@ app.post('/api/dz-agent/github/deploy-sync', async (req, res) => {
       if (r.ok) results.pushed.push(file.path)
       else results.failed.push(file.path)
     } catch { results.failed.push(file.path) }
-  }
-
-  // Trigger Vercel deploy
-  if (vercelToken) {
-    try {
-      const metaR = await fetch(`https://api.github.com/repos/${repo}`, { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
-      const metaD = metaR.ok ? await metaR.json() : {}
-      const vRes = await fetch('https://api.vercel.com/v13/deployments', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: repo.split('/')[1], gitSource: { type: 'github', repoId: String(metaD.id || ''), ref: targetBranch } }),
-        signal: AbortSignal.timeout(20000),
-      })
-      const vData = await vRes.json()
-      if (vData.url) results.vercel = { url: `https://${vData.url}`, id: vData.id, status: vData.status }
-    } catch (ve) {
-      console.warn('[deploy-sync] Vercel step failed:', ve.message)
-    }
   }
 
   return res.json({ success: results.pushed.length > 0, ...results })

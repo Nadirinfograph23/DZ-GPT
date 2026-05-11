@@ -1,563 +1,347 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Rocket, RefreshCw, CheckCircle2, AlertCircle, Loader2,
-  ExternalLink, GitBranch, Github, UploadCloud, KeyRound,
+  Globe, RefreshCw, CheckCircle2, AlertCircle, Loader2,
+  ExternalLink, GitBranch, Github, Clock, Rocket,
 } from 'lucide-react'
 
 type Lang = 'ar' | 'en' | 'fr'
 
-interface SyncStatus {
-  status: 'synced' | 'out_of_sync' | 'unknown'
-  branch: string
-  repository: string
-  github: { commitSha: string | null; shortSha: string | null }
-  vercel: { commitSha: string | null; shortSha: string | null; deploymentUrl: string | null; state?: string }
+interface PagesStatus {
+  url: string | null
+  status: string | null
+  branch: string | null
+  buildType: string | null
+  lastChecked: number
 }
 
-interface SyncCapability {
-  available: boolean
-  hasGithubToken: boolean
-  branch?: string | null
-  changedFiles?: number
-  unpushedCommits?: number
-  pendingTotal?: number
-  localSha?: string | null
-  remoteSha?: string | null
-  runtime?: string
-}
-
-interface DeployResult {
-  success: boolean
-  message?: string
-  url?: string
-  production?: string
-  deploymentId?: string
-  error?: string
-}
-
-interface SyncResult {
-  success: boolean
-  code?: 'PUSHED' | 'NO_CHANGES'
-  message?: string
-  branch?: string
-  sha?: string
-  shortSha?: string
-  commitMessage?: string
-  error?: string
-  detail?: string
+interface DeployState {
+  deploying: boolean
+  phase: 'idle' | 'checking' | 'uploading' | 'enabling' | 'done' | 'error'
+  message: string | null
+  liveUrl: string | null
 }
 
 interface Props {
   language: Lang
+  owner: string
+  repo: string
+  token: string
 }
 
 const T: Record<Lang, Record<string, string>> = {
   ar: {
-    title: 'النشر و المزامنة',
-    deploy: 'إطلاق نشر Vercel',
-    deploying: 'جاري النشر…',
-    sync: 'رفع التغييرات إلى GitHub',
-    syncing: 'جاري الرفع…',
-    refresh: 'تحديث',
-    statusSynced: 'متزامن',
-    statusOut: 'غير متزامن',
+    title: 'نشر GitHub Pages',
+    statusActive: 'الموقع نشط',
+    statusBuilding: 'جاري البناء...',
+    statusInactive: 'غير منشور',
     statusUnknown: 'غير معروف',
-    branch: 'الفرع',
-    github: 'GitHub',
-    vercel: 'Vercel',
-    open: 'فتح الموقع',
-    tokenPrompt: 'أدخل DEPLOY_ADMIN_TOKEN للمتابعة',
-    tokenMissing: 'الرمز مطلوب',
-    msgPrompt: 'رسالة الـ commit (اختياري — اضغط Enter لاستخدام الافتراضية):',
-    deploySuccess: 'تم إطلاق النشر بنجاح',
-    syncSuccess: 'تم رفع التغييرات. سيتم نشر Vercel تلقائياً.',
-    noChanges: 'لا توجد تغييرات محلية. المستودع محدّث.',
+    branch: 'فرع النشر',
+    lastDeployTime: 'آخر نشر',
+    liveUrl: 'رابط الموقع',
+    deployBtn: 'نشر عبر github.io',
+    redeployBtn: 'إعادة النشر',
+    openBtn: 'فتح الموقع',
+    refreshBtn: 'تحديث الحالة',
+    deploying: 'جاري النشر...',
+    checkingFiles: 'التحقق من الملفات...',
+    uploadingFiles: 'رفع الملفات...',
+    enablingPages: 'تفعيل GitHub Pages...',
+    deployDone: 'تم النشر بنجاح',
     deployError: 'فشل النشر',
-    syncError: 'فشل الرفع',
-    syncUnavailable: 'الرفع متاح فقط من بيئة Replit',
-    changedFiles: 'تغييرات بانتظار الرفع',
-    notifTitle: 'حالة النشر',
-    notifBuilding: 'جاري بناء النشر على Vercel…',
-    notifReady: 'تم النشر بنجاح على Vercel ✅',
-    notifFailed: 'فشل نشر Vercel ❌',
-    notifCanceled: 'تم إلغاء نشر Vercel',
-    notifTimeout: 'انتهت مهلة متابعة النشر — تحقّق من Vercel يدوياً',
-    notifClose: 'إغلاق',
-    notifOpen: 'فتح Vercel',
-    changeToken: 'تغيير الرمز',
-    tokenCleared: 'تم مسح الرمز. سيُطلب منك إدخاله في المرة القادمة.',
+    noToken: 'يجب ربط GitHub أولاً',
+    noRepo: 'لا يوجد مستودع محدد',
+    buildType: 'نوع البناء',
+    notAvailable: 'غير متاح',
   },
   en: {
-    title: 'Deploy & Sync',
-    deploy: 'Deploy to Vercel',
-    deploying: 'Deploying…',
-    sync: 'Push changes to GitHub',
-    syncing: 'Pushing…',
-    refresh: 'Refresh',
-    statusSynced: 'In sync',
-    statusOut: 'Out of sync',
+    title: 'GitHub Pages Deploy',
+    statusActive: 'Site is live',
+    statusBuilding: 'Building...',
+    statusInactive: 'Not published',
     statusUnknown: 'Unknown',
-    branch: 'Branch',
-    github: 'GitHub',
-    vercel: 'Vercel',
-    open: 'Open site',
-    tokenPrompt: 'Enter DEPLOY_ADMIN_TOKEN to continue',
-    tokenMissing: 'Token required',
-    msgPrompt: 'Commit message (optional — press Enter for default):',
-    deploySuccess: 'Deploy triggered successfully',
-    syncSuccess: 'Changes pushed. Vercel will deploy automatically.',
-    noChanges: 'No local changes. Repo is up to date.',
+    branch: 'Deploy branch',
+    lastDeployTime: 'Last deploy',
+    liveUrl: 'Live URL',
+    deployBtn: 'Deploy to github.io',
+    redeployBtn: 'Redeploy',
+    openBtn: 'Open site',
+    refreshBtn: 'Refresh status',
+    deploying: 'Deploying...',
+    checkingFiles: 'Checking files...',
+    uploadingFiles: 'Uploading files...',
+    enablingPages: 'Enabling GitHub Pages...',
+    deployDone: 'Deployed successfully',
     deployError: 'Deploy failed',
-    syncError: 'Push failed',
-    syncUnavailable: 'Push only available from Replit environment',
-    changedFiles: 'pending changes',
-    notifTitle: 'Deploy status',
-    notifBuilding: 'Vercel build in progress…',
-    notifReady: 'Vercel deploy succeeded ✅',
-    notifFailed: 'Vercel deploy failed ❌',
-    notifCanceled: 'Vercel deploy canceled',
-    notifTimeout: 'Deploy watch timed out — check Vercel manually',
-    notifClose: 'Close',
-    notifOpen: 'Open Vercel',
-    changeToken: 'Change token',
-    tokenCleared: 'Token cleared. You will be prompted again next time.',
+    noToken: 'Connect GitHub first',
+    noRepo: 'No repository selected',
+    buildType: 'Build type',
+    notAvailable: 'N/A',
   },
   fr: {
-    title: 'Déploiement & Sync',
-    deploy: 'Déployer sur Vercel',
-    deploying: 'Déploiement…',
-    sync: 'Pousser vers GitHub',
-    syncing: 'Envoi en cours…',
-    refresh: 'Actualiser',
-    statusSynced: 'Synchronisé',
-    statusOut: 'Désynchronisé',
+    title: 'Déploiement GitHub Pages',
+    statusActive: 'Site en ligne',
+    statusBuilding: 'En construction...',
+    statusInactive: 'Non publié',
     statusUnknown: 'Inconnu',
-    branch: 'Branche',
-    github: 'GitHub',
-    vercel: 'Vercel',
-    open: 'Ouvrir le site',
-    tokenPrompt: 'Entrez DEPLOY_ADMIN_TOKEN pour continuer',
-    tokenMissing: 'Jeton requis',
-    msgPrompt: 'Message de commit (optionnel — Entrée pour défaut) :',
-    deploySuccess: 'Déploiement lancé avec succès',
-    syncSuccess: 'Changements envoyés. Vercel déploiera automatiquement.',
-    noChanges: 'Aucun changement local. Dépôt à jour.',
+    branch: 'Branche de déploiement',
+    lastDeployTime: 'Dernier déploiement',
+    liveUrl: 'URL du site',
+    deployBtn: 'Déployer sur github.io',
+    redeployBtn: 'Re-déployer',
+    openBtn: 'Ouvrir le site',
+    refreshBtn: 'Actualiser',
+    deploying: 'Déploiement...',
+    checkingFiles: 'Vérification des fichiers...',
+    uploadingFiles: 'Envoi des fichiers...',
+    enablingPages: 'Activation GitHub Pages...',
+    deployDone: 'Déploiement réussi',
     deployError: 'Échec du déploiement',
-    syncError: 'Échec de l’envoi',
-    syncUnavailable: 'Push disponible uniquement depuis Replit',
-    changedFiles: 'changements en attente',
-    notifTitle: 'État du déploiement',
-    notifBuilding: 'Build Vercel en cours…',
-    notifReady: 'Déploiement Vercel réussi ✅',
-    notifFailed: 'Échec du déploiement Vercel ❌',
-    notifCanceled: 'Déploiement Vercel annulé',
-    notifTimeout: 'Surveillance expirée — vérifiez Vercel manuellement',
-    notifClose: 'Fermer',
-    notifOpen: 'Ouvrir Vercel',
-    changeToken: 'Changer le jeton',
-    tokenCleared: 'Jeton effacé. Il sera demandé à nouveau.',
+    noToken: 'Connectez GitHub d\'abord',
+    noRepo: 'Aucun dépôt sélectionné',
+    buildType: 'Type de build',
+    notAvailable: 'N/D',
   },
 }
 
-const TOKEN_KEY = 'dz-deploy-admin-token'
-
-type WatchPhase = 'idle' | 'building' | 'ready' | 'failed' | 'canceled' | 'timeout'
-
-interface DeployNotification {
-  phase: WatchPhase
-  text: string
-  url?: string | null
-  startedAt: number
+function formatTime(ms: number): string {
+  const d = new Date(ms)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-const WATCH_INTERVAL_MS = 5000
-const WATCH_TIMEOUT_MS = 6 * 60 * 1000 // 6 minutes
-
-export default function DZDeployPanel({ language }: Props) {
+export default function DZDeployPanel({ language, owner, repo, token }: Props) {
   const t = T[language]
-  const [sync, setSync] = useState<SyncStatus | null>(null)
-  const [capability, setCapability] = useState<SyncCapability | null>(null)
-  const [loadingSync, setLoadingSync] = useState(false)
-  const [deploying, setDeploying] = useState(false)
-  const [pushing, setPushing] = useState(false)
-  const [feedback, setFeedback] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null)
-  const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isRtl = language === 'ar'
 
-  const [watching, setWatching] = useState(false)
-  const [notification, setNotification] = useState<DeployNotification | null>(null)
-  const watchRef = useRef<{
-    timer: ReturnType<typeof setInterval> | null
-    timeout: ReturnType<typeof setTimeout> | null
-    baselineSha: string | null
-    startedAt: number
-  }>({ timer: null, timeout: null, baselineSha: null, startedAt: 0 })
-
-  const [githubConnected, setGithubConnected] = useState<boolean>(() => {
-    try { return !!sessionStorage.getItem('dz-agent-gh-token') } catch { return false }
+  const [pages, setPages] = useState<PagesStatus | null>(null)
+  const [loadingStatus, setLoadingStatus] = useState(false)
+  const [deploy, setDeploy] = useState<DeployState>({
+    deploying: false,
+    phase: 'idle',
+    message: null,
+    liveUrl: null,
   })
 
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/dz-agent/github/status')
-      .then(r => r.json())
-      .then(d => { if (!cancelled && d?.connected) setGithubConnected(true) })
-      .catch(() => {})
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'dz-agent-gh-token') {
-        setGithubConnected(!!e.newValue)
-      }
-    }
-    const onTokenChange = () => {
-      try { setGithubConnected(!!sessionStorage.getItem('dz-agent-gh-token')) } catch {}
-    }
-    window.addEventListener('storage', onStorage)
-    window.addEventListener('dz-agent-gh-token-change', onTokenChange)
-    return () => {
-      cancelled = true
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener('dz-agent-gh-token-change', onTokenChange)
-    }
-  }, [])
-
-  const showFeedback = useCallback((kind: 'ok' | 'err' | 'info', text: string, duration = 6000) => {
-    setFeedback({ kind, text })
-    if (fbTimer.current) clearTimeout(fbTimer.current)
-    fbTimer.current = setTimeout(() => setFeedback(null), duration)
-  }, [])
-
-  const fetchSync = useCallback(async (): Promise<SyncStatus | null> => {
-    setLoadingSync(true)
+  const fetchPagesStatus = useCallback(async () => {
+    if (!token || !owner || !repo) return
+    setLoadingStatus(true)
     try {
-      const [syncRes, capRes] = await Promise.all([
-        fetch('/api/dz-agent/sync-status', { cache: 'no-store' }),
-        fetch('/api/dz-agent/sync/status', { cache: 'no-store' }),
-      ])
-      let next: SyncStatus | null = null
-      if (syncRes.ok) {
-        next = (await syncRes.json()) as SyncStatus
-        setSync(next)
-      }
-      if (capRes.ok) setCapability((await capRes.json()) as SyncCapability)
-      return next
-    } catch {
-      return null
-    } finally {
-      setLoadingSync(false)
-    }
-  }, [])
-
-  const stopWatch = useCallback(() => {
-    if (watchRef.current.timer) clearInterval(watchRef.current.timer)
-    if (watchRef.current.timeout) clearTimeout(watchRef.current.timeout)
-    watchRef.current.timer = null
-    watchRef.current.timeout = null
-    setWatching(false)
-  }, [])
-
-  const startDeployWatch = useCallback(() => {
-    stopWatch()
-    const baseline = sync?.vercel?.commitSha || null
-    watchRef.current.baselineSha = baseline
-    watchRef.current.startedAt = Date.now()
-    setWatching(true)
-    setNotification({
-      phase: 'building',
-      text: t.notifBuilding,
-      url: sync?.vercel?.deploymentUrl || null,
-      startedAt: Date.now(),
-    })
-
-    const tick = async () => {
-      const next = await fetchSync()
-      if (!next) return
-      const state = (next.vercel?.state || '').toUpperCase()
-      const newSha = next.vercel?.commitSha || null
-      const url = next.vercel?.deploymentUrl || null
-      const shaChanged = newSha && newSha !== watchRef.current.baselineSha
-
-      if (state === 'READY' && (shaChanged || next.status === 'synced')) {
-        stopWatch()
-        setNotification({ phase: 'ready', text: t.notifReady, url, startedAt: Date.now() })
-      } else if (state === 'ERROR' || state === 'FAILED') {
-        stopWatch()
-        setNotification({ phase: 'failed', text: t.notifFailed, url, startedAt: Date.now() })
-      } else if (state === 'CANCELED') {
-        stopWatch()
-        setNotification({ phase: 'canceled', text: t.notifCanceled, url, startedAt: Date.now() })
+      const r = await fetch(
+        `/api/dz-agent/github/pages/status?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+        { cache: 'no-store' }
+      )
+      if (r.ok) {
+        const d = await r.json()
+        setPages({
+          url: d.url || null,
+          status: d.status || null,
+          branch: d.branch || d.source?.branch || 'main',
+          buildType: d.buildType || null,
+          lastChecked: Date.now(),
+        })
       } else {
-        setNotification({
-          phase: 'building',
-          text: t.notifBuilding,
-          url,
-          startedAt: watchRef.current.startedAt,
+        setPages(prev => prev ? { ...prev, status: 'inactive', lastChecked: Date.now() } : {
+          url: null, status: 'inactive', branch: 'main', buildType: null, lastChecked: Date.now(),
         })
       }
+    } catch {
+      /* silent */
+    } finally {
+      setLoadingStatus(false)
     }
-
-    watchRef.current.timer = setInterval(tick, WATCH_INTERVAL_MS)
-    watchRef.current.timeout = setTimeout(() => {
-      stopWatch()
-      setNotification({ phase: 'timeout', text: t.notifTimeout, startedAt: Date.now() })
-    }, WATCH_TIMEOUT_MS)
-    setTimeout(tick, 1500)
-  }, [fetchSync, stopWatch, sync, t])
+  }, [token, owner, repo])
 
   useEffect(() => {
-    if (githubConnected) fetchSync()
-    return () => {
-      if (fbTimer.current) clearTimeout(fbTimer.current)
-      if (watchRef.current.timer) clearInterval(watchRef.current.timer)
-      if (watchRef.current.timeout) clearTimeout(watchRef.current.timeout)
-    }
-  }, [fetchSync, githubConnected])
+    if (token && owner && repo) fetchPagesStatus()
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [fetchPagesStatus, token, owner, repo])
 
-  const ensureToken = useCallback((): string | null => {
-    let token = sessionStorage.getItem(TOKEN_KEY) || ''
-    if (!token) {
-      const entered = window.prompt(t.tokenPrompt)
-      if (!entered) {
-        showFeedback('err', t.tokenMissing)
-        return null
+  // Poll while building
+  useEffect(() => {
+    if (pages?.status === 'building' || pages?.status === null) {
+      if (!pollRef.current) {
+        pollRef.current = setInterval(fetchPagesStatus, 12000)
       }
-      token = entered.trim()
-      sessionStorage.setItem(TOKEN_KEY, token)
+    } else {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     }
-    return token
-  }, [showFeedback, t])
-
-  const clearAdminToken = useCallback(() => {
-    sessionStorage.removeItem(TOKEN_KEY)
-    showFeedback('info', t.tokenCleared)
-  }, [showFeedback, t])
+  }, [pages?.status, fetchPagesStatus])
 
   const triggerDeploy = useCallback(async () => {
-    const token = ensureToken()
-    if (!token) return
-    setDeploying(true)
-    setFeedback(null)
+    if (!token) { setDeploy(s => ({ ...s, message: t.noToken, phase: 'error' })); return }
+    if (!owner || !repo) { setDeploy(s => ({ ...s, message: t.noRepo, phase: 'error' })); return }
+
+    setDeploy({ deploying: true, phase: 'checking', message: t.checkingFiles, liveUrl: null })
+
     try {
-      const r = await fetch('/api/dz-agent/deploy', {
+      setDeploy(s => ({ ...s, phase: 'uploading', message: t.uploadingFiles }))
+
+      const r = await fetch('/api/dz-agent/github/pages/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-deploy-token': token },
-        body: JSON.stringify({}),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, owner, repo }),
       })
-      const data = (await r.json().catch(() => ({}))) as DeployResult
-      if (!r.ok || !data.success) {
-        if (r.status === 403) sessionStorage.removeItem(TOKEN_KEY)
-        showFeedback('err', `${t.deployError}: ${data.error || r.statusText}`)
-      } else {
-        showFeedback('ok', t.deploySuccess)
-        startDeployWatch()
-      }
-    } catch (err) {
-      showFeedback('err', `${t.deployError}: ${(err as Error).message}`)
-    } finally {
-      setDeploying(false)
+      const data = await r.json()
+
+      if (!r.ok) throw new Error(data.error || 'Deploy failed')
+
+      setDeploy(s => ({ ...s, phase: 'enabling', message: t.enablingPages }))
+      await new Promise(res => setTimeout(res, 2000))
+
+      const liveUrl = data.siteUrl || `https://${owner}.github.io/${repo}`
+      setDeploy({ deploying: false, phase: 'done', message: t.deployDone, liveUrl })
+      setPages(prev => ({
+        url: liveUrl,
+        status: 'building',
+        branch: prev?.branch || 'main',
+        buildType: prev?.buildType || null,
+        lastChecked: Date.now(),
+      }))
+
+      // Refresh status after 5s
+      setTimeout(fetchPagesStatus, 5000)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setDeploy({ deploying: false, phase: 'error', message: `${t.deployError}: ${msg}`, liveUrl: null })
     }
-  }, [ensureToken, showFeedback, startDeployWatch, t])
+  }, [token, owner, repo, t, fetchPagesStatus])
 
-  const triggerSync = useCallback(async () => {
-    const token = ensureToken()
-    if (!token) return
-    const message = window.prompt(t.msgPrompt) ?? ''
-    setPushing(true)
-    setFeedback(null)
-    try {
-      const r = await fetch('/api/dz-agent/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-deploy-token': token },
-        body: JSON.stringify({ message }),
-      })
-      const data = (await r.json().catch(() => ({}))) as SyncResult
-      if (!r.ok || !data.success) {
-        if (r.status === 403) sessionStorage.removeItem(TOKEN_KEY)
-        showFeedback('err', `${t.syncError}: ${data.error || r.statusText}`)
-      } else if (data.code === 'NO_CHANGES') {
-        showFeedback('info', t.noChanges)
-      } else {
-        showFeedback('ok', `${t.syncSuccess} (${data.shortSha})`, 8000)
-        startDeployWatch()
-      }
-    } catch (err) {
-      showFeedback('err', `${t.syncError}: ${(err as Error).message}`)
-    } finally {
-      setPushing(false)
-    }
-  }, [ensureToken, showFeedback, startDeployWatch, t])
+  if (!token || !owner || !repo) return null
 
-  const statusLabel =
-    sync?.status === 'synced' ? t.statusSynced : sync?.status === 'out_of_sync' ? t.statusOut : t.statusUnknown
-  const statusClass =
-    sync?.status === 'synced' ? 'dz-deploy-status--ok' : sync?.status === 'out_of_sync' ? 'dz-deploy-status--warn' : 'dz-deploy-status--unknown'
+  const isLive = pages?.status === 'built' || pages?.status === 'active'
+  const isBuilding = pages?.status === 'building' || pages?.status === null
+  const liveUrl = pages?.url || deploy.liveUrl || `https://${owner}.github.io/${repo}`
 
-  const syncAvailable = capability?.available && capability?.hasGithubToken
-  const pendingChanges = capability?.pendingTotal ?? capability?.changedFiles ?? 0
+  const statusLabel = isLive
+    ? t.statusActive
+    : isBuilding && pages !== null
+      ? t.statusBuilding
+      : pages?.status === 'inactive' || !pages
+        ? t.statusInactive
+        : t.statusUnknown
 
-  if (!githubConnected) return null
+  const statusClass = isLive
+    ? 'ghp-status--live'
+    : isBuilding && pages !== null
+      ? 'ghp-status--building'
+      : 'ghp-status--inactive'
 
   return (
-    <div className="dz-deploy-panel" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="dz-deploy-header">
-        <div className="dz-deploy-title">
-          <Rocket size={14} />
+    <div className="ghp-panel" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Header */}
+      <div className="ghp-header">
+        <div className="ghp-title">
+          <Globe size={14} />
           <span>{t.title}</span>
         </div>
-        <div className="dz-deploy-header-actions">
-          <button
-            className="dz-deploy-refresh"
-            onClick={clearAdminToken}
-            title={t.changeToken}
-            aria-label={t.changeToken}
-          >
-            <KeyRound size={12} />
-          </button>
-          <button
-            className="dz-deploy-refresh"
-            onClick={fetchSync}
-            disabled={loadingSync}
-            title={t.refresh}
-            aria-label={t.refresh}
-          >
-            <RefreshCw size={12} className={loadingSync ? 'dz-deploy-spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      <div className={`dz-deploy-status ${statusClass}`}>
-        {sync?.status === 'synced' ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
-        <span>{statusLabel}</span>
-        {pendingChanges > 0 && (
-          <span className="dz-deploy-pending-count">+{pendingChanges}</span>
-        )}
-      </div>
-
-      <div className="dz-deploy-info">
-        <div className="dz-deploy-info-row">
-          <GitBranch size={11} />
-          <span className="dz-deploy-info-label">{t.branch}</span>
-          <span className="dz-deploy-info-value" title={sync?.branch || ''}>
-            {sync?.branch ? truncateBranch(sync.branch) : '—'}
-          </span>
-        </div>
-        <div className="dz-deploy-info-row">
-          <Github size={11} />
-          <span className="dz-deploy-info-label">{t.github}</span>
-          <code className="dz-deploy-sha">{sync?.github.shortSha || '—'}</code>
-        </div>
-        <div className="dz-deploy-info-row">
-          <Rocket size={11} />
-          <span className="dz-deploy-info-label">{t.vercel}</span>
-          <code className="dz-deploy-sha">{sync?.vercel.shortSha || '—'}</code>
-        </div>
-      </div>
-
-      <button
-        className="dz-deploy-btn dz-deploy-btn--sync"
-        onClick={triggerSync}
-        disabled={pushing || !syncAvailable}
-        title={!syncAvailable ? t.syncUnavailable : ''}
-      >
-        {pushing ? (
-          <>
-            <Loader2 size={13} className="dz-deploy-spin" />
-            <span>{t.syncing}</span>
-          </>
-        ) : (
-          <>
-            <UploadCloud size={13} />
-            <span>{t.sync}{pendingChanges > 0 ? ` (${pendingChanges})` : ''}</span>
-          </>
-        )}
-      </button>
-
-      <button
-        className="dz-deploy-btn"
-        onClick={triggerDeploy}
-        disabled={deploying}
-      >
-        {deploying ? (
-          <>
-            <Loader2 size={13} className="dz-deploy-spin" />
-            <span>{t.deploying}</span>
-          </>
-        ) : (
-          <>
-            <Rocket size={13} />
-            <span>{t.deploy}</span>
-          </>
-        )}
-      </button>
-
-      <a
-        className="dz-deploy-link"
-        href={sync?.vercel.deploymentUrl || 'https://dz-gpt.vercel.app'}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <ExternalLink size={11} />
-        <span>{t.open}</span>
-      </a>
-
-      {feedback && (
-        <div className={`dz-deploy-feedback dz-deploy-feedback--${feedback.kind}`}>
-          {feedback.text}
-        </div>
-      )}
-
-      {notification && (
-        <div
-          className={`dz-deploy-toast dz-deploy-toast--${notification.phase}`}
-          dir={language === 'ar' ? 'rtl' : 'ltr'}
-          role="status"
-          aria-live="polite"
+        <button
+          className="ghp-icon-btn"
+          onClick={fetchPagesStatus}
+          disabled={loadingStatus}
+          title={t.refreshBtn}
+          aria-label={t.refreshBtn}
         >
-          <div className="dz-deploy-toast-icon">
-            {notification.phase === 'building' ? (
-              <Loader2 size={16} className="dz-deploy-spin" />
-            ) : notification.phase === 'ready' ? (
-              <CheckCircle2 size={16} />
-            ) : (
-              <AlertCircle size={16} />
-            )}
+          <RefreshCw size={12} className={loadingStatus ? 'ghp-spin' : ''} />
+        </button>
+      </div>
+
+      {/* Status badge */}
+      <div className={`ghp-status ${statusClass}`}>
+        {isLive ? (
+          <CheckCircle2 size={12} />
+        ) : isBuilding && pages !== null ? (
+          <Loader2 size={12} className="ghp-spin" />
+        ) : (
+          <AlertCircle size={12} />
+        )}
+        <span>{statusLabel}</span>
+      </div>
+
+      {/* Info rows */}
+      <div className="ghp-info">
+        <div className="ghp-info-row">
+          <GitBranch size={11} />
+          <span className="ghp-info-label">{t.branch}</span>
+          <code className="ghp-info-value">{pages?.branch || 'main'}</code>
+        </div>
+        {pages?.buildType && (
+          <div className="ghp-info-row">
+            <Github size={11} />
+            <span className="ghp-info-label">{t.buildType}</span>
+            <code className="ghp-info-value">{pages.buildType}</code>
           </div>
-          <div className="dz-deploy-toast-body">
-            <div className="dz-deploy-toast-title">{t.notifTitle}</div>
-            <div className="dz-deploy-toast-text">{notification.text}</div>
-            {watching && (
-              <div className="dz-deploy-toast-elapsed">
-                {Math.max(0, Math.round((Date.now() - notification.startedAt) / 1000))}s
-              </div>
-            )}
+        )}
+        {pages?.lastChecked && (
+          <div className="ghp-info-row">
+            <Clock size={11} />
+            <span className="ghp-info-label">{t.lastDeployTime}</span>
+            <span className="ghp-info-value">{formatTime(pages.lastChecked)}</span>
           </div>
-          <div className="dz-deploy-toast-actions">
-            {notification.url && (
-              <a
-                className="dz-deploy-toast-link"
-                href={notification.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink size={12} />
-                <span>{t.notifOpen}</span>
-              </a>
-            )}
-            <button
-              className="dz-deploy-toast-close"
-              onClick={() => { stopWatch(); setNotification(null) }}
-              aria-label={t.notifClose}
-              title={t.notifClose}
+        )}
+        {liveUrl && (
+          <div className="ghp-info-row ghp-info-row--url">
+            <Globe size={11} />
+            <span className="ghp-info-label">{t.liveUrl}</span>
+            <a
+              className="ghp-url-link"
+              href={liveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={liveUrl}
             >
-              ×
-            </button>
+              {liveUrl.replace('https://', '')}
+              <ExternalLink size={9} />
+            </a>
           </div>
+        )}
+      </div>
+
+      {/* Deploy message / progress */}
+      {deploy.message && (
+        <div className={`ghp-msg ghp-msg--${deploy.phase === 'error' ? 'error' : deploy.phase === 'done' ? 'ok' : 'info'}`}>
+          {deploy.deploying && <Loader2 size={11} className="ghp-spin" />}
+          <span>{deploy.message}</span>
         </div>
       )}
+
+      {/* Action buttons */}
+      <div className="ghp-actions">
+        <button
+          className="ghp-btn ghp-btn--deploy"
+          onClick={triggerDeploy}
+          disabled={deploy.deploying}
+        >
+          {deploy.deploying ? (
+            <>
+              <Loader2 size={13} className="ghp-spin" />
+              <span>{t.deploying}</span>
+            </>
+          ) : isLive ? (
+            <>
+              <Rocket size={13} />
+              <span>{t.redeployBtn}</span>
+            </>
+          ) : (
+            <>
+              <Rocket size={13} />
+              <span>{t.deployBtn}</span>
+            </>
+          )}
+        </button>
+
+        {(isLive || deploy.liveUrl) && (
+          <a
+            className="ghp-btn ghp-btn--open"
+            href={liveUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink size={13} />
+            <span>{t.openBtn}</span>
+          </a>
+        )}
+      </div>
     </div>
   )
-}
-
-function truncateBranch(branch: string): string {
-  if (branch.length <= 22) return branch
-  return branch.slice(0, 10) + '…' + branch.slice(-9)
 }

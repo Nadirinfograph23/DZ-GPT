@@ -9,13 +9,14 @@ import {
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
-  Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Hammer, Layers,
-  ThumbsUp, ThumbsDown,
+  Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
+  Globe, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
+import DZDeployPanel from './DZDeployPanel'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
@@ -2064,9 +2065,9 @@ function ActionLogPanel({ entries }: { entries: ActionLogEntry[] }) {
 // ===== REPO ACTION PANEL =====
 const REPO_ACTIONS: { id: string; Icon: React.ElementType; label: string; desc: string; color: string; badge?: string }[] = [
   { id: 'analyze-project', Icon: Brain,         label: 'تحليل ذكي',        desc: 'قراءة المشروع كاملاً + AI', color: '#a78bfa', badge: 'AI' },
-  { id: 'generate-push',   Icon: Zap,           label: 'توليد + Push',     desc: 'كود AI ← GitHub ← Vercel', color: '#4ade80', badge: 'AI' },
+  { id: 'generate-push',   Icon: Zap,           label: 'توليد + Push',     desc: 'كود AI ← GitHub Pages',    color: '#4ade80', badge: 'AI' },
   { id: 'improve-design',  Icon: Layers,        label: 'تحسين التصميم',    desc: 'تحديث CSS/Theme احترافي',   color: '#f472b6', badge: 'AI' },
-  { id: 'deploy-vercel',   Icon: Hammer,        label: 'نشر Vercel',       desc: 'Build + Deploy فوري',       color: '#38bdf8' },
+  { id: 'deploy-pages',    Icon: Globe,         label: 'نشر github.io',    desc: 'نشر عبر GitHub Pages',      color: '#38bdf8' },
   { id: 'scan',            Icon: ScanSearch,    label: 'فحص شامل',         desc: 'تحليل شامل للمستودع',       color: '#60a5fa' },
   { id: 'bugs',            Icon: Bug,           label: 'إيجاد الأخطاء',    desc: 'كشف الأخطاء والثغرات',      color: '#f87171' },
   { id: 'security',        Icon: ShieldAlert,   label: 'فحص أمني',         desc: 'ثغرات أمنية وحماية',        color: '#fb923c' },
@@ -3406,7 +3407,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   }, [githubToken, addToLog, addAssistantMessage])
 
   // ── AI: Generate and Push ─────────────────────────────────────────────────
-  const generateAndPush = useCallback(async (repo: RepoItem, description: string, deployToVercel = false) => {
+  const generateAndPush = useCallback(async (repo: RepoItem, description: string) => {
     setIsLoading(true)
     setThinkingStep({ type: 'write', label: 'توليد الكود بالذكاء الاصطناعي...' })
     addToLog({ type: 'commit', description: `Generating: ${description.slice(0, 60)}`, status: 'pending', repo: repo.full_name })
@@ -3418,14 +3419,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           token: githubToken,
           repo: repo.full_name,
           description,
-          deployToVercel,
         }),
       })
       const data = await res.json()
       if (!res.ok && !data.generated) throw new Error(data.error || 'Generation failed')
 
       if (!data.pushed) {
-        // AI returned code but no FILE: blocks to push
         addAssistantMessage({
           content: `## ⚡ كود مولَّد لـ \`${repo.name}\`\n\n${data.message || ''}\n\n${data.generated}`,
           richType: 'text',
@@ -3433,9 +3432,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       } else {
         const filesStr = data.files?.map((f: string) => `- \`${f}\``).join('\n') || ''
         const prLink = data.pr?.url ? `\n\n### 🔗 Pull Request\n[#${data.pr.number} ${data.pr.title}](${data.pr.url})` : ''
-        const vercelLink = data.vercel?.url ? `\n\n### 🚀 Vercel Deploy\n[${data.vercel.url}](${data.vercel.url})` : ''
         addAssistantMessage({
-          content: `## ✅ تم توليد الكود ورفعه لـ \`${repo.name}\`\n\n**الفرع:** \`${data.branch}\`\n\n**الملفات المرفوعة:**\n${filesStr}${prLink}${vercelLink}\n\n---\n\n${data.generated}`,
+          content: `## ✅ تم توليد الكود ورفعه لـ \`${repo.name}\`\n\n**الفرع:** \`${data.branch}\`\n\n**الملفات المرفوعة:**\n${filesStr}${prLink}\n\n---\n\n${data.generated}`,
           richType: 'text',
         })
         addToLog({ type: 'commit', description: `Pushed ${data.files?.length || 0} files — PR ${data.pr?.number || 'N/A'}`, status: 'success', repo: repo.full_name })
@@ -3484,30 +3482,29 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
-  // ── Deploy to Vercel ──────────────────────────────────────────────────────
-  const deployToVercel = useCallback(async (repo: RepoItem) => {
+  // ── Deploy to GitHub Pages ────────────────────────────────────────────────
+  const deployToGitHubPages = useCallback(async (repo: RepoItem) => {
     setIsLoading(true)
-    setThinkingStep({ type: 'deploy', label: 'نشر المشروع على Vercel...' })
-    addToLog({ type: 'deploy', description: `Deploying ${repo.name} to Vercel`, status: 'pending', repo: repo.full_name })
+    setThinkingStep({ type: 'deploy', label: 'نشر المشروع على GitHub Pages...' })
+    addToLog({ type: 'deploy', description: `Deploying ${repo.name} to GitHub Pages`, status: 'pending', repo: repo.full_name })
+    const [owner, repoName] = repo.full_name.split('/')
     try {
-      const res = await fetch('/api/dz-agent/github/deploy-sync', {
+      const res = await fetch('/api/dz-agent/github/pages/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken, repo: repo.full_name, files: [], commitMessage: 'chore: vercel deploy trigger [DZ Agent]', branch: 'main' }),
+        body: JSON.stringify({ token: githubToken, owner, repo: repoName }),
       })
       const data = await res.json()
-      if (data.vercel?.url) {
-        addAssistantMessage({
-          content: `## 🚀 تم بدء النشر على Vercel\n\n**المستودع:** \`${repo.name}\`\n**رابط النشر:** [${data.vercel.url}](${data.vercel.url})\n**الحالة:** جاري البناء...`,
-          richType: 'text',
-        })
-        addToLog({ type: 'deploy', description: `Vercel deploy triggered — ${data.vercel.url}`, status: 'success', repo: repo.full_name })
-      } else {
-        addAssistantMessage({ content: `⚠️ تم إرسال طلب النشر لكن لم يُعاد رابط Vercel. تحقق من لوحة Vercel يدوياً.`, richType: 'text' })
-      }
+      if (!res.ok) throw new Error(data.error || 'GitHub Pages deploy failed')
+      const siteUrl = data.siteUrl || `https://${owner}.github.io/${repoName}`
+      addAssistantMessage({
+        content: `## 🌐 تم بدء النشر على GitHub Pages\n\n**المستودع:** \`${repo.name}\`\n**رابط الموقع:** [${siteUrl}](${siteUrl})\n**الحالة:** جاري البناء... (يستغرق 1-2 دقيقة)\n\n> الرابط سيصبح نشطاً بعد اكتمال بناء GitHub Actions.`,
+        richType: 'text',
+      })
+      addToLog({ type: 'deploy', description: `GitHub Pages deploy triggered — ${siteUrl}`, status: 'success', repo: repo.full_name })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      addAssistantMessage({ content: `❌ فشل النشر: ${msg}`, richType: 'text', isError: true })
+      addAssistantMessage({ content: `❌ فشل النشر على GitHub Pages: ${msg}`, richType: 'text', isError: true })
       addToLog({ type: 'deploy', description: `Error: ${msg}`, status: 'error', repo: repo.full_name })
     } finally {
       setIsLoading(false)
@@ -3532,8 +3529,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         await improveDesign(repo, style || 'modern dark')
         break
       }
-      case 'deploy-vercel':
-        await deployToVercel(repo)
+      case 'deploy-pages':
+        await deployToGitHubPages(repo)
         break
       case 'scan':
         await scanRepo(repo)
@@ -3577,7 +3574,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         textareaRef.current?.focus()
         break
     }
-  }, [analyzeProject, generateAndPush, improveDesign, deployToVercel, scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
+  }, [analyzeProject, generateAndPush, improveDesign, deployToGitHubPages, scanRepo, fetchFiles, fetchBranches, fetchIssues, fetchPulls, fetchStats])
 
   const executeApprovedAction = useCallback(async (action: PendingAction, msgId: string) => {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, pendingAction: undefined, content: 'Action approved. Executing...' } : m))
@@ -4089,10 +4086,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         await improveDesign(buildRepoItem(data.repo as string))
         return
       }
-      if (data.action === 'deploy-vercel' && data.repo) {
+      if (data.action === 'deploy-pages' && data.repo) {
         trackFeatureUsage('github-deploy')
-        addAssistantMessage({ content: (data.content as string) || '🚀 جاري النشر...', richType: 'text' })
-        await deployToVercel(buildRepoItem(data.repo as string))
+        addAssistantMessage({ content: (data.content as string) || '🌐 جاري النشر على GitHub Pages...', richType: 'text' })
+        await deployToGitHubPages(buildRepoItem(data.repo as string))
         return
       }
 
@@ -4458,10 +4455,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (
-                        <RepoActionPanel
-                          repo={msg.selectedRepo}
-                          onAction={handleRepoAction}
-                        />
+                        <>
+                          <RepoActionPanel
+                            repo={msg.selectedRepo}
+                            onAction={handleRepoAction}
+                          />
+                          <DZDeployPanel
+                            language={language}
+                            owner={msg.selectedRepo.full_name.split('/')[0]}
+                            repo={msg.selectedRepo.full_name.split('/')[1]}
+                            token={githubToken}
+                          />
+                        </>
                       )}
                       {msg.richType === 'files' && msg.files && (
                         <FilesList

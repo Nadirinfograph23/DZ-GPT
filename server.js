@@ -12574,42 +12574,64 @@ async function downloadAudioToFile(url, outPath) {
   fs.renameSync(tmpFixed, outPath)
 }
 
-// Resolve an HLS m3u8 audio playlist URL for a YouTube link.
-// As of 2026-04, YouTube serves audio-only as HLS (itag 233/234) only, and
-// only when requested via the IOS player_client. Pure-JS extractors
-// (ytdl-core, youtubei.js) currently can't decipher current player.js.
-// We rely on yt-dlp; on Vercel we ship a standalone binary (see vercel.json).
+// Resolve an audio URL for a YouTube link.
+// Strategy (tried in order):
+//   1. iOS player_client → prefers HLS m3u8 manifest URLs (best for background audio)
+//   2. bestaudio without player_client restriction → direct googlevideo URL
+// Returns { url: string, isHls: boolean }
 async function resolveAudioPlaylistUrl(youtubeUrl) {
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) throw new Error('yt-dlp غير متوفر على هذا الخادم')
   const cookies = await ytDlpCookiesArgs()
-  return await new Promise((resolve, reject) => {
-    const proc = spawn(dlpBin, [
-      '--extractor-args', 'youtube:player_client=ios',
-      '-f', 'ba/bestaudio',
-      ...cookies,
-      '-g', '--no-warnings', '--no-playlist', youtubeUrl,
-    ])
-    let out = '', err = ''
-    proc.stdout.on('data', d => { out += d.toString() })
-    proc.stderr.on('data', d => { err += d.toString() })
-    proc.on('error', reject)
-    proc.on('close', code => {
-      const u = out.trim().split('\n')[0]
-      if (code !== 0 || !u) return reject(new Error((err || 'yt-dlp failed').slice(0, 200)))
-      resolve(u)
+
+  // Helper: run yt-dlp with given args, returns the first output URL or null
+  function runDlp(extraArgs) {
+    return new Promise(resolve => {
+      try {
+        const proc = spawn(dlpBin, [
+          ...extraArgs,
+          ...cookies,
+          '-g', '--no-warnings', '--no-playlist', youtubeUrl,
+        ])
+        let out = '', err = ''
+        proc.stdout.on('data', d => { out += d.toString() })
+        proc.stderr.on('data', d => { err += d.toString() })
+        proc.on('error', () => resolve(null))
+        proc.on('close', code => {
+          const u = out.trim().split('\n')[0]
+          if (code === 0 && u && /^https?:\/\//.test(u)) resolve(u)
+          else resolve(null)
+        })
+      } catch { resolve(null) }
     })
-  })
+  }
+
+  // Attempt 1: iOS player_client → may return HLS manifest from googlevideo
+  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '-f', 'ba/bestaudio'])
+  if (iosUrl) {
+    const isHls = /\.m3u8($|\?)/i.test(iosUrl) || /manifest\.googlevideo\.com/i.test(iosUrl)
+    console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS' : 'direct')
+    return { url: iosUrl, isHls }
+  }
+
+  // Attempt 2: bestaudio without player_client restriction
+  const directUrl = await runDlp(['-f', 'bestaudio/best'])
+  if (directUrl) {
+    console.log('[audio-stream] resolved via default client — direct URL')
+    return { url: directUrl, isHls: false }
+  }
+
+  throw new Error('yt-dlp: could not resolve audio URL for ' + youtubeUrl)
 }
 
-// Cache resolved playlist URLs (signed URLs expire ~6h; refresh after 1h)
-const _playlistUrlCache = new Map() // youtubeUrl -> { url, expiresAt }
+// Cache resolved audio URLs (googlevideo signed URLs expire ~6h; refresh after 1h)
+const _playlistUrlCache = new Map() // youtubeUrl -> { url, isHls, expiresAt }
 async function getCachedPlaylistUrl(youtubeUrl) {
   const cached = _playlistUrlCache.get(youtubeUrl)
-  if (cached && cached.expiresAt > Date.now()) return cached.url
-  const url = await resolveAudioPlaylistUrl(youtubeUrl)
-  _playlistUrlCache.set(youtubeUrl, { url, expiresAt: Date.now() + 60 * 60 * 1000 })
-  return url
+  if (cached && cached.expiresAt > Date.now()) return cached
+  const result = await resolveAudioPlaylistUrl(youtubeUrl)
+  _playlistUrlCache.set(youtubeUrl, { ...result, expiresAt: Date.now() + 60 * 60 * 1000 })
+  return result
 }
 
 // Whitelist of upstream hosts we are willing to proxy
@@ -12627,20 +12649,37 @@ app.get('/api/dz-tube/audio-stream', async (req, res) => {
   const url = String(req.query.url || '')
   if (!isValidYouTubeUrl(url)) return res.status(400).end('invalid url')
 
-  let masterUrl
+  let resolved
   try {
-    masterUrl = await getCachedPlaylistUrl(url)
+    resolved = await getCachedPlaylistUrl(url)
   } catch (e) {
     console.error('[audio-stream] resolve failed:', e.message)
     return res.status(502).end('فشل تحميل الصوت')
   }
 
+  const { url: masterUrl, isHls } = resolved
+
+  // Non-HLS path: yt-dlp returned a direct audio URL (not M3U8).
+  // HLS.js cannot parse a direct audio stream as a playlist, so we return a
+  // clear error here. The backgroundPlayer error handler in the frontend will
+  // fall back to /api/dz-tube/audio-proxy automatically.
+  if (!isHls) {
+    console.log('[audio-stream] non-HLS — signalling 501 so client falls back to audio-proxy')
+    return res.status(501).end('non-hls')
+  }
+
+  // HLS path: fetch the M3U8 manifest and rewrite segment URLs so they go
+  // through our same-origin /audio-segment proxy (googlevideo segments are
+  // IP-bound and must be fetched from the server that resolved them).
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const upstream = await fetch(masterUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
       if (upstream.status === 403 && attempt === 0) {
         _playlistUrlCache.delete(url)
-        masterUrl = await getCachedPlaylistUrl(url)
+        resolved = await getCachedPlaylistUrl(url)
+        if (!resolved.isHls) {
+          return res.redirect(307, `/api/dz-tube/audio-proxy?url=${encodeURIComponent(url)}`)
+        }
         continue
       }
       if (!upstream.ok) {
@@ -12648,7 +12687,6 @@ app.get('/api/dz-tube/audio-stream', async (req, res) => {
         return res.status(502).end('فشل تحميل الصوت')
       }
       const text = await upstream.text()
-      // Rewrite every absolute URL line to our segment proxy
       const rewritten = text.split('\n').map(line => {
         const t = line.trim()
         if (!t || t.startsWith('#')) return line

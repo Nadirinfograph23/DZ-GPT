@@ -1,11 +1,15 @@
 import { createContext, useContext, useState, useRef, useEffect, useCallback, ReactNode } from 'react'
 import { backgroundPlayer } from '../utils/backgroundPlayer'
 
-// Smart audio proxy: for Piped/Invidious URLs it returns a 307 redirect so the
-// browser fetches directly from the CDN proxy (fast, no server timeout risk).
-// For IP-bound googlevideo URLs it byte-pipes through the server.
-// Using audio-proxy (not audio-pipe) avoids Vercel's 60s function timeout
-// which was silently killing every song longer than 60 seconds.
+// HLS stream URL — segments are 3-10 s each, far under Vercel's 60s limit.
+// Safari uses native HLS; Chrome/Firefox/Android use HLS.js (auto-attached
+// inside backgroundPlayer). This is the primary audio source.
+function buildHlsStreamUrl(youtubeUrl: string): string {
+  return `/api/dz-tube/audio-stream?url=${encodeURIComponent(youtubeUrl)}`
+}
+
+// Fallback: direct stream proxy. Used when HLS resolution/playback fails.
+// For Piped/Invidious URLs returns a 307 redirect; for googlevideo byte-pipes.
 function buildAudioPipeUrl(youtubeUrl: string): string {
   return `/api/dz-tube/audio-proxy?url=${encodeURIComponent(youtubeUrl)}`
 }
@@ -361,24 +365,32 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // ── Background audio error recovery ──────────────────────────────────────
-  // When the background <audio> element fails (e.g. audio-proxy returns 502,
-  // network error, or the URL expires), unmute the YT iframe as an audible
-  // fallback so the user always hears something instead of silence.
-  // Error counter: if we get 3 errors within 30s we stop trying to recover
-  // the bg audio and leave the YT iframe unmuted permanently for that track.
+  // Layer 1 (HLS fatal): switch immediately to audio-proxy fallback.
+  // Layer 2 (audio-proxy error #1-2): retry with a cache-busted URL.
+  // Layer 3 (audio-proxy error #3): stop retrying; unmute YT iframe.
   useEffect(() => {
-    let bgErrorCount = 0
+    // Track which strategy we're on: 'hls' | 'proxy'
+    let strategy: 'hls' | 'proxy' = 'hls'
+    let proxyErrorCount = 0
     let bgErrorResetTimer: ReturnType<typeof setTimeout> | null = null
 
     backgroundPlayer.on('error', () => {
       if (!wantPlayingRef.current) return
-      bgErrorCount++
       if (bgErrorResetTimer) clearTimeout(bgErrorResetTimer)
-      bgErrorResetTimer = setTimeout(() => { bgErrorCount = 0 }, 30000)
+      bgErrorResetTimer = setTimeout(() => {
+        strategy = 'hls'
+        proxyErrorCount = 0
+      }, 60000)
 
-      console.warn('[mini-player] bg audio error #', bgErrorCount)
+      const t = trackRef.current
+      const curUrl = backgroundPlayer.getCurrentUrl()
+      const isHlsError = strategy === 'hls' ||
+        (curUrl ? curUrl.includes('/audio-stream') : false)
 
-      // Unmute YT iframe as immediate audible fallback so the user always hears sound
+      console.warn('[mini-player] bg audio error — strategy:', isHlsError ? 'hls' : 'proxy')
+
+      // Unmute YT iframe immediately as audible fallback (best-effort;
+      // YT may be suspended on screen-lock but works in foreground).
       try {
         const p = ytPlayerRef.current
         if (p && ytReadyRef.current) {
@@ -387,15 +399,36 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
         }
       } catch {}
 
-      // After 3 errors, stop trying to recover the bg audio — the YT iframe
-      // is now the sole audio source for this track.
-      if (bgErrorCount >= 3) return
+      if (isHlsError) {
+        // HLS failed (yt-dlp unavailable, network error, expired URL) →
+        // fall back to audio-proxy immediately.
+        strategy = 'proxy'
+        if (!t) return
+        const proxyUrl = buildAudioPipeUrl(t.url)
+        console.warn('[mini-player] HLS failed → switching to audio-proxy')
+        setTimeout(() => {
+          if (!wantPlayingRef.current) return
+          try {
+            backgroundPlayer.play(proxyUrl, {
+              title: t.title,
+              artist: t.channel || 'DZ Tube',
+              album: 'DZ Tube',
+              artwork: t.thumbnail,
+            })
+          } catch {}
+        }, 800)
+        return
+      }
 
-      // Single retry: rebuild the audio-proxy URL with cache-bust so the
-      // server invalidates the stale/expired stream URL and extracts a fresh one.
-      const t = trackRef.current
+      // audio-proxy errors: retry with cache-bust up to 2 times.
+      proxyErrorCount++
+      if (proxyErrorCount >= 3) {
+        console.warn('[mini-player] audio-proxy exhausted — YT iframe is sole audio source')
+        return
+      }
       if (!t) return
       const freshUrl = buildAudioPipeUrl(t.url) + `&_r=${Date.now()}`
+      console.warn('[mini-player] audio-proxy retry #', proxyErrorCount)
       setTimeout(() => {
         if (!wantPlayingRef.current) return
         try {
@@ -456,29 +489,32 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     wantPlayingRef.current = true
 
     // ── Audio engine (primary audible source) ─────────────────────────────
-    // Spin up the background <audio> element first so the user-gesture
-    // unlock is captured even on the very first click. Audio bytes come
-    // from our same-origin pipe endpoint so the stream survives the YT
-    // iframe being suspended on screen lock.
+    // HLS is the primary source: segment-based fetching (3-10 s per request)
+    // is immune to Vercel's 60-second function timeout and buffers ahead so
+    // the OS audio thread keeps playing even when JS is suspended on mobile.
+    // audio-proxy remains the fallback (handled in the error listener below).
     try {
       backgroundPlayer.init()
+      const hlsUrl  = buildHlsStreamUrl(t.url)
       const audioUrl = buildAudioPipeUrl(t.url)
-      // Skip a redundant reload of the same source — keeps the buffered
-      // bytes intact and prevents a hiccup when toggling pause/play.
-      if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
-        backgroundPlayer.play(audioUrl, {
+      const curUrl = backgroundPlayer.getCurrentUrl()
+      // Use HLS as primary; only switch to audio-proxy when the error
+      // handler explicitly falls back (it changes currentUrl accordingly).
+      const targetUrl = (curUrl === audioUrl) ? audioUrl : hlsUrl
+      if (curUrl !== targetUrl) {
+        backgroundPlayer.play(targetUrl, {
           title:   t.title,
           artist:  t.channel || 'DZ Tube',
           album:   'DZ Tube',
           artwork: t.thumbnail,
         })
-        // Apply resume offset once the audio has loaded enough metadata to
-        // honour the seek. Without the small delay the seek is silently
-        // dropped on first load.
+        // Apply resume offset once the audio has loaded enough metadata.
+        // HLS.js triggers MANIFEST_PARSED before playing, so the seek needs
+        // a slightly longer grace period than a direct stream.
         if (resumeAt > 1) {
           window.setTimeout(() => {
             try { backgroundPlayer.seek(resumeAt) } catch {}
-          }, 250)
+          }, 800)
         }
       } else {
         backgroundPlayer.play()
@@ -708,13 +744,16 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
       pendingPlayRef.current = { track: t, resumeAt: progress }
       wantPlayingRef.current = true
       setLoading(true)
-      // Still drive the bg player so audio resumes on lockscreen even
+      // Drive the bg HLS player so audio resumes on lockscreen even
       // before the YT iframe is ready.
       try {
         backgroundPlayer.init()
-        const audioUrl = buildAudioPipeUrl(t.url)
-        if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
-          backgroundPlayer.play(audioUrl, {
+        const curUrl = backgroundPlayer.getCurrentUrl()
+        const proxyUrl = buildAudioPipeUrl(t.url)
+        const hlsUrl  = buildHlsStreamUrl(t.url)
+        const targetUrl = (curUrl === proxyUrl) ? proxyUrl : hlsUrl
+        if (curUrl !== targetUrl) {
+          backgroundPlayer.play(targetUrl, {
             title: t.title, artist: t.channel || 'DZ Tube',
             album: 'DZ Tube', artwork: t.thumbnail,
           })
@@ -744,12 +783,20 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
           try { p.mute() } catch {}
           p.playVideo()
           try {
-            const audioUrl = buildAudioPipeUrl(t.url)
-            if (backgroundPlayer.getCurrentUrl() !== audioUrl) {
-              backgroundPlayer.play(audioUrl, {
-                title: t.title, artist: t.channel || 'DZ Tube',
-                album: 'DZ Tube', artwork: t.thumbnail,
-              })
+            const curUrl = backgroundPlayer.getCurrentUrl()
+            const proxyUrl = buildAudioPipeUrl(t.url)
+            // If we already fell back to audio-proxy for this track,
+            // stay on proxy. Otherwise resume the HLS stream.
+            if (curUrl !== proxyUrl) {
+              const hlsUrl = buildHlsStreamUrl(t.url)
+              if (curUrl !== hlsUrl) {
+                backgroundPlayer.play(hlsUrl, {
+                  title: t.title, artist: t.channel || 'DZ Tube',
+                  album: 'DZ Tube', artwork: t.thumbnail,
+                })
+              } else {
+                backgroundPlayer.play()
+              }
             } else {
               backgroundPlayer.play()
             }

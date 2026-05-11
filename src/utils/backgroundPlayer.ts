@@ -3,17 +3,57 @@
 // app-minimised states. Decoupled from any UI element so audio playback is
 // never tied to a DOM mount lifecycle.
 //
-// Usage from any module:
+// HLS-first playback (May 2026):
+//   Primary source → /api/dz-tube/audio-stream (M3U8 playlist, segments proxied)
+//   Each segment is 3-10 s → far under Vercel's 60s function timeout.
+//   Safari: native HLS via <audio src>
+//   Chrome/Firefox/Android: HLS.js attached to the <audio> element
+//   Fallback → /api/dz-tube/audio-proxy (direct stream) if HLS fails
+//
+// Usage:
 //   import { backgroundPlayer } from '@/utils/backgroundPlayer'
-//   backgroundPlayer.init()                        // once, on first user gesture
+//   backgroundPlayer.init()
 //   backgroundPlayer.play(streamUrl, { title, artist, artwork })
 //   backgroundPlayer.pause()
 //   backgroundPlayer.seek(sec)
 //   backgroundPlayer.on('timeupdate', cb)
-//
-// Why this exists: the YouTube IFrame player is suspended by mobile browsers
-// when the screen turns off, killing audio. A vanilla <audio> element with
-// MediaSession metadata keeps playing on the lockscreen on every engine.
+
+import type Hls from 'hls.js'
+
+// Lazy-load HLS.js only in browser, only once, only when needed.
+let _hlsModule: typeof Hls | null = null
+let _hlsLoading = false
+let _hlsLoadCallbacks: Array<(Ctor: typeof Hls | null) => void> = []
+function loadHlsJs(): Promise<typeof Hls | null> {
+  if (_hlsModule !== null) return Promise.resolve(_hlsModule)
+  return new Promise(resolve => {
+    _hlsLoadCallbacks.push(resolve)
+    if (_hlsLoading) return
+    _hlsLoading = true
+    import('hls.js')
+      .then(m => {
+        _hlsModule = m.default as unknown as typeof Hls
+        const cbs = _hlsLoadCallbacks.splice(0)
+        cbs.forEach(cb => cb(_hlsModule))
+      })
+      .catch(() => {
+        const cbs = _hlsLoadCallbacks.splice(0)
+        cbs.forEach(cb => cb(null))
+      })
+  })
+}
+
+// Detect Safari (which supports native HLS in <audio>).
+function isSafariNativeHls(): boolean {
+  if (typeof window === 'undefined') return false
+  const a = document.createElement('audio')
+  return a.canPlayType('application/vnd.apple.mpegurl') !== ''
+}
+
+// Detect if a URL is an HLS playlist
+function isHlsUrl(url: string): boolean {
+  return /\.m3u8($|\?)/i.test(url) || url.includes('/audio-stream')
+}
 
 export interface BgMetadata {
   title?: string
@@ -34,21 +74,21 @@ export interface BgListeners {
 
 class BackgroundPlayer {
   private audio: HTMLAudioElement | null = null
+  private hlsInstance: any = null  // HLS.js instance when active
   private isInitialized = false
   private listeners: BgListeners = {}
   private currentUrl: string | null = null
-  // When true, the engine treats stalls/suspends as recoverable and tries
-  // exactly one resume. Disabled while the user has explicitly paused so we
-  // don't fight a real pause.
   private wantPlaying = false
   private lastResumeAt = 0
-  // Visibility nudge: re-triggers play() the moment a tab goes hidden so the
-  // audio thread stays warm before the OS has a chance to suspend it.
   private visibilityHandler: (() => void) | null = null
 
   constructor() {
     if (typeof window === 'undefined') return
     this.createAudioElement()
+    // Pre-warm HLS.js so it's ready before the first play() call.
+    if (!isSafariNativeHls()) {
+      void loadHlsJs()
+    }
   }
 
   private createAudioElement() {
@@ -57,11 +97,7 @@ class BackgroundPlayer {
     a.crossOrigin = 'anonymous'
     a.preload = 'auto'
     a.loop = false
-    // Hint to the browser that this is "music" — Android uses this to keep
-    // audio focus and show the right lockscreen UI.
     try { (a as any).mozAudioChannelType = 'content' } catch {}
-    // iOS Safari: allow audio to play inline without fullscreen, and enable
-    // AirPlay forwarding. Required for lockscreen audio on mobile Safari.
     try { a.setAttribute('playsinline', '') } catch {}
     try { a.setAttribute('webkit-playsinline', '') } catch {}
     try { a.setAttribute('x-webkit-airplay', 'allow') } catch {}
@@ -73,22 +109,13 @@ class BackgroundPlayer {
     })
     a.addEventListener('pause', () => {
       this.listeners.pause?.()
-      // Don't flip wantPlaying here — pause() may be browser-issued
-      // (audio focus loss on a phone call); the user-pause path resets it.
       this.updateMediaSessionState('paused')
     })
     a.addEventListener('ended', () => {
-      // Guard against premature 'ended' caused by an upstream proxy
-      // (Piped/Invidious) closing the connection cleanly after a few KB.
-      // When that happens the browser fires 'ended' even though the track
-      // has barely started. Detect it: < 10 s of actual playback is always
-      // a truncated stream, not a genuine track end.
       const ct = a.currentTime || 0
       const dur = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 0
       const looksGenuine = ct > 10 && (dur <= 0 || ct >= dur * 0.85)
       if (!looksGenuine && this.wantPlaying) {
-        // Treat as a recoverable network error so the error handler in
-        // MiniPlayerContext can unmute the YT iframe and retry the stream.
         this.listeners.error?.(new Event('ended-premature'))
         return
       }
@@ -98,8 +125,6 @@ class BackgroundPlayer {
     })
     a.addEventListener('timeupdate', () => {
       this.listeners.timeupdate?.(a.currentTime || 0, a.duration || 0)
-      // Keep lockscreen scrubber position in sync on every timeupdate so the
-      // OS progress bar is accurate even when the screen is off.
       this.updatePositionState(a.currentTime || 0, a.duration || 0, a.playbackRate || 1)
     })
     a.addEventListener('loadedmetadata', () => {
@@ -109,11 +134,6 @@ class BackgroundPlayer {
     a.addEventListener('canplay',  () => { this.listeners.loading?.(false) })
     a.addEventListener('playing',  () => { this.listeners.loading?.(false) })
 
-    // Anti-break protection — when the network briefly stalls (mobile data
-    // hiccup, brief offline) the browser fires `stalled` / `suspend`. We
-    // try one play() to nudge it back. Bounded so we don't spin in a tight
-    // loop if the URL is genuinely dead.
-    // Per spec: always attempt recovery on stall/suspend while wantPlaying.
     const tryRecover = () => {
       if (!this.wantPlaying) return
       if (Date.now() - this.lastResumeAt < 2000) return
@@ -122,41 +142,42 @@ class BackgroundPlayer {
     }
     a.addEventListener('stalled',  tryRecover)
     a.addEventListener('suspend',  tryRecover)
-    // `emptied` fires when the browser discards the buffer (e.g. tab
-    // backgrounded on iOS). Re-load and resume so playback survives.
     a.addEventListener('emptied', () => {
       if (!this.wantPlaying || !this.currentUrl) return
       if (Date.now() - this.lastResumeAt < 2000) return
       this.lastResumeAt = Date.now()
-      a.load()
-      a.play().catch(() => {})
+      // For HLS, HLS.js handles recovery automatically.
+      // For direct URLs, reload is needed.
+      if (!this.hlsInstance) {
+        a.load()
+        a.play().catch(() => {})
+      }
     })
     a.addEventListener('error', (e) => {
-      this.listeners.error?.(e)
-      // Browsers fire MEDIA_ERR_NETWORK as code 2 — recoverable.
-      const code = (a.error && a.error.code) || 0
-      if (code === 2 && this.wantPlaying) tryRecover()
+      // HLS.js fatal errors are forwarded separately in _attachHls.
+      // Only propagate non-HLS errors here.
+      if (!this.hlsInstance) {
+        this.listeners.error?.(e)
+        const code = (a.error && a.error.code) || 0
+        if (code === 2 && this.wantPlaying) tryRecover()
+      }
     })
 
     this.audio = a
 
-    // ── Keep-alive: nudge currentTime every 20 s ─────────────────────────
-    // Chrome/Android throttle background audio threads when they detect no
-    // activity. A tiny imperceptible currentTime bump convinces the browser
-    // the audio pipeline is still active, preventing freeze / suspension.
-    // Store as a local variable (not a class field) to avoid the TS6133
-    // "declared but never read" error — the timer is self-sufficient.
+    // Keep-alive: nudge currentTime every 20 s to prevent Chrome/Android
+    // from throttling the background audio thread.
     const keepAlive = setInterval(() => {
       if (!this.audio || !this.wantPlaying || this.audio.paused) return
-      try { this.audio.currentTime += 0.00001 } catch {}
+      // HLS.js manages its own buffer; only nudge for direct streams.
+      if (!this.hlsInstance) {
+        try { this.audio.currentTime += 0.00001 } catch {}
+      }
     }, 20000)
-    // Keep reference alive for the lifetime of the object.
     void keepAlive
 
-    // ── Visibility nudge ──────────────────────────────────────────────────
-    // When the page is hidden (tab switch / screen lock) call play() before
-    // the OS has a chance to suspend the audio thread. When visible again,
-    // do the same so any OS-level resume is properly reflected.
+    // Visibility nudge: call play() the moment a tab goes hidden so the
+    // audio thread stays warm before the OS can suspend it.
     if (typeof document !== 'undefined') {
       this.visibilityHandler = () => {
         if (!this.wantPlaying || !this.audio) return
@@ -165,6 +186,72 @@ class BackgroundPlayer {
         }
       }
       document.addEventListener('visibilitychange', this.visibilityHandler, { passive: true })
+    }
+  }
+
+  /** Tear down any active HLS.js instance without destroying the <audio>. */
+  private destroyHls() {
+    if (this.hlsInstance) {
+      try { this.hlsInstance.destroy() } catch {}
+      this.hlsInstance = null
+    }
+  }
+
+  /**
+   * Attach HLS.js to the audio element for an M3U8 URL.
+   * Forwards fatal HLS errors to the `error` listener so MiniPlayerContext
+   * can fall back to the audio-proxy endpoint.
+   */
+  private async _attachHls(url: string) {
+    if (!this.audio) return false
+    const HlsCtor = await loadHlsJs()
+    if (!HlsCtor) return false
+    if (!(HlsCtor as any).isSupported()) return false
+
+    this.destroyHls()
+    try {
+      const hls = new (HlsCtor as any)({
+        enableWorker: true,
+        lowLatencyMode: false,
+        // Buffer 90 s ahead so a brief foreground→background transition
+        // doesn't cause a gap while the OS suspends JS.
+        maxBufferLength: 90,
+        backBufferLength: 30,
+        // Aggressive retry so transient Piped/Invidious hiccups self-heal.
+        fragLoadingMaxRetry: 6,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingMaxRetry: 4,
+        fragLoadingRetryDelay: 1000,
+        xhrSetup: (xhr: XMLHttpRequest) => {
+          // 30s timeout per segment — well under Vercel's 60s limit.
+          xhr.timeout = 30000
+        },
+      })
+
+      hls.on((HlsCtor as any).Events.ERROR, (_ev: string, data: any) => {
+        if (data.fatal) {
+          console.warn('[bg-player] HLS fatal error:', data.type, data.details)
+          this.destroyHls()
+          // Signal upstream to fall back to audio-proxy.
+          this.listeners.error?.(new Error(`HLS fatal: ${data.details}`))
+        } else {
+          console.debug('[bg-player] HLS non-fatal:', data.details)
+        }
+      })
+
+      hls.on((HlsCtor as any).Events.MANIFEST_PARSED, () => {
+        if (this.wantPlaying && this.audio) {
+          this.audio.play().catch(() => {})
+        }
+      })
+
+      hls.loadSource(url)
+      hls.attachMedia(this.audio)
+      this.hlsInstance = hls
+      return true
+    } catch (err) {
+      console.warn('[bg-player] HLS attach failed:', err)
+      return false
     }
   }
 
@@ -179,8 +266,6 @@ class BackgroundPlayer {
     const unlock = () => {
       if (this.isInitialized || !this.audio) return
       this.isInitialized = true
-      // Touch the engine inside the user-gesture frame so a later
-      // programmatic .play() (e.g. from MediaSession) is allowed.
       const a = this.audio
       const wasSrc = a.src
       a.muted = true
@@ -197,7 +282,6 @@ class BackgroundPlayer {
     document.addEventListener('keydown',   unlock, { once: true })
   }
 
-  /** Subscribe to engine events. Replace any prior listener for the same key. */
   on<K extends keyof BgListeners>(event: K, cb: BgListeners[K]) {
     this.listeners[event] = cb
   }
@@ -206,20 +290,57 @@ class BackgroundPlayer {
     delete this.listeners[event]
   }
 
-  /** Replace the source and start playback. No-op if `url` is empty. */
+  /**
+   * Replace the source and start playback.
+   * If `url` is an HLS/M3U8 URL: Safari uses native HLS, others use HLS.js.
+   * Direct URLs (audio-proxy) are loaded as before.
+   */
   play(url?: string, metadata: BgMetadata = {}) {
     this.createAudioElement()
     if (!this.audio) return
-    if (url) {
-      // Skip a redundant src reset — just resume — because reassigning .src
-      // forces the browser to re-buffer from byte 0 and breaks the user's
-      // current playback position.
-      if (this.audio.src !== url) {
+
+    if (url && url !== this.currentUrl) {
+      const isHls = isHlsUrl(url)
+      this.currentUrl = url
+      this.destroyHls()
+
+      if (isHls) {
+        if (isSafariNativeHls()) {
+          // Safari: set src directly — browser handles HLS natively.
+          this.audio.src = url
+          try { this.audio.load() } catch {}
+          // Playback starts once wantPlaying = true (below).
+        } else {
+          // Chrome/Firefox/Android: async HLS.js attach.
+          // We set wantPlaying = true first so the MANIFEST_PARSED handler
+          // (above) calls play() when the playlist arrives.
+          this.wantPlaying = true
+          void this._attachHls(url).then(ok => {
+            if (!ok) {
+              // HLS.js unavailable — fall back to setting src directly.
+              if (this.audio && this.currentUrl === url) {
+                this.audio.src = url
+                try { this.audio.load() } catch {}
+                if (this.wantPlaying) {
+                  this.audio.play().catch(() => {})
+                }
+              }
+            }
+            // On success, MANIFEST_PARSED calls play() automatically.
+          })
+          if (metadata && (metadata.title || metadata.artist || metadata.artwork)) {
+            this.setMediaSession(metadata)
+          }
+          // Return early — HLS.js will trigger play() asynchronously.
+          return
+        }
+      } else {
+        // Non-HLS direct URL (audio-proxy fallback).
         this.audio.src = url
-        this.currentUrl = url
         try { this.audio.load() } catch {}
       }
     }
+
     this.wantPlaying = true
     const p = this.audio.play()
     if (p && typeof p.catch === 'function') p.catch(() => {})
@@ -228,14 +349,13 @@ class BackgroundPlayer {
     }
   }
 
-  /** Pause playback. Marks the user-paused intent so auto-recover stops. */
+  /** Pause playback. Marks user-paused intent so auto-recover stops. */
   pause() {
     this.wantPlaying = false
     if (!this.audio) return
     try { this.audio.pause() } catch {}
   }
 
-  /** Toggle play/pause based on current state. */
   toggle() {
     if (!this.audio) return
     if (this.audio.paused) this.play()
@@ -250,14 +370,11 @@ class BackgroundPlayer {
 
   stop() {
     this.wantPlaying = false
+    this.destroyHls()
     if (!this.audio) return
     try {
       this.audio.pause()
-      // Drop the source to release the network connection, but keep the
-      // audio element alive in memory — never destroy it. Recreating the
-      // element would lose the user-gesture unlock on iOS/Android.
       this.audio.removeAttribute('src')
-      // `load()` after removing src resets the decoder but keeps the element.
       try { this.audio.load() } catch {}
     } catch {}
     this.currentUrl = null
@@ -373,12 +490,10 @@ class BackgroundPlayer {
   }
 }
 
-// Module-level singleton — `new Audio()` once for the whole app, never
-// destroyed, so playback survives any UI re-render or component unmount.
+// Module-level singleton — created once for the whole app, never destroyed,
+// so playback survives any UI re-render or component unmount.
 export const backgroundPlayer = new BackgroundPlayer()
 
 if (typeof window !== 'undefined') {
-  // Surface for cross-module debugging (e.g. from the dev console). Not used
-  // by the app at runtime.
   ;(window as any).__dzBgPlayer = backgroundPlayer
 }

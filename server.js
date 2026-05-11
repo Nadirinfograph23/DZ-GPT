@@ -12,6 +12,9 @@ import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
 
+// ── Autonomous Reasoning Engine (CoT, ReAct, ToT, Self-Reflection) ──────────
+import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
+
 // ── Resilience layer (must import before anything else uses AI) ──────────────
 import {
   aiSemaphore,
@@ -9796,19 +9799,50 @@ MANDATORY REQUIREMENTS:
   const _smartIntent  = detectSmartIntent(lastUserMessage)
   const _taskHint     = getTaskRoutingHint(_smartIntent)
 
+  // ── Autonomous Reasoning Layer ────────────────────────────────────────────
+  // Enriches system prompt with CoT / ReAct / ToT / Decomposition / Multi-Agent
+  // based on query complexity. Zero extra AI calls for simple queries.
+  const _hasSearchCtx = !!(webSearchContext || rssContext || lfpContext || footballContext)
+  const {
+    messages: reasonedMessages,
+    strategy: _reasoningStrategy,
+    complexity: _queryComplexity,
+    needsReflection: _needsReflection,
+  } = applyReasoning(apiMessages, lastUserMessage, {
+    intent: _smartIntent,
+    hasSearch: _hasSearchCtx,
+  })
+
   // ── Validated fallback chain: DeepSeek → Ollama → Groq (with response validation) ───
   // Each step's output is validated for non-empty, meaningful content before returning.
   // History is trimmed to last 8 turns to keep context relevant and reduce off-topic answers.
   const aiResult = await safeGenerateAI({
-    messages: apiMessages,
+    messages: reasonedMessages,
     query: lastUserMessage,
-    max_tokens: 3000,
+    max_tokens: _queryComplexity === 'multi_step' || _queryComplexity === 'complex' ? 4000 : 3000,
     taskHint: _taskHint,
   })
+
+  // ── Self-Reflection Pass (complex/multi_step queries only) ────────────────
+  // Runs a lightweight QA pass over the AI's draft to improve accuracy.
+  // Only activates when _needsReflection=true AND a valid draft was produced.
+  if (aiResult.content && _needsReflection) {
+    const reflectedContent = await selfReflect(
+      lastUserMessage,
+      aiResult.content,
+      async (msgs) => safeGenerateAI({ messages: msgs, query: lastUserMessage, max_tokens: 3000, taskHint: 'reasoning' })
+    )
+    if (reflectedContent && reflectedContent !== aiResult.content) {
+      aiResult.content = reflectedContent
+      aiResult.model = (aiResult.model || 'unknown') + '+reflection'
+    }
+  }
+
   if (aiResult.content) {
     return res.status(200).json({
       content: _cleanRawUrls(aiResult.content),
       fallbackModel: aiResult.model,
+      reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,

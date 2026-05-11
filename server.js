@@ -8801,6 +8801,7 @@ MANDATORY REQUIREMENTS:
   }
 
   const doctorIntent = detectDoctorIntent(lastUserMessage)
+  console.log(`[DoctorSearch] isDoctorQuery=${doctorIntent.isDoctorQuery} speciality=${doctorIntent.speciality?.ar||'—'} city=${doctorIntent.city?.ar||'—'} query="${lastUserMessage.slice(0,60)}"`)
   if (doctorIntent.isDoctorQuery) {
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
@@ -8857,6 +8858,9 @@ MANDATORY REQUIREMENTS:
       city: doctorIntent.city.fr,
       userLocation,
     })
+    const _realCount = results.filter(r => !r.directoryLink).length
+    const _dirCount  = results.filter(r => r.directoryLink).length
+    console.log(`[DoctorSearch] results: total=${results.length} real=${_realCount} dirs=${_dirCount} cached=${cached} spec="${doctorIntent.speciality.search}" city="${doctorIntent.city.fr}"`)
     return res.status(200).json({
       content: formatDoctorResults(results, doctorIntent.speciality, doctorIntent.city, { hasGps: !!userLocation })
         + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),

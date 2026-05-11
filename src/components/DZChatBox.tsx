@@ -247,6 +247,7 @@ interface DZMessage {
   captionNote?: string
   captionText?: string
   webReaderSiteInfo?: { url: string; title: string; domain: string; description: string; headings: string[] }
+  model?: string
 }
 
 interface ActionLogEntry {

@@ -1029,7 +1029,7 @@ import {
   SERVICE_CONFIG,
 } from './lib/dzPlaceSearch.js'
 
-const DOCTOR_SOURCE_COUNT = 10
+const DOCTOR_SOURCE_COUNT = 4
 
 function formatDoctorResults(results, speciality, city, opts = {}) {
   const specLabel = speciality?.ar || speciality?.fr || 'الأطباء'

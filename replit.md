@@ -516,6 +516,64 @@ Server already had full mute logic (`mutedUsers` Map, mute/unmute/muteUpdate bro
   - CSS: `.dzc-pinned-bar`, `.dzc-pinned-pill`, `.dzc-context-item--pin` with gold accent color `#f0b429`
 - **Files modified**: `src/pages/DZChat.tsx`, `src/styles/dzchat.css`
 
+## GitHub Pages Autonomous Deployment Engine (May 2026)
+
+Added full autonomous deployment to GitHub Pages directly from DZ Agent chat — no Vercel, no Netlify, no manual steps.
+
+### New File: `lib/github-pages/index.js`
+Core engine with these exports:
+- `deployGitHubPages({ token, prompt, siteType, repoName, description, htmlContent })` — full pipeline
+- `batchPushFiles(token, owner, repo, files, commitMessage, branch)` — Git Data API batch commit
+- `createRepo(token, repoName, description, isPrivate)` — create GitHub repo
+- `enableGitHubPages(token, owner, repo)` — activate Pages (workflow + classic fallback)
+- `getPagesStatus(token, owner, repo)` — check Pages deployment status
+- `detectGitHubPagesIntent(message)` — 23-pattern intent detection (Arabic + English + Darija)
+- `extractPagesRequestMeta(message)` — extract siteType / repoName / username from prompt
+- `generatePagesWorkflow()` — GitHub Actions YAML for `actions/deploy-pages@v4`
+- `generateReadme(repoName, description, siteUrl)` — auto README
+
+### Deployment Pipeline
+```
+User chat message (arabic/english/darija)
+→ detectGitHubPagesIntent() → GITHUB_PAGES_MODE
+→ AI generates full HTML site (WEB_BUILDER quality, 8000 tokens)
+→ createRepo() on user's GitHub account
+→ batchPushFiles(): index.html + .github/workflows/pages.yml + README.md
+→ enableGitHubPages() (workflow-based, fallback to classic)
+→ Returns: siteUrl + repoUrl + live preview in chat
+```
+
+### New API Endpoints in `server.js`
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/dz-agent/github/pages/deploy` | Full pipeline: AI-gen site + create repo + push + enable Pages |
+| POST | `/api/dz-agent/github/pages/update` | Update existing Pages repo with new files |
+| GET | `/api/dz-agent/github/pages/status` | Check Pages deployment status (`?owner=&repo=`) |
+| POST | `/api/dz-agent/github/pages/list-repos` | List user's repos with Pages enabled |
+
+### Chat Intent Detection (GITHUB_PAGES_MODE)
+Triggered automatically in `/api/dz-agent-chat` handler before WEB_BUILDER_MODE when the message matches any of 23 patterns including:
+- `github pages`, `github.io`, `gh-pages`
+- `انشر على github`, `أنشئ موقع على github`
+- `deploy.*github`, `publish.*github`, `host.*github`
+
+### Chat Response
+On success, returns:
+- Rich markdown message with live site URL + repo URL
+- `isWebsite: true` with full HTML for local preview
+- `githubPages: { siteUrl, repoUrl, repo, owner, commitSha }` object
+- Graceful fallback: if deploy fails, still shows local preview + HTML download
+
+### Security
+- Token used only server-side (`process.env.GITHUB_TOKEN`) — never exposed to client
+- Repo names sanitized to `[a-z0-9\-_.]` slug
+- `isValidGithubRepo()` validation on update/status endpoints
+- No destructive operations (no delete, no force-push)
+
+### Files Modified
+- `server.js` — import + 4 new endpoints + GITHUB_PAGES_MODE intent handler in chat
+- `lib/github-pages/index.js` — new file (core engine)
+
 ## External Dependencies
 
 - **AI Providers**: Groq (default), DeepSeek, Ollama, + Gemini / Mistral / NVIDIA / Cohere / OpenRouter (optional via env vars).

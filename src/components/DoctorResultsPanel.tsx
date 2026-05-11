@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 
 export interface DoctorResult {
   name: string
@@ -16,6 +16,7 @@ export interface DoctorResult {
   distanceKm?: number
   lat?: number
   lng?: number
+  nameScore?: number
 }
 
 export interface DirLink {
@@ -80,9 +81,28 @@ function telUrl(phone: string) {
   return `tel:${phone}`
 }
 
+function whatsappUrl(phone: string) {
+  const d = phone.replace(/\D/g, '')
+  let intl = ''
+  if (d.length === 10 && d.startsWith('0')) intl = '213' + d.slice(1)
+  else if (d.length === 9) intl = '213' + d
+  else if (d.length === 12 && d.startsWith('213')) intl = d
+  if (!intl) return null
+  const isMobile = /^213(5|6|7)/.test(intl)
+  if (!isMobile) return null
+  return `https://wa.me/${intl}`
+}
+
 function cleanName(name: string) {
   if (/^(dr\.?\s|docteur\s|د\.?\s|الدكتور\s|الدكتوره\s|دكتور\s|دكتوره\s)/i.test(name.trim())) return name.trim()
   return `د. ${name.trim()}`
+}
+
+function matchLabel(score: number): { label: string; cls: string } | null {
+  if (score >= 0.9) return { label: '✓ تطابق تام', cls: 'dr-match-badge--exact' }
+  if (score >= 0.65) return { label: '✓ تطابق عالٍ', cls: 'dr-match-badge--high' }
+  if (score >= 0.45) return { label: '~ قريب', cls: 'dr-match-badge--mid' }
+  return { label: '? محتمل', cls: 'dr-match-badge--low' }
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -91,10 +111,33 @@ const SOURCE_LABELS: Record<string, string> = {
   sihhatech: 'Sihhatech', machrou3: 'Machrou3', beesiha: 'Beesiha',
 }
 
-function DoctorCard({ doctor, specLabel, cityLabel }: {
+function CopyPhoneBtn({ phone }: { phone: string }) {
+  const [copied, setCopied] = useState(false)
+  function handleCopy(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(phone).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    })
+  }
+  return (
+    <button
+      className={`dr-copy-btn${copied ? ' dr-copy-btn--ok' : ''}`}
+      onClick={handleCopy}
+      title="نسخ الرقم"
+      type="button"
+    >
+      {copied ? <Check size={11} /> : <Copy size={11} />}
+    </button>
+  )
+}
+
+function DoctorCard({ doctor, specLabel, cityLabel, showScore }: {
   doctor: DoctorResult
   specLabel: string
   cityLabel: string
+  showScore: boolean
 }) {
   const displayName = cleanName(doctor.name)
   const gender = guessGender(doctor.name)
@@ -104,13 +147,21 @@ function DoctorCard({ doctor, specLabel, cityLabel }: {
   const locationLabel = addrAr
     ? `${addrAr}، ${cityAr}`.replace(/^،\s*/, '').replace(/،\s*$/, '')
     : cityAr || 'الجزائر'
+  const waUrl = doctor.phone ? whatsappUrl(doctor.phone) : null
+  const score = doctor.nameScore ?? 0
+  const match = showScore && score > 0 ? matchLabel(score) : null
 
   return (
     <div className="dr-card">
       <div className="dr-card-header">
         <span className="dr-card-avatar">{gender === 'f' ? '👩‍⚕️' : '👨‍⚕️'}</span>
         <div className="dr-card-name-block">
-          <span className="dr-card-name">{displayName}</span>
+          <div className="dr-card-name-row">
+            <span className="dr-card-name">{displayName}</span>
+            {match && (
+              <span className={`dr-match-badge ${match.cls}`}>{match.label}</span>
+            )}
+          </div>
           {specAr && (
             <span className="dr-card-spec-badge">
               {getSpecEmoji(specAr)} {specAr}
@@ -139,13 +190,31 @@ function DoctorCard({ doctor, specLabel, cityLabel }: {
         )}
 
         {doctor.phone ? (
-          <a
-            className="dr-card-row dr-card-row--phone"
-            href={telUrl(doctor.phone)}
-          >
-            <Phone size={13} className="dr-card-row-icon" />
-            <span className="dr-card-row-text">{formatPhone(doctor.phone)}</span>
-          </a>
+          <div className="dr-card-phone-group">
+            <a
+              className="dr-card-row dr-card-row--phone"
+              href={telUrl(doctor.phone)}
+            >
+              <Phone size={13} className="dr-card-row-icon" />
+              <span className="dr-card-row-text">{formatPhone(doctor.phone)}</span>
+            </a>
+            <div className="dr-card-phone-actions">
+              <CopyPhoneBtn phone={doctor.phone} />
+              {waUrl && (
+                <a
+                  className="dr-wa-btn"
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="واتساب"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                </a>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="dr-card-row dr-card-row--muted">
             <Phone size={13} className="dr-card-row-icon" />
@@ -217,8 +286,17 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
       {doctors.length === 0 && dirs.length === 0 && (
         <div className="dr-panel-empty">
           <span className="dr-panel-empty-icon">🔍</span>
-          <p>لم أجد نتائج حالياً لهذا البحث.</p>
-          <p className="dr-panel-empty-tip">جرّب ولاية مجاورة أو تخصصاً مرادفاً.</p>
+          {isNameSearch ? (
+            <>
+              <p>لم أجد طبيباً باسم <strong>"{meta.queryName || meta.speciality.ar}"</strong> في قواعد البيانات.</p>
+              <p className="dr-panel-empty-tip">جرّب كتابة الاسم بشكل مختلف، أو ابحث بالتخصص والمدينة.</p>
+            </>
+          ) : (
+            <>
+              <p>لم أجد نتائج حالياً لهذا البحث.</p>
+              <p className="dr-panel-empty-tip">جرّب ولاية مجاورة أو تخصصاً مرادفاً.</p>
+            </>
+          )}
         </div>
       )}
 
@@ -228,8 +306,9 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
             <DoctorCard
               key={i}
               doctor={doc}
-              specLabel={meta.speciality.ar}
+              specLabel={isNameSearch ? '' : meta.speciality.ar}
               cityLabel={meta.city.ar}
+              showScore={isNameSearch}
             />
           ))}
         </div>

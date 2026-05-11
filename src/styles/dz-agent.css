@@ -6183,6 +6183,14 @@
   min-width: 0;
 }
 
+.dr-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .dr-card-name {
   font-size: 13.5px;
   font-weight: 700;
@@ -6191,6 +6199,37 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Match quality badge (byName mode) */
+.dr-match-badge {
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+}
+.dr-match-badge--exact {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+.dr-match-badge--high {
+  color: #86efac;
+  background: rgba(134, 239, 172, 0.08);
+  border: 1px solid rgba(134, 239, 172, 0.2);
+}
+.dr-match-badge--mid {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+.dr-match-badge--low {
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.18);
 }
 
 .dr-card-spec-badge {
@@ -6247,6 +6286,73 @@
 
 .dr-card-row--muted {
   opacity: 0.5;
+}
+
+/* Phone row group: tel link + copy + whatsapp */
+.dr-card-phone-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dr-card-phone-group .dr-card-row--phone {
+  flex: 1;
+  min-width: 0;
+}
+
+.dr-card-phone-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* Copy button */
+.dr-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  padding: 0;
+}
+
+.dr-copy-btn:hover {
+  background: rgba(107, 114, 128, 0.1);
+  color: #d1d5db;
+  border-color: rgba(107, 114, 128, 0.35);
+}
+
+.dr-copy-btn--ok {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.07);
+}
+
+/* WhatsApp button */
+.dr-wa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid rgba(37, 211, 102, 0.2);
+  background: transparent;
+  color: #25d366;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.dr-wa-btn:hover {
+  background: rgba(37, 211, 102, 0.1);
+  border-color: rgba(37, 211, 102, 0.4);
 }
 
 .dr-card-row-icon {

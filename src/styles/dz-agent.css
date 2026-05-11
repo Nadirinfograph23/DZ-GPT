@@ -5660,3 +5660,213 @@
   .dzc-qs-chips { gap: 5px; }
   .dzc-qs-chip { font-size: 11px; padding: 5px 10px; }
 }
+
+/* ===== AGENT STEPS PANEL (Autonomous Mode — Devin/Cursor style) ===== */
+
+.asp-wrapper {
+  background: linear-gradient(135deg, rgba(12,12,12,0.95) 0%, rgba(18,20,14,0.95) 100%);
+  border: 1px solid rgba(200, 255, 0, 0.18);
+  border-radius: 14px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 520px;
+  font-family: inherit;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(200,255,0,0.05);
+  animation: asp-appear 0.3s ease-out;
+}
+
+@keyframes asp-appear {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.asp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 13px;
+  background: rgba(200, 255, 0, 0.04);
+  border-bottom: 1px solid rgba(200, 255, 0, 0.1);
+}
+
+.asp-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c8ff00;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.asp-status-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.asp-status-text--done  { color: #4ade80; }
+.asp-status-text--error { color: #f87171; }
+
+.asp-steps {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.asp-step {
+  display: flex;
+  gap: 10px;
+  position: relative;
+}
+
+.asp-step-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 22px;
+}
+
+.asp-step-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 1.5px solid #333;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+  z-index: 1;
+}
+
+.asp-step-dot--running {
+  border-color: #c8ff00;
+  background: rgba(200, 255, 0, 0.08);
+  color: #c8ff00;
+  box-shadow: 0 0 8px rgba(200,255,0,0.25);
+}
+
+.asp-step-dot--done {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+  color: #4ade80;
+}
+
+.asp-step-dot--error {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  color: #f87171;
+}
+
+.asp-step-dot--warn {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+}
+
+.asp-step-dot--pending {
+  border-color: #2a2a2a;
+  background: #111;
+  color: #555;
+}
+
+.asp-connector {
+  width: 1.5px;
+  flex: 1;
+  min-height: 10px;
+  margin: 2px 0;
+  background: #222;
+  border-radius: 1px;
+}
+
+.asp-connector--active { background: rgba(200,255,0,0.2); }
+
+.asp-step-body {
+  padding: 3px 0 10px 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.asp-step-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #ccc;
+  line-height: 1.3;
+}
+
+.asp-step--running .asp-step-label { color: #fff; }
+.asp-step--done    .asp-step-label { color: #aaa; }
+.asp-step--pending .asp-step-label { color: #555; }
+.asp-step--error   .asp-step-label { color: #f87171; }
+
+.asp-step-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.asp-step-detail {
+  font-size: 10.5px;
+  color: #555;
+  margin-top: 2px;
+  padding-right: 2px;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.asp-step--running .asp-step-detail { color: rgba(200,255,0,0.5); }
+.asp-step--done    .asp-step-detail { color: #4ade80; opacity: 0.7; }
+
+.asp-spin {
+  animation: asp-rotate 1s linear infinite;
+}
+
+@keyframes asp-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (max-width: 520px) {
+  .asp-wrapper { max-width: 100%; border-radius: 10px; }
+  .asp-step-label { font-size: 12px; }
+  .asp-step-detail { font-size: 10px; }
+}
+
+/* ===== AUTONOMOUS MODE BADGE ===== */
+.dz-autonomous-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #c8ff00;
+  background: rgba(200, 255, 0, 0.08);
+  border: 1px solid rgba(200, 255, 0, 0.2);
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-right: 6px;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+
+.dz-avatar--autonomous {
+  border-color: rgba(200, 255, 0, 0.5) !important;
+  box-shadow: 0 0 10px rgba(200, 255, 0, 0.2) !important;
+  background: rgba(200, 255, 0, 0.06) !important;
+}

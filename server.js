@@ -45,6 +45,7 @@ import { mountDzAgentV3 } from './lib/dz-v3/mount.js'
 import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
 import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
+import { mountAutonomousAgent } from './lib/autonomous/mount.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
@@ -13412,6 +13413,16 @@ try {
   })
 } catch (err) {
   console.warn('[dz-v5] mount failed:', err.message)
+}
+
+// ===== AUTONOMOUS AGENT (Devin/Cursor style pipeline — /api/dz-agent/autonomous/*) =====
+// Step-by-step: Analyze → Plan → Execute → Verify → Respond (SSE streaming)
+try {
+  mountAutonomousAgent(app, {
+    aiGenerate: (params) => safeGenerateAI({ ...params }),
+  })
+} catch (err) {
+  console.warn('[autonomous] mount failed:', err.message)
 }
 
 // ===== DZ TUBE ANALYTICS (mini-player events) =====

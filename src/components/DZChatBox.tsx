@@ -18,6 +18,8 @@ import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
+import AgentStepsPanel from './AgentStepsPanel'
+import type { AgentStep } from './AgentStepsPanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== RATING PERSISTENCE =====
@@ -2838,6 +2840,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
@@ -3778,6 +3782,115 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [isAdvancedCloneLoading, addAssistantMessage, setMessages])
 
+  // ===== AUTONOMOUS QUERY DETECTION =====
+  const detectAutonomousQuery = useCallback((query: string): boolean => {
+    const q = query.toLowerCase()
+    // Website builder already handles these separately — don't intercept
+    if (/أنش[ئئ]\s+موقع|صمم\s+صفحة|landing\s+page|portfolio\s+site|صفحة\s+ويب/i.test(q)) return false
+    if (/استنسخ|clone\s+website|انسخ\s+الموقع/i.test(q)) return false
+    // Don't intercept YouTube, map, weather, news queries
+    if (/فيديو|يوتيوب|خريطة|طقس|أخبار|صلاة|أذان/i.test(q)) return false
+    // Trigger autonomous for coding / app building
+    if (/أنش[ئئ]\s+(تطبيق|برنامج|نظام|أداة|سكريبت|api|كومبوننت)/i.test(q)) return true
+    if (/اكتب\s+(كود|برنامج|تطبيق|سكريبت|نظام|فنكشن)/i.test(q)) return true
+    if (/(اعمل|دير)\s+(تطبيق|برنامج|نظام)/i.test(q)) return true
+    if (/create\s+(app|application|script|full.?stack|backend|api|component|program)/i.test(q)) return true
+    if (/build\s+(app|application|web\s+app|api|backend|frontend|service)/i.test(q)) return true
+    if (/implement\s+(a|an|the)?\s*(feature|system|module|api)/i.test(q)) return true
+    if (/اصلح\s+(الكود|البرنامج|الخطأ)|fix\s+(the\s+)?(code|bug|error)/i.test(q)) return true
+    if (/debug|تصحيح\s+الكود|code\s+review|refactor/i.test(q)) return true
+    if (/multi.?file|full.?stack|ملفات\s+متعددة/i.test(q)) return true
+    if (/(react|vue|angular|next\.?js|python|django|fastapi|express|node)\s+(app|project|application|api)/i.test(q)) return true
+    return false
+  }, [])
+
+  // ===== AUTONOMOUS SSE RUNNER =====
+  const runAutonomousSSE = useCallback(async (
+    query: string,
+    outboundMessages: Array<{role: string; content: string}>,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    setAgentSteps([{ id: 'start', label: 'بدء التشغيل...', icon: 'think', status: 'running' }])
+
+    let finalContent = ''
+    let finalModel: string | null = null
+    let finalTaskType: string | null = null
+
+    try {
+      const response = await fetch('/api/dz-agent/autonomous/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        body: JSON.stringify({ query, messages: outboundMessages }),
+        signal,
+      })
+
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE error: ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          try {
+            const event = JSON.parse(raw)
+            if (event.type === 'step' && event.step) {
+              setAgentSteps(prev => {
+                const idx = prev.findIndex(s => s.id === event.step.id)
+                if (idx >= 0) {
+                  const next = [...prev]
+                  next[idx] = { ...next[idx], ...event.step }
+                  return next
+                }
+                return [...prev.filter(s => s.id !== 'start'), event.step]
+              })
+            } else if (event.type === 'done') {
+              finalContent = event.content || ''
+              finalModel = event.model || null
+              finalTaskType = event.task?.type || null
+            }
+          } catch { /* ignore malformed events */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).message === 'aborted' || signal.aborted) {
+        setAgentSteps(prev => [...prev.filter(s => s.status !== 'running'), {
+          id: 'aborted', label: 'تم الإيقاف', icon: 'error', status: 'error',
+        }])
+        return
+      }
+      // SSE failed — fall back silently to normal fetch
+      setAgentSteps([])
+      throw err
+    }
+
+    if (!finalContent) {
+      setAgentSteps(prev => [...prev.filter(s => s.status !== 'running'), {
+        id: 'error', label: 'لم يتم استلام رد', icon: 'error', status: 'error',
+      }])
+      finalContent = '⚠️ لم يتمكن DZ Agent من إكمال المهمة. يرجى إعادة المحاولة.'
+    }
+
+    setAgentTaskType(finalTaskType)
+
+    addAssistantMessage({
+      content: finalContent,
+      richType: 'text',
+      model: finalModel || undefined,
+    })
+  }, [addAssistantMessage])
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -3816,10 +3929,24 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
+    setAgentSteps([])
+    setAgentTaskType(null)
 
     try {
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
+
+      // ── Autonomous pipeline (Devin/Cursor style) ─────────────────────────
+      if (detectAutonomousQuery(text) && !dashboardContext) {
+        try {
+          await runAutonomousSSE(text, outboundMessages, signal)
+          return
+        } catch (sseErr) {
+          // SSE failed — fall through to regular fetch
+          setAgentSteps([])
+          console.warn('[DZChatBox] Autonomous SSE failed, falling back:', (sseErr as Error).message)
+        }
+      }
 
       // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
       const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
@@ -4030,9 +4157,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       addAssistantMessage({ content: '⚠️ خطأ في الشبكة. يرجى المحاولة مرة أخرى.', richType: 'text', isError: true })
     } finally {
       setIsLoading(false)
+      setAgentSteps([])
+      setAgentTaskType(null)
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
@@ -4472,8 +4601,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         {isLoading && (
           <div className="dz-message dz-message--assistant">
             <div className="dz-message-avatar">
-              <div className="dz-avatar dz-avatar--bot dz-avatar--thinking">
-                {thinkingStep?.type === 'read'    ? <BookOpen size={15} /> :
+              <div className={`dz-avatar dz-avatar--bot dz-avatar--thinking${agentSteps.length > 0 ? ' dz-avatar--autonomous' : ''}`}>
+                {agentSteps.length > 0 ? <Brain size={15} /> :
+                 thinkingStep?.type === 'read'    ? <BookOpen size={15} /> :
                  thinkingStep?.type === 'analyze' ? <Zap size={15} /> :
                  thinkingStep?.type === 'write'   ? <Pencil size={15} /> :
                  thinkingStep?.type === 'scan'    ? <ShieldAlert size={15} /> :
@@ -4485,8 +4615,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               </div>
             </div>
             <div className="dz-message-body">
-              <div className="dz-message-sender">DZ Agent</div>
-              {thinkingStep ? (
+              <div className="dz-message-sender">
+                DZ Agent
+                {agentSteps.length > 0 && (
+                  <span className="dz-autonomous-badge">⚡ Autonomous</span>
+                )}
+              </div>
+              {agentSteps.length > 0 ? (
+                <AgentStepsPanel
+                  steps={agentSteps}
+                  taskType={agentTaskType || undefined}
+                />
+              ) : thinkingStep ? (
                 <div className="dz-thinking-step">
                   <span className="dz-thinking-label">{thinkingStep.label}</span>
                   <div className="dz-typing-indicator">

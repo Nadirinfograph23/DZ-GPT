@@ -27,6 +27,7 @@ interface MiniPlayerCtx {
   progress: number
   duration: number
   autoRadio: boolean
+  wakeLockActive: boolean
   setAutoRadio: (v: boolean) => void
   // play() is intentionally SYNCHRONOUS so the YouTube IFrame Player API call
   // happens inside the originating click frame and the browser keeps the
@@ -132,6 +133,9 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState(initial.progress)
   const [duration, setDuration] = useState(initial.track?.duration || 0)
   const [autoRadio, setAutoRadioState] = useState<boolean>(loadAutoRadio())
+  const [wakeLockActive, setWakeLockActive] = useState(false)
+  const wakeLockRef = useRef<any>(null)
+
   const setAutoRadio = useCallback((v: boolean) => {
     setAutoRadioState(v)
     try { localStorage.setItem(AUTO_RADIO_KEY, v ? '1' : '0') } catch {}
@@ -905,8 +909,69 @@ export function MiniPlayerProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [playing, track])
 
+  // ── Screen Wake Lock ──────────────────────────────────────────────────────
+  // Request a wake lock while the user is actively playing audio so the screen
+  // does not dim/lock and cut the audio thread. On iOS / older Android this
+  // falls back silently — the background <audio> engine still keeps audio
+  // alive independently. Re-acquire the lock when the page becomes visible
+  // again (browsers auto-release it on visibilitychange).
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    if (!('wakeLock' in navigator)) return
+
+    let cancelled = false
+
+    const acquire = async () => {
+      if (cancelled) return
+      try {
+        const sentinel = await (navigator as any).wakeLock.request('screen')
+        if (cancelled) { sentinel.release().catch(() => {}) ; return }
+        wakeLockRef.current = sentinel
+        setWakeLockActive(true)
+        sentinel.addEventListener('release', () => {
+          if (wakeLockRef.current === sentinel) {
+            wakeLockRef.current = null
+            setWakeLockActive(false)
+          }
+        })
+      } catch {
+        // Permission denied or not supported — silent fallback.
+      }
+    }
+
+    const release = () => {
+      const s = wakeLockRef.current
+      if (s) {
+        s.release().catch(() => {})
+        wakeLockRef.current = null
+        setWakeLockActive(false)
+      }
+    }
+
+    if (playing) {
+      void acquire()
+    } else {
+      release()
+    }
+
+    // Re-acquire when the tab becomes visible again (browsers release the lock
+    // automatically when the page is hidden; we need to re-request it).
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && playing && !wakeLockRef.current) {
+        void acquire()
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVis)
+      release()
+    }
+  }, [playing])
+
   return (
-    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
+    <Ctx.Provider value={{ track, queue, playing, loading, progress, duration, autoRadio, wakeLockActive, setAutoRadio, play, enqueue, playNext, removeFromQueue, clearQueue, next, toggle, seek, stop }}>
       {children}
     </Ctx.Provider>
   )

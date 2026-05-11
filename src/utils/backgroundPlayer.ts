@@ -60,6 +60,11 @@ class BackgroundPlayer {
     // Hint to the browser that this is "music" — Android uses this to keep
     // audio focus and show the right lockscreen UI.
     try { (a as any).mozAudioChannelType = 'content' } catch {}
+    // iOS Safari: allow audio to play inline without fullscreen, and enable
+    // AirPlay forwarding. Required for lockscreen audio on mobile Safari.
+    try { a.setAttribute('playsinline', '') } catch {}
+    try { a.setAttribute('webkit-playsinline', '') } catch {}
+    try { a.setAttribute('x-webkit-airplay', 'allow') } catch {}
 
     a.addEventListener('play', () => {
       this.wantPlaying = true

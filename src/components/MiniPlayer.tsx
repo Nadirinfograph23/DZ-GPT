@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2, Radio } from 'lucide-react'
+import { Play, Pause, X, Loader2, SkipForward, ListMusic, Trash2, ChevronDown, ChevronUp, Music2, Radio, Lock } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import { useEnhancedMiniPlayer, recordSkip } from '../utils/playerEnhancements'
 
@@ -10,7 +10,7 @@ function fmt(s: number): string {
 }
 
 export default function MiniPlayer() {
-  const { track, queue, playing, loading, progress, duration, autoRadio, setAutoRadio, toggle, seek, stop, next, removeFromQueue, clearQueue, play } = useMiniPlayer()
+  const { track, queue, playing, loading, progress, duration, autoRadio, wakeLockActive, setAutoRadio, toggle, seek, stop, next, removeFromQueue, clearQueue, play } = useMiniPlayer()
   const [queueOpen, setQueueOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const touchStartY = useRef<number | null>(null)
@@ -98,7 +98,14 @@ export default function MiniPlayer() {
         <div className="mini-player" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEndBar}>
           <img className="mini-player-thumb" src={track.thumbnail} alt="" onClick={() => setExpanded(true)} style={{ cursor: 'pointer' }} />
           <div className="mini-player-info">
-            <span className="mini-player-title" title={track.title}>{track.title}</span>
+            <div className="mini-player-title-row">
+              <span className="mini-player-title" title={track.title}>{track.title}</span>
+              {wakeLockActive && (
+                <span className="mini-player-wakelock-badge" title="وضع التشغيل في الخلفية مفعّل — الشاشة تبقى نشطة">
+                  <Lock size={9} /> BG
+                </span>
+              )}
+            </div>
             <span className="mini-player-meta">{track.channel}</span>
             <div className="mini-player-bar" onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
@@ -159,7 +166,14 @@ export default function MiniPlayer() {
               <button className="mpf-icon-btn" onClick={() => setExpanded(false)} title="تصغير">
                 <ChevronDown size={22} />
               </button>
-              <span className="mpf-now"><Music2 size={14} /> يُشغَّل الآن</span>
+              <div className="mpf-now-wrap">
+                <span className="mpf-now"><Music2 size={14} /> يُشغَّل الآن</span>
+                {wakeLockActive && (
+                  <span className="mpf-wakelock-pill" title="التشغيل في الخلفية مفعّل">
+                    <Lock size={11} /> الخلفية
+                  </span>
+                )}
+              </div>
               <button className="mpf-icon-btn" onClick={stop} title="إغلاق">
                 <X size={22} />
               </button>

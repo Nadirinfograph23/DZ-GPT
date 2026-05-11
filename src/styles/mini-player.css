@@ -48,6 +48,12 @@
   flex-direction: column;
   gap: 4px;
 }
+.mini-player-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .mini-player-title {
   font-size: 13px;
   font-weight: 700;
@@ -56,6 +62,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.2;
+  flex: 1;
+  min-width: 0;
+}
+.mini-player-wakelock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  border-radius: 999px;
+  color: #86efac;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
 }
 .mini-player-meta {
   font-size: 11px;
@@ -337,9 +361,33 @@
   transition: background .15s;
 }
 .mpf-icon-btn:hover { background: rgba(255,255,255,.22); }
+.mpf-now-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
 .mpf-now {
   font-size: 12px; opacity: .8; letter-spacing: .5px;
   display: inline-flex; align-items: center; gap: 6px;
+}
+.mpf-wakelock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(34, 197, 94, 0.18);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  border-radius: 999px;
+  color: #86efac;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  animation: mpf-wl-pulse 2.4s ease-in-out infinite;
+}
+@keyframes mpf-wl-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 .mpf-art-wrap {
   flex: 1 1 auto;

@@ -259,7 +259,7 @@ interface DZMessage {
   model?: string
   doctors?: DoctorResult[]
   dirs?: DirLink[]
-  doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean }
+  doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
 }
 
 interface ActionLogEntry {
@@ -4178,6 +4178,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             city: (data.city as { ar: string; fr: string }) || { ar: '', fr: '' },
             hasGps: !!data.hasGps,
             cached: !!data.cached,
+            byName: !!data.byName,
+            queryName: (data.queryName as string) || undefined,
           },
         })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {

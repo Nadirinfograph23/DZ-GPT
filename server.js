@@ -9082,13 +9082,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       name: nameIntent.name,
       userLocation,
     })
+    const realDocs = results.filter(r => !r.directoryLink)
+    const dirLinks = results.filter(r => r.directoryLink)
+    console.log(`[DoctorSearch:byName] name="${nameIntent.name}" real=${realDocs.length} dirs=${dirLinks.length} cached=${cached}`)
     return res.status(200).json({
-      content: formatDoctorMulti(results, nameIntent.name, '', {
-        sourceCount: DOCTOR_SOURCE_COUNT,
-        hasGps: !!userLocation,
-        byName: true,
-        queryName: nameIntent.name,
-      }) + (cached ? '\n\n_⚡ من الذاكرة المؤقتة_' : ''),
+      richType: 'doctor-results',
+      doctors: realDocs,
+      dirs: dirLinks,
+      byName: true,
+      queryName: nameIntent.name,
+      speciality: { ar: nameIntent.name, fr: nameIntent.name },
+      city: { ar: '', fr: '' },
+      hasGps: !!userLocation,
+      cached: !!cached,
     })
   }
 

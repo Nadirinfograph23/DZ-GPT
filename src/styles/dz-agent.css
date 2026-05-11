@@ -6082,6 +6082,11 @@
   color: #7dd3d0;
 }
 
+.dr-panel-query-name {
+  color: #7dd3fc;
+  font-style: italic;
+}
+
 .dr-panel-cached {
   font-size: 10px;
   color: #9acd32;

@@ -29,6 +29,8 @@ interface DoctorSearchMeta {
   city: { ar: string; fr: string }
   hasGps?: boolean
   cached?: boolean
+  byName?: boolean
+  queryName?: string
 }
 
 interface Props {
@@ -178,7 +180,8 @@ function DoctorCard({ doctor, specLabel, cityLabel }: {
 
 export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) {
   const [showDirs, setShowDirs] = useState(false)
-  const specEmoji = getSpecEmoji(meta.speciality.ar)
+  const isNameSearch = !!meta.byName
+  const specEmoji = isNameSearch ? '🔎' : getSpecEmoji(meta.speciality.ar)
   const withPhone = doctors.filter(d => d.phone).length
   const withAddr = doctors.filter(d => d.address || d.addressAr || d.city || d.cityAr).length
 
@@ -187,16 +190,23 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
       <div className="dr-panel-header">
         <div className="dr-panel-title">
           <span className="dr-panel-emoji">{specEmoji}</span>
-          <span className="dr-panel-label">
-            {meta.speciality.ar}
-            {meta.city.ar && <span className="dr-panel-city"> في {meta.city.ar}</span>}
-          </span>
+          {isNameSearch ? (
+            <span className="dr-panel-label">
+              نتائج البحث عن:&nbsp;
+              <span className="dr-panel-query-name">{meta.queryName || meta.speciality.ar}</span>
+            </span>
+          ) : (
+            <span className="dr-panel-label">
+              {meta.speciality.ar}
+              {meta.city.ar && <span className="dr-panel-city"> في {meta.city.ar}</span>}
+            </span>
+          )}
           {meta.cached && <span className="dr-panel-cached">⚡ من الذاكرة</span>}
         </div>
 
         {doctors.length > 0 && (
           <div className="dr-panel-stats">
-            <span className="dr-stat dr-stat--count">{doctors.length} طبيب</span>
+            <span className="dr-stat dr-stat--count">{doctors.length} نتيجة</span>
             {withPhone > 0 && <span className="dr-stat dr-stat--phone">📞 {withPhone} رقم</span>}
             {withAddr > 0 && <span className="dr-stat dr-stat--addr">📍 {withAddr} عنوان</span>}
             {meta.hasGps && <span className="dr-stat dr-stat--gps">📡 مرتب حسب القرب</span>}

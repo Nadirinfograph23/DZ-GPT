@@ -8570,6 +8570,75 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── GITHUB WHOAMI (profile card — must come before GITHUB_PAGES_MODE) ─────
+  {
+    const _whoamiTriggers = [
+      'من أنا على github', 'بروفايلي على github', 'حسابي على github', 'معلوماتي على github',
+      'اعرض بروفايلي', 'اعرض حسابي على github', 'من أنا في github', 'ملفي الشخصي على github',
+      'show my github', 'my github profile', 'who am i on github', 'github profile',
+      'show github profile', 'mon profil github', 'mon compte github',
+    ]
+    const _lm2 = lastUserMessage.toLowerCase()
+    if (_whoamiTriggers.some(t => _lm2.includes(t.toLowerCase()))) {
+      const _tok2 = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+      if (!_tok2) {
+        return res.status(200).json({
+          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nانقر على زر **"ربط GitHub"** في الأعلى لعرض بروفايلك.',
+          githubAction: 'needs-connect',
+        })
+      }
+      try {
+        const _pRes = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${_tok2}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!_pRes.ok) throw new Error('فشل جلب بيانات GitHub')
+        const _u = await _pRes.json()
+        const _joinYear = _u.created_at ? new Date(_u.created_at).getFullYear() : ''
+        const _profileCard = [
+          `## 👤 بروفايل GitHub — @${_u.login}`,
+          '',
+          `![صورة الحساب](${_u.avatar_url}&s=96)`,
+          '',
+          `**الاسم:** ${_u.name || _u.login}`,
+          _u.bio ? `**Bio:** ${_u.bio}` : null,
+          _u.company ? `**الشركة:** ${_u.company}` : null,
+          _u.location ? `**الموقع:** ${_u.location}` : null,
+          _u.email ? `**البريد:** ${_u.email}` : null,
+          _u.blog ? `**الموقع:** [${_u.blog}](${_u.blog.startsWith('http') ? _u.blog : 'https://' + _u.blog})` : null,
+          '',
+          `| 📦 المستودعات | 👥 المتابعون | 👤 المتابَعون |`,
+          `|:---:|:---:|:---:|`,
+          `| **${_u.public_repos}** | **${_u.followers}** | **${_u.following}** |`,
+          '',
+          `🗓️ عضو منذ **${_joinYear}**${_u.plan ? ` · خطة **${_u.plan.name}**` : ''}`,
+          '',
+          `🔗 [افتح البروفايل على GitHub](${_u.html_url})`,
+        ].filter(l => l !== null).join('\n')
+
+        return res.status(200).json({
+          content: _profileCard,
+          githubAction: 'whoami',
+          githubUser: {
+            login: _u.login,
+            name: _u.name || _u.login,
+            avatar: _u.avatar_url,
+            url: _u.html_url,
+            repos: _u.public_repos,
+            bio: _u.bio || null,
+            company: _u.company || null,
+            location: _u.location || null,
+            followers: _u.followers,
+            following: _u.following,
+            joinYear: _joinYear,
+          },
+        })
+      } catch (_e2) {
+        return res.status(200).json({ content: `❌ **خطأ:** ${_e2.message}` })
+      }
+    }
+  }
+
   // ── CREATE REPO (fast path — must come before GITHUB_PAGES_MODE) ──────────
   {
     const _createTriggers = ['أنشئ مستودع', 'انشئ مستودع', 'إنشاء مستودع', 'create repo', 'create a repo', 'new repo', 'new repository', 'create repository', 'create a new repo', 'créer un dépôt', 'créer un repo']
@@ -10231,6 +10300,41 @@ app.get('/api/auth/github/callback', async (req, res) => {
 })
 
 // Check if server has GitHub token configured (also fetches authenticated user info)
+// ── GET /api/github/whoami — Rich GitHub profile card ──────────────────────
+app.get('/api/github/whoami', async (req, res) => {
+  const token = req.headers['x-github-token'] || req.query.token || process.env.GITHUB_TOKEN || ''
+  if (!token) return res.status(401).json({ error: 'no_token', message: 'GitHub token required' })
+  try {
+    const r = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      return res.status(r.status).json({ error: err.message || 'GitHub API error' })
+    }
+    const u = await r.json()
+    return res.status(200).json({
+      login: u.login,
+      name: u.name || u.login,
+      avatar: u.avatar_url,
+      url: u.html_url,
+      bio: u.bio || null,
+      company: u.company || null,
+      location: u.location || null,
+      email: u.email || null,
+      blog: u.blog || null,
+      public_repos: u.public_repos,
+      followers: u.followers,
+      following: u.following,
+      created_at: u.created_at,
+      plan: u.plan?.name || null,
+    })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/dz-agent/github/status', async (_req, res) => {
   const token = process.env.GITHUB_TOKEN
   const hasOAuth = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)

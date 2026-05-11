@@ -17,6 +17,7 @@ import remarkGfm from 'remark-gfm'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import DZDeployPanel from './DZDeployPanel'
+import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
@@ -62,6 +63,7 @@ type RichType =
   | 'youtube'
   | 'web-reader'
   | 'github-profile'
+  | 'doctor-results'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -255,6 +257,9 @@ interface DZMessage {
     followers?: number; following?: number; joinYear?: string | number;
   } | null
   model?: string
+  doctors?: DoctorResult[]
+  dirs?: DirLink[]
+  doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean }
 }
 
 interface ActionLogEntry {
@@ -3993,7 +3998,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       while (attempts < 3) {
         data = await fetchAgentResponse()
         console.log('[DZChatBox] API response (attempt', attempts + 1, '):', data)
-        if (data.action || data.pendingAction || (typeof data.content === 'string' && data.content.trim() !== '')) {
+        if (data.action || data.pendingAction || data.richType || (typeof data.content === 'string' && data.content.trim() !== '')) {
           break
         }
         attempts++
@@ -4003,8 +4008,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
 
-      // Ensure content is never blank
-      if (!data.content || (typeof data.content === 'string' && data.content.trim() === '')) {
+      // Ensure content is never blank (skip for structured rich responses)
+      if (!data.richType && (!data.content || (typeof data.content === 'string' && data.content.trim() === ''))) {
         data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
       }
 
@@ -4160,6 +4165,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           content: (data.content as string) || '🌐 تم اكتشاف الموقع',
           richType: 'web-reader',
           webReaderSiteInfo: data.webSiteInfo as { url: string; title: string; domain: string; description: string; headings: string[] },
+        })
+      } else if (data.richType === 'doctor-results' && Array.isArray(data.doctors)) {
+        trackFeatureUsage('doctor-search')
+        addAssistantMessage({
+          content: '',
+          richType: 'doctor-results',
+          doctors: data.doctors as DoctorResult[],
+          dirs: (data.dirs as DirLink[]) || [],
+          doctorMeta: {
+            speciality: (data.speciality as { ar: string; fr: string }) || { ar: 'الأطباء', fr: '' },
+            city: (data.city as { ar: string; fr: string }) || { ar: '', fr: '' },
+            hasGps: !!data.hasGps,
+            cached: !!data.cached,
+          },
         })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
@@ -4512,6 +4531,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       )}
                       {msg.richType === 'stats' && msg.stats && (
                         <StatsPanel stats={msg.stats} />
+                      )}
+                      {msg.richType === 'doctor-results' && msg.doctorMeta && (
+                        <DoctorResultsPanel
+                          doctors={msg.doctors || []}
+                          dirs={msg.dirs || []}
+                          meta={msg.doctorMeta}
+                        />
                       )}
                       {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
                         (msg.mapMeta as Record<string, unknown>)?.needsGps

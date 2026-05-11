@@ -29,6 +29,9 @@ export default defineConfig({
       "tesseract.js",
       "jszip",
       "recharts",
+      "@tanstack/react-table",
+      "@tanstack/react-virtual",
+      "xlsx",
     ],
   },
 })

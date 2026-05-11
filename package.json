@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
+    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.24",
+    "@types/papaparse": "^5.5.2",
     "@types/react-router-dom": "^5.3.3",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
@@ -25,6 +28,7 @@
     "hls.js": "^1.6.16",
     "jszip": "^3.10.1",
     "lucide-react": "^0.364.0",
+    "papaparse": "^5.5.3",
     "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -36,6 +40,7 @@
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
     "ws": "^8.20.0",
+    "xlsx": "^0.18.5",
     "youtube-sr": "^4.3.12"
   },
   "devDependencies": {

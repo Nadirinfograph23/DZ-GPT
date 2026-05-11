@@ -1091,6 +1091,255 @@
   margin: 8px 0;
 }
 
+/* ===== DZ SMART TABLE ENGINE ===== */
+.dzt-wrapper {
+  margin: 10px 0;
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d0d0d;
+  font-size: 13px;
+  color: #e0e0e0;
+}
+.dzt-wrapper--compact { font-size: 12px; }
+
+.dzt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #111;
+  border-bottom: 1px solid #1e1e1e;
+}
+.dzt-toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dzt-toolbar-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.dzt-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: #c8ff00;
+  letter-spacing: 0.3px;
+}
+.dzt-count {
+  font-size: 11px;
+  color: #555;
+  background: #161616;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #222;
+}
+.dzt-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+.dzt-badge--virtual {
+  background: rgba(200,255,0,0.08);
+  color: #c8ff00;
+  border: 1px solid rgba(200,255,0,0.2);
+}
+
+.dzt-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #161616;
+  border: 1px solid #252525;
+  border-radius: 7px;
+  padding: 3px 9px;
+  transition: border-color 0.15s;
+}
+.dzt-search-wrap:focus-within { border-color: rgba(200,255,0,0.4); }
+.dzt-search-icon { font-size: 11px; color: #444; }
+.dzt-search {
+  background: none;
+  border: none;
+  outline: none;
+  color: #e0e0e0;
+  font-size: 12px;
+  width: 130px;
+  font-family: inherit;
+}
+.dzt-search::placeholder { color: #444; }
+.dzt-search-clear {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.dzt-search-clear:hover { color: #ff6b6b; }
+
+.dzt-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #161616;
+  border: 1px solid #252525;
+  color: #888;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.dzt-export-btn:hover:not(:disabled) {
+  background: rgba(200,255,0,0.08);
+  border-color: rgba(200,255,0,0.3);
+  color: #c8ff00;
+}
+.dzt-export-btn--xlsx:hover:not(:disabled) {
+  background: rgba(0,180,80,0.08);
+  border-color: rgba(0,180,80,0.3);
+  color: #00ff88;
+}
+.dzt-export-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.dzt-scroll-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 520px;
+  -webkit-overflow-scrolling: touch;
+}
+.dzt-scroll-container--virtual { overflow-y: auto; max-height: 480px; }
+.dzt-scroll-container::-webkit-scrollbar { width: 5px; height: 5px; }
+.dzt-scroll-container::-webkit-scrollbar-track { background: transparent; }
+.dzt-scroll-container::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+.dzt-scroll-container::-webkit-scrollbar-corner { background: transparent; }
+
+.dzt-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.dzt-thead { position: sticky; top: 0; z-index: 2; }
+
+.dzt-th {
+  background: #141414;
+  border-bottom: 1px solid #222;
+  border-right: 1px solid #1a1a1a;
+  padding: 9px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #aaa;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+.dzt-th:last-child { border-right: none; }
+.dzt-th--left { text-align: left; }
+.dzt-th--right { text-align: right; }
+.dzt-th--center { text-align: center; }
+.dzt-th--sortable { cursor: pointer; transition: background 0.15s, color 0.15s; }
+.dzt-th--sortable:hover { background: #181818; color: #c8ff00; }
+.dzt-th--sorted { color: #c8ff00; background: rgba(200,255,0,0.04); }
+.dzt-th-inner { display: inline-flex; align-items: center; gap: 2px; }
+.dzt-sort-icon { font-size: 10px; opacity: 0.6; }
+
+.dzt-tbody {}
+.dzt-tr { border-bottom: 1px solid #161616; transition: background 0.1s; }
+.dzt-tr:last-child { border-bottom: none; }
+.dzt-tr:hover { background: rgba(200,255,0,0.03); }
+
+.dzt-td {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #d4d4d4;
+  vertical-align: middle;
+  border-right: 1px solid #161616;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.dzt-td:last-child { border-right: none; }
+.dzt-td--left { text-align: left; }
+.dzt-td--right { text-align: right; }
+.dzt-td--center { text-align: center; }
+
+.dzt-link {
+  color: #c8ff00;
+  text-decoration: none;
+  font-size: 12px;
+}
+.dzt-link:hover { text-decoration: underline; }
+
+.dzt-empty {
+  text-align: center;
+  padding: 28px;
+  color: #444;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.dzt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #111;
+  border-top: 1px solid #1e1e1e;
+}
+.dzt-page-btn {
+  background: #161616;
+  border: 1px solid #252525;
+  color: #888;
+  font-size: 13px;
+  width: 30px;
+  height: 28px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+.dzt-page-btn:hover:not(:disabled) {
+  background: rgba(200,255,0,0.08);
+  border-color: rgba(200,255,0,0.3);
+  color: #c8ff00;
+}
+.dzt-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.dzt-page-info { font-size: 12px; color: #555; padding: 0 4px; }
+
+.dzt-fallback-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.dzt-fallback-table th,
+.dzt-fallback-table td {
+  border: 1px solid #222;
+  padding: 7px 12px;
+  color: #d4d4d4;
+}
+.dzt-fallback-table th {
+  background: #141414;
+  color: #aaa;
+  font-weight: 700;
+}
+.dzt-fallback-table tr:hover td { background: rgba(200,255,0,0.03); }
+
+@media (max-width: 600px) {
+  .dzt-toolbar { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .dzt-toolbar-right { width: 100%; }
+  .dzt-search { width: 100px; }
+  .dzt-th, .dzt-td { padding: 7px 8px; font-size: 12px; }
+  .dzt-scroll-container { max-height: 380px; }
+}
+
 /* ===== CODE BLOCK ===== */
 .dz-code-block {
   background: #111;

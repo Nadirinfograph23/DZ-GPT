@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
@@ -4263,6 +4264,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                                 </a>
                               )
                             },
+                            table({ children }) {
+                              return <DZMDTable>{children}</DZMDTable>
+                            },
+                            thead({ children }) { return <thead>{children}</thead> },
+                            tbody({ children }) { return <tbody>{children}</tbody> },
+                            tr({ children }) { return <tr>{children}</tr> },
+                            th({ children }) { return <th>{children}</th> },
+                            td({ children }) { return <td>{children}</td> },
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}

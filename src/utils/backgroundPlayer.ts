@@ -82,6 +82,44 @@ class BackgroundPlayer {
   private lastResumeAt = 0
   private visibilityHandler: (() => void) | null = null
 
+  // ── AudioContext Silent Keep-alive ────────────────────────────────────────
+  // iOS/Android suspend the audio thread when they detect no activity.
+  // Playing one frame of silence every 25 s keeps the audio session alive
+  // so the user can hear audio with the screen locked / app backgrounded.
+  private _actxKA: { ctx: any; timer: ReturnType<typeof setTimeout> | null } | null = null
+
+  private startAudioCtxKeepalive() {
+    if (this._actxKA) return
+    if (typeof window === 'undefined') return
+    const ACtx = (window as any).AudioContext || (window as any).webkitAudioContext
+    if (!ACtx) return
+    try {
+      const ctx = new ACtx({ sampleRate: 22050 })
+      this._actxKA = { ctx, timer: null }
+      const tick = () => {
+        if (!this.wantPlaying || !this._actxKA) return
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+        try {
+          const buf = ctx.createBuffer(1, 1, ctx.sampleRate)
+          const src = ctx.createBufferSource()
+          src.buffer = buf
+          src.connect(ctx.destination)
+          src.start()
+        } catch {}
+        this._actxKA.timer = setTimeout(tick, 25_000)
+      }
+      tick()
+    } catch {}
+  }
+
+  private stopAudioCtxKeepalive() {
+    if (!this._actxKA) return
+    const { ctx, timer } = this._actxKA
+    if (timer != null) clearTimeout(timer)
+    try { ctx.close() } catch {}
+    this._actxKA = null
+  }
+
   constructor() {
     if (typeof window === 'undefined') return
     this.createAudioElement()
@@ -342,6 +380,7 @@ class BackgroundPlayer {
     }
 
     this.wantPlaying = true
+    this.startAudioCtxKeepalive()
     const p = this.audio.play()
     if (p && typeof p.catch === 'function') p.catch(() => {})
     if (metadata && (metadata.title || metadata.artist || metadata.artwork)) {
@@ -352,6 +391,7 @@ class BackgroundPlayer {
   /** Pause playback. Marks user-paused intent so auto-recover stops. */
   pause() {
     this.wantPlaying = false
+    this.stopAudioCtxKeepalive()
     if (!this.audio) return
     try { this.audio.pause() } catch {}
   }
@@ -370,6 +410,7 @@ class BackgroundPlayer {
 
   stop() {
     this.wantPlaying = false
+    this.stopAudioCtxKeepalive()
     this.destroyHls()
     if (!this.audio) return
     try {

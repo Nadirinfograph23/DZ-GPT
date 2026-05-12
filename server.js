@@ -11665,11 +11665,15 @@ let _uaIdx = 0
 const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
 function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
 
-// Client rotation order for multi-attempt retry
+// Client rotation order for multi-attempt retry.
+// ios first — returns HLS m3u8 manifest (best for background audio + no SABR issues).
+// android second — reliable direct googlevideo URL.
+// web third — sometimes needs SABR workaround but ytdl-core handles it.
 const YT_DLP_CLIENTS = [
+  'ios',
   'android,ios,web',
   'tv_embedded',
-  'web_creator',
+  'mweb',
 ]
 
 function ytDlpAntiBotArgs(clientIdx = 0) {
@@ -11679,10 +11683,11 @@ function ytDlpAntiBotArgs(clientIdx = 0) {
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
+    '--no-check-formats',
     '--retries', '3',
     '--fragment-retries', '3',
     '--socket-timeout', '25',
-    '--sleep-requests', '0.5',
+    '--sleep-requests', '0.3',
   ]
 }
 
@@ -11826,13 +11831,14 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
-  // Refreshed 2026-04-24 (live-probed) — only two public instances were
-  // actually returning JSON; the rest are dead. We keep them anyway as cheap
-  // retries since the helper falls through on failure.
+  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
+  'https://pipedapi.kavin.rocks',
   'https://api.piped.private.coffee',
   'https://piapi.ggtyler.dev',
-  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.tokhmi.xyz',
   'https://api.piped.privacydev.net',
+  'https://piped-api.garudalinux.org',
+  'https://pipedapi.in.projectsegfau.lt',
 ]
 
 // Invidious is a separate free YouTube proxy network. Unlike Piped, every
@@ -11841,11 +11847,14 @@ const PIPED_API_INSTANCES = [
 // bypasses googlevideo's IP-bound signed URL restrictions. We use it as a
 // third independent source raced alongside ytdown.to + Piped.
 const INVIDIOUS_API_INSTANCES = [
-  // Refreshed 2026-04-24 (live-probed) — these returned full JSON.
-  'https://invidious.materialio.us',
+  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
+  'https://inv.nadeko.net',
+  'https://invidious.fdn.fr',
   'https://iv.ggtyler.dev',
+  'https://invidious.materialio.us',
   'https://invidious.protokolla.fi',
   'https://inv.in.projectsegfau.lt',
+  'https://invidious.garudalinux.org',
 ]
 
 // Best-effort fetch of a stream URL via the public Invidious network.
@@ -12475,19 +12484,43 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     })
   })()
 
-  // Race the two reliable extractors.
-  const tagged = [
+  // Layer 3: Invidious proxy URL — each instance streams the bytes itself
+  // so the URL is not IP-bound to our server. Content-Range from Invidious
+  // is unreliable (always reports end+1 as total) so we byte-pipe it.
+  // Used ONLY as last resort when both yt-dlp and ytdl-core fail.
+  const tryInvidious = (async () => {
+    const r = await fetchInvidiousStreams(videoId, { isAudio: true })
+    if (!r?.url) throw new Error('invidious: no url')
+    const ok = await probeUpstreamPlayable(r.url)
+    if (!ok) throw new Error('invidious: probe failed')
+    return r.url
+  })()
+
+  // Race yt-dlp + ytdl-core first (these return proper googlevideo URLs with
+  // correct Content-Range). Only if both fail do we fall back to Invidious.
+  const primaryTagged = [
     tryJs.catch(e => { console.warn('[audio-proxy:js-fail]', e.message); throw e }),
     tryDlp.catch(e => { console.warn('[audio-proxy:dlp-fail]', e.message); throw e }),
   ]
 
   try {
-    const winner = await Promise.any(tagged)
+    const winner = await Promise.any(primaryTagged)
     _audioUrlCache.set(youtubeUrl, { url: winner, expiresAt: Date.now() + _AUDIO_URL_CACHE_TTL_MS })
     _trimAudioUrlCache()
+    // Let Invidious complete in background to warm its own cache.
+    tryInvidious.catch(() => {})
     return winner
   } catch {
-    throw new Error('all extractors failed')
+    // Primary extractors both failed — try Invidious as last resort.
+    console.warn('[audio-proxy] primary extractors failed — trying Invidious fallback')
+    try {
+      const fallback = await tryInvidious
+      _audioUrlCache.set(youtubeUrl, { url: fallback, expiresAt: Date.now() + 10 * 60 * 1000 }) // 10 min TTL for proxy URLs
+      _trimAudioUrlCache()
+      return fallback
+    } catch (e2) {
+      throw new Error(`all extractors failed: ${e2.message}`)
+    }
   }
 }
 
@@ -13067,19 +13100,29 @@ async function resolveAudioPlaylistUrl(youtubeUrl) {
     })
   }
 
-  // Attempt 1: iOS player_client → may return HLS manifest from googlevideo
-  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '-f', 'ba/bestaudio'])
+  // Attempt 1: iOS player_client — returns HLS m3u8 manifest.
+  // This is the best format for background audio: segment-based (3-10 s),
+  // immune to Vercel's 60s timeout, buffers ahead, no SABR streaming issues.
+  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '--no-check-formats', '-f', 'ba/bestaudio'])
   if (iosUrl) {
     const isHls = /\.m3u8($|\?)/i.test(iosUrl) || /manifest\.googlevideo\.com/i.test(iosUrl)
-    console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS' : 'direct')
+    console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS ✓' : 'direct')
     return { url: iosUrl, isHls }
   }
 
-  // Attempt 2: bestaudio without player_client restriction
-  const directUrl = await runDlp(['-f', 'bestaudio/best'])
-  if (directUrl) {
-    console.log('[audio-stream] resolved via default client — direct URL')
-    return { url: directUrl, isHls: false }
+  // Attempt 2: android client — returns direct googlevideo URL.
+  const androidUrl = await runDlp(['--extractor-args', 'youtube:player_client=android,ios,web', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/best'])
+  if (androidUrl) {
+    console.log('[audio-stream] resolved via android client — direct URL')
+    return { url: androidUrl, isHls: false }
+  }
+
+  // Attempt 3: tv_embedded client — often bypasses bot detection.
+  const tvUrl = await runDlp(['--extractor-args', 'youtube:player_client=tv_embedded', '--no-check-formats', '-f', 'bestaudio/best'])
+  if (tvUrl) {
+    const isHls = /\.m3u8($|\?)/i.test(tvUrl) || /manifest\.googlevideo\.com/i.test(tvUrl)
+    console.log('[audio-stream] resolved via tv_embedded client —', isHls ? 'HLS' : 'direct')
+    return { url: tvUrl, isHls }
   }
 
   throw new Error('yt-dlp: could not resolve audio URL for ' + youtubeUrl)

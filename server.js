@@ -9450,9 +9450,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
     if (matchList(deployVercelTriggers)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🚀 لنشر المستودع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ content: '🌐 لنشر المستودع على GitHub Pages، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
-      return res.status(200).json({ action: 'deploy-vercel', repo: currentRepo, content: `🚀 جاري النشر على Vercel لـ **${currentRepo}**...` })
+      return res.status(200).json({ action: 'deploy-pages', repo: currentRepo, content: `🌐 جاري النشر على GitHub Pages لـ **${currentRepo}**...` })
     }
 
     if (matchList(createRepoTriggers)) {
@@ -10959,7 +10959,38 @@ app.post('/api/dz-agent/github/generate', async (req, res) => {
   }
 })
 
-// Commit a file to GitHub
+// Helper: check if a GitHub repo is completely empty (no commits yet)
+async function isRepoEmpty(token, repo) {
+  const r = await ghFetch(`/repos/${repo}/contents`, token)
+  if (r.status === 409) return true
+  if (!r.ok) return false
+  const data = await r.json().catch(() => null)
+  if (data && data.message && /Git Repository is empty/i.test(data.message)) return true
+  return false
+}
+
+// Helper: create initial README.md commit so the repo is no longer empty
+async function initRepoWithReadme(token, repo, branch = 'main') {
+  const [owner, repoName] = repo.split('/')
+  const readmeContent = `# ${repoName}\n\nCreated by DZ Agent 🇩🇿\n`
+  const body = {
+    message: 'Initial commit — add README.md',
+    content: Buffer.from(readmeContent).toString('base64'),
+    branch,
+  }
+  const r = await ghFetch(`/repos/${repo}/contents/README.md`, token, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}))
+    throw new Error(d.message || 'Failed to create initial commit')
+  }
+  console.log(`[GitHub] ✅ Initial commit created for ${repo} on branch ${branch}`)
+  return await r.json()
+}
+
+// Commit a file to GitHub (auto-initialises empty repos with README.md first)
 app.post('/api/dz-agent/github/commit', async (req, res) => {
   const token = req.body.token || process.env.GITHUB_TOKEN || ''
   const { repo, path, content, message, branch } = req.body
@@ -10971,8 +11002,22 @@ app.post('/api/dz-agent/github/commit', async (req, res) => {
   if (typeof message !== 'string' || message.length > 500) return res.status(400).json({ error: 'Invalid commit message.' })
   if (typeof content !== 'string' || content.length > 500000) return res.status(400).json({ error: 'File content too large.' })
 
+  const targetBranch = branch || 'main'
+
   try {
-    // Get current file SHA (if exists, for update)
+    // ── 1. Auto-init empty repo ───────────────────────────────────────────────
+    const empty = await isRepoEmpty(token, repo)
+    if (empty) {
+      console.log(`[GitHub] ⚠️ Repo ${repo} is empty — creating initial README.md commit`)
+      try {
+        await initRepoWithReadme(token, repo, targetBranch)
+        await new Promise(r => setTimeout(r, 1500))
+      } catch (initErr) {
+        console.error('[GitHub] initRepo error:', initErr.message)
+      }
+    }
+
+    // ── 2. Get current file SHA (if exists, for update) ───────────────────────
     let sha
     const existingRes = await ghFetch(`/repos/${repo}/contents/${path}`, token)
     if (existingRes.ok) {
@@ -10983,7 +11028,7 @@ app.post('/api/dz-agent/github/commit', async (req, res) => {
     const body = {
       message,
       content: Buffer.from(content).toString('base64'),
-      ...(branch ? { branch } : {}),
+      branch: targetBranch,
       ...(sha ? { sha } : {}),
     }
 
@@ -10993,13 +11038,32 @@ app.post('/api/dz-agent/github/commit', async (req, res) => {
     })
     const commitData = await commitRes.json()
 
+    // ── 3. If still "empty" error, retry once after re-init ───────────────────
+    if (!commitRes.ok && /Git Repository is empty/i.test(commitData.message || '')) {
+      console.log(`[GitHub] ⚠️ Still empty after init — retrying README then file`)
+      try { await initRepoWithReadme(token, repo, targetBranch) } catch {}
+      await new Promise(r => setTimeout(r, 2000))
+      const retry = await ghFetch(`/repos/${repo}/contents/${path}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ message, content: Buffer.from(content).toString('base64'), branch: targetBranch }),
+      })
+      const retryData = await retry.json()
+      if (!retry.ok) return res.status(retry.status).json({ error: retryData.message || 'Commit failed.' })
+      return res.status(200).json({
+        success: true,
+        html_url: retryData.content?.html_url || `https://github.com/${repo}/blob/${targetBranch}/${path}`,
+        sha: retryData.content?.sha,
+        autoInited: true,
+      })
+    }
+
     if (!commitRes.ok) {
       return res.status(commitRes.status).json({ error: commitData.message || 'Commit failed.' })
     }
 
     return res.status(200).json({
       success: true,
-      html_url: commitData.content?.html_url || `https://github.com/${repo}/blob/${branch || 'main'}/${path}`,
+      html_url: commitData.content?.html_url || `https://github.com/${repo}/blob/${targetBranch}/${path}`,
       sha: commitData.content?.sha,
     })
   } catch (err) {

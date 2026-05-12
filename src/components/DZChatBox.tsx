@@ -10,7 +10,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown,
+  Globe, ThumbsUp, ThumbsDown, Hammer,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'

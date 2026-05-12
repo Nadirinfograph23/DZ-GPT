@@ -24,8 +24,8 @@ const MAX_IMG_BYTES  = 150_000
 const MAX_PARALLEL   = 10
 
 // INDEX-ONLY mode limits (used by clone pipeline for speed)
-const INDEX_MAX_CSS  = 5
-const INDEX_MAX_IMG  = 8
+const INDEX_MAX_CSS  = 3
+const INDEX_MAX_IMG  = 4
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 // ── helpers ──────────────────────────────────────────────────────────────────

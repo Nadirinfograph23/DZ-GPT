@@ -13,7 +13,6 @@ import { fetchHtmlMultiStrategy } from './fetcher.js'
 import { deepExtract } from './extractor.js'
 import { buildCloneSystemPrompt, buildIndexOnlySystemPrompt, buildCloneUserPrompt, buildRepairPrompt } from './prompter.js'
 import { rewriteAssetsToAbsolute } from './asset-handler.js'
-import { downloadWebsite, injectRealCssIntoClone, extractAssetUrls } from './downloader.js'
 
 // ── Validation helpers ───────────────────────────────────────────────────────
 
@@ -166,8 +165,8 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     { role: 'user', content: userPrompt },
   ]
 
-  // 12000 output tokens — enough for full homepage, fits in context window
-  const result = await aiGenerate(messages, 12000)
+  // 8000 output tokens — enough for full homepage (reduced from 12000 for speed)
+  const result = await aiGenerate(messages, 8000)
   let htmlCode = extractHtml(result?.content || '')
 
   // ─── Stage 3b: Retry with even slimmer prompt if empty ───────────────────
@@ -195,7 +194,7 @@ OUTPUT: ONE complete standalone HTML file (<!DOCTYPE html>…</html>).
 All CSS in <style>. Responsive. Minimum 300 lines. Start immediately:`,
       },
     ]
-    const retryResult = await aiGenerate(retryMessages, 12000)
+    const retryResult = await aiGenerate(retryMessages, 8000)
     htmlCode = extractHtml(retryResult?.content || '') || retryResult?.content || ''
   }
 
@@ -215,24 +214,10 @@ All CSS in <style>. Responsive. Minimum 300 lines. Start immediately:`,
   // V3: Enforce verbatim years/copyright
   htmlCode = enforceVerbatimContent(htmlCode, tokens)
 
-  // ─── Stage 4b: Real CSS Injection — INDEX-ONLY (fast path) ──────────────
-  // Fetches CSS only (max 5 sheets), skips JS entirely, limits images to 8.
-  // ZIP is NOT built here — only on explicit download request.
-  let downloadResult = null
-  try {
-    progress({ stage: 'real-assets', message: `🌐 جلب CSS الحقيقي من الصفحة الرئيسية (سريع — بدون JS · بدون ZIP)...`, pct: 68 })
-    downloadResult = await downloadWebsite(url, rawHtml, (p) => {
-      progress({ ...p, pct: 68 + Math.round((p.pct - 38) * 0.14) })
-    }, { indexOnly: true, buildZip: false })
-    // Inject real CSS layout into AI clone (non-destructive — only structural rules)
-    if (downloadResult.assets?.css && Object.keys(downloadResult.assets.css).length > 0) {
-      htmlCode = injectRealCssIntoClone(htmlCode, downloadResult.assets.css)
-      console.log(`[CloneEngineV3/INDEX] Injected ${Object.keys(downloadResult.assets.css).length} CSS sheets (JS skipped, ZIP skipped)`)
-    }
-    progress({ stage: 'real-assets', message: `✅ CSS الحقيقي مدمج (${downloadResult.stats.cssCount} ملف · ${downloadResult.stats.imageCount} صورة)`, pct: 80 })
-  } catch (dlErr) {
-    console.warn(`[CloneEngineV3/V2] Real asset download failed (non-fatal): ${dlErr.message}`)
-  }
+  // ─── Stage 4b: SKIPPED (LITE MODE) ───────────────────────────────────────
+  // Real CSS/image download removed from main pipeline to save resources.
+  // Use /api/dz-agent/clone-v2/download-full for full asset download.
+  const downloadResult = null
 
   // ─── Stage 5: Validation + Auto-repair ──────────────────────────────────
   const score = scoreClone(htmlCode, tokens)

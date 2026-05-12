@@ -289,36 +289,34 @@ function extractFooterContent($) {
   }
 }
 
-// ── V3: Extract all text with structure (list items, cards, sections) ──────────
+// ── V3: Extract key text content — LITE (headings, paragraphs, li only — no span/div loop) ──
 function extractAllTextContent($) {
   const blocks = []
 
-  // All headings with level
-  $('h1, h2, h3, h4, h5').each((_, el) => {
+  // Headings
+  $('h1, h2, h3, h4').each((_, el) => {
     const tag = el.tagName?.toLowerCase()
     const t = $(el).text().replace(/\s+/g, ' ').trim()
     if (t.length > 0 && t.length < 200) blocks.push(`[${tag.toUpperCase()}] ${t}`)
   })
 
-  // All paragraphs
+  // Paragraphs (first 20 only)
+  let pCount = 0
   $('p').each((_, el) => {
+    if (pCount >= 20) return false
     const t = $(el).text().replace(/\s+/g, ' ').trim()
-    if (t.length > 15 && t.length < 800) blocks.push(`[P] ${t}`)
+    if (t.length > 15 && t.length < 400) { blocks.push(`[P] ${t}`); pCount++ }
   })
 
-  // List items (important for features, pricing, etc.)
+  // List items (first 30 only — features/pricing/etc.)
+  let liCount = 0
   $('li').each((_, el) => {
+    if (liCount >= 30) return false
     const t = $(el).text().replace(/\s+/g, ' ').trim()
-    if (t.length > 3 && t.length < 200) blocks.push(`[LI] ${t}`)
+    if (t.length > 3 && t.length < 120) { blocks.push(`[LI] ${t}`); liCount++ }
   })
 
-  // Spans and divs with significant text (catch text-only containers)
-  $('span, div').each((_, el) => {
-    const directText = $(el).clone().children().remove().end().text().replace(/\s+/g, ' ').trim()
-    if (directText.length > 20 && directText.length < 200) blocks.push(`[TEXT] ${directText}`)
-  })
-
-  return blocks.slice(0, 150).join('\n')
+  return blocks.slice(0, 80).join('\n')
 }
 
 // ── V3: Extract all links with href and text ──────────────────────────────────
@@ -489,17 +487,12 @@ export function deepExtract(rawHtml, url) {
   const forms = extractForms($)
   const keyframes = extractKeyframes(allCss)
 
-  // Extended CSS sample — 14k chars for better reproduction
-  const rawStyleSample = allCss.slice(0, 14000)
+  // CSS sample — trimmed to 5k for lighter processing
+  const rawStyleSample = allCss.slice(0, 5000)
   const textContent = paragraphs.slice(0, 20).join('\n')
 
-  // Raw HTML body snapshot (first 8000 chars) for structure reference
-  const rawBodySnapshot = (() => {
-    try {
-      const bodyHtml = $('body').html() || ''
-      return bodyHtml.replace(/<script[\s\S]*?<\/script>/gi, '').slice(0, 8000)
-    } catch { return '' }
-  })()
+  // Raw HTML body snapshot — LITE: disabled to save memory
+  const rawBodySnapshot = ''
 
   return {
     domain,

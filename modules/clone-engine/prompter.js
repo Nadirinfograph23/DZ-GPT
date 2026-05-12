@@ -89,16 +89,79 @@ ANIMATION INSTRUCTIONS (reproduce all detected animations):
 @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
 @keyframes gradientShift { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }`
 
+const CSS_QUALITY_RULES = `
+CSS EXCELLENCE MANDATE — produce CSS as good as (or better than) the original:
+
+▸ CUSTOM PROPERTIES (always define :root vars):
+  :root { --primary: [extracted]; --bg: [extracted]; --text: [extracted]; --accent: [extracted]; --surface: [extracted]; --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.12); }
+
+▸ TYPOGRAPHY HIERARCHY (fluid + precise):
+  - h1: font-size: clamp(2.2rem, 5vw, 4.5rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1;
+  - h2: font-size: clamp(1.7rem, 3.5vw, 3rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.2;
+  - h3: font-size: clamp(1.2rem, 2vw, 1.6rem); font-weight: 600; line-height: 1.3;
+  - p:  font-size: 1rem; line-height: 1.7; color: var(--text-muted, rgba(text,0.75));
+  - .caption / small: font-size: 0.8rem; letter-spacing: 0.04em;
+
+▸ NAVIGATION (pixel-perfect):
+  nav { position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px); transition: box-shadow 0.3s; }
+  nav.scrolled { box-shadow: var(--shadow); }
+  nav a { transition: color 0.2s, opacity 0.2s; }
+  nav a:hover { color: var(--primary); opacity: 0.85; }
+  .hamburger { display: none; flex-direction: column; gap: 4px; cursor: pointer; }
+  .hamburger span { width: 22px; height: 2px; background: currentColor; transition: transform 0.3s; border-radius: 2px; }
+
+▸ FORM FIELDS (polished):
+  input, select, textarea, [type="email"], [type="text"], [type="tel"], [type="password"] {
+    width: 100%; padding: 11px 15px; font-size: 14px; font-family: inherit;
+    border: 1.5px solid rgba(0,0,0,0.15); border-radius: 8px;
+    background: rgba(255,255,255,0.06); color: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb,59,130,246), 0.18);
+  }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+  ::placeholder { opacity: 0.45; }
+
+▸ BUTTONS (exact replica + micro-interaction):
+  .btn, button[type="submit"], [class*="btn"], [class*="cta"] {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 12px 24px; font-weight: 700; letter-spacing: 0.01em;
+    border-radius: var(--radius); cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    text-decoration: none;
+  }
+  .btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+  .btn:active { transform: scale(0.98); }
+
+▸ CARDS (elevation on hover):
+  .card, [class*="card"], [class*="feature-item"] {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    border-radius: var(--radius);
+  }
+  .card:hover { transform: translateY(-5px); box-shadow: 0 16px 40px rgba(0,0,0,0.15); }
+
+▸ SECTIONS:
+  section { padding: clamp(48px, 8vw, 96px) clamp(16px, 4vw, 48px); }
+  .container { max-width: 1200px; margin: 0 auto; width: 100%; }
+
+▸ SCROLLBAR (styled):
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 99px; }`
+
 const RESPONSIVE_RULES = `
 RESPONSIVE RULES (mobile-first):
-- Hamburger menu for mobile nav (toggles .open class)
-- Fluid typography: clamp() for headings
-- Grid collapses correctly on mobile (1 col)
-- Images/placeholders: max-width:100%, height:auto
-- Cards stack vertically on mobile
-- Hero height adjusts for mobile
-- @media (max-width: 1024px) for tablet
-- @media (max-width: 768px) for mobile
+- Hamburger menu for mobile nav (toggles .open class + JS toggle)
+- Fluid typography using clamp() — NEVER fixed px for headings
+- Grid collapses correctly on mobile (grid-template-columns: 1fr)
+- Images: max-width:100%, height:auto, object-fit:cover
+- Cards stack vertically on mobile (flex-direction:column)
+- Hero height adjusts: min-height: clamp(60vh, 80vh, 100vh)
+- Sections: padding shrinks on mobile via clamp()
+- @media (max-width: 1024px) { .hamburger { display:flex } nav ul { display:none } nav ul.open { display:flex; flex-direction:column } }
+- @media (max-width: 768px) for mobile layout
 - @media (max-width: 480px) for small mobile`
 
 const ICON_RULES = {
@@ -286,6 +349,7 @@ function buildFrameworkInstructions(techStack) {
   if (techStack.includes('tailwind')) instructions.push(TAILWIND_RULES)
   else if (techStack.includes('bootstrap')) instructions.push(BOOTSTRAP_RULES)
   else instructions.push(`\nSTYLING: Use pure CSS with custom properties. All CSS inside <style>. Be verbose — produce complete, detailed styles.`)
+  instructions.push(CSS_QUALITY_RULES)
   instructions.push(ANIMATION_RULES)
   instructions.push(RESPONSIVE_RULES)
   return instructions.join('\n')

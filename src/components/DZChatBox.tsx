@@ -855,28 +855,70 @@ interface CloneProgressState {
   sections?: string[]
 }
 
+// Map backend SSE stages → 4 visual steps
+const STAGE_TO_VISUAL: Record<string, number> = {
+  fetch: 0, extract: 1, generate: 2, repair: 2, download: 2, done: 3,
+}
+
 const CLONE_STAGES = [
-  { id: 'fetch',    icon: '🌐', labelAr: 'جارٍ جلب الموقع',             thinkLabel: 'راني نخمم، أصبر...' },
-  { id: 'extract',  icon: '🧠', labelAr: 'استخراج التصميم والهيكل',      thinkLabel: 'جارٍ قراءة الألوان والخطوط...' },
-  { id: 'generate', icon: '🤖', labelAr: 'الذكاء الاصطناعي يبني الاستنساخ', thinkLabel: 'جارٍ النسخ بالذكاء الاصطناعي...' },
-  { id: 'repair',   icon: '✏️', labelAr: 'تحرير وإصلاح الكود',           thinkLabel: 'جارٍ تحرير الكود...' },
-  { id: 'download', icon: '📦', labelAr: 'جلب الأصول الحقيقية (CSS/JS)', thinkLabel: 'جارٍ تنزيل الملفات...' },
-  { id: 'done',     icon: '✅', labelAr: 'اكتمل الاستنساخ!',             thinkLabel: 'اكتمل!' },
+  {
+    id: 'fetch',
+    visual: 0,
+    icon: '🧠',
+    iconAnim: 'brain',
+    labelAr: 'يفكر',
+    subAr: 'تحليل الطلب وتجهيز الخطة...',
+    thinkLabel: 'راني نخمم، أصبر...',
+  },
+  {
+    id: 'extract',
+    visual: 1,
+    icon: '🔎',
+    iconAnim: 'scan',
+    labelAr: 'معاينة وفحص',
+    subAr: 'فحص الألوان، الخطوط، الهيكل، الصور...',
+    thinkLabel: 'جارٍ فحص الموقع...',
+  },
+  {
+    id: 'generate',
+    visual: 2,
+    icon: '✍️',
+    iconAnim: 'write',
+    labelAr: 'يكتب الكود',
+    subAr: 'الذكاء الاصطناعي يبني الاستنساخ...',
+    thinkLabel: 'جارٍ كتابة الكود...',
+  },
+  {
+    id: 'done',
+    visual: 3,
+    icon: '✅',
+    iconAnim: 'done',
+    labelAr: 'تم الاستنساخ',
+    subAr: 'الموقع المستنسخ جاهز!',
+    thinkLabel: 'اكتمل!',
+  },
 ]
 
 function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
-  const currentIdx = CLONE_STAGES.findIndex(s => s.id === progress.stage)
-  const activeStageMeta = currentIdx >= 0 ? CLONE_STAGES[currentIdx] : CLONE_STAGES[0]
+  const visualIdx = STAGE_TO_VISUAL[progress.stage] ?? 0
+  const VISUAL_STAGES = [CLONE_STAGES[0], CLONE_STAGES[1], CLONE_STAGES[2], CLONE_STAGES[3]]
+  const activeStage = VISUAL_STAGES[visualIdx]
   let domain = progress.url
   try { domain = new URL(progress.url).hostname } catch {}
 
   return (
     <div className="dz-clone-progress">
+      {/* Animated background glow */}
+      <div className="dz-clone-progress__glow" />
+
+      {/* Header */}
       <div className="dz-clone-progress__header">
-        <span className="dz-clone-progress__badge">🧬 V2</span>
-        <div className="dz-clone-progress__meta">
-          <span className="dz-clone-progress__title">محرك الاستنساخ</span>
-          <span className="dz-clone-progress__domain">{domain}</span>
+        <div className="dz-clone-progress__logo">
+          <span className="dz-clone-progress__logo-icon">🧬</span>
+          <div>
+            <span className="dz-clone-progress__title">محرك الاستنساخ V2</span>
+            <span className="dz-clone-progress__domain">{domain}</span>
+          </div>
         </div>
         <span className="dz-clone-progress__pct">{progress.pct}%</span>
       </div>
@@ -889,25 +931,23 @@ function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
         />
       </div>
 
-      {/* Stage pipeline */}
+      {/* 4-stage visual pipeline */}
       <div className="dz-clone-progress__stages">
-        {CLONE_STAGES.map((s, i) => {
-          const isDone    = i < currentIdx
-          const isCurrent = i === currentIdx
-          const isPending = i > currentIdx
+        {VISUAL_STAGES.map((s, i) => {
+          const isDone    = i < visualIdx
+          const isCurrent = i === visualIdx
+          const isPending = i > visualIdx
           return (
             <div
               key={s.id}
               className={`dz-clone-stage${isDone ? ' dz-clone-stage--done' : ''}${isCurrent ? ' dz-clone-stage--active' : ''}${isPending ? ' dz-clone-stage--pending' : ''}`}
             >
-              <div className="dz-clone-stage__icon">
-                {isDone    ? '✅' : isCurrent ? <span className="dz-clone-stage__spin">{s.icon}</span> : s.icon}
+              <div className={`dz-clone-stage__icon dz-clone-stage__icon--${s.iconAnim}${isCurrent ? ' is-active' : ''}`}>
+                {isDone ? '✅' : s.icon}
               </div>
               <div className="dz-clone-stage__text">
                 <span className="dz-clone-stage__label">{s.labelAr}</span>
-                {isCurrent && (
-                  <span className="dz-clone-stage__think">{activeStageMeta.thinkLabel}</span>
-                )}
+                {isCurrent && <span className="dz-clone-stage__think">{s.subAr}</span>}
               </div>
               {isCurrent && (
                 <div className="dz-clone-stage__dots">
@@ -919,7 +959,7 @@ function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
         })}
       </div>
 
-      {/* Tech / Sections detected */}
+      {/* Tech / Sections chips */}
       {(progress.tech?.length || progress.sections?.length) ? (
         <div className="dz-clone-progress__chips">
           {progress.tech?.slice(0, 5).map(t => (
@@ -931,10 +971,10 @@ function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
         </div>
       ) : null}
 
-      {/* Status label */}
+      {/* Status footer */}
       <div className="dz-clone-progress__status">
         <Loader2 size={11} className="dz-spin" style={{ opacity: 0.5 }} />
-        <span>{progress.label || activeStageMeta.thinkLabel}</span>
+        <span>{progress.label || activeStage.thinkLabel}</span>
       </div>
     </div>
   )

@@ -161,9 +161,8 @@ export default function DZChat() {
     try {
       const saved = localStorage.getItem('dzchat-saved-profile')
       if (saved) {
-        const { name, password } = JSON.parse(saved)
-        if (name) setEntryName(name)
-        if (password) { setEntryPassword(password); setEntrySaveProfile(true) }
+        const { name } = JSON.parse(saved)
+        if (name) { setEntryName(name); setEntrySaveProfile(true) }
       }
     } catch {}
   }, [])
@@ -368,7 +367,7 @@ export default function DZChat() {
       if (entryPassword.trim().length >= 4) {
         body.profilePassword = entryPassword.trim()
         if (entrySaveProfile) {
-          localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: entryName.trim(), password: entryPassword.trim() }))
+          localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: entryName.trim() }))
         } else {
           localStorage.removeItem('dzchat-saved-profile')
         }

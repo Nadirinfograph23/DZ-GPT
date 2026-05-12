@@ -115,13 +115,13 @@ app.use(helmet({
       scriptSrc: isProd
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com'],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com'],
       connectSrc: isProd
-        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com']
-        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com'],
+        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org']
+        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org'],
       mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'data:'],
       objectSrc: ["'none'"],
       frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
       childSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
@@ -211,6 +211,14 @@ const deployLimiter = rateLimit({
   message: { error: 'Deploy rate limit exceeded. Please wait.' },
 })
 
+const cloneLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many clone requests. Please wait a minute.' },
+})
+
 app.use('/api/chat', aiLimiter)
 app.use('/api/dz-agent-chat', aiLimiter)
 app.use('/api/dz-agent/github', githubLimiter)
@@ -223,6 +231,7 @@ app.use('/api/lessons', searchLimiter)
 app.use('/api/lesson', searchLimiter)
 app.use('/api/dz-agent/deploy', deployLimiter)
 app.use('/api/dz-agent/sync', deployLimiter)
+app.use('/api/dz-agent/clone-v2', cloneLimiter)
 app.use('/api/dz-agent/doctor-search', searchLimiter)
 
 // ===== INPUT SANITIZER =====

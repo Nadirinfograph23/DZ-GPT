@@ -1188,6 +1188,9 @@ try {
 
     // Listen for completion
     const handler = (e: MessageEvent) => {
+      // Validate origin — only accept messages from same origin or sandboxed iframes (origin='null')
+      const allowedOrigin = window.location.origin
+      if (e.origin !== allowedOrigin && e.origin !== 'null' && e.origin !== '') return
       if (e.data?.type === 'exec-done') {
         setRunning(false)
         window.removeEventListener('message', handler)

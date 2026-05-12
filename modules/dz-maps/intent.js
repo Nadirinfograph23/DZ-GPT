@@ -332,7 +332,7 @@ export function extractLocationFromMsg(msg, poiKey) {
   let cleaned = msg
   if (poiKey && POI_TYPES[poiKey]) {
     for (const lbl of POI_TYPES[poiKey].labels) {
-      cleaned = cleaned.replace(new RegExp(lbl, 'gi'), '')
+      cleaned = cleaned.replace(new RegExp(lbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '')
     }
   }
   const preps = [

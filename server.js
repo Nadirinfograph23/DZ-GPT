@@ -8950,7 +8950,260 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       // ── أمر: إنشاء / تعديل ملف أو صفحة ويب ────────────────────────────
       if (_isCreateFile || _isUpdateFile) {
-        // كشف مسار الملف المطلوب
+
+        // ════════════════════════════════════════════════════════════════
+        // BATCH COMMIT MODE — رفع عدة ملفات في commit واحد عبر Tree API
+        // يُفعَّل عندما يطلب المستخدم مشروعاً كاملاً أو ملفات متعددة
+        // ════════════════════════════════════════════════════════════════
+        const _isBatchRequest = /موقع\s*كامل|مشروع\s*كامل|full\s*project|projet\s*complet|html\s*[وو+&]\s*css|css\s*[وو+&]\s*js|html\s*[وو+&]\s*js|ملفات\s*متعدد|multiple\s*file|plusieurs\s*fichier|index\.html.*style\.css|كل\s*الملفات|bootstrap.*project|react.*project|landing.*page.*complete/i.test(lastUserMessage)
+
+        if (_isBatchRequest) {
+          console.log(`[GH:BatchCommit] Activated for repo="${_fullRepo}" msg="${lastUserMessage.slice(0,60)}"`)
+
+          // ── Step 1: تأكد من وجود المستودع أو أنشئه ──────────────────
+          let _defaultBranch = 'main'
+          try {
+            const _repoChk = await fetch(`https://api.github.com/repos/${_fullRepo}`, { headers: _ghH, signal: AbortSignal.timeout(8000) })
+            if (!_repoChk.ok) {
+              const _crR = await fetch('https://api.github.com/user/repos', {
+                method: 'POST', headers: _ghH, signal: AbortSignal.timeout(15000),
+                body: JSON.stringify({ name: _targetRepoName, description: `Created by DZ Agent 🇩🇿`, auto_init: true, private: false }),
+              })
+              if (!_crR.ok) { const _d = await _crR.json(); return res.status(200).json({ content: `❌ تعذّر إنشاء المستودع: ${_d.message}` }) }
+              console.log(`[GH:BatchCommit] ✅ Auto-created: ${_fullRepo}`)
+              await new Promise(r => setTimeout(r, 2500))
+            } else {
+              const _rd = await _repoChk.json()
+              _defaultBranch = _rd.default_branch || 'main'
+            }
+          } catch (_re) {
+            return res.status(200).json({ content: `❌ **خطأ في GitHub:** ${_re.message}` })
+          }
+
+          // ── Step 2: توليد خطة الملفات عبر AI ───────────────────────
+          let _filePlan = []
+          try {
+            const _planResult = await safeGenerateAI({
+              messages: [
+                {
+                  role: 'system',
+                  content: `أنت DZ Agent — مخطط مشاريع ويب. حلّل الطلب وأنتج خطة ملفات JSON دقيقة.
+قواعد صارمة:
+- أعطِ مصفوفة JSON فقط بدون أي نص آخر
+- كل عنصر: {"path":"...","type":"html|css|js|md|json|py","desc":"وصف مختصر بالعربية"}
+- أضف دائماً README.md
+- للمواقع: index.html + style.css + script.js + README.md
+- للمشاريع Python: main.py + requirements.txt + README.md
+- للمشاريع Node: index.js + package.json + README.md
+- لا تتجاوز 8 ملفات
+- Output: JSON array فقط مثل: [{"path":"index.html","type":"html","desc":"الصفحة الرئيسية"}]`,
+                },
+                { role: 'user', content: `المستودع: ${_fullRepo}\nالطلب: ${lastUserMessage}` },
+              ],
+              query: lastUserMessage,
+              max_tokens: 1000,
+            })
+            const _planRaw = (_planResult.content || '').trim()
+            const _jsonMatch = _planRaw.match(/\[[\s\S]*\]/)
+            if (_jsonMatch) _filePlan = JSON.parse(_jsonMatch[0])
+            if (!Array.isArray(_filePlan) || !_filePlan.length) throw new Error('خطة فارغة')
+          } catch (_pe) {
+            // Fallback خطة افتراضية
+            _filePlan = [
+              { path: 'index.html', type: 'html', desc: 'الصفحة الرئيسية' },
+              { path: 'style.css', type: 'css', desc: 'ملف التنسيق' },
+              { path: 'script.js', type: 'js', desc: 'ملف JavaScript' },
+              { path: 'README.md', type: 'md', desc: 'توثيق المشروع' },
+            ]
+            console.warn(`[GH:BatchCommit] Plan fallback: ${_pe.message}`)
+          }
+          console.log(`[GH:BatchCommit] Plan: ${_filePlan.map(f=>f.path).join(', ')}`)
+
+          // ── Step 3: توليد محتوى كل ملف بالتوازي ───────────────────
+          const _SYSTEM_MAP = {
+            html: `أنت DZ Agent — مهندس ويب. أنشئ ملف HTML5 كاملاً احترافياً responsive مع TailwindCSS CDN إذا مناسب. محتوى حقيقي. Output: HTML فقط بدون markdown.`,
+            css:  `أنت DZ Agent — مصمم CSS. أنشئ ملف CSS احترافياً modern، clean، responsive مع variables و animations. Output: CSS فقط بدون markdown.`,
+            js:   `أنت DZ Agent — مطور JavaScript. أنشئ ملف JS احترافياً ES6+ مع تعليقات واضحة. Output: JS فقط بدون markdown.`,
+            md:   `أنت DZ Agent — فنّي توثيق. اكتب README.md احترافياً بـ Markdown مع badges، وصف، تثبيت، استخدام. Output: Markdown فقط.`,
+            json: `أنت DZ Agent. أنشئ ملف JSON صحيح مناسب للمشروع. Output: JSON فقط بدون markdown.`,
+            py:   `أنت DZ Agent — مطور Python. اكتب سكريبت Python3 احترافياً مع docstrings. Output: Python فقط بدون markdown.`,
+          }
+
+          const _generatedFiles = await Promise.all(_filePlan.map(async (f) => {
+            try {
+              const _sys = _SYSTEM_MAP[f.type] || `أنت DZ Agent. أنشئ محتوى الملف "${f.path}" (${f.desc}). Output: كود فقط بدون markdown.`
+              const _aiR = await safeGenerateAI({
+                messages: [
+                  { role: 'system', content: _sys },
+                  { role: 'user', content: `المشروع: ${_targetRepoName}\nالملف: ${f.path}\nالوصف: ${f.desc}\nالطلب الأصلي: ${lastUserMessage}` },
+                ],
+                query: lastUserMessage,
+                max_tokens: f.type === 'html' ? 8000 : 3000,
+              })
+              let _c = _aiR.content || ''
+              if (f.type === 'html') _c = extractHtmlFromResponse(_c) || _c
+              // نظّف markdown code fences إذا وُجدت
+              _c = _c.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
+              return { ...f, content: _c, ok: _c.length > 20, size: _c.length }
+            } catch (_fe) {
+              return { ...f, content: `/* Error generating ${f.path}: ${_fe.message} */`, ok: false, size: 0 }
+            }
+          }))
+
+          const _successFiles = _generatedFiles.filter(f => f.ok)
+          const _failedFiles  = _generatedFiles.filter(f => !f.ok)
+          console.log(`[GH:BatchCommit] Generated: ${_successFiles.length}/${_filePlan.length} files OK`)
+
+          if (!_successFiles.length) {
+            return res.status(200).json({ content: `❌ فشل توليد جميع الملفات. صف الطلب بشكل أوضح وأعد المحاولة.` })
+          }
+
+          // ── Step 4: الحصول على HEAD commit ──────────────────────────
+          let _baseTree = null
+          let _parentSha = null
+          try {
+            const _refR = await fetch(`https://api.github.com/repos/${_fullRepo}/git/ref/heads/${_defaultBranch}`, { headers: _ghH, signal: AbortSignal.timeout(8000) })
+            if (_refR.ok) {
+              const _refD = await _refR.json()
+              _parentSha = _refD.object?.sha
+              const _commitR = await fetch(`https://api.github.com/repos/${_fullRepo}/git/commits/${_parentSha}`, { headers: _ghH, signal: AbortSignal.timeout(8000) })
+              if (_commitR.ok) { const _cd = await _commitR.json(); _baseTree = _cd.tree?.sha }
+            }
+          } catch (_te) {
+            console.warn('[GH:BatchCommit] Could not fetch HEAD, will create initial commit:', _te.message)
+          }
+
+          // ── Step 5: إنشاء blob لكل ملف ──────────────────────────────
+          const _blobs = await Promise.all(_successFiles.map(async (f) => {
+            try {
+              const _br = await fetch(`https://api.github.com/repos/${_fullRepo}/git/blobs`, {
+                method: 'POST', headers: _ghH, signal: AbortSignal.timeout(15000),
+                body: JSON.stringify({ content: f.content, encoding: 'utf-8' }),
+              })
+              if (!_br.ok) { const _d = await _br.json(); throw new Error(_d.message) }
+              const { sha } = await _br.json()
+              return { path: f.path, mode: '100644', type: 'blob', sha }
+            } catch (_be) {
+              console.warn(`[GH:BatchCommit] Blob failed for ${f.path}:`, _be.message)
+              return null
+            }
+          }))
+          const _validBlobs = _blobs.filter(Boolean)
+
+          // ── Step 6: إنشاء Tree جديد ─────────────────────────────────
+          const _treeBody = { tree: _validBlobs }
+          if (_baseTree) _treeBody.base_tree = _baseTree
+          const _treeR = await fetch(`https://api.github.com/repos/${_fullRepo}/git/trees`, {
+            method: 'POST', headers: _ghH, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify(_treeBody),
+          })
+          if (!_treeR.ok) {
+            const _td = await _treeR.json()
+            return res.status(200).json({ content: `❌ فشل إنشاء Tree: ${_td.message}` })
+          }
+          const { sha: _newTreeSha } = await _treeR.json()
+
+          // ── Step 7: إنشاء Commit ─────────────────────────────────────
+          const _commitBody = {
+            message: `feat: ${_filePlan.map(f=>f.path).join(', ')} — via DZ Agent 🇩🇿 [batch]`,
+            tree: _newTreeSha,
+            ...(_parentSha ? { parents: [_parentSha] } : { parents: [] }),
+          }
+          const _commitR = await fetch(`https://api.github.com/repos/${_fullRepo}/git/commits`, {
+            method: 'POST', headers: _ghH, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify(_commitBody),
+          })
+          if (!_commitR.ok) {
+            const _cd = await _commitR.json()
+            return res.status(200).json({ content: `❌ فشل إنشاء Commit: ${_cd.message}` })
+          }
+          const { sha: _newCommitSha } = await _commitR.json()
+
+          // ── Step 8: تحديث الفرع ──────────────────────────────────────
+          const _updateMethod = _parentSha ? 'PATCH' : 'POST'
+          const _updateUrl = _parentSha
+            ? `https://api.github.com/repos/${_fullRepo}/git/refs/heads/${_defaultBranch}`
+            : `https://api.github.com/repos/${_fullRepo}/git/refs`
+          const _updateBody = _parentSha
+            ? { sha: _newCommitSha }
+            : { ref: `refs/heads/${_defaultBranch}`, sha: _newCommitSha }
+          const _upR = await fetch(_updateUrl, {
+            method: _updateMethod, headers: _ghH, signal: AbortSignal.timeout(10000),
+            body: JSON.stringify(_updateBody),
+          })
+          if (!_upR.ok) {
+            const _ud2 = await _upR.json()
+            return res.status(200).json({ content: `❌ فشل تحديث الفرع: ${_ud2.message}` })
+          }
+          console.log(`[GH:BatchCommit] ✅ Commit ${_newCommitSha.slice(0,8)} pushed ${_validBlobs.length} files → ${_fullRepo}`)
+
+          // ── Step 9: تفعيل GitHub Pages إذا وُجد index.html ─────────
+          let _pagesUrl = null
+          const _hasHtml = _successFiles.some(f => f.path === 'index.html' || f.type === 'html')
+          if (_hasHtml) {
+            try {
+              const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                body: JSON.stringify({ source: { branch: _defaultBranch, path: '/' } }),
+                signal: AbortSignal.timeout(10000),
+              })
+              if (_pgR.ok || _pgR.status === 409) {
+                _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
+              }
+            } catch {}
+          }
+
+          // ── Step 10: بناء التقرير التفصيلي ──────────────────────────
+          const _totalKb = (_successFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(1)
+          const _fileReport = [
+            ..._successFiles.map(f => `  ✅ \`${f.path}\` — ${f.desc} *(${(f.size/1024).toFixed(1)} KB)*`),
+            ..._failedFiles.map(f => `  ❌ \`${f.path}\` — فشل التوليد`),
+          ]
+
+          const _batchReport = [
+            `## ✅ Batch Commit مكتمل — \`${_fullRepo}\``,
+            ``,
+            `📦 **المستودع:** [github.com/${_fullRepo}](https://github.com/${_fullRepo})`,
+            `🔀 **Commit:** [\`${_newCommitSha.slice(0,8)}\`](https://github.com/${_fullRepo}/commit/${_newCommitSha})`,
+            `📁 **الملفات المرفوعة:** ${_validBlobs.length} / ${_filePlan.length} ملف`,
+            `💾 **الحجم الإجمالي:** ${_totalKb} KB`,
+            _pagesUrl ? `🌐 **الموقع المباشر:** [${_pagesUrl}](${_pagesUrl}) *(جاهز خلال دقيقة)*` : null,
+            ``,
+            `### 📋 تفاصيل الملفات`,
+            ..._fileReport,
+            ``,
+            `### 📊 Commit Summary`,
+            `| الملف | الحجم | الحالة |`,
+            `|-------|-------|--------|`,
+            ..._successFiles.map(f => `| \`${f.path}\` | ${(f.size/1024).toFixed(1)} KB | ✅ تم رفعه |`),
+            ..._failedFiles.map(f => `| \`${f.path}\` | — | ❌ فشل |`),
+            ``,
+            `> 💡 **ماذا بعد؟** جرّب: *"عدّل التصميم في مستودع ${_targetRepoName}"* أو *"أضف صفحة about.html"*`,
+          ].filter(l => l !== null).join('\n')
+
+          const _htmlFile = _successFiles.find(f => f.path === 'index.html' || f.type === 'html')
+          return res.status(200).json({
+            content: _batchReport,
+            isWebsite: !!_htmlFile,
+            htmlCode: _htmlFile?.content || undefined,
+            cssCode: _successFiles.find(f => f.type === 'css')?.content || undefined,
+            jsCode: _successFiles.find(f => f.type === 'js')?.content || undefined,
+            webBuilderMeta: _htmlFile ? { type: 'landing', style: 'modern', title: _targetRepoName, description: lastUserMessage.slice(0, 100), icon: '🚀' } : undefined,
+            githubAction: 'batch-commit',
+            githubRepo: _fullRepo,
+            githubCommitSha: _newCommitSha,
+            githubCommitUrl: `https://github.com/${_fullRepo}/commit/${_newCommitSha}`,
+            githubPagesUrl: _pagesUrl,
+            batchReport: {
+              total: _filePlan.length, pushed: _validBlobs.length, failed: _failedFiles.length,
+              files: _successFiles.map(f => ({ path: f.path, type: f.type, size: f.size, ok: true })),
+              commitSha: _newCommitSha, totalKb: parseFloat(_totalKb),
+            },
+          })
+        }
+        // ── نهاية BATCH COMMIT MODE ───────────────────────────────────
+
+        // كشف مسار الملف المطلوب (الوضع العادي — ملف واحد)
         const _pathMatch = lastUserMessage.match(/(?:ملف|file)\s+["']?([\w\-\.\/]+\.\w+)["']?/i)
         let _filePath = _pathMatch ? _pathMatch[1] : (_isWebPage ? 'index.html' : _isReadme ? 'README.md' : _isScript ? 'script.js' : 'index.html')
         const _ext = _filePath.split('.').pop().toLowerCase()

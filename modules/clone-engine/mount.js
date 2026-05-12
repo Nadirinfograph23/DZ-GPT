@@ -193,11 +193,12 @@ export function mountCloneEngineV2(app, aiGenerate) {
       }
 
       // Step 2: Download all assets + build self-contained HTML + ZIP
+      // This endpoint is the explicit "full download" path — enable ZIP + full asset fetch
       const progressLog = []
       const result = await downloadWebsite(targetUrl, rawHtml, (p) => {
         progressLog.push(p)
         console.log(`[CloneV2:DownloadFull] ${p.stage} (${p.pct}%): ${p.message}`)
-      })
+      }, { indexOnly: false, buildZip: true })
 
       // Cache ZIP
       let zipSessionId = null

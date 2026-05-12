@@ -17,11 +17,15 @@
 
 import JSZip from 'jszip'
 
-const FETCH_TIMEOUT  = 12000
-const MAX_CSS_BYTES  = 300_000
+const FETCH_TIMEOUT  = 8000
+const MAX_CSS_BYTES  = 200_000
 const MAX_JS_BYTES   = 80_000
-const MAX_IMG_BYTES  = 200_000
-const MAX_PARALLEL   = 8
+const MAX_IMG_BYTES  = 150_000
+const MAX_PARALLEL   = 10
+
+// INDEX-ONLY mode limits (used by clone pipeline for speed)
+const INDEX_MAX_CSS  = 5
+const INDEX_MAX_IMG  = 8
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -103,29 +107,45 @@ export function extractAssetUrls(html, baseUrl) {
 }
 
 // ── Fetch all assets in parallel batches ──────────────────────────────────────
+// Options:
+//   indexOnly: true  → CSS-only mode (skip JS entirely, limit CSS to INDEX_MAX_CSS, images to INDEX_MAX_IMG)
+//   maxCss:    N     → override max CSS files
+//   maxImages: N     → override max images
 
-export async function fetchAllAssets(urls, onProgress) {
+export async function fetchAllAssets(urls, onProgress, options = {}) {
   const report = { css: {}, js: {}, images: {}, failed: [] }
   const { css: cssUrls, js: jsUrls, images: imgUrls } = urls
+  const indexOnly = options.indexOnly !== false  // default: true (index-only is now the default)
+  const maxCss    = options.maxCss    ?? INDEX_MAX_CSS
+  const maxImages = options.maxImages ?? INDEX_MAX_IMG
 
-  onProgress?.({ stage: 'assets', message: `📦 جلب ${cssUrls.length} CSS + ${jsUrls.length} JS + ${imgUrls.length} صورة...`, pct: 45 })
+  const cssToFetch = cssUrls.slice(0, maxCss)
+  const imgToFetch = imgUrls.slice(0, maxImages)
 
-  // Fetch CSS files
-  const cssResults = await runInBatches(cssUrls.map(url => async () => {
+  onProgress?.({
+    stage: 'assets',
+    message: `📦 جلب ${cssToFetch.length} CSS${indexOnly ? '' : ` + ${jsUrls.length} JS`} + ${imgToFetch.length} صورة (INDEX-ONLY سريع)...`,
+    pct: 45,
+  })
+
+  // Fetch CSS files (limited)
+  await runInBatches(cssToFetch.map(url => async () => {
     const { text, tooLarge, error } = await safeFetch(url, MAX_CSS_BYTES)
     if (error || tooLarge) { report.failed.push({ url, reason: error || 'too large' }); return }
     report.css[url] = text
   }))
 
-  // Fetch JS files
-  await runInBatches(jsUrls.map(url => async () => {
-    const { text, tooLarge, error, buf } = await safeFetch(url, MAX_JS_BYTES)
-    if (error || tooLarge) { report.failed.push({ url, reason: error || 'too large' }); return }
-    report.js[url] = text
-  }))
+  // Skip JS in index-only mode (not needed for visual clone, huge speedup)
+  if (!indexOnly) {
+    await runInBatches(jsUrls.map(url => async () => {
+      const { text, tooLarge, error } = await safeFetch(url, MAX_JS_BYTES)
+      if (error || tooLarge) { report.failed.push({ url, reason: error || 'too large' }); return }
+      report.js[url] = text
+    }))
+  }
 
-  // Fetch images (convert small ones to base64)
-  await runInBatches(imgUrls.slice(0, 30).map(url => async () => {
+  // Fetch images (limited, convert small ones to base64)
+  await runInBatches(imgToFetch.map(url => async () => {
     const { buf, tooLarge, error, contentType } = await safeFetch(url, MAX_IMG_BYTES)
     if (error || tooLarge || !buf) return
     const mime = contentType.split(';')[0].trim() || guessMime(url)
@@ -134,7 +154,7 @@ export async function fetchAllAssets(urls, onProgress) {
   }))
 
   const totalOk = Object.keys(report.css).length + Object.keys(report.js).length + Object.keys(report.images).length
-  console.log(`[Downloader] Fetched: ${Object.keys(report.css).length} CSS, ${Object.keys(report.js).length} JS, ${Object.keys(report.images).length} images | failed: ${report.failed.length}`)
+  console.log(`[Downloader/INDEX] Fetched: ${Object.keys(report.css).length}/${maxCss} CSS, ${Object.keys(report.js).length} JS (skipped=${indexOnly}), ${Object.keys(report.images).length}/${maxImages} images | failed: ${report.failed.length}`)
   onProgress?.({ stage: 'assets', message: `✅ جُلبت ${totalOk} أصول بنجاح (${report.failed.length} فشلت)`, pct: 65 })
 
   return report
@@ -317,56 +337,72 @@ export async function buildZipArchive(siteUrl, html, assets) {
 // ── Main orchestration — full download pipeline ───────────────────────────────
 
 /**
- * downloadWebsite(url, html, onProgress)
+ * downloadWebsite(url, html, onProgress, options)
  *
- * @param {string} url       - Target website URL
- * @param {string} html      - Already-fetched raw HTML (from fetcher.js)
- * @param {Function} onProgress - Progress callback ({ stage, message, pct })
+ * @param {string}   url         - Target website URL
+ * @param {string}   html        - Already-fetched raw HTML (from fetcher.js)
+ * @param {Function} onProgress  - Progress callback ({ stage, message, pct })
+ * @param {object}   options
+ *   - indexOnly: boolean (default true)  → skip JS, limit CSS/images for speed
+ *   - buildZip:  boolean (default false) → build ZIP archive (slow, only on explicit download)
  * @returns {{ selfContainedHtml, zipBuffer, assets, stats }}
  */
-export async function downloadWebsite(url, html, onProgress) {
-  const progress = onProgress || (() => {})
+export async function downloadWebsite(url, html, onProgress, options = {}) {
+  const progress  = onProgress || (() => {})
+  const indexOnly = options.indexOnly !== false   // default: true
+  const buildZip  = options.buildZip  === true    // default: false (skip ZIP in clone pipeline)
 
-  // 1. Extract all asset URLs from raw HTML
-  progress({ stage: 'extract-assets', message: '🔍 استخراج روابط الأصول (CSS · JS · صور · خطوط)...', pct: 38 })
-  const assetUrls = extractAssetUrls(html, url)
-
-  const totalAssets = assetUrls.css.length + assetUrls.js.length + assetUrls.images.length
+  // 1. Extract asset URLs from raw HTML (index page only)
   progress({
     stage: 'extract-assets',
-    message: `📋 اكتُشف: ${assetUrls.css.length} CSS · ${assetUrls.js.length} JS · ${assetUrls.images.length} صورة · ${assetUrls.fonts.length} خط`,
+    message: `🔍 استخراج أصول الصفحة الرئيسية (CSS · صور${indexOnly ? ' · تخطي JS' : ' · JS · خطوط'})...`,
+    pct: 38,
+  })
+  const assetUrls = extractAssetUrls(html, url)
+
+  const totalAssets = assetUrls.css.length + (indexOnly ? 0 : assetUrls.js.length) + assetUrls.images.length
+  progress({
+    stage: 'extract-assets',
+    message: `📋 اكتُشف: ${assetUrls.css.length} CSS · ${indexOnly ? '(JS مُتخطّى)' : `${assetUrls.js.length} JS`} · ${assetUrls.images.length} صورة`,
     pct: 42,
     assetCount: totalAssets,
   })
 
-  // 2. Fetch all assets in parallel
-  const assets = await fetchAllAssets(assetUrls, progress)
+  // 2. Fetch assets — index-only mode: CSS limited to 5, images to 8, JS skipped
+  const assets = await fetchAllAssets(assetUrls, progress, {
+    indexOnly,
+    maxCss:    options.maxCss    ?? INDEX_MAX_CSS,
+    maxImages: options.maxImages ?? INDEX_MAX_IMG,
+  })
 
-  // 3. Build self-contained HTML (inline everything)
-  progress({ stage: 'inline', message: '🔗 دمج الأصول الحقيقية داخل HTML...', pct: 72 })
+  // 3. Build self-contained HTML (inline CSS + images only)
+  progress({ stage: 'inline', message: '🔗 دمج CSS الحقيقي داخل HTML...', pct: 72 })
   const selfContainedHtml = buildSelfContainedHtml(html, assets, url, assetUrls.fonts)
 
-  // 4. Build ZIP archive
-  progress({ stage: 'zip', message: '🗜️ إنشاء ملف ZIP (مثل wget --mirror)...', pct: 85 })
+  // 4. Build ZIP archive — only when explicitly requested (download endpoint)
   let zipBuffer = null
-  try {
-    zipBuffer = await buildZipArchive(url, selfContainedHtml, assets)
-    progress({ stage: 'zip', message: `✅ ZIP جاهز (${(zipBuffer.length / 1024).toFixed(0)} KB)`, pct: 95 })
-  } catch (zipErr) {
-    console.warn('[Downloader] ZIP build failed (non-fatal):', zipErr.message)
+  if (buildZip) {
+    progress({ stage: 'zip', message: '🗜️ إنشاء ملف ZIP...', pct: 85 })
+    try {
+      zipBuffer = await buildZipArchive(url, selfContainedHtml, assets)
+      progress({ stage: 'zip', message: `✅ ZIP جاهز (${(zipBuffer.length / 1024).toFixed(0)} KB)`, pct: 95 })
+    } catch (zipErr) {
+      console.warn('[Downloader] ZIP build failed (non-fatal):', zipErr.message)
+    }
   }
 
   const stats = {
-    cssCount:   Object.keys(assets.css).length,
-    jsCount:    Object.keys(assets.js).length,
-    imageCount: Object.keys(assets.images).length,
+    cssCount:    Object.keys(assets.css).length,
+    jsCount:     Object.keys(assets.js).length,
+    imageCount:  Object.keys(assets.images).length,
     failedCount: assets.failed.length,
     totalFetched: Object.keys(assets.css).length + Object.keys(assets.js).length + Object.keys(assets.images).length,
     selfContainedSize: selfContainedHtml.length,
     zipSize: zipBuffer?.length || 0,
+    indexOnly,
   }
 
-  console.log(`[Downloader] ✅ Complete — css:${stats.cssCount} js:${stats.jsCount} img:${stats.imageCount} failed:${stats.failedCount} htmlSize:${(stats.selfContainedSize/1024).toFixed(0)}KB zipSize:${(stats.zipSize/1024).toFixed(0)}KB`)
+  console.log(`[Downloader/INDEX] ✅ css:${stats.cssCount} js:${stats.jsCount}(skip=${indexOnly}) img:${stats.imageCount} failed:${stats.failedCount} htmlSize:${(stats.selfContainedSize/1024).toFixed(0)}KB zip:${buildZip ? `${(stats.zipSize/1024).toFixed(0)}KB` : 'skipped'}`)
 
   return { selfContainedHtml, zipBuffer, assets, assetUrls, stats }
 }

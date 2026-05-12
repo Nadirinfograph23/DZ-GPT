@@ -164,8 +164,8 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     { role: 'user', content: userPrompt },
   ]
 
-  // V3: Increased to 14000 tokens for richer output
-  const result = await aiGenerate(messages, 14000)
+  // INDEX-ONLY: 10000 tokens is enough for a full homepage clone (faster)
+  const result = await aiGenerate(messages, 10000)
   let htmlCode = extractHtml(result?.content || '')
 
   // ─── Stage 3b: Retry if empty or too short ───────────────────────────────
@@ -190,7 +190,7 @@ IMPORTANT REMINDERS:
 START WITH <!DOCTYPE html> NOW:`,
       },
     ]
-    const retryResult = await aiGenerate(retryMessages, 14000)
+    const retryResult = await aiGenerate(retryMessages, 10000)
     htmlCode = extractHtml(retryResult?.content || '') || retryResult?.content || ''
   }
 
@@ -210,21 +210,21 @@ START WITH <!DOCTYPE html> NOW:`,
   // V3: Enforce verbatim years/copyright
   htmlCode = enforceVerbatimContent(htmlCode, tokens)
 
-  // ─── Stage 4b: Real Asset Injection (V2 Downloader) ─────────────────────
-  // Downloads real CSS from the source site and injects structural layout
-  // rules into the AI clone — improves fidelity without replacing AI colors.
+  // ─── Stage 4b: Real CSS Injection — INDEX-ONLY (fast path) ──────────────
+  // Fetches CSS only (max 5 sheets), skips JS entirely, limits images to 8.
+  // ZIP is NOT built here — only on explicit download request.
   let downloadResult = null
   try {
-    progress({ stage: 'real-assets', message: `🌐 جلب الأصول الحقيقية من الموقع (V2 Downloader)...`, pct: 68 })
+    progress({ stage: 'real-assets', message: `🌐 جلب CSS الحقيقي من الصفحة الرئيسية (سريع — بدون JS · بدون ZIP)...`, pct: 68 })
     downloadResult = await downloadWebsite(url, rawHtml, (p) => {
-      progress({ ...p, pct: 68 + Math.round((p.pct - 38) * 0.18) })
-    })
+      progress({ ...p, pct: 68 + Math.round((p.pct - 38) * 0.14) })
+    }, { indexOnly: true, buildZip: false })
     // Inject real CSS layout into AI clone (non-destructive — only structural rules)
     if (downloadResult.assets?.css && Object.keys(downloadResult.assets.css).length > 0) {
       htmlCode = injectRealCssIntoClone(htmlCode, downloadResult.assets.css)
-      console.log(`[CloneEngineV3/V2] Injected ${Object.keys(downloadResult.assets.css).length} real CSS sheets into AI clone`)
+      console.log(`[CloneEngineV3/INDEX] Injected ${Object.keys(downloadResult.assets.css).length} CSS sheets (JS skipped, ZIP skipped)`)
     }
-    progress({ stage: 'real-assets', message: `✅ الأصول الحقيقية مدمجة (${downloadResult.stats.totalFetched} ملف)`, pct: 82 })
+    progress({ stage: 'real-assets', message: `✅ CSS الحقيقي مدمج (${downloadResult.stats.cssCount} ملف · ${downloadResult.stats.imageCount} صورة)`, pct: 80 })
   } catch (dlErr) {
     console.warn(`[CloneEngineV3/V2] Real asset download failed (non-fatal): ${dlErr.message}`)
   }
@@ -240,7 +240,7 @@ START WITH <!DOCTYPE html> NOW:`,
       { role: 'system', content: systemPrompt },
       { role: 'user', content: repairPrompt },
     ]
-    const repairResult = await aiGenerate(repairMessages, 14000)
+    const repairResult = await aiGenerate(repairMessages, 10000)
     const repairedHtml = extractHtml(repairResult?.content || '')
     if (repairedHtml && repairedHtml.length > htmlCode.length * 0.7) {
       htmlCode = rewriteAssetsToAbsolute(repairedHtml, url)

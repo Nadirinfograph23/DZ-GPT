@@ -242,6 +242,7 @@ interface DZMessage {
   executionLang?: string
   executionCode?: string
   webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
+  zipDownloadUrl?: string
   youtubeVideo?: YouTubeVideoData
   youtubeResults?: YouTubeResult[]
   youtubeFlow?: 'url' | 'search'
@@ -839,6 +840,102 @@ function DZCodeBlock({ children, className }: { children: React.ReactNode; class
           <WebsitePreview htmlCode={codeText} />
         </div>
       )}
+    </div>
+  )
+}
+
+// ===== CLONE PROGRESS PANEL =====
+
+interface CloneProgressState {
+  stage: string
+  pct: number
+  label: string
+  url: string
+  tech?: string[]
+  sections?: string[]
+}
+
+const CLONE_STAGES = [
+  { id: 'fetch',    icon: '🌐', labelAr: 'جارٍ جلب الموقع',             thinkLabel: 'راني نخمم، أصبر...' },
+  { id: 'extract',  icon: '🧠', labelAr: 'استخراج التصميم والهيكل',      thinkLabel: 'جارٍ قراءة الألوان والخطوط...' },
+  { id: 'generate', icon: '🤖', labelAr: 'الذكاء الاصطناعي يبني الاستنساخ', thinkLabel: 'جارٍ النسخ بالذكاء الاصطناعي...' },
+  { id: 'repair',   icon: '✏️', labelAr: 'تحرير وإصلاح الكود',           thinkLabel: 'جارٍ تحرير الكود...' },
+  { id: 'download', icon: '📦', labelAr: 'جلب الأصول الحقيقية (CSS/JS)', thinkLabel: 'جارٍ تنزيل الملفات...' },
+  { id: 'done',     icon: '✅', labelAr: 'اكتمل الاستنساخ!',             thinkLabel: 'اكتمل!' },
+]
+
+function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
+  const currentIdx = CLONE_STAGES.findIndex(s => s.id === progress.stage)
+  const activeStageMeta = currentIdx >= 0 ? CLONE_STAGES[currentIdx] : CLONE_STAGES[0]
+  let domain = progress.url
+  try { domain = new URL(progress.url).hostname } catch {}
+
+  return (
+    <div className="dz-clone-progress">
+      <div className="dz-clone-progress__header">
+        <span className="dz-clone-progress__badge">🧬 V2</span>
+        <div className="dz-clone-progress__meta">
+          <span className="dz-clone-progress__title">محرك الاستنساخ</span>
+          <span className="dz-clone-progress__domain">{domain}</span>
+        </div>
+        <span className="dz-clone-progress__pct">{progress.pct}%</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="dz-clone-progress__bar-track">
+        <div
+          className="dz-clone-progress__bar-fill"
+          style={{ width: `${Math.max(3, progress.pct)}%` }}
+        />
+      </div>
+
+      {/* Stage pipeline */}
+      <div className="dz-clone-progress__stages">
+        {CLONE_STAGES.map((s, i) => {
+          const isDone    = i < currentIdx
+          const isCurrent = i === currentIdx
+          const isPending = i > currentIdx
+          return (
+            <div
+              key={s.id}
+              className={`dz-clone-stage${isDone ? ' dz-clone-stage--done' : ''}${isCurrent ? ' dz-clone-stage--active' : ''}${isPending ? ' dz-clone-stage--pending' : ''}`}
+            >
+              <div className="dz-clone-stage__icon">
+                {isDone    ? '✅' : isCurrent ? <span className="dz-clone-stage__spin">{s.icon}</span> : s.icon}
+              </div>
+              <div className="dz-clone-stage__text">
+                <span className="dz-clone-stage__label">{s.labelAr}</span>
+                {isCurrent && (
+                  <span className="dz-clone-stage__think">{activeStageMeta.thinkLabel}</span>
+                )}
+              </div>
+              {isCurrent && (
+                <div className="dz-clone-stage__dots">
+                  <span /><span /><span />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tech / Sections detected */}
+      {(progress.tech?.length || progress.sections?.length) ? (
+        <div className="dz-clone-progress__chips">
+          {progress.tech?.slice(0, 5).map(t => (
+            <span key={t} className="dz-clone-chip dz-clone-chip--tech">🔬 {t}</span>
+          ))}
+          {progress.sections?.slice(0, 4).map(s => (
+            <span key={s} className="dz-clone-chip dz-clone-chip--section">📐 {s}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Status label */}
+      <div className="dz-clone-progress__status">
+        <Loader2 size={11} className="dz-spin" style={{ opacity: 0.5 }} />
+        <span>{progress.label || activeStageMeta.thinkLabel}</span>
+      </div>
     </div>
   )
 }
@@ -2849,6 +2946,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
+  const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
@@ -3631,25 +3729,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
     const sectionLabel = section && section !== 'full' ? ` — قسم: ${section}` : ''
 
-    // Optimistic loading message
-    const loadingMsgId = generateId()
-    setMessages(prev => [...prev, {
-      id: loadingMsgId,
-      role: 'assistant' as const,
-      richType: 'text' as const,
-      content: `🧬 **محرك الاستنساخ V2${sectionLabel}**\n\n⏳ **جارٍ الجلب...** تحليل \`${url}\``,
-    }])
-
-    const updateLoadingMsg = (content: string) => {
-      setMessages(prev => prev.map(m => m.id === loadingMsgId ? { ...m, content } : m))
-    }
+    // Init progress panel (replaces old text loading message)
+    setCloneProgress({ stage: 'fetch', pct: 5, label: 'راني نخمم، جارٍ جلب الموقع...', url })
 
     const STAGE_LABELS: Record<string, string> = {
-      fetch:    '🌐 جارٍ جلب الموقع',
-      extract:  '🔬 استخراج التصميم والهيكل',
-      generate: '🤖 بناء الاستنساخ بالذكاء الاصطناعي',
-      repair:   '🔧 إصلاح تلقائي',
-      done:     '✅ اكتمل',
+      fetch:    'راني نخمم، جارٍ جلب الموقع...',
+      extract:  'جارٍ قراءة التصميم والألوان...',
+      generate: 'الذكاء الاصطناعي يبني الاستنساخ...',
+      repair:   'جارٍ تحرير وإصلاح الكود...',
+      download: 'جارٍ جلب الأصول الحقيقية...',
+      done:     'اكتمل!',
     }
 
     try {
@@ -3684,24 +3773,21 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const parsed = JSON.parse(line.slice(6))
 
             if (parsed.stage) {
-              // Progress update
-              const label = STAGE_LABELS[parsed.stage] || parsed.message || parsed.stage
-              const techBadge = parsed.tech?.length > 0
-                ? `\n🔬 **Stack:** ${(parsed.tech as string[]).slice(0, 4).join(' · ')}`
-                : ''
-              const sectionsBadge = parsed.sections?.length > 0
-                ? `\n📐 **أقسام:** ${(parsed.sections as string[]).slice(0, 5).join(' · ')}`
-                : ''
-              const pct = parsed.pct ? ` (${parsed.pct}%)` : ''
-              updateLoadingMsg(
-                `🧬 **محرك الاستنساخ V2${sectionLabel}**\n\n${label}${pct}...${techBadge}${sectionsBadge}`
-              )
+              // Progress update — feed the CloneProgressPanel
+              setCloneProgress({
+                stage: parsed.stage,
+                pct: parsed.pct || 0,
+                label: STAGE_LABELS[parsed.stage] || parsed.message || parsed.stage,
+                url,
+                tech: parsed.tech || [],
+                sections: parsed.sections || [],
+              })
             } else if (parsed.ok !== undefined) {
               // Final result
               finalData = parsed
             } else if (parsed.error) {
               // Error event
-              setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+              setCloneProgress(null)
               addAssistantMessage({
                 content: `⚠️ ${parsed.error}`,
                 richType: 'text',
@@ -3715,8 +3801,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
 
-      // Remove the loading message
-      setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+      // Flash done stage briefly
+      setCloneProgress(prev => prev ? { ...prev, stage: 'done', pct: 100, label: 'اكتمل!' } : null)
+      await new Promise(r => setTimeout(r, 600))
+      setCloneProgress(null)
 
       if (!finalData) throw new Error('No result received')
 
@@ -3730,6 +3818,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
 
       const data = finalData as Record<string, unknown>
+      const dlMeta = data.download as { zipDownloadUrl?: string; zipSessionId?: string; stats?: Record<string, unknown> } | null
       if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('advanced-clone-v2')
         addAssistantMessage({
@@ -3740,6 +3829,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           jsCode:  (data.jsCode  as string) || '',
           webBuilderMeta: data.webBuilderMeta as { type: string; style: string; title: string; description: string; icon: string } | undefined,
           webReaderIntent: 'build',
+          zipDownloadUrl: dlMeta?.zipDownloadUrl || undefined,
         })
       } else {
         addAssistantMessage({
@@ -3750,11 +3840,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
     } catch (err) {
       // SSE failed — fallback to old clone-advanced endpoint
-      setMessages(prev => prev.map(m =>
-        m.id === loadingMsgId
-          ? { ...m, content: `🧬 **محرك الاستنساخ${sectionLabel}**\n\n⏳ جارٍ الاستنساخ (وضع احتياطي)...` }
-          : m
-      ))
+      setCloneProgress({ stage: 'fetch', pct: 10, label: 'وضع احتياطي — جارٍ الاستنساخ...', url })
       try {
         const fallbackRes = await fetch('/api/dz-agent/clone-advanced', {
           method: 'POST',
@@ -3762,7 +3848,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           body: JSON.stringify({ url, section: section || 'full' }),
         })
         const fallbackData = await fallbackRes.json()
-        setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+        setCloneProgress(null)
 
         if (fallbackData.ok && fallbackData.htmlCode) {
           trackFeatureUsage('advanced-clone')
@@ -3783,7 +3869,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           })
         }
       } catch {
-        setMessages(prev => prev.filter(m => m.id !== loadingMsgId))
+        setCloneProgress(null)
         addAssistantMessage({
           content: '⚠️ خطأ في الشبكة أثناء الاستنساخ. يرجى المحاولة مرة أخرى.',
           richType: 'text',
@@ -4553,14 +4639,28 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         />
                       )}
                       {msg.richType === 'website' && msg.htmlCode && (
-                        <WebsitePreview
-                          htmlCode={msg.htmlCode}
-                          cssCode={msg.cssCode}
-                          jsCode={msg.jsCode}
-                          onInsertPrompt={p => setInput(p)}
-                          webBuilderMeta={msg.webBuilderMeta}
-                          webReaderIntent={msg.webReaderIntent}
-                        />
+                        <>
+                          <WebsitePreview
+                            htmlCode={msg.htmlCode}
+                            cssCode={msg.cssCode}
+                            jsCode={msg.jsCode}
+                            onInsertPrompt={p => setInput(p)}
+                            webBuilderMeta={msg.webBuilderMeta}
+                            webReaderIntent={msg.webReaderIntent}
+                          />
+                          {msg.zipDownloadUrl && (
+                            <a
+                              href={msg.zipDownloadUrl}
+                              download
+                              className="dz-clone-zip-btn"
+                              title="تحميل ZIP بالأصول الحقيقية (CSS/JS/صور)"
+                            >
+                              <Download size={13} />
+                              تحميل ZIP — أصول حقيقية
+                              <span className="dz-clone-zip-badge">V2</span>
+                            </a>
+                          )}
+                        </>
                       )}
                       {msg.richType === 'web-reader' && msg.webReaderSiteInfo && (
                         <WebReaderPanel
@@ -4772,6 +4872,24 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Clone Engine V2 Progress Bubble ── */}
+        {isAdvancedCloneLoading && cloneProgress && (
+          <div className="dz-message dz-message--assistant">
+            <div className="dz-message-avatar">
+              <div className="dz-avatar dz-avatar--bot dz-avatar--thinking dz-avatar--clone">
+                <Brain size={15} />
+              </div>
+            </div>
+            <div className="dz-message-body">
+              <div className="dz-message-sender">
+                DZ Agent
+                <span className="dz-clone-badge-inline">🧬 Clone V2</span>
+              </div>
+              <CloneProgressPanel progress={cloneProgress} />
             </div>
           </div>
         )}

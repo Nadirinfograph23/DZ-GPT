@@ -6656,6 +6656,301 @@
   background: rgba(96, 165, 250, 0.14);
 }
 
+/* ===================================================================
+   CLONE ENGINE V2 — PROGRESS PANEL
+   =================================================================== */
+
+/* Avatar variant for clone mode */
+.dz-avatar--clone {
+  background: linear-gradient(135deg, #0d1a2a, #001a30);
+  border-color: rgba(0, 160, 255, 0.35);
+  color: #38bdf8;
+}
+.dz-avatar--clone.dz-avatar--thinking {
+  animation: clone-avatar-pulse 1.8s ease-in-out infinite;
+}
+@keyframes clone-avatar-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.18); }
+}
+
+/* Inline badge next to sender name */
+.dz-clone-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 20px;
+  padding: 1px 8px;
+  margin-right: 6px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Main progress card ── */
+.dz-clone-progress {
+  background: linear-gradient(135deg, #050f1a 0%, #081520 100%);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-width: 300px;
+  max-width: 480px;
+  overflow: hidden;
+  position: relative;
+}
+.dz-clone-progress::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(56,189,248,0.04) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ── Header row ── */
+.dz-clone-progress__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.dz-clone-progress__badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
+}
+.dz-clone-progress__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.dz-clone-progress__title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #cbd5e1;
+  letter-spacing: 0.2px;
+}
+.dz-clone-progress__domain {
+  font-size: 10.5px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dz-clone-progress__pct {
+  font-size: 15px;
+  font-weight: 800;
+  color: #38bdf8;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ── Progress bar ── */
+.dz-clone-progress__bar-track {
+  height: 4px;
+  background: rgba(56, 189, 248, 0.1);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.dz-clone-progress__bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc);
+  border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+.dz-clone-progress__bar-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 30px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4));
+  animation: bar-shimmer 1.2s linear infinite;
+}
+@keyframes bar-shimmer {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Stage list ── */
+.dz-clone-progress__stages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dz-clone-stage {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.dz-clone-stage--done {
+  opacity: 0.55;
+}
+.dz-clone-stage--active {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+.dz-clone-stage--pending {
+  opacity: 0.3;
+}
+
+.dz-clone-stage__icon {
+  font-size: 15px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.dz-clone-stage__spin {
+  display: inline-block;
+  animation: clone-icon-bounce 0.9s ease-in-out infinite alternate;
+}
+@keyframes clone-icon-bounce {
+  from { transform: translateY(0) scale(1); }
+  to   { transform: translateY(-2px) scale(1.1); }
+}
+
+.dz-clone-stage__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.dz-clone-stage__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.dz-clone-stage--active .dz-clone-stage__label {
+  color: #e2e8f0;
+}
+.dz-clone-stage--done .dz-clone-stage__label {
+  color: #4ade80;
+}
+.dz-clone-stage__think {
+  font-size: 10.5px;
+  color: #38bdf8;
+  font-style: italic;
+  animation: think-fade 1.6s ease-in-out infinite;
+}
+@keyframes think-fade {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* Typing dots for active stage */
+.dz-clone-stage__dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.dz-clone-stage__dots span {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #38bdf8;
+  animation: clone-dot 1.1s ease-in-out infinite;
+}
+.dz-clone-stage__dots span:nth-child(2) { animation-delay: 0.18s; }
+.dz-clone-stage__dots span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes clone-dot {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Tech / Section chips ── */
+.dz-clone-progress__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.dz-clone-chip {
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.dz-clone-chip--tech {
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
+}
+.dz-clone-chip--section {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+/* ── Status footer ── */
+.dz-clone-progress__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #475569;
+  padding-top: 8px;
+  border-top: 1px solid rgba(56, 189, 248, 0.08);
+  font-style: italic;
+}
+.dz-clone-progress__status span {
+  animation: think-fade 2s ease-in-out infinite;
+}
+
+/* ── ZIP download button (below WebsitePreview) ── */
+.dz-clone-zip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 14px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 8px;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dz-clone-zip-btn:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+}
+.dz-clone-zip-badge {
+  font-size: 9px;
+  font-weight: 800;
+  background: #38bdf8;
+  color: #000;
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.5px;
+}
+
 /* Empty state */
 .dr-panel-empty {
   padding: 28px 20px;

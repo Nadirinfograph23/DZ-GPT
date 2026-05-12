@@ -8828,6 +8828,279 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // GITHUB REPO COMMAND MODE — تنفيذ الأوامر داخل مستودع محدد
+  // يكتشف: "المستودع test" | "مستودع my-repo" | "في repo X" | "داخل X"
+  // يدعم: إنشاء صفحة | رفع ملف | تعديل | حذف | قراءة | قائمة الملفات
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    // ── 1. كشف اسم المستودع من الرسالة ─────────────────────────────────────
+    const _repoRefMatch = lastUserMessage.match(
+      /(?:(?:في|داخل|بـ|على|inside|in|within|dans|le\s+repo|dans\s+le)\s+)?(?:مستودع|repo(?:sitory)?|dépôt)\s+["']?([\w\-\.]{1,100})["']?/i
+    ) || lastUserMessage.match(
+      /["']?([\w\-\.]{2,100})["']?\s+(?:مستودع|repo(?:sitory)?|dépôt)/i
+    ) || lastUserMessage.match(
+      /(?:في|داخل|inside|in)\s+["']?([\w\-\.]{2,100})["']?(?:\s+(?:مستودع|repo))?/i
+    )
+
+    const _targetRepoName = _repoRefMatch ? _repoRefMatch[1] : null
+
+    // ── 2. كشف نوع الأمر ─────────────────────────────────────────────────
+    const _lmr = lastUserMessage.toLowerCase()
+    const _isCreateFile  = /أنش[إئ]|انش[إئ]|اكتب|أضف|إضافة|add|create|generate|write|génér|créer|صمم|اصنع/.test(_lmr)
+    const _isUpdateFile  = /عدّل|حدّث|غيّر|edit|update|modify|change|modifier/.test(_lmr)
+    const _isDeleteFile  = /احذف|حذف|delete|remove|supprimer/.test(_lmr)
+    const _isListFiles   = /اعرض|قائمة|الملفات|list|show\s+files|affich/.test(_lmr)
+    const _isReadFile    = /اقرأ|اقرأ|محتوى|read\s+file|contenu/.test(_lmr)
+    const _isWebPage     = /صفحة\s*ويب|موقع|html|landing|portfolio|page\s*web|web\s*page|index\.html/.test(_lmr)
+    const _isReadme      = /readme|readme\.md|توثيق|وثّق/.test(_lmr)
+    const _isScript      = /سكريبت|script|python|js\s+file|\.js|\.py/.test(_lmr)
+
+    // ── 3. تنفيذ الأمر فقط إذا كان هناك مستودع محدد + أمر واضح ─────────
+    if (_targetRepoName && (_isCreateFile || _isUpdateFile || _isDeleteFile || _isListFiles || _isReadFile)) {
+      console.log(`[GH:RepoCmd] repo="${_targetRepoName}" cmd=${_isCreateFile?'create':_isUpdateFile?'update':_isDeleteFile?'delete':_isListFiles?'list':'read'} msg="${lastUserMessage.slice(0,60)}"`)
+
+      const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+      if (!_tok) {
+        return res.status(200).json({
+          content: `⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nأضف \`GITHUB_TOKEN\` في أسرار Replit أو انقر **"ربط GitHub"**.`,
+          githubAction: 'needs-connect',
+        })
+      }
+
+      // ── جلب هوية المستخدم لبناء الاسم الكامل للمستودع ─────────────────
+      let _ghLogin = ''
+      let _fullRepo = ''
+      try {
+        const _uR = await fetch('https://api.github.com/user', {
+          headers: { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!_uR.ok) throw new Error('فشل التحقق من الحساب')
+        const _ud = await _uR.json()
+        _ghLogin = _ud.login
+        _fullRepo = `${_ghLogin}/${_targetRepoName}`
+      } catch (_ue) {
+        return res.status(200).json({ content: `❌ **خطأ في GitHub:** ${_ue.message}` })
+      }
+
+      const _ghH = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
+
+      // ── أمر: قائمة الملفات ──────────────────────────────────────────────
+      if (_isListFiles) {
+        try {
+          const _lr = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/`, { headers: _ghH, signal: AbortSignal.timeout(10000) })
+          if (!_lr.ok) {
+            const _ld = await _lr.json()
+            if (_lr.status === 404) return res.status(200).json({ content: `❌ المستودع **${_fullRepo}** غير موجود أو لا تملك صلاحية الوصول إليه.` })
+            return res.status(200).json({ content: `❌ خطأ ${_lr.status}: ${_ld.message}` })
+          }
+          const _files = await _lr.json()
+          const _fileList = Array.isArray(_files) ? _files.map(f => `- ${f.type === 'dir' ? '📁' : '📄'} \`${f.name}\`${f.size ? ` (${(f.size/1024).toFixed(1)} KB)` : ''}`).join('\n') : 'لا توجد ملفات'
+          return res.status(200).json({
+            content: `## 📦 ملفات مستودع \`${_fullRepo}\`\n\n${_fileList}\n\n🔗 [افتح المستودع](https://github.com/${_fullRepo})`,
+            githubAction: 'list-files', githubRepo: _fullRepo,
+          })
+        } catch (_le) {
+          return res.status(200).json({ content: `❌ **خطأ:** ${_le.message}` })
+        }
+      }
+
+      // ── أمر: قراءة ملف ──────────────────────────────────────────────────
+      if (_isReadFile) {
+        const _pathMatch = lastUserMessage.match(/(?:ملف|file)\s+["']?([\w\-\.\/]+\.\w+)["']?/i)
+        const _filePath = _pathMatch ? _pathMatch[1] : 'index.html'
+        try {
+          const _fr = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_filePath}`, { headers: _ghH, signal: AbortSignal.timeout(10000) })
+          if (!_fr.ok) return res.status(200).json({ content: `❌ الملف \`${_filePath}\` غير موجود في \`${_fullRepo}\`.` })
+          const _fd = await _fr.json()
+          const _content = Buffer.from(_fd.content, 'base64').toString('utf-8')
+          const _ext = _filePath.split('.').pop()
+          return res.status(200).json({
+            content: `## 📄 \`${_filePath}\` في \`${_fullRepo}\`\n\n\`\`\`${_ext}\n${_content.slice(0, 3000)}${_content.length > 3000 ? '\n... (مقتطع)' : ''}\n\`\`\``,
+            githubAction: 'read-file', githubRepo: _fullRepo,
+          })
+        } catch (_re) {
+          return res.status(200).json({ content: `❌ **خطأ:** ${_re.message}` })
+        }
+      }
+
+      // ── أمر: حذف ملف ────────────────────────────────────────────────────
+      if (_isDeleteFile) {
+        const _pathMatch = lastUserMessage.match(/(?:ملف|file)\s+["']?([\w\-\.\/]+\.\w+)["']?/i)
+        if (!_pathMatch) return res.status(200).json({ content: `⚠️ حدد اسم الملف للحذف. مثال: *"احذف ملف old.html من المستودع ${_targetRepoName}"*` })
+        const _dPath = _pathMatch[1]
+        try {
+          const _ex = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_dPath}`, { headers: _ghH, signal: AbortSignal.timeout(8000) })
+          if (!_ex.ok) return res.status(200).json({ content: `❌ الملف \`${_dPath}\` غير موجود في \`${_fullRepo}\`.` })
+          const { sha: _dSha } = await _ex.json()
+          const _dr = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_dPath}`, {
+            method: 'DELETE', headers: _ghH, signal: AbortSignal.timeout(10000),
+            body: JSON.stringify({ message: `chore: حذف ${_dPath} عبر DZ Agent 🤖`, sha: _dSha, branch: 'main' }),
+          })
+          if (!_dr.ok) { const _dd = await _dr.json(); return res.status(200).json({ content: `❌ فشل الحذف: ${_dd.message}` }) }
+          return res.status(200).json({
+            content: `✅ **تم حذف الملف بنجاح**\n\n🗑️ \`${_dPath}\` حُذف من \`${_fullRepo}\`\n🔗 [افتح المستودع](https://github.com/${_fullRepo})`,
+            githubAction: 'file-deleted', githubRepo: _fullRepo,
+          })
+        } catch (_de) {
+          return res.status(200).json({ content: `❌ **خطأ:** ${_de.message}` })
+        }
+      }
+
+      // ── أمر: إنشاء / تعديل ملف أو صفحة ويب ────────────────────────────
+      if (_isCreateFile || _isUpdateFile) {
+        // كشف مسار الملف المطلوب
+        const _pathMatch = lastUserMessage.match(/(?:ملف|file)\s+["']?([\w\-\.\/]+\.\w+)["']?/i)
+        let _filePath = _pathMatch ? _pathMatch[1] : (_isWebPage ? 'index.html' : _isReadme ? 'README.md' : _isScript ? 'script.js' : 'index.html')
+        const _ext = _filePath.split('.').pop().toLowerCase()
+
+        // توليد المحتوى عبر AI
+        let _generatedContent = ''
+        try {
+          let _genSystem = ''
+          if (_ext === 'html' || _isWebPage) {
+            _genSystem = `أنت DZ Agent — مهندس ويب محترف. أنشئ صفحة HTML5 كاملة بتصميم احترافي حديث.
+قواعد صارمة:
+- HTML5 كامل من <!DOCTYPE html> إلى </html>
+- CSS مُدمَج في <style> — responsive، mobile-first، تصميم جميل
+- TailwindCSS CDN مسموح: <script src="https://cdn.tailwindcss.com"></script>
+- محتوى حقيقي مناسب للطلب — لا Lorem ipsum
+- Output: HTML فقط — بدون markdown أو شرح`
+          } else if (_ext === 'md' || _isReadme) {
+            _genSystem = `أنت DZ Agent — اكتب ملف README.md احترافياً بـ Markdown يصف المشروع "${_targetRepoName}". أضف: badges، وصف، تثبيت، استخدام، ترخيص. Output: Markdown فقط.`
+          } else if (_ext === 'py') {
+            _genSystem = `أنت DZ Agent — اكتب سكريبت Python احترافياً. Output: Python code فقط — بدون markdown.`
+          } else if (_ext === 'js' || _ext === 'ts') {
+            _genSystem = `أنت DZ Agent — اكتب JavaScript/TypeScript احترافياً. Output: code فقط — بدون markdown.`
+          } else {
+            _genSystem = `أنت DZ Agent — نفّذ الطلب التالي وأعطِ الكود/المحتوى الكامل فقط بدون markdown.`
+          }
+
+          const _aiResult = await safeGenerateAI({
+            messages: [
+              { role: 'system', content: _genSystem },
+              { role: 'user', content: `المستودع: ${_fullRepo}\nالطلب: ${lastUserMessage}` },
+            ],
+            query: lastUserMessage,
+            max_tokens: 8000,
+          })
+          _generatedContent = (_ext === 'html' || _isWebPage)
+            ? (extractHtmlFromResponse(_aiResult.content || '') || _aiResult.content || '')
+            : (_aiResult.content || '')
+
+          if (!_generatedContent || _generatedContent.length < 50) throw new Error('المحتوى المولّد قصير جداً')
+        } catch (_ge) {
+          return res.status(200).json({ content: `❌ **خطأ في توليد المحتوى:** ${_ge.message}\n\nحاول وصف الطلب بشكل أوضح.` })
+        }
+
+        // رفع الملف إلى GitHub
+        try {
+          // التحقق إذا كان الملف موجوداً (للتحديث)
+          let _existingSha = null
+          const _exR = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_filePath}?ref=main`, { headers: _ghH, signal: AbortSignal.timeout(8000) }).catch(() => null)
+          if (_exR?.ok) { const _exD = await _exR.json(); _existingSha = _exD.sha }
+
+          // التأكد من وجود الفرع main — إذا لم يوجد المستودع أصلاً نُنشئه
+          const _repoR = await fetch(`https://api.github.com/repos/${_fullRepo}`, { headers: _ghH, signal: AbortSignal.timeout(8000) })
+          if (!_repoR.ok) {
+            // المستودع غير موجود — أنشئه أولاً
+            const _crR = await fetch('https://api.github.com/user/repos', {
+              method: 'POST', headers: _ghH, signal: AbortSignal.timeout(15000),
+              body: JSON.stringify({ name: _targetRepoName, description: `Created by DZ Agent 🇩🇿`, auto_init: true, private: false }),
+            })
+            if (!_crR.ok) {
+              const _crd = await _crR.json()
+              return res.status(200).json({ content: `❌ المستودع **${_fullRepo}** غير موجود ولم يمكن إنشاؤه: ${_crd.message}` })
+            }
+            console.log(`[GH:RepoCmd] ✅ Auto-created repo: ${_fullRepo}`)
+            await new Promise(r => setTimeout(r, 2000))
+          }
+
+          const _pushBody = {
+            message: `${_isUpdateFile ? 'update' : 'feat'}: ${_isWebPage ? 'صفحة ويب' : _filePath} عبر DZ Agent 🤖`,
+            content: Buffer.from(_generatedContent).toString('base64'),
+            branch: 'main',
+            ...(_existingSha ? { sha: _existingSha } : {}),
+          }
+          const _pr = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_filePath}`, {
+            method: 'PUT', headers: _ghH, signal: AbortSignal.timeout(20000),
+            body: JSON.stringify(_pushBody),
+          })
+          if (!_pr.ok) {
+            const _prd = await _pr.json()
+            // محاولة إصلاح: إذا كان خطأ "Git Repository is empty"
+            if (/empty|not found|no commit/i.test(_prd.message || '')) {
+              // إنشاء README أولاً ثم إعادة المحاولة
+              await fetch(`https://api.github.com/repos/${_fullRepo}/contents/README.md`, {
+                method: 'PUT', headers: _ghH, signal: AbortSignal.timeout(10000),
+                body: JSON.stringify({ message: 'init: README via DZ Agent', content: Buffer.from(`# ${_targetRepoName}\n\nCreated by DZ Agent 🇩🇿`).toString('base64'), branch: 'main' }),
+              })
+              await new Promise(r => setTimeout(r, 1500))
+              const _retry = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/${_filePath}`, {
+                method: 'PUT', headers: _ghH, signal: AbortSignal.timeout(20000),
+                body: JSON.stringify({ ..._pushBody, sha: undefined }),
+              })
+              if (!_retry.ok) { const _rd = await _retry.json(); return res.status(200).json({ content: `❌ فشل الرفع حتى بعد الإصلاح: ${_rd.message}` }) }
+            } else {
+              return res.status(200).json({ content: `❌ **فشل رفع الملف:** ${_prd.message}` })
+            }
+          }
+
+          console.log(`[GH:RepoCmd] ✅ Pushed ${_filePath} → ${_fullRepo}`)
+
+          // تفعيل GitHub Pages تلقائياً إذا كانت صفحة HTML
+          let _pagesUrl = `https://github.com/${_fullRepo}/blob/main/${_filePath}`
+          let _pagesEnabled = false
+          if (_ext === 'html' || _isWebPage) {
+            try {
+              const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+                signal: AbortSignal.timeout(10000),
+              })
+              if (_pgR.ok || _pgR.status === 409) {
+                _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
+                _pagesEnabled = true
+              }
+            } catch {}
+          }
+
+          const _isHtml = _ext === 'html' || _isWebPage
+          const _successMsg = [
+            `✅ **${_isUpdateFile ? 'تم تحديث' : 'تم إنشاء'} \`${_filePath}\` في \`${_fullRepo}\`**`,
+            ``,
+            `📦 **المستودع:** [github.com/${_fullRepo}](https://github.com/${_fullRepo})`,
+            `📄 **الملف:** [${_filePath}](https://github.com/${_fullRepo}/blob/main/${_filePath})`,
+            _isHtml && _pagesEnabled ? `🌐 **الموقع المباشر:** [${_pagesUrl}](${_pagesUrl}) *(جاهز خلال دقيقة)*` : null,
+            ``,
+            `**ماذا تم؟**`,
+            _isHtml && _pagesEnabled && !_isUpdateFile ? `- ✔️ إنشاء المستودع \`${_targetRepoName}\` (إن لم يكن موجوداً)` : null,
+            `- ✔️ ${_isUpdateFile ? 'تحديث' : 'رفع'} الملف \`${_filePath}\` (${(_generatedContent.length/1024).toFixed(1)} KB)`,
+            _isHtml && _pagesEnabled ? `- ✔️ تفعيل GitHub Pages تلقائياً` : null,
+            ``,
+            `💡 يمكنك الآن قول: *"عدّل التصميم"* أو *"أضف ملف style.css"* أو *"اعرض ملفات المستودع ${_targetRepoName}"*`,
+          ].filter(l => l !== null).join('\n')
+
+          return res.status(200).json({
+            content: _successMsg,
+            isWebsite: _isHtml,
+            htmlCode: _isHtml ? _generatedContent : undefined,
+            cssCode: _isHtml ? extractCssFromHtml(_generatedContent) : undefined,
+            jsCode: _isHtml ? extractJsFromHtml(_generatedContent) : undefined,
+            webBuilderMeta: _isHtml ? { type: 'landing', style: 'modern', title: _targetRepoName, description: lastUserMessage.slice(0, 100), icon: '🚀' } : undefined,
+            githubAction: _isUpdateFile ? 'file-updated' : 'file-created',
+            githubRepo: _fullRepo,
+            githubFileUrl: `https://github.com/${_fullRepo}/blob/main/${_filePath}`,
+            githubPagesUrl: _pagesEnabled ? _pagesUrl : null,
+          })
+        } catch (_pe) {
+          return res.status(200).json({ content: `❌ **خطأ أثناء الرفع:** ${_pe.message}` })
+        }
+      }
+    }
+  }
+
   // ── GITHUB_PAGES_MODE — Autonomous GitHub Pages Deployment (Full Planner) ──
   if (detectGitHubPagesIntent(lastUserMessage)) {
     console.log(`[GITHUB_PAGES_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)

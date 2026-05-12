@@ -879,7 +879,7 @@ const CAPABILITIES_RESPONSE = Object.freeze({
     '📖 **قرآن كريم**: قراءة وتلاوات مع الترجمة.',
     '🎓 **تعليم**: ملخصات ودروس من Eddirasa لكل المستويات.',
     '💱 **عملات**: تحويل وأسعار مباشرة (DZD وغيرها).',
-    '💻 **برمجة + GitHub**: تحليل المستودعات، تعديل الملفات، commit، PR، deploy على Vercel.',
+    '💻 **برمجة + GitHub**: تحليل المستودعات، تعديل الملفات، commit، PR، نشر على GitHub Pages.',
     '🖼️ **OCR**: قراءة النصوص من الصور والـ PDF.',
     '💬 **محادثة بالعربية، الإنجليزية، الفرنسية، واللهجة الجزائرية**.',
     '',
@@ -9405,6 +9405,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       'انشر على vercel', 'نشر vercel', 'deploy vercel', 'deploy to vercel',
       'انشر المستودع', 'ابني وانشر', 'build and deploy',
       'déployer sur vercel', 'déployer le projet',
+      'انشر على github pages', 'نشر github pages', 'deploy github pages',
+      'انشر الموقع', 'نشر الموقع', 'نشر على github.io', 'انشر على github.io',
     ]
     const createRepoTriggers = [
       'أنشئ مستودع', 'انشئ مستودع', 'إنشاء مستودع', 'اصنع مستودع',

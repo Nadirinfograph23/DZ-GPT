@@ -6,7 +6,7 @@
  *          self-healing, SEO injection, 100% fidelity mandate.
  */
 
-import { buildImagePromptBlock } from './asset-handler.js'
+import { buildImagePromptBlock, buildButtonNavBlock } from './asset-handler.js'
 
 const BASE_SYSTEM = `You are DZ Agent V3 — the world's most advanced autonomous website cloning AI.
 Your mission: produce 100% pixel-perfect standalone HTML clones — indistinguishable from the original at first glance.
@@ -50,15 +50,14 @@ PIXEL-PERFECT MANDATE:
 - ALL years, prices, counts, statistics MUST be copied verbatim from the extracted content
 ════════════════════════════════════════════
 
-IMAGE MANDATE (V3 — Fallback System):
-- NEVER use external image URLs in <img src=""> tags — they break cross-origin
-- For EVERY image position: use a themed placeholder div preserving EXACT dimensions:
-  <div class="img-ph" style="background:linear-gradient(135deg,BG1,BG2);display:flex;align-items:center;justify-content:center;border-radius:RADIUS;width:WIDTH;height:HEIGHT;min-height:MIN;color:FG;font-size:14px;font-weight:600;flex-direction:column;gap:6px;overflow:hidden"><span style="font-size:2rem;opacity:.7">🖼️</span><span style="opacity:.8">صورة N</span></div>
-- Adapt BG1/BG2/FG to the site's color scheme (dark sites → dark gradients, light → light)
-- Preserve EXACT original dimensions (aspect-ratio, min-height, width)
-- For hero backgrounds → CSS gradient ONLY, never background-image:url()
-- For OG image, logo, product shots → numbered placeholders (صورة 1, صورة 2...)
-- NEVER break layout when images are missing — placeholders MUST maintain grid alignment`
+IMAGE MANDATE (V4 — Real + Fallback):
+- For images marked [REAL-IMG] in the intelligence block: USE THE EXACT <img> TAG PROVIDED — do NOT replace with placeholders
+- Each [REAL-IMG] already includes an onerror fallback — copy it exactly as given
+- For [BG-IMG]: use as CSS background-image: url("...") on the relevant section/div
+- For [PLACEHOLDER]: use a themed gradient div preserving dimensions
+- MINIMUM 4 real images must appear in the output — use the [REAL-IMG] tags provided
+- Wrap each image in a container: style="overflow:hidden;border-radius:Xpx;" to preserve layout
+- NEVER break layout when images load — use aspect-ratio or min-height on containers`
 
 const TAILWIND_RULES = `
 TAILWIND INSTRUCTIONS:
@@ -163,10 +162,8 @@ function buildDesignContext(tokens) {
   // V2: Image block
   const imageBlock = buildImagePromptBlock(tokens.images || [], 25)
 
-  // V2: Button patterns
-  const buttonStr = tokens.buttonPatterns?.length > 0
-    ? `\nBUTTON HTML PATTERNS (reproduce these exact styles):\n${tokens.buttonPatterns.slice(0, 4).join('\n---\n')}`
-    : ''
+  // V2+: Button & Nav block (real HTML for exact reproduction)
+  const buttonNavStr = buildButtonNavBlock(tokens.buttonPatterns, tokens.navbarHtml)
 
   // V2: Structural skeleton
   const skeletonStr = tokens.structuralSkeleton
@@ -271,7 +268,7 @@ ${numbersStr}
 ${footerStr}
 ${formStr}
 ${imageBlock}
-${buttonStr}
+${buttonNavStr}
 ${allTextStr}
 
 RAW CSS PATTERNS (study and replicate exactly — use EXACT values):
@@ -338,7 +335,10 @@ export function buildIndexOnlySystemPrompt(tokens) {
   const iconCdn      = ICON_RULES[tokens.iconLibrary || 'font-awesome'] || ICON_RULES['font-awesome']
   const layoutInfo   = [tokens.usesGrid ? 'Grid' : '', tokens.usesFlex ? 'Flex' : ''].filter(Boolean).join('+') || 'block'
   const keyframesSlim = tokens.keyframes?.length > 0 ? `\nKEYFRAMES:\n${tokens.keyframes.join('\n').slice(0, 800)}` : ''
-  const buttonSlim   = tokens.buttonPatterns?.length > 0 ? `\nBUTTONS:\n${tokens.buttonPatterns.slice(0, 2).join('\n---\n').slice(0, 600)}` : ''
+  const buttonNavSlim = buildButtonNavBlock(tokens.buttonPatterns, tokens.navbarHtml)
+
+  // Slim image block for INDEX mode — still show real URLs for top 4
+  const imageSlim = buildImagePromptBlock((tokens.images || []).slice(0, 8), 8)
 
   const context = `
 ════════════════════════════
@@ -367,7 +367,8 @@ ${yearsStr}
 ${statsStr}
 ${footerStr}
 ${formStr}
-${buttonSlim}
+${imageSlim}
+${buttonNavSlim}
 ${allTextSlim}
 ${cssSlim}
 ${classesTrim}
@@ -389,7 +390,7 @@ export function buildCloneUserPrompt(url, section, tokens) {
     ? `⚠️ FOOTER COPYRIGHT — copy this EXACTLY: "${tokens.footerContent.copyright}"`
     : ''
 
-  const imgFallback = `IMAGES: NEVER use external URLs. Use themed placeholder divs (صورة 1, صورة 2...) with gradients matching site theme (${tokens.colorScheme} → ${tokens.bgColor || 'extracted bg color'}). Preserve dimensions.`
+  const imgFallback = `IMAGES: Use real <img> tags (with absolute URLs) for the first 4 images as provided in the IMAGES block. Each real img includes an onerror fallback — copy it exactly. For remaining images use themed gradient placeholders matching ${tokens.colorScheme} theme.`
 
   if (section && section !== 'full') {
     return `Clone ONLY the "${section}" section of ${url}.

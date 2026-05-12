@@ -11,6 +11,7 @@ import {
   extractAllImages,
   extractInlineSVGs,
   extractButtonPatterns,
+  extractNavbarHtml,
   extractShadowTokens,
   extractSpacingTokens,
 } from './asset-handler.js'
@@ -471,7 +472,8 @@ export function deepExtract(rawHtml, url) {
   // V2 additions
   const images = extractAllImages(rawHtml, url)
   const svgs = extractInlineSVGs(rawHtml, 6)
-  const buttonPatterns = extractButtonPatterns(rawHtml, 6)
+  const buttonPatterns = extractButtonPatterns(rawHtml, 8)
+  const navbarHtml = extractNavbarHtml(rawHtml, 2000)
   const shadowTokens = extractShadowTokens(allCss)
   const spacingTokens = extractSpacingTokens(allCss)
   const structuralSkeleton = extractStructuralSkeleton($)
@@ -528,6 +530,7 @@ export function deepExtract(rawHtml, url) {
     images,
     svgs,
     buttonPatterns,
+    navbarHtml,
     shadowTokens,
     spacingTokens,
     structuralSkeleton,

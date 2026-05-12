@@ -134,30 +134,78 @@ function isLight(hex) {
 
 /**
  * Build an HTML img tag snippet for each extracted image (for AI prompt context).
- * Shows the AI exactly which images to embed and their dimensions.
+ * First 4 non-background images → real <img> with absolute URL.
+ * Remaining → themed placeholder divs.
  */
 export function buildImagePromptBlock(images, limit = 20) {
   if (!images || images.length === 0) return ''
   const items = images.slice(0, limit)
-  // Generate theme-aware placeholder colors from the first few images' context
+
   const PLACEHOLDER_COLORS = [
-    ['#1e3a5f', '#3b82f6'], // blue
-    ['#1a2e1a', '#22c55e'], // green
-    ['#3b1a1a', '#ef4444'], // red
-    ['#2d1b4e', '#a855f7'], // purple
-    ['#1a2a3a', '#06b6d4'], // cyan
-    ['#2e1f00', '#f59e0b'], // amber
-    ['#1a1a2e', '#6366f1'], // indigo
-    ['#1f2937', '#9ca3af'], // gray
+    ['#1e3a5f', '#3b82f6'],
+    ['#1a2e1a', '#22c55e'],
+    ['#3b1a1a', '#ef4444'],
+    ['#2d1b4e', '#a855f7'],
+    ['#1a2a3a', '#06b6d4'],
+    ['#2e1f00', '#f59e0b'],
+    ['#1a1a2e', '#6366f1'],
+    ['#1f2937', '#9ca3af'],
   ]
-  const lines = items.map((img, i) => {
+
+  // Separate real (non-bg) images from background images
+  const realImgs = items.filter(img => !img.isBackground && img.src && /^https?:\/\//i.test(img.src))
+  const bgImgs   = items.filter(img => img.isBackground)
+
+  const lines = []
+  let realUsed = 0
+
+  items.forEach((img, i) => {
     const dim = img.width && img.height ? ` (${img.width}×${img.height})` : ''
-    const type = img.isBackground ? '[BG]' : '[IMG]'
+    const label = img.alt ? img.alt.slice(0, 30) : `صورة ${i + 1}`
     const [bg, fg] = PLACEHOLDER_COLORS[i % PLACEHOLDER_COLORS.length]
-    const label = img.alt ? img.alt.slice(0, 20) : `صورة ${i + 1}`
-    return `${i + 1}. ${type}${dim} alt="${img.alt || ''}" → PLACEHOLDER: bg="${bg}" color="${fg}" label="${label}"`
+
+    if (!img.isBackground && realUsed < 4 && img.src && /^https?:\/\//i.test(img.src)) {
+      // ✅ Real image — embed with <img> tag + onerror fallback
+      realUsed++
+      const w = img.width ? ` width="${img.width}"` : ''
+      const h = img.height ? ` height="${img.height}"` : ''
+      lines.push(
+        `${i + 1}. [REAL-IMG]${dim} → USE THIS EXACT TAG:\n` +
+        `   <img src="${img.src}" alt="${label}"${w}${h} ` +
+        `style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" loading="lazy" crossorigin="anonymous" ` +
+        `onerror="this.style.display='none';this.nextSibling.style.display='flex'">\n` +
+        `   <div style="display:none;background:linear-gradient(135deg,${bg},${bg}dd);align-items:center;justify-content:center;width:100%;height:100%;min-height:180px;color:${fg};font-size:13px;font-weight:600;flex-direction:column;gap:6px"><span>🖼️</span><span>${label}</span></div>`
+      )
+    } else if (img.isBackground) {
+      lines.push(`${i + 1}. [BG-IMG]${dim} src="${img.src}" → Use as CSS background-image: url("${img.src}") in the relevant section`)
+    } else {
+      lines.push(
+        `${i + 1}. [PLACEHOLDER]${dim} alt="${label}" → ` +
+        `<div style="background:linear-gradient(135deg,${bg},${bg}dd);display:flex;align-items:center;justify-content:center;border-radius:8px;min-height:180px;color:${fg};font-size:13px;font-weight:600;flex-direction:column;gap:6px"><span style="font-size:2rem">🖼️</span><span>${label}</span></div>`
+      )
+    }
   })
-  return `\nIMAGES (${items.length} detected — use COLORED PLACEHOLDER DIVS, NOT <img> tags with external URLs):\n${lines.join('\n')}\n\nFOR EACH IMAGE USE THIS PATTERN:\n<div style="background:linear-gradient(135deg,[bg],[bg]dd);display:flex;align-items:center;justify-content:center;border-radius:8px;min-height:200px;color:[fg];font-size:14px;font-weight:600;flex-direction:column;gap:8px"><span style="font-size:2rem">🖼️</span><span>[label]</span></div>`
+
+  const realCount = Math.min(realImgs.length, 4)
+  return `\nIMAGES (${items.length} detected — ${realCount} REAL embedded, rest placeholders):\n` +
+    `⚠️ CRITICAL: Use the REAL-IMG tags exactly as shown for the first ${realCount} images — do NOT replace with placeholders.\n` +
+    lines.join('\n') +
+    `\n\nWRAP EACH IMAGE IN A CONTAINER that preserves the layout position (aspect-ratio, min-height, overflow:hidden).`
+}
+
+/**
+ * Build a button/nav HTML block for AI reproduction.
+ * Provides exact raw HTML of the top buttons and nav for pixel-perfect reproduction.
+ */
+export function buildButtonNavBlock(buttons, navHtml) {
+  const parts = []
+  if (navHtml) {
+    parts.push(`\nNAVBAR HTML (reproduce this structure EXACTLY — same links, same logo, same layout):\n${navHtml.slice(0, 2000)}`)
+  }
+  if (buttons && buttons.length > 0) {
+    parts.push(`\nBUTTON HTML PATTERNS (copy these exact styles — colors, border-radius, padding, gradients):\n${buttons.slice(0, 6).join('\n---\n')}`)
+  }
+  return parts.join('\n')
 }
 
 /**
@@ -175,16 +223,63 @@ export function extractInlineSVGs(html, limit = 10) {
 
 /**
  * Extract button HTML patterns for accurate reproduction.
+ * Captures button/a tags with their classes, inline styles, and text.
  */
 export function extractButtonPatterns(html, limit = 8) {
   const buttons = []
-  // Real <button> or <a class="btn..."> tags
-  for (const m of html.matchAll(/<(?:button|a)[^>]*(?:btn|button|cta)[^>]*>[\s\S]*?<\/(?:button|a)>/gi)) {
+  const seen = new Set()
+
+  // 1. <button> or <a> with class containing btn/button/cta/action
+  for (const m of html.matchAll(/<(?:button|a)\b[^>]*(?:btn|button|cta|action|primary|secondary)[^>]*>[\s\S]*?<\/(?:button|a)>/gi)) {
     const b = m[0].replace(/\s+/g, ' ').trim()
-    if (b.length > 5 && b.length < 400) buttons.push(b)
+    if (b.length > 5 && b.length < 600 && !seen.has(b.slice(0, 40))) {
+      seen.add(b.slice(0, 40)); buttons.push(b)
+    }
     if (buttons.length >= limit) break
   }
+
+  // 2. <a> or <button> with inline style containing background/color/border-radius
+  if (buttons.length < 3) {
+    for (const m of html.matchAll(/<(?:button|a)\b[^>]*style="[^"]*(?:background|border-radius|padding)[^"]*"[^>]*>[\s\S]*?<\/(?:button|a)>/gi)) {
+      const b = m[0].replace(/\s+/g, ' ').trim()
+      if (b.length > 5 && b.length < 600 && !seen.has(b.slice(0, 40))) {
+        seen.add(b.slice(0, 40)); buttons.push(b)
+      }
+      if (buttons.length >= limit) break
+    }
+  }
+
+  // 3. Any remaining <button> tags as fallback
+  if (buttons.length < 2) {
+    for (const m of html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/gi)) {
+      const b = m[0].replace(/\s+/g, ' ').trim()
+      if (b.length > 3 && b.length < 400 && !seen.has(b.slice(0, 40))) {
+        seen.add(b.slice(0, 40)); buttons.push(b)
+      }
+      if (buttons.length >= limit) break
+    }
+  }
+
   return buttons
+}
+
+/**
+ * Extract the navbar HTML for accurate reproduction.
+ */
+export function extractNavbarHtml(html, limit = 2000) {
+  // Try nav, then header, then any element with navbar/nav class
+  const patterns = [
+    /<nav\b[^>]*>[\s\S]*?<\/nav>/i,
+    /<header\b[^>]*>[\s\S]*?<\/header>/i,
+    /<[^>]+class="[^"]*(?:navbar|nav-bar|navigation|site-header)[^"]*"[^>]*>[\s\S]*?<\/[a-z]+>/i,
+  ]
+  for (const pat of patterns) {
+    const m = html.match(pat)
+    if (m && m[0].length > 50) {
+      return m[0].replace(/\s+/g, ' ').trim().slice(0, limit)
+    }
+  }
+  return ''
 }
 
 /**

@@ -141,32 +141,67 @@ async function tryWaybackMachine(url, timeout = 15000) {
 }
 
 /**
- * Main export — tries strategies in order until one succeeds.
+ * Race a set of strategies in parallel — return the first that succeeds.
+ * If all fail, return null.
+ */
+async function raceStrategies(candidates) {
+  return new Promise((resolve) => {
+    let settled = 0
+    let won = false
+    if (candidates.length === 0) { resolve(null); return }
+    for (const { name, fn } of candidates) {
+      fn()
+        .then(html => {
+          if (!won && html && html.length > 200) {
+            won = true
+            console.log(`[CloneEngine:race] ✓ ${name} — ${html.length} bytes`)
+            resolve({ html, strategy: name, length: html.length })
+          } else {
+            settled++
+            if (settled === candidates.length && !won) resolve(null)
+          }
+        })
+        .catch(err => {
+          console.warn(`[CloneEngine:race] ${name} failed: ${err.message}`)
+          settled++
+          if (settled === candidates.length && !won) resolve(null)
+        })
+    }
+  })
+}
+
+/**
+ * Main export — races top strategies in parallel, then falls back sequentially.
  * Returns { html, strategy, length, error? }
  */
 export async function fetchHtmlMultiStrategy(url) {
-  const strategies = [
-    { name: 'direct',          fn: () => tryFetch(url) },
-    { name: 'allorigins',      fn: () => tryAllOrigins(url) },
-    { name: 'jina-reader',     fn: () => tryJinaReader(url) },
+  // Wave 1: race the 3 fastest strategies simultaneously (fastest wins)
+  const wave1 = await raceStrategies([
+    { name: 'direct',     fn: () => tryFetch(url, 10000) },
+    { name: 'allorigins', fn: () => tryAllOrigins(url, 9000) },
+    { name: 'jina-reader',fn: () => tryJinaReader(url, 14000) },
+  ])
+  if (wave1) return wave1
+
+  // Wave 2: sequential fallbacks if wave 1 all failed
+  const fallbacks = [
     { name: 'codetabs',        fn: () => tryCodeTabs(url) },
     { name: 'corsproxy',       fn: () => tryCorsBridge(url) },
     { name: 'thingproxy',      fn: () => tryScrapingBeePublic(url) },
     { name: 'wayback-machine', fn: () => tryWaybackMachine(url) },
   ]
-
   let lastErr = null
-  for (const { name, fn } of strategies) {
+  for (const { name, fn } of fallbacks) {
     try {
       const html = await fn()
       if (html && html.length > 200) {
-        console.log(`[CloneEngine:fetch] ✓ ${name} — ${html.length} bytes`)
+        console.log(`[CloneEngine:fallback] ✓ ${name} — ${html.length} bytes`)
         return { html, strategy: name, length: html.length }
       }
-      console.warn(`[CloneEngine:fetch] ${name} returned too-short response`)
+      console.warn(`[CloneEngine:fallback] ${name} returned too-short response`)
     } catch (err) {
       lastErr = err
-      console.warn(`[CloneEngine:fetch] ${name} failed: ${err.message}`)
+      console.warn(`[CloneEngine:fallback] ${name} failed: ${err.message}`)
     }
   }
   return { html: '', strategy: 'none', length: 0, error: lastErr?.message || 'All strategies failed' }

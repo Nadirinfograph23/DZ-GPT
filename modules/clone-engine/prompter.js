@@ -302,6 +302,84 @@ export function buildCloneSystemPrompt(tokens) {
     + '\n\nSTART OUTPUT NOW — RAW HTML ONLY (<!DOCTYPE html>…</html>):'
 }
 
+/**
+ * INDEX-ONLY slim prompt — drastically smaller than full prompt.
+ * Removes rawBodySnapshot, structuralSkeleton, allTextContent (trimmed to 1200),
+ * rawStyleSample (trimmed to 1500), classSnapshot (trimmed to 800).
+ * Target: < 10000 chars total to fit model context window reliably.
+ */
+export function buildIndexOnlySystemPrompt(tokens) {
+  const techBadges   = tokens.techStack?.length > 0 ? `\nTECH: ${tokens.techStack.join(', ')}` : ''
+  const navStr       = tokens.navStructure
+    ? `\nNAV: "${tokens.navStructure.brand}" | ${tokens.navStructure.links.slice(0, 8).join(' | ')}`
+    : tokens.navLinks?.length ? `\nNAV LINKS: ${tokens.navLinks.slice(0, 8).join(' | ')}` : ''
+  const heroStr      = tokens.heroContent
+    ? `\nHERO H1: "${tokens.heroContent.h1}"\nHERO SUB: "${tokens.heroContent.subtext?.slice(0, 120)}"\nHERO CTAs: ${tokens.heroContent.ctas.slice(0, 3).join(' | ')}`
+    : ''
+  const footerStr    = tokens.footerContent?.copyright
+    ? `\nFOOTER COPYRIGHT (VERBATIM): "${tokens.footerContent.copyright}"\nFOOTER LINKS: ${tokens.footerContent.links?.slice(0, 8).join(' | ') || ''}`
+    : ''
+  const yearsStr     = tokens.keyNumbers?.years?.length
+    ? `\n⚠️ YEARS (copy verbatim): ${tokens.keyNumbers.years.join(', ')}`
+    : ''
+  const statsStr     = tokens.keyNumbers?.stats?.length
+    ? `\nSTATS (verbatim): ${tokens.keyNumbers.stats.slice(0, 6).join(', ')}`
+    : ''
+  const animStr      = tokens.animations?.length > 0 ? `\nANIMATIONS: ${tokens.animations.slice(0, 6).join(', ')}` : ''
+  const formStr      = tokens.forms?.length > 0
+    ? `\nFORMS: ${tokens.forms.map(f => f.inputs.map(i => `${i.type}[${i.placeholder || i.label}]`).join(',')).join(' | ')}`
+    : ''
+  const cssVarsStr   = tokens.cssVars && Object.keys(tokens.cssVars).length > 0
+    ? `\nCSS VARS:\n${Object.entries(tokens.cssVars).slice(0, 20).map(([k, v]) => `${k}:${v}`).join('; ')}`
+    : ''
+  const allTextSlim  = tokens.allTextContent ? `\nKEY TEXT (verbatim):\n${tokens.allTextContent.slice(0, 1200)}` : ''
+  const cssSlim      = tokens.rawStyleSample  ? `\nCSS SAMPLE:\n${tokens.rawStyleSample.slice(0, 1500)}`       : ''
+  const classesTrim  = tokens.classSnapshot   ? `\nCLASSES: ${tokens.classSnapshot.slice(0, 600)}`             : ''
+  const iconCdn      = ICON_RULES[tokens.iconLibrary || 'font-awesome'] || ICON_RULES['font-awesome']
+  const layoutInfo   = [tokens.usesGrid ? 'Grid' : '', tokens.usesFlex ? 'Flex' : ''].filter(Boolean).join('+') || 'block'
+  const keyframesSlim = tokens.keyframes?.length > 0 ? `\nKEYFRAMES:\n${tokens.keyframes.join('\n').slice(0, 800)}` : ''
+  const buttonSlim   = tokens.buttonPatterns?.length > 0 ? `\nBUTTONS:\n${tokens.buttonPatterns.slice(0, 2).join('\n---\n').slice(0, 600)}` : ''
+
+  const context = `
+════════════════════════════
+INDEX-ONLY CLONE: ${tokens.url}
+════════════════════════════
+Title: ${tokens.title || tokens.domain}
+Layout: ${tokens.layoutType} | ${layoutInfo} | ${tokens.colorScheme} theme
+${techBadges}
+
+SECTIONS (exact order, no additions):
+${tokens.sections?.map((s, i) => `${i + 1}. ${s}`).join('\n') || '1. navbar\n2. hero\n3. features\n4. footer'}
+
+COLORS (use ALL of these):
+${tokens.colors.slice(0, 20).join(', ')}
+${tokens.primaryColor ? `Primary: ${tokens.primaryColor}` : ''}
+${tokens.bgColor ? `Background: ${tokens.bgColor}` : ''}
+${cssVarsStr}
+
+FONTS: ${tokens.fonts?.slice(0, 3).join(', ') || 'system-ui'}
+ICONS: ${iconCdn}
+${animStr}
+${keyframesSlim}
+${navStr}
+${heroStr}
+${yearsStr}
+${statsStr}
+${footerStr}
+${formStr}
+${buttonSlim}
+${allTextSlim}
+${cssSlim}
+${classesTrim}
+════════════════════════════`
+
+  return BASE_SYSTEM
+    + buildFrameworkInstructions(tokens.techStack || [])
+    + '\n\nINDEX PAGE INTELLIGENCE (slim for speed):'
+    + context
+    + '\n\nOUTPUT NOW — RAW HTML ONLY (<!DOCTYPE html>…</html>):'
+}
+
 export function buildCloneUserPrompt(url, section, tokens) {
   const yearsNote = tokens.keyNumbers?.years?.length
     ? `⚠️ CRITICAL — these years appear in the original and MUST appear verbatim in output: ${tokens.keyNumbers.years.join(', ')}`

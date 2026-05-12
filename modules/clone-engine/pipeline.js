@@ -11,7 +11,7 @@
 
 import { fetchHtmlMultiStrategy } from './fetcher.js'
 import { deepExtract } from './extractor.js'
-import { buildCloneSystemPrompt, buildCloneUserPrompt, buildRepairPrompt } from './prompter.js'
+import { buildCloneSystemPrompt, buildIndexOnlySystemPrompt, buildCloneUserPrompt, buildRepairPrompt } from './prompter.js'
 import { rewriteAssetsToAbsolute } from './asset-handler.js'
 import { downloadWebsite, injectRealCssIntoClone, extractAssetUrls } from './downloader.js'
 
@@ -120,13 +120,14 @@ function enforceVerbatimContent(html, tokens) {
 }
 
 /**
- * Run the full V3 cloning pipeline.
+ * Run the V3 cloning pipeline.
+ * Always runs in INDEX-ONLY mode (homepage only, slim prompt).
  */
 export async function runClonePipeline({ url, section = 'full', aiGenerate, onProgress }) {
   const progress = onProgress || (() => {})
 
-  // ─── Stage 1: Fetch ─────────────────────────────────────────────────────
-  progress({ stage: 'fetch', message: `🌐 جارٍ جلب الموقع بـ 7 استراتيجيات...`, pct: 8 })
+  // ─── Stage 1: Fetch — parallel race (3 strategies at once, fastest wins) ──
+  progress({ stage: 'fetch', message: `🌐 جارٍ جلب الصفحة الرئيسية (3 استراتيجيات متوازية)...`, pct: 8 })
   const { html: rawHtml, strategy, error: fetchError } = await fetchHtmlMultiStrategy(url)
 
   if (!rawHtml || rawHtml.length < 100) {
@@ -146,17 +147,18 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
 
   console.log(`[CloneEngineV3] Extracted V3 — tech:[${tokens.techStack.join(',')}] colors:${tokens.colors.length} images:${tokens.images?.length || 0} sections:[${tokens.sections.join(',')}] footer-copyright:"${tokens.footerContent?.copyright?.slice(0,40) || 'none'}" years:${tokens.keyNumbers?.years?.join(',') || 'none'}`)
 
-  // ─── Stage 3: AI Reconstruction ─────────────────────────────────────────
+  // ─── Stage 3: AI Reconstruction — INDEX-ONLY slim prompt ────────────────
   progress({
     stage: 'generate',
-    message: `🤖 إعادة بناء الاستنساخ V3 بدقة 95–100%... (${tokens.sections.length} أقسام · ${tokens.images?.length || 0} صورة)`,
+    message: `🤖 توليد استنساخ الصفحة الرئيسية (prompt مضغوط · ${tokens.sections.length} أقسام)...`,
     pct: 38,
     tech: tokens.techStack,
     sections: tokens.sections,
     imageCount: tokens.images?.length || 0,
   })
 
-  const systemPrompt = buildCloneSystemPrompt(tokens)
+  // INDEX-ONLY: use slim prompt (~8k chars vs ~30k) → AI generates reliably
+  const systemPrompt = buildIndexOnlySystemPrompt(tokens)
   const userPrompt = buildCloneUserPrompt(url, section, tokens)
 
   const messages = [
@@ -164,33 +166,36 @@ export async function runClonePipeline({ url, section = 'full', aiGenerate, onPr
     { role: 'user', content: userPrompt },
   ]
 
-  // INDEX-ONLY: 10000 tokens is enough for a full homepage clone (faster)
-  const result = await aiGenerate(messages, 10000)
+  // 12000 output tokens — enough for full homepage, fits in context window
+  const result = await aiGenerate(messages, 12000)
   let htmlCode = extractHtml(result?.content || '')
 
-  // ─── Stage 3b: Retry if empty or too short ───────────────────────────────
+  // ─── Stage 3b: Retry with even slimmer prompt if empty ───────────────────
   if (!htmlCode || htmlCode.length < 1000) {
-    progress({ stage: 'retry', message: `🔄 إعادة المحاولة بتعليمات أقوى (V3)...`, pct: 55 })
+    progress({ stage: 'retry', message: `🔄 إعادة المحاولة (prompt مخفف)...`, pct: 55 })
     const retryMessages = [
-      { role: 'system', content: systemPrompt },
       {
         role: 'user',
-        content: `CRITICAL RETRY — V3 Clone of ${url}:
-Your previous response was empty or too short. You MUST output a COMPLETE HTML file now.
-${userPrompt}
+        content: `You are an expert HTML developer. Clone the homepage of ${url}.
 
-IMPORTANT REMINDERS:
-- Output MUST start with <!DOCTYPE html>
-- MUST include ALL sections: ${tokens.sections.join(' → ')}
-- MUST use colors: ${tokens.colors.slice(0,6).join(', ')}
-- MUST preserve years verbatim: ${tokens.keyNumbers?.years?.join(', ') || 'none'}
-- Copyright VERBATIM: "${tokens.footerContent?.copyright || ''}"
-- Minimum 400 lines of HTML
+SPECS:
+- Title: "${tokens.title || tokens.domain}"
+- Sections (in order): ${tokens.sections.join(' → ')}
+- Colors: ${tokens.colors.slice(0, 8).join(', ')}
+- Primary: ${tokens.primaryColor || tokens.colors[0] || '#3b82f6'}
+- Background: ${tokens.bgColor || (tokens.colorScheme === 'dark' ? '#0f172a' : '#ffffff')}
+- Theme: ${tokens.colorScheme}
+- Fonts: ${tokens.fonts?.slice(0, 2).join(', ') || 'system-ui'}
+- Nav links: ${tokens.navLinks?.slice(0, 8).join(', ') || ''}
+- Hero: ${tokens.heroContent?.h1 || ''} | ${tokens.heroContent?.subtext?.slice(0, 80) || ''}
+- Copyright: "${tokens.footerContent?.copyright || ''}"
+- Tech: ${tokens.techStack?.join(', ') || 'pure CSS'}
 
-START WITH <!DOCTYPE html> NOW:`,
+OUTPUT: ONE complete standalone HTML file (<!DOCTYPE html>…</html>).
+All CSS in <style>. Responsive. Minimum 300 lines. Start immediately:`,
       },
     ]
-    const retryResult = await aiGenerate(retryMessages, 10000)
+    const retryResult = await aiGenerate(retryMessages, 12000)
     htmlCode = extractHtml(retryResult?.content || '') || retryResult?.content || ''
   }
 

@@ -7419,6 +7419,466 @@ app.post('/api/dz-agent/github/deploy-sync', async (req, res) => {
   return res.json({ success: results.pushed.length > 0, ...results })
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GITHUB AGENT — REAL DEVOPS ENGINEER ENDPOINTS
+// Full execution pipeline: create repo → branch → files → commit → pages → URL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/dz-agent/github/create-branch ────────────────────────────────
+// Create a new branch from an existing one (defaults to main/master)
+app.post('/api/dz-agent/github/create-branch', async (req, res) => {
+  const { repo, branch, fromBranch = 'main', token } = req.body
+  if (!repo || !branch) return res.status(400).json({ error: 'repo و branch مطلوبان.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo format.' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  try {
+    // 1. Get SHA of source branch
+    let sha = null
+    const refRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(fromBranch)}`, {
+      headers: ghHeaders, signal: AbortSignal.timeout(10000),
+    })
+    if (refRes.ok) {
+      const refData = await refRes.json()
+      sha = refData?.object?.sha
+    } else {
+      // Try master if main not found
+      const masterRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/master`, {
+        headers: ghHeaders, signal: AbortSignal.timeout(8000),
+      })
+      if (masterRes.ok) {
+        const masterData = await masterRes.json()
+        sha = masterData?.object?.sha
+      }
+    }
+
+    if (!sha) return res.status(404).json({ error: `الفرع "${fromBranch}" غير موجود في المستودع.` })
+
+    // 2. Create the new branch
+    const createRes = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const createData = await createRes.json()
+    if (!createRes.ok) {
+      if (createData.message?.includes('already exists') || createRes.status === 422) {
+        return res.json({ success: true, branch, sha, message: `الفرع "${branch}" موجود مسبقاً.`, reused: true })
+      }
+      return res.status(createRes.status).json({ error: createData.message || 'فشل إنشاء الفرع.' })
+    }
+
+    console.log(`[GH:create-branch] Created branch "${branch}" in ${repo}`)
+    return res.json({ success: true, branch, sha: createData?.object?.sha || sha, repo, fromBranch })
+  } catch (err) {
+    console.error('[GH:create-branch]', err.message)
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/dz-agent/github/create-repo-full ────────────────────────────
+// Full pipeline: create repo + main branch + README + optional index.html + GitHub Pages
+app.post('/api/dz-agent/github/create-repo-full', async (req, res) => {
+  const { repoName, description = '', isWebsite = false, prompt = '', token, isPrivate = false } = req.body
+  if (!repoName) return res.status(400).json({ error: 'repoName مطلوب.' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
+
+  const safeName = sanitizeRepoName(repoName)
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  const report = { steps: [], errors: [], repoName: safeName }
+
+  try {
+    // 1. Get authenticated user
+    const userRes = await fetch('https://api.github.com/user', { headers: ghHeaders, signal: AbortSignal.timeout(8000) })
+    if (!userRes.ok) return res.status(401).json({ error: 'GitHub Token غير صالح.' })
+    const user = await userRes.json()
+    const owner = user.login
+    report.owner = owner
+
+    // 2. Create repository
+    report.steps.push('🧠 تحليل الطلب...')
+    report.steps.push('🔐 التحقق من GitHub Token... ✅')
+
+    let repoReused = false
+    const createRepoRes = await fetch('https://api.github.com/user/repos', {
+      method: 'POST',
+      headers: ghHeaders,
+      body: JSON.stringify({
+        name: safeName,
+        description: description || prompt.slice(0, 150) || `Created by DZ Agent 🇩🇿`,
+        private: isPrivate,
+        auto_init: true,
+        default_branch: 'main',
+      }),
+      signal: AbortSignal.timeout(20000),
+    })
+    const repoData = await createRepoRes.json()
+    if (!createRepoRes.ok) {
+      if (createRepoRes.status === 422 || repoData.message?.includes('already exists')) {
+        repoReused = true
+        report.steps.push(`♻️ المستودع "${safeName}" موجود — سنستخدمه`)
+      } else {
+        return res.status(createRepoRes.status).json({ error: repoData.message || 'فشل إنشاء المستودع.' })
+      }
+    } else {
+      report.steps.push(`📦 إنشاء المستودع "${safeName}"... ✅`)
+    }
+
+    await new Promise(r => setTimeout(r, 2500))
+
+    // 3. Push README.md if not already initialized
+    const readmeContent = `# ${safeName}\n\n${description || prompt || 'مشروع منشأ بواسطة DZ Agent 🇩🇿'}\n\n---\n*Built with DZ Agent — Made in Algeria 🇩🇿*\n`
+    const readmeRes = await fetch(`https://api.github.com/repos/${owner}/${safeName}/contents/README.md`, {
+      method: 'PUT',
+      headers: ghHeaders,
+      body: JSON.stringify({
+        message: '📚 Add README — by DZ Agent 🤖',
+        content: Buffer.from(readmeContent).toString('base64'),
+        branch: 'main',
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (readmeRes.ok) {
+      report.steps.push('✍️ إنشاء README.md... ✅')
+    } else {
+      const rdErr = await readmeRes.json()
+      if (!rdErr.message?.includes('sha')) {
+        report.errors.push('README: ' + (rdErr.message || 'خطأ غير معروف'))
+      } else {
+        report.steps.push('✍️ README.md موجود مسبقاً')
+      }
+    }
+
+    // 4. Generate and push index.html if website requested
+    let indexHtml = null
+    if (isWebsite || /موقع|ويب|website|html|landing|page/i.test(prompt)) {
+      report.steps.push('🤖 توليد index.html بالذكاء الاصطناعي...')
+      try {
+        const aiResult = await safeGenerateAI({
+          messages: [
+            { role: 'system', content: 'أنت مهندس ويب خبير. أنتج موقع HTML/CSS/JS كامل في ملف واحد لـ GitHub Pages. لا lorem ipsum. تصميم احترافي responsive. Output ONLY the HTML document.' },
+            { role: 'user', content: `أنشئ موقع ويب احترافي: ${prompt || description || safeName}` },
+          ],
+          query: prompt, max_tokens: 8000,
+        })
+        indexHtml = extractHtmlFromResponse(aiResult.content || '') || aiResult.content || ''
+      } catch (_) { indexHtml = null }
+
+      if (!indexHtml || indexHtml.length < 100) {
+        indexHtml = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeName}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0d1117;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:2rem}.card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3rem;max-width:600px;width:100%}h1{font-size:2.5rem;margin-bottom:1rem;background:linear-gradient(135deg,#00d4aa,#00a3e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;line-height:1.7;font-size:1.1rem}.badge{display:inline-block;margin-top:1.5rem;background:#21262d;border:1px solid #30363d;border-radius:20px;padding:.5rem 1.2rem;font-size:.9rem;color:#58a6ff}</style></head><body><div class="card"><h1>${safeName}</h1><p>${description || prompt || 'مشروع رائع منشأ بواسطة DZ Agent'}</p><span class="badge">🇩🇿 Made with DZ Agent</span></div></body></html>`
+      }
+
+      const htmlRes = await fetch(`https://api.github.com/repos/${owner}/${safeName}/contents/index.html`, {
+        method: 'PUT',
+        headers: ghHeaders,
+        body: JSON.stringify({
+          message: '🚀 Add index.html — by DZ Agent 🤖',
+          content: Buffer.from(indexHtml).toString('base64'),
+          branch: 'main',
+        }),
+        signal: AbortSignal.timeout(20000),
+      })
+      if (htmlRes.ok) {
+        report.steps.push('✍️ إنشاء index.html... ✅')
+      } else {
+        const htmlErr = await htmlRes.json()
+        report.errors.push('index.html: ' + (htmlErr.message || 'خطأ'))
+      }
+    }
+
+    // 5. Enable GitHub Pages
+    report.steps.push('🌐 تفعيل GitHub Pages...')
+    let pagesUrl = `https://${owner}.github.io/${safeName}`
+    let pagesStatus = 'building'
+    try {
+      const pagesRes = await fetch(`https://api.github.com/repos/${owner}/${safeName}/pages`, {
+        method: 'POST',
+        headers: ghHeaders,
+        body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const pagesData = await pagesRes.json()
+      if (pagesRes.ok || pagesRes.status === 409) {
+        pagesStatus = pagesData.status || 'building'
+        pagesUrl = pagesData.html_url || pagesUrl
+        report.steps.push('🚀 نشر GitHub Pages... ✅')
+        report.steps.push('✅ العملية اكتملت بنجاح!')
+      } else {
+        report.errors.push('Pages: ' + (pagesData.message || 'خطأ في التفعيل'))
+      }
+    } catch (pErr) {
+      report.errors.push('Pages: ' + pErr.message)
+    }
+
+    console.log(`[GH:create-repo-full] Done: ${owner}/${safeName} → ${pagesUrl}`)
+    return res.json({
+      success: true,
+      owner,
+      repo: safeName,
+      repoUrl: `https://github.com/${owner}/${safeName}`,
+      siteUrl: pagesUrl,
+      pagesStatus,
+      repoReused,
+      hasWebsite: !!(isWebsite || indexHtml),
+      steps: report.steps,
+      errors: report.errors,
+    })
+  } catch (err) {
+    console.error('[GH:create-repo-full]', err.message)
+    return res.status(500).json({ error: err.message, steps: report.steps })
+  }
+})
+
+// ── POST /api/dz-agent/github/exec ────────────────────────────────────────
+// Natural language GitHub command executor — maps NL → real GitHub API operations
+// Understands: create file, edit file, create branch, commit, deploy pages, fix error
+app.post('/api/dz-agent/github/exec', async (req, res) => {
+  const { command, repo, branch = 'main', context = {}, token } = req.body
+  if (!command) return res.status(400).json({ error: 'command مطلوب.' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
+
+  const cmd = normalizeQuery(command)
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  // Classify the GitHub command
+  const isCreateFile = /أنشئ|انشئ|اكتب|create|add|أضف/i.test(command) && /ملف|file|html|css|js|json|md/i.test(command)
+  const isEditFile   = /عدل|حدث|عدّل|حدّث|edit|update|modify|غيّر/i.test(command)
+  const isCreateBranch = /فرع|branch/i.test(command) && /أنشئ|انشئ|create|جديد/i.test(command)
+  const isCommit     = /commit|إضافة|سجل|حفظ/i.test(command)
+  const isDeploy     = /انشر|نشر|deploy|pages|github\.io/i.test(command)
+  const isFixError   = /أصلح|صلح|fix|repair|debug|حل|خطأ|error/i.test(command)
+  const isListFiles  = /اعرض|قائمة|list|show|files/i.test(command)
+
+  try {
+    // Route to appropriate operation
+    if (isListFiles && repo) {
+      const treeRes = await fetch(`https://api.github.com/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, {
+        headers: ghHeaders, signal: AbortSignal.timeout(10000),
+      })
+      if (!treeRes.ok) return res.status(404).json({ error: `لم يتم العثور على المستودع "${repo}" أو الفرع "${branch}".` })
+      const treeData = await treeRes.json()
+      const files = (treeData.tree || []).filter(f => f.type === 'blob').map(f => f.path)
+      return res.json({ success: true, operation: 'list_files', files, count: files.length, repo, branch })
+    }
+
+    if (isCreateBranch && repo) {
+      const newBranch = context.branchName || command.match(/(?:اسمه|named?|باسم)\s+["']?(\S+?)["']?(?:\s|$)/i)?.[1] || `dz-agent/${Date.now()}`
+      const refRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, {
+        headers: ghHeaders, signal: AbortSignal.timeout(8000),
+      })
+      if (!refRes.ok) return res.status(404).json({ error: `الفرع المصدر "${branch}" غير موجود.` })
+      const { object: { sha } } = await refRes.json()
+      const createRes = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+        method: 'POST', headers: ghHeaders,
+        body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const createData = await createRes.json()
+      if (!createRes.ok && !createData.message?.includes('already exists')) {
+        return res.status(createRes.status).json({ error: createData.message })
+      }
+      return res.json({ success: true, operation: 'create_branch', branch: newBranch, sha, repo })
+    }
+
+    if (isDeploy && repo) {
+      const [owner, repoName] = repo.split('/')
+      const pagesRes = await fetch(`https://api.github.com/repos/${repo}/pages`, {
+        method: 'POST', headers: ghHeaders,
+        body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const pagesData = await pagesRes.json()
+      const siteUrl = pagesData.html_url || `https://${owner}.github.io/${repoName}`
+      return res.json({
+        success: pagesRes.ok || pagesRes.status === 409,
+        operation: 'enable_pages',
+        siteUrl,
+        status: pagesData.status || 'building',
+        repo,
+      })
+    }
+
+    // For create/edit/fix/commit — use AI to generate content then push
+    if ((isCreateFile || isEditFile || isFixError || isCommit) && repo) {
+      // Step 1: Identify target file
+      const fileMatch = command.match(/["']([^"']+\.\w+)["']|(\S+\.\w{2,5})/i)
+      const targetFile = context.filePath || fileMatch?.[1] || fileMatch?.[2] || 'index.html'
+
+      // Step 2: Get current content if exists
+      let currentContent = context.currentContent || ''
+      let currentSha = null
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(targetFile)}?ref=${encodeURIComponent(branch)}`, {
+          headers: ghHeaders, signal: AbortSignal.timeout(8000),
+        })
+        if (getRes.ok) {
+          const getData = await getRes.json()
+          currentContent = Buffer.from(getData.content, 'base64').toString('utf8')
+          currentSha = getData.sha
+        }
+      } catch (_) {}
+
+      // Step 3: AI generates new/fixed content
+      const aiMessages = [
+        {
+          role: 'system',
+          content: `أنت مهندس GitHub DevOps متخصص. نفّذ الأمر التالي على الملف المحدد.
+قواعد:
+- أخرج فقط محتوى الملف الجديد بدون شرح ولا markdown code blocks.
+- إذا كان الملف HTML: أخرج HTML كاملاً فقط.
+- إذا كان JS/CSS: أخرج الكود فقط.
+- لا lorem ipsum — محتوى حقيقي احترافي.`,
+        },
+        {
+          role: 'user',
+          content: `المستودع: ${repo}\nالفرع: ${branch}\nالملف: ${targetFile}\nالأمر: ${command}${currentContent ? `\n\nالمحتوى الحالي:\n${currentContent.slice(0, 3000)}` : ''}`,
+        },
+      ]
+      const aiResult = await safeGenerateAI({ messages: aiMessages, query: command, max_tokens: 8000 })
+      let newContent = aiResult.content || ''
+
+      // Extract HTML if applicable
+      if (targetFile.endsWith('.html')) {
+        newContent = extractHtmlFromResponse(newContent) || newContent
+      }
+
+      if (!newContent || newContent.length < 10) {
+        return res.status(500).json({ error: 'فشل توليد محتوى الملف.' })
+      }
+
+      // Step 4: Push to GitHub
+      const commitMsg = `${isFixError ? '🛠️ fix' : isEditFile ? '✏️ update' : '✨ create'}: ${targetFile} — by DZ Agent 🤖`
+      const pushBody = {
+        message: commitMsg,
+        content: Buffer.from(newContent).toString('base64'),
+        branch,
+      }
+      if (currentSha) pushBody.sha = currentSha
+
+      const pushRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(targetFile)}`, {
+        method: 'PUT', headers: ghHeaders,
+        body: JSON.stringify(pushBody),
+        signal: AbortSignal.timeout(20000),
+      })
+      const pushData = await pushRes.json()
+      if (!pushRes.ok) return res.status(pushRes.status).json({ error: pushData.message || 'فشل Push.' })
+
+      console.log(`[GH:exec] ${isFixError ? 'fixed' : isEditFile ? 'edited' : 'created'} ${targetFile} in ${repo}@${branch}`)
+      return res.json({
+        success: true,
+        operation: isFixError ? 'fix_and_commit' : isEditFile ? 'edit_and_commit' : 'create_and_commit',
+        file: targetFile,
+        repo,
+        branch,
+        commitSha: pushData.commit?.sha,
+        commitUrl: pushData.commit?.html_url,
+        fileUrl: pushData.content?.html_url,
+        action: currentSha ? 'updated' : 'created',
+      })
+    }
+
+    // Fallback: use AI to interpret and respond
+    const fallbackAI = await safeGenerateAI({
+      messages: [
+        { role: 'system', content: 'أنت GitHub DevOps engineer. حلّل الأمر وأخبر المستخدم ماذا تحتاج (repo, branch, file) لتنفيذه.' },
+        { role: 'user', content: command },
+      ],
+      query: command, max_tokens: 500,
+    })
+    return res.json({ success: false, operation: 'clarification_needed', message: fallbackAI.content, command })
+  } catch (err) {
+    console.error('[GH:exec]', err.message)
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/dz-agent/github/init-empty-repo ──────────────────────────────
+// Auto-initialize an empty repository: add README + index.html + first commit
+app.post('/api/dz-agent/github/init-empty-repo', async (req, res) => {
+  const { repo, description = '', isWebsite = true, token } = req.body
+  if (!repo) return res.status(400).json({ error: 'repo مطلوب.' })
+  if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo format.' })
+  const tok = sanitizeString(token || process.env.GITHUB_TOKEN || '', 300)
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط.' })
+
+  const ghHeaders = {
+    Authorization: `token ${tok}`,
+    'User-Agent': 'DZ-GPT/1.0',
+    Accept: 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  }
+
+  const [owner, repoName] = repo.split('/')
+  const results = { created: [], failed: [] }
+
+  // Push README.md
+  const readme = `# ${repoName}\n\n${description || 'مشروع منشأ بواسطة DZ Agent 🇩🇿'}\n\n---\n*Built with [DZ Agent](https://dz-gpt.vercel.app) — Made in Algeria 🇩🇿*\n`
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/README.md`, {
+      method: 'PUT', headers: ghHeaders,
+      body: JSON.stringify({ message: '📚 Initial commit: README — by DZ Agent 🤖', content: Buffer.from(readme).toString('base64'), branch: 'main' }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (r.ok) results.created.push('README.md')
+    else results.failed.push('README.md')
+  } catch { results.failed.push('README.md') }
+
+  // Push index.html if website
+  if (isWebsite) {
+    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${repoName}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}.card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3rem;max-width:640px;width:100%;text-align:center}h1{font-size:2.5rem;font-weight:700;margin-bottom:1rem;background:linear-gradient(135deg,#00d4aa,#00a3e0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;line-height:1.7;font-size:1.1rem;margin-bottom:1.5rem}.badge{display:inline-flex;align-items:center;gap:.4rem;background:#21262d;border:1px solid #30363d;border-radius:20px;padding:.5rem 1.2rem;font-size:.9rem;color:#58a6ff;text-decoration:none}a.badge:hover{border-color:#58a6ff}</style></head><body><div class="card"><h1>${repoName}</h1><p>${description || 'مشروع رائع منشأ بواسطة DZ Agent 🤖'}</p><a class="badge" href="https://dz-gpt.vercel.app">🇩🇿 Powered by DZ Agent</a></div></body></html>`
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/contents/index.html`, {
+        method: 'PUT', headers: ghHeaders,
+        body: JSON.stringify({ message: '🚀 Initial commit: index.html — by DZ Agent 🤖', content: Buffer.from(html).toString('base64'), branch: 'main' }),
+        signal: AbortSignal.timeout(15000),
+      })
+      if (r.ok) results.created.push('index.html')
+      else results.failed.push('index.html')
+    } catch { results.failed.push('index.html') }
+
+    // Enable Pages
+    try {
+      await fetch(`https://api.github.com/repos/${repo}/pages`, {
+        method: 'POST', headers: ghHeaders,
+        body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+        signal: AbortSignal.timeout(15000),
+      })
+      results.pagesEnabled = true
+    } catch { results.pagesEnabled = false }
+  }
+
+  console.log(`[GH:init-empty-repo] Initialized ${repo}: ${results.created.join(', ')}`)
+  return res.json({
+    success: results.created.length > 0,
+    repo,
+    ...results,
+    repoUrl: `https://github.com/${repo}`,
+    siteUrl: isWebsite ? `https://${owner}.github.io/${repoName}` : null,
+  })
+})
+
 // ===== TASK 9 — ENHANCED INTENT ENGINE (create/update/fix/optimize) =====
 // Exposed as a utility endpoint for frontend intent mapping
 app.post('/api/dz-agent/detect-intent', (req, res) => {

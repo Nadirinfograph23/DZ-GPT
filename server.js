@@ -96,6 +96,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
+import { GITHUB_AGENT_LAYER } from './lib/prompts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -11161,11 +11162,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── EDUCATION MODE (education queries only) ───────────────────────────
     _isEdu ? `📚 EDUCATION: حدّد المادة والمستوى (ابتدائي/متوسط/ثانوي/بكالوريا). ابحث أولاً في eddirasa.com. للتمارين: فهم → موضوع → حل خطوة بخطوة → شرح مبسط. للشرح: ملخص + أمثلة + 3 تمارين + اختبار صغير.` : '',
 
-    // ── CODE / GITHUB MODE (code queries or github connected) ────────────
+    // ── CODE / GITHUB AGENT MODE (activated when repo connected OR code query) ──
     _isCode ? [
-      `💻 CODE/GITHUB: عند رابط GitHub → تفعيل Smart Dev Mode تلقائياً. حلّل: هيكل المشروع · المكتبات · الأمان (OWASP). لكل مشكلة: ❌ المشكلة + 📍 الموقع + 💡 الحل + 🧾 كود جاهز. قيّم المشروع /10 في: جودة · هيكل · أمان · أداء.`,
-      githubToken ? `GitHub: متصل ✓ | مستودع: ${currentRepo || 'لم يُحدد'}` : `GitHub: غير متصل.`,
-    ].join('\n') : '',
+      // Inject full GITHUB_AGENT_LAYER when user has a repo connected → AGENT MODE
+      (githubToken || currentRepo) ? GITHUB_AGENT_LAYER : '',
+      (githubToken || currentRepo) ? [
+        ``,
+        `━━━ AGENT MODE STATUS ━━━`,
+        `🔐 GitHub Token: ${githubToken ? '✅ متصل' : '❌ غير متصل'}`,
+        `📦 المستودع الحالي: ${currentRepo ? `✅ ${currentRepo}` : '⚠️ لم يُحدد — اطلب "اعرض مستودعاتي"'}`,
+        `🤖 الوضع: ${currentRepo ? 'AGENT MODE — تنفيذ مباشر داخل ' + currentRepo : 'STANDBY — بانتظار اختيار مستودع'}`,
+        currentRepo ? `📋 الأوامر المتاحة: أنشئ ملف | عدّل | أنشئ فرع | commit | انشر | حلّل المشروع | أصلح خطأ` : '',
+      ].filter(Boolean).join('\n') : `💻 CODE: GitHub غير متصل. للعمل داخل مستودع، اطلب "ربط GitHub" أو أرسل رابط المستودع.`,
+    ].filter(Boolean).join('\n') : '',
 
     // ── ALGERIAN ADMIN (admin / howto queries only) ───────────────────────
     _isAdmin ? [

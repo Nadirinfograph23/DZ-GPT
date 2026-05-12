@@ -13,6 +13,7 @@ import { fetchHtmlMultiStrategy } from './fetcher.js'
 import { deepExtract } from './extractor.js'
 import { buildCloneSystemPrompt, buildCloneUserPrompt, buildRepairPrompt } from './prompter.js'
 import { rewriteAssetsToAbsolute } from './asset-handler.js'
+import { downloadWebsite, injectRealCssIntoClone, extractAssetUrls } from './downloader.js'
 
 // ── Validation helpers ───────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ START WITH <!DOCTYPE html> NOW:`,
   }
 
   // ─── Stage 4: Asset URL Rewriting + Year Enforcement ────────────────────
-  progress({ stage: 'assets', message: `🖼️ إصلاح مسارات الأصول · تطبيق قاعدة السنوات الحرفية...`, pct: 68 })
+  progress({ stage: 'assets', message: `🖼️ إصلاح مسارات الأصول · تطبيق قاعدة السنوات الحرفية...`, pct: 62 })
   try {
     htmlCode = rewriteAssetsToAbsolute(htmlCode, url)
     console.log(`[CloneEngineV3] Assets rewritten to absolute URLs`)
@@ -208,6 +209,25 @@ START WITH <!DOCTYPE html> NOW:`,
 
   // V3: Enforce verbatim years/copyright
   htmlCode = enforceVerbatimContent(htmlCode, tokens)
+
+  // ─── Stage 4b: Real Asset Injection (V2 Downloader) ─────────────────────
+  // Downloads real CSS from the source site and injects structural layout
+  // rules into the AI clone — improves fidelity without replacing AI colors.
+  let downloadResult = null
+  try {
+    progress({ stage: 'real-assets', message: `🌐 جلب الأصول الحقيقية من الموقع (V2 Downloader)...`, pct: 68 })
+    downloadResult = await downloadWebsite(url, rawHtml, (p) => {
+      progress({ ...p, pct: 68 + Math.round((p.pct - 38) * 0.18) })
+    })
+    // Inject real CSS layout into AI clone (non-destructive — only structural rules)
+    if (downloadResult.assets?.css && Object.keys(downloadResult.assets.css).length > 0) {
+      htmlCode = injectRealCssIntoClone(htmlCode, downloadResult.assets.css)
+      console.log(`[CloneEngineV3/V2] Injected ${Object.keys(downloadResult.assets.css).length} real CSS sheets into AI clone`)
+    }
+    progress({ stage: 'real-assets', message: `✅ الأصول الحقيقية مدمجة (${downloadResult.stats.totalFetched} ملف)`, pct: 82 })
+  } catch (dlErr) {
+    console.warn(`[CloneEngineV3/V2] Real asset download failed (non-fatal): ${dlErr.message}`)
+  }
 
   // ─── Stage 5: Validation + Auto-repair ──────────────────────────────────
   const score = scoreClone(htmlCode, tokens)
@@ -251,7 +271,7 @@ START WITH <!DOCTYPE html> NOW:`,
     }
   }
 
-  progress({ stage: 'done', message: `✅ اكتمل الاستنساخ V3!`, pct: 100 })
+  progress({ stage: 'done', message: `✅ اكتمل الاستنساخ V3 + V2 Downloader!`, pct: 100 })
 
   const finalScore = scoreClone(htmlCode, tokens)
   const finalIssues = detectIssues(htmlCode, tokens)
@@ -267,6 +287,17 @@ START WITH <!DOCTYPE html> NOW:`,
     imageCount: tokens.images?.length || 0,
     sectionsFound: tokens.sections,
     copyright: tokens.footerContent?.copyright || '',
+    // V2 Downloader data (null if download failed or was skipped)
+    download: downloadResult ? {
+      selfContainedHtml: downloadResult.selfContainedHtml,
+      zipBuffer: downloadResult.zipBuffer,
+      stats: downloadResult.stats,
+      assetUrls: {
+        cssCount: downloadResult.assetUrls?.css?.length || 0,
+        jsCount:  downloadResult.assetUrls?.js?.length  || 0,
+        imgCount: downloadResult.assetUrls?.images?.length || 0,
+      },
+    } : null,
   }
 }
 

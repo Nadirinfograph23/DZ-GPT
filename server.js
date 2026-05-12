@@ -240,6 +240,30 @@ function sanitizeString(str, maxLen = 10000) {
   return str.slice(0, maxLen).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
 }
 
+/**
+ * Resolve GitHub token — prefers GITHUB_PERSONAL_ACCESS_TOKEN (full permissions)
+ * then falls back to GITHUB_TOKEN. Never exposed in responses.
+ */
+function resolveGitHubToken(reqToken = '') {
+  const safe = sanitizeString(reqToken, 300)
+  if (safe) return safe
+  return process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
+         process.env.GITHUB_TOKEN || ''
+}
+
+/**
+ * Standard GitHub API headers using resolved token.
+ */
+function ghHeaders(token) {
+  return {
+    Authorization: `token ${token}`,
+    'User-Agent': 'DZ-GPT-Agent/2.0',
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'Content-Type': 'application/json',
+  }
+}
+
 function isValidGithubPath(p) {
   if (typeof p !== 'string') return false
   if (p.includes('..') || p.includes('//') || p.startsWith('/')) return false
@@ -7887,6 +7911,252 @@ app.post('/api/dz-agent/github/init-empty-repo', async (req, res) => {
     repoUrl: `https://github.com/${repo}`,
     siteUrl: isWebsite ? `https://${owner}.github.io/${repoName}` : null,
   })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GITHUB EXECUTION AGENT V2 — Real DevOps + Verification Pipeline
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/dz-agent/github/verify-env ────────────────────────────────────
+// Check: token validity, repo access, branch existence, Pages status, permissions
+app.post('/api/dz-agent/github/verify-env', async (req, res) => {
+  const { repo, branch = 'main', token } = req.body
+  const tok = resolveGitHubToken(token)
+  const report = { ok: false, checks: {}, errors: [] }
+
+  // 1. Token check
+  if (!tok) {
+    report.errors.push('GITHUB_PERSONAL_ACCESS_TOKEN / GITHUB_TOKEN غير مضبوط في الأسرار')
+    return res.status(401).json(report)
+  }
+  const hdr = ghHeaders(tok)
+
+  // 2. Authenticate
+  try {
+    const userRes = await fetch('https://api.github.com/user', { headers: hdr, signal: AbortSignal.timeout(8000) })
+    if (!userRes.ok) {
+      report.errors.push('Token غير صالح أو منتهي الصلاحية')
+      return res.status(401).json(report)
+    }
+    const user = await userRes.json()
+    report.checks.auth = { ok: true, login: user.login, name: user.name, plan: user.plan?.name || 'free' }
+  } catch (e) { report.errors.push('فشل التحقق من Token: ' + e.message); return res.status(500).json(report) }
+
+  // 3. Repo access (if provided)
+  if (repo && isValidGithubRepo(repo)) {
+    try {
+      const repoRes = await fetch(`https://api.github.com/repos/${repo}`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+      if (repoRes.ok) {
+        const rd = await repoRes.json()
+        report.checks.repo = { ok: true, full_name: rd.full_name, private: rd.private, default_branch: rd.default_branch, has_pages: rd.has_pages }
+      } else { report.checks.repo = { ok: false, error: `HTTP ${repoRes.status}` } }
+    } catch (e) { report.checks.repo = { ok: false, error: e.message } }
+
+    // 4. Branch check
+    if (report.checks.repo?.ok) {
+      try {
+        const brRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+        report.checks.branch = { ok: brRes.ok, branch, sha: brRes.ok ? (await brRes.json())?.object?.sha : null }
+      } catch (e) { report.checks.branch = { ok: false, error: e.message } }
+
+      // 5. Pages status
+      try {
+        const pgRes = await fetch(`https://api.github.com/repos/${repo}/pages`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+        if (pgRes.ok) {
+          const pg = await pgRes.json()
+          report.checks.pages = { ok: true, status: pg.status, url: pg.html_url, source_branch: pg.source?.branch }
+        } else { report.checks.pages = { ok: false, status: 'not_enabled' } }
+      } catch { report.checks.pages = { ok: false, status: 'unknown' } }
+    }
+  }
+
+  // 6. Token permissions check
+  try {
+    const scopeRes = await fetch('https://api.github.com/rate_limit', { headers: hdr, signal: AbortSignal.timeout(5000) })
+    const scopes = scopeRes.headers.get('x-oauth-scopes') || ''
+    report.checks.permissions = {
+      ok: true,
+      scopes: scopes.split(',').map(s => s.trim()).filter(Boolean),
+      has_repo: scopes.includes('repo') || scopes.includes('public_repo'),
+      has_workflow: scopes.includes('workflow'),
+      has_pages: scopes.includes('pages'),
+      rate_limit: {
+        remaining: parseInt(scopeRes.headers.get('x-ratelimit-remaining') || '0'),
+        limit: parseInt(scopeRes.headers.get('x-ratelimit-limit') || '0'),
+      },
+    }
+  } catch { report.checks.permissions = { ok: false } }
+
+  report.ok = report.errors.length === 0
+  console.log(`[GH:verify-env] ${report.checks.auth?.login || 'unknown'} — ${JSON.stringify(report.checks)}`)
+  return res.json(report)
+})
+
+// ── POST /api/dz-agent/github/exec-pipeline ────────────────────────────────
+// Full execution pipeline: NL command → plan → execute → verify → report
+// Supports: create/edit/delete files, create repo, create branch, deploy Pages, commit
+app.post('/api/dz-agent/github/exec-pipeline', async (req, res) => {
+  const { command, repo, branch = 'main', files = [], commitMessage, token, deployPages = false } = req.body
+  if (!command && files.length === 0) return res.status(400).json({ error: 'command أو files مطلوب' })
+
+  const tok = resolveGitHubToken(token)
+  if (!tok) return res.status(401).json({ error: 'GITHUB_PERSONAL_ACCESS_TOKEN / GITHUB_TOKEN غير مضبوط في Replit Secrets' })
+
+  const hdr = ghHeaders(tok)
+  const pipeline = { steps: [], errors: [], verifications: {}, ok: false }
+
+  try {
+    // STEP 1 — Auth + environment check
+    pipeline.steps.push('🔐 التحقق من GitHub Token...')
+    const userRes = await fetch('https://api.github.com/user', { headers: hdr, signal: AbortSignal.timeout(8000) })
+    if (!userRes.ok) { pipeline.errors.push('Token غير صالح'); return res.status(401).json(pipeline) }
+    const user = await userRes.json()
+    const owner = repo ? repo.split('/')[0] : user.login
+    pipeline.steps.push(`✅ مصادق كـ ${user.login}`)
+
+    // STEP 2 — Repo access check (if provided)
+    if (repo && isValidGithubRepo(repo)) {
+      pipeline.steps.push(`🔍 فحص المستودع ${repo}...`)
+      const repoRes = await fetch(`https://api.github.com/repos/${repo}`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+      if (!repoRes.ok) { pipeline.errors.push(`المستودع "${repo}" غير موصول أو لا صلاحية عليه`); return res.status(404).json(pipeline) }
+      pipeline.steps.push(`✅ المستودع ${repo} متاح`)
+
+      // STEP 3 — Branch check / create
+      const brRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+      if (!brRes.ok) {
+        pipeline.steps.push(`📌 إنشاء الفرع "${branch}"...`)
+        // Try creating from main/master
+        for (const src of ['main', 'master']) {
+          const srcRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${src}`, { headers: hdr, signal: AbortSignal.timeout(6000) })
+          if (srcRes.ok) {
+            const { object: { sha } } = await srcRes.json()
+            const newBrRes = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+              method: 'POST', headers: hdr,
+              body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+              signal: AbortSignal.timeout(12000),
+            })
+            if (newBrRes.ok) { pipeline.steps.push(`✅ الفرع "${branch}" أُنشئ`); break }
+          }
+        }
+      } else { pipeline.steps.push(`✅ الفرع "${branch}" موجود`) }
+    }
+
+    // STEP 4 — Execute file operations
+    const pushedFiles = []
+    for (const f of files) {
+      if (!f.path || !f.content) continue
+      pipeline.steps.push(`✍️ كتابة ${f.path}...`)
+
+      // Get current SHA if file exists (needed for update)
+      let sha = null
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(f.path)}?ref=${encodeURIComponent(branch)}`, { headers: hdr, signal: AbortSignal.timeout(6000) })
+        if (getRes.ok) sha = (await getRes.json()).sha
+      } catch {}
+
+      const putBody = {
+        message: f.commitMessage || commitMessage || `🤖 DZ Agent: update ${f.path}`,
+        content: Buffer.from(f.content).toString('base64'),
+        branch,
+        ...(sha ? { sha } : {}),
+      }
+
+      let pushOk = false
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(f.path)}`, {
+          method: 'PUT', headers: hdr, body: JSON.stringify(putBody),
+          signal: AbortSignal.timeout(15000),
+        })
+        if (putRes.ok) {
+          const putData = await putRes.json()
+          pushedFiles.push({ path: f.path, sha: putData.content?.sha, commit: putData.commit?.sha })
+          pipeline.steps.push(`✅ ${f.path} → commit ${putData.commit?.sha?.slice(0,7)}`)
+          pushOk = true
+          break
+        } else {
+          const err = await putRes.json()
+          if (attempt === 3) pipeline.errors.push(`${f.path}: ${err.message}`)
+          else await new Promise(r => setTimeout(r, 1000 * attempt))
+        }
+      }
+      if (!pushOk) pipeline.steps.push(`❌ فشل رفع ${f.path}`)
+    }
+
+    // STEP 5 — GitHub Pages (optional)
+    let pagesUrl = null
+    if (deployPages && repo) {
+      pipeline.steps.push('🌐 تفعيل GitHub Pages...')
+      const [pgOwner, pgRepo] = repo.split('/')
+      const pgRes = await fetch(`https://api.github.com/repos/${repo}/pages`, {
+        method: 'POST', headers: hdr,
+        body: JSON.stringify({ source: { branch, path: '/' } }),
+        signal: AbortSignal.timeout(15000),
+      })
+      const pgData = await pgRes.json()
+      pagesUrl = pgData.html_url || `https://${pgOwner}.github.io/${pgRepo}`
+      pipeline.steps.push(pgRes.ok || pgRes.status === 409 ? `✅ GitHub Pages: ${pagesUrl}` : `⚠️ Pages: ${pgData.message}`)
+    }
+
+    // STEP 6 — VERIFICATION
+    pipeline.steps.push('🔎 التحقق من نجاح العمليات...')
+    if (repo && pushedFiles.length > 0) {
+      for (const pf of pushedFiles.slice(0, 5)) {
+        try {
+          const vRes = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(pf.path)}?ref=${encodeURIComponent(branch)}`, { headers: hdr, signal: AbortSignal.timeout(8000) })
+          pipeline.verifications[pf.path] = vRes.ok ? '✅ موجود' : '❌ لم يُعثر عليه'
+        } catch { pipeline.verifications[pf.path] = '⚠️ فشل التحقق' }
+      }
+    }
+
+    pipeline.ok = pipeline.errors.length === 0
+    pipeline.steps.push(pipeline.ok ? '✅ العملية اكتملت بنجاح!' : `⚠️ اكتملت مع ${pipeline.errors.length} خطأ`)
+
+    console.log(`[GH:exec-pipeline] ${user.login}/${repo} — ${pushedFiles.length} files — ok:${pipeline.ok}`)
+    return res.json({
+      ...pipeline,
+      user: user.login,
+      repo,
+      branch,
+      pushedFiles,
+      pagesUrl,
+      repoUrl: repo ? `https://github.com/${repo}` : null,
+    })
+  } catch (err) {
+    pipeline.errors.push(err.message)
+    console.error('[GH:exec-pipeline]', err.message)
+    return res.status(500).json(pipeline)
+  }
+})
+
+// ── GET /api/dz-agent/github/agent-status ──────────────────────────────────
+// Quick status: token configured + authenticated user info + rate limit
+app.get('/api/dz-agent/github/agent-status', async (_req, res) => {
+  const tok = resolveGitHubToken()
+  if (!tok) return res.json({ ok: false, error: 'لا يوجد GITHUB_PERSONAL_ACCESS_TOKEN أو GITHUB_TOKEN', configured: false })
+
+  try {
+    const hdr = ghHeaders(tok)
+    const [userRes, rateRes] = await Promise.all([
+      fetch('https://api.github.com/user', { headers: hdr, signal: AbortSignal.timeout(6000) }),
+      fetch('https://api.github.com/rate_limit', { headers: hdr, signal: AbortSignal.timeout(6000) }),
+    ])
+    if (!userRes.ok) return res.json({ ok: false, error: 'Token غير صالح', configured: true })
+    const user = await userRes.json()
+    const rate = await rateRes.json()
+    const scopes = rateRes.headers.get('x-oauth-scopes') || ''
+    return res.json({
+      ok: true,
+      configured: true,
+      login: user.login,
+      name: user.name,
+      avatar: user.avatar_url,
+      tokenSource: process.env.GITHUB_PERSONAL_ACCESS_TOKEN ? 'GITHUB_PERSONAL_ACCESS_TOKEN' : 'GITHUB_TOKEN',
+      scopes: scopes.split(',').map(s => s.trim()).filter(Boolean),
+      rateLimit: rate.rate,
+    })
+  } catch (err) {
+    return res.json({ ok: false, error: err.message, configured: true })
+  }
 })
 
 // ===== TASK 9 — ENHANCED INTENT ENGINE (create/update/fix/optimize) =====

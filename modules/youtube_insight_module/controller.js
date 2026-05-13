@@ -3,14 +3,14 @@
  * Handles: URL analysis, keyword search, video discussion
  */
 
-import YouTube from 'youtube-sr'
+import { YouTube } from 'youtube-sr'
 
 const INVIDIOUS_INSTANCES = [
-  'https://inv.nadeko.net',
-  'https://invidious.fdn.fr',
-  'https://iv.ggtyler.dev',
-  'https://invidious.materialio.us',
   'https://invidious.protokolla.fi',
+  'https://invidious.materialio.us',
+  'https://iv.ggtyler.dev',
+  'https://invidious.fdn.fr',
+  'https://inv.nadeko.net',
 ]
 
 // ── Fetch video metadata from Invidious (fallback chain) ──────────────────
@@ -95,24 +95,72 @@ function isYtUrl(u) {
   } catch { return false }
 }
 
-// ── Search YouTube for videos ──────────────────────────────────────────────
+// ── Search via Invidious API (more reliable in serverless envs) ───────────
+async function searchInvidious(query, limit = 8) {
+  const encoded = encodeURIComponent(query)
+  for (const base of INVIDIOUS_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const r = await fetch(
+        `${base}/api/v1/search?q=${encoded}&type=video&page=1`,
+        { signal: ctrl.signal, headers: { 'User-Agent': 'DZ-GPT/2.0', Accept: 'application/json' } }
+      )
+      clearTimeout(t)
+      if (!r.ok) continue
+      const contentType = r.headers.get('content-type') || ''
+      if (!contentType.includes('json')) continue
+      const data = await r.json()
+      if (!Array.isArray(data) || !data.length) continue
+      console.log(`[YouTube:Invidious] Search OK via ${base} — ${data.length} results`)
+      return data.slice(0, limit).map(v => ({
+        id: v.videoId || '',
+        title: v.title || '',
+        url: `https://www.youtube.com/watch?v=${v.videoId}`,
+        thumbnail: v.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+        duration: v.lengthSeconds ? fmtDuration(v.lengthSeconds) : '',
+        views: v.viewCount || 0,
+        channel: v.author || '',
+        description: (v.description || '').slice(0, 200),
+      })).filter(v => v.id && v.title)
+    } catch (e) {
+      console.warn(`[YouTube:Invidious] ${base} failed:`, e.message)
+    }
+  }
+  return []
+}
+
+// ── Search YouTube for videos (youtube-sr primary → Invidious fallback) ───
 async function searchYouTube(query, limit = 8) {
+  // Primary: youtube-sr (HTML scraper)
   try {
     const raw = await YouTube.search(query, { limit, type: 'video', safeSearch: false })
-    return (Array.isArray(raw) ? raw : []).map(v => ({
+    const mapped = (Array.isArray(raw) ? raw : []).map(v => ({
       id: v.id || '',
       title: v.title || '',
       url: `https://www.youtube.com/watch?v=${v.id}`,
       thumbnail: v.thumbnail?.url || v.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+      // youtube-sr returns duration in milliseconds
       duration: v.duration ? fmtDuration(Math.floor(v.duration / 1000)) : '',
       views: v.views || 0,
       channel: v.channel?.name || v.author?.name || '',
       description: (v.description || '').slice(0, 200),
     })).filter(v => v.id && v.title)
+    if (mapped.length) {
+      console.log(`[YouTube:search] youtube-sr OK — ${mapped.length} results for "${query}"`)
+      return mapped
+    }
   } catch (err) {
-    console.error('[YouTube:search] Error:', err.message)
-    return []
+    console.warn('[YouTube:search] youtube-sr failed:', err.message)
   }
+
+  // Fallback: Invidious API (more stable in blocked/serverless envs)
+  console.log(`[YouTube:search] Falling back to Invidious for "${query}"`)
+  const invResults = await searchInvidious(query, limit)
+  if (invResults.length) return invResults
+
+  console.error(`[YouTube:search] All methods failed for "${query}"`)
+  return []
 }
 
 // ── Build analysis prompt from video data ─────────────────────────────────

@@ -118,7 +118,8 @@ async function searchInvidious(query, limit = 8) {
         title: v.title || '',
         url: `https://www.youtube.com/watch?v=${v.videoId}`,
         thumbnail: v.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-        duration: v.lengthSeconds ? fmtDuration(v.lengthSeconds) : '',
+        // Return raw seconds (number) so frontend fmtDuration() works correctly
+        duration: v.lengthSeconds ? Number(v.lengthSeconds) : 0,
         views: v.viewCount || 0,
         channel: v.author || '',
         description: (v.description || '').slice(0, 200),
@@ -140,8 +141,8 @@ async function searchYouTube(query, limit = 8) {
       title: v.title || '',
       url: `https://www.youtube.com/watch?v=${v.id}`,
       thumbnail: v.thumbnail?.url || v.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
-      // youtube-sr returns duration in milliseconds
-      duration: v.duration ? fmtDuration(Math.floor(v.duration / 1000)) : '',
+      // youtube-sr returns duration in milliseconds → convert to seconds (number)
+      duration: v.duration ? Math.floor(v.duration / 1000) : 0,
       views: v.views || 0,
       channel: v.channel?.name || v.author?.name || '',
       description: (v.description || '').slice(0, 200),

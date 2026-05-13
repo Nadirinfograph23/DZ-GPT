@@ -6723,7 +6723,8 @@ ${fileCtx || 'لم يتم قراءة أي ملف'}
   ]
 
   try {
-    const analysis = await safeGenerateAI({ messages: prompt, max_tokens: 2500, taskHint: 'code' })
+    const _analysisResult = await safeGenerateAI({ messages: prompt, max_tokens: 2500, taskHint: 'code' })
+    const analysis = _analysisResult?.content || ''
     console.log(`[GitHub:analyze-project] ${repo} — ${fileTree.length} files, ${Object.keys(fileContents).length} read`)
     return res.json({
       success: true,
@@ -6813,7 +6814,9 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
 
   let generated = ''
   try {
-    generated = await safeGenerateAI({ messages: genPrompt, max_tokens: 4000, taskHint: 'code' })
+    const _genResult = await safeGenerateAI({ messages: genPrompt, max_tokens: 4000, taskHint: 'code' })
+    generated = _genResult?.content || ''
+    if (!generated) return res.status(500).json({ error: 'AI returned empty response' })
   } catch (err) {
     return res.status(500).json({ error: `AI generation failed: ${err.message}` })
   }
@@ -7029,7 +7032,9 @@ FILE: /path/to/file.css
 
   let improved = ''
   try {
-    improved = await safeGenerateAI({ messages: designPrompt, max_tokens: 4000, taskHint: 'code' })
+    const _impResult = await safeGenerateAI({ messages: designPrompt, max_tokens: 4000, taskHint: 'code' })
+    improved = _impResult?.content || ''
+    if (!improved) return res.status(500).json({ error: 'AI returned empty response for design' })
   } catch (err) {
     return res.status(500).json({ error: `Design generation failed: ${err.message}` })
   }
@@ -9607,7 +9612,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       /(?:في|داخل|inside|in)\s+["']?([\w\-\.]{2,100})["']?(?:\s+(?:مستودع|repo))?/i
     )
 
-    const _targetRepoName = _repoRefMatch ? _repoRefMatch[1] : null
+    // Use currentRepo as fallback ONLY when message has clear GitHub/file operation intent
+    // (prevents false positives like "اكتب لي قصيدة" from triggering GitHub mode)
+    const _currentRepoShort = currentRepo ? currentRepo.split('/')[1] : null
+    const _hasExplicitGithubFileContext = _currentRepoShort && githubToken && (
+      /\.(html|css|js|ts|tsx|jsx|py|json|md|yml|yaml|txt|sh|php|rb|go|rs|java|cpp|c)\b/i.test(lastUserMessage)
+      || /\b(ملف|صفحة|موقع|فرع|file|page|commit|push|branch|readme|index|style|script|deploy|pages)\b/i.test(lastUserMessage)
+    )
+    const _targetRepoName = _repoRefMatch ? _repoRefMatch[1] : (_hasExplicitGithubFileContext ? _currentRepoShort : null)
 
     // ── 2. كشف نوع الأمر ─────────────────────────────────────────────────
     const _lmr = lastUserMessage.toLowerCase()
@@ -9775,20 +9787,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         })
       }
 
-      // ── جلب هوية المستخدم لبناء الاسم الكامل للمستودع ─────────────────
+      // ── بناء الاسم الكامل للمستودع ──────────────────────────────────────
+      // currentRepo يحتوي على "owner/repo" كاملاً — نستخدمه مباشرة لتجنب /user API call
       let _ghLogin = ''
       let _fullRepo = ''
-      try {
-        const _uR = await fetch('https://api.github.com/user', {
-          headers: { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
-          signal: AbortSignal.timeout(8000),
-        })
-        if (!_uR.ok) throw new Error('فشل التحقق من الحساب')
-        const _ud = await _uR.json()
-        _ghLogin = _ud.login
-        _fullRepo = `${_ghLogin}/${_targetRepoName}`
-      } catch (_ue) {
-        return res.status(200).json({ content: `❌ **خطأ في GitHub:** ${_ue.message}` })
+      if (currentRepo && currentRepo.includes('/') && currentRepo.split('/')[1] === _targetRepoName) {
+        // currentRepo يطابق repo المطلوب — استخدمه مباشرة
+        _fullRepo = currentRepo
+        _ghLogin = currentRepo.split('/')[0]
+      } else {
+        // احتياج لجلب login من API
+        try {
+          const _uR = await fetch('https://api.github.com/user', {
+            headers: { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(8000),
+          })
+          if (!_uR.ok) throw new Error('فشل التحقق من الحساب')
+          const _ud = await _uR.json()
+          _ghLogin = _ud.login
+          _fullRepo = `${_ghLogin}/${_targetRepoName}`
+        } catch (_ue) {
+          return res.status(200).json({ content: `❌ **خطأ في GitHub:** ${_ue.message}` })
+        }
       }
 
       const _ghH = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
@@ -11035,15 +11055,51 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // Detect: generate code request
-  const isGenerateCode = [
-    'generate', 'write a', 'create a script', 'create a function', 'write code',
-    'انشئ', 'اكتب كود', 'اكتب سكريبت', 'génère', 'écris un script',
-  ].some(p => lowerMsg.includes(p))
+  // ═══════════════════════════════════════════════════════════════════════
+  // GITHUB WRITE CATCH-ALL — آخر خط دفاع قبل الـ AI العام
+  // يُفعَّل عندما: token + currentRepo موجودان + نية كتابة/تعديل واضحة
+  // يحوّل الطلب مباشرة لـ generate-and-push بدل ترك الـ AI يكذب
+  // ═══════════════════════════════════════════════════════════════════════
+  if (githubToken && currentRepo) {
+    const _writeIntentPatterns = [
+      // عربي
+      /أنش[إئ]|انش[إئ]|اصنع|اكتب|أضف|أنشئ|اعمل|ارفع|اعمل لي|أنشئ لي/,
+      /عدّل|حدّث|غيّر|أصلح|صلّح|طوّر|حسّن|أضف ميزة|أضف قسم|أضف صفحة/,
+      /ملف|صفحة|موقع|مكون|component|feature|ميزة|وظيفة|function|class/,
+      /commit|push|رفع|ارفع|دفع|save|حفظ|اضغط/,
+      // إنجليزي
+      /create|generate|add|write|build|make|implement|push|commit|update|edit|fix/,
+      // فرنسي
+      /créer|générer|ajouter|écrire|construire|modifier|mettre à jour|pousser/,
+    ]
+    const _hasWriteIntent = _writeIntentPatterns.some(p => p.test(lastUserMessage))
+    const _hasFileRef = /\.(html|css|js|ts|tsx|jsx|py|json|md|yml|yaml|txt|sh|sql|php|rb|go|rs|java|cpp|c)\b/i.test(lastUserMessage)
+      || /ملف|صفحة|موقع|page|file|component|مكون|function|class/i.test(lastUserMessage)
 
-  if (isGenerateCode) {
-    // Let AI handle it but inject code generation context
+    if (_hasWriteIntent && _hasFileRef) {
+      console.log(`[GH:WriteGateway] Routing to generate-and-push: repo=${currentRepo} msg="${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({
+        action: 'generate-and-push',
+        repo: currentRepo,
+        description: lastUserMessage,
+        content: `⚡ **DZ Agent** — جاري توليد الكود ورفعه إلى **${currentRepo}**...\n\n🧠 تحليل الطلب...\n📝 توليد الملفات...\n🚀 رفع إلى GitHub...`,
+      })
+    }
+
+    // If clear intent to push something with no file ref — still route
+    const _strongPushIntent = /(?:أنش[إئ]|انش[إئ]|اصنع|generate|create|build|اعمل)\s+(?:موقع|مشروع|project|website|app|تطبيق|portfolio|landing)/i.test(lastUserMessage)
+    if (_strongPushIntent) {
+      console.log(`[GH:WriteGateway] Strong push intent: repo=${currentRepo}`)
+      return res.status(200).json({
+        action: 'generate-and-push',
+        repo: currentRepo,
+        description: lastUserMessage,
+        content: `⚡ **DZ Agent** — جاري بناء المشروع ورفعه إلى **${currentRepo}**...\n\n🧠 تحليل الطلب...\n📐 تصميم الهيكل...\n📝 توليد الملفات...\n🚀 رفع إلى GitHub...`,
+      })
+    }
   }
+
+  // (general code request handled by AI with CODE_RULES context — no explicit routing needed)
 
   if (isEducationQuery) {
     try {

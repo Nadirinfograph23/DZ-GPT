@@ -9767,30 +9767,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           body: JSON.stringify({ message: '🤖 ci: GitHub Pages workflow — DZ Agent', content: Buffer.from(_yml).toString('base64'), branch: _defBranch, ...(_wfS ? { sha: _wfS } : {}) }),
         }).catch(() => {})
 
-        // Enable Pages (workflow type first)
+        // Enable Pages — legacy source-based (direct from branch, no workflow needed)
+        const _pgPayload = { source: { branch: _defBranch, path: '/' } }
         const _pgR = await fetch(`https://api.github.com/repos/${_pagesRepo}/pages`, {
           method: 'POST', headers: { ..._ghH3, Accept: 'application/vnd.github.switcheroo-preview+json' },
-          body: JSON.stringify({ build_type: 'workflow' }),
+          body: JSON.stringify(_pgPayload),
           signal: AbortSignal.timeout(10000),
         })
         const _pgD = await _pgR.json().catch(() => ({}))
-        const _pgOk = _pgR.ok || _pgR.status === 409
-        if (!_pgOk) {
-          const _pgR2 = await fetch(`https://api.github.com/repos/${_pagesRepo}/pages`, {
-            method: 'POST', headers: { ..._ghH3, Accept: 'application/vnd.github.switcheroo-preview+json' },
-            body: JSON.stringify({ source: { branch: _defBranch, path: '/' } }),
+        // If already enabled (409), switch to legacy via PUT
+        if (_pgR.status === 409) {
+          await fetch(`https://api.github.com/repos/${_pagesRepo}/pages`, {
+            method: 'PUT', headers: { ..._ghH3, Accept: 'application/vnd.github.switcheroo-preview+json' },
+            body: JSON.stringify({ build_type: 'legacy', source: { branch: _defBranch, path: '/' } }),
             signal: AbortSignal.timeout(10000),
-          })
+          }).catch(() => {})
         }
         const _siteUrl = `https://${_ud3.login}.github.io/${_targetRepoName}`
-        console.log(`[GH:Pages] Enabled Pages for ${_pagesRepo} → ${_siteUrl}`)
+        console.log(`[GH:Pages] Enabled Pages (legacy) for ${_pagesRepo} → ${_siteUrl}`)
         return res.status(200).json({
           content: [
             `✅ **تم تفعيل GitHub Pages بنجاح!**`,
             ``,
             `🌐 **رابط الموقع:** [${_siteUrl}](${_siteUrl}) *(يصبح نشطاً خلال 1-3 دقائق)*`,
             `📦 **المستودع:** [github.com/${_pagesRepo}](https://github.com/${_pagesRepo})`,
-            `⚙️ **آلية النشر:** GitHub Actions (workflow تلقائي)`,
+            `⚙️ **آلية النشر:** مباشر من فرع \`${_defBranch}\` (لا يحتاج GitHub Actions)`,
             ``,
             `> ℹ️ إذا ظهر خطأ 404 → انتظر دقيقة أو اثنتين ثم أعد تحميل الصفحة.`,
           ].join('\n'),
@@ -10104,22 +10105,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
                 body: JSON.stringify({ message: '🤖 ci: add GitHub Pages workflow — DZ Agent', content: Buffer.from(_pagesYml).toString('base64'), branch: _defaultBranch, ...(_wfSha ? { sha: _wfSha } : {}) }),
               }).catch(() => {})
 
-              // 9b. تفعيل Pages API
+              // 9b. تفعيل Pages API — legacy source-based مباشرة
               const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
                 method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                body: JSON.stringify({ build_type: 'workflow' }),
+                body: JSON.stringify({ source: { branch: _defaultBranch, path: '/' } }),
                 signal: AbortSignal.timeout(10000),
               })
               if (_pgR.ok || _pgR.status === 409) {
                 _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
-              } else {
-                // Fallback to source-based pages
-                const _pgR2 = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
-                  method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                  body: JSON.stringify({ source: { branch: _defaultBranch, path: '/' } }),
-                  signal: AbortSignal.timeout(10000),
-                })
-                if (_pgR2.ok || _pgR2.status === 409) _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
+                // If already enabled with wrong type, switch to legacy
+                if (_pgR.status === 409) {
+                  await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                    method: 'PUT', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                    body: JSON.stringify({ build_type: 'legacy', source: { branch: _defaultBranch, path: '/' } }),
+                    signal: AbortSignal.timeout(10000),
+                  }).catch(() => {})
+                }
               }
             } catch {}
           }
@@ -10287,24 +10288,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
                 body: JSON.stringify({ message: '🤖 ci: add GitHub Pages workflow — DZ Agent', content: Buffer.from(_pagesYml).toString('base64'), branch: 'main', ...(_wfShaX ? { sha: _wfShaX } : {}) }),
               }).catch(() => {})
 
-              // ── تفعيل Pages API (workflow-based أولاً، ثم source-based) ──
+              // ── تفعيل Pages API — legacy source-based مباشرة (بدون GitHub Actions) ──
               const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
                 method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                body: JSON.stringify({ build_type: 'workflow' }),
+                body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
                 signal: AbortSignal.timeout(10000),
               })
               if (_pgR.ok || _pgR.status === 409) {
                 _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
                 _pagesEnabled = true
-              } else {
-                const _pgR2 = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
-                  method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                  body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
-                  signal: AbortSignal.timeout(10000),
-                })
-                if (_pgR2.ok || _pgR2.status === 409) {
-                  _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
-                  _pagesEnabled = true
+                // If already enabled with wrong build type, switch to legacy
+                if (_pgR.status === 409) {
+                  await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                    method: 'PUT', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                    body: JSON.stringify({ build_type: 'legacy', source: { branch: 'main', path: '/' } }),
+                    signal: AbortSignal.timeout(10000),
+                  }).catch(() => {})
                 }
               }
             } catch {}

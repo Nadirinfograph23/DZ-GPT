@@ -7494,7 +7494,31 @@ app.post('/api/dz-agent/github/create-branch', async (req, res) => {
       }
     }
 
-    if (!sha) return res.status(404).json({ error: `الفرع "${fromBranch}" غير موجود في المستودع.` })
+    // ── If no SHA found → repo might be empty: auto-init with README then retry ──
+    if (!sha) {
+      console.log(`[GH:create-branch] No branch SHA found — attempting to auto-init repo ${repo}`)
+      try {
+        const readmeContent = Buffer.from(`# ${repo.split('/')[1] || repo}\n\nتم إنشاؤه بواسطة DZ Agent 🇩🇿\n`).toString('base64')
+        const initRes = await fetch(`https://api.github.com/repos/${repo}/contents/README.md`, {
+          method: 'PUT', headers: ghHeaders, signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({ message: '📚 init: README — by DZ Agent 🤖', content: readmeContent, branch: 'main' }),
+        })
+        if (initRes.ok) {
+          await new Promise(r => setTimeout(r, 2000))
+          const retryRef = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/main`, {
+            headers: ghHeaders, signal: AbortSignal.timeout(8000),
+          })
+          if (retryRef.ok) {
+            const rd = await retryRef.json()
+            sha = rd?.object?.sha
+          }
+        }
+      } catch (initErr) {
+        console.warn('[GH:create-branch] auto-init failed:', initErr.message)
+      }
+    }
+
+    if (!sha) return res.status(404).json({ error: `الفرع "${fromBranch}" غير موجود في المستودع. تأكد أن المستودع يحتوي على commit واحد على الأقل.` })
 
     // 2. Create the new branch
     const createRes = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
@@ -9595,6 +9619,149 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _isWebPage     = /صفحة\s*ويب|موقع|html|landing|portfolio|page\s*web|web\s*page|index\.html/.test(_lmr)
     const _isReadme      = /readme|readme\.md|توثيق|وثّق/.test(_lmr)
     const _isScript      = /سكريبت|script|python|js\s+file|\.js|\.py/.test(_lmr)
+    const _isCreateBranch = /(?:أنش[إئ]|انش[إئ]|create|add|جديد|new)\s+(?:فرع|branch)/i.test(lastUserMessage) || /(?:فرع|branch)\s+(?:جديد|new|باسم|named?)/i.test(lastUserMessage)
+    const _isEnablePages  = /(?:فعّل|فعل|enable|انشر|نشر|deploy|github\s*pages|github\.io)/i.test(lastUserMessage) && /(?:pages|github\.io)/i.test(lastUserMessage)
+
+    // ── 2b. كشف إنشاء فرع داخل مستودع محدد ─────────────────────────────
+    if (_targetRepoName && _isCreateBranch) {
+      console.log(`[GH:BranchCmd] repo="${_targetRepoName}" create-branch msg="${lastUserMessage.slice(0,60)}"`)
+      const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+      if (!_tok) {
+        return res.status(200).json({ content: `⚠️ يجب الاتصال بـ GitHub أولاً.`, githubAction: 'needs-connect' })
+      }
+      const _ghH2 = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
+      try {
+        // Get user login
+        const _uR = await fetch('https://api.github.com/user', { headers: _ghH2, signal: AbortSignal.timeout(8000) })
+        if (!_uR.ok) throw new Error('فشل التحقق من الحساب')
+        const _ud = await _uR.json()
+        const _branchFullRepo = `${_ud.login}/${_targetRepoName}`
+
+        // Extract branch name from message
+        const _brMatch = lastUserMessage.match(/(?:باسم|named?|اسمه|called?)\s+["']?([\w\-\.\/]+)["']?/i)
+          || lastUserMessage.match(/(?:فرع|branch)\s+["']?([\w\-\.]+)["']?/i)
+        const _newBranchName = _brMatch?.[1] || 'main'
+
+        // Try to get SHA from main or master
+        let _brSha = null
+        for (const _src of ['main', 'master']) {
+          const _refR = await fetch(`https://api.github.com/repos/${_branchFullRepo}/git/ref/heads/${_src}`, { headers: _ghH2, signal: AbortSignal.timeout(6000) }).catch(() => null)
+          if (_refR?.ok) { const _rd = await _refR.json(); _brSha = _rd?.object?.sha; break }
+        }
+
+        // If no SHA → repo empty → create initial commit first
+        if (!_brSha) {
+          const _initReadme = Buffer.from(`# ${_targetRepoName}\n\nCreated by DZ Agent 🇩🇿\n`).toString('base64')
+          const _initR = await fetch(`https://api.github.com/repos/${_branchFullRepo}/contents/README.md`, {
+            method: 'PUT', headers: _ghH2, signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ message: '📚 init: README — by DZ Agent', content: _initReadme, branch: 'main' }),
+          })
+          if (_initR.ok) {
+            await new Promise(r => setTimeout(r, 2000))
+            const _retryR = await fetch(`https://api.github.com/repos/${_branchFullRepo}/git/ref/heads/main`, { headers: _ghH2, signal: AbortSignal.timeout(8000) }).catch(() => null)
+            if (_retryR?.ok) { const _rd2 = await _retryR.json(); _brSha = _rd2?.object?.sha }
+          }
+        }
+
+        if (!_brSha) {
+          return res.status(200).json({ content: `❌ **تعذّر إنشاء الفرع:** المستودع \`${_branchFullRepo}\` فارغ أو غير موجود. قل: *"أنشئ مستودع باسم ${_targetRepoName}"* أولاً.` })
+        }
+
+        if (_newBranchName === 'main' || _newBranchName === 'master') {
+          return res.status(200).json({
+            content: `✅ **الفرع \`${_newBranchName}\` موجود مسبقاً في \`${_branchFullRepo}\`**\n\n🌿 SHA: \`${_brSha?.slice(0,8)}\`\n🔗 [افتح المستودع](https://github.com/${_branchFullRepo})\n\nيمكنك الآن: *"أنشئ ملف index.html في مستودع ${_targetRepoName}"*`,
+            githubAction: 'branch-exists', githubRepo: _branchFullRepo,
+          })
+        }
+
+        // Create the new branch
+        const _crBrR = await fetch(`https://api.github.com/repos/${_branchFullRepo}/git/refs`, {
+          method: 'POST', headers: _ghH2, signal: AbortSignal.timeout(12000),
+          body: JSON.stringify({ ref: `refs/heads/${_newBranchName}`, sha: _brSha }),
+        })
+        const _crBrD = await _crBrR.json()
+        if (!_crBrR.ok && !_crBrD.message?.includes('already exists')) {
+          return res.status(200).json({ content: `❌ فشل إنشاء الفرع \`${_newBranchName}\`: ${_crBrD.message}` })
+        }
+        const _existed = _crBrD.message?.includes('already exists')
+        console.log(`[GH:BranchCmd] ✅ Branch "${_newBranchName}" ${_existed ? 'already existed' : 'created'} in ${_branchFullRepo}`)
+        return res.status(200).json({
+          content: [
+            `✅ **${_existed ? 'الفرع موجود مسبقاً' : 'تم إنشاء الفرع بنجاح'}**`,
+            ``,
+            `🌿 **الفرع:** \`${_newBranchName}\``,
+            `📦 **المستودع:** [${_branchFullRepo}](https://github.com/${_branchFullRepo})`,
+            `🔗 [اعرض الفرع](https://github.com/${_branchFullRepo}/tree/${_newBranchName})`,
+            ``,
+            `💡 الآن يمكنك: *"أنشئ ملف index.html في مستودع ${_targetRepoName}"* أو *"انشر صفحة HTML على GitHub Pages"*`,
+          ].join('\n'),
+          githubAction: _existed ? 'branch-exists' : 'branch-created',
+          githubRepo: _branchFullRepo,
+          githubBranch: _newBranchName,
+        })
+      } catch (_bErr) {
+        return res.status(200).json({ content: `❌ **خطأ في GitHub:** ${_bErr.message}` })
+      }
+    }
+
+    // ── 2c. تفعيل GitHub Pages لمستودع محدد ─────────────────────────────
+    if (_targetRepoName && _isEnablePages) {
+      const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
+      if (!_tok) return res.status(200).json({ content: `⚠️ يجب الاتصال بـ GitHub أولاً.`, githubAction: 'needs-connect' })
+      const _ghH3 = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
+      try {
+        const _uR3 = await fetch('https://api.github.com/user', { headers: _ghH3, signal: AbortSignal.timeout(8000) })
+        if (!_uR3.ok) throw new Error('فشل التحقق من الحساب')
+        const _ud3 = await _uR3.json()
+        const _pagesRepo = `${_ud3.login}/${_targetRepoName}`
+
+        // Get default branch
+        const _repoR = await fetch(`https://api.github.com/repos/${_pagesRepo}`, { headers: _ghH3, signal: AbortSignal.timeout(8000) })
+        const _repoD = _repoR.ok ? await _repoR.json() : {}
+        const _defBranch = _repoD.default_branch || 'main'
+
+        // Upload GH Actions workflow
+        const _yml = `name: Deploy to GitHub Pages\non:\n  push:\n    branches: [${_defBranch}]\n  workflow_dispatch:\npermissions:\n  contents: read\n  pages: write\n  id-token: write\nconcurrency:\n  group: "pages"\n  cancel-in-progress: false\njobs:\n  deploy:\n    environment:\n      name: github-pages\n      url: \${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/configure-pages@v4\n      - uses: actions/upload-pages-artifact@v3\n        with:\n          path: '.'\n      - id: deployment\n        uses: actions/deploy-pages@v4\n`
+        const _wfC = await fetch(`https://api.github.com/repos/${_pagesRepo}/contents/.github/workflows/pages.yml?ref=${_defBranch}`, { headers: _ghH3, signal: AbortSignal.timeout(5000) }).catch(() => null)
+        const _wfS = _wfC?.ok ? (await _wfC.json().catch(() => ({}))).sha : undefined
+        await fetch(`https://api.github.com/repos/${_pagesRepo}/contents/.github/workflows/pages.yml`, {
+          method: 'PUT', headers: _ghH3, signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({ message: '🤖 ci: GitHub Pages workflow — DZ Agent', content: Buffer.from(_yml).toString('base64'), branch: _defBranch, ...(_wfS ? { sha: _wfS } : {}) }),
+        }).catch(() => {})
+
+        // Enable Pages (workflow type first)
+        const _pgR = await fetch(`https://api.github.com/repos/${_pagesRepo}/pages`, {
+          method: 'POST', headers: { ..._ghH3, Accept: 'application/vnd.github.switcheroo-preview+json' },
+          body: JSON.stringify({ build_type: 'workflow' }),
+          signal: AbortSignal.timeout(10000),
+        })
+        const _pgD = await _pgR.json().catch(() => ({}))
+        const _pgOk = _pgR.ok || _pgR.status === 409
+        if (!_pgOk) {
+          const _pgR2 = await fetch(`https://api.github.com/repos/${_pagesRepo}/pages`, {
+            method: 'POST', headers: { ..._ghH3, Accept: 'application/vnd.github.switcheroo-preview+json' },
+            body: JSON.stringify({ source: { branch: _defBranch, path: '/' } }),
+            signal: AbortSignal.timeout(10000),
+          })
+        }
+        const _siteUrl = `https://${_ud3.login}.github.io/${_targetRepoName}`
+        console.log(`[GH:Pages] Enabled Pages for ${_pagesRepo} → ${_siteUrl}`)
+        return res.status(200).json({
+          content: [
+            `✅ **تم تفعيل GitHub Pages بنجاح!**`,
+            ``,
+            `🌐 **رابط الموقع:** [${_siteUrl}](${_siteUrl}) *(يصبح نشطاً خلال 1-3 دقائق)*`,
+            `📦 **المستودع:** [github.com/${_pagesRepo}](https://github.com/${_pagesRepo})`,
+            `⚙️ **آلية النشر:** GitHub Actions (workflow تلقائي)`,
+            ``,
+            `> ℹ️ إذا ظهر خطأ 404 → انتظر دقيقة أو اثنتين ثم أعد تحميل الصفحة.`,
+          ].join('\n'),
+          githubAction: 'pages-enabled', githubRepo: _pagesRepo, githubPagesUrl: _siteUrl,
+        })
+      } catch (_pErr) {
+        return res.status(200).json({ content: `❌ خطأ في تفعيل Pages: ${_pErr.message}` })
+      }
+    }
 
     // ── 3. تنفيذ الأمر فقط إذا كان هناك مستودع محدد + أمر واضح ─────────
     if (_targetRepoName && (_isCreateFile || _isUpdateFile || _isDeleteFile || _isListFiles || _isReadFile)) {
@@ -9882,13 +10049,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _hasHtml = _successFiles.some(f => f.path === 'index.html' || f.type === 'html')
           if (_hasHtml) {
             try {
+              // 9a. رفع GitHub Actions workflow لضمان نشر صحيح (يتجنب 404)
+              const _pagesYml = `name: Deploy to GitHub Pages\non:\n  push:\n    branches: [${_defaultBranch}]\n  workflow_dispatch:\npermissions:\n  contents: read\n  pages: write\n  id-token: write\nconcurrency:\n  group: "pages"\n  cancel-in-progress: false\njobs:\n  deploy:\n    environment:\n      name: github-pages\n      url: \${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/configure-pages@v4\n      - uses: actions/upload-pages-artifact@v3\n        with:\n          path: '.'\n      - id: deployment\n        uses: actions/deploy-pages@v4\n`
+              const _wfCheck = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/.github/workflows/pages.yml?ref=${_defaultBranch}`, { headers: _ghH, signal: AbortSignal.timeout(5000) }).catch(() => null)
+              const _wfSha = _wfCheck?.ok ? (await _wfCheck.json().catch(() => ({}))).sha : undefined
+              await fetch(`https://api.github.com/repos/${_fullRepo}/contents/.github/workflows/pages.yml`, {
+                method: 'PUT', headers: _ghH, signal: AbortSignal.timeout(15000),
+                body: JSON.stringify({ message: '🤖 ci: add GitHub Pages workflow — DZ Agent', content: Buffer.from(_pagesYml).toString('base64'), branch: _defaultBranch, ...(_wfSha ? { sha: _wfSha } : {}) }),
+              }).catch(() => {})
+
+              // 9b. تفعيل Pages API
               const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
                 method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                body: JSON.stringify({ source: { branch: _defaultBranch, path: '/' } }),
+                body: JSON.stringify({ build_type: 'workflow' }),
                 signal: AbortSignal.timeout(10000),
               })
               if (_pgR.ok || _pgR.status === 409) {
                 _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
+              } else {
+                // Fallback to source-based pages
+                const _pgR2 = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                  method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                  body: JSON.stringify({ source: { branch: _defaultBranch, path: '/' } }),
+                  signal: AbortSignal.timeout(10000),
+                })
+                if (_pgR2.ok || _pgR2.status === 409) _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
               }
             } catch {}
           }
@@ -10047,14 +10232,34 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           let _pagesEnabled = false
           if (_ext === 'html' || _isWebPage) {
             try {
+              // ── رفع GitHub Actions workflow لضمان عدم ظهور 404 ──
+              const _pagesYml = `name: Deploy to GitHub Pages\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\npermissions:\n  contents: read\n  pages: write\n  id-token: write\nconcurrency:\n  group: "pages"\n  cancel-in-progress: false\njobs:\n  deploy:\n    environment:\n      name: github-pages\n      url: \${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/configure-pages@v4\n      - uses: actions/upload-pages-artifact@v3\n        with:\n          path: '.'\n      - id: deployment\n        uses: actions/deploy-pages@v4\n`
+              const _wfChk = await fetch(`https://api.github.com/repos/${_fullRepo}/contents/.github/workflows/pages.yml?ref=main`, { headers: _ghH, signal: AbortSignal.timeout(5000) }).catch(() => null)
+              const _wfShaX = _wfChk?.ok ? (await _wfChk.json().catch(() => ({}))).sha : undefined
+              await fetch(`https://api.github.com/repos/${_fullRepo}/contents/.github/workflows/pages.yml`, {
+                method: 'PUT', headers: _ghH, signal: AbortSignal.timeout(15000),
+                body: JSON.stringify({ message: '🤖 ci: add GitHub Pages workflow — DZ Agent', content: Buffer.from(_pagesYml).toString('base64'), branch: 'main', ...(_wfShaX ? { sha: _wfShaX } : {}) }),
+              }).catch(() => {})
+
+              // ── تفعيل Pages API (workflow-based أولاً، ثم source-based) ──
               const _pgR = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
                 method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
-                body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+                body: JSON.stringify({ build_type: 'workflow' }),
                 signal: AbortSignal.timeout(10000),
               })
               if (_pgR.ok || _pgR.status === 409) {
                 _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
                 _pagesEnabled = true
+              } else {
+                const _pgR2 = await fetch(`https://api.github.com/repos/${_fullRepo}/pages`, {
+                  method: 'POST', headers: { ..._ghH, Accept: 'application/vnd.github.switcheroo-preview+json' },
+                  body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+                  signal: AbortSignal.timeout(10000),
+                })
+                if (_pgR2.ok || _pgR2.status === 409) {
+                  _pagesUrl = `https://${_ghLogin}.github.io/${_targetRepoName}`
+                  _pagesEnabled = true
+                }
               }
             } catch {}
           }

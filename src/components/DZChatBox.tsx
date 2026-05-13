@@ -3000,7 +3000,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
-  const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
+  const [_liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {

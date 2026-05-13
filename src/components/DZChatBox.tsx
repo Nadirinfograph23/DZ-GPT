@@ -21,6 +21,8 @@ import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
 import type { AgentStep } from './AgentStepsPanel'
+import GitHubReActPanel from './GitHubReActPanel'
+import type { ReActStep } from './GitHubReActPanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== RATING PERSISTENCE =====
@@ -63,6 +65,7 @@ type RichType =
   | 'web-reader'
   | 'github-profile'
   | 'doctor-results'
+  | 'github-react'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -260,6 +263,7 @@ interface DZMessage {
   doctors?: DoctorResult[]
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
+  reactSteps?: import('./GitHubReActPanel').ReActStep[]
 }
 
 interface ActionLogEntry {
@@ -2995,6 +2999,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
+  const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
+  const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
@@ -4252,6 +4258,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // ── GitHub ReAct Loop response ─────────────────────────────────────────
+      if (data.mode === 'github-react') {
+        trackFeatureUsage('github-react')
+        setIsGithubReActLoading(false)
+        setLiveReActSteps([])
+        addAssistantMessage({
+          content: (data.content as string) || '✅ اكتملت عمليات GitHub',
+          richType: 'github-react',
+          reactSteps: (data.steps as ReActStep[]) || [],
+        })
+        return
+      }
+
       if (data.pendingAction) {
         addAssistantMessage({
           content: (data.content as string) || 'يرجى مراجعة هذا الإجراء والموافقة عليه:',
@@ -4795,6 +4814,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           </div>
                         </div>
                       )}
+                      {msg.richType === 'github-react' && msg.reactSteps && msg.reactSteps.length > 0 && (
+                        <GitHubReActPanel steps={msg.reactSteps} isLive={false} />
+                      )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog
                           action={msg.pendingAction}
@@ -4867,7 +4889,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           <div className="dz-message dz-message--assistant">
             <div className="dz-message-avatar">
               <div className={`dz-avatar dz-avatar--bot dz-avatar--thinking${agentSteps.length > 0 ? ' dz-avatar--autonomous' : ''}`}>
-                {agentSteps.length > 0 ? <Brain size={15} /> :
+                {isGithubReActLoading ? <GitBranch size={15} /> :
+                 agentSteps.length > 0 ? <Brain size={15} /> :
                  thinkingStep?.type === 'read'    ? <BookOpen size={15} /> :
                  thinkingStep?.type === 'analyze' ? <Zap size={15} /> :
                  thinkingStep?.type === 'write'   ? <Pencil size={15} /> :
@@ -4885,8 +4908,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                 {agentSteps.length > 0 && (
                   <span className="dz-autonomous-badge">⚡ Autonomous</span>
                 )}
+                {isGithubReActLoading && (
+                  <span className="dz-github-react-badge">🤖 GitHub ReAct</span>
+                )}
               </div>
-              {agentSteps.length > 0 ? (
+              {isGithubReActLoading ? (
+                <GitHubReActPanel steps={liveReActSteps} isLive={true} />
+              ) : agentSteps.length > 0 ? (
                 <AgentStepsPanel
                   steps={agentSteps}
                   taskType={agentTaskType || undefined}

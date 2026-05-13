@@ -7312,6 +7312,170 @@
   to   { transform: rotate(360deg); }
 }
 
+/* ===== GITHUB LOADING INDICATOR ===== */
+.gh-loading {
+  border: 1px solid #1a2a1a;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #060c06;
+  min-width: 280px;
+  max-width: 440px;
+  font-family: 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+  margin-top: 4px;
+}
+
+/* Top bar */
+.gh-loading-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0a140a;
+  padding: 7px 12px;
+  border-bottom: 1px solid #142014;
+}
+.gh-loading-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.gh-loading-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.gh-loading-dot--red    { background: #ff5f57; }
+.gh-loading-dot--yellow { background: #ffbd2e; }
+.gh-loading-dot--green  { background: #28ca41; animation: gh-glow-green 1.5s ease-in-out infinite alternate; }
+.gh-loading-title {
+  font-size: 10px;
+  color: #4b5563;
+  margin-left: 6px;
+  letter-spacing: 0.3px;
+}
+.gh-loading-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  color: #28ca41;
+  background: rgba(40,202,65,0.08);
+  border-radius: 4px;
+  padding: 1px 6px;
+  border: 1px solid rgba(40,202,65,0.15);
+}
+@keyframes gh-glow-green {
+  from { box-shadow: 0 0 0px #28ca41; }
+  to   { box-shadow: 0 0 6px #28ca41; }
+}
+
+/* Body */
+.gh-loading-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Darija message line */
+.gh-loading-dz {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+.gh-loading-dz-icon { flex-shrink: 0; }
+.gh-loading-dz-text {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  transition: color 0.4s ease;
+}
+.gh-loading-dz-cursor {
+  font-size: 13px;
+  color: #4ade80;
+  animation: gh-cursor-blink 1s step-end infinite;
+  margin-left: 1px;
+}
+@keyframes gh-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* Terminal log */
+.gh-loading-terminal {
+  background: #020a02;
+  border: 1px solid #0f1f0f;
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.gh-loading-log-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+  color: #4b5563;
+  line-height: 1.5;
+  transition: opacity 0.3s;
+}
+.gh-loading-log-line--active {
+  color: #9ca3af;
+  opacity: 1 !important;
+}
+.gh-loading-prompt {
+  color: #28ca41;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+/* Progress bar */
+.gh-loading-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gh-loading-progress-track {
+  flex: 1;
+  height: 4px;
+  background: #0f1f0f;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.gh-loading-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease, background 0.4s ease;
+  box-shadow: 0 0 6px currentColor;
+}
+.gh-loading-progress-pct {
+  font-size: 9.5px;
+  color: #4b5563;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* Wait text */
+.gh-loading-wait {
+  font-size: 11px;
+  color: #374151;
+  text-align: center;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+/* Spin utility for badge */
+.gh-loading-spin {
+  animation: gh-spin 1.2s linear infinite;
+}
+@keyframes gh-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* Loading badge in message bubble */
 .dz-github-react-badge {
   display: inline-flex;

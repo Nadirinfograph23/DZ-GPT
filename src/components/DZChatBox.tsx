@@ -23,6 +23,7 @@ import AgentStepsPanel from './AgentStepsPanel'
 import type { AgentStep } from './AgentStepsPanel'
 import GitHubReActPanel from './GitHubReActPanel'
 import type { ReActStep } from './GitHubReActPanel'
+import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== RATING PERSISTENCE =====
@@ -4913,7 +4914,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                 )}
               </div>
               {isGithubReActLoading ? (
-                <GitHubReActPanel steps={liveReActSteps} isLive={true} />
+                <GitHubLoadingIndicator />
               ) : agentSteps.length > 0 ? (
                 <AgentStepsPanel
                   steps={agentSteps}

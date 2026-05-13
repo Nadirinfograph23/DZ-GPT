@@ -3192,7 +3192,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
     if (!githubToken && !serverGithubConnected) {
-      addAssistantMessage({ content: 'يرجى ربط توكن GitHub أولاً لعرض المستودعات. انقر على "ربط GitHub" في الأعلى.', richType: 'text' })
+      addAssistantMessage({ content: 'عاود اخرج من GitHub (تسجيل الخروج) وعاود ادخل (تسجيل الدخول) من الفوق 🔄\nمبعد اضغط على **عرض مستودعاتي** 👌', richType: 'text' })
       return
     }
     setIsLoading(true)

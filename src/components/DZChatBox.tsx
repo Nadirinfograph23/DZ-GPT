@@ -16,7 +16,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
-import DZDeployPanel from './DZDeployPanel'
 import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
 import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
@@ -4605,18 +4604,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (
-                        <>
-                          <RepoActionPanel
-                            repo={msg.selectedRepo}
-                            onAction={handleRepoAction}
-                          />
-                          <DZDeployPanel
-                            language={language}
-                            owner={msg.selectedRepo.full_name.split('/')[0]}
-                            repo={msg.selectedRepo.full_name.split('/')[1]}
-                            token={githubToken}
-                          />
-                        </>
+                        <RepoActionPanel
+                          repo={msg.selectedRepo}
+                          onAction={handleRepoAction}
+                        />
                       )}
                       {msg.richType === 'files' && msg.files && (
                         <FilesList

@@ -49,6 +49,7 @@ import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
 import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
 import { mountAutonomousAgent } from './lib/autonomous/mount.js'
+import { runReActLoop, shouldUseReActLoop } from './lib/agent-loop/react.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
@@ -9035,6 +9036,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMessage)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // ── GitHub ReAct Agent — real tool execution via loop ─────────────────────
+  if (shouldUseReActLoop(lastUserMessage)) {
+    const resolvedToken = githubToken || process.env.GITHUB_TOKEN || ''
+    console.log(`[GitHub ReAct] Routing to ReAct loop — token=${!!resolvedToken} query="${lastUserMessage.slice(0, 60)}"`)
+    try {
+      const steps = []
+      const result = await runReActLoop({
+        query: lastUserMessage,
+        messages,
+        aiGenerate: safeGenerateAI,
+        githubToken: resolvedToken,
+        onStep: (s) => steps.push(s),
+      })
+      return res.status(200).json({
+        content: result.content,
+        model: result.model,
+        mode: 'github-react',
+        steps: result.steps || steps,
+        github_token: !!resolvedToken,
+      })
+    } catch (reactErr) {
+      console.error('[GitHub ReAct] Error:', reactErr.message)
+    }
   }
 
   // ── Doctor search intent ─────────────────────────────────────────────────

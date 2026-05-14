@@ -281,81 +281,71 @@ async function searchYouTube(query, limit = 8) {
   return []
 }
 
-// ── Build smart context-aware suggestions from video metadata ─────────────
-function buildSmartSuggestions(video, hasCaptions = false) {
-  const title = (video.title || '').toLowerCase()
-  const desc  = (video.description || '').toLowerCase()
-  const kw    = (video.keywords || []).join(' ').toLowerCase()
-  const ctx   = `${title} ${desc} ${kw}`
+// ── Static fallback suggestions (used when AI is unavailable) ─────────────
+function buildFallbackSuggestions(video) {
+  const ctx = `${video.title || ''} ${video.description || ''} ${(video.keywords || []).join(' ')}`.toLowerCase()
+  if (/react|vue|python|javascript|برمجة|كود|تطوير|programming/i.test(ctx))
+    return [`ما التقنيات المذكورة في الفيديو؟`, `هل توجد طريقة أحدث لنفس الموضوع؟`, `حوّل خطوات الشرح إلى دليل تنفيذ`]
+  if (/ذكاء اصطناعي|ai|machine learning|gpt|llm|نموذج/i.test(ctx))
+    return [`ما النماذج المذكورة في الفيديو؟`, `قارن هذا الموضوع مع أحدث تطورات الذكاء الاصطناعي`, `ما أهم مفهوم تقني في الفيديو؟`]
+  if (/تاريخ|حرب|معركة|ثورة|history|war|battle/i.test(ctx))
+    return [`متى وقعت هذه الأحداث؟`, `ما أسباب هذا الحدث التاريخي؟`, `ما نتائج وتداعيات هذه الأحداث؟`]
+  if (/صحة|تغذية|رياضة|تمرين|health|fitness|nutrition/i.test(ctx))
+    return [`هل النصائح المذكورة علمياً صحيحة؟`, `ما خطة التطبيق العملي؟`, `ما المخاطر المحتملة غير المذكورة؟`]
+  if (/اقتصاد|تداول|استثمار|trading|crypto|bitcoin/i.test(ctx))
+    return [`ما الاستراتيجية الرئيسية في الفيديو؟`, `ما المخاطر التي لم يذكرها الفيديو؟`, `هل هذا مناسب للمبتدئين في الاستثمار؟`]
+  return [`لخّص هذا الفيديو في 3 نقاط`, `ما أبرز المعلومات في هذا الفيديو؟`, `هل يمكنك التوسع في الموضوع الرئيسي؟`]
+}
 
-  // Detect topic clusters
-  const isCoding   = /react|vue|angular|python|javascript|node|django|api|html|css|git|docker|linux|typescript|next\.?js|fastapi|laravel|flutter|kotlin|swift|programming|برمجة|كود|تطوير/i.test(ctx)
-  const isAI       = /ai|artificial intelligence|machine learning|deep learning|llm|chatgpt|gpt|gemini|hugging|langchain|ذكاء اصطناعي|تعلم الآلة|نموذج/i.test(ctx)
-  const isGitHub   = /github|git|repository|pull request|commit|branch|مستودع/i.test(ctx)
-  const isVercel   = /vercel|netlify|deploy|deployment|hosting|نشر/i.test(ctx)
-  const isDevOps   = /docker|kubernetes|ci\/cd|pipeline|devops|nginx|server|سيرفر/i.test(ctx)
-  const isDesign   = /figma|ui|ux|design|tailwind|css|تصميم|واجهة/i.test(ctx)
-  const isTutorial = /tutorial|course|شرح|درس|تعلم|learn|beginner|مبتدئ|خطوة/i.test(ctx)
-  const isMath     = /math|calculus|algebra|physics|رياضيات|فيزياء|معادلة/i.test(ctx)
-  const isFinance  = /trading|forex|crypto|bitcoin|investment|اقتصاد|تداول|استثمار/i.test(ctx)
-  const isHealth   = /health|fitness|nutrition|workout|صحة|رياضة|تمرين|تغذية/i.test(ctx)
+// ── Build AI-powered contextual suggestions from video title + description ──
+async function buildAISuggestions(video, aiGenerate) {
+  const title = (video.title || '').trim()
+  const desc  = (video.description || '').slice(0, 600).trim()
+  const kw    = (video.keywords || []).slice(0, 6).join(', ')
 
-  // Base suggestions (always)
-  const base = hasCaptions
-    ? [`لخّص هذا الفيديو في 3 نقاط رئيسية`, `ما رأيك في جودة الشرح؟`]
-    : [`عطيني فكرة عامة على محتوى الفيديو`, `هل هذا الفيديو مناسب للمبتدئين؟`]
+  if (!aiGenerate || !title) return buildFallbackSuggestions(video)
 
-  // Topic-specific suggestions
-  if (isCoding && hasCaptions) return [...base,
-    `استخرج جميع الأوامر البرمجية والأكواد من الفيديو`,
-    `حوّل خطوات الشرح إلى دليل تنفيذ عملي`,
-  ]
-  if (isCoding) return [...base,
-    `ما التقنيات والأدوات المذكورة في الفيديو؟`,
-    `هل توجد طريقة أحدث أو أفضل لنفس الموضوع؟`,
-  ]
-  if (isAI && hasCaptions) return [...base,
-    `استخرج النماذج والتقنيات المذكورة في الفيديو`,
-    `ما أهم مفهوم تقني شرحه الفيديو؟`,
-  ]
-  if (isAI) return [...base,
-    `ما النماذج أو الأدوات المذكورة في عنوان الفيديو؟`,
-    `قارن هذا الموضوع مع أحدث تطورات الذكاء الاصطناعي`,
-  ]
-  if (isGitHub) return [...base,
-    `استخرج أوامر Git المذكورة في الفيديو`,
-    `ما الـ workflow الذي يشرحه الفيديو؟`,
-  ]
-  if (isVercel || isDevOps) return [...base,
-    `ما خطوات النشر المذكورة في الفيديو؟`,
-    `هل هناك بدائل أفضل لما يشرحه الفيديو؟`,
-  ]
-  if (isDesign) return [...base,
-    `ما مبادئ التصميم الرئيسية في هذا الفيديو؟`,
-    `كيف أطبق هذا التصميم على مشروعي؟`,
-  ]
-  if (isTutorial) return [...base,
-    `ما المتطلبات الأساسية لفهم هذا الشرح؟`,
-    `حوّل الشرح إلى خطوات تنفيذ بالترتيب`,
-  ]
-  if (isMath) return [...base,
-    `هل يمكنك شرح المفهوم الرئيسي بطريقة أبسط؟`,
-    `أعطني تمارين مشابهة لما يشرحه الفيديو`,
-  ]
-  if (isFinance) return [...base,
-    `ما الاستراتيجية الرئيسية التي يشرحها الفيديو؟`,
-    `ما المخاطر التي لم يذكرها الفيديو؟`,
-  ]
-  if (isHealth) return [...base,
-    `هل النصائح المذكورة علمية وموثوقة؟`,
-    `ما خطة التطبيق العملي من هذا الفيديو؟`,
-  ]
+  const prompt = [
+    `أنت مساعد يولّد أسئلة متابعة ذكية ومحددة بناءً على محتوى فيديو YouTube.`,
+    ``,
+    `## بيانات الفيديو`,
+    `- العنوان: ${title}`,
+    kw ? `- الكلمات المفتاحية: ${kw}` : null,
+    desc ? `- الوصف: ${desc}` : null,
+    ``,
+    `## مهمتك`,
+    `اقترح بالضبط 4 أسئلة قصيرة ومحددة يمكن للمستخدم أن يسألها عن **موضوع هذا الفيديو تحديداً**.`,
+    `- الأسئلة يجب أن تكون مباشرة ومرتبطة فعلياً بمحتوى الفيديو (الأشخاص، الأحداث، المفاهيم، التواريخ، التقنيات المذكورة).`,
+    `- لا تذكر عبارات عامة مثل "هل الفيديو مناسب للمبتدئين" أو "ما الجمهور المستهدف" أو "قارن مع محتوى مشابه".`,
+    `- اكتب كل سؤال في سطر منفصل يبدأ بـ "-".`,
+    `- الأسئلة بالعربية، قصيرة (لا تتجاوز 10 كلمات).`,
+    `- مثال: إذا كان العنوان "الحرب على الخليج" فالأسئلة: متى اندلعت حرب الخليج؟ / من هي الأطراف المتنازعة؟ / ما أسباب الحرب؟ / ما نتائج حرب الخليج؟`,
+    ``,
+    `أجب فقط بالأسئلة الأربعة، لا إضافات.`,
+  ].filter(Boolean).join('\n')
 
-  // Generic fallback
-  return [...base,
-    `ما الجمهور المستهدف من هذا الفيديو؟`,
-    `قارن هذا الفيديو مع محتوى مشابه`,
-  ]
+  try {
+    const result = await Promise.race([
+      aiGenerate({ messages: [{ role: 'user', content: prompt }], max_tokens: 200 }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+    ])
+
+    const raw = (result?.content || '').trim()
+    const suggestions = raw
+      .split('\n')
+      .map(l => l.replace(/^[-–•*\d.)\s]+/, '').trim())
+      .filter(l => l.length > 4 && l.length < 120)
+      .slice(0, 4)
+
+    if (suggestions.length >= 2) {
+      console.log(`[YouTube Insight] AI suggestions generated: ${suggestions.length}`)
+      return suggestions
+    }
+  } catch (err) {
+    console.warn(`[YouTube Insight] AI suggestions failed (${err.message}), using fallback`)
+  }
+
+  return buildFallbackSuggestions(video)
 }
 
 // ── Build rich AI analysis prompt ─────────────────────────────────────────
@@ -507,7 +497,7 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       views: video.views,
     }
 
-    const suggestions = noSuggestions ? [] : buildSmartSuggestions(video, !!captionData)
+    const suggestions = noSuggestions ? [] : await buildAISuggestions(video, aiGenerate)
 
     const message = [
       `🎬 **${video.title}**`,

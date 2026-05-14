@@ -186,10 +186,8 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
           <tr>
             <th className="dr-th dr-th--num">#</th>
             <th className="dr-th dr-th--name">الطبيب</th>
+            <th className="dr-th dr-th--contact">📍 العنوان &amp; 📞 الهاتف</th>
             <th className="dr-th dr-th--spec">التخصص</th>
-            <th className="dr-th dr-th--addr">العنوان</th>
-            <th className="dr-th dr-th--phone">الهاتف</th>
-            <th className="dr-th dr-th--profile"></th>
           </tr>
         </thead>
         <tbody>
@@ -213,7 +211,36 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                       {match && (
                         <span className={`dr-match-badge ${match.cls}`}>{match.label}</span>
                       )}
+                      {doc.profileUrl && !doc.directoryLink && (
+                        <a
+                          className="dr-profile-btn"
+                          href={doc.profileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="صفحة الطبيب"
+                        >
+                          <Globe size={11} />
+                        </a>
+                      )}
                     </div>
+                  </div>
+                </td>
+                <td className="dr-td dr-td--contact">
+                  <div className="dr-contact-cell">
+                    <AddressCell
+                      name={displayName}
+                      address={addrAr}
+                      city={cityAr}
+                      lat={doc.lat}
+                      lng={doc.lng}
+                    />
+                    {typeof doc.distanceKm === 'number' && (
+                      <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
+                    )}
+                    {doc.phone
+                      ? <PhoneCell phone={doc.phone} />
+                      : <span className="dr-cell-muted">—</span>
+                    }
                   </div>
                 </td>
                 <td className="dr-td dr-td--spec">
@@ -221,37 +248,6 @@ function TableView({ doctors, specLabel, cityLabel, showScore }: {
                     ? <span className="dr-spec-cell">{getSpecEmoji(specAr)} {specAr}</span>
                     : <span className="dr-cell-muted">—</span>
                   }
-                </td>
-                <td className="dr-td dr-td--addr">
-                  <AddressCell
-                    name={displayName}
-                    address={addrAr}
-                    city={cityAr}
-                    lat={doc.lat}
-                    lng={doc.lng}
-                  />
-                  {typeof doc.distanceKm === 'number' && (
-                    <span className="dr-distance-badge">~{doc.distanceKm} كم</span>
-                  )}
-                </td>
-                <td className="dr-td dr-td--phone">
-                  {doc.phone
-                    ? <PhoneCell phone={doc.phone} />
-                    : <span className="dr-cell-muted">—</span>
-                  }
-                </td>
-                <td className="dr-td dr-td--profile">
-                  {doc.profileUrl && !doc.directoryLink && (
-                    <a
-                      className="dr-profile-btn"
-                      href={doc.profileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="صفحة الطبيب"
-                    >
-                      <Globe size={12} />
-                    </a>
-                  )}
                 </td>
               </tr>
             )

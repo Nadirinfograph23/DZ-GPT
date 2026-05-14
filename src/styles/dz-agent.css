@@ -6197,12 +6197,20 @@
   border-bottom: 1px solid #0d1f1f;
   white-space: nowrap;
 }
-.dr-th--num  { width: 36px; text-align: center; }
-.dr-th--name { min-width: 160px; }
-.dr-th--spec { min-width: 120px; }
-.dr-th--addr { min-width: 160px; }
-.dr-th--phone{ min-width: 150px; }
+.dr-th--num     { width: 36px; text-align: center; }
+.dr-th--name    { min-width: 140px; }
+.dr-th--contact { min-width: 180px; }
+.dr-th--spec    { min-width: 110px; }
+.dr-th--addr    { min-width: 160px; }
+.dr-th--phone   { min-width: 150px; }
 .dr-th--profile { width: 36px; }
+
+/* Contact cell — address + phone stacked */
+.dr-contact-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
 
 .dr-tr {
   transition: background 0.1s;

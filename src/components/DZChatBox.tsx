@@ -67,6 +67,7 @@ type RichType =
   | 'github-profile'
   | 'doctor-results'
   | 'github-react'
+  | 'github-agent'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -265,6 +266,20 @@ interface DZMessage {
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
   reactSteps?: import('./GitHubReActPanel').ReActStep[]
+  // GitHub Agent
+  ghAgentRepo?: string
+  ghAgentAnalysis?: string
+  ghAgentPlan?: string
+  ghAgentExecution?: string
+  ghAgentGitOutput?: { branch: string; commit: string; prTitle: string; prBody: string }
+  ghAgentFiles?: { path: string; lines: number }[]
+  ghAgentFileContents?: { path: string; content: string }[]
+  ghAgentExecutionReport?: {
+    branch: string; filesCommitted: string[]; prUrl: string; errors: string[]
+    vercelTriggered: boolean; vercelDeployId?: string | null
+  } | null
+  ghAgentAutoExecute?: boolean
+  ghAgentRawText?: string
 }
 
 interface ActionLogEntry {
@@ -2099,6 +2114,156 @@ function FileContentView({
   )
 }
 
+// ===== GITHUB AGENT RESULT PANEL =====
+interface GHAgentExecutionReport {
+  branch: string
+  filesCommitted: string[]
+  prUrl: string
+  errors: string[]
+  vercelTriggered: boolean
+  vercelDeployId?: string | null
+}
+interface GHAgentGitOutput { branch: string; commit: string; prTitle: string; prBody: string }
+interface GHAgentFile { path: string; lines: number }
+
+function GitHubAgentResultPanel({
+  repo, analysis, plan, gitOutput, files, executionReport, autoExecute, onExecute,
+}: {
+  repo: string
+  analysis?: string
+  plan?: string
+  gitOutput?: GHAgentGitOutput
+  files?: GHAgentFile[]
+  executionReport?: GHAgentExecutionReport | null
+  autoExecute?: boolean
+  onExecute?: () => void
+}) {
+  const [tab, setTab] = useState<'analysis' | 'plan' | 'files' | 'result'>('analysis')
+  const repoUrl = `https://github.com/${repo}`
+
+  return (
+    <div className="gh-agent-panel">
+      {/* Header */}
+      <div className="gh-agent-header">
+        <div className="gh-agent-header-left">
+          <Github size={15} />
+          <span className="gh-agent-repo-name">{repo}</span>
+          <a href={repoUrl} target="_blank" rel="noreferrer" className="gh-agent-repo-link">
+            <ExternalLink size={11} />
+          </a>
+        </div>
+        <span className="gh-agent-badge">DZ GitHub Agent</span>
+      </div>
+
+      {/* Tabs */}
+      <div className="gh-agent-tabs">
+        {(['analysis', 'plan', 'files', 'result'] as const).map(t => (
+          <button
+            key={t}
+            className={`gh-agent-tab ${tab === t ? 'active' : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {t === 'analysis' && <><Search size={11} /> Analysis</>}
+            {t === 'plan'     && <><Brain size={11} /> Plan</>}
+            {t === 'files'    && <><FileText size={11} /> Files ({files?.length ?? 0})</>}
+            {t === 'result'   && <><GitPullRequest size={11} /> Git Output</>}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="gh-agent-body">
+        {tab === 'analysis' && (
+          <div className="gh-agent-section">
+            <div className="gh-agent-section-icon"><Search size={13} /></div>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analysis || '(لا يوجد تحليل)'}</ReactMarkdown>
+          </div>
+        )}
+        {tab === 'plan' && (
+          <div className="gh-agent-section">
+            <div className="gh-agent-section-icon"><Brain size={13} /></div>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{plan || '(لا يوجد خطة)'}</ReactMarkdown>
+          </div>
+        )}
+        {tab === 'files' && (
+          <div className="gh-agent-files-list">
+            {files && files.length > 0 ? files.map((f, i) => (
+              <div key={i} className="gh-agent-file-row">
+                <FileText size={13} className="gh-agent-file-icon" />
+                <span className="gh-agent-file-path">{f.path}</span>
+                <span className="gh-agent-file-lines">{f.lines} lines</span>
+              </div>
+            )) : <p className="gh-agent-empty">لا توجد ملفات للتعديل في هذه الجلسة.</p>}
+          </div>
+        )}
+        {tab === 'result' && (
+          <div className="gh-agent-git-output">
+            {gitOutput?.branch && (
+              <div className="gh-agent-git-row">
+                <GitBranch size={13} />
+                <span className="gh-agent-git-label">Branch:</span>
+                <code className="gh-agent-git-val">{gitOutput.branch}</code>
+              </div>
+            )}
+            {gitOutput?.commit && (
+              <div className="gh-agent-git-row">
+                <GitCommit size={13} />
+                <span className="gh-agent-git-label">Commit:</span>
+                <code className="gh-agent-git-val">{gitOutput.commit}</code>
+              </div>
+            )}
+            {gitOutput?.prTitle && (
+              <div className="gh-agent-git-row">
+                <GitPullRequest size={13} />
+                <span className="gh-agent-git-label">PR:</span>
+                <code className="gh-agent-git-val">{gitOutput.prTitle}</code>
+              </div>
+            )}
+            {/* Execution report */}
+            {executionReport && (
+              <div className="gh-agent-exec-report">
+                <div className="gh-agent-exec-title">
+                  <Activity size={13} /> تقرير التنفيذ
+                </div>
+                {executionReport.filesCommitted.length > 0 && (
+                  <div className="gh-agent-exec-success">
+                    <CheckCircle2 size={13} />
+                    <span>تم رفع {executionReport.filesCommitted.length} ملف</span>
+                  </div>
+                )}
+                {executionReport.prUrl && (
+                  <a href={executionReport.prUrl} target="_blank" rel="noreferrer" className="gh-agent-pr-link">
+                    <GitPullRequest size={13} /> فتح Pull Request
+                  </a>
+                )}
+                {executionReport.vercelTriggered && (
+                  <div className="gh-agent-vercel-badge">
+                    <Zap size={12} /> Vercel Deployment triggered
+                    {executionReport.vercelDeployId && <span> — {executionReport.vercelDeployId.slice(0, 14)}…</span>}
+                  </div>
+                )}
+                {executionReport.errors.length > 0 && (
+                  <div className="gh-agent-exec-errors">
+                    {executionReport.errors.map((e, i) => (
+                      <div key={i} className="gh-agent-exec-error"><XCircle size={12} /> {e}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Execute button when not already executed */}
+            {!autoExecute && !executionReport && files && files.length > 0 && onExecute && (
+              <button className="gh-agent-execute-btn" onClick={onExecute}>
+                <Zap size={13} /> تنفيذ على GitHub (Branch + Commit + PR)
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ===== APPROVAL DIALOG =====
 function ApprovalDialog({
   action,
@@ -3022,6 +3187,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
+  // DZ GitHub Agent mode
+  const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
+  const [ghAgentAutoExecute, setGhAgentAutoExecute] = useState(false)
+  const [showGhAgentInput, setShowGhAgentInput] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -4084,6 +4253,45 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
+      // ── DZ GitHub Agent mode — any GitHub URL or explicit repo in ghAgentRepo ──
+      const ghUrlMatch = text.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i)
+      const activeGhRepo = ghAgentRepo.trim() || (ghUrlMatch ? ghUrlMatch[1].replace(/\.git$/, '') : '')
+      if (activeGhRepo) {
+        console.log('[DZChatBox] → DZ GitHub Agent mode, repo:', activeGhRepo)
+        trackFeatureUsage('github-agent')
+        const ghAgentReq = await fetch('/api/dz-github-agent/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            repoUrl: activeGhRepo,
+            githubToken: githubToken || undefined,
+            autoExecute: ghAgentAutoExecute,
+          }),
+          signal,
+        })
+        const ghAgentData = await ghAgentReq.json().catch(() => ({})) as Record<string, unknown>
+        if (ghAgentData.richType === 'github-agent') {
+          addAssistantMessage({
+            content: `✅ DZ GitHub Agent — \`${activeGhRepo}\``,
+            richType: 'github-agent',
+            ghAgentRepo: (ghAgentData.repo as string) || activeGhRepo,
+            ghAgentAnalysis: ghAgentData.analysis as string | undefined,
+            ghAgentPlan: ghAgentData.plan as string | undefined,
+            ghAgentExecution: ghAgentData.execution as string | undefined,
+            ghAgentGitOutput: ghAgentData.gitOutput as GHAgentGitOutput | undefined,
+            ghAgentFiles: ghAgentData.files as GHAgentFile[] | undefined,
+            ghAgentFileContents: ghAgentData.fileContents as { path: string; content: string }[] | undefined,
+            ghAgentExecutionReport: ghAgentData.executionReport as GHAgentExecutionReport | null,
+            ghAgentAutoExecute: ghAgentAutoExecute,
+          })
+          return
+        }
+        // Fallback to text if something went wrong
+        addAssistantMessage({ content: (ghAgentData.content as string) || (ghAgentData.error as string) || '⚠️ خطأ في DZ GitHub Agent', richType: 'text' })
+        return
+      }
+
       // ── Autonomous pipeline (Devin/Cursor style) ─────────────────────────
       if (detectAutonomousQuery(text) && !dashboardContext) {
         try {
@@ -4818,6 +5026,38 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                       {msg.richType === 'github-react' && msg.reactSteps && msg.reactSteps.length > 0 && (
                         <GitHubReActPanel steps={msg.reactSteps} isLive={false} />
                       )}
+                      {msg.richType === 'github-agent' && msg.ghAgentRepo && (
+                        <GitHubAgentResultPanel
+                          repo={msg.ghAgentRepo}
+                          analysis={msg.ghAgentAnalysis}
+                          plan={msg.ghAgentPlan}
+                          gitOutput={msg.ghAgentGitOutput}
+                          files={msg.ghAgentFiles}
+                          executionReport={msg.ghAgentExecutionReport}
+                          autoExecute={msg.ghAgentAutoExecute}
+                          onExecute={async () => {
+                            if (!msg.ghAgentFileContents?.length) return
+                            try {
+                              const execRes = await fetch('/api/dz-github-agent/chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  message: '(auto-execute)',
+                                  repoUrl: msg.ghAgentRepo,
+                                  githubToken: githubToken || undefined,
+                                  autoExecute: true,
+                                }),
+                              })
+                              const execData = await execRes.json() as Record<string, unknown>
+                              setMessages(prev => prev.map(m =>
+                                m.id === msg.id
+                                  ? { ...m, ghAgentExecutionReport: execData.executionReport as GHAgentExecutionReport, ghAgentAutoExecute: true }
+                                  : m
+                              ))
+                            } catch {}
+                          }}
+                        />
+                      )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog
                           action={msg.pendingAction}
@@ -4966,6 +5206,28 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         {messages.length > 0 && (
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
         )}
+        {/* DZ GitHub Agent — repo bar */}
+        {showGhAgentInput && (
+          <div className="gh-agent-repo-bar">
+            <Github size={13} className="gh-agent-repo-bar-icon" />
+            <input
+              className="gh-agent-repo-input"
+              placeholder="owner/repo أو https://github.com/owner/repo"
+              value={ghAgentRepo}
+              onChange={e => setGhAgentRepo(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && input.trim()) sendMessage() }}
+            />
+            <label className="gh-agent-auto-label">
+              <input
+                type="checkbox"
+                checked={ghAgentAutoExecute}
+                onChange={e => setGhAgentAutoExecute(e.target.checked)}
+              />
+              <span>Auto Execute</span>
+            </label>
+            <button className="gh-agent-repo-bar-clear" onClick={() => { setGhAgentRepo(''); setShowGhAgentInput(false) }}>✕</button>
+          </div>
+        )}
         {activeYouTubeVideo && (
           <div className="dzc-yt-ctx-bar">
             <span className="dzc-yt-ctx-icon">🎬</span>
@@ -4993,6 +5255,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
+            <button
+              className={`gh-agent-toggle-btn ${showGhAgentInput ? 'active' : ''}`}
+              title="وضع DZ GitHub Agent"
+              onClick={() => setShowGhAgentInput(v => !v)}
+            >
+              <Github size={15} />
+            </button>
             <VoicePanel
               onTranscript={(t) => {
                 setInput((cur) => (cur ? `${cur} ${t}` : t))

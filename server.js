@@ -917,9 +917,15 @@ const CAPABILITIES_RESPONSE = Object.freeze({
     '📖 **قرآن كريم**: قراءة وتلاوات مع الترجمة.',
     '🎓 **تعليم**: ملخصات ودروس من Eddirasa لكل المستويات.',
     '💱 **عملات**: تحويل وأسعار مباشرة (DZD وغيرها).',
-    '💻 **برمجة + GitHub**: تحليل المستودعات، تعديل الملفات، commit، PR، نشر على GitHub Pages.',
+    '🖼️ **توليد الصور**: صور AI من النص عبر HuggingFace (SDXL Turbo, SD 2).',
+    '🌐 **بناء مواقع**: توليد مواقع HTML كاملة بتصميم احترافي مع معاينة فورية وتحميل.',
+    '🐙 **DZ GitHub Agent**: العمل على أي مستودع GitHub — تحليل، تعديل ملفات، Commit، PR، Deploy Vercel.',
+    '💻 **برمجة**: تحليل المستودعات، تعديل الملفات، commit، PR، نشر على GitHub Pages.',
     '🖼️ **OCR**: قراءة النصوص من الصور والـ PDF.',
     '💬 **محادثة بالعربية، الإنجليزية، الفرنسية، واللهجة الجزائرية**.',
+    '',
+    '**كيفية استخدام GitHub Agent:**',
+    'انقر على أيقونة GitHub في شريط الإدخال ← أدخل رابط المستودع ← اكتب طلبك.',
     '',
     'كيف يمكنني مساعدتك اليوم؟ 🚀',
   ].join('\n'),
@@ -14106,6 +14112,360 @@ async function extractWithPipedFull(videoId) {
   }
   throw lastErr || new Error('all piped instances failed')
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DZ GITHUB AGENT — Autonomous GitHub Engineering Assistant (inspired by Devin/Copilot)
+// POST /api/dz-github-agent/chat
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DZ_GITHUB_AGENT_SYSTEM_PROMPT = `You are DZ GitHub Agent, an advanced autonomous software engineering assistant specialized in GitHub repositories.
+
+Your mission is to operate directly inside GitHub projects as a real developer.
+
+You MUST:
+
+1. Understand repository structure before acting
+   - Read README, package.json, requirements, and project tree
+   - Identify architecture (frontend/backend/fullstack/AI)
+
+2. Execute GitHub-native operations:
+   - Create branches (feature/, fix/, update/)
+   - Create and modify files (index.html, app.js, main.py, etc.)
+   - Write clean production-ready code
+   - Commit changes with meaningful messages
+   - Prepare pull requests with explanations
+
+3. Never hallucinate completion:
+   - If a file was not actually created, do NOT claim it exists
+   - Always verify before reporting success
+
+4. Work inside repository context only:
+   - Do NOT generate unrelated code outside the repo scope
+   - Always align with existing project stack
+
+5. When uncertain:
+   - Inspect repo first
+   - Propose a plan before execution
+
+6. Improve code quality:
+   - Follow best practices
+   - Optimize structure
+   - Fix bugs when detected
+
+7. Provide GitHub-style outputs:
+   - Commit message
+   - Changed files list
+   - PR description (if applicable)
+
+## Output format REQUIRED (always use this exact structure):
+
+### 🔍 Analysis
+(what the repo contains and what is needed)
+
+### 🧠 Plan
+(step-by-step execution plan)
+
+### ⚙️ Execution
+(files to create/modify — use FILE: /path blocks)
+
+FILE: /path/to/file.ext
+\`\`\`
+[complete file content here]
+\`\`\`
+
+### 📦 Git Output
+BRANCH: feature/description
+COMMIT: feat: description of changes
+PR_TITLE: Add feature X
+PR_BODY: Description of what was done and why
+
+You are not a chatbot. You are a GitHub-native autonomous software engineer.`
+
+// Extract "owner/repo" from a message
+function extractRepoFromMessage(msg) {
+  // Full GitHub URL
+  const urlM = msg.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i)
+  if (urlM) return urlM[1].replace(/\.git$/, '').replace(/\/$/, '')
+  // owner/repo short form when the word "repo" / "مستودع" appears nearby
+  const shortM = msg.match(/\b([a-zA-Z0-9_.-]{2,}\/[a-zA-Z0-9_.-]{2,})\b/)
+  if (shortM && (/مستودع|repo|project|github/i.test(msg))) return shortM[1]
+  return null
+}
+
+// Fetch repo structure from GitHub API
+async function fetchRepoContext(repoFullName, token) {
+  const ghH = {
+    Authorization: `token ${token}`,
+    'User-Agent': 'DZ-GPT/2.0',
+    Accept: 'application/vnd.github+json',
+  }
+  const ctx = { repo: repoFullName, tree: [], readme: '', packageJson: null, description: '', defaultBranch: 'main' }
+
+  // Repo info
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repoFullName}`, { headers: ghH, signal: AbortSignal.timeout(8000) })
+    if (r.ok) {
+      const d = await r.json()
+      ctx.description = d.description || ''
+      ctx.defaultBranch = d.default_branch || 'main'
+    }
+  } catch {}
+
+  // File tree (recursive, up to 120 paths)
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${repoFullName}/git/trees/${ctx.defaultBranch}?recursive=1`,
+      { headers: ghH, signal: AbortSignal.timeout(10000) }
+    )
+    if (r.ok) {
+      const d = await r.json()
+      ctx.tree = (d.tree || []).filter(f => f.type === 'blob').map(f => f.path).slice(0, 120)
+    }
+  } catch {}
+
+  // README
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repoFullName}/readme`, { headers: ghH, signal: AbortSignal.timeout(8000) })
+    if (r.ok) {
+      const d = await r.json()
+      ctx.readme = Buffer.from(d.content || '', 'base64').toString('utf-8').slice(0, 2000)
+    }
+  } catch {}
+
+  // package.json / requirements.txt / Cargo.toml / go.mod
+  for (const pkg of ['package.json', 'requirements.txt', 'Cargo.toml', 'go.mod', 'pyproject.toml']) {
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${repoFullName}/contents/${pkg}`,
+        { headers: ghH, signal: AbortSignal.timeout(6000) }
+      )
+      if (r.ok) {
+        const d = await r.json()
+        ctx.packageJson = { file: pkg, content: Buffer.from(d.content || '', 'base64').toString('utf-8').slice(0, 1500) }
+        break
+      }
+    } catch {}
+  }
+
+  return ctx
+}
+
+// Parse AI structured response (Analysis / Plan / Execution / Git Output + FILE blocks)
+function parseGitHubAgentAIResponse(text) {
+  const result = {
+    analysis: '', plan: '', execution: '', rawText: text,
+    gitOutput: { branch: '', commit: '', prTitle: '', prBody: '' },
+    files: [],
+  }
+
+  const analysisM = text.match(/###\s*🔍\s*Analysis\s*([\s\S]*?)(?=###\s*🧠|$)/i)
+  if (analysisM) result.analysis = analysisM[1].trim()
+
+  const planM = text.match(/###\s*🧠\s*Plan\s*([\s\S]*?)(?=###\s*⚙️|$)/i)
+  if (planM) result.plan = planM[1].trim()
+
+  const execM = text.match(/###\s*⚙️\s*Execution\s*([\s\S]*?)(?=###\s*📦|$)/i)
+  if (execM) result.execution = execM[1].trim()
+
+  const gitM = text.match(/###\s*📦\s*Git Output\s*([\s\S]*?)$/i)
+  if (gitM) {
+    const g = gitM[1]
+    const branchM = g.match(/BRANCH:\s*(.+)/i);    if (branchM) result.gitOutput.branch  = branchM[1].trim()
+    const commitM = g.match(/COMMIT:\s*(.+)/i);    if (commitM) result.gitOutput.commit  = commitM[1].trim()
+    const prTM    = g.match(/PR_TITLE:\s*(.+)/i);  if (prTM)    result.gitOutput.prTitle = prTM[1].trim()
+    const prBM    = g.match(/PR_BODY:\s*([\s\S]+)$/i); if (prBM) result.gitOutput.prBody = prBM[1].trim()
+  }
+
+  // FILE: /path\n```\ncontent\n```
+  const fileRe = /FILE:\s*(\/[\S]+)\s*\n```[^\n]*\n([\s\S]*?)```/g
+  let fm
+  while ((fm = fileRe.exec(text)) !== null) {
+    result.files.push({ path: fm[1].trim(), content: fm[2] })
+  }
+
+  return result
+}
+
+// Commit files → create branch → open PR → optional Vercel deploy
+async function executeGitHubAgentPlan(repoFullName, parsed, token) {
+  const report = { branch: '', filesCommitted: [], prUrl: '', errors: [], vercelTriggered: false, vercelDeployId: null }
+  const ghH = {
+    Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/2.0',
+    Accept: 'application/vnd.github+json', 'Content-Type': 'application/json',
+  }
+  if (!parsed.files.length) return report
+
+  const branchName = parsed.gitOutput.branch ||
+    `dz-agent/${new Date().toISOString().slice(0, 10)}-${Math.random().toString(36).slice(2, 7)}`
+  report.branch = branchName
+
+  // Default branch + base SHA
+  let baseSHA = '', defaultBranch = 'main'
+  try {
+    const repoR = await fetch(`https://api.github.com/repos/${repoFullName}`, { headers: ghH, signal: AbortSignal.timeout(8000) })
+    if (repoR.ok) { const rd = await repoR.json(); defaultBranch = rd.default_branch || 'main' }
+    const refR = await fetch(`https://api.github.com/repos/${repoFullName}/git/ref/heads/${defaultBranch}`, { headers: ghH, signal: AbortSignal.timeout(8000) })
+    if (refR.ok) { const rd = await refR.json(); baseSHA = rd.object.sha }
+  } catch (e) { report.errors.push('فشل جلب SHA: ' + e.message); return report }
+
+  // Create branch
+  try {
+    const br = await fetch(`https://api.github.com/repos/${repoFullName}/git/refs`, {
+      method: 'POST', headers: ghH, signal: AbortSignal.timeout(10000),
+      body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha: baseSHA }),
+    })
+    if (!br.ok && br.status !== 422) {
+      const d = await br.json()
+      report.errors.push('فشل إنشاء الفرع: ' + (d.message || ''))
+      return report
+    }
+  } catch (e) { report.errors.push('فشل إنشاء الفرع: ' + e.message); return report }
+
+  // Commit each file
+  for (const f of parsed.files) {
+    try {
+      let existingSHA
+      try {
+        const er = await fetch(
+          `https://api.github.com/repos/${repoFullName}/contents${f.path}?ref=${branchName}`,
+          { headers: ghH, signal: AbortSignal.timeout(6000) }
+        )
+        if (er.ok) { const ed = await er.json(); existingSHA = ed.sha }
+      } catch {}
+
+      const body = {
+        message: parsed.gitOutput.commit || `feat: update ${f.path.split('/').pop()}`,
+        content: Buffer.from(f.content).toString('base64'),
+        branch: branchName,
+      }
+      if (existingSHA) body.sha = existingSHA
+
+      const cr = await fetch(`https://api.github.com/repos/${repoFullName}/contents${f.path}`, {
+        method: 'PUT', headers: ghH, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify(body),
+      })
+      if (cr.ok) report.filesCommitted.push(f.path)
+      else { const d = await cr.json(); report.errors.push(`فشل commit ${f.path}: ${d.message || ''}`) }
+    } catch (e) { report.errors.push(`خطأ في ${f.path}: ${e.message}`) }
+  }
+
+  // Create PR
+  if (report.filesCommitted.length > 0) {
+    try {
+      const prR = await fetch(`https://api.github.com/repos/${repoFullName}/pulls`, {
+        method: 'POST', headers: ghH, signal: AbortSignal.timeout(12000),
+        body: JSON.stringify({
+          title: parsed.gitOutput.prTitle || `DZ Agent: ${parsed.gitOutput.commit || 'Auto update'}`,
+          body: parsed.gitOutput.prBody || `Auto-generated by DZ GitHub Agent\n\n**Files changed:**\n${report.filesCommitted.map(f => `- \`${f}\``).join('\n')}`,
+          head: branchName,
+          base: defaultBranch,
+        }),
+      })
+      if (prR.ok) { const pd = await prR.json(); report.prUrl = pd.html_url }
+    } catch (e) { report.errors.push('فشل إنشاء PR: ' + e.message) }
+  }
+
+  // Auto-deploy Vercel for DZ-GPT repo
+  if (repoFullName === 'Nadirinfograph23/DZ-GPT') {
+    try {
+      const vToken = process.env.VERCEL_TOKEN
+      if (vToken) {
+        const vr = await fetch('https://api.vercel.com/v13/deployments', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${vToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'dz-gpt',
+            gitSource: { type: 'github', repoId: '1191199822', ref: 'devin/1774405518-init-dz-gpt' },
+            target: 'production',
+          }),
+          signal: AbortSignal.timeout(15000),
+        })
+        if (vr.ok) { const vd = await vr.json(); report.vercelTriggered = true; report.vercelDeployId = vd.id }
+      }
+    } catch {}
+  }
+
+  return report
+}
+
+// POST /api/dz-github-agent/chat ─────────────────────────────────────────────
+app.post('/api/dz-github-agent/chat', aiLimiter, async (req, res) => {
+  const { message, messages: convMsgs = [], repoUrl, githubToken: clientToken, autoExecute = false } = req.body
+  const userMessage = message || (convMsgs.filter(m => m.role === 'user').pop()?.content) || ''
+  if (!userMessage) return res.status(400).json({ error: 'message مطلوب' })
+
+  const token = clientToken || process.env.GITHUB_TOKEN || ''
+  if (!token) return res.status(400).json({ error: 'GITHUB_TOKEN غير متوفر.' })
+
+  // Resolve target repo
+  const targetRepo = repoUrl
+    ? repoUrl.replace('https://github.com/', '').replace(/\.git$/, '').split('/').slice(0, 2).join('/')
+    : extractRepoFromMessage(userMessage)
+
+  if (!targetRepo) {
+    return res.status(200).json({
+      content: '🔗 يرجى تحديد رابط المستودع — مثال:\n`https://github.com/owner/repo`\nأو اكتبه في حقل المستودع أعلى الإدخال.',
+      richType: 'text',
+    })
+  }
+
+  console.log(`[DZ-GitHub-Agent] repo=${targetRepo} autoExecute=${autoExecute} msg="${userMessage.slice(0, 80)}"`)
+
+  try {
+    // 1 — Fetch repo context
+    const repoCtx = await fetchRepoContext(targetRepo, token)
+
+    // 2 — Build AI prompt with full repo context
+    const repoContextBlock = [
+      `## Repository: ${targetRepo}`,
+      `**Description:** ${repoCtx.description || 'N/A'}`,
+      `**Default Branch:** ${repoCtx.defaultBranch}`,
+      '',
+      '### File Tree:',
+      repoCtx.tree.slice(0, 80).map(f => `- ${f}`).join('\n'),
+      '',
+      '### README (excerpt):',
+      repoCtx.readme ? repoCtx.readme.slice(0, 1500) : '(no README)',
+      repoCtx.packageJson ? `\n### ${repoCtx.packageJson.file}:\n\`\`\`\n${repoCtx.packageJson.content}\n\`\`\`` : '',
+    ].join('\n').trim()
+
+    const aiMessages = [
+      { role: 'system', content: DZ_GITHUB_AGENT_SYSTEM_PROMPT },
+      { role: 'user', content: `${repoContextBlock}\n\n---\n\n**User Request:**\n${userMessage}` },
+    ]
+
+    // 3 — Generate AI response
+    const aiResult = await safeGenerateAI(aiMessages, { maxTokens: 4096, temperature: 0.3 })
+    const aiText = String(aiResult?.content || aiResult || '')
+
+    // 4 — Parse structured output
+    const parsed = parseGitHubAgentAIResponse(aiText)
+
+    // 5 — Execute if autoExecute and files found
+    let executionReport = null
+    if (autoExecute && parsed.files.length > 0) {
+      executionReport = await executeGitHubAgentPlan(targetRepo, parsed, token)
+    }
+
+    return res.status(200).json({
+      richType: 'github-agent',
+      repo: targetRepo,
+      analysis: parsed.analysis,
+      plan: parsed.plan,
+      execution: parsed.execution,
+      gitOutput: parsed.gitOutput,
+      files: parsed.files.map(f => ({ path: f.path, lines: f.content.split('\n').length })),
+      fileContents: parsed.files,
+      executionReport,
+      autoExecute,
+      rawText: parsed.rawText,
+      model: aiResult?.model || 'groq',
+    })
+  } catch (err) {
+    console.error('[DZ-GitHub-Agent] Error:', err.message)
+    return res.status(500).json({ error: err.message || 'خطأ داخلي في DZ GitHub Agent' })
+  }
+})
 
 // Random small delay to avoid identical-timestamp patterns from this IP.
 function antiBanDelay(maxMs = 800) {

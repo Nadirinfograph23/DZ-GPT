@@ -54,6 +54,7 @@ import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
+import { mountGitHubSkill } from './lib/skills/mount.js'
 import {
   deployGitHubPages,
   deployProject as ghDeployProject,
@@ -16368,6 +16369,14 @@ try {
   )
 } catch (err) {
   console.warn('[clone-engine-v2] mount failed:', err.message)
+}
+
+// ===== DZ-GITHUB-EXECUTION-SKILL (real GitHub + Vercel ops — additive only) =====
+// New endpoints: /api/github-skill/{health,analyze,file/*,branch/*,pr/*,debug,auto-fix,sync/*,execute}
+try {
+  mountGitHubSkill(app)
+} catch (err) {
+  console.warn('[github-skill] mount failed:', err.message)
 }
 
 // ===== EXPORT APP (for Vercel serverless) =====

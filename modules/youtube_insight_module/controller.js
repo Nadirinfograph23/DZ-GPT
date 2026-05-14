@@ -617,9 +617,9 @@ export async function handleVideoDiscussion(youtubeContext, question, history = 
     reply = '⚠️ حدث خطأ أثناء معالجة سؤالك. يرجى المحاولة مرة أخرى.'
   }
 
-  const quickSuggestions = buildSmartSuggestions(
-    { title, description, keywords: [] },
-    !!captionText,
+  const quickSuggestions = await buildAISuggestions(
+    { title, description: description || '', keywords: [] },
+    aiGenerate,
   )
 
   return { reply, quickSuggestions }

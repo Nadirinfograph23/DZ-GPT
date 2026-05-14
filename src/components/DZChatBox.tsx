@@ -193,6 +193,8 @@ interface YouTubeVideoData {
   thumbnail: string
   publishDate?: string
   tags?: string[]
+  description?: string
+  captionText?: string
 }
 
 interface YouTubeResult {
@@ -3321,8 +3323,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const id = generateId()
     setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
     if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
-      setActiveYouTubeVideo(msg.youtubeVideo)
-      activeYouTubeVideoRef.current = msg.youtubeVideo
+      const enrichedVideo: YouTubeVideoData = {
+        ...msg.youtubeVideo,
+        captionText: msg.captionText || undefined,
+      }
+      setActiveYouTubeVideo(enrichedVideo)
+      activeYouTubeVideoRef.current = enrichedVideo
       // Clear candidates once a video is selected and analyzed
       youtubeCandidatesRef.current = []
     }

@@ -7490,3 +7490,249 @@
   font-weight: 600;
   margin-bottom: 6px;
 }
+
+/* ===== DZ GITHUB AGENT PANEL ===== */
+.gh-agent-panel {
+  border: 1px solid #1e2a1e;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d1117;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.gh-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 13px;
+  background: #0f1923;
+  border-bottom: 1px solid #1a2a1a;
+}
+
+.gh-agent-header-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #58a6ff;
+}
+
+.gh-agent-repo-name {
+  font-family: monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+.gh-agent-repo-link {
+  color: #555;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.gh-agent-repo-link:hover { color: #58a6ff; }
+
+.gh-agent-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: #3fb950;
+  background: rgba(63,185,80,.12);
+  border: 1px solid rgba(63,185,80,.25);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+/* Tabs */
+.gh-agent-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: #0d1117;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.gh-agent-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 5px 5px 0 0;
+  font-size: 11.5px;
+  color: #666;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.gh-agent-tab:hover { color: #ccc; background: rgba(255,255,255,.04); }
+.gh-agent-tab.active { color: #58a6ff; background: rgba(88,166,255,.08); border-bottom: 2px solid #58a6ff; }
+
+/* Body */
+.gh-agent-body {
+  padding: 13px 15px;
+  min-height: 80px;
+  max-height: 360px;
+  overflow-y: auto;
+  color: #cdd9e5;
+  line-height: 1.65;
+}
+.gh-agent-body::-webkit-scrollbar { width: 4px; }
+.gh-agent-body::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+.gh-agent-section { display: flex; flex-direction: column; gap: 6px; }
+.gh-agent-section-icon { color: #555; }
+.gh-agent-section p, .gh-agent-section li { font-size: 12.5px; }
+
+/* Files list */
+.gh-agent-files-list { display: flex; flex-direction: column; gap: 5px; }
+.gh-agent-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: rgba(255,255,255,.03);
+  border-radius: 5px;
+  border: 1px solid #1a1a1a;
+}
+.gh-agent-file-icon { color: #58a6ff; flex-shrink: 0; }
+.gh-agent-file-path { font-family: monospace; font-size: 12px; color: #cdd9e5; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-agent-file-lines { font-size: 10.5px; color: #555; flex-shrink: 0; }
+.gh-agent-empty { color: #555; font-size: 12px; font-style: italic; }
+
+/* Git output */
+.gh-agent-git-output { display: flex; flex-direction: column; gap: 8px; }
+.gh-agent-git-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #58a6ff;
+  font-size: 12.5px;
+}
+.gh-agent-git-label { color: #666; width: 55px; flex-shrink: 0; }
+.gh-agent-git-val { font-family: monospace; color: #cdd9e5; background: rgba(255,255,255,.04); padding: 2px 6px; border-radius: 4px; font-size: 11.5px; }
+
+/* Execution report */
+.gh-agent-exec-report {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(63,185,80,.05);
+  border: 1px solid rgba(63,185,80,.2);
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.gh-agent-exec-title { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; color: #3fb950; }
+.gh-agent-exec-success { display: flex; align-items: center; gap: 5px; color: #3fb950; font-size: 12px; }
+.gh-agent-pr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #58a6ff;
+  text-decoration: none;
+  padding: 4px 10px;
+  background: rgba(88,166,255,.1);
+  border-radius: 5px;
+  border: 1px solid rgba(88,166,255,.25);
+  width: fit-content;
+}
+.gh-agent-pr-link:hover { background: rgba(88,166,255,.2); }
+.gh-agent-vercel-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #a371f7;
+  background: rgba(163,113,247,.08);
+  border: 1px solid rgba(163,113,247,.2);
+  border-radius: 4px;
+  padding: 3px 9px;
+  width: fit-content;
+}
+.gh-agent-exec-errors { display: flex; flex-direction: column; gap: 4px; }
+.gh-agent-exec-error { display: flex; align-items: center; gap: 5px; color: #f85149; font-size: 11.5px; }
+
+/* Execute button */
+.gh-agent-execute-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: rgba(63,185,80,.1);
+  border: 1px solid rgba(63,185,80,.3);
+  border-radius: 6px;
+  color: #3fb950;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  width: fit-content;
+}
+.gh-agent-execute-btn:hover { background: rgba(63,185,80,.2); border-color: rgba(63,185,80,.5); }
+
+/* ── Repo bar (input area) ── */
+.gh-agent-repo-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(88,166,255,.05);
+  border: 1px solid rgba(88,166,255,.2);
+  border-radius: 7px;
+  margin-bottom: 6px;
+}
+.gh-agent-repo-bar-icon { color: #58a6ff; flex-shrink: 0; }
+.gh-agent-repo-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #cdd9e5;
+  font-family: monospace;
+  font-size: 12.5px;
+  min-width: 0;
+}
+.gh-agent-repo-input::placeholder { color: #444; }
+.gh-agent-auto-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.gh-agent-auto-label input { cursor: pointer; }
+.gh-agent-repo-bar-clear {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color .15s;
+}
+.gh-agent-repo-bar-clear:hover { color: #f85149; }
+
+/* ── GitHub Agent toggle button in input bar ── */
+.gh-agent-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #1a1a1a;
+  color: #555;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.gh-agent-toggle-btn:hover { color: #58a6ff; border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.08); }
+.gh-agent-toggle-btn.active { color: #58a6ff; background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); }

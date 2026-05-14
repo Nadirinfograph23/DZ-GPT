@@ -4305,6 +4305,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
 
+      // ── GitHub ReAct loading indicator ────────────────────────────────────
+      // Detect if this query will be routed to the GitHub ReAct loop on the server
+      const isGithubReActQuery = !activeGhRepo && (
+        /\b(github|مستودع|ريبو|repo|repository|branch|فرع|push|commit|pull.?request|deploy|pages)\b/i.test(text) ||
+        /\b(اعرض|عطيني|شوفلي|أنشئ|انشئ|ارفع|احذف|أنشئ|create|list|show|delete|enable)\b.{0,30}\b(مستودع|repo|branch|فرع|ملفات|pages)\b/i.test(text)
+      )
+      if (isGithubReActQuery) {
+        setIsGithubReActLoading(true)
+        setLiveReActSteps([{ type: 'start', message: 'جاري الاتصال بـ GitHub...' }])
+      }
+
       // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
       const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
         return await withRetry(async () => {
@@ -4572,6 +4583,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setIsLoading(false)
       setAgentSteps([])
       setAgentTaskType(null)
+      setIsGithubReActLoading(false)
+      setLiveReActSteps([])
       abortRef.current = null
     }
   }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE])

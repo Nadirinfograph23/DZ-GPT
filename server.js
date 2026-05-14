@@ -9084,6 +9084,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     } catch (reactErr) {
       console.error('[GitHub ReAct] Error:', reactErr.message)
+      return res.status(200).json({
+        content: `⚠️ حدث خطأ في GitHub Agent: ${reactErr.message}\nيرجى المحاولة مرة أخرى.`,
+        mode: 'github-react',
+        steps: [],
+      })
     }
   }
 

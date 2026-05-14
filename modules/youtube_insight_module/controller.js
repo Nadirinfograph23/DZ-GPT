@@ -421,7 +421,7 @@ function buildAnalysisPrompt(video, captionData) {
 // handleYouTubeInput — Entry point: URL analysis OR keyword search
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleYouTubeInput(urlOrQuery, opts = {}) {
-  const { aiGenerate, preloadedMeta } = opts
+  const { aiGenerate, preloadedMeta, noSuggestions } = opts
 
   // ── URL Mode ─────────────────────────────────────────────────────────────
   if (isYtUrl(urlOrQuery)) {
@@ -507,7 +507,7 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       views: video.views,
     }
 
-    const suggestions = buildSmartSuggestions(video, !!captionData)
+    const suggestions = noSuggestions ? [] : buildSmartSuggestions(video, !!captionData)
 
     const message = [
       `🎬 **${video.title}**`,

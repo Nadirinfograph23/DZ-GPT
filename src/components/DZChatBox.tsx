@@ -4960,11 +4960,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           captionText={msg.captionText}
                           onAsk={(q) => sendMessage(q)}
                           onAnalyzeWithMeta={(ytResult) => {
-                            // Pass preloaded metadata so the server skips scraping
-                            // and can summarize directly from title + description
+                            // Set preloaded meta so server uses existing title/description
                             youtubePreloadedMetaRef.current = ytResult
-                            sendMessage(ytResult.url)
-                            // Clear after a tick so ref is read before cleanup
+                            // Send title + URL explicitly so user sees what's being analyzed
+                            sendMessage(`حلل هذا الفيديو: "${ytResult.title}" ${ytResult.url}`)
                             setTimeout(() => { youtubePreloadedMetaRef.current = null }, 100)
                           }}
                           onDiscuss={(ytResult) => {

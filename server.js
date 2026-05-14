@@ -9206,6 +9206,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const ytResult = await handleYouTubeInput(ytInput, {
         aiGenerate: (params) => safeGenerateAI({ ...params }),
         preloadedMeta: _ytPreloadedMeta,
+        noSuggestions: !!_ytPreloadedMeta,
       })
       if (ytResult.flow === 'url') {
         return res.status(200).json({

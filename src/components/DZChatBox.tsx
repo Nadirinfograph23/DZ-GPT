@@ -265,6 +265,7 @@ interface DZMessage {
   doctors?: DoctorResult[]
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
+  dua?: string
   reactSteps?: import('./GitHubReActPanel').ReActStep[]
   // GitHub Agent
   ghAgentRepo?: string
@@ -4529,6 +4530,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'doctor-results',
           doctors: data.doctors as DoctorResult[],
           dirs: (data.dirs as DirLink[]) || [],
+          dua: (data.dua as string) || 'ربي يجيب الشفاء 🤍\nاللهم اشفي مرضانا ومرضى المسلمين أجمعين يا رب العالمين.',
           doctorMeta: {
             speciality: (data.speciality as { ar: string; fr: string }) || { ar: 'الأطباء', fr: '' },
             city: (data.city as { ar: string; fr: string }) || { ar: '', fr: '' },
@@ -4883,11 +4885,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         <StatsPanel stats={msg.stats} />
                       )}
                       {msg.richType === 'doctor-results' && msg.doctorMeta && (
-                        <DoctorResultsPanel
-                          doctors={msg.doctors || []}
-                          dirs={msg.dirs || []}
-                          meta={msg.doctorMeta}
-                        />
+                        <>
+                          <DoctorResultsPanel
+                            doctors={msg.doctors || []}
+                            dirs={msg.dirs || []}
+                            meta={msg.doctorMeta}
+                          />
+                          {msg.dua && (
+                            <div style={{ marginTop: '12px', padding: '10px 14px', background: 'linear-gradient(135deg,#e8f5e9,#f1f8e9)', borderRadius: '10px', borderRight: '3px solid #66bb6a', textAlign: 'right', direction: 'rtl', color: '#2e7d32', fontSize: '0.92rem', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
+                              {msg.dua}
+                            </div>
+                          )}
+                        </>
                       )}
                       {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
                         (msg.mapMeta as Record<string, unknown>)?.needsGps

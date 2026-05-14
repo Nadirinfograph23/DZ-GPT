@@ -1833,7 +1833,7 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
   }
 
   logKeyStats()
-  return { content: null, error: 'All API keys exhausted or rate-limited. Please try again later.' }
+  return { content: null, error: 'والله يا صاحبي راني عيان شوية 😅\nخليني نرتاح ونرجعلك بعد قليل — سامحني 🤍\n\n_(All AI providers are currently busy or rate-limited. Please try again in a moment.)_' }
 }
 
 // ===== KEY STATS API =====
@@ -10709,6 +10709,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       city: { ar: doctorIntent.city.ar, fr: doctorIntent.city.fr },
       hasGps: !!userLocation,
       cached: !!cached,
+      dua: 'ربي يجيب الشفاء 🤍\nاللهم اشفي مرضانا ومرضى المسلمين أجمعين يا رب العالمين.',
     })
   }
 
@@ -16531,6 +16532,16 @@ function setupChatWebSocket(httpServer) {
           session.lastSeen = Date.now()
           const cleanText = sanitizeString(data.text, 1000).trim()
           if (!cleanText) return
+          // Profanity guard — DZ Chat
+          const chatMod = moderateMessage(cleanText, session.name)
+          if (!chatMod.ok) {
+            const warnMsg = pushChatMsg({
+              id: chatId(), from: 'DZ AGENT 🤖', fromId: 'dzagent', gender: 'bot',
+              text: chatMod.replyIfBlocked, timestamp: Date.now(), isSystem: true,
+            })
+            ws.send(JSON.stringify({ type: 'message', msg: warnMsg }))
+            return
+          }
           const msg = pushChatMsg({
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),

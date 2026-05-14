@@ -971,7 +971,7 @@ const DOCTOR_TRIGGER_PATTERNS = [
   'pneumologue', 'gastrologue', 'endocrinologue', 'nephrologue', 'oncologue', 'radiologue',
   // Arabic specialty triggers
   'أسنان', 'سنان', 'ضروس', 'طب الأسنان',
-  'نسائية', 'توليد', 'نساء وتوليد',
+  'نسائية', 'نساء وتوليد', 'ولادة', 'حمل',
   'أطفال', 'طب الأطفال',
   'عيون', 'بصريات',
   'جلدية', 'أمراض الجلد',
@@ -1027,9 +1027,24 @@ const DOCTOR_CITIES = [
   { ar: 'غليزان', fr: 'Relizane' },
 ]
 
+// كلمات تدل على السياق التقني — إذا وُجدت مع "توليد" لا يُعدّ طلب طبيب
+const TECH_CONTEXT_EXCLUSIONS = [
+  'صور', 'صورة', 'image', 'images', 'photo', 'كود', 'code', 'نص', 'text',
+  'موقع', 'website', 'فيديو', 'video', 'ذكاء', 'ai', 'اصطناعي', 'artificial',
+  'تلقائي', 'automatic', 'محتوى', 'content', 'بيانات', 'data', 'تقرير', 'report',
+  'ملف', 'file', 'html', 'css', 'python', 'javascript', 'pdf', 'خريطة',
+  'هل تستطيع', 'هل يمكنك', 'هل تقدر', 'can you', 'قادر على', 'able to',
+]
+
 function detectDoctorIntent(message) {
   if (!message || typeof message !== 'string') return { isDoctorQuery: false }
   const norm = normalizeQuery(message)
+
+  // ── Exclusion guard — منع التفعيل الخاطئ في السياق التقني ───────────────
+  // مثال: "توليد الصور" ، "هل تستطيع توليد كود"
+  const hasTechContext = TECH_CONTEXT_EXCLUSIONS.some(w => norm.includes(w.toLowerCase()))
+  if (hasTechContext) return { isDoctorQuery: false }
+
   const isDoctorQuery = DOCTOR_TRIGGER_PATTERNS.some(p => norm.includes(p.toLowerCase()))
   if (!isDoctorQuery) return { isDoctorQuery: false }
 

@@ -100,6 +100,8 @@ import {
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { GITHUB_AGENT_LAYER } from './lib/prompts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
+import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
+import { mountMemoryRouter } from './lib/mem/mem-router.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -11700,6 +11702,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     )
   }
 
+  // ── DZ Memory Layer — استرجاع الذكريات ذات الصلة قبل بناء systemPrompt ──
+  // يُستبدل كامل تاريخ المحادثة بذكريات مُختارة → تقليل tokens
+  const _memProjectId = currentRepo || req.body.projectId || null
+  let _memoryContext = ''
+  try {
+    const _mems = searchMemories({
+      query: lastUserMessage,
+      projectId: _memProjectId,
+      topK: 5,
+    })
+    if (_mems.length) _memoryContext = buildMemoryContext(_mems)
+  } catch { /* fail silently — memory is optional */ }
+
   const systemPrompt = [
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
@@ -11778,6 +11793,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
+    _memoryContext ? `\n${_memoryContext}` : '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -11832,6 +11848,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   if (aiResult.content) {
+    // ── DZ Memory Write — حفظ الجواب الناجح في الذاكرة الدائمة ────────────
+    // يحفظ فقط إذا الجواب ذو قيمة (ليس رسالة خطأ أو قصير جداً)
+    try {
+      if (aiResult.content.length > 120 && !aiResult.content.startsWith('⚠️')) {
+        storeMemory({
+          type: _isCode ? MEM_TYPE.EXECUTION : _isNews ? MEM_TYPE.GENERAL : MEM_TYPE.GENERAL,
+          projectId: _memProjectId,
+          query: lastUserMessage,
+          content: aiResult.content.slice(0, 700),
+          meta: { model: aiResult.model, intent: _smartIntent },
+        })
+      }
+    } catch { /* fail silently */ }
+
     return res.status(200).json({
       content: _cleanRawUrls(aiResult.content),
       fallbackModel: aiResult.model,
@@ -16375,6 +16405,7 @@ try {
 // New endpoints: /api/github-skill/{health,analyze,file/*,branch/*,pr/*,debug,auto-fix,sync/*,execute}
 try {
   mountGitHubSkill(app)
+  mountMemoryRouter(app)
 } catch (err) {
   console.warn('[github-skill] mount failed:', err.message)
 }

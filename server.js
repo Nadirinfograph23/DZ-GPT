@@ -8938,6 +8938,62 @@ app.post('/api/dz-agent/deploy', async (req, res) => {
   }
 })
 
+// ── GitHub ReAct SSE streaming endpoint ──────────────────────────────────────
+// Streams each Thought → Action → Observation step in real-time via SSE
+app.post('/api/dz-agent/github/react/stream', async (req, res) => {
+  const rawToken = req.body.githubToken
+  const githubToken = rawToken ? sanitizeString(String(rawToken), 300) : process.env.GITHUB_TOKEN || ''
+  const messages = normalizeChatMessages(req.body.messages)
+  const query = sanitizeString(String(req.body.query || ''), 2000)
+    || [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const send = (type, payload = {}) => {
+    try {
+      res.write(`data: ${JSON.stringify({ type, ...payload })}\n\n`)
+      if (typeof res.flush === 'function') res.flush()
+    } catch (_) {}
+  }
+
+  send('start', { message: 'بدء GitHub ReAct Agent...' })
+
+  try {
+    const collectedSteps = []
+    const result = await runReActLoop({
+      query,
+      messages,
+      aiGenerate: safeGenerateAI,
+      githubToken,
+      onStep: (step) => {
+        collectedSteps.push(step)
+        send('step', { step })
+        console.log(`[ReAct-SSE] ${step.type}: ${step.message || step.tool || ''}`)
+      },
+    })
+    send('done', {
+      content: result.content,
+      steps: result.steps || collectedSteps,
+      model: result.model,
+    })
+  } catch (err) {
+    console.error('[ReAct-SSE] Error:', err.message)
+    send('error', { message: err.message })
+    send('done', {
+      content: `⚠️ خطأ في GitHub Agent: ${err.message}`,
+      steps: [],
+      model: null,
+    })
+  } finally {
+    res.end()
+  }
+})
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const messages = normalizeChatMessages(req.body.messages)

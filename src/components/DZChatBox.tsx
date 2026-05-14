@@ -4209,6 +4209,79 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     })
   }, [addAssistantMessage])
 
+  // ===== GITHUB REACT SSE RUNNER =====
+  const runGithubReActSSE = useCallback(async (
+    query: string,
+    outboundMessages: Array<{role: string; content: string}>,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    setIsGithubReActLoading(true)
+    setLiveReActSteps([{ type: 'start', message: 'جاري الاتصال بـ GitHub...' }])
+
+    let finalContent = ''
+    let finalSteps: ReActStep[] = []
+
+    try {
+      const response = await fetch('/api/dz-agent/github/react/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        body: JSON.stringify({
+          query,
+          messages: outboundMessages,
+          githubToken: githubToken || undefined,
+        }),
+        signal,
+      })
+
+      if (!response.ok || !response.body) throw new Error(`SSE error: ${response.status}`)
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          try {
+            const event = JSON.parse(raw)
+            if (event.type === 'step' && event.step) {
+              setLiveReActSteps(prev => [...prev, event.step as ReActStep])
+            } else if (event.type === 'done') {
+              finalContent = event.content || ''
+              finalSteps = (event.steps as ReActStep[]) || []
+            } else if (event.type === 'error') {
+              finalContent = `⚠️ خطأ في GitHub Agent: ${event.message}`
+            }
+          } catch { /* ignore malformed events */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        setIsGithubReActLoading(false)
+        setLiveReActSteps([])
+        return
+      }
+      finalContent = `⚠️ تعذّر الاتصال بـ GitHub Agent. يرجى المحاولة مرة أخرى.`
+    }
+
+    setIsGithubReActLoading(false)
+    setLiveReActSteps([])
+    trackFeatureUsage('github-react')
+    addAssistantMessage({
+      content: finalContent || '✅ اكتملت عمليات GitHub',
+      richType: 'github-react',
+      reactSteps: finalSteps,
+    })
+  }, [githubToken, addAssistantMessage])
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -4305,15 +4378,29 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
 
-      // ── GitHub ReAct loading indicator ────────────────────────────────────
-      // Detect if this query will be routed to the GitHub ReAct loop on the server
+      // ── GitHub ReAct SSE pipeline ─────────────────────────────────────────
+      // Matches same patterns as shouldUseReActLoop() on the server side
       const isGithubReActQuery = !activeGhRepo && (
-        /\b(github|مستودع|ريبو|repo|repository|branch|فرع|push|commit|pull.?request|deploy|pages)\b/i.test(text) ||
-        /\b(اعرض|عطيني|شوفلي|أنشئ|انشئ|ارفع|احذف|أنشئ|create|list|show|delete|enable)\b.{0,30}\b(مستودع|repo|branch|فرع|ملفات|pages)\b/i.test(text)
+        (/\bgithub\b/i.test(text) && /\b(create|push|add|delete|update|list|show|read|deploy|merge|clone|fork|commit|انشئ|ارفع|احذف|عدل|اعرض|نشر|رفع)\b/i.test(text)) ||
+        /أنش[ئئيى]\s*(مستودع|ريبو|repo|repository|فرع|branch|pull)/i.test(text) ||
+        /اعرض|عطيني.*مستودع|شوفلي.*مستودع/i.test(text) ||
+        /مستودع.*جديد|مستودع.*github/i.test(text) ||
+        /commit.*push|push.*commit/i.test(text) ||
+        /list\s*(my\s*)?(repos|repositories|files|branches)/i.test(text) ||
+        /create\s*(a\s*)?(new\s*)?(repo|repository|branch|pr|pull\s*request)/i.test(text) ||
+        /enable\s*(github\s*)?pages/i.test(text) ||
+        /show\s*(me\s*)?my\s*(repos|repositories|github)/i.test(text) ||
+        /ارفع.*ملف|رفع.*github|احذف.*فرع/i.test(text)
       )
       if (isGithubReActQuery) {
-        setIsGithubReActLoading(true)
-        setLiveReActSteps([{ type: 'start', message: 'جاري الاتصال بـ GitHub...' }])
+        try {
+          await runGithubReActSSE(text, outboundMessages, signal)
+          return
+        } catch (sseErr) {
+          console.warn('[DZChatBox] GitHub ReAct SSE failed, falling back:', (sseErr as Error).message)
+          setIsGithubReActLoading(false)
+          setLiveReActSteps([])
+        }
       }
 
       // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
@@ -4587,7 +4674,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setLiveReActSteps([])
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE, runGithubReActSSE])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return

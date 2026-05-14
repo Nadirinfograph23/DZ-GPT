@@ -9188,8 +9188,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── YouTube Insight Engine ─────────────────────────────────────────────────
   // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
   const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
-  // Matches: "فيديو", "يوتيوب", "شرح X بالفيديو", "درس X بالفيديو", "شرحلي بالفيديو", "عطيني فيديو"
-  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو)/i
+  // Matches: فيديو، يوتيوب، tutorial، review، documentaire، course، شرحلي، جيبلي فيديو، ابحث فيديو...
+  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video)/i
   const _isYouTubeQuery = !!_ytUrlInMsg
     || (_ytKwRe.test(lastUserMessage)
         && !detectWebsiteBuilderQuery(lastUserMessage)

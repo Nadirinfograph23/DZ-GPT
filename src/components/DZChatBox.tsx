@@ -3162,7 +3162,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
-  const [_liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
+  const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
@@ -5263,7 +5263,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                 )}
               </div>
               {isGithubReActLoading ? (
-                <GitHubLoadingIndicator />
+                liveReActSteps.length > 0
+                  ? <GitHubReActPanel steps={liveReActSteps} isLive={true} />
+                  : <GitHubLoadingIndicator />
               ) : agentSteps.length > 0 ? (
                 <AgentStepsPanel
                   steps={agentSteps}

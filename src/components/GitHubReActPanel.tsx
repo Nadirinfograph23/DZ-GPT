@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  Brain, Wrench, Eye, CheckCircle2, XCircle, Loader2,
-  ChevronDown, ChevronUp, Github, Zap, Clock,
+  Github, CheckCircle2, XCircle, Loader2, Clock,
   FileCode, GitBranch, GitPullRequest, FolderOpen,
-  FilePlus, Trash2, Info, AlertTriangle,
+  FilePlus, Trash2, Zap, User, Eye, Brain,
+  AlertTriangle, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react'
 
 export interface ReActStep {
@@ -14,6 +14,7 @@ export interface ReActStep {
   thought?: string
   args?: Record<string, unknown>
   result?: Record<string, unknown>
+  content?: string
 }
 
 interface Props {
@@ -21,279 +22,354 @@ interface Props {
   isLive?: boolean
 }
 
-const TOOL_ICONS: Record<string, React.ReactNode> = {
-  create_repo:        <GitBranch size={12} />,
-  list_repos:         <FolderOpen size={12} />,
-  list_files:         <FolderOpen size={12} />,
-  read_file:          <FileCode size={12} />,
-  push_file:          <FilePlus size={12} />,
-  push_files_batch:   <FilePlus size={12} />,
-  list_branches:      <GitBranch size={12} />,
-  create_branch:      <GitBranch size={12} />,
-  delete_branch:      <Trash2 size={12} />,
-  create_pull_request:<GitPullRequest size={12} />,
-  enable_pages:       <Zap size={12} />,
-  get_repo_info:      <Info size={12} />,
-  get_auth_user:      <Github size={12} />,
+// ── Phase derived from a tool_call + its observation ─────────────────────────
+interface Phase {
+  id: number
+  tool: string
+  thought: string
+  args: Record<string, unknown>
+  label: string
+  icon: React.ReactNode
+  color: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  summary: string
+  detail?: string
+  resultUrl?: string
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  create_repo:        'إنشاء مستودع',
-  list_repos:         'عرض المستودعات',
-  list_files:         'عرض الملفات',
-  read_file:          'قراءة ملف',
-  push_file:          'رفع ملف',
-  push_files_batch:   'رفع ملفات (دفعة)',
-  list_branches:      'عرض الفروع',
-  create_branch:      'إنشاء فرع',
-  delete_branch:      'حذف فرع',
-  create_pull_request:'إنشاء Pull Request',
-  enable_pages:       'تفعيل GitHub Pages',
-  get_repo_info:      'معلومات المستودع',
-  get_auth_user:      'هوية المستخدم',
+const TOOL_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  get_auth_user:      { label: 'التحقق من الهوية',    icon: <User size={14} />,          color: '#60a5fa' },
+  list_repos:         { label: 'عرض المستودعات',       icon: <FolderOpen size={14} />,    color: '#34d399' },
+  create_repo:        { label: 'إنشاء مستودع',         icon: <GitBranch size={14} />,     color: '#a78bfa' },
+  list_files:         { label: 'عرض الملفات',          icon: <FolderOpen size={14} />,    color: '#60a5fa' },
+  read_file:          { label: 'قراءة ملف',             icon: <FileCode size={14} />,      color: '#fbbf24' },
+  push_file:          { label: 'رفع ملف',               icon: <FilePlus size={14} />,      color: '#34d399' },
+  push_files_batch:   { label: 'رفع ملفات (دفعة)',     icon: <FilePlus size={14} />,      color: '#34d399' },
+  list_branches:      { label: 'عرض الفروع',           icon: <GitBranch size={14} />,     color: '#60a5fa' },
+  create_branch:      { label: 'إنشاء فرع',            icon: <GitBranch size={14} />,     color: '#a78bfa' },
+  delete_branch:      { label: 'حذف فرع',              icon: <Trash2 size={14} />,        color: '#f87171' },
+  create_pull_request:{ label: 'إنشاء Pull Request',   icon: <GitPullRequest size={14} />,color: '#a78bfa' },
+  enable_pages:       { label: 'تفعيل GitHub Pages',   icon: <Zap size={14} />,           color: '#fbbf24' },
+  get_repo_info:      { label: 'معلومات المستودع',     icon: <Eye size={14} />,           color: '#60a5fa' },
 }
 
-function ArgsPreview({ args }: { args: Record<string, unknown> }) {
-  const [open, setOpen] = useState(false)
-  const entries = Object.entries(args).filter(([k]) => k !== 'token' && k !== '_login')
-  if (!entries.length) return null
-  const preview = entries.slice(0, 2).map(([k, v]) =>
-    `${k}: ${typeof v === 'string' ? v.slice(0, 40) : JSON.stringify(v).slice(0, 40)}`
-  ).join(' · ')
+function getResultSummary(tool: string, result: Record<string, unknown>): { summary: string; url?: string } {
+  if (!result) return { summary: '—' }
+  if (result.error) return { summary: `❌ ${String(result.error).slice(0, 60)}` }
+
+  switch (tool) {
+    case 'get_auth_user':
+      return { summary: `@${result.login || '?'} · ${result.public_repos ?? '?'} مستودع` }
+    case 'list_repos': {
+      const repos = result.repos as Array<{ full_name: string }> | undefined
+      const count = result.count ?? repos?.length ?? 0
+      const names = repos?.slice(0, 3).map(r => r.full_name.split('/')[1]).join('، ') || ''
+      return { summary: `${count} مستودع${names ? ' · ' + names : ''}` }
+    }
+    case 'create_repo': {
+      const url = result.html_url as string | undefined
+      return { summary: result.full_name ? String(result.full_name) : 'تم الإنشاء', url }
+    }
+    case 'list_files': {
+      const items = result.items as Array<{ name: string }> | undefined
+      const count = result.count ?? items?.length ?? 0
+      return { summary: `${count} ملف/مجلد` }
+    }
+    case 'read_file': {
+      const content = result.content as string | undefined
+      return { summary: content ? `${content.slice(0, 50)}…` : 'تمت القراءة' }
+    }
+    case 'push_file':
+    case 'push_files_batch': {
+      const sha = result.commit as string | undefined
+      const count = result.files_pushed as number | undefined
+      return {
+        summary: count != null ? `${count} ملف مرفوع` : sha ? `commit: ${String(sha).slice(0, 8)}` : 'تم الرفع',
+      }
+    }
+    case 'list_branches': {
+      const count = result.count ?? (result.branches as unknown[])?.length ?? 0
+      return { summary: `${count} فرع` }
+    }
+    case 'create_branch':
+      return { summary: result.branch ? `فرع: ${result.branch}` : 'تم الإنشاء' }
+    case 'delete_branch':
+      return { summary: 'تم الحذف' }
+    case 'create_pull_request': {
+      const url = result.html_url as string | undefined
+      return { summary: result.title ? String(result.title).slice(0, 50) : 'تم إنشاء PR', url }
+    }
+    case 'enable_pages': {
+      const url = result.html_url as string | undefined
+      return { summary: url ? `الموقع: ${url}` : 'تم التفعيل', url }
+    }
+    case 'get_repo_info': {
+      const url = result.html_url as string | undefined
+      return { summary: result.full_name ? String(result.full_name) : 'تمت القراءة', url }
+    }
+    default:
+      return { summary: JSON.stringify(result).slice(0, 60) }
+  }
+}
+
+function buildPhases(steps: ReActStep[], isLive: boolean): Phase[] {
+  const phases: Phase[] = []
+  let phaseId = 0
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    if (step.type !== 'tool_call') continue
+
+    phaseId++
+    const tool = step.tool || ''
+    const meta = TOOL_META[tool] || { label: tool, icon: <Brain size={14} />, color: '#9ca3af' }
+
+    // Look for the next observation
+    const obs = steps[i + 1]?.type === 'observation' ? steps[i + 1] : undefined
+    const hasResult = !!obs
+
+    let status: Phase['status'] = 'pending'
+    let summary = '...'
+    let resultUrl: string | undefined
+
+    if (hasResult) {
+      const r = getResultSummary(tool, obs!.result || {})
+      summary = r.summary
+      resultUrl = r.url
+      status = obs!.result?.error ? 'failed' : 'done'
+    } else if (isLive) {
+      status = 'running'
+      summary = 'جاري التنفيذ...'
+    }
+
+    phases.push({
+      id: phaseId,
+      tool,
+      thought: step.thought || '',
+      args: step.args || {},
+      label: meta.label,
+      icon: meta.icon,
+      color: meta.color,
+      status,
+      summary,
+      resultUrl,
+    })
+  }
+
+  return phases
+}
+
+function PhaseCard({ phase, isLast }: { phase: Phase; isLast: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasArgs = Object.keys(phase.args).filter(k => k !== 'token' && k !== '_login' && k !== 'content').length > 0
 
   return (
-    <div className="react-args">
-      <button className="react-args-toggle" onClick={() => setOpen(o => !o)}>
-        {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-        <span>{preview}{entries.length > 2 ? ' …' : ''}</span>
-      </button>
-      {open && (
-        <pre className="react-args-full">
-          {JSON.stringify(Object.fromEntries(entries), null, 2)}
-        </pre>
-      )}
-    </div>
-  )
-}
+    <div className={`rp-phase rp-phase--${phase.status}`}>
+      {/* Connector line */}
+      {!isLast && <div className="rp-connector" />}
 
-function ResultPreview({ result }: { result: Record<string, unknown> }) {
-  const [open, setOpen] = useState(false)
-  if (!result) return null
-  const isError = !!result.error
-  const summary = isError
-    ? String(result.error).slice(0, 80)
-    : result.html_url
-      ? String(result.html_url)
-      : result.full_name
-        ? String(result.full_name)
-        : result.commit
-          ? `commit: ${result.commit}`
-          : result.files_pushed
-            ? `${result.files_pushed} ملف مرفوع`
-            : result.count !== undefined
-              ? `${result.count} عنصر`
-              : JSON.stringify(result).slice(0, 80)
+      {/* Status dot */}
+      <div className="rp-phase-dot" style={{ borderColor: phase.status === 'done' ? '#22c55e' : phase.status === 'failed' ? '#ef4444' : phase.status === 'running' ? phase.color : '#2a2a2a' }}>
+        {phase.status === 'done'    && <CheckCircle2 size={11} color="#22c55e" />}
+        {phase.status === 'failed'  && <XCircle size={11} color="#ef4444" />}
+        {phase.status === 'running' && <Loader2 size={11} color={phase.color} className="rp-spin" />}
+        {phase.status === 'pending' && <span className="rp-phase-num">{phase.id}</span>}
+      </div>
 
-  return (
-    <div className={`react-result ${isError ? 'react-result--error' : 'react-result--ok'}`}>
-      <button className="react-args-toggle" onClick={() => setOpen(o => !o)}>
-        {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-        <span className="react-result-summary">{summary}</span>
-      </button>
-      {open && (
-        <pre className="react-args-full">
-          {JSON.stringify(result, null, 2).slice(0, 600)}
-        </pre>
-      )}
+      {/* Content */}
+      <div className="rp-phase-content">
+        <div className="rp-phase-header" onClick={() => hasArgs && setExpanded(e => !e)}>
+          <span className="rp-phase-icon" style={{ color: phase.color }}>{phase.icon}</span>
+          <span className="rp-phase-label" style={{ color: phase.status === 'pending' ? '#4b5563' : '#e5e7eb' }}>
+            {phase.label}
+          </span>
+          {phase.status === 'running' && (
+            <span className="rp-phase-badge rp-phase-badge--running">يعمل</span>
+          )}
+          {phase.status === 'failed' && (
+            <span className="rp-phase-badge rp-phase-badge--failed">فشل</span>
+          )}
+          <div className="rp-phase-summary" style={{
+            color: phase.status === 'failed' ? '#f87171'
+              : phase.status === 'done' ? '#6ee7b7'
+              : '#4b5563',
+          }}>
+            {phase.summary}
+          </div>
+          {phase.resultUrl && (
+            <a href={phase.resultUrl} target="_blank" rel="noopener noreferrer" className="rp-phase-link" onClick={e => e.stopPropagation()}>
+              <ExternalLink size={10} />
+            </a>
+          )}
+          {hasArgs && (
+            <button className="rp-expand-btn" onClick={e => { e.stopPropagation(); setExpanded(x => !x) }}>
+              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            </button>
+          )}
+        </div>
+
+        {/* Thought */}
+        {phase.thought && (
+          <div className="rp-phase-thought">"{phase.thought.slice(0, 100)}"</div>
+        )}
+
+        {/* Args detail (expandable) */}
+        {expanded && hasArgs && (
+          <div className="rp-phase-args">
+            {Object.entries(phase.args)
+              .filter(([k]) => k !== 'token' && k !== '_login' && k !== 'content')
+              .map(([k, v]) => (
+                <div key={k} className="rp-arg-row">
+                  <span className="rp-arg-key">{k}:</span>
+                  <span className="rp-arg-val">
+                    {typeof v === 'string' ? v.slice(0, 80) : JSON.stringify(v).slice(0, 80)}
+                  </span>
+                </div>
+              ))
+            }
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
 export default function GitHubReActPanel({ steps, isLive = false }: Props) {
-  if (!steps || steps.length === 0) return null
+  const [showReport, setShowReport] = useState(false)
 
   const startStep  = steps.find(s => s.type === 'start')
   const doneStep   = steps.find(s => s.type === 'done')
   const errorStep  = steps.find(s => s.type === 'error' || s.type === 'timeout')
-  const toolCalls  = steps.filter(s => s.type === 'tool_call')
-  const iterations = steps.filter(s => s.type === 'thinking').length
-
-  const ghUser = startStep?.message?.match(/@([\w-]+)/)?.[1]
+  const phases     = buildPhases(steps, isLive)
 
   const isComplete = !!doneStep
   const isFailed   = !!errorStep && !isComplete
+  const ghUser     = startStep?.message?.match(/@([\w-]+)/)?.[1]
+  const doneCount  = phases.filter(p => p.status === 'done').length
+  const failCount  = phases.filter(p => p.status === 'failed').length
 
-  const actionSteps: Array<{ call: ReActStep; obs?: ReActStep }> = []
-  for (let i = 0; i < steps.length; i++) {
-    if (steps[i].type === 'tool_call') {
-      const obs = steps[i + 1]?.type === 'observation' ? steps[i + 1] : undefined
-      actionSteps.push({ call: steps[i], obs })
-    }
-  }
+  // Auto-open report when done
+  useEffect(() => {
+    if (isComplete && doneStep?.content) setShowReport(true)
+  }, [isComplete, doneStep])
+
+  if (!steps || steps.length === 0) return null
 
   return (
-    <div className={`react-panel ${isLive ? 'react-panel--live' : ''} ${isComplete ? 'react-panel--done' : ''} ${isFailed ? 'react-panel--error' : ''}`}>
+    <div className={`rp-panel ${isLive ? 'rp-panel--live' : ''} ${isComplete ? 'rp-panel--done' : ''} ${isFailed ? 'rp-panel--failed' : ''}`}>
 
-      {/* Header */}
-      <div className="react-header">
-        <div className="react-header-left">
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="rp-header">
+        <div className="rp-header-left">
           <Github size={13} />
-          <span className="react-header-title">GitHub ReAct Agent</span>
-          {ghUser && <span className="react-header-user">@{ghUser}</span>}
+          <span className="rp-header-title">GitHub Agent</span>
+          {ghUser && <span className="rp-header-user">@{ghUser}</span>}
         </div>
-        <div className="react-header-right">
+        <div className="rp-header-right">
           {isLive && !isComplete && !isFailed && (
-            <span className="react-live-badge">
-              <Loader2 size={10} className="react-spin" />
-              يعمل
+            <span className="rp-badge rp-badge--live">
+              <Loader2 size={9} className="rp-spin" /> يعمل
             </span>
           )}
           {isComplete && (
-            <span className="react-done-badge">
-              <CheckCircle2 size={10} />
-              اكتمل
+            <span className="rp-badge rp-badge--done">
+              <CheckCircle2 size={9} /> اكتمل
             </span>
           )}
           {isFailed && (
-            <span className="react-error-badge">
-              <XCircle size={10} />
-              فشل
+            <span className="rp-badge rp-badge--failed">
+              <AlertTriangle size={9} /> فشل
             </span>
           )}
-          {iterations > 0 && (
-            <span className="react-iter-badge">
-              <Clock size={10} />
-              {iterations} دورة
+          {phases.length > 0 && (
+            <span className="rp-badge rp-badge--count">
+              <Clock size={9} />
+              {doneCount}/{phases.length} مرحلة
             </span>
           )}
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="react-timeline">
-
-        {/* Start row */}
-        {startStep && (
-          <div className="react-row react-row--start">
-            <div className="react-dot react-dot--start">
-              <Brain size={11} />
-            </div>
-            <div className="react-row-body">
-              <span className="react-row-label">بدء الوكيل</span>
-              {ghUser && <span className="react-row-detail">مرتبط بـ @{ghUser}</span>}
-            </div>
-          </div>
-        )}
-
-        {/* Tool call + observation pairs */}
-        {actionSteps.map((pair, idx) => {
-          const { call, obs } = pair
-          const toolName = call.tool || ''
-          const obsOk = obs && !obs.result?.error
-          const obsFailed = obs && !!obs.result?.error
-
-          return (
-            <div key={idx} className="react-action-group">
-              {/* Thought */}
-              {call.thought && (
-                <div className="react-row react-row--thought">
-                  <div className="react-dot react-dot--thought">
-                    <Brain size={10} />
-                  </div>
-                  <div className="react-row-body">
-                    <span className="react-thought-text">"{call.thought.slice(0, 120)}"</span>
-                  </div>
+      {/* ── Phases Pipeline ──────────────────────────────────────────────────── */}
+      {phases.length > 0 ? (
+        <div className="rp-pipeline">
+          <div className="rp-pipeline-title">المراحل</div>
+          <div className="rp-phases-list">
+            {phases.map((phase, idx) => (
+              <PhaseCard key={phase.id} phase={phase} isLast={idx === phases.length - 1} />
+            ))}
+            {/* Running indicator when live but no tool calls yet */}
+            {isLive && !isComplete && phases.length === 0 && (
+              <div className="rp-phase rp-phase--running">
+                <div className="rp-phase-dot" style={{ borderColor: '#60a5fa' }}>
+                  <Loader2 size={11} color="#60a5fa" className="rp-spin" />
                 </div>
-              )}
-
-              {/* Tool call */}
-              <div className="react-row react-row--tool">
-                <div className="react-dot react-dot--tool">
-                  <Wrench size={11} />
-                </div>
-                <div className="react-row-body">
-                  <div className="react-tool-line">
-                    <span className="react-tool-icon">{TOOL_ICONS[toolName] || <Wrench size={11} />}</span>
-                    <span className="react-tool-name">{TOOL_LABELS[toolName] || toolName}</span>
-                    <code className="react-tool-code">{toolName}()</code>
+                <div className="rp-phase-content">
+                  <div className="rp-phase-header">
+                    <span className="rp-phase-label">يحلّل الطلب...</span>
                   </div>
-                  {call.args && Object.keys(call.args).filter(k => k !== 'token' && k !== '_login').length > 0 && (
-                    <ArgsPreview args={call.args} />
-                  )}
                 </div>
               </div>
-
-              {/* Observation */}
-              {obs && (
-                <div className={`react-row react-row--obs ${obsOk ? 'react-row--obs-ok' : ''} ${obsFailed ? 'react-row--obs-err' : ''}`}>
-                  <div className={`react-dot react-dot--obs ${obsOk ? 'react-dot--ok' : ''} ${obsFailed ? 'react-dot--err' : ''}`}>
-                    {obsOk ? <CheckCircle2 size={10} /> : obsFailed ? <XCircle size={10} /> : <Eye size={10} />}
-                  </div>
-                  <div className="react-row-body">
-                    <span className="react-row-label">
-                      {obsOk ? '✅ نجح' : obsFailed ? '❌ فشل' : 'نتيجة'}
-                    </span>
-                    {obs.result && <ResultPreview result={obs.result} />}
-                  </div>
-                </div>
-              )}
-
-              {/* Loading next obs */}
-              {!obs && isLive && (
-                <div className="react-row react-row--obs-pending">
-                  <div className="react-dot react-dot--pending">
-                    <Loader2 size={10} className="react-spin" />
-                  </div>
-                  <div className="react-row-body">
-                    <span className="react-row-label react-row-label--muted">جاري التنفيذ...</span>
-                  </div>
-                </div>
-              )}
+            )}
+          </div>
+        </div>
+      ) : isLive && !isComplete ? (
+        <div className="rp-pipeline">
+          <div className="rp-phase rp-phase--running">
+            <div className="rp-phase-dot" style={{ borderColor: '#60a5fa' }}>
+              <Loader2 size={11} color="#60a5fa" className="rp-spin" />
             </div>
-          )
-        })}
-
-        {/* Live thinking indicator */}
-        {isLive && !isComplete && !isFailed && toolCalls.length === 0 && (
-          <div className="react-row react-row--thinking">
-            <div className="react-dot react-dot--thinking">
-              <Loader2 size={10} className="react-spin" />
-            </div>
-            <div className="react-row-body">
-              <span className="react-row-label react-row-label--muted">يحلّل الطلب...</span>
-              <div className="react-thinking-dots">
-                <span /><span /><span />
+            <div className="rp-phase-content">
+              <div className="rp-phase-header">
+                <span className="rp-phase-label" style={{ color: '#60a5fa' }}>يحلّل الطلب ويعدّ الأدوات...</span>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      ) : null}
 
-        {/* Error */}
-        {isFailed && (
-          <div className="react-row react-row--failed">
-            <div className="react-dot react-dot--err">
-              <AlertTriangle size={10} />
-            </div>
-            <div className="react-row-body">
-              <span className="react-row-label">{errorStep?.message || 'حدث خطأ'}</span>
-            </div>
-          </div>
-        )}
+      {/* ── Stats Bar ───────────────────────────────────────────────────────── */}
+      {phases.length > 0 && (
+        <div className="rp-stats">
+          <span className="rp-stat rp-stat--done">
+            <CheckCircle2 size={10} /> {doneCount} نجحت
+          </span>
+          {failCount > 0 && (
+            <span className="rp-stat rp-stat--failed">
+              <XCircle size={10} /> {failCount} فشلت
+            </span>
+          )}
+          <span className="rp-stat rp-stat--total">
+            {phases.length} مرحلة
+          </span>
+        </div>
+      )}
 
-        {/* Done */}
-        {isComplete && (
-          <div className="react-row react-row--complete">
-            <div className="react-dot react-dot--done">
-              <CheckCircle2 size={11} />
+      {/* ── Final Report ─────────────────────────────────────────────────────── */}
+      {isComplete && doneStep?.content && (
+        <div className="rp-report">
+          <button className="rp-report-toggle" onClick={() => setShowReport(r => !r)}>
+            <span className="rp-report-toggle-label">
+              <CheckCircle2 size={12} color="#22c55e" />
+              التقرير النهائي
+            </span>
+            {showReport ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+          {showReport && (
+            <div className="rp-report-body">
+              {doneStep.content}
             </div>
-            <div className="react-row-body">
-              <span className="react-row-label react-row-label--done">
-                اكتملت المهمة — {toolCalls.length} عملية
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Error ───────────────────────────────────────────────────────────── */}
+      {isFailed && errorStep?.message && (
+        <div className="rp-error-row">
+          <AlertTriangle size={11} color="#f87171" />
+          <span>{errorStep.message}</span>
+        </div>
+      )}
     </div>
   )
 }

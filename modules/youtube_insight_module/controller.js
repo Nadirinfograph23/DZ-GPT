@@ -364,8 +364,12 @@ function buildAnalysisPrompt(video, captionData) {
   const hasDesc = video.description && video.description.length > 30
   const hasKeywords = video.keywords && video.keywords.length > 0
 
+  const noCaptionsInstruction = hasDesc
+    ? `لا يوجد نص مُستخرج من الفيديو — لكن لديك العنوان والوصف والكلمات المفتاحية. استخدم هذه البيانات **إضافةً إلى معرفتك التدريبية الكاملة** عن هذا الموضوع لتقديم ملخص وافٍ ومفيد حقيقي — كأنك شاهدت الفيديو وتعرف محتواه جيداً.`
+    : `لا يوجد وصف ولا نص مُستخرج — لديك فقط العنوان: "${video.title}". استنِد على معرفتك التدريبية الكاملة عن هذا الموضوع وقدّم ملخصاً تعليمياً مفيداً يشرح ما يتناوله هذا النوع من المحتوى عادةً، بناءً على العنوان.`
+
   const lines = [
-    `أنت DZ Agent — محلّل فيديوهات خبير. مهمتك تقديم تحليل عميق ومفيد حقيقي.`,
+    `أنت DZ Agent — محلّل فيديوهات خبير. مهمتك تقديم ملخص عميق ومفيد فعلاً للمستخدم.`,
     ``,
     `## بيانات الفيديو`,
     `- **العنوان:** ${video.title}`,
@@ -378,34 +382,36 @@ function buildAnalysisPrompt(video, captionData) {
     hasDesc ? `## وصف الفيديو\n${video.description.slice(0, 1200)}` : null,
     hasCaptions ? `## نص مقتطف من الفيديو (${captionData.name || captionData.lang})\n${captionData.text.slice(0, 3000)}` : null,
     ``,
-    `## مهمتك — التحليل العميق`,
+    `## مهمتك`,
     hasCaptions
       ? `لديك نص حقيقي مستخرج من الفيديو — استخدمه لتقديم تحليل دقيق وتفصيلي.`
-      : `لا يوجد نص مرفق — لكن بناءً على العنوان والوصف والكلمات المفتاحية، قدّم تحليلاً موضوعياً عميقاً للمحتوى.`,
+      : noCaptionsInstruction,
     ``,
-    `قدّم الإجابة بهذا الهيكل بالضبط:`,
+    `قدّم الإجابة بهذا الهيكل:`,
     ``,
     `### 🎬 ملخص الفيديو`,
-    `(3-5 جمل تشرح المحتوى الفعلي — ليس فقط إعادة صياغة العنوان)`,
+    hasCaptions
+      ? `(3-5 جمل تشرح المحتوى الفعلي بناءً على النص المستخرج)`
+      : `(اشرح بـ3-5 جمل ما يتناوله هذا الفيديو — استنِد على العنوان والوصف ومعرفتك بالموضوع، لا تكتفِ بإعادة صياغة العنوان)`,
     ``,
     `### 💡 أبرز ما يحتويه الفيديو`,
-    `- نقطة 1 (محددة وذات قيمة)`,
-    `- نقطة 2`,
-    `- نقطة 3`,
-    `- نقطة 4 (إن وجد)`,
+    `- نقطة محددة وذات قيمة`,
+    `- نقطة ثانية`,
+    `- نقطة ثالثة`,
+    `- نقطة رابعة (إن وجد)`,
     ``,
     `### 🎯 من يستفيد من هذا الفيديو؟`,
-    `(حدّد الجمهور المستهدف بدقة: مبتدئ / متوسط / متقدم، ومن هم)`,
+    `(مبتدئ / متوسط / متقدم — ومن هم تحديداً)`,
     ``,
-    `### ✅ نقاط القوة`,
-    `(ما يجعل هذا الفيديو مفيداً أو مميزاً)`,
+    `### ✅ لماذا يستحق المشاهدة؟`,
+    `(جملة أو اثنتان تقنعان المستخدم بقيمة الفيديو)`,
     ``,
-    `### 📊 التقييم العام`,
-    `(من 5 نجوم + جملة تقييمية واضحة)`,
+    `### 📊 التقييم`,
+    `(★★★★☆ مثلاً + جملة تقييمية مختصرة)`,
     ``,
-    !hasCaptions ? `> ℹ️ ملاحظة: التحليل مبني على العنوان والوصف والكلمات المفتاحية — لا يتوفر نص الفيديو الكامل.` : null,
+    !hasCaptions ? `> ℹ️ الملخص مبني على العنوان والوصف ومعرفة DZ Agent بهذا المجال.` : null,
     ``,
-    `أجب بالعربية. ابدأ مباشرةً بالهيكل. لا مقدمات.`,
+    `أجب بالعربية. ابدأ مباشرةً. لا مقدمات ولا تكرار للتعليمات.`,
   ].filter(l => l !== null).join('\n')
 
   return lines
@@ -415,7 +421,7 @@ function buildAnalysisPrompt(video, captionData) {
 // handleYouTubeInput — Entry point: URL analysis OR keyword search
 // ═══════════════════════════════════════════════════════════════════════════
 export async function handleYouTubeInput(urlOrQuery, opts = {}) {
-  const { aiGenerate } = opts
+  const { aiGenerate, preloadedMeta } = opts
 
   // ── URL Mode ─────────────────────────────────────────────────────────────
   if (isYtUrl(urlOrQuery)) {
@@ -424,7 +430,7 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       return { flow: 'url', message: '⚠️ لم أتمكن من استخراج معرّف الفيديو من الرابط.' }
     }
 
-    console.log(`[YouTube Insight] URL mode — videoId: ${videoId}`)
+    console.log(`[YouTube Insight] URL mode — videoId: ${videoId} preloaded=${!!preloadedMeta?.title}`)
 
     // ── 1. Get metadata: scrape YouTube page (primary) → Invidious (fallback) ──
     let video = await scrapeYouTubePage(videoId)
@@ -433,15 +439,36 @@ export async function handleYouTubeInput(urlOrQuery, opts = {}) {
       video = await fetchVideoMetaInvidious(videoId)
     }
 
-    // Last resort: bare minimum from video ID
+    // Last resort: use preloaded metadata from search results card (if available),
+    // or fall back to bare minimum so we can still generate an AI summary from the title
     if (!video) {
-      video = {
-        id: videoId, title: 'فيديو YouTube', description: '', author: '',
-        duration: 0, views: 0, published: '', keywords: [],
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        captionTracks: [],
+      if (preloadedMeta?.title) {
+        console.log(`[YouTube Insight] Using preloaded meta for ${videoId}: "${preloadedMeta.title}"`)
+        video = {
+          id: videoId,
+          title: preloadedMeta.title,
+          description: preloadedMeta.description || '',
+          author: preloadedMeta.channel || '',
+          duration: preloadedMeta.duration || 0,
+          views: preloadedMeta.views || 0,
+          published: '',
+          keywords: [],
+          thumbnail: preloadedMeta.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          captionTracks: [],
+        }
+      } else {
+        video = {
+          id: videoId, title: 'فيديو YouTube', description: '', author: '',
+          duration: 0, views: 0, published: '', keywords: [],
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          captionTracks: [],
+        }
       }
+    } else if (preloadedMeta?.description && (!video.description || video.description.length < preloadedMeta.description.length)) {
+      // Enrich scraped data with preloaded description if it's longer
+      video.description = preloadedMeta.description
     }
 
     // ── 2. Get captions from extracted tracks ────────────────────────────

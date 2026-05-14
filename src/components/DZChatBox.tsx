@@ -1701,6 +1701,7 @@ function YouTubePanel({
   captionText,
   onAsk,
   onDiscuss,
+  onAnalyzeWithMeta,
 }: {
   video?: YouTubeVideoData
   results?: YouTubeResult[]
@@ -1711,6 +1712,7 @@ function YouTubePanel({
   captionText?: string
   onAsk?: (q: string) => void
   onDiscuss?: (video: YouTubeResult) => void
+  onAnalyzeWithMeta?: (video: YouTubeResult) => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(
     flow === 'url' && video?.id ? video.id : null,
@@ -1889,7 +1891,7 @@ function YouTubePanel({
             <div className="dzc-yt-action-btns">
               <button
                 className="dzc-yt-action-btn dzc-yt-action-btn--analyze"
-                onClick={() => onAsk?.(selectedVideo.url)}
+                onClick={() => onAnalyzeWithMeta ? onAnalyzeWithMeta(selectedVideo) : onAsk?.(selectedVideo.url)}
               >
                 🔍 حلل هذا الفيديو
               </button>
@@ -3202,6 +3204,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   // (React setState is async — calling sendMessage() right after setActiveYouTubeVideo()
   //  would still read the old state value without this ref)
   const activeYouTubeVideoRef = useRef<YouTubeVideoData | null>(null)
+  // Preloaded metadata from a search-result card — sent with the next analyze request
+  // so the server can use title/description immediately even if page scraping fails
+  const youtubePreloadedMetaRef = useRef<YouTubeResult | null>(null)
   // Smart Video Selection — stores last search results so they can be sent as candidates
   const youtubeCandidatesRef = useRef<YouTubeResult[]>([])
 
@@ -4323,6 +4328,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               dashboardContext,
               youtubeContext: activeYouTubeVideoRef.current || undefined,
               youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
+              youtubePreloadedMeta: youtubePreloadedMetaRef.current || undefined,
             }),
             signal,
           })
@@ -4953,6 +4959,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                           captionNote={msg.captionNote}
                           captionText={msg.captionText}
                           onAsk={(q) => sendMessage(q)}
+                          onAnalyzeWithMeta={(ytResult) => {
+                            // Pass preloaded metadata so the server skips scraping
+                            // and can summarize directly from title + description
+                            youtubePreloadedMetaRef.current = ytResult
+                            sendMessage(ytResult.url)
+                            // Clear after a tick so ref is read before cleanup
+                            setTimeout(() => { youtubePreloadedMetaRef.current = null }, 100)
+                          }}
                           onDiscuss={(ytResult) => {
                             const videoData: YouTubeVideoData = {
                               id: ytResult.id,

@@ -9200,8 +9200,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[YouTube Insight] Detected: flow=${_ytUrlInMsg ? 'url' : 'search'} input="${lastUserMessage.slice(0, 80)}"`)
     try {
       const ytInput = _ytUrlInMsg || lastUserMessage
+      const _ytPreloadedMeta = req.body.youtubePreloadedMeta && typeof req.body.youtubePreloadedMeta === 'object'
+        ? req.body.youtubePreloadedMeta
+        : null
       const ytResult = await handleYouTubeInput(ytInput, {
         aiGenerate: (params) => safeGenerateAI({ ...params }),
+        preloadedMeta: _ytPreloadedMeta,
       })
       if (ytResult.flow === 'url') {
         return res.status(200).json({

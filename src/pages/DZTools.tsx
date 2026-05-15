@@ -21,11 +21,23 @@ function CVTool() {
     summary: '', experience: '', education: '', skills: '', languages: '',
     outputLang: 'ar',
   })
-  const [result, setResult] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [result, setResult]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [copied, setCopied]     = useState(false)
+  const [photo, setPhoto]       = useState<string>('')
+  const [photoDrag, setPhotoDrag] = useState(false)
+
+  const photoInputRef  = useRef<HTMLInputElement>(null)
+  const resultBodyRef  = useRef<HTMLDivElement>(null)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handlePhotoFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = ev => setPhoto(ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const generate = async () => {
     if (!form.name.trim()) return
@@ -74,10 +86,110 @@ Rendez le CV professionnel, structuré, prêt pour les employeurs.`
   const copyResult = () => {
     navigator.clipboard.writeText(result).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
+
   const downloadMd = () => {
     const blob = new Blob([result], { type: 'text/markdown;charset=utf-8' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
     a.download = `cv-${form.name.replace(/\s+/g,'-') || 'dz'}.md`; a.click()
+  }
+
+  const printCV = () => {
+    const bodyHtml = resultBodyRef.current?.innerHTML || ''
+    const isRtl = form.outputLang === 'ar'
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html>
+<html lang="${isRtl ? 'ar' : 'fr'}" dir="${isRtl ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${isRtl ? 'السيرة الذاتية' : 'Curriculum Vitae'} — ${form.name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: ${isRtl ? "'Cairo'" : "'Inter'"}, system-ui, sans-serif;
+    direction: ${isRtl ? 'rtl' : 'ltr'};
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 13px;
+    line-height: 1.7;
+    padding: 32px 40px;
+  }
+  .cv-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #c8ff00;
+    margin-bottom: 24px;
+    flex-direction: ${isRtl ? 'row' : 'row'};
+  }
+  .cv-photo-wrap {
+    flex-shrink: 0;
+  }
+  .cv-photo {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #c8ff00;
+    display: block;
+  }
+  .cv-photo-placeholder {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1a1a2e, #0f3460);
+    border: 3px solid #c8ff00;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+  }
+  .cv-name-block { flex: 1; }
+  .cv-name { font-size: 26px; font-weight: 800; color: #0a0a0a; margin-bottom: 4px; }
+  .cv-title { font-size: 15px; color: #555; font-weight: 600; margin-bottom: 8px; }
+  .cv-contacts { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #666; }
+  .cv-contact { display: flex; align-items: center; gap: 4px; }
+  .cv-body h1, .cv-body h2 { color: #0a0a0a; border-bottom: 2px solid #e5e5e5; padding-bottom: 4px; margin: 18px 0 8px; font-size: 15px; font-weight: 800; }
+  .cv-body h3 { font-size: 13px; font-weight: 700; margin: 12px 0 4px; color: #222; }
+  .cv-body p { margin-bottom: 6px; color: #333; }
+  .cv-body ul { padding-${isRtl ? 'right' : 'left'}: 18px; margin-bottom: 8px; }
+  .cv-body li { margin-bottom: 3px; color: #333; }
+  .cv-body strong { color: #0a0a0a; font-weight: 700; }
+  .cv-body hr { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+  @media print {
+    body { padding: 20px 24px; }
+    .cv-header { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="cv-header">
+  <div class="cv-photo-wrap">
+    ${photo
+      ? `<img src="${photo}" class="cv-photo" alt="${form.name}" />`
+      : `<div class="cv-photo-placeholder">👤</div>`
+    }
+  </div>
+  <div class="cv-name-block">
+    <div class="cv-name">${form.name || ''}</div>
+    ${form.title ? `<div class="cv-title">${form.title}</div>` : ''}
+    <div class="cv-contacts">
+      ${form.phone  ? `<span class="cv-contact">📞 ${form.phone}</span>` : ''}
+      ${form.email  ? `<span class="cv-contact">✉️ ${form.email}</span>` : ''}
+      ${form.city   ? `<span class="cv-contact">📍 ${form.city}</span>` : ''}
+    </div>
+  </div>
+</div>
+<div class="cv-body">
+  ${bodyHtml}
+</div>
+<script>window.onload = function(){ window.print(); }<\/script>
+</body></html>`)
+    win.document.close()
   }
 
   return (
@@ -88,6 +200,52 @@ Rendez le CV professionnel, structuré, prêt pour les employeurs.`
           <div className="dzt-tool-desc-title">مولّد السيرة الذاتية الذكي</div>
           <div className="dzt-tool-desc-text">أدخل معلوماتك وسيُنشئ DZ Agent سيرة ذاتية احترافية جاهزة للتحميل أو الطباعة مباشرة.</div>
         </div>
+      </div>
+
+      {/* ── Photo Upload ── */}
+      <div className="dzt-photo-section">
+        <div className="dzt-photo-label">
+          <span>🖼️ الصورة الشخصية</span>
+          <span className="dzt-photo-hint">اختياري — تظهر في نسخة الطباعة</span>
+        </div>
+        <div
+          className={`dzt-photo-drop ${photoDrag ? 'dzt-photo-drop--drag' : ''} ${photo ? 'dzt-photo-drop--has' : ''}`}
+          onClick={() => photoInputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setPhotoDrag(true) }}
+          onDragLeave={() => setPhotoDrag(false)}
+          onDrop={e => {
+            e.preventDefault(); setPhotoDrag(false)
+            const file = e.dataTransfer.files?.[0]
+            if (file) handlePhotoFile(file)
+          }}
+        >
+          {photo ? (
+            <div className="dzt-photo-preview-wrap">
+              <img src={photo} alt="صورة شخصية" className="dzt-photo-preview" />
+              <div className="dzt-photo-overlay">
+                <span>تغيير الصورة</span>
+              </div>
+              <button
+                className="dzt-photo-remove"
+                onClick={e => { e.stopPropagation(); setPhoto('') }}
+                title="حذف الصورة"
+              >✕</button>
+            </div>
+          ) : (
+            <div className="dzt-photo-empty">
+              <span className="dzt-photo-empty-icon">📷</span>
+              <span className="dzt-photo-empty-text">اضغط لرفع صورة أو اسحبها هنا</span>
+              <span className="dzt-photo-empty-sub">JPG, PNG, WEBP — من الهاتف أو الحاسوب</span>
+            </div>
+          )}
+        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoFile(f) }}
+        />
       </div>
 
       <div className="dzt-form">
@@ -170,12 +328,22 @@ Rendez le CV professionnel, structuré, prêt pour les employeurs.`
               <button className="dzt-result-btn" onClick={downloadMd}>
                 <Download size={12} /> تحميل MD
               </button>
-              <button className="dzt-result-btn" onClick={() => window.print()}>
-                <Printer size={12} /> طباعة PDF
+              <button className="dzt-result-btn dzt-result-btn--print" onClick={printCV}>
+                <Printer size={12} /> طباعة / PDF
               </button>
             </div>
           </div>
-          <div className="dzt-result-body">
+          {/* Photo preview in result */}
+          {photo && (
+            <div className="dzt-result-photo-bar">
+              <img src={photo} alt="الصورة الشخصية" className="dzt-result-photo" />
+              <div className="dzt-result-photo-info">
+                <span className="dzt-result-photo-name">{form.name}</span>
+                <span className="dzt-result-photo-title">{form.title}</span>
+              </div>
+            </div>
+          )}
+          <div className="dzt-result-body" ref={resultBodyRef}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown>
           </div>
         </div>

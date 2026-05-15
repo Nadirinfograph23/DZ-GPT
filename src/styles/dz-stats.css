@@ -1,0 +1,161 @@
+/* ===== DZ STATS PAGE ===== */
+.dzs-layout {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e5e5e5;
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  direction: rtl;
+  padding: 24px 20px 60px;
+}
+.dzs-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #1a1a1a;
+}
+.dzs-back {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid #222;
+  color: #aaa;
+  border-radius: 10px;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.dzs-back:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.dzs-title { font-size: 22px; font-weight: 800; background: linear-gradient(135deg,#c8ff00,#00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.dzs-subtitle { font-size: 13px; color: #555; margin-top: 2px; }
+
+.dzs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.dzs-card {
+  background: #111;
+  border: 1px solid #1d1d1d;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color .2s;
+}
+.dzs-card:hover { border-color: #333; }
+.dzs-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.dzs-card-value {
+  font-size: 32px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+.dzs-card-label {
+  font-size: 13px;
+  color: #666;
+}
+.dzs-card-accent { border-color: rgba(200,255,0,.18); }
+.dzs-card-accent .dzs-card-value { color: #c8ff00; }
+
+.dzs-section {
+  background: #111;
+  border: 1px solid #1d1d1d;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.dzs-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dzs-section-icon { font-size: 18px; }
+
+/* Top intents bar chart */
+.dzs-intent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.dzs-intent-label { width: 130px; font-size: 13px; color: #ccc; flex-shrink: 0; }
+.dzs-intent-bar-wrap { flex: 1; background: #1a1a1a; border-radius: 999px; height: 8px; overflow: hidden; }
+.dzs-intent-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#c8ff00,#00ff88); transition: width .5s ease; }
+.dzs-intent-count { width: 32px; text-align: left; font-size: 12px; color: #666; }
+
+/* Top features */
+.dzs-feature-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.dzs-feature-chip {
+  background: rgba(200,255,0,.08);
+  border: 1px solid rgba(200,255,0,.18);
+  color: #c8ff00;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Recent queries */
+.dzs-query-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #181818;
+}
+.dzs-query-item:last-child { border-bottom: none; }
+.dzs-query-intent {
+  background: #1a1a1a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dzs-query-text { font-size: 13.5px; color: #ccc; line-height: 1.4; }
+.dzs-query-time { font-size: 11px; color: #444; white-space: nowrap; margin-right: auto; }
+
+/* Ratings */
+.dzs-ratings-row {
+  display: flex;
+  gap: 16px;
+}
+.dzs-rating-box {
+  flex: 1;
+  background: #161616;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.dzs-rating-box-val { font-size: 28px; font-weight: 800; }
+.dzs-rating-box-lbl { font-size: 12px; color: #666; margin-top: 4px; }
+.dzs-rating-up .dzs-rating-box-val { color: #22c55e; }
+.dzs-rating-down .dzs-rating-box-val { color: #ef4444; }
+
+/* Empty state */
+.dzs-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #444;
+}
+.dzs-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.dzs-empty-text { font-size: 14px; }
+
+@media (max-width: 600px) {
+  .dzs-layout { padding: 16px 12px 40px; }
+  .dzs-grid { grid-template-columns: repeat(2, 1fr); }
+  .dzs-card { padding: 14px; }
+  .dzs-card-value { font-size: 26px; }
+}

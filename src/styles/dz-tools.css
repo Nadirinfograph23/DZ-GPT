@@ -1,0 +1,205 @@
+/* ===== DZ TOOLS PAGE ===== */
+.dzt-layout {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e5e5e5;
+  font-family: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  direction: rtl;
+}
+.dzt-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #0d0d0d;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.dzt-back {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid #222;
+  color: #aaa;
+  border-radius: 10px;
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.dzt-back:hover { background: rgba(255,255,255,.12); color: #fff; }
+.dzt-brand { display: flex; flex-direction: column; }
+.dzt-brand-name { font-size: 18px; font-weight: 800; background: linear-gradient(135deg,#c8ff00,#00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.dzt-brand-sub { font-size: 11px; color: #555; }
+
+/* Tab bar */
+.dzt-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid #1a1a1a;
+  overflow-x: auto;
+}
+.dzt-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all .15s;
+  border-radius: 8px 8px 0 0;
+}
+.dzt-tab:hover { color: #ccc; background: rgba(255,255,255,.04); }
+.dzt-tab.active { color: #c8ff00; border-bottom-color: #c8ff00; }
+.dzt-tab-icon { font-size: 16px; }
+
+/* Content area */
+.dzt-content {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+
+/* Tool description card */
+.dzt-tool-desc {
+  background: linear-gradient(135deg, rgba(200,255,0,.06), rgba(0,255,136,.04));
+  border: 1px solid rgba(200,255,0,.15);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.dzt-tool-desc-icon { font-size: 36px; flex-shrink: 0; }
+.dzt-tool-desc-title { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+.dzt-tool-desc-text { font-size: 13.5px; color: #888; line-height: 1.6; }
+
+/* Form */
+.dzt-form { display: flex; flex-direction: column; gap: 16px; }
+.dzt-field { display: flex; flex-direction: column; gap: 6px; }
+.dzt-label { font-size: 13px; font-weight: 700; color: #ccc; }
+.dzt-input, .dzt-textarea, .dzt-select {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  color: #e5e5e5;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color .15s;
+  direction: rtl;
+}
+.dzt-input:focus, .dzt-textarea:focus, .dzt-select:focus { border-color: rgba(200,255,0,.4); }
+.dzt-textarea { min-height: 90px; resize: vertical; line-height: 1.6; }
+.dzt-select option { background: #111; }
+
+.dzt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Submit button */
+.dzt-btn {
+  background: linear-gradient(135deg, #c8ff00, #00ff88);
+  color: #0a0a0a;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 28px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all .15s;
+  margin-top: 4px;
+}
+.dzt-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(200,255,0,.25); }
+.dzt-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* Result area */
+.dzt-result {
+  background: #0f0f0f;
+  border: 1px solid #1d1d1d;
+  border-radius: 16px;
+  margin-top: 24px;
+  overflow: hidden;
+}
+.dzt-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #111;
+}
+.dzt-result-title { font-size: 14px; font-weight: 700; color: #c8ff00; display: flex; align-items: center; gap: 7px; }
+.dzt-result-actions { display: flex; gap: 8px; }
+.dzt-result-btn {
+  background: rgba(255,255,255,.06);
+  border: 1px solid #222;
+  color: #ccc;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex; align-items: center; gap: 5px;
+  transition: all .15s;
+}
+.dzt-result-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.dzt-result-body {
+  padding: 20px;
+  font-size: 14.5px;
+  line-height: 1.9;
+  color: #ddd;
+  white-space: pre-wrap;
+  direction: rtl;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.dzt-result-body h1, .dzt-result-body h2, .dzt-result-body h3 { color: #fff; margin: 12px 0 6px; }
+.dzt-result-body strong { color: #c8ff00; }
+.dzt-result-body hr { border-color: #222; margin: 14px 0; }
+
+/* Loading state */
+.dzt-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: #666;
+  font-size: 14px;
+}
+.dzt-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid #222;
+  border-top-color: #c8ff00;
+  border-radius: 50%;
+  animation: dzt-spin .8s linear infinite;
+}
+@keyframes dzt-spin { to { transform: rotate(360deg); } }
+
+/* CV preview print area */
+@media print {
+  .dzt-header, .dzt-tabs, .dzt-form, .dzt-tool-desc,
+  .dzt-result-header, .dzt-back { display: none !important; }
+  .dzt-result-body { max-height: none; padding: 0; font-size: 12pt; color: #000; background: #fff; }
+}
+
+@media (max-width: 640px) {
+  .dzt-content { padding: 16px 12px 40px; }
+  .dzt-row { grid-template-columns: 1fr; }
+  .dzt-tabs { padding: 12px 12px 0; }
+  .dzt-header { padding: 14px 16px; }
+}

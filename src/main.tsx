@@ -9,6 +9,8 @@ import DZAgentV3 from './pages/DZAgentV3.tsx'
 import AIQuran from './pages/AIQuran.tsx'
 import DZChat from './pages/DZChat.tsx'
 import DZTube from './pages/DZTube.tsx'
+import DZStats from './pages/DZStats.tsx'
+import DZTools from './pages/DZTools.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 
@@ -51,6 +53,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/dz-tube" element={<DZTube />} />
             <Route path="/dztube" element={<Navigate to="/dz-tube" replace />} />
             <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
+            <Route path="/stats" element={<DZStats />} />
+            <Route path="/tools" element={<DZTools />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <MiniPlayer />

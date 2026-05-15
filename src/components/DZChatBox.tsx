@@ -4982,40 +4982,43 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         ) : (
           <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
         )}
-        {messages.length > 0 && (
+        <div className="dz-toolbar-spacer" />
+        <div className="dz-toolbar-actions">
+          {messages.length > 0 && (
+            <button
+              className="gh-log-toggle"
+              onClick={exportAsMarkdown}
+              title="تصدير المحادثة كـ Markdown"
+            >
+              <Download size={13} />
+              تصدير
+            </button>
+          )}
           <button
             className="gh-log-toggle"
-            onClick={exportAsMarkdown}
-            title="تصدير المحادثة كـ Markdown"
+            onClick={() => window.open('/stats', '_blank')}
+            title="إحصاءاتك"
           >
-            <Download size={13} />
-            تصدير
+            <BarChart2 size={13} />
+            إحصاءات
           </button>
-        )}
-        <button
-          className="gh-log-toggle"
-          onClick={() => window.open('/stats', '_blank')}
-          title="إحصاءاتك"
-        >
-          <BarChart2 size={13} />
-          إحصاءات
-        </button>
-        <button
-          className="gh-log-toggle"
-          onClick={() => window.open('/tools', '_blank')}
-          title="أدوات ذكية: سيرة ذاتية، مخطط مشاريع، تحليل قانوني"
-        >
-          <Wrench size={13} />
-          أدوات
-        </button>
-        <button
-          className={`gh-log-toggle ${showLog ? 'active' : ''}`}
-          onClick={() => setShowLog(!showLog)}
-          title="سجل الإجراءات"
-        >
-          <Terminal size={13} />
-          السجل ({actionLog.length})
-        </button>
+          <button
+            className="gh-log-toggle"
+            onClick={() => window.open('/tools', '_blank')}
+            title="أدوات ذكية: سيرة ذاتية، مخطط مشاريع، تحليل قانوني"
+          >
+            <Wrench size={13} />
+            أدوات
+          </button>
+          <button
+            className={`gh-log-toggle ${showLog ? 'active' : ''}`}
+            onClick={() => setShowLog(!showLog)}
+            title="سجل الإجراءات"
+          >
+            <Terminal size={13} />
+            السجل {actionLog.length > 0 && <span className="dz-log-badge">{actionLog.length}</span>}
+          </button>
+        </div>
       </div>
 
       {/* Auth error */}
@@ -5087,7 +5090,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               <div className="dz-message-sender">
                 {msg.role === 'user' ? 'You' : 'DZ Agent'}
               </div>
-              <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`} dir="auto">
+              <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`} dir="rtl">
                 {msg.role === 'assistant' && msg.thinkingTrace && msg.thinkingTrace.length > 0 && (
                   <ThinkingTracePanel roles={msg.thinkingTrace} />
                 )}
@@ -5105,13 +5108,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            p({ children }) { return <p dir="auto">{children}</p> },
-                            li({ children, ...props }) { return <li dir="auto" {...props}>{children}</li> },
-                            h1({ children }) { return <h1 dir="auto">{children}</h1> },
-                            h2({ children }) { return <h2 dir="auto">{children}</h2> },
-                            h3({ children }) { return <h3 dir="auto">{children}</h3> },
-                            h4({ children }) { return <h4 dir="auto">{children}</h4> },
-                            blockquote({ children }) { return <blockquote dir="auto">{children}</blockquote> },
+                            p({ children }) { return <p dir="rtl">{children}</p> },
+                            li({ children, ...props }) { return <li dir="rtl" {...props}>{children}</li> },
+                            h1({ children }) { return <h1 dir="rtl">{children}</h1> },
+                            h2({ children }) { return <h2 dir="rtl">{children}</h2> },
+                            h3({ children }) { return <h3 dir="rtl">{children}</h3> },
+                            h4({ children }) { return <h4 dir="rtl">{children}</h4> },
+                            blockquote({ children }) { return <blockquote dir="rtl">{children}</blockquote> },
                             code({ className, children, ...props }) {
                               const isBlock = className?.startsWith('language-')
                               if (isBlock) return <DZCodeBlock className={className}>{children}</DZCodeBlock>

@@ -1052,6 +1052,7 @@
   font-size: 15px;
   line-height: 1.65;
   color: #e5e5e5;
+  unicode-bidi: plaintext;
 }
 
 .dz-message--user .dz-message-text {
@@ -1062,6 +1063,15 @@
   display: inline-block;
   max-width: 100%;
 }
+
+/* RTL Arabic alignment */
+.dz-message-text[dir="rtl"] { text-align: right; }
+.dz-message-text p,
+.dz-message-text li,
+.dz-message-text h1,
+.dz-message-text h2,
+.dz-message-text h3,
+.dz-message-text blockquote { unicode-bidi: plaintext; text-align: inherit; }
 
 /* markdown in assistant messages */
 .dz-message--assistant .dz-message-text p { margin: 0 0 10px; }

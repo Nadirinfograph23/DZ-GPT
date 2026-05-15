@@ -11,6 +11,7 @@ import DZChat from './pages/DZChat.tsx'
 import DZTube from './pages/DZTube.tsx'
 import DZStats from './pages/DZStats.tsx'
 import DZTools from './pages/DZTools.tsx'
+import DZWebBuilder from './pages/DZWebBuilder.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 
@@ -55,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/aiquran" element={<Navigate to="/quran" replace />} />
             <Route path="/stats" element={<DZStats />} />
             <Route path="/tools" element={<DZTools />} />
+            <Route path="/web-builder" element={<DZWebBuilder />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <MiniPlayer />

@@ -891,6 +891,10 @@ function App() {
                 <Video size={14} />
                 <span>DZ Tube</span>
               </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/web-builder'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <span style={{ fontSize: 14 }}>🌐</span>
+                <span>Web Builder</span>
+              </button>
             </div>
           )}
         </div>
@@ -987,6 +991,14 @@ function App() {
               >
                 <span className="dz-tube-badge">NEW</span>
                 <Video size={14} style={{ verticalAlign: 'middle', marginInlineEnd: 4 }} /> DZ Tube
+              </button>
+              <button
+                className="model-tab"
+                onClick={() => navigate('/web-builder')}
+                title="DZ Web Builder"
+                style={{ gap: 4 }}
+              >
+                🌐 Web Builder
               </button>
             </div>
           </div>

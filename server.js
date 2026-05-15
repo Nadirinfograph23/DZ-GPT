@@ -2972,18 +2972,25 @@ IMAGE RECOVERY & FALLBACK SYSTEM (V2.1):
 10. Output production-ready, fully runnable single-file HTML
 
 DESIGN REFERENCES (inspiration sources — match this quality):
-- shadcn/ui → clean component system, well-spaced, professional
-- Aceternity UI → animated backgrounds, spotlight effects, moving cards
-- Magic UI → particle effects, shimmer borders, animated gradients
-- Tremor → dashboard components, charts, stats, data visualization
+- shadcn/ui (ui.shadcn.com) → clean component system, well-spaced, professional
+- Aceternity UI (ui.aceternity.com) → animated backgrounds, spotlight effects, moving cards, 3D transforms
+- Magic UI (magicui.design) → particle effects, shimmer borders, animated gradients, beam effects
+- HeroUI (heroui.com) → next-gen React components, elegant animations, dark variants
+- Framer Motion patterns → spring animations, layout transitions, exit animations, gesture-driven UI
+- 21st.dev → cutting-edge web components, innovative UI patterns
+- Flowbite (flowbite.com) → Tailwind component blocks, modals, navbars, dropdowns, forms
+- DaisyUI (daisyui.com) → semantic Tailwind components, themeable design system
+- HyperUI (hyperui.dev) → utility-first Tailwind components, hero sections, pricing, bento grids
+- Tabler (tabler.io) → admin dashboards, data tables, KPI widgets, charts
+- Tremor → dashboard charts, stats, data visualization, analytics widgets
 - Origin UI → modern form elements, toggles, polished micro-interactions
 - Uiverse → creative CSS-only cards, buttons, loaders, toggles
-- Flowbite → Tailwind component blocks, modals, navbars, dropdowns
-- HyperUI → utility-first Tailwind components, hero sections, pricing
+- Tailwind UI (tailwindui.com) → premium Tailwind templates, marketing sections, app UI
+- Dribbble / Behance / Mobbin → visual design trends, mobile UI patterns, color inspiration
 
 ════════════════════════════════════════════
 QUALITY BARS (MANDATORY — NO EXCEPTIONS):
-✅ MUST look like Vercel / Linear / Stripe / Notion — top-tier SaaS quality
+✅ MUST look like Vercel / Linear / Stripe / Notion / OpenAI / Framer — top-tier SaaS quality
 ✅ MUST use realistic content (no "Lorem ipsum", no "Title here", no "Description...")
 ✅ MUST use Font Awesome icons on every feature card
 ✅ MUST have working JS (no dead buttons, no broken interactions)

@@ -15,6 +15,7 @@ export interface ReActStep {
   args?: Record<string, unknown>
   result?: Record<string, unknown>
   content?: string
+  liveUrl?: string
 }
 
 interface Props {
@@ -234,16 +235,48 @@ function PhaseCard({ phase, isLast }: { phase: Phase; isLast: boolean }) {
   )
 }
 
+/** Scan all steps to extract the first live site URL */
+function extractLiveUrl(steps: ReActStep[]): string | null {
+  // 1. Explicit liveUrl on a done step (injected by DZChatBox from server)
+  const doneWithUrl = steps.find(s => s.type === 'done' && s.liveUrl)
+  if (doneWithUrl?.liveUrl) return doneWithUrl.liveUrl
+
+  // 2. enable_pages observation with html_url
+  for (const s of steps) {
+    if (s.type === 'observation' && s.result) {
+      const url = s.result.html_url as string | undefined
+      if (url && url.includes('.github.io')) return url
+      const su = (s.result.site_url || s.result.pagesUrl) as string | undefined
+      if (su) return su
+    }
+  }
+
+  // 3. Infer from create_repo full_name + index.html push
+  const repoObs = steps.find(s => s.type === 'observation' && s.result?.full_name)
+  const hasIndex = steps.some(s =>
+    s.type === 'observation' && (
+      String(s.result?.path || s.result?.file || '').includes('index.html') ||
+      String(s.result?.files || '').includes('index.html')
+    )
+  )
+  if (repoObs && hasIndex) {
+    const full = String(repoObs.result!.full_name)
+    const [owner, repo] = full.split('/')
+    if (owner && repo) return `https://${owner}.github.io/${repo}`
+  }
+  return null
+}
+
 export default function GitHubReActPanel({ steps, isLive = false }: Props) {
   const [showReport, setShowReport] = useState(false)
 
   const startStep  = steps.find(s => s.type === 'start')
   const doneStep   = steps.find(s => s.type === 'done')
   const errorStep  = steps.find(s => s.type === 'error' || s.type === 'timeout')
-  const phases     = buildPhases(steps, isLive)
-
   const isComplete = !!doneStep
   const isFailed   = !!errorStep && !isComplete
+  const phases     = buildPhases(steps, isLive)
+  const liveUrl    = isComplete ? extractLiveUrl(steps) : null
   const ghUser     = startStep?.message?.match(/@([\w-]+)/)?.[1]
   const doneCount  = phases.filter(p => p.status === 'done').length
   const failCount  = phases.filter(p => p.status === 'failed').length
@@ -342,6 +375,21 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
           <span className="rp-stat rp-stat--total">
             {phases.length} مرحلة
           </span>
+        </div>
+      )}
+
+      {/* ── Live Site Button ─────────────────────────────────────────────────── */}
+      {isComplete && liveUrl && (
+        <div className="rp-live-site">
+          <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="rp-live-site-btn">
+            <span className="rp-live-site-icon">🌐</span>
+            <div className="rp-live-site-text">
+              <span className="rp-live-site-label">الموقع المباشر</span>
+              <span className="rp-live-site-url">{liveUrl}</span>
+            </div>
+            <ExternalLink size={13} className="rp-live-site-arrow" />
+          </a>
+          <p className="rp-live-site-note">⏱ قد يستغرق تفعيل الموقع 1–2 دقيقة بعد أول نشر</p>
         </div>
       )}
 

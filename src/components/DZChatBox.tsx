@@ -4257,6 +4257,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             } else if (event.type === 'done') {
               finalContent = event.content || ''
               finalSteps = (event.steps as ReActStep[]) || []
+              // Attach liveUrl to the done step so the panel can show it
+              if (event.liveUrl) {
+                finalSteps = [...finalSteps, { type: 'done', content: event.content || '', liveUrl: event.liveUrl } as ReActStep]
+              }
             } else if (event.type === 'error') {
               finalContent = `⚠️ خطأ في GitHub Agent: ${event.message}`
             }

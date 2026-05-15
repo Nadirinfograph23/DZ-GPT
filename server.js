@@ -8977,10 +8977,43 @@ app.post('/api/dz-agent/github/react/stream', async (req, res) => {
         console.log(`[ReAct-SSE] ${step.type}: ${step.message || step.tool || ''}`)
       },
     })
+    // ── Extract live site URL from ReAct steps ──────────────────────────────
+    let liveUrl = null
+    const allSteps = result.steps || collectedSteps
+    for (const step of allSteps) {
+      if (step.type === 'observation' && step.result) {
+        // enable_pages tool returns html_url directly
+        if (step.result.html_url && String(step.result.html_url).includes('.github.io')) {
+          liveUrl = step.result.html_url
+          break
+        }
+        // create_repo may return pages URL
+        if (step.result.site_url || step.result.pagesUrl) {
+          liveUrl = step.result.site_url || step.result.pagesUrl
+          break
+        }
+      }
+    }
+    // Fallback: infer from create_repo full_name if index.html was pushed
+    if (!liveUrl) {
+      const repoObs = allSteps.find(s => s.type === 'observation' && s.result?.full_name)
+      const hasIndexHtml = allSteps.some(s =>
+        s.type === 'observation' && (
+          String(s.result?.path || s.result?.file || '').includes('index.html') ||
+          String(s.result?.files || '').includes('index.html')
+        )
+      )
+      if (repoObs && hasIndexHtml) {
+        const [owner2, repo2] = String(repoObs.result.full_name).split('/')
+        if (owner2 && repo2) liveUrl = `https://${owner2}.github.io/${repo2}`
+      }
+    }
+
     send('done', {
       content: result.content,
-      steps: result.steps || collectedSteps,
+      steps: allSteps,
       model: result.model,
+      liveUrl,
     })
   } catch (err) {
     console.error('[ReAct-SSE] Error:', err.message)

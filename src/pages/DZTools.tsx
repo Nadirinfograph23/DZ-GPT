@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Copy, Check, Printer, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tools.css'
 
 type ToolId = 'cv' | 'planner' | 'legal'
@@ -409,6 +410,11 @@ ${text.slice(0, 4000)}
 export default function DZTools() {
   const navigate = useNavigate()
   const [active, setActive] = useState<ToolId>('cv')
+  const { track } = useMiniPlayer()
+  const miniPlayerActive = !!track
+
+  // padding-bottom: enough to fully show the button above the mini player
+  const contentPb = miniPlayerActive ? 140 : 80
 
   return (
     <div className="dzt-layout">
@@ -435,7 +441,7 @@ export default function DZTools() {
         ))}
       </div>
 
-      <div className="dzt-content">
+      <div className="dzt-content" style={{ paddingBottom: contentPb }}>
         {active === 'cv'      && <CVTool />}
         {active === 'planner' && <PlannerTool />}
         {active === 'legal'   && <LegalTool />}

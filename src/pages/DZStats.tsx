@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, BarChart2, Zap, Star, Clock, MessageSquare } from 'lucide-react'
-import { getTopIntents, getTopFeatures, getRecentQueries } from '../utils/dzMemory'
+import { getTopFeatures, getRecentQueries } from '../utils/dzMemory'
 import type { UserIntent, StoredQuery } from '../utils/dzMemory'
 import '../styles/dz-stats.css'
 
@@ -36,7 +36,7 @@ export default function DZStats() {
   const [topFeatures, setTopFeatures] = useState<string[]>([])
   const [conversationCount, setConversationCount] = useState(0)
   const [ratings, setRatings] = useState<{ up: number; down: number }>({ up: 0, down: 0 })
-  const [totalTokens, setTotalTokens] = useState(0)
+  const [_totalTokens, setTotalTokens] = useState(0)
 
   useEffect(() => {
     const q = getRecentQueries(20)

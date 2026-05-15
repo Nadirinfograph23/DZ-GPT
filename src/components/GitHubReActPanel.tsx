@@ -262,7 +262,7 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
       <div className="rp-header">
         <div className="rp-header-left">
           <Github size={13} />
-          <span className="rp-header-title">GitHub Agent</span>
+          <span className="rp-header-title">Dz Agent 🇩🇿</span>
           {ghUser && <span className="rp-header-user">@{ghUser}</span>}
         </div>
         <div className="rp-header-right">

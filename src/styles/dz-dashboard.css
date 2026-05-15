@@ -636,7 +636,7 @@
 }
 
 /* ===== NEWS / SPORTS PANEL ===== */
-.dzd-news-panel { }
+.dzd-news-panel { direction: rtl; }
 
 .dzd-news-list {
   display: flex;
@@ -648,18 +648,20 @@
   position: relative;
   display: flex;
   align-items: flex-start;
+  flex-direction: row-reverse;
   gap: 10px;
   background: rgba(200, 255, 0, 0.025);
   border: 1px solid rgba(200, 255, 0, 0.07);
   border-radius: 11px;
-  padding: 10px 36px 10px 12px;
+  padding: 10px 12px 10px 36px;
   cursor: pointer;
   transition: all 0.16s;
+  direction: rtl;
 }
 .dzd-news-card:hover {
   background: rgba(200, 255, 0, 0.055);
   border-color: rgba(200, 255, 0, 0.16);
-  transform: translateX(-2px);
+  transform: translateX(2px);
 }
 .dzd-news-card--sport {
   background: rgba(52, 211, 153, 0.025);
@@ -673,7 +675,7 @@
 .dzd-news-card-left {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 3px;
   min-width: 60px;
   flex-shrink: 0;
@@ -697,11 +699,13 @@
   color: #333;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  direction: ltr;
 }
 
 .dzd-news-card-body {
   flex: 1;
   min-width: 0;
+  direction: rtl;
 }
 
 .dzd-news-title {
@@ -710,6 +714,8 @@
   color: #ccc;
   line-height: 1.45;
   margin: 0;
+  text-align: right;
+  direction: rtl;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -809,10 +815,10 @@
 
 /* ===== TECH INTELLIGENCE MODULE — Cards ===== */
 .dzd-news-card--tech {
-  border-left: 2px solid rgba(139, 92, 246, 0.4);
+  border-right: 2px solid rgba(139, 92, 246, 0.4);
 }
 .dzd-news-card--tech:hover {
-  border-left-color: rgba(139, 92, 246, 0.8);
+  border-right-color: rgba(139, 92, 246, 0.8);
   background: rgba(139, 92, 246, 0.04);
 }
 

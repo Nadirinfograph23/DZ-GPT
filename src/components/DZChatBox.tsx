@@ -3220,8 +3220,8 @@ function DZSuggestionCards({ onSend }: { onSend: (cmd: string) => void }) {
                 className="dz-scard-chip"
                 onClick={() => onSend(s.command)}
               >
-                <span className="dz-scard-chip-arrow">›</span>
                 {s.label}
+                <span className="dz-scard-chip-arrow">‹</span>
               </button>
             ))}
           </div>

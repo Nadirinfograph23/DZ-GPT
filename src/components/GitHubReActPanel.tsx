@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Github, CheckCircle2, XCircle, Loader2, Clock,
   FileCode, GitBranch, GitPullRequest, FolderOpen,
   FilePlus, Trash2, Zap, User, Eye, Brain,
   AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Copy, Check,
+  Globe,
 } from 'lucide-react'
 
 export interface ReActStep {
@@ -236,6 +237,48 @@ function PhaseCard({ phase, isLast }: { phase: Phase; isLast: boolean }) {
 }
 
 /** Scan all steps to extract the first live site URL */
+// ── Extract site info from ReAct steps (repo, pushed HTML content) ────────────
+interface SiteInfo {
+  repo: string | null
+  hasHtml: boolean
+  htmlContent: string | null
+}
+
+function extractSiteInfo(steps: ReActStep[]): SiteInfo {
+  let repo: string | null = null
+  let hasHtml = false
+  let htmlContent: string | null = null
+
+  for (const s of steps) {
+    // Grab repo name from observations
+    if (s.type === 'observation' && s.result) {
+      if (typeof s.result.full_name === 'string') repo = s.result.full_name
+      if (typeof s.result.repo === 'string') repo = s.result.repo
+    }
+    // Grab repo & HTML content from tool_call args
+    if (s.type === 'tool_call' && s.args) {
+      const args = s.args as Record<string, unknown>
+      if (typeof args.repo === 'string') repo = args.repo
+      if (s.tool === 'push_file') {
+        const p = String(args.path || '')
+        if (p.includes('index.html') || p.includes('.html')) {
+          hasHtml = true
+          if (typeof args.content === 'string') htmlContent = args.content
+        }
+      }
+      if (s.tool === 'push_files_batch' && Array.isArray(args.files)) {
+        const idxFile = (args.files as Array<{ path?: string; content?: string }>)
+          .find(f => String(f.path || '').includes('.html'))
+        if (idxFile) {
+          hasHtml = true
+          if (typeof idxFile.content === 'string') htmlContent = idxFile.content
+        }
+      }
+    }
+  }
+  return { repo, hasHtml, htmlContent }
+}
+
 function extractLiveUrl(steps: ReActStep[]): string | null {
   // 1. Explicit liveUrl on a done step (injected by DZChatBox from server)
   const doneWithUrl = steps.find(s => s.type === 'done' && s.liveUrl)
@@ -268,8 +311,16 @@ function extractLiveUrl(steps: ReActStep[]): string | null {
 }
 
 export default function GitHubReActPanel({ steps, isLive = false }: Props) {
-  const [showReport, setShowReport] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [showReport, setShowReport]   = useState(false)
+  const [copied, setCopied]           = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewUrl, setPreviewUrl]   = useState<string | null>(null)
+  const [pagesStatus, setPagesStatus] = useState<'idle' | 'enabling' | 'building' | 'live' | 'error'>('idle')
+  const [pagesUrl, setPagesUrl]       = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Cleanup poll on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
   const copyLink = useCallback((url: string) => {
     navigator.clipboard.writeText(url).then(() => {
@@ -277,6 +328,59 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
       setTimeout(() => setCopied(false), 2000)
     })
   }, [])
+
+  // Build blob URL for preview whenever HTML content is available
+  const siteInfo = extractSiteInfo(steps)
+  useEffect(() => {
+    if (!siteInfo.htmlContent) { setPreviewUrl(null); return }
+    const blob = new Blob([siteInfo.htmlContent], { type: 'text/html' })
+    const url  = URL.createObjectURL(blob)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [siteInfo.htmlContent])
+
+  const pollPagesStatus = useCallback((repo: string, fallbackUrl: string) => {
+    let attempts = 0
+    pollRef.current = setInterval(async () => {
+      attempts++
+      try {
+        const r = await fetch(`/api/dz-agent/github/react/pages-status?repo=${encodeURIComponent(repo)}`)
+        const d = await r.json()
+        if (d.status === 'built' || (d.enabled && d.html_url)) {
+          setPagesStatus('live')
+          setPagesUrl(d.html_url || fallbackUrl)
+          clearInterval(pollRef.current!)
+          pollRef.current = null
+        }
+      } catch { /* ignore */ }
+      if (attempts >= 18) {          // stop after 3 min regardless
+        setPagesStatus('live')
+        setPagesUrl(fallbackUrl)
+        clearInterval(pollRef.current!)
+        pollRef.current = null
+      }
+    }, 10_000)
+  }, [])
+
+  const enablePages = useCallback(async () => {
+    if (!siteInfo.repo) return
+    setPagesStatus('enabling')
+    try {
+      const r = await fetch('/api/dz-agent/github/react/enable-pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo: siteInfo.repo }),
+      })
+      const d = await r.json()
+      if (d.error) { setPagesStatus('error'); return }
+      const url = d.html_url || `https://${siteInfo.repo.split('/')[0]}.github.io/${siteInfo.repo.split('/')[1]}/`
+      setPagesUrl(url)
+      setPagesStatus('building')
+      pollPagesStatus(siteInfo.repo, url)
+    } catch {
+      setPagesStatus('error')
+    }
+  }, [siteInfo.repo, pollPagesStatus])
 
   const startStep  = steps.find(s => s.type === 'start')
   const doneStep   = steps.find(s => s.type === 'done')
@@ -386,8 +490,107 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
         </div>
       )}
 
-      {/* ── Live Site Button ─────────────────────────────────────────────────── */}
-      {isComplete && liveUrl && (
+      {/* ── Preview Section ──────────────────────────────────────────────────── */}
+      {isComplete && siteInfo.hasHtml && (
+        <div className="rp-preview-section">
+          <button className="rp-preview-toggle" onClick={() => setShowPreview(v => !v)}>
+            <Eye size={11} />
+            <span>{showPreview ? 'إخفاء المعاينة' : '👁 معاينة الموقع'}</span>
+            {showPreview ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+          </button>
+          {showPreview && previewUrl && (
+            <div className="rp-preview-frame-wrap">
+              <div className="rp-preview-device-bar">
+                <span className="rp-preview-dot" style={{ background: '#ff5f57' }} />
+                <span className="rp-preview-dot" style={{ background: '#febc2e' }} />
+                <span className="rp-preview-dot" style={{ background: '#28c840' }} />
+                <span className="rp-preview-addr">{siteInfo.repo ? `${siteInfo.repo} — preview` : 'معاينة محلية'}</span>
+              </div>
+              <iframe
+                src={previewUrl}
+                className="rp-preview-frame"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                title="معاينة الموقع"
+              />
+            </div>
+          )}
+          {showPreview && !previewUrl && (
+            <div className="rp-preview-loading">
+              <Loader2 size={13} className="rp-spin" /> جارٍ تحميل المعاينة...
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── GitHub Pages Publish Button ───────────────────────────────────────── */}
+      {isComplete && siteInfo.hasHtml && !liveUrl && pagesStatus !== 'live' && (
+        <div className="rp-pages-publish">
+          <div className="rp-pages-header">
+            <Globe size={11} />
+            <span className="rp-pages-title">نشر على GitHub Pages</span>
+          </div>
+          {pagesStatus === 'idle' && (
+            <button
+              className="rp-pages-btn"
+              onClick={enablePages}
+              disabled={!siteInfo.repo}
+              title={siteInfo.repo ? `نشر ${siteInfo.repo}` : 'لا يوجد مستودع محدد'}
+            >
+              <Zap size={12} />
+              نشر الموقع مجاناً على GitHub Pages
+            </button>
+          )}
+          {pagesStatus === 'enabling' && (
+            <div className="rp-pages-status rp-pages-status--building">
+              <Loader2 size={11} className="rp-spin" /> جارٍ تفعيل GitHub Pages...
+            </div>
+          )}
+          {pagesStatus === 'building' && (
+            <div className="rp-pages-status rp-pages-status--building">
+              <Loader2 size={11} className="rp-spin" />
+              يتم بناء الموقع... قد يستغرق 1–2 دقيقة
+              {pagesUrl && (
+                <a href={pagesUrl} target="_blank" rel="noopener noreferrer" className="rp-pages-preview-link">
+                  {pagesUrl}
+                </a>
+              )}
+            </div>
+          )}
+          {pagesStatus === 'error' && (
+            <div className="rp-pages-status rp-pages-status--error">
+              <XCircle size={11} /> فشل التفعيل — تأكد أن المستودع عام (Public)
+              <button className="rp-pages-retry" onClick={() => setPagesStatus('idle')}>إعادة المحاولة</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Pages Live URL (after manual enable) ─────────────────────────────── */}
+      {pagesStatus === 'live' && pagesUrl && (
+        <div className="rp-live-site rp-live-site--pages">
+          <div className="rp-live-site-row">
+            <a href={pagesUrl} target="_blank" rel="noopener noreferrer" className="rp-live-site-btn">
+              <span className="rp-live-site-icon">🚀</span>
+              <div className="rp-live-site-text">
+                <span className="rp-live-site-label">موقعك مباشر على GitHub Pages</span>
+                <span className="rp-live-site-url">{pagesUrl}</span>
+              </div>
+              <ExternalLink size={13} className="rp-live-site-arrow" />
+            </a>
+            <button
+              className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`}
+              onClick={() => copyLink(pagesUrl)}
+              title="نسخ الرابط"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              <span>{copied ? 'تم النسخ!' : 'نسخ'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Live Site Button (from ReAct agent auto-enable) ───────────────────── */}
+      {isComplete && liveUrl && pagesStatus !== 'live' && (
         <div className="rp-live-site">
           <div className="rp-live-site-row">
             <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="rp-live-site-btn">

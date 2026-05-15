@@ -7302,6 +7302,39 @@ app.get('/api/dz-agent/github/pages/status', async (req, res) => {
   }
 })
 
+// ── POST /api/dz-agent/github/react/enable-pages ───────────────────────────
+// Called by GitHubReActPanel "Publish" button — enables Pages on a given repo
+app.post('/api/dz-agent/github/react/enable-pages', async (req, res) => {
+  const { repo } = req.body
+  if (!repo || !isValidGithubRepo(repo)) return res.status(400).json({ error: 'repo مطلوب (owner/repo)' })
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN غير مضبوط' })
+  const [owner, repoName] = repo.split('/')
+  try {
+    const result = await ghPagesEnable(token, owner, repoName)
+    const html_url = (result && result.html_url) || `https://${owner}.github.io/${repoName}/`
+    return res.json({ success: true, html_url, status: result?.status || 'building' })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/dz-agent/github/react/pages-status ────────────────────────────
+// Polls GitHub Pages build status — called every 10s by the panel
+app.get('/api/dz-agent/github/react/pages-status', async (req, res) => {
+  const { repo } = req.query
+  if (!repo || !isValidGithubRepo(repo)) return res.status(400).json({ error: 'repo مطلوب' })
+  const token = process.env.GITHUB_TOKEN
+  const [owner, repoName] = repo.split('/')
+  try {
+    const status = await getPagesStatus(token, owner, repoName)
+    if (!status) return res.json({ enabled: false, status: 'not_enabled' })
+    return res.json({ enabled: true, ...status })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 // ── POST /api/dz-agent/github/pages/stream-deploy ──────────────────────────
 // SSE Streaming: Full autonomous deployment pipeline
 // Plan → Generate files → Create repo → Upload → Enable Pages → Live URL

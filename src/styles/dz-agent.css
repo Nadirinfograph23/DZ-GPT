@@ -1130,6 +1130,9 @@
   background: #0d0d0d;
   font-size: 13px;
   color: #e0e0e0;
+  direction: rtl;
+  width: 100%;
+  max-width: 100%;
 }
 .dzt-wrapper--compact { font-size: 12px; }
 
@@ -1810,27 +1813,46 @@
 .dz-gh-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 14px;
+  gap: 6px;
+  padding: 5px 12px;
   border-bottom: 1px solid #111;
   background: #080808;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: 4px;
   min-height: 42px;
 }
 
 .dz-toolbar-spacer {
   flex: 1;
+  min-width: 8px;
 }
 
 .dz-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid #1c1c1c;
   border-radius: 10px;
-  padding: 3px;
+  padding: 2px;
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+.dz-toolbar-actions::-webkit-scrollbar { display: none; }
+
+@media (max-width: 600px) {
+  .dz-gh-bar {
+    padding: 4px 10px;
+    row-gap: 6px;
+  }
+  .dz-toolbar-actions {
+    width: 100%;
+    justify-content: space-around;
+  }
+  .dz-toolbar-spacer { display: none; }
 }
 
 /* ===== GITHUB TOKEN PANEL ===== */
@@ -1946,7 +1968,7 @@
 .gh-log-toggle {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   background: none;
   border: none;
   border-radius: 7px;
@@ -1954,10 +1976,11 @@
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 5px 8px;
   transition: all 0.18s;
   white-space: nowrap;
   font-family: 'Cairo', system-ui, sans-serif;
+  flex-shrink: 0;
 }
 .gh-log-toggle:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -1966,6 +1989,14 @@
 .gh-log-toggle.active {
   background: rgba(200, 255, 0, 0.08);
   color: #c8ff00;
+}
+@media (max-width: 480px) {
+  .gh-log-toggle span:not(.dz-log-badge) {
+    display: none;
+  }
+  .gh-log-toggle {
+    padding: 6px;
+  }
 }
 
 .dz-log-badge {

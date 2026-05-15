@@ -614,6 +614,23 @@ body:has(.dzt-app) {
   color: #aaa;
 }
 
+/* ── RTL Arabic text alignment ── */
+.message-text[dir="rtl"],
+.message-text[dir="auto"]:has(> p:first-child:dir(rtl)) {
+  text-align: right;
+}
+.chat-input[dir="auto"] { unicode-bidi: plaintext; }
+.message-text { unicode-bidi: plaintext; }
+.message-text p,
+.message-text li,
+.message-text h1,
+.message-text h2,
+.message-text h3,
+.message-text blockquote {
+  unicode-bidi: plaintext;
+  text-align: inherit;
+}
+
 .message-text table {
   border-collapse: collapse;
   margin: 12px 0;

@@ -66,11 +66,11 @@
 .dzt-tab.active { color: #c8ff00; border-bottom-color: #c8ff00; }
 .dzt-tab-icon { font-size: 16px; }
 
-/* Content area */
+/* Content area — padding-bottom controlled via inline style (mini player aware) */
 .dzt-content {
   max-width: 860px;
   margin: 0 auto;
-  padding: 28px 24px 60px;
+  padding: 28px 24px 80px;
 }
 
 /* Tool description card */

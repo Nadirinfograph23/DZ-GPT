@@ -445,16 +445,12 @@
   background: rgba(200, 255, 0, 0.07);
   border-color: rgba(200, 255, 0, 0.2);
   border-radius: 12px 12px 3px 12px;
-  direction: rtl;
-  text-align: right;
 }
 
 .dzc-msg--bot {
   background: rgba(0, 200, 80, 0.05);
   border-color: rgba(0, 200, 80, 0.2);
   max-width: 85%;
-  direction: rtl;
-  text-align: right;
 }
 
 .dzc-msg--highlighted {
@@ -740,8 +736,6 @@
   line-height: 1.55;
   word-break: break-word;
   white-space: pre-wrap;
-  direction: rtl;
-  text-align: right;
 }
 
 /* ===== ENTRY PROFILE SECTION ===== */

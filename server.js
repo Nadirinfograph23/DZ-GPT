@@ -2685,7 +2685,7 @@ MANDATORY HTML STRUCTURE:
    d. Social proof — animated stat counters (3 numbers) + testimonial cards
    e. How it works / About — 3-step process or split-screen with visual
    f. CTA section — gradient background, email input + submit button
-   g. Footer — logo + 3 link columns + social icons + copyright
+   g. Footer — logo + 3 link columns + social icons + copyright © <span id="cr-year"></span> (MUST use JS: document.getElementById('cr-year').textContent = new Date().getFullYear())
 
 3. <script> block with all JS logic
 ════════════════════════════════════════════
@@ -2864,6 +2864,7 @@ QUALITY BARS (MANDATORY — NO EXCEPTIONS):
 ✅ Content MUST be context-aware (restaurant → menu items, hotel → room types, etc.)
 ✅ SEO: <meta> description + og:title + og:description in <head>
 ✅ Self-healing: if any section would be empty, fill with contextually appropriate content
+✅ Footer copyright year MUST be dynamic — NEVER hardcode a year. Always use: <span id="cr-year"></span> with JS: document.getElementById('cr-year').textContent = new Date().getFullYear() — so it always shows the current year automatically (e.g. جميع الحقوق محفوظة © 2026)
 
 START OUTPUT NOW — PURE HTML ONLY:`
 

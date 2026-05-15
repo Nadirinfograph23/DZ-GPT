@@ -240,10 +240,188 @@
 }
 @keyframes dzt-spin { to { transform: rotate(360deg); } }
 
+/* ── Photo Upload Section ───────────────────────────────────────────── */
+.dzt-photo-section {
+  margin: 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dzt-photo-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: #aaa;
+}
+
+.dzt-photo-hint {
+  font-size: 10px;
+  color: #444;
+  font-weight: 600;
+}
+
+.dzt-photo-drop {
+  border: 2px dashed rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.02);
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+  position: relative;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dzt-photo-drop:hover {
+  border-color: rgba(200,255,0,0.3);
+  background: rgba(200,255,0,0.03);
+}
+
+.dzt-photo-drop--drag {
+  border-color: rgba(200,255,0,0.5) !important;
+  background: rgba(200,255,0,0.06) !important;
+  transform: scale(1.01);
+}
+
+.dzt-photo-drop--has {
+  border-style: solid;
+  border-color: rgba(200,255,0,0.2);
+  min-height: 120px;
+}
+
+.dzt-photo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 20px;
+  text-align: center;
+}
+
+.dzt-photo-empty-icon { font-size: 28px; }
+
+.dzt-photo-empty-text {
+  font-size: 12px;
+  color: #666;
+  font-weight: 600;
+}
+
+.dzt-photo-empty-sub {
+  font-size: 10px;
+  color: #333;
+}
+
+.dzt-photo-preview-wrap {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dzt-photo-preview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(200,255,0,0.4);
+  box-shadow: 0 0 20px rgba(200,255,0,0.15);
+  display: block;
+}
+
+.dzt-photo-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 700;
+  border-radius: 14px;
+}
+.dzt-photo-drop:hover .dzt-photo-overlay { opacity: 1; }
+
+.dzt-photo-remove {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(248,113,113,0.15);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: #f87171;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s;
+  z-index: 2;
+}
+.dzt-photo-remove:hover { background: rgba(248,113,113,0.3); }
+
+/* ── Result photo bar ──────────────────────────────────────────────── */
+.dzt-result-photo-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: rgba(200,255,0,0.04);
+  border-bottom: 1px solid rgba(200,255,0,0.08);
+}
+
+.dzt-result-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(200,255,0,0.35);
+  flex-shrink: 0;
+  box-shadow: 0 0 16px rgba(200,255,0,0.12);
+}
+
+.dzt-result-photo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dzt-result-photo-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #e5e5e5;
+}
+
+.dzt-result-photo-title {
+  font-size: 11px;
+  color: #666;
+}
+
+/* ── Print button highlight ────────────────────────────────────────── */
+.dzt-result-btn--print {
+  background: rgba(200,255,0,0.08) !important;
+  border-color: rgba(200,255,0,0.25) !important;
+  color: #c8ff00 !important;
+}
+.dzt-result-btn--print:hover {
+  background: rgba(200,255,0,0.15) !important;
+}
+
 /* CV preview print area */
 @media print {
   .dzt-header, .dzt-tabs, .dzt-form, .dzt-tool-desc,
-  .dzt-result-header, .dzt-back { display: none !important; }
+  .dzt-result-header, .dzt-back, .dzt-photo-section { display: none !important; }
   .dzt-result-body { max-height: none; padding: 0; font-size: 12pt; color: #000; background: #fff; }
 }
 

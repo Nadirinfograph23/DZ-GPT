@@ -4840,22 +4840,52 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   // Feature C — Export conversation as Markdown
   const exportAsMarkdown = useCallback(() => {
     if (messages.length === 0) return
-    const lines: string[] = [
-      `# محادثة DZ Agent`,
-      `> التاريخ: ${new Date().toLocaleDateString('ar-DZ')}`,
-      `> عدد الرسائل: ${messages.length}`,
-      `\n---\n`,
-    ]
-    messages.forEach(m => {
-      lines.push(`## ${m.role === 'user' ? '👤 أنت' : '🤖 DZ Agent'}\n`)
-      lines.push(m.content || '')
-      lines.push('\n---\n')
-    })
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `dz-agent-${Date.now()}.md`; a.click()
-    URL.revokeObjectURL(url)
+    const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const rows = messages.map(m => {
+      const isUser = m.role === 'user'
+      return `<div class="msg ${isUser ? 'msg-user' : 'msg-bot'}">
+        <div class="msg-header">${isUser ? '👤 أنت' : '🤖 DZ Agent'}</div>
+        <div class="msg-body">${escHtml(m.content || '').replace(/\n/g, '<br>')}</div>
+      </div>`
+    }).join('<div class="sep"></div>')
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>محادثة DZ Agent — ${dateStr}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Cairo',Tahoma,Arial,sans-serif;direction:rtl;text-align:right;background:#fff;color:#111;padding:36px 40px;line-height:1.75;font-size:14px}
+  .cover{margin-bottom:28px;padding-bottom:18px;border-bottom:3px solid #111}
+  .cover h1{font-size:24px;font-weight:900;margin-bottom:6px}
+  .cover .meta{font-size:12px;color:#777}
+  .msg{margin-bottom:6px;page-break-inside:avoid}
+  .msg-header{font-size:11px;font-weight:700;margin-bottom:6px;color:#888;letter-spacing:.03em}
+  .msg-user .msg-header{color:#1d4ed8}
+  .msg-bot .msg-header{color:#15803d}
+  .msg-body{background:#f8f8f8;border-radius:10px;padding:12px 16px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;border-right:3px solid #ddd;direction:rtl;text-align:right}
+  .msg-user .msg-body{border-right-color:#1d4ed8;background:#eff6ff}
+  .msg-bot .msg-body{border-right-color:#15803d;background:#f0fdf4}
+  .sep{border:none;border-top:1px solid #eee;margin:12px 0}
+  @media print{body{padding:20px}@page{margin:1.5cm}}</style>
+</head>
+<body>
+<div class="cover">
+  <h1>🤖 محادثة DZ Agent</h1>
+  <p class="meta">📅 ${dateStr} &nbsp;·&nbsp; 💬 ${messages.length} رسالة</p>
+</div>
+${rows}
+</body>
+</html>`
+
+    const win = window.open('', '_blank', 'width=860,height=720,scrollbars=yes')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.onload = () => setTimeout(() => { try { win.print() } catch {} }, 400)
   }, [messages])
 
   const regenerate = useCallback(async () => {
@@ -4988,10 +5018,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             <button
               className="gh-log-toggle"
               onClick={exportAsMarkdown}
-              title="تصدير المحادثة كـ Markdown"
+              title="تصدير المحادثة كـ PDF بدعم العربية"
             >
               <Download size={13} />
-              تصدير
+              PDF تصدير
             </button>
           )}
           <button

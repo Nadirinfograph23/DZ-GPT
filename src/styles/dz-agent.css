@@ -1811,10 +1811,26 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 5px 14px;
   border-bottom: 1px solid #111;
-  background: #0c0c0c;
-  flex-wrap: wrap;
+  background: #080808;
+  flex-wrap: nowrap;
+  min-height: 42px;
+}
+
+.dz-toolbar-spacer {
+  flex: 1;
+}
+
+.dz-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #1c1c1c;
+  border-radius: 10px;
+  padding: 3px;
+  flex-shrink: 0;
 }
 
 /* ===== GITHUB TOKEN PANEL ===== */
@@ -1932,16 +1948,40 @@
   align-items: center;
   gap: 5px;
   background: none;
-  border: 1px solid #1a1a1a;
-  border-radius: 8px;
+  border: none;
+  border-radius: 7px;
   color: #555;
   cursor: pointer;
   font-size: 11px;
+  font-weight: 600;
   padding: 5px 10px;
-  margin-left: auto;
-  transition: all 0.2s;
+  transition: all 0.18s;
+  white-space: nowrap;
+  font-family: 'Cairo', system-ui, sans-serif;
 }
-.gh-log-toggle:hover, .gh-log-toggle.active { border-color: #333; color: #888; }
+.gh-log-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #aaa;
+}
+.gh-log-toggle.active {
+  background: rgba(200, 255, 0, 0.08);
+  color: #c8ff00;
+}
+
+.dz-log-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(200, 255, 0, 0.15);
+  color: #c8ff00;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
 
 /* ===== QUICK COMMANDS ===== */
 .dz-quick-commands {

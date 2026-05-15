@@ -7342,6 +7342,11 @@
   padding: 10px 12px 6px;
   border-top: 1px solid #0f1a0f;
 }
+.rp-live-site-row {
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+}
 .rp-live-site-btn {
   display: flex;
   align-items: center;
@@ -7391,6 +7396,37 @@
   color: #4b5563;
   margin-top: 5px;
   padding: 0 2px;
+}
+
+/* Copy button */
+.rp-copy-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 12px;
+  background: #0d1a0d;
+  border: 1px solid #22c55e30;
+  border-radius: 10px;
+  color: #6ee7b7;
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  min-width: 54px;
+}
+.rp-copy-btn:hover {
+  background: #122012;
+  border-color: #22c55e60;
+  color: #22c55e;
+}
+.rp-copy-btn--done {
+  background: #0a200a;
+  border-color: #22c55e80;
+  color: #22c55e;
 }
 
 /* Error row */

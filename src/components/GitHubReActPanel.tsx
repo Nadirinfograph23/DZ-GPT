@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   Github, CheckCircle2, XCircle, Loader2, Clock,
   FileCode, GitBranch, GitPullRequest, FolderOpen,
   FilePlus, Trash2, Zap, User, Eye, Brain,
-  AlertTriangle, ChevronDown, ChevronUp, ExternalLink,
+  AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Copy, Check,
 } from 'lucide-react'
 
 export interface ReActStep {
@@ -269,6 +269,14 @@ function extractLiveUrl(steps: ReActStep[]): string | null {
 
 export default function GitHubReActPanel({ steps, isLive = false }: Props) {
   const [showReport, setShowReport] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const copyLink = useCallback((url: string) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [])
 
   const startStep  = steps.find(s => s.type === 'start')
   const doneStep   = steps.find(s => s.type === 'done')
@@ -381,14 +389,24 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
       {/* ── Live Site Button ─────────────────────────────────────────────────── */}
       {isComplete && liveUrl && (
         <div className="rp-live-site">
-          <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="rp-live-site-btn">
-            <span className="rp-live-site-icon">🌐</span>
-            <div className="rp-live-site-text">
-              <span className="rp-live-site-label">الموقع المباشر</span>
-              <span className="rp-live-site-url">{liveUrl}</span>
-            </div>
-            <ExternalLink size={13} className="rp-live-site-arrow" />
-          </a>
+          <div className="rp-live-site-row">
+            <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="rp-live-site-btn">
+              <span className="rp-live-site-icon">🌐</span>
+              <div className="rp-live-site-text">
+                <span className="rp-live-site-label">الموقع المباشر</span>
+                <span className="rp-live-site-url">{liveUrl}</span>
+              </div>
+              <ExternalLink size={13} className="rp-live-site-arrow" />
+            </a>
+            <button
+              className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`}
+              onClick={() => copyLink(liveUrl!)}
+              title="نسخ الرابط"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              <span>{copied ? 'تم النسخ!' : 'نسخ'}</span>
+            </button>
+          </div>
           <p className="rp-live-site-note">⏱ قد يستغرق تفعيل الموقع 1–2 دقيقة بعد أول نشر</p>
         </div>
       )}

@@ -3961,25 +3961,44 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 const RSS_FEEDS = {
   national: [
     { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/ar/feed' },
+    { name: 'راديو الجزائر', url: 'https://news.radioalgerie.dz/ar/rss.xml' },
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
     { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
     { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
-    { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
-    { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
-    { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
-    { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
+    { name: 'البلاد', url: 'https://www.elbilad.net/rss' },
+    { name: 'الفجر', url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'الحياة', url: 'https://elhayatdz.dz/feed/' },
+    { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'الوطن', url: 'https://www.el-watan.com/feed/' },
-    { name: 'الأحداث', url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'جزاير تيوب', url: 'https://www.dzairtube.dz/feed/' },
+    { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
+    { name: 'الجزيرة عربي', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+    { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
     { name: 'رويترز عربي', url: 'https://feeds.reuters.com/reuters/arabicNews' },
-    { name: 'Google News الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
+    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=algerie&hl=fr&gl=DZ&ceid=DZ:fr' },
   ],
   sports: [
-    // Removed: الجزيرة الرياضة (per user request — keep Algerian league context clean)
+    { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+    { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
     { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
     { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
+    { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
     { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
     { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-    { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+    { name: 'Sky Sports', url: 'https://feeds.skynews.com/feeds/rss/sports.xml' },
+    { name: 'CAF Football', url: 'https://www.cafonline.com/rss-feed/' },
+    { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
+  ],
+  tech: [
+    { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+    { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+    { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
+    { name: 'MIT Tech Review', url: 'https://www.technologyreview.com/feed/' },
+    { name: 'VentureBeat AI', url: 'https://venturebeat.com/category/ai/feed/' },
+    { name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index' },
+    { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
   ],
 }
 
@@ -3988,12 +4007,15 @@ const FOOTBALL_CACHE = new Map()
 const FOOTBALL_CACHE_TTL = 5 * 60 * 1000 // 5 min for live match data
 
 const INTL_FOOTBALL_FEEDS = [
-  // Removed: الجزيرة الرياضة (per user request)
+  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
   { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
   { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+  { name: 'Sky Sports', url: 'https://feeds.skynews.com/feeds/rss/sports.xml' },
   { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
   { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
-  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'CAF Football', url: 'https://www.cafonline.com/rss-feed/' },
+  { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
 ]
 
 async function fetchSofaScoreFootball(dateStr) {

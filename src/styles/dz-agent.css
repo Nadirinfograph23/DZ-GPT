@@ -1064,20 +1064,38 @@
   max-width: 100%;
 }
 
-/* RTL Arabic alignment */
-.dz-message-text[dir="rtl"] { text-align: right; }
+/* RTL — every block element auto-detects its own direction */
 .dz-message-text p,
 .dz-message-text li,
 .dz-message-text h1,
 .dz-message-text h2,
 .dz-message-text h3,
-.dz-message-text blockquote { unicode-bidi: plaintext; text-align: inherit; }
+.dz-message-text h4,
+.dz-message-text h5,
+.dz-message-text h6,
+.dz-message-text blockquote,
+.dz-message-text td,
+.dz-message-text th {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* RTL: when the wrapper is detected as RTL (Arabic/Darija content) */
+.dz-message-text[dir="rtl"] p,
+.dz-message-text[dir="rtl"] li,
+.dz-message-text[dir="rtl"] h1,
+.dz-message-text[dir="rtl"] h2,
+.dz-message-text[dir="rtl"] h3,
+.dz-message-text[dir="rtl"] blockquote {
+  direction: rtl;
+  text-align: right;
+}
 
 /* markdown in assistant messages */
 .dz-message--assistant .dz-message-text p { margin: 0 0 10px; }
 .dz-message--assistant .dz-message-text p:last-child { margin-bottom: 0; }
 .dz-message--assistant .dz-message-text ul,
-.dz-message--assistant .dz-message-text ol { padding-left: 20px; margin: 8px 0; }
+.dz-message--assistant .dz-message-text ol { padding-inline-start: 20px; margin: 8px 0; }
 .dz-message--assistant .dz-message-text li { margin-bottom: 4px; }
 .dz-message--assistant .dz-message-text code {
   background: #1a1a1a;

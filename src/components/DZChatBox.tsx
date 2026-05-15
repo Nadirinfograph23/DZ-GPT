@@ -4999,10 +4999,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
+                            p({ children }) { return <p dir="auto">{children}</p> },
+                            li({ children, ...props }) { return <li dir="auto" {...props}>{children}</li> },
+                            h1({ children }) { return <h1 dir="auto">{children}</h1> },
+                            h2({ children }) { return <h2 dir="auto">{children}</h2> },
+                            h3({ children }) { return <h3 dir="auto">{children}</h3> },
+                            h4({ children }) { return <h4 dir="auto">{children}</h4> },
+                            blockquote({ children }) { return <blockquote dir="auto">{children}</blockquote> },
                             code({ className, children, ...props }) {
                               const isBlock = className?.startsWith('language-')
                               if (isBlock) return <DZCodeBlock className={className}>{children}</DZCodeBlock>
-                              return <code className={className} {...props}>{children}</code>
+                              return <code className={className} dir="ltr" {...props}>{children}</code>
                             },
                             pre({ children }) { return <>{children}</> },
                             a({ href, children, ...props }) {
@@ -5018,8 +5025,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                             thead({ children }) { return <thead>{children}</thead> },
                             tbody({ children }) { return <tbody>{children}</tbody> },
                             tr({ children }) { return <tr>{children}</tr> },
-                            th({ children }) { return <th>{children}</th> },
-                            td({ children }) { return <td>{children}</td> },
+                            th({ children }) { return <th dir="auto">{children}</th> },
+                            td({ children }) { return <td dir="auto">{children}</td> },
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}

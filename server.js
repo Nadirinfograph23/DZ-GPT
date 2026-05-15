@@ -1788,36 +1788,35 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
 
-  // 1. DeepSeek
-  const ds = await callDeepSeek(trimmed, { max_tokens })
-  if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
-  if (ds !== null) logInvalidResponse('deepseek', query, ds)
-
-  // 2. Ollama
-  const ol = await callOllama(trimmed)
-  if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
-  if (ol !== null) logInvalidResponse('ollama', query, ol)
-
-  // 3. Groq fallback chain
-  const fallbackModels = [
-    'llama-3.3-70b-versatile',
-    'meta-llama/llama-4-scout-17b-16e-instruct',
-    'qwen/qwen3-32b',
-    'llama-3.1-8b-instant',
+  // 1. Groq FIRST — fastest provider, ordered by speed then quality
+  // llama-3.1-8b-instant responds in ~0.5s for simple queries
+  const groqModels = [
+    'llama-3.1-8b-instant',                           // ultra-fast, general purpose
+    'llama-3.3-70b-versatile',                        // best quality on Groq
+    'meta-llama/llama-4-scout-17b-16e-instruct',      // multimodal capable
+    'qwen/qwen3-32b',                                 // strong multilingual
   ]
-  for (const model of fallbackModels) {
+  for (const model of groqModels) {
     const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens })
     if (validateAIContent(content, query)) return { content, model }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
 
-  // 4. Capability-aware multi-provider fallback
-  // taskHint routes to the best-suited provider for the task type.
-  // e.g. 'multilingual' → Gemini first, 'technical' → NVIDIA first, etc.
-  console.warn(`[AI] Groq/DeepSeek/Ollama all failed — escalating to capability-aware router (hint=${taskHint})`)
+  // 2. DeepSeek fallback (only if Groq fully fails — reduced timeout to 8s)
+  const ds = await callDeepSeek(trimmed, { max_tokens, timeoutMs: 8000 })
+  if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
+  if (ds !== null) logInvalidResponse('deepseek', query, ds)
+
+  // 3. Ollama fallback
+  const ol = await callOllama(trimmed)
+  if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
+  if (ol !== null) logInvalidResponse('ollama', query, ol)
+
+  // 4. Capability-aware multi-provider fallback (Gemini, Mistral, Cohere, etc.)
+  console.warn(`[AI] All primary providers failed — escalating to router (hint=${taskHint})`)
   const routerResult = await callAIRouter(trimmed, { max_tokens, taskHint })
   if (validateAIContent(routerResult?.content, query)) {
-    console.log(`[AI] ✓ Router succeeded via ${routerResult.model} (hint=${taskHint}, reason=${routerResult.routingReason || 'n/a'})`)
+    console.log(`[AI] ✓ Router: ${routerResult.model} (hint=${taskHint})`)
     return routerResult
   }
 
@@ -1864,6 +1863,7 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
+        signal: AbortSignal.timeout(16000),
       })
       const data = await r.json()
 
@@ -12031,8 +12031,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const systemPrompt = [
     // ── CORE (always) ─────────────────────────────────────────────────────
-    `أنت DZ Agent 🇩🇿 — وكيل بحث ذكاء اصطناعي أنشأه Nadir Houamria (Nadir Infograph).`,
+    `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
+    // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
+    `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
+• الهوية: DZ Agent — وكيل الجزائر الذكي، يعمل 24/7، أنشأه Nadir Houamria
+• عدد الوكلاء: 6 وكلاء متخصصين يعملون معاً: [بحث الويب] [الكود والمستودعات] [الأخبار والرياضة] [الطقس والخرائط] [الذاكرة والسياق] [التحليل والاستنتاج]
+• المهارات (skills): البحث الحي على الإنترنت · قراءة المواقع · الكود والـ GitHub · أخبار الجزائر والعالم · الرياضة والدوري الجزائري · الطقس · القرآن الكريم · السيرة الذاتية · مخطط المشاريع · الوثائق القانونية · إحصاءات الجزائر · الدارجة الجزائرية · الترجمة
+• التقنيات المستعملة: نماذج LLM متعددة القدرات · بحث ويب حي · ذاكرة دائمة (Long-Term Memory) · WebSocket للحوار الفوري · محرك الدارجة الجزائرية · نظام circuit breaker للمرونة · RAG (Retrieval-Augmented Generation)
+• لا تذكر أسماء المزودين (Groq / Gemini / Mistral / DeepSeek / etc) في إجابتك`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
     `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,

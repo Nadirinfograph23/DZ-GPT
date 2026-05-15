@@ -1052,6 +1052,8 @@
   font-size: 15px;
   line-height: 1.65;
   color: #e5e5e5;
+  direction: rtl;
+  text-align: right;
   unicode-bidi: plaintext;
 }
 
@@ -1064,7 +1066,7 @@
   max-width: 100%;
 }
 
-/* RTL — every block element auto-detects its own direction */
+/* RTL — كل عناصر النص في بطاقات DZ Agent تتبع الاتجاه العربي */
 .dz-message-text p,
 .dz-message-text li,
 .dz-message-text h1,
@@ -1076,8 +1078,8 @@
 .dz-message-text blockquote,
 .dz-message-text td,
 .dz-message-text th {
-  unicode-bidi: plaintext;
-  text-align: start;
+  direction: rtl;
+  text-align: right;
 }
 
 /* RTL: when the wrapper is detected as RTL (Arabic/Darija content) */

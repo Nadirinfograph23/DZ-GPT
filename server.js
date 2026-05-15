@@ -899,6 +899,98 @@ app.get('/api/dz-agent/agent-status', (_req, res) => {
 // END RESILIENT DATA ENGINE
 // ============================================================
 
+// ═══════════════════════════════════════════════════════════════════════
+// THINKING TRACE ENDPOINT — 6-Role Deliberation (SSE streaming)
+// Exposes the Advanced Thinking Engine (Layer 14) visually to the user.
+// POST /api/dz-agent/thinking-trace
+// ═══════════════════════════════════════════════════════════════════════
+const THINKING_ROLES = [
+  { id: 'planner',   emoji: '🧭', name: 'Planner',          nameAr: 'المخطط',          color: '#3b82f6' },
+  { id: 'researcher',emoji: '🔬', name: 'Researcher',        nameAr: 'الباحث',          color: '#8b5cf6' },
+  { id: 'architect', emoji: '🏗️', name: 'Architect',         nameAr: 'المهندس',         color: '#06b6d4' },
+  { id: 'debugger',  emoji: '🐛', name: 'Debugger',          nameAr: 'المدقق',          color: '#f59e0b' },
+  { id: 'memory',    emoji: '🧠', name: 'Memory Optimizer',  nameAr: 'محسّن الذاكرة',   color: '#10b981' },
+  { id: 'critic',    emoji: '⚖️', name: 'Critic',            nameAr: 'الناقد',          color: '#ef4444' },
+]
+
+const THINKING_TRACE_PROMPT = (query) => `You are running a structured internal deliberation for this user request:
+"${query.slice(0, 400)}"
+
+Output EXACTLY this JSON object — one key per role, each value 1-2 concise sentences (max 120 chars each):
+
+{
+  "planner":    "What is the real goal? Key subtasks?",
+  "researcher": "What knowledge/tools are needed? Any gaps?",
+  "architect":  "Best structural approach? Module/flow design?",
+  "debugger":   "Potential errors, edge cases, or hallucinations to guard against?",
+  "memory":     "What context from conversation is relevant?",
+  "critic":     "What could be improved in this approach?"
+}
+
+Reply ONLY with the raw JSON object. No markdown, no explanation.`
+
+app.post('/api/dz-agent/thinking-trace', async (req, res) => {
+  const { query = '', messages = [], intent = 'general' } = req.body || {}
+  if (!query && !messages.length) return res.status(400).json({ error: 'query required' })
+
+  const userQuery = query || (messages.findLast?.(m => m.role === 'user')?.content) || ''
+
+  // Fast-path: skip deliberation for trivial requests
+  const isTrivial = userQuery.length < 20 ||
+    /^(مرحبا|سلام|شكرا|hello|hi|thanks|ok|okay|نعم|لا|yes|no)\b/i.test(userQuery.trim())
+
+  if (isTrivial) {
+    return res.json({
+      trivial: true,
+      roles: THINKING_ROLES.map(r => ({ ...r, output: r.id === 'critic' ? 'Simple request — direct answer.' : '' }))
+    })
+  }
+
+  // Setup SSE
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  }
+
+  // Emit roles as skeleton immediately
+  send('init', { roles: THINKING_ROLES })
+
+  try {
+    const aiPrompt = [{ role: 'user', content: THINKING_TRACE_PROMPT(userQuery) }]
+    const raw = await safeGenerateAI({ messages: aiPrompt, max_tokens: 600, taskHint: 'reasoning' })
+    const text = typeof raw === 'string' ? raw : (raw?.content || raw?.choices?.[0]?.message?.content || '')
+
+    // Parse JSON from AI output
+    let parsed = {}
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
+    } catch { /* fallback: use empty strings */ }
+
+    // Stream each role with 80ms delay for visual effect
+    for (const role of THINKING_ROLES) {
+      const output = parsed[role.id] || '—'
+      send('role', { id: role.id, output })
+      await new Promise(r => setTimeout(r, 80))
+    }
+
+    send('done', { ok: true })
+  } catch (err) {
+    console.error('[thinking-trace]', err.message)
+    // Emit fallback outputs on error
+    for (const role of THINKING_ROLES) {
+      send('role', { id: role.id, output: '—' })
+    }
+    send('done', { ok: false, error: err.message })
+  }
+  res.end()
+})
+
 function isDeveloperOrOwnerQuestion(message) {
   if (typeof message !== 'string' || !message) return false
   return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))

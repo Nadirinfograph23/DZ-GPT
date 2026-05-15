@@ -8061,3 +8061,89 @@
 }
 .gh-agent-toggle-btn:hover { color: #58a6ff; border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.08); }
 .gh-agent-toggle-btn.active { color: #58a6ff; background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); }
+
+/* ═══════════════════════════════════════════════════
+   THINKING TRACE PANEL — 6-Role Deliberation UI
+   ═══════════════════════════════════════════════════ */
+.dz-thinking-trace {
+  margin-bottom: 10px;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.dz-thinking-trace__toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  direction: ltr;
+  transition: background .15s;
+}
+.dz-thinking-trace__toggle:hover { background: rgba(125,211,252,.06); }
+
+.dz-thinking-trace__icon { font-size: 14px; }
+.dz-thinking-trace__label { flex: 1; opacity: .85; }
+.dz-thinking-trace__chevron { font-size: 10px; opacity: .5; }
+
+.dz-thinking-trace__steps {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px solid #1e293b;
+}
+
+.dz-thinking-trace__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: #0f172a;
+  border-left: 3px solid var(--step-color, #3b82f6);
+  animation: trace-step-in .25s ease both;
+  animation-delay: var(--step-delay, 0s);
+}
+@keyframes trace-step-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.dz-thinking-trace__step-emoji {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.dz-thinking-trace__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dz-thinking-trace__step-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--step-color, #3b82f6);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  direction: ltr;
+}
+
+.dz-thinking-trace__step-output {
+  font-size: 12.5px;
+  color: #94a3b8;
+  line-height: 1.5;
+  unicode-bidi: plaintext;
+}

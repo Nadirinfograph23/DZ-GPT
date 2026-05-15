@@ -27,6 +27,53 @@ import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== RATING PERSISTENCE =====
+// ===== THINKING TRACE TYPES =====
+interface ThinkingTraceRole {
+  id: string
+  emoji: string
+  name: string
+  nameAr: string
+  color: string
+  output: string
+}
+
+// ===== THINKING TRACE PANEL =====
+function ThinkingTracePanel({ roles }: { roles: ThinkingTraceRole[] }) {
+  const [open, setOpen] = useState(false)
+  const filled = roles.filter(r => r.output && r.output !== '—')
+  if (!filled.length) return null
+  return (
+    <div className="dz-thinking-trace">
+      <button className="dz-thinking-trace__toggle" onClick={() => setOpen(o => !o)}>
+        <span className="dz-thinking-trace__icon">🧠</span>
+        <span className="dz-thinking-trace__label">
+          {open ? 'إخفاء مراحل التفكير' : `عرض مراحل التفكير (${filled.length} خطوة)`}
+        </span>
+        <span className="dz-thinking-trace__chevron">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="dz-thinking-trace__steps">
+          {roles.map((role, i) => (
+            <div
+              key={role.id}
+              className="dz-thinking-trace__step"
+              style={{ '--step-color': role.color, '--step-delay': `${i * 0.07}s` } as React.CSSProperties}
+            >
+              <span className="dz-thinking-trace__step-emoji">{role.emoji}</span>
+              <div className="dz-thinking-trace__step-body">
+                <span className="dz-thinking-trace__step-name">{role.nameAr}</span>
+                <span className="dz-thinking-trace__step-output" dir="auto">
+                  {role.output || '—'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const RATINGS_KEY = 'dz-msg-ratings'
 type RatingVote = 'up' | 'down'
 type RatingsStore = Record<string, RatingVote>
@@ -316,6 +363,7 @@ interface DZMessage {
   dirs?: DirLink[]
   doctorMeta?: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; hasGps?: boolean; cached?: boolean; byName?: boolean; queryName?: string }
   dua?: string
+  thinkingTrace?: ThinkingTraceRole[]
   reactSteps?: import('./GitHubReActPanel').ReActStep[]
   // GitHub Agent
   ghAgentRepo?: string
@@ -4458,6 +4506,58 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
 
+      // ── Thinking Trace — fire in parallel (non-blocking) ──────────────────
+      const isComplexQuery = text.length >= 20 &&
+        !/^(مرحبا|سلام|شكرا|hello|hi|thanks|ok|okay|نعم|لا|yes|no)\b/i.test(text.trim())
+      let thinkingTraceRoles: ThinkingTraceRole[] | null = null
+      const thinkingTracePromise = isComplexQuery
+        ? (async () => {
+            try {
+              const sse = await fetch('/api/dz-agent/thinking-trace', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: text, messages: outboundMessages.slice(-4) }),
+                signal,
+              })
+              if (!sse.ok) return
+              const ct = sse.headers.get('content-type') || ''
+              // JSON fast-path (trivial)
+              if (ct.includes('application/json')) {
+                const j = await sse.json().catch(() => null)
+                if (j?.roles) thinkingTraceRoles = j.roles as ThinkingTraceRole[]
+                return
+              }
+              // SSE stream
+              const reader = sse.body?.getReader()
+              if (!reader) return
+              const roles: ThinkingTraceRole[] = []
+              const dec = new TextDecoder()
+              let buf = ''
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                buf += dec.decode(value, { stream: true })
+                const parts = buf.split('\n\n')
+                buf = parts.pop() || ''
+                for (const chunk of parts) {
+                  const lines = chunk.split('\n')
+                  const evLine = lines.find(l => l.startsWith('event:'))
+                  const dataLine = lines.find(l => l.startsWith('data:'))
+                  if (!evLine || !dataLine) continue
+                  const ev = evLine.replace('event:', '').trim()
+                  const parsed = JSON.parse(dataLine.replace('data:', '').trim())
+                  if (ev === 'init') roles.push(...(parsed.roles as ThinkingTraceRole[]).map(r => ({ ...r, output: '' })))
+                  if (ev === 'role') {
+                    const idx = roles.findIndex(r => r.id === parsed.id)
+                    if (idx >= 0) roles[idx] = { ...roles[idx], output: parsed.output }
+                  }
+                  if (ev === 'done') { thinkingTraceRoles = [...roles]; break }
+                }
+              }
+            } catch { /* thinking trace is optional — silently ignore */ }
+          })()
+        : Promise.resolve()
+
       // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
       const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
         return await withRetry(async () => {
@@ -4490,9 +4590,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
 
       // Auto-retry up to 3 times when response content is empty
+      // Run thinking trace in parallel with main response fetch
       let data: Record<string, unknown> = {}
       let attempts = 0
       while (attempts < 3) {
+        if (attempts === 0) await thinkingTracePromise.catch(() => {})
         data = await fetchAgentResponse()
         console.log('[DZChatBox] API response (attempt', attempts + 1, '):', data)
         if (data.action || data.pendingAction || data.richType || (typeof data.content === 'string' && data.content.trim() !== '')) {
@@ -4718,6 +4820,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           newsQuery: data.newsQuery as string | undefined,
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
           quickSuggestions: autoSuggestions,
+          thinkingTrace: thinkingTraceRoles ?? undefined,
         })
       }
     } catch (err: unknown) {
@@ -4985,6 +5088,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
                 {msg.role === 'user' ? 'You' : 'DZ Agent'}
               </div>
               <div className={`dz-message-text ${msg.isError ? 'dz-message-text--error' : ''}`} dir="auto">
+                {msg.role === 'assistant' && msg.thinkingTrace && msg.thinkingTrace.length > 0 && (
+                  <ThinkingTracePanel roles={msg.thinkingTrace} />
+                )}
                 {msg.role === 'assistant' ? (
                   typingId === msg.id && msg.richType === 'text' ? (
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />

@@ -45,6 +45,54 @@ function persistRating(msgId: string, vote: RatingVote): RatingsStore {
   return store
 }
 
+// ===== PERSISTENT MEMORY (Feature A) =====
+const MEMORY_KEY = 'dz-user-memory'
+const CONV_COUNT_KEY = 'dz-conv-count'
+interface UserMemory { conversationCount: number; lastTopics: string[]; lastSeen: string }
+function loadUserMemory(): UserMemory {
+  try { return { conversationCount: 0, lastTopics: [], lastSeen: '', ...JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}') } } catch { return { conversationCount: 0, lastTopics: [], lastSeen: '' } }
+}
+function saveUserMemory(patch: Partial<UserMemory>) {
+  try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...loadUserMemory(), ...patch, lastSeen: new Date().toISOString() })) } catch {}
+}
+function buildMemoryContext(): string {
+  const m = loadUserMemory()
+  if (!m.lastTopics?.length && !m.conversationCount) return ''
+  const parts: string[] = []
+  if (m.conversationCount > 0) parts.push(`هذه محادثتك رقم ${m.conversationCount + 1} مع DZ Agent`)
+  if (m.lastTopics?.length > 0) parts.push(`مواضيع محادثاتك الأخيرة: ${m.lastTopics.slice(0, 3).join('، ')}`)
+  return parts.length > 0 ? `\n[ذاكرة: ${parts.join(' — ')}]` : ''
+}
+function incrementConvCount() {
+  const c = parseInt(localStorage.getItem(CONV_COUNT_KEY) || '0', 10) + 1
+  localStorage.setItem(CONV_COUNT_KEY, String(c))
+  saveUserMemory({ conversationCount: c })
+}
+
+// ===== CLIENT-SIDE SUGGESTIONS (Feature I) =====
+function generateClientSuggestions(content: string, query: string): string[] {
+  const t = (content + ' ' + query).toLowerCase()
+  if (t.includes('كود') || t.includes('python') || t.includes('javascript') || t.includes('برمجة') || t.includes('دالة') || t.includes('function') || t.includes('class') || t.includes('react'))
+    return ['اشرح الكود بالتفصيل', 'حسّن هذا الكود وأضف تعليقات', 'اكتب اختبارات لهذا الكود']
+  if (t.includes('أخبار') || t.includes('خبر') || t.includes('اليوم') || t.includes('عاجل'))
+    return ['عرض المزيد من الأخبار', 'أخبار الاقتصاد الجزائري', 'ما أبرز الأحداث الدولية اليوم؟']
+  if (t.includes('رياضة') || t.includes('مباراة') || t.includes('كرة') || t.includes('دوري') || t.includes('هدف'))
+    return ['نتائج مباريات اليوم', 'أخبار المنتخب الجزائري', 'جدول ترتيب الدوري']
+  if (t.includes('طقس') || t.includes('جو') || t.includes('حرارة') || t.includes('weather'))
+    return ['طقس وهران ومدن أخرى', 'توقعات الأسبوع القادم', 'هل سيكون الجو مناسباً للسفر؟']
+  if (t.includes('عملة') || t.includes('دولار') || t.includes('يورو') || t.includes('دينار') || t.includes('صرف'))
+    return ['سعر اليورو مقابل الدينار', 'تاريخ سعر الصرف الأسبوعي', 'أين أفضل مكان للصرافة؟']
+  if (t.includes('github') || t.includes('مستودع') || t.includes('repo') || t.includes('commit'))
+    return ['عرض مستودعاتي على GitHub', 'إنشاء مستودع جديد', 'اشرح لي أفضل ممارسات Git']
+  if (t.includes('قرآن') || t.includes('آية') || t.includes('سورة') || t.includes('تفسير'))
+    return ['تفسير الآية التالية', 'آيات عن الصبر والشكر', 'اذهب لصفحة القرآن الكريم']
+  if (t.includes('موقع') || t.includes('html') || t.includes('landing') || t.includes('صفحة'))
+    return ['أضف قسم تواصل للموقع', 'اجعل الموقع متجاوباً مع الجوال', 'غيّر الألوان والخطوط']
+  if (t.includes('سير') || t.includes('cv') || t.includes('resume') || t.includes('وظيفة'))
+    return ['انتقل لمولد السيرة الذاتية', 'كيف أُحسّن سيرتي الذاتية؟', 'أسئلة المقابلات الشائعة']
+  return ['أخبرني المزيد عن هذا', 'اشرح لي بشكل مبسط', 'أعطني أمثلة عملية']
+}
+
 // ===== TYPES =====
 type RichType =
   | 'text'
@@ -4310,16 +4358,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         : m.content,
     }))
 
-    // Inject behavior context into the last user message (server reads it for smarter responses)
-    if (behaviorCtx && outboundMessages.length > 0) {
+    // Inject behavior context + persistent memory into the last user message
+    const memoryCtx = buildMemoryContext()
+    if ((behaviorCtx || memoryCtx) && outboundMessages.length > 0) {
       const last = outboundMessages[outboundMessages.length - 1]
       if (last.role === 'user') {
         outboundMessages[outboundMessages.length - 1] = {
           ...last,
-          content: last.content + behaviorCtx,
+          content: last.content + behaviorCtx + memoryCtx,
         }
       }
     }
+    // Update memory with this query topic
+    saveUserMemory({ lastTopics: [text.slice(0, 60), ...loadUserMemory().lastTopics].slice(0, 5) })
 
     setMessages(prev => [...prev, userMessage])
     setInput('')
@@ -4654,16 +4705,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
         })
       } else {
+        const responseContent = (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
+        const serverSuggestions = Array.isArray(data.quickSuggestions) && (data.quickSuggestions as string[]).length > 0
+          ? (data.quickSuggestions as string[])
+          : undefined
+        const autoSuggestions = serverSuggestions || generateClientSuggestions(responseContent, text)
         addAssistantMessage({
-          content: (data.content as string) || '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.',
+          content: responseContent,
           richType: 'text',
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
-          quickSuggestions: Array.isArray(data.quickSuggestions) && (data.quickSuggestions as string[]).length > 0
-            ? (data.quickSuggestions as string[])
-            : undefined,
+          quickSuggestions: autoSuggestions,
         })
       }
     } catch (err: unknown) {
@@ -4679,6 +4733,27 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = null
     }
   }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE, runGithubReActSSE])
+
+  // Feature C — Export conversation as Markdown
+  const exportAsMarkdown = useCallback(() => {
+    if (messages.length === 0) return
+    const lines: string[] = [
+      `# محادثة DZ Agent`,
+      `> التاريخ: ${new Date().toLocaleDateString('ar-DZ')}`,
+      `> عدد الرسائل: ${messages.length}`,
+      `\n---\n`,
+    ]
+    messages.forEach(m => {
+      lines.push(`## ${m.role === 'user' ? '👤 أنت' : '🤖 DZ Agent'}\n`)
+      lines.push(m.content || '')
+      lines.push('\n---\n')
+    })
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `dz-agent-${Date.now()}.md`; a.click()
+    URL.revokeObjectURL(url)
+  }, [messages])
 
   const regenerate = useCallback(async () => {
     if (messages.length < 2 || isLoading) return
@@ -4739,6 +4814,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
   const clearChat = () => {
     abortRef.current?.abort()
+    if (messages.length > 1) incrementConvCount()
     setMessages([])
     setIsLoading(false)
     setTypingId(null)
@@ -4803,6 +4879,32 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         ) : (
           <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
         )}
+        {messages.length > 0 && (
+          <button
+            className="gh-log-toggle"
+            onClick={exportAsMarkdown}
+            title="تصدير المحادثة كـ Markdown"
+          >
+            <Download size={13} />
+            تصدير
+          </button>
+        )}
+        <button
+          className="gh-log-toggle"
+          onClick={() => window.open('/stats', '_blank')}
+          title="إحصاءاتك"
+        >
+          <BarChart2 size={13} />
+          إحصاءات
+        </button>
+        <button
+          className="gh-log-toggle"
+          onClick={() => window.open('/tools', '_blank')}
+          title="أدوات ذكية: سيرة ذاتية، مخطط مشاريع، تحليل قانوني"
+        >
+          <Wrench size={13} />
+          أدوات
+        </button>
         <button
           className={`gh-log-toggle ${showLog ? 'active' : ''}`}
           onClick={() => setShowLog(!showLog)}

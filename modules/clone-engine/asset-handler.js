@@ -164,7 +164,7 @@ export function buildImagePromptBlock(images, limit = 20) {
     const label = img.alt ? img.alt.slice(0, 30) : `صورة ${i + 1}`
     const [bg, fg] = PLACEHOLDER_COLORS[i % PLACEHOLDER_COLORS.length]
 
-    if (!img.isBackground && realUsed < 4 && img.src && /^https?:\/\//i.test(img.src)) {
+    if (!img.isBackground && realUsed < 8 && img.src && /^https?:\/\//i.test(img.src)) {
       // ✅ Real image — embed with <img> tag + onerror fallback
       realUsed++
       const w = img.width ? ` width="${img.width}"` : ''
@@ -186,9 +186,9 @@ export function buildImagePromptBlock(images, limit = 20) {
     }
   })
 
-  const realCount = Math.min(realImgs.length, 4)
+  const realCount = Math.min(realImgs.length, 8)
   return `\nIMAGES (${items.length} detected — ${realCount} REAL embedded, rest placeholders):\n` +
-    `⚠️ CRITICAL: Use the REAL-IMG tags exactly as shown for the first ${realCount} images — do NOT replace with placeholders.\n` +
+    `⚠️ CRITICAL: Use the REAL-IMG tags exactly as shown (4–8 images minimum) — do NOT replace with placeholders.\n` +
     lines.join('\n') +
     `\n\nWRAP EACH IMAGE IN A CONTAINER that preserves the layout position (aspect-ratio, min-height, overflow:hidden).`
 }

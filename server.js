@@ -2303,6 +2303,24 @@ function detectMapWebsiteQuery(msg) {
 function detectWebsiteBuilderQuery(msg) {
   // Map website requests are handled separately
   if (detectMapWebsiteQuery(msg)) return false
+
+  // ── GUARD: Code Review / Analysis / Debug requests — NEVER route to web builder ──
+  // If the message contains a code block (```) it's a review/debug request, not a build request
+  if (/```/.test(msg)) {
+    // Only skip builder if combined with a review/analysis verb OR if no explicit build keyword
+    const reviewVerbs = /(?:راجع|اراجع|افحص|اشرح|شرح|اصلح|أصلح|صحح|اقترح|حسّن|حسن|optimize|refactor|review|explain|debug|fix|analyze|analyse|improve|check|inspect|أصلح|حلل|تحليل)/i
+    const codeNouns = /(?:الكود|هذا الكود|كودي|كود|snippet|function|class|component|script|module)/i
+    if (reviewVerbs.test(msg) || codeNouns.test(msg)) return false
+    // Message has code block with no clear build instruction — treat as code chat
+    const explicitBuildInBlock = /(?:أنشئ موقع|انشئ موقع|اصنع موقع|ابني موقع|build website|create website|make website|landing page)/i
+    if (!explicitBuildInBlock.test(msg)) return false
+  }
+
+  // ── GUARD: "هذا الكود / الكود / كودي" + review signals — pure code assistance ──
+  const isCodeReview = /(?:راجع|اراجع|افحص|اشرح|اقترح تحسينات|اقترح|أصلح|اصلح|حسّن|صحح)\s+(?:هذا\s+)?(?:الكود|كود|snippet)/i
+  const isCodeReviewEn = /(?:review|fix|debug|refactor|explain|optimize|improve|check)\s+(?:this\s+)?(?:code|snippet|function|class|component)/i
+  if (isCodeReview.test(msg) || isCodeReviewEn.test(msg)) return false
+
   const lower = msg.toLowerCase()
   const keywords = [
     // Arabic — verbs + "موقع/صفحة" (all spelling variants of أنشئ/انشئ/إنشأ/إنشاء)

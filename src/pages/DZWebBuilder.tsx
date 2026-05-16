@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import '../styles/dz-web-builder.css'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -70,6 +70,7 @@ const EXAMPLES = [
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function DZWebBuilder() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const [prompt, setPrompt]               = useState('')
   const [siteType, setSiteType]           = useState('landing')
@@ -80,8 +81,82 @@ export default function DZWebBuilder() {
   const [activeTab, setActiveTab]         = useState<'preview'|'code'>('preview')
   const [statusText, setStatusText]       = useState('')
   const [errorMsg, setErrorMsg]           = useState('')
+  const [cloneUrl, setCloneUrl]           = useState<string | null>(null)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // ── Auto-clone from URL param (?clone=https://...) ────────────────────────
+  useEffect(() => {
+    const urlToClone = searchParams.get('clone')
+    if (urlToClone) {
+      setCloneUrl(urlToClone)
+      setPrompt(`استنسخ هذا الموقع بدقة عالية وأعد بناءه: ${urlToClone}`)
+      // Auto-trigger clone after state settles
+      setTimeout(() => {
+        triggerCloneFromUrl(urlToClone)
+      }, 300)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const triggerCloneFromUrl = useCallback(async (url: string) => {
+    setLoading(true)
+    setErrorMsg('')
+    setResult(null)
+    setStatusText('🌐 يقرأ محتوى الموقع…')
+
+    const steps = [
+      '🔍 يحلل هيكل الصفحة…',
+      '🎨 يُنشئ CSS مطابق…',
+      '⚡ يكتب JavaScript…',
+      '🔧 يُطبق التصميم…',
+      '✅ يتحقق من الجودة…',
+    ]
+    let si = 0
+    const stInt = setInterval(() => {
+      if (si < steps.length) setStatusText(steps[si++])
+    }, 1800)
+
+    try {
+      const cloneMsg = `ابني نسخة احترافية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث وجذاب مستوحى من نفس الأسلوب: ${url}`
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: cloneMsg,
+          conversationId: `wb-clone-${Date.now()}`,
+          lang: 'ar',
+        }),
+      })
+
+      clearInterval(stInt)
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const data = await res.json()
+
+      if (data.isWebsite && data.htmlCode) {
+        setResult({
+          htmlCode: data.htmlCode,
+          message:  data.content || `✅ تم استنساخ الموقع بنجاح!`,
+          meta:     data.webBuilderMeta,
+        })
+        setActiveTab('preview')
+        setStatusText('✅ تم الاستنساخ!')
+        setTimeout(() => {
+          if (iframeRef.current) {
+            const doc = iframeRef.current.contentDocument
+            if (doc) { doc.open(); doc.write(data.htmlCode); doc.close() }
+          }
+        }, 100)
+      } else {
+        setErrorMsg(data.content || 'لم يتم توليد الموقع. يرجى المحاولة مجدداً.')
+      }
+    } catch (err: unknown) {
+      clearInterval(stInt)
+      setErrorMsg(`خطأ: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setLoading(false)
+    }
+  }, [iframeRef])
 
   const toggleFeature = (id: string) => {
     setTechFeatures(prev =>

@@ -38,9 +38,11 @@ function scoreClone(html, tokens) {
   )
   score += Math.min(18, sectionHits.length * 3)
 
-  // Placeholder images present (V3 — we expect placeholders, not real imgs)
-  const phCount = (html.match(/صورة\s*\d/g) || []).length
-  if (phCount > 0) score += Math.min(6, phCount * 2)
+  // Real images present (V4 — reward actual <img> tags, not placeholders)
+  const realImgCount = (html.match(/<img\s[^>]*src=["']https?:\/\//gi) || []).length
+  if (realImgCount >= 4) score += 8
+  else if (realImgCount >= 2) score += 4
+  else if (realImgCount >= 1) score += 2
 
   // Animation presence
   if (/@keyframes/i.test(html)) score += 4
@@ -83,36 +85,38 @@ function detectIssues(html, tokens) {
   return issues
 }
 
-// ── V3: Post-processing — enforce verbatim years/copyright ────────────────────
+// ── V4: Post-processing — inject dynamic copyright year ───────────────────────
+// The footer copyright always shows the CURRENT year via JS (new Date().getFullYear()).
+// We ensure the cr-yr span + JS is present in the output.
 function enforceVerbatimContent(html, tokens) {
-  if (!tokens.footerContent?.copyright) return html
+  if (!html) return html
 
-  const copyright = tokens.footerContent.copyright
-  const years = tokens.keyNumbers?.years || []
+  // If the AI already used the dynamic cr-yr pattern, nothing to do
+  if (html.includes('cr-yr') || html.includes('cr-year')) return html
 
-  // Extract years from copyright
-  const copyrightYears = copyright.match(/\b(19|20)\d{2}\b/g) || []
+  // Inject dynamic year script if a footer copyright section exists
+  const hasFooter = /<footer[\s>]/i.test(html)
+  if (!hasFooter) return html
 
-  if (copyrightYears.length === 0 && years.length === 0) return html
-
+  // Replace hardcoded years in footer copyright context with dynamic span
   let result = html
+  const currentYear = new Date().getFullYear().toString()
 
-  // Replace common AI year substitutions (2025, 2026) with the actual year from site
-  const siteYear = copyrightYears[0] || years[0]
-  if (siteYear) {
-    // In footer/copyright contexts, replace wrong years
-    const wrongYears = ['2025', '2026', '2027'].filter(y => y !== siteYear)
-    for (const wy of wrongYears) {
-      // Only replace in clearly copyright contexts (near ©, copyright, All Rights, etc.)
-      result = result.replace(
-        new RegExp(`(©|&copy;|copyright|all rights|tous droits)[^<]{0,30}${wy}`, 'gi'),
-        (match) => match.replace(wy, siteYear)
-      )
-      result = result.replace(
-        new RegExp(`${wy}([^<]{0,30})(©|&copy;|copyright|all rights|tous droits)`, 'gi'),
-        (match) => match.replace(wy, siteYear)
-      )
+  // Replace hardcoded year in footer © contexts
+  result = result.replace(
+    /(©|&copy;)\s*(19|20)\d{2}/gi,
+    (match) => {
+      const symbol = match.match(/©|&copy;/i)[0]
+      return `${symbol} <span id="cr-yr">${currentYear}</span>`
     }
+  )
+
+  // Inject the JS to update cr-yr span (before </script> or before </body>)
+  const crYrJs = `\n  // Dynamic copyright year\n  const _crYr = document.getElementById('cr-yr'); if (_crYr) _crYr.textContent = new Date().getFullYear();`
+  if (result.includes('</script>')) {
+    result = result.replace('</script>', crYrJs + '\n</script>')
+  } else {
+    result = result.replace('</body>', `<script>${crYrJs}\n</script>\n</body>`)
   }
 
   return result
@@ -239,26 +243,23 @@ All CSS in <style>. Responsive. Minimum 300 lines. Start immediately:`,
     }
   }
 
-  // ─── Stage 6: Final copyright injection (failsafe) ──────────────────────
-  if (tokens.footerContent?.copyright) {
-    const copyright = tokens.footerContent.copyright
-    // If copyright line is still missing, inject it into existing footer
-    if (!htmlCode.includes(copyright.slice(0, 20))) {
-      progress({ stage: 'copyright', message: `📌 تطبيق نص حقوق الملكية الأصلي...`, pct: 92 })
-      const copyrightYears = copyright.match(/\b(19|20)\d{2}\b/g) || []
-      if (copyrightYears.length > 0) {
-        const siteYear = copyrightYears[0]
-        const wrongYears = ['2025', '2026', '2027'].filter(y => y !== siteYear)
-        for (const wy of wrongYears) {
-          // More aggressive replacement in footer section
-          htmlCode = htmlCode.replace(
-            new RegExp(`(<footer[^>]*>[\\s\\S]{0,2000})${wy}`, 'i'),
-            (match) => match.replace(wy, siteYear)
-          )
-        }
-      }
-      console.log(`[CloneEngineV3] Copyright enforcement applied`)
+  // ─── Stage 6: Dynamic copyright year injection (failsafe) ───────────────
+  progress({ stage: 'copyright', message: `📅 تطبيق السنة الديناميكية في التذييل...`, pct: 92 })
+  if (!htmlCode.includes('cr-yr') && !htmlCode.includes('cr-year')) {
+    const currentYear = new Date().getFullYear().toString()
+    // Replace any hardcoded year in footer © context
+    htmlCode = htmlCode.replace(/(©|&copy;)\s*(19|20)\d{2}/gi, (match) => {
+      const sym = match.match(/©|&copy;/i)[0]
+      return `${sym} <span id="cr-yr">${currentYear}</span>`
+    })
+    // Inject JS updater before </script> or </body>
+    const js = `\n  var _y=document.getElementById('cr-yr');if(_y)_y.textContent=new Date().getFullYear();`
+    if (htmlCode.includes('</script>')) {
+      htmlCode = htmlCode.replace('</script>', js + '\n</script>')
+    } else {
+      htmlCode = htmlCode.replace('</body>', `<script>${js}\n</script>\n</body>`)
     }
+    console.log(`[CloneEngineV4] Dynamic copyright year injected`)
   }
 
   progress({ stage: 'done', message: `✅ اكتمل الاستنساخ V3 + V2 Downloader!`, pct: 100 })

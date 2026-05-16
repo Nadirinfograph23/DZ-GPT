@@ -431,3 +431,156 @@
   .dzt-tabs { padding: 12px 12px 0; }
   .dzt-header { padding: 14px 16px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUSINESS DOCUMENTS TOOL — وثائق تجارية
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dzt-doc-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.dzt-doc-type-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  color: #c0c0d0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: 'Cairo', sans-serif;
+}
+.dzt-doc-type-btn:hover {
+  background: rgba(124,58,237,0.15);
+  border-color: rgba(124,58,237,0.4);
+  color: #e0e0f0;
+}
+.dzt-doc-type-btn.active {
+  background: rgba(124,58,237,0.25);
+  border-color: rgba(124,58,237,0.6);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODE TABS (shared between Jobs & Health)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dzt-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  padding: 4px;
+}
+.dzt-mode-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #808090;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: 'Cairo', sans-serif;
+  font-weight: 600;
+}
+.dzt-mode-tab:hover { color: #c0c0d0; background: rgba(255,255,255,0.06); }
+.dzt-mode-tab.active { background: rgba(124,58,237,0.3); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   JOB SEARCH TOOL
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dzt-job-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.dzt-job-board-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid rgba(52,211,153,0.25);
+  background: rgba(52,211,153,0.06);
+  border-radius: 8px;
+  color: #34d399;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.18s;
+  font-family: 'Cairo', sans-serif;
+}
+.dzt-job-board-btn:hover {
+  background: rgba(52,211,153,0.15);
+  border-color: rgba(52,211,153,0.5);
+  color: #6ee7b7;
+  text-decoration: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEALTH TOOL
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dzt-health-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.dzt-health-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid rgba(248,113,113,0.2);
+  background: rgba(248,113,113,0.05);
+  border-radius: 8px;
+  color: #f8a1a1;
+  font-size: 11px;
+  font-family: 'Cairo', sans-serif;
+}
+.dzt-health-emergency {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #fca5a5;
+  margin: 8px 0;
+  direction: rtl;
+  text-align: right;
+}
+.dzt-health-emergency strong { color: #f87171; }
+.dzt-health-disclaimer {
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #fbbf24;
+  margin-top: 10px;
+  direction: rtl;
+}
+.dzt-health-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+@media (max-width: 640px) {
+  .dzt-doc-types { gap: 5px; }
+  .dzt-doc-type-btn { font-size: 12px; padding: 7px 10px; }
+  .dzt-job-boards { gap: 5px; }
+}

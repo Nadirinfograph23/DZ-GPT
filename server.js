@@ -9687,7 +9687,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Emergency intent (Algeria) — answered immediately, before doctor search ──
-  if (isEmergencyQuery(lastUserMessage)) {
+  // Skip for DZTools health/symptom requests — they intentionally contain medical keywords
+  if (!isDZToolRequest && isEmergencyQuery(lastUserMessage)) {
     return res.status(200).json({ content: EMERGENCY_INFO })
   }
 

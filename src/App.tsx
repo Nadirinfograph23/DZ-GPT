@@ -7,6 +7,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
 import PwaInstallBanner from './PwaInstallBanner'
 import { DeveloperCard } from './components/DeveloperCard'
+import BreakingNewsBanner from './components/BreakingNewsBanner'
 import './App.css'
 import './styles/dz-agent.css'
 
@@ -1523,6 +1524,9 @@ function App() {
 
       {/* Overlay */}
       {sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Breaking News Banner — source-tagged only */}
+      <BreakingNewsBanner />
 
       {/* PWA Install Banner */}
       <PwaInstallBanner />

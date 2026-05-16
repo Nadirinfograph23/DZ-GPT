@@ -9525,10 +9525,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
   // Extract and strip client-injected behavior context tag from the last user message
-  const behaviorContextMatch = lastUserMessage.match(/\n?\[سياق المستخدم:([^\]]+)\]$/)
-  const clientBehaviorContext = behaviorContextMatch ? behaviorContextMatch[1].trim() : ''
+  const behaviorContextMatch = lastUserMessage.match(/\n?\[سياق المستخدم:[^\]]*\]/)
+  const clientBehaviorContext = behaviorContextMatch ? behaviorContextMatch[0].replace(/^\n?\[سياق المستخدم:/, '').replace(/\]$/, '').trim() : ''
   if (behaviorContextMatch) {
     lastUserMessage = lastUserMessage.replace(behaviorContextMatch[0], '').trim()
+    const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
+    if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
+  }
+
+  // Strip client-injected memory context tag [ذاكرة: ...] so it never leaks into search queries
+  const memoryTagMatch = lastUserMessage.match(/\n?\[ذاكرة:[^\]]*\]/)
+  if (memoryTagMatch) {
+    lastUserMessage = lastUserMessage.replace(memoryTagMatch[0], '').trim()
     const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
     if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
   }

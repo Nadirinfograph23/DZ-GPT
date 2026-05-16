@@ -8,6 +8,80 @@
 
 import { buildImagePromptBlock, buildButtonNavBlock } from './asset-handler.js'
 
+// ── Supplementary Unsplash image pool by site type ────────────────────────────
+// Used when extracted real images < 4 — guarantees 4–8 real images in every clone.
+const CLONE_SUPPLEMENT_POOLS = {
+  restaurant: [
+    'https://images.unsplash.com/photo-1414235077-eefff0f14b66?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1476224203421-9ac39bcb3df1?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
+  ],
+  hotel: [
+    'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1445019980597-93fa8acb246c?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1566073771259-470b8b62b6e5?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1520250498-8426a84b7ada?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1455587734955-081b22074882?w=800&auto=format&fit=crop&q=80',
+  ],
+  ecommerce: [
+    'https://images.unsplash.com/photo-1445205170230-053b83016050?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1523381140794-a1eefbc27394?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1490481974858-c338c60a56ea?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&auto=format&fit=crop&q=80',
+  ],
+  portfolio: [
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&auto=format&fit=crop&q=80',
+  ],
+  agency: [
+    'https://images.unsplash.com/photo-1542744173-05336fcc0ad2?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&auto=format&fit=crop&q=80',
+  ],
+  blog: [
+    'https://images.unsplash.com/photo-1432821596592-e2c18b78144f?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1455390582262-4670c72e49eb?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80',
+  ],
+  landing: [
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800&auto=format&fit=crop&q=80',
+  ],
+}
+
+const _CLONE_ONERROR = `this.onerror=null;this.style.cssText='background:linear-gradient(135deg,#1e293b,#334155);min-height:220px;display:block;border-radius:8px;width:100%'`
+
+function buildSupplementBlock(layoutType, existingRealCount) {
+  const needed = Math.max(0, 4 - existingRealCount)
+  if (needed === 0) return ''
+  const key = layoutType?.toLowerCase()
+  const pool = CLONE_SUPPLEMENT_POOLS[key] || CLONE_SUPPLEMENT_POOLS.landing
+  const urls = pool.slice(0, Math.max(needed, 4))
+  const items = urls.map((url, i) =>
+    `SUPPLEMENT-IMG ${i + 1}: <img src="${url}" alt="image ${i + 1}" loading="lazy" ` +
+    `style="width:100%;height:260px;object-fit:cover;border-radius:12px;display:block" ` +
+    `onerror="${_CLONE_ONERROR}">`
+  ).join('\n')
+  return `\n\nSUPPLEMENTARY IMAGES (${(layoutType || 'landing').toUpperCase()} — use when real site images < 4):\n${items}\n⚠️ Use these to fill remaining image slots — do NOT leave image positions empty.`
+}
+
 const BASE_SYSTEM = `You are DZ Agent V3 — the world's most advanced autonomous website cloning AI.
 Your mission: produce 100% pixel-perfect standalone HTML clones — indistinguishable from the original at first glance.
 
@@ -41,23 +115,28 @@ PIXEL-PERFECT MANDATE:
 - Use REAL extracted content — NEVER Lorem ipsum
 
 ════════════════════════════════════════════
-⚠️ CRITICAL: DATES, YEARS, NUMBERS — VERBATIM COPY RULE:
-- NEVER change any date, year, phone number, price, or statistic
-- If footer says "© 2024 CompanyName" → output EXACTLY "© 2024 CompanyName"
-- If the site shows "2019–2024" → output EXACTLY "2019–2024"
+⚠️ NUMBERS & STATS — VERBATIM COPY RULE:
+- ALL phone numbers, prices, statistics, counts MUST be copied verbatim
 - If a stat card says "10,000+ clients" → output EXACTLY "10,000+ clients"
-- DO NOT substitute current year (2025/2026) for any number found in the original
-- ALL years, prices, counts, statistics MUST be copied verbatim from the extracted content
+- If the site shows "2019–2024" in content → output EXACTLY "2019–2024"
+
+⚠️ FOOTER COPYRIGHT YEAR — DYNAMIC RULE (MANDATORY):
+- ALWAYS use the CURRENT YEAR dynamically in the footer copyright
+- Add this HTML: © <span id="cr-yr"></span> CompanyName
+- Add this JS: document.getElementById('cr-yr').textContent = new Date().getFullYear();
+- This ensures the footer always shows the current year (e.g. © 2026 CompanyName)
+- NEVER hardcode a year in the footer copyright line
 ════════════════════════════════════════════
 
-IMAGE MANDATE (V4 — Real + Fallback):
+IMAGE MANDATE (V4 — 4–8 Real Images Required):
 - For images marked [REAL-IMG] in the intelligence block: USE THE EXACT <img> TAG PROVIDED — do NOT replace with placeholders
 - Each [REAL-IMG] already includes an onerror fallback — copy it exactly as given
 - For [BG-IMG]: use as CSS background-image: url("...") on the relevant section/div
-- For [PLACEHOLDER]: use a themed gradient div preserving dimensions
-- MINIMUM 4 real images must appear in the output — use the [REAL-IMG] tags provided
+- For [SUPPLEMENT-IMG] in SUPPLEMENTARY IMAGES block: use these Unsplash URLs when real site images are insufficient
+- MINIMUM 4, TARGET 6–8 real images must appear in the output
 - Wrap each image in a container: style="overflow:hidden;border-radius:Xpx;" to preserve layout
-- NEVER break layout when images load — use aspect-ratio or min-height on containers`
+- NEVER break layout when images load — use aspect-ratio or min-height on containers
+- For any remaining slots where no real URL is available: use themed gradient div`
 
 const TAILWIND_RULES = `
 TAILWIND INSTRUCTIONS:
@@ -356,10 +435,13 @@ function buildFrameworkInstructions(techStack) {
 }
 
 export function buildCloneSystemPrompt(tokens) {
+  const existingReal = (tokens.images || []).filter(i => !i.isBackground && /^https?:\/\//i.test(i.src)).length
+  const supplementBlock = buildSupplementBlock(tokens.layoutType, existingReal)
   return BASE_SYSTEM
     + buildFrameworkInstructions(tokens.techStack || [])
     + '\n\nSITE-SPECIFIC INTELLIGENCE:'
     + buildDesignContext(tokens)
+    + supplementBlock
     + '\n\nSTART OUTPUT NOW — RAW HTML ONLY (<!DOCTYPE html>…</html>):'
 }
 
@@ -378,10 +460,10 @@ export function buildIndexOnlySystemPrompt(tokens) {
     ? `\nHERO H1: "${tokens.heroContent.h1}"\nHERO SUB: "${tokens.heroContent.subtext?.slice(0, 120)}"\nHERO CTAs: ${tokens.heroContent.ctas.slice(0, 3).join(' | ')}`
     : ''
   const footerStr    = tokens.footerContent?.copyright
-    ? `\nFOOTER COPYRIGHT (VERBATIM): "${tokens.footerContent.copyright}"\nFOOTER LINKS: ${tokens.footerContent.links?.slice(0, 8).join(' | ') || ''}`
-    : ''
-  const yearsStr     = tokens.keyNumbers?.years?.length
-    ? `\n⚠️ YEARS (copy verbatim): ${tokens.keyNumbers.years.join(', ')}`
+    ? `\nFOOTER COPYRIGHT — use dynamic year: © <span id="cr-yr"></span> ${tokens.footerContent.copyright.replace(/©?\s*(19|20)\d{2}\s*/g, '').trim() || tokens.domain}\nJS: document.getElementById('cr-yr').textContent = new Date().getFullYear();\nFOOTER LINKS: ${tokens.footerContent.links?.slice(0, 8).join(' | ') || ''}`
+    : `\nFOOTER COPYRIGHT — use dynamic year: © <span id="cr-yr"></span> ${tokens.domain || 'Company'}\nJS: document.getElementById('cr-yr').textContent = new Date().getFullYear();`
+  const yearsStr     = tokens.keyNumbers?.stats?.length
+    ? `\nSTATS (copy verbatim): ${tokens.keyNumbers.stats.slice(0, 6).join(', ')}`
     : ''
   const statsStr     = tokens.keyNumbers?.stats?.length
     ? `\nSTATS (verbatim): ${tokens.keyNumbers.stats.slice(0, 6).join(', ')}`
@@ -401,8 +483,10 @@ export function buildIndexOnlySystemPrompt(tokens) {
   const keyframesSlim = tokens.keyframes?.length > 0 ? `\nKEYFRAMES:\n${tokens.keyframes.join('\n').slice(0, 800)}` : ''
   const buttonNavSlim = buildButtonNavBlock(tokens.buttonPatterns, tokens.navbarHtml)
 
-  // Slim image block for INDEX mode — still show real URLs for top 4
+  // Slim image block for INDEX mode — show real URLs for top 8
   const imageSlim = buildImagePromptBlock((tokens.images || []).slice(0, 8), 8)
+  const existingRealSlim = (tokens.images || []).filter(i => !i.isBackground && /^https?:\/\//i.test(i.src)).length
+  const supplementSlim = buildSupplementBlock(tokens.layoutType, existingRealSlim)
 
   const context = `
 ════════════════════════════
@@ -442,6 +526,7 @@ ${classesTrim}
     + buildFrameworkInstructions(tokens.techStack || [])
     + '\n\nINDEX PAGE INTELLIGENCE (slim for speed):'
     + context
+    + supplementSlim
     + '\n\nOUTPUT NOW — RAW HTML ONLY (<!DOCTYPE html>…</html>):'
 }
 
@@ -450,11 +535,9 @@ export function buildCloneUserPrompt(url, section, tokens) {
     ? `⚠️ CRITICAL — these years appear in the original and MUST appear verbatim in output: ${tokens.keyNumbers.years.join(', ')}`
     : ''
 
-  const copyrightNote = tokens.footerContent?.copyright
-    ? `⚠️ FOOTER COPYRIGHT — copy this EXACTLY: "${tokens.footerContent.copyright}"`
-    : ''
+  const copyrightNote = `⚠️ FOOTER COPYRIGHT — use DYNAMIC year: © <span id="cr-yr"></span> ${(tokens.footerContent?.copyright || tokens.domain || 'Company').replace(/©?\s*(19|20)\d{2}\s*/g, '').trim()}\nJS (add in <script>): document.getElementById('cr-yr').textContent = new Date().getFullYear();`
 
-  const imgFallback = `IMAGES: Use real <img> tags (with absolute URLs) for the first 4 images as provided in the IMAGES block. Each real img includes an onerror fallback — copy it exactly. For remaining images use themed gradient placeholders matching ${tokens.colorScheme} theme.`
+  const imgFallback = `IMAGES: Use 4–8 real <img> tags from the IMAGES block and SUPPLEMENTARY IMAGES block. Each real img includes an onerror fallback — copy it exactly. For any remaining slots use themed gradient placeholders matching ${tokens.colorScheme} theme.`
 
   if (section && section !== 'full') {
     return `Clone ONLY the "${section}" section of ${url}.

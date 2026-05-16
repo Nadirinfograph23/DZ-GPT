@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Briefcase } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'

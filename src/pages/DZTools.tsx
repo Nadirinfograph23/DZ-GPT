@@ -168,7 +168,10 @@ function CVTool() {
     setResult('')
     try {
       const prompt = form.outputLang === 'ar'
-        ? `أنشئ سيرة ذاتية احترافية بالعربية للشخص التالي. استخدم تنسيق Markdown منظم مع عناوين واضحة:\n
+        ? `[TOOL:CV_GENERATOR — لا مقدمات — لا شرح — لا تعليقات — ابدأ مباشرةً بالسيرة الذاتية — السيرة الذاتية فقط]
+
+أنشئ سيرة ذاتية احترافية بالعربية بتنسيق Markdown منظم مع عناوين واضحة، باستخدام هذه المعلومات فقط:
+
 الاسم: ${form.name}
 المنصب المطلوب: ${form.title}
 الهاتف: ${form.phone || 'غير محدد'}
@@ -180,8 +183,11 @@ function CVTool() {
 المهارات: ${form.skills || 'غير محدد'}
 اللغات: ${form.languages || 'العربية'}
 
-اجعل السيرة الذاتية احترافية، منظمة، جاهزة للإرسال لأصحاب العمل.`
-        : `Créez un CV professionnel en français pour cette personne. Utilisez le format Markdown structuré:\n
+قاعدة صارمة: ابدأ مباشرةً بـ # اسم الشخص — لا تكتب أي جملة تمهيدية أو شرح قبل السيرة الذاتية.`
+        : `[TOOL:CV_GENERATOR — NO PREAMBLE — NO EXPLANATION — START DIRECTLY WITH THE CV — CV CONTENT ONLY]
+
+Créez un CV professionnel en français au format Markdown structuré, en utilisant uniquement ces informations:
+
 Nom: ${form.name}
 Poste souhaité: ${form.title}
 Téléphone: ${form.phone || 'Non précisé'}
@@ -193,12 +199,12 @@ Formation: ${form.education || 'Non précisé'}
 Compétences: ${form.skills || 'Non précisé'}
 Langues: ${form.languages || 'Arabe'}
 
-Rendez le CV professionnel, structuré, prêt pour les employeurs.`
+Règle stricte: commencez directement par # Nom — aucune phrase d'introduction ni explication avant le CV.`
 
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'cv' }),
       })
       const data = await res.json()
       setResult(data.content || '⚠️ لم يتمكن الوكيل من إنشاء السيرة الذاتية.')

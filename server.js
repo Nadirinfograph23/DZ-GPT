@@ -11740,25 +11740,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // Specific scans first (more specific wins)
     if (matchTrigger('securityScan')) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🔐 لإجراء فحص أمني، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🔐 **فحص أمني** — اختر أولاً المستودع الذي تريد فحصه:' })
       }
       return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'security', content: `🔐 جاري الفحص الأمني للمستودع **${currentRepo}**...` })
     }
     if (matchTrigger('bugScan')) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🐛 لإيجاد الأخطاء، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🐛 **كشف الأخطاء** — اختر أولاً المستودع الذي تريد فحصه:' })
       }
       return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'bugs', content: `🐛 جاري البحث عن الأخطاء في **${currentRepo}**...` })
     }
     if (matchTrigger('suggestImprovements') && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '💡 لاقتراح تحسينات، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '💡 **اقتراحات التحسين** — اختر أولاً المستودع الذي تريد تحسينه:' })
       }
       return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'suggest', content: `💡 جاري إعداد اقتراحات التحسين لـ **${currentRepo}**...` })
     }
     if (matchTrigger('fullScan')) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🔍 لفحص مستودع، اختر مستودعاً أولاً من قائمة المستودعات. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🔍 **فحص شامل** — اختر أولاً المستودع الذي تريد فحصه:' })
       }
       return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: '', content: `🔍 جاري الفحص الشامل للمستودع **${currentRepo}**...` })
     }
@@ -11796,9 +11796,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── New AI Coding Actions ────────────────────────────────────────────────
     const analyzeProjectTriggers = [
       'حلل المشروع', 'تحليل المشروع', 'افهم المشروع', 'اشرح المشروع',
+      'حلل الكود', 'تحليل الكود', 'تقرير الأخطاء', 'تقرير عن الأخطاء',
+      'حلل كودي', 'حلل مستودعي', 'تحليل مستودعي', 'تحليل الكود في مستودعي',
       'ما هو هذا المشروع', 'ما stack', 'ما التقنية', 'ما التبعيات',
-      'analyze project', 'understand project', 'project overview', 'tech stack',
-      'analyse le projet', 'comprendre le projet',
+      'analyze project', 'analyze code', 'code analysis', 'analyze my code',
+      'understand project', 'project overview', 'tech stack', 'code report',
+      'analyse le projet', 'comprendre le projet', 'analyser le code',
     ]
     const generateAndPushTriggers = [
       'أنشئ ميزة', 'أنشئ فيتشر', 'أضف ميزة', 'أضف مكوّن', 'أضف صفحة', 'أنشئ ملف',
@@ -11838,13 +11841,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     if (matchList(analyzeProjectTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🔬 لتحليل المشروع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🔬 **تحليل الكود** — اختر أولاً المستودع الذي تريد تحليله:' })
       }
       return res.status(200).json({ action: 'analyze-project', repo: currentRepo, content: `🔬 جاري قراءة وتحليل مشروع **${currentRepo}** بالكامل...` })
     }
     if (matchList(generateAndPushTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '⚡ لتوليد كود ورفعه، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '⚡ اختر أولاً المستودع الذي تريد إضافة الميزة إليه:' })
       }
       // Extract the feature description (everything after the trigger phrase)
       let description = lastUserMessage
@@ -11856,13 +11859,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
     if (matchList(improveDesignTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🎨 لتحسين التصميم، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🎨 **تحسين التصميم** — اختر أولاً المستودع الذي تريد تحسينه:' })
       }
       return res.status(200).json({ action: 'improve-design', repo: currentRepo, content: `🎨 جاري تحليل وتحسين تصميم **${currentRepo}**...` })
     }
     if (matchList(deployVercelTriggers)) {
       if (!currentRepo) {
-        return res.status(200).json({ content: '🌐 لنشر المستودع على GitHub Pages، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
+        return res.status(200).json({ action: 'list-repos', content: '🌐 **النشر** — اختر أولاً المستودع الذي تريد نشره:' })
       }
       return res.status(200).json({ action: 'deploy-pages', repo: currentRepo, content: `🌐 جاري النشر على GitHub Pages لـ **${currentRepo}**...` })
     }

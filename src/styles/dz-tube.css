@@ -1051,6 +1051,100 @@ body.dz-mini-active .dzt-batch-bar { bottom: 110px; }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
+/* ── Background Play Tip Popup ─────────────────────────────────────────────── */
+.dzt-bgtip-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: dzt-bgtip-fade 0.2s ease;
+}
+@keyframes dzt-bgtip-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.dzt-bgtip {
+  background: #16161e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  max-width: 340px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+  animation: dzt-bgtip-up 0.22s cubic-bezier(.22,1,.36,1);
+  direction: rtl;
+}
+@keyframes dzt-bgtip-up {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+.dzt-bgtip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.dzt-bgtip-icon { font-size: 20px; line-height: 1; }
+.dzt-bgtip-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.2px;
+}
+.dzt-bgtip-close {
+  background: rgba(255,255,255,0.07);
+  border: none;
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dzt-bgtip-close:hover { background: rgba(255,255,255,0.14); color: #f1f5f9; }
+.dzt-bgtip-lead {
+  font-size: 14px;
+  color: #cbd5e1;
+  margin: 0 0 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.dzt-bgtip-steps {
+  margin: 0 0 20px;
+  padding-right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dzt-bgtip-steps li {
+  font-size: 13.5px;
+  color: #94a3b8;
+  line-height: 1.55;
+}
+.dzt-bgtip-steps li strong {
+  color: #7dd3fc;
+  font-weight: 600;
+}
+.dzt-bgtip-ok {
+  width: 100%;
+  padding: 11px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.dzt-bgtip-ok:hover { opacity: 0.88; }
+
 /* Mobile */
 @media (max-width: 720px) {
   .dzt-header { padding: 11px 14px; }

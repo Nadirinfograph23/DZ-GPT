@@ -98,7 +98,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
-import { GITHUB_AGENT_LAYER } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -12275,7 +12275,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   } catch { /* fail silently — memory is optional */ }
 
   const systemPrompt = [
-    // ── ADVANCED REASONING CORE (always first) ────────────────────────────
+    // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
+    INTENT_SEPARATION_GUARD,
+    // ── ADVANCED REASONING CORE ───────────────────────────────────────────
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,

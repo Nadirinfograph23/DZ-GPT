@@ -978,8 +978,63 @@ function HealthTool() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const SPECIALTIES = ['طب عام','قلب وأوعية','عيون','أسنان','جلدية','أطفال','نساء وتوليد','عظام','مسالك بولية','جهاز هضمي','أعصاب','نفسية','أنف وأذن وحنجرة']
-  const CITIES = ['الجزائر','وهران','قسنطينة','عنابة','سطيف','باتنة','تلمسان','بجاية','بليدة','تيزي وزو','ورقلة','مستغانم']
+  const SPECIALTIES = ['طب عام','قلب وأوعية','عيون','أسنان','جلدية','أطفال','نساء وتوليد','عظام','مسالك بولية','جهاز هضمي','أعصاب','نفسية','أنف وأذن وحنجرة','رئة وتنفس','كلى','سكري وغدد','أورام','روماتولوجيا','أشعة وتصوير','تغذية ورجيم']
+  const CITIES = ['الجزائر','وهران','قسنطينة','عنابة','سطيف','باتنة','تلمسان','بجاية','بليدة','تيزي وزو','ورقلة','مستغانم','المدية','برج بوعريريج','سيدي بلعباس','قالمة','جيجل','سكيكدة','البويرة','الأغواط']
+
+  // SahaDoc specialty URL slugs mapping
+  const SAHADOC_SLUGS: Record<string, string> = {
+    'طب عام':           'medecin-generaliste',
+    'قلب وأوعية':       'cardiologue',
+    'عيون':             'ophtalmologue',
+    'أسنان':            'dentiste',
+    'جلدية':            'dermatologue',
+    'أطفال':            'pediatre',
+    'نساء وتوليد':      'gynecologue',
+    'عظام':             'orthopediste',
+    'مسالك بولية':      'urologue',
+    'جهاز هضمي':        'gastro-enterologue',
+    'أعصاب':            'neurologue',
+    'نفسية':            'psychiatre',
+    'أنف وأذن وحنجرة':  'orl-oto-rhino-laryngologiste',
+    'رئة وتنفس':        'pneumologue',
+    'كلى':              'nephrologue',
+    'سكري وغدد':        'endocrinologue',
+    'أورام':            'oncologue',
+    'روماتولوجيا':      'rhumatologue',
+    'أشعة وتصوير':      'radiologue',
+    'تغذية ورجيم':      'nutritionniste',
+  }
+
+  const SAHADOC_CITIES: Record<string, string> = {
+    'الجزائر':    'alger',
+    'وهران':      'oran',
+    'قسنطينة':    'constantine',
+    'عنابة':      'annaba',
+    'سطيف':       'setif',
+    'باتنة':      'batna',
+    'تلمسان':     'tlemcen',
+    'بجاية':      'bejaia',
+    'بليدة':      'blida',
+    'تيزي وزو':   'tizi-ouzou',
+    'ورقلة':      'ouargla',
+    'مستغانم':    'mostaganem',
+    'المدية':     'medea',
+    'برج بوعريريج':'bordj-bou-arreridj',
+    'سيدي بلعباس': 'sidi-bel-abbes',
+    'قالمة':      'guelma',
+    'جيجل':       'jijel',
+    'سكيكدة':     'skikda',
+    'البويرة':    'bouira',
+    'الأغواط':    'laghouat',
+  }
+
+  const getSahadocUrl = () => {
+    const slug = specialty ? SAHADOC_SLUGS[specialty] : null
+    const citySlug = SAHADOC_CITIES[city]
+    if (slug && citySlug) return `https://www.sahadoc.net/ar/docteur/s-${slug}/v-${citySlug}/`
+    if (slug)             return `https://www.sahadoc.net/ar/docteur/s-${slug}/`
+    return 'https://www.sahadoc.net/ar/docteur/'
+  }
 
   const analyze = async () => {
     setLoading(true); setResult('')
@@ -1013,23 +1068,34 @@ function HealthTool() {
 **تنبيه: حلّل الأعراض المذكورة فقط. لا تفترض أعراضاً أخرى.**
 ⚠️ هذا تقييم استرشادي. استشر طبيبك دائماً.`
     } else {
-      prompt = `أنت وكيل صحة متخصص في المنظومة الصحية الجزائرية. ساعدني في إيجاد طبيب:
-- التخصص: ${specialty || 'طب عام'}
-- الولاية/المدينة: ${city}
+      const sahadocUrl = getSahadocUrl()
+      prompt = `[TOOL:DOCTOR_SEARCH — لا مقدمات — ابدأ مباشرةً بالمعلومات]
 
-قدّم:
-1. **كيفية البحث** عن طبيب ${specialty||'عام'} في ${city} (CNAS، دليل الأطباء، التطبيقات)
-2. **المستشفيات والعيادات** الرئيسية في ${city} لهذا التخصص
-3. **الأسعار التقريبية** للكشف الطبي في ${city} (قطاع عام / خاص)
-4. **خطوات الاستفادة** من التغطية الاجتماعية (CNAS/CASNOS)
-5. **روابط مفيدة**: أطباء.دز، Doctolib Algeria، CNAS.dz، مواعيد.دز
-6. **نصائح** للحصول على موعد سريع في الجزائر`
+أنت وكيل صحة متخصص في المنظومة الصحية الجزائرية. أُريد إيجاد طبيب ${specialty || 'طب عام'} في ${city}.
+
+## 🔍 SahaDoc — المصدر الأول (الأسرع)
+**رابط مباشر للحجز:** ${sahadocUrl}
+اشرح كيفية استخدام SahaDoc (sahadoc.net): البحث بالتخصص، تصفية المدينة، طلب موعد مباشر.
+
+## 🏥 المستشفيات والعيادات
+أذكر 3-5 مستشفيات أو مراكز طبية رئيسية في ${city} لتخصص ${specialty||'طب عام'} مع عناوينها إن أمكن.
+
+## 💰 الأسعار التقريبية في ${city}
+- قطاع عام (مستشفى حكومي)
+- قطاع خاص (عيادة / مصحة)
+- مع تغطية CNAS/CASNOS
+
+## 📋 كيفية الاستفادة من الضمان الاجتماعي
+خطوات عملية للحصول على إحالة أو استرداد مصاريف CNAS/CASNOS.
+
+## ⚡ نصائح للحصول على موعد سريع
+3-4 نصائح عملية خاصة بـ ${city}.`
     }
 
     try {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'health' })
       })
       const data = await res.json()
       setResult(data.content || '⚠️ فشل التحليل.')
@@ -1110,7 +1176,23 @@ function HealthTool() {
               </select>
             </div>
           </div>
+          {/* SahaDoc direct link — updates reactively with specialty + city */}
+          <a
+            href={getSahadocUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="dzt-sahadoc-btn"
+          >
+            <span className="dzt-sahadoc-icon">🩺</span>
+            <span className="dzt-sahadoc-text">
+              <strong>ابحث على SahaDoc</strong>
+              <small>{specialty ? `${specialty} — ${city}` : `جميع الأطباء — ${city}`}</small>
+            </span>
+            <span className="dzt-sahadoc-arrow">↗</span>
+          </a>
+
           <div className="dzt-health-links">
+            <a href="https://www.sahadoc.net/ar/docteur/" target="_blank" rel="noopener noreferrer" className="dzt-job-board-btn">🩺 SahaDoc</a>
             <a href="https://www.cnas.dz" target="_blank" rel="noopener noreferrer" className="dzt-job-board-btn">🏛️ CNAS.dz</a>
             <a href="https://www.sante.gov.dz" target="_blank" rel="noopener noreferrer" className="dzt-job-board-btn">🏥 وزارة الصحة</a>
             <a href="https://www.casnos.com.dz" target="_blank" rel="noopener noreferrer" className="dzt-job-board-btn">📋 CASNOS</a>

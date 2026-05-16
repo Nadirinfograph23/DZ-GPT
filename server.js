@@ -17425,6 +17425,275 @@ try {
   console.warn('[github-skill] mount failed:', err.message)
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS (available on Vercel too)
+// ══════════════════════════════════════════════════════════════════════
+
+// GET /api/tools/image-search?q=... — multi-source: Openverse + Wikimedia Commons fallback
+app.get('/api/tools/image-search', async (req, res) => {
+  const q = sanitizeString(String(req.query.q || ''), 200).trim()
+  if (!q) return res.status(400).json({ error: 'query required', results: [] })
+
+  // Translate Arabic keywords to English — apply ALL matches (not just first)
+  const AR_EN_MAP = [
+    ['الجزائر العاصمة', 'Algiers capital Algeria'],
+    ['الجزائر', 'Algeria'],   ['جزائر', 'Algeria'],
+    ['وهران', 'Oran Algeria'],['قسنطينة', 'Constantine Algeria'],
+    ['عنابة', 'Annaba Algeria'], ['بجاية', 'Bejaia Algeria'],
+    ['سطيف', 'Setif Algeria'], ['تلمسان', 'Tlemcen Algeria'],
+    ['باتنة', 'Batna Algeria'], ['بسكرة', 'Biskra Algeria'],
+    ['ورقلة', 'Ouargla Algeria'], ['تيزي وزو', 'Tizi Ouzou Algeria'],
+    ['شروق', 'sunrise'], ['غروب', 'sunset'],
+    ['بحر', 'sea'], ['جبل', 'mountain'], ['صحراء', 'sahara desert'],
+    ['غابة', 'forest'], ['علم', 'flag'], ['مسجد', 'mosque'],
+    ['قصبة', 'Casbah'], ['سوق', 'market'], ['شاطئ', 'beach'],
+    ['مدينة', 'city'], ['قرية', 'village'], ['طبيعة', 'nature'],
+    ['تقليدي', 'traditional'], ['ثقافة', 'culture'], ['تاريخ', 'history'],
+    ['أزرق', 'blue'], ['أحمر', 'red'], ['أخضر', 'green'],
+  ]
+  let searchQ = q
+  for (const [ar, en] of AR_EN_MAP) {
+    if (searchQ.includes(ar)) searchQ = searchQ.split(ar).join(en)
+  }
+  const stillHasArabic = /[\u0600-\u06FF]/.test(searchQ)
+  if (stillHasArabic) {
+    searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
+  }
+  searchQ = searchQ.replace(/\s+/g, ' ').trim() || 'Algeria'
+  console.log(`[ImageSearch] original="${q}" searchQ="${searchQ}"`)
+
+  // ── Source 1: Openverse (CC-licensed images) ──
+  const fetchOpenverse = async () => {
+    const params = new URLSearchParams({ q: searchQ, page_size: '24', license_type: 'all' })
+    const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app; contact@dz-gpt.vercel.app)' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) throw new Error(`Openverse ${r.status}`)
+    const data = await r.json()
+    return (data.results || []).map(img => ({
+      id: `ov-${img.id}`,
+      title: img.title || searchQ,
+      url: img.url,
+      thumbnail: img.url,
+      source: img.source || 'openverse',
+      license: img.license || 'CC',
+      creator: img.creator || '',
+      width: img.width || 0,
+      height: img.height || 0,
+    })).filter(img => img.url && img.url.startsWith('http'))
+  }
+
+  // ── Source 2: Wikimedia Commons (completely free, no key) ──
+  const fetchWikimedia = async () => {
+    const params = new URLSearchParams({
+      action: 'query',
+      generator: 'search',
+      gsrsearch: `filetype:bitmap ${searchQ}`,
+      gsrnamespace: '6',
+      gsrlimit: '20',
+      prop: 'imageinfo',
+      iiprop: 'url|thumburl|extmetadata',
+      iiurlwidth: '400',
+      format: 'json',
+      origin: '*',
+    })
+    const r = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
+      headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!r.ok) throw new Error(`Wikimedia ${r.status}`)
+    const data = await r.json()
+    const pages = Object.values(data?.query?.pages || {})
+    return pages.map(p => {
+      const info = p.imageinfo?.[0]
+      if (!info?.url) return null
+      const meta = info.extmetadata || {}
+      const license = meta.LicenseShortName?.value || 'CC'
+      const creator = meta.Artist?.value?.replace(/<[^>]*>/g, '') || ''
+      return {
+        id: `wm-${p.pageid}`,
+        title: (p.title || '').replace(/^File:/, '').replace(/\.[^.]+$/, ''),
+        url: info.url,
+        thumbnail: info.thumburl || info.url,
+        source: 'wikimedia',
+        license,
+        creator,
+        width: info.width || 0,
+        height: info.height || 0,
+      }
+    }).filter(Boolean).filter(img => img.url && img.url.startsWith('http'))
+  }
+
+  try {
+    let results = []
+    let total = 0
+    let source = 'openverse'
+
+    try {
+      const ovResults = await fetchOpenverse()
+      results = ovResults
+      total = ovResults.length
+      console.log(`[ImageSearch:Openverse] q="${searchQ}" results=${ovResults.length}`)
+    } catch (ovErr) {
+      console.warn(`[ImageSearch:Openverse] failed (${ovErr.message}) — trying Wikimedia`)
+    }
+
+    if (results.length < 3) {
+      try {
+        const wmResults = await fetchWikimedia()
+        console.log(`[ImageSearch:Wikimedia] q="${searchQ}" results=${wmResults.length}`)
+        const existingUrls = new Set(results.map(r => r.url))
+        const wmNew = wmResults.filter(r => !existingUrls.has(r.url))
+        results = [...results, ...wmNew]
+        total = results.length
+        source = results.length > 0 ? (results[0].source === 'openverse' ? 'openverse+wikimedia' : 'wikimedia') : 'none'
+      } catch (wmErr) {
+        console.warn(`[ImageSearch:Wikimedia] also failed: ${wmErr.message}`)
+      }
+    }
+
+    console.log(`[ImageSearch] final q="${q}" results=${results.length} source=${source}`)
+    if (results.length === 0) {
+      return res.json({ results: [], total: 0, query: q, error: 'لم تُوجد صور — جرّب كلمات أبسط باللغة العربية أو الإنجليزية' })
+    }
+    return res.json({ results: results.slice(0, 24), total: total || results.length, query: q, source })
+  } catch (err) {
+    console.error('[ImageSearch] fatal error:', err.message)
+    return res.status(500).json({ error: err.message, results: [] })
+  }
+})
+
+// GET /api/tools/reverse-image?url=... — generate reverse search redirect links
+app.get('/api/tools/reverse-image', (req, res) => {
+  const imageUrl = sanitizeString(String(req.query.url || ''), 1000).trim()
+  if (!imageUrl) return res.status(400).json({ error: 'url required' })
+  const enc = encodeURIComponent(imageUrl)
+  return res.json({
+    links: [
+      { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
+      { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
+      { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
+      { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
+      { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
+    ],
+  })
+})
+
+// POST /api/tools/reverse-image-upload — upload base64 image, return reverse search links via temp hosting
+app.post('/api/tools/reverse-image-upload', async (req, res) => {
+  const imageBase64 = String(req.body.imageBase64 || '')
+  const mimeType = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
+  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' })
+
+  try {
+    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+
+    const formData = new URLSearchParams()
+    formData.append('image', base64Data)
+    formData.append('type', 'base64')
+
+    const imgurRes = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Client-ID 546c25a59c58ad7',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString(),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    let publicUrl = null
+    if (imgurRes.ok) {
+      const imgurData = await imgurRes.json()
+      publicUrl = imgurData?.data?.link
+    }
+
+    if (!publicUrl) {
+      const freeRes = await fetch('https://freeimage.host/api/1/upload?key=6d207e02198a847aa98d0a2a901485a5', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ source: base64Data, format: 'json' }).toString(),
+        signal: AbortSignal.timeout(12000),
+      })
+      if (freeRes.ok) {
+        const freeData = await freeRes.json()
+        publicUrl = freeData?.image?.url
+      }
+    }
+
+    if (!publicUrl) return res.status(500).json({ error: 'فشل رفع الصورة — يرجى استخدام رابط URL بدلاً من ذلك' })
+
+    const enc = encodeURIComponent(publicUrl)
+    console.log(`[ReverseImageUpload] Uploaded to ${publicUrl.slice(0, 60)}`)
+    return res.json({
+      url: publicUrl,
+      links: [
+        { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
+        { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
+        { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
+        { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
+        { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
+      ],
+    })
+  } catch (err) {
+    console.error('[ReverseImageUpload] error:', err.message)
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/tools/image-analyze — Gemini 1.5 Flash Vision
+app.post('/api/tools/image-analyze', async (req, res) => {
+  const imageBase64 = String(req.body.imageBase64 || '')
+  const imageUrl    = sanitizeString(String(req.body.imageUrl || ''), 1000).trim()
+  const mimeType    = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
+  const mode        = sanitizeString(String(req.body.mode || 'analyze'), 20)
+
+  const PROMPTS = {
+    analyze: 'حلّل هذه الصورة بالتفصيل: اذكر كل ما تراه (الأشخاص، الأشياء، الألوان، الخلفية، الأجواء، أي نص مرئي). نظّم الإجابة بنقاط واضحة. أجب بالعربية.',
+    ocr:     'استخرج كل النص الموجود في هذه الصورة بدقة تامة. حافظ على التنسيق الأصلي قدر الإمكان. أخرج النص المستخرج فقط دون أي تعليق.',
+    caption: 'اكتب وصفاً موجزاً لهذه الصورة في جملة أو جملتين فقط. أجب بالعربية.',
+    objects: 'حدّد وأعد قائمة بجميع الأشياء والعناصر المرئية في الصورة. رتّبها من الأبرز للأقل أهمية مع إشارة موضعها (يمين/يسار/مركز). أجب بالعربية.',
+  }
+  const prompt = PROMPTS[mode] || PROMPTS.analyze
+
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'Gemini API key not configured' })
+
+  try {
+    let imagePart
+    if (imageBase64) {
+      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+      imagePart = { inlineData: { data: base64Data, mimeType } }
+    } else if (imageUrl) {
+      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
+      if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`)
+      const ct = imgRes.headers.get('content-type') || mimeType
+      const buf = await imgRes.arrayBuffer()
+      imagePart = { inlineData: { data: Buffer.from(buf).toString('base64'), mimeType: ct.split(';')[0] } }
+    } else {
+      return res.status(400).json({ error: 'imageBase64 or imageUrl required' })
+    }
+
+    const body = {
+      contents: [{ parts: [{ text: prompt }, imagePart] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+    }
+    const gRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }
+    )
+    const gData = await gRes.json()
+    if (!gRes.ok) throw new Error(gData.error?.message || `Gemini ${gRes.status}`)
+    const content = gData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    console.log(`[ImageAnalyze] mode=${mode} ok (${content.length} chars)`)
+    return res.json({ content, mode })
+  } catch (err) {
+    console.error('[ImageAnalyze] error:', err.message)
+    return res.status(500).json({ error: err.message })
+  }
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -17506,285 +17775,7 @@ if (isMain) {
     }
   }, 10 * 60 * 1000, { label: 'resilience-housekeeping' })
 
-  // (mountSmartAgent + mountDzAgentV2 already mounted above so they also
-  // attach on Vercel serverless. Keeping background-refresh / intervals here.)
-
-  // ══════════════════════════════════════════════════════════════════════
-  // DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS
-  // ══════════════════════════════════════════════════════════════════════
-
-  // GET /api/tools/image-search?q=... — multi-source: Openverse + Wikimedia Commons fallback
-  app.get('/api/tools/image-search', async (req, res) => {
-    const q = sanitizeString(String(req.query.q || ''), 200).trim()
-    if (!q) return res.status(400).json({ error: 'query required', results: [] })
-
-    // Translate Arabic keywords to English — apply ALL matches (not just first)
-    const AR_EN_MAP = [
-      ['الجزائر العاصمة', 'Algiers capital Algeria'],
-      ['الجزائر', 'Algeria'],   ['جزائر', 'Algeria'],
-      ['وهران', 'Oran Algeria'],['قسنطينة', 'Constantine Algeria'],
-      ['عنابة', 'Annaba Algeria'], ['بجاية', 'Bejaia Algeria'],
-      ['سطيف', 'Setif Algeria'], ['تلمسان', 'Tlemcen Algeria'],
-      ['باتنة', 'Batna Algeria'], ['بسكرة', 'Biskra Algeria'],
-      ['ورقلة', 'Ouargla Algeria'], ['تيزي وزو', 'Tizi Ouzou Algeria'],
-      ['شروق', 'sunrise'], ['غروب', 'sunset'],
-      ['بحر', 'sea'], ['جبل', 'mountain'], ['صحراء', 'sahara desert'],
-      ['غابة', 'forest'], ['علم', 'flag'], ['مسجد', 'mosque'],
-      ['قصبة', 'Casbah'], ['سوق', 'market'], ['شاطئ', 'beach'],
-      ['مدينة', 'city'], ['قرية', 'village'], ['طبيعة', 'nature'],
-      ['تقليدي', 'traditional'], ['ثقافة', 'culture'], ['تاريخ', 'history'],
-      ['أزرق', 'blue'], ['أحمر', 'red'], ['أخضر', 'green'],
-    ]
-    let searchQ = q
-    for (const [ar, en] of AR_EN_MAP) {
-      if (searchQ.includes(ar)) searchQ = searchQ.split(ar).join(en)
-    }
-    // Strip remaining Arabic characters and append Algeria if relevant
-    const stillHasArabic = /[\u0600-\u06FF]/.test(searchQ)
-    if (stillHasArabic) {
-      // Remove remaining Arabic words (untranslated) and add Algeria for context
-      searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
-    }
-    searchQ = searchQ.replace(/\s+/g, ' ').trim() || 'Algeria'
-    console.log(`[ImageSearch] original="${q}" searchQ="${searchQ}")`)
-
-    // ── Source 1: Openverse (CC-licensed images) ──
-    const fetchOpenverse = async () => {
-      const params = new URLSearchParams({ q: searchQ, page_size: '24', license_type: 'all' })
-      const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
-        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app; contact@dz-gpt.vercel.app)' },
-        signal: AbortSignal.timeout(10000),
-      })
-      if (!r.ok) throw new Error(`Openverse ${r.status}`)
-      const data = await r.json()
-      return (data.results || []).map(img => ({
-        id: `ov-${img.id}`,
-        title: img.title || searchQ,
-        url: img.url,
-        // Use direct source URL as thumbnail — avoids Openverse proxy auth issues
-        thumbnail: img.url,
-        source: img.source || 'openverse',
-        license: img.license || 'CC',
-        creator: img.creator || '',
-        width: img.width || 0,
-        height: img.height || 0,
-      })).filter(img => img.url && img.url.startsWith('http'))
-    }
-
-    // ── Source 2: Wikimedia Commons (completely free, no key) ──
-    const fetchWikimedia = async () => {
-      const params = new URLSearchParams({
-        action: 'query',
-        generator: 'search',
-        gsrsearch: `filetype:bitmap ${searchQ}`,
-        gsrnamespace: '6',
-        gsrlimit: '20',
-        prop: 'imageinfo',
-        iiprop: 'url|thumburl|extmetadata',
-        iiurlwidth: '400',
-        format: 'json',
-        origin: '*',
-      })
-      const r = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
-        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
-        signal: AbortSignal.timeout(10000),
-      })
-      if (!r.ok) throw new Error(`Wikimedia ${r.status}`)
-      const data = await r.json()
-      const pages = Object.values(data?.query?.pages || {})
-      return pages.map(p => {
-        const info = p.imageinfo?.[0]
-        if (!info?.url) return null
-        const meta = info.extmetadata || {}
-        const license = meta.LicenseShortName?.value || 'CC'
-        const creator = meta.Artist?.value?.replace(/<[^>]*>/g, '') || ''
-        return {
-          id: `wm-${p.pageid}`,
-          title: (p.title || '').replace(/^File:/, '').replace(/\.[^.]+$/, ''),
-          url: info.url,
-          thumbnail: info.thumburl || info.url,
-          source: 'wikimedia',
-          license,
-          creator,
-          width: info.width || 0,
-          height: info.height || 0,
-        }
-      }).filter(Boolean).filter(img => img.url && img.url.startsWith('http'))
-    }
-
-    try {
-      // Try Openverse first; if it returns < 3 results, also try Wikimedia
-      let results = []
-      let total = 0
-      let source = 'openverse'
-
-      try {
-        const ovResults = await fetchOpenverse()
-        results = ovResults
-        total = ovResults.length
-        console.log(`[ImageSearch:Openverse] q="${searchQ}" results=${ovResults.length}`)
-      } catch (ovErr) {
-        console.warn(`[ImageSearch:Openverse] failed (${ovErr.message}) — trying Wikimedia`)
-      }
-
-      if (results.length < 3) {
-        try {
-          const wmResults = await fetchWikimedia()
-          console.log(`[ImageSearch:Wikimedia] q="${searchQ}" results=${wmResults.length}`)
-          // Merge: Openverse first, then Wikimedia (avoid duplicates by URL)
-          const existingUrls = new Set(results.map(r => r.url))
-          const wmNew = wmResults.filter(r => !existingUrls.has(r.url))
-          results = [...results, ...wmNew]
-          total = results.length
-          source = results.length > 0 ? (results[0].source === 'openverse' ? 'openverse+wikimedia' : 'wikimedia') : 'none'
-        } catch (wmErr) {
-          console.warn(`[ImageSearch:Wikimedia] also failed: ${wmErr.message}`)
-        }
-      }
-
-      console.log(`[ImageSearch] final q="${q}" results=${results.length} source=${source}`)
-      if (results.length === 0) {
-        return res.json({ results: [], total: 0, query: q, error: 'لم تُوجد صور — جرّب كلمات أبسط باللغة العربية أو الإنجليزية' })
-      }
-      return res.json({ results: results.slice(0, 24), total: total || results.length, query: q, source })
-    } catch (err) {
-      console.error('[ImageSearch] fatal error:', err.message)
-      return res.status(500).json({ error: err.message, results: [] })
-    }
-  })
-
-  // GET /api/tools/reverse-image?url=... — generate reverse search redirect links
-  app.get('/api/tools/reverse-image', (req, res) => {
-    const imageUrl = sanitizeString(String(req.query.url || ''), 1000).trim()
-    if (!imageUrl) return res.status(400).json({ error: 'url required' })
-    const enc = encodeURIComponent(imageUrl)
-    return res.json({
-      links: [
-        { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
-        { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
-        { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
-        { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
-        { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
-      ],
-    })
-  })
-
-  // POST /api/tools/reverse-image-upload — upload base64 image, return reverse search links via temp hosting
-  app.post('/api/tools/reverse-image-upload', async (req, res) => {
-    const imageBase64 = String(req.body.imageBase64 || '')
-    const mimeType = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
-    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' })
-
-    try {
-      // Upload image to freeimage.host (free, no-key API)
-      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-
-      // Try imgur anonymous upload (no key needed for base64)
-      const formData = new URLSearchParams()
-      formData.append('image', base64Data)
-      formData.append('type', 'base64')
-
-      const imgurRes = await fetch('https://api.imgur.com/3/image', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Client-ID 546c25a59c58ad7',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
-        signal: AbortSignal.timeout(15000),
-      })
-
-      let publicUrl = null
-      if (imgurRes.ok) {
-        const imgurData = await imgurRes.json()
-        publicUrl = imgurData?.data?.link
-      }
-
-      if (!publicUrl) {
-        // Fallback: use freeimagehost
-        const freeRes = await fetch('https://freeimage.host/api/1/upload?key=6d207e02198a847aa98d0a2a901485a5', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ source: base64Data, format: 'json' }).toString(),
-          signal: AbortSignal.timeout(12000),
-        })
-        if (freeRes.ok) {
-          const freeData = await freeRes.json()
-          publicUrl = freeData?.image?.url
-        }
-      }
-
-      if (!publicUrl) return res.status(500).json({ error: 'فشل رفع الصورة — يرجى استخدام رابط URL بدلاً من ذلك' })
-
-      const enc = encodeURIComponent(publicUrl)
-      console.log(`[ReverseImageUpload] Uploaded to ${publicUrl.slice(0, 60)}`)
-      return res.json({
-        url: publicUrl,
-        links: [
-          { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
-          { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
-          { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
-          { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
-          { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
-        ],
-      })
-    } catch (err) {
-      console.error('[ReverseImageUpload] error:', err.message)
-      return res.status(500).json({ error: err.message })
-    }
-  })
-
-  // POST /api/tools/image-analyze — Gemini 1.5 Flash Vision
-  app.post('/api/tools/image-analyze', async (req, res) => {
-    const imageBase64 = String(req.body.imageBase64 || '')
-    const imageUrl    = sanitizeString(String(req.body.imageUrl || ''), 1000).trim()
-    const mimeType    = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
-    const mode        = sanitizeString(String(req.body.mode || 'analyze'), 20)
-
-    const PROMPTS = {
-      analyze: 'حلّل هذه الصورة بالتفصيل: اذكر كل ما تراه (الأشخاص، الأشياء، الألوان، الخلفية، الأجواء، أي نص مرئي). نظّم الإجابة بنقاط واضحة. أجب بالعربية.',
-      ocr:     'استخرج كل النص الموجود في هذه الصورة بدقة تامة. حافظ على التنسيق الأصلي قدر الإمكان. أخرج النص المستخرج فقط دون أي تعليق.',
-      caption: 'اكتب وصفاً موجزاً لهذه الصورة في جملة أو جملتين فقط. أجب بالعربية.',
-      objects: 'حدّد وأعد قائمة بجميع الأشياء والعناصر المرئية في الصورة. رتّبها من الأبرز للأقل أهمية مع إشارة موضعها (يمين/يسار/مركز). أجب بالعربية.',
-    }
-    const prompt = PROMPTS[mode] || PROMPTS.analyze
-
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
-    if (!apiKey) return res.status(500).json({ error: 'Gemini API key not configured' })
-
-    try {
-      let imagePart
-      if (imageBase64) {
-        const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-        imagePart = { inlineData: { data: base64Data, mimeType } }
-      } else if (imageUrl) {
-        const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
-        if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`)
-        const ct = imgRes.headers.get('content-type') || mimeType
-        const buf = await imgRes.arrayBuffer()
-        imagePart = { inlineData: { data: Buffer.from(buf).toString('base64'), mimeType: ct.split(';')[0] } }
-      } else {
-        return res.status(400).json({ error: 'imageBase64 or imageUrl required' })
-      }
-
-      const body = {
-        contents: [{ parts: [{ text: prompt }, imagePart] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
-      }
-      const gRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }
-      )
-      const gData = await gRes.json()
-      if (!gRes.ok) throw new Error(gData.error?.message || `Gemini ${gRes.status}`)
-      const content = gData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      console.log(`[ImageAnalyze] mode=${mode} ok (${content.length} chars)`)
-      return res.json({ content, mode })
-    } catch (err) {
-      console.error('[ImageAnalyze] error:', err.message)
-      return res.status(500).json({ error: err.message })
-    }
-  })
+  // (DZ Tools image routes are registered above export{app} — available on Vercel too)
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

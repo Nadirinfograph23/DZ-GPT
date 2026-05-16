@@ -11236,8 +11236,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   const doctorIntent = detectDoctorIntent(lastUserMessage)
-  console.log(`[DoctorSearch] isDoctorQuery=${doctorIntent.isDoctorQuery} speciality=${doctorIntent.speciality?.ar||'—'} city=${doctorIntent.city?.ar||'—'} query="${lastUserMessage.slice(0,60)}"`)
-  if (doctorIntent.isDoctorQuery) {
+  console.log(`[DoctorSearch] isDoctorQuery=${doctorIntent.isDoctorQuery} isDZToolRequest=${isDZToolRequest} speciality=${doctorIntent.speciality?.ar||'—'} city=${doctorIntent.city?.ar||'—'} query="${lastUserMessage.slice(0,60)}"`)
+  // Skip doctor search interception for DZTools requests (symptom analyzer prompt contains "طبيب")
+  if (!isDZToolRequest && doctorIntent.isDoctorQuery) {
     if (!doctorIntent.speciality && !doctorIntent.city) {
       return res.status(200).json({
         content: [
@@ -17499,34 +17500,129 @@ if (isMain) {
   // DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS
   // ══════════════════════════════════════════════════════════════════════
 
-  // GET /api/tools/image-search?q=... — Openverse free CC images
+  // GET /api/tools/image-search?q=... — multi-source: Openverse + Wikimedia Commons fallback
   app.get('/api/tools/image-search', async (req, res) => {
     const q = sanitizeString(String(req.query.q || ''), 200).trim()
     if (!q) return res.status(400).json({ error: 'query required', results: [] })
-    try {
-      const params = new URLSearchParams({ q, page_size: '24', license_type: 'all' })
+
+    // Helper: map common Arabic terms to English for better results
+    const AR_EN_MAP = {
+      'جزائر': 'Algeria', 'الجزائر': 'Algeria', 'وهران': 'Oran Algeria',
+      'قسنطينة': 'Constantine Algeria', 'عنابة': 'Annaba Algeria',
+      'بجاية': 'Bejaia Algeria', 'سطيف': 'Setif Algeria',
+      'تلمسان': 'Tlemcen Algeria', 'باتنة': 'Batna Algeria',
+      'شروق': 'sunrise', 'غروب': 'sunset', 'بحر': 'sea ocean',
+      'جبل': 'mountain', 'صحراء': 'desert sahara', 'غابة': 'forest',
+      'علم': 'flag', 'مسجد': 'mosque', 'قصبة': 'Casbah Algiers',
+    }
+    let searchQ = q
+    for (const [ar, en] of Object.entries(AR_EN_MAP)) {
+      if (q.includes(ar)) { searchQ = q.replace(ar, en); break }
+    }
+    // If query still has Arabic chars, append "Algeria" for better results
+    if (/[\u0600-\u06FF]/.test(searchQ)) searchQ = searchQ + ' Algeria'
+
+    // ── Source 1: Openverse (CC-licensed images) ──
+    const fetchOpenverse = async () => {
+      const params = new URLSearchParams({ q: searchQ, page_size: '24', license_type: 'all' })
       const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
-        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
-        signal: AbortSignal.timeout(12000),
+        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app; contact@dz-gpt.vercel.app)' },
+        signal: AbortSignal.timeout(10000),
       })
       if (!r.ok) throw new Error(`Openverse ${r.status}`)
       const data = await r.json()
-      const results = (data.results || []).map(img => ({
-        id: img.id,
-        title: img.title || q,
+      return (data.results || []).map(img => ({
+        id: `ov-${img.id}`,
+        title: img.title || searchQ,
         url: img.url,
-        thumbnail: img.thumbnail || img.url,
-        source: img.source || '',
-        license: img.license || 'cc',
+        // Use direct source URL as thumbnail — avoids Openverse proxy auth issues
+        thumbnail: img.url,
+        source: img.source || 'openverse',
+        license: img.license || 'CC',
         creator: img.creator || '',
-        detail_url: img.detail_url || '',
         width: img.width || 0,
         height: img.height || 0,
-      }))
-      console.log(`[ImageSearch] q="${q}" results=${results.length}/${data.result_count}`)
-      return res.json({ results, total: data.result_count || results.length, query: q })
+      })).filter(img => img.url && img.url.startsWith('http'))
+    }
+
+    // ── Source 2: Wikimedia Commons (completely free, no key) ──
+    const fetchWikimedia = async () => {
+      const params = new URLSearchParams({
+        action: 'query',
+        generator: 'search',
+        gsrsearch: `filetype:bitmap ${searchQ}`,
+        gsrnamespace: '6',
+        gsrlimit: '20',
+        prop: 'imageinfo',
+        iiprop: 'url|thumburl|extmetadata',
+        iiurlwidth: '400',
+        format: 'json',
+        origin: '*',
+      })
+      const r = await fetch(`https://commons.wikimedia.org/w/api.php?${params}`, {
+        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!r.ok) throw new Error(`Wikimedia ${r.status}`)
+      const data = await r.json()
+      const pages = Object.values(data?.query?.pages || {})
+      return pages.map(p => {
+        const info = p.imageinfo?.[0]
+        if (!info?.url) return null
+        const meta = info.extmetadata || {}
+        const license = meta.LicenseShortName?.value || 'CC'
+        const creator = meta.Artist?.value?.replace(/<[^>]*>/g, '') || ''
+        return {
+          id: `wm-${p.pageid}`,
+          title: (p.title || '').replace(/^File:/, '').replace(/\.[^.]+$/, ''),
+          url: info.url,
+          thumbnail: info.thumburl || info.url,
+          source: 'wikimedia',
+          license,
+          creator,
+          width: info.width || 0,
+          height: info.height || 0,
+        }
+      }).filter(Boolean).filter(img => img.url && img.url.startsWith('http'))
+    }
+
+    try {
+      // Try Openverse first; if it returns < 3 results, also try Wikimedia
+      let results = []
+      let total = 0
+      let source = 'openverse'
+
+      try {
+        const ovResults = await fetchOpenverse()
+        results = ovResults
+        total = ovResults.length
+        console.log(`[ImageSearch:Openverse] q="${searchQ}" results=${ovResults.length}`)
+      } catch (ovErr) {
+        console.warn(`[ImageSearch:Openverse] failed (${ovErr.message}) — trying Wikimedia`)
+      }
+
+      if (results.length < 3) {
+        try {
+          const wmResults = await fetchWikimedia()
+          console.log(`[ImageSearch:Wikimedia] q="${searchQ}" results=${wmResults.length}`)
+          // Merge: Openverse first, then Wikimedia (avoid duplicates by URL)
+          const existingUrls = new Set(results.map(r => r.url))
+          const wmNew = wmResults.filter(r => !existingUrls.has(r.url))
+          results = [...results, ...wmNew]
+          total = results.length
+          source = results.length > 0 ? (results[0].source === 'openverse' ? 'openverse+wikimedia' : 'wikimedia') : 'none'
+        } catch (wmErr) {
+          console.warn(`[ImageSearch:Wikimedia] also failed: ${wmErr.message}`)
+        }
+      }
+
+      console.log(`[ImageSearch] final q="${q}" results=${results.length} source=${source}`)
+      if (results.length === 0) {
+        return res.json({ results: [], total: 0, query: q, error: 'لم تُوجد صور — جرّب كلمات أبسط باللغة العربية أو الإنجليزية' })
+      }
+      return res.json({ results: results.slice(0, 24), total: total || results.length, query: q, source })
     } catch (err) {
-      console.error('[ImageSearch] error:', err.message)
+      console.error('[ImageSearch] fatal error:', err.message)
       return res.status(500).json({ error: err.message, results: [] })
     }
   })

@@ -9529,6 +9529,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   const lowerMsg = lastUserMessage.toLowerCase()
 
+  // ── Smart Context Isolation — DZTools tool requests bypass GitHub routing ──
+  const _dzToolRequest = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
+  const isDZToolRequest = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_dzToolRequest)
+
   // ── Deep Query Analysis — فهم السؤال قبل الإجابة ──────────────────────
   const queryAnalysis = analyzeQuery(lastUserMessage)
 
@@ -11440,7 +11444,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const matchTrigger = (key) => repoActionTriggers[key].some(p => lowerMsg.includes(p))
 
-  if (githubToken) {
+  // Smart GitHub Context Guard — explicit repo/github mention required for vague triggers
+  const hasGithubContextInMsg = /\bgithub\b|مستودع|مستودعي|الريبو|ريبو\b|\brepo\b|\brepository\b/i.test(lastUserMessage)
+
+  // Block entire GitHub routing for DZTools requests (jobs/health/cv/legal/ocr)
+  if (githubToken && !isDZToolRequest) {
     // Specific scans first (more specific wins)
     if (matchTrigger('securityScan')) {
       if (!currentRepo) {
@@ -11454,7 +11462,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       return res.status(200).json({ action: 'scan-repo', repo: currentRepo, focus: 'bugs', content: `🐛 جاري البحث عن الأخطاء في **${currentRepo}**...` })
     }
-    if (matchTrigger('suggestImprovements')) {
+    if (matchTrigger('suggestImprovements') && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
         return res.status(200).json({ content: '💡 لاقتراح تحسينات، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
@@ -11540,13 +11548,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     const matchList = (list) => list.some(p => lowerMsg.includes(p.toLowerCase()))
 
-    if (matchList(analyzeProjectTriggers)) {
+    if (matchList(analyzeProjectTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
         return res.status(200).json({ content: '🔬 لتحليل المشروع، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
       return res.status(200).json({ action: 'analyze-project', repo: currentRepo, content: `🔬 جاري قراءة وتحليل مشروع **${currentRepo}** بالكامل...` })
     }
-    if (matchList(generateAndPushTriggers)) {
+    if (matchList(generateAndPushTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
         return res.status(200).json({ content: '⚡ لتوليد كود ورفعه، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
@@ -11558,7 +11566,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       return res.status(200).json({ action: 'generate-and-push', repo: currentRepo, description: description || lastUserMessage, content: `⚡ جاري توليد الكود لـ **${currentRepo}**...` })
     }
-    if (matchList(improveDesignTriggers)) {
+    if (matchList(improveDesignTriggers) && (currentRepo || hasGithubContextInMsg)) {
       if (!currentRepo) {
         return res.status(200).json({ content: '🎨 لتحسين التصميم، اختر مستودعاً أولاً. اطلب: "اعرض مستودعاتي".' })
       }
@@ -11683,7 +11691,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // يُفعَّل عندما: token + currentRepo موجودان + نية كتابة/تعديل واضحة
   // يحوّل الطلب مباشرة لـ generate-and-push بدل ترك الـ AI يكذب
   // ═══════════════════════════════════════════════════════════════════════
-  if (githubToken && currentRepo) {
+  if (githubToken && currentRepo && !isDZToolRequest) {
     const _writeIntentPatterns = [
       // عربي
       /أنش[إئ]|انش[إئ]|اصنع|اكتب|أضف|أنشئ|اعمل|ارفع|اعمل لي|أنشئ لي/,
@@ -11699,7 +11707,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _hasFileRef = /\.(html|css|js|ts|tsx|jsx|py|json|md|yml|yaml|txt|sh|sql|php|rb|go|rs|java|cpp|c)\b/i.test(lastUserMessage)
       || /ملف|صفحة|موقع|page|file|component|مكون|function|class/i.test(lastUserMessage)
 
-    if (_hasWriteIntent && _hasFileRef) {
+    // Guard: skip write routing for explanation/question requests — they should go to normal AI
+    const _isExplanationRequest = /^(اشرح|explain\b|what is\b|what are\b|ما هو|ما هي|كيف تعمل|كيف يعمل|how does\b|how do\b|pourquoi|comment fonctionne|لماذا|ما معنى|ما الفرق|مقارنة بين|compare\b|difference between)/i.test(lastUserMessage.trim())
+
+    if (_hasWriteIntent && _hasFileRef && !_isExplanationRequest) {
       console.log(`[GH:WriteGateway] Routing to generate-and-push: repo=${currentRepo} msg="${lastUserMessage.slice(0, 60)}"`)
       return res.status(200).json({
         action: 'generate-and-push',

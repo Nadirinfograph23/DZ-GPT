@@ -3165,7 +3165,7 @@ const SUGGESTION_CARDS: SuggestionCard[] = [
     suggestions: [
       { label: 'عرض مستودعاتي', command: 'اعرض مستودعاتي على GitHub' },
       { label: 'تحليل الكود', command: 'حلل الكود في مستودعي وأعطني تقريراً عن الأخطاء والتحسينات' },
-      { label: 'إنشاء مشروع جديد', command: 'ساعدني في إنشاء مشروع Python جديد على GitHub مع ملف README' },
+      { label: 'إنشاء مشروع جديد', command: 'أنشئ مستودع جديد على GitHub' },
     ],
   },
   {
@@ -4478,6 +4478,49 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           // SSE failed — fall through to regular fetch
           setAgentSteps([])
           console.warn('[DZChatBox] Autonomous SSE failed, falling back:', (sseErr as Error).message)
+        }
+      }
+
+      // ── GitHub dashboard quick-action shortcuts (bypass AI routing) ─────────
+      // These 3 buttons should trigger direct GitHub UI actions, not AI text
+      const _ghDirectListRepos  = 'اعرض مستودعاتي على GitHub'
+      const _ghDirectAnalyze    = 'حلل الكود في مستودعي وأعطني تقريراً عن الأخطاء والتحسينات'
+
+      if (text === _ghDirectListRepos || text === _ghDirectAnalyze) {
+        setIsLoading(false)
+        if (!githubToken) {
+          addAssistantMessage({
+            content: '🔐 يجب ربط حساب GitHub أولاً.\n\nانقر على زر **"ربط GitHub"** في الأعلى ثم كرر الطلب.',
+            richType: 'text',
+          })
+          return
+        }
+        if (text === _ghDirectListRepos) {
+          // Directly open the interactive repo picker — no AI involved
+          await fetchRepos()
+          return
+        }
+        if (text === _ghDirectAnalyze) {
+          if (!currentRepo) {
+            // No repo selected yet — show picker first with context message
+            addAssistantMessage({
+              content: '🔬 **تحليل الكود**\n\nاختر أولاً المستودع الذي تريد تحليله:',
+              richType: 'text',
+            })
+            await fetchRepos()
+          } else {
+            // Repo already selected — run full scan directly
+            await scanRepo({
+              name: currentRepo.split('/')[1] || currentRepo,
+              full_name: currentRepo,
+              description: null,
+              language: null,
+              private: false,
+              default_branch: 'main',
+              html_url: `https://github.com/${currentRepo}`,
+            })
+          }
+          return
         }
       }
 

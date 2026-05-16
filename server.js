@@ -11073,7 +11073,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── WEB_BUILDER_MODE — Website Builder God Mode v6 (with UI Inspiration Search) ──
   // Guard: skip if this was already handled as a Web Reader BUILD mode query
-  if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery)) {
+  // Guard: skip if request comes from a DZ Tools tool (planner, bizplan, docs, health, jobs, ocr, cv)
+  const _dzToolMode = typeof req.body.tool === 'string' && req.body.tool.length > 0
+  if (detectWebsiteBuilderQuery(lastUserMessage) && !(_webReaderIntent === 'build' && isWebReaderQuery) && !_dzToolMode) {
     console.log(`[WEB_BUILDER_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 

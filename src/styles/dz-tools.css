@@ -582,6 +582,42 @@
   margin: 8px 0;
 }
 
+/* ── Symptom Checkers Grid ──────────────────────────────────────────── */
+.dzt-symptom-checkers-label {
+  font-size: 11.5px;
+  color: rgba(248,113,113,0.7);
+  margin: 12px 0 6px;
+  font-family: 'Cairo', sans-serif;
+  direction: rtl;
+}
+.dzt-symptom-checkers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.dzt-checker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: rgba(248,113,113,0.07);
+  border: 1px solid rgba(248,113,113,0.2);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 11.5px;
+  font-family: 'Cairo', sans-serif;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.dzt-checker-btn:hover {
+  background: rgba(248,113,113,0.15);
+  border-color: rgba(248,113,113,0.4);
+  color: #fecaca;
+  transform: translateY(-1px);
+}
+
 /* ── SahaDoc Direct Link Button ────────────────────────────────────── */
 .dzt-sahadoc-btn {
   display: flex;

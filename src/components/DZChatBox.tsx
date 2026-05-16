@@ -1103,7 +1103,6 @@ function CloneProgressPanel({ progress }: { progress: CloneProgressState }) {
 function WebReaderPanel({
   siteInfo,
   onAnalyze,
-  onClone,
   onExtract,
   onAdvancedClone,
   onOpenInBuilder,
@@ -1111,7 +1110,6 @@ function WebReaderPanel({
 }: {
   siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
   onAnalyze: () => void
-  onClone: () => void
   onExtract: () => void
   onAdvancedClone: (section?: string) => void
   onOpenInBuilder: () => void
@@ -5291,10 +5289,9 @@ ${rows}
                         <WebReaderPanel
                           siteInfo={msg.webReaderSiteInfo}
                           onAnalyze={() => sendMessage(`حلل هذا الموقع وأعطني تحليلاً شاملاً للمحتوى والأقسام والهدف والجمهور المستهدف: ${msg.webReaderSiteInfo!.url}`)}
-                          onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
                           onExtract={() => sendMessage(`استخرج كل محتوى هذا الموقع وقدمه بشكل منظم ومنسق: العناوين الرئيسية، الفقرات المهمة، والروابط الأساسية — اجعله قابلاً للنسخ والاستخدام: ${msg.webReaderSiteInfo!.url}`)}
                           onAdvancedClone={(section) => handleAdvancedClone(msg.webReaderSiteInfo!.url, section)}
-                          onOpenInBuilder={() => navigate(`/web-builder?clone=${encodeURIComponent(msg.webReaderSiteInfo!.url)}`)}
+                          onOpenInBuilder={() => { window.location.href = `/web-builder?clone=${encodeURIComponent(msg.webReaderSiteInfo!.url)}` }}
                           isAdvancedLoading={isAdvancedCloneLoading}
                         />
                       )}

@@ -820,47 +820,54 @@ function JobSearchTool() {
     setLoading(true); setResult('')
     const levelLabel = LEVELS.find(l=>l.v===form.level)?.l || ''
     const prompt = mode === 'search'
-      ? `أنت وكيل بحث وظيفي متخصص في سوق العمل الجزائري. المطلوب: البحث عن وظائف حقيقية ومحددة.
+      ? `[TOOL:JOB_SEARCH — وكيل توظيف جزائري — لا مقدمات — ابدأ مباشرةً]
 
-**طلب البحث:**
-- التخصص/المجال: ${form.domain}
+أنت وكيل توظيف متخصص في الجزائر. أُريد وظائف لمجال: **${form.domain}** في **${form.city}** — المستوى: ${levelLabel}.
+
+## 1. عروض نموذجية للمنصب
+قدّم 5-7 عروض عمل نموذجية واقعية بهذا التنسيق الدقيق لكل عرض:
+| المنصب | الشركة | المدينة | الراتب (دج) | موقع البحث |
+|--------|--------|---------|-------------|------------|
+الشركات يجب أن تكون جزائرية حقيقية في قطاع **${form.domain}**.
+موقع البحث: اختر الأنسب من المواقع المدرجة أدناه فقط.
+
+## 2. أنسب المواقع المتخصصة لهذا المجال
+رتّب هذه المواقع من الأنسب للأقل لمجال **${form.domain}**، مع شرح سبب الاختيار:
+- **EmploiTimes.dz** — emploitimes.dz
+- **CVya.dz** — cvya.dz
+- **SogJob** — sogjob.com
+- **AtlasDZ** — atlasdz.site
+- **LinkedIn Jobs Algeria** — linkedin.com/jobs
+- **Indeed Algérie** — dz.indeed.com
+- **Bayt.com** — bayt.com/ar/algeria/jobs
+- **Tanqeeb** — algeria.tanqeeb.com
+- **Emploi-Partner** — emploi-partner.com
+- **Ouedkniss Emploi** — ouedkniss.com/emploi
+- **ANEM Wassit** — wassitonline.anem.dz
+
+## 3. جدول الرواتب
+رواتب تقريبية لمجال **${form.domain}** في **${city}** حسب المستوى (دج/شهر).
+
+## 4. أبرز الشركات الجزائرية الناشطة
+5 شركات جزائرية في قطاع ${form.domain} مع نشاطها.
+
+## 5. نصائح التقدم
+أهم 3 نصائح للتقدم بنجاح في ${form.city}.`
+      : `[TOOL:COVER_LETTER — رسالة تقدم احترافية — لا مقدمات]
+
+أنت خبير في كتابة وثائق التوظيف للسوق الجزائري. أَخرِج الرسالة مباشرةً بدون أي جملة تمهيدية.
+
+اكتب رسالة تقدم (Lettre de Motivation) احترافية باللغة ${form.lang === 'fr' ? 'الفرنسية' : 'العربية'}:
+- الوظيفة: ${form.coverFor || form.domain || 'الوظيفة المستهدفة'}
 - المدينة: ${form.city}
 - المستوى: ${levelLabel}
 
-**المطلوب منك بالضبط — لا تخلط المعلومات:**
-
-## 1. عروض العمل المتاحة حالياً
-قدّم 6 إلى 8 عروض عمل نموذجية محددة لمجال **${form.domain}** في **${form.city}** بالتنسيق التالي لكل عرض:
-- **المنصب:** [اسم الوظيفة]
-- **الشركة:** [اسم شركة جزائرية حقيقية في هذا المجال]
-- **المدينة:** ${form.city}
-- **المستوى:** ${levelLabel}
-- **الراتب التقريبي:** [بالدينار الجزائري]
-- **ابحث عنها في:** [اسم الموقع المناسب من القائمة أدناه]
-
-## 2. أفضل المواقع للبحث عن هذه الوظيفة
-من هذه المواقع تحديداً، أخبرني أيها الأنسب لمجال ${form.domain}:
-emploitimes.dz | cvya.dz | sogjob.com | atlasdz.site | linkedin.com/jobs | dz.indeed.com | bayt.com | tanqeeb.com | emploi-partner.com | ouedkniss.com/emploi | wassitonline.anem.dz
-
-## 3. متوسط الرواتب
-جدول رواتب واقعي لمجال ${form.domain} في الجزائر حسب المستوى.
-
-## 4. أهم الشركات الجزائرية الناشطة في مجال ${form.domain}
-(5 شركات على الأقل مع نشاطها)
-
-## 5. الوثائق المطلوبة ونصائح التقدم
-
-**مهم: ركّز فقط على مجال ${form.domain}. لا تعطِ معلومات عامة عن كل المجالات.**`
-      : `أنت خبير في كتابة رسائل التقدم الوظيفي بالجزائر. اكتب لي رسالة تقدم (Lettre de Motivation) احترافية:
-- الوظيفة المستهدفة: ${form.coverFor || form.domain || 'الوظيفة'}
-- المدينة: ${form.city}
-- مستواي: ${levelLabel}
-اكتب رسالة تقدم احترافية باللغة ${form.lang === 'fr' ? 'الفرنسية' : 'العربية'} تناسب السوق الجزائري مع: افتتاحية قوية، عرض المهارات، الحماس للمنصب، خاتمة مقنعة.`
+الرسالة يجب أن تتضمن: افتتاحية قوية، عرض المهارات المرتبطة بالمنصب، الحماس للمنصب، خاتمة بطلب مقابلة. أسلوب رسمي يناسب الشركات الجزائرية.`
 
     try {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'jobs' })
       })
       const data = await res.json()
       setResult(data.content || '⚠️ فشل البحث.')
@@ -946,7 +953,7 @@ emploitimes.dz | cvya.dz | sogjob.com | atlasdz.site | linkedin.com/jobs | dz.in
         </button>
       </div>
 
-      {loading && <div className="dzt-loading"><div className="dzt-spinner"/>DZ Agent يبحث في سوق العمل الجزائري...</div>}
+      {loading && <div className="dzt-loading"><div className="dzt-spinner"/>DZ Agent يبحث في المواقع الوظيفية...</div>}
 
       {result && (
         <div className="dzt-result">
@@ -1040,33 +1047,36 @@ function HealthTool() {
     setLoading(true); setResult('')
     let prompt = ''
     if (mode === 'symptoms') {
-      prompt = `أنت طبيب مساعد ذكي متخصص. المريض: ${gender==='male'?'ذكر':'أنثى'}, العمر: ${age||'غير محدد'} سنة.
+      prompt = `[TOOL:SYMPTOM_ANALYZER — تحليل أعراض طبي — لا مقدمات — ابدأ مباشرةً]
 
-**الأعراض المُبلَّغ عنها:** ${symptoms}
+أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة (WebMD، Mayo Clinic، Ada Health، Cleveland Clinic، Isabel DDx). المريض: ${gender==='male'?'ذكر':'أنثى'}، العمر: ${age||'غير محدد'} سنة.
 
-**المطلوب — التزم بهذه الأعراض تحديداً ولا تضف أعراضاً أخرى:**
+**الأعراض:** ${symptoms}
+
+التزم بهذه الأعراض فقط — لا تضف أعراضاً أخرى.
 
 ## 1. التشخيص التفريقي
-بناءً على هذه الأعراض بالذات، قدّم 2-3 حالات صحية محتملة مرتبة من الأكثر احتمالاً:
-- **الحالة:** [اسمها الطبي + الشائع]
-- **لماذا مرجّحة:** [ربطها بالأعراض المذكورة فقط]
-- **نسبة الاحتمال:** عالية / متوسطة / منخفضة
+2-4 حالات محتملة مرتّبة من الأعلى احتمالاً:
+| الحالة | الاسم الطبي | الارتباط بالأعراض | الاحتمالية |
+|--------|------------|-----------------|-----------|
 
 ## 2. درجة الاستعجال
-- 🔴 **طارئ** (توجه للمستعجلات فوراً) / 🟡 **موعد طبي خلال 48 ساعة** / 🟢 **يمكن الانتظار أسبوع**
-- **السبب:** [مبرر محدد بناءً على الأعراض]
+🔴 طارئ / 🟡 موعد خلال 48 ساعة / 🟢 يمكن الانتظار أسبوع — مع مبرّر محدد.
 
 ## 3. التخصص الطبي الأنسب
-أي طبيب تزور أولاً وللماذا، بناءً على هذه الأعراض.
+الطبيب المناسب مع السبب، وما هي الفحوصات الأولية المتوقعة.
 
 ## 4. الإجراءات الفورية في المنزل
 3-4 خطوات عملية يمكن تطبيقها الآن.
 
-## 5. أعراض تستوجب التوجه للطوارئ فوراً
-علامات التدهور التي يجب مراقبتها.
+## 5. علامات التدهور — توجّه للطوارئ فوراً إذا ظهرت:
+قائمة مختصرة بالأعراض التحذيرية.
 
-**تنبيه: حلّل الأعراض المذكورة فقط. لا تفترض أعراضاً أخرى.**
-⚠️ هذا تقييم استرشادي. استشر طبيبك دائماً.`
+## 6. روابط مرجعية للاطلاع
+اذكر من هذه المصادر ما يُفيد لهذه الأعراض تحديداً:
+symptoms.webmd.com | mayoclinic.org | ada.com | symptomate.com | my.clevelandclinic.org/health/symptoms
+
+⚠️ هذا تقييم استرشادي مبني على معلومات طبية موثوقة — لا يُغني عن استشارة الطبيب.`
     } else {
       const sahadocUrl = getSahadocUrl()
       prompt = `[TOOL:DOCTOR_SEARCH — لا مقدمات — ابدأ مباشرةً بالمعلومات]
@@ -1154,11 +1164,47 @@ function HealthTool() {
             <label className="dzt-label">الأعراض التي تعاني منها *</label>
             <textarea className="dzt-textarea" value={symptoms} onChange={e=>setSymptoms(e.target.value)} placeholder="صف أعراضك بالتفصيل: منذ متى؟ أين تؤلمك؟ شدة الألم؟ أي أعراض أخرى مصاحبة؟" style={{minHeight:120}}/>
           </div>
+
+          {/* Symptom Checkers — International Medical Sources */}
+          <div className="dzt-symptom-checkers-label">🌍 أدوات تحليل الأعراض العالمية — للاستئناس:</div>
+          <div className="dzt-symptom-checkers">
+            <a href="https://symptoms.webmd.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🔬</span><span>WebMD</span>
+            </a>
+            <a href="https://www.mayoclinic.org/symptom-checker/select-symptom/itt-20009075" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🏛️</span><span>Mayo Clinic</span>
+            </a>
+            <a href="https://ada.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🤖</span><span>Ada Health</span>
+            </a>
+            <a href="https://www.buoyhealth.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>💊</span><span>Buoy Health</span>
+            </a>
+            <a href="https://symptomate.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🩻</span><span>Symptomate</span>
+            </a>
+            <a href="https://www.babylonhealth.com/symptom-checker" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🌿</span><span>Babylon</span>
+            </a>
+            <a href="https://www.mediktor.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🧬</span><span>Mediktor</span>
+            </a>
+            <a href="https://your.md" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>📋</span><span>Your.MD</span>
+            </a>
+            <a href="https://symptomchecker.isabelhealthcare.com" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🔍</span><span>Isabel</span>
+            </a>
+            <a href="https://my.clevelandclinic.org/health/symptoms" target="_blank" rel="noopener noreferrer" className="dzt-checker-btn">
+              <span>🏥</span><span>Cleveland Clinic</span>
+            </a>
+          </div>
+
           <div className="dzt-health-emergency">
             ⚠️ في حالة طوارئ: اتصل بـ <strong>021 23 50 50</strong> (SAMU) أو توجه لأقرب مستعجلات
           </div>
           <button className="dzt-btn" onClick={analyze} disabled={!symptoms.trim() || loading}>
-            {loading ? <><span className="dzt-spinner"/> جاري التحليل...</> : <><Heart size={15}/> تحليل الأعراض</>}
+            {loading ? <><span className="dzt-spinner"/> جاري التحليل...</> : <><Heart size={15}/> تحليل الأعراض بالذكاء الاصطناعي</>}
           </button>
         </>) : (<>
           <div className="dzt-row">

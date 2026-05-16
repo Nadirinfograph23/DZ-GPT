@@ -12,48 +12,115 @@ function generatePDF(
   ref: React.RefObject<HTMLDivElement>,
   filename: string,
   isRtl = true,
+  title?: string,
 ) {
   if (!ref.current) return
-  const bodyHtml = ref.current.innerHTML
+
+  // Strip any elements that should not appear in PDF (disclaimers, buttons, UI chrome)
+  const clone = ref.current.cloneNode(true) as HTMLElement
+  clone.querySelectorAll(
+    '.dzt-health-disclaimer,.dzt-result-actions,.dzt-result-btn,.dzt-btn,.dzt-spinner,button,input,select,textarea,[data-no-print]'
+  ).forEach(el => el.remove())
+  const bodyHtml = clone.innerHTML
+
   const win = window.open('', '_blank')
   if (!win) return
   const dir = isRtl ? 'rtl' : 'ltr'
-  const fontFamily = isRtl ? "'Cairo', 'Tajawal'" : "'Inter', 'Segoe UI'"
+  const lang = isRtl ? 'ar' : 'fr'
+  const fontUrl = isRtl
+    ? 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap'
+    : 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+  const fontFamily = isRtl ? "'Cairo','Tajawal'" : "'Inter','Segoe UI'"
+  const docTitle = title || filename.replace('.pdf', '')
+  const now = new Date().toLocaleDateString(isRtl ? 'ar-DZ' : 'fr-DZ', { year: 'numeric', month: 'long', day: 'numeric' })
+
   win.document.write(`<!DOCTYPE html>
-<html lang="${isRtl ? 'ar' : 'fr'}" dir="${dir}">
+<html lang="${lang}" dir="${dir}">
 <head>
 <meta charset="UTF-8">
-<title>${filename.replace('.pdf','')}</title>
+<title>${docTitle}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="${fontUrl}" rel="stylesheet">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:${fontFamily},system-ui,sans-serif;direction:${dir};background:#fff;color:#1a1a1a;font-size:13px;line-height:1.85;padding:36px 44px}
-  h1{font-size:22px;color:#0a3d1f;border-bottom:2px solid #c8ff00;padding-bottom:8px;margin:20px 0 12px}
-  h2{font-size:17px;color:#0d5c2e;border-bottom:1px solid #e0e0e0;padding-bottom:5px;margin:16px 0 8px}
-  h3{font-size:14px;color:#1a7a2f;margin:12px 0 6px}
-  h4{font-size:13px;color:#333;margin:10px 0 4px}
-  p{margin:5px 0}
-  strong{color:#1a5c2e;font-weight:700}
-  em{font-style:italic;color:#444}
-  ul,ol{padding-${isRtl?'right':'left'}:22px;margin:6px 0}
-  li{margin:3px 0}
-  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
-  th{background:#e8f5e9;color:#0a3d1f;padding:7px 10px;text-align:${isRtl?'right':'left'};font-weight:700;border:1px solid #c5e0c8}
-  td{padding:6px 10px;border:1px solid #ddd}
-  tr:nth-child(even){background:#f7fbf8}
-  code{background:#f0f4f0;padding:2px 6px;border-radius:4px;font-size:11.5px;font-family:monospace}
-  pre{background:#f5f7f5;padding:12px 16px;border-radius:6px;overflow:auto;font-size:12px;margin:8px 0;border:1px solid #e0e5e0}
-  blockquote{border-${isRtl?'right':'left'}:3px solid #c8ff00;padding:4px 14px;margin:8px 0;color:#555;background:#fafff5}
-  hr{border:none;border-top:1px solid #ddd;margin:14px 0}
-  a{color:#0a5c28;text-decoration:underline}
-  @media print{body{padding:20px 28px}@page{margin:1.5cm;size:A4 portrait}}
+  html,body{height:100%}
+  body{
+    font-family:${fontFamily},system-ui,sans-serif;
+    direction:${dir};
+    background:#fff;
+    color:#111;
+    font-size:13.5px;
+    line-height:1.9;
+    padding:0;
+  }
+  /* ── Page header ── */
+  .pdf-header{
+    background:linear-gradient(135deg,#0a3d1f 0%,#1a6b3c 100%);
+    color:#fff;
+    padding:22px 44px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .pdf-header-brand{font-size:11px;opacity:.75;white-space:nowrap}
+  .pdf-header-title{font-size:18px;font-weight:800;letter-spacing:-.3px}
+  .pdf-header-date{font-size:11px;opacity:.75;white-space:nowrap;text-align:${isRtl?'left':'right'}}
+  /* ── Content ── */
+  .pdf-body{padding:32px 44px 44px}
+  h1{font-size:20px;color:#0a3d1f;border-bottom:2.5px solid #c8ff00;padding-bottom:7px;margin:22px 0 13px}
+  h2{font-size:16px;color:#0d5c2e;border-bottom:1px solid #d4edda;padding-bottom:5px;margin:18px 0 9px;font-weight:700}
+  h3{font-size:14px;color:#1a7a2f;margin:14px 0 6px;font-weight:700}
+  h4{font-size:13px;color:#333;margin:10px 0 4px;font-weight:600}
+  p{margin:5px 0 7px}
+  strong{color:#0d4a20;font-weight:700}
+  em{font-style:italic;color:#555}
+  ul,ol{padding-${isRtl?'right':'left'}:24px;margin:6px 0 10px}
+  li{margin:4px 0}
+  li>p{margin:0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12.5px}
+  thead tr{background:#e8f5e9}
+  th{color:#0a3d1f;padding:8px 11px;text-align:${isRtl?'right':'left'};font-weight:700;border:1px solid #c5e0c8;font-size:12px}
+  td{padding:7px 11px;border:1px solid #e0e8e2;vertical-align:top}
+  tr:nth-child(even) td{background:#f6fbf7}
+  code{background:#f0f5f1;padding:2px 7px;border-radius:4px;font-size:11.5px;font-family:'Courier New',monospace;color:#1a5c2e}
+  pre{background:#f4f8f5;padding:14px 18px;border-radius:7px;font-size:12px;margin:10px 0;border:1px solid #d8e8dc;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+  blockquote{border-${isRtl?'right':'left'}:4px solid #c8ff00;padding:6px 16px;margin:10px 0;color:#444;background:#fafff5;border-radius:0 6px 6px 0}
+  hr{border:none;border-top:1.5px solid #e4ede6;margin:18px 0}
+  a{color:#0a5c28}
+  /* ── Footer ── */
+  .pdf-footer{
+    border-top:1px solid #e4ede6;
+    padding:10px 44px;
+    font-size:10.5px;
+    color:#888;
+    display:flex;
+    justify-content:space-between;
+    margin-top:24px;
+  }
+  /* ── Print ── */
+  @media print{
+    .pdf-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{margin:0;size:A4 portrait}
+    html,body{height:auto}
+  }
 </style>
 </head>
-<body>${bodyHtml}</body>
+<body>
+<div class="pdf-header">
+  <div class="pdf-header-brand">🇩🇿 DZ-GPT · dz-gpt.vercel.app</div>
+  <div class="pdf-header-title">${docTitle}</div>
+  <div class="pdf-header-date">${now}</div>
+</div>
+<div class="pdf-body">${bodyHtml}</div>
+<div class="pdf-footer">
+  <span>🇩🇿 DZ-GPT — مُنشأ بواسطة الذكاء الاصطناعي</span>
+  <span>${now}</span>
+</div>
+</body>
 </html>`)
   win.document.close()
-  setTimeout(() => { win.focus(); win.print() }, 700)
+  setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
 type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan'
@@ -421,26 +488,39 @@ function PlannerTool() {
   const generate = async () => {
     if (!form.title.trim()) return
     setLoading(true); setResult('')
-    const typeLabels: Record<string, string> = { web: 'تطبيق ويب', mobile: 'تطبيق موبايل', business: 'مشروع تجاري', research: 'مشروع بحثي', other: 'مشروع آخر' }
-    const prompt = `أنت مدير مشاريع خبير. أنشئ خطة مشروع تفصيلية ومنظمة بالعربية بتنسيق Markdown واضح يتضمن:
-1. **ملخص المشروع** 
-2. **الأهداف الرئيسية** (3-5 أهداف)
-3. **المراحل والمهام** (مع تقدير الوقت لكل مرحلة)
-4. **الجدول الزمني** (خط زمني واضح)
-5. **الموارد المطلوبة**
-6. **مؤشرات النجاح (KPIs)**
-7. **المخاطر المحتملة والحلول**
+    const typeLabels: Record<string, string> = {
+      web:      'مشروع برمجي / نظام رقمي',
+      mobile:   'مشروع للهواتف الذكية',
+      business: 'مشروع تجاري',
+      research: 'مشروع بحثي',
+      other:    'مشروع متنوع',
+    }
+    const prompt = `[TOOL:PROJECT_PLANNER — لا تُنشئ كوداً ولا مواقع — خطة إدارة مشاريع فقط]
 
-معلومات المشروع:
+أنت مدير مشاريع محترف. أنشئ خطة مشروع تفصيلية بالعربية بتنسيق Markdown. أَخرِج الخطة مباشرةً دون أي مقدمة أو خاتمة.
+
+# خطة مشروع: ${form.title}
+
+اشمل هذه الأقسام بالترتيب:
+1. **ملخص المشروع**
+2. **الأهداف الرئيسية** (3-5 أهداف قابلة للقياس)
+3. **المراحل والمهام** (مع تقدير الوقت لكل مرحلة)
+4. **الجدول الزمني** (جدول واضح بالأسابيع/الأشهر)
+5. **الموارد المطلوبة** (بشرية + تقنية + مالية)
+6. **مؤشرات النجاح KPIs**
+7. **المخاطر والحلول**
+
+المعلومات:
 - الاسم: ${form.title}
 - النوع: ${typeLabels[form.type] || form.type}
 - الوصف: ${form.description || 'مشروع طموح'}
-- المدة المتاحة: ${form.duration} يوم
-- حجم الفريق: ${form.team} شخص
-
-اجعل الخطة عملية، قابلة للتطبيق فعلاً، مع مهام محددة وواضحة.`
+- المدة: ${form.duration} يوم
+- الفريق: ${form.team} شخص`
     try {
-      const res = await fetch('/api/dz-agent-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) })
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'planner' })
+      })
       const data = await res.json()
       setResult(data.content || '⚠️ فشل في إنشاء الخطة.')
     } catch { setResult('⚠️ خطأ في الاتصال.') }
@@ -514,7 +594,7 @@ function PlannerTool() {
               </button>
               <button className="dzt-result-btn" onClick={downloadMd}><Download size={12} /> تحميل MD</button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
-              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `plan-${form.title.replace(/\s+/g,'-')}.pdf`)}>📥 PDF</button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `plan-${form.title.replace(/\s+/g,'-')}.pdf`, true, `خطة مشروع: ${form.title}`)}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
@@ -535,6 +615,7 @@ function BizDocsTool() {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const pdfRef = useRef<HTMLDivElement>(null)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const DOC_TYPES = [
@@ -597,7 +678,7 @@ function BizDocsTool() {
     try {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'docs' })
       })
       const data = await res.json()
       setResult(data.content || '⚠️ فشل إنشاء الوثيقة.')
@@ -713,9 +794,10 @@ function BizDocsTool() {
                 {copied ? <><Check size={12}/> تم</> : <><Copy size={12}/> نسخ</>}
               </button>
               <button className="dzt-result-btn dzt-result-btn--print" onClick={printDoc}><Printer size={12}/> طباعة</button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `doc-${docType}-dz.pdf`, true, currentType?.label)}>📥 PDF</button>
             </div>
           </div>
-          <div className="dzt-result-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
+          <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
         </div>
       )}
     </div>
@@ -1107,8 +1189,9 @@ function OCRTool() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'user', content:
-              `حلّل النص التالي المستخرج من وثيقة ممسوحة ضوئياً:\n\n"""\n${extracted.slice(0, 4000)}\n"""\n\nقدّم:\n1. **نوع الوثيقة** وموضوعها\n2. **الأطراف والتواريخ** المذكورة\n3. **البنود الأساسية** بلغة بسيطة\n4. **أي نقاط حساسة أو مهمة** تستوجب الانتباه`
+              `[TOOL:OCR_ANALYZER — تحليل وثيقة — لا مقدمات]\n\nحلّل النص التالي المستخرج من وثيقة ممسوحة ضوئياً وأَخرِج التحليل مباشرةً:\n\n"""\n${extracted.slice(0, 4000)}\n"""\n\n## نوع الوثيقة\n## الأطراف والتواريخ\n## البنود الأساسية\n## نقاط مهمة تستوجب الانتباه`
             }],
+            tool: 'ocr',
           }),
         })
         const aiData = await aiRes.json()
@@ -1222,34 +1305,37 @@ function BizPlanTool() {
     if (!form.projectName.trim() || !form.sector) return
     setLoading(true); setResult('')
     const langInstr = form.lang === 'ar' ? 'بالعربية الفصحى' : 'en français professionnel'
-    const prompt = `أنت خبير اقتصادي جزائري متخصص في دراسات الجدوى وخطط الأعمال للسوق الجزائرية.
+    const prompt = `[TOOL:BUSINESS_PLAN — وثيقة خطة عمل رسمية — لا مقدمات ولا تعليقات]
 
-أنشئ خطة عمل (Business Plan) احترافية ${langInstr}:
+أنت خبير اقتصادي جزائري متخصص في دراسات الجدوى. أَخرِج خطة العمل مباشرةً بتنسيق Markdown ${langInstr}، دون أي جملة تمهيدية أو خاتمة.
 
-**المشروع:** ${form.projectName}
-**القطاع:** ${form.sector}
-**المدينة:** ${form.city || 'الجزائر العاصمة'}
-**رأس المال:** ${form.budget || 'غير محدد'} دج
-**الفئة المستهدفة:** ${form.target || 'غير محددة'}
-**الفكرة:** ${form.description || 'غير محدد'}
+# خطة عمل: ${form.projectName}
 
-تضمّن:
-1. **ملخص تنفيذي** — الفكرة والقيمة المضافة
-2. **تحليل السوق الجزائرية** — حجم السوق، المنافسون، SWOT
-3. **الهيكل القانوني** — EURL/SARL/SNC + إجراءات التسجيل
+| البيان | التفاصيل |
+|--------|---------|
+| القطاع | ${form.sector} |
+| المدينة | ${form.city || 'الجزائر العاصمة'} |
+| رأس المال | ${form.budget || 'غير محدد'} دج |
+| الفئة المستهدفة | ${form.target || 'غير محددة'} |
+| الفكرة | ${form.description || 'غير محدد'} |
+
+الأقسام المطلوبة:
+1. **الملخص التنفيذي** — الفكرة، القيمة المضافة، الميزة التنافسية
+2. **تحليل السوق الجزائرية** — حجم السوق، المنافسون، تحليل SWOT
+3. **الهيكل القانوني** — EURL/SARL/SNC + خطوات التسجيل + التكلفة
 4. **خطة التشغيل** — الموقع، التجهيزات، العمالة، الموردون
-5. **الخطة المالية** — تكاليف الانطلاق، توقعات 3 سنوات، نقطة التعادل
-6. **استراتيجية التسويق** — الجمهور، القنوات، التسعير
-7. **جدول 12 شهراً** — خطة تنفيذية مفصّلة
-8. **مصادر التمويل** — ANSEJ، CNAC، بنوك جزائرية
+5. **الخطة المالية** — جدول تكاليف الانطلاق، توقعات 3 سنوات، نقطة التعادل
+6. **استراتيجية التسويق** — القنوات، التسعير، الترويج
+7. **جدول التنفيذ** (12 شهراً)
+8. **مصادر التمويل** — ANSEJ، CNAC، ANADE، بنوك جزائرية
 
-استخدم أرقاماً وإحصاءات حقيقية من السوق الجزائرية.`
+استخدم أرقاماً واقعية من السوق الجزائرية. أَخرِج الخطة مباشرةً.`
 
     try {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'bizplan' }),
       })
       const data = await res.json()
       setResult(data.content || '⚠️ فشل توليد خطة العمل.')
@@ -1320,7 +1406,7 @@ function BizPlanTool() {
               </button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
               <button className="dzt-result-btn" onClick={() => { const b = new Blob([result], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `bizplan-${form.projectName.replace(/\s+/g,'-')}.txt`; a.click() }}><Download size={12} /> نص</button>
-              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `bizplan-${form.projectName.replace(/\s+/g,'-')}.pdf`, form.lang === 'ar')}>📥 PDF</button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `bizplan-${form.projectName.replace(/\s+/g,'-')}.pdf`, form.lang === 'ar', `خطة عمل: ${form.projectName}`)}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>

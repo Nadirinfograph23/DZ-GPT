@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch, Upload } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
+import DoctorResultsPanel, { DoctorResult, DirLink } from '../components/DoctorResultsPanel'
 import '../styles/dz-tools.css'
 
 // ─── Shared PDF Generator (browser print-to-PDF — zero dependencies) ──────────
@@ -983,6 +984,7 @@ function HealthTool() {
   const [city, setCity] = useState('الجزائر')
   const [specialty, setSpecialty] = useState('')
   const [result, setResult] = useState('')
+  const [doctorData, setDoctorData] = useState<{ doctors: DoctorResult[]; dirs: DirLink[]; meta: { speciality: { ar: string; fr: string }; city: { ar: string; fr: string }; cached?: boolean } } | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -1045,14 +1047,18 @@ function HealthTool() {
   }
 
   const analyze = async () => {
-    setLoading(true); setResult('')
-    let prompt = ''
+    setLoading(true); setResult(''); setDoctorData(null)
+
     if (mode === 'symptoms') {
-      prompt = `[TOOL:SYMPTOM_ANALYZER — تحليل أعراض طبي — لا مقدمات — ابدأ مباشرةً]
+      // Always send symptoms to AI in Arabic regardless of input language
+      // The AI is instructed to respond in Arabic
+      const prompt = `[TOOL:SYMPTOM_ANALYZER — تحليل أعراض طبي — لا مقدمات — ابدأ مباشرةً بالعربية]
 
-أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة (WebMD، Mayo Clinic، Ada Health، Cleveland Clinic، Isabel DDx). المريض: ${gender==='male'?'ذكر':'أنثى'}، العمر: ${age||'غير محدد'} سنة.
+أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة دولية وجزائرية. المريض: ${gender==='male'?'ذكر':'أنثى'}، العمر: ${age||'غير محدد'} سنة.
 
-**الأعراض:** ${symptoms}
+**الأعراض المُدخلة:** ${symptoms}
+
+⚠️ مهم: مهما كانت لغة الأعراض أعلاه (عربية، فرنسية، إنجليزية، دارجة)، يجب أن يكون ردّك كله بالعربية الفصحى الواضحة.
 
 التزم بهذه الأعراض فقط — لا تضف أعراضاً أخرى.
 
@@ -1073,45 +1079,75 @@ function HealthTool() {
 ## 5. علامات التدهور — توجّه للطوارئ فوراً إذا ظهرت:
 قائمة مختصرة بالأعراض التحذيرية.
 
-## 6. روابط مرجعية للاطلاع
-اذكر من هذه المصادر ما يُفيد لهذه الأعراض تحديداً:
-symptoms.webmd.com | mayoclinic.org | ada.com | symptomate.com | my.clevelandclinic.org/health/symptoms
+## 6. مصادر طبية موثوقة للاطلاع (بالعربية)
+اذكر روابط مفيدة من: WebMD عربي | Mayo Clinic | Vidal.fr | ada.com | my.clevelandclinic.org/health
 
 ⚠️ هذا تقييم استرشادي مبني على معلومات طبية موثوقة — لا يُغني عن استشارة الطبيب.`
+
+      try {
+        const res = await fetch('/api/dz-agent-chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'health' })
+        })
+        const data = await res.json()
+        setResult(data.content || '⚠️ فشل التحليل.')
+      } catch { setResult('⚠️ خطأ في الاتصال.') }
+      finally { setLoading(false) }
+
     } else {
-      const sahadocUrl = getSahadocUrl()
-      prompt = `[TOOL:DOCTOR_SEARCH — لا مقدمات — ابدأ مباشرةً بالمعلومات]
+      // Doctor search — use real doctor search API
+      const SPECIALTY_FR: Record<string, string> = {
+        'طب عام': 'medecin-generaliste', 'قلب وأوعية': 'cardiologue',
+        'عيون': 'ophtalmologue', 'أسنان': 'dentiste', 'جلدية': 'dermatologue',
+        'أطفال': 'pediatre', 'نساء وتوليد': 'gynecologue', 'عظام': 'orthopediste',
+        'مسالك بولية': 'urologue', 'جهاز هضمي': 'gastro-enterologue',
+        'أعصاب': 'neurologue', 'نفسية': 'psychiatre',
+        'أنف وأذن وحنجرة': 'orl-oto-rhino-laryngologiste', 'رئة وتنفس': 'pneumologue',
+        'كلى': 'nephrologue', 'سكري وغدد': 'endocrinologue', 'أورام': 'oncologue',
+        'روماتولوجيا': 'rhumatologue', 'أشعة وتصوير': 'radiologue', 'تغذية ورجيم': 'nutritionniste',
+      }
+      const CITY_FR: Record<string, string> = {
+        'الجزائر': 'alger', 'وهران': 'oran', 'قسنطينة': 'constantine',
+        'عنابة': 'annaba', 'سطيف': 'setif', 'باتنة': 'batna',
+        'تلمسان': 'tlemcen', 'بجاية': 'bejaia', 'بليدة': 'blida',
+        'تيزي وزو': 'tizi-ouzou', 'ورقلة': 'ouargla', 'مستغانم': 'mostaganem',
+        'المدية': 'medea', 'برج بوعريريج': 'bordj-bou-arreridj',
+        'سيدي بلعباس': 'sidi-bel-abbes', 'قالمة': 'guelma',
+        'جيجل': 'jijel', 'سكيكدة': 'skikda', 'البويرة': 'bouira', 'الأغواط': 'laghouat',
+      }
+      const specFr = SPECIALTY_FR[specialty] || 'medecin-generaliste'
+      const cityFr = CITY_FR[city] || 'alger'
+      const query = `طبيب ${specialty || 'طب عام'} في ${city}`
 
-أنت وكيل صحة متخصص في المنظومة الصحية الجزائرية. أُريد إيجاد طبيب ${specialty || 'طب عام'} في ${city}.
-
-## 🔍 SahaDoc — المصدر الأول (الأسرع)
-**رابط مباشر للحجز:** ${sahadocUrl}
-اشرح كيفية استخدام SahaDoc (sahadoc.net): البحث بالتخصص، تصفية المدينة، طلب موعد مباشر.
-
-## 🏥 المستشفيات والعيادات
-أذكر 3-5 مستشفيات أو مراكز طبية رئيسية في ${city} لتخصص ${specialty||'طب عام'} مع عناوينها إن أمكن.
-
-## 💰 الأسعار التقريبية في ${city}
-- قطاع عام (مستشفى حكومي)
-- قطاع خاص (عيادة / مصحة)
-- مع تغطية CNAS/CASNOS
-
-## 📋 كيفية الاستفادة من الضمان الاجتماعي
-خطوات عملية للحصول على إحالة أو استرداد مصاريف CNAS/CASNOS.
-
-## ⚡ نصائح للحصول على موعد سريع
-3-4 نصائح عملية خاصة بـ ${city}.`
+      try {
+        const res = await fetch('/api/dz-agent/doctor-search', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, speciality: specFr, city: cityFr })
+        })
+        const data = await res.json()
+        if (data.results && Array.isArray(data.results)) {
+          const realDocs = data.results.filter((r: DoctorResult & { directoryLink?: boolean }) => !r.directoryLink)
+          const dirs = data.results.filter((r: DoctorResult & { directoryLink?: boolean }) => r.directoryLink)
+          setDoctorData({
+            doctors: realDocs,
+            dirs,
+            meta: {
+              speciality: { ar: specialty || 'طب عام', fr: specFr },
+              city: { ar: city, fr: cityFr },
+              cached: !!data.cached,
+            }
+          })
+          if (realDocs.length === 0) {
+            setResult('لم يتم العثور على أطباء في قاعدة البيانات لهذا التخصص والمدينة. جرّب ولاية أخرى أو تخصصاً مختلفاً.')
+          }
+        } else if (data.content) {
+          setResult(data.content)
+        } else {
+          setResult('⚠️ لم يتم العثور على نتائج.')
+        }
+      } catch { setResult('⚠️ خطأ في الاتصال بخادم البحث.') }
+      finally { setLoading(false) }
     }
-
-    try {
-      const res = await fetch('/api/dz-agent-chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'health' })
-      })
-      const data = await res.json()
-      setResult(data.content || '⚠️ فشل التحليل.')
-    } catch { setResult('⚠️ خطأ في الاتصال.') }
-    finally { setLoading(false) }
   }
 
   const HEALTH_TIPS = [
@@ -1250,12 +1286,22 @@ symptoms.webmd.com | mayoclinic.org | ada.com | symptomate.com | my.clevelandcli
         </>)}
       </div>
 
-      {loading && <div className="dzt-loading"><div className="dzt-spinner"/>DZ Agent يتحقق من المعلومات الصحية...</div>}
+      {loading && <div className="dzt-loading"><div className="dzt-spinner"/>DZ Agent يبحث...</div>}
 
+      {/* Doctor results panel */}
+      {doctorData && !loading && (
+        <DoctorResultsPanel
+          doctors={doctorData.doctors}
+          dirs={doctorData.dirs}
+          meta={doctorData.meta}
+        />
+      )}
+
+      {/* Symptom analysis result (always Arabic) */}
       {result && (
         <div className="dzt-result">
           <div className="dzt-result-header">
-            <span className="dzt-result-title">{mode==='symptoms' ? '🩺 التقييم الصحي' : '👨‍⚕️ دليل البحث عن طبيب'}</span>
+            <span className="dzt-result-title">{mode==='symptoms' ? '🩺 التقييم الصحي' : '👨‍⚕️ نتيجة البحث'}</span>
             <div className="dzt-result-actions">
               <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(()=>setCopied(false),2000) }}>
                 {copied ? <><Check size={12}/> تم</> : <><Copy size={12}/> نسخ</>}
@@ -1562,15 +1608,20 @@ function ImageTool() {
   const [searchResults, setSearchResults] = useState<ImageSearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchTotal, setSearchTotal]   = useState(0)
+  const [searchError, setSearchError]   = useState('')
 
   const [reverseUrl, setReverseUrl]     = useState('')
+  const [reverseBase64, setReverseBase64] = useState<{ data: string; mime: string } | null>(null)
   const [reverseLinks, setReverseLinks] = useState<ReverseLink[]>([])
   const [reverseLoading, setReverseLoading] = useState(false)
+  const [reverseError, setReverseError] = useState('')
+  const reverseFileRef = useRef<HTMLInputElement>(null)
 
   const [analyzeMode, setAnalyzeMode]   = useState<AnalyzeMode>('analyze')
   const [analyzeInput, setAnalyzeInput] = useState<ImageInput | null>(null)
   const [analyzeResult, setAnalyzeResult] = useState('')
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState('')
   const [copied, setCopied]             = useState(false)
 
   const analyzeFileRef = useRef<HTMLInputElement>(null)
@@ -1581,32 +1632,74 @@ function ImageTool() {
     reader.readAsDataURL(file)
   }, [])
 
+  const handleReverseFile = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      setReverseBase64({ data: dataUrl, mime: file.type })
+      setReverseUrl('')
+      setReverseLinks([])
+      setReverseError('')
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
   const search = useCallback(async () => {
     if (!query.trim()) return
-    setSearchLoading(true); setSearchResults([])
+    setSearchLoading(true); setSearchResults([]); setSearchError('')
     try {
       const res = await fetch(`/api/tools/image-search?q=${encodeURIComponent(query.trim())}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
+      if (data.error) throw new Error(data.error)
       setSearchResults(data.results || [])
       setSearchTotal(data.total || 0)
-    } catch { setSearchResults([]) }
+      if ((data.results || []).length === 0) setSearchError('لم تُوجد نتائج. جرّب كلمات مختلفة.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ'
+      setSearchError(`⚠️ فشل البحث: ${msg}`)
+      setSearchResults([])
+    }
     finally { setSearchLoading(false) }
   }, [query])
 
   const doReverse = useCallback(async () => {
-    if (!reverseUrl.trim()) return
-    setReverseLoading(true)
+    const hasUrl = reverseUrl.trim()
+    const hasFile = !!reverseBase64
+    if (!hasUrl && !hasFile) return
+    setReverseLoading(true); setReverseLinks([]); setReverseError('')
     try {
-      const res = await fetch(`/api/tools/reverse-image?url=${encodeURIComponent(reverseUrl.trim())}`)
-      const data = await res.json()
-      setReverseLinks(data.links || [])
-    } catch { setReverseLinks([]) }
+      if (hasFile && reverseBase64) {
+        // Upload file: send base64 to image-analyze endpoint to get a hosted URL
+        // For reverse search, we use the dataURL directly by uploading to a temp endpoint
+        // Instead: generate reverse links using a data URI trick via image-analyze
+        // Best approach: upload to server, get a temp URL back, then generate reverse links
+        const uploadRes = await fetch('/api/tools/reverse-image-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: reverseBase64.data, mimeType: reverseBase64.mime }),
+        })
+        if (!uploadRes.ok) throw new Error(`HTTP ${uploadRes.status}`)
+        const uploadData = await uploadRes.json()
+        if (uploadData.error) throw new Error(uploadData.error)
+        setReverseLinks(uploadData.links || [])
+      } else {
+        const res = await fetch(`/api/tools/reverse-image?url=${encodeURIComponent(reverseUrl.trim())}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+        setReverseLinks(data.links || [])
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ'
+      setReverseError(`⚠️ فشل البحث العكسي: ${msg}`)
+    }
     finally { setReverseLoading(false) }
-  }, [reverseUrl])
+  }, [reverseUrl, reverseBase64])
 
   const analyzeImage = useCallback(async () => {
     if (!analyzeInput) return
-    setAnalyzeLoading(true); setAnalyzeResult('')
+    setAnalyzeLoading(true); setAnalyzeResult(''); setAnalyzeError('')
     try {
       const body: Record<string, string> = { mode: analyzeMode }
       if (analyzeInput.type === 'base64') {
@@ -1618,9 +1711,17 @@ function ImageTool() {
       const res = await fetch('/api/tools/image-analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `HTTP ${res.status}`)
+      }
       const data = await res.json()
+      if (data.error) throw new Error(data.error)
       setAnalyzeResult(data.content || '⚠️ فشل التحليل.')
-    } catch { setAnalyzeResult('⚠️ خطأ في الاتصال.') }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ في الاتصال'
+      setAnalyzeError(`⚠️ ${msg}`)
+    }
     finally { setAnalyzeLoading(false) }
   }, [analyzeInput, analyzeMode])
 
@@ -1662,7 +1763,7 @@ function ImageTool() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && search()}
-              placeholder="ابحث عن صور... مثال: علم الجزائر، شروق الشمس، مدينة وهران، مطعم جزائري..."
+              placeholder="ابحث عن صور... مثال: علم الجزائر، شروق الشمس، مدينة وهران..."
               dir="rtl"
             />
             <button className="dzt-btn dzt-img-search-btn" onClick={search} disabled={!query.trim() || searchLoading}>
@@ -1673,9 +1774,8 @@ function ImageTool() {
           <div className="dzt-img-source-note">
             🌐 الصور من <strong>Openverse</strong> — مكتبة مفتوحة المصدر بترخيص Creative Commons
           </div>
-          {searchLoading && (
-            <div className="dzt-loading"><div className="dzt-spinner" />جاري البحث في مكتبة الصور المفتوحة...</div>
-          )}
+          {searchLoading && <div className="dzt-loading"><div className="dzt-spinner" />جاري البحث في مكتبة الصور...</div>}
+          {searchError && <div className="dzt-img-empty">{searchError}</div>}
           {!searchLoading && searchResults.length > 0 && (
             <div>
               <div className="dzt-img-results-header">
@@ -1685,13 +1785,8 @@ function ImageTool() {
                 {searchResults.map(img => (
                   <div key={img.id} className="dzt-img-card">
                     <div className="dzt-img-card-inner">
-                      <img
-                        src={img.thumbnail}
-                        alt={img.title}
-                        loading="lazy"
-                        className="dzt-img-thumb"
-                        onError={e => { (e.target as HTMLImageElement).src = img.url }}
-                      />
+                      <img src={img.thumbnail} alt={img.title} loading="lazy" className="dzt-img-thumb"
+                        onError={e => { (e.target as HTMLImageElement).src = img.url }} />
                       <div className="dzt-img-card-overlay">
                         <div className="dzt-img-card-title">{img.title}</div>
                         {(img.creator || img.license) && (
@@ -1704,7 +1799,7 @@ function ImageTool() {
                           <a href={img.url} target="_blank" rel="noopener noreferrer" className="dzt-img-action-btn">⬆️ فتح</a>
                           <button className="dzt-img-action-btn" onClick={() => navigator.clipboard.writeText(img.url)}>🔗 نسخ</button>
                           <a href={img.url} download className="dzt-img-action-btn">⬇️ تحميل</a>
-                          <button className="dzt-img-action-btn" onClick={() => { setMode('reverse'); setReverseUrl(img.url); setReverseLinks([]) }}>
+                          <button className="dzt-img-action-btn" onClick={() => { setMode('reverse'); setReverseUrl(img.url); setReverseBase64(null); setReverseLinks([]) }}>
                             🔍 عكسي
                           </button>
                         </div>
@@ -1715,9 +1810,6 @@ function ImageTool() {
               </div>
             </div>
           )}
-          {!searchLoading && searchResults.length === 0 && query.trim() && (
-            <div className="dzt-img-empty">لم يتم العثور على نتائج. جرّب كلمات مختلفة.</div>
-          )}
         </div>
       )}
 
@@ -1725,45 +1817,59 @@ function ImageTool() {
       {mode === 'reverse' && (
         <div>
           <div className="dzt-img-reverse-desc">
-            ابحث عن مصدر صورة، تحقق من أصالتها، أو اعثر على صور مشابهة باستخدام أفضل محركات البحث العكسي.
+            ابحث عن مصدر صورة، تحقق من أصالتها، أو اعثر على صور مشابهة. يمكنك إدخال رابط <strong>أو رفع صورة مباشرة</strong>.
           </div>
-          <div className="dzt-img-search-bar">
+
+          {/* URL input row */}
+          <div className="dzt-img-search-bar" style={{ marginBottom: 8 }}>
             <input
               className="dzt-input dzt-img-query-input"
               value={reverseUrl}
-              onChange={e => { setReverseUrl(e.target.value); setReverseLinks([]) }}
+              onChange={e => { setReverseUrl(e.target.value); setReverseBase64(null); setReverseLinks([]); setReverseError('') }}
               onKeyDown={e => e.key === 'Enter' && doReverse()}
               placeholder="الصق رابط الصورة... https://example.com/photo.jpg"
               dir="ltr"
             />
-            <button className="dzt-btn dzt-img-search-btn" onClick={doReverse} disabled={!reverseUrl.trim() || reverseLoading}>
+            <button className="dzt-btn dzt-img-search-btn" onClick={doReverse}
+              disabled={(!reverseUrl.trim() && !reverseBase64) || reverseLoading}>
               {reverseLoading ? <span className="dzt-spinner" /> : <RotateCcw size={14} />}
               {reverseLoading ? 'جاري...' : 'بحث عكسي'}
             </button>
           </div>
-          {reverseUrl.trim() && (
+
+          {/* Upload button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ color: '#888', fontSize: 13 }}>أو</span>
+            <button className="dzt-btn dzt-img-upload-btn" onClick={() => reverseFileRef.current?.click()}>
+              <Upload size={13} /> ارفع صورة للبحث العكسي
+            </button>
+            <input ref={reverseFileRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleReverseFile(f) }} />
+            {reverseBase64 && (
+              <button className="dzt-img-clear-btn" onClick={() => { setReverseBase64(null); setReverseLinks([]); setReverseError('') }}>✕ إزالة</button>
+            )}
+          </div>
+
+          {/* Preview */}
+          {(reverseUrl.trim() || reverseBase64) && (
             <div className="dzt-img-reverse-preview">
               <img
-                src={reverseUrl}
-                alt="preview"
-                className="dzt-img-reverse-thumb"
+                src={reverseBase64 ? reverseBase64.data : reverseUrl}
+                alt="preview" className="dzt-img-reverse-thumb"
                 onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
               />
             </div>
           )}
+
+          {reverseError && <div className="dzt-img-empty">{reverseError}</div>}
+
           {reverseLinks.length > 0 && (
             <div className="dzt-img-reverse-links">
               <div className="dzt-img-reverse-title">ابحث عن هذه الصورة في:</div>
               <div className="dzt-img-reverse-grid">
                 {reverseLinks.map(link => (
-                  <a
-                    key={link.name}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="dzt-img-reverse-link"
-                    style={{ '--lc': link.color } as React.CSSProperties}
-                  >
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer"
+                    className="dzt-img-reverse-link" style={{ '--lc': link.color } as React.CSSProperties}>
                     <span className="dzt-img-reverse-link-icon">{link.icon}</span>
                     <span className="dzt-img-reverse-link-name">{link.name}</span>
                     <span className="dzt-img-reverse-link-arrow">→</span>
@@ -1772,11 +1878,12 @@ function ImageTool() {
               </div>
             </div>
           )}
-          {!reverseLinks.length && !reverseLoading && (
+
+          {!reverseLinks.length && !reverseLoading && !reverseError && (
             <div className="dzt-img-reverse-tips">
               <div className="dzt-img-tips-title">💡 كيف تستخدم البحث العكسي؟</div>
               <ul className="dzt-img-tips-list">
-                <li>الصق رابط صورة من الإنترنت</li>
+                <li>الصق رابط صورة أو ارفع صورة من جهازك</li>
                 <li>سيُولَّد روابط مباشرة لكل محرك بحث</li>
                 <li>انقر على أي رابط للبحث فوراً</li>
                 <li>مفيد للتحقق من مصدر الصورة ومعرفة هل هي مزيفة</li>
@@ -1845,6 +1952,7 @@ function ImageTool() {
           {analyzeLoading && (
             <div className="dzt-loading"><div className="dzt-spinner" />Gemini Vision يحلل الصورة...</div>
           )}
+          {analyzeError && <div className="dzt-img-empty">{analyzeError}</div>}
           {analyzeResult && (
             <div className="dzt-result">
               <div className="dzt-result-header">

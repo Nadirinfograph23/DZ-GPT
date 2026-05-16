@@ -5217,6 +5217,17 @@
   background: rgba(255,180,0,0.12);
   transform: translateY(-1px);
 }
+.dzc-wr-btn--builder {
+  border-color: rgba(138,43,226,0.4);
+  background: linear-gradient(135deg, rgba(138,43,226,0.1), rgba(99,102,241,0.08));
+  color: #a78bfa;
+}
+.dzc-wr-btn--builder:hover {
+  border-color: rgba(138,43,226,0.7);
+  background: linear-gradient(135deg, rgba(138,43,226,0.18), rgba(99,102,241,0.14));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(138,43,226,0.2);
+}
 .dzc-wr-actions--3 {
   grid-template-columns: 1fr 1fr 1fr;
 }

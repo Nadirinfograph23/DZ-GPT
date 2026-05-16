@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
@@ -123,7 +123,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -131,8 +131,9 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'docs',    icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
   { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
   { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
-  { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract', badge: 'جديد' },
-  { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية', badge: 'جديد' },
+  { id: 'image',   icon: '🖼️', name: 'Visual AI — صور',        desc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور', badge: 'NEW' },
+  { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
+  { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -1544,6 +1545,329 @@ function BizPlanTool() {
   )
 }
 
+// ─── Image Search & Visual AI Tool ────────────────────────────────────────────
+type ImageSearchResult = {
+  id: string; title: string; url: string; thumbnail: string
+  source: string; license: string; creator: string; detail_url: string
+  width: number; height: number
+}
+type ReverseLink = { name: string; url: string; icon: string; color: string }
+type AnalyzeMode = 'analyze' | 'ocr' | 'caption' | 'objects'
+type ImageInput = { type: 'url'; value: string } | { type: 'base64'; value: string; mimeType: string }
+
+function ImageTool() {
+  const [mode, setMode] = useState<'search' | 'reverse' | 'analyze'>('search')
+
+  const [query, setQuery]               = useState('')
+  const [searchResults, setSearchResults] = useState<ImageSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchTotal, setSearchTotal]   = useState(0)
+
+  const [reverseUrl, setReverseUrl]     = useState('')
+  const [reverseLinks, setReverseLinks] = useState<ReverseLink[]>([])
+  const [reverseLoading, setReverseLoading] = useState(false)
+
+  const [analyzeMode, setAnalyzeMode]   = useState<AnalyzeMode>('analyze')
+  const [analyzeInput, setAnalyzeInput] = useState<ImageInput | null>(null)
+  const [analyzeResult, setAnalyzeResult] = useState('')
+  const [analyzeLoading, setAnalyzeLoading] = useState(false)
+  const [analyzed, setAnalyzed]         = useState(false)
+  const [copied, setCopied]             = useState(false)
+
+  const analyzeFileRef = useRef<HTMLInputElement>(null)
+
+  const handleImageFile = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => setAnalyzeInput({ type: 'base64', value: e.target?.result as string, mimeType: file.type })
+    reader.readAsDataURL(file)
+  }, [])
+
+  const search = useCallback(async () => {
+    if (!query.trim()) return
+    setSearchLoading(true); setSearchResults([])
+    try {
+      const res = await fetch(`/api/tools/image-search?q=${encodeURIComponent(query.trim())}`)
+      const data = await res.json()
+      setSearchResults(data.results || [])
+      setSearchTotal(data.total || 0)
+    } catch { setSearchResults([]) }
+    finally { setSearchLoading(false) }
+  }, [query])
+
+  const doReverse = useCallback(async () => {
+    if (!reverseUrl.trim()) return
+    setReverseLoading(true)
+    try {
+      const res = await fetch(`/api/tools/reverse-image?url=${encodeURIComponent(reverseUrl.trim())}`)
+      const data = await res.json()
+      setReverseLinks(data.links || [])
+    } catch { setReverseLinks([]) }
+    finally { setReverseLoading(false) }
+  }, [reverseUrl])
+
+  const analyzeImage = useCallback(async () => {
+    if (!analyzeInput) return
+    setAnalyzeLoading(true); setAnalyzeResult(''); setAnalyzed(false)
+    try {
+      const body: Record<string, string> = { mode: analyzeMode }
+      if (analyzeInput.type === 'base64') {
+        body.imageBase64 = analyzeInput.value
+        body.mimeType = analyzeInput.mimeType
+      } else {
+        body.imageUrl = analyzeInput.value
+      }
+      const res = await fetch('/api/tools/image-analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      setAnalyzeResult(data.content || '⚠️ فشل التحليل.')
+      setAnalyzed(true)
+    } catch { setAnalyzeResult('⚠️ خطأ في الاتصال.') }
+    finally { setAnalyzeLoading(false) }
+  }, [analyzeInput, analyzeMode])
+
+  const ANALYZE_MODES: { v: AnalyzeMode; l: string; d: string; icon: string }[] = [
+    { v: 'analyze', l: 'تحليل كامل',    d: 'وصف شامل لكل عناصر الصورة',     icon: '🔬' },
+    { v: 'ocr',     l: 'استخراج نص',   d: 'OCR — قراءة النصوص من الصورة',  icon: '📝' },
+    { v: 'caption', l: 'وصف مختصر',    d: 'Caption — جملة وصفية موجزة',    icon: '💬' },
+    { v: 'objects', l: 'كشف العناصر',  d: 'Object Detection — تحديد الأشياء', icon: '🎯' },
+  ]
+
+  return (
+    <div>
+      <div className="dzt-tool-desc">
+        <span className="dzt-tool-desc-icon">🖼️</span>
+        <div>
+          <div className="dzt-tool-desc-title">Visual AI — البحث والتحليل البصري</div>
+          <div className="dzt-tool-desc-text">ابحث عن الصور مجاناً • بحث عكسي (Google Lens / Yandex / TinEye) • تحليل الصور بـ Gemini Vision • OCR ذكي</div>
+        </div>
+      </div>
+
+      <div className="dzt-mode-tabs">
+        <button className={`dzt-mode-tab${mode === 'search'  ? ' active' : ''}`} onClick={() => setMode('search')}>
+          <Search size={13} /> بحث عن صور
+        </button>
+        <button className={`dzt-mode-tab${mode === 'reverse' ? ' active' : ''}`} onClick={() => setMode('reverse')}>
+          <RotateCcw size={13} /> بحث عكسي
+        </button>
+        <button className={`dzt-mode-tab${mode === 'analyze' ? ' active' : ''}`} onClick={() => setMode('analyze')}>
+          <ScanSearch size={13} /> تحليل AI
+        </button>
+      </div>
+
+      {/* ── Text Image Search ── */}
+      {mode === 'search' && (
+        <div>
+          <div className="dzt-img-search-bar">
+            <input
+              className="dzt-input dzt-img-query-input"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && search()}
+              placeholder="ابحث عن صور... مثال: علم الجزائر، شروق الشمس، مدينة وهران، مطعم جزائري..."
+              dir="rtl"
+            />
+            <button className="dzt-btn dzt-img-search-btn" onClick={search} disabled={!query.trim() || searchLoading}>
+              {searchLoading ? <span className="dzt-spinner" /> : <Search size={14} />}
+              {searchLoading ? 'جاري...' : 'بحث'}
+            </button>
+          </div>
+          <div className="dzt-img-source-note">
+            🌐 الصور من <strong>Openverse</strong> — مكتبة مفتوحة المصدر بترخيص Creative Commons
+          </div>
+          {searchLoading && (
+            <div className="dzt-loading"><div className="dzt-spinner" />جاري البحث في مكتبة الصور المفتوحة...</div>
+          )}
+          {!searchLoading && searchResults.length > 0 && (
+            <div>
+              <div className="dzt-img-results-header">
+                <span>🖼️ {searchResults.length} صورة من {searchTotal.toLocaleString('ar-DZ')} نتيجة</span>
+              </div>
+              <div className="dzt-img-grid">
+                {searchResults.map(img => (
+                  <div key={img.id} className="dzt-img-card">
+                    <div className="dzt-img-card-inner">
+                      <img
+                        src={img.thumbnail}
+                        alt={img.title}
+                        loading="lazy"
+                        className="dzt-img-thumb"
+                        onError={e => { (e.target as HTMLImageElement).src = img.url }}
+                      />
+                      <div className="dzt-img-card-overlay">
+                        <div className="dzt-img-card-title">{img.title}</div>
+                        {(img.creator || img.license) && (
+                          <div className="dzt-img-card-meta">
+                            {img.creator && <span>{img.creator}</span>}
+                            <span className="dzt-img-license">{img.license}</span>
+                          </div>
+                        )}
+                        <div className="dzt-img-card-actions">
+                          <a href={img.url} target="_blank" rel="noopener noreferrer" className="dzt-img-action-btn">⬆️ فتح</a>
+                          <button className="dzt-img-action-btn" onClick={() => navigator.clipboard.writeText(img.url)}>🔗 نسخ</button>
+                          <a href={img.url} download className="dzt-img-action-btn">⬇️ تحميل</a>
+                          <button className="dzt-img-action-btn" onClick={() => { setMode('reverse'); setReverseUrl(img.url); setReverseLinks([]) }}>
+                            🔍 عكسي
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!searchLoading && searchResults.length === 0 && query.trim() && (
+            <div className="dzt-img-empty">لم يتم العثور على نتائج. جرّب كلمات مختلفة.</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Reverse Image Search ── */}
+      {mode === 'reverse' && (
+        <div>
+          <div className="dzt-img-reverse-desc">
+            ابحث عن مصدر صورة، تحقق من أصالتها، أو اعثر على صور مشابهة باستخدام أفضل محركات البحث العكسي.
+          </div>
+          <div className="dzt-img-search-bar">
+            <input
+              className="dzt-input dzt-img-query-input"
+              value={reverseUrl}
+              onChange={e => { setReverseUrl(e.target.value); setReverseLinks([]) }}
+              onKeyDown={e => e.key === 'Enter' && doReverse()}
+              placeholder="الصق رابط الصورة... https://example.com/photo.jpg"
+              dir="ltr"
+            />
+            <button className="dzt-btn dzt-img-search-btn" onClick={doReverse} disabled={!reverseUrl.trim() || reverseLoading}>
+              {reverseLoading ? <span className="dzt-spinner" /> : <RotateCcw size={14} />}
+              {reverseLoading ? 'جاري...' : 'بحث عكسي'}
+            </button>
+          </div>
+          {reverseUrl.trim() && (
+            <div className="dzt-img-reverse-preview">
+              <img
+                src={reverseUrl}
+                alt="preview"
+                className="dzt-img-reverse-thumb"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            </div>
+          )}
+          {reverseLinks.length > 0 && (
+            <div className="dzt-img-reverse-links">
+              <div className="dzt-img-reverse-title">ابحث عن هذه الصورة في:</div>
+              <div className="dzt-img-reverse-grid">
+                {reverseLinks.map(link => (
+                  <a
+                    key={link.name}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="dzt-img-reverse-link"
+                    style={{ '--lc': link.color } as React.CSSProperties}
+                  >
+                    <span className="dzt-img-reverse-link-icon">{link.icon}</span>
+                    <span className="dzt-img-reverse-link-name">{link.name}</span>
+                    <span className="dzt-img-reverse-link-arrow">→</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {!reverseLinks.length && !reverseLoading && (
+            <div className="dzt-img-reverse-tips">
+              <div className="dzt-img-tips-title">💡 كيف تستخدم البحث العكسي؟</div>
+              <ul className="dzt-img-tips-list">
+                <li>الصق رابط صورة من الإنترنت</li>
+                <li>سيُولَّد روابط مباشرة لكل محرك بحث</li>
+                <li>انقر على أي رابط للبحث فوراً</li>
+                <li>مفيد للتحقق من مصدر الصورة ومعرفة هل هي مزيفة</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AI Image Analysis ── */}
+      {mode === 'analyze' && (
+        <div>
+          <div className="dzt-img-analyze-modes">
+            {ANALYZE_MODES.map(m => (
+              <button
+                key={m.v}
+                className={`dzt-img-analyze-mode${analyzeMode === m.v ? ' active' : ''}`}
+                onClick={() => { setAnalyzeMode(m.v); setAnalyzeResult(''); setAnalyzed(false) }}
+              >
+                <span className="dzt-img-analyze-mode-icon">{m.icon}</span>
+                <span className="dzt-img-analyze-mode-label">{m.l}</span>
+                <span className="dzt-img-analyze-mode-desc">{m.d}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="dzt-img-analyze-input">
+            <div className="dzt-img-analyze-input-title">الصورة المراد تحليلها:</div>
+            <div className="dzt-img-analyze-input-row">
+              <input
+                className="dzt-input"
+                placeholder="الصق رابط الصورة... https://..."
+                value={analyzeInput?.type === 'url' ? analyzeInput.value : ''}
+                onChange={e => { setAnalyzeInput({ type: 'url', value: e.target.value }); setAnalyzeResult(''); setAnalyzed(false) }}
+                dir="ltr"
+              />
+              <span className="dzt-img-or">أو</span>
+              <button className="dzt-btn dzt-img-upload-btn" onClick={() => analyzeFileRef.current?.click()}>
+                <ImageIcon size={13} /> ارفع صورة
+              </button>
+              <input
+                ref={analyzeFileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) { handleImageFile(f); setAnalyzeResult(''); setAnalyzed(false) } }}
+              />
+            </div>
+            {analyzeInput && (
+              <div className="dzt-img-analyze-preview">
+                <img
+                  src={analyzeInput.value}
+                  alt="preview"
+                  className="dzt-img-analyze-preview-img"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+                <button className="dzt-img-clear-btn" onClick={() => { setAnalyzeInput(null); setAnalyzeResult(''); setAnalyzed(false) }}>✕</button>
+              </div>
+            )}
+          </div>
+
+          <button className="dzt-btn" onClick={analyzeImage} disabled={!analyzeInput || analyzeLoading}>
+            {analyzeLoading ? <><span className="dzt-spinner" /> جاري التحليل...</> : <><ScanSearch size={14} /> تحليل بالذكاء الاصطناعي</>}
+          </button>
+
+          {analyzeLoading && (
+            <div className="dzt-loading"><div className="dzt-spinner" />Gemini Vision يحلل الصورة...</div>
+          )}
+          {analyzeResult && (
+            <div className="dzt-result">
+              <div className="dzt-result-header">
+                <span className="dzt-result-title">🧠 نتيجة التحليل</span>
+                <div className="dzt-result-actions">
+                  <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(analyzeResult); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
+                    {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
+                  </button>
+                </div>
+              </div>
+              <div className="dzt-result-body">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{analyzeResult}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -1590,6 +1914,7 @@ export default function DZTools() {
         {active === 'docs'    && <BizDocsTool />}
         {active === 'jobs'    && <JobSearchTool />}
         {active === 'health'  && <HealthTool />}
+        {active === 'image'   && <ImageTool />}
         {active === 'ocr'     && <OCRTool />}
         {active === 'bizplan' && <BizPlanTool />}
       </div>

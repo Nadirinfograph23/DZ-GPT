@@ -17580,69 +17580,98 @@ app.get('/api/tools/reverse-image', (req, res) => {
   })
 })
 
-// POST /api/tools/reverse-image-upload — upload base64 image, return reverse search links via temp hosting
+// POST /api/tools/reverse-image-upload — upload base64 image → public URL → reverse search links
 app.post('/api/tools/reverse-image-upload', async (req, res) => {
   const imageBase64 = String(req.body.imageBase64 || '')
   const mimeType = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' })
 
+  const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const imgBuffer  = Buffer.from(base64Data, 'base64')
+  const ext        = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
+  const filename   = `dz-image.${ext}`
+
+  let publicUrl = null
+
+  // ── Source 1: 0x0.st — completely free, no auth, no rate-limit for normal use ──
   try {
-    const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-
-    const formData = new URLSearchParams()
-    formData.append('image', base64Data)
-    formData.append('type', 'base64')
-
-    const imgurRes = await fetch('https://api.imgur.com/3/image', {
+    const fd = new FormData()
+    fd.append('file', new Blob([imgBuffer], { type: mimeType }), filename)
+    const r = await fetch('https://0x0.st', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Client-ID 546c25a59c58ad7',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData.toString(),
-      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': 'DZ-GPT/2.0' },
+      body: fd,
+      signal: AbortSignal.timeout(18000),
     })
-
-    let publicUrl = null
-    if (imgurRes.ok) {
-      const imgurData = await imgurRes.json()
-      publicUrl = imgurData?.data?.link
+    if (r.ok) {
+      const text = (await r.text()).trim()
+      if (text.startsWith('http')) { publicUrl = text; console.log(`[ReverseUpload:0x0.st] ${publicUrl}`) }
     }
+  } catch (e) { console.warn('[ReverseUpload:0x0.st] failed:', e.message) }
 
-    if (!publicUrl) {
-      const freeRes = await fetch('https://freeimage.host/api/1/upload?key=6d207e02198a847aa98d0a2a901485a5', {
+  // ── Source 2: tmpfiles.org ────────────────────────────────────────────────
+  if (!publicUrl) {
+    try {
+      const fd = new FormData()
+      fd.append('file', new Blob([imgBuffer], { type: mimeType }), filename)
+      const r = await fetch('https://tmpfiles.org/api/v1/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ source: base64Data, format: 'json' }).toString(),
-        signal: AbortSignal.timeout(12000),
+        headers: { 'User-Agent': 'DZ-GPT/2.0' },
+        body: fd,
+        signal: AbortSignal.timeout(15000),
       })
-      if (freeRes.ok) {
-        const freeData = await freeRes.json()
-        publicUrl = freeData?.image?.url
+      if (r.ok) {
+        const d = await r.json()
+        // tmpfiles returns {"status":"success","data":{"url":"https://tmpfiles.org/..."}}
+        const raw = d?.data?.url || ''
+        if (raw) {
+          // Convert tmpfiles viewer URL to direct URL
+          publicUrl = raw.replace('tmpfiles.org/', 'tmpfiles.org/dl/')
+          console.log(`[ReverseUpload:tmpfiles] ${publicUrl}`)
+        }
       }
-    }
-
-    if (!publicUrl) return res.status(500).json({ error: 'فشل رفع الصورة — يرجى استخدام رابط URL بدلاً من ذلك' })
-
-    const enc = encodeURIComponent(publicUrl)
-    console.log(`[ReverseImageUpload] Uploaded to ${publicUrl.slice(0, 60)}`)
-    return res.json({
-      url: publicUrl,
-      links: [
-        { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
-        { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
-        { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
-        { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
-        { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
-      ],
-    })
-  } catch (err) {
-    console.error('[ReverseImageUpload] error:', err.message)
-    return res.status(500).json({ error: err.message })
+    } catch (e) { console.warn('[ReverseUpload:tmpfiles] failed:', e.message) }
   }
+
+  // ── Source 3: filebin.net ─────────────────────────────────────────────────
+  if (!publicUrl) {
+    try {
+      const bin = `dzgpt-${Date.now()}`
+      const r = await fetch(`https://filebin.net/${bin}/${filename}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': mimeType,
+          'User-Agent': 'DZ-GPT/2.0',
+          'Accept': 'application/json',
+        },
+        body: imgBuffer,
+        signal: AbortSignal.timeout(15000),
+      })
+      if (r.ok) {
+        publicUrl = `https://filebin.net/${bin}/${filename}`
+        console.log(`[ReverseUpload:filebin] ${publicUrl}`)
+      }
+    } catch (e) { console.warn('[ReverseUpload:filebin] failed:', e.message) }
+  }
+
+  if (!publicUrl) {
+    return res.status(500).json({ error: 'فشل رفع الصورة مؤقتاً — جرّب إدخال رابط URL مباشرة بدلاً من رفع الملف' })
+  }
+
+  const enc = encodeURIComponent(publicUrl)
+  return res.json({
+    url: publicUrl,
+    links: [
+      { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
+      { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
+      { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
+      { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
+      { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
+    ],
+  })
 })
 
-// POST /api/tools/image-analyze — Gemini 1.5 Flash Vision
+// POST /api/tools/image-analyze — Vision AI (Gemini primary → OpenRouter fallback)
 app.post('/api/tools/image-analyze', async (req, res) => {
   const imageBase64 = String(req.body.imageBase64 || '')
   const imageUrl    = sanitizeString(String(req.body.imageUrl || ''), 1000).trim()
@@ -17657,41 +17686,223 @@ app.post('/api/tools/image-analyze', async (req, res) => {
   }
   const prompt = PROMPTS[mode] || PROMPTS.analyze
 
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'Gemini API key not configured' })
+  // ── Prepare image data (base64 or fetch from URL) ─────────────────────────
+  let base64Data = ''
+  let resolvedMime = mimeType
 
-  try {
-    let imagePart
-    if (imageBase64) {
-      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-      imagePart = { inlineData: { data: base64Data, mimeType } }
-    } else if (imageUrl) {
-      const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
-      if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`)
+  if (imageBase64) {
+    base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  } else if (imageUrl) {
+    try {
+      const imgRes = await fetch(imageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)',
+          'Referer': 'https://dz-gpt.vercel.app',
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (!imgRes.ok) throw new Error(`تعذّر جلب الصورة: ${imgRes.status}`)
       const ct = imgRes.headers.get('content-type') || mimeType
+      resolvedMime = ct.split(';')[0].trim() || mimeType
       const buf = await imgRes.arrayBuffer()
-      imagePart = { inlineData: { data: Buffer.from(buf).toString('base64'), mimeType: ct.split(';')[0] } }
-    } else {
-      return res.status(400).json({ error: 'imageBase64 or imageUrl required' })
+      base64Data = Buffer.from(buf).toString('base64')
+    } catch (fetchErr) {
+      return res.status(400).json({ error: `فشل جلب الصورة: ${fetchErr.message}` })
     }
-
-    const body = {
-      contents: [{ parts: [{ text: prompt }, imagePart] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
-    }
-    const gRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }
-    )
-    const gData = await gRes.json()
-    if (!gRes.ok) throw new Error(gData.error?.message || `Gemini ${gRes.status}`)
-    const content = gData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    console.log(`[ImageAnalyze] mode=${mode} ok (${content.length} chars)`)
-    return res.json({ content, mode })
-  } catch (err) {
-    console.error('[ImageAnalyze] error:', err.message)
-    return res.status(500).json({ error: err.message })
+  } else {
+    return res.status(400).json({ error: 'imageBase64 أو imageUrl مطلوب' })
   }
+
+  // ── Attempt 1: Gemini 1.5 Flash (primary) ────────────────────────────────
+  // NOTE: do NOT send Referer header — GCP key has referer restrictions
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  if (geminiKey) {
+    for (const gModel of ['gemini-1.5-flash', 'gemini-2.0-flash-lite']) {
+      try {
+        const body = {
+          contents: [{ parts: [{ text: prompt }, { inlineData: { data: base64Data, mimeType: resolvedMime } }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+        }
+        const gRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },  // NO Referer!
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30000),
+          }
+        )
+        const gData = await gRes.json()
+        if (gRes.ok && gData.candidates?.[0]?.content?.parts?.[0]?.text) {
+          const content = gData.candidates[0].content.parts[0].text
+          console.log(`[ImageAnalyze:Gemini/${gModel}] mode=${mode} ok (${content.length} chars)`)
+          return res.json({ content, mode, model: gModel })
+        }
+        const errMsg = gData.error?.message || `HTTP ${gRes.status}`
+        console.warn(`[ImageAnalyze:Gemini/${gModel}] failed: ${errMsg}`)
+      } catch (gemErr) {
+        console.warn(`[ImageAnalyze:Gemini/${gModel}] error: ${gemErr.message}`)
+      }
+    }
+    console.warn('[ImageAnalyze:Gemini] all models failed — trying OpenRouter')
+  }
+
+  // ── Attempt 2: Groq Llama 4 Scout Vision (confirmed working) ─────────────
+  const groqKey = process.env.AI_API_KEY
+  if (groqKey) {
+    try {
+      const groqBody = {
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${resolvedMime};base64,${base64Data}` } },
+          ],
+        }],
+        max_tokens: 2048,
+        temperature: 0.4,
+      }
+      const gqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+        body: JSON.stringify(groqBody),
+        signal: AbortSignal.timeout(30000),
+      })
+      const gqData = await gqRes.json()
+      if (gqRes.ok && gqData.choices?.[0]?.message?.content) {
+        const content = gqData.choices[0].message.content
+        console.log(`[ImageAnalyze:Groq] mode=${mode} ok (${content.length} chars)`)
+        return res.json({ content, mode, model: 'llama-4-scout-vision' })
+      }
+      console.warn(`[ImageAnalyze:Groq] failed: ${gqData.error?.message || `HTTP ${gqRes.status}`}`)
+    } catch (gqErr) {
+      console.warn(`[ImageAnalyze:Groq] error: ${gqErr.message}`)
+    }
+  }
+
+  // ── Attempt 3: OpenRouter — additional fallback ───────────────────────────
+  const orKey = process.env.OPENROUTER_API_KEY
+  if (orKey) {
+    const orModels = [
+      'nvidia/nemotron-nano-12b-v2-vl:free',
+      'google/gemma-4-31b-it:free',
+    ]
+    for (const model of orModels) {
+      try {
+        const orBody = {
+          model,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:${resolvedMime};base64,${base64Data}` } },
+            ],
+          }],
+          max_tokens: 2048,
+          temperature: 0.4,
+        }
+        const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${orKey}`,
+            'HTTP-Referer': 'https://dz-gpt.vercel.app',
+            'X-Title': 'DZ-GPT Vision',
+          },
+          body: JSON.stringify(orBody),
+          signal: AbortSignal.timeout(30000),
+        })
+        const orData = await orRes.json()
+        if (orRes.ok && orData.choices?.[0]?.message?.content) {
+          const content = orData.choices[0].message.content
+          console.log(`[ImageAnalyze:OpenRouter/${model}] mode=${mode} ok (${content.length} chars)`)
+          return res.json({ content, mode, model: model.split('/').pop() })
+        }
+        const orErrMsg = orData.error?.message || orData.error || `HTTP ${orRes.status}`
+        console.warn(`[ImageAnalyze:OpenRouter/${model}] failed: ${JSON.stringify(orErrMsg).slice(0, 100)}`)
+      } catch (orErr) {
+        console.warn(`[ImageAnalyze:OpenRouter/${model}] error: ${orErr.message}`)
+      }
+    }
+  }
+
+  // ── Attempt 3: Mistral Pixtral ────────────────────────────────────────────
+  const mistralKey = process.env.MISTRAL_API_KEY
+  if (mistralKey) {
+    for (const mModel of ['pixtral-12b-2409', 'pixtral-large-latest']) {
+      try {
+        const mBody = {
+          model: mModel,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${resolvedMime};base64,${base64Data}` } },
+              { type: 'text', text: prompt },
+            ],
+          }],
+          max_tokens: 2048,
+        }
+        const mRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${mistralKey}` },
+          body: JSON.stringify(mBody),
+          signal: AbortSignal.timeout(30000),
+        })
+        const mText = await mRes.text()
+        let mData = {}
+        try { mData = JSON.parse(mText) } catch {}
+        if (mRes.ok && mData.choices?.[0]?.message?.content) {
+          const content = mData.choices[0].message.content
+          console.log(`[ImageAnalyze:Mistral/${mModel}] mode=${mode} ok (${content.length} chars)`)
+          return res.json({ content, mode, model: mModel })
+        }
+        console.warn(`[ImageAnalyze:Mistral/${mModel}] failed: HTTP ${mRes.status} — ${mText.slice(0, 120)}`)
+      } catch (mErr) {
+        console.warn(`[ImageAnalyze:Mistral/${mModel}] error: ${mErr.message}`)
+      }
+    }
+  }
+
+  // ── Attempt 4: HuggingFace (image captioning) ────────────────────────────
+  const hfKey = process.env.HF_TOKEN
+  if (hfKey) {
+    // Try multiple HF models for image-to-text
+    const hfModels = [
+      'Salesforce/blip-image-captioning-large',
+      'nlpconnect/vit-gpt2-image-captioning',
+    ]
+    for (const hfModel of hfModels) {
+      try {
+        const imgBytes = Buffer.from(base64Data, 'base64')
+        const hfRes = await fetch(
+          `https://api-inference.huggingface.co/models/${hfModel}`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${hfKey}`, 'Content-Type': resolvedMime },
+            body: imgBytes,
+            signal: AbortSignal.timeout(30000),
+          }
+        )
+        const hfText = await hfRes.text()
+        if (hfRes.ok) {
+          let hfData = {}
+          try { hfData = JSON.parse(hfText) } catch {}
+          const caption = Array.isArray(hfData) ? hfData[0]?.generated_text : hfData?.generated_text
+          if (caption) {
+            const content = `📷 **${caption}**\n\n*(تحليل بنموذج HuggingFace — لتحليل أعمق جرّب مرة أخرى)*`
+            console.log(`[ImageAnalyze:HF/${hfModel}] ok (${caption.length} chars)`)
+            return res.json({ content, mode, model: hfModel.split('/').pop() })
+          }
+        }
+        console.warn(`[ImageAnalyze:HF/${hfModel}] failed: ${hfRes.status} ${hfText.slice(0, 80)}`)
+      } catch (hfErr) {
+        console.warn(`[ImageAnalyze:HF/${hfModel}] error: ${hfErr.message}`)
+      }
+    }
+  }
+
+  return res.status(500).json({ error: 'فشل تحليل الصورة — يرجى المحاولة مرة أخرى لاحقاً' })
 })
 
 // ===== EXPORT APP (for Vercel serverless) =====

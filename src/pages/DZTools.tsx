@@ -4,81 +4,55 @@ import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText } f
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
-// @ts-ignore
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
 import '../styles/dz-tools.css'
 
-// ─── Shared PDF Generator ─────────────────────────────────────────────────────
-async function generatePDF(
+// ─── Shared PDF Generator (browser print-to-PDF — zero dependencies) ──────────
+function generatePDF(
   ref: React.RefObject<HTMLDivElement>,
   filename: string,
   isRtl = true,
 ) {
   if (!ref.current) return
-
-  const el = ref.current
-
-  // Inject a temporary light-theme wrapper over the element for capture
-  const wrapper = document.createElement('div')
-  wrapper.style.cssText = [
-    'position:fixed', 'top:-9999px', 'left:-9999px',
-    'width:794px', 'padding:40px 48px', 'box-sizing:border-box',
-    'background:#fff', 'color:#111',
-    `direction:${isRtl ? 'rtl' : 'ltr'}`,
-    'font-family:Cairo,Tajawal,sans-serif',
-    'font-size:13px', 'line-height:1.8',
-  ].join(';')
-  wrapper.innerHTML = el.innerHTML
-  // Override dark colours in cloned HTML
-  const style = document.createElement('style')
-  style.textContent = `
-    *{color:#111!important;background:transparent!important;border-color:#ccc!important}
-    strong{color:#1a7a2f!important;font-weight:700}
-    h1,h2,h3,h4{color:#0a3d1f!important;border-bottom:1px solid #ddd;padding-bottom:4px;margin:14px 0 8px}
-    table{width:100%;border-collapse:collapse}
-    th{background:#e8f5e9!important;color:#0a3d1f!important;padding:6px 10px}
-    td{padding:5px 10px;border:1px solid #ccc!important}
-    tr:nth-child(even){background:#f5f5f5!important}
-    code{background:#f0f0f0!important;padding:1px 5px;border-radius:4px}
-    pre{background:#f5f5f5!important;padding:10px;border-radius:6px;overflow:auto}
-    a{color:#0a5c28!important}
-    blockquote{border-${isRtl ? 'right' : 'left'}:3px solid #c8ff00!important;padding:4px 12px;margin:8px 0;color:#444!important}
-  `
-  wrapper.appendChild(style)
-  document.body.appendChild(wrapper)
-
-  try {
-    const canvas = await html2canvas(wrapper, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false,
-      width: wrapper.scrollWidth,
-      height: wrapper.scrollHeight,
-    })
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.92)
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
-    const pageW = pdf.internal.pageSize.getWidth()
-    const pageH = pdf.internal.pageSize.getHeight()
-    const margin = 12
-    const printW = pageW - margin * 2
-    const imgRenderedH = (canvas.height / canvas.width) * printW
-
-    let yOffset = 0
-    const printH = pageH - margin * 2
-
-    while (yOffset < imgRenderedH) {
-      if (yOffset > 0) pdf.addPage()
-      pdf.addImage(imgData, 'JPEG', margin, margin - yOffset, printW, imgRenderedH)
-      yOffset += printH
-    }
-
-    pdf.save(filename)
-  } finally {
-    document.body.removeChild(wrapper)
-  }
+  const bodyHtml = ref.current.innerHTML
+  const win = window.open('', '_blank')
+  if (!win) return
+  const dir = isRtl ? 'rtl' : 'ltr'
+  const fontFamily = isRtl ? "'Cairo', 'Tajawal'" : "'Inter', 'Segoe UI'"
+  win.document.write(`<!DOCTYPE html>
+<html lang="${isRtl ? 'ar' : 'fr'}" dir="${dir}">
+<head>
+<meta charset="UTF-8">
+<title>${filename.replace('.pdf','')}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:${fontFamily},system-ui,sans-serif;direction:${dir};background:#fff;color:#1a1a1a;font-size:13px;line-height:1.85;padding:36px 44px}
+  h1{font-size:22px;color:#0a3d1f;border-bottom:2px solid #c8ff00;padding-bottom:8px;margin:20px 0 12px}
+  h2{font-size:17px;color:#0d5c2e;border-bottom:1px solid #e0e0e0;padding-bottom:5px;margin:16px 0 8px}
+  h3{font-size:14px;color:#1a7a2f;margin:12px 0 6px}
+  h4{font-size:13px;color:#333;margin:10px 0 4px}
+  p{margin:5px 0}
+  strong{color:#1a5c2e;font-weight:700}
+  em{font-style:italic;color:#444}
+  ul,ol{padding-${isRtl?'right':'left'}:22px;margin:6px 0}
+  li{margin:3px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
+  th{background:#e8f5e9;color:#0a3d1f;padding:7px 10px;text-align:${isRtl?'right':'left'};font-weight:700;border:1px solid #c5e0c8}
+  td{padding:6px 10px;border:1px solid #ddd}
+  tr:nth-child(even){background:#f7fbf8}
+  code{background:#f0f4f0;padding:2px 6px;border-radius:4px;font-size:11.5px;font-family:monospace}
+  pre{background:#f5f7f5;padding:12px 16px;border-radius:6px;overflow:auto;font-size:12px;margin:8px 0;border:1px solid #e0e5e0}
+  blockquote{border-${isRtl?'right':'left'}:3px solid #c8ff00;padding:4px 14px;margin:8px 0;color:#555;background:#fafff5}
+  hr{border:none;border-top:1px solid #ddd;margin:14px 0}
+  a{color:#0a5c28;text-decoration:underline}
+  @media print{body{padding:20px 28px}@page{margin:1.5cm;size:A4 portrait}}
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`)
+  win.document.close()
+  setTimeout(() => { win.focus(); win.print() }, 700)
 }
 
 type ToolId = 'cv' | 'planner' | 'legal' | 'docs' | 'jobs' | 'health' | 'ocr' | 'contracts' | 'bizplan'
@@ -107,7 +81,6 @@ function CVTool() {
   const [copied, setCopied]     = useState(false)
   const [photo, setPhoto]       = useState<string>('')
   const [photoDrag, setPhotoDrag] = useState(false)
-  const [pdfCvLoading, setPdfCvLoading] = useState(false)
 
   const photoInputRef  = useRef<HTMLInputElement>(null)
   const resultBodyRef  = useRef<HTMLDivElement>(null)
@@ -413,8 +386,8 @@ Rendez le CV professionnel, structuré, prêt pour les employeurs.`
               <button className="dzt-result-btn dzt-result-btn--print" onClick={printCV}>
                 <Printer size={12} /> طباعة
               </button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfCvLoading} onClick={async () => { setPdfCvLoading(true); await generatePDF(resultBodyRef, `cv-${form.name.replace(/\s+/g,'-') || 'dz'}.pdf`, form.outputLang === 'ar'); setPdfCvLoading(false) }}>
-                {pdfCvLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(resultBodyRef, `cv-${form.name.replace(/\s+/g,'-') || 'dz'}.pdf`, form.outputLang === 'ar')}>
+                📥 PDF
               </button>
             </div>
           </div>
@@ -443,7 +416,6 @@ function PlannerTool() {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [pdfLoading, setPdfLoading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -543,9 +515,7 @@ function PlannerTool() {
               </button>
               <button className="dzt-result-btn" onClick={downloadMd}><Download size={12} /> تحميل MD</button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfLoading} onClick={async () => { setPdfLoading(true); await generatePDF(pdfRef, `plan-${form.title.replace(/\s+/g,'-')}.pdf`); setPdfLoading(false) }}>
-                {pdfLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
-              </button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `plan-${form.title.replace(/\s+/g,'-')}.pdf`)}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
@@ -1056,7 +1026,6 @@ function LegalTool() {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [pdfLoading, setPdfLoading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -1151,9 +1120,7 @@ ${text.slice(0, 4000)}
                 {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
               </button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfLoading} onClick={async () => { setPdfLoading(true); await generatePDF(pdfRef, `legal-analysis-dz.pdf`); setPdfLoading(false) }}>
-                {pdfLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
-              </button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `legal-analysis-dz.pdf`)}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
@@ -1172,7 +1139,6 @@ function OCRTool() {
   const [loading, setLoading]   = useState(false)
   const [copied, setCopied]     = useState(false)
   const [drag, setDrag]         = useState(false)
-  const [pdfLoading, setPdfLoading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -1262,9 +1228,7 @@ function OCRTool() {
                 {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
               </button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfLoading} onClick={async () => { setPdfLoading(true); await generatePDF(pdfRef, `ocr-result-dz.pdf`); setPdfLoading(false) }}>
-                {pdfLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
-              </button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `ocr-result-dz.pdf`)}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
@@ -1284,7 +1248,6 @@ function ContractsTool() {
   const [result, setResult]   = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied]   = useState(false)
-  const [pdfLoading, setPdfLoading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
 
   const CONTRACT_TYPES = [
@@ -1390,9 +1353,7 @@ ${langInstr}. أنشئ ${typeLabel} كاملاً ومتوافقاً مع الق�
               </button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
               <button className="dzt-result-btn" onClick={() => { const b = new Blob([result], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `contract-dz-${Date.now()}.txt`; a.click() }}><Download size={12} /> نص</button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfLoading} onClick={async () => { setPdfLoading(true); await generatePDF(pdfRef, `contract-dz-${Date.now()}.pdf`, lang === 'ar'); setPdfLoading(false) }}>
-                {pdfLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
-              </button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `contract-dz-${Date.now()}.pdf`, lang === 'ar')}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" dir={lang === 'ar' ? 'rtl' : 'ltr'} ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
@@ -1406,7 +1367,6 @@ ${langInstr}. أنشئ ${typeLabel} كاملاً ومتوافقاً مع الق�
 // ─── Business Plan Tool ────────────────────────────────────────────────────────
 function BizPlanTool() {
   const [form, setForm] = useState({ projectName: '', sector: '', city: '', budget: '', target: '', description: '', lang: 'ar' })
-  const [pdfLoading, setPdfLoading] = useState(false)
   const pdfRef = useRef<HTMLDivElement>(null)
   const [result, setResult]   = useState('')
   const [loading, setLoading] = useState(false)
@@ -1517,9 +1477,7 @@ function BizPlanTool() {
               </button>
               <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
               <button className="dzt-result-btn" onClick={() => { const b = new Blob([result], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `bizplan-${form.projectName.replace(/\s+/g,'-')}.txt`; a.click() }}><Download size={12} /> نص</button>
-              <button className="dzt-result-btn dzt-pdf-btn" disabled={pdfLoading} onClick={async () => { setPdfLoading(true); await generatePDF(pdfRef, `bizplan-${form.projectName.replace(/\s+/g,'-')}.pdf`, form.lang === 'ar'); setPdfLoading(false) }}>
-                {pdfLoading ? <><span className="dzt-spinner" style={{width:10,height:10}} /> PDF...</> : '📥 PDF'}
-              </button>
+              <button className="dzt-result-btn dzt-pdf-btn" onClick={() => generatePDF(pdfRef, `bizplan-${form.projectName.replace(/\s+/g,'-')}.pdf`, form.lang === 'ar')}>📥 PDF</button>
             </div>
           </div>
           <div className="dzt-result-body" ref={pdfRef}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>

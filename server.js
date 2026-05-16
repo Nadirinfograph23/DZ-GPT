@@ -17475,6 +17475,109 @@ if (isMain) {
   // (mountSmartAgent + mountDzAgentV2 already mounted above so they also
   // attach on Vercel serverless. Keeping background-refresh / intervals here.)
 
+  // ══════════════════════════════════════════════════════════════════════
+  // DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS
+  // ══════════════════════════════════════════════════════════════════════
+
+  // GET /api/tools/image-search?q=... — Openverse free CC images
+  app.get('/api/tools/image-search', async (req, res) => {
+    const q = sanitizeString(String(req.query.q || ''), 200).trim()
+    if (!q) return res.status(400).json({ error: 'query required', results: [] })
+    try {
+      const params = new URLSearchParams({ q, page_size: '24', license_type: 'all' })
+      const r = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
+        headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+        signal: AbortSignal.timeout(12000),
+      })
+      if (!r.ok) throw new Error(`Openverse ${r.status}`)
+      const data = await r.json()
+      const results = (data.results || []).map(img => ({
+        id: img.id,
+        title: img.title || q,
+        url: img.url,
+        thumbnail: img.thumbnail || img.url,
+        source: img.source || '',
+        license: img.license || 'cc',
+        creator: img.creator || '',
+        detail_url: img.detail_url || '',
+        width: img.width || 0,
+        height: img.height || 0,
+      }))
+      console.log(`[ImageSearch] q="${q}" results=${results.length}/${data.result_count}`)
+      return res.json({ results, total: data.result_count || results.length, query: q })
+    } catch (err) {
+      console.error('[ImageSearch] error:', err.message)
+      return res.status(500).json({ error: err.message, results: [] })
+    }
+  })
+
+  // GET /api/tools/reverse-image?url=... — generate reverse search redirect links
+  app.get('/api/tools/reverse-image', (req, res) => {
+    const imageUrl = sanitizeString(String(req.query.url || ''), 1000).trim()
+    if (!imageUrl) return res.status(400).json({ error: 'url required' })
+    const enc = encodeURIComponent(imageUrl)
+    return res.json({
+      links: [
+        { name: 'Google Lens',   url: `https://lens.google.com/uploadbyurl?url=${enc}`,                                          icon: '🔍', color: '#4285F4' },
+        { name: 'Bing Visual',   url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,                 icon: '🔎', color: '#00809d' },
+        { name: 'Yandex',        url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                               icon: '🟡', color: '#f0330a' },
+        { name: 'TinEye',        url: `https://www.tineye.com/search?url=${enc}`,                                                icon: '👁️', color: '#72a81c' },
+      ],
+    })
+  })
+
+  // POST /api/tools/image-analyze — Gemini 1.5 Flash Vision
+  app.post('/api/tools/image-analyze', async (req, res) => {
+    const imageBase64 = String(req.body.imageBase64 || '')
+    const imageUrl    = sanitizeString(String(req.body.imageUrl || ''), 1000).trim()
+    const mimeType    = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
+    const mode        = sanitizeString(String(req.body.mode || 'analyze'), 20)
+
+    const PROMPTS = {
+      analyze: 'حلّل هذه الصورة بالتفصيل: اذكر كل ما تراه (الأشخاص، الأشياء، الألوان، الخلفية، الأجواء، أي نص مرئي). نظّم الإجابة بنقاط واضحة. أجب بالعربية.',
+      ocr:     'استخرج كل النص الموجود في هذه الصورة بدقة تامة. حافظ على التنسيق الأصلي قدر الإمكان. أخرج النص المستخرج فقط دون أي تعليق.',
+      caption: 'اكتب وصفاً موجزاً لهذه الصورة في جملة أو جملتين فقط. أجب بالعربية.',
+      objects: 'حدّد وأعد قائمة بجميع الأشياء والعناصر المرئية في الصورة. رتّبها من الأبرز للأقل أهمية مع إشارة موضعها (يمين/يسار/مركز). أجب بالعربية.',
+    }
+    const prompt = PROMPTS[mode] || PROMPTS.analyze
+
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+    if (!apiKey) return res.status(500).json({ error: 'Gemini API key not configured' })
+
+    try {
+      let imagePart
+      if (imageBase64) {
+        const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+        imagePart = { inlineData: { data: base64Data, mimeType } }
+      } else if (imageUrl) {
+        const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(15000) })
+        if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`)
+        const ct = imgRes.headers.get('content-type') || mimeType
+        const buf = await imgRes.arrayBuffer()
+        imagePart = { inlineData: { data: Buffer.from(buf).toString('base64'), mimeType: ct.split(';')[0] } }
+      } else {
+        return res.status(400).json({ error: 'imageBase64 or imageUrl required' })
+      }
+
+      const body = {
+        contents: [{ parts: [{ text: prompt }, imagePart] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+      }
+      const gRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }
+      )
+      const gData = await gRes.json()
+      if (!gRes.ok) throw new Error(gData.error?.message || `Gemini ${gRes.status}`)
+      const content = gData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      console.log(`[ImageAnalyze] mode=${mode} ok (${content.length} chars)`)
+      return res.json({ content, mode })
+    } catch (err) {
+      console.error('[ImageAnalyze] error:', err.message)
+      return res.status(500).json({ error: err.message })
+    }
+  })
+
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))
     app.get('*', async (_req, res) => {

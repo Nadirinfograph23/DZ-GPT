@@ -1804,39 +1804,53 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 // Used by the capability-aware AI router when all primary providers fail.
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
-
-  // 1. Groq FIRST — fastest provider, cap tokens for speed on simple queries
-  // llama-3.1-8b-instant responds in ~0.4s
   const effectiveTokens = Math.min(max_tokens, 4096)
-  const groqModels = [
-    'llama-3.1-8b-instant',              // ultra-fast ~0.4s
-    'llama-3.3-70b-versatile',           // best quality
-    'meta-llama/llama-4-scout-17b-16e-instruct',
-    'qwen/qwen3-32b',
-  ]
+
+  // ── Smart model selection ────────────────────────────────────────────────────
+  // Complex queries (Arabic, long, knowledge-heavy) → skip 8b, go straight to 70b
+  // Simple/conversational → 8b-instant first (ultra-fast ~0.4s)
+  const _isComplex = (
+    query.length > 30 ||
+    /[\u0600-\u06FF]{3,}/.test(query) ||
+    /مباراة|نتيجة|أخبار|طقس|شرح|كيف|ماذا|لماذا|ترتيب|إحصاء|قانون|فيديو|أغنية/.test(query) ||
+    taskHint === 'reasoning' || taskHint === 'multilingual' || taskHint === 'retrieval'
+  )
+
+  // Max 2 Groq attempts: right model first, one backup — never iterate all 4 models
+  const groqModels = _isComplex
+    ? ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct']
+    : ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']
+
   for (const model of groqModels) {
     const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens: effectiveTokens })
     if (validateAIContent(content, query)) return { content, model }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
 
-  // 2. DeepSeek fallback (only if Groq fully fails — reduced timeout to 8s)
-  const ds = await callDeepSeek(trimmed, { max_tokens, timeoutMs: 8000 })
-  if (validateAIContent(ds, query)) return { content: ds, model: 'deepseek-chat' }
-  if (ds !== null) logInvalidResponse('deepseek', query, ds)
+  // ── Parallel provider race — fastest good answer wins ───────────────────────
+  // After Groq fails, race multiple providers simultaneously instead of sequential fallback
+  console.warn(`[AI] Groq exhausted — parallel provider race (hint=${taskHint})`)
+  try {
+    const raceCandidates = [
+      // DeepSeek: fast if funded
+      process.env.DEEPSEEK_API_KEY
+        ? callDeepSeek(trimmed, { max_tokens, timeoutMs: 7000 }).then(c => validateAIContent(c, query) ? { content: c, model: 'deepseek-chat' } : null).catch(() => null)
+        : null,
+      // Router — Gemini/Mistral/Cohere based on taskHint
+      callAIRouter(trimmed, { max_tokens, taskHint }).then(r => r?.content && validateAIContent(r.content, query) ? r : null).catch(() => null),
+    ].filter(Boolean)
 
-  // 3. Ollama fallback
-  const ol = await callOllama(trimmed)
-  if (validateAIContent(ol, query)) return { content: ol, model: 'ollama-llama3' }
-  if (ol !== null) logInvalidResponse('ollama', query, ol)
-
-  // 4. Capability-aware multi-provider fallback (Gemini, Mistral, Cohere, etc.)
-  console.warn(`[AI] All primary providers failed — escalating to router (hint=${taskHint})`)
-  const routerResult = await callAIRouter(trimmed, { max_tokens, taskHint })
-  if (validateAIContent(routerResult?.content, query)) {
-    console.log(`[AI] ✓ Router: ${routerResult.model} (hint=${taskHint})`)
-    return routerResult
-  }
+    if (raceCandidates.length > 0) {
+      // Promise.any: resolves with first non-null good result
+      const winner = await Promise.any(
+        raceCandidates.map(p => p.then(r => r ?? Promise.reject(new Error('empty'))))
+      ).catch(() => null)
+      if (winner?.content) {
+        console.log(`[AI] ✓ parallel race winner: ${winner.model}`)
+        return winner
+      }
+    }
+  } catch { /* ignore — all parallel attempts failed */ }
 
   return { content: null, model: null }
 }
@@ -1853,7 +1867,7 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          55_000,
+          25_000,
           'safeGenerateAI'
         )
       )
@@ -1881,7 +1895,7 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(7000),
       })
       const data = await r.json()
 

@@ -81,7 +81,7 @@ export default function DZWebBuilder() {
   const [activeTab, setActiveTab]         = useState<'preview'|'code'>('preview')
   const [statusText, setStatusText]       = useState('')
   const [errorMsg, setErrorMsg]           = useState('')
-  const [cloneUrl, setCloneUrl]           = useState<string | null>(null)
+  const [cloneUrl, setCloneUrl]           = useState('')
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -298,6 +298,15 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           </div>
         )}
       </header>
+
+      {/* ── Clone URL Banner ── */}
+      {cloneUrl && (
+        <div style={{ background:'rgba(138,43,226,0.12)', borderBottom:'1px solid rgba(138,43,226,0.3)', padding:'8px 20px', display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', color:'#c4b5fd' }}>
+          <span>🔗</span>
+          <span>جارٍ استنساخ:</span>
+          <a href={cloneUrl} target="_blank" rel="noopener noreferrer" style={{ color:'#a78bfa', textDecoration:'underline', maxWidth:'400px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cloneUrl}</a>
+        </div>
+      )}
 
       {/* ── Body ── */}
       <div className="dzwb-body">

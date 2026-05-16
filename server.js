@@ -1881,7 +1881,7 @@ async function callGroqWithFallback({ model, messages, max_tokens = 4096, temper
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
-        signal: AbortSignal.timeout(16000),
+        signal: AbortSignal.timeout(10000),
       })
       const data = await r.json()
 
@@ -12483,20 +12483,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     taskHint: _taskHint,
   })
 
-  // ── Self-Reflection Pass (complex/multi_step queries only) ────────────────
-  // Runs a lightweight QA pass over the AI's draft to improve accuracy.
-  // Only activates when _needsReflection=true AND a valid draft was produced.
-  if (aiResult.content && _needsReflection) {
-    const reflectedContent = await selfReflect(
-      lastUserMessage,
-      aiResult.content,
-      async (msgs) => safeGenerateAI({ messages: msgs, query: lastUserMessage, max_tokens: 3000, taskHint: 'reasoning' })
-    )
-    if (reflectedContent && reflectedContent !== aiResult.content) {
-      aiResult.content = reflectedContent
-      aiResult.model = (aiResult.model || 'unknown') + '+reflection'
-    }
-  }
+  // Self-Reflection disabled — was triggering a full second AI call on complex queries
+  // causing 2x latency. Speed > marginal accuracy gain for DZ Agent chat.
 
   if (aiResult.content) {
     // ── DZ Memory Write — حفظ الجواب الناجح في الذاكرة الدائمة ────────────

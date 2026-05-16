@@ -2779,7 +2779,9 @@ function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<st
   const toLng   = meta.toLng   ? Number(meta.toLng)   : null
 
   const gmapsOpen   = isPoi
-    ? `https://www.google.com/maps/search/${encodeURIComponent(s(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`
+    ? (meta.specificName && locationFr
+        ? `https://www.google.com/maps/search/${encodeURIComponent(s(meta.specificName) + ' ' + locationFr + ' Algeria')}`
+        : `https://www.google.com/maps/search/${encodeURIComponent(s(meta.poiNameAr) + ' ' + locationFr + ' Algeria')}`)
     : isRoute
       ? (fromLat && fromLng && toLat && toLng
           ? `https://www.google.com/maps/dir/${fromLat},${fromLng}/${toLat},${toLng}`

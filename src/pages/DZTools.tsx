@@ -6,15 +6,18 @@ import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import '../styles/dz-tools.css'
 
-type ToolId = 'cv' | 'planner' | 'legal' | 'docs' | 'jobs' | 'health'
+type ToolId = 'cv' | 'planner' | 'legal' | 'docs' | 'jobs' | 'health' | 'ocr' | 'contracts' | 'bizplan'
 
-const TOOLS: { id: ToolId; icon: string; name: string; desc: string }[] = [
-  { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',    desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
-  { id: 'planner', icon: '📋', name: 'مخطط المشاريع',            desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
-  { id: 'legal',   icon: '⚖️', name: 'محلّل الوثائق القانونية', desc: 'فهم العقود والوثائق الرسمية بلغة بسيطة' },
-  { id: 'docs',    icon: '📑', name: 'وثائق تجارية',             desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
-  { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',               desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
-  { id: 'health',  icon: '🏥', name: 'وكيل الصحة',              desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
+const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
+  { id: 'cv',        icon: '📄', name: 'مولّد السيرة الذاتية',    desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
+  { id: 'planner',   icon: '📋', name: 'مخطط المشاريع',            desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
+  { id: 'legal',     icon: '⚖️', name: 'محلّل الوثائق القانونية', desc: 'فهم العقود والوثائق الرسمية بلغة بسيطة' },
+  { id: 'docs',      icon: '📑', name: 'وثائق تجارية',             desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
+  { id: 'jobs',      icon: '💼', name: 'بحث وظيفي',               desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
+  { id: 'health',    icon: '🏥', name: 'وكيل الصحة',              desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
+  { id: 'ocr',       icon: '📷', name: 'قارئ الوثائق OCR',        desc: 'ارفع صورة أو PDF واستخرج النص وحلّله تلقائياً', badge: 'جديد' },
+  { id: 'contracts', icon: '📝', name: 'مولّد العقود الجزائرية',  desc: 'أنشئ عقود عمل • إيجار • شراكة جاهزة للتوقيع', badge: 'جديد' },
+  { id: 'bizplan',   icon: '📊', name: 'خطة العمل Business Plan',  desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية', badge: 'جديد' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -1071,6 +1074,357 @@ ${text.slice(0, 4000)}
   )
 }
 
+// ─── OCR Tool ─────────────────────────────────────────────────────────────────
+function OCRTool() {
+  const [image, setImage]       = useState<string>('')
+  const [fileName, setFileName] = useState('')
+  const [mode, setMode]         = useState<'extract' | 'analyze'>('analyze')
+  const [result, setResult]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [copied, setCopied]     = useState(false)
+  const [drag, setDrag]         = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFile = (file: File) => {
+    if (!file) return
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => setImage(ev.target?.result as string || '')
+    reader.readAsDataURL(file)
+  }
+
+  const extract = async () => {
+    if (!image) return
+    setLoading(true); setResult('')
+    const modeLabel = mode === 'extract'
+      ? 'استخرج النص الكامل من هذه الصورة/الوثيقة فقط، دون أي تحليل إضافي. أعد النص المستخرج كما هو.'
+      : `قم بـ:\n1. استخراج النص الكامل من هذه الصورة/الوثيقة\n2. تحليل الوثيقة وتحديد: نوعها، الأطراف، التواريخ، البنود الأساسية\n3. اشرح المحتوى بلغة بسيطة\n4. حدد أي نقاط حساسة أو مهمة`
+
+    try {
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: modeLabel },
+            { type: 'image_url', image_url: { url: image } },
+          ]}],
+        }),
+      })
+      const data = await res.json()
+      setResult(data.content || '⚠️ لم يتمكن DZ Agent من قراءة الصورة.')
+    } catch { setResult('⚠️ خطأ في الاتصال. يرجى المحاولة مرة أخرى.') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div>
+      <div className="dzt-tool-desc">
+        <span className="dzt-tool-desc-icon">📷</span>
+        <div>
+          <div className="dzt-tool-desc-title">قارئ الوثائق الذكي — OCR</div>
+          <div className="dzt-tool-desc-text">ارفع صورة أو وثيقة ممسوحة ضوئياً، وسيستخرج DZ Agent النص ويحلّل المحتوى تلقائياً. يدعم: JPG • PNG • وثائق رسمية • عقود ممسوحة.</div>
+        </div>
+      </div>
+      <div className="dzt-form">
+        <div className="dzt-field">
+          <label className="dzt-label">وضع المعالجة</label>
+          <select className="dzt-select" value={mode} onChange={e => setMode(e.target.value as 'extract' | 'analyze')}>
+            <option value="analyze">🔬 استخراج + تحليل كامل</option>
+            <option value="extract">📋 استخراج النص فقط</option>
+          </select>
+        </div>
+        <div
+          className="dzt-field"
+          onDragOver={e => { e.preventDefault(); setDrag(true) }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }}
+        >
+          <label className="dzt-label">رفع الصورة أو الوثيقة</label>
+          <input ref={fileRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} style={{ display: 'none' }} />
+          <div onClick={() => fileRef.current?.click()} style={{ border: `2px dashed ${drag ? '#c8ff00' : '#333'}`, borderRadius: 12, padding: '28px 20px', textAlign: 'center', cursor: 'pointer', background: drag ? '#1a1a1a' : 'transparent', transition: 'all .2s' }}>
+            {image ? (
+              <div>
+                <div style={{ fontSize: 13, color: '#c8ff00', marginBottom: 8 }}>✅ {fileName}</div>
+                {image.startsWith('data:image') && <img src={image} alt="preview" style={{ maxHeight: 160, maxWidth: '100%', borderRadius: 8, border: '1px solid #333' }} />}
+              </div>
+            ) : (
+              <div style={{ color: '#666' }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
+                <div style={{ fontSize: 13 }}>اسحب الصورة هنا أو انقر للاختيار</div>
+                <div style={{ fontSize: 11, marginTop: 4, color: '#444' }}>JPG • PNG • وثائق رسمية مُصوَّرة</div>
+              </div>
+            )}
+          </div>
+        </div>
+        <button className="dzt-btn" onClick={extract} disabled={!image || loading}>
+          {loading ? <><span className="dzt-spinner" /> جاري القراءة والتحليل...</> : '📷 استخراج وتحليل'}
+        </button>
+      </div>
+      {loading && <div className="dzt-loading"><div className="dzt-spinner" />DZ Agent يقرأ الوثيقة...</div>}
+      {result && (
+        <div className="dzt-result">
+          <div className="dzt-result-header">
+            <span className="dzt-result-title">📷 نتيجة القراءة</span>
+            <div className="dzt-result-actions">
+              <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
+                {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
+              </button>
+              <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
+            </div>
+          </div>
+          <div className="dzt-result-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Algerian Contracts Generator ─────────────────────────────────────────────
+function ContractsTool() {
+  const [type, setType]       = useState('employment')
+  const [partyA, setPartyA]   = useState('')
+  const [partyB, setPartyB]   = useState('')
+  const [details, setDetails] = useState('')
+  const [lang, setLang]       = useState('ar')
+  const [result, setResult]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied]   = useState(false)
+
+  const CONTRACT_TYPES = [
+    { value: 'employment',  label: '💼 عقد عمل' },
+    { value: 'lease',       label: '🏠 عقد إيجار سكن' },
+    { value: 'commercial',  label: '🏪 عقد إيجار تجاري' },
+    { value: 'partnership', label: '🤝 عقد شراكة تجارية' },
+    { value: 'service',     label: '🔧 عقد خدمات / مقاولة' },
+    { value: 'sale',        label: '🛒 عقد بيع' },
+    { value: 'freelance',   label: '💻 عقد عمل حر (Freelance)' },
+    { value: 'nda',         label: '🔒 اتفاقية سرية NDA' },
+  ]
+
+  const generate = async () => {
+    if (!partyA.trim() || !partyB.trim()) return
+    setLoading(true); setResult('')
+    const typeLabel = CONTRACT_TYPES.find(t => t.value === type)?.label || type
+    const langInstr = lang === 'ar' ? 'بالعربية الفصحى الرسمية القانونية' : 'en français juridique formel'
+    const prompt = `أنت خبير قانوني جزائري متخصص في صياغة العقود وفق القانون الجزائري (القانون المدني الجزائري، قانون العمل 90-11).
+
+${langInstr}. أنشئ ${typeLabel} كاملاً ومتوافقاً مع القانون الجزائري يتضمن:
+
+**الطرف الأول:** ${partyA}
+**الطرف الثاني:** ${partyB}
+**تفاصيل إضافية:** ${details || 'غير محددة'}
+
+يجب أن يتضمن العقد:
+1. ديباجة رسمية مع المراجع القانونية الجزائرية
+2. تعريف الأطراف كاملاً
+3. موضوع العقد وشروطه التفصيلية
+4. الالتزامات والحقوق لكل طرف
+5. المدة والمقابل المالي (ضع خانات للملء: [...])
+6. شروط الإنهاء والفسخ
+7. تسوية النزاعات (المحكمة المختصة بالجزائر)
+8. خانات التوقيع مع التاريخ والمكان
+
+ضع [...] في أي معلومة تحتاج تعبئة مستقبلاً.`
+
+    try {
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      })
+      const data = await res.json()
+      setResult(data.content || '⚠️ فشل توليد العقد.')
+    } catch { setResult('⚠️ خطأ في الاتصال.') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div>
+      <div className="dzt-tool-desc">
+        <span className="dzt-tool-desc-icon">📝</span>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد العقود الجزائرية</div>
+          <div className="dzt-tool-desc-text">أنشئ عقوداً قانونية جاهزة للتوقيع وفق القانون الجزائري — عقود عمل، إيجار، شراكة، خدمات وغيرها بالعربية أو الفرنسية.</div>
+        </div>
+      </div>
+      <div className="dzt-form">
+        <div className="dzt-row">
+          <div className="dzt-field">
+            <label className="dzt-label">نوع العقد *</label>
+            <select className="dzt-select" value={type} onChange={e => setType(e.target.value)}>
+              {CONTRACT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="dzt-field">
+            <label className="dzt-label">لغة العقد</label>
+            <select className="dzt-select" value={lang} onChange={e => setLang(e.target.value)}>
+              <option value="ar">🇩🇿 عربية رسمية</option>
+              <option value="fr">🇫🇷 فرنسية</option>
+            </select>
+          </div>
+        </div>
+        <div className="dzt-row">
+          <div className="dzt-field">
+            <label className="dzt-label">الطرف الأول (المشغّل / المالك) *</label>
+            <input className="dzt-input" value={partyA} onChange={e => setPartyA(e.target.value)} placeholder="الاسم الكامل أو اسم الشركة" />
+          </div>
+          <div className="dzt-field">
+            <label className="dzt-label">الطرف الثاني (الموظف / المستأجر) *</label>
+            <input className="dzt-input" value={partyB} onChange={e => setPartyB(e.target.value)} placeholder="الاسم الكامل" />
+          </div>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">تفاصيل إضافية (اختياري)</label>
+          <textarea className="dzt-textarea" value={details} onChange={e => setDetails(e.target.value)}
+            placeholder="المنصب، المرتب، مدة العقد، العنوان، شروط خاصة..." style={{ minHeight: 80 }} />
+        </div>
+        <button className="dzt-btn" onClick={generate} disabled={!partyA.trim() || !partyB.trim() || loading}>
+          {loading ? <><span className="dzt-spinner" /> جاري توليد العقد...</> : '📝 توليد العقد'}
+        </button>
+      </div>
+      {loading && <div className="dzt-loading"><div className="dzt-spinner" />DZ Agent يصيغ العقد...</div>}
+      {result && (
+        <div className="dzt-result">
+          <div className="dzt-result-header">
+            <span className="dzt-result-title">📝 العقد الجاهز</span>
+            <div className="dzt-result-actions">
+              <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
+                {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
+              </button>
+              <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
+              <button className="dzt-result-btn" onClick={() => { const b = new Blob([result], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `contract-dz-${Date.now()}.txt`; a.click() }}><Download size={12} /> تحميل</button>
+            </div>
+          </div>
+          <div className="dzt-result-body" dir={lang === 'ar' ? 'rtl' : 'ltr'}><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
+          <div className="dzt-health-disclaimer">⚠️ هذا العقد مرجعي. راجع محامياً قبل التوقيع.</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Business Plan Tool ────────────────────────────────────────────────────────
+function BizPlanTool() {
+  const [form, setForm] = useState({ projectName: '', sector: '', city: '', budget: '', target: '', description: '', lang: 'ar' })
+  const [result, setResult]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied]   = useState(false)
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const SECTORS = ['تجارة عامة','مطعم / كافيه','تقنية معلومات','خدمات','بناء وعقار','زراعة','صناعة','تعليم / تكوين','صحة','سياحة','تجارة إلكترونية','طاقة متجددة','نقل وشحن','أخرى']
+
+  const generate = async () => {
+    if (!form.projectName.trim() || !form.sector) return
+    setLoading(true); setResult('')
+    const langInstr = form.lang === 'ar' ? 'بالعربية الفصحى' : 'en français professionnel'
+    const prompt = `أنت خبير اقتصادي جزائري متخصص في دراسات الجدوى وخطط الأعمال للسوق الجزائرية.
+
+أنشئ خطة عمل (Business Plan) احترافية ${langInstr}:
+
+**المشروع:** ${form.projectName}
+**القطاع:** ${form.sector}
+**المدينة:** ${form.city || 'الجزائر العاصمة'}
+**رأس المال:** ${form.budget || 'غير محدد'} دج
+**الفئة المستهدفة:** ${form.target || 'غير محددة'}
+**الفكرة:** ${form.description || 'غير محدد'}
+
+تضمّن:
+1. **ملخص تنفيذي** — الفكرة والقيمة المضافة
+2. **تحليل السوق الجزائرية** — حجم السوق، المنافسون، SWOT
+3. **الهيكل القانوني** — EURL/SARL/SNC + إجراءات التسجيل
+4. **خطة التشغيل** — الموقع، التجهيزات، العمالة، الموردون
+5. **الخطة المالية** — تكاليف الانطلاق، توقعات 3 سنوات، نقطة التعادل
+6. **استراتيجية التسويق** — الجمهور، القنوات، التسعير
+7. **جدول 12 شهراً** — خطة تنفيذية مفصّلة
+8. **مصادر التمويل** — ANSEJ، CNAC، بنوك جزائرية
+
+استخدم أرقاماً وإحصاءات حقيقية من السوق الجزائرية.`
+
+    try {
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      })
+      const data = await res.json()
+      setResult(data.content || '⚠️ فشل توليد خطة العمل.')
+    } catch { setResult('⚠️ خطأ في الاتصال.') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div>
+      <div className="dzt-tool-desc">
+        <span className="dzt-tool-desc-icon">📊</span>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد خطة العمل — Business Plan</div>
+          <div className="dzt-tool-desc-text">أنشئ خطة عمل كاملة لمشروعك في الجزائر مع تحليل SWOT، الخطة المالية، مصادر التمويل (ANSEJ/CNAC)، وجدول التنفيذ.</div>
+        </div>
+      </div>
+      <div className="dzt-form">
+        <div className="dzt-row">
+          <div className="dzt-field">
+            <label className="dzt-label">اسم المشروع *</label>
+            <input className="dzt-input" value={form.projectName} onChange={e => set('projectName', e.target.value)} placeholder="مثال: كافيه الجزائر الجديد" />
+          </div>
+          <div className="dzt-field">
+            <label className="dzt-label">القطاع *</label>
+            <select className="dzt-select" value={form.sector} onChange={e => set('sector', e.target.value)}>
+              <option value="">اختر القطاع</option>
+              {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="dzt-row">
+          <div className="dzt-field">
+            <label className="dzt-label">المدينة / الولاية</label>
+            <input className="dzt-input" value={form.city} onChange={e => set('city', e.target.value)} placeholder="الجزائر، وهران، قسنطينة..." />
+          </div>
+          <div className="dzt-field">
+            <label className="dzt-label">رأس المال (دج)</label>
+            <input className="dzt-input" value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="مثال: 2,000,000" />
+          </div>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">الفئة المستهدفة</label>
+          <input className="dzt-input" value={form.target} onChange={e => set('target', e.target.value)} placeholder="شباب 18-35، موظفون، عائلات..." />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">وصف الفكرة</label>
+          <textarea className="dzt-textarea" value={form.description} onChange={e => set('description', e.target.value)} placeholder="اشرح فكرة مشروعك بإيجاز..." style={{ minHeight: 80 }} />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">لغة الخطة</label>
+          <select className="dzt-select" value={form.lang} onChange={e => set('lang', e.target.value)}>
+            <option value="ar">🇩🇿 عربية</option>
+            <option value="fr">🇫🇷 فرنسية</option>
+          </select>
+        </div>
+        <button className="dzt-btn" onClick={generate} disabled={!form.projectName.trim() || !form.sector || loading}>
+          {loading ? <><span className="dzt-spinner" /> جاري إعداد خطة العمل...</> : '📊 توليد خطة العمل'}
+        </button>
+      </div>
+      {loading && <div className="dzt-loading"><div className="dzt-spinner" />DZ Agent يُعدّ خطة عملك...</div>}
+      {result && (
+        <div className="dzt-result">
+          <div className="dzt-result-header">
+            <span className="dzt-result-title">📊 خطة العمل</span>
+            <div className="dzt-result-actions">
+              <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(result); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
+                {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
+              </button>
+              <button className="dzt-result-btn" onClick={() => window.print()}><Printer size={12} /> طباعة</button>
+              <button className="dzt-result-btn" onClick={() => { const b = new Blob([result], { type: 'text/plain;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `bizplan-${form.projectName.replace(/\s+/g,'-')}.txt`; a.click() }}><Download size={12} /> تحميل</button>
+            </div>
+          </div>
+          <div className="dzt-result-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result}</ReactMarkdown></div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -1078,7 +1432,6 @@ export default function DZTools() {
   const { track } = useMiniPlayer()
   const miniPlayerActive = !!track
 
-  // padding-bottom: enough to fully show the button above the mini player
   const contentPb = miniPlayerActive ? 140 : 80
 
   return (
@@ -1089,7 +1442,7 @@ export default function DZTools() {
         </button>
         <div className="dzt-brand">
           <div className="dzt-brand-name">🛠️ DZ Tools</div>
-          <div className="dzt-brand-sub">أدوات ذكاء اصطناعي متخصصة</div>
+          <div className="dzt-brand-sub">مدعم بـ 16 وكيل · 39 مهارة متخصصة</div>
         </div>
       </div>
 
@@ -1099,20 +1452,29 @@ export default function DZTools() {
             key={t.id}
             className={`dzt-tab${active === t.id ? ' active' : ''}`}
             onClick={() => setActive(t.id)}
+            style={{ position: 'relative' }}
           >
             <span className="dzt-tab-icon">{t.icon}</span>
             {t.name}
+            {t.badge && (
+              <span style={{ position: 'absolute', top: -6, right: -4, background: '#c8ff00', color: '#000', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, lineHeight: 1.4 }}>
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
-        {active === 'cv'      && <CVTool />}
-        {active === 'planner' && <PlannerTool />}
-        {active === 'legal'   && <LegalTool />}
-        {active === 'docs'    && <BizDocsTool />}
-        {active === 'jobs'    && <JobSearchTool />}
-        {active === 'health'  && <HealthTool />}
+        {active === 'cv'        && <CVTool />}
+        {active === 'planner'   && <PlannerTool />}
+        {active === 'legal'     && <LegalTool />}
+        {active === 'docs'      && <BizDocsTool />}
+        {active === 'jobs'      && <JobSearchTool />}
+        {active === 'health'    && <HealthTool />}
+        {active === 'ocr'       && <OCRTool />}
+        {active === 'contracts' && <ContractsTool />}
+        {active === 'bizplan'   && <BizPlanTool />}
       </div>
     </div>
   )

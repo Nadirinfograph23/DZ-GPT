@@ -22,6 +22,9 @@ import {
   verifyOwnerToken, getExtraFeeds,
 } from './lib/owner-commands.js'
 
+// ── Breaking News Detector ────────────────────────────────────────────────────
+import { startBreakingNewsPoller } from './lib/breaking-news.js'
+
 // ── Resilience layer (must import before anything else uses AI) ──────────────
 import {
   aiSemaphore,
@@ -2007,6 +2010,41 @@ app.get('/api/ai-router/health', (_req, res) => {
     res.status(500).json({ ok: false, error: err.message })
   }
 })
+
+// ===== BREAKING NEWS: SSE STREAM =====
+const _breakingSseClients = new Set()
+
+app.get('/api/breaking-news/stream', (req, res) => {
+  res.set({
+    'Content-Type':  'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection':    'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.flushHeaders()
+  _breakingSseClients.add(res)
+
+  const ping = setInterval(() => {
+    try { res.write(':ping\n\n') }
+    catch { clearInterval(ping); _breakingSseClients.delete(res) }
+  }, 25_000)
+
+  req.on('close', () => {
+    clearInterval(ping)
+    _breakingSseClients.delete(res)
+  })
+})
+
+function broadcastBreakingNews(items) {
+  const payload = `data: ${JSON.stringify({ type: 'breaking_news', items })}\n\n`
+  for (const res of _breakingSseClients) {
+    try { res.write(payload) }
+    catch { _breakingSseClients.delete(res) }
+  }
+  // Also push into DZ Chat WebSocket
+  try { broadcastChat({ type: 'breaking_news', items }) } catch {}
+  console.log(`[BreakingNews] 📡 Pushed ${items.length} item(s) to ${_breakingSseClients.size} SSE client(s)`)
+}
 
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
@@ -18341,6 +18379,7 @@ if (isMain) {
       console.log(`Server running on port ${PORT}`)
     })
     setupChatWebSocket(httpServer)
+    startBreakingNewsPoller(broadcastBreakingNews)
   } else {
     // Dev: embed Vite as middleware so both API and frontend run on port 5000
     const { createServer: createViteServer } = await import('vite')
@@ -18357,6 +18396,7 @@ if (isMain) {
     })
     app.use(vite.middlewares)
     setupChatWebSocket(httpServer)
+    startBreakingNewsPoller(broadcastBreakingNews)
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`Dev server running on http://0.0.0.0:${PORT}`)
     })

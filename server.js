@@ -12459,6 +12459,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _smartIntent  = detectSmartIntent(lastUserMessage)
   const _taskHint     = getTaskRoutingHint(_smartIntent)
 
+  // ── Weather fast-path: return table directly — no AI needed ─────────────
+  // When real weather data is available, skip AI entirely to avoid latency
+  // and prevent the model from adding "شرح:" or unwanted preamble.
+  if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:')) {
+    const wLines = weatherPriorityContext.split('\n')
+    const city = (wLines.find(l => l.startsWith('city:')) || '').replace('city:', '').trim()
+    const source = (wLines.find(l => l.startsWith('source:')) || '').replace('source:', '').trim() || 'open-meteo.com'
+    const tableRows = wLines.filter(l => l.startsWith('|')).join('\n')
+    const staleNote = wLines.find(l => l.startsWith('⚠️')) || ''
+    const formattedWeather = [
+      `## 🌤️ حالة الطقس في ${city} — اليوم`,
+      '',
+      tableRows,
+      '',
+      staleNote,
+      `> 📡 المصدر: **${source}**`,
+    ].filter(Boolean).join('\n')
+    return res.status(200).json({ content: formattedWeather })
+  }
+
   // ── Autonomous Reasoning Layer ────────────────────────────────────────────
   // Enriches system prompt with CoT / ReAct / ToT / Decomposition / Multi-Agent
   // based on query complexity. Zero extra AI calls for simple queries.
@@ -12489,17 +12509,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (aiResult.content) {
     // ── DZ Memory Write — حفظ الجواب الناجح في الذاكرة الدائمة ────────────
     // يحفظ فقط إذا الجواب ذو قيمة (ليس رسالة خطأ أو قصير جداً)
-    try {
-      if (aiResult.content.length > 120 && !aiResult.content.startsWith('⚠️')) {
-        storeMemory({
-          type: _isCode ? MEM_TYPE.EXECUTION : _isNews ? MEM_TYPE.GENERAL : MEM_TYPE.GENERAL,
-          projectId: _memProjectId,
-          query: lastUserMessage,
-          content: aiResult.content.slice(0, 700),
-          meta: { model: aiResult.model, intent: _smartIntent },
-        })
-      }
-    } catch { /* fail silently */ }
+    // Memory saving disabled — user prefers no session storage in DZ Agent chat
 
     return res.status(200).json({
       content: _cleanRawUrls(aiResult.content),

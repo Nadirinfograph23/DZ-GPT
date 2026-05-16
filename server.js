@@ -8884,6 +8884,171 @@ app.post('/api/dz-agent/doctor-search', async (req, res) => {
   }
 })
 
+// ─── DZ Dollar / Parallel Market Exchange Rates ────────────────────────────
+// Fetches official rates then applies Algeria parallel-market spread estimate.
+// Falls back to static estimates when external sources are unavailable.
+let _dollarCache = null
+let _dollarCacheTs = 0
+const DOLLAR_CACHE_TTL = 30 * 60 * 1000 // 30 min
+
+async function fetchDollarRates() {
+  const now = Date.now()
+  if (_dollarCache && now - _dollarCacheTs < DOLLAR_CACHE_TTL) return _dollarCache
+
+  // Try to get official DZD rates then apply parallel market spread
+  let officialUsd = 0, officialEur = 0, officialGbp = 0
+  try {
+    const officialData = await fetchCurrencyData()
+    if (officialData?.rates) {
+      officialUsd = officialData.rates['USD'] || 0
+      officialEur = officialData.rates['EUR'] || 0
+      officialGbp = officialData.rates['GBP'] || 0
+    }
+  } catch { /* ignore */ }
+
+  // Parallel market spread (black market is typically 15-25% above official in Algeria)
+  // This is an educational estimate — actual rates fluctuate daily
+  const spread = 1.22 // ~22% spread (representative 2025 estimate)
+  const toParallel = (official) => official > 0 ? Math.round(1 / official * spread * 10) / 10 : null
+
+  let usd = toParallel(officialUsd) || 248
+  let eur = toParallel(officialEur) || 268
+  let gbp = toParallel(officialGbp) || 312
+
+  // Try to get a live estimate from an API that exposes DZD parallel rates
+  try {
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort(), 8000)
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=dzd', { signal: ctrl.signal })
+    if (r.ok) {
+      const j = await r.json()
+      const usdtDzd = j?.tether?.dzd
+      if (usdtDzd && usdtDzd > 100 && usdtDzd < 1000) {
+        usd = Math.round(usdtDzd * 10) / 10
+        eur = Math.round(usdtDzd * 1.08 * 10) / 10
+        gbp = Math.round(usdtDzd * 1.26 * 10) / 10
+      }
+    }
+  } catch { /* use calculated estimates */ }
+
+  const trend = usd > 245 ? '📈 الدولار في ارتفاع مقارنة بالمستوى العادي' : '📉 الدولار مستقر أو في انخفاض'
+
+  _dollarCache = {
+    usd, eur, gbp, trend,
+    source: 'تقدير حسابي + بيانات رسمية',
+    updatedAt: new Date().toISOString(),
+    disclaimer: 'الأسعار تقديرية للإعلام فقط. الرجوع للبنك الرسمي للمعاملات القانونية.',
+  }
+  _dollarCacheTs = now
+  return _dollarCache
+}
+
+app.get('/api/dz-dollar', async (_req, res) => {
+  try {
+    const data = await fetchDollarRates()
+    res.json(data)
+  } catch (err) {
+    console.error('[dz-dollar] error:', err)
+    res.json({
+      usd: 248, eur: 268, gbp: 312,
+      trend: '📊 بيانات تقديرية',
+      source: 'تقدير ثابت',
+      updatedAt: new Date().toISOString(),
+      disclaimer: 'الأسعار تقديرية.',
+    })
+  }
+})
+
+// ─── Telegram Bot Webhook ────────────────────────────────────────────────────
+// Set your bot webhook: https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://dz-gpt.vercel.app/api/telegram/webhook
+app.post('/api/telegram/webhook', async (req, res) => {
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+  if (!BOT_TOKEN) return res.json({ ok: false, error: 'TELEGRAM_BOT_TOKEN not set' })
+
+  try {
+    const update = req.body
+    const message = update?.message || update?.edited_message
+    if (!message?.text) return res.json({ ok: true })
+
+    const chatId = message.chat.id
+    const text = message.text.trim()
+    const username = message.from?.username || message.from?.first_name || 'مستخدم'
+
+    // Handle /start command
+    if (text === '/start') {
+      const welcome = `🇩🇿 أهلاً بك في **DZ Agent** على تيليغرام!
+
+أنا مساعدك الذكي الجزائري. أستطيع مساعدتك في:
+• الأسئلة العامة والمعلومات
+• الدارجة الجزائرية 🗣️
+• أسعار الصرف والدولار 💵
+• الرياضة والأخبار ⚽📰
+• الوظائف والصحة 💼🏥
+• وأكثر بكثير!
+
+اكتب سؤالك مباشرة أو زر موقعنا: https://dz-gpt.vercel.app`
+      await sendTelegramMessage(BOT_TOKEN, chatId, welcome)
+      return res.json({ ok: true })
+    }
+
+    // Route to DZ Agent AI
+    const aiRes = await fetch(`http://localhost:${process.env.PORT || 5000}/api/dz-agent-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: `[تيليغرام — ${username}]: ${text}` }],
+        source: 'telegram',
+      }),
+    })
+    const aiData = await aiRes.json()
+    const reply = aiData?.content || '⚠️ عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.'
+
+    // Telegram message limit is 4096 chars
+    const trimmed = reply.slice(0, 4090)
+    await sendTelegramMessage(BOT_TOKEN, chatId, trimmed)
+    return res.json({ ok: true })
+  } catch (err) {
+    console.error('[telegram/webhook] error:', err)
+    res.status(200).json({ ok: true }) // Always return 200 to Telegram
+  }
+})
+
+async function sendTelegramMessage(token, chatId, text) {
+  try {
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort(), 10000)
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+    })
+  } catch (err) {
+    console.error('[telegram/send] error:', err)
+  }
+}
+
+// ─── Telegram Bot Setup Helper ──────────────────────────────────────────────
+app.post('/api/telegram/setup', async (req, res) => {
+  const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+  if (!BOT_TOKEN) return res.status(400).json({ error: 'TELEGRAM_BOT_TOKEN not set in environment secrets.' })
+  const webhookUrl = req.body?.webhookUrl || `https://dz-gpt.vercel.app/api/telegram/webhook`
+  try {
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort(), 10000)
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({ url: webhookUrl }),
+    })
+    const data = await r.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: String(err.message) })
+  }
+})
+
 // ===== SYNC ENDPOINT (commit + push to GitHub from Replit) =====
 app.get('/api/dz-agent/sync/status', async (_req, res) => {
   try {
@@ -12035,10 +12200,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
-• الهوية: DZ Agent — وكيل الجزائر الذكي، يعمل 24/7، أنشأه Nadir Houamria
-• عدد الوكلاء: 6 وكلاء متخصصين يعملون معاً: [بحث الويب] [الكود والمستودعات] [الأخبار والرياضة] [الطقس والخرائط] [الذاكرة والسياق] [التحليل والاستنتاج]
-• المهارات (skills): البحث الحي على الإنترنت · قراءة المواقع · الكود والـ GitHub · أخبار الجزائر والعالم · الرياضة والدوري الجزائري · الطقس · القرآن الكريم · السيرة الذاتية · مخطط المشاريع · الوثائق القانونية · إحصاءات الجزائر · الدارجة الجزائرية · الترجمة
-• التقنيات المستعملة: نماذج LLM متعددة القدرات · بحث ويب حي · ذاكرة دائمة (Long-Term Memory) · WebSocket للحوار الفوري · محرك الدارجة الجزائرية · نظام circuit breaker للمرونة · RAG (Retrieval-Augmented Generation)
+• الهوية: DZ Agent — وكيل الجزائر الذكي الأول من نوعه، يعمل 24/7، أنشأه Nadir Houamria
+• عدد الوكلاء: 6+ وكلاء متخصصين يعملون معاً في تناسق كامل: [بحث الويب الحي] [الكود والـ GitHub] [الأخبار والرياضة الجزائرية] [الطقس والخرائط] [الذاكرة الشخصية والسياق] [التحليل العميق والاستنتاج]
+• المهارات الكاملة: البحث الحي على الإنترنت · قراءة المواقع · الكود والـ GitHub · أخبار الجزائر والعالم · الرياضة والدوري الجزائري المهني الأول · سعر الدولار والعملات · الطقس · القرآن الكريم · السيرة الذاتية الاحترافية · مخطط المشاريع · الوثائق التجارية (عقود/مراسلات/devis/PV/شهادات) · المحلل القانوني · البحث الوظيفي الجزائري + رسائل التقدم · وكيل الصحة الجزائري (أعراض/أطباء/CNAS) · الإحصاءات الجزائرية · الدارجة الجزائرية بكل لهجاتها · الترجمة 3 لغات · بوت تيليغرام · الصوت والنص
+• التقنيات: نماذج LLM متعددة القدرات · بحث ويب حي · ذاكرة شخصية دائمة (Long-Term Memory) · WebSocket للحوار الفوري · محرك الدارجة الجزائرية المتقدم · نظام circuit breaker للمرونة · RAG · تكامل Telegram
 • لا تذكر أسماء المزودين (Groq / Gemini / Mistral / DeepSeek / etc) في إجابتك`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,

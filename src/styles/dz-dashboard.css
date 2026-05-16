@@ -1282,3 +1282,120 @@
   from { opacity: 0; transform: scale(0.94); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DOLLAR BLACK MARKET PANEL — سوق الصرف الموازي
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dzd-dollar-panel {
+  padding: 4px 0 16px;
+  direction: rtl;
+}
+.dzd-dollar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 2px 12px;
+}
+.dzd-dollar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #facc15;
+  letter-spacing: 0.3px;
+}
+.dzd-dollar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dzd-dollar-card {
+  background: linear-gradient(135deg, rgba(250,204,21,0.08), rgba(245,158,11,0.05));
+  border: 1px solid rgba(250,204,21,0.2);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.dzd-dollar-card:hover {
+  background: linear-gradient(135deg, rgba(250,204,21,0.15), rgba(245,158,11,0.1));
+  border-color: rgba(250,204,21,0.4);
+  transform: translateY(-1px);
+}
+.dzd-dollar-card-flag { font-size: 22px; margin-bottom: 4px; }
+.dzd-dollar-card-code { font-size: 14px; font-weight: 800; color: #facc15; }
+.dzd-dollar-card-name { font-size: 10px; color: #888; margin: 2px 0; }
+.dzd-dollar-card-rate { font-size: 16px; font-weight: 700; color: #f0f0ff; margin: 4px 0; }
+.dzd-dollar-card-sub { font-size: 9px; color: #666; }
+
+.dzd-dollar-trend {
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #a0a0b0;
+  margin-bottom: 6px;
+  direction: rtl;
+}
+.dzd-dollar-updated {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.dzd-dollar-fallback {
+  padding: 8px 0;
+}
+.dzd-dollar-disclaimer {
+  background: rgba(250,204,21,0.06);
+  border: 1px solid rgba(250,204,21,0.15);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #a0a0b0;
+  margin-bottom: 10px;
+}
+.dzd-dollar-questions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dzd-dollar-info {
+  margin-top: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+.dzd-dollar-info-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #a0a0b0;
+  margin-bottom: 8px;
+}
+.dzd-dollar-qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.dzd-dollar-qa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  color: #b0b0c0;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: right;
+  transition: all 0.15s;
+  font-family: 'Cairo', sans-serif;
+  width: 100%;
+}
+.dzd-dollar-qa-btn:hover {
+  background: rgba(250,204,21,0.08);
+  border-color: rgba(250,204,21,0.2);
+  color: #facc15;
+}
+
+@media (max-width: 360px) {
+  .dzd-dollar-grid { grid-template-columns: 1fr 1fr; }
+}

@@ -171,6 +171,19 @@ const NON_MAP_REGEXES = [
   /تطبيق (جوال|موبايل|هاتف)/i,
   /اعمل لي (موقع|تطبيق)/i,
 
+  // ── WEB FILE / INDEX REFERENCES ─────────────────────────────────────────
+  // "موقع index" / "صفحة index.html" / "ملف index" → web dev context, NEVER map
+  // KEY FIX: "موقع" before a filename = website/page, not geographic location
+  /(?:موقع|صفحة|ملف|فايل|file)\s+index(?:\.[a-zA-Z0-9]+)?/i,
+  /\bindex\.(html?|js|ts|jsx|tsx|php|css|vue|svelte|py|rb|asp|aspx)\b/i,
+  /(?:موقع|صفحة|ملف|كود)\s+(?:html?|css|javascript|js|ts|jsx|tsx|react|vue|angular|next|nuxt|vite|django|flask|express|node|php|python)/i,
+  /(?:صفحة|ملف)\s+(?:index|main|app|home|header|footer|navbar|style|script|component|layout|base)/i,
+  /(?:موقع|تطبيق)\s+(?:react|vue|angular|next\.?js|nuxt|vite|django|flask|express|wordpress|laravel|symfony|spring|rails)/i,
+  /(?:تصميم|واجهة|frontend|backend|fullstack|full-stack|UI|UX)/i,
+  /(?:function|class\s+\w|variable|const\s+\w|let\s+\w|var\s+\w|import\s+|export\s+|async\s+|await\s+|fetch\(|npm\s+|pip\s+)/i,
+  /(?:برمجة|خوارزمية|دالة|متغير|كلاس|مصفوفة|واجهة برمجية|فريمورك|مكتبة|ريبو|repository)/i,
+  /\.(html?|css|js|ts|jsx|tsx|py|php|json|xml|yaml|sql|sh)\b/i,
+
   // Explanation / factual / historical queries (not navigation)
   /(?:اشرح|شرح|explain|ما هو|ما هي|ما معنى|ما تعريف|من هو|من هي)\s+\S/i,
   /(?:تاريخ|تأسيس|نشأة)\s+\S+(الجزائر|تونس|المغرب|وهران|قسنطينة|عنابة|سطيف|باتنة|تيزي|بجاية|تلمسان)/i,

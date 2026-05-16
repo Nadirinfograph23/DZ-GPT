@@ -450,7 +450,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 const group = L.featureGroup();
 MARKERS.forEach((m,i) => {
   const icon = L.divIcon({className:'',html:'<div class="lbl">'+(i+1)+'</div>',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-18]});
-  const popup = '<div style="font-family:sans-serif;min-width:160px;direction:rtl"><strong style="font-size:13px">'+(i+1)+'. '+m.name+'</strong>'+(m.addr?'<br><span style="color:#555;font-size:11px">📍 '+m.addr+'</span>':'')+'<br><a href="https://www.openstreetmap.org/?mlat='+m.lat+'&mlon='+m.lon+'&zoom=17" target="_blank" style="color:${accentColor};font-size:11px;text-decoration:none">فتح في OpenStreetMap ↗</a></div>';
+  const popup = '<div style="font-family:sans-serif;min-width:170px;direction:rtl"><strong style="font-size:13px">'+(i+1)+'. '+m.name+'</strong>'+(m.addr?'<br><span style="color:#555;font-size:11px">📍 '+m.addr+'</span>':'')+'<br><div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(m.name+' ${locationLabel} Algeria')+'" target="_blank" style="color:#1a73e8;font-size:11px;text-decoration:none">📍 Google Maps ↗</a><a href="https://www.openstreetmap.org/?mlat='+m.lat+'&mlon='+m.lon+'&zoom=17" target="_blank" style="color:${accentColor};font-size:11px;text-decoration:none">🗺️ OSM ↗</a></div></div>';
   L.marker([m.lat,m.lon],{icon}).bindPopup(popup,{maxWidth:240}).addTo(map);
   group.addLayer(L.marker([m.lat,m.lon]));
 });

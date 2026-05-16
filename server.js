@@ -9842,20 +9842,35 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _msgStripped = lastUserMessage.replace(URL_RE, '').trim()
     const _hasExplicitIntent = /(ابني|اصنع|أنشئ|حلل|analyze|clone|build|create|استخرج|اقرأ|شرح|explain|مستوحى|inspired|اشرح|ماهو|ما هو|ما هي|اخبرني|تكلم|ناقش|كلمني|صف|describe|summarize|لخص)/i.test(lastUserMessage)
     if (_msgStripped.length < 15 && !_hasExplicitIntent) {
-      console.log(`[WebReader:DETECT] Pure URL → action panel for: ${_detectedUrls[0]}`)
+      console.log(`[WebReader:DETECT] Pure URL → auto-summary + action panel for: ${_detectedUrls[0]}`)
       try {
-        const _qi = await fetchWebContent(_detectedUrls[0], 800)
+        const _qi = await fetchWebContent(_detectedUrls[0], 2000)
         const _domain = (() => { try { return new URL(_detectedUrls[0]).hostname } catch { return _detectedUrls[0] } })()
         const _rawDesc = (_qi.content || '').replace(/#+\s*/g, '').replace(/>\s*/g, '').replace(/\n+/g, ' ').trim()
+
+        // ── Generate AI summary automatically ─────────────────────────────
+        const _summaryMsgs = [
+          {
+            role: 'system',
+            content: '[TOOL:WEB_SUMMARIZER — لا مقدمات — ابدأ مباشرةً — لا شرح — ملخص فقط]\nأنت محلل مواقع خبير. لخّص الموقع في 4-5 نقاط واضحة بالعربية.',
+          },
+          {
+            role: 'user',
+            content: `الموقع: ${_qi.title || _domain}\nالرابط: ${_detectedUrls[0]}\nالمحتوى المستخرج:\n${_rawDesc.slice(0, 1800)}\n\nأعطني:\n1. ما هو هذا الموقع وما هدفه؟\n2. ما أبرز محتوياته وأقسامه؟\n3. لمن هو موجّه؟\n4. نقاط قوته الرئيسية.`,
+          },
+        ]
+        const _summaryResult = await safeGenerateAI({ messages: _summaryMsgs, max_tokens: 500, taskHint: 'general' })
+        const _autoSummary = _summaryResult?.content || _rawDesc.slice(0, 400)
+
         return res.status(200).json({
-          content: `🌐 تم اكتشاف الموقع: **${_qi.title || _domain}**`,
+          content: _autoSummary,
           isWebReader: true,
           webSiteInfo: {
             url: _detectedUrls[0],
             title: _qi.title || _domain,
             domain: _domain,
             description: _rawDesc.slice(0, 220),
-            headings: (_qi.headings || []).slice(0, 4),
+            headings: (_qi.headings || []).slice(0, 5),
           },
         })
       } catch (_e) {

@@ -98,6 +98,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
+import { detectAmbiguity, formatClarification } from './lib/smart-clarify.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
@@ -9623,6 +9624,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMessage)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SMART INTENT CLARIFICATION — فهم النية قبل التنفيذ
+  // RULE: Only intercept genuinely ambiguous short requests.
+  //       DZ-Tool requests, conversation-only patterns → always skip.
+  // ══════════════════════════════════════════════════════════════════════
+  if (!isDZToolRequest) {
+    const _ambiguity = detectAmbiguity(lastUserMessage)
+    if (_ambiguity.needsClarification) {
+      console.log(`[SmartClarify] 🤔 case=${_ambiguity.caseId} conf=${_ambiguity.confidence}% msg="${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: formatClarification(_ambiguity.question, _ambiguity.options),
+        mode: 'clarification',
+        clarificationCase: _ambiguity.caseId,
+      })
+    }
   }
 
   // ── GitHub ReAct Agent — real tool execution via loop ─────────────────────

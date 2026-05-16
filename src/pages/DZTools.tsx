@@ -847,7 +847,7 @@ function JobSearchTool() {
 - **ANEM Wassit** — wassitonline.anem.dz
 
 ## 3. جدول الرواتب
-رواتب تقريبية لمجال **${form.domain}** في **${city}** حسب المستوى (دج/شهر).
+رواتب تقريبية لمجال **${form.domain}** في **${form.city}** حسب المستوى (دج/شهر).
 
 ## 4. أبرز الشركات الجزائرية الناشطة
 5 شركات جزائرية في قطاع ${form.domain} مع نشاطها.
@@ -1571,7 +1571,6 @@ function ImageTool() {
   const [analyzeInput, setAnalyzeInput] = useState<ImageInput | null>(null)
   const [analyzeResult, setAnalyzeResult] = useState('')
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
-  const [analyzed, setAnalyzed]         = useState(false)
   const [copied, setCopied]             = useState(false)
 
   const analyzeFileRef = useRef<HTMLInputElement>(null)
@@ -1607,7 +1606,7 @@ function ImageTool() {
 
   const analyzeImage = useCallback(async () => {
     if (!analyzeInput) return
-    setAnalyzeLoading(true); setAnalyzeResult(''); setAnalyzed(false)
+    setAnalyzeLoading(true); setAnalyzeResult('')
     try {
       const body: Record<string, string> = { mode: analyzeMode }
       if (analyzeInput.type === 'base64') {
@@ -1621,7 +1620,6 @@ function ImageTool() {
       })
       const data = await res.json()
       setAnalyzeResult(data.content || '⚠️ فشل التحليل.')
-      setAnalyzed(true)
     } catch { setAnalyzeResult('⚠️ خطأ في الاتصال.') }
     finally { setAnalyzeLoading(false) }
   }, [analyzeInput, analyzeMode])
@@ -1796,7 +1794,7 @@ function ImageTool() {
               <button
                 key={m.v}
                 className={`dzt-img-analyze-mode${analyzeMode === m.v ? ' active' : ''}`}
-                onClick={() => { setAnalyzeMode(m.v); setAnalyzeResult(''); setAnalyzed(false) }}
+                onClick={() => { setAnalyzeMode(m.v); setAnalyzeResult('') }}
               >
                 <span className="dzt-img-analyze-mode-icon">{m.icon}</span>
                 <span className="dzt-img-analyze-mode-label">{m.l}</span>
@@ -1812,7 +1810,7 @@ function ImageTool() {
                 className="dzt-input"
                 placeholder="الصق رابط الصورة... https://..."
                 value={analyzeInput?.type === 'url' ? analyzeInput.value : ''}
-                onChange={e => { setAnalyzeInput({ type: 'url', value: e.target.value }); setAnalyzeResult(''); setAnalyzed(false) }}
+                onChange={e => { setAnalyzeInput({ type: 'url', value: e.target.value }); setAnalyzeResult('') }}
                 dir="ltr"
               />
               <span className="dzt-img-or">أو</span>
@@ -1824,7 +1822,7 @@ function ImageTool() {
                 type="file"
                 accept="image/*"
                 style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) { handleImageFile(f); setAnalyzeResult(''); setAnalyzed(false) } }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) { handleImageFile(f); setAnalyzeResult('') } }}
               />
             </div>
             {analyzeInput && (
@@ -1835,7 +1833,7 @@ function ImageTool() {
                   className="dzt-img-analyze-preview-img"
                   onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                 />
-                <button className="dzt-img-clear-btn" onClick={() => { setAnalyzeInput(null); setAnalyzeResult(''); setAnalyzed(false) }}>✕</button>
+                <button className="dzt-img-clear-btn" onClick={() => { setAnalyzeInput(null); setAnalyzeResult('') }}>✕</button>
               </div>
             )}
           </div>

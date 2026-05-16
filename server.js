@@ -2306,6 +2306,16 @@ function detectWebsiteBuilderQuery(msg) {
   // Map website requests are handled separately
   if (detectMapWebsiteQuery(msg)) return false
 
+  // ── GUARD: YouTube / Video / Music queries → NEVER route to web builder ──
+  // "الشاب خالد فيديو" / "ابحث عن اغنية" / "جيبلي كليب" → YouTube search, NOT website build
+  const _hasVideoIntent = /(?:فيديو|يوتيوب|يوتيب|كليب|اغنية|أغنية|موسيقى|نشيد|أنشودة|مقطع|شاهد|watch|youtube|video|music|clip|song)/i.test(msg)
+  const _hasExplicitBuildWithWeb = /(?:ابني|اصنع|أنشئ|انشئ|صمم|اعمل|أعمل|دير|create|build|make|design)\s+(?:موقع|صفحة|تطبيق|site|page|app|html)/i.test(msg)
+  if (_hasVideoIntent && !_hasExplicitBuildWithWeb) return false
+
+  // ── GUARD: Simple search / question queries — NOT website build ──
+  // "ابحث عن X" / "ما هو X" / "من هو X" → search/info request, not build
+  if (/^(?:ابحث|ابحثلي|جيبلي|عطيني|اخبرني|ما هو|ما هي|من هو|من هي|متى|أين|كم|شكون|وش|علاش)\s/i.test(msg.trim())) return false
+
   // ── GUARD: Code Review / Analysis / Debug requests — NEVER route to web builder ──
   // If the message contains a code block (```) it's a review/debug request, not a build request
   if (/```/.test(msg)) {
@@ -4667,6 +4677,7 @@ function analyzeQuery(msg) {
 
   // ── 1. Question Type Detection ────────────────────────────────────────
   const QT = {
+    youtube:    /فيديو|يوتيوب|يوتيب|كليب|اغنية|أغنية|موسيقى|نشيد|أنشودة|مقطع.*فيديو|youtube|video\s*clip|music\s*video/i,
     news:       /أخبار|خبر|آخر أخبار|عاجل|حدث|news|latest|breaking|actualité|nouvelles/i,
     sports:     /مباراة|مباريات|نتيجة|نتائج رياضية|هدف|دوري|كأس|منتخب|لاعب|فريق|football|soccer|match|score|league|ليغ|هداف|تصفيات|الملعب|ركلة|خماسي|سداسي|تشكيلة/i,
     weather:    /طقس|حرارة|مطر|رياح|جو|درجة|weather|température|pluie|ثلج|عاصفة|رطوبة/i,
@@ -4674,7 +4685,7 @@ function analyzeQuery(msg) {
     prayer:     /صلاة|أذان|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|prayer|salat/i,
     education:  /درس|دروس|تمرين|شرح|مادة|بكالوريا|بيام|lesson|exercise|homework|bac|شرح لي|اشرح/i,
     code:       /كود|برمجة|كيف أعمل|كيف أكتب|github|api|function|class|error|bug|npm|python|javascript|react|كتابة كود|اكتب لي|اكتب برنامج/i,
-    howto:      /كيف|طريقة|خطوات|كيفية|how to|comment faire|étapes|steps|guide|tutorial|ما هي طريقة|علاش|وش كيف/i,
+    howto:      /كيف|طريقة|خطوات|كيفية|how to|comment faire|étapes|steps|guide|ما هي طريقة|علاش|وش كيف/i,
     factual:    /ما هو|ما هي|من هو|من هي|متى|أين|كم|what is|who is|when|where|pourquoi|combien|قداش|شكون|وين|وقتاه/i,
     location:   /خريطة|عنوان|أين|مكان|مطعم|محطة|فندق|مستشفى|map|location|restaurant|hospital|hotel|adresse|ولاية|بلدية/i,
     comparison: /مقارنة|الفرق بين|أيهما أفضل|vs|versus|compare|différence|مقابل|أحسن|والو فالفرق/i,
@@ -9789,8 +9800,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── YouTube Insight Engine ─────────────────────────────────────────────────
   // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
   const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
-  // Matches: فيديو، يوتيوب، tutorial، review، documentaire، course، شرحلي، جيبلي فيديو، ابحث فيديو...
-  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video)/i
+  // Matches: فيديو، يوتيوب، اغنية، كليب، tutorial، review، documentaire، course، شرحلي، جيبلي فيديو...
+  // BROAD: any message with فيديو/يوتيوب/اغنية/كليب without explicit build keyword → YouTube
+  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|ابحث.*اغنية|جيبلي.*اغنية|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|موسيقى|كليب|video\s*clip|music\s*video|نشيد|أنشودة|مقطع.*فيديو|فيديو.*مقطع)/i
   const _isYouTubeQuery = !!_ytUrlInMsg
     || (_ytKwRe.test(lastUserMessage)
         && !detectWebsiteBuilderQuery(lastUserMessage)
@@ -9831,7 +9843,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     } catch (ytErr) {
       console.error('[YouTube Insight] Error:', ytErr.message)
-      // Non-fatal — fall through to general AI handler
+      // ── YouTube query but engine failed → return direct search link, NOT general AI ──
+      // Prevents: "الشاب خالد فيديو" → website builder when YouTube API is down
+      const _ytFallbackQ = encodeURIComponent(lastUserMessage.replace(/^(?:جيبلي|ابحث عن|ابحث|عطيني|شوفلي)\s+/i, '').trim())
+      return res.status(200).json({
+        content: `🎬 البحث عن: **"${lastUserMessage}"** على YouTube\n\n⚠️ تعذّر تحميل نتائج YouTube مؤقتاً.\n\n👉 [ابحث مباشرة على YouTube](https://www.youtube.com/results?search_query=${_ytFallbackQ})\n\n💡 يمكنك أيضاً تجربة:\n- نسخ اسم الفيديو والبحث على YouTube مباشرة\n- إضافة رابط YouTube مباشر لتحليله`,
+        isYouTube: false,
+      })
     }
   }
 
@@ -12324,6 +12342,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isAdmin     = ['admin', 'howto'].includes(_qType)
   const _isWeather   = _qType === 'weather'
   const _isWebReader = _qType === 'web_reader' || isWebReaderQuery
+  const _isYouTubeType = _qType === 'youtube'
 
   // Compress + trim contexts to prevent TPM exhaustion (Groq free tier limits)
   // GN article URLs can be 400-600 chars each — strip to save tokens
@@ -12391,6 +12410,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`
       : '',
+
+    // ── YOUTUBE MODULE (youtube questionType queries) ─────────────────────
+    _isYouTubeType ? [
+      `🎬 YOUTUBE SEARCH MODE: المستخدم يبحث عن فيديو / أغنية / كليب على YouTube.`,
+      `⚠️ CRITICAL RULE: لا تبني موقعاً ولا تكتب HTML ولا تنشئ مستودعاً. هذا بحث يوتيوب فقط.`,
+      `✅ إذا وصلتك نتائج YouTube: اعرضها منسقة بعنوان وقناة ورابط.`,
+      `✅ إذا لم تصلك نتائج: أخبر المستخدم وأعطِه رابط البحث المباشر على YouTube.`,
+      `✅ مثال صحيح: "الشاب خالد فيديو" → ابحث على YouTube عن "الشاب خالد" وأعرض النتائج.`,
+      `❌ مثال خاطئ: "الشاب خالد فيديو" → بناء موقع باسم "الشاب خالد" ← محظور تماماً.`,
+    ].join('\n') : '',
 
     // ── NEWS MODULE (news / sports_news queries only) ─────────────────────
     _isNews ? [

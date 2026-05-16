@@ -1106,6 +1106,7 @@ function WebReaderPanel({
   onClone,
   onExtract,
   onAdvancedClone,
+  onOpenInBuilder,
   isAdvancedLoading,
 }: {
   siteInfo: { url: string; title: string; domain: string; description: string; headings: string[] }
@@ -1113,6 +1114,7 @@ function WebReaderPanel({
   onClone: () => void
   onExtract: () => void
   onAdvancedClone: (section?: string) => void
+  onOpenInBuilder: () => void
   isAdvancedLoading: boolean
 }) {
   const [showSections, setShowSections] = useState(false)
@@ -1145,15 +1147,15 @@ function WebReaderPanel({
         <button className="dzc-wr-btn dzc-wr-btn--analyze" onClick={onAnalyze}>
           <span className="dzc-wr-btn-icon">🔍</span>
           <div className="dzc-wr-btn-text">
-            <span className="dzc-wr-btn-title">تحليل الموقع</span>
-            <span className="dzc-wr-btn-desc">تلخيص المحتوى والهيكل والغرض</span>
+            <span className="dzc-wr-btn-title">تحليل معمّق</span>
+            <span className="dzc-wr-btn-desc">تحليل شامل للمحتوى والهيكل والجمهور</span>
           </div>
         </button>
-        <button className="dzc-wr-btn dzc-wr-btn--clone" onClick={onClone}>
-          <span className="dzc-wr-btn-icon">🧱</span>
+        <button className="dzc-wr-btn dzc-wr-btn--builder" onClick={onOpenInBuilder}>
+          <span className="dzc-wr-btn-icon">🏗️</span>
           <div className="dzc-wr-btn-text">
-            <span className="dzc-wr-btn-title">استنساخ سريع</span>
-            <span className="dzc-wr-btn-desc">نسخة مشابهة بـ HTML + CSS + JS</span>
+            <span className="dzc-wr-btn-title">استنساخ في Web Builder</span>
+            <span className="dzc-wr-btn-desc">فتح محرر المواقع مع الاستنساخ التلقائي</span>
           </div>
         </button>
         <button className="dzc-wr-btn dzc-wr-btn--extract" onClick={onExtract}>
@@ -5292,6 +5294,7 @@ ${rows}
                           onClone={() => sendMessage(`ابني نسخة عصرية ومتجاوبة من هذا الموقع باستخدام HTML + CSS + JS مع تصميم حديث: ${msg.webReaderSiteInfo!.url}`)}
                           onExtract={() => sendMessage(`استخرج كل محتوى هذا الموقع وقدمه بشكل منظم ومنسق: العناوين الرئيسية، الفقرات المهمة، والروابط الأساسية — اجعله قابلاً للنسخ والاستخدام: ${msg.webReaderSiteInfo!.url}`)}
                           onAdvancedClone={(section) => handleAdvancedClone(msg.webReaderSiteInfo!.url, section)}
+                          onOpenInBuilder={() => navigate(`/web-builder?clone=${encodeURIComponent(msg.webReaderSiteInfo!.url)}`)}
                           isAdvancedLoading={isAdvancedCloneLoading}
                         />
                       )}

@@ -1393,8 +1393,8 @@ function OCRTool() {
       <div className="dzt-tool-desc">
         <span className="dzt-tool-desc-icon">📷</span>
         <div>
-          <div className="dzt-tool-desc-title">قارئ الوثائق — Tesseract OCR</div>
-          <div className="dzt-tool-desc-text">ارفع صورة وثيقة ليستخرج Tesseract النص محلياً بدون إرسال الصورة للخادم. يدعم العربية والفرنسية والإنجليزية.</div>
+          <div className="dzt-tool-desc-title">قارئ الوثائق — DZ OCR</div>
+          <div className="dzt-tool-desc-text">ارفع صورة وثيقة ليستخرج DZ OCR النص محلياً بدون إرسال الصورة للخادم. يدعم العربية والفرنسية والإنجليزية.</div>
         </div>
       </div>
       <div className="dzt-form">
@@ -1451,7 +1451,7 @@ function OCRTool() {
           {loading ? <><span className="dzt-spinner" /> جاري الاستخراج...</> : '📷 استخراج النص'}
         </button>
       </div>
-      {loading && <div className="dzt-loading"><div className="dzt-spinner" />Tesseract يقرأ الوثيقة...</div>}
+      {loading && <div className="dzt-loading"><div className="dzt-spinner" />DZ OCR يقرأ الوثيقة...</div>}
       {ocrText && (
         <div className="dzt-result">
           <div className="dzt-result-header">

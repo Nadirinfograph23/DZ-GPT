@@ -4,6 +4,9 @@ import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText } f
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
+// @ts-ignore
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
 import '../styles/dz-tools.css'
 
 // ─── Shared PDF Generator ─────────────────────────────────────────────────────
@@ -13,12 +16,6 @@ async function generatePDF(
   isRtl = true,
 ) {
   if (!ref.current) return
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const { default: html2canvas } = await import('html2canvas')
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
-  const { jsPDF } = await import('jspdf')
 
   const el = ref.current
 

@@ -13,7 +13,11 @@ async function generatePDF(
   isRtl = true,
 ) {
   if (!ref.current) return
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   const { default: html2canvas } = await import('html2canvas')
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   const { jsPDF } = await import('jspdf')
 
   const el = ref.current

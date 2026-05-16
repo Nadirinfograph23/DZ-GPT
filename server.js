@@ -3838,16 +3838,23 @@ CRITICAL RULES:
 ✅ Dark/light theme must match the original site's scheme exactly
 ✅ Minimum output: 400 lines of detailed, production-quality HTML
 
-⚠️ DATES/YEARS/NUMBERS — VERBATIM COPY RULE:
-✅ NEVER change any date, year, phone number, price, or statistic
-✅ If footer says "© 2024 Company" → output EXACTLY "© 2024 Company"
-✅ NEVER substitute current year (2025/2026) for any year found in the original
-✅ ALL years, prices, counts, statistics MUST be copied verbatim
+⚠️ NUMBERS & STATS — VERBATIM COPY RULE:
+✅ ALL phone numbers, prices, statistics MUST be copied verbatim from extracted content
+✅ If a stat shows "10,000+ clients" → output EXACTLY "10,000+ clients"
 
-IMAGE MANDATE:
-✅ NEVER use external image URLs — they break cross-origin
-✅ For every image slot: use a themed placeholder div → صورة 1, صورة 2... preserving exact dimensions
-✅ Hero backgrounds: CSS gradient ONLY, never background-image:url()
+⚠️ FOOTER COPYRIGHT YEAR — DYNAMIC (MANDATORY):
+✅ ALWAYS use CURRENT year dynamically: © <span id="cr-yr"></span> CompanyName
+✅ Add JS: document.getElementById('cr-yr').textContent = new Date().getFullYear();
+✅ This shows the current year automatically (e.g. © 2026 CompanyName)
+✅ NEVER hardcode a year in the footer copyright line
+
+IMAGE MANDATE (V4 — 4–8 Real Images Required):
+✅ Use 4–8 real <img> tags from the SUPPLEMENTARY IMAGES POOL injected below
+✅ Every <img> MUST have: loading="lazy" + object-fit:cover + onerror fallback
+✅ onerror: this.onerror=null;this.style.cssText='background:linear-gradient(135deg,#1e293b,#334155);min-height:220px;display:block;border-radius:8px;width:100%'
+✅ Hero section background: CSS gradient only (full-viewport reliability)
+✅ Gallery / cards / room photos / product images → use real <img> tags from pool
+✅ NEVER invent image URLs — use ONLY the URLs from SUPPLEMENTARY IMAGES POOL below
 
 QUALITY TARGET: 95–100% visual accuracy — indistinguishable from the original.
 
@@ -4107,14 +4114,21 @@ ${sectionTarget}
 ════════════════════════════════════════════
 `
 
-    // Phase 4: Pixel-Perfect Reconstruction via AI
+    // Phase 4: Supplementary image pool (injected when real images are insufficient)
+    const _cloneImgPool = buildImagePoolBlock(tokens.layoutType || 'landing')
+    const _cloneImageNote = `\n\n════════════════════════════════════════════
+SUPPLEMENTARY IMAGES POOL (use when real site images are unavailable):
+${_cloneImgPool}
+════════════════════════════════════════════`
+
+    // Phase 5: Pixel-Perfect Reconstruction via AI
     const cloneMessages = [
-      { role: 'system', content: PIXEL_PERFECT_CLONE_PROMPT + designContext },
+      { role: 'system', content: PIXEL_PERFECT_CLONE_PROMPT + _cloneImageNote + designContext },
       {
         role: 'user',
         content: section && section !== 'full'
-          ? `Clone ONLY the "${section}" section of ${targetUrl}. Use the extracted design tokens above. Output complete standalone HTML.`
-          : `Reconstruct a pixel-perfect clone of ${targetUrl}. Use ALL the extracted design tokens, color palette, typography, and section structure above. The result must be visually near-identical to the original.`
+          ? `Clone ONLY the "${section}" section of ${targetUrl}. Use the extracted design tokens above. Use 4–8 real images from the SUPPLEMENTARY IMAGES POOL. Output complete standalone HTML.`
+          : `Reconstruct a pixel-perfect clone of ${targetUrl}. Use ALL the extracted design tokens, color palette, typography, and section structure above. Use 4–8 real images from the SUPPLEMENTARY IMAGES POOL. Footer copyright year must be DYNAMIC (new Date().getFullYear()). The result must be visually near-identical to the original.`
       },
     ]
 

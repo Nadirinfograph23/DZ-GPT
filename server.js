@@ -9692,6 +9692,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: EMERGENCY_INFO })
   }
 
+  // ── DZTools fast-path: bypass ALL intent routing → go straight to AI ──────
+  // When tool='health'|'cv'|'legal'|etc., the prompt is pre-structured by the tool.
+  // Skip maps, places, YouTube, web-reader, doctor routing — all irrelevant.
+  if (isDZToolRequest) {
+    try {
+      const toolResult = await safeGenerateAI({ messages, query: lastUserMessage, max_tokens: 2000, taskHint: 'general' })
+      return res.status(200).json({ content: toolResult.content || '⚠️ فشل التحليل. يرجى المحاولة مرة أخرى.', model: toolResult.model })
+    } catch (toolErr) {
+      console.error('[DZTools fast-path] error:', toolErr.message)
+      return res.status(500).json({ content: '⚠️ خطأ في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى.' })
+    }
+  }
+
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
   if (isAlgerianCitizenQuery(lastUserMessage)) {
     const algeriaResult = searchAlgeria(lastUserMessage)
@@ -17505,22 +17518,35 @@ if (isMain) {
     const q = sanitizeString(String(req.query.q || ''), 200).trim()
     if (!q) return res.status(400).json({ error: 'query required', results: [] })
 
-    // Helper: map common Arabic terms to English for better results
-    const AR_EN_MAP = {
-      'جزائر': 'Algeria', 'الجزائر': 'Algeria', 'وهران': 'Oran Algeria',
-      'قسنطينة': 'Constantine Algeria', 'عنابة': 'Annaba Algeria',
-      'بجاية': 'Bejaia Algeria', 'سطيف': 'Setif Algeria',
-      'تلمسان': 'Tlemcen Algeria', 'باتنة': 'Batna Algeria',
-      'شروق': 'sunrise', 'غروب': 'sunset', 'بحر': 'sea ocean',
-      'جبل': 'mountain', 'صحراء': 'desert sahara', 'غابة': 'forest',
-      'علم': 'flag', 'مسجد': 'mosque', 'قصبة': 'Casbah Algiers',
-    }
+    // Translate Arabic keywords to English — apply ALL matches (not just first)
+    const AR_EN_MAP = [
+      ['الجزائر العاصمة', 'Algiers capital Algeria'],
+      ['الجزائر', 'Algeria'],   ['جزائر', 'Algeria'],
+      ['وهران', 'Oran Algeria'],['قسنطينة', 'Constantine Algeria'],
+      ['عنابة', 'Annaba Algeria'], ['بجاية', 'Bejaia Algeria'],
+      ['سطيف', 'Setif Algeria'], ['تلمسان', 'Tlemcen Algeria'],
+      ['باتنة', 'Batna Algeria'], ['بسكرة', 'Biskra Algeria'],
+      ['ورقلة', 'Ouargla Algeria'], ['تيزي وزو', 'Tizi Ouzou Algeria'],
+      ['شروق', 'sunrise'], ['غروب', 'sunset'],
+      ['بحر', 'sea'], ['جبل', 'mountain'], ['صحراء', 'sahara desert'],
+      ['غابة', 'forest'], ['علم', 'flag'], ['مسجد', 'mosque'],
+      ['قصبة', 'Casbah'], ['سوق', 'market'], ['شاطئ', 'beach'],
+      ['مدينة', 'city'], ['قرية', 'village'], ['طبيعة', 'nature'],
+      ['تقليدي', 'traditional'], ['ثقافة', 'culture'], ['تاريخ', 'history'],
+      ['أزرق', 'blue'], ['أحمر', 'red'], ['أخضر', 'green'],
+    ]
     let searchQ = q
-    for (const [ar, en] of Object.entries(AR_EN_MAP)) {
-      if (q.includes(ar)) { searchQ = q.replace(ar, en); break }
+    for (const [ar, en] of AR_EN_MAP) {
+      if (searchQ.includes(ar)) searchQ = searchQ.split(ar).join(en)
     }
-    // If query still has Arabic chars, append "Algeria" for better results
-    if (/[\u0600-\u06FF]/.test(searchQ)) searchQ = searchQ + ' Algeria'
+    // Strip remaining Arabic characters and append Algeria if relevant
+    const stillHasArabic = /[\u0600-\u06FF]/.test(searchQ)
+    if (stillHasArabic) {
+      // Remove remaining Arabic words (untranslated) and add Algeria for context
+      searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
+    }
+    searchQ = searchQ.replace(/\s+/g, ' ').trim() || 'Algeria'
+    console.log(`[ImageSearch] original="${q}" searchQ="${searchQ}")`)
 
     // ── Source 1: Openverse (CC-licensed images) ──
     const fetchOpenverse = async () => {

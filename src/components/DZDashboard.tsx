@@ -356,7 +356,10 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
   const [welcomeCity, setWelcomeCity] = useState<string | null>(null)
   const [welcomeVisible, setWelcomeVisible] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran'>('prayer')
+  const [dollarData, setDollarData] = useState<{ usd: number; eur: number; gbp: number; trend: string; updatedAt: string; source: string } | null>(null)
+  const [dollarLoading, setDollarLoading] = useState(false)
+
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar'>('prayer')
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
@@ -418,6 +421,18 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     } finally {
       setPrayerLoading(false)
     }
+  }, [])
+
+  const loadDollar = useCallback(async () => {
+    setDollarLoading(true)
+    try {
+      const r = await fetch('/api/dz-dollar')
+      if (r.ok) {
+        const d = await r.json()
+        setDollarData(d)
+      }
+    } catch { /* ignore */ }
+    finally { setDollarLoading(false) }
   }, [])
 
   const loadCurrency = useCallback(async () => {
@@ -540,6 +555,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     loadCurrency()
     loadStandings()
     loadGlobalLeagues()
+    loadDollar()
   }, [])
 
   const tabs = [
@@ -547,6 +563,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     { key: 'prayer' as const, label: 'مواقيت الصلاة', icon: '🕌' },
     { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
     { key: 'news' as const, label: 'الأخبار', icon: '📰' },
+    { key: 'dollar' as const, label: 'سوق الصرف', icon: '💵' },
     { key: 'sports' as const, label: 'الدوري الجزائري', icon: '⚽' },
     { key: 'standings' as const, label: 'الترتيب', icon: '🏆' },
     { key: 'global' as const, label: 'الدوريات العالمية', icon: '🌍' },
@@ -633,7 +650,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         </div>
         <button
           className="dzd-refresh-btn"
-          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadStandings(); loadGlobalLeagues({ force: true }) }}
+          onClick={() => { loadDashboard({ force: true }); loadPrayer(selectedCity); loadWeather(selectedCity); loadCurrency(); loadStandings(); loadGlobalLeagues({ force: true }); loadDollar() }}
           title="تحديث"
         >
           <RefreshCw size={13} className={(loading || prayerLoading || weatherLoading || currencyLoading || standingsLoading || globalLoading) ? 'dzd-spin' : ''} />
@@ -1024,6 +1041,79 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== DOLLAR BLACK MARKET ===== */}
+        {activeSection === 'dollar' && (
+          <div className="dzd-dollar-panel">
+            <div className="dzd-dollar-header">
+              <span className="dzd-dollar-title">💵 سوق الصرف — الدينار الجزائري</span>
+              <button className="dzd-retry-btn" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={loadDollar} disabled={dollarLoading}>
+                <RefreshCw size={10} className={dollarLoading ? 'dzd-spin' : ''} />
+                {dollarLoading ? 'جاري...' : 'تحديث'}
+              </button>
+            </div>
+
+            {dollarLoading ? (
+              <div className="dzd-dollar-grid">
+                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--currency" />)}
+              </div>
+            ) : dollarData ? (
+              <>
+                <div className="dzd-dollar-grid">
+                  {[
+                    { code: 'USD', label: 'دولار أمريكي', icon: '🇺🇸', rate: dollarData.usd },
+                    { code: 'EUR', label: 'يورو', icon: '🇪🇺', rate: dollarData.eur },
+                    { code: 'GBP', label: 'جنيه إسترليني', icon: '🇬🇧', rate: dollarData.gbp },
+                  ].map(c => (
+                    <div key={c.code} className="dzd-dollar-card" onClick={() => onSend(`سعر ${c.code} مقابل الدينار في السوق الموازية`)}>
+                      <div className="dzd-dollar-card-flag">{c.icon}</div>
+                      <div className="dzd-dollar-card-code">{c.code}</div>
+                      <div className="dzd-dollar-card-name">{c.label}</div>
+                      <div className="dzd-dollar-card-rate">{c.rate ? `${c.rate} دج` : '—'}</div>
+                      <div className="dzd-dollar-card-sub">1 {c.code}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="dzd-dollar-trend">
+                  <span>{dollarData.trend || '📊 البيانات محدّثة'}</span>
+                </div>
+                <div className="dzd-dollar-updated">
+                  المصدر: {dollarData.source || 'حساب تقديري'} — {dollarData.updatedAt ? new Date(dollarData.updatedAt).toLocaleTimeString('ar-DZ') : ''}
+                </div>
+              </>
+            ) : (
+              <div className="dzd-dollar-fallback">
+                <div className="dzd-dollar-disclaimer">
+                  📊 أسعار السوق تتغير يومياً. اسأل DZ Agent للحصول على آخر الأسعار.
+                </div>
+                <div className="dzd-dollar-questions">
+                  {['كم سعر الدولار اليوم بالدينار؟', 'ما سعر صرف اليورو في السوق الموازية؟', 'تحليل تطور سعر الدولار هذا الشهر'].map(q => (
+                    <button key={q} className="dzd-retry-btn" style={{ fontSize: 11, margin: '3px', padding: '5px 10px' }} onClick={() => onSend(q)}>
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="dzd-dollar-info">
+              <div className="dzd-dollar-info-title">📈 أسئلة شائعة</div>
+              <div className="dzd-dollar-qa-list">
+                {[
+                  'كم سعر الدولار الأسود اليوم؟',
+                  'مقارنة سعر الصرف الرسمي والموازي',
+                  'هل سيرتفع سعر الدولار قريباً؟',
+                  'أفضل طريقة لتحويل الأموال للجزائر',
+                  'سعر درهم الإمارات مقابل الدينار',
+                ].map(q => (
+                  <button key={q} className="dzd-dollar-qa-btn" onClick={() => onSend(q)}>
+                    <TrendingUp size={11} /> {q}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

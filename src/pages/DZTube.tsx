@@ -164,6 +164,7 @@ export default function DZTube() {
   const favoriteIds = useMemo(() => new Set(favorites.map(f => f.id)), [favorites])
   const [toast, setToast] = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [showBgTip, setShowBgTip] = useState(false)
   const showToast = useCallback((msg: string, kind: 'ok' | 'err' = 'ok') => {
     setToast({ msg, kind })
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -282,6 +283,7 @@ export default function DZTube() {
       channel: r.channel,
       duration: r.duration,
     })
+    setShowBgTip(true)
   }, [player, showToast])
 
   const playInFrame = useCallback((r: SearchResult) => {
@@ -929,6 +931,26 @@ export default function DZTube() {
       {toast && (
         <div className={`dzt-toast dzt-toast-${toast.kind}`} role="status">
           {toast.msg}
+        </div>
+      )}
+
+      {showBgTip && (
+        <div className="dzt-bgtip-overlay" onClick={() => setShowBgTip(false)}>
+          <div className="dzt-bgtip" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="dzt-bgtip-header">
+              <span className="dzt-bgtip-icon">🎧</span>
+              <span className="dzt-bgtip-title">DZ Tube</span>
+              <button className="dzt-bgtip-close" onClick={() => setShowBgTip(false)} aria-label="إغلاق">
+                <X size={16} />
+              </button>
+            </div>
+            <p className="dzt-bgtip-lead">إذا أردت التشغيل مع قفل الشاشة:</p>
+            <ol className="dzt-bgtip-steps">
+              <li>قم بفتح نافذة جديدة</li>
+              <li>إذا كان الصوت متوقفاً قم بالضغط على <strong>play</strong> في لوحة إشعارات الهاتف</li>
+            </ol>
+            <button className="dzt-bgtip-ok" onClick={() => setShowBgTip(false)}>حسناً</button>
+          </div>
         </div>
       )}
 

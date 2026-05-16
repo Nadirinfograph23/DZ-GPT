@@ -15,6 +15,13 @@ import compression from 'compression'
 // ── Autonomous Reasoning Engine (CoT, ReAct, ToT, Self-Reflection) ──────────
 import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
 
+// ── Owner Command System ──────────────────────────────────────────────────────
+import {
+  loadOwnerConfig, saveOwnerConfig,
+  detectOwnerCommand, processOwnerCommand,
+  verifyOwnerToken, getExtraFeeds,
+} from './lib/owner-commands.js'
+
 // ── Resilience layer (must import before anything else uses AI) ──────────────
 import {
   aiSemaphore,
@@ -1999,6 +2006,34 @@ app.get('/api/ai-router/health', (_req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }
+})
+
+// ===== OWNER: COMMAND ENDPOINT =====
+app.post('/api/owner/command', async (req, res) => {
+  const { message, githubToken } = req.body || {}
+  if (!message) return res.status(400).json({ error: 'message is required' })
+  const tok = githubToken || process.env.GITHUB_TOKEN || ''
+  const isOwner = await verifyOwnerToken(tok)
+  if (!isOwner) {
+    return res.status(403).json({ error: 'تحقق الهوية فشل — يجب أن تكون مالك المشروع (Nadirinfograph23).' })
+  }
+  const cfg = loadOwnerConfig()
+  const result = processOwnerCommand(message, cfg)
+  if (result.success && result.config) {
+    saveOwnerConfig(result.config)
+    if (result.feed) {
+      const alreadyIn = RSS_FEEDS.national.some(f => f.url === result.feed.url)
+      if (!alreadyIn) RSS_FEEDS.national.push({ name: result.feed.name, url: result.feed.url, _owner: true })
+    }
+  }
+  res.json({ success: result.success, message: result.message, config: result.config })
+})
+
+app.get('/api/owner/config', async (req, res) => {
+  const tok = req.headers.authorization?.replace('token ', '') || process.env.GITHUB_TOKEN || ''
+  const isOwner = await verifyOwnerToken(tok)
+  if (!isOwner) return res.status(403).json({ error: 'غير مصرح' })
+  res.json(loadOwnerConfig())
 })
 
 // ===== ADMIN: ROUTER DIAGNOSTIC SUMMARY =====
@@ -4435,6 +4470,16 @@ const RSS_FEEDS = {
     { name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index' },
     { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
   ],
+}
+
+// ── Load owner config and inject custom feeds ─────────────────────────────────
+const _ownerCfg = loadOwnerConfig()
+{
+  const _extraFeeds = getExtraFeeds(_ownerCfg)
+  if (_extraFeeds.length) {
+    RSS_FEEDS.national.push(..._extraFeeds)
+    console.log(`[OwnerCmd] Loaded ${_extraFeeds.length} custom news feed(s) from owner config`)
+  }
 }
 
 // ===== FOOTBALL INTELLIGENCE SYSTEM =====
@@ -9789,6 +9834,34 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const moderation = moderateMessage(lastUserMessage)
   if (!moderation.ok) {
     return res.status(200).json({ content: moderation.replyIfBlocked })
+  }
+
+  // ── Owner Command Detection ────────────────────────────────────────────────
+  const _ownerCmd = detectOwnerCommand(lastUserMessage)
+  if (_ownerCmd) {
+    const _tok = req.body.githubToken || process.env.GITHUB_TOKEN || ''
+    const _isOwner = await verifyOwnerToken(_tok)
+    if (_isOwner) {
+      const _cfg = loadOwnerConfig()
+      const _result = processOwnerCommand(lastUserMessage, _cfg)
+      if (_result.success && _result.config) {
+        saveOwnerConfig(_result.config)
+        // Hot-reload custom feeds without restart
+        if (_ownerCmd === 'add_feed' && _result.feed) {
+          const alreadyIn = RSS_FEEDS.national.some(f => f.url === _result.feed.url)
+          if (!alreadyIn) RSS_FEEDS.national.push({ name: _result.feed.name, url: _result.feed.url, _owner: true })
+        } else if (_ownerCmd === 'remove_feed') {
+          const before = RSS_FEEDS.national.length
+          RSS_FEEDS.national = RSS_FEEDS.national.filter(f => !f._owner || _result.config.feeds.some(cf => cf.url === f.url))
+          console.log(`[OwnerCmd] Removed ${before - RSS_FEEDS.national.length} feed(s) from runtime list`)
+        }
+      }
+      return res.status(200).json({ content: _result.message })
+    } else {
+      return res.status(200).json({
+        content: '⛔ **تحقق الهوية فشل**\n\nهذا الأمر مخصص لمالك المشروع فقط.\n\nللتنفيذ، يجب أن تكون متصلاً بـ GitHub بحساب مالك المشروع (`Nadirinfograph23`).',
+      })
+    }
   }
 
   // Step 2: Style detection (darija | franco | mixed | msa | french | unknown)

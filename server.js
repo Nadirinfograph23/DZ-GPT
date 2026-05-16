@@ -1805,16 +1805,17 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
 
-  // 1. Groq FIRST — fastest provider, ordered by speed then quality
-  // llama-3.1-8b-instant responds in ~0.5s for simple queries
+  // 1. Groq FIRST — fastest provider, cap tokens for speed on simple queries
+  // llama-3.1-8b-instant responds in ~0.4s
+  const effectiveTokens = Math.min(max_tokens, 4096)
   const groqModels = [
-    'llama-3.1-8b-instant',                           // ultra-fast, general purpose
-    'llama-3.3-70b-versatile',                        // best quality on Groq
-    'meta-llama/llama-4-scout-17b-16e-instruct',      // multimodal capable
-    'qwen/qwen3-32b',                                 // strong multilingual
+    'llama-3.1-8b-instant',              // ultra-fast ~0.4s
+    'llama-3.3-70b-versatile',           // best quality
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'qwen/qwen3-32b',
   ]
   for (const model of groqModels) {
-    const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens })
+    const { content } = await callGroqWithFallback({ model, messages: trimmed, max_tokens: effectiveTokens })
     if (validateAIContent(content, query)) return { content, model }
     if (content) logInvalidResponse(`groq:${model}`, query, content)
   }
@@ -17536,12 +17537,78 @@ if (isMain) {
     const enc = encodeURIComponent(imageUrl)
     return res.json({
       links: [
-        { name: 'Google Lens',   url: `https://lens.google.com/uploadbyurl?url=${enc}`,                                          icon: '🔍', color: '#4285F4' },
-        { name: 'Bing Visual',   url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,                 icon: '🔎', color: '#00809d' },
-        { name: 'Yandex',        url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                               icon: '🟡', color: '#f0330a' },
-        { name: 'TinEye',        url: `https://www.tineye.com/search?url=${enc}`,                                                icon: '👁️', color: '#72a81c' },
+        { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
+        { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
+        { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
+        { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
+        { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
       ],
     })
+  })
+
+  // POST /api/tools/reverse-image-upload — upload base64 image, return reverse search links via temp hosting
+  app.post('/api/tools/reverse-image-upload', async (req, res) => {
+    const imageBase64 = String(req.body.imageBase64 || '')
+    const mimeType = sanitizeString(String(req.body.mimeType || 'image/jpeg'), 50)
+    if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' })
+
+    try {
+      // Upload image to freeimage.host (free, no-key API)
+      const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+
+      // Try imgur anonymous upload (no key needed for base64)
+      const formData = new URLSearchParams()
+      formData.append('image', base64Data)
+      formData.append('type', 'base64')
+
+      const imgurRes = await fetch('https://api.imgur.com/3/image', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Client-ID 546c25a59c58ad7',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      let publicUrl = null
+      if (imgurRes.ok) {
+        const imgurData = await imgurRes.json()
+        publicUrl = imgurData?.data?.link
+      }
+
+      if (!publicUrl) {
+        // Fallback: use freeimagehost
+        const freeRes = await fetch('https://freeimage.host/api/1/upload?key=6d207e02198a847aa98d0a2a901485a5', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ source: base64Data, format: 'json' }).toString(),
+          signal: AbortSignal.timeout(12000),
+        })
+        if (freeRes.ok) {
+          const freeData = await freeRes.json()
+          publicUrl = freeData?.image?.url
+        }
+      }
+
+      if (!publicUrl) return res.status(500).json({ error: 'فشل رفع الصورة — يرجى استخدام رابط URL بدلاً من ذلك' })
+
+      const enc = encodeURIComponent(publicUrl)
+      console.log(`[ReverseImageUpload] Uploaded to ${publicUrl.slice(0, 60)}`)
+      return res.json({
+        url: publicUrl,
+        links: [
+          { name: 'Google Lens', url: `https://lens.google.com/uploadbyurl?url=${enc}`,                            icon: '🔍', color: '#4285F4' },
+          { name: 'Bing Visual', url: `https://www.bing.com/images/search?q=imgurl:${enc}&view=detailv2&iss=sbi`,  icon: '🔎', color: '#00809d' },
+          { name: 'Yandex',      url: `https://yandex.com/images/search?url=${enc}&rpt=imageview`,                 icon: '🟡', color: '#f0330a' },
+          { name: 'TinEye',      url: `https://www.tineye.com/search?url=${enc}`,                                  icon: '👁️', color: '#72a81c' },
+          { name: 'SauceNAO',   url: `https://saucenao.com/search.php?url=${enc}`,                                 icon: '🎨', color: '#1a1a2e' },
+        ],
+      })
+    } catch (err) {
+      console.error('[ReverseImageUpload] error:', err.message)
+      return res.status(500).json({ error: err.message })
+    }
   })
 
   // POST /api/tools/image-analyze — Gemini 1.5 Flash Vision

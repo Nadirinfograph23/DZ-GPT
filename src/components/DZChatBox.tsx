@@ -5187,13 +5187,12 @@ ${rows}
             إحصاءات
           </button>
           <button
-            className="gh-log-toggle"
+            className="gh-log-toggle gh-tools-btn"
             onClick={() => window.open('/tools', '_blank')}
             title="أدوات ذكية: سيرة ذاتية، مخطط مشاريع، تحليل قانوني"
           >
             <Wrench size={13} />
             أدوات
-            <span className="dz-tools-dot" />
           </button>
           <button
             className={`gh-log-toggle ${showLog ? 'active' : ''}`}

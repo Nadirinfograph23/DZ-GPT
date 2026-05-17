@@ -117,6 +117,7 @@ import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
+import { streamAIResponse } from './lib/ai-sdk-stream.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -13073,6 +13074,80 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   return res.status(200).json({
     content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**⚽ ذكاء كرة القدم:**\n- 🇩🇿 الدوري الجزائري (LFP)، المنتخب الوطني\n- 🌍 البريميرليغ، الليغا، البوندسليغا، السيريا، دوري الأبطال، كأس العالم، كأس أمم أفريقيا\n- 📡 SofaScore (مباشر)، BBC Sport، ESPN، كووورة\n\n**💱 أسعار الصرف (DZD):**\n- سعر الدولار، اليورو، الجنيه الإسترليني، الريال السعودي، الدرهم وغيرها\n- تحويل العملات مباشر (FloatRates)\n\n**📰 أخبار وخدمات:**\n- أخبار الجزائر والعالم (APS، الشروق، BBC)\n- 🕌 مواقيت الصلاة لكل المدن\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وكتابة الأكواد\n\nجرّب: **"سعر الدولار اليوم"** أو **"مباريات اليوم"** أو **"اعرض مستودعاتي"**',
   })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DZ AGENT STREAM — Fast SSE Streaming Endpoint (Vercel AI SDK)
+// ═══════════════════════════════════════════════════════════════════════════
+// استخدام streamText من Vercel AI SDK لإرسال tokens فورياً للعميل.
+// المستخدم يرى أول كلمة خلال ~300ms بدلاً من انتظار 2-8 ثوانٍ.
+//
+// الاستجابات المُرسَلة عبر SSE:
+//   data: {"token":"..."}     ← chunk نصي من LLM
+//   data: {"redirect":"full"} ← تحويل للـ endpoint الكامل (بيانات حية)
+//   data: {"error":"..."}     ← خطأ في جميع المزودين
+//   data: [DONE]              ← نهاية البث
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _streamSSEHeaders = (res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.flushHeaders()
+}
+
+// Queries that require LIVE data injection — redirect to full endpoint
+const _LIVE_DATA_RE = /طقس|حرارة|أمطار|ضباب|رياح|الجو اليوم|weather|مباراة|ماتش|أهداف|ترتيب الدوري|كأس أفريقيا|بطولة|صلاة|أذان|فجر|مغرب|عشاء|ظهر|عصر|سعر الصرف|دولار.*دينار|يورو.*دينار|صرف اليوم|آخر الأخبار|أخبار اليوم|أخبار.*الجزائر/i
+
+app.post('/api/dz-agent-stream', async (req, res) => {
+  const messages = normalizeChatMessages(req.body.messages)
+  if (!messages?.length) return res.status(400).json({ error: 'messages required' })
+
+  const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // ── Step 1: Moderation ───────────────────────────────────────────────────
+  const mod = moderateMessage(lastUserMessage)
+  if (!mod.ok) {
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ token: mod.replyIfBlocked })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
+  // ── Step 2: Live-data detection — redirect to full endpoint ──────────────
+  if (_LIVE_DATA_RE.test(lastUserMessage)) {
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
+  // ── Step 3: Core system prompt ───────────────────────────────────────────
+  const _yearNow  = getCurrentYear()
+  const _today    = getCurrentDateString('ar-DZ')
+  const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
+
+  const coreSystemPrompt = [
+    INTENT_SEPARATION_GUARD,
+    DZ_ADVANCED_REASONING_PROMPT,
+    `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
+    `اليوم: ${_today} | السنة: ${_yearNow}`,
+    `إذا سأل المستخدم عن نفسك (من أنت / ما مهاراتك): أجب بأنك DZ Agent، وكيل الجزائر الذكي الأول، أنشأه Nadir Houamria، يعمل 24/7، يدعم الدارجة والعربية والفرنسية. لا تذكر أسماء المزودين.`,
+    `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك صراحةً ولا تخترع`,
+    `روابط: [اسم](url) فقط — لا URL خام. Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
+    _training ? `\n━━━ تدريب مخصص من المالك (مُلزِم) ━━━\n${_training}` : '',
+  ].filter(Boolean).join('\n\n')
+
+  const isComplex = lastUserMessage.length > 50 || /[\u0600-\u06FF]{3,}/.test(lastUserMessage)
+
+  const apiMessages = [
+    { role: 'system', content: coreSystemPrompt },
+    ...messages,
+  ]
+
+  await streamAIResponse(res, apiMessages, { maxTokens: 3000, isComplex })
 })
 
 // ===== DZ AGENT GITHUB API ROUTES =====

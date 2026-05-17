@@ -5193,6 +5193,7 @@ ${rows}
           >
             <Wrench size={13} />
             أدوات
+            <span className="dz-tools-dot" />
           </button>
           <button
             className={`gh-log-toggle ${showLog ? 'active' : ''}`}

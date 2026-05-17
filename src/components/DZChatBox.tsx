@@ -326,6 +326,7 @@ interface DZMessage {
   pendingAction?: PendingAction
   actionLog?: ActionLogEntry[]
   isError?: boolean
+  isStreaming?: boolean
   showDevCard?: boolean
   selectedRepo?: RepoItem
   branches?: BranchItem[]
@@ -3290,6 +3291,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
+  const streamingMsgIdRef = useRef<string | null>(null)  // tracks the in-progress SSE message
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
   const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
   // Ref mirrors the state so sendMessage() always reads the latest value synchronously
@@ -4624,6 +4626,84 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           })()
         : Promise.resolve()
 
+      // ── Streaming fast-path (Vercel AI SDK) ──────────────────────────────
+      // يُجرّب endpoint البث أولاً — المستخدم يرى أول كلمة خلال ~300ms.
+      // إذا أعاد Server "redirect:full" (بيانات حية) → يُكمل بالـ endpoint الكامل.
+      const _streamResult = await (async (): Promise<string | null> => {
+        const tempId = generateId()
+        streamingMsgIdRef.current = tempId
+        setMessages(prev => [...prev, {
+          id: tempId,
+          role: 'assistant' as const,
+          content: '',
+          richType: 'text' as const,
+          isStreaming: true,
+        }])
+        try {
+          const streamRes = await fetch('/api/dz-agent-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            body: JSON.stringify({ messages: outboundMessages }),
+            signal,
+          })
+          if (!streamRes.ok || !streamRes.body) throw new Error(`stream-http:${streamRes.status}`)
+          const reader = streamRes.body.getReader()
+          const dec = new TextDecoder()
+          let accumulated = ''
+          let shouldRedirect = false
+          outer: while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            for (const line of dec.decode(value, { stream: true }).split('\n')) {
+              if (!line.startsWith('data: ')) continue
+              const raw = line.slice(6).trim()
+              if (raw === '[DONE]') break outer
+              try {
+                const parsed = JSON.parse(raw)
+                if (parsed.redirect === 'full' || parsed.error) { shouldRedirect = true; break outer }
+                if (parsed.token) {
+                  accumulated += parsed.token
+                  setMessages(prev => prev.map(m =>
+                    m.id === tempId ? { ...m, content: accumulated } : m
+                  ))
+                }
+              } catch { /* ignore malformed SSE lines */ }
+            }
+          }
+          if (shouldRedirect || !accumulated.trim()) {
+            setMessages(prev => prev.filter(m => m.id !== tempId))
+            streamingMsgIdRef.current = null
+            return null
+          }
+          setMessages(prev => prev.map(m =>
+            m.id === tempId ? { ...m, isStreaming: false } : m
+          ))
+          streamingMsgIdRef.current = null
+          return accumulated
+        } catch (err) {
+          if ((err as Error).name !== 'AbortError') {
+            console.warn('[DZChatBox] stream fast-path failed:', (err as Error).message)
+          }
+          setMessages(prev => prev.filter(m => m.id !== tempId))
+          streamingMsgIdRef.current = null
+          return null
+        }
+      })()
+
+      if (_streamResult) {
+        await thinkingTracePromise.catch(() => {})
+        if (thinkingTraceRoles) {
+          setMessages(prev => {
+            const lastAsst = [...prev].reverse().find(m => m.role === 'assistant')
+            if (!lastAsst) return prev
+            return prev.map(m =>
+              m.id === lastAsst.id ? { ...m, thinkingTrace: thinkingTraceRoles } : m
+            )
+          })
+        }
+        return
+      }
+
       // Helper to perform one DZ Agent fetch attempt — fully awaits json() inside
       const fetchAgentResponse = async (): Promise<Record<string, unknown>> => {
         return await withRetry(async () => {
@@ -5199,7 +5279,12 @@ ${rows}
                   <ThinkingTracePanel roles={msg.thinkingTrace} />
                 )}
                 {msg.role === 'assistant' ? (
-                  typingId === msg.id && msg.richType === 'text' ? (
+                  msg.isStreaming ? (
+                    <span className="dz-stream-text">
+                      {msg.content}
+                      <span className="dz-stream-cursor">▊</span>
+                    </span>
+                  ) : typingId === msg.id && msg.richType === 'text' ? (
                     <TypingEffect text={msg.content} onDone={() => setTypingId(null)} />
                   ) : (
                     <>

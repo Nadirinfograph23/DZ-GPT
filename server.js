@@ -20,6 +20,7 @@ import {
   loadOwnerConfig, saveOwnerConfig,
   detectOwnerCommand, processOwnerCommand,
   verifyOwnerToken, getExtraFeeds,
+  getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
 
 // ── Breaking News Detector ────────────────────────────────────────────────────
@@ -9936,30 +9937,57 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: moderation.replyIfBlocked })
   }
 
-  // ── Owner Command Detection ────────────────────────────────────────────────
+  // ── Owner Training & Command Detection ────────────────────────────────────
   const _ownerCmd = detectOwnerCommand(lastUserMessage)
   if (_ownerCmd) {
-    const _tok = req.body.githubToken || process.env.GITHUB_TOKEN || ''
+    const _tok     = req.body.githubToken || process.env.GITHUB_TOKEN || ''
     const _isOwner = await verifyOwnerToken(_tok)
     if (_isOwner) {
-      const _cfg = loadOwnerConfig()
+      const _cfg    = loadOwnerConfig()
       const _result = processOwnerCommand(lastUserMessage, _cfg)
-      if (_result.success && _result.config) {
-        saveOwnerConfig(_result.config)
-        // Hot-reload custom feeds without restart
-        if (_ownerCmd === 'add_feed' && _result.feed) {
-          const alreadyIn = RSS_FEEDS.national.some(f => f.url === _result.feed.url)
-          if (!alreadyIn) RSS_FEEDS.national.push({ name: _result.feed.name, url: _result.feed.url, _owner: true })
-        } else if (_ownerCmd === 'remove_feed') {
-          const before = RSS_FEEDS.national.length
-          RSS_FEEDS.national = RSS_FEEDS.national.filter(f => !f._owner || _result.config.feeds.some(cf => cf.url === f.url))
-          console.log(`[OwnerCmd] Removed ${before - RSS_FEEDS.national.length} feed(s) from runtime list`)
+
+      if (_result.success) {
+        // ── حفظ تغييرات مصادر الأخبار ──────────────────────────────────────
+        if (_result.config) {
+          saveOwnerConfig(_result.config)
+
+          if (_ownerCmd === 'add_feed' && _result.feed) {
+            // Hot-reload في RSS الأخبار العامة
+            const alreadyIn = RSS_FEEDS.national.some(f => f.url === _result.feed.url)
+            if (!alreadyIn) RSS_FEEDS.national.push({ name: _result.feed.name, url: _result.feed.url, _owner: true })
+
+            // إضافة إلى نظام الأخبار العاجلة (breaking-news poller)
+            addFeed(_result.feed.name, _result.feed.url)
+
+            console.log(`[OwnerTraining] ✅ add_feed → RSS.national + BreakingNews + owner_config.json: ${_result.feed.url}`)
+
+          } else if (_ownerCmd === 'remove_feed') {
+            // حذف من RSS الأخبار العامة
+            const before = RSS_FEEDS.national.length
+            RSS_FEEDS.national = RSS_FEEDS.national.filter(
+              f => !f._owner || _result.config.feeds.some(cf => cf.url === f.url)
+            )
+            const removed = before - RSS_FEEDS.national.length
+
+            // حذف من نظام الأخبار العاجلة
+            const feedUrl = lastUserMessage.match(/https?:\/\/[^\s<>"،,\u060C\u061B]+/)?.[0]?.replace(/[.,;!?]+$/, '')
+            if (feedUrl) removeFeed(feedUrl)
+
+            console.log(`[OwnerTraining] 🗑️ remove_feed → RSS.national (${removed}) + BreakingNews + owner_config.json`)
+          }
+        }
+
+        // ── حفظ بيانات التدريب (facts / qa_pairs / behaviors) ──────────────
+        if (_result.training) {
+          console.log(`[OwnerTraining] 🧠 ${_ownerCmd} → agent_training.json saved`)
         }
       }
+
       return res.status(200).json({ content: _result.message })
+
     } else {
       return res.status(200).json({
-        content: '⛔ **تحقق الهوية فشل**\n\nهذا الأمر مخصص لمالك المشروع فقط.\n\nللتنفيذ، يجب أن تكون متصلاً بـ GitHub بحساب مالك المشروع (`Nadirinfograph23`).',
+        content: '⛔ **تحقق الهوية فشل**\n\nهذا الأمر مخصص لمالك المشروع فقط.\n\nللتنفيذ، يجب أن تكون متصلاً بـ GitHub بحساب المالك (`Nadirinfograph23`).',
       })
     }
   }
@@ -12886,6 +12914,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
     _memoryContext ? `\n${_memoryContext}` : '',
+
+    // ── Owner Training Injection (facts / qa / behaviors from admin) ──────
+    (() => {
+      try {
+        const _tc = getTrainingContext()
+        return _tc ? `\n━━━ تدريب مخصص من المالك (مُلزِم) ━━━\n${_tc}` : ''
+      } catch { return '' }
+    })(),
+
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [

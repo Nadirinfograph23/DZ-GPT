@@ -4697,7 +4697,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const lastAsst = [...prev].reverse().find(m => m.role === 'assistant')
             if (!lastAsst) return prev
             return prev.map(m =>
-              m.id === lastAsst.id ? { ...m, thinkingTrace: thinkingTraceRoles } : m
+              m.id === lastAsst.id ? { ...m, thinkingTrace: thinkingTraceRoles! } : m
             )
           })
         }

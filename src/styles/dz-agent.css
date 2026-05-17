@@ -1999,19 +1999,21 @@
   }
 }
 
-.dz-tools-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
+.gh-tools-btn::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 5px #22c55e, 0 0 10px #22c55e88;
-  animation: dz-tools-blink 1.4s ease-in-out infinite;
+  box-shadow: 0 0 4px #22c55e, 0 0 8px #22c55e99;
+  animation: gh-tools-pulse 1.4s ease-in-out infinite;
   flex-shrink: 0;
+  margin-right: 1px;
 }
-@keyframes dz-tools-blink {
-  0%, 100% { opacity: 1; box-shadow: 0 0 5px #22c55e, 0 0 10px #22c55e88; }
-  50% { opacity: 0.25; box-shadow: none; }
+@keyframes gh-tools-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px #22c55e, 0 0 8px #22c55e99; }
+  50%       { opacity: 0.2; box-shadow: none; }
 }
 
 .dz-log-badge {

@@ -18458,33 +18458,53 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 
 // ── Image Processing Tools ─────────────────────────────────────────────────
 
-// POST /api/tools/img-remove-bg — Background removal via HuggingFace RMBG-1.4
+// POST /api/tools/img-remove-bg — Background removal via withoutbg.com
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64, mimeType = 'image/jpeg' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
-  const hfKey = process.env.HF_TOKEN
-  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
+  const apiKey = process.env.WITHOUTBG_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-  const imgBytes = Buffer.from(b64, 'base64')
-  for (const model of ['briaai/RMBG-1.4', 'Xenova/modnet', 'schirrmacher/person-segmentation']) {
-    try {
-      const r = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': mimeType },
-        body: imgBytes,
-        signal: AbortSignal.timeout(90000),
-      })
-      if (r.ok) {
-        const buf = await r.arrayBuffer()
-        const ct = r.headers.get('content-type') || 'image/png'
-        console.log(`[RemoveBG:${model}] ok`)
-        return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}`, model })
-      }
+  try {
+    const sharp = (await import('sharp')).default
+    const r = await fetch('https://api.withoutbg.com/v1.0/alpha-channel-base64', {
+      method: 'POST',
+      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_base64: b64 }),
+      signal: AbortSignal.timeout(60000),
+    })
+    if (!r.ok) {
       const errTxt = await r.text()
-      console.warn(`[RemoveBG:${model}] ${r.status}: ${errTxt.slice(0, 100)}`)
-    } catch (e) { console.warn(`[RemoveBG:${model}] ${e.message}`) }
+      console.warn(`[RemoveBG] ${r.status}: ${errTxt.slice(0, 200)}`)
+      return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول بعد لحظات' })
+    }
+    const data = await r.json()
+    if (!data.alpha_base64) return res.status(500).json({ error: 'استجابة غير صحيحة من الخدمة' })
+    const origBuf = Buffer.from(b64, 'base64')
+    const alphaBuf = Buffer.from(data.alpha_base64, 'base64')
+    const { data: origRaw, info: origInfo } = await sharp(origBuf)
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .raw().toBuffer({ resolveWithObject: true })
+    const { data: alphaRaw } = await sharp(alphaBuf)
+      .resize({ width: origInfo.width, height: origInfo.height, fit: 'fill' })
+      .grayscale().raw().toBuffer({ resolveWithObject: true })
+    const rgbaPixels = Buffer.alloc(origInfo.width * origInfo.height * 4)
+    const channels = origInfo.channels
+    for (let i = 0; i < origInfo.width * origInfo.height; i++) {
+      rgbaPixels[i * 4]     = origRaw[i * channels]
+      rgbaPixels[i * 4 + 1] = origRaw[i * channels + 1]
+      rgbaPixels[i * 4 + 2] = origRaw[i * channels + 2]
+      rgbaPixels[i * 4 + 3] = alphaRaw[i]
+    }
+    const resultBuf = await sharp(rgbaPixels, {
+      raw: { width: origInfo.width, height: origInfo.height, channels: 4 }
+    }).png().toBuffer()
+    console.log('[RemoveBG] ok')
+    return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}` })
+  } catch (e) {
+    console.error('[RemoveBG]', e.message)
+    return res.status(500).json({ error: 'خطأ في معالجة الصورة' })
   }
-  return res.status(500).json({ error: 'فشل إزالة الخلفية — النموذج مشغول، حاول بعد لحظات' })
 })
 
 // POST /api/tools/img-upscale — Image upscaling via HuggingFace Swin2SR / ESRGAN

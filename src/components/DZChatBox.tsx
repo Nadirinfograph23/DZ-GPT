@@ -3461,7 +3461,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
     if (!githubToken && !serverGithubConnected) {
-      addAssistantMessage({ content: 'عاود اخرج من GitHub (تسجيل الخروج) وعاود ادخل (تسجيل الدخول) من الفوق 🔄\nمبعد اضغط على **عرض مستودعاتي** 👌', richType: 'text' })
+      addAssistantMessage({
+        content: '🔐 **لعرض مستودعاتك على GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى، ثم عُد واضغط على **عرض مستودعاتي** مجدداً.',
+        richType: 'text',
+      })
       return
     }
     setIsLoading(true)
@@ -4484,34 +4487,42 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
 
       // ── GitHub dashboard quick-action shortcuts (bypass AI routing) ─────────
-      // These 3 buttons should trigger direct GitHub UI actions, not AI text
-      const _ghDirectListRepos  = 'اعرض مستودعاتي على GitHub'
-      const _ghDirectAnalyze    = 'حلل الكود في مستودعي وأعطني تقريراً عن الأخطاء والتحسينات'
+      // These buttons trigger direct GitHub UI actions, not AI text
+      const _ghDirectListRepos = 'اعرض مستودعاتي على GitHub'
+      const _ghDirectAnalyze   = 'حلل الكود في مستودعي وأعطني تقريراً عن الأخبار والتحسينات'
+      const _ghDirectAnalyze2  = 'حلل الكود في مستودعي وأعطني تقريراً عن الأخطاء والتحسينات'
+      const _ghDirectCreate    = 'أنشئ مستودع جديد على GitHub'
 
-      if (text === _ghDirectListRepos || text === _ghDirectAnalyze) {
+      const _isGhDirect = text === _ghDirectListRepos
+        || text === _ghDirectAnalyze
+        || text === _ghDirectAnalyze2
+        || text === _ghDirectCreate
+
+      if (_isGhDirect) {
         setIsLoading(false)
+        // Guard: token required for all GitHub direct actions
         if (!githubToken) {
           addAssistantMessage({
-            content: '🔐 يجب ربط حساب GitHub أولاً.\n\nانقر على زر **"ربط GitHub"** في الأعلى ثم كرر الطلب.',
+            content: '🔐 **لاستخدام ميزات GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى لربط حسابك، ثم كرر الطلب.',
             richType: 'text',
           })
           return
         }
+
         if (text === _ghDirectListRepos) {
-          // Directly open the interactive repo picker — no AI involved
+          // Open interactive repo picker directly — no AI involved
           await fetchRepos()
           return
         }
-        if (text === _ghDirectAnalyze) {
+
+        if (text === _ghDirectAnalyze || text === _ghDirectAnalyze2) {
           if (!currentRepo) {
-            // No repo selected yet — show picker first with context message
             addAssistantMessage({
               content: '🔬 **تحليل الكود**\n\nاختر أولاً المستودع الذي تريد تحليله:',
               richType: 'text',
             })
             await fetchRepos()
           } else {
-            // Repo already selected — run full scan directly
             await scanRepo({
               name: currentRepo.split('/')[1] || currentRepo,
               full_name: currentRepo,
@@ -4522,6 +4533,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               html_url: `https://github.com/${currentRepo}`,
             })
           }
+          return
+        }
+
+        if (text === _ghDirectCreate) {
+          // Show repo picker to pick base, then guide to create
+          addAssistantMessage({
+            content: '🆕 **إنشاء مستودع جديد**\n\nاختر مستودعاً موجوداً كمرجع (اختياري) أو أخبرني باسم المستودع الجديد مباشرةً:',
+            richType: 'text',
+          })
+          await fetchRepos()
           return
         }
       }
@@ -4659,6 +4680,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
       if (data.action === 'list-repos') {
         trackFeatureUsage('github-repos')
+        // Guard: if no token yet, show connect prompt instead of the cryptic fetchRepos error
+        if (!githubToken && !serverGithubConnected) {
+          addAssistantMessage({
+            content: '🔐 **لاستخدام ميزات GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى لربط حسابك، ثم كرر الطلب.',
+            richType: 'text',
+          })
+          return
+        }
         await fetchRepos()
         return
       }

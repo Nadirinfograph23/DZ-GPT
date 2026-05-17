@@ -23,7 +23,10 @@ import {
 } from './lib/owner-commands.js'
 
 // ── Breaking News Detector ────────────────────────────────────────────────────
-import { startBreakingNewsPoller } from './lib/breaking-news.js'
+import {
+  startBreakingNewsPoller,
+  listFeeds, addFeed, removeFeed, pauseFeed, resumeFeed, triggerPollNow,
+} from './lib/breaking-news.js'
 
 // ── Resilience layer (must import before anything else uses AI) ──────────────
 import {
@@ -2072,6 +2075,65 @@ app.get('/api/owner/config', async (req, res) => {
   const isOwner = await verifyOwnerToken(tok)
   if (!isOwner) return res.status(403).json({ error: 'غير مصرح' })
   res.json(loadOwnerConfig())
+})
+
+// ===== OWNER: BREAKING-FEEDS MANAGEMENT =====
+
+/** مساعد: التحقق من هوية المالك من Authorization أو body */
+async function _ownerAuth(req, res) {
+  const tok =
+    (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '') ||
+    req.body?.githubToken ||
+    process.env.GITHUB_TOKEN ||
+    ''
+  const ok = await verifyOwnerToken(tok)
+  if (!ok) res.status(403).json({ ok: false, error: 'تحقق الهوية فشل — يجب أن تكون Nadirinfograph23.' })
+  return ok
+}
+
+/** GET /api/owner/breaking-feeds — قائمة كل المصادر مع حالتها */
+app.get('/api/owner/breaking-feeds', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  res.json({ ok: true, feeds: listFeeds() })
+})
+
+/** POST /api/owner/breaking-feeds — إضافة مصدر جديد { name, url } */
+app.post('/api/owner/breaking-feeds', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  const { name, url } = req.body || {}
+  const result = addFeed(name?.trim(), url?.trim())
+  res.status(result.ok ? 200 : 400).json(result)
+})
+
+/** DELETE /api/owner/breaking-feeds — حذف مصدر { url } */
+app.delete('/api/owner/breaking-feeds', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  const { url } = req.body || {}
+  if (!url) return res.status(400).json({ ok: false, error: 'url مطلوب' })
+  res.json(removeFeed(url))
+})
+
+/** PATCH /api/owner/breaking-feeds/pause — إيقاف مؤقت { url } */
+app.patch('/api/owner/breaking-feeds/pause', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  const { url } = req.body || {}
+  if (!url) return res.status(400).json({ ok: false, error: 'url مطلوب' })
+  res.json(pauseFeed(url))
+})
+
+/** PATCH /api/owner/breaking-feeds/resume — استئناف { url } */
+app.patch('/api/owner/breaking-feeds/resume', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  const { url } = req.body || {}
+  if (!url) return res.status(400).json({ ok: false, error: 'url مطلوب' })
+  res.json(resumeFeed(url))
+})
+
+/** POST /api/owner/breaking-feeds/poll — فحص فوري بدون انتظار 2 دقيقة */
+app.post('/api/owner/breaking-feeds/poll', async (req, res) => {
+  if (!await _ownerAuth(req, res)) return
+  triggerPollNow().catch(() => {})
+  res.json({ ok: true, message: 'بدأ الفحص الفوري — النتائج ستُبث عبر SSE إذا وُجدت أخبار عاجلة' })
 })
 
 // ===== ADMIN: ROUTER DIAGNOSTIC SUMMARY =====

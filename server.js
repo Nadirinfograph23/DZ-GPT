@@ -18457,6 +18457,8 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 })
 
 // ── Image Processing Tools ─────────────────────────────────────────────────
+const REMBG_PORT = 7000
+let rembgReady = false
 
 // POST /api/tools/img-remove-bg — Background removal via rembg (local) or withoutbg (Vercel fallback)
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
@@ -18531,65 +18533,65 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
   }
 })
 
-// POST /api/tools/img-upscale — Image upscaling via HuggingFace Swin2SR / ESRGAN
+// POST /api/tools/img-upscale — Image upscaling via sharp Lanczos (free, local, instant)
 app.post('/api/tools/img-upscale', express.json({ limit: '25mb' }), async (req, res) => {
-  const { imageBase64, mimeType = 'image/jpeg' } = req.body
+  const { imageBase64, scale: scaleStr = '4' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
-  const hfKey = process.env.HF_TOKEN
-  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-  const imgBytes = Buffer.from(b64, 'base64')
-  for (const model of [
-    'caidas/swin2SR-realworld-sr-x4-64-bsrgan-psnr',
-    'caidas/swin2SR-lightweight-x2-64',
-    'eugenesiow/super-image',
-  ]) {
-    try {
-      const r = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': mimeType },
-        body: imgBytes,
-        signal: AbortSignal.timeout(120000),
-      })
-      if (r.ok) {
-        const buf = await r.arrayBuffer()
-        const ct = r.headers.get('content-type') || 'image/png'
-        console.log(`[Upscale:${model}] ok`)
-        return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}`, model })
-      }
-      const errTxt = await r.text()
-      console.warn(`[Upscale:${model}] ${r.status}: ${errTxt.slice(0, 100)}`)
-    } catch (e) { console.warn(`[Upscale:${model}] ${e.message}`) }
+  try {
+    const sharp = (await import('sharp')).default
+    const inputBuf = Buffer.from(b64, 'base64')
+    const meta = await sharp(inputBuf).metadata()
+    const scaleN = Math.min(Math.max(parseInt(scaleStr) || 4, 2), 4)
+    const newW = (meta.width  || 512) * scaleN
+    const newH = (meta.height || 512) * scaleN
+    const MAX = 4096
+    const clampedW = Math.min(newW, MAX)
+    const clampedH = Math.min(newH, MAX)
+    const resultBuf = await sharp(inputBuf)
+      .resize(clampedW, clampedH, { kernel: 'lanczos3', fit: 'fill' })
+      .png()
+      .toBuffer()
+    console.log(`[Upscale] ${meta.width}x${meta.height} → ${clampedW}x${clampedH}`)
+    return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}` })
+  } catch (e) {
+    console.error('[Upscale]', e.message)
+    return res.status(500).json({ error: 'فشل تحسين الصورة' })
   }
-  return res.status(500).json({ error: 'فشل تحسين الصورة — النموذج مشغول، حاول بعد لحظات' })
 })
 
-// POST /api/tools/img-inpaint — Object removal via HuggingFace inpainting
+// POST /api/tools/img-inpaint — Object removal via skimage biharmonic inpainting (free, local)
 app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, res) => {
-  const { imageBase64, maskBase64, prompt = 'plain seamless background, no artifacts' } = req.body
+  const { imageBase64, maskBase64 } = req.body
   if (!imageBase64 || !maskBase64) return res.status(400).json({ error: 'imageBase64 و maskBase64 مطلوبان' })
-  const hfKey = process.env.HF_TOKEN
-  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
   const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
   const mskB64 = maskBase64.includes(',') ? maskBase64.split(',')[1] : maskBase64
+  const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'inpaint.py')
+  const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
+  const payload = JSON.stringify({ image: imgB64, mask: mskB64 })
   try {
-    const r = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inputs: prompt, parameters: { image: imgB64, mask_image: mskB64 } }),
-      signal: AbortSignal.timeout(120000),
+    const result = await new Promise((resolve, reject) => {
+      const proc = spawn('python3', [scriptPath], {
+        env: { ...process.env, PYTHONPATH: pythonLibs },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      const chunks = []
+      const errChunks = []
+      proc.stdout.on('data', d => chunks.push(d))
+      proc.stderr.on('data', d => errChunks.push(d))
+      proc.on('close', code => {
+        if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString().slice(0, 200)))
+        resolve(Buffer.concat(chunks).toString().trim())
+      })
+      proc.on('error', reject)
+      proc.stdin.write(payload)
+      proc.stdin.end()
     })
-    if (r.ok) {
-      const buf = await r.arrayBuffer()
-      const ct = r.headers.get('content-type') || 'image/png'
-      console.log('[Inpaint] ok')
-      return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}` })
-    }
-    const errTxt = await r.text()
-    console.warn(`[Inpaint] ${r.status}: ${errTxt.slice(0, 120)}`)
-    return res.status(500).json({ error: `فشل حذف العنصر — ${errTxt.slice(0, 80)}` })
+    console.log('[Inpaint] ok —', result.length, 'chars')
+    return res.json({ imageBase64: `data:image/png;base64,${result}` })
   } catch (e) {
-    return res.status(500).json({ error: `خطأ: ${e.message}` })
+    console.error('[Inpaint]', e.message)
+    return res.status(500).json({ error: 'فشل حذف العنصر: ' + e.message.slice(0, 100) })
   }
 })
 
@@ -18721,19 +18723,18 @@ if (isMain) {
   });
 
   // ── Start rembg HTTP server locally (skip on Vercel) ───────────────────────
-  const REMBG_PORT = 7000
-  let rembgReady = false
   if (!process.env.VERCEL) {
-    const rembgBin = path.join(process.cwd(), '.pythonlibs/bin/rembg')
+    const rembgScript = path.join(process.cwd(), 'scripts', 'rembg_server.py')
     const rembgPythonPath = path.join(process.cwd(), '.pythonlibs/lib/python3.11/site-packages')
     const startRembg = () => {
-      const proc = spawn(rembgBin, ['s', '--port', String(REMBG_PORT), '--no-ui', '--log_level', 'warning'], {
+      const proc = spawn('python3', [rembgScript, '--port', String(REMBG_PORT)], {
         env: { ...process.env, PYTHONPATH: rembgPythonPath },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       const markReady = (d) => {
         const msg = d.toString()
-        if (/Application startup|Uvicorn running|Started server/i.test(msg)) rembgReady = true
+        console.log('[rembg]', msg.trim())
+        if (/listening on port/i.test(msg)) rembgReady = true
       }
       proc.stdout.on('data', markReady)
       proc.stderr.on('data', markReady)
@@ -18743,8 +18744,8 @@ if (isMain) {
         setTimeout(startRembg, 5000)
       })
       proc.on('error', (e) => console.warn('[rembg] spawn error:', e.message))
-      // Assume ready after 30s in case log format changes
-      setTimeout(() => { rembgReady = true }, 30000)
+      // Fallback: assume ready after 20s
+      setTimeout(() => { rembgReady = true }, 20000)
       console.log('[rembg] starting background removal server on port', REMBG_PORT)
     }
     startRembg()

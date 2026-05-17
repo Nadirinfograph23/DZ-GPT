@@ -1999,6 +1999,21 @@
   }
 }
 
+.dz-tools-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 5px #22c55e, 0 0 10px #22c55e88;
+  animation: dz-tools-blink 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes dz-tools-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 5px #22c55e, 0 0 10px #22c55e88; }
+  50% { opacity: 0.25; box-shadow: none; }
+}
+
 .dz-log-badge {
   display: inline-flex;
   align-items: center;

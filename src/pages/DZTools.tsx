@@ -2002,6 +2002,9 @@ function ImageProcessingTool() {
   const [error, setError]       = useState('')
   const [modelUsed, setModelUsed] = useState('')
 
+  // Enhance settings
+  const [enhanceScale, setEnhanceScale] = useState<'2' | '4'>('4')
+
   // Compress settings
   const [compFmt, setCompFmt]     = useState<'image/webp' | 'image/jpeg'>('image/webp')
   const [compQ, setCompQ]         = useState(80)
@@ -2036,14 +2039,14 @@ function ImageProcessingTool() {
   }
 
   // ── Server-side (Remove BG / Enhance) ────────────────────────────────────
-  const processServer = async (endpoint: string) => {
+  const processServer = async (endpoint: string, extras: Record<string, string> = {}) => {
     if (!inputImage) return
     setLoading(true); setError(''); setResult(''); setModelUsed('')
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: inputImage, mimeType: inputMime }),
+        body: JSON.stringify({ imageBase64: inputImage, mimeType: inputMime, ...extras }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
@@ -2238,9 +2241,21 @@ function ImageProcessingTool() {
           <UploadZone />
           {inputImage && (
             <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">✨ يستخدم نموذج <strong>Swin2SR</strong> لرفع دقة الصورة 4x وتحسين التفاصيل (قد تستغرق دقيقة)</div>
-              <button className="dzt-btn" onClick={() => processServer('/api/tools/img-upscale')} disabled={loading}>
-                {loading ? <><span className="dzt-spinner" /> جاري التحسين — انتظر...</> : '✨ تحسين الجودة 4x'}
+              <div className="dzt-imgproc-hint">✨ يرفع دقة الصورة ويحسّن التفاصيل — يعمل محلياً بدون اتصال خارجي</div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">نسبة التكبير:</label>
+                <div className="dzt-imgproc-btn-group">
+                  {(['2', '4'] as const).map(s => (
+                    <button key={s}
+                      className={`dzt-imgproc-opt${enhanceScale === s ? ' active' : ''}`}
+                      onClick={() => setEnhanceScale(s)}>
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button className="dzt-btn" onClick={() => processServer('/api/tools/img-upscale', { scale: enhanceScale })} disabled={loading}>
+                {loading ? <><span className="dzt-spinner" /> جاري التحسين...</> : `✨ تحسين الجودة ${enhanceScale}x`}
               </button>
             </div>
           )}
@@ -2340,7 +2355,7 @@ function ImageProcessingTool() {
             <UploadZone forInpaint />
           ) : (
             <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">🖌️ ارسم باللون الأحمر فوق العنصر المراد حذفه، ثم اضغط <strong>حذف العنصر</strong></div>
+              <div className="dzt-imgproc-hint">🖌️ ارسم باللون الأحمر فوق العنصر المراد حذفه، ثم اضغط <strong>حذف العنصر</strong> — المعالجة محلية بدون اتصال خارجي</div>
               <div className="dzt-imgproc-row">
                 <label className="dzt-imgproc-label">الفرشاة: <strong>{brushSize}px</strong></label>
                 <input type="range" min={5} max={80} value={brushSize}

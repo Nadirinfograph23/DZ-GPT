@@ -2223,7 +2223,7 @@ function ImageProcessingTool() {
           <UploadZone />
           {inputImage && (
             <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">🧽 يستخدم نموذج <strong>RMBG-1.4</strong> لإزالة الخلفية وإخراج PNG شفاف عالي الجودة</div>
+              <div className="dzt-imgproc-hint">🧽 يزيل الخلفية تلقائياً ويُخرج PNG شفاف عالي الجودة — أشخاص، منتجات، شعارات</div>
               <button className="dzt-btn" onClick={() => processServer('/api/tools/img-remove-bg')} disabled={loading}>
                 {loading ? <><span className="dzt-spinner" /> جاري المعالجة...</> : '🧽 إزالة الخلفية'}
               </button>

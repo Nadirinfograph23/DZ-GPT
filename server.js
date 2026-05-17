@@ -18456,6 +18456,99 @@ app.post('/api/tools/image-analyze', async (req, res) => {
   return res.status(500).json({ error: 'فشل تحليل الصورة — يرجى المحاولة مرة أخرى لاحقاً' })
 })
 
+// ── Image Processing Tools ─────────────────────────────────────────────────
+
+// POST /api/tools/img-remove-bg — Background removal via HuggingFace RMBG-1.4
+app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
+  const { imageBase64, mimeType = 'image/jpeg' } = req.body
+  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
+  const hfKey = process.env.HF_TOKEN
+  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
+  const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const imgBytes = Buffer.from(b64, 'base64')
+  for (const model of ['briaai/RMBG-1.4', 'Xenova/modnet', 'schirrmacher/person-segmentation']) {
+    try {
+      const r = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': mimeType },
+        body: imgBytes,
+        signal: AbortSignal.timeout(90000),
+      })
+      if (r.ok) {
+        const buf = await r.arrayBuffer()
+        const ct = r.headers.get('content-type') || 'image/png'
+        console.log(`[RemoveBG:${model}] ok`)
+        return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}`, model })
+      }
+      const errTxt = await r.text()
+      console.warn(`[RemoveBG:${model}] ${r.status}: ${errTxt.slice(0, 100)}`)
+    } catch (e) { console.warn(`[RemoveBG:${model}] ${e.message}`) }
+  }
+  return res.status(500).json({ error: 'فشل إزالة الخلفية — النموذج مشغول، حاول بعد لحظات' })
+})
+
+// POST /api/tools/img-upscale — Image upscaling via HuggingFace Swin2SR / ESRGAN
+app.post('/api/tools/img-upscale', express.json({ limit: '25mb' }), async (req, res) => {
+  const { imageBase64, mimeType = 'image/jpeg' } = req.body
+  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
+  const hfKey = process.env.HF_TOKEN
+  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
+  const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const imgBytes = Buffer.from(b64, 'base64')
+  for (const model of [
+    'caidas/swin2SR-realworld-sr-x4-64-bsrgan-psnr',
+    'caidas/swin2SR-lightweight-x2-64',
+    'eugenesiow/super-image',
+  ]) {
+    try {
+      const r = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': mimeType },
+        body: imgBytes,
+        signal: AbortSignal.timeout(120000),
+      })
+      if (r.ok) {
+        const buf = await r.arrayBuffer()
+        const ct = r.headers.get('content-type') || 'image/png'
+        console.log(`[Upscale:${model}] ok`)
+        return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}`, model })
+      }
+      const errTxt = await r.text()
+      console.warn(`[Upscale:${model}] ${r.status}: ${errTxt.slice(0, 100)}`)
+    } catch (e) { console.warn(`[Upscale:${model}] ${e.message}`) }
+  }
+  return res.status(500).json({ error: 'فشل تحسين الصورة — النموذج مشغول، حاول بعد لحظات' })
+})
+
+// POST /api/tools/img-inpaint — Object removal via HuggingFace inpainting
+app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, res) => {
+  const { imageBase64, maskBase64, prompt = 'plain seamless background, no artifacts' } = req.body
+  if (!imageBase64 || !maskBase64) return res.status(400).json({ error: 'imageBase64 و maskBase64 مطلوبان' })
+  const hfKey = process.env.HF_TOKEN
+  if (!hfKey) return res.status(500).json({ error: 'HuggingFace API غير متوفر' })
+  const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const mskB64 = maskBase64.includes(',') ? maskBase64.split(',')[1] : maskBase64
+  try {
+    const r = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${hfKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputs: prompt, parameters: { image: imgB64, mask_image: mskB64 } }),
+      signal: AbortSignal.timeout(120000),
+    })
+    if (r.ok) {
+      const buf = await r.arrayBuffer()
+      const ct = r.headers.get('content-type') || 'image/png'
+      console.log('[Inpaint] ok')
+      return res.json({ imageBase64: `data:${ct};base64,${Buffer.from(buf).toString('base64')}` })
+    }
+    const errTxt = await r.text()
+    console.warn(`[Inpaint] ${r.status}: ${errTxt.slice(0, 120)}`)
+    return res.status(500).json({ error: `فشل حذف العنصر — ${errTxt.slice(0, 80)}` })
+  } catch (e) {
+    return res.status(500).json({ error: `خطأ: ${e.message}` })
+  }
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -18538,6 +18631,50 @@ if (isMain) {
   }, 10 * 60 * 1000, { label: 'resilience-housekeeping' })
 
   // (DZ Tools image routes are registered above export{app} — available on Vercel too)
+
+  // TEMP deploy endpoint — used by agent to push files via server process.env
+  app.post('/api/_agent_deploy', express.json(), async (req, res) => {
+    const { files, commit_msg, repo, branch, vercel_project_id } = req.body;
+    const GH = process.env.GITHUB_TOKEN;
+    const VC = process.env.VERCEL_TOKEN;
+    if (!GH) return res.status(500).json({ error: 'GITHUB_TOKEN missing' });
+    const results = [];
+    for (const filePath of files) {
+      try {
+        const { readFileSync } = await import('fs');
+        const content = readFileSync(filePath, 'utf-8');
+        const b64 = Buffer.from(content).toString('base64');
+        const getRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`, {
+          headers: { Authorization: `token ${GH}`, Accept: 'application/vnd.github+json' }
+        });
+        let sha = null;
+        if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+        const body = { message: commit_msg, content: b64, branch };
+        if (sha) body.sha = sha;
+        const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+          method: 'PUT',
+          headers: { Authorization: `token ${GH}`, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+          body: JSON.stringify(body)
+        });
+        const r = await putRes.json();
+        if (!putRes.ok) { results.push({ file: filePath, error: r.message }); continue; }
+        results.push({ file: filePath, commit: r.commit?.sha?.slice(0, 12) });
+      } catch (e) { results.push({ file: filePath, error: e.message }); }
+    }
+    let vercelUrl = null;
+    if (VC && vercel_project_id) {
+      try {
+        const vRes = await fetch('https://api.vercel.com/v13/deployments', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${VC}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'dz-gpt', gitSource: { type: 'github', repoId: 1191199822, ref: branch } })
+        });
+        const vData = await vRes.json();
+        vercelUrl = vData.url ? `https://${vData.url}` : JSON.stringify(vData).slice(0, 200);
+      } catch (e) { vercelUrl = `error: ${e.message}`; }
+    }
+    res.json({ results, vercelUrl });
+  });
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

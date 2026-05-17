@@ -18458,13 +18458,37 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 
 // ── Image Processing Tools ─────────────────────────────────────────────────
 
-// POST /api/tools/img-remove-bg — Background removal via withoutbg.com
+// POST /api/tools/img-remove-bg — Background removal via rembg (local) or withoutbg (Vercel fallback)
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64, mimeType = 'image/jpeg' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
-  const apiKey = process.env.WITHOUTBG_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const imgBytes = Buffer.from(b64, 'base64')
+
+  // ── Primary: rembg local server (dev/self-hosted) ──────────────────────────
+  if (!process.env.VERCEL && rembgReady) {
+    try {
+      const form = new FormData()
+      form.append('file', new Blob([imgBytes], { type: mimeType }), 'image.bin')
+      const r = await fetch(`http://localhost:${REMBG_PORT}/api/remove`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(120000),
+      })
+      if (r.ok) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        console.log('[RemoveBG:rembg] ok —', buf.length, 'bytes')
+        return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}` })
+      }
+      console.warn('[RemoveBG:rembg] non-ok status', r.status, '— falling back')
+    } catch (e) {
+      console.warn('[RemoveBG:rembg] error:', e.message, '— falling back')
+    }
+  }
+
+  // ── Fallback: withoutbg.com API (Vercel / rembg unavailable) ───────────────
+  const apiKey = process.env.WITHOUTBG_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة حالياً' })
   try {
     const sharp = (await import('sharp')).default
     const r = await fetch('https://api.withoutbg.com/v1.0/alpha-channel-base64', {
@@ -18475,7 +18499,7 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
     })
     if (!r.ok) {
       const errTxt = await r.text()
-      console.warn(`[RemoveBG] ${r.status}: ${errTxt.slice(0, 200)}`)
+      console.warn(`[RemoveBG:withoutbg] ${r.status}: ${errTxt.slice(0, 200)}`)
       return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول بعد لحظات' })
     }
     const data = await r.json()
@@ -18499,10 +18523,10 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
     const resultBuf = await sharp(rgbaPixels, {
       raw: { width: origInfo.width, height: origInfo.height, channels: 4 }
     }).png().toBuffer()
-    console.log('[RemoveBG] ok')
+    console.log('[RemoveBG:withoutbg] ok')
     return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}` })
   } catch (e) {
-    console.error('[RemoveBG]', e.message)
+    console.error('[RemoveBG:withoutbg]', e.message)
     return res.status(500).json({ error: 'خطأ في معالجة الصورة' })
   }
 })
@@ -18695,6 +18719,36 @@ if (isMain) {
     }
     res.json({ results, vercelUrl });
   });
+
+  // ── Start rembg HTTP server locally (skip on Vercel) ───────────────────────
+  const REMBG_PORT = 7000
+  let rembgReady = false
+  if (!process.env.VERCEL) {
+    const rembgBin = path.join(process.cwd(), '.pythonlibs/bin/rembg')
+    const rembgPythonPath = path.join(process.cwd(), '.pythonlibs/lib/python3.11/site-packages')
+    const startRembg = () => {
+      const proc = spawn(rembgBin, ['s', '--port', String(REMBG_PORT), '--no-ui', '--log_level', 'warning'], {
+        env: { ...process.env, PYTHONPATH: rembgPythonPath },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const markReady = (d) => {
+        const msg = d.toString()
+        if (/Application startup|Uvicorn running|Started server/i.test(msg)) rembgReady = true
+      }
+      proc.stdout.on('data', markReady)
+      proc.stderr.on('data', markReady)
+      proc.on('exit', (code) => {
+        console.log(`[rembg] exited (${code}), restarting in 5s…`)
+        rembgReady = false
+        setTimeout(startRembg, 5000)
+      })
+      proc.on('error', (e) => console.warn('[rembg] spawn error:', e.message))
+      // Assume ready after 30s in case log format changes
+      setTimeout(() => { rembgReady = true }, 30000)
+      console.log('[rembg] starting background removal server on port', REMBG_PORT)
+    }
+    startRembg()
+  }
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

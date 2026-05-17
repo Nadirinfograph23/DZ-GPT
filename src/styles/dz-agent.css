@@ -8248,3 +8248,23 @@
   line-height: 1.5;
   unicode-bidi: plaintext;
 }
+
+/* ── Streaming text (Vercel AI SDK fast-path) ─────────────────────────── */
+.dz-stream-text {
+  display: inline;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dz-stream-cursor {
+  display: inline-block;
+  color: #10b981;
+  animation: dz-blink 0.75s step-end infinite;
+  margin-inline-start: 1px;
+  font-weight: 700;
+}
+
+@keyframes dz-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}

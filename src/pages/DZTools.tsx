@@ -124,7 +124,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -132,6 +132,8 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'docs',    icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
   { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
   { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
+  { id: 'invoice', icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF', badge: 'NEW' },
+  { id: 'tax',     icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024', badge: 'NEW' },
   { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
   { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
 ]
@@ -1596,6 +1598,574 @@ function BizPlanTool() {
   )
 }
 
+// ─── Invoice Tool ─────────────────────────────────────────────────────────────
+type InvoiceItem = { id: number; desc: string; qty: string; price: string; tva: string }
+
+const TVA_RATES = [
+  { label: 'TVA 19% (عادي)', value: '19' },
+  { label: 'TVA 9% (مخفض)', value: '9' },
+  { label: 'معفى 0%',       value: '0'  },
+]
+
+let _invoiceItemId = 1
+
+function newItem(): InvoiceItem {
+  return { id: _invoiceItemId++, desc: '', qty: '1', price: '', tva: '19' }
+}
+
+function fmt(n: number) {
+  return n.toLocaleString('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA'
+}
+
+function InvoiceTool() {
+  const [company, setCompany] = useState({ name: '', address: '', nif: '', nis: '', rc: '', phone: '', email: '' })
+  const [client,  setClient]  = useState({ name: '', address: '', nif: '' })
+  const [meta,    setMeta]    = useState({ num: '', date: new Date().toISOString().slice(0,10), due: '', note: '' })
+  const [items,   setItems]   = useState<InvoiceItem[]>([newItem()])
+  const printRef = useRef<HTMLDivElement>(null)
+
+  const setC = (k: string, v: string) => setCompany(p => ({ ...p, [k]: v }))
+  const setL = (k: string, v: string) => setClient(p => ({ ...p, [k]: v }))
+  const setM = (k: string, v: string) => setMeta(p => ({ ...p, [k]: v }))
+
+  const updateItem = (id: number, k: keyof InvoiceItem, v: string) =>
+    setItems(prev => prev.map(it => it.id === id ? { ...it, [k]: v } : it))
+  const addItem    = () => setItems(prev => [...prev, newItem()])
+  const removeItem = (id: number) => setItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev)
+
+  // ── Calculations ──────────────────────────────────────────────────────────
+  const rows = items.map(it => {
+    const qty   = parseFloat(it.qty)  || 0
+    const price = parseFloat(it.price) || 0
+    const tva   = parseFloat(it.tva)  || 0
+    const ht    = qty * price
+    const tvaAmt = ht * tva / 100
+    return { ...it, ht, tvaAmt, ttc: ht + tvaAmt }
+  })
+
+  const totalHT  = rows.reduce((s, r) => s + r.ht, 0)
+  const totalTVA = rows.reduce((s, r) => s + r.tvaAmt, 0)
+  const totalTTC = totalHT + totalTVA
+
+  // Group TVA lines
+  const tvaGroups: Record<string, number> = {}
+  rows.forEach(r => {
+    const k = r.tva + '%'
+    tvaGroups[k] = (tvaGroups[k] || 0) + r.tvaAmt
+  })
+
+  // ── PDF Print ─────────────────────────────────────────────────────────────
+  const printPDF = () => {
+    const win = window.open('', '_blank')
+    if (!win) return
+    const itemRows = rows.map(r => `
+      <tr>
+        <td>${r.desc || '—'}</td>
+        <td class="num">${parseFloat(r.qty)||0}</td>
+        <td class="num">${parseFloat(r.price)||0}</td>
+        <td class="num">${r.tva}%</td>
+        <td class="num">${r.ht.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="num">${r.tvaAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="num"><strong>${r.ttc.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
+      </tr>`).join('')
+
+    const tvaLines = Object.entries(tvaGroups)
+      .filter(([,v]) => v > 0)
+      .map(([k,v]) => `<tr><td>TVA ${k}</td><td class="num">${v.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td></tr>`).join('')
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>فاتورة ${meta.num}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;background:#fff;padding:0}
+.header{background:linear-gradient(135deg,#0a3d1f,#1a6b3c);color:#fff;padding:24px 40px;display:flex;justify-content:space-between;align-items:flex-start}
+.brand{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.brand-sub{font-size:11px;opacity:.75;margin-top:4px}
+.inv-badge{background:rgba(255,255,255,.15);border-radius:8px;padding:10px 18px;text-align:center}
+.inv-badge .num{font-size:18px;font-weight:800;color:#c8ff00}
+.inv-badge .label{font-size:10px;opacity:.7}
+.body{padding:28px 40px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+.party{background:#f9fafb;border-radius:10px;padding:14px 18px;border:1px solid #e5e7eb}
+.party-title{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.party-name{font-size:15px;font-weight:700;color:#111;margin-bottom:6px}
+.party-detail{font-size:12px;color:#555;line-height:1.7}
+.meta{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.meta-item{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 14px;font-size:12px}
+.meta-item strong{display:block;font-size:10px;color:#16a34a;font-weight:700;margin-bottom:2px}
+table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12.5px}
+thead tr{background:#0a3d1f;color:#fff}
+th{padding:10px 12px;text-align:right;font-weight:700;font-size:11px}
+td{padding:9px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+tr:nth-child(even) td{background:#f9fafb}
+.num{text-align:center}
+.totals{display:flex;justify-content:flex-start;flex-direction:column;align-items:flex-end;gap:4px}
+.total-row{display:flex;gap:32px;justify-content:flex-end;font-size:13px;padding:4px 0}
+.total-row.ht{color:#555}
+.total-row.tva{color:#2563eb}
+.total-row.ttc{font-size:17px;font-weight:800;color:#0a3d1f;border-top:2px solid #c8ff00;padding-top:10px;margin-top:6px}
+.total-label{width:160px;text-align:right}
+.total-val{width:150px;text-align:left;font-weight:600}
+.note{margin-top:20px;padding:12px 18px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5;font-size:12px;color:#555}
+.footer{border-top:1px solid #e5e7eb;padding:12px 40px;font-size:10.5px;color:#9ca3af;text-align:center;margin-top:24px}
+@media print{body{padding:0}@page{margin:0}}
+</style></head>
+<body>
+<div class="header">
+  <div>
+    <div class="brand">${company.name || 'اسم الشركة'}</div>
+    <div class="brand-sub">${company.address || ''}</div>
+    ${company.nif?`<div class="brand-sub">NIF: ${company.nif}</div>`:''}
+    ${company.nis?`<div class="brand-sub">NIS: ${company.nis}</div>`:''}
+    ${company.rc ?`<div class="brand-sub">RC: ${company.rc}</div>`:''}
+    ${company.phone?`<div class="brand-sub">📞 ${company.phone}</div>`:''}
+  </div>
+  <div class="inv-badge">
+    <div class="label">FACTURE N°</div>
+    <div class="num">${meta.num || '---'}</div>
+    <div class="label">Date: ${meta.date}</div>
+    ${meta.due?`<div class="label">Échéance: ${meta.due}</div>`:''}
+  </div>
+</div>
+<div class="body">
+  <div class="parties">
+    <div class="party">
+      <div class="party-title">FOURNISSEUR</div>
+      <div class="party-name">${company.name||'—'}</div>
+      <div class="party-detail">${company.address||''}<br>${company.email||''}</div>
+    </div>
+    <div class="party">
+      <div class="party-title">CLIENT</div>
+      <div class="party-name">${client.name||'—'}</div>
+      <div class="party-detail">${client.address||''}${client.nif?`<br>NIF: ${client.nif}`:''}</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:35%">الوصف</th>
+      <th class="num" style="width:8%">الكمية</th>
+      <th class="num" style="width:14%">سعر الوحدة (DA)</th>
+      <th class="num" style="width:8%">TVA</th>
+      <th class="num" style="width:12%">المجموع HT</th>
+      <th class="num" style="width:12%">مبلغ TVA</th>
+      <th class="num" style="width:11%">المجموع TTC</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <div class="totals">
+    <div class="total-row ht"><span class="total-label">المجموع HT</span><span class="total-val">${totalHT.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
+    ${tvaLines}
+    <div class="total-row ttc"><span class="total-label">الإجمالي TTC</span><span class="total-val">${totalTTC.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
+  </div>
+  ${meta.note?`<div class="note"><strong>ملاحظات:</strong> ${meta.note}</div>`:''}
+</div>
+<div class="footer">DZ Tools — مولّد الفواتير الجزائري | dz-gpt.vercel.app</div>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  const inputCls = 'dzt-inv-input'
+
+  return (
+    <div className="dzt-invoice-wrap">
+      {/* ── Company ───────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">🏢 معلومات الشركة / المورّد</div>
+        <div className="dzt-inv-grid2">
+          <input className={inputCls} placeholder="اسم الشركة *" value={company.name}    onChange={e=>setC('name',e.target.value)} />
+          <input className={inputCls} placeholder="رقم الهاتف"   value={company.phone}   onChange={e=>setC('phone',e.target.value)} />
+          <input className={inputCls} placeholder="العنوان"       value={company.address} onChange={e=>setC('address',e.target.value)} />
+          <input className={inputCls} placeholder="البريد الإلكتروني" value={company.email} onChange={e=>setC('email',e.target.value)} />
+          <input className={inputCls} placeholder="NIF"           value={company.nif}     onChange={e=>setC('nif',e.target.value)} />
+          <input className={inputCls} placeholder="NIS"           value={company.nis}     onChange={e=>setC('nis',e.target.value)} />
+          <input className={inputCls} placeholder="RC"            value={company.rc}      onChange={e=>setC('rc',e.target.value)} />
+        </div>
+      </div>
+
+      {/* ── Client ────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">👤 معلومات العميل</div>
+        <div className="dzt-inv-grid2">
+          <input className={inputCls} placeholder="اسم العميل *" value={client.name}    onChange={e=>setL('name',e.target.value)} />
+          <input className={inputCls} placeholder="NIF العميل"   value={client.nif}     onChange={e=>setL('nif',e.target.value)} />
+          <input className={inputCls} placeholder="عنوان العميل" value={client.address} onChange={e=>setL('address',e.target.value)} style={{gridColumn:'span 2'}} />
+        </div>
+      </div>
+
+      {/* ── Meta ──────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">📋 بيانات الفاتورة</div>
+        <div className="dzt-inv-grid3">
+          <div><label className="dzt-inv-label">رقم الفاتورة</label><input className={inputCls} placeholder="001" value={meta.num} onChange={e=>setM('num',e.target.value)} /></div>
+          <div><label className="dzt-inv-label">تاريخ الإصدار</label><input className={inputCls} type="date" value={meta.date} onChange={e=>setM('date',e.target.value)} /></div>
+          <div><label className="dzt-inv-label">تاريخ الاستحقاق</label><input className={inputCls} type="date" value={meta.due} onChange={e=>setM('due',e.target.value)} /></div>
+        </div>
+      </div>
+
+      {/* ── Items ─────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">🛒 المنتجات / الخدمات</div>
+        <div className="dzt-inv-items-header">
+          <span style={{flex:'2 1 180px'}}>الوصف</span>
+          <span style={{flex:'0 0 80px',textAlign:'center'}}>الكمية</span>
+          <span style={{flex:'0 0 120px',textAlign:'center'}}>سعر الوحدة (DA)</span>
+          <span style={{flex:'0 0 110px',textAlign:'center'}}>TVA</span>
+          <span style={{flex:'0 0 120px',textAlign:'center'}}>المجموع HT</span>
+          <span style={{width:32}}></span>
+        </div>
+        {items.map(it => {
+          const qty   = parseFloat(it.qty)   || 0
+          const price = parseFloat(it.price)  || 0
+          const ht    = qty * price
+          return (
+            <div key={it.id} className="dzt-inv-item-row">
+              <input className={inputCls} placeholder="وصف المنتج أو الخدمة" value={it.desc} onChange={e=>updateItem(it.id,'desc',e.target.value)} style={{flex:'2 1 180px'}} />
+              <input className={inputCls} type="number" min="0" placeholder="1" value={it.qty} onChange={e=>updateItem(it.id,'qty',e.target.value)} style={{flex:'0 0 80px',textAlign:'center'}} />
+              <input className={inputCls} type="number" min="0" placeholder="0.00" value={it.price} onChange={e=>updateItem(it.id,'price',e.target.value)} style={{flex:'0 0 120px',textAlign:'center'}} />
+              <select className={inputCls} value={it.tva} onChange={e=>updateItem(it.id,'tva',e.target.value)} style={{flex:'0 0 110px'}}>
+                {TVA_RATES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <div className="dzt-inv-line-total" style={{flex:'0 0 120px'}}>
+                {fmt(ht)}
+              </div>
+              <button className="dzt-inv-del-btn" onClick={()=>removeItem(it.id)} title="حذف">✕</button>
+            </div>
+          )
+        })}
+        <button className="dzt-inv-add-btn" onClick={addItem}>＋ إضافة منتج</button>
+      </div>
+
+      {/* ── Totals ────────────────────────────────────────────────── */}
+      <div className="dzt-inv-totals-box">
+        <div className="dzt-inv-total-row">
+          <span>المجموع HT</span>
+          <span>{fmt(totalHT)}</span>
+        </div>
+        {Object.entries(tvaGroups).filter(([,v])=>v>0).map(([k,v]) => (
+          <div key={k} className="dzt-inv-total-row dzt-inv-total-tva">
+            <span>TVA {k}</span>
+            <span>{fmt(v)}</span>
+          </div>
+        ))}
+        <div className="dzt-inv-total-row dzt-inv-total-ttc">
+          <span>الإجمالي TTC</span>
+          <span>{fmt(totalTTC)}</span>
+        </div>
+      </div>
+
+      {/* ── Note ──────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">📝 ملاحظات (اختياري)</div>
+        <textarea className={inputCls} rows={2} placeholder="شروط الدفع، ملاحظات إضافية..." value={meta.note} onChange={e=>setM('note',e.target.value)} style={{width:'100%',resize:'vertical'}} />
+      </div>
+
+      {/* ── Actions ───────────────────────────────────────────────── */}
+      <div className="dzt-result-actions" style={{marginTop:8}}>
+        <button className="dzt-btn" onClick={printPDF}>
+          <Download size={14} /> تحميل الفاتورة PDF
+        </button>
+      </div>
+
+      <div ref={printRef} style={{display:'none'}} />
+    </div>
+  )
+}
+
+// ─── Tax Calculator Tool ───────────────────────────────────────────────────────
+const IRG_BRACKETS = [
+  { min: 0,         max: 240_000,   rate: 0  },
+  { min: 240_000,   max: 480_000,   rate: 23 },
+  { min: 480_000,   max: 960_000,   rate: 27 },
+  { min: 960_000,   max: 1_920_000, rate: 30 },
+  { min: 1_920_000, max: 3_840_000, rate: 33 },
+  { min: 3_840_000, max: Infinity,  rate: 35 },
+]
+
+const IBS_RATES = [
+  { label: 'نشاط إنتاجي / فلاحي / سياحي (19%)', value: 19 },
+  { label: 'نشاط مختلط (23%)',                     value: 23 },
+  { label: 'نشاط تجاري / خدماتي / بناء (26%)',     value: 26 },
+]
+
+function calcIRG(annualIncome: number) {
+  let tax = 0
+  const breakdown: { label: string; base: number; rate: number; amount: number }[] = []
+  for (const b of IRG_BRACKETS) {
+    if (annualIncome <= b.min) break
+    const taxable = Math.min(annualIncome, b.max) - b.min
+    const amount  = taxable * b.rate / 100
+    tax += amount
+    breakdown.push({
+      label: b.max === Infinity ? `أكثر من ${(b.min/1000).toFixed(0)}k DA` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k DA`,
+      base: taxable, rate: b.rate, amount,
+    })
+  }
+  return { tax, breakdown }
+}
+
+function TaxTool() {
+  const [mode, setMode] = useState<'irg'|'ibs'>('irg')
+
+  // IRG state
+  const [period,    setPeriod]    = useState<'monthly'|'annual'>('monthly')
+  const [salary,    setSalary]    = useState('')
+  const [irgResult, setIrgResult] = useState<null|{ gross:number; tax:number; net:number; effectiveRate:number; breakdown: {label:string;base:number;rate:number;amount:number}[] }>(null)
+
+  // IBS state
+  const [profit,     setProfit]     = useState('')
+  const [ibsRate,    setIbsRate]    = useState(19)
+  const [ibsResult,  setIbsResult]  = useState<null|{ profit:number; taxAmt:number; net:number }>(null)
+
+  const calcIrgAction = () => {
+    const monthly = parseFloat(salary) || 0
+    const annual  = period === 'monthly' ? monthly * 12 : monthly
+    if (!annual) return
+    const { tax, breakdown } = calcIRG(annual)
+    const annualNet = annual - tax
+    setIrgResult({ gross: annual, tax, net: annualNet, effectiveRate: annual > 0 ? tax/annual*100 : 0, breakdown })
+  }
+
+  const calcIbsAction = () => {
+    const p = parseFloat(profit) || 0
+    if (!p) return
+    const taxAmt = p * ibsRate / 100
+    setIbsResult({ profit: p, taxAmt, net: p - taxAmt })
+  }
+
+  const printIRG = () => {
+    if (!irgResult) return
+    const rows = irgResult.breakdown.map(b => `
+      <tr>
+        <td>${b.label}</td>
+        <td class="n">${b.rate}%</td>
+        <td class="n">${b.base.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="n"><strong>${b.amount.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
+      </tr>`).join('')
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>حساب IRG</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
+h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
+.cards{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
+.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
+.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
+.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+thead tr{background:#0a3d1f;color:#fff}
+th{padding:10px 14px;text-align:right;font-size:12px}
+td{padding:9px 14px;border-bottom:1px solid #f3f4f6}
+.n{text-align:center}
+tr:nth-child(even) td{background:#f9fafb}
+footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
+</style></head><body>
+<h1>🧾 حساب IRG — ضريبة الدخل الإجمالي</h1>
+<div class="cards">
+  <div class="card"><div class="card-label">الدخل السنوي الخام</div><div class="card-val">${irgResult.gross.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card tax"><div class="card-label">IRG المستحق</div><div class="card-val">${irgResult.tax.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">الصافي السنوي</div><div class="card-val">${irgResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">معدل الضريبة الفعلي</div><div class="card-val">${irgResult.effectiveRate.toFixed(2)}%</div></div>
+</div>
+<table>
+  <thead><tr><th>الشريحة</th><th class="n">المعدل</th><th class="n">الوعاء الضريبي</th><th class="n">مبلغ الضريبة</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<p style="font-size:11px;color:#777">* حسب قانون المالية الجزائري — شرائح IRG 2024. للاستشارة الضريبية المعتمدة راجع خبيراً محاسبياً.</p>
+<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  const printIBS = () => {
+    if (!ibsResult) return
+    const win = window.open('', '_blank')
+    if (!win) return
+    const rateLabel = IBS_RATES.find(r=>r.value===ibsRate)?.label || `${ibsRate}%`
+    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>حساب IBS</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
+h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
+.cards{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
+.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
+.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
+.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
+.note{font-size:12px;color:#777;margin-top:16px;padding:12px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5}
+footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
+</style></head><body>
+<h1>🏢 حساب IBS — ضريبة أرباح الشركات</h1>
+<div class="cards">
+  <div class="card"><div class="card-label">الربح الخاضع للضريبة</div><div class="card-val">${ibsResult.profit.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">معدل IBS المطبق</div><div class="card-val">${ibsRate}%</div></div>
+  <div class="card tax"><div class="card-label">مبلغ IBS المستحق</div><div class="card-val">${ibsResult.taxAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">صافي الربح بعد الضريبة</div><div class="card-val">${ibsResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+</div>
+<div class="note">نوع النشاط: ${rateLabel}<br>* حسب قانون المالية الجزائري. للاستشارة المعتمدة راجع خبيراً محاسبياً معتمداً.</div>
+<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  return (
+    <div className="dzt-tax-wrap">
+      {/* ── Mode Tabs ─────────────────────────────────────────────── */}
+      <div className="dzt-tax-mode-tabs">
+        <button className={`dzt-tax-mode-btn${mode==='irg'?' active':''}`} onClick={()=>setMode('irg')}>
+          👤 IRG — ضريبة الدخل
+        </button>
+        <button className={`dzt-tax-mode-btn${mode==='ibs'?' active':''}`} onClick={()=>setMode('ibs')}>
+          🏢 IBS — ضريبة الشركات
+        </button>
+      </div>
+
+      {mode === 'irg' && (
+        <div className="dzt-tax-panel">
+          <div className="dzt-inv-section-title">حساب IRG — الضريبة على الدخل الإجمالي</div>
+          <p className="dzt-tax-desc">شرائح IRG 2024 — حسب قانون المالية الجزائري</p>
+
+          <div className="dzt-tax-period-row">
+            <button className={`dzt-tax-period-btn${period==='monthly'?' active':''}`} onClick={()=>setPeriod('monthly')}>شهري</button>
+            <button className={`dzt-tax-period-btn${period==='annual'?' active':''}`}  onClick={()=>setPeriod('annual')}>سنوي</button>
+          </div>
+
+          <div className="dzt-tax-input-row">
+            <input
+              className="dzt-inv-input"
+              type="number"
+              min="0"
+              placeholder={period==='monthly' ? 'الراتب الشهري الخام (DA)' : 'الدخل السنوي الخام (DA)'}
+              value={salary}
+              onChange={e=>{ setSalary(e.target.value); setIrgResult(null) }}
+            />
+            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIrgAction}>
+              احسب IRG
+            </button>
+          </div>
+
+          {/* Brackets table */}
+          <div className="dzt-tax-brackets">
+            <div className="dzt-tax-bracket-title">شرائح IRG 2024</div>
+            {IRG_BRACKETS.map((b, i) => (
+              <div key={i} className="dzt-tax-bracket-row">
+                <span className="dzt-tax-bracket-range">
+                  {b.max === Infinity ? `> ${(b.min/1000).toFixed(0)}k` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k`} DA/سنة
+                </span>
+                <span className="dzt-tax-bracket-rate" style={{color: b.rate===0?'#22c55e': b.rate<27?'#f59e0b':'#ef4444'}}>
+                  {b.rate}%
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {irgResult && (
+            <div className="dzt-tax-result">
+              <div className="dzt-tax-cards">
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">الدخل السنوي</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.gross)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.gross/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-red">
+                  <div className="dzt-tax-card-label">IRG المستحق</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.tax)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.tax/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-green">
+                  <div className="dzt-tax-card-label">صافي الدخل</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.net)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.net/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">معدل الضريبة</div>
+                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{irgResult.effectiveRate.toFixed(2)}%</div>
+                </div>
+              </div>
+              <div className="dzt-tax-breakdown-title">تفصيل الحساب بالشرائح</div>
+              {irgResult.breakdown.filter(b=>b.rate>0||b.base>0).map((b,i) => (
+                <div key={i} className="dzt-tax-breakdown-row">
+                  <span className="dzt-tbr-range">{b.label}</span>
+                  <span className="dzt-tbr-rate">{b.rate}%</span>
+                  <span className="dzt-tbr-base">{fmt(b.base)}</span>
+                  <span className="dzt-tbr-amt">{fmt(b.amount)}</span>
+                </div>
+              ))}
+              <div className="dzt-result-actions" style={{marginTop:12}}>
+                <button className="dzt-btn" onClick={printIRG}><Download size={14}/> تحميل PDF</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode === 'ibs' && (
+        <div className="dzt-tax-panel">
+          <div className="dzt-inv-section-title">حساب IBS — الضريبة على أرباح الشركات</div>
+          <p className="dzt-tax-desc">معدلات IBS 2024 حسب نوع النشاط</p>
+
+          <div className="dzt-tax-ibs-rates">
+            {IBS_RATES.map(r => (
+              <button key={r.value} className={`dzt-tax-ibs-btn${ibsRate===r.value?' active':''}`} onClick={()=>{ setIbsRate(r.value); setIbsResult(null) }}>
+                <span className="dzt-tax-ibs-rate">{r.value}%</span>
+                <span className="dzt-tax-ibs-label">{r.label.replace(/\s*\(\d+%\)$/,'')}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="dzt-tax-input-row">
+            <input
+              className="dzt-inv-input"
+              type="number"
+              min="0"
+              placeholder="الربح الصافي الخاضع للضريبة (DA)"
+              value={profit}
+              onChange={e=>{ setProfit(e.target.value); setIbsResult(null) }}
+            />
+            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIbsAction}>
+              احسب IBS
+            </button>
+          </div>
+
+          {ibsResult && (
+            <div className="dzt-tax-result">
+              <div className="dzt-tax-cards">
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">الربح الخاضع</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.profit)}</div>
+                </div>
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">معدل IBS</div>
+                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{ibsRate}%</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-red">
+                  <div className="dzt-tax-card-label">IBS المستحق</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.taxAmt)}</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-green">
+                  <div className="dzt-tax-card-label">صافي الربح</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.net)}</div>
+                </div>
+              </div>
+              <div className="dzt-result-actions" style={{marginTop:12}}>
+                <button className="dzt-btn" onClick={printIBS}><Download size={14}/> تحميل PDF</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -1642,6 +2212,8 @@ export default function DZTools() {
         {active === 'docs'    && <BizDocsTool />}
         {active === 'jobs'    && <JobSearchTool />}
         {active === 'health'  && <HealthTool />}
+        {active === 'invoice' && <InvoiceTool />}
+        {active === 'tax'     && <TaxTool />}
         {active === 'ocr'     && <OCRTool />}
         {active === 'bizplan' && <BizPlanTool />}
       </div>

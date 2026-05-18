@@ -18494,40 +18494,19 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
     }
   }
 
-  // ── Fallback: BRIA RMBG Space API (Vercel / Python unavailable) ────────────
+  // ── Fallback: @imgly/background-removal-node (Node.js ONNX — works on Vercel) ─
   try {
-    const sharp = (await import('sharp')).default
+    const imglyBgRemoval = await import('@imgly/background-removal-node')
+    const removeBackground = imglyBgRemoval.removeBackground
     const imgBytes = Buffer.from(b64, 'base64')
-    // Encode as base64 data URL for the Space API
-    const dataUrl = `data:image/png;base64,${b64}`
-    const spaceRes = await fetch('https://bria-ai-rmbg-1-4.hf.space/run/predict', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: [dataUrl], fn_index: 0 }),
-      signal: AbortSignal.timeout(90000),
-    })
-    if (spaceRes.ok) {
-      const spaceData = await spaceRes.json()
-      const resultUrl = spaceData?.data?.[0]
-      if (resultUrl) {
-        // resultUrl may be a data URL or a hosted URL
-        let outBuf
-        if (resultUrl.startsWith('data:')) {
-          const resPart = resultUrl.split(',')[1]
-          outBuf = Buffer.from(resPart, 'base64')
-        } else {
-          const fetchRes = await fetch(resultUrl, { signal: AbortSignal.timeout(30000) })
-          outBuf = Buffer.from(await fetchRes.arrayBuffer())
-        }
-        const finalBuf = await sharp(outBuf).png().toBuffer()
-        console.log('[RemoveBG:HF-Space] ok —', finalBuf.length, 'bytes')
-        return res.json({ imageBase64: `data:image/png;base64,${finalBuf.toString('base64')}` })
-      }
-    }
-    const errTxt = await spaceRes.text().catch(() => '')
-    console.warn('[RemoveBG:HF-Space] non-ok:', spaceRes.status, errTxt.slice(0, 100))
+    const blob = new Blob([imgBytes], { type: 'image/png' })
+    const resultBlob = await removeBackground(blob, { output: { format: 'image/png', quality: 1 } })
+    const arrayBuf = await resultBlob.arrayBuffer()
+    const outBuf = Buffer.from(arrayBuf)
+    console.log('[RemoveBG:imgly] ok —', outBuf.length, 'bytes')
+    return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
   } catch (e) {
-    console.warn('[RemoveBG:HF-Space] error:', e.message)
+    console.warn('[RemoveBG:imgly] error:', e.message.slice(0, 150))
   }
 
   return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول مرة أخرى بعد لحظات' })
@@ -18619,37 +18598,51 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
     }
   }
 
-  // ── Fallback: HF Stable Diffusion 2 Inpainting (Vercel / skimage unavailable) ─
-  const hfToken = process.env.HF_TOKEN
-  if (!hfToken) return res.status(500).json({ error: 'خدمة حذف العناصر غير متوفرة على هذا الخادم' })
+  // ── Fallback: sharp blur-fill inpaint (pure Node.js — works on Vercel) ───────
   try {
-    const hfRes = await fetch(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-inpainting',
-      {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputs: 'background, clean, seamless, realistic',
-          parameters: {
-            image: imgB64,
-            mask_image: mskB64,
-            num_inference_steps: 25,
-            guidance_scale: 7.5,
-          }
-        }),
-        signal: AbortSignal.timeout(120000),
+    const sharp = (await import('sharp')).default
+    const imgBuf  = Buffer.from(imgB64, 'base64')
+    const mskBuf  = Buffer.from(mskB64, 'base64')
+    const meta    = await sharp(imgBuf).metadata()
+    const W = meta.width, H = meta.height
+
+    // 1. Resize mask to match image exactly
+    const maskResized = await sharp(mskBuf)
+      .resize(W, H, { fit: 'fill' })
+      .grayscale()
+      .raw()
+      .toBuffer()
+
+    // 2. Create a blurred version of the original image (fills masked area smoothly)
+    const blurred = await sharp(imgBuf)
+      .blur(Math.max(W, H) / 15)   // strong blur proportional to image size
+      .raw({ depth: 'uchar' })
+      .toBuffer({ resolveWithObject: true })
+
+    // 3. Get original pixels
+    const orig = await sharp(imgBuf)
+      .removeAlpha()
+      .raw({ depth: 'uchar' })
+      .toBuffer({ resolveWithObject: true })
+
+    const channels = orig.info.channels   // 3 (RGB)
+    const pixels   = orig.data.length / channels
+
+    // 4. Composite: where mask is white → use blurred; elsewhere → original
+    const result = Buffer.alloc(pixels * channels)
+    for (let i = 0; i < pixels; i++) {
+      const alpha = maskResized[i] / 255   // 0 = keep original, 1 = fill
+      for (let c = 0; c < channels; c++) {
+        const idx = i * channels + c
+        result[idx] = Math.round(orig.data[idx] * (1 - alpha) + blurred.data[idx] * alpha)
       }
-    )
-    if (hfRes.ok) {
-      const outBuf = Buffer.from(await hfRes.arrayBuffer())
-      console.log('[Inpaint:HF-SD2] ok —', outBuf.length, 'bytes')
-      return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
     }
-    const errTxt = await hfRes.text()
-    console.warn('[Inpaint:HF-SD2]', hfRes.status, errTxt.slice(0, 150))
-    return res.status(500).json({ error: 'فشل حذف العنصر — حاول مرة أخرى بعد لحظات' })
+
+    const outBuf = await sharp(result, { raw: { width: W, height: H, channels } }).png().toBuffer()
+    console.log('[Inpaint:sharp-fill] ok —', outBuf.length, 'bytes')
+    return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
   } catch (e) {
-    console.error('[Inpaint:HF-SD2]', e.message)
+    console.error('[Inpaint:sharp-fill]', e.message)
     return res.status(500).json({ error: 'فشل حذف العنصر: ' + e.message.slice(0, 80) })
   }
 })

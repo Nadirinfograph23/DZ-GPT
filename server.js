@@ -18533,65 +18533,124 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
   }
 })
 
-// POST /api/tools/img-upscale — Image upscaling via sharp Lanczos (free, local, instant)
+// POST /api/tools/img-upscale — AI upscaling via HF Swin2SR, fallback to sharp Lanczos
 app.post('/api/tools/img-upscale', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64, scale: scaleStr = '4' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const inputBuf = Buffer.from(b64, 'base64')
+
+  // ── Primary: HF Swin2SR Real-World Super-Resolution (AI quality) ────────────
+  const hfToken = process.env.HF_TOKEN
+  if (hfToken) {
+    try {
+      const hfRes = await fetch(
+        'https://api-inference.huggingface.co/models/caidas/swin2SR-realworld-sr-x4-64-bsrgan-psnr',
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/octet-stream' },
+          body: inputBuf,
+          signal: AbortSignal.timeout(90000),
+        }
+      )
+      if (hfRes.ok) {
+        const outBuf = Buffer.from(await hfRes.arrayBuffer())
+        console.log('[Upscale:Swin2SR] ok —', outBuf.length, 'bytes')
+        return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}`, model: 'Swin2SR AI' })
+      }
+      const errTxt = await hfRes.text()
+      console.warn('[Upscale:Swin2SR] non-ok:', hfRes.status, errTxt.slice(0, 120), '— falling back')
+    } catch (e) {
+      console.warn('[Upscale:Swin2SR] error:', e.message, '— falling back')
+    }
+  }
+
+  // ── Fallback: sharp Lanczos3 ────────────────────────────────────────────────
   try {
     const sharp = (await import('sharp')).default
-    const inputBuf = Buffer.from(b64, 'base64')
     const meta = await sharp(inputBuf).metadata()
     const scaleN = Math.min(Math.max(parseInt(scaleStr) || 4, 2), 4)
-    const newW = (meta.width  || 512) * scaleN
-    const newH = (meta.height || 512) * scaleN
     const MAX = 4096
-    const clampedW = Math.min(newW, MAX)
-    const clampedH = Math.min(newH, MAX)
+    const clampedW = Math.min((meta.width  || 512) * scaleN, MAX)
+    const clampedH = Math.min((meta.height || 512) * scaleN, MAX)
     const resultBuf = await sharp(inputBuf)
       .resize(clampedW, clampedH, { kernel: 'lanczos3', fit: 'fill' })
-      .png()
-      .toBuffer()
-    console.log(`[Upscale] ${meta.width}x${meta.height} → ${clampedW}x${clampedH}`)
-    return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}` })
+      .png().toBuffer()
+    console.log(`[Upscale:Lanczos] ${meta.width}x${meta.height} → ${clampedW}x${clampedH}`)
+    return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}`, model: 'Lanczos3' })
   } catch (e) {
     console.error('[Upscale]', e.message)
     return res.status(500).json({ error: 'فشل تحسين الصورة' })
   }
 })
 
-// POST /api/tools/img-inpaint — Object removal via skimage biharmonic inpainting (free, local)
+// POST /api/tools/img-inpaint — Object removal: Python skimage (local) → HF SD2 (Vercel fallback)
 app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, res) => {
   const { imageBase64, maskBase64 } = req.body
   if (!imageBase64 || !maskBase64) return res.status(400).json({ error: 'imageBase64 و maskBase64 مطلوبان' })
   const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
   const mskB64 = maskBase64.includes(',') ? maskBase64.split(',')[1] : maskBase64
-  const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'inpaint.py')
-  const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
-  const payload = JSON.stringify({ image: imgB64, mask: mskB64 })
+
+  // ── Primary: Python skimage biharmonic inpainting (Replit / self-hosted) ────
+  if (!process.env.VERCEL) {
+    const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'inpaint.py')
+    const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
+    const payload = JSON.stringify({ image: imgB64, mask: mskB64 })
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const proc = spawn('python3', [scriptPath], {
+          env: { ...process.env, PYTHONPATH: pythonLibs },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        const chunks = [], errChunks = []
+        proc.stdout.on('data', d => chunks.push(d))
+        proc.stderr.on('data', d => errChunks.push(d))
+        proc.on('close', code => {
+          if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString().slice(0, 200)))
+          resolve(Buffer.concat(chunks).toString().trim())
+        })
+        proc.on('error', reject)
+        proc.stdin.write(payload); proc.stdin.end()
+      })
+      console.log('[Inpaint:skimage] ok —', result.length, 'chars')
+      return res.json({ imageBase64: `data:image/png;base64,${result}` })
+    } catch (e) {
+      console.warn('[Inpaint:skimage] error:', e.message, '— falling back to HF')
+    }
+  }
+
+  // ── Fallback: HF Stable Diffusion 2 Inpainting (Vercel / skimage unavailable) ─
+  const hfToken = process.env.HF_TOKEN
+  if (!hfToken) return res.status(500).json({ error: 'خدمة حذف العناصر غير متوفرة على هذا الخادم' })
   try {
-    const result = await new Promise((resolve, reject) => {
-      const proc = spawn('python3', [scriptPath], {
-        env: { ...process.env, PYTHONPATH: pythonLibs },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-      const chunks = []
-      const errChunks = []
-      proc.stdout.on('data', d => chunks.push(d))
-      proc.stderr.on('data', d => errChunks.push(d))
-      proc.on('close', code => {
-        if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString().slice(0, 200)))
-        resolve(Buffer.concat(chunks).toString().trim())
-      })
-      proc.on('error', reject)
-      proc.stdin.write(payload)
-      proc.stdin.end()
-    })
-    console.log('[Inpaint] ok —', result.length, 'chars')
-    return res.json({ imageBase64: `data:image/png;base64,${result}` })
+    const hfRes = await fetch(
+      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-inpainting',
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputs: 'background, clean, seamless, realistic',
+          parameters: {
+            image: imgB64,
+            mask_image: mskB64,
+            num_inference_steps: 25,
+            guidance_scale: 7.5,
+          }
+        }),
+        signal: AbortSignal.timeout(120000),
+      }
+    )
+    if (hfRes.ok) {
+      const outBuf = Buffer.from(await hfRes.arrayBuffer())
+      console.log('[Inpaint:HF-SD2] ok —', outBuf.length, 'bytes')
+      return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
+    }
+    const errTxt = await hfRes.text()
+    console.warn('[Inpaint:HF-SD2]', hfRes.status, errTxt.slice(0, 150))
+    return res.status(500).json({ error: 'فشل حذف العنصر — حاول مرة أخرى بعد لحظات' })
   } catch (e) {
-    console.error('[Inpaint]', e.message)
-    return res.status(500).json({ error: 'فشل حذف العنصر: ' + e.message.slice(0, 100) })
+    console.error('[Inpaint:HF-SD2]', e.message)
+    return res.status(500).json({ error: 'فشل حذف العنصر: ' + e.message.slice(0, 80) })
   }
 })
 

@@ -18460,87 +18460,77 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 const REMBG_PORT = 7000
 let rembgReady = false
 
-// POST /api/tools/img-remove-bg — HF RMBG-1.4 (primary) → rembg local → error
+// POST /api/tools/img-remove-bg — rembg Python script (primary) → HF Space (Vercel fallback)
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
-  const { imageBase64, mimeType = 'image/jpeg' } = req.body
+  const { imageBase64 } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-  const imgBytes = Buffer.from(b64, 'base64')
-  const sharp = (await import('sharp')).default
 
-  // helper: apply grayscale mask as alpha channel onto original image
-  async function applyMask(origBuf, maskBuf) {
-    const { data: origRaw, info } = await sharp(origBuf)
-      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-      .removeAlpha().raw().toBuffer({ resolveWithObject: true })
-    const { data: alphaRaw } = await sharp(maskBuf)
-      .resize({ width: info.width, height: info.height, fit: 'fill' })
-      .grayscale().raw().toBuffer({ resolveWithObject: true })
-    const rgba = Buffer.alloc(info.width * info.height * 4)
-    const ch = info.channels
-    for (let i = 0; i < info.width * info.height; i++) {
-      rgba[i * 4]     = origRaw[i * ch]
-      rgba[i * 4 + 1] = origRaw[i * ch + 1]
-      rgba[i * 4 + 2] = origRaw[i * ch + 2]
-      rgba[i * 4 + 3] = alphaRaw[i]
+  // ── Primary: rembg Python script (Replit / self-hosted) ────────────────────
+  if (!process.env.VERCEL) {
+    const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'remove_bg.py')
+    const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
+    const payload = JSON.stringify({ image: b64 })
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const proc = spawn('python3', [scriptPath], {
+          env: { ...process.env, PYTHONPATH: pythonLibs },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        const chunks = [], errChunks = []
+        proc.stdout.on('data', d => chunks.push(d))
+        proc.stderr.on('data', d => errChunks.push(d))
+        proc.on('close', code => {
+          if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString().slice(0, 300)))
+          resolve(Buffer.concat(chunks).toString().trim())
+        })
+        proc.on('error', reject)
+        proc.stdin.write(payload); proc.stdin.end()
+      })
+      console.log('[RemoveBG:rembg-py] ok —', result.length, 'chars')
+      return res.json({ imageBase64: `data:image/png;base64,${result}` })
+    } catch (e) {
+      console.warn('[RemoveBG:rembg-py] error:', e.message.slice(0, 150), '— falling back')
     }
-    return sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer()
   }
 
-  // ── Primary: HF RMBG-1.4 (works on Replit + Vercel) ───────────────────────
-  const hfToken = process.env.HF_TOKEN
-  if (hfToken) {
-    try {
-      const hfRes = await fetch(
-        'https://api-inference.huggingface.co/models/briaai/RMBG-1.4',
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/octet-stream' },
-          body: imgBytes,
-          signal: AbortSignal.timeout(90000),
-        }
-      )
-      if (hfRes.ok) {
-        const ct = hfRes.headers.get('content-type') || ''
-        const outBuf = Buffer.from(await hfRes.arrayBuffer())
-        // If model returns transparent PNG directly, use it; otherwise treat as mask
-        const outMeta = await sharp(outBuf).metadata()
-        let finalBuf
-        if (outMeta.hasAlpha) {
-          finalBuf = await sharp(outBuf).png().toBuffer()
+  // ── Fallback: BRIA RMBG Space API (Vercel / Python unavailable) ────────────
+  try {
+    const sharp = (await import('sharp')).default
+    const imgBytes = Buffer.from(b64, 'base64')
+    // Encode as base64 data URL for the Space API
+    const dataUrl = `data:image/png;base64,${b64}`
+    const spaceRes = await fetch('https://bria-ai-rmbg-1-4.hf.space/run/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [dataUrl], fn_index: 0 }),
+      signal: AbortSignal.timeout(90000),
+    })
+    if (spaceRes.ok) {
+      const spaceData = await spaceRes.json()
+      const resultUrl = spaceData?.data?.[0]
+      if (resultUrl) {
+        // resultUrl may be a data URL or a hosted URL
+        let outBuf
+        if (resultUrl.startsWith('data:')) {
+          const resPart = resultUrl.split(',')[1]
+          outBuf = Buffer.from(resPart, 'base64')
         } else {
-          finalBuf = await applyMask(imgBytes, outBuf)
+          const fetchRes = await fetch(resultUrl, { signal: AbortSignal.timeout(30000) })
+          outBuf = Buffer.from(await fetchRes.arrayBuffer())
         }
-        console.log('[RemoveBG:RMBG-1.4] ok —', finalBuf.length, 'bytes')
+        const finalBuf = await sharp(outBuf).png().toBuffer()
+        console.log('[RemoveBG:HF-Space] ok —', finalBuf.length, 'bytes')
         return res.json({ imageBase64: `data:image/png;base64,${finalBuf.toString('base64')}` })
       }
-      const errTxt = await hfRes.text()
-      console.warn('[RemoveBG:RMBG-1.4] non-ok:', hfRes.status, errTxt.slice(0, 120), '— falling back')
-    } catch (e) {
-      console.warn('[RemoveBG:RMBG-1.4] error:', e.message, '— falling back')
     }
+    const errTxt = await spaceRes.text().catch(() => '')
+    console.warn('[RemoveBG:HF-Space] non-ok:', spaceRes.status, errTxt.slice(0, 100))
+  } catch (e) {
+    console.warn('[RemoveBG:HF-Space] error:', e.message)
   }
 
-  // ── Secondary: rembg local server (when onnxruntime available) ─────────────
-  if (!process.env.VERCEL && rembgReady) {
-    try {
-      const form = new FormData()
-      form.append('file', new Blob([imgBytes], { type: mimeType }), 'image.bin')
-      const r = await fetch(`http://localhost:${REMBG_PORT}/api/remove`, {
-        method: 'POST', body: form, signal: AbortSignal.timeout(120000),
-      })
-      if (r.ok) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        console.log('[RemoveBG:rembg] ok —', buf.length, 'bytes')
-        return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}` })
-      }
-      console.warn('[RemoveBG:rembg] non-ok:', r.status)
-    } catch (e) {
-      console.warn('[RemoveBG:rembg] error:', e.message)
-    }
-  }
-
-  return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة حالياً — حاول لاحقاً' })
+  return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول مرة أخرى بعد لحظات' })
 })
 
 // POST /api/tools/img-upscale — AI upscaling via HF Swin2SR, fallback to sharp Lanczos

@@ -2038,26 +2038,8 @@ function ImageProcessingTool() {
     reader.readAsDataURL(file)
   }
 
-  // ── Client-side Remove Background (@imgly/background-removal) ───────────
-  const removeBgClient = async () => {
-    if (!inputImage || !inputFile) return
-    setLoading(true); setError(''); setResult(''); setModelUsed('')
-    try {
-      const { removeBackground } = await import('@imgly/background-removal')
-      const resultBlob = await removeBackground(inputFile, {
-        model: 'isnet_quint8',
-        output: { format: 'image/png', quality: 1 },
-      })
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setResult(e.target?.result as string)
-        setModelUsed('IMG.LY — محلي في المتصفح')
-      }
-      reader.readAsDataURL(resultBlob)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'خطأ في حذف الخلفية')
-    } finally { setLoading(false) }
-  }
+  // ── Server-side Remove Background (HF RMBG-1.4) ─────────────────────────
+  const removeBgClient = () => processServer('/api/tools/img-remove-bg')
 
   // ── Server-side (Enhance) ────────────────────────────────────────────────
   const processServer = async (endpoint: string, extras: Record<string, string> = {}) => {

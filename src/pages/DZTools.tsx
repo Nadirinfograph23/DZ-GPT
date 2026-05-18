@@ -2262,7 +2262,7 @@ function ImageProcessingTool() {
           <UploadZone />
           {inputImage && (
             <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">✨ يرفع دقة الصورة ويحسّن التفاصيل — يعمل محلياً بدون اتصال خارجي</div>
+              <div className="dzt-imgproc-hint">✨ يرفع دقة الصورة بتقنية AI (Swin2SR / Real-ESRGAN) — جودة عالية حتى 4x</div>
               <div className="dzt-imgproc-row">
                 <label className="dzt-imgproc-label">نسبة التكبير:</label>
                 <div className="dzt-imgproc-btn-group">

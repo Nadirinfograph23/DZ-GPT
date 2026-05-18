@@ -18494,19 +18494,51 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
     }
   }
 
-  // ── Fallback: @imgly/background-removal-node (Node.js ONNX — works on Vercel) ─
+  // ── Fallback: sharp chroma-key removal (pure Node.js — Vercel-safe) ──────────
   try {
-    const imglyBgRemoval = await import('@imgly/background-removal-node')
-    const removeBackground = imglyBgRemoval.removeBackground
+    const sharp = (await import('sharp')).default
     const imgBytes = Buffer.from(b64, 'base64')
-    const blob = new Blob([imgBytes], { type: 'image/png' })
-    const resultBlob = await removeBackground(blob, { output: { format: 'image/png', quality: 1 } })
-    const arrayBuf = await resultBlob.arrayBuffer()
-    const outBuf = Buffer.from(arrayBuf)
-    console.log('[RemoveBG:imgly] ok —', outBuf.length, 'bytes')
+
+    // Resize to max 1024 for performance
+    const resized = await sharp(imgBytes)
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const { data, info: { width: W, height: H, channels: C } } = resized
+
+    // Sample background from image border pixels (corners + midpoints)
+    const samplePoints = [
+      [0,0],[W-1,0],[0,H-1],[W-1,H-1],
+      [W>>1,0],[W>>1,H-1],[0,H>>1],[W-1,H>>1],
+      [W>>2,0],[3*(W>>2),0],[W>>2,H-1],[3*(W>>2),H-1],
+    ]
+    let bgR=0, bgG=0, bgB=0
+    for (const [x,y] of samplePoints) {
+      const idx = (y*W+x)*C
+      bgR += data[idx]; bgG += data[idx+1]; bgB += data[idx+2]
+    }
+    bgR /= samplePoints.length; bgG /= samplePoints.length; bgB /= samplePoints.length
+
+    const T = 55        // hard threshold
+    const T2 = T * 1.8  // soft edge zone
+
+    const rgba = Buffer.alloc(W*H*4)
+    for (let i = 0; i < W*H; i++) {
+      const si = i*C, di = i*4
+      const r=data[si], g=data[si+1], b=data[si+2]
+      const dist = Math.sqrt((r-bgR)**2 + (g-bgG)**2 + (b-bgB)**2)
+      const alpha = dist < T ? 0 : dist < T2 ? Math.round((dist-T)/(T2-T)*255) : 255
+      rgba[di]=r; rgba[di+1]=g; rgba[di+2]=b; rgba[di+3]=alpha
+    }
+
+    const outBuf = await sharp(rgba, { raw: { width:W, height:H, channels:4 } })
+      .png().toBuffer()
+    console.log('[RemoveBG:sharp-chroma] ok —', outBuf.length, 'bytes')
     return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
   } catch (e) {
-    console.warn('[RemoveBG:imgly] error:', e.message.slice(0, 150))
+    console.warn('[RemoveBG:sharp-chroma] error:', e.message.slice(0, 150))
   }
 
   return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول مرة أخرى بعد لحظات' })

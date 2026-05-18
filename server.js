@@ -18460,77 +18460,87 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 const REMBG_PORT = 7000
 let rembgReady = false
 
-// POST /api/tools/img-remove-bg — Background removal via rembg (local) or withoutbg (Vercel fallback)
+// POST /api/tools/img-remove-bg — HF RMBG-1.4 (primary) → rembg local → error
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64, mimeType = 'image/jpeg' } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
   const imgBytes = Buffer.from(b64, 'base64')
+  const sharp = (await import('sharp')).default
 
-  // ── Primary: rembg local server (dev/self-hosted) ──────────────────────────
+  // helper: apply grayscale mask as alpha channel onto original image
+  async function applyMask(origBuf, maskBuf) {
+    const { data: origRaw, info } = await sharp(origBuf)
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .removeAlpha().raw().toBuffer({ resolveWithObject: true })
+    const { data: alphaRaw } = await sharp(maskBuf)
+      .resize({ width: info.width, height: info.height, fit: 'fill' })
+      .grayscale().raw().toBuffer({ resolveWithObject: true })
+    const rgba = Buffer.alloc(info.width * info.height * 4)
+    const ch = info.channels
+    for (let i = 0; i < info.width * info.height; i++) {
+      rgba[i * 4]     = origRaw[i * ch]
+      rgba[i * 4 + 1] = origRaw[i * ch + 1]
+      rgba[i * 4 + 2] = origRaw[i * ch + 2]
+      rgba[i * 4 + 3] = alphaRaw[i]
+    }
+    return sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer()
+  }
+
+  // ── Primary: HF RMBG-1.4 (works on Replit + Vercel) ───────────────────────
+  const hfToken = process.env.HF_TOKEN
+  if (hfToken) {
+    try {
+      const hfRes = await fetch(
+        'https://api-inference.huggingface.co/models/briaai/RMBG-1.4',
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${hfToken}`, 'Content-Type': 'application/octet-stream' },
+          body: imgBytes,
+          signal: AbortSignal.timeout(90000),
+        }
+      )
+      if (hfRes.ok) {
+        const ct = hfRes.headers.get('content-type') || ''
+        const outBuf = Buffer.from(await hfRes.arrayBuffer())
+        // If model returns transparent PNG directly, use it; otherwise treat as mask
+        const outMeta = await sharp(outBuf).metadata()
+        let finalBuf
+        if (outMeta.hasAlpha) {
+          finalBuf = await sharp(outBuf).png().toBuffer()
+        } else {
+          finalBuf = await applyMask(imgBytes, outBuf)
+        }
+        console.log('[RemoveBG:RMBG-1.4] ok —', finalBuf.length, 'bytes')
+        return res.json({ imageBase64: `data:image/png;base64,${finalBuf.toString('base64')}` })
+      }
+      const errTxt = await hfRes.text()
+      console.warn('[RemoveBG:RMBG-1.4] non-ok:', hfRes.status, errTxt.slice(0, 120), '— falling back')
+    } catch (e) {
+      console.warn('[RemoveBG:RMBG-1.4] error:', e.message, '— falling back')
+    }
+  }
+
+  // ── Secondary: rembg local server (when onnxruntime available) ─────────────
   if (!process.env.VERCEL && rembgReady) {
     try {
       const form = new FormData()
       form.append('file', new Blob([imgBytes], { type: mimeType }), 'image.bin')
       const r = await fetch(`http://localhost:${REMBG_PORT}/api/remove`, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(120000),
+        method: 'POST', body: form, signal: AbortSignal.timeout(120000),
       })
       if (r.ok) {
         const buf = Buffer.from(await r.arrayBuffer())
         console.log('[RemoveBG:rembg] ok —', buf.length, 'bytes')
         return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}` })
       }
-      console.warn('[RemoveBG:rembg] non-ok status', r.status, '— falling back')
+      console.warn('[RemoveBG:rembg] non-ok:', r.status)
     } catch (e) {
-      console.warn('[RemoveBG:rembg] error:', e.message, '— falling back')
+      console.warn('[RemoveBG:rembg] error:', e.message)
     }
   }
 
-  // ── Fallback: withoutbg.com API (Vercel / rembg unavailable) ───────────────
-  const apiKey = process.env.WITHOUTBG_API_KEY
-  if (!apiKey) return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة حالياً' })
-  try {
-    const sharp = (await import('sharp')).default
-    const r = await fetch('https://api.withoutbg.com/v1.0/alpha-channel-base64', {
-      method: 'POST',
-      headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_base64: b64 }),
-      signal: AbortSignal.timeout(60000),
-    })
-    if (!r.ok) {
-      const errTxt = await r.text()
-      console.warn(`[RemoveBG:withoutbg] ${r.status}: ${errTxt.slice(0, 200)}`)
-      return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول بعد لحظات' })
-    }
-    const data = await r.json()
-    if (!data.alpha_base64) return res.status(500).json({ error: 'استجابة غير صحيحة من الخدمة' })
-    const origBuf = Buffer.from(b64, 'base64')
-    const alphaBuf = Buffer.from(data.alpha_base64, 'base64')
-    const { data: origRaw, info: origInfo } = await sharp(origBuf)
-      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-      .raw().toBuffer({ resolveWithObject: true })
-    const { data: alphaRaw } = await sharp(alphaBuf)
-      .resize({ width: origInfo.width, height: origInfo.height, fit: 'fill' })
-      .grayscale().raw().toBuffer({ resolveWithObject: true })
-    const rgbaPixels = Buffer.alloc(origInfo.width * origInfo.height * 4)
-    const channels = origInfo.channels
-    for (let i = 0; i < origInfo.width * origInfo.height; i++) {
-      rgbaPixels[i * 4]     = origRaw[i * channels]
-      rgbaPixels[i * 4 + 1] = origRaw[i * channels + 1]
-      rgbaPixels[i * 4 + 2] = origRaw[i * channels + 2]
-      rgbaPixels[i * 4 + 3] = alphaRaw[i]
-    }
-    const resultBuf = await sharp(rgbaPixels, {
-      raw: { width: origInfo.width, height: origInfo.height, channels: 4 }
-    }).png().toBuffer()
-    console.log('[RemoveBG:withoutbg] ok')
-    return res.json({ imageBase64: `data:image/png;base64,${resultBuf.toString('base64')}` })
-  } catch (e) {
-    console.error('[RemoveBG:withoutbg]', e.message)
-    return res.status(500).json({ error: 'خطأ في معالجة الصورة' })
-  }
+  return res.status(500).json({ error: 'خدمة إزالة الخلفية غير متوفرة حالياً — حاول لاحقاً' })
 })
 
 // POST /api/tools/img-upscale — AI upscaling via HF Swin2SR, fallback to sharp Lanczos

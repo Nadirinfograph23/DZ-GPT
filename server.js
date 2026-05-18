@@ -18460,17 +18460,17 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 const REMBG_PORT = 7000
 let rembgReady = false
 
-// POST /api/tools/img-remove-bg — rembg Python script (primary) → HF Space (Vercel fallback)
+// POST /api/tools/img-remove-bg — rembg+alpha-matting (primary) → flood-fill (Vercel)
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64 } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
 
-  // ── Primary: rembg Python script (Replit / self-hosted) ────────────────────
+  // ── Primary: rembg + alpha matting (Replit / self-hosted) ─────────────────
   if (!process.env.VERCEL) {
     const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'remove_bg.py')
     const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
-    const payload = JSON.stringify({ image: b64 })
+    const payload = JSON.stringify({ image: b64, method: 'alpha_matting' })
     try {
       const result = await new Promise((resolve, reject) => {
         const proc = spawn('python3', [scriptPath], {
@@ -18487,58 +18487,91 @@ app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req
         proc.on('error', reject)
         proc.stdin.write(payload); proc.stdin.end()
       })
-      console.log('[RemoveBG:rembg-py] ok —', result.length, 'chars')
+      console.log('[RemoveBG:rembg+matting] ok —', result.length, 'chars')
       return res.json({ imageBase64: `data:image/png;base64,${result}` })
     } catch (e) {
-      console.warn('[RemoveBG:rembg-py] error:', e.message.slice(0, 150), '— falling back')
+      console.warn('[RemoveBG:rembg+matting] error:', e.message.slice(0, 150), '— falling back')
     }
   }
 
-  // ── Fallback: sharp chroma-key removal (pure Node.js — Vercel-safe) ──────────
+  // ── Fallback: BFS flood-fill from borders + feathered edges (Vercel-safe) ──
   try {
     const sharp = (await import('sharp')).default
     const imgBytes = Buffer.from(b64, 'base64')
 
-    // Resize to max 1024 for performance
-    const resized = await sharp(imgBytes)
+    const { data: raw, info } = await sharp(imgBytes)
       .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true })
+      .removeAlpha().raw().toBuffer({ resolveWithObject: true })
 
-    const { data, info: { width: W, height: H, channels: C } } = resized
+    const W = info.width, H = info.height, C = info.channels
+    const N = W * H
 
-    // Sample background from image border pixels (corners + midpoints)
-    const samplePoints = [
-      [0,0],[W-1,0],[0,H-1],[W-1,H-1],
-      [W>>1,0],[W>>1,H-1],[0,H>>1],[W-1,H>>1],
-      [W>>2,0],[3*(W>>2),0],[W>>2,H-1],[3*(W>>2),H-1],
-    ]
-    let bgR=0, bgG=0, bgB=0
-    for (const [x,y] of samplePoints) {
-      const idx = (y*W+x)*C
-      bgR += data[idx]; bgG += data[idx+1]; bgB += data[idx+2]
+    // ── Step 1: BFS flood-fill from all border pixels ────────────────────────
+    // Adaptive tolerance per-pixel based on local color variance on border
+    const isBg  = new Uint8Array(N)      // 1 = confirmed background
+    const visited = new Uint8Array(N)
+    const queue = new Int32Array(N * 2)
+    let qHead = 0, qTail = 0
+
+    // Seed: all border pixels
+    const seed = (idx) => { if (!visited[idx]) { visited[idx]=1; queue[qTail++]=idx } }
+    for (let x = 0; x < W; x++) { seed(x); seed((H-1)*W+x) }
+    for (let y = 1; y < H-1; y++) { seed(y*W); seed(y*W+W-1) }
+
+    // Compute average background color from border seeds
+    let bR=0,bG=0,bB=0,cnt=qTail
+    for (let i=0;i<cnt;i++){const p=queue[i]*C;bR+=raw[p];bG+=raw[p+1];bB+=raw[p+2]}
+    bR/=cnt; bG/=cnt; bB/=cnt
+
+    const THARD = 50, TSOFT = 95
+
+    // BFS: expand to neighbors if color is close to background
+    while (qHead < qTail) {
+      const idx = queue[qHead++]
+      const pi = idx * C
+      const r=raw[pi],g=raw[pi+1],b=raw[pi+2]
+      const dist = Math.sqrt((r-bR)**2+(g-bG)**2+(b-bB)**2)
+      if (dist > TSOFT) continue   // too different → foreground
+      isBg[idx] = dist < THARD ? 2 : 1  // 2=hard bg, 1=soft bg
+
+      const x=idx%W, y=(idx/W)|0
+      if(x>0   && !visited[idx-1]){visited[idx-1]=1;queue[qTail++]=idx-1}
+      if(x<W-1 && !visited[idx+1]){visited[idx+1]=1;queue[qTail++]=idx+1}
+      if(y>0   && !visited[idx-W]){visited[idx-W]=1;queue[qTail++]=idx-W}
+      if(y<H-1 && !visited[idx+W]){visited[idx+W]=1;queue[qTail++]=idx+W}
     }
-    bgR /= samplePoints.length; bgG /= samplePoints.length; bgB /= samplePoints.length
 
-    const T = 55        // hard threshold
-    const T2 = T * 1.8  // soft edge zone
-
-    const rgba = Buffer.alloc(W*H*4)
-    for (let i = 0; i < W*H; i++) {
-      const si = i*C, di = i*4
-      const r=data[si], g=data[si+1], b=data[si+2]
-      const dist = Math.sqrt((r-bgR)**2 + (g-bgG)**2 + (b-bgB)**2)
-      const alpha = dist < T ? 0 : dist < T2 ? Math.round((dist-T)/(T2-T)*255) : 255
-      rgba[di]=r; rgba[di+1]=g; rgba[di+2]=b; rgba[di+3]=alpha
+    // ── Step 2: Build raw alpha mask ─────────────────────────────────────────
+    const alphaBuf = Buffer.alloc(N)
+    for (let i=0;i<N;i++) {
+      alphaBuf[i] = isBg[i]===2 ? 0 : isBg[i]===1 ? 80 : 255
     }
 
-    const outBuf = await sharp(rgba, { raw: { width:W, height:H, channels:4 } })
-      .png().toBuffer()
-    console.log('[RemoveBG:sharp-chroma] ok —', outBuf.length, 'bytes')
+    // ── Step 3: Smooth the alpha mask with two blur passes + threshold ────────
+    const alphaImg = sharp(alphaBuf, { raw:{width:W,height:H,channels:1} })
+    const blurred1 = await alphaImg.clone().blur(2.5).raw().toBuffer()
+    // Second pass: sharpen result to clean up mid-values
+    const blurred2 = Buffer.alloc(N)
+    for (let i=0;i<N;i++){
+      const v = blurred1[i]
+      blurred2[i] = v < 30 ? 0 : v > 200 ? 255 : Math.round((v-30)/(170)*255)
+    }
+    // Final light blur for feathering
+    const finalAlpha = await sharp(blurred2, {raw:{width:W,height:H,channels:1}})
+      .blur(1.5).raw().toBuffer()
+
+    // ── Step 4: Compose RGBA output ──────────────────────────────────────────
+    const rgba = Buffer.alloc(N*4)
+    for (let i=0;i<N;i++){
+      const si=i*C, di=i*4
+      rgba[di]=raw[si]; rgba[di+1]=raw[si+1]; rgba[di+2]=raw[si+2]; rgba[di+3]=finalAlpha[i]
+    }
+
+    const outBuf = await sharp(rgba,{raw:{width:W,height:H,channels:4}}).png().toBuffer()
+    console.log('[RemoveBG:flood-fill] ok —', outBuf.length, 'bytes')
     return res.json({ imageBase64: `data:image/png;base64,${outBuf.toString('base64')}` })
   } catch (e) {
-    console.warn('[RemoveBG:sharp-chroma] error:', e.message.slice(0, 150))
+    console.warn('[RemoveBG:flood-fill] error:', e.message.slice(0, 150))
   }
 
   return res.status(500).json({ error: 'فشل إزالة الخلفية — حاول مرة أخرى بعد لحظات' })

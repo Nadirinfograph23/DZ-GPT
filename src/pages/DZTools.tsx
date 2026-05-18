@@ -2038,7 +2038,28 @@ function ImageProcessingTool() {
     reader.readAsDataURL(file)
   }
 
-  // ── Server-side (Remove BG / Enhance) ────────────────────────────────────
+  // ── Client-side Remove Background (@imgly/background-removal) ───────────
+  const removeBgClient = async () => {
+    if (!inputImage || !inputFile) return
+    setLoading(true); setError(''); setResult(''); setModelUsed('')
+    try {
+      const { removeBackground } = await import('@imgly/background-removal')
+      const resultBlob = await removeBackground(inputFile, {
+        model: 'isnet_quint8',
+        output: { format: 'image/png', quality: 1 },
+      })
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setResult(e.target?.result as string)
+        setModelUsed('IMG.LY — محلي في المتصفح')
+      }
+      reader.readAsDataURL(resultBlob)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'خطأ في حذف الخلفية')
+    } finally { setLoading(false) }
+  }
+
+  // ── Server-side (Enhance) ────────────────────────────────────────────────
   const processServer = async (endpoint: string, extras: Record<string, string> = {}) => {
     if (!inputImage) return
     setLoading(true); setError(''); setResult(''); setModelUsed('')
@@ -2226,9 +2247,9 @@ function ImageProcessingTool() {
           <UploadZone />
           {inputImage && (
             <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">🧽 يزيل الخلفية تلقائياً ويُخرج PNG شفاف عالي الجودة — أشخاص، منتجات، شعارات</div>
-              <button className="dzt-btn" onClick={() => processServer('/api/tools/img-remove-bg')} disabled={loading}>
-                {loading ? <><span className="dzt-spinner" /> جاري المعالجة...</> : '🧽 إزالة الخلفية'}
+              <div className="dzt-imgproc-hint">🧽 يزيل الخلفية تلقائياً ويُخرج PNG شفاف — يعمل محلياً في المتصفح بدون اتصال خارجي</div>
+              <button className="dzt-btn" onClick={removeBgClient} disabled={loading}>
+                {loading ? <><span className="dzt-spinner" /> جاري حذف الخلفية...</> : '🧽 إزالة الخلفية'}
               </button>
             </div>
           )}

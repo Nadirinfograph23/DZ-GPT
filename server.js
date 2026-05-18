@@ -69,6 +69,7 @@ import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import { mountGitHubSkill } from './lib/skills/mount.js'
+import { mountMetaClaw, injectSkills as metaClawInject } from './lib/skills/dz-metaclaw-skill.js'
 import {
   deployGitHubPages,
   deployProject as ghDeployProject,
@@ -12815,6 +12816,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_mems.length) _memoryContext = buildMemoryContext(_mems)
   } catch { /* fail silently — memory is optional */ }
 
+  // ── MetaClaw Skill Injection ───────────────────────────────────────────
+  let _metaClawBlock = ''
+  try { _metaClawBlock = metaClawInject('', lastUserMessage) } catch { /* fail silently */ }
+
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
@@ -12924,6 +12929,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       } catch { return '' }
     })(),
 
+    _metaClawBlock,
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -17974,6 +17980,13 @@ try {
   mountMemoryRouter(app)
 } catch (err) {
   console.warn('[github-skill] mount failed:', err.message)
+}
+
+// ===== MetaClaw Skill Evolution System =====
+try {
+  mountMetaClaw(app)
+} catch (err) {
+  console.warn('[MetaClaw] mount failed:', err.message)
 }
 
 // ══════════════════════════════════════════════════════════════════════

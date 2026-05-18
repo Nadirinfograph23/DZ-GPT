@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 from skimage.restoration import inpaint_biharmonic
 
-MAX_DIM = 512
+MAX_DIM = 900
 
 def run():
     data = json.loads(sys.stdin.read())

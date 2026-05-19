@@ -2845,7 +2845,6 @@ function ZakatTool() {
   const [cropsKg,    setCropsKg]   = useState('')
   const [cropsPrice, setCropsPrice]=useState('')
   const [irrigated,  setIrrigated] = useState(false)
-  const [copied,     setCopied]    = useState(false)
 
   // Nisab calculations
   const nisabGold   = 85 * goldPrice                       // 85g gold in DZD

@@ -126,7 +126,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel' | 'hashtag'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -136,6 +136,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'health',       icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
   { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
+  { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغات AI',      desc: 'اكتب موضوعك → AI يولد أفضل الهاشتاغات لكل منصة مصنّفة حسب الشعبية', badge: 'NEW' },
   { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',         desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
   { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',      desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
   { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',           desc: 'أنشئ QR Code احترافي لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
@@ -2641,6 +2642,253 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
   )
 }
 
+// ─── Hashtag Generator Tool ────────────────────────────────────────────────────
+const HT_PLATFORMS = [
+  { id: 'instagram', label: 'Instagram', icon: '📸' },
+  { id: 'twitter',   label: 'X / Twitter', icon: '✖️' },
+  { id: 'tiktok',    label: 'TikTok',   icon: '🎵' },
+  { id: 'linkedin',  label: 'LinkedIn', icon: '💼' },
+  { id: 'facebook',  label: 'Facebook', icon: '👥' },
+  { id: 'youtube',   label: 'YouTube',  icon: '▶️' },
+]
+const HT_LANGS = [
+  { id: 'ar',    label: 'العربية' },
+  { id: 'fr',    label: 'Français' },
+  { id: 'en',    label: 'English' },
+  { id: 'dz',    label: '🇩🇿 دارجة' },
+  { id: 'mixed', label: 'مختلط' },
+]
+const HT_CATS = [
+  { id: 'general',       label: 'عام' },
+  { id: 'entertainment', label: 'ترفيه' },
+  { id: 'education',     label: 'تعليم' },
+  { id: 'business',      label: 'أعمال' },
+  { id: 'tech',          label: 'تقنية' },
+  { id: 'sport',         label: 'رياضة' },
+  { id: 'religion',      label: 'ديني' },
+  { id: 'travel',        label: 'سفر' },
+  { id: 'food',          label: 'طعام' },
+  { id: 'fashion',       label: 'موضة' },
+]
+
+interface HtResult { popular: string[]; medium: string[]; niche: string[] }
+
+function HashtagTool() {
+  const [topic,    setTopic]    = useState('')
+  const [platform, setPlatform] = useState('instagram')
+  const [lang,     setLang]     = useState('ar')
+  const [count,    setCount]    = useState(20)
+  const [category, setCategory] = useState('general')
+  const [loading,  setLoading]  = useState(false)
+  const [result,   setResult]   = useState<HtResult | null>(null)
+  const [copied,   setCopied]   = useState(false)
+  const [copiedTag, setCopiedTag] = useState<string | null>(null)
+
+  const generate = async () => {
+    if (!topic.trim()) return
+    setLoading(true); setResult(null)
+    const pl = HT_PLATFORMS.find(p => p.id === platform)?.label || platform
+    const la = HT_LANGS.find(l => l.id === lang)?.label || lang
+    const ca = HT_CATS.find(c => c.id === category)?.label || category
+    const popular = Math.round(count * 0.3)
+    const medium  = Math.round(count * 0.4)
+    const niche   = count - popular - medium
+
+    const prompt = `أنت خبير تسويق رقمي وإدارة مواقع التواصل الاجتماعي في الجزائر والعالم العربي.
+
+المهمة: ولّد ${count} هاشتاغ لـ ${pl} حول: "${topic}"
+اللغة: ${la} | الفئة: ${ca}
+
+اتبع هذا التنسيق بدقة تامة — ضع الهاشتاغات مباشرة بعد كل عنوان:
+
+🔥 شائعة (${popular}):
+[${popular} هاشتاغات ذات حجم بحث عالي جداً]
+
+📈 متوسطة (${medium}):
+[${medium} هاشتاغات حجم بحث متوسط، استهداف أدق]
+
+🎯 نيش (${niche}):
+[${niche} هاشتاغات متخصصة، منافسة أقل، جمهور مستهدف]
+
+قواعد: كل هاشتاغ يبدأ بـ # بدون مسافة داخلية — لا تكرار — أضف هاشتاغات جزائرية/مغاربية عند الاقتضاء`
+
+    try {
+      const res  = await fetch('/api/dz-agent-chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+      })
+      const data = await res.json()
+      const text = data.content || ''
+      const parseGroup = (start: string, stop: string): string[] => {
+        const s = text.indexOf(start)
+        const e = stop ? text.indexOf(stop, s + 1) : text.length
+        if (s === -1) return []
+        const section = text.slice(s, e === -1 ? undefined : e)
+        return section.match(/#[\w\u0600-\u06FF\u0750-\u077F\u200C_]+/g) || []
+      }
+      setResult({
+        popular: parseGroup('🔥', '📈'),
+        medium:  parseGroup('📈', '🎯'),
+        niche:   parseGroup('🎯', '\n\n\n'),
+      })
+    } catch { setResult({ popular: [], medium: [], niche: [] }) }
+    setLoading(false)
+  }
+
+  const copyTag = (tag: string) => {
+    navigator.clipboard.writeText(tag)
+    setCopiedTag(tag); setTimeout(() => setCopiedTag(null), 1400)
+  }
+  const copyGroup = (tags: string[]) => navigator.clipboard.writeText(tags.join(' '))
+  const allTags   = result ? [...result.popular, ...result.medium, ...result.niche] : []
+  const copyAll   = () => {
+    navigator.clipboard.writeText(allTags.join(' '))
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+
+  const PLATFORM_TIPS: Record<string, string> = {
+    instagram: '📸 Instagram: استخدم 20–30 هاشتاغ — ضعها في التعليق الأول لمظهر أنظف في الكابشن',
+    twitter:   '✖️ X / Twitter: 2–3 هاشتاغات فقط تحقق أفضل engagement — اختر الأكثر صلة',
+    tiktok:    '🎵 TikTok: 5–10 هاشتاغات — أضف #fyp و#viral دائماً لزيادة الانتشار',
+    linkedin:  '💼 LinkedIn: 3–5 هاشتاغات مهنية — اختر الأدق تخصصاً لجمهورك',
+    facebook:  '👥 Facebook: 3–5 هاشتاغات — تأثيرها في البحث محدود لكن مفيد للتصنيف',
+    youtube:   '▶️ YouTube: 3–5 في العنوان + 5–10 في الوصف — تجنب Keyword Stuffing',
+  }
+
+  return (
+    <div className="dzt-ht-wrap">
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">#️⃣</div>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد الهاشتاغات بالذكاء الاصطناعي</div>
+          <div className="dzt-tool-desc-text">اكتب موضوع مختصر ← AI يحلل ويولد أفضل الهاشتاغات مصنّفة حسب الشعبية — جاهزة للنسخ والاستخدام الفوري</div>
+        </div>
+      </div>
+
+      {/* Platform selector */}
+      <div className="dzt-ht-block">
+        <label className="dzt-label">المنصة</label>
+        <div className="dzt-ht-platforms">
+          {HT_PLATFORMS.map(p => (
+            <button key={p.id}
+              className={`dzt-ht-platform${platform === p.id ? ' active' : ''}`}
+              onClick={() => setPlatform(p.id)}>
+              <span className="dzt-ht-platform-icon">{p.icon}</span>
+              <span>{p.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Topic */}
+      <div className="dzt-ht-block">
+        <label className="dzt-label">الموضوع *</label>
+        <textarea
+          className="dzt-ht-textarea"
+          placeholder="مثال: وصفة الكسكسي الجزائري الأصيل... أو: الذكاء الاصطناعي في التعليم... أو: السياحة في الجنوب الجزائري..."
+          value={topic}
+          onChange={e => setTopic(e.target.value)}
+          rows={3}
+          onKeyDown={e => e.key === 'Enter' && e.ctrlKey && generate()}
+        />
+        <div style={{fontSize:11,color:'#444',textAlign:'right',marginTop:4}}>Ctrl+Enter للتوليد السريع</div>
+      </div>
+
+      {/* Controls row */}
+      <div className="dzt-ht-controls">
+        <div className="dzt-ht-ctrl">
+          <label className="dzt-label">اللغة</label>
+          <div className="dzt-ht-pills">
+            {HT_LANGS.map(l => (
+              <button key={l.id} className={`dzt-ht-pill${lang === l.id ? ' active' : ''}`} onClick={() => setLang(l.id)}>{l.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="dzt-ht-ctrl">
+          <label className="dzt-label">الفئة</label>
+          <div className="dzt-ht-pills">
+            {HT_CATS.map(c => (
+              <button key={c.id} className={`dzt-ht-pill${category === c.id ? ' active' : ''}`} onClick={() => setCategory(c.id)}>{c.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="dzt-ht-ctrl">
+          <label className="dzt-label">العدد</label>
+          <div className="dzt-ht-pills">
+            {[10, 20, 30].map(n => (
+              <button key={n} className={`dzt-ht-pill${count === n ? ' active' : ''}`} onClick={() => setCount(n)}>{n} هاشتاغ</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={generate} disabled={loading || !topic.trim()}
+        style={{fontSize:15,padding:'14px 28px',borderRadius:12}}>
+        {loading ? '⏳ AI يحلل الموضوع...' : `✨ ولّد ${count} هاشتاغ لـ ${HT_PLATFORMS.find(p=>p.id===platform)?.label}`}
+      </button>
+
+      {/* Loading */}
+      {loading && (
+        <div className="dzt-ht-loading">
+          <div className="dzt-ht-spinner"/>
+          <span>AI يختار أفضل الهاشتاغات الشائعة والمتخصصة...</span>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && allTags.length > 0 && (
+        <div className="dzt-ht-results">
+          <div className="dzt-ht-results-bar">
+            <span className="dzt-ht-count-badge">{allTags.length} هاشتاغ جاهز</span>
+            <button className={`dzt-ht-copy-all${copied ? ' done' : ''}`} onClick={copyAll}>
+              {copied ? '✅ تم النسخ!' : '📋 نسخ الكل'}
+            </button>
+          </div>
+
+          {[
+            { key: 'popular', emoji: '🔥', label: 'شائعة',  desc: 'بحث عالي جداً',  color: '#ff6b35', tags: result.popular },
+            { key: 'medium',  emoji: '📈', label: 'متوسطة', desc: 'استهداف جيد',     color: '#60a5fa', tags: result.medium },
+            { key: 'niche',   emoji: '🎯', label: 'نيش',    desc: 'منافسة أقل — أفضل وصول', color: '#c8ff00', tags: result.niche },
+          ].map(g => g.tags.length > 0 && (
+            <div key={g.key} className="dzt-ht-group">
+              <div className="dzt-ht-group-head">
+                <span className="dzt-ht-group-title" style={{color: g.color}}>{g.emoji} {g.label}</span>
+                <span className="dzt-ht-group-desc">{g.desc} · {g.tags.length} هاشتاغ</span>
+                <button className="dzt-ht-copy-grp" onClick={() => copyGroup(g.tags)}>نسخ المجموعة</button>
+              </div>
+              <div className="dzt-ht-chips">
+                {g.tags.map((tag, i) => (
+                  <button key={i} className={`dzt-ht-chip${copiedTag === tag ? ' copied' : ''}`}
+                    style={{'--chip-color': g.color} as React.CSSProperties}
+                    onClick={() => copyTag(tag)} title="انقر للنسخ">
+                    {copiedTag === tag ? '✅' : tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Platform tip */}
+          <div className="dzt-ht-tip">
+            💡 {PLATFORM_TIPS[platform]}
+          </div>
+
+          {/* Ready-to-paste */}
+          <div className="dzt-ht-paste">
+            <div className="dzt-ht-paste-head">
+              <span>📋 جاهز للصق المباشر</span>
+              <button className={`dzt-ht-copy-all${copied?' done':''}`} onClick={copyAll}>
+                {copied ? '✅ تم!' : 'نسخ'}
+              </button>
+            </div>
+            <div className="dzt-ht-paste-body" dir="ltr">{allTags.join(' ')}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Data Analysis Tool (CSV / Excel) ─────────────────────────────────────────
 interface DataRow { [key: string]: string | number }
 
@@ -2895,6 +3143,7 @@ export default function DZTools() {
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
+        {active === 'hashtag'      && <HashtagTool />}
         {active === 'excel'        && <SpreadsheetTool />}
         {active === 'cv'           && <CVTool />}
         {active === 'planner'      && <PlannerTool />}

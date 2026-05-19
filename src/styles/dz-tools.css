@@ -1817,3 +1817,344 @@
   .dzt-tax-breakdown-row { grid-template-columns: 1fr 0.5fr 1fr 1fr; font-size: 11px; }
   .dzt-tax-ibs-rates { flex-direction: column; }
 }
+
+/* ════════════════════════════════════════════════════════
+   PENSION / CNAS / CASNOS TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-pension-type-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.dzt-pension-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 18px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  color: rgba(255,255,255,0.6);
+  font-family: 'Cairo', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.dzt-pension-type-btn:hover { border-color: rgba(200,255,0,0.3); color: #fff; }
+.dzt-pension-type-btn.active {
+  background: rgba(200,255,0,0.08);
+  border-color: #c8ff00;
+  color: #c8ff00;
+}
+.dzt-pension-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 600px) { .dzt-pension-grid { grid-template-columns: 1fr; } }
+.dzt-pension-info-box {
+  background: rgba(200,255,0,0.05);
+  border: 1px solid rgba(200,255,0,0.15);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #aaa;
+  line-height: 1.7;
+  direction: rtl;
+  text-align: right;
+}
+.dzt-pension-info-box strong { color: #c8ff00; }
+.dzt-pension-result {
+  animation: fadeInUp 0.3s ease;
+}
+
+/* ════════════════════════════════════════════════════════
+   QR CODE TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-qr-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dzt-qr-preset-btn {
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: #ccc;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.dzt-qr-preset-btn:hover {
+  background: rgba(200,255,0,0.1);
+  border-color: #c8ff00;
+  color: #c8ff00;
+}
+.dzt-qr-options {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 600px) { .dzt-qr-options { grid-template-columns: 1fr 1fr; } }
+.dzt-qr-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dzt-qr-color-picker {
+  width: 44px;
+  height: 38px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+  background: #111;
+  border: 1px solid #333;
+}
+.dzt-qr-color-hex {
+  font-size: 13px;
+  color: #aaa;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+}
+.dzt-qr-result {
+  background: #0f0f0f;
+  border: 1px solid #1d1d1d;
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: fadeInUp 0.3s ease;
+}
+.dzt-qr-preview-wrap {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  display: inline-flex;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+}
+.dzt-qr-img {
+  display: block;
+  max-width: 100%;
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.dzt-qr-content-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  max-width: 340px;
+  word-break: break-all;
+}
+.dzt-qr-content-label { color: #c8ff00; font-weight: 700; flex-shrink: 0; }
+.dzt-qr-content-val   { color: #aaa; }
+
+/* ════════════════════════════════════════════════════════
+   BUSINESS CARD TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-bc-themes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dzt-bc-theme-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  outline: none;
+}
+.dzt-bc-theme-btn.active {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 2px #c8ff00;
+}
+.dzt-bc-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+.dzt-bc-preview-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.dzt-bc-card-outer {
+  padding: 20px;
+  background: repeating-conic-gradient(#111 0% 25%, #0d0d0d 0% 50%) 0 0 / 20px 20px;
+  border-radius: 16px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.dzt-bc-card {
+  width: 340px;
+  height: 204px;
+  border-radius: 12px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+.dzt-bc-accent {
+  position: absolute;
+  top: 0;
+  width: 5px;
+  height: 100%;
+}
+.dzt-bc-top { padding: 0 8px; }
+.dzt-bc-name    { font-size: 18px; font-weight: 800; line-height: 1.2; margin-bottom: 3px; }
+.dzt-bc-title   { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 2px; }
+.dzt-bc-company { font-size: 10px; opacity: 0.7; }
+.dzt-bc-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 8px;
+}
+.dzt-bc-contact { font-size: 10px; opacity: 0.8; }
+.dzt-bc-brand {
+  position: absolute;
+  bottom: 10px;
+  font-size: 8px;
+  opacity: 0.4;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+@media (max-width: 400px) {
+  .dzt-bc-card { width: 100%; height: auto; min-height: 180px; }
+}
+
+/* ════════════════════════════════════════════════════════
+   DATA ANALYSIS TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-data-dropzone {
+  border: 2px dashed rgba(200,255,0,0.25);
+  border-radius: 16px;
+  padding: 36px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(200,255,0,0.02);
+  text-align: center;
+  gap: 4px;
+}
+.dzt-data-dropzone:hover {
+  border-color: rgba(200,255,0,0.5);
+  background: rgba(200,255,0,0.05);
+}
+.dzt-data-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #888;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+.dzt-data-meta span { color: #ccc; font-weight: 600; }
+.dzt-data-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 600px) { .dzt-data-stats-grid { grid-template-columns: 1fr; } }
+.dzt-data-stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dzt-data-stat-col {
+  font-size: 12px;
+  font-weight: 800;
+  color: #c8ff00;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(200,255,0,0.1);
+  padding-bottom: 6px;
+  word-break: break-word;
+}
+.dzt-data-stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: #888;
+}
+.dzt-data-stat-row strong { color: #e5e5e5; }
+.dzt-data-chart-section {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 18px;
+}
+.dzt-data-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dzt-data-table-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.dzt-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  min-width: 400px;
+}
+.dzt-data-table th {
+  background: rgba(200,255,0,0.06);
+  color: #c8ff00;
+  padding: 9px 12px;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(200,255,0,0.15);
+  font-size: 12px;
+}
+.dzt-data-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: #ccc;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dzt-data-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+.dzt-data-table tr:hover td { background: rgba(200,255,0,0.03); }

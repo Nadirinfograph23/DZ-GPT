@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Upload, RefreshCw, BarChart2, CreditCard, QrCode, Calculator } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import DoctorResultsPanel, { DoctorResult, DirLink } from '../components/DoctorResultsPanel'
 import '../styles/dz-tools.css'
@@ -124,18 +125,22 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
-  { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
-  { id: 'planner', icon: '📋', name: 'مخطط المشاريع',           desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
-  { id: 'docs',    icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
-  { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
-  { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
-  { id: 'invoice', icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF', badge: 'NEW' },
-  { id: 'tax',     icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024', badge: 'NEW' },
-  { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
-  { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
+  { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
+  { id: 'planner',      icon: '📋', name: 'مخطط المشاريع',           desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
+  { id: 'docs',         icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
+  { id: 'jobs',         icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
+  { id: 'health',       icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
+  { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
+  { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
+  { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',      desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
+  { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',           desc: 'أنشئ QR Code احترافي لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
+  { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',             desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
+  { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',           desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
+  { id: 'ocr',          icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
+  { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -2166,6 +2171,641 @@ footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top
   )
 }
 
+// ─── Pension / CNAS / CASNOS Tool ─────────────────────────────────────────────
+function PensionTool() {
+  const [type, setType]   = useState<'cnas'|'casnos'>('cnas')
+  const [gender, setGender] = useState<'m'|'f'>('m')
+  const [salary, setSalary] = useState('')
+  const [years, setYears]   = useState('')
+  const [age, setAge]       = useState('')
+  const [result, setResult] = useState<null|{
+    contrib: number; employerContrib?: number; totalMonthly: number;
+    pension: number; retireAge: number; yearsLeft: number; rate: number;
+  }>(null)
+
+  const fmt = (n: number) => Math.round(n).toLocaleString('fr-DZ') + ' DA'
+
+  const calc = () => {
+    const s = parseFloat(salary) || 0
+    const y = parseFloat(years)  || 0
+    const a = parseFloat(age)    || 0
+    if (!s || !y || !a) return
+
+    const retireAge = gender === 'm' ? 60 : 55
+    const yearsLeft = Math.max(0, retireAge - a)
+
+    if (type === 'cnas') {
+      const contrib         = s * 0.09
+      const employerContrib = s * 0.26
+      const totalMonthly    = contrib + employerContrib
+      const rate            = Math.min(y * 2.5, 80) / 100
+      const pension         = s * rate
+      setResult({ contrib, employerContrib, totalMonthly, pension, retireAge, yearsLeft, rate: rate * 100 })
+    } else {
+      const annualIncome = s * 12
+      const contrib      = (annualIncome * 0.15) / 12
+      const rate         = Math.min(y * 2.5, 80) / 100
+      const pension      = s * rate
+      setResult({ contrib, totalMonthly: contrib, pension, retireAge, yearsLeft, rate: rate * 100 })
+    }
+  }
+
+  const printResult = () => {
+    if (!result) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>حاسبة التقاعد CNAS</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Cairo',sans-serif;direction:rtl;padding:40px;background:#fff;color:#111}
+h1{color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.card{background:#f6fbf7;border:1px solid #c8e6c9;border-radius:12px;padding:16px}
+.label{font-size:12px;color:#666;margin-bottom:4px}
+.val{font-size:22px;font-weight:800;color:#0a3d1f}
+.val.red{color:#d32f2f}.val.blue{color:#1565c0}
+.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}
+</style></head><body>
+<h1>🏦 تقرير حاسبة التقاعد — ${type === 'cnas' ? 'CNAS موظف' : 'CASNOS مستقل'}</h1>
+<div class="grid">
+  ${type === 'cnas' ? `<div class="card"><div class="label">اشتراك الموظف (9%)</div><div class="val blue">${fmt(result.contrib)}</div></div>
+  <div class="card"><div class="label">اشتراك صاحب العمل (26%)</div><div class="val blue">${fmt(result.employerContrib||0)}</div></div>` :
+  `<div class="card"><div class="label">الاشتراك الشهري (15%)</div><div class="val blue">${fmt(result.contrib)}</div></div>`}
+  <div class="card"><div class="label">نسبة المعاش</div><div class="val">${result.rate.toFixed(1)}%</div></div>
+  <div class="card" style="background:#e8f5e9"><div class="label">المعاش الشهري المتوقع</div><div class="val">${fmt(result.pension)}</div></div>
+  <div class="card"><div class="label">سن التقاعد القانوني</div><div class="val">${result.retireAge} سنة</div></div>
+  <div class="card"><div class="label">السنوات المتبقية</div><div class="val red">${result.yearsLeft} سنة</div></div>
+</div>
+<div class="footer">🇩🇿 DZ Tools — dz-gpt.vercel.app | المعطيات وفق قانون CNAS/CASNOS الجزائري 2024</div>
+</body></html>`)
+    w.document.close()
+    setTimeout(() => { w.focus(); w.print() }, 600)
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🏦</div>
+        <div>
+          <div className="dzt-tool-desc-title">حاسبة التقاعد والضمان الاجتماعي</div>
+          <div className="dzt-tool-desc-text">احسب اشتراكاتك الشهرية ومعاشك المتوقع — CNAS للموظفين · CASNOS للمستقلين — وفق شرائح 2024</div>
+        </div>
+      </div>
+
+      <div className="dzt-pension-type-row">
+        {(['cnas','casnos'] as const).map(t => (
+          <button key={t} className={`dzt-pension-type-btn${type===t?' active':''}`} onClick={()=>{ setType(t); setResult(null) }}>
+            <span style={{fontSize:22}}>{t==='cnas'?'🏢':'🧑‍💼'}</span>
+            <span style={{fontWeight:800}}>{t==='cnas'?'CNAS':'CASNOS'}</span>
+            <span style={{fontSize:12,opacity:.7}}>{t==='cnas'?'موظف / أجير':'مستقل / حر'}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="dzt-pension-grid">
+        <div className="dzt-field">
+          <label className="dzt-label">الجنس</label>
+          <select className="dzt-select" value={gender} onChange={e=>{ setGender(e.target.value as 'm'|'f'); setResult(null) }}>
+            <option value="m">ذكر (تقاعد عند 60)</option>
+            <option value="f">أنثى (تقاعد عند 55)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">العمر الحالي (سنة)</label>
+          <input className="dzt-input" type="number" min="18" max="70" placeholder="مثال: 35" value={age} onChange={e=>{ setAge(e.target.value); setResult(null) }} />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">{type==='cnas'?'الراتب الإجمالي الشهري (DA)':'الدخل الشهري الإجمالي (DA)'}</label>
+          <input className="dzt-input" type="number" min="0" placeholder="مثال: 85000" value={salary} onChange={e=>{ setSalary(e.target.value); setResult(null) }} />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">سنوات العمل / الاشتراك</label>
+          <input className="dzt-input" type="number" min="0" max="40" placeholder="مثال: 15" value={years} onChange={e=>{ setYears(e.target.value); setResult(null) }} />
+        </div>
+      </div>
+
+      <div className="dzt-pension-info-box">
+        {type==='cnas'
+          ? <><strong>CNAS — موظف:</strong> اشتراك الموظف <strong>9%</strong> + صاحب العمل <strong>26%</strong> من الراتب الإجمالي · المعاش = <strong>2.5% × سنوات العمل × الراتب</strong> (سقف 80%)</>
+          : <><strong>CASNOS — مستقل:</strong> اشتراك <strong>15%</strong> من الدخل السنوي · المعاش = <strong>2.5% × سنوات الاشتراك × الدخل</strong> (سقف 80%)</>
+        }
+      </div>
+
+      <button className="dzt-btn" onClick={calc} disabled={!salary||!years||!age}>
+        <Calculator size={16}/> احسب
+      </button>
+
+      {result && (
+        <div className="dzt-pension-result">
+          <div className="dzt-tax-cards" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">اشتراكك الشهري</div>
+              <div className="dzt-tax-card-val" style={{color:'#60a5fa'}}>{fmt(result.contrib)}</div>
+              <div className="dzt-tax-card-sub">{type==='cnas'?'9% من راتبك':'15% من دخلك'}</div>
+            </div>
+            {type==='cnas' && (
+              <div className="dzt-tax-card">
+                <div className="dzt-tax-card-label">اشتراك صاحب العمل</div>
+                <div className="dzt-tax-card-val" style={{color:'#a78bfa'}}>{fmt(result.employerContrib||0)}</div>
+                <div className="dzt-tax-card-sub">26% من راتبك</div>
+              </div>
+            )}
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">نسبة المعاش</div>
+              <div className="dzt-tax-card-val">{result.rate.toFixed(1)}%</div>
+              <div className="dzt-tax-card-sub">2.5% × {years} سنة</div>
+            </div>
+            <div className="dzt-tax-card dzt-tax-card-green">
+              <div className="dzt-tax-card-label">المعاش الشهري المتوقع</div>
+              <div className="dzt-tax-card-val">{fmt(result.pension)}</div>
+            </div>
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">سن التقاعد القانوني</div>
+              <div className="dzt-tax-card-val">{result.retireAge} سنة</div>
+            </div>
+            <div className={`dzt-tax-card${result.yearsLeft>0?' dzt-tax-card-red':' dzt-tax-card-green'}`}>
+              <div className="dzt-tax-card-label">{result.yearsLeft>0?'السنوات المتبقية':'أنت أهل للتقاعد!'}</div>
+              <div className="dzt-tax-card-val">{result.yearsLeft>0?`${result.yearsLeft} سنة`:'✓ الآن'}</div>
+            </div>
+          </div>
+          <div className="dzt-result-actions" style={{marginTop:12}}>
+            <button className="dzt-btn" onClick={printResult}><Download size={14}/> تحميل PDF</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── QR Code Generator Tool ────────────────────────────────────────────────────
+function QRCodeTool() {
+  const [text, setText]     = useState('')
+  const [size, setSize]     = useState('300')
+  const [color, setColor]   = useState('000000')
+  const [bgColor, setBgColor] = useState('ffffff')
+  const [qrUrl, setQrUrl]   = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const generate = () => {
+    if (!text.trim()) return
+    const encoded = encodeURIComponent(text.trim())
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}&color=${color}&bgcolor=${bgColor}&margin=10&format=png`
+    setQrUrl(url)
+  }
+
+  const download = async () => {
+    if (!qrUrl) return
+    try {
+      const res  = await fetch(qrUrl)
+      const blob = await res.blob()
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = 'qrcode-dz.png'
+      a.click()
+    } catch { alert('تعذّر التحميل، حاول مرة أخرى') }
+  }
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(text).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000) })
+  }
+
+  const PRESETS = [
+    { label:'رابط موقع', value:'https://dz-gpt.vercel.app' },
+    { label:'واتساب',    value:'https://wa.me/213XXXXXXXXX' },
+    { label:'إيميل',     value:'mailto:contact@example.com' },
+    { label:'هاتف',      value:'tel:+213XXXXXXXXX' },
+    { label:'نص حر',    value:'مرحباً بكم في DZ-GPT 🇩🇿' },
+  ]
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">📲</div>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد QR Code الاحترافي</div>
+          <div className="dzt-tool-desc-text">أنشئ QR Code لأي رابط، رقم هاتف، واتساب، إيميل أو نص — تخصيص الألوان والحجم — تحميل PNG فوري</div>
+        </div>
+      </div>
+
+      <div className="dzt-field">
+        <label className="dzt-label">نوع المحتوى (اختر أو اكتب)</label>
+        <div className="dzt-qr-presets">
+          {PRESETS.map(p => (
+            <button key={p.label} className="dzt-qr-preset-btn" onClick={()=>{ setText(p.value); setQrUrl('') }}>{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dzt-field">
+        <label className="dzt-label">المحتوى (رابط، نص، رقم...)</label>
+        <textarea
+          className="dzt-textarea"
+          placeholder="https://dz-gpt.vercel.app أو أي نص أو رقم هاتف..."
+          value={text}
+          onChange={e=>{ setText(e.target.value); setQrUrl('') }}
+          rows={3}
+        />
+      </div>
+
+      <div className="dzt-qr-options">
+        <div className="dzt-field">
+          <label className="dzt-label">الحجم</label>
+          <select className="dzt-select" value={size} onChange={e=>{ setSize(e.target.value); setQrUrl('') }}>
+            <option value="150">صغير (150×150)</option>
+            <option value="300">متوسط (300×300)</option>
+            <option value="500">كبير (500×500)</option>
+            <option value="800">عالي الدقة (800×800)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">لون الـ QR</label>
+          <div className="dzt-qr-color-row">
+            <input type="color" value={`#${color}`} onChange={e=>{ setColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
+            <span className="dzt-qr-color-hex">#{color}</span>
+          </div>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">لون الخلفية</label>
+          <div className="dzt-qr-color-row">
+            <input type="color" value={`#${bgColor}`} onChange={e=>{ setBgColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
+            <span className="dzt-qr-color-hex">#{bgColor}</span>
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={generate} disabled={!text.trim()}>
+        <QrCode size={16}/> توليد QR Code
+      </button>
+
+      {qrUrl && (
+        <div className="dzt-qr-result">
+          <div className="dzt-qr-preview-wrap">
+            <img src={qrUrl} alt="QR Code" className="dzt-qr-img" />
+          </div>
+          <div className="dzt-qr-content-preview">
+            <span className="dzt-qr-content-label">المحتوى:</span>
+            <span className="dzt-qr-content-val">{text.length > 60 ? text.slice(0,60)+'…' : text}</span>
+          </div>
+          <div className="dzt-result-actions" style={{justifyContent:'center',gap:12}}>
+            <button className="dzt-btn" onClick={download} style={{flex:1}}>
+              <Download size={14}/> تحميل PNG
+            </button>
+            <button className="dzt-result-btn" onClick={copyLink} style={{flex:1}}>
+              {copied ? <Check size={14}/> : <Copy size={14}/>}
+              {copied ? 'تم النسخ' : 'نسخ النص'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Business Card Tool ────────────────────────────────────────────────────────
+const BC_THEMES = [
+  { id:'dark',    label:'داكن',    bg:'#0a0a0a', text:'#fff',     accent:'#c8ff00', sub:'#aaa' },
+  { id:'green',   label:'أخضر',   bg:'#0a3d1f', text:'#fff',     accent:'#c8ff00', sub:'#a3d9a5' },
+  { id:'blue',    label:'أزرق',   bg:'#0d1b4b', text:'#fff',     accent:'#60a5fa', sub:'#93c5fd' },
+  { id:'white',   label:'أبيض',   bg:'#ffffff', text:'#111',     accent:'#0a3d1f', sub:'#555' },
+  { id:'gold',    label:'ذهبي',   bg:'#1a1100', text:'#ffe082',  accent:'#ffd600', sub:'#c8a000' },
+]
+
+function BizCardTool() {
+  const [lang, setLang]   = useState<'ar'|'fr'>('ar')
+  const [theme, setTheme] = useState(BC_THEMES[0])
+  const [form, setForm]   = useState({
+    name:'', title:'', company:'', phone:'', email:'', website:'', address:'', logo:''
+  })
+  const cardRef = useRef<HTMLDivElement>(null)
+  const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}))
+
+  const printCard = () => {
+    const el = cardRef.current
+    if (!el) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    const dir = lang === 'ar' ? 'rtl' : 'ltr'
+    w.document.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8">
+<title>بطاقة العمل — ${form.name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:${lang==='ar'?"'Cairo'":'Inter'},sans-serif}
+.card{width:90mm;height:55mm;background:${theme.bg};color:${theme.text};border-radius:4mm;padding:7mm 8mm;display:flex;flex-direction:column;justify-content:space-between;direction:${dir};position:relative;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.25)}
+.accent-line{position:absolute;top:0;${lang==='ar'?'right':'left'}:0;width:3mm;height:100%;background:${theme.accent}}
+.name{font-size:16pt;font-weight:800;color:${theme.text};margin-${lang==='ar'?'right':'left'}:4mm}
+.title{font-size:9pt;color:${theme.accent};font-weight:600;margin:1mm 0 0 0;margin-${lang==='ar'?'right':'left'}:4mm}
+.company{font-size:8pt;color:${theme.sub};margin-${lang==='ar'?'right':'left'}:4mm}
+.contacts{display:flex;flex-direction:column;gap:1.5mm;margin-${lang==='ar'?'right':'left'}:4mm}
+.contact-row{font-size:7.5pt;color:${theme.sub};display:flex;align-items:center;gap:2mm}
+.brand{position:absolute;bottom:4mm;${lang==='ar'?'left':'right'}:5mm;font-size:6pt;color:${theme.accent};opacity:.5}
+@media print{body{background:none}@page{margin:0;size:90mm 55mm}}
+</style></head><body>
+<div class="card">
+  <div class="accent-line"></div>
+  <div>
+    <div class="name">${form.name||'الاسم الكامل'}</div>
+    <div class="title">${form.title||'المنصب'}</div>
+    ${form.company?`<div class="company">${form.company}</div>`:''}
+  </div>
+  <div class="contacts">
+    ${form.phone?`<div class="contact-row">📞 ${form.phone}</div>`:''}
+    ${form.email?`<div class="contact-row">✉️ ${form.email}</div>`:''}
+    ${form.website?`<div class="contact-row">🌐 ${form.website}</div>`:''}
+    ${form.address?`<div class="contact-row">📍 ${form.address}</div>`:''}
+  </div>
+  <div class="brand">DZ-GPT</div>
+</div>
+</body></html>`)
+    w.document.close()
+    setTimeout(()=>{ w.focus(); w.print() }, 600)
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🪪</div>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد بطاقة العمل الاحترافية</div>
+          <div className="dzt-tool-desc-text">صمّم بطاقة عمل احترافية بالعربية أو الفرنسية مع معاينة مباشرة — تصدير PDF جاهز للطباعة (90mm × 55mm)</div>
+        </div>
+      </div>
+
+      <div className="dzt-row">
+        <div className="dzt-field">
+          <label className="dzt-label">اللغة</label>
+          <select className="dzt-select" value={lang} onChange={e=>setLang(e.target.value as 'ar'|'fr')}>
+            <option value="ar">العربية (RTL)</option>
+            <option value="fr">Français (LTR)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">النمط / الثيم</label>
+          <div className="dzt-bc-themes">
+            {BC_THEMES.map(t=>(
+              <button key={t.id} className={`dzt-bc-theme-btn${theme.id===t.id?' active':''}`}
+                style={{background:t.bg,color:t.text,borderColor:theme.id===t.id?t.accent:'transparent'}}
+                onClick={()=>setTheme(t)}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="dzt-inv-grid2">
+        <input className="dzt-inv-input" placeholder="الاسم الكامل *" value={form.name} onChange={e=>set('name',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="المنصب / الوظيفة *" value={form.title} onChange={e=>set('title',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="اسم الشركة / المؤسسة" value={form.company} onChange={e=>set('company',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="رقم الهاتف" value={form.phone} onChange={e=>set('phone',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="البريد الإلكتروني" value={form.email} onChange={e=>set('email',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="الموقع الإلكتروني" value={form.website} onChange={e=>set('website',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="العنوان / المدينة" value={form.address} onChange={e=>set('address',e.target.value)} style={{gridColumn:'span 2'}} />
+      </div>
+
+      {/* Live Preview */}
+      <div className="dzt-bc-preview-wrap">
+        <div className="dzt-bc-preview-label">معاينة مباشرة</div>
+        <div className="dzt-bc-card-outer">
+          <div
+            ref={cardRef}
+            className="dzt-bc-card"
+            style={{background:theme.bg, color:theme.text, direction:lang==='ar'?'rtl':'ltr', fontFamily:lang==='ar'?'Cairo, sans-serif':'Inter, sans-serif'}}
+          >
+            <div className="dzt-bc-accent" style={{background:theme.accent, [lang==='ar'?'right':'left']:0}} />
+            <div className="dzt-bc-top">
+              <div className="dzt-bc-name" style={{color:theme.text}}>{form.name||'الاسم الكامل'}</div>
+              <div className="dzt-bc-title" style={{color:theme.accent}}>{form.title||'المنصب'}</div>
+              {form.company && <div className="dzt-bc-company" style={{color:theme.sub}}>{form.company}</div>}
+            </div>
+            <div className="dzt-bc-contacts">
+              {form.phone   && <div className="dzt-bc-contact" style={{color:theme.sub}}>📞 {form.phone}</div>}
+              {form.email   && <div className="dzt-bc-contact" style={{color:theme.sub}}>✉️ {form.email}</div>}
+              {form.website && <div className="dzt-bc-contact" style={{color:theme.sub}}>🌐 {form.website}</div>}
+              {form.address && <div className="dzt-bc-contact" style={{color:theme.sub}}>📍 {form.address}</div>}
+            </div>
+            <div className="dzt-bc-brand" style={{color:theme.accent}}>DZ-GPT</div>
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={printCard} disabled={!form.name}>
+        <Download size={16}/> تصدير PDF (90×55mm)
+      </button>
+    </div>
+  )
+}
+
+// ─── Data Analysis Tool (CSV / Excel) ─────────────────────────────────────────
+interface DataRow { [key: string]: string | number }
+
+function DataAnalysisTool() {
+  const [rows, setRows]       = useState<DataRow[]>([])
+  const [cols, setCols]       = useState<string[]>([])
+  const [filename, setFilename] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [summary, setSummary] = useState('')
+  const [chartCol, setChartCol] = useState('')
+  const [error, setError]     = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const numCols = cols.filter(c => rows.some(r => !isNaN(parseFloat(String(r[c])))))
+
+  const parseFile = useCallback(async (file: File) => {
+    setLoading(true); setError(''); setRows([]); setCols([]); setSummary(''); setChartCol('')
+    setFilename(file.name)
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let parsed: DataRow[] = []
+      let headers: string[] = []
+
+      if (ext === 'csv') {
+        const text = await file.text()
+        const Papa = (await import('papaparse')).default
+        const result = Papa.parse<DataRow>(text, { header: true, skipEmptyLines: true, dynamicTyping: true })
+        parsed  = result.data
+        headers = result.meta.fields || []
+      } else {
+        const buffer = await file.arrayBuffer()
+        const XLSX   = await import('xlsx')
+        const wb     = XLSX.read(buffer, { type: 'array' })
+        const ws     = wb.Sheets[wb.SheetNames[0]]
+        const data: DataRow[][] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as DataRow[][]
+        if (data.length < 2) throw new Error('الملف فارغ')
+        headers = (data[0] as string[]).map(String)
+        parsed  = data.slice(1).map(row => {
+          const obj: DataRow = {}
+          headers.forEach((h, i) => { obj[h] = (row as DataRow[])[i] ?? '' })
+          return obj
+        })
+      }
+      setCols(headers)
+      setRows(parsed.slice(0, 500))
+      const firstNum = headers.find(c => parsed.some(r => !isNaN(parseFloat(String(r[c])))))
+      if (firstNum) setChartCol(firstNum)
+    } catch (e) {
+      setError('تعذّر قراءة الملف. تأكد أنه CSV أو Excel صحيح.')
+    }
+    setLoading(false)
+  }, [])
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) parseFile(file)
+  }
+
+  const getStats = (col: string) => {
+    const vals = rows.map(r => parseFloat(String(r[col]))).filter(v => !isNaN(v))
+    if (!vals.length) return null
+    const sum = vals.reduce((a,b)=>a+b,0)
+    const min = Math.min(...vals), max = Math.max(...vals)
+    const avg = sum / vals.length
+    const sorted = [...vals].sort((a,b)=>a-b)
+    const median = sorted[Math.floor(sorted.length/2)]
+    return { sum, min, max, avg, median, count: vals.length }
+  }
+
+  const aiSummary = async () => {
+    if (!rows.length) return
+    setLoading(true)
+    try {
+      const sample = rows.slice(0,20)
+      const statsStr = numCols.map(c => {
+        const s = getStats(c); if (!s) return ''
+        return `${c}: المجموع=${s.sum.toFixed(0)}, المتوسط=${s.avg.toFixed(2)}, الأدنى=${s.min}, الأعلى=${s.max}`
+      }).filter(Boolean).join('\n')
+      const prompt = `أنت محلل بيانات. لديك ملف "${filename}" يحتوي على ${rows.length} صف و ${cols.length} عمود.
+الأعمدة: ${cols.join('، ')}
+إحصائيات الأعمدة العددية:
+${statsStr}
+عينة من البيانات (أول 5 صفوف):
+${JSON.stringify(sample.slice(0,5), null, 2)}
+
+اكتب ملخصاً تحليلياً باللغة العربية في 5-8 جمل: ماذا تخبرنا هذه البيانات؟ أبرز الأنماط، القيم المثيرة للاهتمام، وأي ملاحظات مهمة.`
+      const res  = await fetch('/api/dz-agent-chat', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages:[{role:'user',content:prompt}], tool:'data-analysis' }) })
+      const data = await res.json()
+      setSummary(data.content || '')
+    } catch { setSummary('⚠️ تعذّر توليد الملخص. حاول مرة أخرى.') }
+    setLoading(false)
+  }
+
+  const chartData = chartCol
+    ? rows.slice(0,20).map((r,i)=>({ name: String(r[cols[0]]||i+1).slice(0,15), value: parseFloat(String(r[chartCol]))||0 }))
+    : []
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">📈</div>
+        <div>
+          <div className="dzt-tool-desc-title">محلل البيانات — Excel / CSV</div>
+          <div className="dzt-tool-desc-text">ارفع ملف Excel أو CSV واحصل على جدول، إحصائيات تلقائية، رسوم بيانية وملخص AI فوري</div>
+        </div>
+      </div>
+
+      <div
+        className="dzt-data-dropzone"
+        onDrop={onDrop}
+        onDragOver={e=>e.preventDefault()}
+        onClick={()=>fileRef.current?.click()}
+      >
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:'none'}} onChange={e=>{ if(e.target.files?.[0]) parseFile(e.target.files[0]) }} />
+        <Upload size={32} style={{color:'#c8ff00',marginBottom:8}} />
+        <div style={{fontWeight:700,color:'#fff'}}>اسحب الملف هنا أو انقر للاختيار</div>
+        <div style={{fontSize:12,color:'#666',marginTop:4}}>CSV · Excel (.xlsx / .xls) — حتى 500 صف</div>
+      </div>
+
+      {loading && <div className="dzt-spinner" style={{margin:'12px auto'}} />}
+      {error   && <div style={{color:'#f87171',background:'rgba(239,68,68,.08)',borderRadius:10,padding:'12px 16px',fontSize:14}}>{error}</div>}
+
+      {rows.length > 0 && (
+        <>
+          <div className="dzt-data-meta">
+            <span>📁 {filename}</span>
+            <span>🗂️ {rows.length} صف</span>
+            <span>📊 {cols.length} عمود</span>
+            <span>🔢 {numCols.length} عمود رقمي</span>
+          </div>
+
+          {/* Stats Cards */}
+          {numCols.length > 0 && (
+            <div className="dzt-data-stats-grid">
+              {numCols.slice(0,4).map(c => {
+                const s = getStats(c); if (!s) return null
+                return (
+                  <div key={c} className="dzt-data-stat-card">
+                    <div className="dzt-data-stat-col">{c}</div>
+                    <div className="dzt-data-stat-row"><span>المجموع</span><strong>{s.sum.toLocaleString('fr-DZ')}</strong></div>
+                    <div className="dzt-data-stat-row"><span>المتوسط</span><strong>{s.avg.toFixed(2)}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الأدنى</span><strong style={{color:'#f87171'}}>{s.min}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الأعلى</span><strong style={{color:'#4ade80'}}>{s.max}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الوسيط</span><strong>{s.median}</strong></div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Chart */}
+          {numCols.length > 0 && (
+            <div className="dzt-data-chart-section">
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,flexWrap:'wrap'}}>
+                <div style={{fontWeight:700,color:'#ccc',fontSize:14}}>📊 رسم بياني للعمود:</div>
+                <select className="dzt-select" style={{flex:1,maxWidth:260}} value={chartCol} onChange={e=>setChartCol(e.target.value)}>
+                  {numCols.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartData} margin={{top:4,right:4,left:4,bottom:24}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="name" tick={{fill:'#888',fontSize:11}} angle={-30} textAnchor="end" />
+                  <YAxis tick={{fill:'#888',fontSize:11}} />
+                  <Tooltip contentStyle={{background:'#111',border:'1px solid #222',borderRadius:8,color:'#fff'}} />
+                  <Bar dataKey="value" fill="#c8ff00" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* AI Summary */}
+          <div className="dzt-result-actions" style={{marginTop:4}}>
+            <button className="dzt-btn" onClick={aiSummary} disabled={loading}>
+              <BarChart2 size={15}/> ملخص AI للبيانات
+            </button>
+          </div>
+          {summary && (
+            <div className="dzt-result">
+              <div className="dzt-result-header">
+                <span>🤖 ملخص AI</span>
+              </div>
+              <div className="dzt-result-body" style={{padding:'16px 20px'}}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+
+          {/* Table preview */}
+          <div className="dzt-data-table-wrap">
+            <div className="dzt-data-table-label">جدول البيانات (أول 50 صف)</div>
+            <div style={{overflowX:'auto'}}>
+              <table className="dzt-data-table">
+                <thead>
+                  <tr>{cols.map(c=><th key={c}>{c}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0,50).map((r,i)=>(
+                    <tr key={i}>{cols.map(c=><td key={c}>{String(r[c]??'')}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -2207,15 +2847,19 @@ export default function DZTools() {
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
-        {active === 'cv'      && <CVTool />}
-        {active === 'planner' && <PlannerTool />}
-        {active === 'docs'    && <BizDocsTool />}
-        {active === 'jobs'    && <JobSearchTool />}
-        {active === 'health'  && <HealthTool />}
-        {active === 'invoice' && <InvoiceTool />}
-        {active === 'tax'     && <TaxTool />}
-        {active === 'ocr'     && <OCRTool />}
-        {active === 'bizplan' && <BizPlanTool />}
+        {active === 'cv'           && <CVTool />}
+        {active === 'planner'      && <PlannerTool />}
+        {active === 'docs'         && <BizDocsTool />}
+        {active === 'jobs'         && <JobSearchTool />}
+        {active === 'health'       && <HealthTool />}
+        {active === 'invoice'      && <InvoiceTool />}
+        {active === 'tax'          && <TaxTool />}
+        {active === 'pension'      && <PensionTool />}
+        {active === 'qrcode'       && <QRCodeTool />}
+        {active === 'bizcard'      && <BizCardTool />}
+        {active === 'dataanalysis' && <DataAnalysisTool />}
+        {active === 'ocr'          && <OCRTool />}
+        {active === 'bizplan'      && <BizPlanTool />}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react'
+import { useState, useRef, useCallback, KeyboardEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Download, Upload, Sparkles, Bold, Italic, AlignRight, AlignCenter, AlignLeft, X, ChevronDown } from 'lucide-react'
 
@@ -235,8 +235,8 @@ function evalCondition(cond: string, cells: Cells, visited: Set<string>): boolea
   const opMatch = cond.match(/^(.+?)(>=|<=|<>|!=|>|<|=)(.+)$/)
   if (!opMatch) {
     const v = evalFormula(cond, cells, visited)
-    if (v === 'TRUE' || v === true || v === 1) return true
-    if (v === 'FALSE'|| v === false|| v === 0 || v === '') return false
+    if (v === 'TRUE' || v === 1) return true
+    if (v === 'FALSE' || v === 0 || v === '') return false
     return Boolean(v)
   }
   const [,left,op,right] = opMatch

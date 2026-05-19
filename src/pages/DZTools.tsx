@@ -126,7 +126,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel' | 'hashtag'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel' | 'hashtag' | 'darija' | 'zakat'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -136,6 +136,8 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'health',       icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
   { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
+  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة الجزائرية',  desc: 'عربي/فرنسي ↔ دارجة جزائرية — شرق · غرب · وسط · جنوب — بالذكاء الاصطناعي', badge: 'NEW' },
+  { id: 'zakat',        icon: '☪️', name: 'حاسبة الزكاة الشاملة',     desc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع — بالدينار الجزائري 2025', badge: 'NEW' },
   { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغات AI',      desc: 'اكتب موضوعك → AI يولد أفضل الهاشتاغات لكل منصة مصنّفة حسب الشعبية', badge: 'NEW' },
   { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',         desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
   { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',      desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
@@ -2642,6 +2644,410 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
   )
 }
 
+// ─── Darija Translator Tool ───────────────────────────────────────────────────
+const DARIJA_DIRS = [
+  { id: 'ar2dz', label: 'عربي فصيح  →  دارجة', from: 'العربية الفصحى', to: 'الدارجة الجزائرية' },
+  { id: 'dz2ar', label: 'دارجة  →  عربي فصيح', from: 'الدارجة الجزائرية', to: 'العربية الفصحى' },
+  { id: 'fr2dz', label: 'Français  →  دارجة',   from: 'الفرنسية', to: 'الدارجة الجزائرية' },
+  { id: 'dz2fr', label: 'دارجة  →  Français',   from: 'الدارجة الجزائرية', to: 'الفرنسية' },
+]
+const DARIJA_REGIONS = [
+  { id: 'center', label: '🏙️ الجزائر العاصمة / الوسط' },
+  { id: 'west',   label: '🌅 وهران / تلمسان (الغرب)' },
+  { id: 'east',   label: '🏔️ قسنطينة / عنابة (الشرق)' },
+  { id: 'south',  label: '🏜️ الجنوب (تمنراست / ورقلة)' },
+]
+function DarijaTool() {
+  const [dir,      setDir]      = useState('ar2dz')
+  const [region,   setRegion]   = useState('center')
+  const [input,    setInput]    = useState('')
+  const [output,   setOutput]   = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [copied,   setCopied]   = useState(false)
+  const [examples, setExamples] = useState<{original:string;darija:string;note:string}[]>([])
+
+  const QUICK: Record<string, string[]> = {
+    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا تعبان'],
+    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','أنا مريض'],
+    fr2dz: ['Comment tu vas?','Je veux manger','Où habites-tu?','Merci beaucoup','Au revoir','C\'est combien?','Je suis fatigué','Allons-y'],
+    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','أنا مريض','هيا بينا'],
+  }
+
+  const regionLabels: Record<string,string> = { center:'الجزائر العاصمة', west:'وهران والغرب', east:'قسنطينة والشرق', south:'الجنوب الجزائري' }
+
+  const translate = async () => {
+    if (!input.trim()) return
+    setLoading(true); setOutput(''); setExamples([])
+    const d = DARIJA_DIRS.find(x=>x.id===dir)!
+    const reg = regionLabels[region]
+    const prompt = `أنت خبير في اللهجة الجزائرية الدارجة ومتمكن من جميع اللهجات الجزائرية الإقليمية.
+
+المهمة: ترجم النص التالي من ${d.from} إلى ${d.to} — مع مراعاة لهجة منطقة: ${reg}
+
+النص: "${input}"
+
+أعطني:
+1. **الترجمة الرئيسية** (كبيرة وواضحة):
+[ضع الترجمة هنا فقط]
+
+2. **شرح مختصر** (إذا كانت هناك تعابير خاصة):
+[شرح التعابير الصعبة]
+
+3. **أمثلة مماثلة** (3 أمثلة بنفس الأسلوب اللهجوي):
+- مثال 1: [أصل] | [ترجمة]
+- مثال 2: [أصل] | [ترجمة]  
+- مثال 3: [أصل] | [ترجمة]
+
+ملاحظة: استخدم الكتابة العربية للدارجة، ويمكن إضافة كلمات فرنسية مدرجة إذا كانت شائعة في المنطقة.`
+
+    try {
+      const res  = await fetch('/api/dz-agent-chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages:[{role:'user',content:prompt}] })
+      })
+      const data = await res.json()
+      const text = data.content || ''
+      // Extract main translation
+      const mainMatch = text.match(/\*\*الترجمة الرئيسية\*\*[^\n]*\n+([\s\S]*?)(?=\n\n|\*\*شرح|$)/i)
+      setOutput(mainMatch ? mainMatch[1].trim() : text.split('\n').find((l:string)=>l.trim()&&!l.startsWith('#')&&!l.startsWith('*')) || text)
+      // Extract examples
+      const exMatches = [...text.matchAll(/مثال \d+:\s*([^|]+)\|([^\n]+)/g)]
+      setExamples(exMatches.slice(0,3).map(m=>({ original:m[1].trim(), darija:m[2].trim(), note:'' })))
+    } catch { setOutput('⚠️ خطأ في الاتصال، حاول مرة أخرى.') }
+    setLoading(false)
+  }
+
+  const swap = () => {
+    const pairs: Record<string,string> = { ar2dz:'dz2ar', dz2ar:'ar2dz', fr2dz:'dz2fr', dz2fr:'fr2dz' }
+    setDir(pairs[dir]||dir); setInput(output); setOutput(''); setExamples([])
+  }
+
+  return (
+    <div className="dzt-dj-wrap">
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🗣️</div>
+        <div>
+          <div className="dzt-tool-desc-title">مترجم الدارجة الجزائرية</div>
+          <div className="dzt-tool-desc-text">ترجمة ذكية بين العربية الفصحى والفرنسية والدارجة الجزائرية — مع مراعاة اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
+        </div>
+      </div>
+
+      {/* Direction */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">اتجاه الترجمة</label>
+        <div className="dzt-dj-dirs">
+          {DARIJA_DIRS.map(d=>(
+            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`} onClick={()=>{setDir(d.id);setOutput('');setExamples([])}}>
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Region */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">المنطقة / اللهجة</label>
+        <div className="dzt-dj-regions">
+          {DARIJA_REGIONS.map(r=>(
+            <button key={r.id} className={`dzt-dj-region${region===r.id?' active':''}`} onClick={()=>setRegion(r.id)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick examples */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">أمثلة سريعة</label>
+        <div className="dzt-dj-quick">
+          {(QUICK[dir]||[]).map(q=>(
+            <button key={q} className="dzt-dj-quick-btn" onClick={()=>{setInput(q);setOutput('');setExamples([])}}>
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Input / Output */}
+      <div className="dzt-dj-panels">
+        <div className="dzt-dj-panel">
+          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.from}</div>
+          <textarea className="dzt-dj-textarea" placeholder="اكتب النص هنا..." value={input}
+            onChange={e=>setInput(e.target.value)} rows={4}
+            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()} />
+        </div>
+
+        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه">⇄</button>
+
+        <div className="dzt-dj-panel">
+          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.to}
+            {output && <button className={`dzt-dj-copy${copied?' done':''}`}
+              onClick={()=>{navigator.clipboard.writeText(output);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
+              {copied?'✅':'📋'}
+            </button>}
+          </div>
+          <div className={`dzt-dj-output${loading?' loading':''}`}>
+            {loading ? <span className="dzt-dj-loading-txt">⏳ AI يترجم...</span>
+                     : output || <span style={{color:'#333'}}>ستظهر الترجمة هنا...</span>}
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={translate} disabled={loading||!input.trim()}
+        style={{fontSize:14,padding:'12px 24px'}}>
+        {loading?'⏳ جاري الترجمة...':'🗣️ ترجم الآن'}
+      </button>
+
+      {/* Examples */}
+      {examples.length>0 && (
+        <div className="dzt-dj-examples">
+          <div className="dzt-dj-ex-title">📚 أمثلة مماثلة</div>
+          {examples.map((ex,i)=>(
+            <div key={i} className="dzt-dj-ex-row">
+              <span className="dzt-dj-ex-orig">{ex.original}</span>
+              <span className="dzt-dj-ex-arrow">→</span>
+              <span className="dzt-dj-ex-trans">{ex.darija}</span>
+              <button className="dzt-dj-ex-use" onClick={()=>{setInput(ex.original);setOutput('');setExamples([])}}>جرب</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Zakat Calculator Tool ────────────────────────────────────────────────────
+type ZakatTab = 'mal' | 'gold' | 'silver' | 'trade' | 'crops'
+const ZAKAT_TABS: {id:ZakatTab;icon:string;label:string}[] = [
+  { id:'mal',    icon:'💵', label:'زكاة المال' },
+  { id:'gold',   icon:'🥇', label:'زكاة الذهب' },
+  { id:'silver', icon:'🥈', label:'زكاة الفضة' },
+  { id:'trade',  icon:'🛒', label:'زكاة التجارة' },
+  { id:'crops',  icon:'🌾', label:'زكاة الزروع' },
+]
+function ZakatTool() {
+  const [tab,        setTab]       = useState<ZakatTab>('mal')
+  const [goldPrice,  setGoldPrice] = useState(9200)   // DZD per gram (18k avg 2025)
+  const [silverPrice,setSilverPrice] = useState(95)   // DZD per gram
+  // Mal
+  const [savings,    setSavings]   = useState('')
+  const [debts,      setDebts]     = useState('')
+  // Gold
+  const [goldGrams,  setGoldGrams] = useState('')
+  const [goldKarat,  setGoldKarat] = useState(21)
+  // Silver
+  const [silverGrams,setSilverGrams]=useState('')
+  // Trade
+  const [inventory,  setInventory] = useState('')
+  const [receivables,setReceivables]=useState('')
+  const [tradeDebts, setTradeDebts]=useState('')
+  // Crops
+  const [cropsKg,    setCropsKg]   = useState('')
+  const [cropsPrice, setCropsPrice]=useState('')
+  const [irrigated,  setIrrigated] = useState(false)
+  const [copied,     setCopied]    = useState(false)
+
+  // Nisab calculations
+  const nisabGold   = 85 * goldPrice                       // 85g gold in DZD
+  const nisabSilver = 595 * silverPrice                    // 595g silver in DZD
+  const nisabCrops  = 653                                  // 653 kg
+
+  // Results
+  const calcMal = () => {
+    const net = (parseFloat(savings)||0) - (parseFloat(debts)||0)
+    if (net < nisabGold) return null
+    return { base: net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
+  }
+  const calcGold = () => {
+    const grams = parseFloat(goldGrams)||0
+    const purity = goldKarat/24
+    const pureGrams = grams * purity
+    const value = pureGrams * goldPrice
+    const nisab85 = 85 * goldPrice
+    if (pureGrams < 85) return { grams, pureGrams, value, nisab: nisab85, eligible: false, zakat: 0 }
+    return { grams, pureGrams, value, nisab: nisab85, eligible: true, zakat: value * 0.025 }
+  }
+  const calcSilver = () => {
+    const grams = parseFloat(silverGrams)||0
+    const value = grams * silverPrice
+    const nisab595 = 595 * silverPrice
+    if (grams < 595) return { grams, value, nisab: nisab595, eligible: false, zakat: 0 }
+    return { grams, value, nisab: nisab595, eligible: true, zakat: value * 0.025 }
+  }
+  const calcTrade = () => {
+    const net = (parseFloat(inventory)||0) + (parseFloat(receivables)||0) - (parseFloat(tradeDebts)||0)
+    if (net < nisabGold) return null
+    return { net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
+  }
+  const calcCrops = () => {
+    const kg = parseFloat(cropsKg)||0
+    const price = parseFloat(cropsPrice)||0
+    const value = kg * price
+    const rate = irrigated ? 0.05 : 0.10
+    if (kg < nisabCrops) return { kg, value, rate, nisab: nisabCrops, eligible: false, zakat: 0 }
+    return { kg, value, rate, nisab: nisabCrops, eligible: true, zakat: value * rate }
+  }
+
+  const fmt = (n:number) => n.toLocaleString('fr-DZ',{maximumFractionDigits:0}) + ' دج'
+
+  const ResultBox = ({eligible,zakat,note}:{eligible:boolean;zakat:number;note?:string}) => (
+    <div className={`dzt-zk-result${eligible?' eligible':' not-eligible'}`}>
+      {eligible ? (
+        <>
+          <div className="dzt-zk-result-label">✅ تجب عليك الزكاة</div>
+          <div className="dzt-zk-result-amount">{fmt(zakat)}</div>
+          <div className="dzt-zk-result-sub">مبلغ الزكاة الواجبة (ربع العشر 2.5%)</div>
+        </>
+      ) : (
+        <>
+          <div className="dzt-zk-result-label">🔵 لا تجب عليك الزكاة</div>
+          <div className="dzt-zk-result-sub">النصاب لم يكتمل بعد</div>
+        </>
+      )}
+      {note && <div className="dzt-zk-result-note">ℹ️ {note}</div>}
+    </div>
+  )
+
+  return (
+    <div className="dzt-zk-wrap">
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">☪️</div>
+        <div>
+          <div className="dzt-tool-desc-title">حاسبة الزكاة الشاملة — 2025</div>
+          <div className="dzt-tool-desc-text">احسب زكاة المال والذهب والفضة والتجارة والزروع بالدينار الجزائري — بناءً على أسعار 2025 والنصاب الشرعي</div>
+        </div>
+      </div>
+
+      {/* Gold/Silver prices */}
+      <div className="dzt-zk-prices">
+        <div className="dzt-zk-price-field">
+          <label className="dzt-label">سعر الذهب (دج/غرام 18 قيراط)</label>
+          <input type="number" className="dzt-inv-input" value={goldPrice}
+            onChange={e=>setGoldPrice(+e.target.value)} placeholder="9200" />
+          <div className="dzt-zk-hint">النصاب = 85غ × {goldPrice.toLocaleString()} = <strong>{fmt(nisabGold)}</strong></div>
+        </div>
+        <div className="dzt-zk-price-field">
+          <label className="dzt-label">سعر الفضة (دج/غرام)</label>
+          <input type="number" className="dzt-inv-input" value={silverPrice}
+            onChange={e=>setSilverPrice(+e.target.value)} placeholder="95" />
+          <div className="dzt-zk-hint">النصاب = 595غ × {silverPrice} = <strong>{fmt(nisabSilver)}</strong></div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="dzt-zk-tabs">
+        {ZAKAT_TABS.map(t=>(
+          <button key={t.id} className={`dzt-zk-tab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+            <span>{t.icon}</span><span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="dzt-zk-body">
+
+        {tab==='mal' && (() => {
+          const r = calcMal()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 زكاة المال تجب إذا بلغ المال النصاب (≈ {fmt(nisabGold)}) وحال عليه الحول (سنة هجرية كاملة)</div>
+              <label className="dzt-label">المدخرات والأموال السائلة (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 500000" value={savings} onChange={e=>setSavings(e.target.value)} />
+              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 50000 أو 0" value={debts} onChange={e=>setDebts(e.target.value)} />
+              {savings && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء الزكوي: ${fmt(r.base)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='gold' && (() => {
+          const r = calcGold()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الذهب = 85 غراماً من الذهب الخالص (24 قيراط) — أي ما يعادل ≈ {fmt(85*goldPrice)} بالأسعار الحالية</div>
+              <label className="dzt-label">وزن الذهب (غرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 120" value={goldGrams} onChange={e=>setGoldGrams(e.target.value)} />
+              <label className="dzt-label">عيار الذهب</label>
+              <div className="dzt-ht-pills" style={{marginBottom:8}}>
+                {[18,21,22,24].map(k=>(
+                  <button key={k} className={`dzt-ht-pill${goldKarat===k?' active':''}`} onClick={()=>setGoldKarat(k)}>{k} قيراط</button>
+                ))}
+              </div>
+              {goldGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`الذهب الخالص: ${r.pureGrams.toFixed(1)}غ — القيمة: ${fmt(r.value)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='silver' && (() => {
+          const r = calcSilver()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الفضة = 595 غراماً — أي ما يعادل ≈ {fmt(nisabSilver)} بالأسعار الحالية (الفضة أقل من الذهب فنصابها يُستخدم لمن فيه رفق بالفقراء)</div>
+              <label className="dzt-label">وزن الفضة (غرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 700" value={silverGrams} onChange={e=>setSilverGrams(e.target.value)} />
+              {silverGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`القيمة: ${fmt(r.value)} — النصاب: ${fmt(r.nisab)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='trade' && (() => {
+          const r = calcTrade()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 زكاة عروض التجارة = (البضاعة + الذمم المدينة − الديون) × 2.5% — إذا بلغ المجموع النصاب</div>
+              <label className="dzt-label">قيمة المخزون / البضاعة (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 2000000" value={inventory} onChange={e=>setInventory(e.target.value)} />
+              <label className="dzt-label">الذمم المدينة (ديون الغير لك) (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 300000 أو 0" value={receivables} onChange={e=>setReceivables(e.target.value)} />
+              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 100000 أو 0" value={tradeDebts} onChange={e=>setTradeDebts(e.target.value)} />
+              {inventory && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء: ${fmt(r.net)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='crops' && (() => {
+          const r = calcCrops()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الزروع = 653 كغ — المعدل: 10% للأرض المسقية بالمطر · 5% للأرض المروية بالري الاصطناعي</div>
+              <label className="dzt-label">كمية المحصول (كيلوغرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 1000" value={cropsKg} onChange={e=>setCropsKg(e.target.value)} />
+              <label className="dzt-label">سعر الكيلو (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 80" value={cropsPrice} onChange={e=>setCropsPrice(e.target.value)} />
+              <div className="dzt-dj-dirs" style={{marginTop:4}}>
+                <button className={`dzt-dj-dir-btn${!irrigated?' active':''}`} onClick={()=>setIrrigated(false)}>
+                  🌧️ بعلي (مطر) — العشر 10%
+                </button>
+                <button className={`dzt-dj-dir-btn${irrigated?' active':''}`} onClick={()=>setIrrigated(true)}>
+                  🚿 مروي (ري اصطناعي) — نصف العشر 5%
+                </button>
+              </div>
+              {cropsKg && cropsPrice && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`المحصول: ${(parseFloat(cropsKg)||0).toLocaleString()} كغ — القيمة: ${fmt(r.value)} — المعدل: ${r.rate*100}%`} />}
+            </div>
+          )
+        })()}
+
+      </div>
+
+      {/* Summary */}
+      <div className="dzt-zk-summary">
+        <div className="dzt-zk-summary-title">📊 ملخص شرعي مهم</div>
+        <div className="dzt-zk-summary-items">
+          <div className="dzt-zk-summary-item">⏱️ <strong>الحول</strong>: يجب أن يمر على المال سنة هجرية كاملة</div>
+          <div className="dzt-zk-summary-item">🕌 <strong>النية</strong>: تجب النية عند إخراج الزكاة</div>
+          <div className="dzt-zk-summary-item">📅 <strong>التوقيت</strong>: رمضان أفضل وقت لإخراجها ولكن تُخرج حين الوجوب</div>
+          <div className="dzt-zk-summary-item">🤲 <strong>المستحقون</strong>: الفقراء · المساكين · ابن السبيل · في سبيل الله · المؤلفة قلوبهم</div>
+          <div className="dzt-zk-summary-item">⚠️ <strong>تنبيه</strong>: الأسعار تقريبية — راجع عالماً معتمداً للتثبت</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Hashtag Generator Tool ────────────────────────────────────────────────────
 const HT_PLATFORMS = [
   { id: 'instagram', label: 'Instagram', icon: '📸' },
@@ -3143,6 +3549,8 @@ export default function DZTools() {
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
+        {active === 'darija'       && <DarijaTool />}
+        {active === 'zakat'        && <ZakatTool />}
         {active === 'hashtag'      && <HashtagTool />}
         {active === 'excel'        && <SpreadsheetTool />}
         {active === 'cv'           && <CVTool />}

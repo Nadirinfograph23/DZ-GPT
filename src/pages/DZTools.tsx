@@ -2476,10 +2476,19 @@ function BizCardTool() {
   const [lang, setLang]   = useState<'ar'|'fr'>('ar')
   const [theme, setTheme] = useState(BC_THEMES[0])
   const [form, setForm]   = useState({
-    name:'', title:'', company:'', phone:'', email:'', website:'', address:'', logo:''
+    name:'', title:'', company:'', phone:'', email:'', website:'', address:'', logo:'', photo:''
   })
-  const cardRef = useRef<HTMLDivElement>(null)
+  const cardRef  = useRef<HTMLDivElement>(null)
+  const photoRef = useRef<HTMLInputElement>(null)
   const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}))
+
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => set('photo', ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
 
   const printCard = () => {
     const el = cardRef.current
@@ -2495,6 +2504,8 @@ function BizCardTool() {
 body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:${lang==='ar'?"'Cairo'":'Inter'},sans-serif}
 .card{width:90mm;height:55mm;background:${theme.bg};color:${theme.text};border-radius:4mm;padding:7mm 8mm;display:flex;flex-direction:column;justify-content:space-between;direction:${dir};position:relative;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.25)}
 .accent-line{position:absolute;top:0;${lang==='ar'?'right':'left'}:0;width:3mm;height:100%;background:${theme.accent}}
+.photo-circle{position:absolute;top:5mm;${lang==='ar'?'left':'right'}:5mm;width:14mm;height:14mm;border-radius:50%;overflow:hidden;border:1.2mm solid ${theme.accent};box-shadow:0 0 4mm rgba(0,0,0,0.4)}
+.photo-circle img{width:100%;height:100%;object-fit:cover;display:block}
 .name{font-size:16pt;font-weight:800;color:${theme.text};margin-${lang==='ar'?'right':'left'}:4mm}
 .title{font-size:9pt;color:${theme.accent};font-weight:600;margin:1mm 0 0 0;margin-${lang==='ar'?'right':'left'}:4mm}
 .company{font-size:8pt;color:${theme.sub};margin-${lang==='ar'?'right':'left'}:4mm}
@@ -2505,6 +2516,7 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
 </style></head><body>
 <div class="card">
   <div class="accent-line"></div>
+  ${form.photo ? `<div class="photo-circle"><img src="${form.photo}" /></div>` : ''}
   <div>
     <div class="name">${form.name||'الاسم الكامل'}</div>
     <div class="title">${form.title||'المنصب'}</div>
@@ -2553,6 +2565,30 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
         </div>
       </div>
 
+      {/* Photo upload */}
+      <div className="dzt-bc-photo-section">
+        <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto} />
+        <div className="dzt-bc-photo-upload-area" onClick={()=>photoRef.current?.click()}>
+          {form.photo ? (
+            <div className="dzt-bc-photo-preview-wrap">
+              <img src={form.photo} alt="صورة البطاقة" className="dzt-bc-photo-thumb" />
+              <div className="dzt-bc-photo-preview-label">
+                <span>✅ تم رفع الصورة</span>
+                <button className="dzt-bc-photo-remove" onClick={e=>{ e.stopPropagation(); set('photo','') }}>✕ حذف</button>
+              </div>
+            </div>
+          ) : (
+            <div className="dzt-bc-photo-placeholder">
+              <div className="dzt-bc-photo-circle-empty">👤</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:'#c8ff00'}}>رفع صورة شخصية دائرية</div>
+                <div style={{fontSize:11,color:'#666',marginTop:3}}>JPG · PNG · WebP — تظهر في المعاينة والتصدير</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="dzt-inv-grid2">
         <input className="dzt-inv-input" placeholder="الاسم الكامل *" value={form.name} onChange={e=>set('name',e.target.value)} />
         <input className="dzt-inv-input" placeholder="المنصب / الوظيفة *" value={form.title} onChange={e=>set('title',e.target.value)} />
@@ -2573,6 +2609,15 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
             style={{background:theme.bg, color:theme.text, direction:lang==='ar'?'rtl':'ltr', fontFamily:lang==='ar'?'Cairo, sans-serif':'Inter, sans-serif'}}
           >
             <div className="dzt-bc-accent" style={{background:theme.accent, [lang==='ar'?'right':'left']:0}} />
+            {/* Circular photo */}
+            {form.photo && (
+              <div className="dzt-bc-photo-circle" style={{
+                borderColor: theme.accent,
+                [lang==='ar' ? 'left' : 'right']: 14
+              }}>
+                <img src={form.photo} alt="" />
+              </div>
+            )}
             <div className="dzt-bc-top">
               <div className="dzt-bc-name" style={{color:theme.text}}>{form.name||'الاسم الكامل'}</div>
               <div className="dzt-bc-title" style={{color:theme.accent}}>{form.title||'المنصب'}</div>

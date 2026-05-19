@@ -2004,7 +2004,6 @@ const IMGPROC_TOOLS: { id: ImgProcMode; icon: string; name: string; desc: string
 function ImageProcessingTool() {
   const [mode, setMode]         = useState<ImgProcMode>('remove-bg')
   const [inputImage, setInputImage] = useState<string>('')
-  const [inputMime, setInputMime]   = useState('image/jpeg')
   const [inputFile, setInputFile]   = useState<File | null>(null)
   const [result, setResult]     = useState<string>('')
   const [loading, setLoading]   = useState(false)
@@ -2038,7 +2037,7 @@ function ImageProcessingTool() {
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) return
-    setInputFile(file); setInputMime(file.type)
+    setInputFile(file)
     const reader = new FileReader()
     reader.onload = e => { setInputImage(e.target?.result as string); reset() }
     reader.readAsDataURL(file)
@@ -2052,7 +2051,6 @@ function ImageProcessingTool() {
       const { removeBackground } = await import('@imgly/background-removal')
       const blob = await removeBackground(inputFile, {
         debug: false,
-        model: 'medium',
       })
       const url = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()

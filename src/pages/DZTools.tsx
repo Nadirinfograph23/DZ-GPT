@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Upload, RefreshCw, BarChart2, CreditCard, QrCode, Calculator } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Upload, BarChart2, QrCode, Calculator } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -2628,12 +2628,13 @@ function DataAnalysisTool() {
         const XLSX   = await import('xlsx')
         const wb     = XLSX.read(buffer, { type: 'array' })
         const ws     = wb.Sheets[wb.SheetNames[0]]
-        const data: DataRow[][] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as DataRow[][]
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][]
         if (data.length < 2) throw new Error('الملف فارغ')
         headers = (data[0] as string[]).map(String)
         parsed  = data.slice(1).map(row => {
+          const r = row as (string | number)[]
           const obj: DataRow = {}
-          headers.forEach((h, i) => { obj[h] = (row as DataRow[])[i] ?? '' })
+          headers.forEach((h, i) => { obj[h] = r[i] ?? '' })
           return obj
         })
       }

@@ -2249,6 +2249,274 @@
 .dzt-data-table tr:hover td { background: rgba(200,255,0,0.03); }
 
 /* ════════════════════════════════════════════════════════
+   HASHTAG GENERATOR TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-ht-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  direction: rtl;
+}
+
+/* Platform buttons */
+.dzt-ht-block { display: flex; flex-direction: column; gap: 10px; }
+.dzt-ht-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dzt-ht-platform {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  background: rgba(255,255,255,.04);
+  border: 1.5px solid #222;
+  border-radius: 10px;
+  color: #888;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.dzt-ht-platform:hover { border-color: #444; color: #ccc; background: rgba(255,255,255,.07); }
+.dzt-ht-platform.active {
+  background: rgba(200,255,0,.1);
+  border-color: #c8ff00;
+  color: #c8ff00;
+}
+.dzt-ht-platform-icon { font-size: 16px; }
+
+/* Textarea */
+.dzt-ht-textarea {
+  width: 100%;
+  background: #111;
+  border: 1.5px solid #1e1e1e;
+  border-radius: 12px;
+  color: #e5e5e5;
+  font-family: 'Cairo', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 14px 16px;
+  resize: vertical;
+  outline: none;
+  direction: rtl;
+  text-align: right;
+  transition: border-color .15s;
+}
+.dzt-ht-textarea:focus { border-color: rgba(200,255,0,.35); }
+.dzt-ht-textarea::placeholder { color: #444; }
+
+/* Controls row */
+.dzt-ht-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dzt-ht-ctrl { display: flex; flex-direction: column; gap: 8px; }
+.dzt-ht-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dzt-ht-pill {
+  padding: 5px 13px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 20px;
+  color: #777;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+}
+.dzt-ht-pill:hover { border-color: #444; color: #bbb; }
+.dzt-ht-pill.active {
+  background: rgba(200,255,0,.12);
+  border-color: rgba(200,255,0,.5);
+  color: #c8ff00;
+}
+
+/* Loading */
+.dzt-ht-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  background: rgba(200,255,0,.04);
+  border: 1px solid rgba(200,255,0,.1);
+  border-radius: 12px;
+  color: #888;
+  font-size: 13px;
+  direction: rtl;
+}
+.dzt-ht-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(200,255,0,.2);
+  border-top-color: #c8ff00;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Results */
+.dzt-ht-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeInUp .25s ease;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dzt-ht-results-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+}
+.dzt-ht-count-badge {
+  font-size: 14px;
+  font-weight: 800;
+  color: #c8ff00;
+}
+
+.dzt-ht-copy-all {
+  padding: 7px 18px;
+  background: rgba(200,255,0,.1);
+  border: 1px solid rgba(200,255,0,.3);
+  border-radius: 8px;
+  color: #c8ff00;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+.dzt-ht-copy-all:hover { background: rgba(200,255,0,.18); }
+.dzt-ht-copy-all.done  { background: rgba(34,197,94,.12); border-color: #22c55e; color: #22c55e; }
+
+/* Group */
+.dzt-ht-group {
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.dzt-ht-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1a1a;
+  background: rgba(255,255,255,.02);
+}
+.dzt-ht-group-title { font-size: 14px; font-weight: 800; }
+.dzt-ht-group-desc  { font-size: 11px; color: #555; flex: 1; }
+.dzt-ht-copy-grp {
+  padding: 4px 12px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #888;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+}
+.dzt-ht-copy-grp:hover { border-color: #555; color: #ccc; }
+
+/* Hashtag chips */
+.dzt-ht-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 12px 14px;
+  direction: ltr;
+}
+.dzt-ht-chip {
+  padding: 5px 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+  color: #bbb;
+  font-size: 12.5px;
+  font-family: 'Cairo', monospace;
+  cursor: pointer;
+  transition: all .12s;
+  direction: ltr;
+  white-space: nowrap;
+}
+.dzt-ht-chip:hover {
+  background: rgba(var(--chip-color, 200,255,0),.1);
+  border-color: var(--chip-color, #c8ff00);
+  color: var(--chip-color, #c8ff00);
+  transform: translateY(-1px);
+}
+.dzt-ht-chip.copied {
+  background: rgba(34,197,94,.1);
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+/* Tip */
+.dzt-ht-tip {
+  padding: 12px 16px;
+  background: rgba(96,165,250,.05);
+  border: 1px solid rgba(96,165,250,.15);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #60a5fa;
+  line-height: 1.6;
+  direction: rtl;
+}
+
+/* Paste box */
+.dzt-ht-paste {
+  background: #0a0a0a;
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.dzt-ht-paste-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 12px;
+  color: #666;
+  font-weight: 700;
+}
+.dzt-ht-paste-body {
+  padding: 14px;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.8;
+  word-break: break-all;
+  font-family: monospace;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .dzt-ht-platforms { gap: 6px; }
+  .dzt-ht-platform  { padding: 6px 10px; font-size: 12px; }
+}
+
+/* ════════════════════════════════════════════════════════
    SPREADSHEET / EXCEL TOOL
    ════════════════════════════════════════════════════════ */
 .dzt-xl-wrap {

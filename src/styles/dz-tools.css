@@ -2158,3 +2158,364 @@
 }
 .dzt-data-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
 .dzt-data-table tr:hover td { background: rgba(200,255,0,0.03); }
+
+/* ════════════════════════════════════════════════════════
+   SPREADSHEET / EXCEL TOOL
+   ════════════════════════════════════════════════════════ */
+.dzt-xl-wrap {
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  border-radius: 14px;
+  overflow: hidden;
+  outline: none;
+  user-select: none;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Toolbar */
+.dzt-xl-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #111;
+  border-bottom: 1px solid #1e1e1e;
+  flex-wrap: wrap;
+}
+.dzt-xl-toolbar-left  { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.dzt-xl-toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+.dzt-xl-tool-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px;
+  color: #ccc;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.dzt-xl-tool-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+.dzt-xl-fmt-btn {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #777;
+  cursor: pointer;
+  transition: all .15s;
+}
+.dzt-xl-fmt-btn:hover { background: rgba(255,255,255,.07); color: #ccc; }
+.dzt-xl-fmt-btn.active { background: rgba(200,255,0,.12); border-color: rgba(200,255,0,.3); color: #c8ff00; }
+
+.dzt-xl-divider { width: 1px; height: 20px; background: #222; margin: 0 4px; }
+
+.dzt-xl-filename { display: flex; align-items: center; }
+.dzt-xl-filename-input {
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 7px;
+  color: #aaa;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  width: 160px;
+  text-align: right;
+}
+.dzt-xl-filename-input:focus { border-color: rgba(200,255,0,.3); }
+
+.dzt-xl-ai-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  background: rgba(200,255,0,.08);
+  border: 1px solid rgba(200,255,0,.25);
+  border-radius: 8px;
+  color: #c8ff00;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.dzt-xl-ai-btn:hover, .dzt-xl-ai-btn.active {
+  background: rgba(200,255,0,.15);
+  border-color: #c8ff00;
+}
+
+/* Formula bar */
+.dzt-xl-formulabar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #0d0d0d;
+  border-bottom: 1px solid #1e1e1e;
+  height: 36px;
+}
+.dzt-xl-cellref {
+  min-width: 64px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #c8ff00;
+  border-right: 1px solid #1e1e1e;
+  padding: 0 10px;
+  height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+.dzt-xl-fx {
+  padding: 0 10px;
+  color: #555;
+  font-size: 14px;
+  font-weight: 700;
+  border-right: 1px solid #1e1e1e;
+  height: 100%;
+  display: flex; align-items: center;
+}
+.dzt-xl-formula-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e5e5e5;
+  font-family: 'Cairo', 'Courier New', monospace;
+  font-size: 13px;
+  padding: 0 14px;
+  direction: ltr;
+  text-align: left;
+  height: 100%;
+}
+
+/* AI Panel */
+.dzt-xl-ai-panel {
+  background: #0f0f0f;
+  border-bottom: 1px solid #1e1e1e;
+  animation: fadeInUp .2s ease;
+}
+.dzt-xl-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 13px;
+  font-weight: 700;
+  color: #c8ff00;
+  direction: rtl;
+}
+.dzt-xl-ai-header button {
+  background: none; border: none; color: #555; cursor: pointer;
+  display: grid; place-items: center;
+}
+.dzt-xl-ai-header button:hover { color: #fff; }
+.dzt-xl-ai-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; direction: rtl; }
+.dzt-xl-ai-quick {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.dzt-xl-ai-quick-btn {
+  padding: 4px 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 16px;
+  color: #aaa;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.dzt-xl-ai-quick-btn:hover { background: rgba(200,255,0,.08); border-color: #c8ff00; color: #c8ff00; }
+.dzt-xl-ai-input-row { display: flex; gap: 8px; align-items: center; }
+.dzt-xl-ai-input {
+  flex: 1;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  color: #e5e5e5;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  padding: 9px 14px;
+  outline: none;
+  direction: rtl;
+  text-align: right;
+}
+.dzt-xl-ai-input:focus { border-color: rgba(200,255,0,.3); }
+.dzt-xl-ai-result {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 13px;
+  color: #ccc;
+  line-height: 1.7;
+  max-height: 260px;
+  overflow-y: auto;
+  direction: rtl;
+  text-align: right;
+}
+.dzt-xl-ai-result code { background: #1a1a1a; padding: 2px 7px; border-radius: 5px; color: #c8ff00; font-size: 12px; }
+.dzt-xl-ai-result strong { color: #fff; }
+.dzt-xl-ai-insert-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 9px;
+  background: rgba(200,255,0,.1);
+  border: 1px solid rgba(200,255,0,.3);
+  border-radius: 8px;
+  color: #c8ff00;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+.dzt-xl-ai-insert-btn:hover { background: rgba(200,255,0,.18); }
+
+/* Function chips */
+.dzt-xl-fn-chips {
+  display: flex;
+  gap: 5px;
+  padding: 7px 12px;
+  background: #0d0d0d;
+  border-bottom: 1px solid #1a1a1a;
+  overflow-x: auto;
+  direction: ltr;
+}
+.dzt-xl-fn-chip {
+  padding: 3px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 5px;
+  color: #60a5fa;
+  font-family: 'Courier New', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .12s;
+}
+.dzt-xl-fn-chip:hover { background: rgba(96,165,250,.1); border-color: #60a5fa; color: #93c5fd; }
+
+/* Grid */
+.dzt-xl-grid-wrap {
+  overflow: auto;
+  max-height: 480px;
+  direction: ltr;
+}
+.dzt-xl-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+}
+.dzt-xl-th-corner {
+  width: 40px;
+  min-width: 40px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  position: sticky; top: 0; left: 0;
+  z-index: 3;
+}
+.dzt-xl-th-col {
+  width: 100px;
+  min-width: 100px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  color: #666;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  padding: 5px 4px;
+  position: sticky; top: 0;
+  z-index: 2;
+  letter-spacing: 1px;
+  font-family: 'Courier New', monospace;
+  transition: color .1s;
+}
+.dzt-xl-th-col.sel { color: #c8ff00; background: rgba(200,255,0,.05); }
+.dzt-xl-th-row {
+  width: 40px;
+  min-width: 40px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  color: #555;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  padding: 4px 2px;
+  position: sticky; left: 0;
+  z-index: 1;
+  font-family: 'Courier New', monospace;
+  transition: color .1s;
+}
+.dzt-xl-th-row.sel { color: #c8ff00; background: rgba(200,255,0,.05); }
+.dzt-xl-cell {
+  height: 26px;
+  min-width: 100px;
+  max-width: 180px;
+  border: 1px solid #181818;
+  padding: 0 6px;
+  font-size: 12.5px;
+  color: #d4d4d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: cell;
+  font-family: 'Cairo', sans-serif;
+  background: #0a0a0a;
+  transition: background .05s;
+  vertical-align: middle;
+  direction: ltr;
+}
+.dzt-xl-cell:hover { background: rgba(255,255,255,.03); }
+.dzt-xl-cell.sel {
+  background: rgba(200,255,0,.07) !important;
+  border: 1.5px solid #c8ff00 !important;
+  outline: none;
+  z-index: 1;
+  position: relative;
+}
+.dzt-xl-cell.err { color: #f87171; }
+.dzt-xl-cell-input {
+  width: 100%;
+  height: 100%;
+  background: #1a2a0a;
+  border: none;
+  outline: none;
+  color: #c8ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  padding: 0 4px;
+  direction: ltr;
+  text-align: left;
+}
+
+/* Status bar */
+.dzt-xl-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 5px 14px;
+  background: #0d0d0d;
+  border-top: 1px solid #1a1a1a;
+  font-size: 11px;
+  color: #555;
+  direction: rtl;
+  flex-wrap: wrap;
+}
+.dzt-xl-statusbar strong { color: #aaa; }
+
+@media (max-width: 640px) {
+  .dzt-xl-statusbar span:last-child { display: none; }
+  .dzt-xl-grid-wrap { max-height: 360px; }
+  .dzt-xl-toolbar { gap: 6px; }
+}

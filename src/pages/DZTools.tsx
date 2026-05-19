@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import SpreadsheetTool from '../components/SpreadsheetTool'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Upload, BarChart2, QrCode, Calculator } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch, Upload } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import DoctorResultsPanel, { DoctorResult, DirLink } from '../components/DoctorResultsPanel'
 import '../styles/dz-tools.css'
+
+const NO_AI_MSG = '⚠️ خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة لاحقاً أو التواصل مع الدعم.'
 
 // ─── Shared PDF Generator (browser print-to-PDF — zero dependencies) ──────────
 function generatePDF(
@@ -126,26 +126,19 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel' | 'hashtag' | 'darija' | 'zakat'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
-  { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
-  { id: 'planner',      icon: '📋', name: 'مخطط المشاريع',           desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
-  { id: 'docs',         icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
-  { id: 'jobs',         icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
-  { id: 'health',       icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
-  { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
-  { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
-  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة الجزائرية',  desc: 'عربي/فرنسي ↔ دارجة جزائرية — شرق · غرب · وسط · جنوب — بالذكاء الاصطناعي', badge: 'NEW' },
-  { id: 'zakat',        icon: '☪️', name: 'حاسبة الزكاة الشاملة',     desc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع — بالدينار الجزائري 2025', badge: 'NEW' },
-  { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغات AI',      desc: 'اكتب موضوعك → AI يولد أفضل الهاشتاغات لكل منصة مصنّفة حسب الشعبية', badge: 'NEW' },
-  { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',         desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
-  { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',      desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
-  { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',           desc: 'أنشئ QR Code احترافي لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
-  { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',             desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
-  { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',           desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
-  { id: 'ocr',          icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
-  { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
+  { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
+  { id: 'planner', icon: '📋', name: 'مخطط المشاريع',           desc: 'حوّل فكرتك إلى خطة عمل تفصيلية مع مهام وجدول زمني' },
+  { id: 'docs',    icon: '📑', name: 'وثائق تجارية',            desc: 'عقود عمل • مراسلات • عروض أسعار • محاضر اجتماعات' },
+  { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
+  { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
+  { id: 'image',   icon: '🖼️', name: 'Visual AI — صور',        desc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور' },
+  { id: 'imgproc', icon: '🎨', name: 'Image Tools — معالجة',   desc: 'إزالة خلفية • تحسين • ضغط • تعديل • حذف عنصر', badge: 'NEW' },
+  { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
+  { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
+  { id: 'hashtag', icon: '#️⃣', name: 'مولّد الهاشتاغ',         desc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -218,7 +211,8 @@ Règle stricte: commencez directement par # Nom — aucune phrase d'introduction
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'cv' }),
       })
       const data = await res.json()
-      setResult(data.content || '⚠️ لم يتمكن الوكيل من إنشاء السيرة الذاتية.')
+      if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); return }
+      setResult(data.content)
     } catch { setResult('⚠️ خطأ في الاتصال. يرجى المحاولة مرة أخرى.') }
     finally { setLoading(false) }
   }
@@ -541,7 +535,8 @@ function PlannerTool() {
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'planner' })
       })
       const data = await res.json()
-      setResult(data.content || '⚠️ فشل في إنشاء الخطة.')
+      if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); return }
+      setResult(data.content)
     } catch { setResult('⚠️ خطأ في الاتصال.') }
     finally { setLoading(false) }
   }
@@ -700,7 +695,8 @@ function BizDocsTool() {
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'docs' })
       })
       const data = await res.json()
-      setResult(data.content || '⚠️ فشل إنشاء الوثيقة.')
+      if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); return }
+      setResult(data.content)
     } catch { setResult('⚠️ خطأ في الاتصال.') }
     finally { setLoading(false) }
   }
@@ -889,7 +885,8 @@ function JobSearchTool() {
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'jobs' })
       })
       const data = await res.json()
-      setResult(data.content || '⚠️ فشل البحث.')
+      if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); return }
+      setResult(data.content)
     } catch { setResult('⚠️ خطأ في الاتصال.') }
     finally { setLoading(false) }
   }
@@ -1107,7 +1104,8 @@ function HealthTool() {
           body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'health' })
         })
         const data = await res.json()
-        setResult(data.content || '⚠️ فشل التحليل.')
+        if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); setLoading(false); return }
+        setResult(data.content)
       } catch { setResult('⚠️ خطأ في الاتصال.') }
       finally { setLoading(false) }
 
@@ -1530,7 +1528,8 @@ function BizPlanTool() {
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'bizplan' }),
       })
       const data = await res.json()
-      setResult(data.content || '⚠️ فشل توليد خطة العمل.')
+      if (data.status === 'no_api_key' || !data.content) { setResult(NO_AI_MSG); return }
+      setResult(data.content)
     } catch { setResult('⚠️ خطأ في الاتصال.') }
     finally { setLoading(false) }
   }
@@ -1608,1685 +1607,900 @@ function BizPlanTool() {
   )
 }
 
-// ─── Invoice Tool ─────────────────────────────────────────────────────────────
-type InvoiceItem = { id: number; desc: string; qty: string; price: string; tva: string }
-
-const TVA_RATES = [
-  { label: 'TVA 19% (عادي)', value: '19' },
-  { label: 'TVA 9% (مخفض)', value: '9' },
-  { label: 'معفى 0%',       value: '0'  },
-]
-
-let _invoiceItemId = 1
-
-function newItem(): InvoiceItem {
-  return { id: _invoiceItemId++, desc: '', qty: '1', price: '', tva: '19' }
+// ─── Image Search & Visual AI Tool ────────────────────────────────────────────
+type ImageSearchResult = {
+  id: string; title: string; url: string; thumbnail: string
+  source: string; license: string; creator: string; detail_url: string
+  width: number; height: number
 }
+type ReverseLink = { name: string; url: string; icon: string; color: string }
+type AnalyzeMode = 'analyze' | 'ocr' | 'caption' | 'objects'
+type ImageInput = { type: 'url'; value: string } | { type: 'base64'; value: string; mimeType: string }
 
-function fmt(n: number) {
-  return n.toLocaleString('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA'
-}
+function ImageTool() {
+  const [mode, setMode] = useState<'search' | 'reverse' | 'analyze'>('search')
 
-function InvoiceTool() {
-  const [company, setCompany] = useState({ name: '', address: '', nif: '', nis: '', rc: '', phone: '', email: '' })
-  const [client,  setClient]  = useState({ name: '', address: '', nif: '' })
-  const [meta,    setMeta]    = useState({ num: '', date: new Date().toISOString().slice(0,10), due: '', note: '' })
-  const [items,   setItems]   = useState<InvoiceItem[]>([newItem()])
-  const printRef = useRef<HTMLDivElement>(null)
+  const [query, setQuery]               = useState('')
+  const [searchResults, setSearchResults] = useState<ImageSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchTotal, setSearchTotal]   = useState(0)
+  const [searchError, setSearchError]   = useState('')
 
-  const setC = (k: string, v: string) => setCompany(p => ({ ...p, [k]: v }))
-  const setL = (k: string, v: string) => setClient(p => ({ ...p, [k]: v }))
-  const setM = (k: string, v: string) => setMeta(p => ({ ...p, [k]: v }))
+  const [reverseUrl, setReverseUrl]     = useState('')
+  const [reverseBase64, setReverseBase64] = useState<{ data: string; mime: string } | null>(null)
+  const [reverseLinks, setReverseLinks] = useState<ReverseLink[]>([])
+  const [reverseLoading, setReverseLoading] = useState(false)
+  const [reverseError, setReverseError] = useState('')
+  const reverseFileRef = useRef<HTMLInputElement>(null)
 
-  const updateItem = (id: number, k: keyof InvoiceItem, v: string) =>
-    setItems(prev => prev.map(it => it.id === id ? { ...it, [k]: v } : it))
-  const addItem    = () => setItems(prev => [...prev, newItem()])
-  const removeItem = (id: number) => setItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev)
+  const [analyzeMode, setAnalyzeMode]   = useState<AnalyzeMode>('analyze')
+  const [analyzeInput, setAnalyzeInput] = useState<ImageInput | null>(null)
+  const [analyzeResult, setAnalyzeResult] = useState('')
+  const [analyzeLoading, setAnalyzeLoading] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState('')
+  const [copied, setCopied]             = useState(false)
 
-  // ── Calculations ──────────────────────────────────────────────────────────
-  const rows = items.map(it => {
-    const qty   = parseFloat(it.qty)  || 0
-    const price = parseFloat(it.price) || 0
-    const tva   = parseFloat(it.tva)  || 0
-    const ht    = qty * price
-    const tvaAmt = ht * tva / 100
-    return { ...it, ht, tvaAmt, ttc: ht + tvaAmt }
-  })
+  const analyzeFileRef = useRef<HTMLInputElement>(null)
 
-  const totalHT  = rows.reduce((s, r) => s + r.ht, 0)
-  const totalTVA = rows.reduce((s, r) => s + r.tvaAmt, 0)
-  const totalTTC = totalHT + totalTVA
+  const handleImageFile = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => setAnalyzeInput({ type: 'base64', value: e.target?.result as string, mimeType: file.type })
+    reader.readAsDataURL(file)
+  }, [])
 
-  // Group TVA lines
-  const tvaGroups: Record<string, number> = {}
-  rows.forEach(r => {
-    const k = r.tva + '%'
-    tvaGroups[k] = (tvaGroups[k] || 0) + r.tvaAmt
-  })
-
-  // ── PDF Print ─────────────────────────────────────────────────────────────
-  const printPDF = () => {
-    const win = window.open('', '_blank')
-    if (!win) return
-    const itemRows = rows.map(r => `
-      <tr>
-        <td>${r.desc || '—'}</td>
-        <td class="num">${parseFloat(r.qty)||0}</td>
-        <td class="num">${parseFloat(r.price)||0}</td>
-        <td class="num">${r.tva}%</td>
-        <td class="num">${r.ht.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
-        <td class="num">${r.tvaAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
-        <td class="num"><strong>${r.ttc.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
-      </tr>`).join('')
-
-    const tvaLines = Object.entries(tvaGroups)
-      .filter(([,v]) => v > 0)
-      .map(([k,v]) => `<tr><td>TVA ${k}</td><td class="num">${v.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td></tr>`).join('')
-
-    win.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><title>فاتورة ${meta.num}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;background:#fff;padding:0}
-.header{background:linear-gradient(135deg,#0a3d1f,#1a6b3c);color:#fff;padding:24px 40px;display:flex;justify-content:space-between;align-items:flex-start}
-.brand{font-size:22px;font-weight:800;letter-spacing:-.5px}
-.brand-sub{font-size:11px;opacity:.75;margin-top:4px}
-.inv-badge{background:rgba(255,255,255,.15);border-radius:8px;padding:10px 18px;text-align:center}
-.inv-badge .num{font-size:18px;font-weight:800;color:#c8ff00}
-.inv-badge .label{font-size:10px;opacity:.7}
-.body{padding:28px 40px}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
-.party{background:#f9fafb;border-radius:10px;padding:14px 18px;border:1px solid #e5e7eb}
-.party-title{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.party-name{font-size:15px;font-weight:700;color:#111;margin-bottom:6px}
-.party-detail{font-size:12px;color:#555;line-height:1.7}
-.meta{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
-.meta-item{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 14px;font-size:12px}
-.meta-item strong{display:block;font-size:10px;color:#16a34a;font-weight:700;margin-bottom:2px}
-table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12.5px}
-thead tr{background:#0a3d1f;color:#fff}
-th{padding:10px 12px;text-align:right;font-weight:700;font-size:11px}
-td{padding:9px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
-tr:nth-child(even) td{background:#f9fafb}
-.num{text-align:center}
-.totals{display:flex;justify-content:flex-start;flex-direction:column;align-items:flex-end;gap:4px}
-.total-row{display:flex;gap:32px;justify-content:flex-end;font-size:13px;padding:4px 0}
-.total-row.ht{color:#555}
-.total-row.tva{color:#2563eb}
-.total-row.ttc{font-size:17px;font-weight:800;color:#0a3d1f;border-top:2px solid #c8ff00;padding-top:10px;margin-top:6px}
-.total-label{width:160px;text-align:right}
-.total-val{width:150px;text-align:left;font-weight:600}
-.note{margin-top:20px;padding:12px 18px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5;font-size:12px;color:#555}
-.footer{border-top:1px solid #e5e7eb;padding:12px 40px;font-size:10.5px;color:#9ca3af;text-align:center;margin-top:24px}
-@media print{body{padding:0}@page{margin:0}}
-</style></head>
-<body>
-<div class="header">
-  <div>
-    <div class="brand">${company.name || 'اسم الشركة'}</div>
-    <div class="brand-sub">${company.address || ''}</div>
-    ${company.nif?`<div class="brand-sub">NIF: ${company.nif}</div>`:''}
-    ${company.nis?`<div class="brand-sub">NIS: ${company.nis}</div>`:''}
-    ${company.rc ?`<div class="brand-sub">RC: ${company.rc}</div>`:''}
-    ${company.phone?`<div class="brand-sub">📞 ${company.phone}</div>`:''}
-  </div>
-  <div class="inv-badge">
-    <div class="label">FACTURE N°</div>
-    <div class="num">${meta.num || '---'}</div>
-    <div class="label">Date: ${meta.date}</div>
-    ${meta.due?`<div class="label">Échéance: ${meta.due}</div>`:''}
-  </div>
-</div>
-<div class="body">
-  <div class="parties">
-    <div class="party">
-      <div class="party-title">FOURNISSEUR</div>
-      <div class="party-name">${company.name||'—'}</div>
-      <div class="party-detail">${company.address||''}<br>${company.email||''}</div>
-    </div>
-    <div class="party">
-      <div class="party-title">CLIENT</div>
-      <div class="party-name">${client.name||'—'}</div>
-      <div class="party-detail">${client.address||''}${client.nif?`<br>NIF: ${client.nif}`:''}</div>
-    </div>
-  </div>
-  <table>
-    <thead><tr>
-      <th style="width:35%">الوصف</th>
-      <th class="num" style="width:8%">الكمية</th>
-      <th class="num" style="width:14%">سعر الوحدة (DA)</th>
-      <th class="num" style="width:8%">TVA</th>
-      <th class="num" style="width:12%">المجموع HT</th>
-      <th class="num" style="width:12%">مبلغ TVA</th>
-      <th class="num" style="width:11%">المجموع TTC</th>
-    </tr></thead>
-    <tbody>${itemRows}</tbody>
-  </table>
-  <div class="totals">
-    <div class="total-row ht"><span class="total-label">المجموع HT</span><span class="total-val">${totalHT.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
-    ${tvaLines}
-    <div class="total-row ttc"><span class="total-label">الإجمالي TTC</span><span class="total-val">${totalTTC.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
-  </div>
-  ${meta.note?`<div class="note"><strong>ملاحظات:</strong> ${meta.note}</div>`:''}
-</div>
-<div class="footer">DZ Tools — مولّد الفواتير الجزائري | dz-gpt.vercel.app</div>
-</body></html>`)
-    win.document.close()
-    setTimeout(() => { win.focus(); win.print() }, 700)
-  }
-
-  const inputCls = 'dzt-inv-input'
-
-  return (
-    <div className="dzt-invoice-wrap">
-      {/* ── Company ───────────────────────────────────────────────── */}
-      <div className="dzt-inv-section">
-        <div className="dzt-inv-section-title">🏢 معلومات الشركة / المورّد</div>
-        <div className="dzt-inv-grid2">
-          <input className={inputCls} placeholder="اسم الشركة *" value={company.name}    onChange={e=>setC('name',e.target.value)} />
-          <input className={inputCls} placeholder="رقم الهاتف"   value={company.phone}   onChange={e=>setC('phone',e.target.value)} />
-          <input className={inputCls} placeholder="العنوان"       value={company.address} onChange={e=>setC('address',e.target.value)} />
-          <input className={inputCls} placeholder="البريد الإلكتروني" value={company.email} onChange={e=>setC('email',e.target.value)} />
-          <input className={inputCls} placeholder="NIF"           value={company.nif}     onChange={e=>setC('nif',e.target.value)} />
-          <input className={inputCls} placeholder="NIS"           value={company.nis}     onChange={e=>setC('nis',e.target.value)} />
-          <input className={inputCls} placeholder="RC"            value={company.rc}      onChange={e=>setC('rc',e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Client ────────────────────────────────────────────────── */}
-      <div className="dzt-inv-section">
-        <div className="dzt-inv-section-title">👤 معلومات العميل</div>
-        <div className="dzt-inv-grid2">
-          <input className={inputCls} placeholder="اسم العميل *" value={client.name}    onChange={e=>setL('name',e.target.value)} />
-          <input className={inputCls} placeholder="NIF العميل"   value={client.nif}     onChange={e=>setL('nif',e.target.value)} />
-          <input className={inputCls} placeholder="عنوان العميل" value={client.address} onChange={e=>setL('address',e.target.value)} style={{gridColumn:'span 2'}} />
-        </div>
-      </div>
-
-      {/* ── Meta ──────────────────────────────────────────────────── */}
-      <div className="dzt-inv-section">
-        <div className="dzt-inv-section-title">📋 بيانات الفاتورة</div>
-        <div className="dzt-inv-grid3">
-          <div><label className="dzt-inv-label">رقم الفاتورة</label><input className={inputCls} placeholder="001" value={meta.num} onChange={e=>setM('num',e.target.value)} /></div>
-          <div><label className="dzt-inv-label">تاريخ الإصدار</label><input className={inputCls} type="date" value={meta.date} onChange={e=>setM('date',e.target.value)} /></div>
-          <div><label className="dzt-inv-label">تاريخ الاستحقاق</label><input className={inputCls} type="date" value={meta.due} onChange={e=>setM('due',e.target.value)} /></div>
-        </div>
-      </div>
-
-      {/* ── Items ─────────────────────────────────────────────────── */}
-      <div className="dzt-inv-section">
-        <div className="dzt-inv-section-title">🛒 المنتجات / الخدمات</div>
-        <div className="dzt-inv-items-header">
-          <span style={{flex:'2 1 180px'}}>الوصف</span>
-          <span style={{flex:'0 0 80px',textAlign:'center'}}>الكمية</span>
-          <span style={{flex:'0 0 120px',textAlign:'center'}}>سعر الوحدة (DA)</span>
-          <span style={{flex:'0 0 110px',textAlign:'center'}}>TVA</span>
-          <span style={{flex:'0 0 120px',textAlign:'center'}}>المجموع HT</span>
-          <span style={{width:32}}></span>
-        </div>
-        {items.map(it => {
-          const qty   = parseFloat(it.qty)   || 0
-          const price = parseFloat(it.price)  || 0
-          const ht    = qty * price
-          return (
-            <div key={it.id} className="dzt-inv-item-row">
-              <input className={inputCls} placeholder="وصف المنتج أو الخدمة" value={it.desc} onChange={e=>updateItem(it.id,'desc',e.target.value)} style={{flex:'2 1 180px'}} />
-              <input className={inputCls} type="number" min="0" placeholder="1" value={it.qty} onChange={e=>updateItem(it.id,'qty',e.target.value)} style={{flex:'0 0 80px',textAlign:'center'}} />
-              <input className={inputCls} type="number" min="0" placeholder="0.00" value={it.price} onChange={e=>updateItem(it.id,'price',e.target.value)} style={{flex:'0 0 120px',textAlign:'center'}} />
-              <select className={inputCls} value={it.tva} onChange={e=>updateItem(it.id,'tva',e.target.value)} style={{flex:'0 0 110px'}}>
-                {TVA_RATES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
-              <div className="dzt-inv-line-total" style={{flex:'0 0 120px'}}>
-                {fmt(ht)}
-              </div>
-              <button className="dzt-inv-del-btn" onClick={()=>removeItem(it.id)} title="حذف">✕</button>
-            </div>
-          )
-        })}
-        <button className="dzt-inv-add-btn" onClick={addItem}>＋ إضافة منتج</button>
-      </div>
-
-      {/* ── Totals ────────────────────────────────────────────────── */}
-      <div className="dzt-inv-totals-box">
-        <div className="dzt-inv-total-row">
-          <span>المجموع HT</span>
-          <span>{fmt(totalHT)}</span>
-        </div>
-        {Object.entries(tvaGroups).filter(([,v])=>v>0).map(([k,v]) => (
-          <div key={k} className="dzt-inv-total-row dzt-inv-total-tva">
-            <span>TVA {k}</span>
-            <span>{fmt(v)}</span>
-          </div>
-        ))}
-        <div className="dzt-inv-total-row dzt-inv-total-ttc">
-          <span>الإجمالي TTC</span>
-          <span>{fmt(totalTTC)}</span>
-        </div>
-      </div>
-
-      {/* ── Note ──────────────────────────────────────────────────── */}
-      <div className="dzt-inv-section">
-        <div className="dzt-inv-section-title">📝 ملاحظات (اختياري)</div>
-        <textarea className={inputCls} rows={2} placeholder="شروط الدفع، ملاحظات إضافية..." value={meta.note} onChange={e=>setM('note',e.target.value)} style={{width:'100%',resize:'vertical'}} />
-      </div>
-
-      {/* ── Actions ───────────────────────────────────────────────── */}
-      <div className="dzt-result-actions" style={{marginTop:8}}>
-        <button className="dzt-btn" onClick={printPDF}>
-          <Download size={14} /> تحميل الفاتورة PDF
-        </button>
-      </div>
-
-      <div ref={printRef} style={{display:'none'}} />
-    </div>
-  )
-}
-
-// ─── Tax Calculator Tool ───────────────────────────────────────────────────────
-const IRG_BRACKETS = [
-  { min: 0,         max: 240_000,   rate: 0  },
-  { min: 240_000,   max: 480_000,   rate: 23 },
-  { min: 480_000,   max: 960_000,   rate: 27 },
-  { min: 960_000,   max: 1_920_000, rate: 30 },
-  { min: 1_920_000, max: 3_840_000, rate: 33 },
-  { min: 3_840_000, max: Infinity,  rate: 35 },
-]
-
-const IBS_RATES = [
-  { label: 'نشاط إنتاجي / فلاحي / سياحي (19%)', value: 19 },
-  { label: 'نشاط مختلط (23%)',                     value: 23 },
-  { label: 'نشاط تجاري / خدماتي / بناء (26%)',     value: 26 },
-]
-
-function calcIRG(annualIncome: number) {
-  let tax = 0
-  const breakdown: { label: string; base: number; rate: number; amount: number }[] = []
-  for (const b of IRG_BRACKETS) {
-    if (annualIncome <= b.min) break
-    const taxable = Math.min(annualIncome, b.max) - b.min
-    const amount  = taxable * b.rate / 100
-    tax += amount
-    breakdown.push({
-      label: b.max === Infinity ? `أكثر من ${(b.min/1000).toFixed(0)}k DA` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k DA`,
-      base: taxable, rate: b.rate, amount,
-    })
-  }
-  return { tax, breakdown }
-}
-
-function TaxTool() {
-  const [mode, setMode] = useState<'irg'|'ibs'>('irg')
-
-  // IRG state
-  const [period,    setPeriod]    = useState<'monthly'|'annual'>('monthly')
-  const [salary,    setSalary]    = useState('')
-  const [irgResult, setIrgResult] = useState<null|{ gross:number; tax:number; net:number; effectiveRate:number; breakdown: {label:string;base:number;rate:number;amount:number}[] }>(null)
-
-  // IBS state
-  const [profit,     setProfit]     = useState('')
-  const [ibsRate,    setIbsRate]    = useState(19)
-  const [ibsResult,  setIbsResult]  = useState<null|{ profit:number; taxAmt:number; net:number }>(null)
-
-  const calcIrgAction = () => {
-    const monthly = parseFloat(salary) || 0
-    const annual  = period === 'monthly' ? monthly * 12 : monthly
-    if (!annual) return
-    const { tax, breakdown } = calcIRG(annual)
-    const annualNet = annual - tax
-    setIrgResult({ gross: annual, tax, net: annualNet, effectiveRate: annual > 0 ? tax/annual*100 : 0, breakdown })
-  }
-
-  const calcIbsAction = () => {
-    const p = parseFloat(profit) || 0
-    if (!p) return
-    const taxAmt = p * ibsRate / 100
-    setIbsResult({ profit: p, taxAmt, net: p - taxAmt })
-  }
-
-  const printIRG = () => {
-    if (!irgResult) return
-    const rows = irgResult.breakdown.map(b => `
-      <tr>
-        <td>${b.label}</td>
-        <td class="n">${b.rate}%</td>
-        <td class="n">${b.base.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
-        <td class="n"><strong>${b.amount.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
-      </tr>`).join('')
-    const win = window.open('', '_blank')
-    if (!win) return
-    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><title>حساب IRG</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
-h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
-.cards{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap}
-.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
-.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
-.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
-.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}
-thead tr{background:#0a3d1f;color:#fff}
-th{padding:10px 14px;text-align:right;font-size:12px}
-td{padding:9px 14px;border-bottom:1px solid #f3f4f6}
-.n{text-align:center}
-tr:nth-child(even) td{background:#f9fafb}
-footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
-</style></head><body>
-<h1>🧾 حساب IRG — ضريبة الدخل الإجمالي</h1>
-<div class="cards">
-  <div class="card"><div class="card-label">الدخل السنوي الخام</div><div class="card-val">${irgResult.gross.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-  <div class="card tax"><div class="card-label">IRG المستحق</div><div class="card-val">${irgResult.tax.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-  <div class="card"><div class="card-label">الصافي السنوي</div><div class="card-val">${irgResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-  <div class="card"><div class="card-label">معدل الضريبة الفعلي</div><div class="card-val">${irgResult.effectiveRate.toFixed(2)}%</div></div>
-</div>
-<table>
-  <thead><tr><th>الشريحة</th><th class="n">المعدل</th><th class="n">الوعاء الضريبي</th><th class="n">مبلغ الضريبة</th></tr></thead>
-  <tbody>${rows}</tbody>
-</table>
-<p style="font-size:11px;color:#777">* حسب قانون المالية الجزائري — شرائح IRG 2024. للاستشارة الضريبية المعتمدة راجع خبيراً محاسبياً.</p>
-<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
-</body></html>`)
-    win.document.close()
-    setTimeout(() => { win.focus(); win.print() }, 700)
-  }
-
-  const printIBS = () => {
-    if (!ibsResult) return
-    const win = window.open('', '_blank')
-    if (!win) return
-    const rateLabel = IBS_RATES.find(r=>r.value===ibsRate)?.label || `${ibsRate}%`
-    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
-<head><meta charset="UTF-8"><title>حساب IBS</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
-h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
-.cards{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
-.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
-.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
-.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
-.note{font-size:12px;color:#777;margin-top:16px;padding:12px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5}
-footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
-</style></head><body>
-<h1>🏢 حساب IBS — ضريبة أرباح الشركات</h1>
-<div class="cards">
-  <div class="card"><div class="card-label">الربح الخاضع للضريبة</div><div class="card-val">${ibsResult.profit.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-  <div class="card"><div class="card-label">معدل IBS المطبق</div><div class="card-val">${ibsRate}%</div></div>
-  <div class="card tax"><div class="card-label">مبلغ IBS المستحق</div><div class="card-val">${ibsResult.taxAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-  <div class="card"><div class="card-label">صافي الربح بعد الضريبة</div><div class="card-val">${ibsResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
-</div>
-<div class="note">نوع النشاط: ${rateLabel}<br>* حسب قانون المالية الجزائري. للاستشارة المعتمدة راجع خبيراً محاسبياً معتمداً.</div>
-<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
-</body></html>`)
-    win.document.close()
-    setTimeout(() => { win.focus(); win.print() }, 700)
-  }
-
-  return (
-    <div className="dzt-tax-wrap">
-      {/* ── Mode Tabs ─────────────────────────────────────────────── */}
-      <div className="dzt-tax-mode-tabs">
-        <button className={`dzt-tax-mode-btn${mode==='irg'?' active':''}`} onClick={()=>setMode('irg')}>
-          👤 IRG — ضريبة الدخل
-        </button>
-        <button className={`dzt-tax-mode-btn${mode==='ibs'?' active':''}`} onClick={()=>setMode('ibs')}>
-          🏢 IBS — ضريبة الشركات
-        </button>
-      </div>
-
-      {mode === 'irg' && (
-        <div className="dzt-tax-panel">
-          <div className="dzt-inv-section-title">حساب IRG — الضريبة على الدخل الإجمالي</div>
-          <p className="dzt-tax-desc">شرائح IRG 2024 — حسب قانون المالية الجزائري</p>
-
-          <div className="dzt-tax-period-row">
-            <button className={`dzt-tax-period-btn${period==='monthly'?' active':''}`} onClick={()=>setPeriod('monthly')}>شهري</button>
-            <button className={`dzt-tax-period-btn${period==='annual'?' active':''}`}  onClick={()=>setPeriod('annual')}>سنوي</button>
-          </div>
-
-          <div className="dzt-tax-input-row">
-            <input
-              className="dzt-inv-input"
-              type="number"
-              min="0"
-              placeholder={period==='monthly' ? 'الراتب الشهري الخام (DA)' : 'الدخل السنوي الخام (DA)'}
-              value={salary}
-              onChange={e=>{ setSalary(e.target.value); setIrgResult(null) }}
-            />
-            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIrgAction}>
-              احسب IRG
-            </button>
-          </div>
-
-          {/* Brackets table */}
-          <div className="dzt-tax-brackets">
-            <div className="dzt-tax-bracket-title">شرائح IRG 2024</div>
-            {IRG_BRACKETS.map((b, i) => (
-              <div key={i} className="dzt-tax-bracket-row">
-                <span className="dzt-tax-bracket-range">
-                  {b.max === Infinity ? `> ${(b.min/1000).toFixed(0)}k` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k`} DA/سنة
-                </span>
-                <span className="dzt-tax-bracket-rate" style={{color: b.rate===0?'#22c55e': b.rate<27?'#f59e0b':'#ef4444'}}>
-                  {b.rate}%
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {irgResult && (
-            <div className="dzt-tax-result">
-              <div className="dzt-tax-cards">
-                <div className="dzt-tax-card">
-                  <div className="dzt-tax-card-label">الدخل السنوي</div>
-                  <div className="dzt-tax-card-val">{fmt(irgResult.gross)}</div>
-                  <div className="dzt-tax-card-sub">{fmt(irgResult.gross/12)} / شهر</div>
-                </div>
-                <div className="dzt-tax-card dzt-tax-card-red">
-                  <div className="dzt-tax-card-label">IRG المستحق</div>
-                  <div className="dzt-tax-card-val">{fmt(irgResult.tax)}</div>
-                  <div className="dzt-tax-card-sub">{fmt(irgResult.tax/12)} / شهر</div>
-                </div>
-                <div className="dzt-tax-card dzt-tax-card-green">
-                  <div className="dzt-tax-card-label">صافي الدخل</div>
-                  <div className="dzt-tax-card-val">{fmt(irgResult.net)}</div>
-                  <div className="dzt-tax-card-sub">{fmt(irgResult.net/12)} / شهر</div>
-                </div>
-                <div className="dzt-tax-card">
-                  <div className="dzt-tax-card-label">معدل الضريبة</div>
-                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{irgResult.effectiveRate.toFixed(2)}%</div>
-                </div>
-              </div>
-              <div className="dzt-tax-breakdown-title">تفصيل الحساب بالشرائح</div>
-              {irgResult.breakdown.filter(b=>b.rate>0||b.base>0).map((b,i) => (
-                <div key={i} className="dzt-tax-breakdown-row">
-                  <span className="dzt-tbr-range">{b.label}</span>
-                  <span className="dzt-tbr-rate">{b.rate}%</span>
-                  <span className="dzt-tbr-base">{fmt(b.base)}</span>
-                  <span className="dzt-tbr-amt">{fmt(b.amount)}</span>
-                </div>
-              ))}
-              <div className="dzt-result-actions" style={{marginTop:12}}>
-                <button className="dzt-btn" onClick={printIRG}><Download size={14}/> تحميل PDF</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {mode === 'ibs' && (
-        <div className="dzt-tax-panel">
-          <div className="dzt-inv-section-title">حساب IBS — الضريبة على أرباح الشركات</div>
-          <p className="dzt-tax-desc">معدلات IBS 2024 حسب نوع النشاط</p>
-
-          <div className="dzt-tax-ibs-rates">
-            {IBS_RATES.map(r => (
-              <button key={r.value} className={`dzt-tax-ibs-btn${ibsRate===r.value?' active':''}`} onClick={()=>{ setIbsRate(r.value); setIbsResult(null) }}>
-                <span className="dzt-tax-ibs-rate">{r.value}%</span>
-                <span className="dzt-tax-ibs-label">{r.label.replace(/\s*\(\d+%\)$/,'')}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="dzt-tax-input-row">
-            <input
-              className="dzt-inv-input"
-              type="number"
-              min="0"
-              placeholder="الربح الصافي الخاضع للضريبة (DA)"
-              value={profit}
-              onChange={e=>{ setProfit(e.target.value); setIbsResult(null) }}
-            />
-            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIbsAction}>
-              احسب IBS
-            </button>
-          </div>
-
-          {ibsResult && (
-            <div className="dzt-tax-result">
-              <div className="dzt-tax-cards">
-                <div className="dzt-tax-card">
-                  <div className="dzt-tax-card-label">الربح الخاضع</div>
-                  <div className="dzt-tax-card-val">{fmt(ibsResult.profit)}</div>
-                </div>
-                <div className="dzt-tax-card">
-                  <div className="dzt-tax-card-label">معدل IBS</div>
-                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{ibsRate}%</div>
-                </div>
-                <div className="dzt-tax-card dzt-tax-card-red">
-                  <div className="dzt-tax-card-label">IBS المستحق</div>
-                  <div className="dzt-tax-card-val">{fmt(ibsResult.taxAmt)}</div>
-                </div>
-                <div className="dzt-tax-card dzt-tax-card-green">
-                  <div className="dzt-tax-card-label">صافي الربح</div>
-                  <div className="dzt-tax-card-val">{fmt(ibsResult.net)}</div>
-                </div>
-              </div>
-              <div className="dzt-result-actions" style={{marginTop:12}}>
-                <button className="dzt-btn" onClick={printIBS}><Download size={14}/> تحميل PDF</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Pension / CNAS / CASNOS Tool ─────────────────────────────────────────────
-function PensionTool() {
-  const [type, setType]   = useState<'cnas'|'casnos'>('cnas')
-  const [gender, setGender] = useState<'m'|'f'>('m')
-  const [salary, setSalary] = useState('')
-  const [years, setYears]   = useState('')
-  const [age, setAge]       = useState('')
-  const [result, setResult] = useState<null|{
-    contrib: number; employerContrib?: number; totalMonthly: number;
-    pension: number; retireAge: number; yearsLeft: number; rate: number;
-  }>(null)
-
-  const fmt = (n: number) => Math.round(n).toLocaleString('fr-DZ') + ' DA'
-
-  const calc = () => {
-    const s = parseFloat(salary) || 0
-    const y = parseFloat(years)  || 0
-    const a = parseFloat(age)    || 0
-    if (!s || !y || !a) return
-
-    const retireAge = gender === 'm' ? 60 : 55
-    const yearsLeft = Math.max(0, retireAge - a)
-
-    if (type === 'cnas') {
-      const contrib         = s * 0.09
-      const employerContrib = s * 0.26
-      const totalMonthly    = contrib + employerContrib
-      const rate            = Math.min(y * 2.5, 80) / 100
-      const pension         = s * rate
-      setResult({ contrib, employerContrib, totalMonthly, pension, retireAge, yearsLeft, rate: rate * 100 })
-    } else {
-      const annualIncome = s * 12
-      const contrib      = (annualIncome * 0.15) / 12
-      const rate         = Math.min(y * 2.5, 80) / 100
-      const pension      = s * rate
-      setResult({ contrib, totalMonthly: contrib, pension, retireAge, yearsLeft, rate: rate * 100 })
+  const handleReverseFile = useCallback((file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      setReverseBase64({ data: dataUrl, mime: file.type })
+      setReverseUrl('')
+      setReverseLinks([])
+      setReverseError('')
     }
-  }
+    reader.readAsDataURL(file)
+  }, [])
 
-  const printResult = () => {
-    if (!result) return
-    const w = window.open('', '_blank')
-    if (!w) return
-    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
-<title>حاسبة التقاعد CNAS</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
-<style>body{font-family:'Cairo',sans-serif;direction:rtl;padding:40px;background:#fff;color:#111}
-h1{color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
-.card{background:#f6fbf7;border:1px solid #c8e6c9;border-radius:12px;padding:16px}
-.label{font-size:12px;color:#666;margin-bottom:4px}
-.val{font-size:22px;font-weight:800;color:#0a3d1f}
-.val.red{color:#d32f2f}.val.blue{color:#1565c0}
-.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}
-</style></head><body>
-<h1>🏦 تقرير حاسبة التقاعد — ${type === 'cnas' ? 'CNAS موظف' : 'CASNOS مستقل'}</h1>
-<div class="grid">
-  ${type === 'cnas' ? `<div class="card"><div class="label">اشتراك الموظف (9%)</div><div class="val blue">${fmt(result.contrib)}</div></div>
-  <div class="card"><div class="label">اشتراك صاحب العمل (26%)</div><div class="val blue">${fmt(result.employerContrib||0)}</div></div>` :
-  `<div class="card"><div class="label">الاشتراك الشهري (15%)</div><div class="val blue">${fmt(result.contrib)}</div></div>`}
-  <div class="card"><div class="label">نسبة المعاش</div><div class="val">${result.rate.toFixed(1)}%</div></div>
-  <div class="card" style="background:#e8f5e9"><div class="label">المعاش الشهري المتوقع</div><div class="val">${fmt(result.pension)}</div></div>
-  <div class="card"><div class="label">سن التقاعد القانوني</div><div class="val">${result.retireAge} سنة</div></div>
-  <div class="card"><div class="label">السنوات المتبقية</div><div class="val red">${result.yearsLeft} سنة</div></div>
-</div>
-<div class="footer">🇩🇿 DZ Tools — dz-gpt.vercel.app | المعطيات وفق قانون CNAS/CASNOS الجزائري 2024</div>
-</body></html>`)
-    w.document.close()
-    setTimeout(() => { w.focus(); w.print() }, 600)
-  }
-
-  return (
-    <div style={{display:'flex',flexDirection:'column',gap:20}}>
-      <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">🏦</div>
-        <div>
-          <div className="dzt-tool-desc-title">حاسبة التقاعد والضمان الاجتماعي</div>
-          <div className="dzt-tool-desc-text">احسب اشتراكاتك الشهرية ومعاشك المتوقع — CNAS للموظفين · CASNOS للمستقلين — وفق شرائح 2024</div>
-        </div>
-      </div>
-
-      <div className="dzt-pension-type-row">
-        {(['cnas','casnos'] as const).map(t => (
-          <button key={t} className={`dzt-pension-type-btn${type===t?' active':''}`} onClick={()=>{ setType(t); setResult(null) }}>
-            <span style={{fontSize:22}}>{t==='cnas'?'🏢':'🧑‍💼'}</span>
-            <span style={{fontWeight:800}}>{t==='cnas'?'CNAS':'CASNOS'}</span>
-            <span style={{fontSize:12,opacity:.7}}>{t==='cnas'?'موظف / أجير':'مستقل / حر'}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="dzt-pension-grid">
-        <div className="dzt-field">
-          <label className="dzt-label">الجنس</label>
-          <select className="dzt-select" value={gender} onChange={e=>{ setGender(e.target.value as 'm'|'f'); setResult(null) }}>
-            <option value="m">ذكر (تقاعد عند 60)</option>
-            <option value="f">أنثى (تقاعد عند 55)</option>
-          </select>
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">العمر الحالي (سنة)</label>
-          <input className="dzt-input" type="number" min="18" max="70" placeholder="مثال: 35" value={age} onChange={e=>{ setAge(e.target.value); setResult(null) }} />
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">{type==='cnas'?'الراتب الإجمالي الشهري (DA)':'الدخل الشهري الإجمالي (DA)'}</label>
-          <input className="dzt-input" type="number" min="0" placeholder="مثال: 85000" value={salary} onChange={e=>{ setSalary(e.target.value); setResult(null) }} />
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">سنوات العمل / الاشتراك</label>
-          <input className="dzt-input" type="number" min="0" max="40" placeholder="مثال: 15" value={years} onChange={e=>{ setYears(e.target.value); setResult(null) }} />
-        </div>
-      </div>
-
-      <div className="dzt-pension-info-box">
-        {type==='cnas'
-          ? <><strong>CNAS — موظف:</strong> اشتراك الموظف <strong>9%</strong> + صاحب العمل <strong>26%</strong> من الراتب الإجمالي · المعاش = <strong>2.5% × سنوات العمل × الراتب</strong> (سقف 80%)</>
-          : <><strong>CASNOS — مستقل:</strong> اشتراك <strong>15%</strong> من الدخل السنوي · المعاش = <strong>2.5% × سنوات الاشتراك × الدخل</strong> (سقف 80%)</>
-        }
-      </div>
-
-      <button className="dzt-btn" onClick={calc} disabled={!salary||!years||!age}>
-        <Calculator size={16}/> احسب
-      </button>
-
-      {result && (
-        <div className="dzt-pension-result">
-          <div className="dzt-tax-cards" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
-            <div className="dzt-tax-card">
-              <div className="dzt-tax-card-label">اشتراكك الشهري</div>
-              <div className="dzt-tax-card-val" style={{color:'#60a5fa'}}>{fmt(result.contrib)}</div>
-              <div className="dzt-tax-card-sub">{type==='cnas'?'9% من راتبك':'15% من دخلك'}</div>
-            </div>
-            {type==='cnas' && (
-              <div className="dzt-tax-card">
-                <div className="dzt-tax-card-label">اشتراك صاحب العمل</div>
-                <div className="dzt-tax-card-val" style={{color:'#a78bfa'}}>{fmt(result.employerContrib||0)}</div>
-                <div className="dzt-tax-card-sub">26% من راتبك</div>
-              </div>
-            )}
-            <div className="dzt-tax-card">
-              <div className="dzt-tax-card-label">نسبة المعاش</div>
-              <div className="dzt-tax-card-val">{result.rate.toFixed(1)}%</div>
-              <div className="dzt-tax-card-sub">2.5% × {years} سنة</div>
-            </div>
-            <div className="dzt-tax-card dzt-tax-card-green">
-              <div className="dzt-tax-card-label">المعاش الشهري المتوقع</div>
-              <div className="dzt-tax-card-val">{fmt(result.pension)}</div>
-            </div>
-            <div className="dzt-tax-card">
-              <div className="dzt-tax-card-label">سن التقاعد القانوني</div>
-              <div className="dzt-tax-card-val">{result.retireAge} سنة</div>
-            </div>
-            <div className={`dzt-tax-card${result.yearsLeft>0?' dzt-tax-card-red':' dzt-tax-card-green'}`}>
-              <div className="dzt-tax-card-label">{result.yearsLeft>0?'السنوات المتبقية':'أنت أهل للتقاعد!'}</div>
-              <div className="dzt-tax-card-val">{result.yearsLeft>0?`${result.yearsLeft} سنة`:'✓ الآن'}</div>
-            </div>
-          </div>
-          <div className="dzt-result-actions" style={{marginTop:12}}>
-            <button className="dzt-btn" onClick={printResult}><Download size={14}/> تحميل PDF</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── QR Code Generator Tool ────────────────────────────────────────────────────
-function QRCodeTool() {
-  const [text, setText]     = useState('')
-  const [size, setSize]     = useState('300')
-  const [color, setColor]   = useState('000000')
-  const [bgColor, setBgColor] = useState('ffffff')
-  const [qrUrl, setQrUrl]   = useState('')
-  const [copied, setCopied] = useState(false)
-
-  const generate = () => {
-    if (!text.trim()) return
-    const encoded = encodeURIComponent(text.trim())
-    const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}&color=${color}&bgcolor=${bgColor}&margin=10&format=png`
-    setQrUrl(url)
-  }
-
-  const download = async () => {
-    if (!qrUrl) return
+  const search = useCallback(async () => {
+    if (!query.trim()) return
+    setSearchLoading(true); setSearchResults([]); setSearchError('')
     try {
-      const res  = await fetch(qrUrl)
-      const blob = await res.blob()
-      const a    = document.createElement('a')
-      a.href     = URL.createObjectURL(blob)
-      a.download = 'qrcode-dz.png'
-      a.click()
-    } catch { alert('تعذّر التحميل، حاول مرة أخرى') }
-  }
+      const res = await fetch(`/api/tools/image-search?q=${encodeURIComponent(query.trim())}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setSearchResults(data.results || [])
+      setSearchTotal(data.total || 0)
+      if ((data.results || []).length === 0) setSearchError('لم تُوجد نتائج. جرّب كلمات مختلفة.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ'
+      setSearchError(`⚠️ فشل البحث: ${msg}`)
+      setSearchResults([])
+    }
+    finally { setSearchLoading(false) }
+  }, [query])
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(text).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000) })
-  }
+  const doReverse = useCallback(async () => {
+    const hasUrl = reverseUrl.trim()
+    const hasFile = !!reverseBase64
+    if (!hasUrl && !hasFile) return
+    setReverseLoading(true); setReverseLinks([]); setReverseError('')
+    try {
+      if (hasFile && reverseBase64) {
+        // Upload file: send base64 to image-analyze endpoint to get a hosted URL
+        // For reverse search, we use the dataURL directly by uploading to a temp endpoint
+        // Instead: generate reverse links using a data URI trick via image-analyze
+        // Best approach: upload to server, get a temp URL back, then generate reverse links
+        const uploadRes = await fetch('/api/tools/reverse-image-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: reverseBase64.data, mimeType: reverseBase64.mime }),
+        })
+        if (!uploadRes.ok) throw new Error(`HTTP ${uploadRes.status}`)
+        const uploadData = await uploadRes.json()
+        if (uploadData.error) throw new Error(uploadData.error)
+        setReverseLinks(uploadData.links || [])
+      } else {
+        const res = await fetch(`/api/tools/reverse-image?url=${encodeURIComponent(reverseUrl.trim())}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (data.error) throw new Error(data.error)
+        setReverseLinks(data.links || [])
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ'
+      setReverseError(`⚠️ فشل البحث العكسي: ${msg}`)
+    }
+    finally { setReverseLoading(false) }
+  }, [reverseUrl, reverseBase64])
 
-  const PRESETS = [
-    { label:'رابط موقع', value:'https://dz-gpt.vercel.app' },
-    { label:'واتساب',    value:'https://wa.me/213XXXXXXXXX' },
-    { label:'إيميل',     value:'mailto:contact@example.com' },
-    { label:'هاتف',      value:'tel:+213XXXXXXXXX' },
-    { label:'نص حر',    value:'مرحباً بكم في DZ-GPT 🇩🇿' },
+  const analyzeImage = useCallback(async () => {
+    if (!analyzeInput) return
+    setAnalyzeLoading(true); setAnalyzeResult(''); setAnalyzeError('')
+    try {
+      const body: Record<string, string> = { mode: analyzeMode }
+      if (analyzeInput.type === 'base64') {
+        body.imageBase64 = analyzeInput.value
+        body.mimeType = analyzeInput.mimeType
+      } else {
+        body.imageUrl = analyzeInput.value
+      }
+      const res = await fetch('/api/tools/image-analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setAnalyzeResult(data.content || '⚠️ فشل التحليل.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ في الاتصال'
+      setAnalyzeError(`⚠️ ${msg}`)
+    }
+    finally { setAnalyzeLoading(false) }
+  }, [analyzeInput, analyzeMode])
+
+  const ANALYZE_MODES: { v: AnalyzeMode; l: string; d: string; icon: string }[] = [
+    { v: 'analyze', l: 'تحليل كامل',    d: 'وصف شامل لكل عناصر الصورة',     icon: '🔬' },
+    { v: 'ocr',     l: 'استخراج نص',   d: 'OCR — قراءة النصوص من الصورة',  icon: '📝' },
+    { v: 'caption', l: 'وصف مختصر',    d: 'Caption — جملة وصفية موجزة',    icon: '💬' },
+    { v: 'objects', l: 'كشف العناصر',  d: 'Object Detection — تحديد الأشياء', icon: '🎯' },
   ]
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+    <div>
       <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">📲</div>
+        <span className="dzt-tool-desc-icon">🖼️</span>
         <div>
-          <div className="dzt-tool-desc-title">مولّد QR Code الاحترافي</div>
-          <div className="dzt-tool-desc-text">أنشئ QR Code لأي رابط، رقم هاتف، واتساب، إيميل أو نص — تخصيص الألوان والحجم — تحميل PNG فوري</div>
+          <div className="dzt-tool-desc-title">Visual AI — البحث والتحليل البصري</div>
+          <div className="dzt-tool-desc-text">ابحث عن الصور مجاناً • بحث عكسي (Google Lens / Yandex / TinEye) • تحليل الصور بـ Gemini Vision • OCR ذكي</div>
         </div>
       </div>
 
-      <div className="dzt-field">
-        <label className="dzt-label">نوع المحتوى (اختر أو اكتب)</label>
-        <div className="dzt-qr-presets">
-          {PRESETS.map(p => (
-            <button key={p.label} className="dzt-qr-preset-btn" onClick={()=>{ setText(p.value); setQrUrl('') }}>{p.label}</button>
-          ))}
-        </div>
+      <div className="dzt-mode-tabs">
+        <button className={`dzt-mode-tab${mode === 'search'  ? ' active' : ''}`} onClick={() => setMode('search')}>
+          <Search size={13} /> بحث عن صور
+        </button>
+        <button className={`dzt-mode-tab${mode === 'reverse' ? ' active' : ''}`} onClick={() => setMode('reverse')}>
+          <RotateCcw size={13} /> بحث عكسي
+        </button>
+        <button className={`dzt-mode-tab${mode === 'analyze' ? ' active' : ''}`} onClick={() => setMode('analyze')}>
+          <ScanSearch size={13} /> تحليل AI
+        </button>
       </div>
 
-      <div className="dzt-field">
-        <label className="dzt-label">المحتوى (رابط، نص، رقم...)</label>
-        <textarea
-          className="dzt-textarea"
-          placeholder="https://dz-gpt.vercel.app أو أي نص أو رقم هاتف..."
-          value={text}
-          onChange={e=>{ setText(e.target.value); setQrUrl('') }}
-          rows={3}
-        />
-      </div>
-
-      <div className="dzt-qr-options">
-        <div className="dzt-field">
-          <label className="dzt-label">الحجم</label>
-          <select className="dzt-select" value={size} onChange={e=>{ setSize(e.target.value); setQrUrl('') }}>
-            <option value="150">صغير (150×150)</option>
-            <option value="300">متوسط (300×300)</option>
-            <option value="500">كبير (500×500)</option>
-            <option value="800">عالي الدقة (800×800)</option>
-          </select>
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">لون الـ QR</label>
-          <div className="dzt-qr-color-row">
-            <input type="color" value={`#${color}`} onChange={e=>{ setColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
-            <span className="dzt-qr-color-hex">#{color}</span>
-          </div>
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">لون الخلفية</label>
-          <div className="dzt-qr-color-row">
-            <input type="color" value={`#${bgColor}`} onChange={e=>{ setBgColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
-            <span className="dzt-qr-color-hex">#{bgColor}</span>
-          </div>
-        </div>
-      </div>
-
-      <button className="dzt-btn" onClick={generate} disabled={!text.trim()}>
-        <QrCode size={16}/> توليد QR Code
-      </button>
-
-      {qrUrl && (
-        <div className="dzt-qr-result">
-          <div className="dzt-qr-preview-wrap">
-            <img src={qrUrl} alt="QR Code" className="dzt-qr-img" />
-          </div>
-          <div className="dzt-qr-content-preview">
-            <span className="dzt-qr-content-label">المحتوى:</span>
-            <span className="dzt-qr-content-val">{text.length > 60 ? text.slice(0,60)+'…' : text}</span>
-          </div>
-          <div className="dzt-result-actions" style={{justifyContent:'center',gap:12}}>
-            <button className="dzt-btn" onClick={download} style={{flex:1}}>
-              <Download size={14}/> تحميل PNG
-            </button>
-            <button className="dzt-result-btn" onClick={copyLink} style={{flex:1}}>
-              {copied ? <Check size={14}/> : <Copy size={14}/>}
-              {copied ? 'تم النسخ' : 'نسخ النص'}
+      {/* ── Text Image Search ── */}
+      {mode === 'search' && (
+        <div>
+          <div className="dzt-img-search-bar">
+            <input
+              className="dzt-input dzt-img-query-input"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && search()}
+              placeholder="ابحث عن صور... مثال: علم الجزائر، شروق الشمس، مدينة وهران..."
+              dir="rtl"
+            />
+            <button className="dzt-btn dzt-img-search-btn" onClick={search} disabled={!query.trim() || searchLoading}>
+              {searchLoading ? <span className="dzt-spinner" /> : <Search size={14} />}
+              {searchLoading ? 'جاري...' : 'بحث'}
             </button>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Business Card Tool ────────────────────────────────────────────────────────
-const BC_THEMES = [
-  { id:'dark',    label:'داكن',    bg:'#0a0a0a', text:'#fff',     accent:'#c8ff00', sub:'#aaa' },
-  { id:'green',   label:'أخضر',   bg:'#0a3d1f', text:'#fff',     accent:'#c8ff00', sub:'#a3d9a5' },
-  { id:'blue',    label:'أزرق',   bg:'#0d1b4b', text:'#fff',     accent:'#60a5fa', sub:'#93c5fd' },
-  { id:'white',   label:'أبيض',   bg:'#ffffff', text:'#111',     accent:'#0a3d1f', sub:'#555' },
-  { id:'gold',    label:'ذهبي',   bg:'#1a1100', text:'#ffe082',  accent:'#ffd600', sub:'#c8a000' },
-]
-
-function BizCardTool() {
-  const [lang, setLang]   = useState<'ar'|'fr'>('ar')
-  const [theme, setTheme] = useState(BC_THEMES[0])
-  const [form, setForm]   = useState({
-    name:'', title:'', company:'', phone:'', email:'', website:'', address:'', logo:'', photo:''
-  })
-  const cardRef  = useRef<HTMLDivElement>(null)
-  const photoRef = useRef<HTMLInputElement>(null)
-  const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}))
-
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => set('photo', ev.target?.result as string)
-    reader.readAsDataURL(file)
-  }
-
-  const printCard = () => {
-    const el = cardRef.current
-    if (!el) return
-    const w = window.open('', '_blank')
-    if (!w) return
-    const dir = lang === 'ar' ? 'rtl' : 'ltr'
-    w.document.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8">
-<title>بطاقة العمل — ${form.name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:${lang==='ar'?"'Cairo'":'Inter'},sans-serif}
-.card{width:90mm;height:55mm;background:${theme.bg};color:${theme.text};border-radius:4mm;padding:7mm 8mm;display:flex;flex-direction:column;justify-content:space-between;direction:${dir};position:relative;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.25)}
-.accent-line{position:absolute;top:0;${lang==='ar'?'right':'left'}:0;width:3mm;height:100%;background:${theme.accent}}
-.photo-circle{position:absolute;top:5mm;${lang==='ar'?'left':'right'}:5mm;width:14mm;height:14mm;border-radius:50%;overflow:hidden;border:1.2mm solid ${theme.accent};box-shadow:0 0 4mm rgba(0,0,0,0.4)}
-.photo-circle img{width:100%;height:100%;object-fit:cover;display:block}
-.name{font-size:16pt;font-weight:800;color:${theme.text};margin-${lang==='ar'?'right':'left'}:4mm}
-.title{font-size:9pt;color:${theme.accent};font-weight:600;margin:1mm 0 0 0;margin-${lang==='ar'?'right':'left'}:4mm}
-.company{font-size:8pt;color:${theme.sub};margin-${lang==='ar'?'right':'left'}:4mm}
-.contacts{display:flex;flex-direction:column;gap:1.5mm;margin-${lang==='ar'?'right':'left'}:4mm}
-.contact-row{font-size:7.5pt;color:${theme.sub};display:flex;align-items:center;gap:2mm}
-.brand{position:absolute;bottom:4mm;${lang==='ar'?'left':'right'}:5mm;font-size:6pt;color:${theme.accent};opacity:.5}
-@media print{body{background:none}@page{margin:0;size:90mm 55mm}}
-</style></head><body>
-<div class="card">
-  <div class="accent-line"></div>
-  ${form.photo ? `<div class="photo-circle"><img src="${form.photo}" /></div>` : ''}
-  <div>
-    <div class="name">${form.name||'الاسم الكامل'}</div>
-    <div class="title">${form.title||'المنصب'}</div>
-    ${form.company?`<div class="company">${form.company}</div>`:''}
-  </div>
-  <div class="contacts">
-    ${form.phone?`<div class="contact-row">📞 ${form.phone}</div>`:''}
-    ${form.email?`<div class="contact-row">✉️ ${form.email}</div>`:''}
-    ${form.website?`<div class="contact-row">🌐 ${form.website}</div>`:''}
-    ${form.address?`<div class="contact-row">📍 ${form.address}</div>`:''}
-  </div>
-  <div class="brand">DZ-GPT</div>
-</div>
-</body></html>`)
-    w.document.close()
-    setTimeout(()=>{ w.focus(); w.print() }, 600)
-  }
-
-  return (
-    <div style={{display:'flex',flexDirection:'column',gap:20}}>
-      <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">🪪</div>
-        <div>
-          <div className="dzt-tool-desc-title">مولّد بطاقة العمل الاحترافية</div>
-          <div className="dzt-tool-desc-text">صمّم بطاقة عمل احترافية بالعربية أو الفرنسية مع معاينة مباشرة — تصدير PDF جاهز للطباعة (90mm × 55mm)</div>
-        </div>
-      </div>
-
-      <div className="dzt-row">
-        <div className="dzt-field">
-          <label className="dzt-label">اللغة</label>
-          <select className="dzt-select" value={lang} onChange={e=>setLang(e.target.value as 'ar'|'fr')}>
-            <option value="ar">العربية (RTL)</option>
-            <option value="fr">Français (LTR)</option>
-          </select>
-        </div>
-        <div className="dzt-field">
-          <label className="dzt-label">النمط / الثيم</label>
-          <div className="dzt-bc-themes">
-            {BC_THEMES.map(t=>(
-              <button key={t.id} className={`dzt-bc-theme-btn${theme.id===t.id?' active':''}`}
-                style={{background:t.bg,color:t.text,borderColor:theme.id===t.id?t.accent:'transparent'}}
-                onClick={()=>setTheme(t)}>{t.label}</button>
-            ))}
+          <div className="dzt-img-source-note">
+            🌐 الصور من <strong>Openverse</strong> — مكتبة مفتوحة المصدر بترخيص Creative Commons
           </div>
-        </div>
-      </div>
-
-      {/* Photo upload */}
-      <div className="dzt-bc-photo-section">
-        <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto} />
-        <div className="dzt-bc-photo-upload-area" onClick={()=>photoRef.current?.click()}>
-          {form.photo ? (
-            <div className="dzt-bc-photo-preview-wrap">
-              <img src={form.photo} alt="صورة البطاقة" className="dzt-bc-photo-thumb" />
-              <div className="dzt-bc-photo-preview-label">
-                <span>✅ تم رفع الصورة</span>
-                <button className="dzt-bc-photo-remove" onClick={e=>{ e.stopPropagation(); set('photo','') }}>✕ حذف</button>
+          {searchLoading && <div className="dzt-loading"><div className="dzt-spinner" />جاري البحث في مكتبة الصور...</div>}
+          {searchError && <div className="dzt-img-empty">{searchError}</div>}
+          {!searchLoading && searchResults.length > 0 && (
+            <div>
+              <div className="dzt-img-results-header">
+                <span>🖼️ {searchResults.length} صورة من {searchTotal.toLocaleString('ar-DZ')} نتيجة</span>
               </div>
-            </div>
-          ) : (
-            <div className="dzt-bc-photo-placeholder">
-              <div className="dzt-bc-photo-circle-empty">👤</div>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,color:'#c8ff00'}}>رفع صورة شخصية دائرية</div>
-                <div style={{fontSize:11,color:'#666',marginTop:3}}>JPG · PNG · WebP — تظهر في المعاينة والتصدير</div>
+              <div className="dzt-img-grid">
+                {searchResults.map(img => (
+                  <div key={img.id} className="dzt-img-card">
+                    <div className="dzt-img-card-inner">
+                      <img src={img.thumbnail} alt={img.title} loading="lazy" className="dzt-img-thumb"
+                        onError={e => { (e.target as HTMLImageElement).src = img.url }} />
+                      <div className="dzt-img-card-overlay">
+                        <div className="dzt-img-card-title">{img.title}</div>
+                        {(img.creator || img.license) && (
+                          <div className="dzt-img-card-meta">
+                            {img.creator && <span>{img.creator}</span>}
+                            <span className="dzt-img-license">{img.license}</span>
+                          </div>
+                        )}
+                        <div className="dzt-img-card-actions">
+                          <a href={img.url} target="_blank" rel="noopener noreferrer" className="dzt-img-action-btn">⬆️ فتح</a>
+                          <button className="dzt-img-action-btn" onClick={() => navigator.clipboard.writeText(img.url)}>🔗 نسخ</button>
+                          <a href={img.url} download className="dzt-img-action-btn">⬇️ تحميل</a>
+                          <button className="dzt-img-action-btn" onClick={() => { setMode('reverse'); setReverseUrl(img.url); setReverseBase64(null); setReverseLinks([]) }}>
+                            🔍 عكسي
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      <div className="dzt-inv-grid2">
-        <input className="dzt-inv-input" placeholder="الاسم الكامل *" value={form.name} onChange={e=>set('name',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="المنصب / الوظيفة *" value={form.title} onChange={e=>set('title',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="اسم الشركة / المؤسسة" value={form.company} onChange={e=>set('company',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="رقم الهاتف" value={form.phone} onChange={e=>set('phone',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="البريد الإلكتروني" value={form.email} onChange={e=>set('email',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="الموقع الإلكتروني" value={form.website} onChange={e=>set('website',e.target.value)} />
-        <input className="dzt-inv-input" placeholder="العنوان / المدينة" value={form.address} onChange={e=>set('address',e.target.value)} style={{gridColumn:'span 2'}} />
-      </div>
+      {/* ── Reverse Image Search ── */}
+      {mode === 'reverse' && (
+        <div>
+          <div className="dzt-img-reverse-desc">
+            ابحث عن مصدر صورة، تحقق من أصالتها، أو اعثر على صور مشابهة. يمكنك إدخال رابط <strong>أو رفع صورة مباشرة</strong>.
+          </div>
 
-      {/* Live Preview */}
-      <div className="dzt-bc-preview-wrap">
-        <div className="dzt-bc-preview-label">معاينة مباشرة</div>
-        <div className="dzt-bc-card-outer">
-          <div
-            ref={cardRef}
-            className="dzt-bc-card"
-            style={{background:theme.bg, color:theme.text, direction:lang==='ar'?'rtl':'ltr', fontFamily:lang==='ar'?'Cairo, sans-serif':'Inter, sans-serif'}}
-          >
-            <div className="dzt-bc-accent" style={{background:theme.accent, [lang==='ar'?'right':'left']:0}} />
-            {/* Circular photo */}
-            {form.photo && (
-              <div className="dzt-bc-photo-circle" style={{
-                borderColor: theme.accent,
-                [lang==='ar' ? 'left' : 'right']: 14
-              }}>
-                <img src={form.photo} alt="" />
+          {/* URL input row */}
+          <div className="dzt-img-search-bar" style={{ marginBottom: 8 }}>
+            <input
+              className="dzt-input dzt-img-query-input"
+              value={reverseUrl}
+              onChange={e => { setReverseUrl(e.target.value); setReverseBase64(null); setReverseLinks([]); setReverseError('') }}
+              onKeyDown={e => e.key === 'Enter' && doReverse()}
+              placeholder="الصق رابط الصورة... https://example.com/photo.jpg"
+              dir="ltr"
+            />
+            <button className="dzt-btn dzt-img-search-btn" onClick={doReverse}
+              disabled={(!reverseUrl.trim() && !reverseBase64) || reverseLoading}>
+              {reverseLoading ? <span className="dzt-spinner" /> : <RotateCcw size={14} />}
+              {reverseLoading ? 'جاري...' : 'بحث عكسي'}
+            </button>
+          </div>
+
+          {/* Upload button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ color: '#888', fontSize: 13 }}>أو</span>
+            <button className="dzt-btn dzt-img-upload-btn" onClick={() => reverseFileRef.current?.click()}>
+              <Upload size={13} /> ارفع صورة للبحث العكسي
+            </button>
+            <input ref={reverseFileRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleReverseFile(f) }} />
+            {reverseBase64 && (
+              <button className="dzt-img-clear-btn" onClick={() => { setReverseBase64(null); setReverseLinks([]); setReverseError('') }}>✕ إزالة</button>
+            )}
+          </div>
+
+          {/* Preview */}
+          {(reverseUrl.trim() || reverseBase64) && (
+            <div className="dzt-img-reverse-preview">
+              <img
+                src={reverseBase64 ? reverseBase64.data : reverseUrl}
+                alt="preview" className="dzt-img-reverse-thumb"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            </div>
+          )}
+
+          {reverseError && <div className="dzt-img-empty">{reverseError}</div>}
+
+          {reverseLinks.length > 0 && (
+            <div className="dzt-img-reverse-links">
+              <div className="dzt-img-reverse-title">ابحث عن هذه الصورة في:</div>
+              <div className="dzt-img-reverse-grid">
+                {reverseLinks.map(link => (
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer"
+                    className="dzt-img-reverse-link" style={{ '--lc': link.color } as React.CSSProperties}>
+                    <span className="dzt-img-reverse-link-icon">{link.icon}</span>
+                    <span className="dzt-img-reverse-link-name">{link.name}</span>
+                    <span className="dzt-img-reverse-link-arrow">→</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!reverseLinks.length && !reverseLoading && !reverseError && (
+            <div className="dzt-img-reverse-tips">
+              <div className="dzt-img-tips-title">💡 كيف تستخدم البحث العكسي؟</div>
+              <ul className="dzt-img-tips-list">
+                <li>الصق رابط صورة أو ارفع صورة من جهازك</li>
+                <li>سيُولَّد روابط مباشرة لكل محرك بحث</li>
+                <li>انقر على أي رابط للبحث فوراً</li>
+                <li>مفيد للتحقق من مصدر الصورة ومعرفة هل هي مزيفة</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AI Image Analysis ── */}
+      {mode === 'analyze' && (
+        <div>
+          <div className="dzt-img-analyze-modes">
+            {ANALYZE_MODES.map(m => (
+              <button
+                key={m.v}
+                className={`dzt-img-analyze-mode${analyzeMode === m.v ? ' active' : ''}`}
+                onClick={() => { setAnalyzeMode(m.v); setAnalyzeResult('') }}
+              >
+                <span className="dzt-img-analyze-mode-icon">{m.icon}</span>
+                <span className="dzt-img-analyze-mode-label">{m.l}</span>
+                <span className="dzt-img-analyze-mode-desc">{m.d}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="dzt-img-analyze-input">
+            <div className="dzt-img-analyze-input-title">الصورة المراد تحليلها:</div>
+            <div className="dzt-img-analyze-input-row">
+              <input
+                className="dzt-input"
+                placeholder="الصق رابط الصورة... https://..."
+                value={analyzeInput?.type === 'url' ? analyzeInput.value : ''}
+                onChange={e => { setAnalyzeInput({ type: 'url', value: e.target.value }); setAnalyzeResult('') }}
+                dir="ltr"
+              />
+              <span className="dzt-img-or">أو</span>
+              <button className="dzt-btn dzt-img-upload-btn" onClick={() => analyzeFileRef.current?.click()}>
+                <ImageIcon size={13} /> ارفع صورة
+              </button>
+              <input
+                ref={analyzeFileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) { handleImageFile(f); setAnalyzeResult('') } }}
+              />
+            </div>
+            {analyzeInput && (
+              <div className="dzt-img-analyze-preview">
+                <img
+                  src={analyzeInput.value}
+                  alt="preview"
+                  className="dzt-img-analyze-preview-img"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+                <button className="dzt-img-clear-btn" onClick={() => { setAnalyzeInput(null); setAnalyzeResult('') }}>✕</button>
               </div>
             )}
-            <div className="dzt-bc-top">
-              <div className="dzt-bc-name" style={{color:theme.text}}>{form.name||'الاسم الكامل'}</div>
-              <div className="dzt-bc-title" style={{color:theme.accent}}>{form.title||'المنصب'}</div>
-              {form.company && <div className="dzt-bc-company" style={{color:theme.sub}}>{form.company}</div>}
-            </div>
-            <div className="dzt-bc-contacts">
-              {form.phone   && <div className="dzt-bc-contact" style={{color:theme.sub}}>📞 {form.phone}</div>}
-              {form.email   && <div className="dzt-bc-contact" style={{color:theme.sub}}>✉️ {form.email}</div>}
-              {form.website && <div className="dzt-bc-contact" style={{color:theme.sub}}>🌐 {form.website}</div>}
-              {form.address && <div className="dzt-bc-contact" style={{color:theme.sub}}>📍 {form.address}</div>}
-            </div>
-            <div className="dzt-bc-brand" style={{color:theme.accent}}>DZ-GPT</div>
           </div>
-        </div>
-      </div>
 
-      <button className="dzt-btn" onClick={printCard} disabled={!form.name}>
-        <Download size={16}/> تصدير PDF (90×55mm)
-      </button>
+          <button className="dzt-btn" onClick={analyzeImage} disabled={!analyzeInput || analyzeLoading}>
+            {analyzeLoading ? <><span className="dzt-spinner" /> جاري التحليل...</> : <><ScanSearch size={14} /> تحليل بالذكاء الاصطناعي</>}
+          </button>
+
+          {analyzeLoading && (
+            <div className="dzt-loading"><div className="dzt-spinner" />Gemini Vision يحلل الصورة...</div>
+          )}
+          {analyzeError && <div className="dzt-img-empty">{analyzeError}</div>}
+          {analyzeResult && (
+            <div className="dzt-result">
+              <div className="dzt-result-header">
+                <span className="dzt-result-title">🧠 نتيجة التحليل</span>
+                <div className="dzt-result-actions">
+                  <button className="dzt-result-btn" onClick={() => { navigator.clipboard.writeText(analyzeResult); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
+                    {copied ? <><Check size={12} /> تم</> : <><Copy size={12} /> نسخ</>}
+                  </button>
+                </div>
+              </div>
+              <div className="dzt-result-body">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{analyzeResult}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Darija Translator Tool ───────────────────────────────────────────────────
-const DARIJA_DIRS = [
-  { id: 'ar2dz', label: 'عربي فصيح  →  دارجة', from: 'العربية الفصحى', to: 'الدارجة الجزائرية' },
-  { id: 'dz2ar', label: 'دارجة  →  عربي فصيح', from: 'الدارجة الجزائرية', to: 'العربية الفصحى' },
-  { id: 'fr2dz', label: 'Français  →  دارجة',   from: 'الفرنسية', to: 'الدارجة الجزائرية' },
-  { id: 'dz2fr', label: 'دارجة  →  Français',   from: 'الدارجة الجزائرية', to: 'الفرنسية' },
-]
-const DARIJA_REGIONS = [
-  { id: 'center', label: '🏙️ الجزائر العاصمة / الوسط' },
-  { id: 'west',   label: '🌅 وهران / تلمسان (الغرب)' },
-  { id: 'east',   label: '🏔️ قسنطينة / عنابة (الشرق)' },
-  { id: 'south',  label: '🏜️ الجنوب (تمنراست / ورقلة)' },
-]
-function DarijaTool() {
-  const [dir,      setDir]      = useState('ar2dz')
-  const [region,   setRegion]   = useState('center')
-  const [input,    setInput]    = useState('')
-  const [output,   setOutput]   = useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [copied,   setCopied]   = useState(false)
-  const [examples, setExamples] = useState<{original:string;darija:string;note:string}[]>([])
+// ─── Image Processing Tool ────────────────────────────────────────────────────
+type ImgProcMode = 'remove-bg' | 'enhance' | 'compress' | 'edit' | 'inpaint'
 
-  const QUICK: Record<string, string[]> = {
-    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا تعبان'],
-    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','أنا مريض'],
-    fr2dz: ['Comment tu vas?','Je veux manger','Où habites-tu?','Merci beaucoup','Au revoir','C\'est combien?','Je suis fatigué','Allons-y'],
-    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','أنا مريض','هيا بينا'],
+const IMGPROC_TOOLS: { id: ImgProcMode; icon: string; name: string; desc: string }[] = [
+  { id: 'remove-bg', icon: '🧽', name: 'إزالة الخلفية',  desc: 'PNG شفاف — أشخاص ومنتجات' },
+  { id: 'enhance',   icon: '✨', name: 'تحسين الجودة',   desc: 'رفع الدقة 4x بتقنية AI' },
+  { id: 'compress',  icon: '⚡', name: 'ضغط الصورة',    desc: 'WebP/JPEG — بدون سيرفر' },
+  { id: 'edit',      icon: '🔄', name: 'تعديل أساسي',   desc: 'تدوير • قلب • سطوع • تباين' },
+  { id: 'inpaint',   icon: '🚫', name: 'حذف عنصر',      desc: 'ارسم فوق العنصر → يُحذف' },
+]
+
+function ImageProcessingTool() {
+  const [mode, setMode]         = useState<ImgProcMode>('remove-bg')
+  const [inputImage, setInputImage] = useState<string>('')
+  const [inputMime, setInputMime]   = useState('image/jpeg')
+  const [inputFile, setInputFile]   = useState<File | null>(null)
+  const [result, setResult]     = useState<string>('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [modelUsed, setModelUsed] = useState('')
+
+  // Compress settings
+  const [compFmt, setCompFmt]     = useState<'image/webp' | 'image/jpeg'>('image/webp')
+  const [compQ, setCompQ]         = useState(80)
+  const [compScale, setCompScale] = useState(100)
+  const [compSize, setCompSize]   = useState({ before: 0, after: 0 })
+
+  // Edit settings
+  const [rotation, setRotation]   = useState(0)
+  const [flipH, setFlipH]         = useState(false)
+  const [flipV, setFlipV]         = useState(false)
+  const [brightness, setBrightness] = useState(100)
+  const [contrast, setContrast]   = useState(100)
+  const [saturation, setSaturation] = useState(100)
+
+  // Inpaint mask
+  const canvasRef  = useRef<HTMLCanvasElement>(null)
+  const maskRef    = useRef<HTMLCanvasElement>(null)
+  const [painting, setPainting]   = useState(false)
+  const [brushSize, setBrushSize] = useState(24)
+  const [maskDrawn, setMaskDrawn] = useState(false)
+
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const reset = () => { setResult(''); setError(''); setModelUsed(''); setMaskDrawn(false) }
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    setInputFile(file); setInputMime(file.type)
+    const reader = new FileReader()
+    reader.onload = e => { setInputImage(e.target?.result as string); reset() }
+    reader.readAsDataURL(file)
   }
 
-  const regionLabels: Record<string,string> = { center:'الجزائر العاصمة', west:'وهران والغرب', east:'قسنطينة والشرق', south:'الجنوب الجزائري' }
-
-  const translate = async () => {
-    if (!input.trim()) return
-    setLoading(true); setOutput(''); setExamples([])
-    const d = DARIJA_DIRS.find(x=>x.id===dir)!
-    const reg = regionLabels[region]
-    const prompt = `أنت خبير في اللهجة الجزائرية الدارجة ومتمكن من جميع اللهجات الجزائرية الإقليمية.
-
-المهمة: ترجم النص التالي من ${d.from} إلى ${d.to} — مع مراعاة لهجة منطقة: ${reg}
-
-النص: "${input}"
-
-أعطني:
-1. **الترجمة الرئيسية** (كبيرة وواضحة):
-[ضع الترجمة هنا فقط]
-
-2. **شرح مختصر** (إذا كانت هناك تعابير خاصة):
-[شرح التعابير الصعبة]
-
-3. **أمثلة مماثلة** (3 أمثلة بنفس الأسلوب اللهجوي):
-- مثال 1: [أصل] | [ترجمة]
-- مثال 2: [أصل] | [ترجمة]  
-- مثال 3: [أصل] | [ترجمة]
-
-ملاحظة: استخدم الكتابة العربية للدارجة، ويمكن إضافة كلمات فرنسية مدرجة إذا كانت شائعة في المنطقة.`
-
+  // ── Client-side Remove Background (no API key needed) ────────────────────
+  const processRemoveBg = async () => {
+    if (!inputImage || !inputFile) return
+    setLoading(true); setError(''); setResult(''); setModelUsed('')
     try {
-      const res  = await fetch('/api/dz-agent-chat', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages:[{role:'user',content:prompt}] })
+      const { removeBackground } = await import('@imgly/background-removal')
+      const blob = await removeBackground(inputFile, {
+        debug: false,
+        model: 'medium',
       })
-      const data = await res.json()
-      const text = data.content || ''
-      // Extract main translation
-      const mainMatch = text.match(/\*\*الترجمة الرئيسية\*\*[^\n]*\n+([\s\S]*?)(?=\n\n|\*\*شرح|$)/i)
-      setOutput(mainMatch ? mainMatch[1].trim() : text.split('\n').find((l:string)=>l.trim()&&!l.startsWith('#')&&!l.startsWith('*')) || text)
-      // Extract examples
-      const exMatches = [...text.matchAll(/مثال \d+:\s*([^|]+)\|([^\n]+)/g)]
-      setExamples(exMatches.slice(0,3).map(m=>({ original:m[1].trim(), darija:m[2].trim(), note:'' })))
-    } catch { setOutput('⚠️ خطأ في الاتصال، حاول مرة أخرى.') }
-    setLoading(false)
+      const url = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload  = e => resolve(e.target?.result as string)
+        reader.onerror = () => reject(new Error('قراءة النتيجة فشلت'))
+        reader.readAsDataURL(blob)
+      })
+      setResult(url)
+      setModelUsed('BiRefNet (محلي)')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل إزالة الخلفية')
+    } finally { setLoading(false) }
   }
 
-  const swap = () => {
-    const pairs: Record<string,string> = { ar2dz:'dz2ar', dz2ar:'ar2dz', fr2dz:'dz2fr', dz2fr:'fr2dz' }
-    setDir(pairs[dir]||dir); setInput(output); setOutput(''); setExamples([])
+  // ── Client-side Enhance (2× Bicubic + Unsharp Mask) ──────────────────────
+  const enhanceImage = () => {
+    if (!inputImage) return
+    setLoading(true); setError(''); setResult(''); setModelUsed('')
+    const img = new Image()
+    img.onload = () => {
+      const scale = 2
+      const W = img.width * scale, H = img.height * scale
+      const canvas = document.createElement('canvas')
+      canvas.width = W; canvas.height = H
+      const ctx = canvas.getContext('2d')!
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, W, H)
+      // Unsharp mask (sharpening 3×3 kernel)
+      const id = ctx.getImageData(0, 0, W, H)
+      const src = new Uint8ClampedArray(id.data)
+      const k = [0, -1, 0, -1, 5, -1, 0, -1, 0]
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          for (let c = 0; c < 3; c++) {
+            let s = 0
+            for (let ky = 0; ky < 3; ky++)
+              for (let kx = 0; kx < 3; kx++)
+                s += src[((y + ky - 1) * W + (x + kx - 1)) * 4 + c] * k[ky * 3 + kx]
+            id.data[(y * W + x) * 4 + c] = Math.max(0, Math.min(255, s))
+          }
+        }
+      }
+      ctx.putImageData(id, 0, 0)
+      setResult(canvas.toDataURL('image/png'))
+      setModelUsed('Bicubic 2× + Unsharp (محلي)')
+      setLoading(false)
+    }
+    img.onerror = () => { setError('فشل تحميل الصورة'); setLoading(false) }
+    img.src = inputImage
   }
 
-  return (
-    <div className="dzt-dj-wrap">
-      <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">🗣️</div>
-        <div>
-          <div className="dzt-tool-desc-title">مترجم الدارجة الجزائرية</div>
-          <div className="dzt-tool-desc-text">ترجمة ذكية بين العربية الفصحى والفرنسية والدارجة الجزائرية — مع مراعاة اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
-        </div>
-      </div>
-
-      {/* Direction */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">اتجاه الترجمة</label>
-        <div className="dzt-dj-dirs">
-          {DARIJA_DIRS.map(d=>(
-            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`} onClick={()=>{setDir(d.id);setOutput('');setExamples([])}}>
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Region */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">المنطقة / اللهجة</label>
-        <div className="dzt-dj-regions">
-          {DARIJA_REGIONS.map(r=>(
-            <button key={r.id} className={`dzt-dj-region${region===r.id?' active':''}`} onClick={()=>setRegion(r.id)}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick examples */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">أمثلة سريعة</label>
-        <div className="dzt-dj-quick">
-          {(QUICK[dir]||[]).map(q=>(
-            <button key={q} className="dzt-dj-quick-btn" onClick={()=>{setInput(q);setOutput('');setExamples([])}}>
-              {q}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Input / Output */}
-      <div className="dzt-dj-panels">
-        <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.from}</div>
-          <textarea className="dzt-dj-textarea" placeholder="اكتب النص هنا..." value={input}
-            onChange={e=>setInput(e.target.value)} rows={4}
-            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()} />
-        </div>
-
-        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه">⇄</button>
-
-        <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.to}
-            {output && <button className={`dzt-dj-copy${copied?' done':''}`}
-              onClick={()=>{navigator.clipboard.writeText(output);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
-              {copied?'✅':'📋'}
-            </button>}
-          </div>
-          <div className={`dzt-dj-output${loading?' loading':''}`}>
-            {loading ? <span className="dzt-dj-loading-txt">⏳ AI يترجم...</span>
-                     : output || <span style={{color:'#333'}}>ستظهر الترجمة هنا...</span>}
-          </div>
-        </div>
-      </div>
-
-      <button className="dzt-btn" onClick={translate} disabled={loading||!input.trim()}
-        style={{fontSize:14,padding:'12px 24px'}}>
-        {loading?'⏳ جاري الترجمة...':'🗣️ ترجم الآن'}
-      </button>
-
-      {/* Examples */}
-      {examples.length>0 && (
-        <div className="dzt-dj-examples">
-          <div className="dzt-dj-ex-title">📚 أمثلة مماثلة</div>
-          {examples.map((ex,i)=>(
-            <div key={i} className="dzt-dj-ex-row">
-              <span className="dzt-dj-ex-orig">{ex.original}</span>
-              <span className="dzt-dj-ex-arrow">→</span>
-              <span className="dzt-dj-ex-trans">{ex.darija}</span>
-              <button className="dzt-dj-ex-use" onClick={()=>{setInput(ex.original);setOutput('');setExamples([])}}>جرب</button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Zakat Calculator Tool ────────────────────────────────────────────────────
-type ZakatTab = 'mal' | 'gold' | 'silver' | 'trade' | 'crops'
-const ZAKAT_TABS: {id:ZakatTab;icon:string;label:string}[] = [
-  { id:'mal',    icon:'💵', label:'زكاة المال' },
-  { id:'gold',   icon:'🥇', label:'زكاة الذهب' },
-  { id:'silver', icon:'🥈', label:'زكاة الفضة' },
-  { id:'trade',  icon:'🛒', label:'زكاة التجارة' },
-  { id:'crops',  icon:'🌾', label:'زكاة الزروع' },
-]
-function ZakatTool() {
-  const [tab,        setTab]       = useState<ZakatTab>('mal')
-  const [goldPrice,  setGoldPrice] = useState(9200)   // DZD per gram (18k avg 2025)
-  const [silverPrice,setSilverPrice] = useState(95)   // DZD per gram
-  // Mal
-  const [savings,    setSavings]   = useState('')
-  const [debts,      setDebts]     = useState('')
-  // Gold
-  const [goldGrams,  setGoldGrams] = useState('')
-  const [goldKarat,  setGoldKarat] = useState(21)
-  // Silver
-  const [silverGrams,setSilverGrams]=useState('')
-  // Trade
-  const [inventory,  setInventory] = useState('')
-  const [receivables,setReceivables]=useState('')
-  const [tradeDebts, setTradeDebts]=useState('')
-  // Crops
-  const [cropsKg,    setCropsKg]   = useState('')
-  const [cropsPrice, setCropsPrice]=useState('')
-  const [irrigated,  setIrrigated] = useState(false)
-
-  // Nisab calculations
-  const nisabGold   = 85 * goldPrice                       // 85g gold in DZD
-  const nisabSilver = 595 * silverPrice                    // 595g silver in DZD
-  const nisabCrops  = 653                                  // 653 kg
-
-  // Results
-  const calcMal = () => {
-    const net = (parseFloat(savings)||0) - (parseFloat(debts)||0)
-    if (net < nisabGold) return null
-    return { base: net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
-  }
-  const calcGold = () => {
-    const grams = parseFloat(goldGrams)||0
-    const purity = goldKarat/24
-    const pureGrams = grams * purity
-    const value = pureGrams * goldPrice
-    const nisab85 = 85 * goldPrice
-    if (pureGrams < 85) return { grams, pureGrams, value, nisab: nisab85, eligible: false, zakat: 0 }
-    return { grams, pureGrams, value, nisab: nisab85, eligible: true, zakat: value * 0.025 }
-  }
-  const calcSilver = () => {
-    const grams = parseFloat(silverGrams)||0
-    const value = grams * silverPrice
-    const nisab595 = 595 * silverPrice
-    if (grams < 595) return { grams, value, nisab: nisab595, eligible: false, zakat: 0 }
-    return { grams, value, nisab: nisab595, eligible: true, zakat: value * 0.025 }
-  }
-  const calcTrade = () => {
-    const net = (parseFloat(inventory)||0) + (parseFloat(receivables)||0) - (parseFloat(tradeDebts)||0)
-    if (net < nisabGold) return null
-    return { net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
-  }
-  const calcCrops = () => {
-    const kg = parseFloat(cropsKg)||0
-    const price = parseFloat(cropsPrice)||0
-    const value = kg * price
-    const rate = irrigated ? 0.05 : 0.10
-    if (kg < nisabCrops) return { kg, value, rate, nisab: nisabCrops, eligible: false, zakat: 0 }
-    return { kg, value, rate, nisab: nisabCrops, eligible: true, zakat: value * rate }
+  // ── Browser-side Compress ─────────────────────────────────────────────────
+  const compressImage = () => {
+    if (!inputImage || !inputFile) return
+    const img = new Image()
+    img.onload = () => {
+      const sc = compScale / 100
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width * sc)
+      canvas.height = Math.round(img.height * sc)
+      const ctx = canvas.getContext('2d')!
+      if (compFmt === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height) }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const compressed = canvas.toDataURL(compFmt, compQ / 100)
+      setResult(compressed)
+      const after = Math.round((compressed.length - compressed.indexOf(',') - 1) * 0.75)
+      setCompSize({ before: inputFile.size, after })
+    }
+    img.src = inputImage
   }
 
-  const fmt = (n:number) => n.toLocaleString('fr-DZ',{maximumFractionDigits:0}) + ' دج'
+  // ── Browser-side Edit ─────────────────────────────────────────────────────
+  const applyEdit = () => {
+    if (!inputImage) return
+    const img = new Image()
+    img.onload = () => {
+      const rotated = rotation === 90 || rotation === 270
+      const w = rotated ? img.height : img.width
+      const h = rotated ? img.width  : img.height
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      const ctx = canvas.getContext('2d')!
+      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`
+      ctx.translate(w / 2, h / 2)
+      ctx.rotate((rotation * Math.PI) / 180)
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
+      ctx.drawImage(img, -img.width / 2, -img.height / 2)
+      setResult(canvas.toDataURL('image/png'))
+    }
+    img.src = inputImage
+  }
 
-  const ResultBox = ({eligible,zakat,note}:{eligible:boolean;zakat:number;note?:string}) => (
-    <div className={`dzt-zk-result${eligible?' eligible':' not-eligible'}`}>
-      {eligible ? (
-        <>
-          <div className="dzt-zk-result-label">✅ تجب عليك الزكاة</div>
-          <div className="dzt-zk-result-amount">{fmt(zakat)}</div>
-          <div className="dzt-zk-result-sub">مبلغ الزكاة الواجبة (ربع العشر 2.5%)</div>
-        </>
+  // ── Inpaint mask canvas ───────────────────────────────────────────────────
+  const initMask = useCallback(() => {
+    if (!canvasRef.current || !maskRef.current || !inputImage) return
+    const img = new Image()
+    img.onload = () => {
+      const maxW = 380
+      const sc = Math.min(1, maxW / img.width)
+      const W = Math.round(img.width * sc), H = Math.round(img.height * sc)
+      const cv = canvasRef.current!; const mk = maskRef.current!
+      cv.width = mk.width = W; cv.height = mk.height = H
+      const ctx = cv.getContext('2d')!
+      ctx.drawImage(img, 0, 0, W, H)
+      const mctx = mk.getContext('2d')!
+      mctx.fillStyle = '#000'; mctx.fillRect(0, 0, W, H)
+    }
+    img.src = inputImage
+  }, [inputImage])
+
+  useEffect(() => { if (mode === 'inpaint' && inputImage) initMask() }, [mode, inputImage, initMask])
+
+  const getXY = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top)  * (canvas.height / rect.height),
+    }
+  }
+
+  const paint = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!painting || !canvasRef.current || !maskRef.current) return
+    const { x, y } = getXY(e)
+    const r = brushSize / 2
+    const ctx = canvasRef.current.getContext('2d')!
+    ctx.globalAlpha = 0.55; ctx.fillStyle = '#ff3b3b'
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = 1
+    const mctx = maskRef.current.getContext('2d')!
+    mctx.fillStyle = '#fff'
+    mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill()
+    setMaskDrawn(true)
+  }
+
+  const processInpaint = () => {
+    if (!inputImage || !maskRef.current || !canvasRef.current || !maskDrawn) return
+    setLoading(true); setError(''); setResult('')
+    const img = new Image()
+    img.onload = () => {
+      // Build full-res output canvas
+      const out = document.createElement('canvas')
+      out.width = img.width; out.height = img.height
+      const octx = out.getContext('2d')!
+      octx.drawImage(img, 0, 0)
+      // Scale mask to image dimensions
+      const scaledMask = document.createElement('canvas')
+      scaledMask.width = img.width; scaledMask.height = img.height
+      const smCtx = scaledMask.getContext('2d')!
+      smCtx.drawImage(maskRef.current!, 0, 0, img.width, img.height)
+      const imgData = octx.getImageData(0, 0, img.width, img.height)
+      const maskData = smCtx.getImageData(0, 0, img.width, img.height)
+      const pix = imgData.data
+      const msk = maskData.data
+      const W = img.width, H = img.height
+      const radius = Math.max(12, Math.round(Math.min(W, H) * 0.04))
+      const result = new Uint8ClampedArray(pix)
+      // Weighted average from surrounding non-masked pixels
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4
+          if (msk[i] > 128) {
+            let r = 0, g = 0, b = 0, w = 0
+            for (let dy = -radius; dy <= radius; dy++) {
+              for (let dx = -radius; dx <= radius; dx++) {
+                const nx = x + dx, ny = y + dy
+                if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue
+                const ni = (ny * W + nx) * 4
+                if (msk[ni] <= 128) {
+                  const d = Math.sqrt(dx * dx + dy * dy) + 1
+                  const wt = 1 / (d * d)
+                  r += pix[ni] * wt; g += pix[ni + 1] * wt; b += pix[ni + 2] * wt; w += wt
+                }
+              }
+            }
+            if (w > 0) {
+              result[i] = Math.round(r / w)
+              result[i + 1] = Math.round(g / w)
+              result[i + 2] = Math.round(b / w)
+            }
+          }
+        }
+      }
+      octx.putImageData(new ImageData(result, W, H), 0, 0)
+      setResult(out.toDataURL('image/png'))
+      setLoading(false)
+      setMaskDrawn(false)
+    }
+    img.onerror = () => { setError('فشل تحميل الصورة'); setLoading(false) }
+    img.src = inputImage
+  }
+
+  const download = () => {
+    if (!result) return
+    const ext = result.includes('webp') ? 'webp' : result.includes('jpeg') ? 'jpg' : 'png'
+    const a = document.createElement('a'); a.href = result; a.download = `dz-image.${ext}`; a.click()
+  }
+
+  const UploadZone = ({ forInpaint = false }: { forInpaint?: boolean }) => (
+    <div
+      className="dzt-imgproc-upload"
+      onClick={() => fileRef.current?.click()}
+      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }}
+      onDragOver={e => e.preventDefault()}
+    >
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+      {inputImage && !forInpaint ? (
+        <div className="dzt-imgproc-preview-wrap">
+          <img src={inputImage} alt="input" className="dzt-imgproc-preview-img" />
+          <button className="dzt-imgproc-change-btn" onClick={e => { e.stopPropagation(); fileRef.current?.click() }}>
+            تغيير الصورة
+          </button>
+        </div>
       ) : (
-        <>
-          <div className="dzt-zk-result-label">🔵 لا تجب عليك الزكاة</div>
-          <div className="dzt-zk-result-sub">النصاب لم يكتمل بعد</div>
-        </>
+        <div className="dzt-imgproc-upload-ph">
+          <div className="dzt-imgproc-upload-icon">{forInpaint ? '🚫' : '📤'}</div>
+          <div className="dzt-imgproc-upload-text">
+            {forInpaint ? 'ارفع صورة ثم ارسم فوق العنصر المراد حذفه' : 'اسحب وأفلت الصورة هنا أو انقر للاختيار'}
+          </div>
+          <div className="dzt-imgproc-upload-sub">JPG • PNG • WebP • حتى 10MB</div>
+        </div>
       )}
-      {note && <div className="dzt-zk-result-note">ℹ️ {note}</div>}
     </div>
   )
 
   return (
-    <div className="dzt-zk-wrap">
+    <div>
       <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">☪️</div>
+        <span className="dzt-tool-desc-icon">🎨</span>
         <div>
-          <div className="dzt-tool-desc-title">حاسبة الزكاة الشاملة — 2025</div>
-          <div className="dzt-tool-desc-text">احسب زكاة المال والذهب والفضة والتجارة والزروع بالدينار الجزائري — بناءً على أسعار 2025 والنصاب الشرعي</div>
+          <div className="dzt-tool-desc-title">Image Tools — معالجة الصور بالذكاء الاصطناعي</div>
+          <div className="dzt-tool-desc-text">إزالة الخلفية • تحسين الجودة AI • ضغط فوري • تعديل أساسي • حذف عنصر — بدون توليد صور</div>
         </div>
       </div>
 
-      {/* Gold/Silver prices */}
-      <div className="dzt-zk-prices">
-        <div className="dzt-zk-price-field">
-          <label className="dzt-label">سعر الذهب (دج/غرام 18 قيراط)</label>
-          <input type="number" className="dzt-inv-input" value={goldPrice}
-            onChange={e=>setGoldPrice(+e.target.value)} placeholder="9200" />
-          <div className="dzt-zk-hint">النصاب = 85غ × {goldPrice.toLocaleString()} = <strong>{fmt(nisabGold)}</strong></div>
-        </div>
-        <div className="dzt-zk-price-field">
-          <label className="dzt-label">سعر الفضة (دج/غرام)</label>
-          <input type="number" className="dzt-inv-input" value={silverPrice}
-            onChange={e=>setSilverPrice(+e.target.value)} placeholder="95" />
-          <div className="dzt-zk-hint">النصاب = 595غ × {silverPrice} = <strong>{fmt(nisabSilver)}</strong></div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="dzt-zk-tabs">
-        {ZAKAT_TABS.map(t=>(
-          <button key={t.id} className={`dzt-zk-tab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
-            <span>{t.icon}</span><span>{t.label}</span>
+      {/* Tool selector */}
+      <div className="dzt-imgproc-grid">
+        {IMGPROC_TOOLS.map(t => (
+          <button
+            key={t.id}
+            className={`dzt-imgproc-tool${mode === t.id ? ' active' : ''}`}
+            onClick={() => { setMode(t.id); reset() }}
+          >
+            <span className="dzt-imgproc-tool-icon">{t.icon}</span>
+            <span className="dzt-imgproc-tool-name">{t.name}</span>
+            <span className="dzt-imgproc-tool-desc">{t.desc}</span>
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="dzt-zk-body">
-
-        {tab==='mal' && (() => {
-          const r = calcMal()
-          return (
-            <div className="dzt-zk-form">
-              <div className="dzt-zk-info">💡 زكاة المال تجب إذا بلغ المال النصاب (≈ {fmt(nisabGold)}) وحال عليه الحول (سنة هجرية كاملة)</div>
-              <label className="dzt-label">المدخرات والأموال السائلة (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 500000" value={savings} onChange={e=>setSavings(e.target.value)} />
-              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 50000 أو 0" value={debts} onChange={e=>setDebts(e.target.value)} />
-              {savings && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء الزكوي: ${fmt(r.base)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
-            </div>
-          )
-        })()}
-
-        {tab==='gold' && (() => {
-          const r = calcGold()
-          return (
-            <div className="dzt-zk-form">
-              <div className="dzt-zk-info">💡 نصاب الذهب = 85 غراماً من الذهب الخالص (24 قيراط) — أي ما يعادل ≈ {fmt(85*goldPrice)} بالأسعار الحالية</div>
-              <label className="dzt-label">وزن الذهب (غرام)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 120" value={goldGrams} onChange={e=>setGoldGrams(e.target.value)} />
-              <label className="dzt-label">عيار الذهب</label>
-              <div className="dzt-ht-pills" style={{marginBottom:8}}>
-                {[18,21,22,24].map(k=>(
-                  <button key={k} className={`dzt-ht-pill${goldKarat===k?' active':''}`} onClick={()=>setGoldKarat(k)}>{k} قيراط</button>
-                ))}
-              </div>
-              {goldGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
-                note={`الذهب الخالص: ${r.pureGrams.toFixed(1)}غ — القيمة: ${fmt(r.value)}`} />}
-            </div>
-          )
-        })()}
-
-        {tab==='silver' && (() => {
-          const r = calcSilver()
-          return (
-            <div className="dzt-zk-form">
-              <div className="dzt-zk-info">💡 نصاب الفضة = 595 غراماً — أي ما يعادل ≈ {fmt(nisabSilver)} بالأسعار الحالية (الفضة أقل من الذهب فنصابها يُستخدم لمن فيه رفق بالفقراء)</div>
-              <label className="dzt-label">وزن الفضة (غرام)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 700" value={silverGrams} onChange={e=>setSilverGrams(e.target.value)} />
-              {silverGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
-                note={`القيمة: ${fmt(r.value)} — النصاب: ${fmt(r.nisab)}`} />}
-            </div>
-          )
-        })()}
-
-        {tab==='trade' && (() => {
-          const r = calcTrade()
-          return (
-            <div className="dzt-zk-form">
-              <div className="dzt-zk-info">💡 زكاة عروض التجارة = (البضاعة + الذمم المدينة − الديون) × 2.5% — إذا بلغ المجموع النصاب</div>
-              <label className="dzt-label">قيمة المخزون / البضاعة (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 2000000" value={inventory} onChange={e=>setInventory(e.target.value)} />
-              <label className="dzt-label">الذمم المدينة (ديون الغير لك) (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 300000 أو 0" value={receivables} onChange={e=>setReceivables(e.target.value)} />
-              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 100000 أو 0" value={tradeDebts} onChange={e=>setTradeDebts(e.target.value)} />
-              {inventory && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء: ${fmt(r.net)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
-            </div>
-          )
-        })()}
-
-        {tab==='crops' && (() => {
-          const r = calcCrops()
-          return (
-            <div className="dzt-zk-form">
-              <div className="dzt-zk-info">💡 نصاب الزروع = 653 كغ — المعدل: 10% للأرض المسقية بالمطر · 5% للأرض المروية بالري الاصطناعي</div>
-              <label className="dzt-label">كمية المحصول (كيلوغرام)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 1000" value={cropsKg} onChange={e=>setCropsKg(e.target.value)} />
-              <label className="dzt-label">سعر الكيلو (دج)</label>
-              <input type="number" className="dzt-inv-input" placeholder="مثال: 80" value={cropsPrice} onChange={e=>setCropsPrice(e.target.value)} />
-              <div className="dzt-dj-dirs" style={{marginTop:4}}>
-                <button className={`dzt-dj-dir-btn${!irrigated?' active':''}`} onClick={()=>setIrrigated(false)}>
-                  🌧️ بعلي (مطر) — العشر 10%
-                </button>
-                <button className={`dzt-dj-dir-btn${irrigated?' active':''}`} onClick={()=>setIrrigated(true)}>
-                  🚿 مروي (ري اصطناعي) — نصف العشر 5%
-                </button>
-              </div>
-              {cropsKg && cropsPrice && <ResultBox eligible={r.eligible} zakat={r.zakat}
-                note={`المحصول: ${(parseFloat(cropsKg)||0).toLocaleString()} كغ — القيمة: ${fmt(r.value)} — المعدل: ${r.rate*100}%`} />}
-            </div>
-          )
-        })()}
-
-      </div>
-
-      {/* Summary */}
-      <div className="dzt-zk-summary">
-        <div className="dzt-zk-summary-title">📊 ملخص شرعي مهم</div>
-        <div className="dzt-zk-summary-items">
-          <div className="dzt-zk-summary-item">⏱️ <strong>الحول</strong>: يجب أن يمر على المال سنة هجرية كاملة</div>
-          <div className="dzt-zk-summary-item">🕌 <strong>النية</strong>: تجب النية عند إخراج الزكاة</div>
-          <div className="dzt-zk-summary-item">📅 <strong>التوقيت</strong>: رمضان أفضل وقت لإخراجها ولكن تُخرج حين الوجوب</div>
-          <div className="dzt-zk-summary-item">🤲 <strong>المستحقون</strong>: الفقراء · المساكين · ابن السبيل · في سبيل الله · المؤلفة قلوبهم</div>
-          <div className="dzt-zk-summary-item">⚠️ <strong>تنبيه</strong>: الأسعار تقريبية — راجع عالماً معتمداً للتثبت</div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Hashtag Generator Tool ────────────────────────────────────────────────────
-const HT_PLATFORMS = [
-  { id: 'instagram', label: 'Instagram', icon: '📸' },
-  { id: 'twitter',   label: 'X / Twitter', icon: '✖️' },
-  { id: 'tiktok',    label: 'TikTok',   icon: '🎵' },
-  { id: 'linkedin',  label: 'LinkedIn', icon: '💼' },
-  { id: 'facebook',  label: 'Facebook', icon: '👥' },
-  { id: 'youtube',   label: 'YouTube',  icon: '▶️' },
-]
-const HT_LANGS = [
-  { id: 'ar',    label: 'العربية' },
-  { id: 'fr',    label: 'Français' },
-  { id: 'en',    label: 'English' },
-  { id: 'dz',    label: '🇩🇿 دارجة' },
-  { id: 'mixed', label: 'مختلط' },
-]
-const HT_CATS = [
-  { id: 'general',       label: 'عام' },
-  { id: 'entertainment', label: 'ترفيه' },
-  { id: 'education',     label: 'تعليم' },
-  { id: 'business',      label: 'أعمال' },
-  { id: 'tech',          label: 'تقنية' },
-  { id: 'sport',         label: 'رياضة' },
-  { id: 'religion',      label: 'ديني' },
-  { id: 'travel',        label: 'سفر' },
-  { id: 'food',          label: 'طعام' },
-  { id: 'fashion',       label: 'موضة' },
-]
-
-interface HtResult { popular: string[]; medium: string[]; niche: string[] }
-
-function HashtagTool() {
-  const [topic,    setTopic]    = useState('')
-  const [platform, setPlatform] = useState('instagram')
-  const [lang,     setLang]     = useState('ar')
-  const [count,    setCount]    = useState(20)
-  const [category, setCategory] = useState('general')
-  const [loading,  setLoading]  = useState(false)
-  const [result,   setResult]   = useState<HtResult | null>(null)
-  const [copied,   setCopied]   = useState(false)
-  const [copiedTag, setCopiedTag] = useState<string | null>(null)
-
-  const generate = async () => {
-    if (!topic.trim()) return
-    setLoading(true); setResult(null)
-    const pl = HT_PLATFORMS.find(p => p.id === platform)?.label || platform
-    const la = HT_LANGS.find(l => l.id === lang)?.label || lang
-    const ca = HT_CATS.find(c => c.id === category)?.label || category
-    const popular = Math.round(count * 0.3)
-    const medium  = Math.round(count * 0.4)
-    const niche   = count - popular - medium
-
-    const prompt = `أنت خبير تسويق رقمي وإدارة مواقع التواصل الاجتماعي في الجزائر والعالم العربي.
-
-المهمة: ولّد ${count} هاشتاغ لـ ${pl} حول: "${topic}"
-اللغة: ${la} | الفئة: ${ca}
-
-اتبع هذا التنسيق بدقة تامة — ضع الهاشتاغات مباشرة بعد كل عنوان:
-
-🔥 شائعة (${popular}):
-[${popular} هاشتاغات ذات حجم بحث عالي جداً]
-
-📈 متوسطة (${medium}):
-[${medium} هاشتاغات حجم بحث متوسط، استهداف أدق]
-
-🎯 نيش (${niche}):
-[${niche} هاشتاغات متخصصة، منافسة أقل، جمهور مستهدف]
-
-قواعد: كل هاشتاغ يبدأ بـ # بدون مسافة داخلية — لا تكرار — أضف هاشتاغات جزائرية/مغاربية عند الاقتضاء`
-
-    try {
-      const res  = await fetch('/api/dz-agent-chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
-      })
-      const data = await res.json()
-      const text = data.content || ''
-      const parseGroup = (start: string, stop: string): string[] => {
-        const s = text.indexOf(start)
-        const e = stop ? text.indexOf(stop, s + 1) : text.length
-        if (s === -1) return []
-        const section = text.slice(s, e === -1 ? undefined : e)
-        return section.match(/#[\w\u0600-\u06FF\u0750-\u077F\u200C_]+/g) || []
-      }
-      setResult({
-        popular: parseGroup('🔥', '📈'),
-        medium:  parseGroup('📈', '🎯'),
-        niche:   parseGroup('🎯', '\n\n\n'),
-      })
-    } catch { setResult({ popular: [], medium: [], niche: [] }) }
-    setLoading(false)
-  }
-
-  const copyTag = (tag: string) => {
-    navigator.clipboard.writeText(tag)
-    setCopiedTag(tag); setTimeout(() => setCopiedTag(null), 1400)
-  }
-  const copyGroup = (tags: string[]) => navigator.clipboard.writeText(tags.join(' '))
-  const allTags   = result ? [...result.popular, ...result.medium, ...result.niche] : []
-  const copyAll   = () => {
-    navigator.clipboard.writeText(allTags.join(' '))
-    setCopied(true); setTimeout(() => setCopied(false), 2000)
-  }
-
-  const PLATFORM_TIPS: Record<string, string> = {
-    instagram: '📸 Instagram: استخدم 20–30 هاشتاغ — ضعها في التعليق الأول لمظهر أنظف في الكابشن',
-    twitter:   '✖️ X / Twitter: 2–3 هاشتاغات فقط تحقق أفضل engagement — اختر الأكثر صلة',
-    tiktok:    '🎵 TikTok: 5–10 هاشتاغات — أضف #fyp و#viral دائماً لزيادة الانتشار',
-    linkedin:  '💼 LinkedIn: 3–5 هاشتاغات مهنية — اختر الأدق تخصصاً لجمهورك',
-    facebook:  '👥 Facebook: 3–5 هاشتاغات — تأثيرها في البحث محدود لكن مفيد للتصنيف',
-    youtube:   '▶️ YouTube: 3–5 في العنوان + 5–10 في الوصف — تجنب Keyword Stuffing',
-  }
-
-  return (
-    <div className="dzt-ht-wrap">
-      <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">#️⃣</div>
+      {/* ── Remove Background ── */}
+      {mode === 'remove-bg' && (
         <div>
-          <div className="dzt-tool-desc-title">مولّد الهاشتاغات بالذكاء الاصطناعي</div>
-          <div className="dzt-tool-desc-text">اكتب موضوع مختصر ← AI يحلل ويولد أفضل الهاشتاغات مصنّفة حسب الشعبية — جاهزة للنسخ والاستخدام الفوري</div>
+          <UploadZone />
+          {inputImage && (
+            <div className="dzt-imgproc-controls">
+              <div className="dzt-imgproc-hint">🧽 يستخدم نموذج <strong>BiRefNet</strong> لإزالة الخلفية محلياً — بدون سيرفر، يعمل مباشرةً في المتصفح</div>
+              <button className="dzt-btn" onClick={processRemoveBg} disabled={loading}>
+                {loading ? <><span className="dzt-spinner" /> جاري إزالة الخلفية...</> : '🧽 إزالة الخلفية'}
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Platform selector */}
-      <div className="dzt-ht-block">
-        <label className="dzt-label">المنصة</label>
-        <div className="dzt-ht-platforms">
-          {HT_PLATFORMS.map(p => (
-            <button key={p.id}
-              className={`dzt-ht-platform${platform === p.id ? ' active' : ''}`}
-              onClick={() => setPlatform(p.id)}>
-              <span className="dzt-ht-platform-icon">{p.icon}</span>
-              <span>{p.label}</span>
-            </button>
-          ))}
+      {/* ── Enhance Image ── */}
+      {mode === 'enhance' && (
+        <div>
+          <UploadZone />
+          {inputImage && (
+            <div className="dzt-imgproc-controls">
+              <div className="dzt-imgproc-hint">✨ يُضاعف أبعاد الصورة 2× مع تطبيق خوارزمية Bicubic + Unsharp Mask لتحسين الحواف — فوري ومحلي</div>
+              <button className="dzt-btn" onClick={enhanceImage} disabled={loading}>
+                {loading ? <><span className="dzt-spinner" /> جاري التحسين...</> : '✨ تحسين الجودة 2×'}
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Topic */}
-      <div className="dzt-ht-block">
-        <label className="dzt-label">الموضوع *</label>
-        <textarea
-          className="dzt-ht-textarea"
-          placeholder="مثال: وصفة الكسكسي الجزائري الأصيل... أو: الذكاء الاصطناعي في التعليم... أو: السياحة في الجنوب الجزائري..."
-          value={topic}
-          onChange={e => setTopic(e.target.value)}
-          rows={3}
-          onKeyDown={e => e.key === 'Enter' && e.ctrlKey && generate()}
-        />
-        <div style={{fontSize:11,color:'#444',textAlign:'right',marginTop:4}}>Ctrl+Enter للتوليد السريع</div>
-      </div>
+      {/* ── Compress Image ── */}
+      {mode === 'compress' && (
+        <div>
+          <UploadZone />
+          {inputImage && (
+            <div className="dzt-imgproc-controls">
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">الصيغة:</label>
+                <div className="dzt-imgproc-btn-group">
+                  {(['image/webp', 'image/jpeg'] as const).map(f => (
+                    <button key={f} className={`dzt-imgproc-opt${compFmt === f ? ' active' : ''}`}
+                      onClick={() => setCompFmt(f)}>
+                      {f === 'image/webp' ? 'WebP (أفضل)' : 'JPEG'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">الجودة: <strong>{compQ}%</strong></label>
+                <input type="range" min={10} max={100} value={compQ}
+                  onChange={e => setCompQ(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">الحجم: <strong>{compScale}%</strong></label>
+                <input type="range" min={10} max={100} value={compScale}
+                  onChange={e => setCompScale(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <button className="dzt-btn" onClick={compressImage}>⚡ ضغط فوري (بدون سيرفر)</button>
+              {compSize.before > 0 && result && (
+                <div className="dzt-imgproc-compress-stats">
+                  <span>قبل: <strong>{(compSize.before / 1024).toFixed(0)} KB</strong></span>
+                  <span className="dzt-imgproc-arrow-sep">→</span>
+                  <span>بعد: <strong>{(compSize.after / 1024).toFixed(0)} KB</strong></span>
+                  <span className="dzt-imgproc-savings">
+                    ✅ وفّرت {Math.round((1 - compSize.after / compSize.before) * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Controls row */}
-      <div className="dzt-ht-controls">
-        <div className="dzt-ht-ctrl">
-          <label className="dzt-label">اللغة</label>
-          <div className="dzt-ht-pills">
-            {HT_LANGS.map(l => (
-              <button key={l.id} className={`dzt-ht-pill${lang === l.id ? ' active' : ''}`} onClick={() => setLang(l.id)}>{l.label}</button>
-            ))}
-          </div>
+      {/* ── Basic Edit ── */}
+      {mode === 'edit' && (
+        <div>
+          <UploadZone />
+          {inputImage && (
+            <div className="dzt-imgproc-controls">
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">تدوير:</label>
+                <div className="dzt-imgproc-btn-group">
+                  {[0, 90, 180, 270].map(r => (
+                    <button key={r} className={`dzt-imgproc-opt${rotation === r ? ' active' : ''}`}
+                      onClick={() => setRotation(r)}>{r}°</button>
+                  ))}
+                </div>
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">قلب:</label>
+                <div className="dzt-imgproc-btn-group">
+                  <button className={`dzt-imgproc-opt${flipH ? ' active' : ''}`} onClick={() => setFlipH(v => !v)}>أفقي ↔</button>
+                  <button className={`dzt-imgproc-opt${flipV ? ' active' : ''}`} onClick={() => setFlipV(v => !v)}>عمودي ↕</button>
+                </div>
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">السطوع: <strong>{brightness}%</strong></label>
+                <input type="range" min={0} max={200} value={brightness}
+                  onChange={e => setBrightness(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">التباين: <strong>{contrast}%</strong></label>
+                <input type="range" min={0} max={200} value={contrast}
+                  onChange={e => setContrast(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">الإشباع: <strong>{saturation}%</strong></label>
+                <input type="range" min={0} max={200} value={saturation}
+                  onChange={e => setSaturation(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <button className="dzt-btn" onClick={applyEdit}>🔄 تطبيق التعديلات</button>
+            </div>
+          )}
         </div>
-        <div className="dzt-ht-ctrl">
-          <label className="dzt-label">الفئة</label>
-          <div className="dzt-ht-pills">
-            {HT_CATS.map(c => (
-              <button key={c.id} className={`dzt-ht-pill${category === c.id ? ' active' : ''}`} onClick={() => setCategory(c.id)}>{c.label}</button>
-            ))}
-          </div>
-        </div>
-        <div className="dzt-ht-ctrl">
-          <label className="dzt-label">العدد</label>
-          <div className="dzt-ht-pills">
-            {[10, 20, 30].map(n => (
-              <button key={n} className={`dzt-ht-pill${count === n ? ' active' : ''}`} onClick={() => setCount(n)}>{n} هاشتاغ</button>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
 
-      <button className="dzt-btn" onClick={generate} disabled={loading || !topic.trim()}
-        style={{fontSize:15,padding:'14px 28px',borderRadius:12}}>
-        {loading ? '⏳ AI يحلل الموضوع...' : `✨ ولّد ${count} هاشتاغ لـ ${HT_PLATFORMS.find(p=>p.id===platform)?.label}`}
-      </button>
+      {/* ── Object Removal (Inpaint) ── */}
+      {mode === 'inpaint' && (
+        <div>
+          {!inputImage ? (
+            <UploadZone forInpaint />
+          ) : (
+            <div className="dzt-imgproc-controls">
+              <div className="dzt-imgproc-hint">🖌️ ارسم باللون الأحمر فوق العنصر المراد حذفه، ثم اضغط <strong>حذف العنصر</strong> — يملأ المنطقة بألوان محيطة تلقائياً</div>
+              <div className="dzt-imgproc-row">
+                <label className="dzt-imgproc-label">الفرشاة: <strong>{brushSize}px</strong></label>
+                <input type="range" min={5} max={80} value={brushSize}
+                  onChange={e => setBrushSize(+e.target.value)} className="dzt-imgproc-slider" />
+              </div>
+              <div className="dzt-imgproc-canvas-wrap">
+                <canvas
+                  ref={canvasRef}
+                  className="dzt-imgproc-canvas"
+                  onMouseDown={() => setPainting(true)}
+                  onMouseUp={() => setPainting(false)}
+                  onMouseLeave={() => setPainting(false)}
+                  onMouseMove={paint}
+                  onTouchStart={e => { e.preventDefault(); setPainting(true) }}
+                  onTouchEnd={() => setPainting(false)}
+                  onTouchMove={e => { e.preventDefault(); paint(e) }}
+                />
+                <canvas ref={maskRef} style={{ display: 'none' }} />
+              </div>
+              <div className="dzt-imgproc-inpaint-actions">
+                <button className="dzt-btn" onClick={processInpaint} disabled={loading || !maskDrawn}>
+                  {loading ? <><span className="dzt-spinner" /> جاري الحذف...</> : '🚫 حذف العنصر'}
+                </button>
+                <button className="dzt-result-btn" onClick={() => { initMask(); setMaskDrawn(false); setResult('') }}>
+                  ↺ إعادة الرسم
+                </button>
+                <button className="dzt-result-btn" onClick={() => { setInputImage(''); reset() }}>
+                  ✕ تغيير الصورة
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
-        <div className="dzt-ht-loading">
-          <div className="dzt-ht-spinner"/>
-          <span>AI يختار أفضل الهاشتاغات الشائعة والمتخصصة...</span>
+        <div className="dzt-loading">
+          <div className="dzt-spinner" />
+          يُعالَج الآن بالذكاء الاصطناعي — قد يستغرق لحظات...
         </div>
       )}
 
-      {/* Results */}
-      {result && allTags.length > 0 && (
-        <div className="dzt-ht-results">
-          <div className="dzt-ht-results-bar">
-            <span className="dzt-ht-count-badge">{allTags.length} هاشتاغ جاهز</span>
-            <button className={`dzt-ht-copy-all${copied ? ' done' : ''}`} onClick={copyAll}>
-              {copied ? '✅ تم النسخ!' : '📋 نسخ الكل'}
+      {/* Error */}
+      {error && <div className="dzt-imgproc-error">⚠️ {error}</div>}
+
+      {/* Result */}
+      {result && !loading && (
+        <div className="dzt-imgproc-result">
+          <div className="dzt-imgproc-result-header">
+            <span className="dzt-imgproc-result-label">
+              ✅ النتيجة جاهزة
+              {modelUsed && (
+                <span className="dzt-imgproc-model-tag">{modelUsed.split('/').pop()}</span>
+              )}
+            </span>
+            <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>
+              ⬇️ تحميل
             </button>
           </div>
-
-          {[
-            { key: 'popular', emoji: '🔥', label: 'شائعة',  desc: 'بحث عالي جداً',  color: '#ff6b35', tags: result.popular },
-            { key: 'medium',  emoji: '📈', label: 'متوسطة', desc: 'استهداف جيد',     color: '#60a5fa', tags: result.medium },
-            { key: 'niche',   emoji: '🎯', label: 'نيش',    desc: 'منافسة أقل — أفضل وصول', color: '#c8ff00', tags: result.niche },
-          ].map(g => g.tags.length > 0 && (
-            <div key={g.key} className="dzt-ht-group">
-              <div className="dzt-ht-group-head">
-                <span className="dzt-ht-group-title" style={{color: g.color}}>{g.emoji} {g.label}</span>
-                <span className="dzt-ht-group-desc">{g.desc} · {g.tags.length} هاشتاغ</span>
-                <button className="dzt-ht-copy-grp" onClick={() => copyGroup(g.tags)}>نسخ المجموعة</button>
-              </div>
-              <div className="dzt-ht-chips">
-                {g.tags.map((tag, i) => (
-                  <button key={i} className={`dzt-ht-chip${copiedTag === tag ? ' copied' : ''}`}
-                    style={{'--chip-color': g.color} as React.CSSProperties}
-                    onClick={() => copyTag(tag)} title="انقر للنسخ">
-                    {copiedTag === tag ? '✅' : tag}
-                  </button>
-                ))}
-              </div>
+          <div className="dzt-imgproc-compare">
+            <div className="dzt-imgproc-compare-col">
+              <div className="dzt-imgproc-compare-label">الأصلية</div>
+              <img src={inputImage} alt="before" className="dzt-imgproc-compare-img" />
             </div>
-          ))}
-
-          {/* Platform tip */}
-          <div className="dzt-ht-tip">
-            💡 {PLATFORM_TIPS[platform]}
-          </div>
-
-          {/* Ready-to-paste */}
-          <div className="dzt-ht-paste">
-            <div className="dzt-ht-paste-head">
-              <span>📋 جاهز للصق المباشر</span>
-              <button className={`dzt-ht-copy-all${copied?' done':''}`} onClick={copyAll}>
-                {copied ? '✅ تم!' : 'نسخ'}
-              </button>
+            <div className="dzt-imgproc-compare-arrow">→</div>
+            <div className="dzt-imgproc-compare-col">
+              <div className="dzt-imgproc-compare-label">النتيجة</div>
+              <img src={result} alt="after" className="dzt-imgproc-compare-img dzt-imgproc-checkerboard" />
             </div>
-            <div className="dzt-ht-paste-body" dir="ltr">{allTags.join(' ')}</div>
           </div>
         </div>
       )}
@@ -3294,214 +2508,197 @@ function HashtagTool() {
   )
 }
 
-// ─── Data Analysis Tool (CSV / Excel) ─────────────────────────────────────────
-interface DataRow { [key: string]: string | number }
+// ─── Hashtag Tool ─────────────────────────────────────────────────────────────
+const HASHTAG_PLATFORMS = [
+  { id: 'instagram', label: 'إنستغرام', icon: '📸', max: 30 },
+  { id: 'tiktok',    label: 'تيك توك',  icon: '🎵', max: 20 },
+  { id: 'twitter',   label: 'X / تويتر', icon: '✖️', max: 10 },
+  { id: 'linkedin',  label: 'لينكدإن',  icon: '💼', max: 15 },
+  { id: 'facebook',  label: 'فيسبوك',   icon: '👥', max: 20 },
+]
 
-function DataAnalysisTool() {
-  const [rows, setRows]       = useState<DataRow[]>([])
-  const [cols, setCols]       = useState<string[]>([])
-  const [filename, setFilename] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [summary, setSummary] = useState('')
-  const [chartCol, setChartCol] = useState('')
-  const [error, setError]     = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
+const HASHTAG_CATS = [
+  'عام', 'طعام ومطاعم', 'موضة وأزياء', 'تقنية', 'رياضة', 'سفر وسياحة',
+  'تعليم', 'أعمال وريادة', 'صحة وجمال', 'ترفيه وفن', 'دين وقيم',
+]
 
-  const numCols = cols.filter(c => rows.some(r => !isNaN(parseFloat(String(r[c])))))
+// Fallback client-side pool (used when no AI key)
+const HT_POOL: Record<string, string[]> = {
+  'عام':            ['#الجزائر','#Algeria','#DZ','#Algérie','#الجزائر_العاصمة','#جزائري','#dzair','#AlgeriaDZ','#Algerian','#algeria2025','#algerie','#جزائر','#جزائريون','#شباب_الجزائر','#DZArt','#بنات_الجزائر'],
+  'طعام ومطاعم':   ['#طعام_جزائري','#cuisine_algérienne','#مطبخ_جزائري','#algerian_food','#طاجين','#كسكسي','#شرشم','#تمبالة','#مطاعم_الجزائر','#طبخ','#food','#foodie','#foodphotography','#الطبخ_الجزائري','#CuisineDZ','#homemade'],
+  'موضة وأزياء':   ['#موضة_جزائرية','#fashion_dz','#قنادر','#خياطة_جزائرية','#أزياء','#style','#fashion','#ootd','#تقليدي','#حايك','#قفطان','#كراكو','#تراث_جزائري','#FashionDZ','#AlgerianFashion','#mode_algérienne'],
+  'تقنية':          ['#تقنية','#tech_dz','#برمجة','#ذكاء_اصطناعي','#Algeria_Tech','#coding','#developer','#AI','#startup_dz','#التكنولوجيا','#مطور','#تطوير_تطبيقات','#webdev','#programming','#innovation','#DZtech'],
+  'رياضة':          ['#رياضة_الجزائر','#sport_dz','#الخضر','#MCA','#CRB','#USMA','#JSK','#كرة_القدم_الجزائرية','#العنابي','#football_algérien','#handball_dz','#athletisme_dz','#SportDZ','#منتخب_الجزائر','#الدوري_الجزائري','#مباراة'],
+  'سفر وسياحة':    ['#سياحة_جزائرية','#tourisme_algérie','#الصحراء_الجزائرية','#تيميمون','#جانت','#قسنطينة','#وهران','#تلمسان','#الجزائر_العاصمة','#القصبة','#travel','#algeria_travel','#الاهقار','#Sahara','#TourismeDZ','#AlgeriaTourism'],
+  'تعليم':          ['#تعليم_جزائر','#éducation_dz','#باك_جزائر','#جامعة_الجزائر','#bac2025','#دروس_مجانية','#تعلم','#formation_dz','#étudiant_algérien','#USTHB','#طالب_جزائري','#education','#learn','#مذاكرة','#baccalauréat','#تطوير_الذات'],
+  'أعمال وريادة':   ['#ريادة_أعمال_الجزائر','#startup_algérie','#entrepreneuriat_dz','#مقاول_جزائري','#ANSEJ','#CNAC','#investissement_dz','#أعمال','#entrepreneur','#business_dz','#PME_algérie','#freelance_dz','#مستقل','#تجارة_إلكترونية','#DZBusiness','#investir_algérie'],
+  'صحة وجمال':     ['#صحة','#beauté_dz','#جمال_جزائري','#طب_طبيعي','#عشبة','#سنة_نبوية','#skincare','#حجامة','#عسل_جزائري','#صحة_وعافية','#beauty','#wellness','#soins_naturels','#حمية','#لياقة','#fitness_dz'],
+  'ترفيه وفن':      ['#فن_جزائري','#موسيقى_جزائرية','#شعبي','#راي','#مالوف','#chaabi_algérien','#rai_music','#cinema_algérien','#فيلم_جزائري','#photography_dz','#art_dz','#dessin','#calligraphie','#humour_dz','#AlgerianArt','#creative_dz'],
+  'دين وقيم':       ['#إسلام','#الجزائر_المسلمة','#قرآن_كريم','#حديث_شريف','#رمضان_الجزائر','#صلاة','#أخلاق','#دعاء','#تذكير','#إيمان','#quran','#islam_dz','#تفسير','#ذكر_الله','#مسجد','#هداية'],
+}
 
-  const parseFile = useCallback(async (file: File) => {
-    setLoading(true); setError(''); setRows([]); setCols([]); setSummary(''); setChartCol('')
-    setFilename(file.name)
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase()
-      let parsed: DataRow[] = []
-      let headers: string[] = []
+function HashtagTool() {
+  const [topic, setTopic]       = useState('')
+  const [platform, setPlatform] = useState('instagram')
+  const [category, setCategory] = useState('عام')
+  const [lang, setLang]         = useState('ar')
+  const [hashtags, setHashtags] = useState<string[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [copied, setCopied]     = useState(false)
+  const [copiedOne, setCopiedOne] = useState<string | null>(null)
 
-      if (ext === 'csv') {
-        const text = await file.text()
-        const Papa = (await import('papaparse')).default
-        const result = Papa.parse<DataRow>(text, { header: true, skipEmptyLines: true, dynamicTyping: true })
-        parsed  = result.data
-        headers = result.meta.fields || []
-      } else {
-        const buffer = await file.arrayBuffer()
-        const XLSX   = await import('xlsx')
-        const wb     = XLSX.read(buffer, { type: 'array' })
-        const ws     = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][]
-        if (data.length < 2) throw new Error('الملف فارغ')
-        headers = (data[0] as string[]).map(String)
-        parsed  = data.slice(1).map(row => {
-          const r = row as (string | number)[]
-          const obj: DataRow = {}
-          headers.forEach((h, i) => { obj[h] = r[i] ?? '' })
-          return obj
-        })
-      }
-      setCols(headers)
-      setRows(parsed.slice(0, 500))
-      const firstNum = headers.find(c => parsed.some(r => !isNaN(parseFloat(String(r[c])))))
-      if (firstNum) setChartCol(firstNum)
-    } catch (e) {
-      setError('تعذّر قراءة الملف. تأكد أنه CSV أو Excel صحيح.')
-    }
-    setLoading(false)
-  }, [])
+  const plat = HASHTAG_PLATFORMS.find(p => p.id === platform)!
 
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) parseFile(file)
+  const copyAll = () => {
+    navigator.clipboard.writeText(hashtags.join(' '))
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
-  const getStats = (col: string) => {
-    const vals = rows.map(r => parseFloat(String(r[col]))).filter(v => !isNaN(v))
-    if (!vals.length) return null
-    const sum = vals.reduce((a,b)=>a+b,0)
-    const min = Math.min(...vals), max = Math.max(...vals)
-    const avg = sum / vals.length
-    const sorted = [...vals].sort((a,b)=>a-b)
-    const median = sorted[Math.floor(sorted.length/2)]
-    return { sum, min, max, avg, median, count: vals.length }
+  const copyOne = (tag: string) => {
+    navigator.clipboard.writeText(tag)
+    setCopiedOne(tag); setTimeout(() => setCopiedOne(null), 1500)
   }
 
-  const aiSummary = async () => {
-    if (!rows.length) return
-    setLoading(true)
-    try {
-      const sample = rows.slice(0,20)
-      const statsStr = numCols.map(c => {
-        const s = getStats(c); if (!s) return ''
-        return `${c}: المجموع=${s.sum.toFixed(0)}, المتوسط=${s.avg.toFixed(2)}, الأدنى=${s.min}, الأعلى=${s.max}`
-      }).filter(Boolean).join('\n')
-      const prompt = `أنت محلل بيانات. لديك ملف "${filename}" يحتوي على ${rows.length} صف و ${cols.length} عمود.
-الأعمدة: ${cols.join('، ')}
-إحصائيات الأعمدة العددية:
-${statsStr}
-عينة من البيانات (أول 5 صفوف):
-${JSON.stringify(sample.slice(0,5), null, 2)}
+  const generate = async () => {
+    setLoading(true); setError(''); setHashtags([])
+    const langInstr = lang === 'ar' ? 'بالعربية والإنجليزية' : lang === 'fr' ? 'بالفرنسية والإنجليزية' : 'بالعربية والفرنسية والإنجليزية'
+    const prompt = `[TOOL:HASHTAG_GENERATOR — أخرج الهاشتاغات فقط بدون أي تعليق أو مقدمة]
 
-اكتب ملخصاً تحليلياً باللغة العربية في 5-8 جمل: ماذا تخبرنا هذه البيانات؟ أبرز الأنماط، القيم المثيرة للاهتمام، وأي ملاحظات مهمة.`
-      const res  = await fetch('/api/dz-agent-chat', { method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages:[{role:'user',content:prompt}], tool:'data-analysis' }) })
+أنت خبير تسويق رقمي متخصص في المحتوى الجزائري على منصة ${plat.label}.
+الموضوع: "${topic || category}"
+الفئة: ${category}
+المنصة: ${plat.label} (الحد الأقصى ${plat.max} هاشتاغ)
+اللغة: ${langInstr}
+
+اكتب قائمة من ${plat.max} هاشتاغ مناسبة للجمهور الجزائري — تبدأ كل واحدة بـ #.
+اجعل الهاشتاغات متنوعة: عامة + خاصة بالموضوع + جزائرية محلية.
+أخرج فقط الهاشتاغات في سطور منفصلة أو مفصولة بمسافات، بدون أي نص آخر.`
+
+    try {
+      const res = await fetch('/api/dz-agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], tool: 'hashtag' }),
+      })
       const data = await res.json()
-      setSummary(data.content || '')
-    } catch { setSummary('⚠️ تعذّر توليد الملخص. حاول مرة أخرى.') }
-    setLoading(false)
+      if (data.status === 'no_api_key' || !data.content) {
+        // Fallback: client-side generation from pool
+        clientGenerate(); return
+      }
+      // Parse hashtags from AI response
+      const raw = data.content as string
+      const parsed = raw.match(/#[\p{L}\p{N}_]+/gu) || []
+      if (parsed.length < 3) { clientGenerate(); return }
+      setHashtags(parsed.slice(0, plat.max))
+    } catch {
+      clientGenerate()
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const chartData = chartCol
-    ? rows.slice(0,20).map((r,i)=>({ name: String(r[cols[0]]||i+1).slice(0,15), value: parseFloat(String(r[chartCol]))||0 }))
-    : []
+  const clientGenerate = () => {
+    const pool = [...(HT_POOL[category] || HT_POOL['عام'])]
+    // Add topic-based tags if topic given
+    if (topic.trim()) {
+      const slug = topic.trim().replace(/\s+/g, '_')
+      pool.unshift(`#${slug}`, `#${slug}_الجزائر`, `#${slug}_DZ`)
+    }
+    // Shuffle and slice
+    const shuffled = pool.sort(() => Math.random() - 0.5)
+    setHashtags(shuffled.slice(0, plat.max))
+    setLoading(false)
+  }
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+    <div>
       <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">📈</div>
+        <span className="dzt-tool-desc-icon">#️⃣</span>
         <div>
-          <div className="dzt-tool-desc-title">محلل البيانات — Excel / CSV</div>
-          <div className="dzt-tool-desc-text">ارفع ملف Excel أو CSV واحصل على جدول، إحصائيات تلقائية، رسوم بيانية وملخص AI فوري</div>
+          <div className="dzt-tool-desc-title">مولّد الهاشتاغ الذكي</div>
+          <div className="dzt-tool-desc-text">أنشئ هاشتاغات مخصصة للجمهور الجزائري على كل المنصات — انقر على أي هاشتاغ لنسخه فوراً.</div>
         </div>
       </div>
 
-      <div
-        className="dzt-data-dropzone"
-        onDrop={onDrop}
-        onDragOver={e=>e.preventDefault()}
-        onClick={()=>fileRef.current?.click()}
-      >
-        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:'none'}} onChange={e=>{ if(e.target.files?.[0]) parseFile(e.target.files[0]) }} />
-        <Upload size={32} style={{color:'#c8ff00',marginBottom:8}} />
-        <div style={{fontWeight:700,color:'#fff'}}>اسحب الملف هنا أو انقر للاختيار</div>
-        <div style={{fontSize:12,color:'#666',marginTop:4}}>CSV · Excel (.xlsx / .xls) — حتى 500 صف</div>
+      <div className="dzt-form">
+        {/* Platform selector */}
+        <div className="dzt-field">
+          <label className="dzt-label">المنصة</label>
+          <div className="dzt-ht-platforms">
+            {HASHTAG_PLATFORMS.map(p => (
+              <button key={p.id}
+                className={`dzt-ht-plat${platform === p.id ? ' active' : ''}`}
+                onClick={() => setPlatform(p.id)}>
+                <span>{p.icon}</span> {p.label}
+                <span className="dzt-ht-plat-max">max {p.max}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="dzt-row">
+          {/* Category */}
+          <div className="dzt-field">
+            <label className="dzt-label">الفئة</label>
+            <select className="dzt-select" value={category} onChange={e => setCategory(e.target.value)}>
+              {HASHTAG_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {/* Language */}
+          <div className="dzt-field">
+            <label className="dzt-label">اللغة</label>
+            <select className="dzt-select" value={lang} onChange={e => setLang(e.target.value)}>
+              <option value="ar">🇩🇿 عربية</option>
+              <option value="fr">🇫🇷 فرنسية</option>
+              <option value="mix">🌐 متعدد</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Topic input */}
+        <div className="dzt-field">
+          <label className="dzt-label">الموضوع / الكلمة المفتاحية <span style={{color:'#555',fontWeight:400}}>(اختياري)</span></label>
+          <input
+            className="dzt-input"
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && generate()}
+            placeholder="مثال: مطعم وهران، فستان قنادر، سيارة كيا..."
+          />
+        </div>
+
+        <button className="dzt-btn" onClick={generate} disabled={loading}>
+          {loading
+            ? <><span className="dzt-spinner" /> جاري التوليد...</>
+            : <>#️⃣ توليد الهاشتاغات</>}
+        </button>
       </div>
 
-      {loading && <div className="dzt-spinner" style={{margin:'12px auto'}} />}
-      {error   && <div style={{color:'#f87171',background:'rgba(239,68,68,.08)',borderRadius:10,padding:'12px 16px',fontSize:14}}>{error}</div>}
+      {error && <div className="dzt-error">{error}</div>}
 
-      {rows.length > 0 && (
-        <>
-          <div className="dzt-data-meta">
-            <span>📁 {filename}</span>
-            <span>🗂️ {rows.length} صف</span>
-            <span>📊 {cols.length} عمود</span>
-            <span>🔢 {numCols.length} عمود رقمي</span>
-          </div>
-
-          {/* Stats Cards */}
-          {numCols.length > 0 && (
-            <div className="dzt-data-stats-grid">
-              {numCols.slice(0,4).map(c => {
-                const s = getStats(c); if (!s) return null
-                return (
-                  <div key={c} className="dzt-data-stat-card">
-                    <div className="dzt-data-stat-col">{c}</div>
-                    <div className="dzt-data-stat-row"><span>المجموع</span><strong>{s.sum.toLocaleString('fr-DZ')}</strong></div>
-                    <div className="dzt-data-stat-row"><span>المتوسط</span><strong>{s.avg.toFixed(2)}</strong></div>
-                    <div className="dzt-data-stat-row"><span>الأدنى</span><strong style={{color:'#f87171'}}>{s.min}</strong></div>
-                    <div className="dzt-data-stat-row"><span>الأعلى</span><strong style={{color:'#4ade80'}}>{s.max}</strong></div>
-                    <div className="dzt-data-stat-row"><span>الوسيط</span><strong>{s.median}</strong></div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Chart */}
-          {numCols.length > 0 && (
-            <div className="dzt-data-chart-section">
-              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,flexWrap:'wrap'}}>
-                <div style={{fontWeight:700,color:'#ccc',fontSize:14}}>📊 رسم بياني للعمود:</div>
-                <select className="dzt-select" style={{flex:1,maxWidth:260}} value={chartCol} onChange={e=>setChartCol(e.target.value)}>
-                  {numCols.map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} margin={{top:4,right:4,left:4,bottom:24}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="name" tick={{fill:'#888',fontSize:11}} angle={-30} textAnchor="end" />
-                  <YAxis tick={{fill:'#888',fontSize:11}} />
-                  <Tooltip contentStyle={{background:'#111',border:'1px solid #222',borderRadius:8,color:'#fff'}} />
-                  <Bar dataKey="value" fill="#c8ff00" radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* AI Summary */}
-          <div className="dzt-result-actions" style={{marginTop:4}}>
-            <button className="dzt-btn" onClick={aiSummary} disabled={loading}>
-              <BarChart2 size={15}/> ملخص AI للبيانات
+      {hashtags.length > 0 && (
+        <div className="dzt-ht-result">
+          <div className="dzt-ht-result-header">
+            <span className="dzt-ht-result-count">{hashtags.length} هاشتاغ · {plat.icon} {plat.label}</span>
+            <button className="dzt-result-btn" onClick={copyAll}>
+              {copied ? <><Check size={12} /> تم النسخ</> : <><Copy size={12} /> نسخ الكل</>}
             </button>
           </div>
-          {summary && (
-            <div className="dzt-result">
-              <div className="dzt-result-header">
-                <span>🤖 ملخص AI</span>
-              </div>
-              <div className="dzt-result-body" style={{padding:'16px 20px'}}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
-              </div>
-            </div>
-          )}
-
-          {/* Table preview */}
-          <div className="dzt-data-table-wrap">
-            <div className="dzt-data-table-label">جدول البيانات (أول 50 صف)</div>
-            <div style={{overflowX:'auto'}}>
-              <table className="dzt-data-table">
-                <thead>
-                  <tr>{cols.map(c=><th key={c}>{c}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0,50).map((r,i)=>(
-                    <tr key={i}>{cols.map(c=><td key={c}>{String(r[c]??'')}</td>)}</tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="dzt-ht-chips">
+            {hashtags.map((tag, i) => (
+              <button key={i} className={`dzt-ht-chip${copiedOne === tag ? ' copied' : ''}`}
+                onClick={() => copyOne(tag)}
+                title="انقر للنسخ">
+                {copiedOne === tag ? <><Check size={11} /> تم</> : tag}
+              </button>
+            ))}
           </div>
-        </>
+          <div className="dzt-ht-rawbox">
+            <div className="dzt-ht-rawbox-label">نص جاهز للنشر</div>
+            <div className="dzt-ht-rawtext" dir="ltr">{hashtags.join(' ')}</div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -3548,23 +2745,16 @@ export default function DZTools() {
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
-        {active === 'darija'       && <DarijaTool />}
-        {active === 'zakat'        && <ZakatTool />}
-        {active === 'hashtag'      && <HashtagTool />}
-        {active === 'excel'        && <SpreadsheetTool />}
-        {active === 'cv'           && <CVTool />}
-        {active === 'planner'      && <PlannerTool />}
-        {active === 'docs'         && <BizDocsTool />}
-        {active === 'jobs'         && <JobSearchTool />}
-        {active === 'health'       && <HealthTool />}
-        {active === 'invoice'      && <InvoiceTool />}
-        {active === 'tax'          && <TaxTool />}
-        {active === 'pension'      && <PensionTool />}
-        {active === 'qrcode'       && <QRCodeTool />}
-        {active === 'bizcard'      && <BizCardTool />}
-        {active === 'dataanalysis' && <DataAnalysisTool />}
-        {active === 'ocr'          && <OCRTool />}
-        {active === 'bizplan'      && <BizPlanTool />}
+        {active === 'cv'      && <CVTool />}
+        {active === 'planner' && <PlannerTool />}
+        {active === 'docs'    && <BizDocsTool />}
+        {active === 'jobs'    && <JobSearchTool />}
+        {active === 'health'  && <HealthTool />}
+        {active === 'image'   && <ImageTool />}
+        {active === 'imgproc' && <ImageProcessingTool />}
+        {active === 'ocr'     && <OCRTool />}
+        {active === 'bizplan' && <BizPlanTool />}
+        {active === 'hashtag' && <HashtagTool />}
       </div>
     </div>
   )

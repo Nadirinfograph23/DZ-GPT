@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch, Upload } from 'lucide-react'
+import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch, Upload, Plus, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import DoctorResultsPanel, { DoctorResult, DirLink } from '../components/DoctorResultsPanel'
+import SpreadsheetTool from '../components/SpreadsheetTool'
 import '../styles/dz-tools.css'
 
 const NO_AI_MSG = '⚠️ خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة لاحقاً أو التواصل مع الدعم.'
@@ -126,7 +127,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -136,9 +137,18 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'image',   icon: '🖼️', name: 'Visual AI — صور',        desc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور' },
   { id: 'imgproc', icon: '🎨', name: 'Image Tools — معالجة',   desc: 'إزالة خلفية • تحسين • ضغط • تعديل • حذف عنصر', badge: 'NEW' },
-  { id: 'ocr',     icon: '📷', name: 'قارئ الوثائق OCR',       desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
-  { id: 'bizplan', icon: '📊', name: 'خطة العمل Business Plan', desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
-  { id: 'hashtag', icon: '#️⃣', name: 'مولّد الهاشتاغ',         desc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن', badge: 'NEW' },
+  { id: 'ocr',          icon: '📷', name: 'قارئ الوثائق OCR',           desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
+  { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan',     desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
+  { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',               desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
+  { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',               desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
+  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة الجزائرية',      desc: 'عربي/فرنسي ↔ دارجة جزائرية — شرق · غرب · وسط · جنوب', badge: 'NEW' },
+  { id: 'zakat',        icon: '☪️', name: 'حاسبة الزكاة الشاملة',         desc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع — بالدينار الجزائري', badge: 'NEW' },
+  { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغ',               desc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن', badge: 'NEW' },
+  { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',             desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
+  { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',           desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
+  { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',                 desc: 'أنشئ QR Code لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
+  { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',                   desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
+  { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',                 desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -2506,6 +2516,1667 @@ function ImageProcessingTool() {
   )
 }
 
+
+// ─── Invoice Tool ─────────────────────────────────────────────────────────────
+type InvoiceItem = { id: number; desc: string; qty: string; price: string; tva: string }
+
+const TVA_RATES = [
+  { label: 'TVA 19% (عادي)', value: '19' },
+  { label: 'TVA 9% (مخفض)', value: '9' },
+  { label: 'معفى 0%',       value: '0'  },
+]
+
+let _invoiceItemId = 1
+
+function newItem(): InvoiceItem {
+  return { id: _invoiceItemId++, desc: '', qty: '1', price: '', tva: '19' }
+}
+
+function fmt(n: number) {
+  return n.toLocaleString('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DA'
+}
+
+function InvoiceTool() {
+  const [company, setCompany] = useState({ name: '', address: '', nif: '', nis: '', rc: '', phone: '', email: '' })
+  const [client,  setClient]  = useState({ name: '', address: '', nif: '' })
+  const [meta,    setMeta]    = useState({ num: '', date: new Date().toISOString().slice(0,10), due: '', note: '' })
+  const [items,   setItems]   = useState<InvoiceItem[]>([newItem()])
+  const printRef = useRef<HTMLDivElement>(null)
+
+  const setC = (k: string, v: string) => setCompany(p => ({ ...p, [k]: v }))
+  const setL = (k: string, v: string) => setClient(p => ({ ...p, [k]: v }))
+  const setM = (k: string, v: string) => setMeta(p => ({ ...p, [k]: v }))
+
+  const updateItem = (id: number, k: keyof InvoiceItem, v: string) =>
+    setItems(prev => prev.map(it => it.id === id ? { ...it, [k]: v } : it))
+  const addItem    = () => setItems(prev => [...prev, newItem()])
+  const removeItem = (id: number) => setItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev)
+
+  // ── Calculations ──────────────────────────────────────────────────────────
+  const rows = items.map(it => {
+    const qty   = parseFloat(it.qty)  || 0
+    const price = parseFloat(it.price) || 0
+    const tva   = parseFloat(it.tva)  || 0
+    const ht    = qty * price
+    const tvaAmt = ht * tva / 100
+    return { ...it, ht, tvaAmt, ttc: ht + tvaAmt }
+  })
+
+  const totalHT  = rows.reduce((s, r) => s + r.ht, 0)
+  const totalTVA = rows.reduce((s, r) => s + r.tvaAmt, 0)
+  const totalTTC = totalHT + totalTVA
+
+  // Group TVA lines
+  const tvaGroups: Record<string, number> = {}
+  rows.forEach(r => {
+    const k = r.tva + '%'
+    tvaGroups[k] = (tvaGroups[k] || 0) + r.tvaAmt
+  })
+
+  // ── PDF Print ─────────────────────────────────────────────────────────────
+  const printPDF = () => {
+    const win = window.open('', '_blank')
+    if (!win) return
+    const itemRows = rows.map(r => `
+      <tr>
+        <td>${r.desc || '—'}</td>
+        <td class="num">${parseFloat(r.qty)||0}</td>
+        <td class="num">${parseFloat(r.price)||0}</td>
+        <td class="num">${r.tva}%</td>
+        <td class="num">${r.ht.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="num">${r.tvaAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="num"><strong>${r.ttc.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
+      </tr>`).join('')
+
+    const tvaLines = Object.entries(tvaGroups)
+      .filter(([,v]) => v > 0)
+      .map(([k,v]) => `<tr><td>TVA ${k}</td><td class="num">${v.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td></tr>`).join('')
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>فاتورة ${meta.num}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;background:#fff;padding:0}
+.header{background:linear-gradient(135deg,#0a3d1f,#1a6b3c);color:#fff;padding:24px 40px;display:flex;justify-content:space-between;align-items:flex-start}
+.brand{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.brand-sub{font-size:11px;opacity:.75;margin-top:4px}
+.inv-badge{background:rgba(255,255,255,.15);border-radius:8px;padding:10px 18px;text-align:center}
+.inv-badge .num{font-size:18px;font-weight:800;color:#c8ff00}
+.inv-badge .label{font-size:10px;opacity:.7}
+.body{padding:28px 40px}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
+.party{background:#f9fafb;border-radius:10px;padding:14px 18px;border:1px solid #e5e7eb}
+.party-title{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.party-name{font-size:15px;font-weight:700;color:#111;margin-bottom:6px}
+.party-detail{font-size:12px;color:#555;line-height:1.7}
+.meta{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.meta-item{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 14px;font-size:12px}
+.meta-item strong{display:block;font-size:10px;color:#16a34a;font-weight:700;margin-bottom:2px}
+table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12.5px}
+thead tr{background:#0a3d1f;color:#fff}
+th{padding:10px 12px;text-align:right;font-weight:700;font-size:11px}
+td{padding:9px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+tr:nth-child(even) td{background:#f9fafb}
+.num{text-align:center}
+.totals{display:flex;justify-content:flex-start;flex-direction:column;align-items:flex-end;gap:4px}
+.total-row{display:flex;gap:32px;justify-content:flex-end;font-size:13px;padding:4px 0}
+.total-row.ht{color:#555}
+.total-row.tva{color:#2563eb}
+.total-row.ttc{font-size:17px;font-weight:800;color:#0a3d1f;border-top:2px solid #c8ff00;padding-top:10px;margin-top:6px}
+.total-label{width:160px;text-align:right}
+.total-val{width:150px;text-align:left;font-weight:600}
+.note{margin-top:20px;padding:12px 18px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5;font-size:12px;color:#555}
+.footer{border-top:1px solid #e5e7eb;padding:12px 40px;font-size:10.5px;color:#9ca3af;text-align:center;margin-top:24px}
+@media print{body{padding:0}@page{margin:0}}
+</style></head>
+<body>
+<div class="header">
+  <div>
+    <div class="brand">${company.name || 'اسم الشركة'}</div>
+    <div class="brand-sub">${company.address || ''}</div>
+    ${company.nif?`<div class="brand-sub">NIF: ${company.nif}</div>`:''}
+    ${company.nis?`<div class="brand-sub">NIS: ${company.nis}</div>`:''}
+    ${company.rc ?`<div class="brand-sub">RC: ${company.rc}</div>`:''}
+    ${company.phone?`<div class="brand-sub">📞 ${company.phone}</div>`:''}
+  </div>
+  <div class="inv-badge">
+    <div class="label">FACTURE N°</div>
+    <div class="num">${meta.num || '---'}</div>
+    <div class="label">Date: ${meta.date}</div>
+    ${meta.due?`<div class="label">Échéance: ${meta.due}</div>`:''}
+  </div>
+</div>
+<div class="body">
+  <div class="parties">
+    <div class="party">
+      <div class="party-title">FOURNISSEUR</div>
+      <div class="party-name">${company.name||'—'}</div>
+      <div class="party-detail">${company.address||''}<br>${company.email||''}</div>
+    </div>
+    <div class="party">
+      <div class="party-title">CLIENT</div>
+      <div class="party-name">${client.name||'—'}</div>
+      <div class="party-detail">${client.address||''}${client.nif?`<br>NIF: ${client.nif}`:''}</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:35%">الوصف</th>
+      <th class="num" style="width:8%">الكمية</th>
+      <th class="num" style="width:14%">سعر الوحدة (DA)</th>
+      <th class="num" style="width:8%">TVA</th>
+      <th class="num" style="width:12%">المجموع HT</th>
+      <th class="num" style="width:12%">مبلغ TVA</th>
+      <th class="num" style="width:11%">المجموع TTC</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <div class="totals">
+    <div class="total-row ht"><span class="total-label">المجموع HT</span><span class="total-val">${totalHT.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
+    ${tvaLines}
+    <div class="total-row ttc"><span class="total-label">الإجمالي TTC</span><span class="total-val">${totalTTC.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</span></div>
+  </div>
+  ${meta.note?`<div class="note"><strong>ملاحظات:</strong> ${meta.note}</div>`:''}
+</div>
+<div class="footer">DZ Tools — مولّد الفواتير الجزائري | dz-gpt.vercel.app</div>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  const inputCls = 'dzt-inv-input'
+
+  return (
+    <div className="dzt-invoice-wrap">
+      {/* ── Company ───────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">🏢 معلومات الشركة / المورّد</div>
+        <div className="dzt-inv-grid2">
+          <input className={inputCls} placeholder="اسم الشركة *" value={company.name}    onChange={e=>setC('name',e.target.value)} />
+          <input className={inputCls} placeholder="رقم الهاتف"   value={company.phone}   onChange={e=>setC('phone',e.target.value)} />
+          <input className={inputCls} placeholder="العنوان"       value={company.address} onChange={e=>setC('address',e.target.value)} />
+          <input className={inputCls} placeholder="البريد الإلكتروني" value={company.email} onChange={e=>setC('email',e.target.value)} />
+          <input className={inputCls} placeholder="NIF"           value={company.nif}     onChange={e=>setC('nif',e.target.value)} />
+          <input className={inputCls} placeholder="NIS"           value={company.nis}     onChange={e=>setC('nis',e.target.value)} />
+          <input className={inputCls} placeholder="RC"            value={company.rc}      onChange={e=>setC('rc',e.target.value)} />
+        </div>
+      </div>
+
+      {/* ── Client ────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">👤 معلومات العميل</div>
+        <div className="dzt-inv-grid2">
+          <input className={inputCls} placeholder="اسم العميل *" value={client.name}    onChange={e=>setL('name',e.target.value)} />
+          <input className={inputCls} placeholder="NIF العميل"   value={client.nif}     onChange={e=>setL('nif',e.target.value)} />
+          <input className={inputCls} placeholder="عنوان العميل" value={client.address} onChange={e=>setL('address',e.target.value)} style={{gridColumn:'span 2'}} />
+        </div>
+      </div>
+
+      {/* ── Meta ──────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">📋 بيانات الفاتورة</div>
+        <div className="dzt-inv-grid3">
+          <div><label className="dzt-inv-label">رقم الفاتورة</label><input className={inputCls} placeholder="001" value={meta.num} onChange={e=>setM('num',e.target.value)} /></div>
+          <div><label className="dzt-inv-label">تاريخ الإصدار</label><input className={inputCls} type="date" value={meta.date} onChange={e=>setM('date',e.target.value)} /></div>
+          <div><label className="dzt-inv-label">تاريخ الاستحقاق</label><input className={inputCls} type="date" value={meta.due} onChange={e=>setM('due',e.target.value)} /></div>
+        </div>
+      </div>
+
+      {/* ── Items ─────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">🛒 المنتجات / الخدمات</div>
+        <div className="dzt-inv-items-header">
+          <span style={{flex:'2 1 180px'}}>الوصف</span>
+          <span style={{flex:'0 0 80px',textAlign:'center'}}>الكمية</span>
+          <span style={{flex:'0 0 120px',textAlign:'center'}}>سعر الوحدة (DA)</span>
+          <span style={{flex:'0 0 110px',textAlign:'center'}}>TVA</span>
+          <span style={{flex:'0 0 120px',textAlign:'center'}}>المجموع HT</span>
+          <span style={{width:32}}></span>
+        </div>
+        {items.map(it => {
+          const qty   = parseFloat(it.qty)   || 0
+          const price = parseFloat(it.price)  || 0
+          const ht    = qty * price
+          return (
+            <div key={it.id} className="dzt-inv-item-row">
+              <input className={inputCls} placeholder="وصف المنتج أو الخدمة" value={it.desc} onChange={e=>updateItem(it.id,'desc',e.target.value)} style={{flex:'2 1 180px'}} />
+              <input className={inputCls} type="number" min="0" placeholder="1" value={it.qty} onChange={e=>updateItem(it.id,'qty',e.target.value)} style={{flex:'0 0 80px',textAlign:'center'}} />
+              <input className={inputCls} type="number" min="0" placeholder="0.00" value={it.price} onChange={e=>updateItem(it.id,'price',e.target.value)} style={{flex:'0 0 120px',textAlign:'center'}} />
+              <select className={inputCls} value={it.tva} onChange={e=>updateItem(it.id,'tva',e.target.value)} style={{flex:'0 0 110px'}}>
+                {TVA_RATES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <div className="dzt-inv-line-total" style={{flex:'0 0 120px'}}>
+                {fmt(ht)}
+              </div>
+              <button className="dzt-inv-del-btn" onClick={()=>removeItem(it.id)} title="حذف">✕</button>
+            </div>
+          )
+        })}
+        <button className="dzt-inv-add-btn" onClick={addItem}>＋ إضافة منتج</button>
+      </div>
+
+      {/* ── Totals ────────────────────────────────────────────────── */}
+      <div className="dzt-inv-totals-box">
+        <div className="dzt-inv-total-row">
+          <span>المجموع HT</span>
+          <span>{fmt(totalHT)}</span>
+        </div>
+        {Object.entries(tvaGroups).filter(([,v])=>v>0).map(([k,v]) => (
+          <div key={k} className="dzt-inv-total-row dzt-inv-total-tva">
+            <span>TVA {k}</span>
+            <span>{fmt(v)}</span>
+          </div>
+        ))}
+        <div className="dzt-inv-total-row dzt-inv-total-ttc">
+          <span>الإجمالي TTC</span>
+          <span>{fmt(totalTTC)}</span>
+        </div>
+      </div>
+
+      {/* ── Note ──────────────────────────────────────────────────── */}
+      <div className="dzt-inv-section">
+        <div className="dzt-inv-section-title">📝 ملاحظات (اختياري)</div>
+        <textarea className={inputCls} rows={2} placeholder="شروط الدفع، ملاحظات إضافية..." value={meta.note} onChange={e=>setM('note',e.target.value)} style={{width:'100%',resize:'vertical'}} />
+      </div>
+
+      {/* ── Actions ───────────────────────────────────────────────── */}
+      <div className="dzt-result-actions" style={{marginTop:8}}>
+        <button className="dzt-btn" onClick={printPDF}>
+          <Download size={14} /> تحميل الفاتورة PDF
+        </button>
+      </div>
+
+      <div ref={printRef} style={{display:'none'}} />
+    </div>
+  )
+}
+
+
+// ─── Tax Calculator Tool ───────────────────────────────────────────────────────
+const IRG_BRACKETS = [
+  { min: 0,         max: 240_000,   rate: 0  },
+  { min: 240_000,   max: 480_000,   rate: 23 },
+  { min: 480_000,   max: 960_000,   rate: 27 },
+  { min: 960_000,   max: 1_920_000, rate: 30 },
+  { min: 1_920_000, max: 3_840_000, rate: 33 },
+  { min: 3_840_000, max: Infinity,  rate: 35 },
+]
+
+const IBS_RATES = [
+  { label: 'نشاط إنتاجي / فلاحي / سياحي (19%)', value: 19 },
+  { label: 'نشاط مختلط (23%)',                     value: 23 },
+  { label: 'نشاط تجاري / خدماتي / بناء (26%)',     value: 26 },
+]
+
+function calcIRG(annualIncome: number) {
+  let tax = 0
+  const breakdown: { label: string; base: number; rate: number; amount: number }[] = []
+  for (const b of IRG_BRACKETS) {
+    if (annualIncome <= b.min) break
+    const taxable = Math.min(annualIncome, b.max) - b.min
+    const amount  = taxable * b.rate / 100
+    tax += amount
+    breakdown.push({
+      label: b.max === Infinity ? `أكثر من ${(b.min/1000).toFixed(0)}k DA` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k DA`,
+      base: taxable, rate: b.rate, amount,
+    })
+  }
+  return { tax, breakdown }
+}
+
+function TaxTool() {
+  const [mode, setMode] = useState<'irg'|'ibs'>('irg')
+
+  // IRG state
+  const [period,    setPeriod]    = useState<'monthly'|'annual'>('monthly')
+  const [salary,    setSalary]    = useState('')
+  const [irgResult, setIrgResult] = useState<null|{ gross:number; tax:number; net:number; effectiveRate:number; breakdown: {label:string;base:number;rate:number;amount:number}[] }>(null)
+
+  // IBS state
+  const [profit,     setProfit]     = useState('')
+  const [ibsRate,    setIbsRate]    = useState(19)
+  const [ibsResult,  setIbsResult]  = useState<null|{ profit:number; taxAmt:number; net:number }>(null)
+
+  const calcIrgAction = () => {
+    const monthly = parseFloat(salary) || 0
+    const annual  = period === 'monthly' ? monthly * 12 : monthly
+    if (!annual) return
+    const { tax, breakdown } = calcIRG(annual)
+    const annualNet = annual - tax
+    setIrgResult({ gross: annual, tax, net: annualNet, effectiveRate: annual > 0 ? tax/annual*100 : 0, breakdown })
+  }
+
+  const calcIbsAction = () => {
+    const p = parseFloat(profit) || 0
+    if (!p) return
+    const taxAmt = p * ibsRate / 100
+    setIbsResult({ profit: p, taxAmt, net: p - taxAmt })
+  }
+
+  const printIRG = () => {
+    if (!irgResult) return
+    const rows = irgResult.breakdown.map(b => `
+      <tr>
+        <td>${b.label}</td>
+        <td class="n">${b.rate}%</td>
+        <td class="n">${b.base.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</td>
+        <td class="n"><strong>${b.amount.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</strong></td>
+      </tr>`).join('')
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>حساب IRG</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
+h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
+.cards{display:flex;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
+.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
+.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
+.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+thead tr{background:#0a3d1f;color:#fff}
+th{padding:10px 14px;text-align:right;font-size:12px}
+td{padding:9px 14px;border-bottom:1px solid #f3f4f6}
+.n{text-align:center}
+tr:nth-child(even) td{background:#f9fafb}
+footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
+</style></head><body>
+<h1>🧾 حساب IRG — ضريبة الدخل الإجمالي</h1>
+<div class="cards">
+  <div class="card"><div class="card-label">الدخل السنوي الخام</div><div class="card-val">${irgResult.gross.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card tax"><div class="card-label">IRG المستحق</div><div class="card-val">${irgResult.tax.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">الصافي السنوي</div><div class="card-val">${irgResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">معدل الضريبة الفعلي</div><div class="card-val">${irgResult.effectiveRate.toFixed(2)}%</div></div>
+</div>
+<table>
+  <thead><tr><th>الشريحة</th><th class="n">المعدل</th><th class="n">الوعاء الضريبي</th><th class="n">مبلغ الضريبة</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<p style="font-size:11px;color:#777">* حسب قانون المالية الجزائري — شرائح IRG 2024. للاستشارة الضريبية المعتمدة راجع خبيراً محاسبياً.</p>
+<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  const printIBS = () => {
+    if (!ibsResult) return
+    const win = window.open('', '_blank')
+    if (!win) return
+    const rateLabel = IBS_RATES.find(r=>r.value===ibsRate)?.label || `${ibsRate}%`
+    win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl">
+<head><meta charset="UTF-8"><title>حساب IBS</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Cairo',sans-serif;direction:rtl;font-size:13px;color:#111;padding:32px 44px}
+h1{font-size:20px;color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px;margin-bottom:24px}
+.cards{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.card{flex:1;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:14px 18px}
+.card-label{font-size:11px;color:#16a34a;font-weight:700;margin-bottom:4px}
+.card-val{font-size:18px;font-weight:800;color:#0a3d1f}
+.card.tax .card-val{color:#dc2626}.card.tax{background:#fff5f5;border-color:#fecaca}
+.note{font-size:12px;color:#777;margin-top:16px;padding:12px;background:#fafff5;border-radius:8px;border:1px solid #d1fae5}
+footer{margin-top:28px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:12px}
+</style></head><body>
+<h1>🏢 حساب IBS — ضريبة أرباح الشركات</h1>
+<div class="cards">
+  <div class="card"><div class="card-label">الربح الخاضع للضريبة</div><div class="card-val">${ibsResult.profit.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">معدل IBS المطبق</div><div class="card-val">${ibsRate}%</div></div>
+  <div class="card tax"><div class="card-label">مبلغ IBS المستحق</div><div class="card-val">${ibsResult.taxAmt.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+  <div class="card"><div class="card-label">صافي الربح بعد الضريبة</div><div class="card-val">${ibsResult.net.toLocaleString('fr-DZ',{minimumFractionDigits:2})} DA</div></div>
+</div>
+<div class="note">نوع النشاط: ${rateLabel}<br>* حسب قانون المالية الجزائري. للاستشارة المعتمدة راجع خبيراً محاسبياً معتمداً.</div>
+<footer>DZ Tools — مُحاسب الضرائب | dz-gpt.vercel.app</footer>
+</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  return (
+    <div className="dzt-tax-wrap">
+      {/* ── Mode Tabs ─────────────────────────────────────────────── */}
+      <div className="dzt-tax-mode-tabs">
+        <button className={`dzt-tax-mode-btn${mode==='irg'?' active':''}`} onClick={()=>setMode('irg')}>
+          👤 IRG — ضريبة الدخل
+        </button>
+        <button className={`dzt-tax-mode-btn${mode==='ibs'?' active':''}`} onClick={()=>setMode('ibs')}>
+          🏢 IBS — ضريبة الشركات
+        </button>
+      </div>
+
+      {mode === 'irg' && (
+        <div className="dzt-tax-panel">
+          <div className="dzt-inv-section-title">حساب IRG — الضريبة على الدخل الإجمالي</div>
+          <p className="dzt-tax-desc">شرائح IRG 2024 — حسب قانون المالية الجزائري</p>
+
+          <div className="dzt-tax-period-row">
+            <button className={`dzt-tax-period-btn${period==='monthly'?' active':''}`} onClick={()=>setPeriod('monthly')}>شهري</button>
+            <button className={`dzt-tax-period-btn${period==='annual'?' active':''}`}  onClick={()=>setPeriod('annual')}>سنوي</button>
+          </div>
+
+          <div className="dzt-tax-input-row">
+            <input
+              className="dzt-inv-input"
+              type="number"
+              min="0"
+              placeholder={period==='monthly' ? 'الراتب الشهري الخام (DA)' : 'الدخل السنوي الخام (DA)'}
+              value={salary}
+              onChange={e=>{ setSalary(e.target.value); setIrgResult(null) }}
+            />
+            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIrgAction}>
+              احسب IRG
+            </button>
+          </div>
+
+          {/* Brackets table */}
+          <div className="dzt-tax-brackets">
+            <div className="dzt-tax-bracket-title">شرائح IRG 2024</div>
+            {IRG_BRACKETS.map((b, i) => (
+              <div key={i} className="dzt-tax-bracket-row">
+                <span className="dzt-tax-bracket-range">
+                  {b.max === Infinity ? `> ${(b.min/1000).toFixed(0)}k` : `${(b.min/1000).toFixed(0)}k – ${(b.max/1000).toFixed(0)}k`} DA/سنة
+                </span>
+                <span className="dzt-tax-bracket-rate" style={{color: b.rate===0?'#22c55e': b.rate<27?'#f59e0b':'#ef4444'}}>
+                  {b.rate}%
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {irgResult && (
+            <div className="dzt-tax-result">
+              <div className="dzt-tax-cards">
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">الدخل السنوي</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.gross)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.gross/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-red">
+                  <div className="dzt-tax-card-label">IRG المستحق</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.tax)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.tax/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-green">
+                  <div className="dzt-tax-card-label">صافي الدخل</div>
+                  <div className="dzt-tax-card-val">{fmt(irgResult.net)}</div>
+                  <div className="dzt-tax-card-sub">{fmt(irgResult.net/12)} / شهر</div>
+                </div>
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">معدل الضريبة</div>
+                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{irgResult.effectiveRate.toFixed(2)}%</div>
+                </div>
+              </div>
+              <div className="dzt-tax-breakdown-title">تفصيل الحساب بالشرائح</div>
+              {irgResult.breakdown.filter(b=>b.rate>0||b.base>0).map((b,i) => (
+                <div key={i} className="dzt-tax-breakdown-row">
+                  <span className="dzt-tbr-range">{b.label}</span>
+                  <span className="dzt-tbr-rate">{b.rate}%</span>
+                  <span className="dzt-tbr-base">{fmt(b.base)}</span>
+                  <span className="dzt-tbr-amt">{fmt(b.amount)}</span>
+                </div>
+              ))}
+              <div className="dzt-result-actions" style={{marginTop:12}}>
+                <button className="dzt-btn" onClick={printIRG}><Download size={14}/> تحميل PDF</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode === 'ibs' && (
+        <div className="dzt-tax-panel">
+          <div className="dzt-inv-section-title">حساب IBS — الضريبة على أرباح الشركات</div>
+          <p className="dzt-tax-desc">معدلات IBS 2024 حسب نوع النشاط</p>
+
+          <div className="dzt-tax-ibs-rates">
+            {IBS_RATES.map(r => (
+              <button key={r.value} className={`dzt-tax-ibs-btn${ibsRate===r.value?' active':''}`} onClick={()=>{ setIbsRate(r.value); setIbsResult(null) }}>
+                <span className="dzt-tax-ibs-rate">{r.value}%</span>
+                <span className="dzt-tax-ibs-label">{r.label.replace(/\s*\(\d+%\)$/,'')}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="dzt-tax-input-row">
+            <input
+              className="dzt-inv-input"
+              type="number"
+              min="0"
+              placeholder="الربح الصافي الخاضع للضريبة (DA)"
+              value={profit}
+              onChange={e=>{ setProfit(e.target.value); setIbsResult(null) }}
+            />
+            <button className="dzt-btn" style={{whiteSpace:'nowrap'}} onClick={calcIbsAction}>
+              احسب IBS
+            </button>
+          </div>
+
+          {ibsResult && (
+            <div className="dzt-tax-result">
+              <div className="dzt-tax-cards">
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">الربح الخاضع</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.profit)}</div>
+                </div>
+                <div className="dzt-tax-card">
+                  <div className="dzt-tax-card-label">معدل IBS</div>
+                  <div className="dzt-tax-card-val" style={{fontSize:22}}>{ibsRate}%</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-red">
+                  <div className="dzt-tax-card-label">IBS المستحق</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.taxAmt)}</div>
+                </div>
+                <div className="dzt-tax-card dzt-tax-card-green">
+                  <div className="dzt-tax-card-label">صافي الربح</div>
+                  <div className="dzt-tax-card-val">{fmt(ibsResult.net)}</div>
+                </div>
+              </div>
+              <div className="dzt-result-actions" style={{marginTop:12}}>
+                <button className="dzt-btn" onClick={printIBS}><Download size={14}/> تحميل PDF</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── Pension / CNAS / CASNOS Tool ─────────────────────────────────────────────
+function PensionTool() {
+  const [type, setType]   = useState<'cnas'|'casnos'>('cnas')
+  const [gender, setGender] = useState<'m'|'f'>('m')
+  const [salary, setSalary] = useState('')
+  const [years, setYears]   = useState('')
+  const [age, setAge]       = useState('')
+  const [result, setResult] = useState<null|{
+    contrib: number; employerContrib?: number; totalMonthly: number;
+    pension: number; retireAge: number; yearsLeft: number; rate: number;
+  }>(null)
+
+  const fmt = (n: number) => Math.round(n).toLocaleString('fr-DZ') + ' DA'
+
+  const calc = () => {
+    const s = parseFloat(salary) || 0
+    const y = parseFloat(years)  || 0
+    const a = parseFloat(age)    || 0
+    if (!s || !y || !a) return
+
+    const retireAge = gender === 'm' ? 60 : 55
+    const yearsLeft = Math.max(0, retireAge - a)
+
+    if (type === 'cnas') {
+      const contrib         = s * 0.09
+      const employerContrib = s * 0.26
+      const totalMonthly    = contrib + employerContrib
+      const rate            = Math.min(y * 2.5, 80) / 100
+      const pension         = s * rate
+      setResult({ contrib, employerContrib, totalMonthly, pension, retireAge, yearsLeft, rate: rate * 100 })
+    } else {
+      const annualIncome = s * 12
+      const contrib      = (annualIncome * 0.15) / 12
+      const rate         = Math.min(y * 2.5, 80) / 100
+      const pension      = s * rate
+      setResult({ contrib, totalMonthly: contrib, pension, retireAge, yearsLeft, rate: rate * 100 })
+    }
+  }
+
+  const printResult = () => {
+    if (!result) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<title>حاسبة التقاعد CNAS</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+<style>body{font-family:'Cairo',sans-serif;direction:rtl;padding:40px;background:#fff;color:#111}
+h1{color:#0a3d1f;border-bottom:3px solid #c8ff00;padding-bottom:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.card{background:#f6fbf7;border:1px solid #c8e6c9;border-radius:12px;padding:16px}
+.label{font-size:12px;color:#666;margin-bottom:4px}
+.val{font-size:22px;font-weight:800;color:#0a3d1f}
+.val.red{color:#d32f2f}.val.blue{color:#1565c0}
+.footer{margin-top:32px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:12px}
+</style></head><body>
+<h1>🏦 تقرير حاسبة التقاعد — ${type === 'cnas' ? 'CNAS موظف' : 'CASNOS مستقل'}</h1>
+<div class="grid">
+  ${type === 'cnas' ? `<div class="card"><div class="label">اشتراك الموظف (9%)</div><div class="val blue">${fmt(result.contrib)}</div></div>
+  <div class="card"><div class="label">اشتراك صاحب العمل (26%)</div><div class="val blue">${fmt(result.employerContrib||0)}</div></div>` :
+  `<div class="card"><div class="label">الاشتراك الشهري (15%)</div><div class="val blue">${fmt(result.contrib)}</div></div>`}
+  <div class="card"><div class="label">نسبة المعاش</div><div class="val">${result.rate.toFixed(1)}%</div></div>
+  <div class="card" style="background:#e8f5e9"><div class="label">المعاش الشهري المتوقع</div><div class="val">${fmt(result.pension)}</div></div>
+  <div class="card"><div class="label">سن التقاعد القانوني</div><div class="val">${result.retireAge} سنة</div></div>
+  <div class="card"><div class="label">السنوات المتبقية</div><div class="val red">${result.yearsLeft} سنة</div></div>
+</div>
+<div class="footer">🇩🇿 DZ Tools — dz-gpt.vercel.app | المعطيات وفق قانون CNAS/CASNOS الجزائري 2024</div>
+</body></html>`)
+    w.document.close()
+    setTimeout(() => { w.focus(); w.print() }, 600)
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🏦</div>
+        <div>
+          <div className="dzt-tool-desc-title">حاسبة التقاعد والضمان الاجتماعي</div>
+          <div className="dzt-tool-desc-text">احسب اشتراكاتك الشهرية ومعاشك المتوقع — CNAS للموظفين · CASNOS للمستقلين — وفق شرائح 2024</div>
+        </div>
+      </div>
+
+      <div className="dzt-pension-type-row">
+        {(['cnas','casnos'] as const).map(t => (
+          <button key={t} className={`dzt-pension-type-btn${type===t?' active':''}`} onClick={()=>{ setType(t); setResult(null) }}>
+            <span style={{fontSize:22}}>{t==='cnas'?'🏢':'🧑‍💼'}</span>
+            <span style={{fontWeight:800}}>{t==='cnas'?'CNAS':'CASNOS'}</span>
+            <span style={{fontSize:12,opacity:.7}}>{t==='cnas'?'موظف / أجير':'مستقل / حر'}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="dzt-pension-grid">
+        <div className="dzt-field">
+          <label className="dzt-label">الجنس</label>
+          <select className="dzt-select" value={gender} onChange={e=>{ setGender(e.target.value as 'm'|'f'); setResult(null) }}>
+            <option value="m">ذكر (تقاعد عند 60)</option>
+            <option value="f">أنثى (تقاعد عند 55)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">العمر الحالي (سنة)</label>
+          <input className="dzt-input" type="number" min="18" max="70" placeholder="مثال: 35" value={age} onChange={e=>{ setAge(e.target.value); setResult(null) }} />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">{type==='cnas'?'الراتب الإجمالي الشهري (DA)':'الدخل الشهري الإجمالي (DA)'}</label>
+          <input className="dzt-input" type="number" min="0" placeholder="مثال: 85000" value={salary} onChange={e=>{ setSalary(e.target.value); setResult(null) }} />
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">سنوات العمل / الاشتراك</label>
+          <input className="dzt-input" type="number" min="0" max="40" placeholder="مثال: 15" value={years} onChange={e=>{ setYears(e.target.value); setResult(null) }} />
+        </div>
+      </div>
+
+      <div className="dzt-pension-info-box">
+        {type==='cnas'
+          ? <><strong>CNAS — موظف:</strong> اشتراك الموظف <strong>9%</strong> + صاحب العمل <strong>26%</strong> من الراتب الإجمالي · المعاش = <strong>2.5% × سنوات العمل × الراتب</strong> (سقف 80%)</>
+          : <><strong>CASNOS — مستقل:</strong> اشتراك <strong>15%</strong> من الدخل السنوي · المعاش = <strong>2.5% × سنوات الاشتراك × الدخل</strong> (سقف 80%)</>
+        }
+      </div>
+
+      <button className="dzt-btn" onClick={calc} disabled={!salary||!years||!age}>
+        <Calculator size={16}/> احسب
+      </button>
+
+      {result && (
+        <div className="dzt-pension-result">
+          <div className="dzt-tax-cards" style={{gridTemplateColumns:'repeat(2,1fr)'}}>
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">اشتراكك الشهري</div>
+              <div className="dzt-tax-card-val" style={{color:'#60a5fa'}}>{fmt(result.contrib)}</div>
+              <div className="dzt-tax-card-sub">{type==='cnas'?'9% من راتبك':'15% من دخلك'}</div>
+            </div>
+            {type==='cnas' && (
+              <div className="dzt-tax-card">
+                <div className="dzt-tax-card-label">اشتراك صاحب العمل</div>
+                <div className="dzt-tax-card-val" style={{color:'#a78bfa'}}>{fmt(result.employerContrib||0)}</div>
+                <div className="dzt-tax-card-sub">26% من راتبك</div>
+              </div>
+            )}
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">نسبة المعاش</div>
+              <div className="dzt-tax-card-val">{result.rate.toFixed(1)}%</div>
+              <div className="dzt-tax-card-sub">2.5% × {years} سنة</div>
+            </div>
+            <div className="dzt-tax-card dzt-tax-card-green">
+              <div className="dzt-tax-card-label">المعاش الشهري المتوقع</div>
+              <div className="dzt-tax-card-val">{fmt(result.pension)}</div>
+            </div>
+            <div className="dzt-tax-card">
+              <div className="dzt-tax-card-label">سن التقاعد القانوني</div>
+              <div className="dzt-tax-card-val">{result.retireAge} سنة</div>
+            </div>
+            <div className={`dzt-tax-card${result.yearsLeft>0?' dzt-tax-card-red':' dzt-tax-card-green'}`}>
+              <div className="dzt-tax-card-label">{result.yearsLeft>0?'السنوات المتبقية':'أنت أهل للتقاعد!'}</div>
+              <div className="dzt-tax-card-val">{result.yearsLeft>0?`${result.yearsLeft} سنة`:'✓ الآن'}</div>
+            </div>
+          </div>
+          <div className="dzt-result-actions" style={{marginTop:12}}>
+            <button className="dzt-btn" onClick={printResult}><Download size={14}/> تحميل PDF</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── QR Code Generator Tool ────────────────────────────────────────────────────
+function QRCodeTool() {
+  const [text, setText]     = useState('')
+  const [size, setSize]     = useState('300')
+  const [color, setColor]   = useState('000000')
+  const [bgColor, setBgColor] = useState('ffffff')
+  const [qrUrl, setQrUrl]   = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const generate = () => {
+    if (!text.trim()) return
+    const encoded = encodeURIComponent(text.trim())
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}&color=${color}&bgcolor=${bgColor}&margin=10&format=png`
+    setQrUrl(url)
+  }
+
+  const download = async () => {
+    if (!qrUrl) return
+    try {
+      const res  = await fetch(qrUrl)
+      const blob = await res.blob()
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = 'qrcode-dz.png'
+      a.click()
+    } catch { alert('تعذّر التحميل، حاول مرة أخرى') }
+  }
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(text).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000) })
+  }
+
+  const PRESETS = [
+    { label:'رابط موقع', value:'https://dz-gpt.vercel.app' },
+    { label:'واتساب',    value:'https://wa.me/213XXXXXXXXX' },
+    { label:'إيميل',     value:'mailto:contact@example.com' },
+    { label:'هاتف',      value:'tel:+213XXXXXXXXX' },
+    { label:'نص حر',    value:'مرحباً بكم في DZ-GPT 🇩🇿' },
+  ]
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">📲</div>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد QR Code الاحترافي</div>
+          <div className="dzt-tool-desc-text">أنشئ QR Code لأي رابط، رقم هاتف، واتساب، إيميل أو نص — تخصيص الألوان والحجم — تحميل PNG فوري</div>
+        </div>
+      </div>
+
+      <div className="dzt-field">
+        <label className="dzt-label">نوع المحتوى (اختر أو اكتب)</label>
+        <div className="dzt-qr-presets">
+          {PRESETS.map(p => (
+            <button key={p.label} className="dzt-qr-preset-btn" onClick={()=>{ setText(p.value); setQrUrl('') }}>{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dzt-field">
+        <label className="dzt-label">المحتوى (رابط، نص، رقم...)</label>
+        <textarea
+          className="dzt-textarea"
+          placeholder="https://dz-gpt.vercel.app أو أي نص أو رقم هاتف..."
+          value={text}
+          onChange={e=>{ setText(e.target.value); setQrUrl('') }}
+          rows={3}
+        />
+      </div>
+
+      <div className="dzt-qr-options">
+        <div className="dzt-field">
+          <label className="dzt-label">الحجم</label>
+          <select className="dzt-select" value={size} onChange={e=>{ setSize(e.target.value); setQrUrl('') }}>
+            <option value="150">صغير (150×150)</option>
+            <option value="300">متوسط (300×300)</option>
+            <option value="500">كبير (500×500)</option>
+            <option value="800">عالي الدقة (800×800)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">لون الـ QR</label>
+          <div className="dzt-qr-color-row">
+            <input type="color" value={`#${color}`} onChange={e=>{ setColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
+            <span className="dzt-qr-color-hex">#{color}</span>
+          </div>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">لون الخلفية</label>
+          <div className="dzt-qr-color-row">
+            <input type="color" value={`#${bgColor}`} onChange={e=>{ setBgColor(e.target.value.replace('#','')); setQrUrl('') }} className="dzt-qr-color-picker" />
+            <span className="dzt-qr-color-hex">#{bgColor}</span>
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={generate} disabled={!text.trim()}>
+        <QrCode size={16}/> توليد QR Code
+      </button>
+
+      {qrUrl && (
+        <div className="dzt-qr-result">
+          <div className="dzt-qr-preview-wrap">
+            <img src={qrUrl} alt="QR Code" className="dzt-qr-img" />
+          </div>
+          <div className="dzt-qr-content-preview">
+            <span className="dzt-qr-content-label">المحتوى:</span>
+            <span className="dzt-qr-content-val">{text.length > 60 ? text.slice(0,60)+'…' : text}</span>
+          </div>
+          <div className="dzt-result-actions" style={{justifyContent:'center',gap:12}}>
+            <button className="dzt-btn" onClick={download} style={{flex:1}}>
+              <Download size={14}/> تحميل PNG
+            </button>
+            <button className="dzt-result-btn" onClick={copyLink} style={{flex:1}}>
+              {copied ? <Check size={14}/> : <Copy size={14}/>}
+              {copied ? 'تم النسخ' : 'نسخ النص'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── Business Card Tool ────────────────────────────────────────────────────────
+const BC_THEMES = [
+  { id:'dark',    label:'داكن',    bg:'#0a0a0a', text:'#fff',     accent:'#c8ff00', sub:'#aaa' },
+  { id:'green',   label:'أخضر',   bg:'#0a3d1f', text:'#fff',     accent:'#c8ff00', sub:'#a3d9a5' },
+  { id:'blue',    label:'أزرق',   bg:'#0d1b4b', text:'#fff',     accent:'#60a5fa', sub:'#93c5fd' },
+  { id:'white',   label:'أبيض',   bg:'#ffffff', text:'#111',     accent:'#0a3d1f', sub:'#555' },
+  { id:'gold',    label:'ذهبي',   bg:'#1a1100', text:'#ffe082',  accent:'#ffd600', sub:'#c8a000' },
+]
+
+function BizCardTool() {
+  const [lang, setLang]   = useState<'ar'|'fr'>('ar')
+  const [theme, setTheme] = useState(BC_THEMES[0])
+  const [form, setForm]   = useState({
+    name:'', title:'', company:'', phone:'', email:'', website:'', address:'', logo:'', photo:''
+  })
+  const cardRef  = useRef<HTMLDivElement>(null)
+  const photoRef = useRef<HTMLInputElement>(null)
+  const set = (k:string, v:string) => setForm(f=>({...f,[k]:v}))
+
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => set('photo', ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const printCard = () => {
+    const el = cardRef.current
+    if (!el) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    const dir = lang === 'ar' ? 'rtl' : 'ltr'
+    w.document.write(`<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><meta charset="UTF-8">
+<title>بطاقة العمل — ${form.name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:${lang==='ar'?"'Cairo'":'Inter'},sans-serif}
+.card{width:90mm;height:55mm;background:${theme.bg};color:${theme.text};border-radius:4mm;padding:7mm 8mm;display:flex;flex-direction:column;justify-content:space-between;direction:${dir};position:relative;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.25)}
+.accent-line{position:absolute;top:0;${lang==='ar'?'right':'left'}:0;width:3mm;height:100%;background:${theme.accent}}
+.photo-circle{position:absolute;top:5mm;${lang==='ar'?'left':'right'}:5mm;width:14mm;height:14mm;border-radius:50%;overflow:hidden;border:1.2mm solid ${theme.accent};box-shadow:0 0 4mm rgba(0,0,0,0.4)}
+.photo-circle img{width:100%;height:100%;object-fit:cover;display:block}
+.name{font-size:16pt;font-weight:800;color:${theme.text};margin-${lang==='ar'?'right':'left'}:4mm}
+.title{font-size:9pt;color:${theme.accent};font-weight:600;margin:1mm 0 0 0;margin-${lang==='ar'?'right':'left'}:4mm}
+.company{font-size:8pt;color:${theme.sub};margin-${lang==='ar'?'right':'left'}:4mm}
+.contacts{display:flex;flex-direction:column;gap:1.5mm;margin-${lang==='ar'?'right':'left'}:4mm}
+.contact-row{font-size:7.5pt;color:${theme.sub};display:flex;align-items:center;gap:2mm}
+.brand{position:absolute;bottom:4mm;${lang==='ar'?'left':'right'}:5mm;font-size:6pt;color:${theme.accent};opacity:.5}
+@media print{body{background:none}@page{margin:0;size:90mm 55mm}}
+</style></head><body>
+<div class="card">
+  <div class="accent-line"></div>
+  ${form.photo ? `<div class="photo-circle"><img src="${form.photo}" /></div>` : ''}
+  <div>
+    <div class="name">${form.name||'الاسم الكامل'}</div>
+    <div class="title">${form.title||'المنصب'}</div>
+    ${form.company?`<div class="company">${form.company}</div>`:''}
+  </div>
+  <div class="contacts">
+    ${form.phone?`<div class="contact-row">📞 ${form.phone}</div>`:''}
+    ${form.email?`<div class="contact-row">✉️ ${form.email}</div>`:''}
+    ${form.website?`<div class="contact-row">🌐 ${form.website}</div>`:''}
+    ${form.address?`<div class="contact-row">📍 ${form.address}</div>`:''}
+  </div>
+  <div class="brand">DZ-GPT</div>
+</div>
+</body></html>`)
+    w.document.close()
+    setTimeout(()=>{ w.focus(); w.print() }, 600)
+  }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🪪</div>
+        <div>
+          <div className="dzt-tool-desc-title">مولّد بطاقة العمل الاحترافية</div>
+          <div className="dzt-tool-desc-text">صمّم بطاقة عمل احترافية بالعربية أو الفرنسية مع معاينة مباشرة — تصدير PDF جاهز للطباعة (90mm × 55mm)</div>
+        </div>
+      </div>
+
+      <div className="dzt-row">
+        <div className="dzt-field">
+          <label className="dzt-label">اللغة</label>
+          <select className="dzt-select" value={lang} onChange={e=>setLang(e.target.value as 'ar'|'fr')}>
+            <option value="ar">العربية (RTL)</option>
+            <option value="fr">Français (LTR)</option>
+          </select>
+        </div>
+        <div className="dzt-field">
+          <label className="dzt-label">النمط / الثيم</label>
+          <div className="dzt-bc-themes">
+            {BC_THEMES.map(t=>(
+              <button key={t.id} className={`dzt-bc-theme-btn${theme.id===t.id?' active':''}`}
+                style={{background:t.bg,color:t.text,borderColor:theme.id===t.id?t.accent:'transparent'}}
+                onClick={()=>setTheme(t)}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Photo upload */}
+      <div className="dzt-bc-photo-section">
+        <input ref={photoRef} type="file" accept="image/*" style={{display:'none'}} onChange={handlePhoto} />
+        <div className="dzt-bc-photo-upload-area" onClick={()=>photoRef.current?.click()}>
+          {form.photo ? (
+            <div className="dzt-bc-photo-preview-wrap">
+              <img src={form.photo} alt="صورة البطاقة" className="dzt-bc-photo-thumb" />
+              <div className="dzt-bc-photo-preview-label">
+                <span>✅ تم رفع الصورة</span>
+                <button className="dzt-bc-photo-remove" onClick={e=>{ e.stopPropagation(); set('photo','') }}>✕ حذف</button>
+              </div>
+            </div>
+          ) : (
+            <div className="dzt-bc-photo-placeholder">
+              <div className="dzt-bc-photo-circle-empty">👤</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:'#c8ff00'}}>رفع صورة شخصية دائرية</div>
+                <div style={{fontSize:11,color:'#666',marginTop:3}}>JPG · PNG · WebP — تظهر في المعاينة والتصدير</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="dzt-inv-grid2">
+        <input className="dzt-inv-input" placeholder="الاسم الكامل *" value={form.name} onChange={e=>set('name',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="المنصب / الوظيفة *" value={form.title} onChange={e=>set('title',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="اسم الشركة / المؤسسة" value={form.company} onChange={e=>set('company',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="رقم الهاتف" value={form.phone} onChange={e=>set('phone',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="البريد الإلكتروني" value={form.email} onChange={e=>set('email',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="الموقع الإلكتروني" value={form.website} onChange={e=>set('website',e.target.value)} />
+        <input className="dzt-inv-input" placeholder="العنوان / المدينة" value={form.address} onChange={e=>set('address',e.target.value)} style={{gridColumn:'span 2'}} />
+      </div>
+
+      {/* Live Preview */}
+      <div className="dzt-bc-preview-wrap">
+        <div className="dzt-bc-preview-label">معاينة مباشرة</div>
+        <div className="dzt-bc-card-outer">
+          <div
+            ref={cardRef}
+            className="dzt-bc-card"
+            style={{background:theme.bg, color:theme.text, direction:lang==='ar'?'rtl':'ltr', fontFamily:lang==='ar'?'Cairo, sans-serif':'Inter, sans-serif'}}
+          >
+            <div className="dzt-bc-accent" style={{background:theme.accent, [lang==='ar'?'right':'left']:0}} />
+            {/* Circular photo */}
+            {form.photo && (
+              <div className="dzt-bc-photo-circle" style={{
+                borderColor: theme.accent,
+                [lang==='ar' ? 'left' : 'right']: 14
+              }}>
+                <img src={form.photo} alt="" />
+              </div>
+            )}
+            <div className="dzt-bc-top">
+              <div className="dzt-bc-name" style={{color:theme.text}}>{form.name||'الاسم الكامل'}</div>
+              <div className="dzt-bc-title" style={{color:theme.accent}}>{form.title||'المنصب'}</div>
+              {form.company && <div className="dzt-bc-company" style={{color:theme.sub}}>{form.company}</div>}
+            </div>
+            <div className="dzt-bc-contacts">
+              {form.phone   && <div className="dzt-bc-contact" style={{color:theme.sub}}>📞 {form.phone}</div>}
+              {form.email   && <div className="dzt-bc-contact" style={{color:theme.sub}}>✉️ {form.email}</div>}
+              {form.website && <div className="dzt-bc-contact" style={{color:theme.sub}}>🌐 {form.website}</div>}
+              {form.address && <div className="dzt-bc-contact" style={{color:theme.sub}}>📍 {form.address}</div>}
+            </div>
+            <div className="dzt-bc-brand" style={{color:theme.accent}}>DZ-GPT</div>
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={printCard} disabled={!form.name}>
+        <Download size={16}/> تصدير PDF (90×55mm)
+      </button>
+    </div>
+  )
+}
+
+
+// ─── Darija Translator Tool ───────────────────────────────────────────────────
+const DARIJA_DIRS = [
+  { id: 'ar2dz', label: 'عربي فصيح  →  دارجة', from: 'العربية الفصحى', to: 'الدارجة الجزائرية' },
+  { id: 'dz2ar', label: 'دارجة  →  عربي فصيح', from: 'الدارجة الجزائرية', to: 'العربية الفصحى' },
+  { id: 'fr2dz', label: 'Français  →  دارجة',   from: 'الفرنسية', to: 'الدارجة الجزائرية' },
+  { id: 'dz2fr', label: 'دارجة  →  Français',   from: 'الدارجة الجزائرية', to: 'الفرنسية' },
+]
+const DARIJA_REGIONS = [
+  { id: 'center', label: '🏙️ الجزائر العاصمة / الوسط' },
+  { id: 'west',   label: '🌅 وهران / تلمسان (الغرب)' },
+  { id: 'east',   label: '🏔️ قسنطينة / عنابة (الشرق)' },
+  { id: 'south',  label: '🏜️ الجنوب (تمنراست / ورقلة)' },
+]
+function DarijaTool() {
+  const [dir,      setDir]      = useState('ar2dz')
+  const [region,   setRegion]   = useState('center')
+  const [input,    setInput]    = useState('')
+  const [output,   setOutput]   = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [copied,   setCopied]   = useState(false)
+  const [examples, setExamples] = useState<{original:string;darija:string;note:string}[]>([])
+
+  const QUICK: Record<string, string[]> = {
+    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا تعبان'],
+    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','أنا مريض'],
+    fr2dz: ['Comment tu vas?','Je veux manger','Où habites-tu?','Merci beaucoup','Au revoir','C\'est combien?','Je suis fatigué','Allons-y'],
+    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','أنا مريض','هيا بينا'],
+  }
+
+  const regionLabels: Record<string,string> = { center:'الجزائر العاصمة', west:'وهران والغرب', east:'قسنطينة والشرق', south:'الجنوب الجزائري' }
+
+  const translate = async () => {
+    if (!input.trim()) return
+    setLoading(true); setOutput(''); setExamples([])
+    const d = DARIJA_DIRS.find(x=>x.id===dir)!
+    const reg = regionLabels[region]
+    const prompt = `أنت خبير في اللهجة الجزائرية الدارجة ومتمكن من جميع اللهجات الجزائرية الإقليمية.
+
+المهمة: ترجم النص التالي من ${d.from} إلى ${d.to} — مع مراعاة لهجة منطقة: ${reg}
+
+النص: "${input}"
+
+أعطني:
+1. **الترجمة الرئيسية** (كبيرة وواضحة):
+[ضع الترجمة هنا فقط]
+
+2. **شرح مختصر** (إذا كانت هناك تعابير خاصة):
+[شرح التعابير الصعبة]
+
+3. **أمثلة مماثلة** (3 أمثلة بنفس الأسلوب اللهجوي):
+- مثال 1: [أصل] | [ترجمة]
+- مثال 2: [أصل] | [ترجمة]  
+- مثال 3: [أصل] | [ترجمة]
+
+ملاحظة: استخدم الكتابة العربية للدارجة، ويمكن إضافة كلمات فرنسية مدرجة إذا كانت شائعة في المنطقة.`
+
+    try {
+      const res  = await fetch('/api/dz-agent-chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages:[{role:'user',content:prompt}] })
+      })
+      const data = await res.json()
+      const text = data.content || ''
+      // Extract main translation
+      const mainMatch = text.match(/\*\*الترجمة الرئيسية\*\*[^\n]*\n+([\s\S]*?)(?=\n\n|\*\*شرح|$)/i)
+      setOutput(mainMatch ? mainMatch[1].trim() : text.split('\n').find((l:string)=>l.trim()&&!l.startsWith('#')&&!l.startsWith('*')) || text)
+      // Extract examples
+      const exMatches = [...text.matchAll(/مثال \d+:\s*([^|]+)\|([^\n]+)/g)]
+      setExamples(exMatches.slice(0,3).map(m=>({ original:m[1].trim(), darija:m[2].trim(), note:'' })))
+    } catch { setOutput('⚠️ خطأ في الاتصال، حاول مرة أخرى.') }
+    setLoading(false)
+  }
+
+  const swap = () => {
+    const pairs: Record<string,string> = { ar2dz:'dz2ar', dz2ar:'ar2dz', fr2dz:'dz2fr', dz2fr:'fr2dz' }
+    setDir(pairs[dir]||dir); setInput(output); setOutput(''); setExamples([])
+  }
+
+  return (
+    <div className="dzt-dj-wrap">
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">🗣️</div>
+        <div>
+          <div className="dzt-tool-desc-title">مترجم الدارجة الجزائرية</div>
+          <div className="dzt-tool-desc-text">ترجمة ذكية بين العربية الفصحى والفرنسية والدارجة الجزائرية — مع مراعاة اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
+        </div>
+      </div>
+
+      {/* Direction */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">اتجاه الترجمة</label>
+        <div className="dzt-dj-dirs">
+          {DARIJA_DIRS.map(d=>(
+            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`} onClick={()=>{setDir(d.id);setOutput('');setExamples([])}}>
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Region */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">المنطقة / اللهجة</label>
+        <div className="dzt-dj-regions">
+          {DARIJA_REGIONS.map(r=>(
+            <button key={r.id} className={`dzt-dj-region${region===r.id?' active':''}`} onClick={()=>setRegion(r.id)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick examples */}
+      <div className="dzt-dj-block">
+        <label className="dzt-label">أمثلة سريعة</label>
+        <div className="dzt-dj-quick">
+          {(QUICK[dir]||[]).map(q=>(
+            <button key={q} className="dzt-dj-quick-btn" onClick={()=>{setInput(q);setOutput('');setExamples([])}}>
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Input / Output */}
+      <div className="dzt-dj-panels">
+        <div className="dzt-dj-panel">
+          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.from}</div>
+          <textarea className="dzt-dj-textarea" placeholder="اكتب النص هنا..." value={input}
+            onChange={e=>setInput(e.target.value)} rows={4}
+            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()} />
+        </div>
+
+        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه">⇄</button>
+
+        <div className="dzt-dj-panel">
+          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.to}
+            {output && <button className={`dzt-dj-copy${copied?' done':''}`}
+              onClick={()=>{navigator.clipboard.writeText(output);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
+              {copied?'✅':'📋'}
+            </button>}
+          </div>
+          <div className={`dzt-dj-output${loading?' loading':''}`}>
+            {loading ? <span className="dzt-dj-loading-txt">⏳ AI يترجم...</span>
+                     : output || <span style={{color:'#333'}}>ستظهر الترجمة هنا...</span>}
+          </div>
+        </div>
+      </div>
+
+      <button className="dzt-btn" onClick={translate} disabled={loading||!input.trim()}
+        style={{fontSize:14,padding:'12px 24px'}}>
+        {loading?'⏳ جاري الترجمة...':'🗣️ ترجم الآن'}
+      </button>
+
+      {/* Examples */}
+      {examples.length>0 && (
+        <div className="dzt-dj-examples">
+          <div className="dzt-dj-ex-title">📚 أمثلة مماثلة</div>
+          {examples.map((ex,i)=>(
+            <div key={i} className="dzt-dj-ex-row">
+              <span className="dzt-dj-ex-orig">{ex.original}</span>
+              <span className="dzt-dj-ex-arrow">→</span>
+              <span className="dzt-dj-ex-trans">{ex.darija}</span>
+              <button className="dzt-dj-ex-use" onClick={()=>{setInput(ex.original);setOutput('');setExamples([])}}>جرب</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── Zakat Calculator Tool ────────────────────────────────────────────────────
+type ZakatTab = 'mal' | 'gold' | 'silver' | 'trade' | 'crops'
+const ZAKAT_TABS: {id:ZakatTab;icon:string;label:string}[] = [
+  { id:'mal',    icon:'💵', label:'زكاة المال' },
+  { id:'gold',   icon:'🥇', label:'زكاة الذهب' },
+  { id:'silver', icon:'🥈', label:'زكاة الفضة' },
+  { id:'trade',  icon:'🛒', label:'زكاة التجارة' },
+  { id:'crops',  icon:'🌾', label:'زكاة الزروع' },
+]
+function ZakatTool() {
+  const [tab,        setTab]       = useState<ZakatTab>('mal')
+  const [goldPrice,  setGoldPrice] = useState(9200)   // DZD per gram (18k avg 2025)
+  const [silverPrice,setSilverPrice] = useState(95)   // DZD per gram
+  // Mal
+  const [savings,    setSavings]   = useState('')
+  const [debts,      setDebts]     = useState('')
+  // Gold
+  const [goldGrams,  setGoldGrams] = useState('')
+  const [goldKarat,  setGoldKarat] = useState(21)
+  // Silver
+  const [silverGrams,setSilverGrams]=useState('')
+  // Trade
+  const [inventory,  setInventory] = useState('')
+  const [receivables,setReceivables]=useState('')
+  const [tradeDebts, setTradeDebts]=useState('')
+  // Crops
+  const [cropsKg,    setCropsKg]   = useState('')
+  const [cropsPrice, setCropsPrice]=useState('')
+  const [irrigated,  setIrrigated] = useState(false)
+
+  // Nisab calculations
+  const nisabGold   = 85 * goldPrice                       // 85g gold in DZD
+  const nisabSilver = 595 * silverPrice                    // 595g silver in DZD
+  const nisabCrops  = 653                                  // 653 kg
+
+  // Results
+  const calcMal = () => {
+    const net = (parseFloat(savings)||0) - (parseFloat(debts)||0)
+    if (net < nisabGold) return null
+    return { base: net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
+  }
+  const calcGold = () => {
+    const grams = parseFloat(goldGrams)||0
+    const purity = goldKarat/24
+    const pureGrams = grams * purity
+    const value = pureGrams * goldPrice
+    const nisab85 = 85 * goldPrice
+    if (pureGrams < 85) return { grams, pureGrams, value, nisab: nisab85, eligible: false, zakat: 0 }
+    return { grams, pureGrams, value, nisab: nisab85, eligible: true, zakat: value * 0.025 }
+  }
+  const calcSilver = () => {
+    const grams = parseFloat(silverGrams)||0
+    const value = grams * silverPrice
+    const nisab595 = 595 * silverPrice
+    if (grams < 595) return { grams, value, nisab: nisab595, eligible: false, zakat: 0 }
+    return { grams, value, nisab: nisab595, eligible: true, zakat: value * 0.025 }
+  }
+  const calcTrade = () => {
+    const net = (parseFloat(inventory)||0) + (parseFloat(receivables)||0) - (parseFloat(tradeDebts)||0)
+    if (net < nisabGold) return null
+    return { net, zakat: net * 0.025, nisab: nisabGold, eligible: true }
+  }
+  const calcCrops = () => {
+    const kg = parseFloat(cropsKg)||0
+    const price = parseFloat(cropsPrice)||0
+    const value = kg * price
+    const rate = irrigated ? 0.05 : 0.10
+    if (kg < nisabCrops) return { kg, value, rate, nisab: nisabCrops, eligible: false, zakat: 0 }
+    return { kg, value, rate, nisab: nisabCrops, eligible: true, zakat: value * rate }
+  }
+
+  const fmt = (n:number) => n.toLocaleString('fr-DZ',{maximumFractionDigits:0}) + ' دج'
+
+  const ResultBox = ({eligible,zakat,note}:{eligible:boolean;zakat:number;note?:string}) => (
+    <div className={`dzt-zk-result${eligible?' eligible':' not-eligible'}`}>
+      {eligible ? (
+        <>
+          <div className="dzt-zk-result-label">✅ تجب عليك الزكاة</div>
+          <div className="dzt-zk-result-amount">{fmt(zakat)}</div>
+          <div className="dzt-zk-result-sub">مبلغ الزكاة الواجبة (ربع العشر 2.5%)</div>
+        </>
+      ) : (
+        <>
+          <div className="dzt-zk-result-label">🔵 لا تجب عليك الزكاة</div>
+          <div className="dzt-zk-result-sub">النصاب لم يكتمل بعد</div>
+        </>
+      )}
+      {note && <div className="dzt-zk-result-note">ℹ️ {note}</div>}
+    </div>
+  )
+
+  return (
+    <div className="dzt-zk-wrap">
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">☪️</div>
+        <div>
+          <div className="dzt-tool-desc-title">حاسبة الزكاة الشاملة — 2025</div>
+          <div className="dzt-tool-desc-text">احسب زكاة المال والذهب والفضة والتجارة والزروع بالدينار الجزائري — بناءً على أسعار 2025 والنصاب الشرعي</div>
+        </div>
+      </div>
+
+      {/* Gold/Silver prices */}
+      <div className="dzt-zk-prices">
+        <div className="dzt-zk-price-field">
+          <label className="dzt-label">سعر الذهب (دج/غرام 18 قيراط)</label>
+          <input type="number" className="dzt-inv-input" value={goldPrice}
+            onChange={e=>setGoldPrice(+e.target.value)} placeholder="9200" />
+          <div className="dzt-zk-hint">النصاب = 85غ × {goldPrice.toLocaleString()} = <strong>{fmt(nisabGold)}</strong></div>
+        </div>
+        <div className="dzt-zk-price-field">
+          <label className="dzt-label">سعر الفضة (دج/غرام)</label>
+          <input type="number" className="dzt-inv-input" value={silverPrice}
+            onChange={e=>setSilverPrice(+e.target.value)} placeholder="95" />
+          <div className="dzt-zk-hint">النصاب = 595غ × {silverPrice} = <strong>{fmt(nisabSilver)}</strong></div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="dzt-zk-tabs">
+        {ZAKAT_TABS.map(t=>(
+          <button key={t.id} className={`dzt-zk-tab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+            <span>{t.icon}</span><span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="dzt-zk-body">
+
+        {tab==='mal' && (() => {
+          const r = calcMal()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 زكاة المال تجب إذا بلغ المال النصاب (≈ {fmt(nisabGold)}) وحال عليه الحول (سنة هجرية كاملة)</div>
+              <label className="dzt-label">المدخرات والأموال السائلة (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 500000" value={savings} onChange={e=>setSavings(e.target.value)} />
+              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 50000 أو 0" value={debts} onChange={e=>setDebts(e.target.value)} />
+              {savings && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء الزكوي: ${fmt(r.base)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='gold' && (() => {
+          const r = calcGold()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الذهب = 85 غراماً من الذهب الخالص (24 قيراط) — أي ما يعادل ≈ {fmt(85*goldPrice)} بالأسعار الحالية</div>
+              <label className="dzt-label">وزن الذهب (غرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 120" value={goldGrams} onChange={e=>setGoldGrams(e.target.value)} />
+              <label className="dzt-label">عيار الذهب</label>
+              <div className="dzt-ht-pills" style={{marginBottom:8}}>
+                {[18,21,22,24].map(k=>(
+                  <button key={k} className={`dzt-ht-pill${goldKarat===k?' active':''}`} onClick={()=>setGoldKarat(k)}>{k} قيراط</button>
+                ))}
+              </div>
+              {goldGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`الذهب الخالص: ${r.pureGrams.toFixed(1)}غ — القيمة: ${fmt(r.value)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='silver' && (() => {
+          const r = calcSilver()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الفضة = 595 غراماً — أي ما يعادل ≈ {fmt(nisabSilver)} بالأسعار الحالية (الفضة أقل من الذهب فنصابها يُستخدم لمن فيه رفق بالفقراء)</div>
+              <label className="dzt-label">وزن الفضة (غرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 700" value={silverGrams} onChange={e=>setSilverGrams(e.target.value)} />
+              {silverGrams && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`القيمة: ${fmt(r.value)} — النصاب: ${fmt(r.nisab)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='trade' && (() => {
+          const r = calcTrade()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 زكاة عروض التجارة = (البضاعة + الذمم المدينة − الديون) × 2.5% — إذا بلغ المجموع النصاب</div>
+              <label className="dzt-label">قيمة المخزون / البضاعة (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 2000000" value={inventory} onChange={e=>setInventory(e.target.value)} />
+              <label className="dzt-label">الذمم المدينة (ديون الغير لك) (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 300000 أو 0" value={receivables} onChange={e=>setReceivables(e.target.value)} />
+              <label className="dzt-label">الديون المستحقة عليك (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 100000 أو 0" value={tradeDebts} onChange={e=>setTradeDebts(e.target.value)} />
+              {inventory && <ResultBox eligible={!!r} zakat={r?.zakat||0} note={r?`الوعاء: ${fmt(r.net)}`:`النصاب المطلوب: ${fmt(nisabGold)}`} />}
+            </div>
+          )
+        })()}
+
+        {tab==='crops' && (() => {
+          const r = calcCrops()
+          return (
+            <div className="dzt-zk-form">
+              <div className="dzt-zk-info">💡 نصاب الزروع = 653 كغ — المعدل: 10% للأرض المسقية بالمطر · 5% للأرض المروية بالري الاصطناعي</div>
+              <label className="dzt-label">كمية المحصول (كيلوغرام)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 1000" value={cropsKg} onChange={e=>setCropsKg(e.target.value)} />
+              <label className="dzt-label">سعر الكيلو (دج)</label>
+              <input type="number" className="dzt-inv-input" placeholder="مثال: 80" value={cropsPrice} onChange={e=>setCropsPrice(e.target.value)} />
+              <div className="dzt-dj-dirs" style={{marginTop:4}}>
+                <button className={`dzt-dj-dir-btn${!irrigated?' active':''}`} onClick={()=>setIrrigated(false)}>
+                  🌧️ بعلي (مطر) — العشر 10%
+                </button>
+                <button className={`dzt-dj-dir-btn${irrigated?' active':''}`} onClick={()=>setIrrigated(true)}>
+                  🚿 مروي (ري اصطناعي) — نصف العشر 5%
+                </button>
+              </div>
+              {cropsKg && cropsPrice && <ResultBox eligible={r.eligible} zakat={r.zakat}
+                note={`المحصول: ${(parseFloat(cropsKg)||0).toLocaleString()} كغ — القيمة: ${fmt(r.value)} — المعدل: ${r.rate*100}%`} />}
+            </div>
+          )
+        })()}
+
+      </div>
+
+      {/* Summary */}
+      <div className="dzt-zk-summary">
+        <div className="dzt-zk-summary-title">📊 ملخص شرعي مهم</div>
+        <div className="dzt-zk-summary-items">
+          <div className="dzt-zk-summary-item">⏱️ <strong>الحول</strong>: يجب أن يمر على المال سنة هجرية كاملة</div>
+          <div className="dzt-zk-summary-item">🕌 <strong>النية</strong>: تجب النية عند إخراج الزكاة</div>
+          <div className="dzt-zk-summary-item">📅 <strong>التوقيت</strong>: رمضان أفضل وقت لإخراجها ولكن تُخرج حين الوجوب</div>
+          <div className="dzt-zk-summary-item">🤲 <strong>المستحقون</strong>: الفقراء · المساكين · ابن السبيل · في سبيل الله · المؤلفة قلوبهم</div>
+          <div className="dzt-zk-summary-item">⚠️ <strong>تنبيه</strong>: الأسعار تقريبية — راجع عالماً معتمداً للتثبت</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ─── Data Analysis Tool (CSV / Excel) ─────────────────────────────────────────
+interface DataRow { [key: string]: string | number }
+
+function DataAnalysisTool() {
+  const [rows, setRows]       = useState<DataRow[]>([])
+  const [cols, setCols]       = useState<string[]>([])
+  const [filename, setFilename] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [summary, setSummary] = useState('')
+  const [chartCol, setChartCol] = useState('')
+  const [error, setError]     = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const numCols = cols.filter(c => rows.some(r => !isNaN(parseFloat(String(r[c])))))
+
+  const parseFile = useCallback(async (file: File) => {
+    setLoading(true); setError(''); setRows([]); setCols([]); setSummary(''); setChartCol('')
+    setFilename(file.name)
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let parsed: DataRow[] = []
+      let headers: string[] = []
+
+      if (ext === 'csv') {
+        const text = await file.text()
+        const Papa = (await import('papaparse')).default
+        const result = Papa.parse<DataRow>(text, { header: true, skipEmptyLines: true, dynamicTyping: true })
+        parsed  = result.data
+        headers = result.meta.fields || []
+      } else {
+        const buffer = await file.arrayBuffer()
+        const XLSX   = await import('xlsx')
+        const wb     = XLSX.read(buffer, { type: 'array' })
+        const ws     = wb.Sheets[wb.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][]
+        if (data.length < 2) throw new Error('الملف فارغ')
+        headers = (data[0] as string[]).map(String)
+        parsed  = data.slice(1).map(row => {
+          const r = row as (string | number)[]
+          const obj: DataRow = {}
+          headers.forEach((h, i) => { obj[h] = r[i] ?? '' })
+          return obj
+        })
+      }
+      setCols(headers)
+      setRows(parsed.slice(0, 500))
+      const firstNum = headers.find(c => parsed.some(r => !isNaN(parseFloat(String(r[c])))))
+      if (firstNum) setChartCol(firstNum)
+    } catch (e) {
+      setError('تعذّر قراءة الملف. تأكد أنه CSV أو Excel صحيح.')
+    }
+    setLoading(false)
+  }, [])
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) parseFile(file)
+  }
+
+  const getStats = (col: string) => {
+    const vals = rows.map(r => parseFloat(String(r[col]))).filter(v => !isNaN(v))
+    if (!vals.length) return null
+    const sum = vals.reduce((a,b)=>a+b,0)
+    const min = Math.min(...vals), max = Math.max(...vals)
+    const avg = sum / vals.length
+    const sorted = [...vals].sort((a,b)=>a-b)
+    const median = sorted[Math.floor(sorted.length/2)]
+    return { sum, min, max, avg, median, count: vals.length }
+  }
+
+  const aiSummary = async () => {
+    if (!rows.length) return
+    setLoading(true)
+    try {
+      const sample = rows.slice(0,20)
+      const statsStr = numCols.map(c => {
+        const s = getStats(c); if (!s) return ''
+        return `${c}: المجموع=${s.sum.toFixed(0)}, المتوسط=${s.avg.toFixed(2)}, الأدنى=${s.min}, الأعلى=${s.max}`
+      }).filter(Boolean).join('\n')
+      const prompt = `أنت محلل بيانات. لديك ملف "${filename}" يحتوي على ${rows.length} صف و ${cols.length} عمود.
+الأعمدة: ${cols.join('، ')}
+إحصائيات الأعمدة العددية:
+${statsStr}
+عينة من البيانات (أول 5 صفوف):
+${JSON.stringify(sample.slice(0,5), null, 2)}
+
+اكتب ملخصاً تحليلياً باللغة العربية في 5-8 جمل: ماذا تخبرنا هذه البيانات؟ أبرز الأنماط، القيم المثيرة للاهتمام، وأي ملاحظات مهمة.`
+      const res  = await fetch('/api/dz-agent-chat', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ messages:[{role:'user',content:prompt}], tool:'data-analysis' }) })
+      const data = await res.json()
+      setSummary(data.content || '')
+    } catch { setSummary('⚠️ تعذّر توليد الملخص. حاول مرة أخرى.') }
+    setLoading(false)
+  }
+
+  const chartData = chartCol
+    ? rows.slice(0,20).map((r,i)=>({ name: String(r[cols[0]]||i+1).slice(0,15), value: parseFloat(String(r[chartCol]))||0 }))
+    : []
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:20}}>
+      <div className="dzt-tool-desc">
+        <div className="dzt-tool-desc-icon">📈</div>
+        <div>
+          <div className="dzt-tool-desc-title">محلل البيانات — Excel / CSV</div>
+          <div className="dzt-tool-desc-text">ارفع ملف Excel أو CSV واحصل على جدول، إحصائيات تلقائية، رسوم بيانية وملخص AI فوري</div>
+        </div>
+      </div>
+
+      <div
+        className="dzt-data-dropzone"
+        onDrop={onDrop}
+        onDragOver={e=>e.preventDefault()}
+        onClick={()=>fileRef.current?.click()}
+      >
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" style={{display:'none'}} onChange={e=>{ if(e.target.files?.[0]) parseFile(e.target.files[0]) }} />
+        <Upload size={32} style={{color:'#c8ff00',marginBottom:8}} />
+        <div style={{fontWeight:700,color:'#fff'}}>اسحب الملف هنا أو انقر للاختيار</div>
+        <div style={{fontSize:12,color:'#666',marginTop:4}}>CSV · Excel (.xlsx / .xls) — حتى 500 صف</div>
+      </div>
+
+      {loading && <div className="dzt-spinner" style={{margin:'12px auto'}} />}
+      {error   && <div style={{color:'#f87171',background:'rgba(239,68,68,.08)',borderRadius:10,padding:'12px 16px',fontSize:14}}>{error}</div>}
+
+      {rows.length > 0 && (
+        <>
+          <div className="dzt-data-meta">
+            <span>📁 {filename}</span>
+            <span>🗂️ {rows.length} صف</span>
+            <span>📊 {cols.length} عمود</span>
+            <span>🔢 {numCols.length} عمود رقمي</span>
+          </div>
+
+          {/* Stats Cards */}
+          {numCols.length > 0 && (
+            <div className="dzt-data-stats-grid">
+              {numCols.slice(0,4).map(c => {
+                const s = getStats(c); if (!s) return null
+                return (
+                  <div key={c} className="dzt-data-stat-card">
+                    <div className="dzt-data-stat-col">{c}</div>
+                    <div className="dzt-data-stat-row"><span>المجموع</span><strong>{s.sum.toLocaleString('fr-DZ')}</strong></div>
+                    <div className="dzt-data-stat-row"><span>المتوسط</span><strong>{s.avg.toFixed(2)}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الأدنى</span><strong style={{color:'#f87171'}}>{s.min}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الأعلى</span><strong style={{color:'#4ade80'}}>{s.max}</strong></div>
+                    <div className="dzt-data-stat-row"><span>الوسيط</span><strong>{s.median}</strong></div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Chart */}
+          {numCols.length > 0 && (
+            <div className="dzt-data-chart-section">
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,flexWrap:'wrap'}}>
+                <div style={{fontWeight:700,color:'#ccc',fontSize:14}}>📊 رسم بياني للعمود:</div>
+                <select className="dzt-select" style={{flex:1,maxWidth:260}} value={chartCol} onChange={e=>setChartCol(e.target.value)}>
+                  {numCols.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartData} margin={{top:4,right:4,left:4,bottom:24}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="name" tick={{fill:'#888',fontSize:11}} angle={-30} textAnchor="end" />
+                  <YAxis tick={{fill:'#888',fontSize:11}} />
+                  <Tooltip contentStyle={{background:'#111',border:'1px solid #222',borderRadius:8,color:'#fff'}} />
+                  <Bar dataKey="value" fill="#c8ff00" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* AI Summary */}
+          <div className="dzt-result-actions" style={{marginTop:4}}>
+            <button className="dzt-btn" onClick={aiSummary} disabled={loading}>
+              <BarChart2 size={15}/> ملخص AI للبيانات
+            </button>
+          </div>
+          {summary && (
+            <div className="dzt-result">
+              <div className="dzt-result-header">
+                <span>🤖 ملخص AI</span>
+              </div>
+              <div className="dzt-result-body" style={{padding:'16px 20px'}}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
+              </div>
+            </div>
+          )}
+
+          {/* Table preview */}
+          <div className="dzt-data-table-wrap">
+            <div className="dzt-data-table-label">جدول البيانات (أول 50 صف)</div>
+            <div style={{overflowX:'auto'}}>
+              <table className="dzt-data-table">
+                <thead>
+                  <tr>{cols.map(c=><th key={c}>{c}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0,50).map((r,i)=>(
+                    <tr key={i}>{cols.map(c=><td key={c}>{String(r[c]??'')}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+
 // ─── Hashtag Tool ─────────────────────────────────────────────────────────────
 const HASHTAG_PLATFORMS = [
   { id: 'instagram', label: 'إنستغرام', icon: '📸', max: 30 },
@@ -2750,9 +4421,18 @@ export default function DZTools() {
         {active === 'health'  && <HealthTool />}
         {active === 'image'   && <ImageTool />}
         {active === 'imgproc' && <ImageProcessingTool />}
-        {active === 'ocr'     && <OCRTool />}
-        {active === 'bizplan' && <BizPlanTool />}
-        {active === 'hashtag' && <HashtagTool />}
+        {active === 'ocr'          && <OCRTool />}
+        {active === 'bizplan'      && <BizPlanTool />}
+        {active === 'invoice'      && <InvoiceTool />}
+        {active === 'tax'          && <TaxTool />}
+        {active === 'darija'       && <DarijaTool />}
+        {active === 'zakat'        && <ZakatTool />}
+        {active === 'hashtag'      && <HashtagTool />}
+        {active === 'excel'        && <SpreadsheetTool />}
+        {active === 'pension'      && <PensionTool />}
+        {active === 'qrcode'       && <QRCodeTool />}
+        {active === 'bizcard'      && <BizCardTool />}
+        {active === 'dataanalysis' && <DataAnalysisTool />}
       </div>
     </div>
   )

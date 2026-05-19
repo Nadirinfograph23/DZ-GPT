@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import SpreadsheetTool from '../components/SpreadsheetTool'
 import { createWorker } from 'tesseract.js'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, Upload, BarChart2, QrCode, Calculator } from 'lucide-react'
@@ -125,7 +126,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'dataanalysis' | 'excel'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -135,6 +136,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'health',       icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',          desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
   { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',          desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
+  { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',         desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
   { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',      desc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل', badge: 'NEW' },
   { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',           desc: 'أنشئ QR Code احترافي لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
   { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',             desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
@@ -2848,6 +2850,7 @@ export default function DZTools() {
       </div>
 
       <div className="dzt-content" style={{ paddingBottom: contentPb }}>
+        {active === 'excel'        && <SpreadsheetTool />}
         {active === 'cv'           && <CVTool />}
         {active === 'planner'      && <PlannerTool />}
         {active === 'docs'         && <BizDocsTool />}

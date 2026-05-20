@@ -18807,12 +18807,16 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   }
 })
 
-// POST /api/tools/img2img — Image-to-Image with prompt
+// POST /api/tools/img2img — Image-to-Image with prompt (FIXED)
 app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res) => {
-  const { imageBase64, prompt, negativePrompt, strength = 0.75, steps = 20 } = req.body
+  const { imageBase64, prompt, negativePrompt, strength = 0.75 } = req.body
   if (!imageBase64 || !prompt?.trim()) return res.status(400).json({ error: 'imageBase64 و prompt مطلوبان' })
 
-  const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const imgB64    = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const dataUri   = `data:image/png;base64,${imgB64}`
+  const imgBuf    = Buffer.from(imgB64, 'base64')
+  const token     = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  const negPrompt = negativePrompt || 'ugly, blurry, low quality, distorted, deformed'
 
   // ── SD WebUI img2img ─────────────────────────────────────────────────────
   const sdUrl = process.env.SD_WEBUI_URL
@@ -18821,68 +18825,159 @@ app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res)
       const r = await fetch(`${sdUrl.replace(/\/$/, '')}/sdapi/v1/img2img`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_images: [imgB64], prompt, negative_prompt: negativePrompt || '', denoising_strength: strength, steps, cfg_scale: 7 }),
+        body: JSON.stringify({ init_images: [imgB64], prompt, negative_prompt: negPrompt, denoising_strength: strength, steps: 28, cfg_scale: 7 }),
         signal: AbortSignal.timeout(120000),
       })
       if (r.ok) {
         const d = await r.json()
         const img = d.images?.[0]
-        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'SD WebUI img2img', provider: 'sdwebui' })
+        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'AI DZ Media', provider: 'sdwebui' })
       }
     } catch (e) { console.warn('[img2img:sdwebui]', e.message) }
   }
 
-  // ── HuggingFace img2img models ───────────────────────────────────────────
-  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
-  const models = [
-    'timbrooks/instruct-pix2pix',
-    'lllyasviel/sd-controlnet-canny',
-  ]
-  for (const modelId of models) {
+  // ── fal-ai FLUX Dev img2img via HuggingFace router (best free AI quality) ──
+  if (token) {
     try {
-      const imgBuf = Buffer.from(imgB64, 'base64')
-      const r = await fetch(`https://router.huggingface.co/hf-inference/models/${modelId}`, {
+      const r = await fetch('https://router.huggingface.co/fal-ai/fal-ai/flux/dev/image-to-image', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ inputs: prompt, image: imgB64 }),
-        signal: AbortSignal.timeout(60000),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          image_url: dataUri,
+          prompt,
+          negative_prompt: negPrompt,
+          strength: Math.max(0.5, strength),
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+          seed: Math.floor(Math.random() * 9999999),
+        }),
+        signal: AbortSignal.timeout(90000),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        const imgUrl = d.images?.[0]?.url || d.image?.url
+        if (imgUrl?.startsWith('http')) {
+          const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(20000) })
+          if (ir.ok) {
+            const buf = Buffer.from(await ir.arrayBuffer())
+            const ct  = ir.headers.get('content-type') || 'image/jpeg'
+            return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
+          }
+        }
+        if (imgUrl) return res.json({ imageUrl: imgUrl, model: 'AI DZ Media', provider: 'ai-dz' })
+      }
+    } catch (e) { console.warn('[img2img:fal-flux]', e.message) }
+  }
+
+  // ── InstructPix2Pix via HuggingFace (instruction-following img2img) ───────
+  if (token) {
+    try {
+      // Format: inputs = base64 image, parameters.prompt = instruction
+      const r = await fetch('https://router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          inputs: imgB64,
+          parameters: {
+            prompt,
+            negative_prompt: negPrompt,
+            num_inference_steps: 30,
+            image_guidance_scale: Math.max(1.2, 2.0 - strength),
+            guidance_scale: 7.5,
+          }
+        }),
+        signal: AbortSignal.timeout(90000),
       })
       const ct = r.headers.get('content-type') || ''
       if (r.ok && ct.startsWith('image/')) {
         const buf = Buffer.from(await r.arrayBuffer())
-        return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}`, model: modelId.split('/').pop(), provider: 'huggingface' })
+        return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
       }
-    } catch (e) { console.warn('[img2img:hf]', modelId, e.message) }
+    } catch (e) { console.warn('[img2img:pix2pix]', e.message) }
   }
 
-  // ── Sharp filter fallback — apply style simulation locally ────────────────
+  // ── Stable Horde img2img (free, anonymous, REAL img2img with source image) ──
+  // Anonymous key "0000000000" works — distributed GPU network, no account needed
   try {
-    const sharp = (await import('sharp')).default
-    const imgBuf = Buffer.from(imgB64, 'base64')
-    const meta = await sharp(imgBuf).metadata()
-    const W = Math.min(meta.width || 512, 1024), H = Math.min(meta.height || 512, 1024)
-    const lp = prompt.toLowerCase()
-    let pipeline = sharp(imgBuf).resize(W, H)
-    if (/sketch|رسم|ébauche/.test(lp))       pipeline = pipeline.greyscale().sharpen(3)
-    else if (/dark|gloomy|مظلم/.test(lp))    pipeline = pipeline.modulate({ brightness: 0.6, saturation: 0.5 })
-    else if (/vivid|vibrant|زاهي/.test(lp))  pipeline = pipeline.modulate({ saturation: 2.2, brightness: 1.1 })
-    else if (/vintage|قديم|rétro/.test(lp))  pipeline = pipeline.tint({ r: 210, g: 180, b: 140 })
-    else if (/blur|soft|ناعم/.test(lp))      pipeline = pipeline.blur(4)
-    else                                      pipeline = pipeline.modulate({ saturation: 1.4 }).sharpen(1)
-    const out = await pipeline.png().toBuffer()
-    return res.json({ imageBase64: `data:image/png;base64,${out.toString('base64')}`, model: 'Sharp Filter (محلي)', provider: 'local', note: 'أضف SD_WEBUI_URL أو HF_TOKEN لنتائج AI حقيقية' })
-  } catch (e) {
-    return res.status(500).json({ error: 'فشل تحويل الصورة: ' + e.message.slice(0, 100) })
-  }
+    console.log('[img2img:stable-horde] submitting job...')
+    const hordeR = await fetch('https://stablehorde.net/api/v2/generate/async', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': '0000000000' },
+      body: JSON.stringify({
+        prompt,
+        params: {
+          n: 1,
+          width: 512,
+          height: 512,
+          denoising_strength: typeof strength === 'number' ? Math.max(0.5, strength) : 0.65,
+          steps: 20,
+          cfg_scale: 7.5,
+          sampler_name: 'k_euler_a',
+        },
+        source_image: imgB64,
+        source_processing: 'img2img',
+        models: ['Deliberate'],
+        nsfw: false,
+        censor_nsfw: true,
+        slow_workers: true,
+        r2: false,
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (hordeR.ok) {
+      const { id } = await hordeR.json()
+      console.log('[img2img:stable-horde] job id:', id)
+      if (id) {
+        for (let attempt = 0; attempt < 16; attempt++) {
+          await new Promise(r => setTimeout(r, 5000))
+          try {
+            const statusR = await fetch(`https://stablehorde.net/api/v2/generate/status/${id}`, { signal: AbortSignal.timeout(10000) })
+            if (!statusR.ok) continue
+            const status = await statusR.json()
+            console.log(`[img2img:stable-horde] attempt ${attempt + 1}: done=${status.done} faulted=${status.faulted} queue=${status.queue_position}`)
+            if (status.done && status.generations?.length) {
+              const imgResult = status.generations[0].img
+              if (imgResult) {
+                console.log('[img2img:stable-horde] ✅ got result image')
+                return res.json({ imageBase64: `data:image/webp;base64,${imgResult}`, model: 'AI DZ Media', provider: 'ai-dz' })
+              }
+            }
+            if (status.faulted) { console.warn('[img2img:stable-horde] job faulted'); break }
+          } catch (pe) { console.warn('[img2img:stable-horde:poll]', pe.message) }
+        }
+      }
+    } else {
+      console.warn('[img2img:stable-horde] submit failed:', hordeR.status, await hordeR.text().catch(() => ''))
+    }
+  } catch (e) { console.warn('[img2img:stable-horde]', e.message) }
+
+  // ── Pollinations turbo via curl (txt2img fallback — no source image used) ──
+  try {
+    const { execFile } = await import('child_process')
+    const seed   = Math.floor(Math.random() * 9000000)
+    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', ultra detailed, photorealistic, high quality, professional photography')}?model=turbo&width=768&height=768&seed=${seed}`
+    const buf    = await new Promise((resolve, reject) => {
+      execFile('curl', ['-sL', '--max-time', '50', '-A', 'Mozilla/5.0', '-o', '-', polUrl],
+        { encoding: 'buffer', maxBuffer: 30 * 1024 * 1024, timeout: 55000 },
+        (err, stdout) => { if (err || !stdout?.length) reject(err || new Error('empty')); else resolve(stdout) }
+      )
+    })
+    if (buf[0] === 0xFF || buf[0] === 0x89) {
+      const mime = buf[0] === 0x89 ? 'image/png' : 'image/jpeg'
+      console.log('[img2img:pollinations] ✅ fallback image generated from prompt')
+      return res.json({ imageBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz', note: 'أضف HF_TOKEN للحصول على img2img دقيق بالصورة المرجعية' })
+    }
+  } catch (e) { console.warn('[img2img:curl-pollinations]', e.message) }
+
+  return res.status(500).json({ error: 'فشل تحويل الصورة — أضف HF_TOKEN في الأسرار للحصول على نتائج أفضل' })
 })
 
-// POST /api/tools/video-gen — Video Generation (Text-to-Video / Image-to-Video)
+// POST /api/tools/video-gen — Video Generation: multi-frame animated sequence (FIXED)
 app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, res) => {
   const { prompt, imageBase64 } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
+
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
 
   // ── SD WebUI AnimateDiff ─────────────────────────────────────────────────
   const sdUrl = process.env.SD_WEBUI_URL
@@ -18891,49 +18986,92 @@ app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, re
       const r = await fetch(`${sdUrl.replace(/\/$/, '')}/animatediff/txt2gif`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, steps: 20, width: 512, height: 512, num_frames: 16 }),
+        body: JSON.stringify({ prompt, steps: 20, width: 512, height: 288, num_frames: 16 }),
         signal: AbortSignal.timeout(180000),
       })
       if (r.ok) {
         const d = await r.json()
-        if (d.gif) return res.json({ videoBase64: `data:image/gif;base64,${d.gif}`, model: 'AnimateDiff (SD WebUI)', provider: 'sdwebui' })
+        if (d.gif) return res.json({ videoBase64: `data:image/gif;base64,${d.gif}`, model: 'AI DZ Media', provider: 'sdwebui' })
       }
     } catch (e) { console.warn('[video-gen:sdwebui]', e.message) }
   }
 
-  // ── HuggingFace text-to-video ─────────────────────────────────────────────
-  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  // ── HuggingFace text-to-video (fast attempt, 30s max) ────────────────────
   if (token) {
-    const videoModels = [
-      ['damo-vilab/text-to-video-ms-1.7b', { inputs: prompt }],
-    ]
-    for (const [modelId, body] of videoModels) {
-      try {
-        const r = await fetch(`https://router.huggingface.co/hf-inference/models/${modelId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(180000),
-        })
-        const ct = r.headers.get('content-type') || ''
-        if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
-          const buf = Buffer.from(await r.arrayBuffer())
-          const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
-          return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: modelId.split('/').pop(), provider: 'huggingface' })
-        }
-      } catch (e) { console.warn('[video-gen:hf]', e.message) }
+    try {
+      const r = await fetch('https://router.huggingface.co/hf-inference/models/damo-vilab/text-to-video-ms-1.7b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ inputs: prompt }),
+        signal: AbortSignal.timeout(45000),
+      })
+      const ct = r.headers.get('content-type') || ''
+      if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
+        return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
+      }
+    } catch (e) { console.warn('[video-gen:hf-video]', e.message) }
+  }
+
+  // ── Pollinations via curl + Ken Burns (1 request → IP limit respected) ──────
+  // Pollinations limits 1 concurrent request per IP — so we get 1 quality image
+  // then apply Ken Burns zoom/pan in the frontend to simulate video motion.
+  console.log('[video-gen:frames] generating cinematic image via curl+Pollinations...')
+  try {
+    const { execFile } = await import('child_process')
+    const curlFetch = (url, timeoutSec = 50) => new Promise((resolve, reject) => {
+      execFile('curl', ['-sL', '--max-time', String(timeoutSec), '-A', 'Mozilla/5.0 (compatible; DZ-GPT)', '-o', '-', url],
+        { encoding: 'buffer', maxBuffer: 30 * 1024 * 1024, timeout: (timeoutSec + 5) * 1000 },
+        (err, stdout) => { if (err || !stdout?.length) reject(err || new Error('empty')); else resolve(stdout) }
+      )
+    })
+
+    // Request 1: wide cinematic shot (primary)
+    const seed1 = Math.floor(Math.random() * 9000000)
+    const url1  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', wide establishing shot, cinematic, 8k, ultra detailed, dramatic lighting')}?model=turbo&width=768&height=432&seed=${seed1}`
+    const buf1  = await curlFetch(url1, 45).catch(e => { console.warn('[video-gen:img1]', e.message); return null })
+
+    if (buf1 && (buf1[0] === 0xFF || buf1[0] === 0x89)) {
+      const mime   = buf1[0] === 0x89 ? 'image/png' : 'image/jpeg'
+      const frame1 = `data:${mime};base64,${buf1.toString('base64')}`
+      console.log(`[video-gen:img1] ✅ ${buf1.length} bytes`)
+
+      // Request 2: different angle (optional — wait 12s for IP rate limit)
+      let frame2 = null
+      await new Promise(r => setTimeout(r, 12000))
+      const seed2 = seed1 + 31337
+      const url2  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', close-up detail, golden hour, bokeh background, photorealistic')}?model=turbo&width=768&height=432&seed=${seed2}`
+      const buf2  = await curlFetch(url2, 45).catch(e => { console.warn('[video-gen:img2]', e.message); return null })
+      if (buf2 && (buf2[0] === 0xFF || buf2[0] === 0x89)) {
+        const mime2 = buf2[0] === 0x89 ? 'image/png' : 'image/jpeg'
+        frame2 = `data:${mime2};base64,${buf2.toString('base64')}`
+        console.log(`[video-gen:img2] ✅ ${buf2.length} bytes`)
+      }
+
+      const frames = [frame1, frame2].filter(Boolean)
+      console.log(`[video-gen] ✅ returning ${frames.length} frame(s) with Ken Burns animation`)
+      return res.json({ frames, model: 'AI DZ Media', provider: 'ai-dz', frameCount: frames.length, kenBurns: true })
     }
+    console.warn('[video-gen:img1] non-image response, buf start:', buf1?.slice(0, 60)?.toString())
+  } catch (e) { console.warn('[video-gen:curl-pollinations]', e.message) }
+
+  // ── Last resort: HuggingFace FLUX (requires HF_TOKEN) ────────────────────
+  if (token) {
+    try {
+      const { generateImage, getImage } = await import('./lib/dz-v4/image.js')
+      const result  = await generateImage({ prompt: `${prompt}, cinematic, high quality` })
+      const imgData = getImage(result.id)
+      if (imgData && imgData.mime !== 'image/svg+xml') {
+        const frame = `data:${imgData.mime};base64,${imgData.bytes.toString('base64')}`
+        return res.json({ frames: [frame], model: 'AI DZ Media', provider: 'ai-dz', frameCount: 1, kenBurns: true })
+      }
+    } catch (e) { console.warn('[video-gen:hf-fallback]', e.message) }
   }
 
   return res.status(503).json({
-    error: 'توليد الفيديو يتطلب إعداداً إضافياً',
-    hint: token
-      ? 'النموذج مشغول أو غير متاح حالياً. أضف SD_WEBUI_URL لاستخدام AnimateDiff.'
-      : 'أضف HF_TOKEN في الأسرار لتفعيل توليد الفيديو عبر Hugging Face، أو أضف SD_WEBUI_URL لـ AnimateDiff.',
-    setupGuide: {
-      sdwebui: 'https://github.com/AUTOMATIC1111/stable-diffusion-webui',
-      comfyui: 'https://github.com/Comfy-Org/ComfyUI',
-    }
+    error: 'فشل توليد الفيديو — حاول مجدداً',
+    hint: 'أضف HF_TOKEN في الأسرار لتحسين النتائج، أو أضف SD_WEBUI_URL لـ AnimateDiff',
   })
 })
 

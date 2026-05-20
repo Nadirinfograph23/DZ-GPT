@@ -3079,6 +3079,67 @@
   color: #888;
 }
 
+/* Undo / Redo buttons */
+.dzt-xl-undo-btn {
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 7px;
+  color: #aaa;
+  font-size: 15px;
+  width: 30px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all .12s;
+  line-height: 1;
+  padding: 0;
+}
+.dzt-xl-undo-btn:hover:not(:disabled) {
+  background: rgba(200,255,0,.08);
+  border-color: rgba(200,255,0,.3);
+  color: #c8ff00;
+}
+.dzt-xl-undo-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+/* FX Panel */
+.dzt-xl-fx-panel {
+  background: #080808;
+  border-bottom: 1px solid #1a1a1a;
+  animation: fadeInUp .18s ease;
+  direction: rtl;
+}
+.dzt-xl-fx-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-bottom: 1px solid #111;
+  font-size: 13px;
+}
+.dzt-xl-fx-close {
+  background: none;
+  border: none;
+  color: #444;
+  cursor: pointer;
+  margin-right: auto;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color .12s;
+}
+.dzt-xl-fx-close:hover { color: #fff; }
+.dzt-xl-fn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px 10px;
+}
+
 /* Chart Panel */
 .dzt-xl-chart-panel {
   background: #0a0a0a;

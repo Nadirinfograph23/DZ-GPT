@@ -49,6 +49,30 @@ interface LocalUser {
   profileId?: string | null
 }
 
+function playDMSound() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const gain = ctx.createGain()
+    gain.connect(ctx.destination)
+    gain.gain.setValueAtTime(0, ctx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55)
+
+    const freqs = [880, 1108, 1318]
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.07)
+      osc.connect(gain)
+      osc.start(ctx.currentTime + i * 0.07)
+      osc.stop(ctx.currentTime + 0.55)
+    })
+    setTimeout(() => ctx.close(), 700)
+  } catch { }
+}
+
 interface ProfileData {
   profileId?: string
   userId: string
@@ -227,6 +251,13 @@ export default function DZChat() {
         const lower = (msg.text || '').toLowerCase()
         if (msg.fromId !== sessionIdRef.current && (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent'))) {
           setAiTyping(true)
+        }
+        if (
+          msg.isDM &&
+          msg.fromId !== sessionIdRef.current &&
+          (msg.dmTo === sessionIdRef.current || !msg.dmTo)
+        ) {
+          playDMSound()
         }
       }
     } else if (data.type === 'update') {

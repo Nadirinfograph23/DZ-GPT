@@ -1,6 +1,11 @@
 import { useState, useRef, useCallback, KeyboardEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Download, Upload, Sparkles, Bold, Italic, AlignRight, AlignCenter, AlignLeft, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Download, Upload, Sparkles, Bold, Italic, AlignRight, AlignCenter, AlignLeft, X, ChevronDown, ChevronRight, BarChart2 } from 'lucide-react'
+import {
+  BarChart, Bar, LineChart, Line, AreaChart, Area,
+  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const ROWS = 100
@@ -734,6 +739,13 @@ export default function SpreadsheetTool() {
   const [fileName, setFileName]         = useState('مصنف-DZ.xlsx')
   const [activeCat, setActiveCat]       = useState<string | null>(null)
   const [fnRefOpen, setFnRefOpen]       = useState(false)
+  const [chartOpen, setChartOpen]       = useState(false)
+  const [chartRange, setChartRange]     = useState('A1:B10')
+  const [chartType, setChartType]       = useState<'bar'|'line'|'area'|'pie'|'radar'>('bar')
+  const [chartTitle, setChartTitle]     = useState('')
+  const [chartScheme, setChartScheme]   = useState<'dz'|'blue'|'warm'|'purple'>('dz')
+  const [chartBuilt, setChartBuilt]     = useState(false)
+  const chartRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -923,6 +935,65 @@ export default function SpreadsheetTool() {
     setEditVal(formula)
   }
 
+  // ── Chart helpers ────────────────────────────────────────────────────────────
+  const COLOR_SCHEMES: Record<string, string[]> = {
+    dz:     ['#c8ff00','#4ade80','#22c55e','#86efac','#bbf7d0','#a3e635'],
+    blue:   ['#60a5fa','#3b82f6','#93c5fd','#1d4ed8','#bfdbfe','#2563eb'],
+    warm:   ['#fb923c','#f59e0b','#fbbf24','#ef4444','#fde68a','#f97316'],
+    purple: ['#a78bfa','#8b5cf6','#c4b5fd','#7c3aed','#ddd6fe','#6d28d9'],
+  }
+
+  const buildChartData = () => {
+    const refs = expandRange(chartRange.toUpperCase().trim())
+    if (!refs.length) return { data: [], keys: [], headers: [] }
+    const parsed = refs.map(r => parseRef(r)).filter(Boolean) as {col:number, row:number}[]
+    const minRow = Math.min(...parsed.map(p=>p.row))
+    const maxRow = Math.max(...parsed.map(p=>p.row))
+    const minCol = Math.min(...parsed.map(p=>p.col))
+    const maxCol = Math.max(...parsed.map(p=>p.col))
+    const headers: string[] = []
+    for (let c = minCol; c <= maxCol; c++) {
+      const v = evaluateCell(cellKey(c, minRow), cells)
+      headers.push(v !== '' ? String(v) : numToCol(c))
+    }
+    const data: Record<string, string|number>[] = []
+    for (let r = minRow + 1; r <= maxRow; r++) {
+      const row: Record<string, string|number> = {}
+      for (let c = minCol; c <= maxCol; c++) {
+        const v = evaluateCell(cellKey(c, r), cells)
+        row[headers[c - minCol] ?? numToCol(c)] = v === '' ? 0 : (typeof v === 'number' ? v : (parseFloat(String(v)) || String(v)))
+      }
+      data.push(row)
+    }
+    return { data, keys: headers.slice(1), headers }
+  }
+
+  const downloadChart = () => {
+    const el = chartRef.current
+    if (!el) return
+    const svg = el.querySelector('svg')
+    if (!svg) return
+    const canvas = document.createElement('canvas')
+    const bb = svg.getBoundingClientRect()
+    canvas.width = bb.width * 2; canvas.height = bb.height * 2
+    const ctx = canvas.getContext('2d')!
+    const xml = new XMLSerializer().serializeToString(svg)
+    const blob = new Blob([xml], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const img = new Image()
+    img.onload = () => {
+      ctx.fillStyle = '#0f0f0f'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      const a = document.createElement('a')
+      a.href = canvas.toDataURL('image/png')
+      a.download = `${chartTitle || 'chart'}-DZ.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="dzt-xl-wrap" onKeyDown={handleKeyDown} tabIndex={0} ref={gridRef}>
@@ -973,6 +1044,13 @@ export default function SpreadsheetTool() {
 
           <button className={`dzt-xl-tool-btn${fnRefOpen?' active':''}`} onClick={()=>setFnRefOpen(v=>!v)} style={{gap:4}}>
             📚 دليل الدوال <ChevronDown size={12}/>
+          </button>
+
+          <div className="dzt-xl-divider" />
+
+          <button className={`dzt-xl-tool-btn${chartOpen?' active':''}`}
+            onClick={()=>{ setChartOpen(v=>!v); setChartBuilt(false) }} style={{gap:4,color:'#fb923c'}}>
+            <BarChart2 size={14}/> خريطة بيانية <ChevronDown size={12}/>
           </button>
         </div>
 
@@ -1076,6 +1154,184 @@ export default function SpreadsheetTool() {
           })()}
         </div>
       )}
+
+      {/* ── Chart Panel ──────────────────────────────────────────────────────── */}
+      {chartOpen && (() => {
+        const colors = COLOR_SCHEMES[chartScheme] ?? COLOR_SCHEMES.dz
+        const { data, keys, headers } = chartBuilt ? buildChartData() : { data: [], keys: [], headers: [] }
+        const nameKey = headers[0] ?? 'name'
+        const CHART_TYPES = [
+          { id: 'bar',   label: '📊 عمودي' },
+          { id: 'line',  label: '📈 خطي' },
+          { id: 'area',  label: '🌊 مساحة' },
+          { id: 'pie',   label: '🥧 دائري' },
+          { id: 'radar', label: '🕸️ رادار' },
+        ] as const
+        const SCHEMES = [
+          { id: 'dz',     label: '🇩🇿 DZ' },
+          { id: 'blue',   label: '🔵 أزرق' },
+          { id: 'warm',   label: '🔴 دافئ' },
+          { id: 'purple', label: '🟣 بنفسجي' },
+        ] as const
+
+        const renderChart = () => {
+          if (!data.length) return null
+          const common = {
+            style: { fontFamily: 'Cairo, sans-serif', fontSize: 11 },
+            margin: { top: 16, right: 24, left: 0, bottom: 8 },
+          }
+          const tooltipStyle = { background:'#111', border:'1px solid #333', borderRadius:8, fontFamily:'Cairo,sans-serif', fontSize:12 }
+
+          if (chartType === 'pie') {
+            const pieData = data.map(d => ({ name: String(d[nameKey] ?? ''), value: Number(d[keys[0] ?? ''] ?? 0) }))
+            return (
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                    outerRadius={120} label={({name,percent})=>`${name} ${(percent*100).toFixed(1)}%`}
+                    labelLine={false}>
+                    {pieData.map((_,i) => <Cell key={i} fill={colors[i % colors.length]}/>)}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle}/>
+                  <Legend wrapperStyle={{fontFamily:'Cairo,sans-serif',fontSize:12}}/>
+                </PieChart>
+              </ResponsiveContainer>
+            )
+          }
+
+          if (chartType === 'radar') {
+            return (
+              <ResponsiveContainer width="100%" height={320}>
+                <RadarChart data={data} {...common}>
+                  <PolarGrid stroke="#222"/>
+                  <PolarAngleAxis dataKey={nameKey} tick={{fill:'#888',fontSize:11}}/>
+                  {keys.map((k,i) => <Radar key={k} name={k} dataKey={k} stroke={colors[i%colors.length]} fill={colors[i%colors.length]} fillOpacity={0.25}/>)}
+                  <Tooltip contentStyle={tooltipStyle}/>
+                  <Legend wrapperStyle={{fontFamily:'Cairo,sans-serif',fontSize:12}}/>
+                </RadarChart>
+              </ResponsiveContainer>
+            )
+          }
+
+          if (chartType === 'line') {
+            return (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={data} {...common}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e"/>
+                  <XAxis dataKey={nameKey} tick={{fill:'#888',fontSize:11}}/>
+                  <YAxis tick={{fill:'#888',fontSize:11}}/>
+                  <Tooltip contentStyle={tooltipStyle}/>
+                  <Legend wrapperStyle={{fontFamily:'Cairo,sans-serif',fontSize:12}}/>
+                  {keys.map((k,i) => <Line key={k} type="monotone" dataKey={k} stroke={colors[i%colors.length]} strokeWidth={2.5} dot={{r:4,fill:colors[i%colors.length]}}/>)}
+                </LineChart>
+              </ResponsiveContainer>
+            )
+          }
+
+          if (chartType === 'area') {
+            return (
+              <ResponsiveContainer width="100%" height={320}>
+                <AreaChart data={data} {...common}>
+                  <defs>
+                    {keys.map((k,i) => (
+                      <linearGradient key={k} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={colors[i%colors.length]} stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor={colors[i%colors.length]} stopOpacity={0.02}/>
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e"/>
+                  <XAxis dataKey={nameKey} tick={{fill:'#888',fontSize:11}}/>
+                  <YAxis tick={{fill:'#888',fontSize:11}}/>
+                  <Tooltip contentStyle={tooltipStyle}/>
+                  <Legend wrapperStyle={{fontFamily:'Cairo,sans-serif',fontSize:12}}/>
+                  {keys.map((k,i) => <Area key={k} type="monotone" dataKey={k} stroke={colors[i%colors.length]} fill={`url(#grad-${i})`} strokeWidth={2.5}/>)}
+                </AreaChart>
+              </ResponsiveContainer>
+            )
+          }
+
+          return (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={data} {...common}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e"/>
+                <XAxis dataKey={nameKey} tick={{fill:'#888',fontSize:11}}/>
+                <YAxis tick={{fill:'#888',fontSize:11}}/>
+                <Tooltip contentStyle={tooltipStyle}/>
+                <Legend wrapperStyle={{fontFamily:'Cairo,sans-serif',fontSize:12}}/>
+                {keys.map((k,i) => <Bar key={k} dataKey={k} fill={colors[i%colors.length]} radius={[4,4,0,0]}/>)}
+              </BarChart>
+            </ResponsiveContainer>
+          )
+        }
+
+        return (
+          <div className="dzt-xl-chart-panel">
+            <div className="dzt-xl-chart-header">
+              <span><BarChart2 size={14}/> منشئ الخرائط البيانية</span>
+              <button onClick={()=>setChartOpen(false)}><X size={14}/></button>
+            </div>
+            <div className="dzt-xl-chart-controls">
+              <div className="dzt-xl-chart-ctrl-group">
+                <label>النطاق</label>
+                <input className="dzt-xl-chart-range-input"
+                  value={chartRange} onChange={e=>{ setChartRange(e.target.value); setChartBuilt(false) }}
+                  placeholder="مثال: A1:C10"
+                  onKeyDown={e=>e.key==='Enter'&&setChartBuilt(true)}/>
+              </div>
+              <div className="dzt-xl-chart-ctrl-group">
+                <label>نوع الخريطة</label>
+                <div className="dzt-xl-chart-type-group">
+                  {CHART_TYPES.map(t=>(
+                    <button key={t.id} className={`dzt-xl-chart-type-btn${chartType===t.id?' active':''}`}
+                      onClick={()=>{ setChartType(t.id); setChartBuilt(false) }}>{t.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="dzt-xl-chart-ctrl-group">
+                <label>لوحة الألوان</label>
+                <div className="dzt-xl-chart-type-group">
+                  {SCHEMES.map(s=>(
+                    <button key={s.id} className={`dzt-xl-chart-type-btn${chartScheme===s.id?' active':''}`}
+                      onClick={()=>{ setChartScheme(s.id); setChartBuilt(false) }}>{s.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="dzt-xl-chart-ctrl-group">
+                <label>عنوان الخريطة</label>
+                <input className="dzt-xl-chart-range-input" value={chartTitle}
+                  onChange={e=>setChartTitle(e.target.value)} placeholder="اختياري"/>
+              </div>
+              <div className="dzt-xl-chart-ctrl-group" style={{alignSelf:'flex-end'}}>
+                <button className="dzt-btn" style={{padding:'9px 20px',fontSize:13,background:'rgba(251,146,60,.15)',borderColor:'rgba(251,146,60,.4)',color:'#fb923c'}}
+                  onClick={()=>setChartBuilt(true)}>
+                  📊 رسم الخريطة
+                </button>
+              </div>
+            </div>
+
+            {chartBuilt && data.length > 0 && (
+              <div className="dzt-xl-chart-output">
+                {chartTitle && <div className="dzt-xl-chart-title">{chartTitle}</div>}
+                <div className="dzt-xl-chart-canvas" ref={chartRef}>
+                  {renderChart()}
+                </div>
+                <div className="dzt-xl-chart-actions">
+                  <span style={{fontSize:12,color:'#555'}}>{data.length} صف × {keys.length} عمود بيانات</span>
+                  <button className="dzt-xl-tool-btn" onClick={downloadChart} style={{gap:4}}>
+                    <Download size={13}/> تحميل PNG
+                  </button>
+                </div>
+              </div>
+            )}
+            {chartBuilt && data.length === 0 && (
+              <div style={{padding:'20px 16px',textAlign:'center',color:'#555',fontSize:13,direction:'rtl'}}>
+                ⚠️ لم يُعثر على بيانات في النطاق "{chartRange}" — تأكد من وجود بيانات في الخلايا
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Function Chips by Category ────────────────────────────────────────── */}
       <div className="dzt-xl-fn-chips" style={{flexWrap:'wrap',gap:4}}>

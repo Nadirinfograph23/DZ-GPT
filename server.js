@@ -18725,6 +18725,218 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
   }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// IMAGE GENERATION STUDIO — Text-to-Image · Image-to-Image · Video Generation
+// Providers: SD WebUI (SD_WEBUI_URL) → ComfyUI (COMFYUI_URL) → HuggingFace
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/tools/img-gen — Text-to-Image
+app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
+  const { prompt, negativePrompt, width = 512, height = 512, steps = 20 } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
+
+  // ── SD WebUI (AUTOMATIC1111) ─────────────────────────────────────────────
+  const sdUrl = process.env.SD_WEBUI_URL
+  if (sdUrl) {
+    try {
+      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/sdapi/v1/txt2img`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, negative_prompt: negativePrompt || '', steps, width, height, cfg_scale: 7 }),
+        signal: AbortSignal.timeout(90000),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        const img = d.images?.[0]
+        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'Stable Diffusion WebUI', provider: 'sdwebui' })
+      }
+    } catch (e) { console.warn('[img-gen:sdwebui]', e.message) }
+  }
+
+  // ── ComfyUI ──────────────────────────────────────────────────────────────
+  const comfyUrl = process.env.COMFYUI_URL
+  if (comfyUrl) {
+    try {
+      const workflow = {
+        "3": { class_type: "KSampler", inputs: { seed: Math.floor(Math.random()*2**32), steps, cfg: 7, sampler_name: "euler", scheduler: "normal", denoise: 1, model: ["4",0], positive: ["6",0], negative: ["7",0], latent_image: ["5",0] } },
+        "4": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: "v1-5-pruned-emaonly.ckpt" } },
+        "5": { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
+        "6": { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["4",1] } },
+        "7": { class_type: "CLIPTextEncode", inputs: { text: negativePrompt || "ugly, blurry, low quality", clip: ["4",1] } },
+        "8": { class_type: "VAEDecode", inputs: { samples: ["3",0], vae: ["4",2] } },
+        "9": { class_type: "SaveImage", inputs: { filename_prefix: "dz-gpt", images: ["8",0] } }
+      }
+      const qr = await fetch(`${comfyUrl.replace(/\/$/, '')}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: workflow }),
+        signal: AbortSignal.timeout(10000),
+      })
+      if (qr.ok) {
+        const { prompt_id } = await qr.json()
+        // Poll for result
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 3000))
+          const hr = await fetch(`${comfyUrl.replace(/\/$/, '')}/history/${prompt_id}`, { signal: AbortSignal.timeout(5000) })
+          if (!hr.ok) continue
+          const hist = await hr.json()
+          const outputs = hist?.[prompt_id]?.outputs
+          if (!outputs) continue
+          const imgs = Object.values(outputs).flatMap(o => o.images || [])
+          if (imgs.length > 0) {
+            const { filename, subfolder, type } = imgs[0]
+            const imgUrl = `${comfyUrl}/view?filename=${filename}&subfolder=${subfolder || ''}&type=${type}`
+            const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(10000) })
+            if (ir.ok) {
+              const buf = Buffer.from(await ir.arrayBuffer())
+              return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}`, model: 'ComfyUI', provider: 'comfyui' })
+            }
+          }
+        }
+      }
+    } catch (e) { console.warn('[img-gen:comfyui]', e.message) }
+  }
+
+  // ── HuggingFace FLUX + Pollinations fallback ─────────────────────────────
+  try {
+    const { generateImage } = await import('./lib/dz-v4/image.js')
+    const result = await generateImage({ prompt, negativePrompt })
+    return res.json({ imageUrl: result.url, promptUsed: result.promptUsed, model: result.model, provider: result.provider })
+  } catch (e) {
+    return res.status(500).json({ error: 'فشل توليد الصورة: ' + e.message.slice(0, 120) })
+  }
+})
+
+// POST /api/tools/img2img — Image-to-Image with prompt
+app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res) => {
+  const { imageBase64, prompt, negativePrompt, strength = 0.75, steps = 20 } = req.body
+  if (!imageBase64 || !prompt?.trim()) return res.status(400).json({ error: 'imageBase64 و prompt مطلوبان' })
+
+  const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+
+  // ── SD WebUI img2img ─────────────────────────────────────────────────────
+  const sdUrl = process.env.SD_WEBUI_URL
+  if (sdUrl) {
+    try {
+      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/sdapi/v1/img2img`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_images: [imgB64], prompt, negative_prompt: negativePrompt || '', denoising_strength: strength, steps, cfg_scale: 7 }),
+        signal: AbortSignal.timeout(120000),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        const img = d.images?.[0]
+        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'SD WebUI img2img', provider: 'sdwebui' })
+      }
+    } catch (e) { console.warn('[img2img:sdwebui]', e.message) }
+  }
+
+  // ── HuggingFace img2img models ───────────────────────────────────────────
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  const models = [
+    'timbrooks/instruct-pix2pix',
+    'lllyasviel/sd-controlnet-canny',
+  ]
+  for (const modelId of models) {
+    try {
+      const imgBuf = Buffer.from(imgB64, 'base64')
+      const r = await fetch(`https://router.huggingface.co/hf-inference/models/${modelId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ inputs: prompt, image: imgB64 }),
+        signal: AbortSignal.timeout(60000),
+      })
+      const ct = r.headers.get('content-type') || ''
+      if (r.ok && ct.startsWith('image/')) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}`, model: modelId.split('/').pop(), provider: 'huggingface' })
+      }
+    } catch (e) { console.warn('[img2img:hf]', modelId, e.message) }
+  }
+
+  // ── Sharp filter fallback — apply style simulation locally ────────────────
+  try {
+    const sharp = (await import('sharp')).default
+    const imgBuf = Buffer.from(imgB64, 'base64')
+    const meta = await sharp(imgBuf).metadata()
+    const W = Math.min(meta.width || 512, 1024), H = Math.min(meta.height || 512, 1024)
+    const lp = prompt.toLowerCase()
+    let pipeline = sharp(imgBuf).resize(W, H)
+    if (/sketch|رسم|ébauche/.test(lp))       pipeline = pipeline.greyscale().sharpen(3)
+    else if (/dark|gloomy|مظلم/.test(lp))    pipeline = pipeline.modulate({ brightness: 0.6, saturation: 0.5 })
+    else if (/vivid|vibrant|زاهي/.test(lp))  pipeline = pipeline.modulate({ saturation: 2.2, brightness: 1.1 })
+    else if (/vintage|قديم|rétro/.test(lp))  pipeline = pipeline.tint({ r: 210, g: 180, b: 140 })
+    else if (/blur|soft|ناعم/.test(lp))      pipeline = pipeline.blur(4)
+    else                                      pipeline = pipeline.modulate({ saturation: 1.4 }).sharpen(1)
+    const out = await pipeline.png().toBuffer()
+    return res.json({ imageBase64: `data:image/png;base64,${out.toString('base64')}`, model: 'Sharp Filter (محلي)', provider: 'local', note: 'أضف SD_WEBUI_URL أو HF_TOKEN لنتائج AI حقيقية' })
+  } catch (e) {
+    return res.status(500).json({ error: 'فشل تحويل الصورة: ' + e.message.slice(0, 100) })
+  }
+})
+
+// POST /api/tools/video-gen — Video Generation (Text-to-Video / Image-to-Video)
+app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, res) => {
+  const { prompt, imageBase64 } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
+
+  // ── SD WebUI AnimateDiff ─────────────────────────────────────────────────
+  const sdUrl = process.env.SD_WEBUI_URL
+  if (sdUrl) {
+    try {
+      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/animatediff/txt2gif`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, steps: 20, width: 512, height: 512, num_frames: 16 }),
+        signal: AbortSignal.timeout(180000),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        if (d.gif) return res.json({ videoBase64: `data:image/gif;base64,${d.gif}`, model: 'AnimateDiff (SD WebUI)', provider: 'sdwebui' })
+      }
+    } catch (e) { console.warn('[video-gen:sdwebui]', e.message) }
+  }
+
+  // ── HuggingFace text-to-video ─────────────────────────────────────────────
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  if (token) {
+    const videoModels = [
+      ['damo-vilab/text-to-video-ms-1.7b', { inputs: prompt }],
+    ]
+    for (const [modelId, body] of videoModels) {
+      try {
+        const r = await fetch(`https://router.huggingface.co/hf-inference/models/${modelId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(180000),
+        })
+        const ct = r.headers.get('content-type') || ''
+        if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
+          const buf = Buffer.from(await r.arrayBuffer())
+          const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
+          return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: modelId.split('/').pop(), provider: 'huggingface' })
+        }
+      } catch (e) { console.warn('[video-gen:hf]', e.message) }
+    }
+  }
+
+  return res.status(503).json({
+    error: 'توليد الفيديو يتطلب إعداداً إضافياً',
+    hint: token
+      ? 'النموذج مشغول أو غير متاح حالياً. أضف SD_WEBUI_URL لاستخدام AnimateDiff.'
+      : 'أضف HF_TOKEN في الأسرار لتفعيل توليد الفيديو عبر Hugging Face، أو أضف SD_WEBUI_URL لـ AnimateDiff.',
+    setupGuide: {
+      sdwebui: 'https://github.com/AUTOMATIC1111/stable-diffusion-webui',
+      comfyui: 'https://github.com/Comfy-Org/ComfyUI',
+    }
+  })
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 

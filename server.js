@@ -18846,92 +18846,88 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   })
 })
 
-// POST /api/tools/img2img — Image-to-Image (Vercel-compatible, pure fetch)
+// ── Stable Horde: poll until job is done (server-side, max 72s — within Vercel 90s maxDuration) ──
+async function waitForHordeJob(jobId, maxWaitMs = 72000) {
+  const BASE = 'https://stablehorde.net/api/v2'
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const start = Date.now(); let polls = 0
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, polls < 4 ? 5000 : 8000)); polls++
+    try {
+      const chk = await fetch(`${BASE}/generate/check/${jobId}`, { headers: H, signal: AbortSignal.timeout(8000) })
+      if (!chk.ok) continue
+      const cd = await chk.json()
+      console.log(`[horde:p${polls}] done=${cd.done} wait=${cd.wait_time}s q=${cd.queue_position}`)
+      if (cd.faulted || cd.is_possible === false) break
+      if (cd.done) {
+        const st = await fetch(`${BASE}/generate/status/${jobId}`, { headers: H, signal: AbortSignal.timeout(15000) })
+        if (!st.ok) break
+        const sd = await st.json()
+        const img = sd.generations?.[0]?.img
+        if (img) return img
+        break
+      }
+    } catch (e) { console.warn('[horde:poll]', e.message) }
+  }
+  return null
+}
+
+// ── Stable Horde: submit img2img job and return jobId ─────────────────────────
+async function hordeSubmitImg2Img(imgB64, prompt, negPrompt, strength) {
+  const BASE = 'https://stablehorde.net/api/v2'
+  const H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  const r = await fetch(`${BASE}/generate/async`, {
+    method: 'POST', headers: H,
+    body: JSON.stringify({
+      prompt: `${prompt.trim()} ### ${negPrompt || 'ugly, blurry, low quality, distorted, deformed'}`,
+      params: { n: 1, steps: 25, width: 512, height: 512, sampler_name: 'k_euler_a', denoising_strength: Math.max(0.3, Math.min(1, Number(strength) || 0.75)), cfg_scale: 7.5 },
+      source_image: imgB64,
+      source_processing: 'img2img',
+      models: ['stable_diffusion'],
+      shared: true, r2: false,
+    }),
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!r.ok) { console.warn('[horde:submit]', r.status); return null }
+  const d = await r.json(); return d.id || null
+}
+
+// POST /api/tools/img2img — True Image-to-Image via Stable Horde (open-source, free, community GPU)
+// Architecture: server submits → polls Stable Horde (72s max, within Vercel 90s maxDuration)
+// Fallback: Pollinations direct URL (prompt-based, instant)
 app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res) => {
   const { imageBase64, prompt, negativePrompt, strength = 0.75 } = req.body
   if (!imageBase64 || !prompt?.trim()) return res.status(400).json({ error: 'imageBase64 و prompt مطلوبان' })
 
-  const imgB64  = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-  const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imgB64}`
-  const token   = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
-  const negPr   = negativePrompt || 'ugly, blurry, low quality, distorted, deformed'
+  const imgB64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
 
-  // 1. InstructPix2Pix via HuggingFace (true instruction-following img2img)
-  if (token) {
-    try {
-      const r = await fetch('https://router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          inputs: imgB64,
-          parameters: { prompt, negative_prompt: negPr, num_inference_steps: 25, image_guidance_scale: 1.5, guidance_scale: 7.5 }
-        }),
-        signal: AbortSignal.timeout(45000),
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && ct.startsWith('image/')) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        if (buf.length > 1000) {
-          console.log('[img2img] ✓ InstructPix2Pix')
-          return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'pix2pix' })
-        }
-      }
-    } catch (e) { console.warn('[img2img:pix2pix]', e.message) }
-  }
-
-  // 2. fal-ai FLUX img2img via HuggingFace router
-  if (token) {
-    try {
-      const r = await fetch('https://router.huggingface.co/fal-ai/fal-ai/flux/dev/image-to-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          image_url: dataUri,
-          prompt,
-          negative_prompt: negPr,
-          strength: Math.max(0.5, Number(strength) || 0.75),
-          num_inference_steps: 25,
-          guidance_scale: 3.5,
-          seed: Math.floor(Math.random() * 9999999),
-        }),
-        signal: AbortSignal.timeout(45000),
-      })
-      if (r.ok) {
-        const d = await r.json()
-        const imgUrl = d.images?.[0]?.url || d.image?.url
-        if (imgUrl?.startsWith('http')) {
-          const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(15000) })
-          if (ir.ok) {
-            const ct  = ir.headers.get('content-type') || 'image/jpeg'
-            const buf = Buffer.from(await ir.arrayBuffer())
-            if (buf.length > 1000) {
-              console.log('[img2img] ✓ fal-ai FLUX')
-              return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'fal-flux' })
-            }
-          }
-        }
-      }
-    } catch (e) { console.warn('[img2img:fal-flux]', e.message) }
-  }
-
-  // 3. Pollinations.ai — prompt-based generation (free, no key, always available)
-  //    Note: True img2img (pixel-level edit) needs HF_TOKEN above.
-  //    This generates a NEW image matching the prompt + style description.
+  // ── Priority 1: Stable Horde — real SD img2img (free, open-source, no API key) ──
   try {
-    const enhancedPrompt = `${prompt}, ultra detailed, photorealistic, high quality, professional photography, sharp focus`
-    const pol = await pollinationsImage(enhancedPrompt, { width: 768, height: 768, model: 'flux', timeoutMs: 52000 })
-    console.log('[img2img] ✓ Pollinations flux (prompt-based fallback)')
-    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations', note: 'أضف HF_TOKEN في الأسرار للحصول على تعديل حقيقي للصورة المرجعية' })
-  } catch (e) { console.warn('[img2img:pol-flux]', e.message) }
+    console.log('[img2img] submitting to Stable Horde...')
+    const jobId = await hordeSubmitImg2Img(imgB64, prompt, negativePrompt, strength)
+    if (jobId) {
+      console.log('[img2img] Stable Horde job:', jobId)
+      const img = await waitForHordeJob(jobId, 72000)
+      if (img) {
+        const src = img.startsWith('http') ? img : `data:image/webp;base64,${img}`
+        console.log('[img2img] ✓ Stable Horde done')
+        return res.json({ imageBase64: src, model: 'Stable Diffusion img2img', provider: 'stable-horde' })
+      }
+      console.warn('[img2img] Stable Horde timed out or faulted — using fallback')
+    }
+  } catch (e) { console.warn('[img2img:horde]', e.message) }
 
-  // 4. Pollinations turbo (faster, lower quality backup)
-  try {
-    const pol = await pollinationsImage(prompt, { width: 768, height: 768, model: 'turbo', timeoutMs: 45000 })
-    console.log('[img2img] ✓ Pollinations turbo (prompt-based fallback)')
-    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations-turbo', note: 'أضف HF_TOKEN في الأسرار للحصول على تعديل حقيقي للصورة المرجعية' })
-  } catch (e) { console.warn('[img2img:pol-turbo]', e.message) }
-
-  return res.status(500).json({ error: 'فشل تحويل الصورة — حاول مجدداً', hint: 'أضف HF_TOKEN في الأسرار للحصول على img2img دقيق' })
+  // ── Fallback: Pollinations direct URL (prompt-based, instant response) ──
+  const seed = Math.floor(Math.random() * 99999999)
+  const encoded = encodeURIComponent(`${prompt.trim()}, ultra detailed, photorealistic, high quality, sharp focus`)
+  const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?model=flux-realism&width=768&height=768&seed=${seed}&nologo=true&safe=false`
+  console.log('[img2img] fallback: Pollinations URL')
+  return res.json({
+    imageUrl,
+    model: 'FLUX-Realism (Pollinations — نص إلى صورة)',
+    provider: 'pollinations',
+    note: 'Stable Horde غير متاح — تم توليد صورة من النص بدلاً من تعديل الصورة الأصلية',
+  })
 })
 
 // POST /api/tools/video-gen — Video Generation: cinematic frame sequence (INSTANT URL-based)

@@ -443,7 +443,7 @@ function evalFormula(expr: string, cells: Cells, visited: Set<string>): string |
         return (n[lo]??0)+((n[lo+1]??0)-(n[lo]??0))*(idx-lo)
       }
       case 'QUARTILE': {
-        const n=n0().sort((a,b)=>a-b); const q=numericRefs([args[1]??'2'])[0]??2
+        const q=numericRefs([args[1]??'2'])[0]??2
         return evalFormula(`PERCENTILE(${args[0]},${q/4})`,cells,visited)
       }
       case 'COUNTIF': {

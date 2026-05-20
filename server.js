@@ -18761,113 +18761,109 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
 // Providers: SD WebUI (SD_WEBUI_URL) → ComfyUI (COMFYUI_URL) → HuggingFace
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// POST /api/tools/img-gen — Text-to-Image
+// ── Shared helper: fetch image from Pollinations and return base64 ──────────
+async function pollinationsImage(prompt, { width = 768, height = 768, model = 'flux', timeoutMs = 45000 } = {}) {
+  const seed = Math.floor(Math.random() * 9000000)
+  const encoded = encodeURIComponent(prompt)
+  const url = `https://image.pollinations.ai/prompt/${encoded}?model=${model}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true`
+  const r = await fetch(url, {
+    headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!r.ok) throw new Error(`Pollinations ${r.status}`)
+  const ct = r.headers.get('content-type') || 'image/jpeg'
+  if (!ct.startsWith('image/')) throw new Error(`Non-image response: ${ct}`)
+  const buf = Buffer.from(await r.arrayBuffer())
+  if (buf.length < 1000) throw new Error('Image too small, likely error page')
+  return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
+}
+
+// ── Shared helper: HuggingFace FLUX.1-schnell ─────────────────────────────
+async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {}) {
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  if (!token) return null
+  const r = await fetch('https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'image/*' },
+    body: JSON.stringify({ inputs: prompt, parameters: negativePrompt ? { negative_prompt: negativePrompt } : {} }),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!r.ok) return null
+  const ct = r.headers.get('content-type') || ''
+  if (!ct.startsWith('image/')) return null
+  const buf = Buffer.from(await r.arrayBuffer())
+  if (buf.length < 1000) return null
+  return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
+}
+
+// POST /api/tools/img-gen — Text-to-Image (Vercel-compatible, pure fetch)
 app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
-  const { prompt, negativePrompt, width = 512, height = 512, steps = 20 } = req.body
+  const { prompt, negativePrompt, width = 768, height = 768 } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
-  // ── SD WebUI (AUTOMATIC1111) ─────────────────────────────────────────────
-  const sdUrl = process.env.SD_WEBUI_URL
-  if (sdUrl) {
-    try {
-      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/sdapi/v1/txt2img`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, negative_prompt: negativePrompt || '', steps, width, height, cfg_scale: 7 }),
-        signal: AbortSignal.timeout(90000),
-      })
-      if (r.ok) {
-        const d = await r.json()
-        const img = d.images?.[0]
-        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'Stable Diffusion WebUI', provider: 'sdwebui' })
-      }
-    } catch (e) { console.warn('[img-gen:sdwebui]', e.message) }
-  }
+  const w = Math.min(Number(width) || 768, 1024)
+  const h = Math.min(Number(height) || 768, 1024)
 
-  // ── ComfyUI ──────────────────────────────────────────────────────────────
-  const comfyUrl = process.env.COMFYUI_URL
-  if (comfyUrl) {
-    try {
-      const workflow = {
-        "3": { class_type: "KSampler", inputs: { seed: Math.floor(Math.random()*2**32), steps, cfg: 7, sampler_name: "euler", scheduler: "normal", denoise: 1, model: ["4",0], positive: ["6",0], negative: ["7",0], latent_image: ["5",0] } },
-        "4": { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: "v1-5-pruned-emaonly.ckpt" } },
-        "5": { class_type: "EmptyLatentImage", inputs: { width, height, batch_size: 1 } },
-        "6": { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["4",1] } },
-        "7": { class_type: "CLIPTextEncode", inputs: { text: negativePrompt || "ugly, blurry, low quality", clip: ["4",1] } },
-        "8": { class_type: "VAEDecode", inputs: { samples: ["3",0], vae: ["4",2] } },
-        "9": { class_type: "SaveImage", inputs: { filename_prefix: "dz-gpt", images: ["8",0] } }
-      }
-      const qr = await fetch(`${comfyUrl.replace(/\/$/, '')}/prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: workflow }),
-        signal: AbortSignal.timeout(10000),
-      })
-      if (qr.ok) {
-        const { prompt_id } = await qr.json()
-        // Poll for result
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 3000))
-          const hr = await fetch(`${comfyUrl.replace(/\/$/, '')}/history/${prompt_id}`, { signal: AbortSignal.timeout(5000) })
-          if (!hr.ok) continue
-          const hist = await hr.json()
-          const outputs = hist?.[prompt_id]?.outputs
-          if (!outputs) continue
-          const imgs = Object.values(outputs).flatMap(o => o.images || [])
-          if (imgs.length > 0) {
-            const { filename, subfolder, type } = imgs[0]
-            const imgUrl = `${comfyUrl}/view?filename=${filename}&subfolder=${subfolder || ''}&type=${type}`
-            const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(10000) })
-            if (ir.ok) {
-              const buf = Buffer.from(await ir.arrayBuffer())
-              return res.json({ imageBase64: `data:image/png;base64,${buf.toString('base64')}`, model: 'ComfyUI', provider: 'comfyui' })
-            }
-          }
-        }
-      }
-    } catch (e) { console.warn('[img-gen:comfyui]', e.message) }
-  }
-
-  // ── HuggingFace FLUX + Pollinations fallback ─────────────────────────────
+  // 1. HuggingFace FLUX.1-schnell (if HF_TOKEN configured)
   try {
-    const { generateImage } = await import('./lib/dz-v4/image.js')
-    const result = await generateImage({ prompt, negativePrompt })
-    return res.json({ imageUrl: result.url, promptUsed: result.promptUsed, model: result.model, provider: result.provider })
-  } catch (e) {
-    return res.status(500).json({ error: 'فشل توليد الصورة: ' + e.message.slice(0, 120) })
-  }
+    const hf = await huggingFaceFlux(prompt, negativePrompt)
+    if (hf) {
+      console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
+      return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell', provider: 'huggingface' })
+    }
+  } catch (e) { console.warn('[img-gen:hf]', e.message) }
+
+  // 2. Pollinations.ai — flux model (free, no key)
+  try {
+    const pol = await pollinationsImage(prompt, { width: w, height: h, model: 'flux', timeoutMs: 45000 })
+    console.log('[img-gen] ✓ Pollinations flux')
+    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations' })
+  } catch (e) { console.warn('[img-gen:pol-flux]', e.message) }
+
+  // 3. Pollinations.ai — turbo model (faster, lower quality)
+  try {
+    const pol = await pollinationsImage(prompt, { width: w, height: h, model: 'turbo', timeoutMs: 35000 })
+    console.log('[img-gen] ✓ Pollinations turbo')
+    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations-turbo' })
+  } catch (e) { console.warn('[img-gen:pol-turbo]', e.message) }
+
+  return res.status(500).json({ error: 'فشل توليد الصورة — حاول مجدداً', hint: 'أضف HF_TOKEN في الأسرار لنتائج أفضل' })
 })
 
-// POST /api/tools/img2img — Image-to-Image with prompt (FIXED)
+// POST /api/tools/img2img — Image-to-Image (Vercel-compatible, pure fetch)
 app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res) => {
   const { imageBase64, prompt, negativePrompt, strength = 0.75 } = req.body
   if (!imageBase64 || !prompt?.trim()) return res.status(400).json({ error: 'imageBase64 و prompt مطلوبان' })
 
-  const imgB64    = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
-  const dataUri   = `data:image/png;base64,${imgB64}`
-  const imgBuf    = Buffer.from(imgB64, 'base64')
-  const token     = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
-  const negPrompt = negativePrompt || 'ugly, blurry, low quality, distorted, deformed'
+  const imgB64  = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
+  const dataUri = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imgB64}`
+  const token   = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  const negPr   = negativePrompt || 'ugly, blurry, low quality, distorted, deformed'
 
-  // ── SD WebUI img2img ─────────────────────────────────────────────────────
-  const sdUrl = process.env.SD_WEBUI_URL
-  if (sdUrl) {
+  // 1. InstructPix2Pix via HuggingFace (true instruction-following img2img)
+  if (token) {
     try {
-      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/sdapi/v1/img2img`, {
+      const r = await fetch('https://router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_images: [imgB64], prompt, negative_prompt: negPrompt, denoising_strength: strength, steps: 28, cfg_scale: 7 }),
-        signal: AbortSignal.timeout(120000),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          inputs: imgB64,
+          parameters: { prompt, negative_prompt: negPr, num_inference_steps: 25, image_guidance_scale: 1.5, guidance_scale: 7.5 }
+        }),
+        signal: AbortSignal.timeout(45000),
       })
-      if (r.ok) {
-        const d = await r.json()
-        const img = d.images?.[0]
-        if (img) return res.json({ imageBase64: `data:image/png;base64,${img}`, model: 'AI DZ Media', provider: 'sdwebui' })
+      const ct = r.headers.get('content-type') || ''
+      if (r.ok && ct.startsWith('image/')) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length > 1000) {
+          console.log('[img2img] ✓ InstructPix2Pix')
+          return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'pix2pix' })
+        }
       }
-    } catch (e) { console.warn('[img2img:sdwebui]', e.message) }
+    } catch (e) { console.warn('[img2img:pix2pix]', e.message) }
   }
 
-  // ── fal-ai FLUX Dev img2img via HuggingFace router (best free AI quality) ──
+  // 2. fal-ai FLUX img2img via HuggingFace router
   if (token) {
     try {
       const r = await fetch('https://router.huggingface.co/fal-ai/fal-ai/flux/dev/image-to-image', {
@@ -18876,233 +18872,124 @@ app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res)
         body: JSON.stringify({
           image_url: dataUri,
           prompt,
-          negative_prompt: negPrompt,
-          strength: Math.max(0.5, strength),
-          num_inference_steps: 28,
+          negative_prompt: negPr,
+          strength: Math.max(0.5, Number(strength) || 0.75),
+          num_inference_steps: 25,
           guidance_scale: 3.5,
           seed: Math.floor(Math.random() * 9999999),
         }),
-        signal: AbortSignal.timeout(90000),
+        signal: AbortSignal.timeout(45000),
       })
       if (r.ok) {
         const d = await r.json()
         const imgUrl = d.images?.[0]?.url || d.image?.url
         if (imgUrl?.startsWith('http')) {
-          const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(20000) })
+          const ir = await fetch(imgUrl, { signal: AbortSignal.timeout(15000) })
           if (ir.ok) {
-            const buf = Buffer.from(await ir.arrayBuffer())
             const ct  = ir.headers.get('content-type') || 'image/jpeg'
-            return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
+            const buf = Buffer.from(await ir.arrayBuffer())
+            if (buf.length > 1000) {
+              console.log('[img2img] ✓ fal-ai FLUX')
+              return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'fal-flux' })
+            }
           }
         }
-        if (imgUrl) return res.json({ imageUrl: imgUrl, model: 'AI DZ Media', provider: 'ai-dz' })
       }
     } catch (e) { console.warn('[img2img:fal-flux]', e.message) }
   }
 
-  // ── InstructPix2Pix via HuggingFace (instruction-following img2img) ───────
-  if (token) {
-    try {
-      // Format: inputs = base64 image, parameters.prompt = instruction
-      const r = await fetch('https://router.huggingface.co/hf-inference/models/timbrooks/instruct-pix2pix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          inputs: imgB64,
-          parameters: {
-            prompt,
-            negative_prompt: negPrompt,
-            num_inference_steps: 30,
-            image_guidance_scale: Math.max(1.2, 2.0 - strength),
-            guidance_scale: 7.5,
-          }
-        }),
-        signal: AbortSignal.timeout(90000),
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && ct.startsWith('image/')) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
-      }
-    } catch (e) { console.warn('[img2img:pix2pix]', e.message) }
-  }
-
-  // ── Stable Horde img2img (free, anonymous, REAL img2img with source image) ──
-  // Anonymous key "0000000000" works — distributed GPU network, no account needed
+  // 3. Pollinations.ai — prompt-based generation (free, no key, always available)
+  //    Note: True img2img (pixel-level edit) needs HF_TOKEN above.
+  //    This generates a NEW image matching the prompt + style description.
   try {
-    console.log('[img2img:stable-horde] submitting job...')
-    const hordeR = await fetch('https://stablehorde.net/api/v2/generate/async', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': '0000000000' },
-      body: JSON.stringify({
-        prompt,
-        params: {
-          n: 1,
-          width: 512,
-          height: 512,
-          denoising_strength: typeof strength === 'number' ? Math.max(0.5, strength) : 0.65,
-          steps: 20,
-          cfg_scale: 7.5,
-          sampler_name: 'k_euler_a',
-        },
-        source_image: imgB64,
-        source_processing: 'img2img',
-        models: ['Deliberate'],
-        nsfw: false,
-        censor_nsfw: true,
-        slow_workers: true,
-        r2: false,
-      }),
-      signal: AbortSignal.timeout(15000),
-    })
-    if (hordeR.ok) {
-      const { id } = await hordeR.json()
-      console.log('[img2img:stable-horde] job id:', id)
-      if (id) {
-        for (let attempt = 0; attempt < 16; attempt++) {
-          await new Promise(r => setTimeout(r, 5000))
-          try {
-            const statusR = await fetch(`https://stablehorde.net/api/v2/generate/status/${id}`, { signal: AbortSignal.timeout(10000) })
-            if (!statusR.ok) continue
-            const status = await statusR.json()
-            console.log(`[img2img:stable-horde] attempt ${attempt + 1}: done=${status.done} faulted=${status.faulted} queue=${status.queue_position}`)
-            if (status.done && status.generations?.length) {
-              const imgResult = status.generations[0].img
-              if (imgResult) {
-                console.log('[img2img:stable-horde] ✅ got result image')
-                return res.json({ imageBase64: `data:image/webp;base64,${imgResult}`, model: 'AI DZ Media', provider: 'ai-dz' })
-              }
-            }
-            if (status.faulted) { console.warn('[img2img:stable-horde] job faulted'); break }
-          } catch (pe) { console.warn('[img2img:stable-horde:poll]', pe.message) }
-        }
-      }
-    } else {
-      console.warn('[img2img:stable-horde] submit failed:', hordeR.status, await hordeR.text().catch(() => ''))
-    }
-  } catch (e) { console.warn('[img2img:stable-horde]', e.message) }
+    const enhancedPrompt = `${prompt}, ultra detailed, photorealistic, high quality, professional photography, sharp focus`
+    const pol = await pollinationsImage(enhancedPrompt, { width: 768, height: 768, model: 'flux', timeoutMs: 52000 })
+    console.log('[img2img] ✓ Pollinations flux (prompt-based fallback)')
+    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations', note: 'أضف HF_TOKEN في الأسرار للحصول على تعديل حقيقي للصورة المرجعية' })
+  } catch (e) { console.warn('[img2img:pol-flux]', e.message) }
 
-  // ── Pollinations turbo via curl (txt2img fallback — no source image used) ──
+  // 4. Pollinations turbo (faster, lower quality backup)
   try {
-    const { execFile } = await import('child_process')
-    const seed   = Math.floor(Math.random() * 9000000)
-    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', ultra detailed, photorealistic, high quality, professional photography')}?model=turbo&width=768&height=768&seed=${seed}`
-    const buf    = await new Promise((resolve, reject) => {
-      execFile('curl', ['-sL', '--max-time', '50', '-A', 'Mozilla/5.0', '-o', '-', polUrl],
-        { encoding: 'buffer', maxBuffer: 30 * 1024 * 1024, timeout: 55000 },
-        (err, stdout) => { if (err || !stdout?.length) reject(err || new Error('empty')); else resolve(stdout) }
-      )
-    })
-    if (buf[0] === 0xFF || buf[0] === 0x89) {
-      const mime = buf[0] === 0x89 ? 'image/png' : 'image/jpeg'
-      console.log('[img2img:pollinations] ✅ fallback image generated from prompt')
-      return res.json({ imageBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz', note: 'أضف HF_TOKEN للحصول على img2img دقيق بالصورة المرجعية' })
-    }
-  } catch (e) { console.warn('[img2img:curl-pollinations]', e.message) }
+    const pol = await pollinationsImage(prompt, { width: 768, height: 768, model: 'turbo', timeoutMs: 45000 })
+    console.log('[img2img] ✓ Pollinations turbo (prompt-based fallback)')
+    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations-turbo', note: 'أضف HF_TOKEN في الأسرار للحصول على تعديل حقيقي للصورة المرجعية' })
+  } catch (e) { console.warn('[img2img:pol-turbo]', e.message) }
 
-  return res.status(500).json({ error: 'فشل تحويل الصورة — أضف HF_TOKEN في الأسرار للحصول على نتائج أفضل' })
+  return res.status(500).json({ error: 'فشل تحويل الصورة — حاول مجدداً', hint: 'أضف HF_TOKEN في الأسرار للحصول على img2img دقيق' })
 })
 
-// POST /api/tools/video-gen — Video Generation: multi-frame animated sequence (FIXED)
+// POST /api/tools/video-gen — Video Generation: animated frames (Vercel-compatible, pure fetch)
+// Strategy: generate 2 cinematic frames via Pollinations fetch (sequential, <55s total),
+// return with kenBurns:true for CSS pan/zoom animation in the frontend.
 app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, res) => {
-  const { prompt, imageBase64 } = req.body
+  const { prompt } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
 
-  // ── SD WebUI AnimateDiff ─────────────────────────────────────────────────
-  const sdUrl = process.env.SD_WEBUI_URL
-  if (sdUrl) {
-    try {
-      const r = await fetch(`${sdUrl.replace(/\/$/, '')}/animatediff/txt2gif`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, steps: 20, width: 512, height: 288, num_frames: 16 }),
-        signal: AbortSignal.timeout(180000),
-      })
-      if (r.ok) {
-        const d = await r.json()
-        if (d.gif) return res.json({ videoBase64: `data:image/gif;base64,${d.gif}`, model: 'AI DZ Media', provider: 'sdwebui' })
-      }
-    } catch (e) { console.warn('[video-gen:sdwebui]', e.message) }
-  }
-
-  // ── HuggingFace text-to-video (fast attempt, 30s max) ────────────────────
+  // 1. HuggingFace text-to-video (damo-vilab, if HF_TOKEN)
   if (token) {
     try {
       const r = await fetch('https://router.huggingface.co/hf-inference/models/damo-vilab/text-to-video-ms-1.7b', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ inputs: prompt }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(40000),
       })
       const ct = r.headers.get('content-type') || ''
       if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
         const buf = Buffer.from(await r.arrayBuffer())
-        const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
-        return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'ai-dz' })
+        if (buf.length > 1000) {
+          const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
+          console.log('[video-gen] ✓ HuggingFace text-to-video')
+          return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'hf-video' })
+        }
       }
     } catch (e) { console.warn('[video-gen:hf-video]', e.message) }
   }
 
-  // ── Pollinations via curl + Ken Burns (1 request → IP limit respected) ──────
-  // Pollinations limits 1 concurrent request per IP — so we get 1 quality image
-  // then apply Ken Burns zoom/pan in the frontend to simulate video motion.
-  console.log('[video-gen:frames] generating cinematic image via curl+Pollinations...')
+  // 2. Pollinations fetch — Frame 1: wide cinematic (primary, ~25s)
+  console.log('[video-gen] generating frames via Pollinations fetch...')
+  let frame1 = null, frame2 = null
+
   try {
-    const { execFile } = await import('child_process')
-    const curlFetch = (url, timeoutSec = 50) => new Promise((resolve, reject) => {
-      execFile('curl', ['-sL', '--max-time', String(timeoutSec), '-A', 'Mozilla/5.0 (compatible; DZ-GPT)', '-o', '-', url],
-        { encoding: 'buffer', maxBuffer: 30 * 1024 * 1024, timeout: (timeoutSec + 5) * 1000 },
-        (err, stdout) => { if (err || !stdout?.length) reject(err || new Error('empty')); else resolve(stdout) }
-      )
-    })
+    const pol1 = await pollinationsImage(
+      `${prompt}, wide establishing shot, cinematic, 8k, ultra detailed, dramatic lighting, golden hour`,
+      { width: 768, height: 432, model: 'flux', timeoutMs: 42000 }
+    )
+    frame1 = pol1.imageBase64
+    console.log('[video-gen] ✓ frame 1 ready')
+  } catch (e) { console.warn('[video-gen:frame1]', e.message) }
 
-    // Request 1: wide cinematic shot (primary)
-    const seed1 = Math.floor(Math.random() * 9000000)
-    const url1  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', wide establishing shot, cinematic, 8k, ultra detailed, dramatic lighting')}?model=turbo&width=768&height=432&seed=${seed1}`
-    const buf1  = await curlFetch(url1, 45).catch(e => { console.warn('[video-gen:img1]', e.message); return null })
-
-    if (buf1 && (buf1[0] === 0xFF || buf1[0] === 0x89)) {
-      const mime   = buf1[0] === 0x89 ? 'image/png' : 'image/jpeg'
-      const frame1 = `data:${mime};base64,${buf1.toString('base64')}`
-      console.log(`[video-gen:img1] ✅ ${buf1.length} bytes`)
-
-      // Request 2: different angle (optional — wait 12s for IP rate limit)
-      let frame2 = null
-      await new Promise(r => setTimeout(r, 12000))
-      const seed2 = seed1 + 31337
-      const url2  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt + ', close-up detail, golden hour, bokeh background, photorealistic')}?model=turbo&width=768&height=432&seed=${seed2}`
-      const buf2  = await curlFetch(url2, 45).catch(e => { console.warn('[video-gen:img2]', e.message); return null })
-      if (buf2 && (buf2[0] === 0xFF || buf2[0] === 0x89)) {
-        const mime2 = buf2[0] === 0x89 ? 'image/png' : 'image/jpeg'
-        frame2 = `data:${mime2};base64,${buf2.toString('base64')}`
-        console.log(`[video-gen:img2] ✅ ${buf2.length} bytes`)
-      }
-
-      const frames = [frame1, frame2].filter(Boolean)
-      console.log(`[video-gen] ✅ returning ${frames.length} frame(s) with Ken Burns animation`)
-      return res.json({ frames, model: 'AI DZ Media', provider: 'ai-dz', frameCount: frames.length, kenBurns: true })
-    }
-    console.warn('[video-gen:img1] non-image response, buf start:', buf1?.slice(0, 60)?.toString())
-  } catch (e) { console.warn('[video-gen:curl-pollinations]', e.message) }
-
-  // ── Last resort: HuggingFace FLUX (requires HF_TOKEN) ────────────────────
-  if (token) {
+  // Frame 2: close-up detail (only if frame1 succeeded and time permits)
+  if (frame1) {
     try {
-      const { generateImage, getImage } = await import('./lib/dz-v4/image.js')
-      const result  = await generateImage({ prompt: `${prompt}, cinematic, high quality` })
-      const imgData = getImage(result.id)
-      if (imgData && imgData.mime !== 'image/svg+xml') {
-        const frame = `data:${imgData.mime};base64,${imgData.bytes.toString('base64')}`
-        return res.json({ frames: [frame], model: 'AI DZ Media', provider: 'ai-dz', frameCount: 1, kenBurns: true })
-      }
-    } catch (e) { console.warn('[video-gen:hf-fallback]', e.message) }
+      const seed2 = Math.floor(Math.random() * 9000000)
+      const pol2 = await pollinationsImage(
+        `${prompt}, close-up detail, bokeh background, photorealistic, cinematic`,
+        { width: 768, height: 432, model: 'turbo', timeoutMs: 28000 }
+      )
+      frame2 = pol2.imageBase64
+      console.log('[video-gen] ✓ frame 2 ready')
+    } catch (e) { console.warn('[video-gen:frame2]', e.message) }
   }
 
+  if (frame1) {
+    const frames = [frame1, frame2].filter(Boolean)
+    console.log(`[video-gen] ✅ returning ${frames.length} frame(s) with Ken Burns`)
+    return res.json({ frames, model: 'AI DZ Media', provider: 'pollinations', frameCount: frames.length, kenBurns: true })
+  }
+
+  // 3. Last resort: Pollinations turbo (faster, lower quality)
+  try {
+    const pol = await pollinationsImage(`${prompt}, cinematic, wide shot`, { width: 768, height: 432, model: 'turbo', timeoutMs: 32000 })
+    console.log('[video-gen] ✓ Pollinations turbo fallback')
+    return res.json({ frames: [pol.imageBase64], model: 'AI DZ Media', provider: 'pollinations-turbo', frameCount: 1, kenBurns: true })
+  } catch (e) { console.warn('[video-gen:pol-turbo]', e.message) }
+
   return res.status(503).json({
-    error: 'فشل توليد الفيديو — حاول مجدداً',
-    hint: 'أضف HF_TOKEN في الأسرار لتحسين النتائج، أو أضف SD_WEBUI_URL لـ AnimateDiff',
+    error: 'فشل توليد الفيديو — حاول مجدداً بعد لحظة',
+    hint: 'أضف HF_TOKEN في الأسرار لتحسين النتائج',
   })
 })
 

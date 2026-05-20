@@ -2024,8 +2024,6 @@ function ImageProcessingTool() {
   const [imgLoading, setImgLoading] = useState(false)
   const [error, setError]       = useState<{ msg: string; hint?: string } | null>(null)
 
-  const reset = () => { setResult(null); setError(null); setImgLoading(false) }
-
   const generate = async () => {
     if (!prompt.trim()) return
     setLoading(true); setError(null); setResult(null); setImgLoading(false)

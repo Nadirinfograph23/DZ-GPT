@@ -2033,41 +2033,65 @@ const kenBurnsStyle = `
 `
 
 function VideoFlipbook({ frames, kenBurns }: { frames: string[]; kenBurns?: boolean }) {
-  const [idx, setIdx] = useState(0)
+  const [idx, setIdx]           = useState(0)
+  const [loaded, setLoaded]     = useState<boolean[]>([])
+  const [errored, setErrored]   = useState<boolean[]>([])
+
+  useEffect(() => {
+    setLoaded(frames.map(() => false))
+    setErrored(frames.map(() => false))
+  }, [frames])
+
   useEffect(() => {
     if (frames.length < 2) return
-    const id = setInterval(() => setIdx(i => (i + 1) % frames.length), kenBurns ? 4000 : 180)
+    const id = setInterval(() => setIdx(i => (i + 1) % frames.length), kenBurns ? 4500 : 180)
     return () => clearInterval(id)
   }, [frames.length, kenBurns])
 
-  if (frames.length === 1 || kenBurns) {
-    return (
-      <div style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 12 }}>
-        <style>{kenBurnsStyle}</style>
-        <img
-          src={frames[idx] || frames[0]} alt="generated"
-          className="dzt-imggen-result-img"
-          style={{ width: '100%', animation: 'kenBurnsZoom 8s ease-in-out infinite alternate', borderRadius: 12 }}
-        />
-        <div style={{ position: 'absolute', bottom: 10, right: 12, background: 'rgba(0,0,0,0.55)', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#c8ff00' }}>
-          🎬 AI DZ Media
-        </div>
-      </div>
-    )
-  }
+  const allLoaded  = loaded.length > 0 && loaded.every(Boolean)
+  const loadedCount = loaded.filter(Boolean).length
+
+  const markLoaded = (i: number) => setLoaded(prev => { const n=[...prev]; n[i]=true; return n })
+  const markError  = (i: number) => setErrored(prev => { const n=[...prev]; n[i]=true; return n })
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 12 }}>
+      <style>{kenBurnsStyle}</style>
+
+      {!allLoaded && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '40px 0', color: '#aaa' }}>
+          <span className="dzt-spinner" style={{ width: 36, height: 36 }} />
+          <span style={{ fontSize: 13 }}>جاري تحميل الإطارات... {loadedCount}/{frames.length}</span>
+          <span style={{ fontSize: 11, opacity: 0.55 }}>Pollinations AI · يستغرق 10–20 ثانية</span>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            {frames.map((_, i) => (
+              <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: loaded[i] ? '#c8ff00' : errored[i] ? '#f55' : '#444' }} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {frames.map((src, i) => (
         <img
           key={i} src={src} alt={`frame ${i}`}
           className="dzt-imggen-result-img"
-          style={{ display: i === idx ? 'block' : 'none', width: '100%', borderRadius: 12 }}
+          crossOrigin="anonymous"
+          style={{
+            display: allLoaded && i === idx ? 'block' : 'none',
+            width: '100%', borderRadius: 12,
+            animation: kenBurns ? 'kenBurnsZoom 9s ease-in-out infinite alternate' : 'none',
+          }}
+          onLoad={() => markLoaded(i)}
+          onError={() => { markError(i); markLoaded(i) }}
         />
       ))}
-      <div style={{ position: 'absolute', bottom: 10, right: 12, background: 'rgba(0,0,0,0.55)', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#c8ff00' }}>
-        {idx + 1} / {frames.length} · AI DZ Media
-      </div>
+
+      {allLoaded && (
+        <div style={{ position: 'absolute', bottom: 10, right: 12, background: 'rgba(0,0,0,0.6)', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#c8ff00', display: 'flex', gap: 6, alignItems: 'center' }}>
+          🎬 AI DZ Media
+          {frames.length > 1 && <span style={{ opacity: 0.7 }}>{idx + 1}/{frames.length}</span>}
+        </div>
+      )}
     </div>
   )
 }
@@ -2082,11 +2106,12 @@ function ImageProcessingTool() {
   const [imgModel, setImgModel] = useState<'flux' | 'flux-realism' | 'flux-3d' | 'turbo'>('flux')
   const [result, setResult]     = useState<ImgResult | null>(null)
   const [loading, setLoading]   = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
   const [imgLoading, setImgLoading] = useState(false)
   const [error, setError]       = useState<{ msg: string; hint?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const reset = () => { setResult(null); setError(null); setImgLoading(false) }
+  const reset = () => { setResult(null); setError(null); setImgLoading(false); setLoadingMsg('') }
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) return
@@ -2097,10 +2122,12 @@ function ImageProcessingTool() {
 
   const generate = async () => {
     if (!prompt.trim()) return
-    setLoading(true); setError(null); setResult(null); setImgLoading(false)
+    setLoading(true); setError(null); setResult(null); setImgLoading(false); setLoadingMsg('')
     try {
       const size = IMG_SIZE_OPTIONS[sizeIdx]
+
       if (mode === 'txt2img') {
+        setLoadingMsg('جاري الإرسال إلى Pollinations FLUX...')
         const r = await fetch('/api/tools/img-gen', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2110,10 +2137,12 @@ function ImageProcessingTool() {
         if (!r.ok) throw { msg: d.error || 'فشل التوليد', hint: d.hint }
         const src = d.imageBase64 || (d.imageUrl ? d.imageUrl : null)
         if (!src) throw { msg: 'لم تُرجَع أي صورة' }
-        if (d.imageUrl) setImgLoading(true)
+        if (d.imageUrl) { setImgLoading(true); setLoadingMsg('الصورة تتحمّل من Pollinations...') }
         setResult({ type: 'image', src, model: d.model || d.provider || 'AI', note: d.note })
+
       } else if (mode === 'img2img') {
         if (!inputImage) { setError({ msg: 'ارفع صورة أولاً' }); setLoading(false); return }
+        setLoadingMsg('⏳ جاري التوليد عبر Stable Horde (قد يستغرق 1–2 دقيقة)...')
         const r = await fetch('/api/tools/img2img', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2123,19 +2152,22 @@ function ImageProcessingTool() {
         if (!r.ok) throw { msg: d.error || 'فشل التحويل', hint: d.hint }
         const src = d.imageBase64 || d.imageUrl
         if (!src) throw { msg: 'لم تُرجع أي صورة' }
-        setResult({ type: 'image', src, model: 'AI DZ Media', note: d.note })
+        if (d.imageUrl) { setImgLoading(true); setLoadingMsg('الصورة تتحمّل...') }
+        setResult({ type: 'image', src, model: d.model || 'AI DZ Media', note: d.note })
+
       } else {
+        setLoadingMsg('جاري إنشاء 4 إطارات سينمائية...')
         const r = await fetch('/api/tools/video-gen', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, imageBase64: inputImage || undefined }),
+          body: JSON.stringify({ prompt }),
         })
         const d = await r.json()
         if (!r.ok) throw { msg: d.error || 'فشل توليد الفيديو', hint: d.hint }
-        if (d.frames?.length) {
-          setResult({ type: 'frames', frames: d.frames, model: 'AI DZ Media', frameCount: d.frameCount || d.frames.length, kenBurns: !!d.kenBurns })
-        } else if (d.videoBase64) {
-          setResult({ type: 'video', src: d.videoBase64, model: 'AI DZ Media' })
+        if (d.videoBase64) {
+          setResult({ type: 'video', src: d.videoBase64, model: d.model || 'AI DZ Media' })
+        } else if (d.frames?.length) {
+          setResult({ type: 'frames', frames: d.frames, model: d.model || 'AI DZ Media', frameCount: d.frameCount || d.frames.length, kenBurns: !!d.kenBurns })
         } else {
           throw { msg: 'لم يُرجع الخادم أي فيديو' }
         }
@@ -2143,7 +2175,7 @@ function ImageProcessingTool() {
     } catch (e: unknown) {
       const err = e as { msg?: string; hint?: string }
       setError({ msg: err.msg || String(e), hint: err.hint })
-    } finally { setLoading(false) }
+    } finally { setLoading(false); setLoadingMsg('') }
   }
 
   const download = () => {
@@ -2287,8 +2319,8 @@ function ImageProcessingTool() {
         disabled={loading || !prompt.trim()}
       >
         {loading
-          ? <><span className="dzt-spinner" /> {mode === 'video' ? 'جاري إنشاء الإطارات...' : 'جاري الإرسال...'}</>
-          : mode === 'txt2img' ? '✨ ولّد الصورة' : mode === 'img2img' ? '🔄 حوّل الصورة' : '🎬 ولّد الفيديو'
+          ? <><span className="dzt-spinner" /> {loadingMsg || (mode === 'video' ? 'جاري الإنشاء...' : mode === 'img2img' ? 'جاري التحويل...' : 'جاري الإرسال...')}</>
+          : mode === 'txt2img' ? '✨ ولّد الصورة' : mode === 'img2img' ? '🔄 حوّل الصورة (Stable Horde)' : '🎬 ولّد الفيديو'
         }
       </button>
 

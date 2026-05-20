@@ -3079,6 +3079,111 @@
   color: #888;
 }
 
+/* Chart Panel */
+.dzt-xl-chart-panel {
+  background: #0a0a0a;
+  border-bottom: 1px solid #1e1e1e;
+  animation: fadeInUp .2s ease;
+  direction: rtl;
+}
+.dzt-xl-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fb923c;
+  gap: 6px;
+}
+.dzt-xl-chart-header button {
+  background: none; border: none; color: #555; cursor: pointer;
+  display: grid; place-items: center; margin-right: auto;
+}
+.dzt-xl-chart-header button:hover { color: #fff; }
+.dzt-xl-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #111;
+  align-items: flex-end;
+}
+.dzt-xl-chart-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.dzt-xl-chart-ctrl-group label {
+  font-size: 11px;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.dzt-xl-chart-range-input {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  color: #e5e5e5;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 7px 12px;
+  outline: none;
+  width: 130px;
+  direction: ltr;
+  text-align: center;
+}
+.dzt-xl-chart-range-input:focus { border-color: rgba(251,146,60,.4); }
+.dzt-xl-chart-type-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.dzt-xl-chart-type-btn {
+  padding: 5px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 7px;
+  color: #888;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+}
+.dzt-xl-chart-type-btn:hover { color: #fb923c; border-color: rgba(251,146,60,.3); }
+.dzt-xl-chart-type-btn.active {
+  background: rgba(251,146,60,.12);
+  border-color: rgba(251,146,60,.5);
+  color: #fb923c;
+  font-weight: 700;
+}
+.dzt-xl-chart-output {
+  padding: 16px;
+  animation: fadeInUp .25s ease;
+}
+.dzt-xl-chart-title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.dzt-xl-chart-canvas {
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 12px;
+  padding: 12px 8px 4px;
+}
+.dzt-xl-chart-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
 /* Grid */
 .dzt-xl-grid-wrap {
   overflow: auto;

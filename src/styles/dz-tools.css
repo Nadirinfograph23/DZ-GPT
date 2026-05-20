@@ -1430,6 +1430,68 @@
   .dzt-imgproc-label { min-width: 80px; }
 }
 
+/* ── Image Generation Studio ─────────────────────────────────────── */
+.dzt-imggen-upload {
+  border: 2px dashed rgba(255,255,255,0.14);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 14px;
+  background: rgba(255,255,255,0.02);
+  direction: rtl;
+}
+.dzt-imggen-upload:hover { border-color: rgba(200,255,0,0.4); background: rgba(200,255,0,0.04); }
+.dzt-imggen-upload-preview { position: relative; display: inline-block; }
+.dzt-imggen-upload-preview img { max-height: 180px; max-width: 100%; border-radius: 12px; object-fit: contain; }
+.dzt-imggen-upload-preview button {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(255,60,60,0.85); border: none; border-radius: 8px;
+  color: #fff; font-size: 11px; padding: 3px 8px; cursor: pointer;
+  font-family: 'Cairo', sans-serif;
+}
+.dzt-imggen-upload-ph {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  color: rgba(255,255,255,0.5); font-family: 'Cairo', sans-serif; font-size: 13px;
+}
+.dzt-imggen-prompt-wrap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.dzt-imggen-textarea {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px;
+  color: #e5e5e5; font-family: 'Cairo', sans-serif; font-size: 14px;
+  padding: 12px 14px; resize: vertical; direction: rtl;
+  transition: border-color 0.2s; box-sizing: border-box;
+}
+.dzt-imggen-textarea:focus { outline: none; border-color: rgba(200,255,0,0.45); background: rgba(200,255,0,0.03); }
+.dzt-imggen-neg { opacity: 0.7; font-size: 12px; }
+.dzt-imggen-suggestions { display: flex; flex-wrap: wrap; gap: 6px; direction: rtl; }
+.dzt-imggen-suggestion {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; color: rgba(255,255,255,0.55); font-size: 11px;
+  padding: 4px 12px; cursor: pointer; font-family: 'Cairo', sans-serif;
+  transition: all 0.15s; white-space: nowrap; direction: rtl;
+}
+.dzt-imggen-suggestion:hover { background: rgba(200,255,0,0.08); border-color: rgba(200,255,0,0.3); color: rgba(200,255,0,0.85); }
+.dzt-imggen-settings { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.dzt-imggen-setting-group { display: flex; flex-direction: column; gap: 6px; direction: rtl; }
+.dzt-imggen-setting-group label { font-size: 12px; color: rgba(255,255,255,0.55); font-family: 'Cairo', sans-serif; font-weight: 600; }
+.dzt-imggen-btn { width: 100%; padding: 14px; font-size: 15px; font-weight: 700; margin-bottom: 10px; border-radius: 14px; }
+.dzt-imggen-provider-hint {
+  font-size: 11px; color: rgba(255,255,255,0.3); font-family: 'Cairo', sans-serif;
+  direction: rtl; text-align: center; margin-bottom: 16px; line-height: 1.6;
+}
+.dzt-imggen-provider-hint strong { color: rgba(200,255,0,0.6); }
+.dzt-imggen-result {
+  margin-top: 16px; background: rgba(255,255,255,0.03);
+  border: 1.5px solid rgba(200,255,0,0.2); border-radius: 16px; padding: 16px;
+}
+.dzt-imggen-result-img {
+  width: 100%; max-height: 520px; object-fit: contain;
+  border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.08);
+  background: #111; display: block;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    INVOICE TOOL
 ══════════════════════════════════════════════════════════════════ */

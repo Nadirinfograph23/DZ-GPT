@@ -332,19 +332,35 @@
 .dzc-user-verified-badge {
   color: #1877f2;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 4px rgba(24, 119, 242, 0.55));
+  filter: drop-shadow(0 0 6px rgba(24, 119, 242, 0.9));
+  animation: dzc-badge-pulse 2.5s ease-in-out infinite;
 }
 
 .dzc-user-name--admin {
-  color: #e2e8f0;
-  font-weight: 600;
+  color: #f5c518;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-shadow: 0 0 8px rgba(245, 197, 24, 0.45);
 }
 
 /* Blue verified badge for admin messages (Facebook-style) */
 .dzc-admin-verified-badge {
   color: #1877f2;
   flex-shrink: 0;
-  filter: drop-shadow(0 0 3px rgba(24, 119, 242, 0.45));
+  filter: drop-shadow(0 0 5px rgba(24, 119, 242, 0.85));
+  animation: dzc-badge-pulse 2.5s ease-in-out infinite;
+}
+
+/* Admin message sender name in chat */
+.dzc-msg-from.dzc-msg-from--admin-sender {
+  color: #f5c518;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(245, 197, 24, 0.4);
+}
+
+@keyframes dzc-badge-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(24, 119, 242, 0.7)); }
+  50%       { filter: drop-shadow(0 0 10px rgba(24, 119, 242, 1)); }
 }
 
 /* ===== MAIN CHAT AREA ===== */

@@ -996,14 +996,14 @@ export default function DZChat() {
                   <div className="dzc-msg-header">
                     {genderIcon(msg.gender)}
                     <span
-                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
+                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${(msg.isAdmin || msg.isHighlighted) ? 'dzc-msg-from--admin-sender' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
                       onClick={(e) => handleMsgSenderClick(e, msg)}
                       title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
                     >
                       {msg.isHighlighted ? ADMIN_NAME : msg.from}
                     </span>
                     {(msg.isAdmin || msg.isHighlighted) && (
-                      <BadgeCheck size={14} className="dzc-admin-verified-badge" aria-label="مشرف موثق" />
+                      <BadgeCheck size={15} className="dzc-admin-verified-badge" aria-label="مشرف موثق" />
                     )}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}

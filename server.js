@@ -18762,20 +18762,29 @@ app.post('/api/tools/img-inpaint', express.json({ limit: '30mb' }), async (req, 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Shared helper: fetch image from Pollinations and return base64 ──────────
+// Retries once after 4s delay to handle Vercel IP rate-limiting by Pollinations
 async function pollinationsImage(prompt, { width = 768, height = 768, model = 'flux', timeoutMs = 45000 } = {}) {
-  const seed = Math.floor(Math.random() * 9000000)
-  const encoded = encodeURIComponent(prompt)
-  const url = `https://image.pollinations.ai/prompt/${encoded}?model=${model}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true`
-  const r = await fetch(url, {
-    headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
-    signal: AbortSignal.timeout(timeoutMs),
-  })
-  if (!r.ok) throw new Error(`Pollinations ${r.status}`)
-  const ct = r.headers.get('content-type') || 'image/jpeg'
-  if (!ct.startsWith('image/')) throw new Error(`Non-image response: ${ct}`)
-  const buf = Buffer.from(await r.arrayBuffer())
-  if (buf.length < 1000) throw new Error('Image too small, likely error page')
-  return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
+  const ATTEMPTS = 2
+  let lastErr = null
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 4000 + Math.random() * 2000))
+    try {
+      const seed = Math.floor(Math.random() * 9000000) + attempt * 31337
+      const encoded = encodeURIComponent(prompt)
+      const url = `https://image.pollinations.ai/prompt/${encoded}?model=${model}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
+      const r = await fetch(url, {
+        headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      if (!r.ok) { lastErr = new Error(`Pollinations ${r.status}`); continue }
+      const ct = r.headers.get('content-type') || 'image/jpeg'
+      if (!ct.startsWith('image/')) { lastErr = new Error(`Non-image response: ${ct}`); continue }
+      const buf = Buffer.from(await r.arrayBuffer())
+      if (buf.length < 1000) { lastErr = new Error('Image too small'); continue }
+      return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
+    } catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error('Pollinations failed after retries')
 }
 
 // ── Shared helper: HuggingFace FLUX.1-schnell ─────────────────────────────

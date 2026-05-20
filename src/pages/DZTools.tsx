@@ -2073,18 +2073,20 @@ function VideoFlipbook({ frames, kenBurns }: { frames: string[]; kenBurns?: bool
 }
 
 function ImageProcessingTool() {
-  const [mode, setMode]       = useState<ImgGenMode>('txt2img')
-  const [prompt, setPrompt]   = useState('')
+  const [mode, setMode]         = useState<ImgGenMode>('txt2img')
+  const [prompt, setPrompt]     = useState('')
   const [negPrompt, setNegPrompt] = useState('')
   const [inputImage, setInputImage] = useState<string>('')
-  const [sizeIdx, setSizeIdx] = useState(0)
+  const [sizeIdx, setSizeIdx]   = useState(0)
   const [strength, setStrength] = useState(0.75)
-  const [result, setResult]   = useState<ImgResult | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<{ msg: string; hint?: string } | null>(null)
+  const [imgModel, setImgModel] = useState<'flux' | 'flux-realism' | 'flux-3d' | 'turbo'>('flux')
+  const [result, setResult]     = useState<ImgResult | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [imgLoading, setImgLoading] = useState(false)
+  const [error, setError]       = useState<{ msg: string; hint?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const reset = () => { setResult(null); setError(null) }
+  const reset = () => { setResult(null); setError(null); setImgLoading(false) }
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) return
@@ -2095,19 +2097,20 @@ function ImageProcessingTool() {
 
   const generate = async () => {
     if (!prompt.trim()) return
-    setLoading(true); setError(null); setResult(null)
+    setLoading(true); setError(null); setResult(null); setImgLoading(false)
     try {
       const size = IMG_SIZE_OPTIONS[sizeIdx]
       if (mode === 'txt2img') {
         const r = await fetch('/api/tools/img-gen', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, negativePrompt: negPrompt, width: size.w, height: size.h }),
+          body: JSON.stringify({ prompt, negativePrompt: negPrompt, width: size.w, height: size.h, model: imgModel }),
         })
         const d = await r.json()
         if (!r.ok) throw { msg: d.error || 'فشل التوليد', hint: d.hint }
         const src = d.imageBase64 || (d.imageUrl ? d.imageUrl : null)
         if (!src) throw { msg: 'لم تُرجَع أي صورة' }
+        if (d.imageUrl) setImgLoading(true)
         setResult({ type: 'image', src, model: d.model || d.provider || 'AI', note: d.note })
       } else if (mode === 'img2img') {
         if (!inputImage) { setError({ msg: 'ارفع صورة أولاً' }); setLoading(false); return }
@@ -2236,6 +2239,26 @@ function ImageProcessingTool() {
 
       {/* Settings */}
       <div className="dzt-imggen-settings">
+        {mode === 'txt2img' && (
+          <div className="dzt-imggen-setting-group">
+            <label>نموذج الصورة</label>
+            <div className="dzt-imgproc-btn-group">
+              {([
+                { id: 'flux',         label: 'FLUX', desc: 'دقيق' },
+                { id: 'flux-realism', label: 'Realism', desc: 'واقعي' },
+                { id: 'flux-3d',      label: '3D',      desc: 'ثلاثي' },
+                { id: 'turbo',        label: 'Turbo',   desc: 'سريع' },
+              ] as const).map(m => (
+                <button key={m.id}
+                  className={`dzt-imgproc-opt${imgModel === m.id ? ' active' : ''}`}
+                  title={m.desc}
+                  onClick={() => setImgModel(m.id)}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {mode !== 'video' && (
           <div className="dzt-imggen-setting-group">
             <label>الأبعاد</label>
@@ -2264,7 +2287,7 @@ function ImageProcessingTool() {
         disabled={loading || !prompt.trim()}
       >
         {loading
-          ? <><span className="dzt-spinner" /> {mode === 'video' ? 'جاري توليد الفيديو...' : 'جاري التوليد...'}</>
+          ? <><span className="dzt-spinner" /> {mode === 'video' ? 'جاري إنشاء الإطارات...' : 'جاري الإرسال...'}</>
           : mode === 'txt2img' ? '✨ ولّد الصورة' : mode === 'img2img' ? '🔄 حوّل الصورة' : '🎬 ولّد الفيديو'
         }
       </button>
@@ -2282,10 +2305,10 @@ function ImageProcessingTool() {
         <div className="dzt-imggen-result">
           <div className="dzt-imgproc-result-header">
             <span className="dzt-imgproc-result-label">
-              ✅ النتيجة جاهزة
+              {imgLoading ? '⏳ الصورة تُحمَّل...' : '✅ النتيجة جاهزة'}
               <span className="dzt-imgproc-model-tag">{result.model}</span>
             </span>
-            <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>⬇️ تحميل</button>
+            {!imgLoading && <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>⬇️ تحميل</button>}
           </div>
           {'note' in result && result.note && <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, padding: '0 4px' }}>ملاحظة: {result.note}</div>}
 
@@ -2293,16 +2316,33 @@ function ImageProcessingTool() {
             <>
               <div style={{ fontSize: 12, opacity: 0.55, marginBottom: 6 }}>
                 {result.kenBurns
-                  ? '🎬 مشهد سينمائي متحرك — AI DZ Media'
+                  ? '🎬 مشهد سينمائي 4 إطارات — AI DZ Media'
                   : `🎬 تسلسل ${result.frameCount} إطار — يعمل تلقائياً`}
               </div>
               <VideoFlipbook frames={result.frames} kenBurns={result.kenBurns} />
             </>
           ) : result.type === 'image' ? (
             <>
-              <img src={result.src} alt="generated" className="dzt-imggen-result-img"
-                onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png' }} />
-              {mode === 'img2img' && inputImage && (
+              {imgLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '32px 0', opacity: 0.7 }}>
+                  <span className="dzt-spinner" style={{ width: 36, height: 36 }} />
+                  <span style={{ fontSize: 13 }}>جاري تحميل الصورة من Pollinations AI...</span>
+                  <span style={{ fontSize: 11, opacity: 0.6 }}>قد يستغرق 10–20 ثانية</span>
+                </div>
+              )}
+              <img
+                src={result.src}
+                alt="generated"
+                className="dzt-imggen-result-img"
+                style={{ display: imgLoading ? 'none' : 'block' }}
+                onLoad={() => setImgLoading(false)}
+                onError={e => {
+                  setImgLoading(false)
+                  setError({ msg: 'تعذّر تحميل الصورة — حاول مرة أخرى', hint: 'تأكد من الاتصال بالإنترنت أو جرّب نموذجاً آخر' });
+                  (e.target as HTMLImageElement).style.display = 'none'
+                }}
+              />
+              {!imgLoading && mode === 'img2img' && inputImage && (
                 <div className="dzt-imgproc-compare" style={{ marginTop: 16 }}>
                   <div className="dzt-imgproc-compare-col">
                     <div className="dzt-imgproc-compare-label">الأصلية</div>

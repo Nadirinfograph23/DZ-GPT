@@ -739,6 +739,11 @@ export default function SpreadsheetTool() {
   const [fileName, setFileName]         = useState('مصنف-DZ.xlsx')
   const [activeCat, setActiveCat]       = useState<string | null>(null)
   const [fnRefOpen, setFnRefOpen]       = useState(false)
+  const [fxOpen, setFxOpen]             = useState(false)
+  const [canUndo, setCanUndo]           = useState(false)
+  const [canRedo, setCanRedo]           = useState(false)
+  const historyRef                       = useRef<Cells[]>([{}])
+  const histIdxRef                       = useRef(0)
   const [chartOpen, setChartOpen]       = useState(false)
   const [chartRange, setChartRange]     = useState('A1:B10')
   const [chartType, setChartType]       = useState<'bar'|'line'|'area'|'pie'|'radar'>('bar')
@@ -751,8 +756,34 @@ export default function SpreadsheetTool() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const getCell = (key: string): CellData => cells[key] || { raw: '' }
-  const setCell = (key: string, data: Partial<CellData>) =>
-    setCells(prev => ({ ...prev, [key]: { ...getCell(key), ...data } }))
+  const setCell = (key: string, data: Partial<CellData>) => {
+    setCells(prev => {
+      const next = { ...prev, [key]: { ...(prev[key] || { raw: '' }), ...data } }
+      const h = historyRef.current.slice(0, histIdxRef.current + 1)
+      h.push(next)
+      historyRef.current = h.length > 60 ? h.slice(-60) : h
+      histIdxRef.current = historyRef.current.length - 1
+      return next
+    })
+    setCanUndo(true)
+    setCanRedo(false)
+  }
+
+  const undo = () => {
+    if (histIdxRef.current <= 0) return
+    histIdxRef.current--
+    setCells(historyRef.current[histIdxRef.current])
+    setCanUndo(histIdxRef.current > 0)
+    setCanRedo(true)
+  }
+
+  const redo = () => {
+    if (histIdxRef.current >= historyRef.current.length - 1) return
+    histIdxRef.current++
+    setCells(historyRef.current[histIdxRef.current])
+    setCanUndo(true)
+    setCanRedo(histIdxRef.current < historyRef.current.length - 1)
+  }
 
   const displayValue = useCallback((key: string): string => {
     const c = cells[key]
@@ -933,6 +964,7 @@ export default function SpreadsheetTool() {
     setCell(selected, { raw: formula })
     startEdit(selected)
     setEditVal(formula)
+    setFxOpen(false)
   }
 
   // ── Chart helpers ────────────────────────────────────────────────────────────
@@ -1039,6 +1071,23 @@ export default function SpreadsheetTool() {
               value={selectedCell.bg||'#1a1a1a'}
               onChange={e=>setCell(selected,{bg:e.target.value})} />
           </label>
+
+          <div className="dzt-xl-divider" />
+
+          <button className="dzt-xl-undo-btn" onClick={undo} disabled={!canUndo} title="تراجع (Ctrl+Z)">
+            ↩
+          </button>
+          <button className="dzt-xl-undo-btn" onClick={redo} disabled={!canRedo} title="إعادة (Ctrl+Y)">
+            ↪
+          </button>
+
+          <div className="dzt-xl-divider" />
+
+          <button className={`dzt-xl-tool-btn${fxOpen?' active':''}`}
+            onClick={()=>setFxOpen(v=>!v)} style={{gap:4,fontWeight:700,letterSpacing:.5}}>
+            الدوال <span style={{fontFamily:'monospace',fontStyle:'italic',color:'#c8ff00'}}>FX</span>
+            <ChevronDown size={12} style={{transform:fxOpen?'rotate(180deg)':'none',transition:'transform .2s'}}/>
+          </button>
 
           <div className="dzt-xl-divider" />
 
@@ -1333,19 +1382,28 @@ export default function SpreadsheetTool() {
         )
       })()}
 
-      {/* ── Function Chips by Category ────────────────────────────────────────── */}
-      <div className="dzt-xl-fn-chips" style={{flexWrap:'wrap',gap:4}}>
-        {FN_CATEGORIES.map(cat=>
-          cat.fns.slice(0,4).map(fn=>(
-            <button key={`${cat.id}-${fn.name}`} className="dzt-xl-fn-chip"
-              style={{borderColor:`${cat.color}44`,color:cat.color}}
-              title={fn.desc}
-              onClick={()=>clickFn(fn.name)}>
-              {fn.name}
-            </button>
-          ))
-        )}
-      </div>
+      {/* ── Function Chips by Category (FX panel) ────────────────────────────── */}
+      {fxOpen && (
+        <div className="dzt-xl-fx-panel">
+          <div className="dzt-xl-fx-panel-header">
+            <span style={{color:'#c8ff00',fontWeight:700,fontStyle:'italic',fontFamily:'monospace'}}>FX</span>
+            <span style={{color:'#888',fontSize:12,marginRight:6}}>اختر دالة لإدراجها في الخلية المحددة</span>
+            <button className="dzt-xl-fx-close" onClick={()=>setFxOpen(false)}><X size={13}/></button>
+          </div>
+          <div className="dzt-xl-fn-chips">
+            {FN_CATEGORIES.map(cat=>
+              cat.fns.slice(0,4).map(fn=>(
+                <button key={`${cat.id}-${fn.name}`} className="dzt-xl-fn-chip"
+                  style={{borderColor:`${cat.color}44`,color:cat.color}}
+                  title={fn.desc}
+                  onClick={()=>clickFn(fn.name)}>
+                  {fn.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Grid ────────────────────────────────────────────────────────────── */}
       <div className="dzt-xl-grid-wrap">

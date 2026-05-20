@@ -137,7 +137,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
   { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'image',   icon: '🖼️', name: 'Visual AI — صور',        desc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور' },
-  { id: 'imgproc', icon: '🎨', name: 'Image Tools — معالجة',   desc: 'إزالة خلفية • تحسين • ضغط • تعديل • حذف عنصر', badge: 'NEW' },
+  { id: 'imgproc', icon: '🎨', name: 'Image Studio — توليد',   desc: 'نص → صورة • صورة → صورة • توليد فيديو — SD WebUI & ComfyUI', badge: 'NEW' },
   { id: 'ocr',          icon: '📷', name: 'قارئ الوثائق OCR',           desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
   { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan',     desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',               desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
@@ -2002,313 +2002,111 @@ function ImageTool() {
 }
 
 // ─── Image Processing Tool ────────────────────────────────────────────────────
-type ImgProcMode = 'remove-bg' | 'enhance' | 'compress' | 'edit' | 'inpaint'
+type ImgGenMode = 'txt2img' | 'img2img' | 'video'
 
-const IMGPROC_TOOLS: { id: ImgProcMode; icon: string; name: string; desc: string }[] = [
-  { id: 'remove-bg', icon: '🧽', name: 'إزالة الخلفية',  desc: 'PNG شفاف — أشخاص ومنتجات' },
-  { id: 'enhance',   icon: '✨', name: 'تحسين الجودة',   desc: 'رفع الدقة 4x بتقنية AI' },
-  { id: 'compress',  icon: '⚡', name: 'ضغط الصورة',    desc: 'WebP/JPEG — بدون سيرفر' },
-  { id: 'edit',      icon: '🔄', name: 'تعديل أساسي',   desc: 'تدوير • قلب • سطوع • تباين' },
-  { id: 'inpaint',   icon: '🚫', name: 'حذف عنصر',      desc: 'ارسم فوق العنصر → يُحذف' },
+const IMGGEN_TOOLS: { id: ImgGenMode; icon: string; name: string; desc: string }[] = [
+  { id: 'txt2img', icon: '✨', name: 'نص → صورة',       desc: 'ولّد صورة من وصف نصي بالعربية أو الإنجليزية' },
+  { id: 'img2img', icon: '🔄', name: 'صورة → صورة',    desc: 'حوّل صورة بأسلوب جديد عبر برومبت' },
+  { id: 'video',   icon: '🎬', name: 'توليد فيديو',     desc: 'فيديو قصير من نص — AnimateDiff & HuggingFace' },
+]
+
+const IMG_SIZE_OPTIONS = [
+  { label: '512×512', w: 512, h: 512 },
+  { label: '768×512', w: 768, h: 512 },
+  { label: '512×768', w: 512, h: 768 },
+  { label: '1024×1024', w: 1024, h: 1024 },
 ]
 
 function ImageProcessingTool() {
-  const [mode, setMode]         = useState<ImgProcMode>('remove-bg')
+  const [mode, setMode]       = useState<ImgGenMode>('txt2img')
+  const [prompt, setPrompt]   = useState('')
+  const [negPrompt, setNegPrompt] = useState('')
   const [inputImage, setInputImage] = useState<string>('')
-  const [inputFile, setInputFile]   = useState<File | null>(null)
-  const [result, setResult]     = useState<string>('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const [modelUsed, setModelUsed] = useState('')
-
-  // Compress settings
-  const [compFmt, setCompFmt]     = useState<'image/webp' | 'image/jpeg'>('image/webp')
-  const [compQ, setCompQ]         = useState(80)
-  const [compScale, setCompScale] = useState(100)
-  const [compSize, setCompSize]   = useState({ before: 0, after: 0 })
-
-  // Edit settings
-  const [rotation, setRotation]   = useState(0)
-  const [flipH, setFlipH]         = useState(false)
-  const [flipV, setFlipV]         = useState(false)
-  const [brightness, setBrightness] = useState(100)
-  const [contrast, setContrast]   = useState(100)
-  const [saturation, setSaturation] = useState(100)
-
-  // Inpaint mask
-  const canvasRef  = useRef<HTMLCanvasElement>(null)
-  const maskRef    = useRef<HTMLCanvasElement>(null)
-  const [painting, setPainting]   = useState(false)
-  const [brushSize, setBrushSize] = useState(24)
-  const [maskDrawn, setMaskDrawn] = useState(false)
-
+  const [sizeIdx, setSizeIdx] = useState(0)
+  const [strength, setStrength] = useState(0.75)
+  const [result, setResult]   = useState<{ type: 'image' | 'video'; src: string; model: string; note?: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<{ msg: string; hint?: string; setupGuide?: Record<string,string> } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const reset = () => { setResult(''); setError(''); setModelUsed(''); setMaskDrawn(false) }
+  const reset = () => { setResult(null); setError(null) }
 
   const handleFile = (file: File) => {
     if (!file.type.startsWith('image/')) return
-    setInputFile(file)
     const reader = new FileReader()
     reader.onload = e => { setInputImage(e.target?.result as string); reset() }
     reader.readAsDataURL(file)
   }
 
-  // ── Client-side Remove Background (no API key needed) ────────────────────
-  const processRemoveBg = async () => {
-    if (!inputImage || !inputFile) return
-    setLoading(true); setError(''); setResult(''); setModelUsed('')
+  const generate = async () => {
+    if (!prompt.trim()) return
+    setLoading(true); setError(null); setResult(null)
     try {
-      const { removeBackground } = await import('@imgly/background-removal')
-      const blob = await removeBackground(inputFile, {
-        debug: false,
-      })
-      const url = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload  = e => resolve(e.target?.result as string)
-        reader.onerror = () => reject(new Error('قراءة النتيجة فشلت'))
-        reader.readAsDataURL(blob)
-      })
-      setResult(url)
-      setModelUsed('BiRefNet (محلي)')
+      const size = IMG_SIZE_OPTIONS[sizeIdx]
+      if (mode === 'txt2img') {
+        const r = await fetch('/api/tools/img-gen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, negativePrompt: negPrompt, width: size.w, height: size.h }),
+        })
+        const d = await r.json()
+        if (!r.ok) throw { msg: d.error || 'فشل التوليد', hint: d.hint }
+        const src = d.imageBase64 || (d.imageUrl ? d.imageUrl : null)
+        if (!src) throw { msg: 'لم تُرجَع أي صورة' }
+        setResult({ type: 'image', src, model: d.model || d.provider || 'AI', note: d.note })
+      } else if (mode === 'img2img') {
+        if (!inputImage) { setError({ msg: 'ارفع صورة أولاً' }); setLoading(false); return }
+        const r = await fetch('/api/tools/img2img', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: inputImage, prompt, negativePrompt: negPrompt, strength }),
+        })
+        const d = await r.json()
+        if (!r.ok) throw { msg: d.error || 'فشل التحويل', hint: d.hint }
+        setResult({ type: 'image', src: d.imageBase64!, model: d.model || d.provider || 'AI', note: d.note })
+      } else {
+        const r = await fetch('/api/tools/video-gen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, imageBase64: inputImage || undefined }),
+        })
+        const d = await r.json()
+        if (!r.ok) throw { msg: d.error || 'فشل توليد الفيديو', hint: d.hint, setupGuide: d.setupGuide }
+        setResult({ type: 'video', src: d.videoBase64!, model: d.model || 'AI' })
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'فشل إزالة الخلفية')
+      const err = e as { msg?: string; hint?: string; setupGuide?: Record<string,string> }
+      setError({ msg: err.msg || String(e), hint: err.hint, setupGuide: err.setupGuide })
     } finally { setLoading(false) }
-  }
-
-  // ── Client-side Enhance (2× Bicubic + Unsharp Mask) ──────────────────────
-  const enhanceImage = () => {
-    if (!inputImage) return
-    setLoading(true); setError(''); setResult(''); setModelUsed('')
-    const img = new Image()
-    img.onload = () => {
-      const scale = 2
-      const W = img.width * scale, H = img.height * scale
-      const canvas = document.createElement('canvas')
-      canvas.width = W; canvas.height = H
-      const ctx = canvas.getContext('2d')!
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(img, 0, 0, W, H)
-      // Unsharp mask (sharpening 3×3 kernel)
-      const id = ctx.getImageData(0, 0, W, H)
-      const src = new Uint8ClampedArray(id.data)
-      const k = [0, -1, 0, -1, 5, -1, 0, -1, 0]
-      for (let y = 1; y < H - 1; y++) {
-        for (let x = 1; x < W - 1; x++) {
-          for (let c = 0; c < 3; c++) {
-            let s = 0
-            for (let ky = 0; ky < 3; ky++)
-              for (let kx = 0; kx < 3; kx++)
-                s += src[((y + ky - 1) * W + (x + kx - 1)) * 4 + c] * k[ky * 3 + kx]
-            id.data[(y * W + x) * 4 + c] = Math.max(0, Math.min(255, s))
-          }
-        }
-      }
-      ctx.putImageData(id, 0, 0)
-      setResult(canvas.toDataURL('image/png'))
-      setModelUsed('Bicubic 2× + Unsharp (محلي)')
-      setLoading(false)
-    }
-    img.onerror = () => { setError('فشل تحميل الصورة'); setLoading(false) }
-    img.src = inputImage
-  }
-
-  // ── Browser-side Compress ─────────────────────────────────────────────────
-  const compressImage = () => {
-    if (!inputImage || !inputFile) return
-    const img = new Image()
-    img.onload = () => {
-      const sc = compScale / 100
-      const canvas = document.createElement('canvas')
-      canvas.width  = Math.round(img.width * sc)
-      canvas.height = Math.round(img.height * sc)
-      const ctx = canvas.getContext('2d')!
-      if (compFmt === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height) }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      const compressed = canvas.toDataURL(compFmt, compQ / 100)
-      setResult(compressed)
-      const after = Math.round((compressed.length - compressed.indexOf(',') - 1) * 0.75)
-      setCompSize({ before: inputFile.size, after })
-    }
-    img.src = inputImage
-  }
-
-  // ── Browser-side Edit ─────────────────────────────────────────────────────
-  const applyEdit = () => {
-    if (!inputImage) return
-    const img = new Image()
-    img.onload = () => {
-      const rotated = rotation === 90 || rotation === 270
-      const w = rotated ? img.height : img.width
-      const h = rotated ? img.width  : img.height
-      const canvas = document.createElement('canvas')
-      canvas.width = w; canvas.height = h
-      const ctx = canvas.getContext('2d')!
-      ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`
-      ctx.translate(w / 2, h / 2)
-      ctx.rotate((rotation * Math.PI) / 180)
-      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
-      ctx.drawImage(img, -img.width / 2, -img.height / 2)
-      setResult(canvas.toDataURL('image/png'))
-    }
-    img.src = inputImage
-  }
-
-  // ── Inpaint mask canvas ───────────────────────────────────────────────────
-  const initMask = useCallback(() => {
-    if (!canvasRef.current || !maskRef.current || !inputImage) return
-    const img = new Image()
-    img.onload = () => {
-      const maxW = 380
-      const sc = Math.min(1, maxW / img.width)
-      const W = Math.round(img.width * sc), H = Math.round(img.height * sc)
-      const cv = canvasRef.current!; const mk = maskRef.current!
-      cv.width = mk.width = W; cv.height = mk.height = H
-      const ctx = cv.getContext('2d')!
-      ctx.drawImage(img, 0, 0, W, H)
-      const mctx = mk.getContext('2d')!
-      mctx.fillStyle = '#000'; mctx.fillRect(0, 0, W, H)
-    }
-    img.src = inputImage
-  }, [inputImage])
-
-  useEffect(() => { if (mode === 'inpaint' && inputImage) initMask() }, [mode, inputImage, initMask])
-
-  const getXY = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current!
-    const rect = canvas.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    return {
-      x: (clientX - rect.left) * (canvas.width / rect.width),
-      y: (clientY - rect.top)  * (canvas.height / rect.height),
-    }
-  }
-
-  const paint = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!painting || !canvasRef.current || !maskRef.current) return
-    const { x, y } = getXY(e)
-    const r = brushSize / 2
-    const ctx = canvasRef.current.getContext('2d')!
-    ctx.globalAlpha = 0.55; ctx.fillStyle = '#ff3b3b'
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
-    ctx.globalAlpha = 1
-    const mctx = maskRef.current.getContext('2d')!
-    mctx.fillStyle = '#fff'
-    mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill()
-    setMaskDrawn(true)
-  }
-
-  const processInpaint = () => {
-    if (!inputImage || !maskRef.current || !canvasRef.current || !maskDrawn) return
-    setLoading(true); setError(''); setResult('')
-    const img = new Image()
-    img.onload = () => {
-      // Build full-res output canvas
-      const out = document.createElement('canvas')
-      out.width = img.width; out.height = img.height
-      const octx = out.getContext('2d')!
-      octx.drawImage(img, 0, 0)
-      // Scale mask to image dimensions
-      const scaledMask = document.createElement('canvas')
-      scaledMask.width = img.width; scaledMask.height = img.height
-      const smCtx = scaledMask.getContext('2d')!
-      smCtx.drawImage(maskRef.current!, 0, 0, img.width, img.height)
-      const imgData = octx.getImageData(0, 0, img.width, img.height)
-      const maskData = smCtx.getImageData(0, 0, img.width, img.height)
-      const pix = imgData.data
-      const msk = maskData.data
-      const W = img.width, H = img.height
-      const radius = Math.max(12, Math.round(Math.min(W, H) * 0.04))
-      const result = new Uint8ClampedArray(pix)
-      // Weighted average from surrounding non-masked pixels
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const i = (y * W + x) * 4
-          if (msk[i] > 128) {
-            let r = 0, g = 0, b = 0, w = 0
-            for (let dy = -radius; dy <= radius; dy++) {
-              for (let dx = -radius; dx <= radius; dx++) {
-                const nx = x + dx, ny = y + dy
-                if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue
-                const ni = (ny * W + nx) * 4
-                if (msk[ni] <= 128) {
-                  const d = Math.sqrt(dx * dx + dy * dy) + 1
-                  const wt = 1 / (d * d)
-                  r += pix[ni] * wt; g += pix[ni + 1] * wt; b += pix[ni + 2] * wt; w += wt
-                }
-              }
-            }
-            if (w > 0) {
-              result[i] = Math.round(r / w)
-              result[i + 1] = Math.round(g / w)
-              result[i + 2] = Math.round(b / w)
-            }
-          }
-        }
-      }
-      octx.putImageData(new ImageData(result, W, H), 0, 0)
-      setResult(out.toDataURL('image/png'))
-      setLoading(false)
-      setMaskDrawn(false)
-    }
-    img.onerror = () => { setError('فشل تحميل الصورة'); setLoading(false) }
-    img.src = inputImage
   }
 
   const download = () => {
     if (!result) return
-    const ext = result.includes('webp') ? 'webp' : result.includes('jpeg') ? 'jpg' : 'png'
-    const a = document.createElement('a'); a.href = result; a.download = `dz-image.${ext}`; a.click()
+    const ext = result.type === 'video' ? (result.src.includes('gif') ? 'gif' : 'mp4') : 'png'
+    const a = document.createElement('a'); a.href = result.src; a.download = `dz-gen.${ext}`; a.click()
   }
 
-  const UploadZone = ({ forInpaint = false }: { forInpaint?: boolean }) => (
-    <div
-      className="dzt-imgproc-upload"
-      onClick={() => fileRef.current?.click()}
-      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }}
-      onDragOver={e => e.preventDefault()}
-    >
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-      {inputImage && !forInpaint ? (
-        <div className="dzt-imgproc-preview-wrap">
-          <img src={inputImage} alt="input" className="dzt-imgproc-preview-img" />
-          <button className="dzt-imgproc-change-btn" onClick={e => { e.stopPropagation(); fileRef.current?.click() }}>
-            تغيير الصورة
-          </button>
-        </div>
-      ) : (
-        <div className="dzt-imgproc-upload-ph">
-          <div className="dzt-imgproc-upload-icon">{forInpaint ? '🚫' : '📤'}</div>
-          <div className="dzt-imgproc-upload-text">
-            {forInpaint ? 'ارفع صورة ثم ارسم فوق العنصر المراد حذفه' : 'اسحب وأفلت الصورة هنا أو انقر للاختيار'}
-          </div>
-          <div className="dzt-imgproc-upload-sub">JPG • PNG • WebP • حتى 10MB</div>
-        </div>
-      )}
-    </div>
-  )
+  const PROMPTS: Record<ImgGenMode, string[]> = {
+    txt2img: ['مدينة الجزائر ليلاً مع أضواء ذهبية، فوتوغرافي احترافي', 'شاب جزائري في الصحراء، غروب الشمس، أسلوب سينمائي', 'قهوة عربية مع تمر، تصوير منتجات احترافي'],
+    img2img: ['حوّلها إلى رسم فني بالألوان المائية', 'أسلوب رسوم متحركة ياباني أنيمي', 'لوحة زيتية كلاسيكية بإضاءة درامية'],
+    video:   ['مشهد من مدينة الجزائر أثناء الغروب مع حركة كاميرا سينمائية', 'عاصفة رملية في الصحراء الجزائرية', 'شلال في الطبيعة الجزائرية مع إضاءة ذهبية'],
+  }
 
   return (
     <div>
       <div className="dzt-tool-desc">
         <span className="dzt-tool-desc-icon">🎨</span>
         <div>
-          <div className="dzt-tool-desc-title">Image Tools — معالجة الصور بالذكاء الاصطناعي</div>
-          <div className="dzt-tool-desc-text">إزالة الخلفية • تحسين الجودة AI • ضغط فوري • تعديل أساسي • حذف عنصر — بدون توليد صور</div>
+          <div className="dzt-tool-desc-title">Image Generation Studio — استوديو توليد الصور</div>
+          <div className="dzt-tool-desc-text">نص → صورة • صورة → صورة • توليد فيديو — يدعم SD WebUI & ComfyUI & HuggingFace FLUX</div>
         </div>
       </div>
 
-      {/* Tool selector */}
-      <div className="dzt-imgproc-grid">
-        {IMGPROC_TOOLS.map(t => (
-          <button
-            key={t.id}
-            className={`dzt-imgproc-tool${mode === t.id ? ' active' : ''}`}
-            onClick={() => { setMode(t.id); reset() }}
-          >
+      {/* Mode selector */}
+      <div className="dzt-imgproc-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {IMGGEN_TOOLS.map(t => (
+          <button key={t.id} className={`dzt-imgproc-tool${mode === t.id ? ' active' : ''}`}
+            onClick={() => { setMode(t.id); reset() }}>
             <span className="dzt-imgproc-tool-icon">{t.icon}</span>
             <span className="dzt-imgproc-tool-name">{t.name}</span>
             <span className="dzt-imgproc-tool-desc">{t.desc}</span>
@@ -2316,201 +2114,149 @@ function ImageProcessingTool() {
         ))}
       </div>
 
-      {/* ── Remove Background ── */}
-      {mode === 'remove-bg' && (
-        <div>
-          <UploadZone />
-          {inputImage && (
-            <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">🧽 يستخدم نموذج <strong>BiRefNet</strong> لإزالة الخلفية محلياً — بدون سيرفر، يعمل مباشرةً في المتصفح</div>
-              <button className="dzt-btn" onClick={processRemoveBg} disabled={loading}>
-                {loading ? <><span className="dzt-spinner" /> جاري إزالة الخلفية...</> : '🧽 إزالة الخلفية'}
-              </button>
+      {/* Image upload (img2img + video optional) */}
+      {(mode === 'img2img' || mode === 'video') && (
+        <div
+          className="dzt-imggen-upload"
+          onClick={() => fileRef.current?.click()}
+          onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleFile(f) }}
+          onDragOver={e => e.preventDefault()}
+        >
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+          {inputImage ? (
+            <div className="dzt-imggen-upload-preview">
+              <img src={inputImage} alt="input" />
+              <button onClick={e => { e.stopPropagation(); setInputImage(''); reset() }}>✕ تغيير</button>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Enhance Image ── */}
-      {mode === 'enhance' && (
-        <div>
-          <UploadZone />
-          {inputImage && (
-            <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">✨ يُضاعف أبعاد الصورة 2× مع تطبيق خوارزمية Bicubic + Unsharp Mask لتحسين الحواف — فوري ومحلي</div>
-              <button className="dzt-btn" onClick={enhanceImage} disabled={loading}>
-                {loading ? <><span className="dzt-spinner" /> جاري التحسين...</> : '✨ تحسين الجودة 2×'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Compress Image ── */}
-      {mode === 'compress' && (
-        <div>
-          <UploadZone />
-          {inputImage && (
-            <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">الصيغة:</label>
-                <div className="dzt-imgproc-btn-group">
-                  {(['image/webp', 'image/jpeg'] as const).map(f => (
-                    <button key={f} className={`dzt-imgproc-opt${compFmt === f ? ' active' : ''}`}
-                      onClick={() => setCompFmt(f)}>
-                      {f === 'image/webp' ? 'WebP (أفضل)' : 'JPEG'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">الجودة: <strong>{compQ}%</strong></label>
-                <input type="range" min={10} max={100} value={compQ}
-                  onChange={e => setCompQ(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">الحجم: <strong>{compScale}%</strong></label>
-                <input type="range" min={10} max={100} value={compScale}
-                  onChange={e => setCompScale(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <button className="dzt-btn" onClick={compressImage}>⚡ ضغط فوري (بدون سيرفر)</button>
-              {compSize.before > 0 && result && (
-                <div className="dzt-imgproc-compress-stats">
-                  <span>قبل: <strong>{(compSize.before / 1024).toFixed(0)} KB</strong></span>
-                  <span className="dzt-imgproc-arrow-sep">→</span>
-                  <span>بعد: <strong>{(compSize.after / 1024).toFixed(0)} KB</strong></span>
-                  <span className="dzt-imgproc-savings">
-                    ✅ وفّرت {Math.round((1 - compSize.after / compSize.before) * 100)}%
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Basic Edit ── */}
-      {mode === 'edit' && (
-        <div>
-          <UploadZone />
-          {inputImage && (
-            <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">تدوير:</label>
-                <div className="dzt-imgproc-btn-group">
-                  {[0, 90, 180, 270].map(r => (
-                    <button key={r} className={`dzt-imgproc-opt${rotation === r ? ' active' : ''}`}
-                      onClick={() => setRotation(r)}>{r}°</button>
-                  ))}
-                </div>
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">قلب:</label>
-                <div className="dzt-imgproc-btn-group">
-                  <button className={`dzt-imgproc-opt${flipH ? ' active' : ''}`} onClick={() => setFlipH(v => !v)}>أفقي ↔</button>
-                  <button className={`dzt-imgproc-opt${flipV ? ' active' : ''}`} onClick={() => setFlipV(v => !v)}>عمودي ↕</button>
-                </div>
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">السطوع: <strong>{brightness}%</strong></label>
-                <input type="range" min={0} max={200} value={brightness}
-                  onChange={e => setBrightness(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">التباين: <strong>{contrast}%</strong></label>
-                <input type="range" min={0} max={200} value={contrast}
-                  onChange={e => setContrast(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">الإشباع: <strong>{saturation}%</strong></label>
-                <input type="range" min={0} max={200} value={saturation}
-                  onChange={e => setSaturation(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <button className="dzt-btn" onClick={applyEdit}>🔄 تطبيق التعديلات</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Object Removal (Inpaint) ── */}
-      {mode === 'inpaint' && (
-        <div>
-          {!inputImage ? (
-            <UploadZone forInpaint />
           ) : (
-            <div className="dzt-imgproc-controls">
-              <div className="dzt-imgproc-hint">🖌️ ارسم باللون الأحمر فوق العنصر المراد حذفه، ثم اضغط <strong>حذف العنصر</strong> — يملأ المنطقة بألوان محيطة تلقائياً</div>
-              <div className="dzt-imgproc-row">
-                <label className="dzt-imgproc-label">الفرشاة: <strong>{brushSize}px</strong></label>
-                <input type="range" min={5} max={80} value={brushSize}
-                  onChange={e => setBrushSize(+e.target.value)} className="dzt-imgproc-slider" />
-              </div>
-              <div className="dzt-imgproc-canvas-wrap">
-                <canvas
-                  ref={canvasRef}
-                  className="dzt-imgproc-canvas"
-                  onMouseDown={() => setPainting(true)}
-                  onMouseUp={() => setPainting(false)}
-                  onMouseLeave={() => setPainting(false)}
-                  onMouseMove={paint}
-                  onTouchStart={e => { e.preventDefault(); setPainting(true) }}
-                  onTouchEnd={() => setPainting(false)}
-                  onTouchMove={e => { e.preventDefault(); paint(e) }}
-                />
-                <canvas ref={maskRef} style={{ display: 'none' }} />
-              </div>
-              <div className="dzt-imgproc-inpaint-actions">
-                <button className="dzt-btn" onClick={processInpaint} disabled={loading || !maskDrawn}>
-                  {loading ? <><span className="dzt-spinner" /> جاري الحذف...</> : '🚫 حذف العنصر'}
-                </button>
-                <button className="dzt-result-btn" onClick={() => { initMask(); setMaskDrawn(false); setResult('') }}>
-                  ↺ إعادة الرسم
-                </button>
-                <button className="dzt-result-btn" onClick={() => { setInputImage(''); reset() }}>
-                  ✕ تغيير الصورة
-                </button>
-              </div>
+            <div className="dzt-imggen-upload-ph">
+              <div style={{ fontSize: 32 }}>{mode === 'img2img' ? '📤' : '🖼️'}</div>
+              <div>{mode === 'img2img' ? 'ارفع صورة المصدر (مطلوب)' : 'ارفع صورة مرجعية (اختياري)'}</div>
+              <div style={{ fontSize: 12, opacity: 0.5 }}>JPG • PNG • WebP</div>
             </div>
           )}
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
-        <div className="dzt-loading">
-          <div className="dzt-spinner" />
-          يُعالَج الآن بالذكاء الاصطناعي — قد يستغرق لحظات...
+      {/* Prompt */}
+      <div className="dzt-imggen-prompt-wrap">
+        <textarea
+          className="dzt-imggen-textarea"
+          placeholder={mode === 'txt2img' ? 'صف الصورة التي تريدها... (عربي، فرنسي، أو إنجليزي)' : mode === 'img2img' ? 'صف الأسلوب أو التعديل المطلوب...' : 'صف مشهد الفيديو الذي تريد توليده...'}
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          rows={3}
+        />
+        {/* Quick prompt suggestions */}
+        <div className="dzt-imggen-suggestions">
+          {PROMPTS[mode].map((s, i) => (
+            <button key={i} className="dzt-imggen-suggestion" onClick={() => setPrompt(s)}>
+              {s.slice(0, 40)}{s.length > 40 ? '…' : ''}
+            </button>
+          ))}
         </div>
-      )}
+        <textarea
+          className="dzt-imggen-textarea dzt-imggen-neg"
+          placeholder="برومبت سلبي (اختياري): ما تريد استبعاده — ugly, blurry, low quality..."
+          value={negPrompt}
+          onChange={e => setNegPrompt(e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      {/* Settings */}
+      <div className="dzt-imggen-settings">
+        {mode !== 'video' && (
+          <div className="dzt-imggen-setting-group">
+            <label>الأبعاد</label>
+            <div className="dzt-imgproc-btn-group">
+              {IMG_SIZE_OPTIONS.map((s, i) => (
+                <button key={i} className={`dzt-imgproc-opt${sizeIdx === i ? ' active' : ''}`}
+                  onClick={() => setSizeIdx(i)}>{s.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {mode === 'img2img' && (
+          <div className="dzt-imggen-setting-group">
+            <label>قوة التحويل: <strong>{Math.round(strength * 100)}%</strong></label>
+            <input type="range" min={10} max={100} value={Math.round(strength * 100)}
+              onChange={e => setStrength(+e.target.value / 100)} className="dzt-imgproc-slider" />
+            <span style={{ fontSize: 11, opacity: 0.5 }}>منخفض = أقرب للأصل، مرتفع = تغيير أكبر</span>
+          </div>
+        )}
+      </div>
+
+      {/* Generate button */}
+      <button
+        className="dzt-btn dzt-imggen-btn"
+        onClick={generate}
+        disabled={loading || !prompt.trim()}
+      >
+        {loading
+          ? <><span className="dzt-spinner" /> {mode === 'video' ? 'جاري توليد الفيديو...' : 'جاري التوليد...'}</>
+          : mode === 'txt2img' ? '✨ ولّد الصورة' : mode === 'img2img' ? '🔄 حوّل الصورة' : '🎬 ولّد الفيديو'
+        }
+      </button>
+
+      {/* Provider hint */}
+      <div className="dzt-imggen-provider-hint">
+        🔗 المزودون: <strong>SD WebUI</strong> (SD_WEBUI_URL) → <strong>ComfyUI</strong> (COMFYUI_URL) → <strong>HuggingFace FLUX</strong> (HF_TOKEN) — تعمل تلقائياً بحسب ما هو مُعدّ
+      </div>
 
       {/* Error */}
-      {error && <div className="dzt-imgproc-error">⚠️ {error}</div>}
+      {error && (
+        <div className="dzt-imgproc-error" style={{ borderRadius: 12, padding: 16 }}>
+          <div>⚠️ {error.msg}</div>
+          {error.hint && <div style={{ fontSize: 13, marginTop: 6, opacity: 0.8 }}>{error.hint}</div>}
+          {error.setupGuide && (
+            <div style={{ marginTop: 8, fontSize: 12, display: 'flex', gap: 10 }}>
+              {Object.entries(error.setupGuide).map(([k, v]) => (
+                <a key={k} href={v} target="_blank" rel="noopener noreferrer"
+                  style={{ color: '#c8ff00', textDecoration: 'underline' }}>
+                  {k === 'sdwebui' ? 'SD WebUI ↗' : 'ComfyUI ↗'}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Result */}
       {result && !loading && (
-        <div className="dzt-imgproc-result">
+        <div className="dzt-imggen-result">
           <div className="dzt-imgproc-result-header">
             <span className="dzt-imgproc-result-label">
               ✅ النتيجة جاهزة
-              {modelUsed && (
-                <span className="dzt-imgproc-model-tag">{modelUsed.split('/').pop()}</span>
-              )}
+              <span className="dzt-imgproc-model-tag">{result.model}</span>
             </span>
-            <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>
-              ⬇️ تحميل
-            </button>
+            <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>⬇️ تحميل</button>
           </div>
-          <div className="dzt-imgproc-compare">
-            <div className="dzt-imgproc-compare-col">
-              <div className="dzt-imgproc-compare-label">الأصلية</div>
-              <img src={inputImage} alt="before" className="dzt-imgproc-compare-img" />
+          {result.note && <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, padding: '0 4px' }}>ملاحظة: {result.note}</div>}
+          {result.type === 'image' ? (
+            <img src={result.src} alt="generated" className="dzt-imggen-result-img"
+              onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png' }} />
+          ) : (
+            result.src.includes('video/') ? (
+              <video src={result.src} controls autoPlay loop className="dzt-imggen-result-img" />
+            ) : (
+              <img src={result.src} alt="generated video" className="dzt-imggen-result-img" />
+            )
+          )}
+          {mode === 'img2img' && inputImage && (
+            <div className="dzt-imgproc-compare" style={{ marginTop: 16 }}>
+              <div className="dzt-imgproc-compare-col">
+                <div className="dzt-imgproc-compare-label">الأصلية</div>
+                <img src={inputImage} alt="before" className="dzt-imgproc-compare-img" />
+              </div>
+              <div className="dzt-imgproc-compare-arrow">→</div>
+              <div className="dzt-imgproc-compare-col">
+                <div className="dzt-imgproc-compare-label">النتيجة</div>
+                <img src={result.src} alt="after" className="dzt-imgproc-compare-img" />
+              </div>
             </div>
-            <div className="dzt-imgproc-compare-arrow">→</div>
-            <div className="dzt-imgproc-compare-col">
-              <div className="dzt-imgproc-compare-label">النتيجة</div>
-              <img src={result} alt="after" className="dzt-imgproc-compare-img dzt-imgproc-checkerboard" />
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

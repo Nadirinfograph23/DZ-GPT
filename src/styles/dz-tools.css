@@ -2997,6 +2997,88 @@
 }
 .dzt-xl-fn-chip:hover { background: rgba(96,165,250,.1); border-color: #60a5fa; color: #93c5fd; }
 
+/* Function Reference Panel */
+.dzt-xl-fnref-panel {
+  background: #0a0a0a;
+  border-bottom: 1px solid #1e1e1e;
+  animation: fadeInUp .2s ease;
+  direction: rtl;
+}
+.dzt-xl-fnref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.dzt-xl-fnref-header button {
+  background: none; border: none; color: #555; cursor: pointer;
+  display: grid; place-items: center;
+}
+.dzt-xl-fnref-header button:hover { color: #fff; }
+.dzt-xl-fnref-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #111;
+}
+.dzt-xl-fnref-cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #222;
+  border-radius: 20px;
+  color: #888;
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.dzt-xl-fnref-cat-btn:hover { color: #fff; border-color: #444; background: rgba(255,255,255,.07); }
+.dzt-xl-fnref-cat-btn.active { background: rgba(255,255,255,.08); font-weight: 700; }
+.dzt-xl-fnref-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 4px;
+  padding: 10px 16px 14px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.dzt-xl-fnref-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: right;
+  transition: all .12s;
+}
+.dzt-xl-fnref-item:hover { background: rgba(255,255,255,.07); border-color: #333; }
+.dzt-xl-fnref-name {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dzt-xl-fnref-sig {
+  font-family: 'Courier New', monospace;
+  font-size: 10.5px;
+  color: #555;
+}
+.dzt-xl-fnref-desc {
+  font-size: 11.5px;
+  color: #888;
+}
+
 /* Grid */
 .dzt-xl-grid-wrap {
   overflow: auto;

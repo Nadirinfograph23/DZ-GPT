@@ -343,23 +343,54 @@
   text-shadow: 0 0 8px rgba(245, 197, 24, 0.45);
 }
 
-/* Blue verified badge for admin messages (Facebook-style) */
-.dzc-admin-verified-badge {
-  display: inline-flex !important;
+/* Blue verified badge wrapper (Facebook-style) */
+.dzc-admin-badge-wrap {
+  display: inline-flex;
   align-items: center;
+  gap: 3px;
+  background: rgba(24, 119, 242, 0.12);
+  border: 1px solid rgba(24, 119, 242, 0.35);
+  border-radius: 20px;
+  padding: 1px 6px 1px 4px;
+  flex-shrink: 0;
+  animation: dzc-badge-glow 2.5s ease-in-out infinite;
+}
+
+/* Blue verified badge icon */
+.dzc-admin-verified-badge {
+  display: block !important;
   color: #1877f2 !important;
   flex-shrink: 0;
-  min-width: 15px;
-  min-height: 15px;
-  filter: drop-shadow(0 0 5px rgba(24, 119, 242, 0.85));
-  animation: dzc-badge-pulse 2.5s ease-in-out infinite;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* "مشرف" label next to badge */
+.dzc-admin-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1877f2;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 /* Admin message sender name in chat — !important overrides --me color */
 .dzc-msg-from--admin-sender {
   color: #f5c518 !important;
   font-weight: 700 !important;
-  text-shadow: 0 0 6px rgba(245, 197, 24, 0.4) !important;
+  text-shadow: 0 0 8px rgba(245, 197, 24, 0.55) !important;
+  font-size: 13px !important;
+}
+
+@keyframes dzc-badge-glow {
+  0%, 100% {
+    border-color: rgba(24, 119, 242, 0.35);
+    box-shadow: 0 0 4px rgba(24, 119, 242, 0.2);
+  }
+  50% {
+    border-color: rgba(24, 119, 242, 0.7);
+    box-shadow: 0 0 10px rgba(24, 119, 242, 0.45);
+  }
 }
 
 @keyframes dzc-badge-pulse {
@@ -479,6 +510,12 @@
   max-width: 80%;
   margin: 4px auto;
   align-self: center;
+}
+
+/* Admin (isAdmin=true) message bubble — distinctive blue-left border */
+.dzc-msg--admin-msg {
+  border-right: 3px solid rgba(24, 119, 242, 0.6);
+  background: rgba(24, 119, 242, 0.04);
 }
 
 .dzc-msg--dm {

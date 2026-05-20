@@ -345,17 +345,21 @@
 
 /* Blue verified badge for admin messages (Facebook-style) */
 .dzc-admin-verified-badge {
-  color: #1877f2;
+  display: inline-flex !important;
+  align-items: center;
+  color: #1877f2 !important;
   flex-shrink: 0;
+  min-width: 15px;
+  min-height: 15px;
   filter: drop-shadow(0 0 5px rgba(24, 119, 242, 0.85));
   animation: dzc-badge-pulse 2.5s ease-in-out infinite;
 }
 
-/* Admin message sender name in chat */
-.dzc-msg-from.dzc-msg-from--admin-sender {
-  color: #f5c518;
-  font-weight: 700;
-  text-shadow: 0 0 6px rgba(245, 197, 24, 0.4);
+/* Admin message sender name in chat — !important overrides --me color */
+.dzc-msg-from--admin-sender {
+  color: #f5c518 !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 6px rgba(245, 197, 24, 0.4) !important;
 }
 
 @keyframes dzc-badge-pulse {

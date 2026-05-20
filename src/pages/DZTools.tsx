@@ -2007,7 +2007,7 @@ type ImgGenMode = 'txt2img' | 'img2img' | 'video'
 const IMGGEN_TOOLS: { id: ImgGenMode; icon: string; name: string; desc: string }[] = [
   { id: 'txt2img', icon: '✨', name: 'نص → صورة',       desc: 'ولّد صورة من وصف نصي بالعربية أو الإنجليزية' },
   { id: 'img2img', icon: '🔄', name: 'صورة → صورة',    desc: 'حوّل صورة بأسلوب جديد عبر برومبت' },
-  { id: 'video',   icon: '🎬', name: 'توليد فيديو',     desc: 'فيديو قصير من نص — AnimateDiff & HuggingFace' },
+  { id: 'video',   icon: '🎬', name: 'توليد فيديو',     desc: 'تسلسل متحرك من نص — AI DZ Media' },
 ]
 
 const IMG_SIZE_OPTIONS = [
@@ -2017,6 +2017,61 @@ const IMG_SIZE_OPTIONS = [
   { label: '1024×1024', w: 1024, h: 1024 },
 ]
 
+type ImgResult =
+  | { type: 'image';  src: string;    model: string; note?: string }
+  | { type: 'video';  src: string;    model: string }
+  | { type: 'frames'; frames: string[]; model: string; frameCount: number; kenBurns?: boolean }
+
+const kenBurnsStyle = `
+  @keyframes kenBurnsZoom {
+    0%   { transform: scale(1.0) translate(0%,0%); }
+    25%  { transform: scale(1.10) translate(-2%,-1%); }
+    50%  { transform: scale(1.15) translate(1%,-2%); }
+    75%  { transform: scale(1.08) translate(-1%, 2%); }
+    100% { transform: scale(1.0) translate(0%,0%); }
+  }
+`
+
+function VideoFlipbook({ frames, kenBurns }: { frames: string[]; kenBurns?: boolean }) {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    if (frames.length < 2) return
+    const id = setInterval(() => setIdx(i => (i + 1) % frames.length), kenBurns ? 4000 : 180)
+    return () => clearInterval(id)
+  }, [frames.length, kenBurns])
+
+  if (frames.length === 1 || kenBurns) {
+    return (
+      <div style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 12 }}>
+        <style>{kenBurnsStyle}</style>
+        <img
+          src={frames[idx] || frames[0]} alt="generated"
+          className="dzt-imggen-result-img"
+          style={{ width: '100%', animation: 'kenBurnsZoom 8s ease-in-out infinite alternate', borderRadius: 12 }}
+        />
+        <div style={{ position: 'absolute', bottom: 10, right: 12, background: 'rgba(0,0,0,0.55)', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#c8ff00' }}>
+          🎬 AI DZ Media
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+      {frames.map((src, i) => (
+        <img
+          key={i} src={src} alt={`frame ${i}`}
+          className="dzt-imggen-result-img"
+          style={{ display: i === idx ? 'block' : 'none', width: '100%', borderRadius: 12 }}
+        />
+      ))}
+      <div style={{ position: 'absolute', bottom: 10, right: 12, background: 'rgba(0,0,0,0.55)', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#c8ff00' }}>
+        {idx + 1} / {frames.length} · AI DZ Media
+      </div>
+    </div>
+  )
+}
+
 function ImageProcessingTool() {
   const [mode, setMode]       = useState<ImgGenMode>('txt2img')
   const [prompt, setPrompt]   = useState('')
@@ -2024,9 +2079,9 @@ function ImageProcessingTool() {
   const [inputImage, setInputImage] = useState<string>('')
   const [sizeIdx, setSizeIdx] = useState(0)
   const [strength, setStrength] = useState(0.75)
-  const [result, setResult]   = useState<{ type: 'image' | 'video'; src: string; model: string; note?: string } | null>(null)
+  const [result, setResult]   = useState<ImgResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<{ msg: string; hint?: string; setupGuide?: Record<string,string> } | null>(null)
+  const [error, setError]     = useState<{ msg: string; hint?: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const reset = () => { setResult(null); setError(null) }
@@ -2063,7 +2118,9 @@ function ImageProcessingTool() {
         })
         const d = await r.json()
         if (!r.ok) throw { msg: d.error || 'فشل التحويل', hint: d.hint }
-        setResult({ type: 'image', src: d.imageBase64!, model: d.model || d.provider || 'AI', note: d.note })
+        const src = d.imageBase64 || d.imageUrl
+        if (!src) throw { msg: 'لم تُرجع أي صورة' }
+        setResult({ type: 'image', src, model: 'AI DZ Media', note: d.note })
       } else {
         const r = await fetch('/api/tools/video-gen', {
           method: 'POST',
@@ -2071,17 +2128,29 @@ function ImageProcessingTool() {
           body: JSON.stringify({ prompt, imageBase64: inputImage || undefined }),
         })
         const d = await r.json()
-        if (!r.ok) throw { msg: d.error || 'فشل توليد الفيديو', hint: d.hint, setupGuide: d.setupGuide }
-        setResult({ type: 'video', src: d.videoBase64!, model: d.model || 'AI' })
+        if (!r.ok) throw { msg: d.error || 'فشل توليد الفيديو', hint: d.hint }
+        if (d.frames?.length) {
+          setResult({ type: 'frames', frames: d.frames, model: 'AI DZ Media', frameCount: d.frameCount || d.frames.length, kenBurns: !!d.kenBurns })
+        } else if (d.videoBase64) {
+          setResult({ type: 'video', src: d.videoBase64, model: 'AI DZ Media' })
+        } else {
+          throw { msg: 'لم يُرجع الخادم أي فيديو' }
+        }
       }
     } catch (e: unknown) {
-      const err = e as { msg?: string; hint?: string; setupGuide?: Record<string,string> }
-      setError({ msg: err.msg || String(e), hint: err.hint, setupGuide: err.setupGuide })
+      const err = e as { msg?: string; hint?: string }
+      setError({ msg: err.msg || String(e), hint: err.hint })
     } finally { setLoading(false) }
   }
 
   const download = () => {
     if (!result) return
+    if (result.type === 'frames') {
+      result.frames.forEach((src, i) => {
+        const a = document.createElement('a'); a.href = src; a.download = `dz-video-frame-${i + 1}.jpg`; a.click()
+      })
+      return
+    }
     const ext = result.type === 'video' ? (result.src.includes('gif') ? 'gif' : 'mp4') : 'png'
     const a = document.createElement('a'); a.href = result.src; a.download = `dz-gen.${ext}`; a.click()
   }
@@ -2098,7 +2167,7 @@ function ImageProcessingTool() {
         <span className="dzt-tool-desc-icon">🎨</span>
         <div>
           <div className="dzt-tool-desc-title">Image Generation Studio — استوديو توليد الصور</div>
-          <div className="dzt-tool-desc-text">نص → صورة • صورة → صورة • توليد فيديو — يدعم SD WebUI & ComfyUI & HuggingFace FLUX</div>
+          <div className="dzt-tool-desc-text">نص → صورة • صورة → صورة • توليد فيديو — مدعوم بـ AI DZ Media</div>
         </div>
       </div>
 
@@ -2200,26 +2269,11 @@ function ImageProcessingTool() {
         }
       </button>
 
-      {/* Provider hint */}
-      <div className="dzt-imggen-provider-hint">
-        🔗 المزودون: <strong>SD WebUI</strong> (SD_WEBUI_URL) → <strong>ComfyUI</strong> (COMFYUI_URL) → <strong>HuggingFace FLUX</strong> (HF_TOKEN) — تعمل تلقائياً بحسب ما هو مُعدّ
-      </div>
-
       {/* Error */}
       {error && (
         <div className="dzt-imgproc-error" style={{ borderRadius: 12, padding: 16 }}>
           <div>⚠️ {error.msg}</div>
           {error.hint && <div style={{ fontSize: 13, marginTop: 6, opacity: 0.8 }}>{error.hint}</div>}
-          {error.setupGuide && (
-            <div style={{ marginTop: 8, fontSize: 12, display: 'flex', gap: 10 }}>
-              {Object.entries(error.setupGuide).map(([k, v]) => (
-                <a key={k} href={v} target="_blank" rel="noopener noreferrer"
-                  style={{ color: '#c8ff00', textDecoration: 'underline' }}>
-                  {k === 'sdwebui' ? 'SD WebUI ↗' : 'ComfyUI ↗'}
-                </a>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -2233,29 +2287,41 @@ function ImageProcessingTool() {
             </span>
             <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>⬇️ تحميل</button>
           </div>
-          {result.note && <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, padding: '0 4px' }}>ملاحظة: {result.note}</div>}
-          {result.type === 'image' ? (
-            <img src={result.src} alt="generated" className="dzt-imggen-result-img"
-              onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png' }} />
+          {'note' in result && result.note && <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, padding: '0 4px' }}>ملاحظة: {result.note}</div>}
+
+          {result.type === 'frames' ? (
+            <>
+              <div style={{ fontSize: 12, opacity: 0.55, marginBottom: 6 }}>
+                {result.kenBurns
+                  ? '🎬 مشهد سينمائي متحرك — AI DZ Media'
+                  : `🎬 تسلسل ${result.frameCount} إطار — يعمل تلقائياً`}
+              </div>
+              <VideoFlipbook frames={result.frames} kenBurns={result.kenBurns} />
+            </>
+          ) : result.type === 'image' ? (
+            <>
+              <img src={result.src} alt="generated" className="dzt-imggen-result-img"
+                onError={e => { (e.target as HTMLImageElement).src = '/placeholder.png' }} />
+              {mode === 'img2img' && inputImage && (
+                <div className="dzt-imgproc-compare" style={{ marginTop: 16 }}>
+                  <div className="dzt-imgproc-compare-col">
+                    <div className="dzt-imgproc-compare-label">الأصلية</div>
+                    <img src={inputImage} alt="before" className="dzt-imgproc-compare-img" />
+                  </div>
+                  <div className="dzt-imgproc-compare-arrow">→</div>
+                  <div className="dzt-imgproc-compare-col">
+                    <div className="dzt-imgproc-compare-label">النتيجة</div>
+                    <img src={result.src} alt="after" className="dzt-imgproc-compare-img" />
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             result.src.includes('video/') ? (
               <video src={result.src} controls autoPlay loop className="dzt-imggen-result-img" />
             ) : (
               <img src={result.src} alt="generated video" className="dzt-imggen-result-img" />
             )
-          )}
-          {mode === 'img2img' && inputImage && (
-            <div className="dzt-imgproc-compare" style={{ marginTop: 16 }}>
-              <div className="dzt-imgproc-compare-col">
-                <div className="dzt-imgproc-compare-label">الأصلية</div>
-                <img src={inputImage} alt="before" className="dzt-imgproc-compare-img" />
-              </div>
-              <div className="dzt-imgproc-compare-arrow">→</div>
-              <div className="dzt-imgproc-compare-col">
-                <div className="dzt-imgproc-compare-label">النتيجة</div>
-                <img src={result.src} alt="after" className="dzt-imgproc-compare-img" />
-              </div>
-            </div>
           )}
         </div>
       )}

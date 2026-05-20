@@ -137,7 +137,7 @@ app.use(helmet({
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co'],
       connectSrc: isProd
         ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org'],
@@ -18805,38 +18805,45 @@ async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {
   return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
 }
 
-// POST /api/tools/img-gen — Text-to-Image (Vercel-compatible, pure fetch)
+// POST /api/tools/img-gen — Text-to-Image (instant URL-based, no proxy delay)
+// Strategy: return direct Pollinations URL (browser loads image directly = instant response)
+// Falls back to HuggingFace base64 if HF_TOKEN is set and Pollinations fails
 app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
-  const { prompt, negativePrompt, width = 768, height = 768 } = req.body
+  const { prompt, negativePrompt, width = 768, height = 768, model: reqModel } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
   const w = Math.min(Number(width) || 768, 1024)
   const h = Math.min(Number(height) || 768, 1024)
+  const seed = Math.floor(Math.random() * 99999999)
 
-  // 1. HuggingFace FLUX.1-schnell (if HF_TOKEN configured)
-  try {
-    const hf = await huggingFaceFlux(prompt, negativePrompt)
-    if (hf) {
-      console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
-      return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell', provider: 'huggingface' })
-    }
-  } catch (e) { console.warn('[img-gen:hf]', e.message) }
+  // ── Priority 1: HuggingFace FLUX.1-schnell (high quality, needs HF_TOKEN) ──
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  if (token) {
+    try {
+      const hf = await huggingFaceFlux(prompt, negativePrompt, { timeoutMs: 35000 })
+      if (hf) {
+        console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
+        return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell', provider: 'huggingface' })
+      }
+    } catch (e) { console.warn('[img-gen:hf]', e.message) }
+  }
 
-  // 2. Pollinations.ai — flux model (free, no key)
-  try {
-    const pol = await pollinationsImage(prompt, { width: w, height: h, model: 'flux', timeoutMs: 45000 })
-    console.log('[img-gen] ✓ Pollinations flux')
-    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations' })
-  } catch (e) { console.warn('[img-gen:pol-flux]', e.message) }
+  // ── Priority 2: Pollinations direct URL (INSTANT — no proxy, browser loads directly) ──
+  // Supports models: flux | flux-realism | flux-anime | flux-3d | flux-pro | turbo | dreamshaper
+  const MODELS = ['flux', 'flux-realism', 'flux-3d', 'turbo']
+  const chosenModel = reqModel && MODELS.includes(reqModel) ? reqModel : 'flux'
+  const encoded = encodeURIComponent(prompt.trim())
+  const negEnc  = negativePrompt ? `&negative=${encodeURIComponent(negativePrompt)}` : ''
+  const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&safe=false${negEnc}`
 
-  // 3. Pollinations.ai — turbo model (faster, lower quality)
-  try {
-    const pol = await pollinationsImage(prompt, { width: w, height: h, model: 'turbo', timeoutMs: 35000 })
-    console.log('[img-gen] ✓ Pollinations turbo')
-    return res.json({ imageBase64: pol.imageBase64, model: 'AI DZ Media', provider: 'pollinations-turbo' })
-  } catch (e) { console.warn('[img-gen:pol-turbo]', e.message) }
-
-  return res.status(500).json({ error: 'فشل توليد الصورة — حاول مجدداً', hint: 'أضف HF_TOKEN في الأسرار لنتائج أفضل' })
+  console.log('[img-gen] ✓ Pollinations direct URL', chosenModel)
+  return res.json({
+    imageUrl,
+    model: `FLUX via Pollinations (${chosenModel})`,
+    provider: 'pollinations',
+    seed,
+    allModels: MODELS,
+  })
 })
 
 // POST /api/tools/img2img — Image-to-Image (Vercel-compatible, pure fetch)
@@ -18927,78 +18934,79 @@ app.post('/api/tools/img2img', express.json({ limit: '30mb' }), async (req, res)
   return res.status(500).json({ error: 'فشل تحويل الصورة — حاول مجدداً', hint: 'أضف HF_TOKEN في الأسرار للحصول على img2img دقيق' })
 })
 
-// POST /api/tools/video-gen — Video Generation: animated frames (Vercel-compatible, pure fetch)
-// Strategy: generate 2 cinematic frames via Pollinations fetch (sequential, <55s total),
-// return with kenBurns:true for CSS pan/zoom animation in the frontend.
+// POST /api/tools/video-gen — Video Generation: cinematic frame sequence (INSTANT URL-based)
+// Strategy: return 4 direct Pollinations URLs with different cinematic styles for smooth Ken Burns
+// animation. Response is INSTANT (no downloading). Browser loads frames directly.
+// If HF_TOKEN set, also tries real video generation via AnimateDiff / ZeroScope.
 app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, res) => {
   const { prompt } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
 
-  // 1. HuggingFace text-to-video (damo-vilab, if HF_TOKEN)
+  // ── Priority 1: Real video via ZeroScope (HuggingFace, if HF_TOKEN) ──
   if (token) {
+    try {
+      const r = await fetch('https://router.huggingface.co/hf-inference/models/cerspense/zeroscope_v2_576w', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'video/mp4,image/gif,image/*,*/*' },
+        body: JSON.stringify({ inputs: prompt }),
+        signal: AbortSignal.timeout(38000),
+      })
+      const ct = r.headers.get('content-type') || ''
+      if (r.ok && (ct.startsWith('video/') || ct.includes('mp4'))) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length > 5000) {
+          console.log('[video-gen] ✓ ZeroScope real video')
+          return res.json({ videoBase64: `data:video/mp4;base64,${buf.toString('base64')}`, model: 'ZeroScope v2', provider: 'hf-zeroscope', isVideo: true })
+        }
+      }
+    } catch (e) { console.warn('[video-gen:zeroscope]', e.message) }
+
+    // AnimateDiff fallback (returns GIF)
     try {
       const r = await fetch('https://router.huggingface.co/hf-inference/models/damo-vilab/text-to-video-ms-1.7b', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ inputs: prompt }),
-        signal: AbortSignal.timeout(40000),
+        signal: AbortSignal.timeout(38000),
       })
       const ct = r.headers.get('content-type') || ''
       if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
         const buf = Buffer.from(await r.arrayBuffer())
-        if (buf.length > 1000) {
+        if (buf.length > 5000) {
           const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
-          console.log('[video-gen] ✓ HuggingFace text-to-video')
-          return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'AI DZ Media', provider: 'hf-video' })
+          console.log('[video-gen] ✓ ModelScope text-to-video')
+          return res.json({ videoBase64: `data:${mime};base64,${buf.toString('base64')}`, model: 'ModelScope T2V', provider: 'hf-modelscope', isVideo: true })
         }
       }
-    } catch (e) { console.warn('[video-gen:hf-video]', e.message) }
+    } catch (e) { console.warn('[video-gen:modelscope]', e.message) }
   }
 
-  // 2. Pollinations fetch — Frame 1: wide cinematic (primary, ~25s)
-  console.log('[video-gen] generating frames via Pollinations fetch...')
-  let frame1 = null, frame2 = null
+  // ── Priority 2: 4 cinematic Pollinations frames (INSTANT direct URLs) ──
+  // Each frame has different cinematic style → Ken Burns animation creates fluid motion feel
+  const baseSeed = Math.floor(Math.random() * 9000000)
+  const frameStyles = [
+    { suffix: 'wide establishing shot, cinematic, 8k, golden hour, dramatic sky', model: 'flux' },
+    { suffix: 'medium shot, soft bokeh, cinematic lighting, shallow depth of field', model: 'flux-realism' },
+    { suffix: 'close-up detail, macro photography, cinematic, ultra sharp, moody', model: 'flux' },
+    { suffix: 'aerial wide angle, cinematic pan, dramatic clouds, vibrant colors', model: 'turbo' },
+  ]
 
-  try {
-    const pol1 = await pollinationsImage(
-      `${prompt}, wide establishing shot, cinematic, 8k, ultra detailed, dramatic lighting, golden hour`,
-      { width: 768, height: 432, model: 'flux', timeoutMs: 42000 }
-    )
-    frame1 = pol1.imageBase64
-    console.log('[video-gen] ✓ frame 1 ready')
-  } catch (e) { console.warn('[video-gen:frame1]', e.message) }
+  const frames = frameStyles.map((f, i) => {
+    const enc = encodeURIComponent(`${prompt}, ${f.suffix}`)
+    const seed = baseSeed + i * 31337
+    return `https://image.pollinations.ai/prompt/${enc}?model=${f.model}&width=768&height=432&seed=${seed}&nologo=true&safe=false`
+  })
 
-  // Frame 2: close-up detail (only if frame1 succeeded and time permits)
-  if (frame1) {
-    try {
-      const seed2 = Math.floor(Math.random() * 9000000)
-      const pol2 = await pollinationsImage(
-        `${prompt}, close-up detail, bokeh background, photorealistic, cinematic`,
-        { width: 768, height: 432, model: 'turbo', timeoutMs: 28000 }
-      )
-      frame2 = pol2.imageBase64
-      console.log('[video-gen] ✓ frame 2 ready')
-    } catch (e) { console.warn('[video-gen:frame2]', e.message) }
-  }
-
-  if (frame1) {
-    const frames = [frame1, frame2].filter(Boolean)
-    console.log(`[video-gen] ✅ returning ${frames.length} frame(s) with Ken Burns`)
-    return res.json({ frames, model: 'AI DZ Media', provider: 'pollinations', frameCount: frames.length, kenBurns: true })
-  }
-
-  // 3. Last resort: Pollinations turbo (faster, lower quality)
-  try {
-    const pol = await pollinationsImage(`${prompt}, cinematic, wide shot`, { width: 768, height: 432, model: 'turbo', timeoutMs: 32000 })
-    console.log('[video-gen] ✓ Pollinations turbo fallback')
-    return res.json({ frames: [pol.imageBase64], model: 'AI DZ Media', provider: 'pollinations-turbo', frameCount: 1, kenBurns: true })
-  } catch (e) { console.warn('[video-gen:pol-turbo]', e.message) }
-
-  return res.status(503).json({
-    error: 'فشل توليد الفيديو — حاول مجدداً بعد لحظة',
-    hint: 'أضف HF_TOKEN في الأسرار لتحسين النتائج',
+  console.log('[video-gen] ✓ 4 cinematic Pollinations frame URLs (instant)')
+  return res.json({
+    frames,
+    model: 'AI DZ Media — Cinematic',
+    provider: 'pollinations',
+    frameCount: frames.length,
+    kenBurns: true,
+    note: 'أضف HF_TOKEN للحصول على فيديو حقيقي (ZeroScope)',
   })
 })
 

@@ -1868,6 +1868,30 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
     }
   } catch { /* ignore — all parallel attempts failed */ }
 
+  // ── Pollinations.ai free text (no API key — always available) ─────────────
+  try {
+    const seed = Math.floor(Math.random() * 999999)
+    const polRes = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai-large',
+        messages: trimmed,
+        seed,
+        private: true,
+      }),
+      signal: AbortSignal.timeout(22000),
+    })
+    if (polRes.ok) {
+      const polData = await polRes.json()
+      const content = polData.choices?.[0]?.message?.content || null
+      if (content && content.trim().length > 5) {
+        console.log('[AI] ✓ Pollinations text fallback')
+        return { content: content.trim(), model: 'pollinations/openai-large' }
+      }
+    }
+  } catch (e) { console.warn('[AI] Pollinations text failed:', e.message) }
+
   return { content: null, model: null }
 }
 

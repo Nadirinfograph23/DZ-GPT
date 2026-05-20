@@ -977,7 +977,7 @@ export default function DZChat() {
                 <div
                   key={msg.id}
                   data-msg-id={msg.id}
-                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
+                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${(msg.isAdmin && !msg.isHighlighted) ? 'dzc-msg--admin-msg' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
                   onContextMenu={(e) => {
                     if (!localUser.isAdmin) return
                     e.preventDefault()
@@ -1003,7 +1003,10 @@ export default function DZChat() {
                       {msg.isHighlighted ? ADMIN_NAME : msg.from}
                     </span>
                     {(msg.isAdmin || msg.isHighlighted) && (
-                      <BadgeCheck size={15} className="dzc-admin-verified-badge" aria-label="مشرف موثق" />
+                      <span className="dzc-admin-badge-wrap" title="مشرف موثق">
+                        <BadgeCheck size={16} className="dzc-admin-verified-badge" />
+                        <span className="dzc-admin-label">مشرف</span>
+                      </span>
                     )}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}

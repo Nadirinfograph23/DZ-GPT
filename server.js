@@ -19133,6 +19133,57 @@ if (isMain) {
     res.json({ results, vercelUrl });
   });
 
+  // ── TTS — AI DZ voice (edge-tts) ─────────────────────────────────────────
+  app.post('/api/tts', async (req, res) => {
+    const { text, voice = 'ar-DZ-AminaNeural', rate = '+0%', pitch = '+0Hz' } = req.body || {}
+    if (!text || typeof text !== 'string' || text.trim().length === 0)
+      return res.status(400).json({ error: 'text is required' })
+    if (text.length > 3000)
+      return res.status(400).json({ error: 'text too long (max 3000 chars)' })
+
+    const { execFile: ef } = await import('child_process')
+    const { promisify: prom } = await import('util')
+    const efAsync = prom(ef)
+    const os = await import('os')
+    const fsMod = await import('fs')
+    const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`)
+
+    try {
+      await efAsync('edge-tts', [
+        '--voice', voice,
+        '--rate', rate,
+        '--pitch', pitch,
+        '--text', text.trim(),
+        '--write-media', tmpFile,
+      ], { timeout: 30000 })
+
+      const buf = fsMod.readFileSync(tmpFile)
+      try { fsMod.unlinkSync(tmpFile) } catch {}
+      res.set('Content-Type', 'audio/mpeg')
+      res.set('Content-Disposition', 'attachment; filename="ai-dz-voice.mp3"')
+      res.send(buf)
+    } catch (e) {
+      try { fsMod.unlinkSync(tmpFile) } catch {}
+      console.error('[TTS] error:', e.message)
+      res.status(500).json({ error: 'TTS generation failed', detail: e.message })
+    }
+  })
+
+  app.get('/api/tts/voices', (_req, res) => {
+    res.json([
+      { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — عربية جزائرية',   lang: 'ar' },
+      { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — عربية جزائرية', lang: 'ar' },
+      { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — عربية فصحى',      lang: 'ar' },
+      { id: 'ar-SA-HamedNeural',   label: '🇸🇦 حامد — عربية فصحى',       lang: 'ar' },
+      { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — عربية مصرية',      lang: 'ar' },
+      { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 دينيز — فرنسية',          lang: 'fr' },
+      { id: 'fr-FR-HenriNeural',   label: '🇫🇷 هنري — فرنسية',           lang: 'fr' },
+      { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 أمين — فرنسية جزائرية',   lang: 'fr' },
+      { id: 'en-US-JennyNeural',   label: '🇺🇸 جيني — إنجليزية',         lang: 'en' },
+      { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
+    ])
+  })
+
   // ── Start rembg HTTP server locally (skip on Vercel) ───────────────────────
   if (!process.env.VERCEL) {
     const rembgScript = path.join(process.cwd(), 'scripts', 'rembg_server.py')

@@ -4049,47 +4049,98 @@ const TTS_VOICES = [
   { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
 ]
 
+// Helper: guess gender from voice name
+function _ttsGender(name: string): 'male' | 'female' | 'unknown' {
+  const n = name.toLowerCase()
+  if (/naayf|hamad|shakir|hatem|guy|henri|amine|ismael|david|paul|mark|james|jorge|remi|ali|omar|youssef|male|man\b/.test(n)) return 'male'
+  if (/hoda|zariyah|amina|nawal|dena|jenny|denise|sonia|female|woman|girl|leila|salma|fatima/.test(n)) return 'female'
+  return 'unknown'
+}
+
 function TTSTool() {
-  const [text, setText]       = useState('')
-  const [voice, setVoice]     = useState('ar-DZ-AminaNeural')
-  const [rate, setRate]       = useState('+0%')
-  const [pitch, setPitch]     = useState('+0Hz')
-  const [loading, setLoading] = useState(false)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [error, setError]     = useState('')
-  const [playing, setPlaying] = useState(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [text, setText]           = useState('')
+  // voiceId: 'srv:ar' | 'srv:fr' | 'srv:en' | 'sys:<voice.name>'
+  const [voiceId, setVoiceId]     = useState('srv:ar')
+  const [rate, setRate]           = useState(1.0)
+  const [loading, setLoading]     = useState(false)
+  const [audioUrl, setAudioUrl]   = useState<string | null>(null)
+  const [error, setError]         = useState('')
+  const [playing, setPlaying]     = useState(false)
+  const [sysVoices, setSysVoices] = useState<SpeechSynthesisVoice[]>([])
+  const audioRef  = useRef<HTMLAudioElement | null>(null)
+  const uttRef    = useRef<SpeechSynthesisUtterance | null>(null)
 
   const charCount = text.length
-  const maxChars = 3000
+  const maxChars  = 3000
+  const isSysVoice = voiceId.startsWith('sys:')
 
-  const generate = async () => {
+  // Load browser voices
+  useEffect(() => {
+    const load = () => {
+      const all = window.speechSynthesis?.getVoices() ?? []
+      const filtered = all.filter(v =>
+        v.lang.startsWith('ar') || v.lang.startsWith('fr') || v.lang.startsWith('en')
+      )
+      setSysVoices(filtered)
+    }
+    load()
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = load
+    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null }
+  }, [])
+
+  // Cleanup Web Speech on unmount
+  useEffect(() => () => { window.speechSynthesis?.cancel() }, [])
+
+  const selectedSysVoice = sysVoices.find(v => v.name === voiceId.slice(4))
+
+  // Determine TTS lang for server
+  const srvLang = voiceId === 'srv:fr' ? 'fr' : voiceId === 'srv:en' ? 'en' : 'ar'
+  const srvVoiceId = srvLang === 'fr' ? 'fr-FR-DeniseNeural' : srvLang === 'en' ? 'en-US-JennyNeural' : 'ar-DZ-AminaNeural'
+
+  // Play via Web Speech API
+  const playSys = () => {
+    if (!text.trim() || !window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const utt = new SpeechSynthesisUtterance(text.trim())
+    if (selectedSysVoice) utt.voice = selectedSysVoice
+    utt.rate = rate
+    uttRef.current = utt
+    utt.onstart  = () => setPlaying(true)
+    utt.onend    = () => setPlaying(false)
+    utt.onerror  = () => setPlaying(false)
+    setPlaying(false)
+    window.speechSynthesis.speak(utt)
+  }
+
+  const stopSys = () => { window.speechSynthesis?.cancel(); setPlaying(false) }
+
+  // Generate via server (Google TTS)
+  const generateSrv = async () => {
     if (!text.trim() || loading) return
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     setPlaying(false)
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = '' }
     if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null) }
-
     try {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), voice, rate, pitch }),
+        body: JSON.stringify({ text: text.trim(), voice: srvVoiceId }),
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
         throw new Error(errData.error || `خطأ ${res.status}`)
       }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      setAudioUrl(url)
+      setAudioUrl(URL.createObjectURL(blob))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'حدث خطأ أثناء توليد الصوت')
     } finally {
       setLoading(false)
     }
   }
+
+  const handleGenerate = () => isSysVoice ? playSys() : generateSrv()
 
   const download = () => {
     if (!audioUrl) return
@@ -4099,24 +4150,30 @@ function TTSTool() {
     a.click()
   }
 
-  const togglePlay = () => {
+  const togglePlaySrv = () => {
     if (!audioRef.current) return
     if (playing) { audioRef.current.pause(); setPlaying(false) }
     else { audioRef.current.play(); setPlaying(true) }
   }
 
   const rateOptions = [
-    { value: '-50%', label: 'بطيء جداً' },
-    { value: '-25%', label: 'بطيء' },
-    { value: '+0%',  label: 'عادي' },
-    { value: '+25%', label: 'سريع' },
-    { value: '+50%', label: 'سريع جداً' },
+    { value: 0.5,  label: 'بطيء جداً' },
+    { value: 0.75, label: 'بطيء' },
+    { value: 1.0,  label: 'عادي' },
+    { value: 1.25, label: 'سريع' },
+    { value: 1.5,  label: 'سريع جداً' },
   ]
-  const pitchOptions = [
-    { value: '-10Hz', label: 'منخفض' },
-    { value: '+0Hz',  label: 'عادي' },
-    { value: '+10Hz', label: 'مرتفع' },
-  ]
+
+  // Grouped system voices
+  const sysAr = sysVoices.filter(v => v.lang.startsWith('ar'))
+  const sysFr = sysVoices.filter(v => v.lang.startsWith('fr'))
+  const sysEn = sysVoices.filter(v => v.lang.startsWith('en'))
+
+  const voiceLabel = (v: SpeechSynthesisVoice) => {
+    const g = _ttsGender(v.name)
+    const icon = g === 'male' ? '👨' : g === 'female' ? '👩' : '🎙️'
+    return `${icon} ${v.name}`
+  }
 
   return (
     <div>
@@ -4125,7 +4182,7 @@ function TTSTool() {
         <div>
           <div className="dzt-tool-desc-title">تحويل نص إلى صوت — AI DZ voice</div>
           <div className="dzt-tool-desc-text">
-            حوّل أي نص إلى صوت طبيعي بأصوات عربية جزائرية وفرنسية وإنجليزية — مع خيارات السرعة والنبرة وتحميل MP3
+            أصوات عربية ذكر وأنثى حقيقية من متصفحك + تحميل MP3 — يدعم العربية، الفرنسية، الإنجليزية
           </div>
         </div>
       </div>
@@ -4134,44 +4191,54 @@ function TTSTool() {
         {/* Voice selector */}
         <div className="dzt-field">
           <label className="dzt-label">الصوت</label>
-          <select className="dzt-select" value={voice} onChange={e => setVoice(e.target.value)}>
-            <optgroup label="🇩🇿 عربية جزائرية">
-              {TTS_VOICES.filter(v => v.id.startsWith('ar-DZ')).map(v => (
-                <option key={v.id} value={v.id}>{v.label}</option>
-              ))}
+          <select className="dzt-select" value={voiceId} onChange={e => { setVoiceId(e.target.value); setAudioUrl(null); stopSys() }}>
+
+            {/* Server voices (Google TTS — downloadable) */}
+            <optgroup label="☁️ خادم — جودة عالية + تحميل MP3">
+              <option value="srv:ar">🇩🇿 عربية (خادم)</option>
+              <option value="srv:fr">🇫🇷 فرنسية (خادم)</option>
+              <option value="srv:en">🇺🇸 إنجليزية (خادم)</option>
             </optgroup>
-            <optgroup label="🇸🇦 عربية فصحى / مصرية">
-              {TTS_VOICES.filter(v => v.lang === 'ar' && !v.id.startsWith('ar-DZ')).map(v => (
-                <option key={v.id} value={v.id}>{v.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="🇫🇷 فرنسية">
-              {TTS_VOICES.filter(v => v.lang === 'fr').map(v => (
-                <option key={v.id} value={v.id}>{v.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="🇺🇸 إنجليزية">
-              {TTS_VOICES.filter(v => v.lang === 'en').map(v => (
-                <option key={v.id} value={v.id}>{v.label}</option>
-              ))}
-            </optgroup>
+
+            {/* Browser voices — real male/female */}
+            {sysAr.length > 0 && (
+              <optgroup label="🎙️ متصفحك — أصوات ذكر وأنثى حقيقية (عربية)">
+                {sysAr.map(v => (
+                  <option key={v.name} value={`sys:${v.name}`}>{voiceLabel(v)}</option>
+                ))}
+              </optgroup>
+            )}
+            {sysFr.length > 0 && (
+              <optgroup label="🎙️ متصفحك — فرنسية">
+                {sysFr.map(v => (
+                  <option key={v.name} value={`sys:${v.name}`}>{voiceLabel(v)}</option>
+                ))}
+              </optgroup>
+            )}
+            {sysEn.length > 0 && (
+              <optgroup label="🎙️ متصفحك — إنجليزية">
+                {sysEn.map(v => (
+                  <option key={v.name} value={`sys:${v.name}`}>{voiceLabel(v)}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
 
-        {/* Rate & Pitch */}
-        <div className="dzt-row">
-          <div className="dzt-field">
-            <label className="dzt-label">السرعة</label>
-            <select className="dzt-select" value={rate} onChange={e => setRate(e.target.value)}>
-              {rateOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-          <div className="dzt-field">
-            <label className="dzt-label">النبرة</label>
-            <select className="dzt-select" value={pitch} onChange={e => setPitch(e.target.value)}>
-              {pitchOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
+        {/* Mode hint */}
+        <div style={{ fontSize: 12, color: '#8aad90', marginTop: -6, direction: 'rtl' }}>
+          {isSysVoice
+            ? `🎙️ صوت المتصفح — ذكر/أنثى حقيقي · ${_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 ذكر' : _ttsGender(selectedSysVoice?.name ?? '') === 'female' ? '👩 أنثى' : 'جنس غير محدد'}`
+            : '☁️ صوت الخادم — يدعم التحميل بصيغة MP3'
+          }
+        </div>
+
+        {/* Rate */}
+        <div className="dzt-field">
+          <label className="dzt-label">السرعة</label>
+          <select className="dzt-select" value={rate} onChange={e => setRate(Number(e.target.value))}>
+            {rateOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
         </div>
 
         {/* Text input */}
@@ -4193,12 +4260,15 @@ function TTSTool() {
 
         <button
           className="dzt-btn"
-          onClick={generate}
+          onClick={handleGenerate}
           disabled={!text.trim() || loading || charCount > maxChars}
         >
           {loading
             ? <><span className="dzt-spinner" /> جاري توليد الصوت...</>
-            : <>🔊 تحويل إلى صوت</>}
+            : isSysVoice
+              ? <>{playing ? '⏸ إيقاف' : '🔊 تشغيل الآن'}</>
+              : <>🔊 تحويل إلى صوت</>
+          }
         </button>
       </div>
 
@@ -4206,6 +4276,31 @@ function TTSTool() {
         <div className="dzt-error" style={{ marginTop: 12 }}>⚠️ {error}</div>
       )}
 
+      {/* Web Speech playing indicator */}
+      {isSysVoice && playing && (
+        <div style={{
+          marginTop: 16,
+          background: 'linear-gradient(135deg, #0d1f0f 0%, #1a3320 100%)',
+          border: '1px solid #2a5a35',
+          borderRadius: 14,
+          padding: '16px 20px',
+          direction: 'rtl',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <span style={{ fontSize: 28, animation: 'pulse 1s infinite' }}>🔊</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#c8ff00', fontWeight: 700, fontSize: 14 }}>
+              {_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 صوت ذكر — يتحدث الآن' : '👩 صوت أنثى — يتحدث الآن'}
+            </div>
+            <div style={{ color: '#8aad90', fontSize: 12 }}>{selectedSysVoice?.name}</div>
+          </div>
+          <button className="dzt-result-btn" onClick={stopSys} style={{ padding: '8px 16px' }}>⏹ إيقاف</button>
+        </div>
+      )}
+
+      {/* Server audio player */}
       {audioUrl && (
         <div style={{
           marginTop: 20,
@@ -4220,12 +4315,11 @@ function TTSTool() {
             <div>
               <div style={{ color: '#c8ff00', fontWeight: 700, fontSize: 15 }}>الصوت جاهز — AI DZ voice</div>
               <div style={{ color: '#8aad90', fontSize: 12 }}>
-                {TTS_VOICES.find(v => v.id === voice)?.label} · {rateOptions.find(r => r.value === rate)?.label}
+                {rateOptions.find(r => r.value === rate)?.label} · جاهز للتشغيل والتحميل
               </div>
             </div>
           </div>
 
-          {/* Native audio player — key forces full remount on each new URL */}
           <audio
             key={audioUrl}
             ref={audioRef}
@@ -4241,7 +4335,7 @@ function TTSTool() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               className="dzt-result-btn"
-              onClick={togglePlay}
+              onClick={togglePlaySrv}
               style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
               {playing ? '⏸ إيقاف' : '▶️ تشغيل'}
@@ -4255,7 +4349,7 @@ function TTSTool() {
             </button>
             <button
               className="dzt-result-btn"
-              onClick={generate}
+              onClick={generateSrv}
               disabled={loading}
               style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >

@@ -236,22 +236,23 @@ export default function DZChat() {
   const inputRef = useRef<HTMLInputElement>(null)
   const sessionIdRef = useRef<string | null>(null)
 
+  // Load saved profile + avatar on mount (single effect, per-user key)
+  const savedAvatarRef = useRef<string | null>(null)
   useEffect(() => {
     try {
       const saved = localStorage.getItem('dzchat-saved-profile')
       if (saved) {
-        const { name } = JSON.parse(saved)
-        if (name) { setEntryName(name); setEntrySaveProfile(true) }
+        const { name, gender } = JSON.parse(saved)
+        if (name) {
+          setEntryName(name)
+          setEntrySaveProfile(true)
+          // load avatar for this specific user
+          const avatarKey = 'dzchat-av-' + name.trim().toLowerCase()
+          const av = localStorage.getItem(avatarKey)
+          if (av && av.startsWith('data:image')) savedAvatarRef.current = av
+        }
+        if (gender === 'male' || gender === 'female') setEntryGender(gender)
       }
-    } catch {}
-  }, [])
-
-  // Load saved avatar from localStorage on mount
-  const savedAvatarRef = useRef<string | null>(null)
-  useEffect(() => {
-    try {
-      const av = localStorage.getItem('dzchat-avatar')
-      if (av && av.startsWith('data:image')) savedAvatarRef.current = av
     } catch {}
   }, [])
 
@@ -475,7 +476,10 @@ export default function DZChat() {
     setEntryError('')
     setEntryLoading(true)
     try {
-      const body: Record<string, string> = { name: entryName.trim(), gender: entryGender }
+      const trimmedName = entryName.trim()
+      const body: Record<string, string> = { name: trimmedName, gender: entryGender }
+
+      // Admin path — password required
       if (entryIsAdmin) {
         const pw = entryPassword.trim()
         if (pw.length < 4) {
@@ -486,12 +490,19 @@ export default function DZChat() {
         body.profilePassword = pw
         body.adminSecret = pw
         sessionStorage.setItem('dzc_admin_secret', pw)
-        if (entrySaveProfile) {
-          localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: entryName.trim() }))
-        } else {
-          localStorage.removeItem('dzchat-saved-profile')
-        }
       }
+
+      // Save or clear profile (for all users)
+      const avatarKey = 'dzchat-av-' + trimmedName.toLowerCase()
+      if (entrySaveProfile) {
+        localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: trimmedName, gender: entryGender }))
+      } else {
+        localStorage.removeItem('dzchat-saved-profile')
+        localStorage.removeItem(avatarKey)
+        savedAvatarRef.current = null
+      }
+
+      // Attach saved avatar for all users
       if (savedAvatarRef.current) {
         body.avatar = savedAvatarRef.current
       }
@@ -853,13 +864,15 @@ export default function DZChat() {
         const newAvatar = d.avatar || editAvatar || null
         setViewProfile(prev => prev ? { ...prev, ...d.profile, avatar: newAvatar, loading: false } : null)
         setLocalUser(prev => prev ? { ...prev, avatar: newAvatar } : null)
-        // Persist avatar in localStorage for session restore after logout
+        // Persist avatar in per-user localStorage key (survives logout)
         try {
+          const uName = localUser?.name || ''
+          const avKey = 'dzchat-av-' + uName.toLowerCase()
           if (newAvatar) {
-            localStorage.setItem('dzchat-avatar', newAvatar)
+            localStorage.setItem(avKey, newAvatar)
             savedAvatarRef.current = newAvatar
           } else {
-            localStorage.removeItem('dzchat-avatar')
+            localStorage.removeItem(avKey)
             savedAvatarRef.current = null
           }
         } catch {}
@@ -963,6 +976,14 @@ export default function DZChat() {
                 <span>أنثى</span>
               </button>
             </div>
+
+            {/* Remember me — for all users */}
+            {!entryIsAdmin && (
+              <label className="dzc-entry-save-toggle dzc-entry-save-toggle--user">
+                <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
+                <span>تذكرني في هذا الجهاز</span>
+              </label>
+            )}
 
             <div className="dzc-entry-admin-toggle">
               <button

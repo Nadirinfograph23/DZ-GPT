@@ -5,7 +5,7 @@ import {
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
   VolumeX, Clock, Megaphone, CornerUpLeft, User, MapPin, ExternalLink,
-  Search, Hash, CheckCheck, Globe, Lock,
+  Search, Hash, CheckCheck, Globe, Lock, Eye, EyeOff,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -162,6 +162,7 @@ export default function DZChat() {
   const [entryError, setEntryError] = useState('')
   const [entryLoading, setEntryLoading] = useState(false)
   const [entryPassword, setEntryPassword] = useState('')
+  const [entryShowPw, setEntryShowPw] = useState(false)
   const [entrySaveProfile, setEntrySaveProfile] = useState(false)
   const [entryIsAdmin, setEntryIsAdmin] = useState(false)
 
@@ -250,6 +251,11 @@ export default function DZChat() {
           const avatarKey = 'dzchat-av-' + name.trim().toLowerCase()
           const av = localStorage.getItem(avatarKey)
           if (av && av.startsWith('data:image')) savedAvatarRef.current = av
+          // load saved password (lightly obfuscated)
+          try {
+            const rawPw = localStorage.getItem('dzchat-pw-' + name.trim().toLowerCase())
+            if (rawPw) setEntryPassword(atob(rawPw))
+          } catch {}
         }
         if (gender === 'male' || gender === 'female') setEntryGender(gender)
       }
@@ -477,28 +483,29 @@ export default function DZChat() {
     setEntryLoading(true)
     try {
       const trimmedName = entryName.trim()
+      const pw = entryPassword.trim()
+      if (pw.length < 4) {
+        setEntryError('كلمة المرور يجب أن تكون 4 أحرف على الأقل.')
+        setEntryLoading(false)
+        return
+      }
       const body: Record<string, string> = { name: trimmedName, gender: entryGender }
 
-      // Admin path — password required
-      if (entryIsAdmin) {
-        const pw = entryPassword.trim()
-        if (pw.length < 4) {
-          setEntryError('كلمة سر المشرف يجب أن تكون 4 أحرف على الأقل.')
-          setEntryLoading(false)
-          return
-        }
-        body.profilePassword = pw
-        body.adminSecret = pw
-        sessionStorage.setItem('dzc_admin_secret', pw)
-      }
+      // Send password for ALL users — server decides if admin
+      body.profilePassword = pw
+      body.adminSecret = pw
+      sessionStorage.setItem('dzc_admin_secret', pw)
 
-      // Save or clear profile (for all users)
+      // Save or clear profile + password (for all users)
       const avatarKey = 'dzchat-av-' + trimmedName.toLowerCase()
+      const pwKey = 'dzchat-pw-' + trimmedName.toLowerCase()
       if (entrySaveProfile) {
         localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: trimmedName, gender: entryGender }))
+        try { localStorage.setItem(pwKey, btoa(pw)) } catch {}
       } else {
         localStorage.removeItem('dzchat-saved-profile')
         localStorage.removeItem(avatarKey)
+        localStorage.removeItem(pwKey)
         savedAvatarRef.current = null
       }
 
@@ -977,47 +984,35 @@ export default function DZChat() {
               </button>
             </div>
 
-            {/* Remember me — for all users */}
-            {!entryIsAdmin && (
-              <label className="dzc-entry-save-toggle dzc-entry-save-toggle--user">
-                <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
-                <span>تذكرني في هذا الجهاز</span>
-              </label>
-            )}
-
-            <div className="dzc-entry-admin-toggle">
-              <button
-                type="button"
-                className={`dzc-entry-admin-btn${entryIsAdmin ? ' dzc-entry-admin-btn--active' : ''}`}
-                onClick={() => { setEntryIsAdmin(p => !p); setEntryPassword('') }}
-              >
-                <Shield size={14} />
-                <span>دخول كمشرف</span>
-                <span className={`dzc-entry-admin-dot${entryIsAdmin ? ' dzc-entry-admin-dot--on' : ''}`} />
-              </button>
-            </div>
-
-            {entryIsAdmin && (
-              <div className="dzc-entry-field dzc-entry-pw-field">
-                <div className="dzc-entry-pw-label">
-                  <Lock size={13} /> كلمة سر المشرف
-                </div>
+            {/* Password — for all users */}
+            <div className="dzc-entry-field dzc-entry-pw-field">
+              <div className="dzc-entry-pw-label">
+                <Lock size={13} /> كلمة المرور
+              </div>
+              <div className="dzc-entry-pw-wrap">
                 <input
-                  className="dzc-entry-input dzc-entry-input--pw dzc-entry-input--admin"
-                  placeholder="أدخل كلمة سر المشرف..."
-                  type="password"
+                  className="dzc-entry-input dzc-entry-input--pw"
+                  placeholder="أدخل كلمة مرورك..."
+                  type={entryShowPw ? 'text' : 'password'}
                   value={entryPassword}
                   onChange={e => setEntryPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleEnterChat()}
-                  maxLength={50}
-                  autoFocus
+                  maxLength={60}
                 />
-                <label className="dzc-entry-save-toggle">
-                  <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
-                  <span>تذكرني في هذا الجهاز</span>
-                </label>
+                <button
+                  type="button"
+                  className="dzc-entry-pw-eye"
+                  onClick={() => setEntryShowPw(p => !p)}
+                  title={entryShowPw ? 'إخفاء' : 'إظهار'}
+                >
+                  {entryShowPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
               </div>
-            )}
+              <label className="dzc-entry-save-toggle">
+                <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
+                <span>تذكرني في هذا الجهاز</span>
+              </label>
+            </div>
 
             {entryError && <div className="dzc-entry-error"><AlertCircle size={13} /> {entryError}</div>}
 

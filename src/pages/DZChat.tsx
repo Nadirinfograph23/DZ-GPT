@@ -164,6 +164,7 @@ export default function DZChat() {
   const [entryPassword, setEntryPassword] = useState('')
   const [entryShowPw, setEntryShowPw] = useState(false)
   const [entrySaveProfile, setEntrySaveProfile] = useState(false)
+  const [entryIsAdmin, setEntryIsAdmin] = useState(false)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [onlineUsers, setOnlineUsers] = useState<ChatUser[]>([])
@@ -475,6 +476,8 @@ export default function DZChat() {
     }
   }, [addMessages, handleServerEvent, startPolling, stopPolling])
 
+  const ADMIN_SECRET = 'openit1979##'
+
   const handleEnterChat = async () => {
     if (!entryName.trim()) { setEntryError('يرجى إدخال اسمك.'); return }
     if (!entryGender) { setEntryError('يرجى اختيار الجنس.'); return }
@@ -488,6 +491,14 @@ export default function DZChat() {
         setEntryLoading(false)
         return
       }
+
+      // Validate admin password client-side
+      if (entryIsAdmin && pw !== ADMIN_SECRET) {
+        setEntryError('كلمة مرور المشرف غير صحيحة.')
+        setEntryLoading(false)
+        return
+      }
+
       const body: Record<string, string> = { name: trimmedName, gender: entryGender }
 
       // Send password for ALL users — server decides if admin
@@ -495,7 +506,7 @@ export default function DZChat() {
       body.adminSecret = pw
       sessionStorage.setItem('dzc_admin_secret', pw)
 
-      // Save or clear profile + password (for all users)
+      // Always save avatar to localStorage (persists even after logout)
       const avatarKey = 'dzchat-av-' + trimmedName.toLowerCase()
       const pwKey = 'dzchat-pw-' + trimmedName.toLowerCase()
       if (entrySaveProfile) {
@@ -503,9 +514,8 @@ export default function DZChat() {
         try { localStorage.setItem(pwKey, btoa(pw)) } catch {}
       } else {
         localStorage.removeItem('dzchat-saved-profile')
-        localStorage.removeItem(avatarKey)
         localStorage.removeItem(pwKey)
-        savedAvatarRef.current = null
+        // Note: avatar is intentionally kept (never removed on logout)
       }
 
       // Attach saved avatar for all users
@@ -587,6 +597,7 @@ export default function DZChat() {
     wsRef.current?.close()
     stopPolling()
     sessionIdRef.current = null
+    // Avatar stays in localStorage — do NOT remove it so it persists after re-login
     setLocalUser(null)
     setMessages([])
     setOnlineUsers([])
@@ -1012,6 +1023,17 @@ export default function DZChat() {
                 <span>تذكرني في هذا الجهاز</span>
               </label>
             </div>
+
+            {/* Admin selector */}
+            <label className="dzc-entry-admin-toggle">
+              <input
+                type="checkbox"
+                checked={entryIsAdmin}
+                onChange={e => setEntryIsAdmin(e.target.checked)}
+              />
+              <Shield size={13} className="dzc-entry-admin-icon" />
+              <span>تسجيل دخول كمشرف</span>
+            </label>
 
             {entryError && <div className="dzc-entry-error"><AlertCircle size={13} /> {entryError}</div>}
 

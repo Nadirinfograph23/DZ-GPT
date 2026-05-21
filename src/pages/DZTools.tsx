@@ -4067,6 +4067,8 @@ function TTSTool() {
     if (!text.trim() || loading) return
     setLoading(true)
     setError('')
+    setPlaying(false)
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = '' }
     if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null) }
 
     try {
@@ -4223,11 +4225,13 @@ function TTSTool() {
             </div>
           </div>
 
-          {/* Native audio player */}
+          {/* Native audio player — key forces full remount on each new URL */}
           <audio
+            key={audioUrl}
             ref={audioRef}
             src={audioUrl}
             controls
+            autoPlay
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onEnded={() => setPlaying(false)}

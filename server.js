@@ -2041,6 +2041,23 @@ app.get('/api/ai-router/health', (_req, res) => {
   }
 })
 
+app.get('/api/link-preview', async (req, res) => {
+  const { url } = req.query
+  if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'invalid url' })
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 5000)
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZBot/1.0)' }, signal: ctrl.signal })
+    clearTimeout(t)
+    const html = await r.text()
+    const og = k => (html.match(new RegExp('<meta[^>]+property=["\']og:' + k + '["\'][^>]+content=["\']([^"\']{1,300})["\']', 'i')) || html.match(new RegExp('<meta[^>]+content=["\']([^"\']{1,300})["\'][^>]+property=["\']og:' + k + '["\']', 'i')) || [])[1] || ''
+    const title = og('title') || (html.match(/<title[^>]*>([^<]{1,120})<\/title>/i) || [])[1] || ''
+    const description = og('description') || (html.match(/<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']{1,250})["\'][^>]*>/i) || [])[1] || ''
+    const image = og('image')
+    res.set('Cache-Control', 'public,max-age=3600').json({ title: title.trim(), description: description.trim(), image, url })
+  } catch { res.json({ title: '', description: '', image: '', url }) }
+})
+
 // ===== BREAKING NEWS: SSE STREAM =====
 const _breakingSseClients = new Set()
 
@@ -14547,7 +14564,7 @@ function getOnlineUsers() {
   const now = Date.now()
   return [...chatSessions.values()]
     .filter(s => now - s.lastSeen < 40000)
-    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profile: s.profile || null, avatar: s.avatar || null }))
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profile: s.profile || null, avatar: s.avatar || null, status: s.status || 'online' }))
 }
 
 function broadcastChat(data, exceptWs = null) {
@@ -17550,7 +17567,7 @@ app.post('/api/chat-room/join', async (req, res) => {
     if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
   }
   const avatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null
-  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile, avatar }
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile, avatar, status: 'online', room: 'عام' }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
     id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
@@ -17578,7 +17595,7 @@ app.post('/api/chat-room/leave', (req, res) => {
 })
 
 app.post('/api/chat-room/send', async (req, res) => {
-  const { sessionId, text, dmTo, dmToName, replyToId, replyToText, replyToFrom } = req.body || {}
+  const { sessionId, text, dmTo, dmToName, replyTo: replyToObj, replyToId, replyToText, replyToFrom } = req.body || {}
   const session = chatSessions.get(sessionId)
   if (!session) return res.status(401).json({ error: 'Invalid session' })
   const muteInfo = mutedUsers.get(sessionId)
@@ -17590,13 +17607,17 @@ app.post('/api/chat-room/send', async (req, res) => {
   const cleanText = sanitizeString(text, 1000).trim()
   if (!cleanText) return res.status(400).json({ error: 'Empty message' })
   session.lastSeen = Date.now()
+  const replyTo = replyToObj
+    ? { id: replyToObj.id, from: replyToObj.from || '?', text: replyToObj.text }
+    : (replyToId && replyToText ? { id: replyToId, from: replyToFrom || '?', text: replyToText } : null)
   const msg = pushChatMsg({
     id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
     fromAvatar: session.avatar || null,
-    replyToId: replyToId || null, replyToText: replyToText || null, replyToFrom: replyToFrom || null,
+    replyTo,
+    room: session.room || 'عام',
   })
   if (dmTo) {
     const recip = [...chatSessions.values()].find(s => s.id === dmTo)
@@ -17758,7 +17779,7 @@ function setupChatWebSocket(httpServer) {
             if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
           }
           const wsAvatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : (existingSession?.avatar || null)
-          chatSessions.set(id, { ...(existingSession || {}), id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: Object.keys(cleanProfile).length ? cleanProfile : (existingSession?.profile || {}), avatar: wsAvatar })
+          chatSessions.set(id, { ...(existingSession || {}), id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: Object.keys(cleanProfile).length ? cleanProfile : (existingSession?.profile || {}), avatar: wsAvatar, status: data.status || existingSession?.status || 'online', room: data.room || existingSession?.room || 'عام' })
           const session = chatSessions.get(id)
           const [wsMessages, wsPinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
           if (pinnedMessage === null) pinnedMessage = wsPinned
@@ -17790,13 +17811,15 @@ function setupChatWebSocket(httpServer) {
             ws.send(JSON.stringify({ type: 'message', msg: warnMsg }))
             return
           }
+          const wsReplyTo = data.replyTo ? { id: data.replyTo.id, from: data.replyTo.from || '?', text: data.replyTo.text } : null
           const msg = pushChatMsg({
             id: chatId(), from: session.name, fromId: session.id, gender: session.gender,
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
             fromAvatar: session.avatar || null,
-            replyToId: data.replyToId || null, replyToText: data.replyToText || null, replyToFrom: data.replyToFrom || null,
+            replyTo: wsReplyTo,
+            room: session.room || 'عام',
           })
           if (data.dmTo) {
             const recip = [...chatSessions.values()].find(s => s.id === data.dmTo)
@@ -17825,6 +17848,27 @@ function setupChatWebSocket(httpServer) {
           try { await dbReact(data.msgId, data.emoji, session.id) } catch {}
           const updated = await dbGetReactions(data.msgId)
           broadcastChat({ type: 'reaction', msgId: data.msgId, emoji: data.emoji, count: updated[data.emoji]?.count || 0, users: updated[data.emoji]?.users || [] })
+        } else if (data.type === 'setStatus') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session) return
+          if (['online','busy','away'].includes(data.status)) {
+            session.status = data.status
+            broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
+          }
+        } else if (data.type === 'setRoom') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (session && data.room) session.room = data.room
+        } else if (data.type === 'msgRead') {
+          const session = sid ? chatSessions.get(sid) : null
+          if (!session || !data.msgId) return
+          const targetMsg = chatMessages.find(m => m.id === data.msgId && m.isDM)
+          if (!targetMsg) return
+          if (!targetMsg.readBy) targetMsg.readBy = []
+          if (!targetMsg.readBy.includes(sid)) targetMsg.readBy.push(sid)
+          const sender = chatSessions.get(targetMsg.fromId)
+          if (sender?.ws?.readyState === 1) {
+            sender.ws.send(JSON.stringify({ type: 'readReceipt', msgId: data.msgId, readBy: targetMsg.readBy }))
+          }
         } else if (data.type === 'ping') {
           const session = sid ? chatSessions.get(sid) : null
           if (session) { session.lastSeen = Date.now(); ws.send(JSON.stringify({ type: 'pong', users: getOnlineUsers(), count: chatSessions.size })) }

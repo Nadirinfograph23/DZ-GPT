@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video, Volume2, Download } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -49,14 +49,6 @@ export default function DZAgent() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [navDropdownOpen, setNavDropdownOpen] = useState(false)
-  const [ttsOpen, setTtsOpen] = useState(false)
-  const [ttsText, setTtsText] = useState('')
-  const [ttsVoice, setTtsVoice] = useState('ar-DZ-AminaNeural')
-  const [ttsRate, setTtsRate] = useState('+0%')
-  const [ttsLoading, setTtsLoading] = useState(false)
-  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null)
-  const [ttsError, setTtsError] = useState('')
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     localStorage.setItem('dz-agent-chats', JSON.stringify(chats))
@@ -90,36 +82,6 @@ export default function DZAgent() {
   }, [])
 
   const labels = LABELS[language]
-
-  const ttsGenerate = useCallback(async () => {
-    if (!ttsText.trim() || ttsLoading) return
-    setTtsLoading(true)
-    setTtsError('')
-    if (ttsAudioUrl) { URL.revokeObjectURL(ttsAudioUrl); setTtsAudioUrl(null) }
-    try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: ttsText.trim(), voice: ttsVoice, rate: ttsRate, pitch: '+0Hz' }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || `خطأ ${res.status}`)
-      }
-      const blob = await res.blob()
-      setTtsAudioUrl(URL.createObjectURL(blob))
-    } catch (e: unknown) {
-      setTtsError(e instanceof Error ? e.message : 'حدث خطأ')
-    } finally {
-      setTtsLoading(false)
-    }
-  }, [ttsText, ttsVoice, ttsRate, ttsLoading, ttsAudioUrl])
-
-  const ttsDownload = () => {
-    if (!ttsAudioUrl) return
-    const a = document.createElement('a'); a.href = ttsAudioUrl
-    a.download = `ai-dz-voice-${Date.now()}.mp3`; a.click()
-  }
 
   return (
     <div className="dza-layout">
@@ -178,70 +140,6 @@ export default function DZAgent() {
                 <Video size={14} />
                 <span>DZ Tube</span>
               </button>
-            </div>
-          )}
-        </div>
-
-        {/* TTS Panel */}
-        <div className="sidebar-nav-dropdown">
-          <button
-            className="sidebar-nav-trigger"
-            onClick={() => setTtsOpen(p => !p)}
-            style={{ gap: 8 }}
-          >
-            <Volume2 size={14} />
-            <span>تحويل نص إلى صوت</span>
-            <ChevronDown size={14} className={`sidebar-nav-chevron ${ttsOpen ? 'sidebar-nav-chevron--open' : ''}`} style={{ marginRight: 'auto' }} />
-          </button>
-          {ttsOpen && (
-            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8, direction: 'rtl' }}>
-              <select
-                value={ttsVoice}
-                onChange={e => setTtsVoice(e.target.value)}
-                style={{ background: '#0d1f0f', border: '1px solid #2a5a35', color: '#e0ffe0', borderRadius: 7, padding: '6px 8px', fontSize: 12, width: '100%' }}
-              >
-                <optgroup label="🇩🇿 جزائرية"><option value="ar-DZ-AminaNeural">أمينة — عربية جزائرية</option><option value="ar-DZ-IsmaelNeural">إسماعيل — عربية جزائرية</option></optgroup>
-                <optgroup label="🇸🇦 فصحى"><option value="ar-SA-ZariyahNeural">زارية — فصحى</option><option value="ar-SA-HamedNeural">حامد — فصحى</option></optgroup>
-                <optgroup label="🇫🇷 فرنسية"><option value="fr-FR-DeniseNeural">دينيز — فرنسية</option><option value="fr-DZ-AmineNeural">أمين — فرنسية جزائرية</option></optgroup>
-                <optgroup label="🇺🇸 إنجليزية"><option value="en-US-JennyNeural">جيني — إنجليزية</option></optgroup>
-              </select>
-              <select
-                value={ttsRate}
-                onChange={e => setTtsRate(e.target.value)}
-                style={{ background: '#0d1f0f', border: '1px solid #2a5a35', color: '#e0ffe0', borderRadius: 7, padding: '6px 8px', fontSize: 12, width: '100%' }}
-              >
-                <option value="-25%">🐢 بطيء</option>
-                <option value="+0%">▶ عادي</option>
-                <option value="+25%">⚡ سريع</option>
-              </select>
-              <textarea
-                value={ttsText}
-                onChange={e => setTtsText(e.target.value.slice(0, 3000))}
-                placeholder="اكتب النص هنا..."
-                rows={4}
-                style={{ background: '#0d1f0f', border: '1px solid #2a5a35', color: '#e0ffe0', borderRadius: 7, padding: '8px 10px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit', direction: 'rtl' }}
-              />
-              {ttsError && <div style={{ color: '#ff6b6b', fontSize: 11 }}>⚠️ {ttsError}</div>}
-              <button
-                onClick={ttsGenerate}
-                disabled={!ttsText.trim() || ttsLoading}
-                style={{ background: ttsLoading || !ttsText.trim() ? '#1a3320' : 'linear-gradient(135deg,#c8ff00,#8fd000)', color: ttsLoading || !ttsText.trim() ? '#4a7a55' : '#000', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: ttsLoading || !ttsText.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              >
-                <Volume2 size={14} />
-                {ttsLoading ? 'جاري التوليد...' : 'تحويل إلى صوت'}
-              </button>
-              {ttsAudioUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <audio ref={ttsAudioRef} src={ttsAudioUrl} controls style={{ width: '100%', borderRadius: 6, accentColor: '#c8ff00' }} />
-                  <button
-                    onClick={ttsDownload}
-                    style={{ background: '#1a3320', border: '1px solid #2a5a35', color: '#c8ff00', borderRadius: 7, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                  >
-                    <Download size={13} /> تحميل MP3
-                  </button>
-                  <div style={{ fontSize: 10, color: '#4a7a55', textAlign: 'center' }}>AI DZ voice</div>
-                </div>
-              )}
             </div>
           )}
         </div>

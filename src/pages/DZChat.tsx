@@ -477,7 +477,6 @@ export default function DZChat() {
       const body: Record<string, string> = { name: entryName.trim(), gender: entryGender }
       const pw = entryPassword.trim()
       if (pw.length >= 4) {
-        // Single password field: doubles as adminSecret + profilePassword
         body.profilePassword = pw
         body.adminSecret = pw
         sessionStorage.setItem('dzc_admin_secret', pw)
@@ -487,23 +486,35 @@ export default function DZChat() {
           localStorage.removeItem('dzchat-saved-profile')
         }
       }
-      // Restore saved avatar from localStorage
       if (savedAvatarRef.current) {
         body.avatar = savedAvatarRef.current
       }
+
       const r = await fetch('/api/chat-room/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const d = await r.json()
-      if (!r.ok) { setEntryError(d.error || 'فشل الدخول.'); return }
-      const user: LocalUser = { name: entryName.trim(), gender: entryGender, sessionId: d.sessionId, isAdmin: !!d.isAdmin, profileId: d.profileId || null, avatar: d.avatar || savedAvatarRef.current || null }
-      sessionIdRef.current = d.sessionId
-      setLocalUser(user)
-      const history: ChatMessage[] = d.messages || []
+
+      // Safe JSON parse — server may return HTML on 4xx/5xx
+      let d: Record<string, unknown> = {}
+      try { d = await r.json() } catch { /* non-JSON response, d stays {} */ }
+
+      if (!r.ok) {
+        setEntryError((d.error as string) || `فشل الدخول — رمز الخطأ: ${r.status}`)
+        return
+      }
+
+      if (!d.sessionId) {
+        setEntryError('فشل الدخول: لم يُستلم معرّف الجلسة.')
+        return
+      }
+
+      const sessionId = d.sessionId as string
+      const isAdmin = !!(d.isAdmin)
+      const history: ChatMessage[] = (d.messages as ChatMessage[]) || []
       history.forEach(m => { if (m.timestamp > lastMsgTsRef.current) lastMsgTsRef.current = m.timestamp })
-      setOnlineUsers(d.users || [])
+
       const welcomeMsg: ChatMessage = {
         id: 'welcome-' + Date.now(),
         from: 'System',
@@ -513,11 +524,31 @@ export default function DZChat() {
         timestamp: Date.now(),
         isSystem: true,
       }
-      // Add messages immediately so the UI is never blank
+
+      const user: LocalUser = {
+        name: entryName.trim(),
+        gender: entryGender,
+        sessionId,
+        isAdmin,
+        profileId: (d.profileId as string) || null,
+        avatar: (d.avatar as string) || savedAvatarRef.current || null,
+      }
+
+      // Setup state before transitioning to chat UI
+      sessionIdRef.current = sessionId
+      setOnlineUsers((d.users as ChatUser[]) || [])
       addMessages([...history, welcomeMsg])
-      connectWebSocket(user, [...history, welcomeMsg])
+
+      // Start polling immediately (fallback for WS-less environments like Vercel)
       startPolling()
-    } catch {
+
+      // Try WebSocket — falls back to polling automatically on error/close
+      connectWebSocket(user, [...history, welcomeMsg])
+
+      // Set user last — triggers UI transition from entry form to chat
+      setLocalUser(user)
+    } catch (err) {
+      console.error('[DZChat] Login error:', err)
       setEntryError('حدث خطأ في الاتصال، حاول مجدداً.')
     } finally {
       setEntryLoading(false)

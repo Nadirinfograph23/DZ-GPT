@@ -421,14 +421,13 @@ export default function DZChat() {
 
     ws.onopen = () => {
       wsConnectedRef.current = true
-      const savedSecret = sessionStorage.getItem('dzc_admin_secret') || ''
+      const savedSecret = user.isAdmin ? (sessionStorage.getItem('dzc_admin_secret') || '') : ''
       ws.send(JSON.stringify({
         type: 'join',
         name: user.name,
         gender: user.gender,
         sessionId: user.sessionId,
         adminSecret: savedSecret,
-        profilePassword: savedSecret,
         status: 'online',
         room: currentRoomRef.current,
       }))
@@ -501,10 +500,15 @@ export default function DZChat() {
 
       const body: Record<string, string> = { name: trimmedName, gender: entryGender }
 
-      // Send password for ALL users — server decides if admin
+      // Only send adminSecret when admin checkbox is checked — server grants admin ONLY via adminSecret
       body.profilePassword = pw
-      body.adminSecret = pw
-      sessionStorage.setItem('dzc_admin_secret', pw)
+      if (entryIsAdmin) {
+        body.adminSecret = pw
+        sessionStorage.setItem('dzc_admin_secret', pw)
+      } else {
+        body.adminSecret = ''
+        sessionStorage.removeItem('dzc_admin_secret')
+      }
 
       // Always save avatar to localStorage (persists even after logout)
       const pwKey = 'dzchat-pw-' + trimmedName.toLowerCase()

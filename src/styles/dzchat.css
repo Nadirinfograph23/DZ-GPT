@@ -751,25 +751,23 @@
   flex: 1;
 }
 
-/* ===== REPLY BUTTON (hover on message) ===== */
+/* ===== REPLY BUTTON (inside message header, appears on hover) ===== */
 .dzc-reply-btn {
-  position: absolute;
-  top: 8px;
-  left: -34px;
-  background: #1a1a1a;
-  border: 1px solid #2e2e2e;
-  border-radius: 8px;
-  color: #475569;
-  cursor: pointer;
-  padding: 5px 6px;
-  display: none;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s, background 0.15s;
-  z-index: 5;
+  background: rgba(71, 85, 105, 0.12);
+  border: 1px solid rgba(71, 85, 105, 0.25);
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+  padding: 3px 5px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s;
 }
-.dzc-msg:hover .dzc-reply-btn { display: flex; }
-.dzc-reply-btn:hover { color: #7dd3fc; background: #1e2d3d; border-color: #7dd3fc33; }
+.dzc-msg:hover .dzc-reply-btn { opacity: 1; }
+.dzc-reply-btn:hover { color: #7dd3fc; background: #1e2d3d; border-color: rgba(125, 211, 252, 0.3); }
 
 /* ===== REPLY PREVIEW BAR (above input) ===== */
 .dzc-reply-bar {

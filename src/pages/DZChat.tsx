@@ -5,7 +5,7 @@ import {
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
   VolumeX, Clock, Megaphone, CornerUpLeft, User, MapPin, ExternalLink,
-  Search, Hash, CheckCheck, Globe,
+  Search, Hash, CheckCheck, Globe, Lock,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -905,17 +905,18 @@ export default function DZChat() {
               </button>
             </div>
 
-            {/* Profile password section */}
-            <div className="dzc-entry-profile-section">
-              <div className="dzc-entry-profile-label">
-                <User size={12} /> بروفايل شخصي <span className="dzc-entry-optional">(اختياري)</span>
+            {/* Password field — admin or profile */}
+            <div className="dzc-entry-field dzc-entry-pw-field">
+              <div className="dzc-entry-pw-label">
+                <Lock size={13} /> كلمة السر <span className="dzc-entry-pw-hint">(مشرف أو حفظ الهوية)</span>
               </div>
               <input
-                className="dzc-entry-input dzc-entry-input--profile"
-                placeholder="أنشئ كلمة مرور لحفظ بروفايلك..."
+                className="dzc-entry-input dzc-entry-input--pw"
+                placeholder="أدخل كلمة السر..."
                 type="password"
                 value={entryPassword}
                 onChange={e => setEntryPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleEnterChat()}
                 maxLength={50}
               />
               {entryPassword.length >= 4 && (

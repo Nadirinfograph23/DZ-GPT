@@ -534,19 +534,15 @@ export default function DZChat() {
         avatar: (d.avatar as string) || savedAvatarRef.current || null,
       }
 
-      // Setup state before transitioning to chat UI
+      // Set session ref and transition to chat UI first (avoids React hook order errors)
       sessionIdRef.current = sessionId
+      setLocalUser(user)
       setOnlineUsers((d.users as ChatUser[]) || [])
       addMessages([...history, welcomeMsg])
 
-      // Start polling immediately (fallback for WS-less environments like Vercel)
-      startPolling()
-
-      // Try WebSocket — falls back to polling automatically on error/close
+      // Start connections after state is committed
       connectWebSocket(user, [...history, welcomeMsg])
-
-      // Set user last — triggers UI transition from entry form to chat
-      setLocalUser(user)
+      startPolling()
     } catch (err) {
       console.error('[DZChat] Login error:', err)
       setEntryError('حدث خطأ في الاتصال، حاول مجدداً.')

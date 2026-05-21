@@ -164,7 +164,6 @@ export default function DZChat() {
   const [entryPassword, setEntryPassword] = useState('')
   const [entryShowPw, setEntryShowPw] = useState(false)
   const [entrySaveProfile, setEntrySaveProfile] = useState(false)
-  const [entryIsAdmin, setEntryIsAdmin] = useState(false)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [onlineUsers, setOnlineUsers] = useState<ChatUser[]>([])

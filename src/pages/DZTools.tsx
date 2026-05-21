@@ -4036,18 +4036,6 @@ function HashtagTool() {
 }
 
 // ─── TTS Tool — AI DZ voice ───────────────────────────────────────────────────
-const TTS_VOICES = [
-  { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — عربية جزائرية',   lang: 'ar' },
-  { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — عربية جزائرية', lang: 'ar' },
-  { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — عربية فصحى',      lang: 'ar' },
-  { id: 'ar-SA-HamedNeural',   label: '🇸🇦 حامد — عربية فصحى',       lang: 'ar' },
-  { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — عربية مصرية',      lang: 'ar' },
-  { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 دينيز — فرنسية',          lang: 'fr' },
-  { id: 'fr-FR-HenriNeural',   label: '🇫🇷 هنري — فرنسية',           lang: 'fr' },
-  { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 أمين — فرنسية جزائرية',   lang: 'fr' },
-  { id: 'en-US-JennyNeural',   label: '🇺🇸 جيني — إنجليزية',         lang: 'en' },
-  { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
-]
 
 // Helper: guess gender from voice name
 function _ttsGender(name: string): 'male' | 'female' | 'unknown' {

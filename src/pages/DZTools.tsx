@@ -4185,7 +4185,7 @@ function TTSTool() {
             value={text}
             onChange={e => setText(e.target.value.slice(0, maxChars))}
             placeholder="اكتب أو الصق النص هنا... (يدعم العربية، الفرنسية، الإنجليزية)"
-            style={{ minHeight: 140, direction: 'auto' }}
+            style={{ minHeight: 140, direction: 'rtl' }}
           />
         </div>
 

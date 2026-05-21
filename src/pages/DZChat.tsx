@@ -14,6 +14,7 @@ interface ChatUser {
   gender: 'male' | 'female'
   isAdmin?: boolean
   profileId?: string | null
+  avatar?: string | null
 }
 
 interface ChatMessage {
@@ -39,6 +40,7 @@ interface ChatMessage {
   reactions?: Record<string, string[]>
   replyTo?: { id: string; from: string; text: string }
   fromProfileId?: string | null
+  fromAvatar?: string | null
 }
 
 interface LocalUser {
@@ -47,6 +49,7 @@ interface LocalUser {
   sessionId: string
   isAdmin: boolean
   profileId?: string | null
+  avatar?: string | null
 }
 
 function playDMSound() {
@@ -82,6 +85,7 @@ interface ProfileData {
   facebook?: string
   instagram?: string
   tiktok?: string
+  avatar?: string | null
   loading?: boolean
 }
 
@@ -158,7 +162,9 @@ export default function DZChat() {
   const [editFacebook, setEditFacebook] = useState('')
   const [editInstagram, setEditInstagram] = useState('')
   const [editTiktok, setEditTiktok] = useState('')
+  const [editAvatar, setEditAvatar] = useState<string | null>(null)
   const [editSaving, setEditSaving] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   // Typing indicator state: userId → name
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map())
@@ -259,6 +265,11 @@ export default function DZChat() {
         ) {
           playDMSound()
         }
+      }
+    } else if (data.type === 'profileUpdate') {
+      const { userId, avatar } = data as { userId: string; avatar?: string | null }
+      if (userId) {
+        setOnlineUsers(prev => prev.map(u => u.id === userId ? { ...u, avatar: avatar || null } : u))
       }
     } else if (data.type === 'update') {
       const msg = data.msg as ChatMessage
@@ -701,37 +712,36 @@ export default function DZChat() {
   }
 
   // Open profile popup
-  const openProfile = async (opts: { profileId?: string | null; userId: string; name: string; gender: 'male' | 'female' }) => {
+  const openProfile = async (opts: { profileId?: string | null; userId: string; name: string; gender: 'male' | 'female'; avatar?: string | null }) => {
     setProfileEditMode(false)
-    setViewProfile({ profileId: opts.profileId || undefined, userId: opts.userId, name: opts.name, gender: opts.gender, loading: !!opts.profileId })
-    if (opts.profileId) {
-      try {
-        const r = await fetch(`/api/chat-room/profile/${opts.profileId}`)
-        if (r.ok) {
-          const d = await r.json()
-          setViewProfile(prev => prev ? { ...prev, ...d, loading: false } : null)
-        } else {
-          setViewProfile(prev => prev ? { ...prev, loading: false } : null)
-        }
-      } catch {
-        setViewProfile(prev => prev ? { ...prev, loading: false } : null)
-      }
-    }
+    setViewProfile({ profileId: opts.profileId || undefined, userId: opts.userId, name: opts.name, gender: opts.gender, avatar: opts.avatar || null, loading: false })
+  }
+
+  // Handle avatar file selection
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 200000) { alert('الصورة كبيرة جداً. الحد الأقصى 200KB'); return }
+    const reader = new FileReader()
+    reader.onload = ev => setEditAvatar(ev.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
   // Save profile fields
   const saveProfileFields = async () => {
-    if (!sessionIdRef.current || !localUser?.profileId) return
+    if (!sessionIdRef.current) return
     setEditSaving(true)
     try {
       const r = await fetch('/api/chat-room/profile/update', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionIdRef.current, city: editCity, facebook: editFacebook, instagram: editInstagram, tiktok: editTiktok }),
+        body: JSON.stringify({ sessionId: sessionIdRef.current, city: editCity, facebook: editFacebook, instagram: editInstagram, tiktok: editTiktok, avatar: editAvatar }),
       })
       if (r.ok) {
         const d = await r.json()
-        setViewProfile(prev => prev ? { ...prev, ...d.profile, loading: false } : null)
+        const newAvatar = d.avatar || editAvatar || null
+        setViewProfile(prev => prev ? { ...prev, ...d.profile, avatar: newAvatar, loading: false } : null)
+        setLocalUser(prev => prev ? { ...prev, avatar: newAvatar } : null)
         setProfileEditMode(false)
       }
     } catch {}
@@ -742,7 +752,7 @@ export default function DZChat() {
   const handleMsgSenderClick = (e: React.MouseEvent, msg: ChatMessage) => {
     if (msg.isBot || msg.isSystem || msg.fromId === sessionIdRef.current) return
     e.stopPropagation()
-    openProfile({ profileId: msg.fromProfileId, userId: msg.fromId, name: msg.from, gender: msg.gender as 'male' | 'female' })
+    openProfile({ profileId: msg.fromProfileId, userId: msg.fromId, name: msg.from, gender: msg.gender as 'male' | 'female', avatar: msg.fromAvatar })
   }
 
   useEffect(() => {
@@ -916,10 +926,13 @@ export default function DZChat() {
                 className={`dzc-user-item ${u.id === sessionIdRef.current ? 'dzc-user-item--me' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  openProfile({ profileId: u.profileId, userId: u.id, name: u.name, gender: u.gender })
+                  openProfile({ profileId: u.profileId, userId: u.id, name: u.name, gender: u.gender, avatar: u.avatar })
                 }}
               >
-                {genderIcon(u.gender)}
+                {u.avatar
+                  ? <img src={u.avatar} className="dzc-user-avatar-img" alt="" />
+                  : genderIcon(u.gender)
+                }
                 <span className={`dzc-user-name${u.isAdmin ? ' dzc-user-name--admin' : ''}`}>{u.name}</span>
                 {u.isAdmin && <BadgeCheck size={13} className="dzc-user-verified-badge" aria-label="مشرف موثق" />}
                 {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
@@ -1025,7 +1038,10 @@ export default function DZChat() {
                     </button>
                   )}
                   <div className="dzc-msg-header">
-                    {genderIcon(msg.gender)}
+                    {msg.fromAvatar
+                      ? <img src={msg.fromAvatar} className="dzc-msg-avatar" alt="" onClick={(e) => handleMsgSenderClick(e, msg)} />
+                      : genderIcon(msg.gender)
+                    }
                     <span
                       className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${(msg.isAdmin || msg.isHighlighted) ? 'dzc-msg-from--admin-sender' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
                       onClick={(e) => handleMsgSenderClick(e, msg)}
@@ -1255,9 +1271,12 @@ export default function DZChat() {
             </button>
 
             {/* Avatar */}
-            <div className={`dzc-profile-avatar dzc-profile-avatar--${viewProfile.gender}`}>
-              {viewProfile.gender === 'female' ? '♀' : '♂'}
-            </div>
+            {viewProfile.avatar
+              ? <img src={viewProfile.avatar} className="dzc-profile-avatar-img" alt="" />
+              : <div className={`dzc-profile-avatar dzc-profile-avatar--${viewProfile.gender}`}>
+                  {viewProfile.gender === 'female' ? '♀' : '♂'}
+                </div>
+            }
 
             {/* Name */}
             <div className="dzc-profile-name">{viewProfile.name}</div>
@@ -1323,12 +1342,13 @@ export default function DZChat() {
                       <MessageCircle size={14} /> رسالة خاصة
                     </button>
                   )}
-                  {localUser?.profileId && viewProfile.userId === sessionIdRef.current && (
+                  {viewProfile.userId === sessionIdRef.current && (
                     <button className="dzc-profile-edit-btn" onClick={() => {
                       setEditCity(viewProfile.city || '')
                       setEditFacebook(viewProfile.facebook || '')
                       setEditInstagram(viewProfile.instagram || '')
                       setEditTiktok(viewProfile.tiktok || '')
+                      setEditAvatar(viewProfile.avatar || localUser?.avatar || null)
                       setProfileEditMode(true)
                     }}>
                       ✏️ تعديل بروفايلي
@@ -1358,6 +1378,25 @@ export default function DZChat() {
             ) : (
               /* Edit mode */
               <div className="dzc-profile-edit-form">
+                {/* Avatar upload */}
+                <div className="dzc-avatar-upload-wrap">
+                  {editAvatar
+                    ? <img src={editAvatar} className="dzc-avatar-preview" alt="صورتي" />
+                    : <div className={`dzc-avatar-placeholder dzc-avatar-placeholder--${viewProfile.gender}`}>{viewProfile.gender === 'female' ? '♀' : '♂'}</div>
+                  }
+                  <div className="dzc-avatar-upload-actions">
+                    <button className="dzc-avatar-upload-btn" type="button" onClick={() => avatarInputRef.current?.click()}>
+                      📷 {editAvatar ? 'تغيير الصورة' : 'إضافة صورة'}
+                    </button>
+                    {editAvatar && (
+                      <button className="dzc-avatar-remove-btn" type="button" onClick={() => setEditAvatar(null)}>
+                        <X size={12} /> حذف
+                      </button>
+                    )}
+                  </div>
+                  <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+                  <p className="dzc-avatar-hint">تظهر صورتك دائرية في الدردشة. الحد الأقصى 200KB.</p>
+                </div>
                 <div className="dzc-profile-edit-field">
                   <label><MapPin size={11} /> المدينة / العنوان</label>
                   <input className="dzc-profile-edit-input" placeholder="مثال: الجزائر العاصمة" value={editCity} onChange={e => setEditCity(e.target.value)} maxLength={100} />

@@ -898,6 +898,99 @@
 }
 .dzc-profile-avatar--female { border-color: #3d1a2a; color: #ff9fd4; background: linear-gradient(135deg, #2a0d1a, #1a0d2a); }
 
+/* Profile photo (when user has uploaded one) */
+.dzc-profile-avatar-img {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #1877f2;
+  box-shadow: 0 4px 24px rgba(24, 119, 242, 0.35), 0 0 0 2px rgba(24,119,242,0.12);
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+/* Circular avatar in chat messages */
+.dzc-msg-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.dzc-msg-avatar:hover { transform: scale(1.12); }
+
+/* Small circular avatar in sidebar user list */
+.dzc-user-avatar-img {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+
+/* Avatar upload section in profile edit */
+.dzc-avatar-upload-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 12px;
+  margin-bottom: 4px;
+}
+.dzc-avatar-preview {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #1877f2;
+  box-shadow: 0 0 16px rgba(24,119,242,0.4);
+}
+.dzc-avatar-placeholder {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d2a1a, #0d1a2a);
+  border: 3px dashed rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; color: #c8ff00;
+}
+.dzc-avatar-placeholder--female { color: #ff9fd4; background: linear-gradient(135deg, #2a0d1a, #1a0d2a); }
+.dzc-avatar-upload-actions {
+  display: flex; gap: 8px; align-items: center;
+}
+.dzc-avatar-upload-btn {
+  background: rgba(24,119,242,0.12);
+  border: 1px solid rgba(24,119,242,0.35);
+  color: #60a5fa;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.dzc-avatar-upload-btn:hover { background: rgba(24,119,242,0.22); border-color: #1877f2; color: #93c5fd; }
+.dzc-avatar-remove-btn {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(220,38,38,0.1);
+  border: 1px solid rgba(220,38,38,0.25);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.dzc-avatar-remove-btn:hover { background: rgba(220,38,38,0.2); }
+.dzc-avatar-hint {
+  font-size: 10px;
+  color: #475569;
+  text-align: center;
+  margin: 0;
+}
+
 .dzc-profile-name {
   font-size: 17px;
   font-weight: 700;

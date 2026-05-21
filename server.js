@@ -14547,7 +14547,7 @@ function getOnlineUsers() {
   const now = Date.now()
   return [...chatSessions.values()]
     .filter(s => now - s.lastSeen < 40000)
-    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profile: s.profile || null }))
+    .map(s => ({ id: s.id, name: s.name, gender: s.gender, isAdmin: s.isAdmin, profile: s.profile || null, avatar: s.avatar || null }))
 }
 
 function broadcastChat(data, exceptWs = null) {
@@ -17549,7 +17549,8 @@ app.post('/api/chat-room/join', async (req, res) => {
   for (const k of allowedProfileFields) {
     if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
   }
-  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile }
+  const avatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null
+  const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile, avatar }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
     id: chatId(), from: 'System', fromId: 'system', gender: 'bot',
@@ -17558,7 +17559,7 @@ app.post('/api/chat-room/join', async (req, res) => {
   broadcastChat({ type: 'message', msg: joinMsg })
   broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
   const [messages, pinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
-  res.json({ sessionId: id, isAdmin, messages, users: getOnlineUsers(), pinnedMessage: pinned })
+  res.json({ sessionId: id, isAdmin, profileId: id, messages, users: getOnlineUsers(), pinnedMessage: pinned })
 })
 
 app.post('/api/chat-room/leave', (req, res) => {
@@ -17594,6 +17595,7 @@ app.post('/api/chat-room/send', async (req, res) => {
     text: cleanText, timestamp: Date.now(),
     isDM: !!dmTo, dmTo: dmTo || null, dmToName: dmToName || null,
     isAdmin: !!session.isAdmin,
+    fromAvatar: session.avatar || null,
     replyToId: replyToId || null, replyToText: replyToText || null, replyToFrom: replyToFrom || null,
   })
   if (dmTo) {
@@ -17646,9 +17648,34 @@ app.post('/api/chat-room/profile', (req, res) => {
   for (const k of allowedProfileFields) {
     if (typeof profile?.[k] === 'string') cleanProfile[k] = profile[k].trim().slice(0, 100)
   }
+  if (typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000) {
+    session.avatar = profile.avatar
+  } else if (profile?.avatar === null || profile?.avatar === '') {
+    session.avatar = null
+  }
   session.profile = cleanProfile
-  broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile })
-  res.json({ ok: true })
+  broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile, avatar: session.avatar || null })
+  res.json({ ok: true, avatar: session.avatar || null })
+})
+
+app.put('/api/chat-room/profile/update', (req, res) => {
+  const { sessionId, city, facebook, instagram, tiktok, avatar } = req.body || {}
+  const session = chatSessions.get(sessionId)
+  if (!session) return res.status(401).json({ error: 'Invalid session' })
+  const cleanProfile = {
+    city: typeof city === 'string' ? city.trim().slice(0, 100) : (session.profile?.city || ''),
+    facebook: typeof facebook === 'string' ? facebook.trim().slice(0, 200) : (session.profile?.facebook || ''),
+    instagram: typeof instagram === 'string' ? instagram.trim().slice(0, 100) : (session.profile?.instagram || ''),
+    tiktok: typeof tiktok === 'string' ? tiktok.trim().slice(0, 100) : (session.profile?.tiktok || ''),
+  }
+  if (typeof avatar === 'string' && avatar.startsWith('data:image') && avatar.length < 200000) {
+    session.avatar = avatar
+  } else if (avatar === null || avatar === '') {
+    session.avatar = null
+  }
+  session.profile = cleanProfile
+  broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile, avatar: session.avatar || null })
+  res.json({ ok: true, profile: cleanProfile, avatar: session.avatar || null })
 })
 
 app.post('/api/chat-room/admin', async (req, res) => {
@@ -17727,11 +17754,12 @@ function setupChatWebSocket(httpServer) {
           for (const k of allowedProfileFields) {
             if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
           }
-          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: cleanProfile })
+          const wsAvatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null
+          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: cleanProfile, avatar: wsAvatar })
           const session = chatSessions.get(id)
           const [wsMessages, wsPinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
           if (pinnedMessage === null) pinnedMessage = wsPinned
-          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, messages: wsMessages, users: getOnlineUsers(), pinnedMessage: pinnedMessage || wsPinned }))
+          ws.send(JSON.stringify({ type: 'welcome', sessionId: id, isAdmin, profileId: id, messages: wsMessages, users: getOnlineUsers(), pinnedMessage: pinnedMessage || wsPinned }))
           const joinMsg = pushChatMsg({ id: chatId(), from: 'System', fromId: 'system', gender: 'bot', text: isAdmin ? 'انضم إلى الدردشة' : `${session.name} انضم إلى الدردشة`, timestamp: Date.now(), isSystem: true, isAdminAnnounce: !!isAdmin })
           broadcastChat({ type: 'message', msg: joinMsg }, ws)
           ws.send(JSON.stringify({ type: 'message', msg: joinMsg }))
@@ -17764,6 +17792,7 @@ function setupChatWebSocket(httpServer) {
             text: cleanText, timestamp: Date.now(),
             isDM: !!data.dmTo, dmTo: data.dmTo || null, dmToName: data.dmToName || null,
             isAdmin: !!session.isAdmin,
+            fromAvatar: session.avatar || null,
             replyToId: data.replyToId || null, replyToText: data.replyToText || null, replyToFrom: data.replyToFrom || null,
           })
           if (data.dmTo) {
@@ -17804,8 +17833,13 @@ function setupChatWebSocket(httpServer) {
           for (const k of allowedProfileFields) {
             if (typeof data.profile?.[k] === 'string') cleanProfile[k] = data.profile[k].trim().slice(0, 100)
           }
+          if (typeof data.avatar === 'string' && data.avatar.startsWith('data:image') && data.avatar.length < 200000) {
+            session.avatar = data.avatar
+          } else if (data.avatar === null || data.avatar === '') {
+            session.avatar = null
+          }
           session.profile = cleanProfile
-          broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile })
+          broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile, avatar: session.avatar || null })
         } else if (data.type === 'admin') {
           const session = sid ? chatSessions.get(sid) : null
           if (!session?.isAdmin) return

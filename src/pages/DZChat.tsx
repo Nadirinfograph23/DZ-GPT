@@ -163,6 +163,7 @@ export default function DZChat() {
   const [entryLoading, setEntryLoading] = useState(false)
   const [entryPassword, setEntryPassword] = useState('')
   const [entrySaveProfile, setEntrySaveProfile] = useState(false)
+  const [entryIsAdmin, setEntryIsAdmin] = useState(false)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [onlineUsers, setOnlineUsers] = useState<ChatUser[]>([])
@@ -475,8 +476,13 @@ export default function DZChat() {
     setEntryLoading(true)
     try {
       const body: Record<string, string> = { name: entryName.trim(), gender: entryGender }
-      const pw = entryPassword.trim()
-      if (pw.length >= 4) {
+      if (entryIsAdmin) {
+        const pw = entryPassword.trim()
+        if (pw.length < 4) {
+          setEntryError('كلمة سر المشرف يجب أن تكون 4 أحرف على الأقل.')
+          setEntryLoading(false)
+          return
+        }
         body.profilePassword = pw
         body.adminSecret = pw
         sessionStorage.setItem('dzc_admin_secret', pw)
@@ -958,26 +964,39 @@ export default function DZChat() {
               </button>
             </div>
 
-            <div className="dzc-entry-field dzc-entry-pw-field">
-              <div className="dzc-entry-pw-label">
-                <Lock size={13} /> كلمة السر <span className="dzc-entry-pw-hint">(مشرف أو حفظ الهوية)</span>
-              </div>
-              <input
-                className="dzc-entry-input dzc-entry-input--pw"
-                placeholder="أدخل كلمة السر..."
-                type="password"
-                value={entryPassword}
-                onChange={e => setEntryPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleEnterChat()}
-                maxLength={50}
-              />
-              {entryPassword.length >= 4 && (
+            <div className="dzc-entry-admin-toggle">
+              <button
+                type="button"
+                className={`dzc-entry-admin-btn${entryIsAdmin ? ' dzc-entry-admin-btn--active' : ''}`}
+                onClick={() => { setEntryIsAdmin(p => !p); setEntryPassword('') }}
+              >
+                <Shield size={14} />
+                <span>دخول كمشرف</span>
+                <span className={`dzc-entry-admin-dot${entryIsAdmin ? ' dzc-entry-admin-dot--on' : ''}`} />
+              </button>
+            </div>
+
+            {entryIsAdmin && (
+              <div className="dzc-entry-field dzc-entry-pw-field">
+                <div className="dzc-entry-pw-label">
+                  <Lock size={13} /> كلمة سر المشرف
+                </div>
+                <input
+                  className="dzc-entry-input dzc-entry-input--pw dzc-entry-input--admin"
+                  placeholder="أدخل كلمة سر المشرف..."
+                  type="password"
+                  value={entryPassword}
+                  onChange={e => setEntryPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleEnterChat()}
+                  maxLength={50}
+                  autoFocus
+                />
                 <label className="dzc-entry-save-toggle">
                   <input type="checkbox" checked={entrySaveProfile} onChange={e => setEntrySaveProfile(e.target.checked)} />
                   <span>تذكرني في هذا الجهاز</span>
                 </label>
-              )}
-            </div>
+              </div>
+            )}
 
             {entryError && <div className="dzc-entry-error"><AlertCircle size={13} /> {entryError}</div>}
 

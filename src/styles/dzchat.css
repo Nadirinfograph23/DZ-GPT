@@ -795,27 +795,36 @@
   white-space: pre-wrap;
 }
 
-/* ===== ENTRY PROFILE SECTION ===== */
-.dzc-entry-profile-section {
+/* ===== ENTRY PASSWORD FIELD ===== */
+.dzc-entry-pw-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid #1e1e1e;
+  border: 1px solid #2a1f00;
   border-radius: 10px;
   padding: 12px 14px;
-  background: rgba(200,255,0,0.02);
+  background: rgba(200,255,0,0.03);
 }
-.dzc-entry-profile-label {
+.dzc-entry-pw-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #556677;
-  font-weight: 600;
+  font-size: 13px;
+  color: #c8ff00;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
-.dzc-entry-optional { font-weight: 400; color: #334455; }
-.dzc-entry-input--profile { margin: 0; border-color: #1e3d2f; }
-.dzc-entry-input--profile:focus { border-color: #c8ff00; }
+.dzc-entry-pw-hint {
+  font-weight: 400;
+  font-size: 11px;
+  color: #556677;
+}
+.dzc-entry-input--pw {
+  margin: 0;
+  border-color: #3a2e00;
+  background: #0d1117;
+}
+.dzc-entry-input--pw:focus { border-color: #c8ff00; box-shadow: 0 0 0 2px rgba(200,255,0,0.12); }
 .dzc-entry-save-toggle {
   display: flex;
   align-items: center;

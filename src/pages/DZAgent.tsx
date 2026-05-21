@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video, Globe } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -139,6 +139,10 @@ export default function DZAgent() {
               <button className="sidebar-nav-item" onClick={() => { navigate('/dz-tube'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
                 <Video size={14} />
                 <span>DZ Tube</span>
+              </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/web-builder'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <Globe size={14} />
+                <span>Web Builder</span>
               </button>
             </div>
           )}

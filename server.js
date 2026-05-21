@@ -19006,6 +19006,90 @@ app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, re
   })
 })
 
+// ── TTS — AI DZ voice (pure Node.js WebSocket → Microsoft Edge TTS) ──────────
+// NOTE: must be BEFORE export { app } so it works on Vercel serverless too
+const _EDGE_TTS_WS = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1'
+const _EDGE_TTS_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
+
+function _ttsEscapeXml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')
+}
+function _ttsGenSSML(text, voice, rate, pitch) {
+  return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ar-DZ'>`
+    + `<voice name='${voice}'><prosody pitch='${pitch}' rate='${rate}'>${_ttsEscapeXml(text)}</prosody></voice></speak>`
+}
+async function _edgeTTSFetch(text, voice, rate, pitch) {
+  const { WebSocket: WS } = await import('ws')
+  const connId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
+  const url = `${_EDGE_TTS_WS}?TrustedClientToken=${_EDGE_TTS_TOKEN}&ConnectionId=${connId}`
+  return new Promise((resolve, reject) => {
+    const ws = new WS(url, {
+      headers: {
+        'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0 Safari/537.36 Edg/122.0',
+      },
+    })
+    const chunks = []
+    let done = false
+    const timer = setTimeout(() => { try { ws.close() } catch {} if (!done) { done = true; reject(new Error('TTS timeout')) } }, 30000)
+    ws.on('open', () => {
+      const ts = new Date().toISOString()
+      ws.send(`X-Timestamp:${ts}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}`)
+      const reqId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
+      ws.send(`X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${ts}Z\r\nPath:ssml\r\n\r\n${_ttsGenSSML(text, voice, rate, pitch)}`)
+    })
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        if (data.length > 2) {
+          const headerLen = data.readUInt16BE(0)
+          const audio = data.slice(2 + headerLen)
+          if (audio.length > 0) chunks.push(audio)
+        }
+      } else {
+        if (data.toString().includes('Path:turn.end')) {
+          clearTimeout(timer); done = true; ws.close()
+          resolve(Buffer.concat(chunks))
+        }
+      }
+    })
+    ws.on('error', (e) => { clearTimeout(timer); if (!done) { done = true; reject(e) } })
+    ws.on('close', () => { clearTimeout(timer); if (!done && chunks.length > 0) { done = true; resolve(Buffer.concat(chunks)) } })
+  })
+}
+
+app.post('/api/tts', async (req, res) => {
+  const { text, voice = 'ar-DZ-AminaNeural', rate = '+0%', pitch = '+0Hz' } = req.body || {}
+  if (!text || typeof text !== 'string' || text.trim().length === 0)
+    return res.status(400).json({ error: 'text is required' })
+  if (text.length > 3000)
+    return res.status(400).json({ error: 'text too long (max 3000 chars)' })
+  try {
+    const buf = await _edgeTTSFetch(text.trim(), voice, rate, pitch)
+    if (!buf || buf.length === 0) return res.status(500).json({ error: 'No audio data received' })
+    res.set('Content-Type', 'audio/mpeg')
+    res.set('Content-Disposition', 'attachment; filename="ai-dz-voice.mp3"')
+    res.send(buf)
+  } catch (e) {
+    console.error('[TTS] error:', e.message)
+    res.status(500).json({ error: 'TTS generation failed', detail: e.message })
+  }
+})
+
+app.get('/api/tts/voices', (_req, res) => {
+  res.json([
+    { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — عربية جزائرية',   lang: 'ar' },
+    { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — عربية جزائرية', lang: 'ar' },
+    { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — عربية فصحى',      lang: 'ar' },
+    { id: 'ar-SA-HamedNeural',   label: '🇸🇦 حامد — عربية فصحى',       lang: 'ar' },
+    { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — عربية مصرية',      lang: 'ar' },
+    { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 دينيز — فرنسية',          lang: 'fr' },
+    { id: 'fr-FR-HenriNeural',   label: '🇫🇷 هنري — فرنسية',           lang: 'fr' },
+    { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 أمين — فرنسية جزائرية',   lang: 'fr' },
+    { id: 'en-US-JennyNeural',   label: '🇺🇸 جيني — إنجليزية',         lang: 'en' },
+    { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
+  ])
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -19132,109 +19216,6 @@ if (isMain) {
     }
     res.json({ results, vercelUrl });
   });
-
-  // ── TTS — AI DZ voice (pure Node.js WebSocket → Microsoft Edge TTS) ─────────
-  const EDGE_TTS_WS = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1'
-  const EDGE_TTS_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
-
-  function _ttsEscapeXml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')
-  }
-
-  function _ttsGenSSML(text, voice, rate, pitch) {
-    return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ar-DZ'>`
-      + `<voice name='${voice}'>`
-      + `<prosody pitch='${pitch}' rate='${rate}'>${_ttsEscapeXml(text)}</prosody>`
-      + `</voice></speak>`
-  }
-
-  async function _edgeTTSFetch(text, voice, rate, pitch) {
-    const { WebSocket: WS } = await import('ws')
-    const connId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
-    const url = `${EDGE_TTS_WS}?TrustedClientToken=${EDGE_TTS_TOKEN}&ConnectionId=${connId}`
-    return new Promise((resolve, reject) => {
-      const ws = new WS(url, {
-        headers: {
-          'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0 Safari/537.36 Edg/122.0',
-        },
-      })
-      const chunks = []
-      let timer = setTimeout(() => { try { ws.close() } catch {} reject(new Error('TTS timeout')) }, 30000)
-
-      ws.on('open', () => {
-        const ts = new Date().toISOString()
-        // 1. Config
-        ws.send(
-          `X-Timestamp:${ts}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
-          `{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}`
-        )
-        // 2. SSML
-        const reqId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
-        ws.send(
-          `X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${ts}Z\r\nPath:ssml\r\n\r\n` +
-          _ttsGenSSML(text, voice, rate, pitch)
-        )
-      })
-
-      ws.on('message', (data, isBinary) => {
-        if (isBinary) {
-          // Binary frame: first 2 bytes = header length
-          if (data.length > 2) {
-            const headerLen = data.readUInt16BE(0)
-            const audio = data.slice(2 + headerLen)
-            if (audio.length > 0) chunks.push(audio)
-          }
-        } else {
-          if (data.toString().includes('Path:turn.end')) {
-            clearTimeout(timer)
-            ws.close()
-            resolve(Buffer.concat(chunks))
-          }
-        }
-      })
-
-      ws.on('error', (e) => { clearTimeout(timer); reject(e) })
-      ws.on('close', () => {
-        clearTimeout(timer)
-        if (chunks.length > 0) resolve(Buffer.concat(chunks))
-        // else let timeout/error handle it
-      })
-    })
-  }
-
-  app.post('/api/tts', async (req, res) => {
-    const { text, voice = 'ar-DZ-AminaNeural', rate = '+0%', pitch = '+0Hz' } = req.body || {}
-    if (!text || typeof text !== 'string' || text.trim().length === 0)
-      return res.status(400).json({ error: 'text is required' })
-    if (text.length > 3000)
-      return res.status(400).json({ error: 'text too long (max 3000 chars)' })
-    try {
-      const buf = await _edgeTTSFetch(text.trim(), voice, rate, pitch)
-      if (!buf || buf.length === 0) return res.status(500).json({ error: 'No audio data received' })
-      res.set('Content-Type', 'audio/mpeg')
-      res.set('Content-Disposition', 'attachment; filename="ai-dz-voice.mp3"')
-      res.send(buf)
-    } catch (e) {
-      console.error('[TTS] error:', e.message)
-      res.status(500).json({ error: 'TTS generation failed', detail: e.message })
-    }
-  })
-
-  app.get('/api/tts/voices', (_req, res) => {
-    res.json([
-      { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — عربية جزائرية',   lang: 'ar' },
-      { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — عربية جزائرية', lang: 'ar' },
-      { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — عربية فصحى',      lang: 'ar' },
-      { id: 'ar-SA-HamedNeural',   label: '🇸🇦 حامد — عربية فصحى',       lang: 'ar' },
-      { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — عربية مصرية',      lang: 'ar' },
-      { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 دينيز — فرنسية',          lang: 'fr' },
-      { id: 'fr-FR-HenriNeural',   label: '🇫🇷 هنري — فرنسية',           lang: 'fr' },
-      { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 أمين — فرنسية جزائرية',   lang: 'fr' },
-      { id: 'en-US-JennyNeural',   label: '🇺🇸 جيني — إنجليزية',         lang: 'en' },
-      { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
-    ])
-  })
 
   // ── Start rembg HTTP server locally (skip on Vercel) ───────────────────────
   if (!process.env.VERCEL) {

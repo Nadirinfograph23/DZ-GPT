@@ -888,6 +888,32 @@ export default function DZChat() {
     setAtDropdown(false)
   }
 
+  useEffect(() => { currentRoomRef.current = currentRoom }, [currentRoom])
+
+  // Auto-mark DMs as read when window is focused
+  useEffect(() => {
+    if (!windowFocused || !sessionIdRef.current) return
+    const sid = sessionIdRef.current
+    messages.forEach(m => {
+      if (m.isDM && m.fromId !== sid && m.dmTo === sid && !(m.readBy || []).includes(sid)) {
+        if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'msgRead', msgId: m.id }))
+      }
+    })
+  }, [messages, windowFocused])
+
+  const visibleMessages = messages.filter(m => {
+    if (m.localDeleted) return false
+    if (m.isDM) return m.fromId === sessionIdRef.current || m.dmTo === sessionIdRef.current
+    if (m.isSystem || m.isBroadcast) return true
+    if (m.room && m.room !== currentRoom) return false
+    if (!m.room && currentRoom !== 'عام') return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      return (m.text || '').toLowerCase().includes(q) || (m.from || '').toLowerCase().includes(q)
+    }
+    return true
+  })
+
   if (!localUser) {
     return (
       <div className="dzc-root" onClick={handleRootClick}>
@@ -932,7 +958,6 @@ export default function DZChat() {
               </button>
             </div>
 
-            {/* Password field — admin or profile */}
             <div className="dzc-entry-field dzc-entry-pw-field">
               <div className="dzc-entry-pw-label">
                 <Lock size={13} /> كلمة السر <span className="dzc-entry-pw-hint">(مشرف أو حفظ الهوية)</span>
@@ -964,32 +989,6 @@ export default function DZChat() {
       </div>
     )
   }
-
-  useEffect(() => { currentRoomRef.current = currentRoom }, [currentRoom])
-
-  // Auto-mark DMs as read when window is focused
-  useEffect(() => {
-    if (!windowFocused || !sessionIdRef.current) return
-    const sid = sessionIdRef.current
-    messages.forEach(m => {
-      if (m.isDM && m.fromId !== sid && m.dmTo === sid && !(m.readBy || []).includes(sid)) {
-        if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'msgRead', msgId: m.id }))
-      }
-    })
-  }, [messages, windowFocused])
-
-  const visibleMessages = messages.filter(m => {
-    if (m.localDeleted) return false
-    if (m.isDM) return m.fromId === sessionIdRef.current || m.dmTo === sessionIdRef.current
-    if (m.isSystem || m.isBroadcast) return true
-    if (m.room && m.room !== currentRoom) return false
-    if (!m.room && currentRoom !== 'عام') return false
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      return (m.text || '').toLowerCase().includes(q) || (m.from || '').toLowerCase().includes(q)
-    }
-    return true
-  })
 
   return (
     <div className="dzc-root" dir="rtl" onClick={handleRootClick}>

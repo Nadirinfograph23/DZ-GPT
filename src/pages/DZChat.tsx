@@ -353,7 +353,8 @@ export default function DZChat() {
         type: 'join',
         name: user.name,
         gender: user.gender,
-        adminSecret: user.isAdmin ? sessionStorage.getItem('dzc_admin_secret') || '' : '',
+        sessionId: user.sessionId,
+        adminSecret: user.isAdmin ? (sessionStorage.getItem('dzc_admin_secret') || '') : '',
       }))
     }
 
@@ -361,6 +362,10 @@ export default function DZChat() {
       try {
         const data = JSON.parse(e.data)
         if (data.type === 'welcome') {
+          // Sync session id — server may reuse HTTP session id or issue a new WS one
+          if (data.sessionId) sessionIdRef.current = data.sessionId as string
+          // Re-confirm admin status from server
+          if (data.isAdmin) setLocalUser(prev => prev ? { ...prev, isAdmin: true } : prev)
           const histIds = new Set(historyMessages.map(m => m.id))
           const fresh = (data.messages || []).filter((m: ChatMessage) => !histIds.has(m.id))
           addMessages([...historyMessages, ...fresh])

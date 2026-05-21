@@ -17744,18 +17744,21 @@ function setupChatWebSocket(httpServer) {
       try {
         const data = JSON.parse(raw.toString())
         if (data.type === 'join') {
-          const { name, gender, adminSecret, profile } = data
+          const { name, gender, adminSecret, profile, sessionId: existingSessionId } = data
           if (!name?.trim() || !gender) return ws.close()
-          const id = chatId()
+          // Reuse existing HTTP session if provided — preserves isAdmin flag
+          const existingSession = existingSessionId ? chatSessions.get(existingSessionId) : null
+          const id = (existingSession && existingSession.id) ? existingSession.id : chatId()
           sid = id
-          const isAdmin = adminSecret === CHAT_ADMIN_SECRET
+          // isAdmin: reuse from HTTP session OR verify secret anew
+          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET)
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {
             if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
           }
-          const wsAvatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null
-          chatSessions.set(id, { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: cleanProfile, avatar: wsAvatar })
+          const wsAvatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : (existingSession?.avatar || null)
+          chatSessions.set(id, { ...(existingSession || {}), id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws, ip: clientIp, profile: Object.keys(cleanProfile).length ? cleanProfile : (existingSession?.profile || {}), avatar: wsAvatar })
           const session = chatSessions.get(id)
           const [wsMessages, wsPinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
           if (pinnedMessage === null) pinnedMessage = wsPinned

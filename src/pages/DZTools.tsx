@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -150,6 +150,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'qrcode',       icon: '📲', name: 'مولّد QR Code',                 desc: 'أنشئ QR Code لأي نص أو رابط أو معلومات — تحميل فوري', badge: 'NEW' },
   { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',                   desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
   { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',                 desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
+  { id: 'tts',          icon: '🔊', name: 'تحويل نص إلى صوت',              desc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية وإنجليزية — تحميل MP3', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -4034,6 +4035,256 @@ function HashtagTool() {
   )
 }
 
+// ─── TTS Tool — AI DZ voice ───────────────────────────────────────────────────
+const TTS_VOICES = [
+  { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — عربية جزائرية',   lang: 'ar' },
+  { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — عربية جزائرية', lang: 'ar' },
+  { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — عربية فصحى',      lang: 'ar' },
+  { id: 'ar-SA-HamedNeural',   label: '🇸🇦 حامد — عربية فصحى',       lang: 'ar' },
+  { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — عربية مصرية',      lang: 'ar' },
+  { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 دينيز — فرنسية',          lang: 'fr' },
+  { id: 'fr-FR-HenriNeural',   label: '🇫🇷 هنري — فرنسية',           lang: 'fr' },
+  { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 أمين — فرنسية جزائرية',   lang: 'fr' },
+  { id: 'en-US-JennyNeural',   label: '🇺🇸 جيني — إنجليزية',         lang: 'en' },
+  { id: 'en-US-GuyNeural',     label: '🇺🇸 غاي — إنجليزية',          lang: 'en' },
+]
+
+function TTSTool() {
+  const [text, setText]       = useState('')
+  const [voice, setVoice]     = useState('ar-DZ-AminaNeural')
+  const [rate, setRate]       = useState('+0%')
+  const [pitch, setPitch]     = useState('+0Hz')
+  const [loading, setLoading] = useState(false)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [error, setError]     = useState('')
+  const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const charCount = text.length
+  const maxChars = 3000
+
+  const generate = async () => {
+    if (!text.trim() || loading) return
+    setLoading(true)
+    setError('')
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null) }
+
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.trim(), voice, rate, pitch }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `خطأ ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setAudioUrl(url)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'حدث خطأ أثناء توليد الصوت')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const download = () => {
+    if (!audioUrl) return
+    const a = document.createElement('a')
+    a.href = audioUrl
+    a.download = `ai-dz-voice-${Date.now()}.mp3`
+    a.click()
+  }
+
+  const togglePlay = () => {
+    if (!audioRef.current) return
+    if (playing) { audioRef.current.pause(); setPlaying(false) }
+    else { audioRef.current.play(); setPlaying(true) }
+  }
+
+  const rateOptions = [
+    { value: '-50%', label: 'بطيء جداً' },
+    { value: '-25%', label: 'بطيء' },
+    { value: '+0%',  label: 'عادي' },
+    { value: '+25%', label: 'سريع' },
+    { value: '+50%', label: 'سريع جداً' },
+  ]
+  const pitchOptions = [
+    { value: '-10Hz', label: 'منخفض' },
+    { value: '+0Hz',  label: 'عادي' },
+    { value: '+10Hz', label: 'مرتفع' },
+  ]
+
+  return (
+    <div>
+      <div className="dzt-tool-desc">
+        <span className="dzt-tool-desc-icon">🔊</span>
+        <div>
+          <div className="dzt-tool-desc-title">تحويل نص إلى صوت — AI DZ voice</div>
+          <div className="dzt-tool-desc-text">
+            حوّل أي نص إلى صوت طبيعي بأصوات عربية جزائرية وفرنسية وإنجليزية — مع خيارات السرعة والنبرة وتحميل MP3
+          </div>
+        </div>
+      </div>
+
+      <div className="dzt-form">
+        {/* Voice selector */}
+        <div className="dzt-field">
+          <label className="dzt-label">الصوت</label>
+          <select className="dzt-select" value={voice} onChange={e => setVoice(e.target.value)}>
+            <optgroup label="🇩🇿 عربية جزائرية">
+              {TTS_VOICES.filter(v => v.id.startsWith('ar-DZ')).map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="🇸🇦 عربية فصحى / مصرية">
+              {TTS_VOICES.filter(v => v.lang === 'ar' && !v.id.startsWith('ar-DZ')).map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="🇫🇷 فرنسية">
+              {TTS_VOICES.filter(v => v.lang === 'fr').map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="🇺🇸 إنجليزية">
+              {TTS_VOICES.filter(v => v.lang === 'en').map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </optgroup>
+          </select>
+        </div>
+
+        {/* Rate & Pitch */}
+        <div className="dzt-row">
+          <div className="dzt-field">
+            <label className="dzt-label">السرعة</label>
+            <select className="dzt-select" value={rate} onChange={e => setRate(e.target.value)}>
+              {rateOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+          <div className="dzt-field">
+            <label className="dzt-label">النبرة</label>
+            <select className="dzt-select" value={pitch} onChange={e => setPitch(e.target.value)}>
+              {pitchOptions.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Text input */}
+        <div className="dzt-field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <label className="dzt-label" style={{ margin: 0 }}>النص المراد تحويله</label>
+            <span style={{ fontSize: 12, color: charCount > maxChars ? '#ff4444' : '#666' }}>
+              {charCount} / {maxChars}
+            </span>
+          </div>
+          <textarea
+            className="dzt-textarea"
+            value={text}
+            onChange={e => setText(e.target.value.slice(0, maxChars))}
+            placeholder="اكتب أو الصق النص هنا... (يدعم العربية، الفرنسية، الإنجليزية)"
+            style={{ minHeight: 140, direction: 'auto' }}
+          />
+        </div>
+
+        <button
+          className="dzt-btn"
+          onClick={generate}
+          disabled={!text.trim() || loading || charCount > maxChars}
+        >
+          {loading
+            ? <><span className="dzt-spinner" /> جاري توليد الصوت...</>
+            : <>🔊 تحويل إلى صوت</>}
+        </button>
+      </div>
+
+      {error && (
+        <div className="dzt-error" style={{ marginTop: 12 }}>⚠️ {error}</div>
+      )}
+
+      {audioUrl && (
+        <div style={{
+          marginTop: 20,
+          background: 'linear-gradient(135deg, #0d1f0f 0%, #1a3320 100%)',
+          border: '1px solid #2a5a35',
+          borderRadius: 14,
+          padding: '20px 24px',
+          direction: 'rtl',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 22 }}>🔊</span>
+            <div>
+              <div style={{ color: '#c8ff00', fontWeight: 700, fontSize: 15 }}>الصوت جاهز — AI DZ voice</div>
+              <div style={{ color: '#8aad90', fontSize: 12 }}>
+                {TTS_VOICES.find(v => v.id === voice)?.label} · {rateOptions.find(r => r.value === rate)?.label}
+              </div>
+            </div>
+          </div>
+
+          {/* Native audio player */}
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            controls
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+            style={{ width: '100%', borderRadius: 8, marginBottom: 14, accentColor: '#c8ff00' }}
+          />
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              className="dzt-result-btn"
+              onClick={togglePlay}
+              style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              {playing ? '⏸ إيقاف' : '▶️ تشغيل'}
+            </button>
+            <button
+              className="dzt-btn"
+              onClick={download}
+              style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 18px', fontSize: 14 }}
+            >
+              <Download size={15} /> تحميل MP3
+            </button>
+            <button
+              className="dzt-result-btn"
+              onClick={generate}
+              disabled={loading}
+              style={{ flex: 1, minWidth: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              🔄 إعادة التوليد
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info box */}
+      <div style={{
+        marginTop: 20,
+        background: 'rgba(200,255,0,0.04)',
+        border: '1px solid rgba(200,255,0,0.12)',
+        borderRadius: 10,
+        padding: '12px 16px',
+        fontSize: 12,
+        color: '#8aad90',
+        direction: 'rtl',
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start',
+      }}>
+        <span style={{ fontSize: 16 }}>💡</span>
+        <div>
+          <strong style={{ color: '#c8ff00' }}>AI DZ voice</strong> — يستخدم أصواتاً نورونية طبيعية تدعم اللهجة الجزائرية.
+          الحد الأقصى 3000 حرف لكل تحويل. الصوت يُنزّل بصيغة MP3 عالية الجودة.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -4094,6 +4345,7 @@ export default function DZTools() {
         {active === 'qrcode'       && <QRCodeTool />}
         {active === 'bizcard'      && <BizCardTool />}
         {active === 'dataanalysis' && <DataAnalysisTool />}
+        {active === 'tts'          && <TTSTool />}
       </div>
     </div>
   )

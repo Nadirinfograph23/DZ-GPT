@@ -430,6 +430,7 @@ export default function DZChat() {
         adminSecret: savedSecret,
         status: 'online',
         room: currentRoomRef.current,
+        profile: user.avatar ? { avatar: user.avatar } : undefined,
       }))
     }
 
@@ -1268,7 +1269,7 @@ export default function DZChat() {
                 <div
                   key={msg.id}
                   data-msg-id={msg.id}
-                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${(msg.isAdmin && !msg.isHighlighted) ? 'dzc-msg--admin-msg' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
+                  className={`dzc-msg ${isMe ? 'dzc-msg--me' : ''} ${msg.isBot ? 'dzc-msg--bot' : ''} ${msg.isHighlighted ? 'dzc-msg--highlighted' : ''} ${((msg.isAdmin || (isMe && localUser?.isAdmin)) && !msg.isHighlighted) ? 'dzc-msg--admin-msg' : ''} ${msg.isDM ? 'dzc-msg--dm' : ''} ${msg.isBreaking ? 'dzc-msg--breaking' : ''}`}
                   onContextMenu={(e) => {
                     if (!localUser.isAdmin) return
                     e.preventDefault()
@@ -1290,13 +1291,13 @@ export default function DZChat() {
                       : genderIcon(msg.gender)
                     }
                     <span
-                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${(msg.isAdmin || msg.isHighlighted) ? 'dzc-msg-from--admin-sender' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
+                      className={`dzc-msg-from ${msg.isBot ? 'dzc-msg-from--bot' : ''} ${isMe ? 'dzc-msg-from--me' : ''} ${(msg.isAdmin || msg.isHighlighted || (isMe && localUser?.isAdmin)) ? 'dzc-msg-from--admin-sender' : ''} ${!msg.isBot && !isMe ? 'dzc-msg-from--clickable' : ''}`}
                       onClick={(e) => handleMsgSenderClick(e, msg)}
                       title={!msg.isBot && !isMe ? 'إرسال رسالة خاصة' : undefined}
                     >
                       {msg.isHighlighted ? ADMIN_NAME : msg.from}
                     </span>
-                    {(msg.isAdmin || msg.isHighlighted) && (
+                    {(msg.isAdmin || msg.isHighlighted || (isMe && localUser?.isAdmin)) && (
                       <span className="dzc-admin-badge-wrap" title="مشرف موثق">
                         <BadgeCheck size={16} className="dzc-admin-verified-badge" />
                         <span className="dzc-admin-label">مشرف</span>
@@ -1325,6 +1326,16 @@ export default function DZChat() {
                         </button>
                       </div>
                     )}
+                    {/* Reply button — visible on hover, inside header */}
+                    {!msg.isSystem && !msg.isDeleted && (
+                      <button
+                        className="dzc-reply-btn"
+                        title="رد على هذه الرسالة"
+                        onClick={e => { e.stopPropagation(); setReplyTarget(msg); inputRef.current?.focus() }}
+                      >
+                        <CornerUpLeft size={13} />
+                      </button>
+                    )}
                     {localUser.isAdmin && !msg.isBot && !msg.isSystem && (
                       <button className="dzc-msg-admin-btn" onClick={(e) => { e.stopPropagation(); setMsgMenu({ msg, x: e.clientX, y: e.clientY }) }}>
                         <MoreVertical size={12} />
@@ -1343,16 +1354,6 @@ export default function DZChat() {
                     const urls = msg.text.match(URL_RE)
                     return urls?.length ? <LinkPreview url={urls[0]} /> : null
                   })()}
-                  {/* Reply button — appears on hover */}
-                  {!msg.isSystem && !msg.isDeleted && (
-                    <button
-                      className="dzc-reply-btn"
-                      title="رد على هذه الرسالة"
-                      onClick={e => { e.stopPropagation(); setReplyTarget(msg); inputRef.current?.focus() }}
-                    >
-                      <CornerUpLeft size={13} />
-                    </button>
-                  )}
                   {/* Emoji reaction picker — appears on hover */}
                   <div className="dzc-emoji-picker">
                     {REACT_EMOJIS.map(emoji => (

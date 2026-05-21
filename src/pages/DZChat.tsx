@@ -159,8 +159,6 @@ export default function DZChat() {
   const [localUser, setLocalUser] = useState<LocalUser | null>(null)
   const [entryName, setEntryName] = useState('')
   const [entryGender, setEntryGender] = useState<'male' | 'female' | ''>('')
-  const [entryAdminMode, setEntryAdminMode] = useState(false)
-  const [entryAdminSecret, setEntryAdminSecret] = useState('')
   const [entryError, setEntryError] = useState('')
   const [entryLoading, setEntryLoading] = useState(false)
   const [entryPassword, setEntryPassword] = useState('')
@@ -247,6 +245,15 @@ export default function DZChat() {
     } catch {}
   }, [])
 
+  // Load saved avatar from localStorage on mount
+  const savedAvatarRef = useRef<string | null>(null)
+  useEffect(() => {
+    try {
+      const av = localStorage.getItem('dzchat-avatar')
+      if (av && av.startsWith('data:image')) savedAvatarRef.current = av
+    } catch {}
+  }, [])
+
   useEffect(() => {
     const onFocus = () => setWindowFocused(true)
     const onBlur = () => setWindowFocused(false)
@@ -320,6 +327,10 @@ export default function DZChat() {
       const { userId, avatar } = data as { userId: string; avatar?: string | null }
       if (userId) {
         setOnlineUsers(prev => prev.map(u => u.id === userId ? { ...u, avatar: avatar || null } : u))
+        // Also update fromAvatar in all existing messages from this user
+        setMessages(prev => prev.map(m =>
+          m.fromId === userId ? { ...m, fromAvatar: avatar || null } : m
+        ))
       }
     } else if (data.type === 'update') {
       const msg = data.msg as ChatMessage
@@ -402,12 +413,14 @@ export default function DZChat() {
 
     ws.onopen = () => {
       wsConnectedRef.current = true
+      const savedSecret = sessionStorage.getItem('dzc_admin_secret') || ''
       ws.send(JSON.stringify({
         type: 'join',
         name: user.name,
         gender: user.gender,
         sessionId: user.sessionId,
-        adminSecret: user.isAdmin ? (sessionStorage.getItem('dzc_admin_secret') || '') : '',
+        adminSecret: savedSecret,
+        profilePassword: savedSecret,
         status: 'online',
         room: currentRoomRef.current,
       }))
@@ -462,17 +475,21 @@ export default function DZChat() {
     setEntryLoading(true)
     try {
       const body: Record<string, string> = { name: entryName.trim(), gender: entryGender }
-      if (entryAdminMode && entryAdminSecret) {
-        body.adminSecret = entryAdminSecret
-        sessionStorage.setItem('dzc_admin_secret', entryAdminSecret)
-      }
-      if (entryPassword.trim().length >= 4) {
-        body.profilePassword = entryPassword.trim()
+      const pw = entryPassword.trim()
+      if (pw.length >= 4) {
+        // Single password field: doubles as adminSecret + profilePassword
+        body.profilePassword = pw
+        body.adminSecret = pw
+        sessionStorage.setItem('dzc_admin_secret', pw)
         if (entrySaveProfile) {
           localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: entryName.trim() }))
         } else {
           localStorage.removeItem('dzchat-saved-profile')
         }
+      }
+      // Restore saved avatar from localStorage
+      if (savedAvatarRef.current) {
+        body.avatar = savedAvatarRef.current
       }
       const r = await fetch('/api/chat-room/join', {
         method: 'POST',
@@ -481,7 +498,7 @@ export default function DZChat() {
       })
       const d = await r.json()
       if (!r.ok) { setEntryError(d.error || 'فشل الدخول.'); return }
-      const user: LocalUser = { name: entryName.trim(), gender: entryGender, sessionId: d.sessionId, isAdmin: !!d.isAdmin, profileId: d.profileId || null }
+      const user: LocalUser = { name: entryName.trim(), gender: entryGender, sessionId: d.sessionId, isAdmin: !!d.isAdmin, profileId: d.profileId || null, avatar: d.avatar || savedAvatarRef.current || null }
       sessionIdRef.current = d.sessionId
       setLocalUser(user)
       const history: ChatMessage[] = d.messages || []
@@ -803,6 +820,21 @@ export default function DZChat() {
         const newAvatar = d.avatar || editAvatar || null
         setViewProfile(prev => prev ? { ...prev, ...d.profile, avatar: newAvatar, loading: false } : null)
         setLocalUser(prev => prev ? { ...prev, avatar: newAvatar } : null)
+        // Persist avatar in localStorage for session restore after logout
+        try {
+          if (newAvatar) {
+            localStorage.setItem('dzchat-avatar', newAvatar)
+            savedAvatarRef.current = newAvatar
+          } else {
+            localStorage.removeItem('dzchat-avatar')
+            savedAvatarRef.current = null
+          }
+        } catch {}
+        // Update fromAvatar in all own messages immediately
+        const myId = sessionIdRef.current
+        setMessages(prev => prev.map(m =>
+          m.fromId === myId ? { ...m, fromAvatar: newAvatar } : m
+        ))
         setProfileEditMode(false)
       }
     } catch {}
@@ -893,21 +925,6 @@ export default function DZChat() {
                 </label>
               )}
             </div>
-
-            <div className="dzc-entry-admin-toggle">
-              <button className="dzc-entry-admin-link" onClick={() => setEntryAdminMode(p => !p)}>
-                <Shield size={12} /> {entryAdminMode ? 'إلغاء وضع المشرف' : 'دخول كمشرف'}
-              </button>
-            </div>
-            {entryAdminMode && (
-              <input
-                className="dzc-entry-input dzc-entry-input--admin"
-                placeholder="كلمة سر المشرف..."
-                type="password"
-                value={entryAdminSecret}
-                onChange={e => setEntryAdminSecret(e.target.value)}
-              />
-            )}
 
             {entryError && <div className="dzc-entry-error"><AlertCircle size={13} /> {entryError}</div>}
 

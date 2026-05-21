@@ -19133,37 +19133,89 @@ if (isMain) {
     res.json({ results, vercelUrl });
   });
 
-  // ── TTS — AI DZ voice (edge-tts) ─────────────────────────────────────────
+  // ── TTS — AI DZ voice (pure Node.js WebSocket → Microsoft Edge TTS) ─────────
+  const EDGE_TTS_WS = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1'
+  const EDGE_TTS_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
+
+  function _ttsEscapeXml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;')
+  }
+
+  function _ttsGenSSML(text, voice, rate, pitch) {
+    return `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='ar-DZ'>`
+      + `<voice name='${voice}'>`
+      + `<prosody pitch='${pitch}' rate='${rate}'>${_ttsEscapeXml(text)}</prosody>`
+      + `</voice></speak>`
+  }
+
+  async function _edgeTTSFetch(text, voice, rate, pitch) {
+    const { WebSocket: WS } = await import('ws')
+    const connId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
+    const url = `${EDGE_TTS_WS}?TrustedClientToken=${EDGE_TTS_TOKEN}&ConnectionId=${connId}`
+    return new Promise((resolve, reject) => {
+      const ws = new WS(url, {
+        headers: {
+          'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0 Safari/537.36 Edg/122.0',
+        },
+      })
+      const chunks = []
+      let timer = setTimeout(() => { try { ws.close() } catch {} reject(new Error('TTS timeout')) }, 30000)
+
+      ws.on('open', () => {
+        const ts = new Date().toISOString()
+        // 1. Config
+        ws.send(
+          `X-Timestamp:${ts}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
+          `{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}`
+        )
+        // 2. SSML
+        const reqId = crypto.randomUUID().replace(/-/g, '').toUpperCase()
+        ws.send(
+          `X-RequestId:${reqId}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${ts}Z\r\nPath:ssml\r\n\r\n` +
+          _ttsGenSSML(text, voice, rate, pitch)
+        )
+      })
+
+      ws.on('message', (data, isBinary) => {
+        if (isBinary) {
+          // Binary frame: first 2 bytes = header length
+          if (data.length > 2) {
+            const headerLen = data.readUInt16BE(0)
+            const audio = data.slice(2 + headerLen)
+            if (audio.length > 0) chunks.push(audio)
+          }
+        } else {
+          if (data.toString().includes('Path:turn.end')) {
+            clearTimeout(timer)
+            ws.close()
+            resolve(Buffer.concat(chunks))
+          }
+        }
+      })
+
+      ws.on('error', (e) => { clearTimeout(timer); reject(e) })
+      ws.on('close', () => {
+        clearTimeout(timer)
+        if (chunks.length > 0) resolve(Buffer.concat(chunks))
+        // else let timeout/error handle it
+      })
+    })
+  }
+
   app.post('/api/tts', async (req, res) => {
     const { text, voice = 'ar-DZ-AminaNeural', rate = '+0%', pitch = '+0Hz' } = req.body || {}
     if (!text || typeof text !== 'string' || text.trim().length === 0)
       return res.status(400).json({ error: 'text is required' })
     if (text.length > 3000)
       return res.status(400).json({ error: 'text too long (max 3000 chars)' })
-
-    const { execFile: ef } = await import('child_process')
-    const { promisify: prom } = await import('util')
-    const efAsync = prom(ef)
-    const os = await import('os')
-    const fsMod = await import('fs')
-    const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`)
-
     try {
-      await efAsync('edge-tts', [
-        '--voice', voice,
-        '--rate', rate,
-        '--pitch', pitch,
-        '--text', text.trim(),
-        '--write-media', tmpFile,
-      ], { timeout: 30000 })
-
-      const buf = fsMod.readFileSync(tmpFile)
-      try { fsMod.unlinkSync(tmpFile) } catch {}
+      const buf = await _edgeTTSFetch(text.trim(), voice, rate, pitch)
+      if (!buf || buf.length === 0) return res.status(500).json({ error: 'No audio data received' })
       res.set('Content-Type', 'audio/mpeg')
       res.set('Content-Disposition', 'attachment; filename="ai-dz-voice.mp3"')
       res.send(buf)
     } catch (e) {
-      try { fsMod.unlinkSync(tmpFile) } catch {}
       console.error('[TTS] error:', e.message)
       res.status(500).json({ error: 'TTS generation failed', detail: e.message })
     }

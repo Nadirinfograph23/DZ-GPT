@@ -135,7 +135,49 @@
 .dzc-gender-icon { font-size: 20px; color: #c8ff00; }
 .dzc-gender-icon--female { color: #ff6fb4; }
 
-.dzc-entry-admin-toggle { text-align: center; }
+.dzc-entry-admin-toggle { text-align: center; margin: 2px 0; }
+
+.dzc-entry-admin-btn {
+  background: rgba(24, 119, 242, 0.07);
+  border: 1.5px solid rgba(24, 119, 242, 0.25);
+  color: #5b9cf6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  transition: all 0.2s;
+  width: 100%;
+  justify-content: center;
+  font-family: inherit;
+}
+.dzc-entry-admin-btn:hover {
+  background: rgba(24, 119, 242, 0.14);
+  border-color: rgba(24, 119, 242, 0.5);
+  color: #7ab4ff;
+}
+.dzc-entry-admin-btn--active {
+  background: rgba(24, 119, 242, 0.18);
+  border-color: #1877f2;
+  color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.18);
+}
+.dzc-entry-admin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #334455;
+  margin-right: auto;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.dzc-entry-admin-dot--on {
+  background: #1877f2;
+  box-shadow: 0 0 6px rgba(24, 119, 242, 0.8);
+}
+
 .dzc-entry-admin-link {
   background: none;
   border: none;
@@ -149,7 +191,7 @@
   border-radius: 6px;
   transition: color 0.2s;
 }
-.dzc-entry-admin-link:hover { color: #cc4444; }
+.dzc-entry-admin-link:hover { color: #1877f2; }
 
 .dzc-entry-error {
   color: #ff6b6b;

@@ -877,6 +877,12 @@
   user-select: none;
 }
 .dzc-entry-save-toggle input[type="checkbox"] { accent-color: #c8ff00; cursor: pointer; }
+.dzc-entry-save-toggle--user {
+  justify-content: center;
+  padding: 6px 0 2px;
+  color: #7a8fa6;
+  font-size: 12px;
+}
 
 /* ===== PROFILE POPUP ===== */
 .dzc-profile-overlay {

@@ -219,7 +219,7 @@ export default function DZAgent() {
                 onChange={e => setTtsText(e.target.value.slice(0, 3000))}
                 placeholder="اكتب النص هنا..."
                 rows={4}
-                style={{ background: '#0d1f0f', border: '1px solid #2a5a35', color: '#e0ffe0', borderRadius: 7, padding: '8px 10px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit', direction: 'auto' }}
+                style={{ background: '#0d1f0f', border: '1px solid #2a5a35', color: '#e0ffe0', borderRadius: 7, padding: '8px 10px', fontSize: 12, resize: 'vertical', fontFamily: 'inherit', direction: 'rtl' }}
               />
               {ttsError && <div style={{ color: '#ff6b6b', fontSize: 11 }}>⚠️ {ttsError}</div>}
               <button

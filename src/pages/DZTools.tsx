@@ -4081,9 +4081,18 @@ function TTSTool() {
 
   const selectedSysVoice = sysVoices.find(v => v.name === voiceId.slice(4))
 
-  // Determine TTS lang for server
-  const srvLang = voiceId === 'srv:fr' ? 'fr' : voiceId === 'srv:en' ? 'en' : 'ar'
-  const srvVoiceId = srvLang === 'fr' ? 'fr-FR-DeniseNeural' : srvLang === 'en' ? 'en-US-JennyNeural' : 'ar-DZ-AminaNeural'
+  // Map voiceId → actual voice ID sent to server
+  const _SRV_VOICE_ID_MAP: Record<string, string> = {
+    'srv:ar':       'ar-DZ-AminaNeural',
+    'srv:ar-fus':   'ar-SA-ZariyahNeural',
+    'srv:fr-f':     'fr-FR-DeniseNeural',
+    'srv:fr-m':     'fr-FR-HenriNeural',
+    'srv:en-f':     'en-US-JennyNeural',
+    'srv:en-m':     'en-US-GuyNeural',
+    'srv:en-gb-f':  'en-GB-SoniaNeural',
+    'srv:en-gb-m':  'en-GB-RyanNeural',
+  }
+  const srvVoiceId = _SRV_VOICE_ID_MAP[voiceId] ?? 'ar-DZ-AminaNeural'
 
   // Play via Web Speech API
   const playSys = () => {
@@ -4181,11 +4190,22 @@ function TTSTool() {
           <label className="dzt-label">الصوت</label>
           <select className="dzt-select" value={voiceId} onChange={e => { setVoiceId(e.target.value); setAudioUrl(null); stopSys() }}>
 
-            {/* Server voices (Google TTS — downloadable) */}
-            <optgroup label="☁️ خادم — جودة عالية + تحميل MP3">
-              <option value="srv:ar">🇩🇿 عربية (خادم)</option>
-              <option value="srv:fr">🇫🇷 فرنسية (خادم)</option>
-              <option value="srv:en">🇺🇸 إنجليزية (خادم)</option>
+            {/* Server voices — Kokoro (EN/FR) + Google TTS (AR) */}
+            <optgroup label="🇩🇿 عربية — Google TTS + تحميل MP3">
+              <option value="srv:ar">🇩🇿 عربية جزائرية</option>
+              <option value="srv:ar-fus">🇸🇦 عربية فصحى</option>
+            </optgroup>
+            <optgroup label="🐸 Kokoro AI — فرنسية + تحميل MP3">
+              <option value="srv:fr-f">🇫🇷 👩 فرنسية أنثى — ff_siwis</option>
+              <option value="srv:fr-m">🇫🇷 👨 فرنسية ذكر — fm_gaston</option>
+            </optgroup>
+            <optgroup label="🐸 Kokoro AI — إنجليزية أمريكية + تحميل MP3">
+              <option value="srv:en-f">🇺🇸 👩 أنثى أمريكية — af_heart</option>
+              <option value="srv:en-m">🇺🇸 👨 ذكر أمريكي — am_adam</option>
+            </optgroup>
+            <optgroup label="🐸 Kokoro AI — إنجليزية بريطانية + تحميل MP3">
+              <option value="srv:en-gb-f">🇬🇧 👩 أنثى بريطانية — bf_emma</option>
+              <option value="srv:en-gb-m">🇬🇧 👨 ذكر بريطاني — bm_george</option>
             </optgroup>
 
             {/* Browser voices — real male/female */}
@@ -4216,8 +4236,10 @@ function TTSTool() {
         {/* Mode hint */}
         <div style={{ fontSize: 12, color: '#8aad90', marginTop: -6, direction: 'rtl' }}>
           {isSysVoice
-            ? `🎙️ صوت المتصفح — ذكر/أنثى حقيقي · ${_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 ذكر' : _ttsGender(selectedSysVoice?.name ?? '') === 'female' ? '👩 أنثى' : 'جنس غير محدد'}`
-            : '☁️ صوت الخادم — يدعم التحميل بصيغة MP3'
+            ? `🎙️ صوت المتصفح — ${_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 ذكر حقيقي' : _ttsGender(selectedSysVoice?.name ?? '') === 'female' ? '👩 أنثى حقيقية' : 'صوت المتصفح'}`
+            : voiceId.startsWith('srv:ar')
+              ? '🇩🇿 Google TTS — عربية · يدعم التحميل MP3'
+              : '🐸 Kokoro AI (hexgrad/Kokoro-82M) — جودة عالية · يدعم التحميل MP3'
           }
         </div>
 

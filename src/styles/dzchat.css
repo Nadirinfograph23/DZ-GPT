@@ -865,8 +865,28 @@
   margin: 0;
   border-color: #3a2e00;
   background: #0d1117;
+  flex: 1;
+  min-width: 0;
 }
 .dzc-entry-input--pw:focus { border-color: #c8ff00; box-shadow: 0 0 0 2px rgba(200,255,0,0.12); }
+.dzc-entry-pw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dzc-entry-pw-eye {
+  background: rgba(200,255,0,0.07);
+  border: 1px solid #2a2e00;
+  border-radius: 7px;
+  color: #7a9933;
+  cursor: pointer;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.dzc-entry-pw-eye:hover { background: rgba(200,255,0,0.15); color: #c8ff00; }
 .dzc-entry-save-toggle {
   display: flex;
   align-items: center;

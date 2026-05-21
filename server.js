@@ -17560,7 +17560,7 @@ app.post('/api/chat-room/join', async (req, res) => {
   const { name, gender, adminSecret, profilePassword, avatar: bodyAvatar, profile } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
-  const isAdmin = adminSecret === CHAT_ADMIN_SECRET || profilePassword === CHAT_ADMIN_SECRET
+  const isAdmin = adminSecret === CHAT_ADMIN_SECRET
   const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
   const cleanProfile = {}
   for (const k of allowedProfileFields) {
@@ -17777,8 +17777,8 @@ function setupChatWebSocket(httpServer) {
           const existingSession = existingSessionId ? chatSessions.get(existingSessionId) : null
           const id = (existingSession && existingSession.id) ? existingSession.id : chatId()
           sid = id
-          // isAdmin: reuse from HTTP session OR verify secret via adminSecret OR profilePassword
-          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET || profilePassword === CHAT_ADMIN_SECRET)
+          // isAdmin: reuse from HTTP session OR verify via adminSecret ONLY (profilePassword never grants admin)
+          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET)
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {

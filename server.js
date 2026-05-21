@@ -17557,16 +17557,18 @@ app.get('/api/dz-tube/download', async (req, res) => {
 app.post('/api/chat-room/join', async (req, res) => {
   const clientIp = getClientIp(req)
   if (bannedIPs.has(clientIp)) return res.status(403).json({ error: 'محظور من الدردشة.' })
-  const { name, gender, adminSecret, profile } = req.body || {}
+  const { name, gender, adminSecret, profilePassword, avatar: bodyAvatar, profile } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
-  const isAdmin = adminSecret === CHAT_ADMIN_SECRET
+  const isAdmin = adminSecret === CHAT_ADMIN_SECRET || profilePassword === CHAT_ADMIN_SECRET
   const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
   const cleanProfile = {}
   for (const k of allowedProfileFields) {
     if (typeof profile?.[k] === 'string' && profile[k].trim()) cleanProfile[k] = profile[k].trim().slice(0, 100)
   }
-  const avatar = typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null
+  const avatar = (typeof bodyAvatar === 'string' && bodyAvatar.startsWith('data:image') && bodyAvatar.length < 200000)
+    ? bodyAvatar
+    : (typeof profile?.avatar === 'string' && profile.avatar.startsWith('data:image') && profile.avatar.length < 200000 ? profile.avatar : null)
   const session = { id, name: sanitizeString(name, 30), gender, isAdmin, lastSeen: Date.now(), ws: null, ip: clientIp, profile: cleanProfile, avatar, status: 'online', room: 'عام' }
   chatSessions.set(id, session)
   const joinMsg = pushChatMsg({
@@ -17576,7 +17578,7 @@ app.post('/api/chat-room/join', async (req, res) => {
   broadcastChat({ type: 'message', msg: joinMsg })
   broadcastChat({ type: 'users', users: getOnlineUsers(), count: chatSessions.size })
   const [messages, pinned] = await Promise.all([dbGetMessages(0, 50), dbGetPinned()])
-  res.json({ sessionId: id, isAdmin, profileId: id, messages, users: getOnlineUsers(), pinnedMessage: pinned })
+  res.json({ sessionId: id, isAdmin, profileId: id, avatar: avatar || null, messages, users: getOnlineUsers(), pinnedMessage: pinned })
 })
 
 app.post('/api/chat-room/leave', (req, res) => {
@@ -17695,6 +17697,10 @@ app.put('/api/chat-room/profile/update', (req, res) => {
     session.avatar = null
   }
   session.profile = cleanProfile
+  // Update fromAvatar in existing in-memory messages for this user
+  for (const m of chatMessages) {
+    if (m.fromId === session.id) m.fromAvatar = session.avatar || null
+  }
   broadcastChat({ type: 'profileUpdate', userId: session.id, profile: cleanProfile, avatar: session.avatar || null })
   res.json({ ok: true, profile: cleanProfile, avatar: session.avatar || null })
 })
@@ -17765,14 +17771,14 @@ function setupChatWebSocket(httpServer) {
       try {
         const data = JSON.parse(raw.toString())
         if (data.type === 'join') {
-          const { name, gender, adminSecret, profile, sessionId: existingSessionId } = data
+          const { name, gender, adminSecret, profilePassword, profile, sessionId: existingSessionId } = data
           if (!name?.trim() || !gender) return ws.close()
           // Reuse existing HTTP session if provided — preserves isAdmin flag
           const existingSession = existingSessionId ? chatSessions.get(existingSessionId) : null
           const id = (existingSession && existingSession.id) ? existingSession.id : chatId()
           sid = id
-          // isAdmin: reuse from HTTP session OR verify secret anew
-          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET)
+          // isAdmin: reuse from HTTP session OR verify secret via adminSecret OR profilePassword
+          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET || profilePassword === CHAT_ADMIN_SECRET)
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {

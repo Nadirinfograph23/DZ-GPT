@@ -19006,17 +19006,31 @@ app.post('/api/tools/video-gen', express.json({ limit: '30mb' }), async (req, re
   })
 })
 
-// ── TTS — AI DZ voice (Google Translate TTS REST — works on Vercel) ──────────
+// ── TTS — Kokoro (HF Inference API) + Google TTS fallback ────────────────────
 // NOTE: must be BEFORE export { app } so it works on Vercel serverless
+
+// Arabic → Google TTS  |  English/French → Kokoro (hexgrad/Kokoro-82M via HF)
 const _TTS_VOICE_LANG = {
   'ar-DZ-AminaNeural':   'ar', 'ar-DZ-IsmaelNeural':  'ar',
   'ar-SA-ZariyahNeural': 'ar', 'ar-SA-HamedNeural':   'ar',
   'ar-EG-ShakirNeural':  'ar', 'fr-FR-DeniseNeural':  'fr',
   'fr-FR-HenriNeural':   'fr', 'fr-DZ-AmineNeural':   'fr',
   'en-US-JennyNeural':   'en', 'en-US-GuyNeural':     'en',
+  'en-GB-SoniaNeural':   'en', 'en-GB-RyanNeural':    'en',
 }
 
-// Split long text into ≤200-char chunks at word boundaries
+// Kokoro voice map — Arabic is NOT supported by Kokoro (use Google TTS for ar)
+// voices: https://huggingface.co/hexgrad/Kokoro-82M
+const _KOKORO_VOICE_MAP = {
+  'en-US-JennyNeural':  'af_heart',   // American Female
+  'en-US-GuyNeural':    'am_adam',    // American Male
+  'en-GB-SoniaNeural':  'bf_emma',    // British Female
+  'en-GB-RyanNeural':   'bm_george',  // British Male
+  'fr-FR-DeniseNeural': 'ff_siwis',   // French Female
+  'fr-FR-HenriNeural':  'fm_gaston',  // French Male
+}
+
+// Split long text into ≤190-char chunks at word boundaries
 function _ttsSplitText(text, max = 190) {
   const parts = []
   let rem = text.trim()
@@ -19030,6 +19044,7 @@ function _ttsSplitText(text, max = 190) {
   return parts
 }
 
+// Google Translate TTS — Arabic + fallback
 async function _googleTTSFetch(text, lang) {
   const parts = _ttsSplitText(text)
   const bufs = []
@@ -19041,6 +19056,7 @@ async function _googleTTSFetch(text, lang) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
         'Referer': 'https://translate.google.com/',
       },
+      signal: AbortSignal.timeout(15000),
     })
     if (!resp.ok) throw new Error(`Google TTS HTTP ${resp.status}`)
     bufs.push(Buffer.from(await resp.arrayBuffer()))
@@ -19048,15 +19064,53 @@ async function _googleTTSFetch(text, lang) {
   return Buffer.concat(bufs)
 }
 
+// Kokoro TTS via HuggingFace Inference API
+async function _kokoroTTSFetch(text, kokoroVoice, speed = 1.0) {
+  const token = process.env.HF_TOKEN
+  if (!token) throw new Error('HF_TOKEN not configured')
+  const resp = await fetch('https://api-inference.huggingface.co/models/hexgrad/Kokoro-82M', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'audio/wav,audio/*,*/*',
+    },
+    body: JSON.stringify({ inputs: text, parameters: { voice: kokoroVoice, speed } }),
+    signal: AbortSignal.timeout(28000),
+  })
+  if (!resp.ok) {
+    const msg = await resp.text().catch(() => '')
+    throw new Error(`Kokoro HTTP ${resp.status}: ${msg.slice(0, 200)}`)
+  }
+  return Buffer.from(await resp.arrayBuffer())
+}
+
 app.post('/api/tts', async (req, res) => {
-  const { text, voice = 'ar-DZ-AminaNeural' } = req.body || {}
+  const { text, voice = 'ar-DZ-AminaNeural', speed = 1.0 } = req.body || {}
   if (!text || typeof text !== 'string' || text.trim().length === 0)
     return res.status(400).json({ error: 'text is required' })
   if (text.length > 3000)
     return res.status(400).json({ error: 'text too long (max 3000 chars)' })
+
   const lang = _TTS_VOICE_LANG[voice] || 'ar'
+  const kokoroVoice = _KOKORO_VOICE_MAP[voice]
+
   try {
-    const buf = await _googleTTSFetch(text.trim(), lang)
+    let buf
+    if (kokoroVoice) {
+      // Try Kokoro first (English/French) → fallback to Google TTS
+      try {
+        console.log(`[TTS] Kokoro: voice=${kokoroVoice}`)
+        buf = await _kokoroTTSFetch(text.trim(), kokoroVoice, Number(speed) || 1.0)
+      } catch (kokoroErr) {
+        console.warn(`[TTS] Kokoro failed (${kokoroErr.message}), falling back to Google TTS`)
+        buf = await _googleTTSFetch(text.trim(), lang)
+      }
+    } else {
+      // Arabic → Google TTS (Kokoro doesn't support Arabic)
+      buf = await _googleTTSFetch(text.trim(), lang)
+    }
+
     if (!buf || buf.length === 0) return res.status(500).json({ error: 'No audio data received' })
     res.set('Content-Type', 'audio/mpeg')
     res.set('Content-Disposition', 'attachment; filename="ai-dz-voice.mp3"')
@@ -19069,16 +19123,14 @@ app.post('/api/tts', async (req, res) => {
 
 app.get('/api/tts/voices', (_req, res) => {
   res.json([
-    { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 عربية جزائرية (أنثى)',   lang: 'ar' },
-    { id: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 عربية جزائرية (ذكر)',    lang: 'ar' },
-    { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 عربية فصحى (أنثى)',      lang: 'ar' },
-    { id: 'ar-SA-HamedNeural',   label: '🇸🇦 عربية فصحى (ذكر)',       lang: 'ar' },
-    { id: 'ar-EG-ShakirNeural',  label: '🇪🇬 عربية مصرية',            lang: 'ar' },
-    { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 فرنسية (أنثى)',          lang: 'fr' },
-    { id: 'fr-FR-HenriNeural',   label: '🇫🇷 فرنسية (ذكر)',           lang: 'fr' },
-    { id: 'fr-DZ-AmineNeural',   label: '🇩🇿 فرنسية جزائرية',         lang: 'fr' },
-    { id: 'en-US-JennyNeural',   label: '🇺🇸 إنجليزية (أنثى)',        lang: 'en' },
-    { id: 'en-US-GuyNeural',     label: '🇺🇸 إنجليزية (ذكر)',         lang: 'en' },
+    { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 عربية جزائرية',        lang: 'ar', engine: 'google' },
+    { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 عربية فصحى',           lang: 'ar', engine: 'google' },
+    { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 فرنسية أنثى',          lang: 'fr', engine: 'kokoro', kokoro: 'ff_siwis' },
+    { id: 'fr-FR-HenriNeural',   label: '🇫🇷 فرنسية ذكر',           lang: 'fr', engine: 'kokoro', kokoro: 'fm_gaston' },
+    { id: 'en-US-JennyNeural',   label: '🇺🇸 إنجليزية أمريكية أنثى', lang: 'en', engine: 'kokoro', kokoro: 'af_heart' },
+    { id: 'en-US-GuyNeural',     label: '🇺🇸 إنجليزية أمريكية ذكر', lang: 'en', engine: 'kokoro', kokoro: 'am_adam' },
+    { id: 'en-GB-SoniaNeural',   label: '🇬🇧 إنجليزية بريطانية أنثى', lang: 'en', engine: 'kokoro', kokoro: 'bf_emma' },
+    { id: 'en-GB-RyanNeural',    label: '🇬🇧 إنجليزية بريطانية ذكر', lang: 'en', engine: 'kokoro', kokoro: 'bm_george' },
   ])
 })
 

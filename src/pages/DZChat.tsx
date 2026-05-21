@@ -5,6 +5,7 @@ import {
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
   MoreVertical, Highlighter, Copy, Check, BadgeCheck, Pin, PinOff,
   VolumeX, Clock, Megaphone, CornerUpLeft, User, MapPin, ExternalLink,
+  Search, Hash, CheckCheck, Globe,
 } from 'lucide-react'
 import '../styles/dzchat.css'
 
@@ -15,6 +16,7 @@ interface ChatUser {
   isAdmin?: boolean
   profileId?: string | null
   avatar?: string | null
+  status?: 'online' | 'busy' | 'away'
 }
 
 interface ChatMessage {
@@ -41,6 +43,8 @@ interface ChatMessage {
   replyTo?: { id: string; from: string; text: string }
   fromProfileId?: string | null
   fromAvatar?: string | null
+  room?: string
+  readBy?: string[]
 }
 
 interface LocalUser {
@@ -112,6 +116,43 @@ function formatTime(ts: number) {
   return d.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })
 }
 
+const URL_RE = /https?:\/\/[^\s<>"{}|\\^`[\]]{8,}/gi
+
+function linkifyText(text: string) {
+  const parts = text.split(/(https?:\/\/[^\s<>"{}|\\^`[\]]{8,})/gi)
+  return parts.map((part, i) =>
+    /^https?:\/\//i.test(part)
+      ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="dzc-inline-link" onClick={e => e.stopPropagation()}>{part}</a>
+      : part
+  )
+}
+
+function LinkPreview({ url }: { url: string }) {
+  const [data, setData] = useState<{ title: string; description: string; image: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/link-preview?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [url])
+  if (loading) return <div className="dzc-link-preview dzc-link-preview--loading"><Globe size={12} /> جاري التحميل...</div>
+  if (!data || (!data.title && !data.description)) return null
+  const domain = (() => { try { return new URL(url).hostname } catch { return url.slice(0, 30) } })()
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="dzc-link-preview" onClick={e => e.stopPropagation()}>
+      {data.image && <img src={data.image} className="dzc-link-preview-img" alt="" onError={e => (e.currentTarget.style.display = 'none')} />}
+      <div className="dzc-link-preview-body">
+        {data.title && <span className="dzc-link-preview-title">{data.title.slice(0, 80)}</span>}
+        {data.description && <span className="dzc-link-preview-desc">{data.description.slice(0, 120)}</span>}
+        <span className="dzc-link-preview-domain"><Globe size={10} /> {domain}</span>
+      </div>
+    </a>
+  )
+}
+
 export default function DZChat() {
   const navigate = useNavigate()
 
@@ -178,6 +219,15 @@ export default function DZChat() {
 
   // Copy feedback state per message
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
+  // Rooms
+  const [currentRoom, setCurrentRoom] = useState('عام')
+  const currentRoomRef = useRef('عام')
+  // My status
+  const [myStatus, setMyStatus] = useState<'online' | 'busy' | 'away'>('online')
 
   const wsRef = useRef<WebSocket | null>(null)
   const wsConnectedRef = useRef(false)
@@ -321,6 +371,9 @@ export default function DZChat() {
         alert('تم حظرك من غرفة الدردشة.')
         handleLogout()
       }
+    } else if (data.type === 'readReceipt') {
+      const { msgId, readBy } = data as { msgId: string; readBy: string[] }
+      if (msgId) setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readBy } : m))
     }
   }, [addMessages])
 
@@ -355,6 +408,8 @@ export default function DZChat() {
         gender: user.gender,
         sessionId: user.sessionId,
         adminSecret: user.isAdmin ? (sessionStorage.getItem('dzc_admin_secret') || '') : '',
+        status: 'online',
+        room: currentRoomRef.current,
       }))
     }
 
@@ -564,6 +619,7 @@ export default function DZChat() {
           dmTo: dmTarget?.id || null,
           dmToName: dmTarget?.name || null,
           replyTo: replySnap || undefined,
+          room: dmTarget ? undefined : currentRoomRef.current,
         }))
         if (isDmSend) setDmTarget(null)
       } else {
@@ -864,9 +920,29 @@ export default function DZChat() {
     )
   }
 
+  useEffect(() => { currentRoomRef.current = currentRoom }, [currentRoom])
+
+  // Auto-mark DMs as read when window is focused
+  useEffect(() => {
+    if (!windowFocused || !sessionIdRef.current) return
+    const sid = sessionIdRef.current
+    messages.forEach(m => {
+      if (m.isDM && m.fromId !== sid && m.dmTo === sid && !(m.readBy || []).includes(sid)) {
+        if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'msgRead', msgId: m.id }))
+      }
+    })
+  }, [messages, windowFocused])
+
   const visibleMessages = messages.filter(m => {
     if (m.localDeleted) return false
     if (m.isDM) return m.fromId === sessionIdRef.current || m.dmTo === sessionIdRef.current
+    if (m.isSystem || m.isBroadcast) return true
+    if (m.room && m.room !== currentRoom) return false
+    if (!m.room && currentRoom !== 'عام') return false
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      return (m.text || '').toLowerCase().includes(q) || (m.from || '').toLowerCase().includes(q)
+    }
     return true
   })
 
@@ -909,11 +985,34 @@ export default function DZChat() {
               <User size={15} />
             </button>
           )}
+          <button className="dzc-nav-btn" onClick={() => setShowSearch(p => !p)} title="بحث في الرسائل">
+            <Search size={15} />
+          </button>
           <button className="dzc-nav-btn dzc-nav-btn--logout" onClick={handleLogout} title="خروج">
             <LogOut size={15} /> <span className="dzc-nav-label">خروج</span>
           </button>
         </div>
       </header>
+
+      {/* ===== SEARCH BAR ===== */}
+      {showSearch && (
+        <div className="dzc-search-bar">
+          <Search size={14} className="dzc-search-icon" />
+          <input
+            className="dzc-search-input"
+            type="text"
+            placeholder={`ابحث في #${currentRoom}...`}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            dir="rtl"
+            autoFocus
+          />
+          {searchQuery && (
+            <button className="dzc-search-clear" onClick={() => setSearchQuery('')} title="مسح"><X size={13} /></button>
+          )}
+          <button className="dzc-search-close" onClick={() => { setShowSearch(false); setSearchQuery('') }} title="إغلاق البحث"><X size={14} /></button>
+        </div>
+      )}
 
       <div className="dzc-layout">
 
@@ -924,6 +1023,24 @@ export default function DZChat() {
             <button className="dzc-sidebar-close" onClick={() => setSidebarOpen(false)}><X size={14} /></button>
           </div>
           <div className="dzc-sidebar-count">{onlineCount || onlineUsers.length} متصل</div>
+
+          {/* Status picker for self */}
+          <div className="dzc-my-status-row">
+            {(['online', 'busy', 'away'] as const).map(s => (
+              <button
+                key={s}
+                className={`dzc-status-btn ${myStatus === s ? 'dzc-status-btn--active' : ''}`}
+                onClick={() => {
+                  setMyStatus(s)
+                  if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'setStatus', status: s }))
+                }}
+              >
+                <span className={`dzc-status-dot dzc-status-dot--${s}`} />
+                {s === 'online' ? 'متصل' : s === 'busy' ? 'مشغول' : 'غائب'}
+              </button>
+            ))}
+          </div>
+
           <div className="dzc-users-list">
             {onlineUsers.map(u => (
               <div
@@ -941,6 +1058,7 @@ export default function DZChat() {
                 <span className={`dzc-user-name${u.isAdmin ? ' dzc-user-name--admin' : ''}`}>{u.name}</span>
                 {u.isAdmin && <BadgeCheck size={13} className="dzc-user-verified-badge" aria-label="مشرف موثق" />}
                 {u.id === sessionIdRef.current && <span className="dzc-user-me">(أنت)</span>}
+                <span className={`dzc-status-dot dzc-status-dot--${u.id === sessionIdRef.current ? myStatus : (u.status || 'online')}`} title={u.status === 'busy' ? 'مشغول' : u.status === 'away' ? 'غائب' : 'متصل'} />
                 {localUser.isAdmin && u.id !== sessionIdRef.current && (
                   <ChevronRight size={12} className="dzc-user-arrow" />
                 )}
@@ -988,6 +1106,27 @@ export default function DZChat() {
               <Pin size={10} /> رسالة مثبتة
             </button>
           )}
+
+          {/* ===== ROOM TABS ===== */}
+          <div className="dzc-rooms">
+            {(['عام', 'تقنية', 'ترفيه', 'دعم'] as const).map(room => (
+              <button
+                key={room}
+                className={`dzc-room-tab ${currentRoom === room ? 'dzc-room-tab--active' : ''}`}
+                onClick={() => {
+                  setCurrentRoom(room)
+                  if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify({ type: 'setRoom', room }))
+                }}
+              >
+                <Hash size={11} /> {room}
+              </button>
+            ))}
+            {searchQuery && (
+              <span className="dzc-rooms-search-hint">
+                <Search size={10} /> نتائج "{searchQuery}"
+              </span>
+            )}
+          </div>
 
           {/* Messages */}
           <div className="dzc-messages">
@@ -1089,7 +1228,18 @@ export default function DZChat() {
                       </button>
                     )}
                   </div>
-                  <div className="dzc-msg-text">{msg.text}</div>
+                  <div className="dzc-msg-text">{linkifyText(msg.text)}</div>
+                  {/* Read receipt for own DMs */}
+                  {isMe && msg.isDM && (
+                    <span className={`dzc-read-receipt${(msg.readBy || []).length > 0 ? ' dzc-read-receipt--read' : ''}`} title={(msg.readBy || []).length > 0 ? 'تم القراءة' : 'تم الإرسال'}>
+                      <CheckCheck size={12} />
+                    </span>
+                  )}
+                  {/* Link preview */}
+                  {(() => {
+                    const urls = msg.text.match(URL_RE)
+                    return urls?.length ? <LinkPreview url={urls[0]} /> : null
+                  })()}
                   {/* Reply button — appears on hover */}
                   {!msg.isSystem && !msg.isDeleted && (
                     <button

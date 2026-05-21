@@ -507,7 +507,6 @@ export default function DZChat() {
       sessionStorage.setItem('dzc_admin_secret', pw)
 
       // Always save avatar to localStorage (persists even after logout)
-      const avatarKey = 'dzchat-av-' + trimmedName.toLowerCase()
       const pwKey = 'dzchat-pw-' + trimmedName.toLowerCase()
       if (entrySaveProfile) {
         localStorage.setItem('dzchat-saved-profile', JSON.stringify({ name: trimmedName, gender: entryGender }))

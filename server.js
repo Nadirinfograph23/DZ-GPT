@@ -14546,7 +14546,7 @@ const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen,
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 const bannedIPs = new Set()     // Permanent IP bans
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'dz-admin-nadir'
+const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'openit1979##'
 const MAX_CHAT_MSGS = 200
 
 function chatId() {

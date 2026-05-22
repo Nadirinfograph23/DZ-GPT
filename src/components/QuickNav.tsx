@@ -1,0 +1,118 @@
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  LayoutGrid, Home, Bot, MessageCircle, BookOpen,
+  Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight
+} from 'lucide-react'
+import '../styles/quick-nav.css'
+
+interface NavItem {
+  path: string
+  label: string
+  labelEn: string
+  icon: React.ReactNode
+  color: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { path: '/',           label: 'الرئيسية',     labelEn: 'Home',         icon: <Home size={18} />,         color: '#c8ff00' },
+  { path: '/dz-agent',   label: 'DZ Agent',     labelEn: 'AI Chat',      icon: <Bot size={18} />,          color: '#4ade80' },
+  { path: '/agent',      label: 'Agent V3',     labelEn: 'Multi-Agent',  icon: <Bot size={18} />,          color: '#818cf8' },
+  { path: '/dzchat',     label: 'DZ Chat',      labelEn: 'Live Chat',    icon: <MessageCircle size={18} />, color: '#38bdf8' },
+  { path: '/quran',      label: 'القرآن AI',    labelEn: 'AI Quran',     icon: <BookOpen size={18} />,     color: '#fbbf24' },
+  { path: '/dz-tube',    label: 'DZ Tube',      labelEn: 'Video AI',     icon: <Video size={18} />,        color: '#f87171' },
+  { path: '/stats',      label: 'الإحصائيات',   labelEn: 'Stats',        icon: <BarChart2 size={18} />,    color: '#34d399' },
+  { path: '/tools',      label: 'الأدوات',      labelEn: 'Tools',        icon: <Wrench size={18} />,       color: '#fb923c' },
+  { path: '/web-builder',label: 'Web Builder',  labelEn: 'Site Builder', icon: <Globe size={18} />,        color: '#a78bfa' },
+  { path: '/ocr-dz',     label: 'OCR DZ',       labelEn: 'Text Scanner', icon: <ScanText size={18} />,     color: '#f472b6' },
+]
+
+const HIDE_ON: string[] = []
+
+export default function QuickNav() {
+  const [open, setOpen]       = useState(false)
+  const [visible, setVisible] = useState(false)
+  const navigate    = useNavigate()
+  const { pathname } = useLocation()
+  const drawerRef   = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (HIDE_ON.includes(pathname)) { setVisible(false); return }
+    setVisible(true)
+  }, [pathname])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onClickOut = (e: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    setTimeout(() => document.addEventListener('mousedown', onClickOut), 10)
+    return () => document.removeEventListener('mousedown', onClickOut)
+  }, [open])
+
+  if (!visible) return null
+
+  const go = (path: string) => {
+    setOpen(false)
+    navigate(path)
+  }
+
+  return (
+    <>
+      {open && <div className="qnav-backdrop" onClick={() => setOpen(false)} />}
+
+      <button
+        className={`qnav-fab${open ? ' qnav-fab--open' : ''}`}
+        onClick={() => setOpen(v => !v)}
+        title="قائمة التنقل السريع"
+        aria-label="Quick navigation"
+      >
+        {open ? <X size={20} /> : <LayoutGrid size={20} />}
+      </button>
+
+      <div ref={drawerRef} className={`qnav-drawer${open ? ' qnav-drawer--open' : ''}`}>
+        <div className="qnav-drawer-header">
+          <span className="qnav-drawer-title">تنقل سريع</span>
+          <button className="qnav-drawer-close" onClick={() => setOpen(false)} aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <nav className="qnav-list">
+          {NAV_ITEMS.map(item => {
+            const active = pathname === item.path ||
+              (item.path !== '/' && pathname.startsWith(item.path))
+            return (
+              <button
+                key={item.path}
+                className={`qnav-item${active ? ' qnav-item--active' : ''}`}
+                style={{ '--item-color': item.color } as React.CSSProperties}
+                onClick={() => go(item.path)}
+              >
+                <span className="qnav-item-icon">{item.icon}</span>
+                <span className="qnav-item-text">
+                  <span className="qnav-item-label">{item.label}</span>
+                  <span className="qnav-item-sub">{item.labelEn}</span>
+                </span>
+                {active && <span className="qnav-item-active-dot" />}
+                {!active && <ChevronRight size={14} className="qnav-item-arrow" />}
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="qnav-drawer-footer">
+          <span>DZ-GPT</span>
+          <span className="qnav-version">v5</span>
+        </div>
+      </div>
+    </>
+  )
+}

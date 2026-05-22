@@ -955,8 +955,19 @@
   min-width: 28px; text-align: center;
 }
 
-/* Header actions cluster (history + select-mode toggle) */
+/* Header actions cluster (history + select-mode toggle + nav) */
 .dzt-header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* Navigation to all pages button */
+.dzt-nav-btn {
+  color: rgba(200, 255, 0, 0.75) !important;
+  border-color: rgba(200, 255, 0, 0.2) !important;
+}
+.dzt-nav-btn:hover {
+  color: #c8ff00 !important;
+  border-color: rgba(200, 255, 0, 0.45) !important;
+  background: rgba(200, 255, 0, 0.08) !important;
+}
 .dzt-history-btn.dzt-select-active {
   background: rgba(76, 175, 80, 0.14);
   border-color: rgba(76, 175, 80, 0.5);

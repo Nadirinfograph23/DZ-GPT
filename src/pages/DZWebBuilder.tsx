@@ -370,7 +370,7 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
       )}
 
       {/* ── Body ── */}
-      <div className="dzwb-body">
+      <div className={`dzwb-body${!result && !loading && !errorMsg ? ' dzwb-body--idle' : ''}`}>
 
         {/* ── Left Panel: Config ── */}
         <aside className="dzwb-sidebar">

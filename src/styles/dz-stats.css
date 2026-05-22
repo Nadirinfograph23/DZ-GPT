@@ -27,6 +27,7 @@
   flex-shrink: 0;
 }
 .dzs-back:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.dzs-back--home:hover { color: #c8ff00; border-color: rgba(200,255,0,0.25); background: rgba(200,255,0,0.06); }
 .dzs-title { font-size: 22px; font-weight: 800; background: linear-gradient(135deg,#c8ff00,#00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .dzs-subtitle { font-size: 13px; color: #555; margin-top: 2px; }
 

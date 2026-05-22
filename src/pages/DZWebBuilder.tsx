@@ -320,7 +320,7 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
             onClick={showCloneBar ? closeCloneBar : openCloneBar}
             title="استنسخ أي موقع من رابطه"
           >
-            🔗 استنسخ موقعاً
+            🔗 <span className="dzwb-clone-btn-text">استنسخ موقعاً</span>
           </button>
           {result && (
             <>

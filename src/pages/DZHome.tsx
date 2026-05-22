@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, X, Download, Share, Plus } from 'lucide-react'
+import { ShieldCheck, X } from 'lucide-react'
 import PwaInstallBanner from '../PwaInstallBanner'
 import '../styles/dz-home.css'
 

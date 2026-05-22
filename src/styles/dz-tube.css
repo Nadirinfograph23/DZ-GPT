@@ -1145,20 +1145,186 @@ body.dz-mini-active .dzt-batch-bar { bottom: 110px; }
 }
 .dzt-bgtip-ok:hover { opacity: 0.88; }
 
-/* Mobile */
+/* ═══════════════════════════════════════════════
+   Mobile — Tablet (≤ 720px)
+   ═══════════════════════════════════════════════ */
 @media (max-width: 720px) {
-  .dzt-header { padding: 11px 14px; }
+  /* Header */
+  .dzt-header { padding: 10px 14px; }
   .dzt-history-label { display: none; }
-  .dzt-search-bar { padding: 10px 14px 8px; top: 60px; }
-  .dzt-search-input { font-size: 14px; }
+  .dzt-logo-sub { display: none; }
+
+  /* Search */
+  .dzt-search-bar { padding: 10px 14px 8px; top: 57px; }
+  .dzt-search-input { font-size: 16px; } /* prevent iOS auto-zoom */
   .dzt-search-btn span { display: none; }
   .dzt-search-btn { padding: 9px 11px; }
+
+  /* Categories */
   .dzt-categories { padding: 4px 14px 12px; gap: 6px; }
-  .dzt-cat { padding: 6px 11px; font-size: 12px; }
-  .dzt-main { padding: 10px 14px 80px; }
+  .dzt-cat { padding: 6px 10px; font-size: 12px; }
+
+  /* Main content */
+  .dzt-main { padding: 10px 14px 100px; }
+  body.dz-mini-active .dzt-main { padding-bottom: 180px; }
+
+  /* Welcome */
+  .dzt-welcome { gap: 20px; padding: 16px 0 12px; }
   .dzt-welcome-title { font-size: 32px; }
   .dzt-welcome-sub { font-size: 13.5px; }
+
+  /* Results */
   .dzt-results-grid, .dzt-skeleton-grid { grid-template-columns: 1fr; gap: 14px; }
   .dzt-card-title { font-size: 13.5px; }
+
+  /* Favorites grid — 2 cols on tablet */
+  .dzt-fav-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+
+  /* History panel — full width */
   .dzt-history-panel { width: 100%; max-width: 100%; }
+
+  /* Toast — lift above mini-player */
+  body.dz-mini-active .dzt-toast { bottom: 112px; }
+  body.dz-mini-active .dzt-batch-bar { bottom: 112px; }
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile — Phone (≤ 480px)
+   ═══════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  /* Header — compact */
+  .dzt-header { padding: 8px 12px; gap: 8px; }
+  .dzt-back-btn span { display: none; }
+  .dzt-back-btn { padding: 7px 10px; }
+  .dzt-logo-badge { width: 30px; height: 30px; border-radius: 8px; }
+  .dzt-logo-title { font-size: 15px; }
+  .dzt-history-btn { padding: 6px 9px; }
+
+  /* Search */
+  .dzt-search-bar { padding: 8px 12px 6px; top: 54px; }
+  .dzt-search-wrap { padding: 4px 4px 4px 10px; border-radius: 12px; }
+  .dzt-search-input { padding: 8px 4px; font-size: 16px; }
+  .dzt-search-btn { padding: 8px 10px; border-radius: 9px; }
+
+  /* Categories */
+  .dzt-categories { padding: 4px 12px 10px; gap: 6px; }
+  .dzt-cat { padding: 6px 10px; font-size: 11.5px; gap: 4px; }
+
+  /* Main */
+  .dzt-main { padding: 8px 12px 100px; }
+
+  /* Welcome */
+  .dzt-welcome { gap: 16px; padding: 12px 0 8px; }
+  .dzt-welcome-hero { padding: 20px 8px; }
+  .dzt-welcome-title { font-size: 26px; letter-spacing: -0.3px; }
+  .dzt-welcome-sub { font-size: 13px; }
+  .dzt-welcome-credit { font-size: 12px; }
+
+  /* Quick suggestions — scrollable row instead of wrapping */
+  .dzt-suggestions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 7px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .dzt-suggestions::-webkit-scrollbar { display: none; }
+  .dzt-suggestion { white-space: nowrap; flex-shrink: 0; font-size: 12.5px; padding: 8px 12px; }
+
+  /* Card */
+  .dzt-card-body { padding: 10px 12px 12px; gap: 6px; }
+  .dzt-card-title { font-size: 13px; min-height: 2.6em; }
+  .dzt-card-meta { font-size: 11.5px; }
+
+  /* Card actions — 2-row layout:
+     Row 1: Play (full width)
+     Row 2: Icon buttons evenly spaced */
+  .dzt-card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .dzt-act-play {
+    width: 100%;
+    justify-content: center;
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+  /* Icon buttons row */
+  .dzt-card-actions > .dzt-act:not(.dzt-act-play),
+  .dzt-card-actions > .dzt-act-dl-wrap {
+    display: none; /* hidden — shown in the secondary row below */
+  }
+  .dzt-card-actions::after { display: none; }
+
+  /* Re-show icon buttons in a flex sub-row via a wrapper trick —
+     We target them directly since the play button is first */
+  .dzt-act-bg, .dzt-act-q,
+  .dzt-act-fav, .dzt-act-mp3,
+  .dzt-act-dl-wrap {
+    display: inline-flex !important;
+  }
+  .dzt-card-actions {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  /* Play button spans full width (first child) */
+  .dzt-act-play { grid-column: 1 / -1; }
+
+  /* All non-play actions go into a flex row */
+  .dzt-act-bg, .dzt-act-q,
+  .dzt-act-fav, .dzt-act-mp3,
+  .dzt-act-dl-wrap {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 7px 4px;
+  }
+  .dzt-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .dzt-act-play {
+    flex: 0 0 100%;
+    order: -1;
+  }
+
+  /* Results header */
+  .dzt-results-header { margin: 4px 0 12px; }
+  .dzt-results-header h2 { font-size: 14px; }
+
+  /* Favorites */
+  .dzt-fav-section { padding: 14px 12px 16px; margin: 16px 0 12px; }
+  .dzt-fav-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .dzt-fav-card-title { font-size: 11.5px; }
+
+  /* Download modal */
+  .dzt-dl-modal-root { padding: 8px; align-items: flex-end; }
+  .dzt-dl-modal-card { border-radius: 16px 16px 12px 12px; max-width: 100%; }
+  .dzt-dl-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .dzt-dl-tile { padding: 10px 6px; }
+
+  /* Toast */
+  .dzt-toast { font-size: 13px; padding: 9px 14px; bottom: 20px; }
+  body.dz-mini-active .dzt-toast { bottom: 108px; }
+
+  /* Batch bar */
+  body.dz-mini-active .dzt-batch-bar { bottom: 108px; }
+}
+
+/* ═══════════════════════════════════════════════
+   Mobile — Small Phone (≤ 360px)
+   ═══════════════════════════════════════════════ */
+@media (max-width: 360px) {
+  .dzt-header { padding: 7px 10px; }
+  .dzt-logo-badge { width: 28px; height: 28px; }
+  .dzt-logo-title { font-size: 14px; }
+  .dzt-search-bar { padding: 7px 10px 5px; }
+  .dzt-main { padding: 6px 10px 100px; }
+  .dzt-welcome-title { font-size: 22px; }
+  .dzt-cat { padding: 5px 8px; font-size: 11px; }
+  .dzt-act-play { padding: 8px 10px; font-size: 12.5px; }
+  .dzt-fav-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
 }

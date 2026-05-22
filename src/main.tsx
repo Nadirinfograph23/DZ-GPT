@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import './index.css'
 import './styles/mini-player.css'
 import App from './App.tsx'
+import DZHome from './pages/DZHome.tsx'
 import DZAgent from './pages/DZAgent.tsx'
 import DZAgentV3 from './pages/DZAgentV3.tsx'
 import AIQuran from './pages/AIQuran.tsx'
@@ -54,7 +55,8 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <MiniPlayerProvider>
           <Routes>
-            <Route path="/" element={<App />} />
+            <Route path="/" element={<DZHome />} />
+            <Route path="/chat" element={<App />} />
             <Route path="/dz-agent" element={<DZAgent />} />
             <Route path="/agent" element={<DZAgentV3 />} />
             <Route path="/quran" element={<AIQuran />} />

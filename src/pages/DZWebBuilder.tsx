@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import '../styles/dz-web-builder.css'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -69,7 +69,6 @@ const EXAMPLES = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function DZWebBuilder() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const [prompt, setPrompt]               = useState('')

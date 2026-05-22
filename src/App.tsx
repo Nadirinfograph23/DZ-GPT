@@ -1527,12 +1527,6 @@ function App() {
       {/* Breaking News Banner — source-tagged only */}
       <BreakingNewsBanner />
 
-      {/* PWA Install Banner */}
-      <PwaInstallBanner />
-
-      {/* Privacy Toast */}
-      <PrivacyToast />
-
     </div>
   )
 }

@@ -82,8 +82,35 @@ export default function DZWebBuilder() {
   const [statusText, setStatusText]       = useState('')
   const [errorMsg, setErrorMsg]           = useState('')
   const [cloneUrl, setCloneUrl]           = useState('')
+  const [showCloneBar, setShowCloneBar]   = useState(false)
+  const [cloneInputVal, setCloneInputVal] = useState('')
+  const cloneInputRef = useRef<HTMLInputElement>(null)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // ── Open/close clone bar ───────────────────────────────────────────────────
+  const openCloneBar = () => {
+    setShowCloneBar(true)
+    setTimeout(() => cloneInputRef.current?.focus(), 80)
+  }
+
+  const closeCloneBar = () => {
+    setShowCloneBar(false)
+    setCloneInputVal('')
+  }
+
+  const submitClone = () => {
+    const url = cloneInputVal.trim()
+    if (!url) return
+    closeCloneBar()
+    setCloneUrl(url)
+    triggerCloneFromUrl(url)
+  }
+
+  const handleCloneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') submitClone()
+    if (e.key === 'Escape') closeCloneBar()
+  }
 
   // ── Auto-clone from URL param (?clone=https://...) ────────────────────────
   useEffect(() => {
@@ -287,17 +314,51 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           <span className="dzwb-badge dzwb-badge--amber">Aceternity</span>
         </div>
 
-        {result && (
-          <div className="dzwb-header-actions">
-            <button className="dzwb-action-btn" onClick={copyCode} title="نسخ الكود">
-              📋 نسخ
-            </button>
-            <button className="dzwb-action-btn dzwb-action-btn--primary" onClick={downloadHtml}>
-              ⬇ تحميل HTML
-            </button>
-          </div>
-        )}
+        <div className="dzwb-header-actions">
+          <button
+            className={`dzwb-action-btn dzwb-action-btn--clone ${showCloneBar ? 'dzwb-action-btn--clone-active' : ''}`}
+            onClick={showCloneBar ? closeCloneBar : openCloneBar}
+            title="استنسخ أي موقع من رابطه"
+          >
+            🔗 استنسخ موقعاً
+          </button>
+          {result && (
+            <>
+              <button className="dzwb-action-btn" onClick={copyCode} title="نسخ الكود">
+                📋 نسخ
+              </button>
+              <button className="dzwb-action-btn dzwb-action-btn--primary" onClick={downloadHtml}>
+                ⬇ تحميل HTML
+              </button>
+            </>
+          )}
+        </div>
       </header>
+
+      {/* ── Clone Bar ── */}
+      {showCloneBar && (
+        <div className="dzwb-clone-bar">
+          <span className="dzwb-clone-bar-icon">🔗</span>
+          <input
+            ref={cloneInputRef}
+            className="dzwb-clone-input"
+            type="url"
+            placeholder="https://stripe.com أو أي موقع تريد استنساخه…"
+            value={cloneInputVal}
+            onChange={e => setCloneInputVal(e.target.value)}
+            onKeyDown={handleCloneKeyDown}
+            dir="ltr"
+          />
+          <button
+            className="dzwb-clone-submit"
+            onClick={submitClone}
+            disabled={!cloneInputVal.trim() || loading}
+          >
+            ⚡ استنسخ الآن
+          </button>
+          <button className="dzwb-clone-close" onClick={closeCloneBar} title="إغلاق">✕</button>
+        </div>
+      )}
 
       {/* ── Clone URL Banner ── */}
       {cloneUrl && (

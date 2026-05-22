@@ -18,24 +18,22 @@
 .dzwb-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: rgba(5,5,16,0.95);
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(5,5,16,0.97);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(24px);
   position: sticky;
   top: 0;
   z-index: 100;
   flex-shrink: 0;
-  overflow: hidden;
-  min-width: 0;
 }
 
 .dzwb-back {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   color: #666;
-  padding: 7px 14px;
+  padding: 7px 12px;
   border-radius: 8px;
   font-size: 12px;
   cursor: pointer;
@@ -48,25 +46,25 @@
 .dzwb-logo-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .dzwb-logo {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  box-shadow: 0 0 24px rgba(99,102,241,0.35);
+  font-size: 18px;
+  box-shadow: 0 0 20px rgba(99,102,241,0.35);
   flex-shrink: 0;
 }
 
 .dzwb-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   background: linear-gradient(135deg, #a5b4fc, #c4b5fd, #67e8f9);
   -webkit-background-clip: text;
@@ -74,22 +72,24 @@
   background-clip: text;
   margin: 0;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .dzwb-subtitle {
   font-size: 10px;
-  color: #555;
+  color: #666;
   margin: 0;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 .dzwb-header-badges {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex: 1 1 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
   overflow: hidden;
 }
@@ -100,6 +100,8 @@
   padding: 3px 8px;
   border-radius: 20px;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .dzwb-badge--green  { background: rgba(52,211,153,0.1);  color: #34d399; border: 1px solid rgba(52,211,153,0.2); }
 .dzwb-badge--purple { background: rgba(139,92,246,0.1);  color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); }
@@ -109,8 +111,9 @@
 .dzwb-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
+  margin-right: auto;
 }
 
 .dzwb-action-btn {
@@ -699,3 +702,96 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
   transition: all 0.18s;
 }
 .dzwb-error-retry:hover { background: rgba(248,113,113,0.2); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE — max-width: 640px
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  /* ── Header: صف واحد — زر رجوع + لوغو + أزرار الإجراءات ── */
+  .dzwb-header {
+    padding: 8px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  /* إخفاء الـ badges على الموبايل لتوفير المساحة */
+  .dzwb-header-badges { display: none; }
+
+  .dzwb-back {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .dzwb-logo { width: 30px; height: 30px; font-size: 15px; border-radius: 8px; }
+  .dzwb-title { font-size: 13px; }
+  .dzwb-subtitle { font-size: 9px; }
+
+  /* أزرار الهيدر: نص مختصر */
+  .dzwb-action-btn { padding: 6px 10px; font-size: 11px; }
+  .dzwb-clone-btn-text { display: none; }
+  .dzwb-header-actions { gap: 4px; margin-right: 0; }
+
+  /* ── Config: عمود واحد ── */
+  .dzwb-config-grid { grid-template-columns: 1fr; }
+  .dzwb-config-card { padding: 14px 14px; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .dzwb-config-card:last-child { border-bottom: none; }
+
+  /* أنواع المواقع: 5 في صف — تصغير */
+  .dzwb-type-grid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .dzwb-type-btn { padding: 7px 2px 5px; }
+  .dzwb-type-icon { font-size: 16px; }
+  .dzwb-type-label { font-size: 7.5px; }
+
+  /* الأنماط: 3 في صف */
+  .dzwb-style-grid { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+
+  /* ── زر البناء ── */
+  .dzwb-generate-wrap {
+    padding: 12px 14px;
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    background: rgba(5,5,16,0.97);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(16px);
+  }
+  .dzwb-generate {
+    padding: 14px 16px;
+    font-size: 14px;
+    border-radius: 12px;
+  }
+
+  /* Mini Player active — رفع الزر */
+  body.dz-mini-active .dzwb-generate-wrap { bottom: 72px; }
+  body.dz-mini-active .dzwb-scroll-body { padding-bottom: 160px; }
+
+  /* ── Tabs المعاينة ── */
+  .dzwb-tabs { padding: 8px 12px; gap: 2px; overflow-x: auto; }
+  .dzwb-tab { padding: 6px 12px; font-size: 11px; }
+  .dzwb-tabs-meta { display: none; }
+
+  /* ── Iframe ── */
+  .dzwb-iframe-wrap { height: 450px; }
+
+  /* ── Clone Bar ── */
+  .dzwb-clone-bar { padding: 8px 12px; gap: 6px; }
+  .dzwb-clone-bar-icon { display: none; }
+  .dzwb-clone-submit { padding: 7px 12px; font-size: 11px; }
+
+  /* ── Section titles ── */
+  .dzwb-section-title { font-size: 10px; }
+
+  /* ── Building / Error ── */
+  .dzwb-building { padding: 40px 20px; }
+  .dzwb-building-steps { width: 100%; }
+  .dzwb-error { padding: 40px 20px; }
+}
+
+/* ── Tablet 641–900px ─────────────────────────────────────────── */
+@media (min-width: 641px) and (max-width: 900px) {
+  .dzwb-config-grid { grid-template-columns: 1fr 1fr; }
+  .dzwb-header-badges .dzwb-badge--amber,
+  .dzwb-header-badges .dzwb-badge--blue { display: none; }
+  .dzwb-generate-wrap { padding: 14px 18px; }
+}

@@ -1,11 +1,20 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video, Globe } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
 
 type Lang = 'ar' | 'en' | 'fr'
+
+const THEMES = [
+  { id: 'teal',   label: 'أخضر',    bg: 'linear-gradient(135deg,#10a37f,#0d9268)' },
+  { id: 'gray',   label: 'رمادي',   bg: 'linear-gradient(135deg,#94a3b8,#64748b)' },
+  { id: 'indigo', label: 'بنفسجي',  bg: 'linear-gradient(135deg,#818cf8,#6366f1)' },
+  { id: 'rose',   label: 'وردي',    bg: 'linear-gradient(135deg,#fb7185,#f43f5e)' },
+  { id: 'amber',  label: 'ذهبي',    bg: 'linear-gradient(135deg,#fbbf24,#f59e0b)' },
+  { id: 'sky',    label: 'سماوي',   bg: 'linear-gradient(135deg,#38bdf8,#0ea5e9)' },
+] as const
+type Theme = typeof THEMES[number]['id']
 
 interface DZChat {
   id: string
@@ -30,8 +39,6 @@ function generateId(): string {
 }
 
 export default function DZAgent() {
-  const navigate = useNavigate()
-
   const [chats, setChats] = useState<DZChat[]>(() => {
     try {
       const saved = localStorage.getItem('dz-agent-chats')
@@ -47,8 +54,11 @@ export default function DZAgent() {
     return (localStorage.getItem('dz-agent-lang') as Lang) || 'ar'
   })
 
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem('dza-theme') as Theme) || 'teal'
+  })
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [navDropdownOpen, setNavDropdownOpen] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('dz-agent-chats', JSON.stringify(chats))
@@ -62,6 +72,10 @@ export default function DZAgent() {
   useEffect(() => {
     localStorage.setItem('dz-agent-lang', language)
   }, [language])
+
+  useEffect(() => {
+    localStorage.setItem('dza-theme', theme)
+  }, [theme])
 
   const createNewChat = useCallback(() => {
     const chat: DZChat = { id: generateId(), title: LABELS[language].newChat, createdAt: Date.now() }
@@ -84,7 +98,7 @@ export default function DZAgent() {
   const labels = LABELS[language]
 
   return (
-    <div className="dza-layout">
+    <div className="dza-layout" data-theme={theme}>
       {/* ===== SIDEBAR ===== */}
       <div className={`dza-sidebar ${sidebarOpen ? 'dza-sidebar--open' : ''}`}>
         <div className="dza-sidebar-header">
@@ -117,35 +131,22 @@ export default function DZAgent() {
           ))}
         </div>
 
-        {/* Navigation Dropdown — excludes current page (DZ Agent) */}
-        <div className="sidebar-nav-dropdown">
-          <button
-            className="sidebar-nav-trigger"
-            onClick={() => setNavDropdownOpen(p => !p)}
-          >
-            <span>التنقل</span>
-            <ChevronDown size={14} className={`sidebar-nav-chevron ${navDropdownOpen ? 'sidebar-nav-chevron--open' : ''}`} />
-          </button>
-          {navDropdownOpen && (
-            <div className="sidebar-nav-menu">
-              <button className="sidebar-nav-item" onClick={() => { navigate('/quran'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <BookOpen size={14} />
-                <span>القرآن الكريم</span>
+        {/* ===== THEME PICKER ===== */}
+        <div className="dza-theme-section">
+          <span className="dza-theme-section-label">الثيمات</span>
+          <div className="dza-theme-grid">
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                className={`dza-theme-swatch${theme === t.id ? ' dza-theme-swatch--active' : ''}`}
+                onClick={() => setTheme(t.id)}
+                title={t.label}
+              >
+                <div className="dza-theme-color" style={{ background: t.bg }} />
+                <span className="dza-theme-name">{t.label}</span>
               </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/dzchat'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <MessageCircle size={14} />
-                <span>DZ CHAT</span>
-              </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/dz-tube'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <Video size={14} />
-                <span>DZ Tube</span>
-              </button>
-              <button className="sidebar-nav-item" onClick={() => { navigate('/web-builder'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
-                <Globe size={14} />
-                <span>Web Builder</span>
-              </button>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
         <button className="dza-new-chat-btn" onClick={createNewChat}>

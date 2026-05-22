@@ -26,7 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/ocr-dz',     label: 'OCR DZ',       labelEn: 'Text Scanner', icon: <ScanText size={18} />,     color: '#f472b6' },
 ]
 
-const HIDE_ON: string[] = []
+const HIDE_ON: string[] = ['/dz-tube']
 
 export default function QuickNav() {
   const [open, setOpen]       = useState(false)

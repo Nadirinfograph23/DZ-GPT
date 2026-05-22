@@ -38,6 +38,16 @@
   white-space: nowrap;
 }
 .v5-header-back:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.v5-header-back--icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #888;
+}
+.v5-header-back--icon:hover { color: #c8ff00; border-color: rgba(200,255,0,0.25); background: rgba(200,255,0,0.06); }
 
 .v5-logo {
   width: 36px;

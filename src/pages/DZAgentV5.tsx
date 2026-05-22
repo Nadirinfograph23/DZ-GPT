@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Home } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import '../styles/dz-agent-v5.css'
@@ -353,7 +354,9 @@ export default function DZAgentV5() {
     <div className="v5">
       {/* Header */}
       <div className="v5-header">
-        <button className="v5-header-back" onClick={() => navigate('/')}>← Back</button>
+        <button className="v5-header-back v5-header-back--icon" onClick={() => navigate('/')} title="الصفحة الرئيسية">
+          <Home size={16} />
+        </button>
         <div className="v5-logo">🤖</div>
         <div className="v5-header-info">
           <h1>DZ Agent V5</h1>

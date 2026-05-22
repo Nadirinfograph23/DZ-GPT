@@ -1,6 +1,6 @@
 import { StrictMode, Component, ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 import './styles/mini-player.css'
 import App from './App.tsx'
@@ -14,6 +14,14 @@ import DZTools from './pages/DZTools.tsx'
 import DZWebBuilder from './pages/DZWebBuilder.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
+
+const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
+
+function ConditionalMiniPlayer() {
+  const { pathname } = useLocation()
+  if (HIDE_MINIPLAYER_ROUTES.includes(pathname)) return null
+  return <MiniPlayer />
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -59,7 +67,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/web-builder" element={<DZWebBuilder />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          <MiniPlayer />
+          <ConditionalMiniPlayer />
         </MiniPlayerProvider>
       </BrowserRouter>
     </ErrorBoundary>

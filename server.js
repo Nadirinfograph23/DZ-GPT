@@ -17899,6 +17899,7 @@ function setupChatWebSocket(httpServer) {
           if (data.action === 'delete' && data.msgId) {
             const m = chatMessages.find(m => m.id === data.msgId)
             if (m) m.isDeleted = true
+            await dbDeleteMsg(data.msgId)
             broadcastChat({ type: 'delete', msgId: data.msgId })
           } else if (data.action === 'block' && data.targetId) {
             const target = chatSessions.get(data.targetId)
@@ -17934,11 +17935,20 @@ function setupChatWebSocket(httpServer) {
             const m = chatMessages.find(m => m.id === data.msgId)
             if (m) {
               pinnedMessage = { id: m.id, text: m.text, from: m.from, timestamp: m.timestamp }
+              await dbSetPinned(pinnedMessage)
               broadcastChat({ type: 'pinUpdate', pinnedMessage })
             }
           } else if (data.action === 'unpin') {
             pinnedMessage = null
+            await dbSetPinned(null)
             broadcastChat({ type: 'pinUpdate', pinnedMessage: null })
+          } else if (data.action === 'broadcast' && data.text) {
+            const broadcastMsg = pushChatMsg({
+              id: chatId(), from: session.name, fromId: session.id,
+              gender: session.gender, text: String(data.text).slice(0, 500),
+              timestamp: Date.now(), isAdmin: true, isBroadcast: true,
+            })
+            broadcastChat({ type: 'message', msg: broadcastMsg })
           }
         }
       } catch (err) { console.error('[WS:Chat]', err.message) }

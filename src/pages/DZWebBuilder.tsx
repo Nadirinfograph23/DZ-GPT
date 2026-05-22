@@ -139,7 +139,7 @@ export default function DZWebBuilder() {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: cloneMsg, conversationId: `wb-clone-${Date.now()}`, lang: 'ar' }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: cloneMsg }], lang: 'ar' }),
       })
       clearInterval(stInt)
       if (!res.ok) throw new Error(`Server error ${res.status}`)
@@ -196,7 +196,7 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: buildSitePrompt(), conversationId: `wb-${Date.now()}`, lang: 'ar' }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: buildSitePrompt() }], lang: 'ar' }),
       })
       clearInterval(stInt)
       if (!res.ok) throw new Error(`Server error ${res.status}`)

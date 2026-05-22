@@ -221,9 +221,13 @@
   gap: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.3) transparent;
+  padding-bottom: 16px;
 }
 .dzwb-scroll-body::-webkit-scrollbar { width: 5px; }
 .dzwb-scroll-body::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 4px; }
+
+/* When Mini Player is active — lift bottom padding so button stays visible */
+body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
 
 /* ── Config Grid (3 horizontal cards) ─────────────────────────── */
 .dzwb-config-grid {

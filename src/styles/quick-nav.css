@@ -20,8 +20,9 @@
 /* ── FAB Button ───────────────────────────────── */
 .qnav-fab {
   position: fixed;
-  bottom: 80px;
-  left: 24px;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
   width: 48px;
   height: 48px;
   border-radius: 14px;
@@ -33,29 +34,30 @@
   display: grid;
   place-items: center;
   z-index: 9999;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              border-color 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.04);
 }
 .qnav-fab:hover {
   color: #c8ff00;
   border-color: rgba(200, 255, 0, 0.4);
   background: rgba(14, 14, 22, 0.98);
-  transform: scale(1.07);
   box-shadow: 0 6px 28px rgba(200, 255, 0, 0.15), 0 0 0 1px rgba(255,255,255,0.06);
 }
 .qnav-fab--open {
   color: #c8ff00;
   border-color: rgba(200, 255, 0, 0.45);
-  transform: rotate(90deg);
 }
 
 /* ── Drawer ───────────────────────────────────── */
 .qnav-drawer {
   position: fixed;
-  bottom: 140px;
-  left: 16px;
+  top: 50%;
+  right: 76px;
   width: 270px;
-  max-height: calc(100vh - 120px);
+  max-height: min(520px, calc(100vh - 40px));
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(10, 10, 18, 0.97);
@@ -65,14 +67,14 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transform: translateY(16px) scale(0.95);
+  transform: translateY(-50%) translateX(12px) scale(0.95);
   opacity: 0;
   pointer-events: none;
   transition: transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1), opacity 0.18s ease;
-  transform-origin: bottom left;
+  transform-origin: right center;
 }
 .qnav-drawer--open {
-  transform: translateY(0) scale(1);
+  transform: translateY(-50%) translateX(0) scale(1);
   opacity: 1;
   pointer-events: all;
 }
@@ -238,17 +240,23 @@
 
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 480px) {
-  .qnav-drawer {
-    left: 12px;
-    right: 12px;
-    width: auto;
-    bottom: 80px;
-    border-radius: 16px;
-  }
   .qnav-fab {
-    bottom: 20px;
-    left: 16px;
+    top: 50%;
+    right: 10px;
     width: 44px;
     height: 44px;
+    transform: translateY(-50%);
+  }
+  .qnav-drawer {
+    top: 50%;
+    right: 64px;
+    left: 12px;
+    width: auto;
+    max-height: min(480px, calc(100vh - 40px));
+    border-radius: 16px;
+    transform: translateY(-50%) translateX(12px) scale(0.95);
+  }
+  .qnav-drawer--open {
+    transform: translateY(-50%) translateX(0) scale(1);
   }
 }

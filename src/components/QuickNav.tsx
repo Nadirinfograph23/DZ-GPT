@@ -17,7 +17,6 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { path: '/',           label: 'الرئيسية',     labelEn: 'Home',         icon: <Home size={18} />,         color: '#c8ff00' },
   { path: '/dz-agent',   label: 'DZ Agent',     labelEn: 'AI Chat',      icon: <Bot size={18} />,          color: '#4ade80' },
-  { path: '/agent',      label: 'Agent V3',     labelEn: 'Multi-Agent',  icon: <Bot size={18} />,          color: '#818cf8' },
   { path: '/dzchat',     label: 'DZ Chat',      labelEn: 'Live Chat',    icon: <MessageCircle size={18} />, color: '#38bdf8' },
   { path: '/quran',      label: 'القرآن AI',    labelEn: 'AI Quran',     icon: <BookOpen size={18} />,     color: '#fbbf24' },
   { path: '/dz-tube',    label: 'DZ Tube',      labelEn: 'Video AI',     icon: <Video size={18} />,        color: '#f87171' },

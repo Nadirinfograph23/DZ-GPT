@@ -126,7 +126,7 @@ const SECTIONS = [
     id: 'ocr-dz',
     label: 'OCR DZ',
     sublabel: 'استخراج النصوص',
-    path: '/chat',
+    path: '/ocr-dz',
     gradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
     bgGlow: 'rgba(16,185,129,0.18)',
     icon: (

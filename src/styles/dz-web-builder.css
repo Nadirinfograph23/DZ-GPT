@@ -135,6 +135,7 @@
 .dzwb-body {
   display: grid;
   grid-template-columns: 360px 1fr;
+  grid-template-rows: 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -162,8 +163,9 @@
 /* ── Sections ──────────────────────────────────────────────────── */
 .dzwb-section {
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
-.dzwb-section--grow { flex: 1; }
+.dzwb-section--grow { flex: 1 0 auto; }
 
 .dzwb-section-title {
   font-size: 11px;
@@ -438,6 +440,38 @@
   position: relative;
   display: flex;
   align-items: stretch;
+}
+
+/* ── Idle Placeholder ──────────────────────────────────────────── */
+.dzwb-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  text-align: center;
+  padding: 40px 24px;
+  color: rgba(255,255,255,0.15);
+}
+.dzwb-idle-icon {
+  font-size: 48px;
+  opacity: 0.2;
+  filter: grayscale(1);
+}
+.dzwb-idle-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.18);
+  margin: 0;
+}
+.dzwb-idle-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.1);
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.6;
+  direction: rtl;
 }
 
 /* ── Iframe ────────────────────────────────────────────────────── */

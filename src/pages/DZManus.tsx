@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Home } from 'lucide-react'
 
 interface AgentDef { id: string; name: string; role: string; icon: string; status: string }
 interface StepEvent {
@@ -181,6 +183,7 @@ function StepCard({ event }: { event: StepEvent }) {
 }
 
 export default function DZManus() {
+  const navigate = useNavigate()
   const [goal, setGoal]       = useState('')
   const [taskId, setTaskId]   = useState<string | null>(null)
   const [status, setStatus]   = useState<string>('idle')
@@ -478,7 +481,10 @@ export default function DZManus() {
             <p className="text-xs text-white/30">مستوحى من: Manus • Devin • OpenHands • Jarvis</p>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/dz-agent" className="text-xs text-white/30 hover:text-white/60 transition-colors">← DZ Agent</a>
+            <button onClick={() => navigate('/')} title="الصفحة الرئيسية"
+              className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/40 hover:text-lime-300 hover:border-lime-400/30 hover:bg-lime-400/8 transition-all flex items-center justify-center flex-shrink-0">
+              <Home size={14} />
+            </button>
             {taskId && (status === 'running' || status === 'queued' || status === 'planning') && (
               <button onClick={cancelCurrentTask}
                 className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-xs hover:bg-red-500/30 transition-colors">

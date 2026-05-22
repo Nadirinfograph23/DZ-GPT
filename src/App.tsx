@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ShieldCheck, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen, Video } from 'lucide-react'
+import { Send, Bot, Sparkles, Plus, Trash2, Menu, X, MessageSquare, Copy, Check, RotateCcw, ChevronDown, FileText, Upload, X as XIcon, CheckCircle, Search, ImageIcon, Loader2, Wand2, MessageCircle, BookOpen, Video } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import * as pdfjsLib from 'pdfjs-dist'
 import Tesseract from 'tesseract.js'
-import PwaInstallBanner from './PwaInstallBanner'
 import { DeveloperCard } from './components/DeveloperCard'
 import BreakingNewsBanner from './components/BreakingNewsBanner'
 import './App.css'
@@ -186,36 +185,6 @@ function CodeBlock({ children, className }: { children: React.ReactNode; classNa
   )
 }
 
-// ===== PRIVACY TOAST =====
-function PrivacyToast() {
-  const [visible, setVisible] = useState(false)
-  const [hiding, setHiding] = useState(false)
-
-  useEffect(() => {
-    const show = setTimeout(() => setVisible(true), 2200)
-    const hide = setTimeout(() => startHide(), 8000)
-    return () => { clearTimeout(show); clearTimeout(hide) }
-  }, [])
-
-  const startHide = () => {
-    setHiding(true)
-    setTimeout(() => setVisible(false), 400)
-  }
-
-  if (!visible) return null
-
-  return (
-    <div className={`privacy-toast${hiding ? ' privacy-toast--hiding' : ''}`}>
-      <ShieldCheck size={18} className="privacy-toast-icon" />
-      <p className="privacy-toast-text">
-        محادثاتك محفوظة <strong>محليًا على جهازك فقط</strong> — لا يتم رفعها إلى أي خادم. يمكنك حذفها في أي وقت.
-      </p>
-      <button className="privacy-toast-close" onClick={startHide} aria-label="إغلاق">
-        <X size={14} />
-      </button>
-    </div>
-  )
-}
 
 // ===== DEVELOPER QUERY DETECTION =====
 const DEVELOPER_KEYWORDS = [

@@ -459,6 +459,14 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           {/* Content */}
           <div className="dzwb-preview-body">
 
+            {/* Idle placeholder */}
+            {!loading && !result && !errorMsg && (
+              <div className="dzwb-idle">
+                <div className="dzwb-idle-icon">🌐</div>
+                <p className="dzwb-idle-title">المعاينة ستظهر هنا</p>
+                <p className="dzwb-idle-sub">اختر نوع الموقع والنمط المرئي ثم اضغط «ابنِ الموقع الآن»</p>
+              </div>
+            )}
 
             {/* Loading */}
             {loading && (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Home } from 'lucide-react'
 
 type AgentEvent = {
   taskId: string
@@ -143,7 +144,9 @@ export default function DZAgentV3() {
   return (
     <div style={S.page}>
       <header style={S.header}>
-        <button onClick={() => navigate('/')} style={S.back}>← Home</button>
+        <button onClick={() => navigate('/')} style={S.homeBtn} title="الصفحة الرئيسية">
+          <Home size={16} />
+        </button>
         <div>
           <div style={S.brand}>DZ Agent V3</div>
           <div style={S.tagline}>Autonomous multi-agent · Web app generator · Live task streaming</div>
@@ -413,6 +416,7 @@ const S: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', background: '#0b1120', color: '#e2e8f0', fontFamily: 'system-ui, -apple-system, sans-serif' },
   header: { display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', borderBottom: '1px solid #1e293b', flexWrap: 'wrap' },
   back: { background: 'transparent', color: '#94a3b8', border: '1px solid #334155', padding: '6px 12px', borderRadius: 6, cursor: 'pointer' },
+  homeBtn: { background: 'rgba(200,255,0,0.05)', color: '#c8ff00', border: '1px solid rgba(200,255,0,0.2)', width: 36, height: 36, borderRadius: 10, cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0, transition: 'all .15s' },
   brand: { fontSize: 18, fontWeight: 700, color: '#c8ff00' },
   tagline: { fontSize: 12, color: '#64748b' },
   badges: { display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' },

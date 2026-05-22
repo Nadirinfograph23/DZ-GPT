@@ -41,6 +41,12 @@ export default function QuickNav() {
   }, [pathname])
 
   useEffect(() => {
+    const handler = () => setOpen(true)
+    window.addEventListener('dz:open-quicknav', handler)
+    return () => window.removeEventListener('dz:open-quicknav', handler)
+  }, [])
+
+  useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     window.addEventListener('keydown', onKey)

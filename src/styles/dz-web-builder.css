@@ -223,6 +223,12 @@
   min-height: 0;
   overflow: hidden;
 }
+.dzwb-body--idle {
+  grid-template-columns: 1fr;
+}
+.dzwb-body--idle .dzwb-preview-panel {
+  display: none;
+}
 
 /* ── Sidebar ───────────────────────────────────────────────────── */
 .dzwb-sidebar {

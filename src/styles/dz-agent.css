@@ -355,6 +355,10 @@
   font-weight: 800;
   letter-spacing: 0.8px;
 }
+.dz-home-btn--icon {
+  width: 36px;
+  padding: 0;
+}
 
 .dz-refresh-chat-btn {
   width: 36px;

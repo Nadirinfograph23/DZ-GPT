@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video, Globe, Home } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, ChevronDown, BookOpen, MessageCircle, Video, Globe } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -185,14 +185,11 @@ export default function DZAgent() {
       <div className="dza-main">
         <header className="dz-agent-header">
           <div className="dz-agent-header-left">
-            <button className="dz-home-btn dz-home-btn--icon" onClick={() => navigate('/')} title="الصفحة الرئيسية">
-              <Home size={16} />
+            <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
+              <Menu size={18} />
             </button>
             <button className="dz-refresh-chat-btn" onClick={createNewChat} title={labels.newChat}>
               <RefreshCw size={18} />
-            </button>
-            <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
-              <Menu size={18} />
             </button>
           </div>
           <div className="dz-agent-logo">

@@ -16,6 +16,7 @@ import DZWebBuilder from './pages/DZWebBuilder.tsx'
 import OCRDZ from './pages/OCRDZ.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
+import QuickNav from './components/QuickNav.tsx'
 
 const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
 
@@ -72,6 +73,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <ConditionalMiniPlayer />
+          <QuickNav />
         </MiniPlayerProvider>
       </BrowserRouter>
     </ErrorBoundary>

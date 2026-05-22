@@ -42,6 +42,16 @@
   flex-shrink: 0;
 }
 .dzwb-back:hover { background: rgba(255,255,255,0.09); color: #ccc; }
+.dzwb-back--icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #888;
+}
+.dzwb-back--icon:hover { color: #c8ff00; border-color: rgba(200,255,0,0.25); background: rgba(200,255,0,0.06); }
 
 .dzwb-logo-wrap {
   display: flex;
@@ -433,15 +443,8 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
 /* ── Generate Button Wrapper ───────────────────────────────────── */
 .dzwb-generate-wrap {
   padding: 14px 20px;
-  position: sticky;
-  bottom: 0;
-  z-index: 50;
-  background: rgba(5,5,16,0.97);
-  border-top: 1px solid rgba(255,255,255,0.07);
-  border-bottom: none;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  flex-shrink: 0;
+  background: transparent;
+  border-top: none;
 }
 
 /* ── Generate Button ───────────────────────────────────────────── */
@@ -490,6 +493,34 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
   min-height: 600px;
   flex-shrink: 0;
 }
+
+/* ── Download Buttons in Tabs ──────────────────────────────────── */
+.dzwb-tabs-downloads {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  flex-shrink: 0;
+}
+.dzwb-dl-btn {
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.25);
+  color: #a5b4fc;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.dzwb-dl-btn:hover { background: rgba(99,102,241,0.22); color: #c4b5fd; border-color: rgba(99,102,241,0.45); }
+.dzwb-dl-btn--zip {
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.25);
+  color: #6ee7b7;
+}
+.dzwb-dl-btn--zip:hover { background: rgba(16,185,129,0.2); color: #a7f3d0; border-color: rgba(16,185,129,0.45); }
 
 /* ── Tabs ──────────────────────────────────────────────────────── */
 .dzwb-tabs {
@@ -762,9 +793,8 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
     border-radius: 12px;
   }
 
-  /* Mini Player active — رفع الزر */
-  body.dz-mini-active .dzwb-generate-wrap { bottom: 72px; }
-  body.dz-mini-active .dzwb-scroll-body { padding-bottom: 160px; }
+  /* Mini Player active */
+  body.dz-mini-active .dzwb-scroll-body { padding-bottom: 80px; }
 
   /* ── Tabs المعاينة ── */
   .dzwb-tabs { padding: 8px 12px; gap: 2px; overflow-x: auto; }

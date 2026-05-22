@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, X } from 'lucide-react'
+import { ShieldCheck, X, MessageSquare } from 'lucide-react'
 import PwaInstallBanner from '../PwaInstallBanner'
 import '../styles/dz-home.css'
 
@@ -38,7 +38,7 @@ function PrivacyToast() {
   )
 }
 
-// ===== ICON DEFINITIONS =====
+// ===== ICON DEFINITIONS (بدون DZ CHAT — انتقلت للـ navbar) =====
 const SECTIONS = [
   {
     id: 'dz-agent',
@@ -138,22 +138,6 @@ const SECTIONS = [
       </svg>
     ),
   },
-  {
-    id: 'dz-chat',
-    label: 'DZ CHAT',
-    sublabel: 'دردشة فورية بالدارجة',
-    path: '/dzchat',
-    gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-    bgGlow: 'rgba(99,102,241,0.18)',
-    icon: (
-      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M8 10h32a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2H28l-8 6v-6H8a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
-        <circle cx="16" cy="22" r="2" fill="currentColor" opacity="0.7" />
-        <circle cx="24" cy="22" r="2" fill="currentColor" opacity="0.7" />
-        <circle cx="32" cy="22" r="2" fill="currentColor" opacity="0.7" />
-      </svg>
-    ),
-  },
 ]
 
 export default function DZHome() {
@@ -180,7 +164,25 @@ export default function DZHome() {
             </div>
             <span className="dz-home-logo-text">DZ GPT</span>
           </div>
-          <div className="dz-home-nav-badge">🇩🇿 الجزائر</div>
+
+          {/* ── حقوق الـ nav: شارة + زر الدردشة ── */}
+          <div className="dz-home-nav-right">
+            <div className="dz-home-nav-badge">🇩🇿 الجزائر</div>
+
+            {/* زر DZ CHAT مع إشعار متحرك */}
+            <button
+              className="dz-home-chat-btn"
+              onClick={() => navigate('/dzchat')}
+              aria-label="DZ CHAT"
+              title="DZ CHAT"
+            >
+              <MessageSquare size={20} />
+              <span className="dz-home-chat-badge">
+                <span className="dz-home-chat-badge-ring" />
+                1
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 

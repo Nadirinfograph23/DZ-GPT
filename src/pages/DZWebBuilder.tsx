@@ -245,7 +245,7 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           <div className="dzwb-logo">🌐</div>
           <div>
             <h1 className="dzwb-title">DZ Web Builder</h1>
-            <p className="dzwb-subtitle">AI Web Architect — Modern Premium Sites</p>
+            <p className="dzwb-subtitle">أنشئ موقعك بالـ AI</p>
           </div>
         </div>
         <div className="dzwb-header-badges">

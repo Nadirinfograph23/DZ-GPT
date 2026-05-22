@@ -249,7 +249,7 @@ export default function DZHome() {
 
       {/* ===== FOOTER ===== */}
       <footer className="dz-home-footer">
-        <p className="dz-home-copy">© 2025 DZ GPT · Nadir Infograph 🇩🇿</p>
+        <p className="dz-home-copy">© 2026 DZ GPT · Nadir Infograph 🇩🇿</p>
       </footer>
 
       {/* ===== PWA + PRIVACY TOAST ===== */}

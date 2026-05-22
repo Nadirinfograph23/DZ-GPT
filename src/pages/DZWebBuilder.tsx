@@ -459,35 +459,6 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           {/* Content */}
           <div className="dzwb-preview-body">
 
-            {/* Empty state */}
-            {!loading && !result && !errorMsg && (
-              <div className="dzwb-empty">
-                <div className="dzwb-empty-orb" />
-                <div className="dzwb-empty-icon">🌐</div>
-                <h2 className="dzwb-empty-title">مرحباً بك في DZ Web Builder</h2>
-                <p className="dzwb-empty-sub">
-                  اختر نوع الموقع والنمط المرئي ثم اضغط <strong>ابنِ الموقع الآن</strong>
-                </p>
-                <div className="dzwb-empty-features">
-                  {[
-                    { icon: '🚀', text: 'Landing Pages احترافية' },
-                    { icon: '📊', text: 'Dashboards متكاملة' },
-                    { icon: '🎨', text: 'Portfolio إبداعية' },
-                    { icon: '🛍️', text: 'متاجر إلكترونية' },
-                    { icon: '⚡', text: 'SaaS Platforms' },
-                    { icon: '🤖', text: 'AI App Interfaces' },
-                  ].map((f, i) => (
-                    <div key={i} className="dzwb-empty-feature">
-                      <span>{f.icon}</span><span>{f.text}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="dzwb-empty-stack">
-                  <span>shadcn/ui</span><span>Aceternity UI</span><span>Magic UI</span>
-                  <span>Flowbite</span><span>Framer Motion</span><span>HyperUI</span>
-                </div>
-              </div>
-            )}
 
             {/* Loading */}
             {loading && (

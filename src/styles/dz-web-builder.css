@@ -18,8 +18,8 @@
 .dzwb-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 24px;
+  gap: 12px;
+  padding: 12px 20px;
   background: rgba(5,5,16,0.95);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   backdrop-filter: blur(24px);
@@ -27,6 +27,8 @@
   top: 0;
   z-index: 100;
   flex-shrink: 0;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .dzwb-back {
@@ -86,8 +88,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
+  flex: 1 1 0;
   flex-wrap: wrap;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .dzwb-badge {
@@ -824,7 +828,6 @@
     overflow: auto;
   }
   .dzwb-sidebar {
-    overflow-y: visible;
     border-right: none;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     max-height: 55vh;
@@ -837,11 +840,23 @@
   .dzwb-type-grid { grid-template-columns: repeat(5, 1fr); }
 }
 
-@media (max-width: 600px) {
-  .dzwb-header { padding: 12px 14px; gap: 10px; }
-  .dzwb-title { font-size: 14px; }
+/* ── Hide subtitle at medium sizes to save space ───────────────── */
+@media (max-width: 860px) {
   .dzwb-subtitle { display: none; }
+}
+
+/* ── Collapse clone button to icon-only at narrow screens ───────── */
+@media (max-width: 720px) {
+  .dzwb-clone-btn-text { display: none; }
+  .dzwb-action-btn--clone { padding: 7px 10px; }
+  .dzwb-logo { width: 32px; height: 32px; font-size: 16px; }
+}
+
+@media (max-width: 600px) {
+  .dzwb-header { padding: 10px 12px; gap: 8px; }
+  .dzwb-title { font-size: 13px; }
+  .dzwb-subtitle { display: none; }
+  .dzwb-back { padding: 6px 10px; font-size: 11px; }
   .dzwb-type-grid { grid-template-columns: repeat(5, 1fr); }
   .dzwb-style-grid { grid-template-columns: repeat(2, 1fr); }
-  .dzwb-empty-features { grid-template-columns: repeat(2, 1fr); }
 }

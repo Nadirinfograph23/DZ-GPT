@@ -432,9 +432,15 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
 
 /* ── Generate Button Wrapper ───────────────────────────────────── */
 .dzwb-generate-wrap {
-  padding: 16px 20px;
-  background: rgba(5,5,16,0.6);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 14px 20px;
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  background: rgba(5,5,16,0.97);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-bottom: none;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   flex-shrink: 0;
 }
 
@@ -746,15 +752,9 @@ body.dz-mini-active .dzwb-scroll-body { padding-bottom: 96px; }
   /* الأنماط: 3 في صف */
   .dzwb-style-grid { grid-template-columns: repeat(3, 1fr); gap: 5px; }
 
-  /* ── زر البناء ── */
+  /* ── زر البناء (موبايل) ── */
   .dzwb-generate-wrap {
     padding: 12px 14px;
-    position: sticky;
-    bottom: 0;
-    z-index: 50;
-    background: rgba(5,5,16,0.97);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    backdrop-filter: blur(16px);
   }
   .dzwb-generate {
     padding: 14px 16px;

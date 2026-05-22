@@ -240,7 +240,6 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
 
       {/* ── Header ── */}
       <header className="dzwb-header">
-        <button className="dzwb-back" onClick={() => navigate('/dz-agent')}>← DZ Agent</button>
         <div className="dzwb-logo-wrap">
           <div className="dzwb-logo">🌐</div>
           <div>
@@ -249,8 +248,6 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           </div>
         </div>
         <div className="dzwb-header-badges">
-          <span className="dzwb-badge dzwb-badge--green">Tailwind</span>
-          <span className="dzwb-badge dzwb-badge--purple">shadcn/ui</span>
           <span className="dzwb-badge dzwb-badge--blue">Framer Motion</span>
           <span className="dzwb-badge dzwb-badge--amber">Aceternity</span>
         </div>
@@ -262,12 +259,6 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
           >
             🔗 <span className="dzwb-clone-btn-text">استنسخ موقعاً</span>
           </button>
-          {result && (
-            <>
-              <button className="dzwb-action-btn" onClick={copyCode} title="نسخ الكود">📋 نسخ</button>
-              <button className="dzwb-action-btn dzwb-action-btn--primary" onClick={downloadHtml}>⬇ تحميل HTML</button>
-            </>
-          )}
         </div>
       </header>
 
@@ -463,6 +454,26 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
                   <button className="dzwb-tab-refresh" onClick={refreshPreview} title="تحديث المعاينة">↺</button>
                   <div className="dzwb-tabs-meta">
                     {result.meta?.icon} {result.meta?.title || 'موقع جاهز'}
+                  </div>
+                  <div className="dzwb-tabs-downloads">
+                    <button className="dzwb-dl-btn" onClick={downloadHtml} title="تحميل index.html">
+                      ⬇ index.html
+                    </button>
+                    <button className="dzwb-dl-btn dzwb-dl-btn--zip" onClick={() => {
+                      if (!result?.htmlCode) return
+                      import('jszip').then(({ default: JSZip }) => {
+                        const zip = new JSZip()
+                        zip.file('index.html', result.htmlCode)
+                        zip.generateAsync({ type: 'blob' }).then(blob => {
+                          const a = document.createElement('a')
+                          a.href = URL.createObjectURL(blob)
+                          a.download = `dz-website-${Date.now()}.zip`
+                          a.click()
+                        })
+                      })
+                    }} title="تحميل الموقع كاملاً ZIP">
+                      📦 تحميل ZIP
+                    </button>
                   </div>
                 </div>
 

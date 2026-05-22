@@ -5,7 +5,7 @@ import {
   ArrowLeft, Download, Loader2, Search, Music, Video, Eye, Clock, History, Trash2,
   RotateCw, X, Play, Headphones, ChevronDown, Plus, Sparkles, Radio, BookOpen,
   GraduationCap, Trophy, Newspaper, Film, TrendingUp, CheckSquare, Square, ListChecks,
-  SkipForward, Heart,
+  SkipForward, Heart, LayoutGrid,
 } from 'lucide-react'
 import { useMiniPlayer } from '../context/MiniPlayerContext'
 import { warmTrackUrl } from '../utils/playerEnhancements'
@@ -512,6 +512,14 @@ export default function DZTube() {
             {(history.length > 0 || Object.values(activeDownloads).length > 0) && (
               <span className="dzt-history-count">{Object.values(activeDownloads).length || history.length}</span>
             )}
+          </button>
+          <button
+            className="dzt-history-btn dzt-nav-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('dz:open-quicknav'))}
+            title="التنقل بين الصفحات"
+          >
+            <LayoutGrid size={16} />
+            <span className="dzt-history-label">الصفحات</span>
           </button>
         </div>
       </header>

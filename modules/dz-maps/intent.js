@@ -352,15 +352,22 @@ export function extractLocationFromMsg(msg, poiKey) {
     }
   }
   const preps = [
-    'في', 'ب', 'بـ', 'حول', 'بالقرب من', 'قريب من', 'داخل', 'بداخل',
+    // Longer/compound preps FIRST so they don't get swallowed by short ب
+    'في ولاية', 'في مدينة', 'في بلدية', 'بالقرب من', 'قريب من', 'بداخل', 'داخل',
+    'بمدينة', 'بولاية', 'بمنطقة', 'بمحافظة',
+    // Then short preps
+    'في', 'ب', 'بـ', 'حول',
+    // French / English
     'à', 'en', 'dans', 'près de', 'autour de', 'au centre de',
     'in', 'near', 'around', 'at',
-    'في ولاية', 'في مدينة', 'في بلدية',
   ]
   let loc = null
   for (const prep of preps) {
+    const escapedPrep = prep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // For Arabic prefix ب/بـ: allow either space OR direct attachment (بعنابة = ب + عنابة)
+    const separator = /^بـ?$/.test(prep) ? '(?:\\s+|(?=[\\u0600-\\u06FF]))' : '\\s+'
     const re = new RegExp(
-      `${prep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+([\\u0600-\\u06FFa-zA-ZÀ-ÿ][\\u0600-\\u06FFa-zA-ZÀ-ÿ\\s\\-]{1,40})`,
+      `${escapedPrep}${separator}([\\u0600-\\u06FFa-zA-ZÀ-ÿ][\\u0600-\\u06FFa-zA-ZÀ-ÿ\\s\\-]{1,40})`,
       'i'
     )
     const m = cleaned.match(re)

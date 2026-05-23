@@ -7,7 +7,52 @@
   font-family: 'Segoe UI', 'Tajawal', Arial, sans-serif;
   color: #f1f5f9;
   overflow-x: hidden;
-  padding-bottom: 24px;
+  overflow-y: auto;
+  padding-bottom: 32px;
+}
+
+/* ===== TABS ===== */
+.le3ba-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 0;
+  width: 100%;
+  max-width: 480px;
+}
+.le3ba-tab {
+  flex: 1;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Segoe UI', 'Tajawal', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+.le3ba-tab:hover {
+  background: rgba(255,255,255,0.08);
+  color: #e2e8f0;
+}
+.le3ba-tab--active {
+  background: rgba(200,255,0,0.12);
+  border-color: rgba(200,255,0,0.4);
+  color: #c8ff00;
+}
+.le3ba-tab:active {
+  transform: scale(0.97);
+}
+
+/* ===== WORDLE wrapper ===== */
+.le3ba-wordle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  gap: 0;
 }
 
 .le3ba-header {

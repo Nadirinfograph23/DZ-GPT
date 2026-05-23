@@ -14,6 +14,7 @@ import DZStats from './pages/DZStats.tsx'
 import DZTools from './pages/DZTools.tsx'
 import DZWebBuilder from './pages/DZWebBuilder.tsx'
 import OCRDZ from './pages/OCRDZ.tsx'
+import DZLe3ba from './pages/DZLe3ba.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
@@ -70,6 +71,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/tools" element={<DZTools />} />
             <Route path="/web-builder" element={<DZWebBuilder />} />
             <Route path="/ocr-dz" element={<OCRDZ />} />
+            <Route path="/le3ba" element={<DZLe3ba />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <ConditionalMiniPlayer />

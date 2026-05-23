@@ -1898,6 +1898,37 @@ function YouTubePanel({
     )
   }
 
+  if (flow === 'search' && (!results || results.length === 0)) {
+    const _q = encodeURIComponent(
+      typeof video?.title === 'string' ? video.title : ''
+    )
+    return (
+      <div className="dzc-yt">
+        <div className="dzc-yt-results-hdr">
+          <span>🔍 YouTube</span>
+        </div>
+        <p style={{ padding: '12px 16px', color: 'var(--dzc-text-muted, #888)', fontSize: '0.9rem' }}>
+          لم يتم العثور على نتائج مباشرة.
+        </p>
+        <a
+          href={`https://www.youtube.com/results?search_query=${_q}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'block', padding: '10px 16px', color: '#e05', fontWeight: 600 }}
+        >
+          ابحث مباشرة على YouTube ↗
+        </a>
+        {suggestions && suggestions.length > 0 && (
+          <div className="dzc-yt-suggestions">
+            {suggestions.map((s, i) => (
+              <button key={i} className="dzc-yt-suggest-btn" onClick={() => onAsk?.(s)}>{s}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (flow === 'search' && results && results.length > 0) {
     const ORDINAL_LABELS = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن']
 

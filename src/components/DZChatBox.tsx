@@ -2755,6 +2755,46 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
 }
 
 // ===== MAP PREVIEW =====
+// ===== MAP POI SUGGESTION CHIPS =====
+const _MAP_POI_CHIPS = [
+  { key: 'mosque',      icon: '🕌', label: 'مساجد'       },
+  { key: 'hospital',    icon: '🏥', label: 'مستشفيات'    },
+  { key: 'pharmacy',    icon: '💊', label: 'صيدليات'     },
+  { key: 'restaurant',  icon: '🍽️', label: 'مطاعم'      },
+  { key: 'bank',        icon: '🏦', label: 'بنوك'         },
+  { key: 'post_office', icon: '📮', label: 'مكاتب بريد'  },
+  { key: 'fuel',        icon: '⛽', label: 'وقود'         },
+  { key: 'school',      icon: '🏫', label: 'مدارس'        },
+  { key: 'hotel',       icon: '🏨', label: 'فنادق'        },
+]
+
+function MapPoiSuggestionsBar({
+  city, currentPoi, onSend,
+}: { city: string; currentPoi: string; onSend: (msg: string) => void }) {
+  const chips = _MAP_POI_CHIPS.filter(c => c.key !== currentPoi).slice(0, 5)
+  if (!city || !chips.length) return null
+  return (
+    <div className="dz-map-poi-suggestions">
+      <span className="dz-map-poi-suggestions-label">
+        <MapPin size={11} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '4px' }} />
+        ابحث في {city}:
+      </span>
+      <div className="dz-map-poi-suggestions-row">
+        {chips.map(c => (
+          <button
+            key={c.key}
+            className="dz-map-poi-btn"
+            onClick={() => onSend(`${c.label} في ${city}`)}
+          >
+            <span className="dz-map-poi-btn-icon">{c.icon}</span>
+            <span>{c.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MapPreview({ mapHtml, mapMeta }: { mapHtml: string; mapMeta?: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(true)
   const meta = mapMeta || {}
@@ -5414,6 +5454,17 @@ ${rows}
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />
                           : <MapPreview mapHtml={msg.mapHtml || ''} mapMeta={msg.mapMeta} />
                       )}
+                      {msg.richType === 'map' && msg.mapMeta &&
+                        !(msg.mapMeta as Record<string, unknown>)?.needsGps &&
+                        (msg.mapMeta as Record<string, unknown>)?.type !== 'route' &&
+                        !!(msg.mapMeta as Record<string, unknown>)?.locationName && (
+                          <MapPoiSuggestionsBar
+                            city={String((msg.mapMeta as Record<string, unknown>).locationName)}
+                            currentPoi={String((msg.mapMeta as Record<string, unknown>).poiKey || '')}
+                            onSend={sendMessage}
+                          />
+                        )
+                      }
                       {msg.richType === 'execution' && msg.executionCode && (
                         <CodeExecutionPreview
                           code={msg.executionCode}

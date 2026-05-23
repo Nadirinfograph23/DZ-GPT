@@ -7,17 +7,19 @@
   flex-direction: column;
   font-family: 'Segoe UI', 'Tajawal', Arial, sans-serif;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
 }
 
 /* ===== NAVBAR ===== */
 .dz-home-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
-  background: rgba(10, 10, 20, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(10, 10, 20, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 
@@ -173,6 +175,7 @@
 .dz-home-hero {
   text-align: center;
   padding: 48px 20px 20px;
+  margin-top: 58px;
   direction: rtl;
 }
 

@@ -70,7 +70,7 @@ export default function DZLe3ba() {
       }
     })
 
-    result.forEach((tile, i) => {
+    result.forEach((tile) => {
       if (tile.state === 'correct') return
       const j = tgtArr.findIndex((l, idx) => l === tile.letter && !used[idx])
       if (j !== -1) {

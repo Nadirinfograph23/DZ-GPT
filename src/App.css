@@ -19,9 +19,10 @@ body {
   overflow: hidden;
 }
 
-/* DZ Tube uses page-level scrolling (its root is min-height:100vh, not a
-   self-contained 100vh flex column). Re-enable body scroll only on that route. */
-body:has(.dzt-app) {
+/* Re-enable body scroll for pages that use page-level scrolling */
+body:has(.dzt-app),
+body:has(.dz-home),
+body:has(.le3ba-root) {
   overflow: auto;
 }
 

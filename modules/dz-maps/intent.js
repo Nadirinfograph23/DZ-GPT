@@ -235,7 +235,10 @@ const ROUTING_WORDS = [
 ]
 
 // Location prepositions — required when only POI keyword present
-const LOC_PREP_REGEX = /(?:في\s|ب\s|بـ\s|بمدينة\s|بولاية\s|بالقرب\s+من\s|قريب\s+من\s|داخل\s|بمنطقة\s|in\s|near\s|à\s|dans\s|en\s|près\s+de\s)/i
+// NOTE: longer patterns (بالقرب من، بمدينة، بولاية، بمنطقة) must come BEFORE the short ب pattern.
+// Arabic prefix ب is written without space (بعنابة، بوهران، بالجزائر).
+// (?:^|\s)ب ensures we only match standalone ب preposition, not ب inside words like ابحث/كتاب.
+const LOC_PREP_REGEX = /(?:في\s|بالقرب\s+من\s?|قريب\s+من\s|بمدينة\s|بولاية\s|بمنطقة\s|داخل\s|(?:^|\s)ب(?:\s|(?=[\u0600-\u06FF]))|in\s|near\s|à\s|dans\s|en\s|près\s+de\s)/im
 
 // ── PUBLIC API ────────────────────────────────────────────────────────────────
 

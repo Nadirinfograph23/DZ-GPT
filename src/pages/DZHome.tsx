@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, X, MessageSquare } from 'lucide-react'
 import PwaInstallBanner from '../PwaInstallBanner'
+import DZRobot from '../components/DZRobot'
 import '../styles/dz-home.css'
 
 const FB_URL  = 'https://www.facebook.com/nadir.infograph23'
@@ -159,6 +160,26 @@ const SECTIONS = [
       </svg>
     ),
   },
+  {
+    id: 'le3ba',
+    label: 'DZ LE3BA',
+    sublabel: 'ألعاب لغوية عربية',
+    path: '/le3ba',
+    gradient: 'linear-gradient(135deg, #f43f5e 0%, #a855f7 100%)',
+    bgGlow: 'rgba(244,63,94,0.18)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="6" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <rect x="26" y="6" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <rect x="6" y="26" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <rect x="26" y="26" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <text x="9" y="20" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ك</text>
+        <text x="29" y="20" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ل</text>
+        <text x="9" y="40" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">م</text>
+        <text x="29" y="40" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ة</text>
+      </svg>
+    ),
+  },
 ]
 
 export default function DZHome() {
@@ -255,6 +276,9 @@ export default function DZHome() {
       {/* ===== PWA + PRIVACY TOAST ===== */}
       <PwaInstallBanner />
       <PrivacyToast />
+
+      {/* ===== ROBOT MASCOT ===== */}
+      <DZRobot />
     </div>
   )
 }

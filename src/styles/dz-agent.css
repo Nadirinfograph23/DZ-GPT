@@ -1370,11 +1370,27 @@
 .dzt-fallback-table tr:hover td { background: rgba(16,163,127,0.03); }
 
 @media (max-width: 600px) {
-  .dzt-toolbar { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .dzt-toolbar-right { width: 100%; }
-  .dzt-search { width: 100px; }
-  .dzt-th, .dzt-td { padding: 7px 8px; font-size: 12px; }
-  .dzt-scroll-container { max-height: 380px; }
+  .dzt-wrapper { margin: 6px 0; border-radius: 8px; }
+  .dzt-toolbar { flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; }
+  .dzt-toolbar-right { width: 100%; flex-wrap: wrap; }
+  .dzt-search-wrap { flex: 1; min-width: 0; }
+  .dzt-search { width: 100%; min-width: 0; }
+  .dzt-th, .dzt-td { padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+  .dzt-scroll-container {
+    max-height: 360px;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .dzt-table { min-width: max-content; width: auto; }
+  .dzt-pagination { flex-wrap: wrap; gap: 4px; padding: 6px; }
+  .dzt-export-btn { font-size: 11px; padding: 4px 8px; height: 28px; }
+}
+
+@media (max-width: 400px) {
+  .dzt-th, .dzt-td { padding: 6px 6px; font-size: 11.5px; }
+  .dzt-toolbar-left { flex-wrap: wrap; gap: 6px; }
 }
 
 /* ===== CODE BLOCK ===== */

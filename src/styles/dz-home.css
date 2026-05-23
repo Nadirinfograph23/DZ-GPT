@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   font-family: 'Segoe UI', 'Tajawal', Arial, sans-serif;
-  overflow-x: clip;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* ===== NAVBAR ===== */
@@ -200,7 +201,7 @@
 /* ===== GRID ===== */
 .dz-home-grid-wrap {
   flex: 1;
-  padding: 28px 16px 20px;
+  padding: 28px 16px 40px;
   display: flex;
   justify-content: center;
 }

@@ -184,6 +184,20 @@ const SECTIONS = [
 
 export default function DZHome() {
   const navigate = useNavigate()
+  const [showRobot, setShowRobot] = useState(() => localStorage.getItem('dz-robot-hidden') !== '1')
+
+  useEffect(() => {
+    const handler = () => {
+      setShowRobot(localStorage.getItem('dz-robot-hidden') !== '1')
+    }
+    window.addEventListener('dz-robot-toggle', handler)
+    return () => window.removeEventListener('dz-robot-toggle', handler)
+  }, [])
+
+  const handleShowRobot = () => {
+    localStorage.removeItem('dz-robot-hidden')
+    setShowRobot(true)
+  }
 
   return (
     <div className="dz-home" dir="rtl">
@@ -278,7 +292,18 @@ export default function DZHome() {
       <PrivacyToast />
 
       {/* ===== ROBOT MASCOT ===== */}
-      <DZRobot />
+      {showRobot ? (
+        <DZRobot />
+      ) : (
+        <button
+          className="dz-home-show-robot"
+          onClick={handleShowRobot}
+          title="إظهار الروبوت"
+          aria-label="إظهار الروبوت"
+        >
+          🤖
+        </button>
+      )}
     </div>
   )
 }

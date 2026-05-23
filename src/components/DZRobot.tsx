@@ -143,6 +143,12 @@ export default function DZRobot() {
 
   const messages = isAngry ? MESSAGES_ANGRY : MESSAGES_NORMAL
 
+  const handleHide = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    localStorage.setItem('dz-robot-hidden', '1')
+    window.dispatchEvent(new Event('dz-robot-toggle'))
+  }
+
   return (
     <div
       ref={robotRef}
@@ -249,6 +255,15 @@ export default function DZRobot() {
       </svg>
 
       <div className={`dzr-label${isAngry ? ' dzr-label--angry' : ''}`}>DZ Agent</div>
+
+      <button
+        className="dzr-hide-btn"
+        onClick={handleHide}
+        title="إخفاء الروبوت"
+        aria-label="إخفاء الروبوت"
+      >
+        ×
+      </button>
     </div>
   )
 }

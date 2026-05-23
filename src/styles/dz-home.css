@@ -397,6 +397,34 @@
   }
 }
 
+/* ===== SHOW ROBOT BUTTON ===== */
+.dz-home-show-robot {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  background: rgba(10,10,15,0.9);
+  border: 1px solid rgba(200,255,0,0.3);
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  line-height: 1;
+  padding: 0;
+}
+.dz-home-show-robot:hover {
+  transform: scale(1.1);
+  border-color: rgba(200,255,0,0.6);
+  box-shadow: 0 6px 20px rgba(200,255,0,0.15);
+}
+
 /* ===== VERY SMALL SCREENS ===== */
 @media (max-width: 320px) {
   .dz-home-grid {

@@ -1963,10 +1963,11 @@ function YouTubePanel({
 
               <div className="dzc-yt-card-thumb-wrap">
                 <img
-                  src={r.thumbnail || `https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
+                  src={`https://i.ytimg.com/vi/${r.id}/hqdefault.jpg`}
                   alt={r.title}
                   className="dzc-yt-card-thumb"
                   loading="lazy"
+                  referrerPolicy="no-referrer"
                 />
                 {r.duration > 0 && (
                   <span className="dzc-yt-card-dur">{fmtDuration(r.duration)}</span>

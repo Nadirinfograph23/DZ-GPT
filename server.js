@@ -13193,6 +13193,23 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
+  // ── Step 2b: YouTube / Map / WebBuilder / Clone — redirect to full endpoint ──
+  // These operations have their own rich UI engines — streaming text would bypass them
+  const _ytKwRe_stream = /(?:فيديو|فيديوهات|يوتيوب|يوتيب|بالفيديو|اغنية|أغنية|أغاني|موسيقى|كليب|نشيد|أنشودة|مقطع.*فيديو|شاهد.*فيديو|watch.*video|music.*video|video.*clip|youtube\.com|youtu\.be)/i
+  const _ytUrlRe_stream = /https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i
+  const _isYTStream = _ytUrlRe_stream.test(lastUserMessage) ||
+    (_ytKwRe_stream.test(lastUserMessage) && !detectWebsiteBuilderQuery(lastUserMessage))
+  const _isMapStream = isMapQuery(lastUserMessage)
+  const _isWebBuildStream = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
+  const _isCloneStream = /https?:\/\/[^\s]{5,}/i.test(lastUserMessage) &&
+    /(?:استنسخ|استنساخ|clone|كلون|انسخ.*موقع|اعمل نسخة)/i.test(lastUserMessage)
+  if (_isYTStream || _isMapStream || _isWebBuildStream || _isCloneStream) {
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
   // ── Step 3: Core system prompt ───────────────────────────────────────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')

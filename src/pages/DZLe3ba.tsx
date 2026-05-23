@@ -41,24 +41,18 @@ function WordleGame() {
   const [shake, setShake] = useState(false)
   const [reveal, setReveal] = useState<number | null>(null)
   const [usedKeys, setUsedKeys] = useState<Record<string, TileState>>({})
-  const [stats, setStats] = useState({ played: 0, wins: 0, streak: 0 })
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    const saved = localStorage.getItem('dz-le3ba-stats')
-    if (saved) setStats(JSON.parse(saved))
-  }, [])
-
   const saveStats = useCallback((won: boolean) => {
-    setStats(prev => {
-      const next = {
-        played: prev.played + 1,
-        wins: prev.wins + (won ? 1 : 0),
-        streak: won ? prev.streak + 1 : 0,
-      }
-      localStorage.setItem('dz-le3ba-stats', JSON.stringify(next))
-      return next
-    })
+    const saved = localStorage.getItem('dz-le3ba-stats')
+    const prev = saved ? JSON.parse(saved) : { played: 0, wins: 0, streak: 0 }
+    const next = {
+      played: prev.played + 1,
+      wins: prev.wins + (won ? 1 : 0),
+      streak: won ? prev.streak + 1 : 0,
+    }
+    localStorage.setItem('dz-le3ba-stats', JSON.stringify(next))
+    window.dispatchEvent(new Event('storage'))
   }, [])
 
   const evaluateGuess = useCallback((guess: string, tgt: string): Tile[] => {

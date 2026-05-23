@@ -10191,8 +10191,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
-  // Guard: YouTube queries (فيديو/يوتيوب/اغنية...) must not be intercepted by Algeria routing.
-  if (!_isYouTubeQuery_pre && isAlgerianCitizenQuery(lastUserMessage)) {
+  // Guard: YouTube/Map queries must not be intercepted by Algeria routing.
+  if (!_isYouTubeQuery_pre && !isMapQuery(lastUserMessage) && isAlgerianCitizenQuery(lastUserMessage)) {
     const algeriaResult = searchAlgeria(lastUserMessage)
     if (algeriaResult) {
       console.log(`[Algeria-KS] Match: category=${algeriaResult.match.category} score=${algeriaResult.score}`)
@@ -13051,8 +13051,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // يحفظ فقط إذا الجواب ذو قيمة (ليس رسالة خطأ أو قصير جداً)
     // Memory saving disabled — user prefers no session storage in DZ Agent chat
 
+    // ── Strip any leaked thinking-trace patterns from AI output ──────────────
+    const _stripThinking = (txt) => txt
+      .replace(/^[\s\S]*?(?:🧠\s*STEP\s*\d+\s*[—–-][^\n]*\n[\s\S]*?\n\n)/gi, '')
+      .replace(/(?:^|\n)(?:🧠\s*)?STEP\s*\d+\s*[—–-][^\n]*/gi, '')
+      .replace(/(?:^|\n)\*\*STEP\s*\d+[^*]*\*\*[^\n]*/gi, '')
+      .replace(/(?:^|\n)###\s*STEP\s*\d+[^\n]*/gi, '')
+      .replace(/(?:^|\n)(?:النية|التصنيف|ما يريده المستخدم حقاً?)[^\n]*\n?/gi, '')
+      .replace(/^\s*\n/, '').trim()
     return res.status(200).json({
-      content: _cleanRawUrls(aiResult.content),
+      content: _cleanRawUrls(_stripThinking(aiResult.content)),
       fallbackModel: aiResult.model,
       reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,

@@ -284,7 +284,7 @@ export default function DZHome() {
 
       {/* ===== FOOTER ===== */}
       <footer className="dz-home-footer">
-        <p className="dz-home-copy">DZ GPT تطوير : حوامرية نذير NADIR INFOGRAPH 🇩🇿 2026 ©</p>
+        <p className="dz-home-copy">تطوير : نذير حوامرية 2026 🇩🇿</p>
       </footer>
 
       {/* ===== PWA + PRIVACY TOAST ===== */}

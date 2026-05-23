@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import DZCrossword from '../components/DZCrossword'
 import '../styles/dz-le3ba.css'
 
+/* ====================================================
+   WORDLE — كلمة
+   ==================================================== */
 const WORD_LENGTH = 4
 const MAX_TRIES = 6
 
 const WORD_BANK = [
   'بيان', 'كتاب', 'شمال', 'يمين', 'قلوب', 'رسول', 'كمال', 'جمال',
   'سلام', 'عيون', 'ديار', 'غيوم', 'صباح', 'نهار', 'بلاد', 'نزول',
-  'جبال', 'أنوار', 'وطان', 'بيوت', 'ليال', 'سهام', 'رمال', 'كلام',
-  'حياة', 'صداق', 'وفاء', 'أمال', 'لغات', 'علوم', 'فكار', 'حلوم',
+  'جبال', 'بيوت', 'ليال', 'سهام', 'رمال', 'كلام',
+  'حياة', 'وفاء', 'لغات', 'علوم', 'فكار', 'حلوم',
 ]
 
 const ARABIC_KEYBOARD = [
@@ -29,8 +33,7 @@ interface Tile {
   state: TileState
 }
 
-export default function DZLe3ba() {
-  const navigate = useNavigate()
+function WordleGame() {
   const [target, setTarget] = useState(pickWord)
   const [guesses, setGuesses] = useState<Tile[][]>([])
   const [current, setCurrent] = useState('')
@@ -64,40 +67,26 @@ export default function DZLe3ba() {
     const used = new Array(WORD_LENGTH).fill(false)
 
     result.forEach((tile, i) => {
-      if (tile.letter === tgtArr[i]) {
-        tile.state = 'correct'
-        used[i] = true
-      }
+      if (tile.letter === tgtArr[i]) { tile.state = 'correct'; used[i] = true }
     })
-
     result.forEach((tile) => {
       if (tile.state === 'correct') return
       const j = tgtArr.findIndex((l, idx) => l === tile.letter && !used[idx])
-      if (j !== -1) {
-        tile.state = 'present'
-        used[j] = true
-      }
+      if (j !== -1) { tile.state = 'present'; used[j] = true }
     })
-
     return result
   }, [])
 
   const submitGuess = useCallback(() => {
     const letters = [...current]
     if (letters.length !== WORD_LENGTH) {
-      setShake(true)
-      setTimeout(() => setShake(false), 500)
-      return
+      setShake(true); setTimeout(() => setShake(false), 500); return
     }
-
     const tiles = evaluateGuess(current, target)
     const newGuesses = [...guesses, tiles]
-    setGuesses(newGuesses)
-    setCurrent('')
-
+    setGuesses(newGuesses); setCurrent('')
     setReveal(newGuesses.length - 1)
     setTimeout(() => setReveal(null), WORD_LENGTH * 150 + 300)
-
     const newKeys = { ...usedKeys }
     tiles.forEach(t => {
       const prev = newKeys[t.letter]
@@ -106,24 +95,16 @@ export default function DZLe3ba() {
       newKeys[t.letter] = t.state
     })
     setUsedKeys(newKeys)
-
     const won = tiles.every(t => t.state === 'correct')
-    if (won) {
-      setTimeout(() => { setGameOver('win'); saveStats(true) }, WORD_LENGTH * 150 + 400)
-    } else if (newGuesses.length >= MAX_TRIES) {
-      setTimeout(() => { setGameOver('lose'); saveStats(false) }, WORD_LENGTH * 150 + 400)
-    }
+    if (won) setTimeout(() => { setGameOver('win'); saveStats(true) }, WORD_LENGTH * 150 + 400)
+    else if (newGuesses.length >= MAX_TRIES) setTimeout(() => { setGameOver('lose'); saveStats(false) }, WORD_LENGTH * 150 + 400)
   }, [current, guesses, target, evaluateGuess, usedKeys, saveStats])
 
   const pressKey = useCallback((key: string) => {
     if (gameOver) return
-    if (key === 'DEL') {
-      setCurrent(p => [...p].slice(0, -1).join(''))
-    } else if (key === 'ENTER') {
-      submitGuess()
-    } else if ([...current].length < WORD_LENGTH) {
-      setCurrent(p => p + key)
-    }
+    if (key === 'DEL') { setCurrent(p => [...p].slice(0, -1).join('')) }
+    else if (key === 'ENTER') { submitGuess() }
+    else if ([...current].length < WORD_LENGTH) { setCurrent(p => p + key) }
   }, [gameOver, current, submitGuess])
 
   useEffect(() => {
@@ -131,41 +112,22 @@ export default function DZLe3ba() {
       if (gameOver) return
       if (e.key === 'Backspace') { pressKey('DEL'); return }
       if (e.key === 'Enter') { pressKey('ENTER'); return }
-      const arabic = /[\u0600-\u06FF]/
-      if (arabic.test(e.key) && e.key.length === 1) pressKey(e.key)
+      if (/[\u0600-\u06FF]/.test(e.key) && e.key.length === 1) pressKey(e.key)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [pressKey, gameOver])
 
   const resetGame = () => {
-    setTarget(pickWord())
-    setGuesses([])
-    setCurrent('')
-    setGameOver(null)
-    setUsedKeys({})
-    setReveal(null)
+    setTarget(pickWord()); setGuesses([]); setCurrent('')
+    setGameOver(null); setUsedKeys({}); setReveal(null)
   }
 
   const currentLetters = [...current]
   const remainingRows = MAX_TRIES - guesses.length - (gameOver ? 0 : 1)
 
   return (
-    <div className="le3ba-root" dir="rtl">
-      <header className="le3ba-header">
-        <button className="le3ba-back" onClick={() => navigate('/')} aria-label="عودة">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M15 19l-7-7 7-7" /></svg>
-        </button>
-        <div className="le3ba-logo">
-          <span className="le3ba-logo-dz">DZ</span>
-          <span className="le3ba-logo-le">LE3BA</span>
-        </div>
-        <div className="le3ba-stats-mini">
-          <span>🏆 {stats.wins}</span>
-          <span>🔥 {stats.streak}</span>
-        </div>
-      </header>
-
+    <div className="le3ba-wordle" dir="rtl">
       <div className="le3ba-subtitle">خمّن الكلمة العربية في {MAX_TRIES} محاولات</div>
 
       <div className="le3ba-board">
@@ -225,9 +187,7 @@ export default function DZLe3ba() {
         {ARABIC_KEYBOARD.map((row, ri) => (
           <div key={ri} className="le3ba-kb-row">
             {ri === 2 && (
-              <button className="le3ba-kb-key le3ba-kb-key--action" onClick={() => pressKey('ENTER')}>
-                ✔
-              </button>
+              <button className="le3ba-kb-key le3ba-kb-key--action" onClick={() => pressKey('ENTER')}>✔</button>
             )}
             {row.map(key => (
               <button
@@ -239,22 +199,75 @@ export default function DZLe3ba() {
               </button>
             ))}
             {ri === 2 && (
-              <button className="le3ba-kb-key le3ba-kb-key--action" onClick={() => pressKey('DEL')}>
-                ⌫
-              </button>
+              <button className="le3ba-kb-key le3ba-kb-key--action" onClick={() => pressKey('DEL')}>⌫</button>
             )}
           </div>
         ))}
       </div>
 
-      <input
-        ref={inputRef}
-        className="le3ba-hidden-input"
-        type="text"
-        aria-hidden="true"
-        tabIndex={-1}
-        readOnly
-      />
+      <input ref={inputRef} className="le3ba-hidden-input" type="text" aria-hidden="true" tabIndex={-1} readOnly />
+    </div>
+  )
+}
+
+/* ====================================================
+   PAGE — DZLe3ba
+   ==================================================== */
+type GameTab = 'wordle' | 'crossword'
+
+export default function DZLe3ba() {
+  const navigate = useNavigate()
+  const [tab, setTab] = useState<GameTab>('wordle')
+  const [stats, setStats] = useState({ played: 0, wins: 0, streak: 0 })
+
+  useEffect(() => {
+    const saved = localStorage.getItem('dz-le3ba-stats')
+    if (saved) setStats(JSON.parse(saved))
+    const onStorage = () => {
+      const s = localStorage.getItem('dz-le3ba-stats')
+      if (s) setStats(JSON.parse(s))
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  return (
+    <div className="le3ba-root" dir="rtl">
+      {/* Header */}
+      <header className="le3ba-header">
+        <button className="le3ba-back" onClick={() => navigate('/')} aria-label="عودة">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="le3ba-logo">
+          <span className="le3ba-logo-dz">DZ</span>
+          <span className="le3ba-logo-le">LE3BA</span>
+        </div>
+        <div className="le3ba-stats-mini">
+          <span>🏆 {stats.wins}</span>
+          <span>🔥 {stats.streak}</span>
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <div className="le3ba-tabs">
+        <button
+          className={`le3ba-tab${tab === 'wordle' ? ' le3ba-tab--active' : ''}`}
+          onClick={() => setTab('wordle')}
+        >
+          🔤 كلمة
+        </button>
+        <button
+          className={`le3ba-tab${tab === 'crossword' ? ' le3ba-tab--active' : ''}`}
+          onClick={() => setTab('crossword')}
+        >
+          🧩 وصلة
+        </button>
+      </div>
+
+      {/* Game content */}
+      {tab === 'wordle' ? <WordleGame /> : <DZCrossword />}
     </div>
   )
 }

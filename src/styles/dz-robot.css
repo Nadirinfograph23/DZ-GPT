@@ -38,13 +38,23 @@
 .dzr-svg {
   width: 72px;
   height: 90px;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: transform 0.2s ease, filter 0.3s ease;
   filter: drop-shadow(0 4px 12px rgba(200,255,0,0.2));
 }
 
 .dzr-svg--held {
   transform: scale(1.08) rotate(-3deg);
   filter: drop-shadow(0 8px 20px rgba(200,255,0,0.5));
+}
+
+.dzr-svg--angry {
+  filter: drop-shadow(0 4px 16px rgba(255,68,68,0.7));
+  animation: dzr-angry-shake 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes dzr-angry-shake {
+  from { transform: rotate(-2deg) scale(1.02); }
+  to   { transform: rotate(2deg) scale(1.02); }
 }
 
 .dzr-eye {
@@ -89,6 +99,23 @@
   to   { transform: rotate(-10deg); }
 }
 
+.dzr-arm-angry-r {
+  transform-origin: 11px 62px;
+  animation: dzr-arm-angry-wave-r 0.25s ease-in-out infinite alternate;
+}
+.dzr-arm-angry-l {
+  transform-origin: 69px 62px;
+  animation: dzr-arm-angry-wave-l 0.25s ease-in-out infinite alternate;
+}
+@keyframes dzr-arm-angry-wave-r {
+  from { transform: rotate(-20deg); }
+  to   { transform: rotate(5deg); }
+}
+@keyframes dzr-arm-angry-wave-l {
+  from { transform: rotate(5deg); }
+  to   { transform: rotate(-20deg); }
+}
+
 .dzr-label {
   font-size: 10px;
   font-weight: 800;
@@ -96,6 +123,12 @@
   letter-spacing: 1px;
   text-shadow: 0 0 8px rgba(200,255,0,0.6);
   font-family: 'Segoe UI', sans-serif;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+
+.dzr-label--angry {
+  color: #ff4444;
+  text-shadow: 0 0 8px rgba(255,68,68,0.8);
 }
 
 .dzr-bubble {
@@ -118,6 +151,14 @@
   max-width: 180px;
   text-align: center;
   direction: rtl;
+  transition: border-color 0.3s, background 0.3s, color 0.3s;
+}
+
+.dzr-bubble--angry {
+  background: rgba(30, 5, 5, 0.97);
+  border-color: rgba(255,68,68,0.6);
+  color: #ffaaaa;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.7), 0 0 12px rgba(255,68,68,0.3);
 }
 
 .dzr-bubble::after {

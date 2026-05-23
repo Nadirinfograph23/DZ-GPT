@@ -251,6 +251,12 @@ async function searchInvidious(query, limit = 8) {
   return []
 }
 
+// ── Clean thumbnail URL — strip expiring sqp/rs signed params ────────────
+function cleanThumb(id, rawUrl) {
+  // Always use the stable public hqdefault URL (no expiring sqp/rs params)
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+}
+
 // ── Search YouTube (youtube-sr primary → Invidious fallback) ──────────────
 async function searchYouTube(query, limit = 8) {
   try {
@@ -259,7 +265,7 @@ async function searchYouTube(query, limit = 8) {
       id: v.id || '',
       title: v.title || '',
       url: `https://www.youtube.com/watch?v=${v.id}`,
-      thumbnail: v.thumbnail?.url || v.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+      thumbnail: cleanThumb(v.id, v.thumbnail?.url || v.thumbnails?.[0]?.url),
       duration: v.duration ? Math.floor(v.duration / 1000) : 0,
       views: v.views || 0,
       channel: v.channel?.name || v.author?.name || '',

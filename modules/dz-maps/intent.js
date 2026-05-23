@@ -419,11 +419,17 @@ export function extractLocationFromMsg(msg, poiKey) {
     const wilayaNum = cleaned.match(/ولاية\s+(\d{1,2})/)
     if (wilayaNum) loc = `wilaya ${wilayaNum[1]}`
   }
-  // City-list fallback — handles preposition-free patterns like "مطعم سطيف"
-  // Match longest city name first to avoid partial matches
-  if (!loc) {
-    for (const city of ALGERIA_CITIES_AR) {
-      if (msg.includes(city)) { loc = city; break }
+  // City-list pass — ALWAYS runs on the original message to:
+  //   a) Fill in when no preposition was found ("مطعم سطيف")
+  //   b) Fix partial matches caused by ب-preposition false positives
+  //      e.g. "صيدلية باتنة" → ب matched inside "باتنة" → loc="اتنة" (wrong) → override to "باتنة"
+  for (const city of ALGERIA_CITIES_AR) {
+    if (msg.includes(city)) {
+      // Override if: no loc yet, OR the known city name is longer/more precise than what was extracted
+      if (!loc || city.length > loc.length || !loc.includes(city)) {
+        loc = city
+      }
+      break
     }
   }
   return loc

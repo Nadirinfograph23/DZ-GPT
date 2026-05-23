@@ -134,6 +134,35 @@ const POI_TYPES = {
   },
 }
 
+// ── ALGERIAN CITIES / WILAYAS — used for preposition-free detection ──────────
+// Pattern: "مطعم سطيف" / "مستشفى نقاوس" / "مسجد في باتنة" — city name without explicit prep
+// Ordered longest-first to prevent partial overlap (e.g. "تيزي وزو" before "تيزي")
+export const ALGERIA_CITIES_AR = [
+  // Wilayas (official names)
+  'الجزائر العاصمة', 'البليدة', 'البويرة', 'تيزي وزو', 'أم البواقي', 'برج بوعريريج',
+  'سوق أهراس', 'عين الدفلى', 'عين تيموشنت', 'سيدي بلعباس', 'غليزان',
+  'رلزيان', 'تيسمسيلت', 'مستغانم', 'خنشلة', 'المسيلة', 'بومرداس', 'تيبازة',
+  // Short wilaya names
+  'وهران', 'قسنطينة', 'عنابة', 'باتنة', 'سطيف', 'بجاية', 'تلمسان', 'سكيكدة',
+  'الجلفة', 'بسكرة', 'ورقلة', 'تبسة', 'قالمة', 'ميلة', 'جيجل', 'معسكر',
+  'تيارت', 'الشلف', 'المدية', 'الوادي', 'بشار', 'تندوف', 'إليزي', 'أدرار',
+  'غرداية', 'المنيعة', 'تمنراست', 'النعامة', 'البيض', 'الأغواط', 'الطارف',
+  // Major cities / communes
+  'نقاوس', 'عين مليلة', 'خراطة', 'بريكة', 'تبسة', 'عين البيضاء', 'أم الدواهر',
+  'بوفاريك', 'خميس مليانة', 'شرشل', 'رويبة', 'المحمدية', 'حسين داي', 'القبة',
+  'بابا علي', 'برج الكيفان', 'الحراش', 'بئر مراد رايس', 'دالي إبراهيم',
+  'حيدرة', 'بن عكنون', 'الأبيار', 'شراقة', 'الدار البيضاء', 'سيدي موسى',
+  'الرغاية', 'بوزريعة', 'بني مسوس', 'القليعة', 'لقبة', 'تيقزيرت',
+  'بجاية', 'سيدي عيش', 'أقبو', 'برج منايل', 'الدلفة', 'ذراع بن خدة',
+  'عزازقة', 'الأربعاء', 'بئر الذجر', 'باب الزوار', 'المرسى',
+  'ميلة', 'تاجنانت', 'شلغوم العيد', 'تسالة المقراني', 'أولاد جلال',
+  'طولقة', 'سيدي خالد', 'مشونش', 'برج زمورة', 'أم بواقي',
+  'عين فكرون', 'قسنطينة', 'حامة بوزيان', 'الخروب', 'ديدوش مراد',
+  'الزيادية', 'عين الاشياخ', 'مسيلة', 'بريكة', 'عين الكبيرة',
+  // Darija spellings of common cities
+  'الجزائر', 'وهران', 'قسنطينة', 'عنابة', 'باتنا', 'سطيف',
+]
+
 // ── NON-MAP EXCLUSION PATTERNS ───────────────────────────────────────────────
 // If a message matches ANY of these, it is NEVER a map query,
 // even if it contains location names or geographic keywords.
@@ -276,6 +305,8 @@ function hasStrongMapIntent(msg) {
  *   2. If strong map intent word → true
  *   3. If routing query → true
  *   4. If POI keyword + location preposition → true
+ *   4b. If POI keyword + known Algerian city (no preposition needed) → true
+ *       e.g. "مطعم سطيف", "مكتب البريد نقاوس", "مسجد الفرقان عنابة"
  *   5. Otherwise → false
  */
 export function isMapQuery(msg) {
@@ -290,10 +321,19 @@ export function isMapQuery(msg) {
   // Step 3 — Explicit routing (من X إلى Y)
   if (isRoutingQuery(msg)) return true
 
-  // Step 4 — POI keyword + explicit location preposition
-  // e.g. "مستشفى في وهران" (NOT just "مستشفى")
   const hasPoi = detectPoiType(msg) !== null
+
+  // Step 4 — POI keyword + explicit location preposition
+  // e.g. "مستشفى في وهران"
   if (hasPoi && LOC_PREP_REGEX.test(msg)) return true
+
+  // Step 4b — POI keyword + known Algerian city WITHOUT preposition
+  // e.g. "مطعم سطيف", "مكتب البريد نقاوس", "صيدلية باتنة"
+  if (hasPoi) {
+    for (const city of ALGERIA_CITIES_AR) {
+      if (msg.includes(city)) return true
+    }
+  }
 
   return false
 }
@@ -343,6 +383,7 @@ export function parseRouting(msg) {
 /**
  * Extract location name from message (after removing POI keywords)
  * e.g. "مستشفيات في الجزائر العاصمة" → "الجزائر العاصمة"
+ * e.g. "مطعم سطيف"  → "سطيف"  (no preposition needed — city list fallback)
  */
 export function extractLocationFromMsg(msg, poiKey) {
   let cleaned = msg
@@ -373,9 +414,17 @@ export function extractLocationFromMsg(msg, poiKey) {
     const m = cleaned.match(re)
     if (m && m[1]) { loc = m[1].trim(); break }
   }
+  // Wilaya number fallback
   if (!loc) {
     const wilayaNum = cleaned.match(/ولاية\s+(\d{1,2})/)
     if (wilayaNum) loc = `wilaya ${wilayaNum[1]}`
+  }
+  // City-list fallback — handles preposition-free patterns like "مطعم سطيف"
+  // Match longest city name first to avoid partial matches
+  if (!loc) {
+    for (const city of ALGERIA_CITIES_AR) {
+      if (msg.includes(city)) { loc = city; break }
+    }
   }
   return loc
 }

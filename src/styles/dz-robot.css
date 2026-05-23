@@ -116,6 +116,37 @@
   to   { transform: rotate(-20deg); }
 }
 
+.dzr-hide-btn {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 18px;
+  height: 18px;
+  background: rgba(15,15,20,0.9);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s, border-color 0.2s, background 0.2s;
+  padding: 0;
+  pointer-events: auto;
+  z-index: 10;
+}
+.dzr-root:hover .dzr-hide-btn {
+  opacity: 1;
+}
+.dzr-hide-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.4);
+  background: rgba(239,68,68,0.12);
+}
+
 .dzr-label {
   font-size: 10px;
   font-weight: 800;

@@ -10347,6 +10347,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         return res.status(200).json({
           content: _autoSummary,
           isWebReader: true,
+          showCloneOption: true,
+          cloneUrl: _detectedUrls[0],
           webSiteInfo: {
             url: _detectedUrls[0],
             title: _qi.title || _domain,
@@ -10495,9 +10497,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           mapMeta:  mapResult.mapMeta || null,
         })
       }
+      // mapResult is null only if isMapQuery changed — return GPS fallback
+      return res.status(200).json({
+        content: '📍 اضغط على زر الموقع لعرض الخريطة القريبة منك.',
+        isMap: true,
+        mapHtml: '',
+        mapMeta: { type: 'gps-nearby', needsGps: true, poiKey: null, poiIcon: '📍', poiNameAr: 'مرفق' },
+      })
     } catch (mapErr) {
       console.error('[DZ-Maps] Error:', mapErr.message)
-      // Fall through to AI handler
+      // Always return a map-type response — never fall through to AI for map queries
+      return res.status(200).json({
+        content: '⚠️ تعذّر تحميل الخريطة مؤقتاً. يرجى المحاولة مرة أخرى.',
+        isMap: false,
+      })
     }
   }
 
@@ -11632,18 +11645,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
     // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
-    let inspirationBlock = ''
-    try {
-      const inspiration = await searchUiInspiration(wbMeta.type, lastUserMessage)
-      if (inspiration.length > 0) {
-        inspirationBlock = `\n\n════════════════════════════════════════════\nUI INSPIRATION FOUND (from CodePen / GitHub / Flowbite — study these patterns, then CREATE BETTER):\n` +
-          inspiration.map((item, i) => `${i + 1}. "${item.title}"\n   → ${item.snippet}\n   URL: ${item.url}`).join('\n') +
-          `\n\nINSTRUCTION: Use these as design direction only. Build something original and superior — not a copy.\n════════════════════════════════════════════`
-        console.log(`[Website Builder v6] Injected ${inspiration.length} inspiration items for type="${wbMeta.type}"`)
-      }
-    } catch (inspErr) {
-      console.warn('[Website Builder v6] Inspiration search failed (non-fatal):', inspErr.message)
-    }
+    // Skip inspiration search — build directly for immediate response (no deep analysis)
+    const inspirationBlock = ''
 
     // ── Step 2: Build enriched user message with metadata hints ──────────────
     const enrichedUserMsg = [

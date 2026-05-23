@@ -9969,6 +9969,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isWebReaderQuery = _detectedUrls.length > 0
   let webReaderContext = ''
 
+  // ── YouTube intent — pre-computed EARLY so we can guard other blocks ──────
+  // Must be defined before isAlgerianCitizenQuery / detectAmbiguity checks.
+  const _ytUrlInMsg_pre = _detectedUrls.find(u => isValidYouTubeUrl(u))
+  const _ytKwRe_pre = /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|ابحث.*اغنية|جيبلي.*اغنية|شوفلي.*اغنية|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|كليبات|video\s*clip|music\s*video|نشيد|أنشودة|مقطع.*فيديو|فيديو.*مقطع|شاهد.*فيديو|watch.*video)/i
+  const _isYouTubeQuery_pre = !!_ytUrlInMsg_pre
+    || (_ytKwRe_pre.test(lastUserMessage)
+        && !detectWebsiteBuilderQuery(lastUserMessage)
+        && !detectCodeExecutionQuery(lastUserMessage)
+        && !isMapQuery(lastUserMessage))
+
   // ══════════════════════════════════════════════════════════════════════
   // DZ LANGUAGE LAYER V2 — Algerian Darja Understanding System
   // Pipeline: Moderation → Normalization → Intent → Entities → Style
@@ -10107,7 +10117,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // RULE: Only intercept genuinely ambiguous short requests.
   //       DZ-Tool requests, conversation-only patterns → always skip.
   // ══════════════════════════════════════════════════════════════════════
-  if (!isDZToolRequest) {
+  if (!isDZToolRequest && !_isYouTubeQuery_pre) {
     const _ambiguity = detectAmbiguity(lastUserMessage)
     if (_ambiguity.needsClarification) {
       console.log(`[SmartClarify] 🤔 case=${_ambiguity.caseId} conf=${_ambiguity.confidence}% msg="${lastUserMessage.slice(0, 60)}"`)
@@ -10181,7 +10191,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
-  if (isAlgerianCitizenQuery(lastUserMessage)) {
+  // Guard: YouTube queries (فيديو/يوتيوب/اغنية...) must not be intercepted by Algeria routing.
+  if (!_isYouTubeQuery_pre && isAlgerianCitizenQuery(lastUserMessage)) {
     const algeriaResult = searchAlgeria(lastUserMessage)
     if (algeriaResult) {
       console.log(`[Algeria-KS] Match: category=${algeriaResult.match.category} score=${algeriaResult.score}`)
@@ -10262,16 +10273,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── YouTube Insight Engine ─────────────────────────────────────────────────
-  // Intercepts YouTube URLs (before Web Reader) and YouTube-intent keywords.
-  const _ytUrlInMsg = _detectedUrls.find(u => isValidYouTubeUrl(u))
-  // Matches: فيديو، يوتيوب، اغنية، كليب، tutorial، review، documentaire، course، شرحلي، جيبلي فيديو...
-  // BROAD: any message with فيديو/يوتيوب/اغنية/كليب without explicit build keyword → YouTube
-  const _ytKwRe = /(?:فيديو|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|ابحث.*اغنية|جيبلي.*اغنية|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|موسيقى|كليب|video\s*clip|music\s*video|نشيد|أنشودة|مقطع.*فيديو|فيديو.*مقطع)/i
-  const _isYouTubeQuery = !!_ytUrlInMsg
-    || (_ytKwRe.test(lastUserMessage)
-        && !detectWebsiteBuilderQuery(lastUserMessage)
-        && !detectCodeExecutionQuery(lastUserMessage)
-        && !isMapQuery(lastUserMessage))
+  // Use pre-computed YouTube intent (defined early above for use as guards)
+  const _ytUrlInMsg = _ytUrlInMsg_pre
+  const _ytKwRe = _ytKwRe_pre
+  const _isYouTubeQuery = _isYouTubeQuery_pre
 
   if (_isYouTubeQuery) {
     console.log(`[YouTube Insight] Detected: flow=${_ytUrlInMsg ? 'url' : 'search'} input="${lastUserMessage.slice(0, 80)}"`)
@@ -10309,10 +10314,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       console.error('[YouTube Insight] Error:', ytErr.message)
       // ── YouTube query but engine failed → return direct search link, NOT general AI ──
       // Prevents: "الشاب خالد فيديو" → website builder when YouTube API is down
-      const _ytFallbackQ = encodeURIComponent(lastUserMessage.replace(/^(?:جيبلي|ابحث عن|ابحث|عطيني|شوفلي)\s+/i, '').trim())
+      const _ytFallbackQ = encodeURIComponent(lastUserMessage.replace(/^(?:جيبلي|ابحث عن|ابحث|عطيني|شوفلي|شرحلي)\s+/i, '').replace(/\s*بالفيديو\s*/i, ' ').trim())
       return res.status(200).json({
-        content: `🎬 البحث عن: **"${lastUserMessage}"** على YouTube\n\n⚠️ تعذّر تحميل نتائج YouTube مؤقتاً.\n\n👉 [ابحث مباشرة على YouTube](https://www.youtube.com/results?search_query=${_ytFallbackQ})\n\n💡 يمكنك أيضاً تجربة:\n- نسخ اسم الفيديو والبحث على YouTube مباشرة\n- إضافة رابط YouTube مباشر لتحليله`,
-        isYouTube: false,
+        content: `🔍 لم أتمكن من تحميل نتائج YouTube مؤقتاً.\n\n👉 [ابحث مباشرة على YouTube](https://www.youtube.com/results?search_query=${_ytFallbackQ})`,
+        isYouTube: true,
+        youtubeFlow: 'search',
+        youtubeResults: [],
+        youtubeSuggestions: [
+          `ابحث عن "${_ytFallbackQ.replace(/%20/g,' ')} شرح"`,
+          `ابحث عن "${_ytFallbackQ.replace(/%20/g,' ')} tutorial"`,
+        ],
       })
     }
   }

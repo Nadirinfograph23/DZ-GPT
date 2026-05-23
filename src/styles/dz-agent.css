@@ -4784,6 +4784,63 @@
 .dz-map-card-footer a { color: #444; text-decoration: none; }
 .dz-map-card-footer a:hover { color: #666; }
 
+/* ===== MAP POI QUICK SUGGESTIONS ===== */
+.dz-map-poi-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 10px 14px 12px;
+  background: linear-gradient(135deg, rgba(0,255,144,0.04) 0%, rgba(0,180,100,0.03) 100%);
+  border: 1px solid rgba(0,255,144,0.12);
+  border-radius: 12px;
+  direction: rtl;
+}
+
+.dz-map-poi-suggestions-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0,255,144,0.55);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.2px;
+}
+
+.dz-map-poi-suggestions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dz-map-poi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,255,144,0.15);
+  border-radius: 20px;
+  color: #c8c8c8;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  direction: rtl;
+}
+.dz-map-poi-btn:hover {
+  background: rgba(0,255,144,0.10);
+  border-color: rgba(0,255,144,0.35);
+  color: #00ff90;
+  transform: translateY(-1px);
+}
+.dz-map-poi-btn-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* GPS button styles removed — replaced by smart intent detection */
 
 /* ===== GPS NEARBY CARD ===== */

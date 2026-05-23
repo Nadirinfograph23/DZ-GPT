@@ -185,9 +185,9 @@ export default function DZLe3ba() {
 
         {!gameOver && guesses.length < MAX_TRIES && (
           <div className={`le3ba-row le3ba-row--active${shake ? ' le3ba-row--shake' : ''}`}>
-            {Array.from({ length: WORD_LENGTH }, (_, i) => (
-              <div key={i} className={`le3ba-tile le3ba-tile--${currentLetters[i] ? 'active' : 'empty'}`}>
-                {currentLetters[i] || ''}
+            {Array.from({ length: WORD_LENGTH }, (_x, ci) => (
+              <div key={ci} className={`le3ba-tile le3ba-tile--${currentLetters[ci] ? 'active' : 'empty'}`}>
+                {currentLetters[ci] || ''}
               </div>
             ))}
           </div>

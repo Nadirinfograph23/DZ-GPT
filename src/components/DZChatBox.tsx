@@ -4647,8 +4647,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       }
 
       // ── Thinking Trace — fire in parallel (non-blocking) ──────────────────
+      // Skip thinking trace for direct-action operations that have their own UI
+      const _isYouTubeDirectOp = /(?:يوتيوب|يوتيب|youtube\.com|youtu\.be)/i.test(text) ||
+        (/(?:فيديو|كليب|اغنية|أغنية|موسيقى|نشيد|أنشودة|مقطع|شاهد|video|music|clip|song)/i.test(text) &&
+          !/(?:ابني|اصنع|أنشئ|انشئ|صمم|اعمل|create|build|make|design)\s+(?:موقع|صفحة|سايت|site|page)/i.test(text))
+      const _isMapDirectOp = /(?:^|\s)(?:خريطة|خرائط|اتجاه|طريق إلى|route|map\b|navigate)/i.test(text) ||
+        /(?:مطعم|مستشفى|صيدلية|مدرسة|مسجد|بنك|فندق|محطة)\s+(?:في|ب|قريب|بالقرب)/i.test(text)
+      const _isWebsiteCreateOp = /(?:انشئ|أنشئ|اصنع|ابني|اعمل|أعمل|دير|create|build|make|generate)\s+(?:موقع|صفحة|سايت|ويب|site|web|html|landing)/i.test(text)
+      const _isWebsiteCloneOp = /https?:\/\/[^\s]{5,}/i.test(text) &&
+        /(?:استنسخ|استنساخ|clone|كلون|اعمل نسخة|انسخ الموقع|copy.*site|انسخ)/i.test(text)
+
       const isComplexQuery = text.length >= 20 &&
-        !/^(مرحبا|سلام|شكرا|hello|hi|thanks|ok|okay|نعم|لا|yes|no)\b/i.test(text.trim())
+        !/^(مرحبا|سلام|شكرا|hello|hi|thanks|ok|okay|نعم|لا|yes|no)\b/i.test(text.trim()) &&
+        !_isYouTubeDirectOp && !_isMapDirectOp && !_isWebsiteCreateOp && !_isWebsiteCloneOp
       let thinkingTraceRoles: ThinkingTraceRole[] | null = null
       const thinkingTracePromise = isComplexQuery
         ? (async () => {

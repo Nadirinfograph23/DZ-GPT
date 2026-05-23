@@ -132,7 +132,21 @@ const POI_TYPES = {
     ],
     osm: 'amenity=parking', icon: '🅿️', nameAr: 'موقف سيارات',
   },
+  bus_station: {
+    labels: [
+      'محطة المسافرين', 'محطة الحافلات', 'محطة حافلات', 'محطة القطار', 'محطة القطارات',
+      'محطة نقل', 'ساحة المسافرين', 'محطة الباص', 'باص', 'حافلة', 'حافلات',
+      'ترمينال', 'المحطة الرئيسية',
+      'gare routière', 'gare', 'terminal', 'station de bus', 'bus station', 'train station',
+      'المحطة', 'الترمينال', 'وين الحافلة', 'وين القطار',
+    ],
+    osm: 'amenity~"bus_station|train_station|ferry_terminal"', icon: '🚌', nameAr: 'محطة المسافرين',
+  },
 }
+
+// ── NON-MAP POI MODIFIERS — disqualify POI queries that are informational, not geographic ──
+// e.g. "أشهر مطعم" / "تاريخ البلدية" / "ميزانية المستشفى" → NOT map queries
+const NON_MAP_POI_MODIFIERS = /(?:أشهر|أفضل|تاريخ|تأسيس|نشأة|ميزانية|هيكل|نظام|دور|وظيفة|مهام|قصة|حكاية|سبب|لماذا|ماذا يفعل|كيف يعمل|معنى|تعريف|شرح|explain|histoire|meilleur|historique)/i
 
 // ── ALGERIAN CITIES / WILAYAS — used for preposition-free detection ──────────
 // Pattern: "مطعم سطيف" / "مستشفى نقاوس" / "مسجد في باتنة" — city name without explicit prep
@@ -334,6 +348,11 @@ export function isMapQuery(msg) {
       if (msg.includes(city)) return true
     }
   }
+
+  // Step 4c — POI keyword alone (no location) → trigger GPS fallback
+  // e.g. "صيدلية", "مطعم", "مسجد", "محطة المسافرين" → show GPS nearby request
+  // Guard: skip if message has non-map informational modifier
+  if (hasPoi && !NON_MAP_POI_MODIFIERS.test(msg)) return true
 
   return false
 }

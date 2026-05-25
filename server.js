@@ -1830,11 +1830,13 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 // Master fallback: tries DeepSeek → Ollama → multiple Groq models.
 // Returns { content, model } where content is validated, or { content: null }.
 // ── Wrapped with: concurrency semaphore + in-flight deduplication ──────────
-// taskHint (optional): 'realtime'|'multilingual'|'technical'|'retrieval'|'reasoning'|'general'
+// taskHint (optional): 'realtime'|'multilingual'|'technical'|'retrieval'|'reasoning'|'general'|'website'|'html'|'code'
 // Used by the capability-aware AI router when all primary providers fail.
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
   const trimmed = trimRelevantContext(messages, 8)
-  const effectiveTokens = Math.min(max_tokens, 4096)
+  // Website/code generation needs more tokens — allow up to 8000; all others capped at 4096
+  const _isHeavyGen = taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
+  const effectiveTokens = _isHeavyGen ? Math.min(max_tokens, 8000) : Math.min(max_tokens, 4096)
 
   // ── Smart model selection ────────────────────────────────────────────────────
   // Complex queries (Arabic, long, knowledge-heavy) → skip 8b, go straight to 70b
@@ -1844,7 +1846,8 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
     query.length > 80 ||
     _arabicCount > 20 ||
     /مباراة|نتيجة|أخبار|طقس|شرح|كيف|ماذا|لماذا|ترتيب|إحصاء|قانون|فيديو|أغنية|اكتب|أنشئ|برمجة|كود/.test(query) ||
-    taskHint === 'reasoning' || taskHint === 'multilingual' || taskHint === 'retrieval'
+    taskHint === 'reasoning' || taskHint === 'multilingual' || taskHint === 'retrieval' ||
+    taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
   )
 
   // Max 2 Groq attempts: right model first, one backup — never iterate all 4 models
@@ -10609,7 +10612,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
             { role: 'user', content: lastUserMessage },
           ]
-          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 7000, taskHint: 'website' })
           const rawHtml = wbResult.content || ''
           const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
           const validation = validateHtmlOutput(htmlCode)
@@ -10750,7 +10753,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
           { role: 'user', content: lastUserMessage },
         ]
-        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 7000, taskHint: 'website' })
         const rawOutput = mwbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
         const validation = validateHtmlOutput(htmlCode)
@@ -11893,7 +11896,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 7000, taskHint: 'website' })
         console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput

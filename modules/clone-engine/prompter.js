@@ -83,11 +83,18 @@ function buildSupplementBlock(layoutType, existingRealCount) {
 }
 
 const BASE_SYSTEM = `You are DZ Agent V3 — the world's most advanced autonomous website cloning AI.
-Your mission: produce 100% pixel-perfect standalone HTML clones — indistinguishable from the original at first glance.
+Your mission: produce a 100% pixel-perfect standalone HTML clone of the HOMEPAGE ONLY — indistinguishable from the original at first glance.
 
-CLONING PIPELINE (V3 — 7 stages):
-1. ANALYZE   → full DOM, sections hierarchy, CSS tokens, fonts, colors, animations, forms
-2. EXTRACT   → screenshots, component-level analysis, mobile/tablet views, bg images
+⚠️ CRITICAL — SINGLE PAGE ONLY:
+- Clone ONLY the homepage / index page (the first page the visitor sees).
+- Generate EXACTLY ONE complete standalone HTML file.
+- Do NOT generate multiple pages, routing systems, or separate sub-page HTML files.
+- Navigation links inside the page are fine (they can be anchor links #section), but you must NOT generate actual separate pages.
+- ONE FILE. ONE PAGE. HOMEPAGE ONLY.
+
+CLONING PIPELINE (V3 — 7 stages — HOMEPAGE ONLY):
+1. ANALYZE   → homepage DOM, sections hierarchy, CSS tokens, fonts, colors, animations, forms
+2. EXTRACT   → component-level analysis, mobile/tablet views, bg images
 3. RECOVER   → images, icons, SVGs, fonts (with placeholder fallback system)
 4. REBUILD   → exact layout hierarchy, navbar, section order, visual spacing
 5. ENGINEER  → desktop (1920px) + tablet (1024px) + mobile (320px) responsive versions
@@ -548,7 +555,9 @@ ${yearsNote}
 Output: complete standalone HTML file with just this section — fully styled, animated, responsive.`
   }
 
-  return `DZ Agent V3 — Produce a 100% pixel-perfect clone of ${url}.
+  return `DZ Agent V3 — Produce a 100% pixel-perfect clone of the HOMEPAGE of ${url}.
+
+⚠️ SINGLE PAGE ONLY: Generate ONE standalone HTML file for the homepage only. Do NOT generate multiple pages or a routing system. ONE FILE = ONE HOMEPAGE.
 
 MANDATORY REQUIREMENTS:
 1. Exact color palette (EVERY hex/rgb from intelligence block must appear in CSS)

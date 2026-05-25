@@ -2059,6 +2059,53 @@ app.get('/api/ai-router/health', (_req, res) => {
   }
 })
 
+// ===== QURAN CONTEXT — RAG endpoint (tafsir_api + Dorar reference) =====
+// Fetches verified tafsir from spa5k/tafsir_api CDN for a specific surah:ayah
+// Dorar.net (dorar.net/api) is listed as a reference source in the system prompt;
+// their API requires a key we don't have yet — will be wired when available.
+app.get('/api/quran/context', async (req, res) => {
+  const surah = parseInt(req.query.surah, 10)
+  const ayah  = parseInt(req.query.ayah,  10)
+  if (!surah || !ayah || surah < 1 || surah > 114 || ayah < 1) {
+    return res.status(400).json({ ok: false, error: 'surah (1-114) و ayah مطلوبان' })
+  }
+
+  const CDN = 'https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir'
+  const TAFSIRS = [
+    { slug: 'ar-tafsir-ibn-kathir', label: 'ابن كثير' },
+    { slug: 'ar-tafsir-muyassar',   label: 'التفسير الميسر' },
+    { slug: 'ar-tafsir-al-saadi',   label: 'السعدي' },
+  ]
+
+  const fetched = await Promise.allSettled(
+    TAFSIRS.map(async ({ slug, label }) => {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 6000)
+      try {
+        const r = await fetch(`${CDN}/${slug}/${surah}/${ayah}.json`, { signal: ctrl.signal })
+        clearTimeout(timer)
+        if (!r.ok) return null
+        const d = await r.json()
+        const text = (d.text || '').trim()
+        return text ? { label, text: text.slice(0, 1200) } : null
+      } catch {
+        clearTimeout(timer)
+        return null
+      }
+    })
+  )
+
+  const tafsirs = fetched
+    .map(r => r.status === 'fulfilled' ? r.value : null)
+    .filter(Boolean)
+
+  if (tafsirs.length === 0) {
+    return res.json({ ok: true, surah, ayah, tafsirs: [], note: 'لم يُعثر على تفسير في قاعدة البيانات لهذه الآية.' })
+  }
+
+  res.json({ ok: true, surah, ayah, tafsirs })
+})
+
 app.get('/api/link-preview', async (req, res) => {
   const { url } = req.query
   if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'invalid url' })

@@ -1175,6 +1175,8 @@
   font-size: 12.5px;
   color: #8fd5b8;
   opacity: 0.85;
+  text-align: right;
+  direction: rtl;
 }
 
 .dzd-doctor-arrow {
@@ -1230,6 +1232,8 @@
   font-size: 14px;
   line-height: 1.55;
   color: #b8b8b8;
+  text-align: center;
+  direction: rtl;
 }
 
 .dzd-doctor-modal-actions {

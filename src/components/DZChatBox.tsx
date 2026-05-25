@@ -3342,7 +3342,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
-  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
+  const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''

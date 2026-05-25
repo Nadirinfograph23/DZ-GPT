@@ -1922,7 +1922,7 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          25_000,
+          35_000,
           'safeGenerateAI'
         )
       )
@@ -10609,7 +10609,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT + webInspirationBlock },
             { role: 'user', content: lastUserMessage },
           ]
-          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+          const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
           const rawHtml = wbResult.content || ''
           const htmlCode = extractHtmlFromResponse(rawHtml) || rawHtml
           const validation = validateHtmlOutput(htmlCode)
@@ -10737,7 +10737,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Map Website Builder ───────────────────────────────────────────────────
   if (detectMapWebsiteQuery(lastUserMessage)) {
     console.log(`[Map Website Builder] Detected: "${lastUserMessage.slice(0, 80)}"`)
-    const MAX_MWB_ATTEMPTS = 3
+    const MAX_MWB_ATTEMPTS = 2
     let lastMwbHtml = null
     let lastMwbValidation = null
 
@@ -10750,7 +10750,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'system', content: MAP_WEBSITE_BUILDER_SYSTEM_PROMPT + retryNote },
           { role: 'user', content: lastUserMessage },
         ]
-        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const mwbResult = await safeGenerateAI({ messages: mwbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
         const rawOutput = mwbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
         const validation = validateHtmlOutput(htmlCode)
@@ -11875,8 +11875,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       `[Generate a complete, production-quality ${wbMeta.description}]`,
     ].join('\n')
 
-    // ── Step 3: Generate HTML with up to 3 attempts ───────────────────────────
-    const MAX_WB_ATTEMPTS = 3
+    // ── Step 3: Generate HTML with up to 2 attempts ───────────────────────────
+    const MAX_WB_ATTEMPTS = 2
     let lastHtml = null
     let lastValidation = null
 
@@ -11893,7 +11893,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 8000 })
+        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 5500, taskHint: 'realtime' })
         console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput
@@ -11917,13 +11917,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
 
         console.warn(`[Website Builder v6] Attempt ${attempt} failed: ${validation.reason} (${htmlCode.length} chars)`)
-        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 1000))
+        if (attempt < MAX_WB_ATTEMPTS) await new Promise(r => setTimeout(r, 150))
       } catch (err) {
         console.error(`[Website Builder v6] Attempt ${attempt} error:`, err.message)
         if (attempt === MAX_WB_ATTEMPTS) {
           return res.status(200).json({ content: '⚠️ حدث خطأ أثناء توليد الموقع. يرجى المحاولة مرة أخرى.' })
         }
-        await new Promise(r => setTimeout(r, 1000))
+        await new Promise(r => setTimeout(r, 150))
       }
     }
 

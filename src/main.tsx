@@ -18,6 +18,7 @@ import DZLe3ba from './pages/DZLe3ba.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
+import GlobalRobot from './components/GlobalRobot.tsx'
 
 const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
 
@@ -76,6 +77,7 @@ createRoot(document.getElementById('root')!).render(
           </Routes>
           <ConditionalMiniPlayer />
           <QuickNav />
+          <GlobalRobot />
         </MiniPlayerProvider>
       </BrowserRouter>
     </ErrorBoundary>

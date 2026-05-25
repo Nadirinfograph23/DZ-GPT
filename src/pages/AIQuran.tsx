@@ -6,6 +6,7 @@ import {
   Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
   SkipBack, SkipForward, Repeat, RotateCcw,
+  Zap,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -40,6 +41,15 @@ interface AiMessage {
   role: 'user' | 'assistant'
   content: string
   showDevCard?: boolean
+  streaming?: boolean
+}
+
+interface QuranSearchResult {
+  verse_key: string
+  surah: number
+  ayah: number
+  text: string
+  tafsir: string | null
 }
 
 interface BookmarkedAyah {
@@ -125,6 +135,12 @@ export default function AIQuran() {
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [aiTab, setAiTab] = useState<'chat' | 'search'>('chat')
+  const [kwSearch, setKwSearch] = useState('')
+  const [kwLoading, setKwLoading] = useState(false)
+  const [kwResults, setKwResults] = useState<QuranSearchResult[]>([])
+  const [kwTotal, setKwTotal] = useState(0)
+  const [kwExpanded, setKwExpanded] = useState<string | null>(null)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
@@ -570,21 +586,91 @@ ${devInfoSection}`
         { role: 'system', content: systemPrompt },
         ...newMessages.map(m => ({ role: m.role, content: m.content })),
       ]
-      const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: 'llama-70b' }),
-      })
-      const d = await r.json()
-      setAiMessages(prev => [...prev, {
-        role: 'assistant',
-        content: d.content || 'حدث خطأ، حاول مجدداً.',
-        showDevCard: !!d.showDevCard,
-      }])
+
+      // ── Streaming via SSE (/api/chat/stream) ──────────────────────────────
+      const streamingMsgIndex = newMessages.length // index of the assistant msg
+      setAiMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true }])
+
+      try {
+        const r = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages, model: 'llama-70b' }),
+        })
+        if (!r.ok || !r.body) throw new Error('stream failed')
+
+        const reader = r.body.getReader()
+        const dec = new TextDecoder()
+        let buf = ''
+        let full = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() || ''
+          for (const line of lines) {
+            if (line.startsWith('event: token')) continue
+            if (line.startsWith('data: ')) {
+              try {
+                const d = JSON.parse(line.slice(6))
+                if (d.token) {
+                  full += d.token
+                  setAiMessages(prev => {
+                    const next = [...prev]
+                    next[streamingMsgIndex] = { role: 'assistant', content: full, streaming: true }
+                    return next
+                  })
+                }
+                if (d.message) { // error event
+                  setAiMessages(prev => {
+                    const next = [...prev]
+                    next[streamingMsgIndex] = { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }
+                    return next
+                  })
+                }
+              } catch {}
+            }
+          }
+        }
+        // Mark streaming done
+        setAiMessages(prev => {
+          const next = [...prev]
+          if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: full || 'حدث خطأ، حاول مجدداً.' }
+          return next
+        })
+      } catch {
+        setAiMessages(prev => {
+          const next = [...prev]
+          if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }
+          return next
+        })
+      }
     } catch {
       setAiMessages(prev => [...prev, { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }])
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  // ── Keyword ayah search ───────────────────────────────────────────────────
+  const runKwSearch = async () => {
+    const q = kwSearch.trim()
+    if (!q || kwLoading) return
+    setKwLoading(true)
+    setKwResults([])
+    setKwTotal(0)
+    setKwExpanded(null)
+    try {
+      const r = await fetch(`/api/quran/search?q=${encodeURIComponent(q)}&size=7`)
+      const d = await r.json()
+      setKwResults(d.results || [])
+      setKwTotal(d.total || 0)
+    } catch {
+      setKwResults([])
+    } finally {
+      setKwLoading(false)
     }
   }
 
@@ -1187,63 +1273,144 @@ ${devInfoSection}`
                 <X size={16} />
               </button>
             </div>
+
+            {/* ── Tab bar ── */}
+            <div className="aq-ai-tabs">
+              <button
+                className={`aq-ai-tab ${aiTab === 'chat' ? 'aq-ai-tab--active' : ''}`}
+                onClick={() => setAiTab('chat')}
+              >
+                <Bot size={13} /> محادثة
+              </button>
+              <button
+                className={`aq-ai-tab ${aiTab === 'search' ? 'aq-ai-tab--active' : ''}`}
+                onClick={() => setAiTab('search')}
+              >
+                <Search size={13} /> بحث في الآيات
+              </button>
+            </div>
+
             <div className="aq-ai-body">
-              <div className="aq-ai-messages">
-                {aiMessages.length === 0 && (
-                  <div className="aq-ai-welcome">
-                    <Bot size={22} />
-                    <p>مساعدك القرآني الذكي — اسألني عن:</p>
-                    <div className="aq-ai-suggestions">
-                      {[
-                        selectedChapter ? `ملخص سورة ${selectedChapter.name_arabic}` : 'ملخص سورة البقرة',
-                        selectedChapter ? `تصنيف سورة ${selectedChapter.name_arabic} مكية أم مدنية؟` : 'كم عدد السور المكية؟',
-                        'ما معنى كلمة الرحمن في القرآن؟',
-                        'ما أسباب نزول آية الكرسي؟',
-                      ].map((s, i) => (
-                        <button key={i} className="aq-ai-suggestion-btn" onClick={() => { setAiInput(s) }}>
-                          {s}
-                        </button>
-                      ))}
+
+              {/* ── CHAT TAB ── */}
+              {aiTab === 'chat' && (<>
+                <div className="aq-ai-messages">
+                  {aiMessages.length === 0 && (
+                    <div className="aq-ai-welcome">
+                      <Bot size={22} />
+                      <p>مساعدك القرآني الذكي — اسألني عن:</p>
+                      <div className="aq-ai-suggestions">
+                        {[
+                          selectedChapter ? `ملخص سورة ${selectedChapter.name_arabic}` : 'ملخص سورة البقرة',
+                          selectedChapter ? `تصنيف سورة ${selectedChapter.name_arabic} مكية أم مدنية؟` : 'كم عدد السور المكية؟',
+                          'ما معنى كلمة الرحمن في القرآن؟',
+                          'ما أسباب نزول آية الكرسي؟',
+                        ].map((s, i) => (
+                          <button key={i} className="aq-ai-suggestion-btn" onClick={() => setAiInput(s)}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+                  )}
+                  {aiMessages.map((m, i) => (
+                    <div key={i} className={`aq-ai-msg aq-ai-msg--${m.role}`}>
+                      {m.role === 'assistant'
+                        ? <><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>{m.streaming && <span className="aq-cursor">▋</span>}</>
+                        : m.content
+                      }
+                      {m.role === 'assistant' && m.showDevCard && <DeveloperCard />}
+                    </div>
+                  ))}
+                  {aiLoading && aiMessages.length > 0 && aiMessages[aiMessages.length - 1]?.content === '' && (
+                    <div className="aq-ai-msg aq-ai-msg--assistant">
+                      <Loader2 size={14} className="aq-spin" /> جاري التفكير...
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                <div className="aq-ai-input-row">
+                  <input
+                    className="aq-ai-input"
+                    placeholder="اسأل عن القرآن..."
+                    value={aiInput}
+                    onChange={e => setAiInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') sendAiMessage() }}
+                    disabled={aiLoading}
+                    autoFocus
+                  />
+                  <button
+                    className="aq-ai-send-btn"
+                    onClick={sendAiMessage}
+                    disabled={aiLoading || !aiInput.trim()}
+                    title="إرسال"
+                  >
+                    {aiLoading ? <Loader2 size={14} className="aq-spin" /> : <><Send size={14} /><span className="aq-ai-send-label">إرسال</span></>}
+                  </button>
+                </div>
+              </>)}
+
+              {/* ── SEARCH TAB ── */}
+              {aiTab === 'search' && (
+                <div className="aq-kw-panel">
+                  <div className="aq-kw-input-row">
+                    <input
+                      className="aq-kw-input"
+                      placeholder="ابحث بكلمة... مثال: الصبر، الرزق، الجنة"
+                      value={kwSearch}
+                      onChange={e => setKwSearch(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') runKwSearch() }}
+                      autoFocus
+                    />
+                    <button
+                      className="aq-kw-search-btn"
+                      onClick={runKwSearch}
+                      disabled={kwLoading || !kwSearch.trim()}
+                    >
+                      {kwLoading ? <Loader2 size={14} className="aq-spin" /> : <><Zap size={14} /> بحث</>}
+                    </button>
                   </div>
-                )}
-                {aiMessages.map((m, i) => (
-                  <div key={i} className={`aq-ai-msg aq-ai-msg--${m.role}`}>
-                    {m.role === 'assistant'
-                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                      : m.content
-                    }
-                    {m.role === 'assistant' && m.showDevCard && <DeveloperCard />}
+
+                  {kwTotal > 0 && (
+                    <div className="aq-kw-total">
+                      وُجد <strong>{kwTotal}</strong> نتيجة — يُعرض أفضل {kwResults.length}
+                    </div>
+                  )}
+
+                  <div className="aq-kw-results">
+                    {kwResults.length === 0 && !kwLoading && kwSearch && (
+                      <div className="aq-kw-empty">لا نتائج للكلمة «{kwSearch}»</div>
+                    )}
+                    {kwResults.map((r) => (
+                      <div key={r.verse_key} className="aq-kw-card">
+                        <div className="aq-kw-card-header" onClick={() => setKwExpanded(kwExpanded === r.verse_key ? null : r.verse_key)}>
+                          <span className="aq-kw-verse-key">{r.verse_key}</span>
+                          <span className="aq-kw-expand-icon">{kwExpanded === r.verse_key ? '▲' : '▼'}</span>
+                        </div>
+                        <p className="aq-kw-verse-text" dir="rtl">{r.text}</p>
+                        {kwExpanded === r.verse_key && r.tafsir && (
+                          <div className="aq-kw-tafsir">
+                            <span className="aq-kw-tafsir-label">تفسير ابن كثير</span>
+                            <p>{r.tafsir}</p>
+                          </div>
+                        )}
+                        {kwExpanded === r.verse_key && !r.tafsir && (
+                          <div className="aq-kw-tafsir aq-kw-tafsir--empty">لا يتوفر تفسير مباشر لهذه الآية</div>
+                        )}
+                        <button
+                          className="aq-kw-ask-btn"
+                          onClick={() => {
+                            setAiTab('chat')
+                            setAiInput(`فسّر لي الآية ${r.verse_key}:\n${r.text}`)
+                          }}
+                        >
+                          <Bot size={12} /> اسأل المساعد عن هذه الآية
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {aiLoading && (
-                  <div className="aq-ai-msg aq-ai-msg--assistant">
-                    <Loader2 size={14} className="aq-spin" /> جاري التفكير...
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-              <div className="aq-ai-input-row">
-                <input
-                  className="aq-ai-input"
-                  placeholder="اسأل عن القرآن..."
-                  value={aiInput}
-                  onChange={e => setAiInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') sendAiMessage() }}
-                  disabled={aiLoading}
-                  autoFocus
-                />
-                <button
-                  className="aq-ai-send-btn"
-                  onClick={sendAiMessage}
-                  disabled={aiLoading || !aiInput.trim()}
-                  title="إرسال"
-                  aria-label="إرسال"
-                >
-                  <Send size={14} />
-                  <span className="aq-ai-send-label">إرسال</span>
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           </aside>
         )}

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, X, MessageSquare } from 'lucide-react'
 import PwaInstallBanner from '../PwaInstallBanner'
-import DZRobot from '../components/DZRobot'
 import '../styles/dz-home.css'
 
 const FB_URL  = 'https://www.facebook.com/nadir.infograph23'
@@ -184,20 +183,6 @@ const SECTIONS = [
 
 export default function DZHome() {
   const navigate = useNavigate()
-  const [showRobot, setShowRobot] = useState(() => localStorage.getItem('dz-robot-hidden') !== '1')
-
-  useEffect(() => {
-    const handler = () => {
-      setShowRobot(localStorage.getItem('dz-robot-hidden') !== '1')
-    }
-    window.addEventListener('dz-robot-toggle', handler)
-    return () => window.removeEventListener('dz-robot-toggle', handler)
-  }, [])
-
-  const handleShowRobot = () => {
-    localStorage.removeItem('dz-robot-hidden')
-    setShowRobot(true)
-  }
 
   return (
     <div className="dz-home" dir="rtl">
@@ -291,19 +276,7 @@ export default function DZHome() {
       <PwaInstallBanner />
       <PrivacyToast />
 
-      {/* ===== ROBOT MASCOT ===== */}
-      {showRobot ? (
-        <DZRobot />
-      ) : (
-        <button
-          className="dz-home-show-robot"
-          onClick={handleShowRobot}
-          title="إظهار الروبوت"
-          aria-label="إظهار الروبوت"
-        >
-          🤖
-        </button>
-      )}
+      {/* Robot is now managed globally via GlobalRobot in main.tsx */}
     </div>
   )
 }

@@ -1576,6 +1576,183 @@
   .aq-bookmarks-btn { padding: 5px 8px; }
 }
 
+/* ===== AI PANEL TABS ===== */
+.aq-ai-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid #1e2433;
+  background: #0d1117;
+}
+.aq-ai-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.aq-ai-tab:hover { color: #c8d8e8; background: rgba(255,255,255,0.04); }
+.aq-ai-tab--active { color: #9acd32; border-bottom-color: #9acd32; background: rgba(154,205,50,0.06); }
+
+/* ===== STREAMING CURSOR ===== */
+.aq-cursor {
+  display: inline-block;
+  animation: blink 0.7s steps(1) infinite;
+  color: #9acd32;
+  margin-right: 2px;
+}
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ===== KEYWORD SEARCH PANEL ===== */
+.aq-kw-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+  overflow: hidden;
+}
+.aq-kw-input-row {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1e2433;
+}
+.aq-kw-input {
+  flex: 1;
+  background: #0f1117;
+  border: 1px solid #2a3045;
+  border-radius: 8px;
+  color: #e8eaf0;
+  font-size: 13px;
+  padding: 8px 12px;
+  direction: rtl;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.aq-kw-input:focus { border-color: #9acd32; }
+.aq-kw-input::placeholder { color: #4b5563; }
+.aq-kw-search-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #9acd32;
+  color: #0a0e1a;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, opacity 0.15s;
+}
+.aq-kw-search-btn:hover { background: #b8e654; }
+.aq-kw-search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.aq-kw-total {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #6b7280;
+  border-bottom: 1px solid #1a1f2e;
+  direction: rtl;
+}
+.aq-kw-total strong { color: #9acd32; }
+.aq-kw-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.aq-kw-empty {
+  text-align: center;
+  color: #4b5563;
+  padding: 32px 16px;
+  font-size: 13px;
+  direction: rtl;
+}
+.aq-kw-card {
+  background: #0f1420;
+  border: 1px solid #1e2840;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.aq-kw-card:hover { border-color: #2a3a60; }
+.aq-kw-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #131929;
+  cursor: pointer;
+  direction: rtl;
+}
+.aq-kw-verse-key {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9acd32;
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+.aq-kw-expand-icon { font-size: 10px; color: #4b5563; }
+.aq-kw-verse-text {
+  padding: 10px 14px 6px;
+  font-size: 15px;
+  font-family: 'Amiri', 'Scheherazade New', serif;
+  line-height: 1.8;
+  color: #d4d8e8;
+  margin: 0;
+  direction: rtl;
+}
+.aq-kw-tafsir {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  background: rgba(154,205,50,0.05);
+  border-right: 3px solid #9acd32;
+  border-radius: 0 0 6px 6px;
+  direction: rtl;
+}
+.aq-kw-tafsir--empty { color: #4b5563; font-size: 11px; }
+.aq-kw-tafsir-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #9acd32;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.aq-kw-tafsir p {
+  font-size: 12px;
+  color: #9aa0b0;
+  margin: 0;
+  line-height: 1.7;
+}
+.aq-kw-ask-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 12px 10px auto;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid #2a3a60;
+  border-radius: 6px;
+  color: #6b80a0;
+  font-size: 11px;
+  cursor: pointer;
+  direction: rtl;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.aq-kw-ask-btn:hover { background: rgba(154,205,50,0.08); border-color: #9acd32; color: #9acd32; }
+
 /* ===== FONT SIZE BAR ===== */
 .aq-font-size-bar {
   display: flex;

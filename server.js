@@ -10398,8 +10398,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
-  // Guard: YouTube/Map queries must not be intercepted by Algeria routing.
-  if (!_isYouTubeQuery_pre && !isMapQuery(lastUserMessage) && isAlgerianCitizenQuery(lastUserMessage)) {
+  // Guard: YouTube/Map/Doctor queries must not be intercepted by Algeria routing.
+  if (!_isYouTubeQuery_pre && !isMapQuery(lastUserMessage) && !detectDoctorIntent(lastUserMessage).isDoctorQuery && isAlgerianCitizenQuery(lastUserMessage)) {
     const algeriaResult = searchAlgeria(lastUserMessage)
     if (algeriaResult) {
       console.log(`[Algeria-KS] Match: category=${algeriaResult.match.category} score=${algeriaResult.score}`)
@@ -13429,7 +13429,7 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     }
   }
 
-  // ── Step 2b: YouTube / Map / WebBuilder / Clone — redirect to full endpoint ──
+  // ── Step 2b: YouTube / Map / WebBuilder / Clone / Doctor — redirect to full endpoint ──
   // These operations have their own rich UI engines — streaming text would bypass them
   const _ytKwRe_stream = /(?:فيديو|فيديوهات|يوتيوب|يوتيب|بالفيديو|اغنية|أغنية|أغاني|موسيقى|كليب|نشيد|أنشودة|مقطع.*فيديو|شاهد.*فيديو|watch.*video|music.*video|video.*clip|youtube\.com|youtu\.be)/i
   const _ytUrlRe_stream = /https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i
@@ -13439,7 +13439,9 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _isWebBuildStream = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
   const _isCloneStream = /https?:\/\/[^\s]{5,}/i.test(lastUserMessage) &&
     /(?:استنسخ|استنساخ|clone|كلون|انسخ.*موقع|اعمل نسخة)/i.test(lastUserMessage)
-  if (_isYTStream || _isMapStream || _isWebBuildStream || _isCloneStream) {
+  // Doctor search has its own rich results panel — must go through full endpoint
+  const _isDoctorStream = detectDoctorIntent(lastUserMessage).isDoctorQuery
+  if (_isYTStream || _isMapStream || _isWebBuildStream || _isCloneStream || _isDoctorStream) {
     _streamSSEHeaders(res)
     res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
     res.write('data: [DONE]\n\n')

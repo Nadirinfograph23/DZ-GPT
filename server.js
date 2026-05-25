@@ -1393,10 +1393,18 @@ const KEY_MAX_ERRORS = 3                  // disable key after 3 consecutive err
 const keyStats = new Map() // key -> { requests, errors, lastError, cooldownUntil, totalMs, avgMs }
 
 function getGroqKeys() {
+  const seen = new Set()
   const keys = []
-  for (let i = 1; i <= 10; i++) {
-    const k = i === 1 ? process.env.AI_API_KEY : process.env[`AI_API_KEY_${i}`]
-    if (k) keys.push(k)
+  const candidates = [
+    process.env.GROQ_API_KEY,
+    process.env.AI_API_KEY,
+    ...Array.from({ length: 9 }, (_, i) => process.env[`AI_API_KEY_${i + 2}`]),
+  ]
+  for (const k of candidates) {
+    if (k && k.trim() && !seen.has(k)) {
+      seen.add(k)
+      keys.push(k)
+    }
   }
   return keys
 }

@@ -2553,6 +2553,9 @@ function detectWebsiteBuilderQuery(msg) {
     'واجهة مستخدم', 'تطبيق ويب', 'صفحة بورتفوليو',
     'موقع شركة', 'موقع تجاري', 'موقع متجر', 'موقع مطعم', 'موقع فندق',
     'موقع وكالة', 'موقع مدرسة', 'موقع شخصي', 'موقع احترافي',
+    'موقع مطعم', 'موقع فندق', 'موقع متجر', 'موقع صيدلية', 'موقع نادي',
+    'موقع جمعية', 'موقع مؤسسة', 'موقع عيادة', 'موقع حلاق', 'موقع مصبغة',
+    'site restaurant', 'site hôtel', 'site hotel', 'site boutique', 'site école',
     'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر',
     'اصنع لي موقع', 'ابني لي موقع', 'عمل موقع', 'نريد موقع',
     'موقع HTML', 'موقع html', 'كود موقع', 'كود HTML', 'كود html',
@@ -10700,7 +10703,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── DZ Maps Intelligence Engine ──────────────────────────────────────────
   // Guard: "موقع index" / "ملف index.html" / web-dev file terms → NOT a map query
   const _isWebFileCtx = /(?:موقع|صفحة|ملف|فايل|file)\s+index(?:\.[a-zA-Z0-9]+)?|\bindex\.(html?|js|ts|jsx|tsx|php|css|vue|svelte|py)\b|(?:موقع|صفحة|ملف)\s+(?:html?|css|javascript|react|vue|angular|next|nuxt|vite|django|flask|express|node|php|python)|\.(?:html?|css|js|ts|jsx|tsx|py|php|json)\b/i.test(lastUserMessage)
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx) {
+  // Guard: إنشاء موقع مطعم / موقع فندق / دير موقع → website builder, NOT map
+  const _isWebBuildCtx = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)

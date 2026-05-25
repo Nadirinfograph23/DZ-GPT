@@ -3335,6 +3335,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
+  const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
@@ -4384,6 +4385,84 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     })
   }, [addAssistantMessage])
 
+  // ===== CLAUDE MODE SSE RUNNER (free-claude-code approach) =====
+  const runClaudeReActSSE = useCallback(async (
+    query: string,
+    outboundMessages: Array<{role: string; content: string}>,
+    signal: AbortSignal,
+  ): Promise<void> => {
+    setIsGithubReActLoading(true)
+    setIsClaudeMode(true)
+    setLiveReActSteps([{ type: 'start', message: '🤖 Claude Mode — جاري التهيئة...' }])
+
+    let finalContent = ''
+    let finalSteps: ReActStep[] = []
+
+    try {
+      const response = await fetch('/api/dz-agent/github/claude/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        body: JSON.stringify({
+          query,
+          messages: outboundMessages,
+          githubToken: githubToken || undefined,
+        }),
+        signal,
+      })
+
+      if (!response.ok || !response.body) throw new Error(`Claude SSE error: ${response.status}`)
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          try {
+            const event = JSON.parse(raw)
+            if (event.type === 'step' && event.step) {
+              setLiveReActSteps(prev => [...prev, event.step as ReActStep])
+            } else if (event.type === 'done') {
+              finalContent = event.content || ''
+              finalSteps = (event.steps as ReActStep[]) || []
+              if (event.liveUrl) {
+                finalSteps = [...finalSteps, { type: 'done', content: event.content || '', liveUrl: event.liveUrl } as ReActStep]
+              }
+            } else if (event.type === 'error') {
+              finalContent = `⚠️ خطأ في Claude Mode: ${event.message}`
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        setIsGithubReActLoading(false); setIsClaudeMode(false); setLiveReActSteps([])
+        return
+      }
+      finalContent = '⚠️ تعذّر الاتصال بـ Claude Mode. يرجى المحاولة مرة أخرى.'
+    }
+
+    setIsGithubReActLoading(false)
+    setIsClaudeMode(false)
+    setLiveReActSteps([])
+    trackFeatureUsage('claude-react')
+    addAssistantMessage({
+      content: finalContent || '✅ اكتملت عمليات GitHub (Claude Mode)',
+      richType: 'github-react',
+      reactSteps: finalSteps,
+      claudeMode: true,
+    })
+  }, [githubToken, addAssistantMessage])
+
   // ===== GITHUB REACT SSE RUNNER =====
   const runGithubReActSSE = useCallback(async (
     query: string,
@@ -4637,12 +4716,22 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       )
       if (isGithubReActQuery) {
         try {
-          await runGithubReActSSE(text, outboundMessages, signal)
+          // Claude Mode (free-claude-code approach) — uses native function calling
+          await runClaudeReActSSE(text, outboundMessages, signal)
           return
         } catch (sseErr) {
-          console.warn('[DZChatBox] GitHub ReAct SSE failed, falling back:', (sseErr as Error).message)
+          console.warn('[DZChatBox] Claude Mode failed, falling back to standard ReAct:', (sseErr as Error).message)
           setIsGithubReActLoading(false)
+          setIsClaudeMode(false)
           setLiveReActSteps([])
+          try {
+            await runGithubReActSSE(text, outboundMessages, signal)
+            return
+          } catch (fallbackErr) {
+            console.warn('[DZChatBox] Standard ReAct also failed:', (fallbackErr as Error).message)
+            setIsGithubReActLoading(false)
+            setLiveReActSteps([])
+          }
         }
       }
 
@@ -5072,7 +5161,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setLiveReActSteps([])
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE, runGithubReActSSE])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
 
   // Feature C — Export conversation as Markdown
   const exportAsMarkdown = useCallback(() => {
@@ -5764,12 +5853,14 @@ ${rows}
                   <span className="dz-autonomous-badge">⚡ Autonomous</span>
                 )}
                 {isGithubReActLoading && (
-                  <span className="dz-github-react-badge">🤖 GitHub ReAct</span>
+                  <span className="dz-github-react-badge">
+                    {isClaudeMode ? '🤖 Claude Mode' : '⚙️ GitHub ReAct'}
+                  </span>
                 )}
               </div>
               {isGithubReActLoading ? (
                 liveReActSteps.length > 0
-                  ? <GitHubReActPanel steps={liveReActSteps} isLive={true} />
+                  ? <GitHubReActPanel steps={liveReActSteps} isLive={true} claudeMode={isClaudeMode} />
                   : <GitHubLoadingIndicator />
               ) : agentSteps.length > 0 ? (
                 <AgentStepsPanel

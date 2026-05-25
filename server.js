@@ -64,6 +64,8 @@ import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
 import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
 import { mountAutonomousAgent } from './lib/autonomous/mount.js'
 import { runReActLoop, shouldUseReActLoop } from './lib/agent-loop/react.js'
+import { runClaudeReActLoop } from './lib/agent-loop/claude-react.js'
+import claudeProxyRouter from './lib/claude-proxy/index.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
@@ -254,6 +256,7 @@ app.use('/api/dz-agent/deploy', deployLimiter)
 app.use('/api/dz-agent/sync', deployLimiter)
 app.use('/api/dz-agent/clone-v2', cloneLimiter)
 app.use('/api/dz-agent/doctor-search', searchLimiter)
+app.use('/api/claude-proxy', aiLimiter)
 
 // ===== INPUT SANITIZER =====
 function sanitizeString(str, maxLen = 10000) {
@@ -9906,6 +9909,86 @@ app.post('/api/dz-agent/github/react/stream', async (req, res) => {
       steps: [],
       model: null,
     })
+  } finally {
+    res.end()
+  }
+})
+
+// ── Mount Anthropic-compatible Claude Proxy (free-claude-code approach) ───────
+app.use('/api/claude-proxy', claudeProxyRouter)
+console.log('[claude-proxy] Anthropic-compatible proxy mounted: /api/claude-proxy/v1/messages')
+
+// ── POST /api/dz-agent/github/claude/stream — Claude Code-style ReAct ─────────
+app.post('/api/dz-agent/github/claude/stream', async (req, res) => {
+  const rawToken = req.body.githubToken
+  const githubToken = rawToken ? sanitizeString(String(rawToken), 300) : process.env.GITHUB_TOKEN || ''
+  const messages = normalizeChatMessages(req.body.messages)
+  const query = sanitizeString(String(req.body.query || ''), 2000)
+    || [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const send = (type, payload = {}) => {
+    try {
+      res.write(`data: ${JSON.stringify({ type, ...payload })}\n\n`)
+      if (typeof res.flush === 'function') res.flush()
+    } catch (_) {}
+  }
+
+  send('start', { message: '🤖 Claude Mode — بدء التنفيذ...' })
+
+  try {
+    const collectedSteps = []
+    const ac = new AbortController()
+    req.on('close', () => ac.abort())
+
+    const result = await runClaudeReActLoop({
+      query,
+      messages,
+      githubToken,
+      signal: ac.signal,
+      onStep: (step) => {
+        collectedSteps.push(step)
+        send('step', { step })
+        console.log(`[claude-stream] ${step.type}: ${step.message || step.tool || ''}`)
+      },
+    })
+
+    // Extract liveUrl from steps
+    let liveUrl = null
+    for (const step of result.steps || collectedSteps) {
+      if (step.type === 'observation' && step.result) {
+        if (step.result.html_url && String(step.result.html_url).includes('.github.io')) {
+          liveUrl = step.result.html_url; break
+        }
+        if (step.result.site_url || step.result.pagesUrl) {
+          liveUrl = step.result.site_url || step.result.pagesUrl; break
+        }
+      }
+    }
+    if (!liveUrl) {
+      const allSteps = result.steps || collectedSteps
+      const repoObs = allSteps.find(s => s.type === 'observation' && s.result?.full_name)
+      const hasHtml = allSteps.some(s => s.type === 'observation' && (
+        String(s.result?.path || s.result?.file || '').includes('index.html') ||
+        String(s.result?.files || '').includes('index.html')
+      ))
+      if (repoObs && hasHtml) {
+        const [o, r] = String(repoObs.result.full_name).split('/')
+        if (o && r) liveUrl = `https://${o}.github.io/${r}`
+      }
+    }
+
+    send('done', { content: result.content, steps: result.steps || collectedSteps, model: result.model, liveUrl, claudeMode: true })
+  } catch (err) {
+    console.error('[claude-stream] Error:', err.message)
+    send('error', { message: err.message })
+    send('done', { content: `⚠️ خطأ في Claude Mode: ${err.message}`, steps: [], model: null })
   } finally {
     res.end()
   }

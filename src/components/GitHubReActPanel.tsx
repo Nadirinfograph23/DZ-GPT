@@ -24,6 +24,7 @@ export interface ReActStep {
 interface Props {
   steps: ReActStep[]
   isLive?: boolean
+  claudeMode?: boolean
 }
 
 interface Phase {
@@ -254,7 +255,7 @@ function getProgress(steps: ReActStep[]): number {
   return Math.min(15 + tools * 15, 85)
 }
 
-export default function GitHubReActPanel({ steps, isLive = false }: Props) {
+export default function GitHubReActPanel({ steps, isLive = false, claudeMode = false }: Props) {
   const [showPhases, setShowPhases]   = useState(false)
   const [showReport, setShowReport]   = useState(false)
   const [copied, setCopied]           = useState(false)
@@ -346,9 +347,10 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
           <div className="rp2-live-bar-top">
             <div className="rp2-live-indicator">
               <span className="rp2-live-dot" />
-              <Github size={12} style={{ color: '#86efac' }} />
-              <span className="rp2-live-title">DZ Agent يعمل</span>
+              <Github size={12} style={{ color: claudeMode ? '#a78bfa' : '#86efac' }} />
+              <span className="rp2-live-title">{claudeMode ? '🤖 Claude Mode' : 'DZ Agent يعمل'}</span>
               {ghUser && <span className="rp2-live-user">@{ghUser}</span>}
+              {claudeMode && <span className="rp2-claude-badge">Groq · llama3.3</span>}
             </div>
             <div className="rp2-live-meta">
               <span className="rp2-live-time">

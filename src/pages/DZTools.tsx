@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -151,6 +151,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'bizcard',      icon: '🪪', name: 'بطاقة العمل',                   desc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF', badge: 'NEW' },
   { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',                 desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
   { id: 'tts',          icon: '🔊', name: 'تحويل نص إلى صوت',              desc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية وإنجليزية — تحميل MP3', badge: 'NEW' },
+  { id: 'screenshot',   icon: '📸', name: 'تصوير المواقع',                  desc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -4393,6 +4394,313 @@ function TTSTool() {
   )
 }
 
+// ─── Screenshot Tool ──────────────────────────────────────────────────────────
+function ScreenshotTool() {
+  const [url, setUrl] = useState('')
+  const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop')
+  const [darkMode, setDarkMode] = useState(false)
+  const [fullPage, setFullPage] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{
+    screenshot: string
+    title: string
+    url: string
+    width: number | null
+    height: number | null
+  } | null>(null)
+  const [zoomed, setZoomed] = useState(false)
+  const [history, setHistory] = useState<{ url: string; title: string; screenshot: string; ts: number }[]>([])
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  const startProgress = () => {
+    setProgress(5)
+    let p = 5
+    progressRef.current = setInterval(() => {
+      p = Math.min(p + (Math.random() * 4 + 1), 88)
+      setProgress(p)
+    }, 600)
+  }
+
+  const stopProgress = (final = 100) => {
+    if (progressRef.current) clearInterval(progressRef.current)
+    setProgress(final)
+    setTimeout(() => setProgress(0), 800)
+  }
+
+  const capture = async () => {
+    const q = url.trim()
+    if (!q) { setError('أدخل رابط الموقع أولاً'); return }
+    setError('')
+    setResult(null)
+    setLoading(true)
+    startProgress()
+
+    try {
+      const res = await fetch('/api/tools/screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: q, viewport, darkMode, fullPage }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'فشل التصوير')
+      setResult(data)
+      setHistory(prev => [
+        { url: data.url, title: data.title || data.url, screenshot: data.screenshot, ts: Date.now() },
+        ...prev.slice(0, 4),
+      ])
+      stopProgress(100)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل التصوير')
+      stopProgress(0)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const downloadPng = () => {
+    if (!result) return
+    const a = document.createElement('a')
+    a.href = result.screenshot
+    a.download = `screenshot-${new URL(result.url).hostname}-${Date.now()}.png`
+    a.click()
+  }
+
+  const downloadPdf = () => {
+    if (!result) return
+    const host = (() => { try { return new URL(result.url).hostname } catch { return 'screenshot' } })()
+    const win = window.open('', '_blank')
+    if (!win) return
+    const now = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' })
+    win.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>${result.title || host}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#fff;font-family:Cairo,Tajawal,sans-serif;direction:rtl}
+  .hd{background:linear-gradient(135deg,#0a1a05 0%,#1a3d10 100%);color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between}
+  .hd-brand{font-size:12px;opacity:.7}
+  .hd-title{font-size:16px;font-weight:800;color:#c8ff00;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hd-date{font-size:11px;opacity:.6}
+  .body{padding:16px 28px}
+  .meta{font-size:12px;color:#555;margin-bottom:12px;direction:ltr}
+  img{width:100%;height:auto;border-radius:8px;border:1px solid #e0e0e0;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+  .ft{border-top:1px solid #e8e8e8;padding:10px 28px;font-size:10px;color:#999;display:flex;justify-content:space-between;margin-top:16px}
+  @media print{
+    @page{margin:0;size:A4 portrait}
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .hd{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+  <div class="hd">
+    <div class="hd-brand">🇩🇿 DZ-GPT · dz-gpt.vercel.app</div>
+    <div class="hd-title">${result.title || host}</div>
+    <div class="hd-date">${now}</div>
+  </div>
+  <div class="body">
+    <div class="meta">${result.url}</div>
+    <img src="${result.screenshot}" alt="screenshot"/>
+  </div>
+  <div class="ft">
+    <span>🇩🇿 DZ-GPT — أداة تصوير المواقع</span>
+    <span>${now}</span>
+  </div>
+</body>
+</html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print() }, 700)
+  }
+
+  const copyUrl = async () => {
+    if (!result) return
+    await navigator.clipboard.writeText(result.url)
+  }
+
+  const EXAMPLE_URLS = ['https://www.google.com', 'https://github.com', 'https://wikipedia.org', 'https://bbc.com']
+
+  return (
+    <div style={{ padding: '12px 0', direction: 'rtl', maxWidth: 860, margin: '0 auto' }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div style={{ background: 'linear-gradient(135deg,#0d1f08 0%,#1a3d10 60%,#0d2a08 100%)', borderRadius: 16, padding: '20px 24px', marginBottom: 20, border: '1px solid #2a4a20', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(ellipse at 80% 50%, rgba(200,255,0,0.06) 0%,transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(200,255,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, border: '1px solid rgba(200,255,0,0.25)', flexShrink: 0 }}>📸</div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#c8ff00', lineHeight: 1.2 }}>أداة تصوير المواقع</div>
+            <div style={{ fontSize: 12, color: '#7a9a60', marginTop: 3 }}>التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── URL Input ──────────────────────────────────────────────────────── */}
+      <div style={{ background: '#0d1f08', border: '1.5px solid #2a4020', borderRadius: 14, padding: '18px 20px', marginBottom: 14 }}>
+        <div style={{ fontSize: 12, color: '#7a9a60', marginBottom: 8, fontWeight: 600 }}>رابط الموقع</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="url"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && capture()}
+            placeholder="https://example.com"
+            disabled={loading}
+            style={{ flex: 1, background: '#060f04', border: '1px solid #2a4020', borderRadius: 10, padding: '11px 14px', color: '#d0e8c0', fontSize: 14, outline: 'none', direction: 'ltr', fontFamily: 'monospace' }}
+          />
+          <button
+            onClick={capture}
+            disabled={loading || !url.trim()}
+            style={{ background: loading ? '#1a2a10' : '#c8ff00', color: '#0a0e04', border: 'none', borderRadius: 10, padding: '11px 22px', fontSize: 13, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', minWidth: 110, justifyContent: 'center', transition: 'all 0.2s' }}
+          >
+            {loading ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> جاري...</> : '📸 التقاط'}
+          </button>
+        </div>
+
+        {/* Example URLs */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+          {EXAMPLE_URLS.map(ex => (
+            <button key={ex} onClick={() => setUrl(ex)} style={{ background: 'rgba(200,255,0,0.06)', border: '1px solid #2a4020', borderRadius: 6, padding: '3px 9px', fontSize: 11, color: '#7a9a60', cursor: 'pointer', direction: 'ltr', fontFamily: 'monospace', transition: 'all 0.15s' }}>
+              {ex.replace('https://', '')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Options ────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        {/* Viewport */}
+        <div style={{ background: '#0d1f08', border: '1px solid #2a4020', borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#7a9a60', marginLeft: 4 }}>الجهاز</span>
+          {(['desktop', 'mobile'] as const).map(v => (
+            <button key={v} onClick={() => setViewport(v)} style={{ background: viewport === v ? '#c8ff00' : 'transparent', color: viewport === v ? '#0a0e04' : '#7a9a60', border: `1px solid ${viewport === v ? '#c8ff00' : '#2a4020'}`, borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
+              {v === 'desktop' ? '🖥️ Desktop' : '📱 Mobile'}
+            </button>
+          ))}
+        </div>
+        {/* Dark mode */}
+        <button onClick={() => setDarkMode(d => !d)} style={{ background: darkMode ? '#1a2a10' : '#0d1f08', border: `1px solid ${darkMode ? '#c8ff00' : '#2a4020'}`, borderRadius: 10, padding: '10px 16px', fontSize: 12, color: darkMode ? '#c8ff00' : '#7a9a60', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+          {darkMode ? '🌙 Dark Mode' : '☀️ Light Mode'}
+        </button>
+        {/* Full page */}
+        <button onClick={() => setFullPage(f => !f)} style={{ background: fullPage ? '#1a2a10' : '#0d1f08', border: `1px solid ${fullPage ? '#c8ff00' : '#2a4020'}`, borderRadius: 10, padding: '10px 16px', fontSize: 12, color: fullPage ? '#c8ff00' : '#7a9a60', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+          {fullPage ? '📜 صفحة كاملة' : '🖼️ Viewport فقط'}
+        </button>
+      </div>
+
+      {/* ── Progress Bar ───────────────────────────────────────────────────── */}
+      {loading && (
+        <div style={{ background: '#0d1f08', border: '1px solid #2a4020', borderRadius: 12, padding: '16px 20px', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 13, color: '#c8ff00', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block', fontSize: 18 }}>⟳</span>
+              جاري التصوير...
+            </span>
+            <span style={{ fontSize: 12, color: '#7a9a60' }}>{Math.round(progress)}%</span>
+          </div>
+          <div style={{ background: '#1a2a10', borderRadius: 8, height: 8, overflow: 'hidden' }}>
+            <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #4a9a20, #c8ff00)', borderRadius: 8, transition: 'width 0.5s ease', boxShadow: '0 0 8px rgba(200,255,0,0.4)' }} />
+          </div>
+          <div style={{ fontSize: 11, color: '#4a6a30', marginTop: 8, textAlign: 'center' }}>
+            {progress < 30 ? 'فتح الصفحة...' : progress < 60 ? 'تحميل المحتوى...' : progress < 85 ? 'التقاط الصورة...' : 'معالجة الصورة...'}
+          </div>
+        </div>
+      )}
+
+      {/* ── Error ──────────────────────────────────────────────────────────── */}
+      {error && (
+        <div style={{ background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.3)', borderRadius: 12, padding: '14px 18px', marginBottom: 14, color: '#ff8888', fontSize: 13, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <div>
+            <strong>فشل التصوير:</strong> {error}
+            <div style={{ fontSize: 11, color: '#aa5555', marginTop: 4 }}>تأكد من صحة الرابط. بعض المواقع تحجب الروبوتات.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Result Preview ─────────────────────────────────────────────────── */}
+      {result && (
+        <div style={{ background: '#0d1f08', border: '1.5px solid #2a5020', borderRadius: 16, overflow: 'hidden', marginBottom: 14 }}>
+          {/* Meta bar */}
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #1a3010', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#c8ff00' }}>{result.title || 'بدون عنوان'}</div>
+              <div style={{ fontSize: 11, color: '#4a6a30', direction: 'ltr', marginTop: 2 }}>{result.url}</div>
+              {(result.width || result.height) && (
+                <div style={{ fontSize: 10, color: '#3a5a28', marginTop: 2 }}>
+                  {result.width && result.height ? `${result.width}×${result.height}px` : `عرض ${result.width}px`} · {viewport === 'mobile' ? '📱 Mobile' : '🖥️ Desktop'} · {darkMode ? '🌙 Dark' : '☀️ Light'}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setZoomed(z => !z)} style={{ background: '#1a3010', border: '1px solid #2a5020', borderRadius: 8, padding: '6px 12px', color: '#7aaa50', fontSize: 12, cursor: 'pointer' }}>{zoomed ? '🔍 تصغير' : '🔍 تكبير'}</button>
+              <button onClick={copyUrl} style={{ background: '#1a3010', border: '1px solid #2a5020', borderRadius: 8, padding: '6px 12px', color: '#7aaa50', fontSize: 12, cursor: 'pointer' }}>🔗 نسخ الرابط</button>
+              <button onClick={downloadPng} style={{ background: '#1a3010', border: '1px solid #2a5020', borderRadius: 8, padding: '6px 12px', color: '#7aaa50', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>⬇️ PNG</button>
+              <button onClick={downloadPdf} style={{ background: '#c8ff00', border: 'none', borderRadius: 8, padding: '6px 14px', color: '#0a0e04', fontSize: 12, cursor: 'pointer', fontWeight: 800 }}>📄 PDF</button>
+            </div>
+          </div>
+
+          {/* Screenshot image */}
+          <div style={{ overflow: 'auto', maxHeight: zoomed ? 'none' : 420, cursor: zoomed ? 'zoom-out' : 'zoom-in', background: '#060f04' }} onClick={() => setZoomed(z => !z)}>
+            <img
+              ref={imgRef}
+              src={result.screenshot}
+              alt="screenshot"
+              style={{ width: zoomed ? 'auto' : '100%', maxWidth: '100%', display: 'block', imageRendering: 'crisp-edges' }}
+            />
+          </div>
+
+          {/* Download actions */}
+          <div style={{ padding: '14px 18px', borderTop: '1px solid #1a3010', display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={downloadPng} style={{ flex: 1, minWidth: 140, background: '#1a3010', border: '1.5px solid #2a5020', borderRadius: 10, padding: '10px 16px', color: '#c8ff00', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              🖼️ تنزيل كـ PNG
+            </button>
+            <button onClick={downloadPdf} style={{ flex: 1, minWidth: 140, background: '#c8ff00', border: 'none', borderRadius: 10, padding: '10px 16px', color: '#0a0e04', fontSize: 13, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              📄 تنزيل كـ PDF
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── History ────────────────────────────────────────────────────────── */}
+      {history.length > 0 && (
+        <div style={{ background: '#0a1a07', border: '1px solid #1e3515', borderRadius: 14, padding: '14px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#5a8a40', marginBottom: 10 }}>📂 السجل الأخير</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {history.map((h, i) => (
+              <button key={i} onClick={() => setUrl(h.url)} style={{ background: '#0d1f08', border: '1px solid #2a4020', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textAlign: 'right', direction: 'rtl' }}>
+                <img src={h.screenshot} alt="" style={{ width: 48, height: 30, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 12, color: '#9acc70', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.title || h.url}</div>
+                  <div style={{ fontSize: 10, color: '#3a5a28', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.url}</div>
+                </div>
+                <span style={{ fontSize: 10, color: '#3a5a28', flexShrink: 0 }}>{new Date(h.ts).toLocaleTimeString('ar')}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Info box ───────────────────────────────────────────────────────── */}
+      <div style={{ marginTop: 14, padding: '12px 16px', background: 'rgba(200,255,0,0.04)', border: '1px solid rgba(200,255,0,0.12)', borderRadius: 10, fontSize: 12, color: '#5a8a40', direction: 'rtl', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 16 }}>💡</span>
+        <div>
+          <strong style={{ color: '#c8ff00' }}>تصوير المواقع الذكي</strong> — يستخدم محرك Chromium متقدم مع انتظار تحميل كامل للشبكة.
+          يدعم الصفحات الطويلة جداً. بعض المواقع قد تحجب التصوير الآلي. مدة التصوير: 10-30 ثانية.
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
@@ -4454,6 +4762,7 @@ export default function DZTools() {
         {active === 'bizcard'      && <BizCardTool />}
         {active === 'dataanalysis' && <DataAnalysisTool />}
         {active === 'tts'          && <TTSTool />}
+        {active === 'screenshot'   && <ScreenshotTool />}
       </div>
     </div>
   )

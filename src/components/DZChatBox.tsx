@@ -24,6 +24,8 @@ import type { AgentStep } from './AgentStepsPanel'
 import GitHubReActPanel from './GitHubReActPanel'
 import type { ReActStep } from './GitHubReActPanel'
 import GitHubLoadingIndicator from './GitHubLoadingIndicator'
+import TaskPlanPanel from './TaskPlanPanel'
+import type { TaskPlan } from './TaskPlanPanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
 
 // ===== RATING PERSISTENCE =====
@@ -161,6 +163,7 @@ type RichType =
   | 'web-reader'
   | 'github-profile'
   | 'doctor-results'
+  | 'task-plan'
   | 'github-react'
   | 'github-agent'
 
@@ -380,6 +383,9 @@ interface DZMessage {
   } | null
   ghAgentAutoExecute?: boolean
   ghAgentRawText?: string
+  taskPlan?: TaskPlan
+  taskPlanQuery?: string
+  claudeMode?: boolean
 }
 
 interface ActionLogEntry {
@@ -3336,6 +3342,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
       return sessionStorage.getItem('dz-agent-gh-token') || ''
@@ -3365,6 +3372,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const streamingMsgIdRef = useRef<string | null>(null)  // tracks the in-progress SSE message
+  const planApprovalRef = useRef<{
+    msgId: string
+    resolve: (approved: boolean) => void
+    query: string
+    outboundMessages: Array<{role: string; content: string}>
+    signal: AbortSignal
+    executor: (q: string, m: Array<{role: string; content: string}>, s: AbortSignal) => Promise<void>
+  } | null>(null)
   const [ratings, setRatings] = useState<RatingsStore>(loadRatings)
   const [activeYouTubeVideo, setActiveYouTubeVideo] = useState<YouTubeVideoData | null>(null)
   // Ref mirrors the state so sendMessage() always reads the latest value synchronously
@@ -4298,6 +4313,88 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     return false
   }, [])
 
+  // ===== SMART TASK PLANNER =====
+  const detectComplexQuery = useCallback((query: string): boolean => {
+    const q = query.toLowerCase()
+    if (q.length < 30) return false
+    if (/^(ما|ماذا|كيف|متى|أين|من|هل|what|how|when|where|who|why|اشرح|explain)\b/.test(q)) return false
+    if (/طقس|أخبار|صلاة|أذان|نتائج|كورة|يوتيوب|youtube|فيديو/i.test(q)) return false
+    if (/كامل|متكامل|من\s+الصفر|احترافي|شامل|complete|full.?stack|from\s+scratch/i.test(q) &&
+        /أنش[ئئ]|اصنع|ابني|صمم|اعمل|دير|create|build|make|develop/i.test(q)) return true
+    const multiStep = (q.match(/ثم|و\s+بعد|أيضاً|كذلك|then|also|and\s+then|followed\s+by/g) || []).length
+    if (multiStep >= 2 && /أنش[ئئ]|اصنع|ابني|create|build/i.test(q)) return true
+    if (/portfolio|landing\s+page|dashboard|e-commerce|ecommerce|متجر\s+إلكتروني|لوحة\s+تحكم|موقع\s+كامل/i.test(q)) return true
+    if (/ملفات\s+متعددة|multiple\s+files|multi.?file|مكونات\s+متعددة/i.test(q)) return true
+    if (/(backend|frontend|واجهة|خلفية).*(و|مع).*(backend|frontend|واجهة|خلفية)/i.test(q)) return true
+    const wordCount = q.split(/\s+/).length
+    if (wordCount >= 14 && /أنش[ئئ]|اصنع|ابني|صمم|create|build|develop|implement/i.test(q)) return true
+    return false
+  }, [])
+
+  const generateAndShowPlan = useCallback(async (
+    query: string,
+    outboundMessages: Array<{role: string; content: string}>,
+    signal: AbortSignal,
+    executor: (query: string, msgs: Array<{role: string; content: string}>, signal: AbortSignal) => Promise<void>
+  ): Promise<boolean> => {
+    setIsGeneratingPlan(true)
+
+    // Add a "generating plan" placeholder in chat
+    const planMsgId = generateId()
+    setMessages(prev => [...prev, {
+      id: planMsgId,
+      role: 'assistant' as const,
+      content: '',
+      richType: 'task-plan' as const,
+      taskPlan: undefined,
+      taskPlanQuery: query,
+    }])
+
+    try {
+      const resp = await fetch('/api/dz-agent/plan/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+        signal,
+      })
+      if (!resp.ok) throw new Error(`Plan API: ${resp.status}`)
+      const data = await resp.json()
+      const plan: TaskPlan = data.plan
+
+      // Replace placeholder with the real plan
+      setMessages(prev => prev.map(m =>
+        m.id === planMsgId
+          ? { ...m, taskPlan: plan, taskPlanQuery: query }
+          : m
+      ))
+      setIsGeneratingPlan(false)
+
+      // Wait for user approval — stored in a promise that resolves on approval/cancel
+      return await new Promise<boolean>((resolve) => {
+        // Store resolver so TaskPlanPanel can call it
+        planApprovalRef.current = {
+          msgId: planMsgId,
+          resolve,
+          query,
+          outboundMessages,
+          signal,
+          executor,
+        }
+      })
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        setIsGeneratingPlan(false)
+        setMessages(prev => prev.filter(m => m.id !== planMsgId))
+        return false
+      }
+      // Plan generation failed — just proceed without plan
+      setIsGeneratingPlan(false)
+      setMessages(prev => prev.filter(m => m.id !== planMsgId))
+      console.warn('[task-planner] Plan generation failed, proceeding directly:', (err as Error).message)
+      return true // still execute the task
+    }
+  }, [])
+
   // ===== AUTONOMOUS SSE RUNNER =====
   const runAutonomousSSE = useCallback(async (
     query: string,
@@ -4629,6 +4726,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
       // ── Autonomous pipeline (Devin/Cursor style) ─────────────────────────
       if (detectAutonomousQuery(text) && !dashboardContext) {
+        // Smart Task Planner — show plan first for complex multi-step requests
+        if (detectComplexQuery(text)) {
+          const approved = await generateAndShowPlan(text, outboundMessages, signal, runAutonomousSSE)
+          if (!approved) return
+        }
         try {
           await runAutonomousSSE(text, outboundMessages, signal)
           return
@@ -5161,7 +5263,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setLiveReActSteps([])
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, detectComplexQuery, generateAndShowPlan, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
 
   // Feature C — Export conversation as Markdown
   const exportAsMarkdown = useCallback(() => {
@@ -5760,6 +5862,36 @@ ${rows}
                             } catch {}
                           }}
                         />
+                      )}
+                      {msg.richType === 'task-plan' && (
+                        msg.taskPlan ? (
+                          <TaskPlanPanel
+                            plan={msg.taskPlan}
+                            query={msg.taskPlanQuery || ''}
+                            onApprove={() => {
+                              const ref = planApprovalRef.current
+                              if (ref && ref.msgId === msg.id) {
+                                planApprovalRef.current = null
+                                // Remove the plan card from messages
+                                setMessages(prev => prev.filter(m => m.id !== msg.id))
+                                ref.resolve(true)
+                              }
+                            }}
+                            onCancel={() => {
+                              const ref = planApprovalRef.current
+                              if (ref && ref.msgId === msg.id) {
+                                planApprovalRef.current = null
+                                setMessages(prev => prev.filter(m => m.id !== msg.id))
+                                ref.resolve(false)
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="tpp-generating">
+                            <div className="tpp-gen-spinner" />
+                            <span>جاري تحليل المهمة وبناء الخطة...</span>
+                          </div>
+                        )
                       )}
                       {msg.richType === 'approval' && msg.pendingAction && (
                         <ApprovalDialog

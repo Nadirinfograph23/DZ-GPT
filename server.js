@@ -119,6 +119,7 @@ import {
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { detectAmbiguity, formatClarification } from './lib/smart-clarify.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
+import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -10091,6 +10092,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
+  // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
+  if (!currentRepo && !req.body.githubToken && messages.length <= 2) {
+    const _staticAnswer = lookupStaticFact(lastUserMessage)
+    if (_staticAnswer) {
+      console.log(`[StaticFact] HIT: "${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({ content: _staticAnswer, _static: true })
+    }
+  }
+
   // ── Cache hit — return instantly for repeated simple queries ─────────────
   if (!currentRepo && !githubToken && !req.body.youtubeContext && messages.length <= 2 && !_NOCACHE_RE.test(lastUserMessage)) {
     const _cached = _cacheGet(lastUserMessage)
@@ -13402,6 +13412,18 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
+  // ── Step 1b: Static Fast-Path — إجابة فورية <1ms بدون LLM ──────────────
+  if (messages.length <= 2) {
+    const _staticAnswer = lookupStaticFact(lastUserMessage)
+    if (_staticAnswer) {
+      console.log(`[StaticFact:Stream] HIT: "${lastUserMessage.slice(0, 60)}"`)
+      _streamSSEHeaders(res)
+      res.write(`data: ${JSON.stringify({ token: _staticAnswer })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    }
+  }
+
   // ── Step 2b: YouTube / Map / WebBuilder / Clone — redirect to full endpoint ──
   // These operations have their own rich UI engines — streaming text would bypass them
   const _ytKwRe_stream = /(?:فيديو|فيديوهات|يوتيوب|يوتيب|بالفيديو|اغنية|أغنية|أغاني|موسيقى|كليب|نشيد|أنشودة|مقطع.*فيديو|شاهد.*فيديو|watch.*video|music.*video|video.*clip|youtube\.com|youtu\.be)/i
@@ -13425,10 +13447,8 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
-    INTENT_SEPARATION_GUARD,
-    `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي جزائري أنشأه Nadir Houamria — منصة DZ-GPT. اليوم: ${_today} | ${_yearNow}`,
-    `إذا سُئلت عن نفسك: أجب بأنك DZ Agent، وكيل الجزائر الذكي الأول، 24/7، دارجة + عربية + فرنسية + إنجليزية. لا تذكر أسماء المزودين.`,
-    `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط | أجب بلغة المستخدم.`,
+    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بلغة المستخدم.`,
+    `❌ لا تخترع أخباراً أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط.`,
     _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
   ].filter(Boolean).join('\n')
 
@@ -13437,7 +13457,7 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _arabicN = (lastUserMessage.match(/[\u0600-\u06FF]/g) || []).length
   const _hasComplexKw = /شرح|اكتب|أنشئ|انشئ|برمجة|كود|خطة|حلّل|قارن|generate|create|write|code/.test(lastUserMessage)
   const _complexity = (_msgLen > 100 || _arabicN > 25 || _hasComplexKw) ? 'complex' : (_msgLen > 50 || _arabicN > 10) ? 'medium' : 'simple'
-  const _streamTokens = _complexity === 'complex' ? 2500 : _complexity === 'medium' ? 1000 : 600
+  const _streamTokens = _complexity === 'complex' ? 2000 : _complexity === 'medium' ? 700 : 300
 
   const apiMessages = [
     { role: 'system', content: coreSystemPrompt },

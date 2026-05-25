@@ -204,7 +204,10 @@ const NON_MAP_REGEXES = [
   /احصائيات الفريق/i,
 
   // Website/app/tech creation — موقع means "website" in this context
-  /(?:إنشاء|بناء|ابني|أنشئ|اصنع|اعمل|صمم|طور|انشاء)\s+(موقع|تطبيق|صفحة)/i,
+  /(?:إنشاء|بناء|ابني|أنشئ|اصنع|اعمل|صمم|طور|انشاء|عمل|دير|ديرلي|صنعلي|اعملي|عملي|بغيت|نحتاج|نبغي)\s+(موقع|تطبيق|صفحة)/i,
+  /(?:موقع|صفحة)\s+(?:مطعم|فندق|متجر|شركة|وكالة|مدرسة|مستشفى|صيدلية|نادي|جمعية|مؤسسة|تجاري|احترافي|إلكتروني|الكتروني|شخصي|ويب|web|html)/i,
+  /(?:create|build|make|design|generate)\s+(?:a\s+)?(?:restaurant|hotel|store|shop|agency|school|business)\s+(?:website|site|page)/i,
+  /(?:crée|créer|faire|construire)\s+(?:un\s+)?(?:site|page)\s+(?:restaurant|hôtel|boutique|agence)/i,
   /موقع\s+(ويب|الكتروني|إلكتروني|انترنت|web)/i,
   /ويب\s*سايت/i,
   /web\s*site/i,

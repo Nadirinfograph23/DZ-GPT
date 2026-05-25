@@ -1829,10 +1829,11 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   // ── Smart model selection ────────────────────────────────────────────────────
   // Complex queries (Arabic, long, knowledge-heavy) → skip 8b, go straight to 70b
   // Simple/conversational → 8b-instant first (ultra-fast ~0.4s)
+  const _arabicCount = (query.match(/[\u0600-\u06FF]/g) || []).length
   const _isComplex = (
-    query.length > 30 ||
-    /[\u0600-\u06FF]{3,}/.test(query) ||
-    /مباراة|نتيجة|أخبار|طقس|شرح|كيف|ماذا|لماذا|ترتيب|إحصاء|قانون|فيديو|أغنية/.test(query) ||
+    query.length > 80 ||
+    _arabicCount > 20 ||
+    /مباراة|نتيجة|أخبار|طقس|شرح|كيف|ماذا|لماذا|ترتيب|إحصاء|قانون|فيديو|أغنية|اكتب|أنشئ|برمجة|كود/.test(query) ||
     taskHint === 'reasoning' || taskHint === 'multilingual' || taskHint === 'retrieval'
   )
 
@@ -10043,6 +10044,30 @@ app.post('/api/dz-agent/github/claude/stream', async (req, res) => {
   }
 })
 
+// ── In-memory response cache (simple identical queries within 5 min) ──────────
+const _agentCache = new Map()
+const _CACHE_TTL_MS = 5 * 60 * 1000
+const _CACHE_MAX = 200
+function _cacheKey(msg) {
+  return msg.trim().toLowerCase().slice(0, 120)
+}
+function _cacheGet(msg) {
+  const k = _cacheKey(msg)
+  const entry = _agentCache.get(k)
+  if (!entry) return null
+  if (Date.now() - entry.ts > _CACHE_TTL_MS) { _agentCache.delete(k); return null }
+  return entry.value
+}
+function _cacheSet(msg, value) {
+  if (_agentCache.size >= _CACHE_MAX) {
+    const oldest = [..._agentCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0]
+    if (oldest) _agentCache.delete(oldest[0])
+  }
+  _agentCache.set(_cacheKey(msg), { value, ts: Date.now() })
+}
+// Queries that should NEVER be cached (live data)
+const _NOCACHE_RE = /أخبار|طقس|مباراة|سعر|صرف|الآن|اليوم|لحظة|live|breaking|latest|news|weather|price/i
+
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
   const messages = normalizeChatMessages(req.body.messages)
@@ -10056,6 +10081,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
   const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // ── Cache hit — return instantly for repeated simple queries ─────────────
+  if (!currentRepo && !githubToken && !req.body.youtubeContext && messages.length <= 2 && !_NOCACHE_RE.test(lastUserMessage)) {
+    const _cached = _cacheGet(lastUserMessage)
+    if (_cached) {
+      console.log(`[AgentCache] HIT: "${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({ ..._cached, _cached: true })
+    }
+  }
 
   // Extract and strip client-injected behavior context tag from the last user message
   const behaviorContextMatch = lastUserMessage.match(/\n?\[سياق المستخدم:[^\]]*\]/)
@@ -13168,10 +13202,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Validated fallback chain: DeepSeek → Ollama → Groq (with response validation) ───
   // Each step's output is validated for non-empty, meaningful content before returning.
   // History is trimmed to last 8 turns to keep context relevant and reduce off-topic answers.
+  // Smart token budget — avoid paying 3000 tokens for a simple greeting
+  const _chatArabicN = (lastUserMessage.match(/[\u0600-\u06FF]/g) || []).length
+  const _chatHasComplexKw = /شرح|اكتب|أنشئ|انشئ|برمجة|كود|خطة|حلّل|قارن|generate|create|write|code|موقع|website/.test(lastUserMessage)
+  const _chatTokens = (
+    _queryComplexity === 'multi_step' ? 4000 :
+    _queryComplexity === 'complex'    ? 3000 :
+    (_chatArabicN > 15 || _chatHasComplexKw || lastUserMessage.length > 80) ? 2000 :
+    lastUserMessage.length > 30 ? 1200 : 700
+  )
+
   const aiResult = await safeGenerateAI({
     messages: reasonedMessages,
     query: lastUserMessage,
-    max_tokens: _queryComplexity === 'multi_step' || _queryComplexity === 'complex' ? 4000 : 3000,
+    max_tokens: _chatTokens,
     taskHint: _taskHint,
   })
 
@@ -13179,10 +13223,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // causing 2x latency. Speed > marginal accuracy gain for DZ Agent chat.
 
   if (aiResult.content) {
-    // ── DZ Memory Write — حفظ الجواب الناجح في الذاكرة الدائمة ────────────
-    // يحفظ فقط إذا الجواب ذو قيمة (ليس رسالة خطأ أو قصير جداً)
-    // Memory saving disabled — user prefers no session storage in DZ Agent chat
-
     // ── Strip any leaked thinking-trace patterns from AI output ──────────────
     const _stripThinking = (txt) => txt
       .replace(/^[\s\S]*?(?:🧠\s*STEP\s*\d+\s*[—–-][^\n]*\n[\s\S]*?\n\n)/gi, '')
@@ -13191,14 +13231,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       .replace(/(?:^|\n)###\s*STEP\s*\d+[^\n]*/gi, '')
       .replace(/(?:^|\n)(?:النية|التصنيف|ما يريده المستخدم حقاً?)[^\n]*\n?/gi, '')
       .replace(/^\s*\n/, '').trim()
-    return res.status(200).json({
-      content: _cleanRawUrls(_stripThinking(aiResult.content)),
+
+    const _finalContent = _cleanRawUrls(_stripThinking(aiResult.content))
+    const _responsePayload = {
+      content: _finalContent,
       fallbackModel: aiResult.model,
       reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
-    })
+    }
+
+    // ── Cache write — only simple, non-live-data, single-turn queries ────────
+    if (!currentRepo && !githubToken && !_NOCACHE_RE.test(lastUserMessage) && messages.length <= 2 && _finalContent.length > 20) {
+      _cacheSet(lastUserMessage, _responsePayload)
+    }
+
+    return res.status(200).json(_responsePayload)
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
 
@@ -13342,30 +13391,32 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
-  // ── Step 3: Core system prompt ───────────────────────────────────────────
+  // ── Step 3: Core system prompt (slim — no heavy reasoning block) ─────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
     INTENT_SEPARATION_GUARD,
-    DZ_ADVANCED_REASONING_PROMPT,
-    `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
-    `اليوم: ${_today} | السنة: ${_yearNow}`,
-    `إذا سأل المستخدم عن نفسك (من أنت / ما مهاراتك): أجب بأنك DZ Agent، وكيل الجزائر الذكي الأول، أنشأه Nadir Houamria، يعمل 24/7، يدعم الدارجة والعربية والفرنسية. لا تذكر أسماء المزودين.`,
-    `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك صراحةً ولا تخترع`,
-    `روابط: [اسم](url) فقط — لا URL خام. Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
-    _training ? `\n━━━ تدريب مخصص من المالك (مُلزِم) ━━━\n${_training}` : '',
-  ].filter(Boolean).join('\n\n')
+    `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي جزائري أنشأه Nadir Houamria — منصة DZ-GPT. اليوم: ${_today} | ${_yearNow}`,
+    `إذا سُئلت عن نفسك: أجب بأنك DZ Agent، وكيل الجزائر الذكي الأول، 24/7، دارجة + عربية + فرنسية + إنجليزية. لا تذكر أسماء المزودين.`,
+    `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط | أجب بلغة المستخدم.`,
+    _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
+  ].filter(Boolean).join('\n')
 
-  const isComplex = lastUserMessage.length > 50 || /[\u0600-\u06FF]{3,}/.test(lastUserMessage)
+  // Smart token budget based on query complexity
+  const _msgLen = lastUserMessage.length
+  const _arabicN = (lastUserMessage.match(/[\u0600-\u06FF]/g) || []).length
+  const _hasComplexKw = /شرح|اكتب|أنشئ|انشئ|برمجة|كود|خطة|حلّل|قارن|generate|create|write|code/.test(lastUserMessage)
+  const _complexity = (_msgLen > 100 || _arabicN > 25 || _hasComplexKw) ? 'complex' : (_msgLen > 50 || _arabicN > 10) ? 'medium' : 'simple'
+  const _streamTokens = _complexity === 'complex' ? 2500 : _complexity === 'medium' ? 1000 : 600
 
   const apiMessages = [
     { role: 'system', content: coreSystemPrompt },
     ...messages,
   ]
 
-  await streamAIResponse(res, apiMessages, { maxTokens: 3000, isComplex })
+  await streamAIResponse(res, apiMessages, { maxTokens: _streamTokens })
 })
 
 // ===== DZ AGENT GITHUB API ROUTES =====

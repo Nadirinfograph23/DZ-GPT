@@ -2059,6 +2059,70 @@ app.get('/api/ai-router/health', (_req, res) => {
   }
 })
 
+// ===== QURAN KEYWORD SEARCH — RAG with tafsir injection =====
+// Searches Quran.com for verses by keyword, then fetches tafsir for top results
+app.get('/api/quran/search', async (req, res) => {
+  const q = sanitizeString(String(req.query.q || '').trim(), 200)
+  if (!q || q.length < 2) return res.status(400).json({ ok: false, error: 'كلمة البحث مطلوبة (حرفان على الأقل)' })
+
+  const CDN = 'https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir'
+  const size = Math.min(parseInt(req.query.size, 10) || 5, 10)
+
+  try {
+    // 1. Search Quran.com
+    const searchCtrl = new AbortController()
+    const searchTimer = setTimeout(() => searchCtrl.abort(), 8000)
+    const searchRes = await fetch(
+      `https://api.quran.com/api/v4/search?q=${encodeURIComponent(q)}&size=${size}&language=ar`,
+      { signal: searchCtrl.signal }
+    )
+    clearTimeout(searchTimer)
+    if (!searchRes.ok) return res.json({ ok: true, query: q, results: [], note: 'تعذر الوصول إلى قاعدة بيانات القرآن الكريم' })
+    const searchData = await searchRes.json()
+    const rawResults = searchData.search?.results || []
+    if (!rawResults.length) return res.json({ ok: true, query: q, results: [], total: 0 })
+
+    // 2. Fetch tafsir (ibn-kathir) for top 3 results in parallel
+    const withTafsir = await Promise.allSettled(
+      rawResults.slice(0, 3).map(async (r) => {
+        const [surah, ayah] = (r.verse_key || '').split(':').map(Number)
+        let tafsir = ''
+        if (surah && ayah) {
+          try {
+            const ctrl = new AbortController()
+            const t = setTimeout(() => ctrl.abort(), 5000)
+            const tf = await fetch(`${CDN}/ar-tafsir-ibn-kathir/${surah}/${ayah}.json`, { signal: ctrl.signal })
+            clearTimeout(t)
+            if (tf.ok) {
+              const td = await tf.json()
+              tafsir = (td.text || '').slice(0, 600)
+            }
+          } catch {}
+        }
+        return {
+          verse_key: r.verse_key,
+          surah,
+          ayah,
+          text: r.text || '',
+          tafsir: tafsir || null,
+        }
+      })
+    )
+
+    const results = [
+      ...withTafsir.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean),
+      ...rawResults.slice(3).map(r => {
+        const [surah, ayah] = (r.verse_key || '').split(':').map(Number)
+        return { verse_key: r.verse_key, surah, ayah, text: r.text || '', tafsir: null }
+      }),
+    ]
+
+    res.json({ ok: true, query: q, total: searchData.search?.total_results || results.length, results })
+  } catch (e) {
+    res.json({ ok: true, query: q, results: [], note: 'خطأ في البحث: ' + e.message })
+  }
+})
+
 // ===== QURAN CONTEXT — RAG endpoint (tafsir_api + Dorar reference) =====
 // Fetches verified tafsir from spa5k/tafsir_api CDN for a specific surah:ayah
 // Dorar.net (dorar.net/api) is listed as a reference source in the system prompt;
@@ -2367,6 +2431,83 @@ app.get('/api/admin/full-report', async (_req, res) => {
     })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== /api/chat/stream — SSE Streaming (Improvement #1: Real-time token output) =====
+// Streams Groq tokens via SSE so users see responses as they're generated, not after.
+app.post('/api/chat/stream', aiLimiter, async (req, res) => {
+  const { model } = req.body
+  const messages = normalizeChatMessages(req.body?.messages)
+  if (!messages || messages.length === 0) {
+    return res.status(400).json({ error: 'Invalid messages payload.' })
+  }
+
+  const keys = getGroqKeys()
+  if (!keys.length) return res.status(500).json({ error: 'API key not configured.' })
+
+  const groqModelMap = {
+    'chatgpt': 'llama-3.3-70b-versatile',
+    'llama-70b': 'llama-3.3-70b-versatile',
+    'llama-8b': 'llama-3.1-8b-instant',
+    'llama-4-scout': 'meta-llama/llama-4-scout-17b-16e-instruct',
+    'qwen': 'qwen/qwen3-32b',
+    'compound': 'groq/compound',
+  }
+  const actualModel = groqModelMap[model] || 'llama-3.3-70b-versatile'
+  const trimmed = trimRelevantContext(messages, 8)
+  const apiKey = keys[Math.floor(Math.random() * keys.length)]
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const send = (event, data) => {
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`) } catch {}
+  }
+
+  try {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: actualModel, messages: trimmed, max_tokens: 4096, stream: true }),
+      signal: AbortSignal.timeout(45000),
+    })
+
+    if (!groqRes.ok) {
+      send('error', { message: 'فشل الاتصال بالنموذج' })
+      return res.end()
+    }
+
+    const reader = groqRes.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const raw = line.slice(6).trim()
+        if (raw === '[DONE]') { send('done', {}); res.end(); return }
+        try {
+          const chunk = JSON.parse(raw)
+          const token = chunk.choices?.[0]?.delta?.content
+          if (token) send('token', { token })
+        } catch {}
+      }
+    }
+    send('done', {})
+    res.end()
+  } catch (e) {
+    send('error', { message: e.message })
+    res.end()
   }
 })
 

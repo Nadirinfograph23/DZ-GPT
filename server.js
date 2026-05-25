@@ -19,6 +19,7 @@ import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
 import {
   loadOwnerConfig, saveOwnerConfig,
   detectOwnerCommand, processOwnerCommand,
+  processImplicitOwnerLearning,
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
@@ -10165,10 +10166,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Owner Training & Command Detection ────────────────────────────────────
+  const _ownerTok = req.body.githubToken || process.env.GITHUB_TOKEN || ''
   const _ownerCmd = detectOwnerCommand(lastUserMessage)
+
   if (_ownerCmd) {
-    const _tok     = req.body.githubToken || process.env.GITHUB_TOKEN || ''
-    const _isOwner = await verifyOwnerToken(_tok)
+    const _isOwner = await verifyOwnerToken(_ownerTok)
     if (_isOwner) {
       const _cfg    = loadOwnerConfig()
       const _result = processOwnerCommand(lastUserMessage, _cfg)
@@ -10179,32 +10181,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           saveOwnerConfig(_result.config)
 
           if (_ownerCmd === 'add_feed' && _result.feed) {
-            // Hot-reload في RSS الأخبار العامة
             const alreadyIn = RSS_FEEDS.national.some(f => f.url === _result.feed.url)
             if (!alreadyIn) RSS_FEEDS.national.push({ name: _result.feed.name, url: _result.feed.url, _owner: true })
-
-            // إضافة إلى نظام الأخبار العاجلة (breaking-news poller)
             addFeed(_result.feed.name, _result.feed.url)
-
             console.log(`[OwnerTraining] ✅ add_feed → RSS.national + BreakingNews + owner_config.json: ${_result.feed.url}`)
 
           } else if (_ownerCmd === 'remove_feed') {
-            // حذف من RSS الأخبار العامة
             const before = RSS_FEEDS.national.length
             RSS_FEEDS.national = RSS_FEEDS.national.filter(
               f => !f._owner || _result.config.feeds.some(cf => cf.url === f.url)
             )
             const removed = before - RSS_FEEDS.national.length
-
-            // حذف من نظام الأخبار العاجلة
             const feedUrl = lastUserMessage.match(/https?:\/\/[^\s<>"،,\u060C\u061B]+/)?.[0]?.replace(/[.,;!?]+$/, '')
             if (feedUrl) removeFeed(feedUrl)
-
             console.log(`[OwnerTraining] 🗑️ remove_feed → RSS.national (${removed}) + BreakingNews + owner_config.json`)
           }
         }
 
-        // ── حفظ بيانات التدريب (facts / qa_pairs / behaviors) ──────────────
         if (_result.training) {
           console.log(`[OwnerTraining] 🧠 ${_ownerCmd} → agent_training.json saved`)
         }
@@ -10216,6 +10209,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       return res.status(200).json({
         content: '⛔ **تحقق الهوية فشل**\n\nهذا الأمر مخصص لمالك المشروع فقط.\n\nللتنفيذ، يجب أن تكون متصلاً بـ GitHub بحساب المالك (`Nadirinfograph23`).',
       })
+    }
+  }
+
+  // ── Implicit Owner Learning — تعلم تلقائي من كل رسالة يكتبها المالك ────────
+  // يعمل حتى بدون أوامر صريحة: تصحيح / تعريف / مصدر مرجعي
+  if (_ownerTok) {
+    // نفحص هوية المالك فقط إذا كانت الرسالة تحتوي إشارة لتصحيح/تعريف/مصدر
+    const _hasLearningSignal = /الصواب|الصحيح|خطأ|صحّح|تصحيح|ليس.*بل|في الحقيقة|في الواقع|هو\s+|تعني?|يعني?|تعريف|معنى|مرجع|مصدر\s+موثوق|راجع|reference|definition|correction/i.test(lastUserMessage)
+    if (_hasLearningSignal) {
+      const _isOwnerSilent = await verifyOwnerToken(_ownerTok)
+      if (_isOwnerSilent) {
+        const _learned = processImplicitOwnerLearning(lastUserMessage)
+        if (_learned.length > 0) {
+          // نُعلم المالك بما تعلّمناه — بدون مقاطعة التدفق الطبيعي
+          const _learnSummary = _learned.map(l => {
+            if (l.type === 'correction')  return `✔️ تصحيح: "${l.correct}"`
+            if (l.type === 'definition')  return `📖 تعريف: **${l.term}** = ${l.definition}`
+            if (l.type === 'source')      return `📚 مصدر: ${l.name}`
+            return ''
+          }).filter(Boolean).join('\n')
+          console.log(`[OwnerLearning] 🧠 implicit save from owner: ${_learned.map(l=>l.type).join(', ')}`)
+          return res.status(200).json({
+            content: `✅ **تم التسجيل والحفظ تلقائياً:**\n\n${_learnSummary}\n\n> سأعتمد هذا في جميع ردودي القادمة.`,
+            _ownerLearned: true,
+          })
+        }
+      }
     }
   }
 

@@ -8955,3 +8955,171 @@
 .dza-layout[data-theme="sky"] .dz-welcome-title { background: linear-gradient(135deg,#38bdf8,#0ea5e9) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; }
 .dza-layout[data-theme="sky"] .dz-suggestion-btn:hover { border-color: rgba(56,189,248,0.25) !important; color: #38bdf8 !important; }
 .dza-layout[data-theme="sky"] .dz-home-btn:hover,.dza-layout[data-theme="sky"] .dz-refresh-chat-btn:hover { border-color: rgba(56,189,248,0.3) !important; color: #38bdf8 !important; background: rgba(56,189,248,0.06) !important; }
+
+/* ══════════════════════════════════════════════════
+   SMART TASK PLANNER — TaskPlanPanel styles
+   ══════════════════════════════════════════════════ */
+.tpp-wrapper {
+  background: linear-gradient(145deg, #0a0f1a 0%, #0d1520 100%);
+  border: 1px solid rgba(99,102,241,0.22);
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
+  max-width: 480px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+}
+
+/* Header */
+.tpp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.018);
+}
+.tpp-header-left { display: flex; align-items: flex-start; gap: 10px; }
+.tpp-icon { font-size: 20px; line-height: 1; margin-top: 2px; }
+.tpp-title {
+  font-size: 13px; font-weight: 700; color: #e2e8f0;
+  line-height: 1.3; direction: rtl;
+}
+.tpp-summary {
+  font-size: 11px; color: #6b7280; margin-top: 3px;
+  direction: rtl; line-height: 1.4;
+}
+.tpp-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.tpp-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 8px; font-size: 9.5px;
+  font-weight: 600; border: 1px solid transparent;
+  white-space: nowrap;
+}
+.tpp-badge--time { color: #9ca3af; border-color: rgba(156,163,175,0.2); background: rgba(156,163,175,0.06); }
+.tpp-badge--complexity { background: rgba(0,0,0,0.25); }
+
+/* Steps list */
+.tpp-steps {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.tpp-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  padding-bottom: 14px;
+}
+.tpp-step:last-child { padding-bottom: 0; }
+
+/* Connector vertical line */
+.tpp-connector {
+  position: absolute;
+  left: 14px;
+  top: 26px;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(99,102,241,0.25), rgba(99,102,241,0.05));
+}
+
+/* Step dot */
+.tpp-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; z-index: 1;
+}
+.tpp-dot-icon { font-size: 13px; line-height: 1; }
+
+/* Step body */
+.tpp-step-body { flex: 1; padding-top: 3px; }
+.tpp-step-header {
+  display: flex; align-items: center; gap: 5px;
+  margin-bottom: 3px;
+}
+.tpp-step-num {
+  font-size: 9px; font-weight: 700; color: #4b5563;
+  background: rgba(75,85,99,0.18); border-radius: 50%;
+  width: 15px; height: 15px; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.tpp-step-title {
+  font-size: 12.5px; font-weight: 600; color: #d1d5db;
+  direction: rtl;
+}
+.tpp-step-arrow { flex-shrink: 0; margin-right: auto; }
+.tpp-step-desc {
+  font-size: 11px; color: #6b7280; direction: rtl;
+  line-height: 1.45;
+}
+
+/* Footer */
+.tpp-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.15);
+}
+.tpp-footer--running {
+  justify-content: center;
+}
+.tpp-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 14px; border-radius: 8px; font-size: 12px;
+  font-weight: 600; cursor: pointer; border: 1px solid;
+  transition: all 0.18s ease; font-family: inherit;
+  direction: rtl;
+}
+.tpp-btn--cancel {
+  color: #6b7280; border-color: rgba(107,114,128,0.25);
+  background: rgba(107,114,128,0.08);
+}
+.tpp-btn--cancel:hover { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.tpp-btn--approve {
+  color: #e2e8f0; border-color: rgba(99,102,241,0.45);
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 100%);
+  box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+.tpp-btn--approve:hover {
+  background: linear-gradient(135deg, #3730a3 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+  transform: translateY(-1px);
+}
+
+/* Running state */
+.tpp-running-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #6366f1;
+  animation: tpp-pulse 1.2s ease-in-out infinite;
+}
+.tpp-running-label { font-size: 12px; color: #9ca3af; }
+
+/* Generating plan skeleton */
+.tpp-generating {
+  padding: 16px;
+  display: flex; align-items: center; gap: 10px;
+  color: #6b7280; font-size: 12px;
+  direction: rtl;
+}
+.tpp-gen-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(99,102,241,0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: tpp-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes tpp-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+@keyframes tpp-spin {
+  to { transform: rotate(360deg); }
+}

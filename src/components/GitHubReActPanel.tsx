@@ -4,7 +4,7 @@ import {
   FileCode, GitBranch, GitPullRequest, FolderOpen,
   FilePlus, Trash2, Zap, User, Eye, Brain,
   AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Copy, Check,
-  Globe,
+  Globe, Terminal, Sparkles,
 } from 'lucide-react'
 
 export interface ReActStep {
@@ -17,6 +17,8 @@ export interface ReActStep {
   result?: Record<string, unknown>
   content?: string
   liveUrl?: string
+  elapsed_ms?: number
+  progress_pct?: number
 }
 
 interface Props {
@@ -24,7 +26,6 @@ interface Props {
   isLive?: boolean
 }
 
-// ── Phase derived from a tool_call + its observation ─────────────────────────
 interface Phase {
   id: number
   tool: string
@@ -37,35 +38,42 @@ interface Phase {
   summary: string
   detail?: string
   resultUrl?: string
+  elapsed_ms?: number
 }
 
 const TOOL_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  get_auth_user:      { label: 'التحقق من الهوية',    icon: <User size={14} />,          color: '#60a5fa' },
-  list_repos:         { label: 'عرض المستودعات',       icon: <FolderOpen size={14} />,    color: '#34d399' },
-  create_repo:        { label: 'إنشاء مستودع',         icon: <GitBranch size={14} />,     color: '#a78bfa' },
-  list_files:         { label: 'عرض الملفات',          icon: <FolderOpen size={14} />,    color: '#60a5fa' },
-  read_file:          { label: 'قراءة ملف',             icon: <FileCode size={14} />,      color: '#fbbf24' },
-  push_file:          { label: 'رفع ملف',               icon: <FilePlus size={14} />,      color: '#34d399' },
-  push_files_batch:   { label: 'رفع ملفات (دفعة)',     icon: <FilePlus size={14} />,      color: '#34d399' },
-  list_branches:      { label: 'عرض الفروع',           icon: <GitBranch size={14} />,     color: '#60a5fa' },
-  create_branch:      { label: 'إنشاء فرع',            icon: <GitBranch size={14} />,     color: '#a78bfa' },
-  delete_branch:      { label: 'حذف فرع',              icon: <Trash2 size={14} />,        color: '#f87171' },
-  create_pull_request:{ label: 'إنشاء Pull Request',   icon: <GitPullRequest size={14} />,color: '#a78bfa' },
-  enable_pages:       { label: 'تفعيل GitHub Pages',   icon: <Zap size={14} />,           color: '#fbbf24' },
-  get_repo_info:      { label: 'معلومات المستودع',     icon: <Eye size={14} />,           color: '#60a5fa' },
+  get_auth_user:      { label: 'التحقق من الهوية',    icon: <User size={13} />,          color: '#60a5fa' },
+  list_repos:         { label: 'عرض المستودعات',       icon: <FolderOpen size={13} />,    color: '#34d399' },
+  create_repo:        { label: 'إنشاء مستودع',         icon: <GitBranch size={13} />,     color: '#a78bfa' },
+  list_files:         { label: 'عرض الملفات',          icon: <FolderOpen size={13} />,    color: '#60a5fa' },
+  read_file:          { label: 'قراءة ملف',             icon: <FileCode size={13} />,      color: '#fbbf24' },
+  push_file:          { label: 'رفع ملف',               icon: <FilePlus size={13} />,      color: '#34d399' },
+  push_files_batch:   { label: 'رفع ملفات',            icon: <FilePlus size={13} />,      color: '#34d399' },
+  list_branches:      { label: 'عرض الفروع',           icon: <GitBranch size={13} />,     color: '#60a5fa' },
+  create_branch:      { label: 'إنشاء فرع',            icon: <GitBranch size={13} />,     color: '#a78bfa' },
+  delete_branch:      { label: 'حذف فرع',              icon: <Trash2 size={13} />,        color: '#f87171' },
+  create_pull_request:{ label: 'إنشاء Pull Request',   icon: <GitPullRequest size={13} />,color: '#a78bfa' },
+  enable_pages:       { label: 'تفعيل GitHub Pages',   icon: <Zap size={13} />,           color: '#fbbf24' },
+  get_repo_info:      { label: 'معلومات المستودع',     icon: <Eye size={13} />,           color: '#60a5fa' },
+  get_pages_status:   { label: 'فحص GitHub Pages',     icon: <Globe size={13} />,         color: '#34d399' },
+}
+
+function fmtMs(ms?: number) {
+  if (!ms) return ''
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
 }
 
 function getResultSummary(tool: string, result: Record<string, unknown>): { summary: string; url?: string } {
   if (!result) return { summary: '—' }
   if (result.error) return { summary: `❌ ${String(result.error).slice(0, 60)}` }
-
   switch (tool) {
     case 'get_auth_user':
       return { summary: `@${result.login || '?'} · ${result.public_repos ?? '?'} مستودع` }
     case 'list_repos': {
       const repos = result.repos as Array<{ full_name: string }> | undefined
       const count = result.count ?? repos?.length ?? 0
-      const names = repos?.slice(0, 3).map(r => r.full_name.split('/')[1]).join('، ') || ''
+      const names = repos?.slice(0, 2).map(r => r.full_name.split('/')[1]).join('، ') || ''
       return { summary: `${count} مستودع${names ? ' · ' + names : ''}` }
     }
     case 'create_repo': {
@@ -85,9 +93,7 @@ function getResultSummary(tool: string, result: Record<string, unknown>): { summ
     case 'push_files_batch': {
       const sha = result.commit as string | undefined
       const count = result.files_pushed as number | undefined
-      return {
-        summary: count != null ? `${count} ملف مرفوع` : sha ? `commit: ${String(sha).slice(0, 8)}` : 'تم الرفع',
-      }
+      return { summary: count != null ? `${count} ملف مرفوع` : sha ? `commit: ${String(sha).slice(0, 8)}` : 'تم الرفع' }
     }
     case 'list_branches': {
       const count = result.count ?? (result.branches as unknown[])?.length ?? 0
@@ -109,6 +115,10 @@ function getResultSummary(tool: string, result: Record<string, unknown>): { summ
       const url = result.html_url as string | undefined
       return { summary: result.full_name ? String(result.full_name) : 'تمت القراءة', url }
     }
+    case 'get_pages_status': {
+      const status = result.status as string | undefined
+      return { summary: status === 'built' ? '✅ مباشر' : status === 'building' ? '⏳ يُبنى' : (status || 'فُحص') }
+    }
     default:
       return { summary: JSON.stringify(result).slice(0, 60) }
   }
@@ -117,23 +127,17 @@ function getResultSummary(tool: string, result: Record<string, unknown>): { summ
 function buildPhases(steps: ReActStep[], isLive: boolean): Phase[] {
   const phases: Phase[] = []
   let phaseId = 0
-
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]
     if (step.type !== 'tool_call') continue
-
     phaseId++
     const tool = step.tool || ''
-    const meta = TOOL_META[tool] || { label: tool, icon: <Brain size={14} />, color: '#9ca3af' }
-
-    // Look for the next observation
+    const meta = TOOL_META[tool] || { label: tool, icon: <Brain size={13} />, color: '#9ca3af' }
     const obs = steps[i + 1]?.type === 'observation' ? steps[i + 1] : undefined
     const hasResult = !!obs
-
     let status: Phase['status'] = 'pending'
     let summary = '...'
     let resultUrl: string | undefined
-
     if (hasResult) {
       const r = getResultSummary(tool, obs!.result || {})
       summary = r.summary
@@ -143,92 +147,45 @@ function buildPhases(steps: ReActStep[], isLive: boolean): Phase[] {
       status = 'running'
       summary = 'جاري التنفيذ...'
     }
-
-    phases.push({
-      id: phaseId,
-      tool,
-      thought: step.thought || '',
-      args: step.args || {},
-      label: meta.label,
-      icon: meta.icon,
-      color: meta.color,
-      status,
-      summary,
-      resultUrl,
-    })
+    phases.push({ id: phaseId, tool, thought: step.thought || '', args: step.args || {}, label: meta.label, icon: meta.icon, color: meta.color, status, summary, resultUrl, elapsed_ms: step.elapsed_ms })
   }
-
   return phases
 }
 
-function PhaseCard({ phase, isLast }: { phase: Phase; isLast: boolean }) {
+function PhaseRow({ phase, isLast }: { phase: Phase; isLast: boolean }) {
   const [expanded, setExpanded] = useState(false)
   const hasArgs = Object.keys(phase.args).filter(k => k !== 'token' && k !== '_login' && k !== 'content').length > 0
-
   return (
-    <div className={`rp-phase rp-phase--${phase.status}`}>
-      {/* Connector line */}
-      {!isLast && <div className="rp-connector" />}
-
-      {/* Status dot */}
-      <div className="rp-phase-dot" style={{ borderColor: phase.status === 'done' ? '#22c55e' : phase.status === 'failed' ? '#ef4444' : phase.status === 'running' ? phase.color : '#2a2a2a' }}>
-        {phase.status === 'done'    && <CheckCircle2 size={11} color="#22c55e" />}
-        {phase.status === 'failed'  && <XCircle size={11} color="#ef4444" />}
-        {phase.status === 'running' && <Loader2 size={11} color={phase.color} className="rp-spin" />}
-        {phase.status === 'pending' && <span className="rp-phase-num">{phase.id}</span>}
+    <div className={`rp2-phase rp2-phase--${phase.status}`}>
+      {!isLast && <div className="rp2-connector" />}
+      <div className="rp2-phase-dot" style={{ borderColor: phase.status === 'done' ? '#22c55e' : phase.status === 'failed' ? '#ef4444' : phase.status === 'running' ? phase.color : '#2a2a3a' }}>
+        {phase.status === 'done'    && <CheckCircle2 size={10} color="#22c55e" />}
+        {phase.status === 'failed'  && <XCircle size={10} color="#ef4444" />}
+        {phase.status === 'running' && <Loader2 size={10} color={phase.color} className="rp-spin" />}
+        {phase.status === 'pending' && <span className="rp2-phase-num">{phase.id}</span>}
       </div>
-
-      {/* Content */}
-      <div className="rp-phase-content">
-        <div className="rp-phase-header" onClick={() => hasArgs && setExpanded(e => !e)}>
-          <span className="rp-phase-icon" style={{ color: phase.color }}>{phase.icon}</span>
-          <span className="rp-phase-label" style={{ color: phase.status === 'pending' ? '#4b5563' : '#e5e7eb' }}>
-            {phase.label}
-          </span>
-          {phase.status === 'running' && (
-            <span className="rp-phase-badge rp-phase-badge--running">يعمل</span>
-          )}
-          {phase.status === 'failed' && (
-            <span className="rp-phase-badge rp-phase-badge--failed">فشل</span>
-          )}
-          <div className="rp-phase-summary" style={{
-            color: phase.status === 'failed' ? '#f87171'
-              : phase.status === 'done' ? '#6ee7b7'
-              : '#4b5563',
-          }}>
-            {phase.summary}
-          </div>
+      <div className="rp2-phase-body">
+        <div className="rp2-phase-row" onClick={() => hasArgs && setExpanded(e => !e)} style={{ cursor: hasArgs ? 'pointer' : 'default' }}>
+          <span style={{ color: phase.color }}>{phase.icon}</span>
+          <span className="rp2-phase-label" style={{ color: phase.status === 'pending' ? '#4b5563' : '#e2e8f0' }}>{phase.label}</span>
+          <span className="rp2-phase-sum" style={{ color: phase.status === 'failed' ? '#f87171' : phase.status === 'done' ? '#6ee7b7' : '#6b7280' }}>{phase.summary}</span>
+          {phase.elapsed_ms && <span className="rp2-phase-time">{fmtMs(phase.elapsed_ms)}</span>}
           {phase.resultUrl && (
-            <a href={phase.resultUrl} target="_blank" rel="noopener noreferrer" className="rp-phase-link" onClick={e => e.stopPropagation()}>
-              <ExternalLink size={10} />
+            <a href={phase.resultUrl} target="_blank" rel="noopener noreferrer" className="rp2-phase-link" onClick={e => e.stopPropagation()}>
+              <ExternalLink size={9} />
             </a>
           )}
-          {hasArgs && (
-            <button className="rp-expand-btn" onClick={e => { e.stopPropagation(); setExpanded(x => !x) }}>
-              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-            </button>
-          )}
+          {hasArgs && <button className="rp2-expand-btn">{expanded ? <ChevronUp size={9} /> : <ChevronDown size={9} />}</button>}
         </div>
-
-        {/* Thought */}
-        {phase.thought && (
-          <div className="rp-phase-thought">"{phase.thought.slice(0, 100)}"</div>
-        )}
-
-        {/* Args detail (expandable) */}
+        {phase.thought && <div className="rp2-thought">"{phase.thought.slice(0, 120)}"</div>}
         {expanded && hasArgs && (
-          <div className="rp-phase-args">
-            {Object.entries(phase.args)
-              .filter(([k]) => k !== 'token' && k !== '_login' && k !== 'content')
-              .map(([k, v]) => (
-                <div key={k} className="rp-arg-row">
-                  <span className="rp-arg-key">{k}:</span>
-                  <span className="rp-arg-val">
-                    {typeof v === 'string' ? v.slice(0, 80) : JSON.stringify(v).slice(0, 80)}
-                  </span>
-                </div>
-              ))
-            }
+          <div className="rp2-args">
+            {Object.entries(phase.args).filter(([k]) => k !== 'token' && k !== '_login' && k !== 'content').map(([k, v]) => (
+              <div key={k} className="rp2-arg-row">
+                <span className="rp2-arg-key">{k}:</span>
+                <span className="rp2-arg-val">{typeof v === 'string' ? v.slice(0, 100) : JSON.stringify(v).slice(0, 100)}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -236,43 +193,24 @@ function PhaseCard({ phase, isLast }: { phase: Phase; isLast: boolean }) {
   )
 }
 
-/** Scan all steps to extract the first live site URL */
-// ── Extract site info from ReAct steps (repo, pushed HTML content) ────────────
-interface SiteInfo {
-  repo: string | null
-  hasHtml: boolean
-  htmlContent: string | null
-}
-
+interface SiteInfo { repo: string | null; hasHtml: boolean; htmlContent: string | null }
 function extractSiteInfo(steps: ReActStep[]): SiteInfo {
-  let repo: string | null = null
-  let hasHtml = false
-  let htmlContent: string | null = null
-
+  let repo: string | null = null, hasHtml = false, htmlContent: string | null = null
   for (const s of steps) {
-    // Grab repo name from observations
     if (s.type === 'observation' && s.result) {
       if (typeof s.result.full_name === 'string') repo = s.result.full_name
       if (typeof s.result.repo === 'string') repo = s.result.repo
     }
-    // Grab repo & HTML content from tool_call args
     if (s.type === 'tool_call' && s.args) {
       const args = s.args as Record<string, unknown>
       if (typeof args.repo === 'string') repo = args.repo
       if (s.tool === 'push_file') {
         const p = String(args.path || '')
-        if (p.includes('index.html') || p.includes('.html')) {
-          hasHtml = true
-          if (typeof args.content === 'string') htmlContent = args.content
-        }
+        if (p.includes('.html')) { hasHtml = true; if (typeof args.content === 'string') htmlContent = args.content }
       }
       if (s.tool === 'push_files_batch' && Array.isArray(args.files)) {
-        const idxFile = (args.files as Array<{ path?: string; content?: string }>)
-          .find(f => String(f.path || '').includes('.html'))
-        if (idxFile) {
-          hasHtml = true
-          if (typeof idxFile.content === 'string') htmlContent = idxFile.content
-        }
+        const f = (args.files as Array<{ path?: string; content?: string }>).find(f => String(f.path || '').includes('.html'))
+        if (f) { hasHtml = true; if (typeof f.content === 'string') htmlContent = f.content }
       }
     }
   }
@@ -280,11 +218,8 @@ function extractSiteInfo(steps: ReActStep[]): SiteInfo {
 }
 
 function extractLiveUrl(steps: ReActStep[]): string | null {
-  // 1. Explicit liveUrl on a done step (injected by DZChatBox from server)
   const doneWithUrl = steps.find(s => s.type === 'done' && s.liveUrl)
   if (doneWithUrl?.liveUrl) return doneWithUrl.liveUrl
-
-  // 2. enable_pages observation with html_url
   for (const s of steps) {
     if (s.type === 'observation' && s.result) {
       const url = s.result.html_url as string | undefined
@@ -293,15 +228,8 @@ function extractLiveUrl(steps: ReActStep[]): string | null {
       if (su) return su
     }
   }
-
-  // 3. Infer from create_repo full_name + index.html push
   const repoObs = steps.find(s => s.type === 'observation' && s.result?.full_name)
-  const hasIndex = steps.some(s =>
-    s.type === 'observation' && (
-      String(s.result?.path || s.result?.file || '').includes('index.html') ||
-      String(s.result?.files || '').includes('index.html')
-    )
-  )
+  const hasIndex = steps.some(s => s.type === 'observation' && (String(s.result?.path || s.result?.file || '').includes('index.html') || String(s.result?.files || '').includes('index.html')))
   if (repoObs && hasIndex) {
     const full = String(repoObs.result!.full_name)
     const [owner, repo] = full.split('/')
@@ -310,31 +238,58 @@ function extractLiveUrl(steps: ReActStep[]): string | null {
   return null
 }
 
+// ── Current active tool label (for minimal loading bar) ───────────────────────
+function getCurrentAction(steps: ReActStep[]): string {
+  const lastTool = [...steps].reverse().find(s => s.type === 'tool_call')
+  const lastThink = [...steps].reverse().find(s => s.type === 'thinking')
+  if (lastTool) return TOOL_META[lastTool.tool || '']?.label || lastTool.tool || 'تنفيذ'
+  if (lastThink) return lastThink.message || 'تحليل الطلب...'
+  return 'الاتصال بـ GitHub...'
+}
+
+function getProgress(steps: ReActStep[]): number {
+  const last = [...steps].reverse().find(s => s.progress_pct != null)
+  if (last?.progress_pct != null) return last.progress_pct
+  const tools = steps.filter(s => s.type === 'tool_call').length
+  return Math.min(15 + tools * 15, 85)
+}
+
 export default function GitHubReActPanel({ steps, isLive = false }: Props) {
+  const [showPhases, setShowPhases]   = useState(false)
   const [showReport, setShowReport]   = useState(false)
   const [copied, setCopied]           = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewUrl, setPreviewUrl]   = useState<string | null>(null)
   const [pagesStatus, setPagesStatus] = useState<'idle' | 'enabling' | 'building' | 'live' | 'error'>('idle')
   const [pagesUrl, setPagesUrl]       = useState<string | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [elapsed, setElapsed]         = useState(0)
+  const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const startRef  = useRef<number>(Date.now())
 
-  // Cleanup poll on unmount
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+  // Elapsed timer while live
+  useEffect(() => {
+    if (isLive && !timerRef.current) {
+      startRef.current = Date.now()
+      timerRef.current = setInterval(() => setElapsed(Date.now() - startRef.current), 200)
+    }
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }
+  }, [isLive])
 
-  const copyLink = useCallback((url: string) => {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (timerRef.current) clearInterval(timerRef.current)
   }, [])
 
-  // Build blob URL for preview whenever HTML content is available
+  const copyLink = useCallback((url: string) => {
+    navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }, [])
+
   const siteInfo = extractSiteInfo(steps)
   useEffect(() => {
     if (!siteInfo.htmlContent) { setPreviewUrl(null); return }
     const blob = new Blob([siteInfo.htmlContent], { type: 'text/html' })
-    const url  = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
     setPreviewUrl(url)
     return () => URL.revokeObjectURL(url)
   }, [siteInfo.htmlContent])
@@ -347,18 +302,11 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
         const r = await fetch(`/api/dz-agent/github/react/pages-status?repo=${encodeURIComponent(repo)}`)
         const d = await r.json()
         if (d.status === 'built' || (d.enabled && d.html_url)) {
-          setPagesStatus('live')
-          setPagesUrl(d.html_url || fallbackUrl)
-          clearInterval(pollRef.current!)
-          pollRef.current = null
+          setPagesStatus('live'); setPagesUrl(d.html_url || fallbackUrl)
+          clearInterval(pollRef.current!); pollRef.current = null
         }
       } catch { /* ignore */ }
-      if (attempts >= 18) {          // stop after 3 min regardless
-        setPagesStatus('live')
-        setPagesUrl(fallbackUrl)
-        clearInterval(pollRef.current!)
-        pollRef.current = null
-      }
+      if (attempts >= 18) { setPagesStatus('live'); setPagesUrl(fallbackUrl); clearInterval(pollRef.current!); pollRef.current = null }
     }, 10_000)
   }, [])
 
@@ -366,20 +314,12 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
     if (!siteInfo.repo) return
     setPagesStatus('enabling')
     try {
-      const r = await fetch('/api/dz-agent/github/react/enable-pages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo: siteInfo.repo }),
-      })
+      const r = await fetch('/api/dz-agent/github/react/enable-pages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo: siteInfo.repo }) })
       const d = await r.json()
       if (d.error) { setPagesStatus('error'); return }
       const url = d.html_url || `https://${siteInfo.repo.split('/')[0]}.github.io/${siteInfo.repo.split('/')[1]}/`
-      setPagesUrl(url)
-      setPagesStatus('building')
-      pollPagesStatus(siteInfo.repo, url)
-    } catch {
-      setPagesStatus('error')
-    }
+      setPagesUrl(url); setPagesStatus('building'); pollPagesStatus(siteInfo.repo, url)
+    } catch { setPagesStatus('error') }
   }, [siteInfo.repo, pollPagesStatus])
 
   const startStep  = steps.find(s => s.type === 'start')
@@ -392,105 +332,120 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
   const ghUser     = startStep?.message?.match(/@([\w-]+)/)?.[1]
   const doneCount  = phases.filter(p => p.status === 'done').length
   const failCount  = phases.filter(p => p.status === 'failed').length
-
-  // Auto-open report when done
-  useEffect(() => {
-    if (isComplete && doneStep?.content) setShowReport(true)
-  }, [isComplete, doneStep])
+  const currentAction = getCurrentAction(steps)
+  const progress = isLive && !isComplete ? getProgress(steps) : isComplete ? 100 : 0
 
   if (!steps || steps.length === 0) return null
 
   return (
-    <div className={`rp-panel ${isLive ? 'rp-panel--live' : ''} ${isComplete ? 'rp-panel--done' : ''} ${isFailed ? 'rp-panel--failed' : ''}`}>
+    <div className={`rp2-panel ${isLive && !isComplete ? 'rp2-panel--live' : ''} ${isComplete ? 'rp2-panel--done' : ''} ${isFailed ? 'rp2-panel--failed' : ''}`}>
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="rp-header">
-        <div className="rp-header-left">
-          <Github size={13} />
-          <span className="rp-header-title">Dz Agent 🇩🇿</span>
-          {ghUser && <span className="rp-header-user">@{ghUser}</span>}
-        </div>
-        <div className="rp-header-right">
-          {isLive && !isComplete && !isFailed && (
-            <span className="rp-badge rp-badge--live">
-              <Loader2 size={9} className="rp-spin" /> يعمل
-            </span>
-          )}
-          {isComplete && (
-            <span className="rp-badge rp-badge--done">
-              <CheckCircle2 size={9} /> اكتمل
-            </span>
-          )}
-          {isFailed && (
-            <span className="rp-badge rp-badge--failed">
-              <AlertTriangle size={9} /> فشل
-            </span>
-          )}
+      {/* ── LIVE: Minimal command bar ─────────────────────────────────────────── */}
+      {isLive && !isComplete && !isFailed && (
+        <div className="rp2-live-bar">
+          <div className="rp2-live-bar-top">
+            <div className="rp2-live-indicator">
+              <span className="rp2-live-dot" />
+              <Github size={12} style={{ color: '#86efac' }} />
+              <span className="rp2-live-title">DZ Agent يعمل</span>
+              {ghUser && <span className="rp2-live-user">@{ghUser}</span>}
+            </div>
+            <div className="rp2-live-meta">
+              <span className="rp2-live-time">
+                <Clock size={9} /> {(elapsed / 1000).toFixed(1)}s
+              </span>
+              {phases.length > 0 && (
+                <span className="rp2-live-steps">{doneCount}/{doneCount + 1} خطوة</span>
+              )}
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="rp2-progress-track">
+            <div className="rp2-progress-fill" style={{ width: `${progress}%` }} />
+            <div className="rp2-progress-glow" style={{ left: `${progress}%` }} />
+          </div>
+
+          {/* Current action */}
+          <div className="rp2-current-action">
+            <Terminal size={10} style={{ color: '#60a5fa', flexShrink: 0 }} />
+            <span className="rp2-current-label">{currentAction}</span>
+            <span className="rp2-dots"><span /><span /><span /></span>
+          </div>
+
+          {/* Phases toggle — hidden by default while running */}
           {phases.length > 0 && (
-            <span className="rp-badge rp-badge--count">
-              <Clock size={9} />
-              {doneCount}/{phases.length} مرحلة
-            </span>
+            <button className="rp2-toggle-phases-btn" onClick={() => setShowPhases(v => !v)}>
+              {showPhases ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              {showPhases ? 'إخفاء التفاصيل' : `عرض التفاصيل (${phases.length} خطوة)`}
+            </button>
           )}
-        </div>
-      </div>
 
-      {/* ── Phases Pipeline ──────────────────────────────────────────────────── */}
-      {phases.length > 0 ? (
-        <div className="rp-pipeline">
-          <div className="rp-pipeline-title">المراحل</div>
-          <div className="rp-phases-list">
-            {phases.map((phase, idx) => (
-              <PhaseCard key={phase.id} phase={phase} isLast={idx === phases.length - 1} />
-            ))}
-            {/* Running indicator when live but no tool calls yet */}
-            {isLive && !isComplete && phases.length === 0 && (
-              <div className="rp-phase rp-phase--running">
-                <div className="rp-phase-dot" style={{ borderColor: '#60a5fa' }}>
-                  <Loader2 size={11} color="#60a5fa" className="rp-spin" />
-                </div>
-                <div className="rp-phase-content">
-                  <div className="rp-phase-header">
-                    <span className="rp-phase-label">يحلّل الطلب...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : isLive && !isComplete ? (
-        <div className="rp-pipeline">
-          <div className="rp-phase rp-phase--running">
-            <div className="rp-phase-dot" style={{ borderColor: '#60a5fa' }}>
-              <Loader2 size={11} color="#60a5fa" className="rp-spin" />
+          {/* Collapsible phases during live */}
+          {showPhases && phases.length > 0 && (
+            <div className="rp2-phases-list">
+              {phases.map((phase, idx) => <PhaseRow key={phase.id} phase={phase} isLast={idx === phases.length - 1} />)}
             </div>
-            <div className="rp-phase-content">
-              <div className="rp-phase-header">
-                <span className="rp-phase-label" style={{ color: '#60a5fa' }}>يحلّل الطلب ويعدّ الأدوات...</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Stats Bar ───────────────────────────────────────────────────────── */}
-      {phases.length > 0 && (
-        <div className="rp-stats">
-          <span className="rp-stat rp-stat--done">
-            <CheckCircle2 size={10} /> {doneCount} نجحت
-          </span>
-          {failCount > 0 && (
-            <span className="rp-stat rp-stat--failed">
-              <XCircle size={10} /> {failCount} فشلت
-            </span>
           )}
-          <span className="rp-stat rp-stat--total">
-            {phases.length} مرحلة
-          </span>
         </div>
       )}
 
-      {/* ── Preview Section ──────────────────────────────────────────────────── */}
+      {/* ── DONE: Compact result card ─────────────────────────────────────────── */}
+      {isComplete && (
+        <div className="rp2-done-card">
+          <div className="rp2-done-header">
+            <div className="rp2-done-status">
+              <div className="rp2-done-icon">
+                <Sparkles size={14} color="#22c55e" />
+              </div>
+              <div>
+                <div className="rp2-done-title">اكتملت المهمة بنجاح</div>
+                <div className="rp2-done-meta">
+                  {ghUser && <span>@{ghUser}</span>}
+                  <span className="rp2-done-sep">·</span>
+                  <span>{doneCount} خطوة</span>
+                  {failCount > 0 && <><span className="rp2-done-sep">·</span><span style={{ color: '#f87171' }}>{failCount} فشلت</span></>}
+                  <span className="rp2-done-sep">·</span>
+                  <span>{(elapsed / 1000).toFixed(1) !== '0.0' ? `${(elapsed / 1000).toFixed(1)}s` : fmtMs(steps.find(s => s.elapsed_ms)?.elapsed_ms)}</span>
+                </div>
+              </div>
+            </div>
+            {/* Phases toggle button */}
+            <button className="rp2-toggle-phases-btn rp2-toggle-phases-btn--done" onClick={() => setShowPhases(v => !v)}>
+              <Terminal size={10} />
+              {showPhases ? 'إخفاء السجل' : `السجل (${phases.length})`}
+              {showPhases ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
+            </button>
+          </div>
+
+          {/* Collapsible phases after done */}
+          {showPhases && (
+            <div className="rp2-phases-list rp2-phases-list--in-done">
+              {phases.map((phase, idx) => <PhaseRow key={phase.id} phase={phase} isLast={idx === phases.length - 1} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FAILED ───────────────────────────────────────────────────────────── */}
+      {isFailed && (
+        <div className="rp2-failed-bar">
+          <AlertTriangle size={12} color="#f87171" />
+          <span>{errorStep?.message || 'فشل التنفيذ'}</span>
+          {phases.length > 0 && (
+            <button className="rp2-toggle-phases-btn" onClick={() => setShowPhases(v => !v)}>
+              {showPhases ? 'إخفاء' : `عرض السجل (${phases.length})`}
+            </button>
+          )}
+        </div>
+      )}
+      {isFailed && showPhases && (
+        <div className="rp2-phases-list">
+          {phases.map((phase, idx) => <PhaseRow key={phase.id} phase={phase} isLast={idx === phases.length - 1} />)}
+        </div>
+      )}
+
+      {/* ── Preview Section ───────────────────────────────────────────────────── */}
       {isComplete && siteInfo.hasHtml && (
         <div className="rp-preview-section">
           <button className="rp-preview-toggle" onClick={() => setShowPreview(v => !v)}>
@@ -504,68 +459,41 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
                 <span className="rp-preview-dot" style={{ background: '#ff5f57' }} />
                 <span className="rp-preview-dot" style={{ background: '#febc2e' }} />
                 <span className="rp-preview-dot" style={{ background: '#28c840' }} />
-                <span className="rp-preview-addr">{siteInfo.repo ? `${siteInfo.repo} — preview` : 'معاينة محلية'}</span>
+                <span className="rp-preview-addr">{siteInfo.repo ? `${siteInfo.repo}` : 'معاينة محلية'}</span>
               </div>
-              <iframe
-                src={previewUrl}
-                className="rp-preview-frame"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                title="معاينة الموقع"
-              />
+              <iframe src={previewUrl} className="rp-preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" title="معاينة الموقع" />
             </div>
           )}
-          {showPreview && !previewUrl && (
-            <div className="rp-preview-loading">
-              <Loader2 size={13} className="rp-spin" /> جارٍ تحميل المعاينة...
-            </div>
-          )}
+          {showPreview && !previewUrl && <div className="rp-preview-loading"><Loader2 size={13} className="rp-spin" /> جارٍ تحميل المعاينة...</div>}
         </div>
       )}
 
-      {/* ── GitHub Pages Publish Button ───────────────────────────────────────── */}
+      {/* ── GitHub Pages Publish ──────────────────────────────────────────────── */}
       {isComplete && siteInfo.hasHtml && !liveUrl && pagesStatus !== 'live' && (
         <div className="rp-pages-publish">
-          <div className="rp-pages-header">
-            <Globe size={11} />
-            <span className="rp-pages-title">نشر على GitHub Pages</span>
-          </div>
+          <div className="rp-pages-header"><Globe size={11} /><span className="rp-pages-title">نشر على GitHub Pages</span></div>
           {pagesStatus === 'idle' && (
-            <button
-              className="rp-pages-btn"
-              onClick={enablePages}
-              disabled={!siteInfo.repo}
-              title={siteInfo.repo ? `نشر ${siteInfo.repo}` : 'لا يوجد مستودع محدد'}
-            >
-              <Zap size={12} />
-              نشر الموقع مجاناً على GitHub Pages
+            <button className="rp-pages-btn" onClick={enablePages} disabled={!siteInfo.repo} title={siteInfo.repo ? `نشر ${siteInfo.repo}` : 'لا يوجد مستودع'}>
+              <Zap size={12} /> نشر الموقع مجاناً على GitHub Pages
             </button>
           )}
-          {pagesStatus === 'enabling' && (
-            <div className="rp-pages-status rp-pages-status--building">
-              <Loader2 size={11} className="rp-spin" /> جارٍ تفعيل GitHub Pages...
-            </div>
-          )}
+          {pagesStatus === 'enabling' && <div className="rp-pages-status rp-pages-status--building"><Loader2 size={11} className="rp-spin" /> جارٍ تفعيل GitHub Pages...</div>}
           {pagesStatus === 'building' && (
             <div className="rp-pages-status rp-pages-status--building">
-              <Loader2 size={11} className="rp-spin" />
-              يتم بناء الموقع... قد يستغرق 1–2 دقيقة
-              {pagesUrl && (
-                <a href={pagesUrl} target="_blank" rel="noopener noreferrer" className="rp-pages-preview-link">
-                  {pagesUrl}
-                </a>
-              )}
+              <Loader2 size={11} className="rp-spin" /> يتم بناء الموقع... قد يستغرق 1–2 دقيقة
+              {pagesUrl && <a href={pagesUrl} target="_blank" rel="noopener noreferrer" className="rp-pages-preview-link">{pagesUrl}</a>}
             </div>
           )}
           {pagesStatus === 'error' && (
             <div className="rp-pages-status rp-pages-status--error">
-              <XCircle size={11} /> فشل التفعيل — تأكد أن المستودع عام (Public)
+              <XCircle size={11} /> فشل التفعيل — تأكد أن المستودع عام
               <button className="rp-pages-retry" onClick={() => setPagesStatus('idle')}>إعادة المحاولة</button>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Pages Live URL (after manual enable) ─────────────────────────────── */}
+      {/* ── Pages Live (manual enable) ────────────────────────────────────────── */}
       {pagesStatus === 'live' && pagesUrl && (
         <div className="rp-live-site rp-live-site--pages">
           <div className="rp-live-site-row">
@@ -577,11 +505,7 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
               </div>
               <ExternalLink size={13} className="rp-live-site-arrow" />
             </a>
-            <button
-              className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`}
-              onClick={() => copyLink(pagesUrl)}
-              title="نسخ الرابط"
-            >
+            <button className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`} onClick={() => copyLink(pagesUrl)} title="نسخ الرابط">
               {copied ? <Check size={13} /> : <Copy size={13} />}
               <span>{copied ? 'تم النسخ!' : 'نسخ'}</span>
             </button>
@@ -589,7 +513,7 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
         </div>
       )}
 
-      {/* ── Live Site Button (from ReAct agent auto-enable) ───────────────────── */}
+      {/* ── Auto-enabled Live Site ────────────────────────────────────────────── */}
       {isComplete && liveUrl && pagesStatus !== 'live' && (
         <div className="rp-live-site">
           <div className="rp-live-site-row">
@@ -601,11 +525,7 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
               </div>
               <ExternalLink size={13} className="rp-live-site-arrow" />
             </a>
-            <button
-              className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`}
-              onClick={() => copyLink(liveUrl!)}
-              title="نسخ الرابط"
-            >
+            <button className={`rp-copy-btn ${copied ? 'rp-copy-btn--done' : ''}`} onClick={() => copyLink(liveUrl!)} title="نسخ الرابط">
               {copied ? <Check size={13} /> : <Copy size={13} />}
               <span>{copied ? 'تم النسخ!' : 'نسخ'}</span>
             </button>
@@ -614,29 +534,14 @@ export default function GitHubReActPanel({ steps, isLive = false }: Props) {
         </div>
       )}
 
-      {/* ── Final Report ─────────────────────────────────────────────────────── */}
+      {/* ── Final Report ──────────────────────────────────────────────────────── */}
       {isComplete && doneStep?.content && (
         <div className="rp-report">
           <button className="rp-report-toggle" onClick={() => setShowReport(r => !r)}>
-            <span className="rp-report-toggle-label">
-              <CheckCircle2 size={12} color="#22c55e" />
-              التقرير النهائي
-            </span>
+            <span className="rp-report-toggle-label"><CheckCircle2 size={12} color="#22c55e" />التقرير النهائي</span>
             {showReport ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-          {showReport && (
-            <div className="rp-report-body">
-              {doneStep.content}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Error ───────────────────────────────────────────────────────────── */}
-      {isFailed && errorStep?.message && (
-        <div className="rp-error-row">
-          <AlertTriangle size={11} color="#f87171" />
-          <span>{errorStep.message}</span>
+          {showReport && <div className="rp-report-body">{doneStep.content}</div>}
         </div>
       )}
     </div>

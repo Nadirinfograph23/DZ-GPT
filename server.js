@@ -66,6 +66,7 @@ import { mountAutonomousAgent } from './lib/autonomous/mount.js'
 import { runReActLoop, shouldUseReActLoop } from './lib/agent-loop/react.js'
 import { runClaudeReActLoop } from './lib/agent-loop/claude-react.js'
 import claudeProxyRouter from './lib/claude-proxy/index.js'
+import { generateTaskPlan } from './lib/task-planner/index.js'
 import { mountDzTubeAnalytics } from './lib/dz-tube/analytics-mount.js'
 import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
@@ -9913,6 +9914,21 @@ app.post('/api/dz-agent/github/react/stream', async (req, res) => {
     res.end()
   }
 })
+
+// ── POST /api/dz-agent/plan/generate — Smart Task Planner ────────────────────
+app.post('/api/dz-agent/plan/generate', async (req, res) => {
+  const query = sanitizeString(String(req.body.query || ''), 2000)
+  if (!query) return res.status(400).json({ error: 'query required' })
+
+  try {
+    const plan = await generateTaskPlan(query)
+    res.json({ plan })
+  } catch (err) {
+    console.error('[task-planner] Error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+console.log('[task-planner] Smart Task Planner mounted: /api/dz-agent/plan/generate')
 
 // ── Mount Anthropic-compatible Claude Proxy (free-claude-code approach) ───────
 app.use('/api/claude-proxy', claudeProxyRouter)

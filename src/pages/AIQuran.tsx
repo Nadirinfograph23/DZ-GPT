@@ -425,6 +425,39 @@ export default function AIQuran() {
     closeAyahMenu()
   }
 
+  // ── RAG: extract surah:ayah reference from user query ───────────────────
+  const extractAyahRef = (query: string): { surah: number; ayah: number } | null => {
+    // Pattern: "2:255" or "2/255" or "سورة 2 آية 255" or verse_key format
+    const explicit = query.match(/\b(\d{1,3})[:/](\d{1,3})\b/)
+    if (explicit) {
+      const s = parseInt(explicit[1], 10), a = parseInt(explicit[2], 10)
+      if (s >= 1 && s <= 114 && a >= 1) return { surah: s, ayah: a }
+    }
+    // Fallback: use current chapter + verse number if mentioned
+    if (selectedChapter) {
+      const verseNum = query.match(/آية\s*(?:رقم\s*)?(\d{1,3})|الآية\s*(\d{1,3})|verse\s*(\d{1,3})/i)
+      if (verseNum) {
+        const a = parseInt(verseNum[1] || verseNum[2] || verseNum[3], 10)
+        if (a >= 1) return { surah: selectedChapter.id, ayah: a }
+      }
+    }
+    return null
+  }
+
+  const fetchTafsirContext = async (surah: number, ayah: number): Promise<string> => {
+    try {
+      const r = await fetch(`/api/quran/context?surah=${surah}&ayah=${ayah}`)
+      const d = await r.json()
+      if (!d.ok || !d.tafsirs?.length) return ''
+      const lines = d.tafsirs.map((t: { label: string; text: string }) =>
+        `【تفسير ${t.label}】\n${t.text}`
+      )
+      return `\n━━━━━━━━━━━━━━━━━━\nتفسير موثق من قاعدة البيانات للآية (${surah}:${ayah})\n━━━━━━━━━━━━━━━━━━\n${lines.join('\n\n')}\n`
+    } catch {
+      return ''
+    }
+  }
+
   const sendAiMessage = async () => {
     const text = aiInput.trim()
     if (!text || aiLoading) return
@@ -440,6 +473,10 @@ export default function AIQuran() {
       const wordCtx = wordOccurrences
         ? `الكلمة المُحللة: «${wordOccurrences.word}» — وردت ${wordOccurrences.count} مرة`
         : ''
+
+      // ── RAG: fetch verified tafsir if ayah reference detected ────────────
+      const ayahRef = extractAyahRef(text)
+      const tafsirCtx = ayahRef ? await fetchTafsirContext(ayahRef.surah, ayahRef.ayah) : ''
       const devInfoSection = `
 ━━━━━━━━━━━━━━━━━━
 معلومات المطور (استثناء وحيد)
@@ -471,6 +508,7 @@ export default function AIQuran() {
 1. القرآن الكريم الرسمي: المصحف العثماني المعتمد
 2. التفاسير المعتمدة: تفسير ابن كثير — تفسير الطبري — تفسير السعدي — تفسير البغوي — تفسير القرطبي — تفسير الجلالين — التفسير الميسر
 3. بيانات القرآن: نصوص القرآن الرسمية فقط — الآيات الموثقة — بيانات السور الصحيحة
+4. الموسوعة الحديثية (dorar.net): مرجع داعم للأحاديث المتعلقة بالآيات — يُستخدم للاستشهاد فقط عند الحاجة — لا يُعوَّل عليه منفرداً في التفسير
 
 ━━━━━━━━━━━━━━━━━━
 قواعد صارمة
@@ -525,6 +563,7 @@ export default function AIQuran() {
 
 ${context ? `السياق الحالي: ${context}` : ''}
 ${wordCtx ? wordCtx : ''}
+${tafsirCtx ? tafsirCtx : ''}
 ${devInfoSection}`
 
       const messages = [

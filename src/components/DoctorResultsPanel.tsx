@@ -438,9 +438,18 @@ export default function DoctorResultsPanel({ doctors, dirs = [], meta }: Props) 
       )}
 
       {doctors.length > 0 && (
-        viewMode === 'table'
-          ? <TableView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
-          : <CardView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
+        <>
+          <div className="dr-tip-banner">
+            <span className="dr-tip-banner-icon">💡</span>
+            <span className="dr-tip-banner-text">
+              <strong>ملاحظة:</strong> اضغط على <span className="dr-tip-highlight"><MapPin size={12} className="dr-tip-inline-icon" /> العنوان</span> لمعرفة تفاصيل أكثر عن الطبيب وموقعه على الخريطة
+            </span>
+          </div>
+          {viewMode === 'table'
+            ? <TableView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
+            : <CardView doctors={doctors} specLabel={isNameSearch ? '' : meta.speciality.ar} cityLabel={meta.city.ar} showScore={isNameSearch} />
+          }
+        </>
       )}
 
       {dirs.length > 0 && (

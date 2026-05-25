@@ -6385,6 +6385,56 @@
   color: #5eead4;
 }
 
+/* ── TIP BANNER ── */
+.dr-tip-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 12px 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.08) 0%, rgba(96, 165, 250, 0.06) 100%);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+  border-radius: 10px;
+  direction: rtl;
+}
+
+.dr-tip-banner-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dr-tip-banner-text {
+  font-size: 12.5px;
+  color: #a5d8d8;
+  line-height: 1.5;
+}
+
+.dr-tip-banner-text strong {
+  color: #5eead4;
+  font-weight: 700;
+  margin-inline-end: 3px;
+}
+
+.dr-tip-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #7dd3fc;
+  font-weight: 600;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 5px;
+  padding: 1px 6px;
+  margin: 0 2px;
+}
+
+.dr-tip-inline-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-bottom: 1px;
+}
+
 /* ── TABLE VIEW ── */
 .dr-table-wrap {
   overflow-x: auto;

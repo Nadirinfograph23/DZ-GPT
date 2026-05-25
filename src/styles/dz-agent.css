@@ -8692,6 +8692,14 @@
 }
 .rp2-live-title { color: #86efac; font-weight: 600; font-size: 12px; }
 .rp2-live-user  { color: #4b5563; font-size: 11px; }
+.rp2-claude-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
+  color: #e9d5ff; font-size: 9px; font-weight: 700;
+  padding: 2px 6px; border-radius: 10px;
+  border: 1px solid rgba(167,139,250,0.35);
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
 .rp2-live-meta  { display: flex; align-items: center; gap: 8px; }
 .rp2-live-time  { display: flex; align-items: center; gap: 3px; color: #6b7280; font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .rp2-live-steps { color: #374151; font-size: 10.5px; }

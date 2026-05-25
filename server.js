@@ -19699,6 +19699,136 @@ app.get('/api/tts/voices', (_req, res) => {
   ])
 })
 
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/tools/screenshot  — Full-page website screenshot via microlink.io
+// GET  /api/tools/screenshot/status — Health check
+// ═══════════════════════════════════════════════════════════════════════════
+const SCREENSHOT_TIMEOUT = 30_000 // 30 s
+
+function isValidScreenshotUrl(raw) {
+  try {
+    const u = new URL(raw)
+    if (!['http:', 'https:'].includes(u.protocol)) return false
+    const h = u.hostname.toLowerCase()
+    // Block internal/private hosts
+    const bad = ['localhost', '127.', '0.0.0.0', '::1', '10.', '192.168.', '172.16.', '169.254.']
+    if (bad.some(b => h === b || h.startsWith(b))) return false
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(h)) {
+      // Allow only real public IPs — block RFC-1918
+      const parts = h.split('.').map(Number)
+      if (parts[0] === 10) return false
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false
+      if (parts[0] === 192 && parts[1] === 168) return false
+      if (parts[0] === 127) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function fetchScreenshotMicrolink(url, opts = {}) {
+  const { fullPage = true, viewport = 'desktop', darkMode = false } = opts
+  const vpWidth  = viewport === 'mobile' ? 390 : 1280
+  const vpHeight = viewport === 'mobile' ? 844 : 900
+
+  const params = new URLSearchParams({
+    url,
+    screenshot: 'true',
+    meta: 'false',
+    'screenshot.fullPage': fullPage ? 'true' : 'false',
+    'screenshot.viewport.width':  String(vpWidth),
+    'screenshot.viewport.height': String(vpHeight),
+    'screenshot.viewport.deviceScaleFactor': viewport === 'mobile' ? '2' : '1',
+    'screenshot.viewport.isMobile':          viewport === 'mobile' ? 'true' : 'false',
+    'screenshot.colorScheme':                darkMode ? 'dark' : 'light',
+    waitUntil: 'networkIdle2',
+  })
+
+  const apiRes = await fetch(`https://api.microlink.io/?${params}`, {
+    headers: { 'User-Agent': 'DZ-GPT/2.0' },
+    signal: AbortSignal.timeout(SCREENSHOT_TIMEOUT),
+  })
+
+  const json = await apiRes.json()
+  if (json.status !== 'success' || !json.data?.screenshot?.url) {
+    throw new Error(json.message || 'microlink returned no screenshot')
+  }
+  return json.data.screenshot // { url, width, height, size }
+}
+
+app.get('/api/tools/screenshot/status', (_req, res) => {
+  res.json({ ok: true, engine: 'microlink.io', ts: Date.now() })
+})
+
+app.post('/api/tools/screenshot', async (req, res) => {
+  const { url, fullPage = true, viewport = 'desktop', darkMode = false } = req.body || {}
+
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'URL مطلوب' })
+  }
+
+  const cleaned = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`
+
+  if (!isValidScreenshotUrl(cleaned)) {
+    return res.status(400).json({ error: 'الرابط غير صالح أو محظور لأسباب أمنية' })
+  }
+
+  try {
+    // ── Attempt 1: microlink.io ────────────────────────────────────────────
+    let screenshotInfo
+    try {
+      screenshotInfo = await fetchScreenshotMicrolink(cleaned, { fullPage, viewport, darkMode })
+    } catch (e1) {
+      console.warn('[screenshot] microlink failed:', e1.message, '— trying thum.io fallback')
+      // ── Fallback: thum.io (always returns an image, no API key) ──────────
+      const thumbUrl = `https://image.thum.io/get/fullpage/${encodeURIComponent(cleaned)}`
+      screenshotInfo = { url: thumbUrl, width: 1280, height: null, size: null }
+    }
+
+    // ── Proxy the image so the browser gets raw bytes (avoids CORS) ────────
+    const imgRes = await fetch(screenshotInfo.url, {
+      headers: { 'User-Agent': 'DZ-GPT/2.0' },
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`)
+    const imgBuf  = await imgRes.arrayBuffer()
+    const base64  = Buffer.from(imgBuf).toString('base64')
+    const ctype   = imgRes.headers.get('content-type') || 'image/png'
+    const dataUri = `data:${ctype};base64,${base64}`
+
+    // ── Extract page title via lightweight fetch ───────────────────────────
+    let pageTitle = ''
+    try {
+      const htmlRes = await fetch(cleaned, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT)' },
+        signal: AbortSignal.timeout(8_000),
+      })
+      const html = await htmlRes.text()
+      const m = html.match(/<title[^>]*>([^<]{1,200})<\/title>/i)
+      if (m) pageTitle = m[1].trim()
+    } catch { /* ignore */ }
+
+    return res.json({
+      ok: true,
+      url: cleaned,
+      title: pageTitle,
+      screenshot: dataUri,
+      width: screenshotInfo.width,
+      height: screenshotInfo.height,
+      viewport,
+      darkMode,
+    })
+  } catch (err) {
+    console.error('[screenshot] error:', err.message)
+    return res.status(500).json({
+      error: err.message?.includes('timeout') || err.message?.includes('abort')
+        ? 'انتهت المهلة — الموقع بطيء أو محجوب'
+        : `فشل التصوير: ${err.message}`,
+    })
+  }
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 

@@ -9,6 +9,7 @@ interface HolidayInfo {
 
 interface DZRobotProps {
   holiday?: HolidayInfo | null
+  onHide?: () => void
 }
 
 const MESSAGES_NORMAL = [
@@ -62,7 +63,7 @@ const HOLIDAY_PARTICLES = [
   { angle: 330, color: '#4ECDC4', size: 7,  shape: 'rect' },
 ]
 
-export default function DZRobot({ holiday }: DZRobotProps) {
+export default function DZRobot({ holiday, onHide }: DZRobotProps) {
   const [pos, setPos] = useState({ x: -1, y: -1 })
   const [isDragging, setIsDragging] = useState(false)
   const [isHappy, setIsHappy] = useState(false)
@@ -206,10 +207,9 @@ export default function DZRobot({ holiday }: DZRobotProps) {
     setIsExploding(true)
     setShowMsg(false)
     setTimeout(() => {
-      localStorage.setItem('dz-robot-hidden', '1')
-      window.dispatchEvent(new Event('dz-robot-toggle'))
+      onHide?.()
     }, 750)
-  }, [])
+  }, [onHide])
 
   // Don't render until position is known
   if (pos.x === -1) return null

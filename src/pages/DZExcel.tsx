@@ -66,6 +66,11 @@ export default function DZExcel() {
         }
         setShowLog(true)
       }
+      if (msg.type === 'chartCreated') {
+        setMacroLog(p => [...p, `📊 مخطط "${msg.title || msg.chartType}" جاهز`])
+        setLastAction('macro_ok')
+        setShowLog(true)
+      }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
@@ -103,17 +108,25 @@ export default function DZExcel() {
   // ── Handle AI response ──
   const handleAiResponse = (d: {
     action?: string; message?: string; rows?: unknown[][];
-    headers?: string[]; macro?: string; templateName?: string
+    headers?: string[]; macro?: string; templateName?: string;
+    theme?: string; autoChart?: object;
+    chartType?: string; labels?: unknown[]; datasets?: unknown[]; title?: string;
   }) => {
     const action = d.action || 'answer'
     setLastAction(action)
 
     if ((action === 'template' || action === 'data') && d.rows) {
-      postToSheet({ action: 'loadData', rows: d.rows, headers: d.headers })
+      postToSheet({
+        action: 'loadData',
+        rows: d.rows,
+        headers: d.headers,
+        theme: d.theme || 'blue',
+        autoChart: d.autoChart || null,
+      })
       const name = d.templateName || 'البيانات'
       setMessages(p => [...p, {
         role: 'assistant',
-        text: `✅ تم تحميل قالب **${name}** في الجدول — يمكنك التعديل مباشرة!\n\n${d.message || ''}`,
+        text: `✅ تم تحميل قالب **${name}** في الجدول بتنسيق احترافي!\n\n${d.message || ''}`,
         action,
       }])
     } else if (action === 'macro' && d.macro) {
@@ -123,6 +136,19 @@ export default function DZExcel() {
       setMessages(p => [...p, {
         role: 'assistant',
         text: `⚡ تم تشغيل الـ Macro!\n\n${d.message || ''}`,
+        action,
+      }])
+    } else if (action === 'chart') {
+      postToSheet({
+        action: 'createChart',
+        chartType: d.chartType || 'bar',
+        labels: d.labels || [],
+        datasets: d.datasets || [],
+        title: d.title || 'مخطط',
+      })
+      setMessages(p => [...p, {
+        role: 'assistant',
+        text: `📊 تم إنشاء المخطط!\n\n${d.message || ''}`,
         action,
       }])
     } else {

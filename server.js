@@ -19727,13 +19727,15 @@ function isValidScreenshotUrl(raw) {
   }
 }
 
-async function fetchScreenshotMicrolink(url, opts = {}) {
+// ── Screenshot helpers ────────────────────────────────────────────────────────
+
+/** Try microlink.io — returns { url, width, height } */
+async function tryMicrolink(targetUrl, opts = {}) {
   const { fullPage = true, viewport = 'desktop', darkMode = false } = opts
   const vpWidth  = viewport === 'mobile' ? 390 : 1280
-  const vpHeight = viewport === 'mobile' ? 844 : 900
-
+  const vpHeight = viewport === 'mobile' ? 844 : 800
   const params = new URLSearchParams({
-    url,
+    url: targetUrl,
     screenshot: 'true',
     meta: 'false',
     'screenshot.fullPage': fullPage ? 'true' : 'false',
@@ -19742,23 +19744,53 @@ async function fetchScreenshotMicrolink(url, opts = {}) {
     'screenshot.viewport.deviceScaleFactor': viewport === 'mobile' ? '2' : '1',
     'screenshot.viewport.isMobile':          viewport === 'mobile' ? 'true' : 'false',
     'screenshot.colorScheme':                darkMode ? 'dark' : 'light',
-    waitUntil: 'networkIdle2',
+    waitUntil: 'load',
   })
-
-  const apiRes = await fetch(`https://api.microlink.io/?${params}`, {
-    headers: { 'User-Agent': 'DZ-GPT/2.0' },
-    signal: AbortSignal.timeout(SCREENSHOT_TIMEOUT),
+  const r = await fetch(`https://api.microlink.io/?${params}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/3.0' },
+    signal: AbortSignal.timeout(22_000),
   })
+  const j = await r.json()
+  if (j.status !== 'success' || !j.data?.screenshot?.url) throw new Error(j.message || 'microlink: no screenshot')
+  return { url: j.data.screenshot.url, width: vpWidth, height: vpHeight, engine: 'microlink' }
+}
 
-  const json = await apiRes.json()
-  if (json.status !== 'success' || !json.data?.screenshot?.url) {
-    throw new Error(json.message || 'microlink returned no screenshot')
-  }
-  return json.data.screenshot // { url, width, height, size }
+/** WordPress mshots — completely free, no API key */
+async function tryWordPressMshots(targetUrl, viewport = 'desktop') {
+  const w = viewport === 'mobile' ? 400 : 1280
+  const h = viewport === 'mobile' ? 800 : 960
+  const imgUrl = `https://s.wordpress.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=${w}&h=${h}`
+  return { url: imgUrl, width: w, height: h, engine: 'mshots' }
+}
+
+/** thum.io — free without API key (raw URL, NOT encoded) */
+async function tryThumio(targetUrl, viewport = 'desktop') {
+  const w = viewport === 'mobile' ? 400 : 1280
+  // thum.io accepts raw URL directly after the path — no encodeURIComponent
+  const imgUrl = `https://image.thum.io/get/width/${w}/crop/900/${targetUrl}`
+  return { url: imgUrl, width: w, height: 900, engine: 'thum.io' }
+}
+
+/** Fetch image and convert to base64 data URI */
+async function imgToDataUri(imgUrl, timeoutMs = 25_000) {
+  const r = await fetch(imgUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'image/webp,image/apng,image/*,*/*',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status} from screenshot service`)
+  const ct = r.headers.get('content-type') || 'image/png'
+  if (!ct.startsWith('image/')) throw new Error(`Non-image response: ${ct}`)
+  const buf = await r.arrayBuffer()
+  if (buf.byteLength < 1000) throw new Error('Image too small — service returned placeholder')
+  return `data:${ct};base64,${Buffer.from(buf).toString('base64')}`
 }
 
 app.get('/api/tools/screenshot/status', (_req, res) => {
-  res.json({ ok: true, engine: 'microlink.io', ts: Date.now() })
+  res.json({ ok: true, engines: ['microlink', 'mshots', 'thum.io'], ts: Date.now() })
 })
 
 app.post('/api/tools/screenshot', async (req, res) => {
@@ -19774,59 +19806,55 @@ app.post('/api/tools/screenshot', async (req, res) => {
     return res.status(400).json({ error: 'الرابط غير صالح أو محظور لأسباب أمنية' })
   }
 
+  // ── Extract page title (best-effort, non-blocking) ───────────────────────
+  let pageTitle = ''
   try {
-    // ── Attempt 1: microlink.io ────────────────────────────────────────────
-    let screenshotInfo
-    try {
-      screenshotInfo = await fetchScreenshotMicrolink(cleaned, { fullPage, viewport, darkMode })
-    } catch (e1) {
-      console.warn('[screenshot] microlink failed:', e1.message, '— trying thum.io fallback')
-      // ── Fallback: thum.io (always returns an image, no API key) ──────────
-      const thumbUrl = `https://image.thum.io/get/fullpage/${encodeURIComponent(cleaned)}`
-      screenshotInfo = { url: thumbUrl, width: 1280, height: null, size: null }
-    }
-
-    // ── Proxy the image so the browser gets raw bytes (avoids CORS) ────────
-    const imgRes = await fetch(screenshotInfo.url, {
-      headers: { 'User-Agent': 'DZ-GPT/2.0' },
-      signal: AbortSignal.timeout(20_000),
+    const htmlRes = await fetch(cleaned, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/3.0)' },
+      signal: AbortSignal.timeout(6_000),
     })
-    if (!imgRes.ok) throw new Error(`Image fetch failed: ${imgRes.status}`)
-    const imgBuf  = await imgRes.arrayBuffer()
-    const base64  = Buffer.from(imgBuf).toString('base64')
-    const ctype   = imgRes.headers.get('content-type') || 'image/png'
-    const dataUri = `data:${ctype};base64,${base64}`
-
-    // ── Extract page title via lightweight fetch ───────────────────────────
-    let pageTitle = ''
-    try {
-      const htmlRes = await fetch(cleaned, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT)' },
-        signal: AbortSignal.timeout(8_000),
-      })
+    if (htmlRes.ok) {
       const html = await htmlRes.text()
       const m = html.match(/<title[^>]*>([^<]{1,200})<\/title>/i)
       if (m) pageTitle = m[1].trim()
-    } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
 
-    return res.json({
-      ok: true,
-      url: cleaned,
-      title: pageTitle,
-      screenshot: dataUri,
-      width: screenshotInfo.width,
-      height: screenshotInfo.height,
-      viewport,
-      darkMode,
-    })
-  } catch (err) {
-    console.error('[screenshot] error:', err.message)
-    return res.status(500).json({
-      error: err.message?.includes('timeout') || err.message?.includes('abort')
-        ? 'انتهت المهلة — الموقع بطيء أو محجوب'
-        : `فشل التصوير: ${err.message}`,
-    })
+  // ── Try screenshot engines in order ─────────────────────────────────────
+  const engines = [
+    () => tryMicrolink(cleaned, { fullPage, viewport, darkMode }),
+    () => tryWordPressMshots(cleaned, viewport),
+    () => tryThumio(cleaned, viewport),
+  ]
+
+  let lastErr = 'كل خدمات التصوير فشلت'
+  for (const getInfo of engines) {
+    try {
+      const info = await getInfo()
+      console.log(`[screenshot] trying engine: ${info.engine} for ${cleaned}`)
+      const dataUri = await imgToDataUri(info.url)
+      return res.json({
+        ok: true,
+        url: cleaned,
+        title: pageTitle,
+        screenshot: dataUri,
+        width: info.width,
+        height: info.height,
+        viewport,
+        darkMode,
+        engine: info.engine,
+      })
+    } catch (e) {
+      console.warn(`[screenshot] engine failed: ${e.message}`)
+      lastErr = e.message
+    }
   }
+
+  return res.status(500).json({
+    error: lastErr?.includes('timeout') || lastErr?.includes('abort')
+      ? 'انتهت المهلة — الموقع بطيء أو محجوب'
+      : `فشل التصوير: ${lastErr}`,
+  })
 })
 
 // ===== EXPORT APP (for Vercel serverless) =====

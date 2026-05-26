@@ -1690,36 +1690,45 @@
   direction: rtl;
 }
 
-/* ── Surah block ── */
+/* ── Surah block (accordion) ── */
 .aq-kw-surah-block {
   border: 1px solid #1e2840;
   border-radius: 10px;
   overflow: hidden;
   transition: border-color 0.15s;
 }
-.aq-kw-surah-block:hover { border-color: #2a3a60; }
+.aq-kw-surah-block:hover { border-color: #2e3f60; }
+.aq-kw-surah-block + .aq-kw-surah-block { margin-top: 4px; }
+
 .aq-kw-surah-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 13px;
-  background: #101828;
+  padding: 10px 12px;
+  background: #0f1825;
   cursor: pointer;
   direction: rtl;
   transition: background 0.15s;
   user-select: none;
+  gap: 8px;
 }
-.aq-kw-surah-header:hover { background: #151f32; }
-.aq-kw-surah-header--open { background: #12202e; border-bottom: 1px solid #1e2840; }
+.aq-kw-surah-header:hover { background: #141e30; }
+.aq-kw-surah-header--open {
+  background: #111f30;
+  border-bottom: 1px solid #1e2840;
+}
+
 .aq-kw-surah-info {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 .aq-kw-surah-num {
-  width: 22px;
-  height: 22px;
-  background: rgba(154,205,50,0.15);
+  width: 24px;
+  height: 24px;
+  background: rgba(154,205,50,0.13);
   color: #9acd32;
   border-radius: 50%;
   font-size: 10px;
@@ -1733,11 +1742,17 @@
   font-size: 13px;
   color: #d0dae8;
   font-family: 'Noto Naskh Arabic', 'Tahoma', serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.aq-kw-surah-header--open .aq-kw-surah-name { color: #c8e67a; }
+
 .aq-kw-surah-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  flex-shrink: 0;
 }
 .aq-kw-surah-count {
   font-size: 11px;
@@ -1746,66 +1761,113 @@
   background: rgba(154,205,50,0.1);
   padding: 2px 8px;
   border-radius: 10px;
+  white-space: nowrap;
 }
-.aq-kw-expand-icon { font-size: 10px; color: #4b5563; }
 
-/* ── Verses list inside surah ── */
+/* + / − button */
+.aq-kw-expand-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #2a3a55;
+  background: #0a1320;
+  color: #6b8ab0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.aq-kw-expand-icon--open {
+  border-color: #9acd32;
+  background: rgba(154,205,50,0.12);
+  color: #9acd32;
+}
+
+/* ── Verses list (expandable) ── */
 .aq-kw-verses-list {
-  background: #0b1018;
+  background: #080f18;
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 .aq-kw-verse-item {
-  padding: 10px 13px 8px;
-  border-bottom: 1px solid #131d28;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #0f1a27;
   direction: rtl;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .aq-kw-verse-item:last-child { border-bottom: none; }
+
 .aq-kw-verse-key {
   display: inline-block;
   font-size: 11px;
   font-weight: 700;
-  color: #4a6a9a;
+  color: #4a7aaa;
   font-family: monospace;
-  letter-spacing: 1px;
-  margin-bottom: 5px;
+  letter-spacing: 0.5px;
+  background: rgba(74,122,170,0.1);
+  padding: 2px 7px;
+  border-radius: 4px;
+  align-self: flex-end;
 }
 .aq-kw-verse-text {
-  font-size: 15px;
-  font-family: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif;
-  line-height: 1.9;
-  color: #d4d8e8;
-  margin: 0 0 7px;
+  font-size: 16px;
+  font-family: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', 'Traditional Arabic', serif;
+  line-height: 2;
+  color: #c8d0e0;
+  margin: 0;
   direction: rtl;
+  text-align: right;
+  word-break: break-word;
+}
+.aq-kw-verse-text mark,
+.aq-kw-verse-text span {
+  display: inline;
 }
 
-/* highlighted search word inside verse */
+/* highlighted keyword inside verse */
 .aq-kw-highlight {
-  background: rgba(154,205,50,0.25);
-  color: #d4f07a;
+  background: rgba(154,205,50,0.22);
+  color: #d8f07a;
   border-radius: 3px;
-  padding: 0 2px;
+  padding: 0 1px;
   font-weight: 700;
-  border-bottom: 2px solid #9acd32;
+  border-bottom: 2px solid rgba(154,205,50,0.6);
+  display: inline;
 }
 
 .aq-kw-ask-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  padding: 5px 11px;
   background: transparent;
-  border: 1px solid #2a3a60;
+  border: 1px solid #1e2e48;
   border-radius: 6px;
-  color: #6b80a0;
+  color: #556a88;
   font-size: 11px;
   cursor: pointer;
   direction: rtl;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   font-family: inherit;
+  align-self: flex-end;
 }
-.aq-kw-ask-btn:hover { background: rgba(154,205,50,0.08); border-color: #9acd32; color: #9acd32; }
+.aq-kw-ask-btn:hover {
+  background: rgba(154,205,50,0.07);
+  border-color: rgba(154,205,50,0.5);
+  color: #9acd32;
+}
+
+@media (max-width: 480px) {
+  .aq-kw-surah-name { font-size: 12px; }
+  .aq-kw-verse-text { font-size: 15px; line-height: 1.85; }
+  .aq-kw-surah-count { font-size: 10px; padding: 2px 6px; }
+}
 
 /* ===== FONT SIZE BAR ===== */
 .aq-font-size-bar {

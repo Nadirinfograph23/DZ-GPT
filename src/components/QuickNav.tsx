@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, Home, Bot, MessageCircle, BookOpen,
-  Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight
+  Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight,
+  FileSpreadsheet, Gamepad2, Github, Cpu
 } from 'lucide-react'
 import '../styles/quick-nav.css'
 
@@ -15,15 +16,19 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/',           label: 'الرئيسية',     labelEn: 'Home',         icon: <Home size={18} />,         color: '#c8ff00' },
-  { path: '/dz-agent',   label: 'DZ Agent',     labelEn: 'AI Chat',      icon: <Bot size={18} />,          color: '#4ade80' },
-  { path: '/dzchat',     label: 'DZ Chat',      labelEn: 'Live Chat',    icon: <MessageCircle size={18} />, color: '#38bdf8' },
-  { path: '/quran',      label: 'القرآن AI',    labelEn: 'AI Quran',     icon: <BookOpen size={18} />,     color: '#fbbf24' },
-  { path: '/dz-tube',    label: 'DZ Tube',      labelEn: 'Video AI',     icon: <Video size={18} />,        color: '#f87171' },
-  { path: '/stats',      label: 'الإحصائيات',   labelEn: 'Stats',        icon: <BarChart2 size={18} />,    color: '#34d399' },
-  { path: '/tools',      label: 'الأدوات',      labelEn: 'Tools',        icon: <Wrench size={18} />,       color: '#fb923c' },
-  { path: '/web-builder',label: 'Web Builder',  labelEn: 'Site Builder', icon: <Globe size={18} />,        color: '#a78bfa' },
-  { path: '/ocr-dz',     label: 'OCR DZ',       labelEn: 'Text Scanner', icon: <ScanText size={18} />,     color: '#f472b6' },
+  { path: '/',             label: 'الرئيسية',     labelEn: 'Home',         icon: <Home size={18} />,            color: '#c8ff00' },
+  { path: '/dz-agent',     label: 'DZ Agent',     labelEn: 'AI Chat',      icon: <Bot size={18} />,             color: '#4ade80' },
+  { path: '/agent',        label: 'DZ Manus',     labelEn: 'Agent Manus',  icon: <Cpu size={18} />,             color: '#818cf8' },
+  { path: '/dzchat',       label: 'DZ Chat',      labelEn: 'Live Chat',    icon: <MessageCircle size={18} />,   color: '#38bdf8' },
+  { path: '/quran',        label: 'القرآن AI',    labelEn: 'AI Quran',     icon: <BookOpen size={18} />,        color: '#fbbf24' },
+  { path: '/dz-tube',      label: 'DZ Tube',      labelEn: 'Video AI',     icon: <Video size={18} />,           color: '#f87171' },
+  { path: '/stats',        label: 'الإحصائيات',   labelEn: 'Stats',        icon: <BarChart2 size={18} />,       color: '#34d399' },
+  { path: '/tools',        label: 'الأدوات',      labelEn: 'Tools',        icon: <Wrench size={18} />,          color: '#fb923c' },
+  { path: '/web-builder',  label: 'Web Builder',  labelEn: 'Site Builder', icon: <Globe size={18} />,           color: '#a78bfa' },
+  { path: '/ocr-dz',       label: 'OCR DZ',       labelEn: 'Text Scanner', icon: <ScanText size={18} />,        color: '#f472b6' },
+  { path: '/excel',        label: 'DZ Excel',     labelEn: 'Smart Sheets', icon: <FileSpreadsheet size={18} />, color: '#4ade80' },
+  { path: '/le3ba',        label: 'DZ Le3ba',     labelEn: 'Word Games',   icon: <Gamepad2 size={18} />,        color: '#fb7185' },
+  { path: '/github-agent', label: 'DZ GitHub',    labelEn: 'Git Deploy',   icon: <Github size={18} />,          color: '#60a5fa' },
 ]
 
 const HIDE_ON: string[] = []

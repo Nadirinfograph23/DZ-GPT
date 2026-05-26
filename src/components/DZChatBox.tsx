@@ -76,6 +76,65 @@ function ThinkingTracePanel({ roles }: { roles: ThinkingTraceRole[] }) {
   )
 }
 
+// ===== NAVIGATION SUGGESTION CARD =====
+const DZ_PAGES: Record<string, { icon: string; color: string }> = {
+  '/quran':       { icon: '📖', color: '#10a37f' },
+  '/tools':       { icon: '🔧', color: '#6366f1' },
+  '/web-builder': { icon: '🌐', color: '#0ea5e9' },
+  '/dz-tube':     { icon: '🎬', color: '#ef4444' },
+  '/dzchat':      { icon: '💬', color: '#f59e0b' },
+  '/agent':       { icon: '🤖', color: '#8b5cf6' },
+  '/stats':       { icon: '📊', color: '#14b8a6' },
+  '/ocr-dz':      { icon: '🔍', color: '#f97316' },
+  '/le3ba':       { icon: '🎮', color: '#ec4899' },
+  '/':            { icon: '🏠', color: '#64748b' },
+}
+
+function NavigationSuggestionCard({
+  path, title, description, onYes, onDismiss
+}: {
+  path: string; title: string; description: string;
+  onYes: () => void; onDismiss: () => void;
+}) {
+  const meta = DZ_PAGES[path] || { icon: '🔗', color: '#10a37f' }
+  return (
+    <div className="dz-nav-suggestion" dir="rtl">
+      <div className="dz-nav-suggestion__header">
+        <span className="dz-nav-suggestion__badge">اقتراح تنقل</span>
+      </div>
+      <div className="dz-nav-suggestion__body">
+        <div className="dz-nav-suggestion__icon" style={{ background: `${meta.color}22`, color: meta.color }}>
+          {meta.icon}
+        </div>
+        <div className="dz-nav-suggestion__info">
+          <div className="dz-nav-suggestion__title">{title}</div>
+          <div className="dz-nav-suggestion__desc">{description}</div>
+          <div className="dz-nav-suggestion__path">{path}</div>
+        </div>
+      </div>
+      <div className="dz-nav-suggestion__actions">
+        <button className="dz-nav-yes" onClick={onYes} style={{ background: meta.color }}>
+          ✅ نعم، خذني هناك
+        </button>
+        <button className="dz-nav-no" onClick={onDismiss}>
+          ❌ لا، شكراً
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Parse [NAVIGATE::/path::Title::Description] from AI response content
+function parseNavSuggestion(content: string): { path: string; title: string; description: string } | null {
+  const match = content.match(/\[NAVIGATE::([^:]+)::([^:]+)::([^\]]+)\]/)
+  if (!match) return null
+  return { path: match[1].trim(), title: match[2].trim(), description: match[3].trim() }
+}
+
+function stripNavSuggestion(content: string): string {
+  return content.replace(/\[NAVIGATE::[^\]]+\]/g, '').trim()
+}
+
 const RATINGS_KEY = 'dz-msg-ratings'
 type RatingVote = 'up' | 'down'
 type RatingsStore = Record<string, RatingVote>
@@ -381,6 +440,7 @@ interface DZMessage {
     branch: string; filesCommitted: string[]; prUrl: string; errors: string[]
     vercelTriggered: boolean; vercelDeployId?: string | null
   } | null
+  navigateSuggestion?: { path: string; title: string; description: string }
   ghAgentAutoExecute?: boolean
   ghAgentRawText?: string
   taskPlan?: TaskPlan
@@ -3322,6 +3382,7 @@ interface DZChatBoxProps {
 type DashboardContext = { priority: 'weather'; city: string }
 
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
     if (!chatId) return []
     try {
@@ -3367,6 +3428,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
   const [ghAgentAutoExecute, setGhAgentAutoExecute] = useState(false)
   const [showGhAgentInput, setShowGhAgentInput] = useState(false)
+  const [dismissedNavSuggestions, setDismissedNavSuggestions] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -3509,7 +3571,15 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
   const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
     const id = generateId()
-    setMessages(prev => [...prev, { ...msg, id, role: 'assistant' }])
+    // Parse navigation suggestion from content
+    let finalMsg = { ...msg }
+    if (msg.content && (msg.richType === 'text' || !msg.richType)) {
+      const navSugg = parseNavSuggestion(msg.content)
+      if (navSugg) {
+        finalMsg = { ...finalMsg, content: stripNavSuggestion(msg.content), navigateSuggestion: navSugg }
+      }
+    }
+    setMessages(prev => [...prev, { ...finalMsg, id, role: 'assistant' }])
     if (msg.richType === 'youtube' && msg.youtubeFlow === 'url' && msg.youtubeVideo) {
       const enrichedVideo: YouTubeVideoData = {
         ...msg.youtubeVideo,
@@ -5609,6 +5679,15 @@ ${rows}
                         >
                           📰 عرض المزيد من الأخبار
                         </button>
+                      )}
+                      {msg.navigateSuggestion && !dismissedNavSuggestions.has(msg.id) && (
+                        <NavigationSuggestionCard
+                          path={msg.navigateSuggestion.path}
+                          title={msg.navigateSuggestion.title}
+                          description={msg.navigateSuggestion.description}
+                          onYes={() => navigate(msg.navigateSuggestion!.path)}
+                          onDismiss={() => setDismissedNavSuggestions(prev => new Set([...prev, msg.id]))}
+                        />
                       )}
                       {msg.showDevCard && <DeveloperCard />}
                       {msg.richType === 'repos' && msg.repos && (

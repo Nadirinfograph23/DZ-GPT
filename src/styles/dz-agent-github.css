@@ -1,0 +1,652 @@
+/* ===== DZ Agent GitHub Builder ===== */
+.dzgh-layout {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  direction: rtl;
+}
+
+/* ===== SIDEBAR ===== */
+.dzgh-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: #161b22;
+  border-left: 1px solid #30363d;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dzgh-sidebar-header {
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid #30363d;
+  flex-shrink: 0;
+}
+
+.dzgh-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #58a6ff;
+}
+
+.dzgh-logo-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e6edf3;
+  line-height: 1.2;
+}
+
+.dzgh-logo-sub {
+  font-size: 10px;
+  color: #58a6ff;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.dzgh-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(48, 54, 61, 0.5);
+  border: 1px solid #30363d;
+}
+
+.dzgh-status-badge--connected {
+  background: rgba(35, 134, 54, 0.1);
+  border-color: rgba(35, 134, 54, 0.4);
+  color: #3fb950;
+}
+
+.dzgh-status-badge--disconnected {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: rgba(248, 81, 73, 0.3);
+  color: #f85149;
+}
+
+.dzgh-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+  animation: dzgh-pulse 2s infinite;
+}
+
+@keyframes dzgh-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.dzgh-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 14px 10px;
+  padding: 8px 12px;
+  background: #238636;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.dzgh-new-btn:hover { background: #2ea043; }
+
+.dzgh-history {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.dzgh-history::-webkit-scrollbar { width: 4px; }
+.dzgh-history::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+
+.dzgh-history-empty {
+  padding: 16px;
+  font-size: 12px;
+  color: #8b949e;
+  text-align: center;
+}
+
+.dzgh-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+}
+
+.dzgh-history-item:hover { background: rgba(48, 54, 61, 0.5); }
+
+.dzgh-history-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dzgh-history-dot--done { background: #3fb950; }
+.dzgh-history-dot--error { background: #f85149; }
+.dzgh-history-dot--running { background: #d29922; animation: dzgh-pulse 1s infinite; }
+.dzgh-history-dot--idle { background: #8b949e; }
+
+.dzgh-history-text {
+  flex: 1;
+  font-size: 12px;
+  color: #8b949e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dzgh-history-time {
+  font-size: 10px;
+  color: #6e7681;
+  flex-shrink: 0;
+}
+
+/* ===== MAIN ===== */
+.dzgh-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dzgh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #30363d;
+  background: #161b22;
+  flex-shrink: 0;
+}
+
+.dzgh-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.dzgh-header-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8b949e;
+  background: #21262d;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #30363d;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  direction: ltr;
+}
+
+.dzgh-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dzgh-content::-webkit-scrollbar { width: 6px; }
+.dzgh-content::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ===== INPUT SECTION ===== */
+.dzgh-input-section {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dzgh-input-label {
+  font-size: 12px;
+  color: #8b949e;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.dzgh-textarea {
+  width: 100%;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #e6edf3;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  text-align: right;
+}
+
+.dzgh-textarea:focus {
+  outline: none;
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+}
+
+.dzgh-textarea::placeholder { color: #484f58; }
+.dzgh-textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.dzgh-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.dzgh-input-repo {
+  flex: 1;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #e6edf3;
+  font-size: 13px;
+  font-family: monospace;
+  direction: ltr;
+  text-align: left;
+}
+
+.dzgh-input-repo:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.dzgh-input-repo::placeholder { color: #484f58; }
+
+.dzgh-run-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 20px;
+  background: #238636;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dzgh-run-btn:hover:not(:disabled) { background: #2ea043; transform: translateY(-1px); }
+.dzgh-run-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.dzgh-run-btn--stop { background: #b91c1c; }
+.dzgh-run-btn--stop:hover:not(:disabled) { background: #dc2626; }
+
+.dzgh-hint {
+  font-size: 11px;
+  color: #6e7681;
+  text-align: left;
+  direction: ltr;
+}
+
+/* ===== PIPELINE ===== */
+.dzgh-pipeline {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.dzgh-pipeline-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #8b949e;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 14px;
+}
+
+.dzgh-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dzgh-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+}
+
+.dzgh-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  top: 38px;
+  bottom: -10px;
+  width: 2px;
+  background: #30363d;
+}
+
+.dzgh-step--done::after { background: rgba(63, 185, 80, 0.3); }
+.dzgh-step--running::after { background: rgba(210, 153, 34, 0.3); }
+.dzgh-step--error::after { background: rgba(248, 81, 73, 0.2); }
+
+.dzgh-step-connector { display: none; }
+
+.dzgh-step-icon-wrap {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 2px solid #30363d;
+  background: #0d1117;
+  color: #8b949e;
+  transition: all 0.3s;
+}
+
+.dzgh-step--idle .dzgh-step-icon-wrap {
+  border-color: #30363d;
+  color: #484f58;
+}
+
+.dzgh-step--running .dzgh-step-icon-wrap {
+  border-color: #d29922;
+  color: #d29922;
+  background: rgba(210, 153, 34, 0.1);
+  box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.1);
+}
+
+.dzgh-step--done .dzgh-step-icon-wrap {
+  border-color: #238636;
+  color: #3fb950;
+  background: rgba(35, 134, 54, 0.1);
+}
+
+.dzgh-step--error .dzgh-step-icon-wrap {
+  border-color: #b91c1c;
+  color: #f85149;
+  background: rgba(185, 28, 28, 0.1);
+}
+
+.dzgh-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dzgh-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.dzgh-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e6edf3;
+  transition: color 0.2s;
+}
+
+.dzgh-step--idle .dzgh-step-label { color: #484f58; }
+.dzgh-step--running .dzgh-step-label { color: #d29922; }
+.dzgh-step--done .dzgh-step-label { color: #3fb950; }
+.dzgh-step--error .dzgh-step-label { color: #f85149; }
+
+.dzgh-step-details {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dzgh-step-detail {
+  font-size: 11.5px;
+  color: #8b949e;
+  padding: 2px 8px;
+  background: rgba(13, 17, 23, 0.6);
+  border-radius: 4px;
+  border-right: 2px solid #30363d;
+  direction: rtl;
+  text-align: right;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+/* ===== SPIN ===== */
+.dzgh-spin {
+  animation: dzgh-rotate 1s linear infinite;
+}
+
+@keyframes dzgh-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ===== ERROR ===== */
+.dzgh-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 8px;
+  color: #f85149;
+  font-size: 13px;
+}
+
+/* ===== RESULT ===== */
+.dzgh-result {
+  background: rgba(35, 134, 54, 0.06);
+  border: 1px solid rgba(35, 134, 54, 0.3);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dzgh-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3fb950;
+}
+
+.dzgh-result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dzgh-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.dzgh-link--github {
+  background: rgba(88, 166, 255, 0.08);
+  border-color: rgba(88, 166, 255, 0.3);
+  color: #58a6ff;
+}
+
+.dzgh-link--github:hover {
+  background: rgba(88, 166, 255, 0.15);
+}
+
+.dzgh-link--pages {
+  background: rgba(63, 185, 80, 0.08);
+  border-color: rgba(63, 185, 80, 0.3);
+  color: #3fb950;
+}
+
+.dzgh-link--pages:hover {
+  background: rgba(63, 185, 80, 0.15);
+}
+
+.dzgh-link--vercel {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #e6edf3;
+}
+
+.dzgh-link--vercel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dzgh-link--pr {
+  background: rgba(163, 113, 247, 0.08);
+  border-color: rgba(163, 113, 247, 0.3);
+  color: #a371f7;
+}
+
+.dzgh-link--pr:hover {
+  background: rgba(163, 113, 247, 0.15);
+}
+
+.dzgh-result-commit {
+  font-size: 12px;
+  color: #8b949e;
+  direction: ltr;
+  text-align: left;
+}
+
+.dzgh-result-commit code {
+  background: #21262d;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.dzgh-result-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dzgh-result-files-title {
+  font-size: 12px;
+  color: #8b949e;
+  margin-bottom: 4px;
+}
+
+.dzgh-result-file {
+  font-size: 12px;
+  color: #58a6ff;
+  font-family: monospace;
+  padding: 3px 8px;
+  background: rgba(88, 166, 255, 0.05);
+  border-radius: 4px;
+  direction: ltr;
+  text-align: left;
+}
+
+/* ===== WELCOME ===== */
+.dzgh-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.dzgh-welcome-icon {
+  color: #30363d;
+  opacity: 0.8;
+}
+
+.dzgh-welcome-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+.dzgh-welcome-desc {
+  font-size: 14px;
+  color: #8b949e;
+  max-width: 420px;
+  line-height: 1.7;
+}
+
+.dzgh-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.dzgh-example-btn {
+  padding: 8px 16px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 20px;
+  color: #8b949e;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.dzgh-example-btn:hover {
+  background: #30363d;
+  color: #e6edf3;
+  border-color: #58a6ff;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 640px) {
+  .dzgh-sidebar {
+    display: none;
+  }
+  .dzgh-header-branch {
+    display: none;
+  }
+}

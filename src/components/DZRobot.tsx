@@ -1,6 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import '../styles/dz-robot.css'
 
+interface HolidayInfo {
+  name: string
+  emoji: string
+  isRamadan: boolean
+}
+
+interface DZRobotProps {
+  holiday?: HolidayInfo | null
+}
+
 const MESSAGES_NORMAL = [
   'مرحباً! أنا DZ Agent 🤖',
   'كيف يمكنني مساعدتك اليوم؟',
@@ -8,6 +18,8 @@ const MESSAGES_NORMAL = [
   'أنا هنا لخدمتك 💚',
   'تكلم معي بالدارجة!',
   'اختر أداة وابدأ! 🚀',
+  'صنعت في الجزائر 🇩🇿',
+  'بحث حي · كود · قرآن · خرائط',
 ]
 
 const MESSAGES_ANGRY = [
@@ -20,7 +32,6 @@ const MESSAGES_ANGRY = [
   'ذرك نحصلك لنذير..... 😅',
 ]
 
-// Particle positions: [angle in degrees, color, shape]
 const PARTICLES = [
   { angle: 0,   color: '#c8ff00', size: 9,  shape: 'rect' },
   { angle: 40,  color: '#00d4aa', size: 7,  shape: 'circle' },
@@ -36,16 +47,33 @@ const PARTICLES = [
   { angle: 300, color: '#00d4aa', size: 7,  shape: 'circle' },
 ]
 
-export default function DZRobot() {
+const HOLIDAY_PARTICLES = [
+  { angle: 0,   color: '#FFD700', size: 10, shape: 'circle' },
+  { angle: 30,  color: '#FF6B6B', size: 8,  shape: 'rect' },
+  { angle: 60,  color: '#4ECDC4', size: 9,  shape: 'circle' },
+  { angle: 90,  color: '#FFD700', size: 7,  shape: 'rect' },
+  { angle: 120, color: '#45B7D1', size: 11, shape: 'circle' },
+  { angle: 150, color: '#FF6B6B', size: 8,  shape: 'rect' },
+  { angle: 180, color: '#FFD700', size: 9,  shape: 'circle' },
+  { angle: 210, color: '#4ECDC4', size: 7,  shape: 'rect' },
+  { angle: 240, color: '#FF6B6B', size: 10, shape: 'circle' },
+  { angle: 270, color: '#FFD700', size: 8,  shape: 'rect' },
+  { angle: 300, color: '#45B7D1', size: 9,  shape: 'circle' },
+  { angle: 330, color: '#4ECDC4', size: 7,  shape: 'rect' },
+]
+
+export default function DZRobot({ holiday }: DZRobotProps) {
   const [pos, setPos] = useState({ x: -1, y: -1 })
   const [isDragging, setIsDragging] = useState(false)
   const [isHappy, setIsHappy] = useState(false)
   const [isAngry, setIsAngry] = useState(false)
   const [isExploding, setIsExploding] = useState(false)
+  const [isHolidayCelebrating, setIsHolidayCelebrating] = useState(false)
   const [msgIdx, setMsgIdx] = useState(0)
   const [showMsg, setShowMsg] = useState(true)
   const [blink, setBlink] = useState(false)
   const [wobble, setWobble] = useState(false)
+  const [holidayShown, setHolidayShown] = useState(false)
   const robotRef = useRef<HTMLDivElement>(null)
   const dragOffset = useRef({ x: 0, y: 0 })
   const dragging = useRef(false)
@@ -53,11 +81,28 @@ export default function DZRobot() {
   const velocity = useRef({ vx: 0, vy: 0 })
   const angryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Initial position
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const setInitialPos = () => {
       setPos({ x: window.innerWidth - 110, y: window.innerHeight - 210 })
     }
+    setInitialPos()
+    window.addEventListener('resize', setInitialPos)
+    return () => window.removeEventListener('resize', setInitialPos)
   }, [])
+
+  // Holiday celebration on mount — show after 1.5s
+  useEffect(() => {
+    if (!holiday || holidayShown) return
+    const timer = setTimeout(() => {
+      setIsHolidayCelebrating(true)
+      setShowMsg(true)
+      setHolidayShown(true)
+      // Stop celebrating after 6 seconds
+      setTimeout(() => setIsHolidayCelebrating(false), 6000)
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [holiday, holidayShown])
 
   // Blink
   useEffect(() => {
@@ -71,10 +116,12 @@ export default function DZRobot() {
   // Message cycle
   useEffect(() => {
     const id = setInterval(() => {
-      if (!isAngry) setMsgIdx(i => (i + 1) % MESSAGES_NORMAL.length)
+      if (!isAngry && !isHolidayCelebrating) {
+        setMsgIdx(i => (i + 1) % MESSAGES_NORMAL.length)
+      }
     }, 4000)
     return () => clearInterval(id)
-  }, [isAngry])
+  }, [isAngry, isHolidayCelebrating])
 
   const triggerAngry = useCallback(() => {
     setIsAngry(true)
@@ -158,31 +205,45 @@ export default function DZRobot() {
     e.stopPropagation()
     setIsExploding(true)
     setShowMsg(false)
-    // After explosion animation finishes, hide
     setTimeout(() => {
       localStorage.setItem('dz-robot-hidden', '1')
       window.dispatchEvent(new Event('dz-robot-toggle'))
     }, 750)
   }, [])
 
+  // Don't render until position is known
   if (pos.x === -1) return null
 
   const messages = isAngry ? MESSAGES_ANGRY : MESSAGES_NORMAL
   const centerX = pos.x + 40
   const centerY = pos.y + 50
 
+  // Holiday color scheme
+  const isHoliday = isHolidayCelebrating
+  const eyeColor = isHoliday ? '#FFD700' : isAngry ? '#ff4444' : '#c8ff00'
+  const bodyGradStart = isHoliday ? '#FFD700' : isAngry ? '#ff4444' : '#c8ff00'
+  const bodyGradEnd   = isHoliday ? '#ff6b6b' : isAngry ? '#ff0000' : '#00d4aa'
+  const bgGradStart   = isHoliday ? '#2a1a00' : isAngry ? '#2a0a0a' : '#1a2a1a'
+  const bgGradEnd     = isHoliday ? '#1a0800' : isAngry ? '#1a0000' : '#0a1a0a'
+
+  const currentMsg = isHolidayCelebrating && holiday
+    ? `${holiday.emoji} ${holiday.name} — كل عام وأنتم بخير 💚`
+    : messages[msgIdx]
+
+  const celebrationParticles = isHoliday ? HOLIDAY_PARTICLES : PARTICLES
+
   return (
     <>
-      {/* Explosion particles — rendered at window level with fixed pos */}
-      {isExploding && PARTICLES.map((p, i) => {
+      {/* Explosion / celebration particles */}
+      {(isExploding || isHolidayCelebrating) && celebrationParticles.map((p, i) => {
         const rad = (p.angle * Math.PI) / 180
-        const dist = 80 + Math.random() * 60
+        const dist = isHoliday ? 60 + Math.random() * 50 : 80 + Math.random() * 60
         const dx = Math.cos(rad) * dist
         const dy = Math.sin(rad) * dist
         return (
           <div
             key={i}
-            className="dzr-particle"
+            className={isHoliday ? 'dzr-holiday-particle' : 'dzr-particle'}
             style={{
               left: centerX,
               top: centerY,
@@ -192,7 +253,8 @@ export default function DZRobot() {
               borderRadius: p.shape === 'circle' ? '50%' : '2px',
               '--dx': `${dx}px`,
               '--dy': `${dy}px`,
-              animationDelay: `${i * 20}ms`,
+              animationDelay: `${i * (isHoliday ? 150 : 20)}ms`,
+              animationIterationCount: isHoliday ? 'infinite' : '1',
             } as React.CSSProperties}
           />
         )
@@ -202,10 +264,11 @@ export default function DZRobot() {
         ref={robotRef}
         className={[
           'dzr-root',
-          isDragging ? 'dzr-root--dragging' : '',
-          wobble ? 'dzr-root--wobble' : '',
-          isAngry ? 'dzr-root--angry' : '',
-          isExploding ? 'dzr-root--exploding' : '',
+          isDragging   ? 'dzr-root--dragging'  : '',
+          wobble       ? 'dzr-root--wobble'     : '',
+          isAngry      ? 'dzr-root--angry'      : '',
+          isExploding  ? 'dzr-root--exploding'  : '',
+          isHoliday    ? 'dzr-root--holiday'    : '',
         ].filter(Boolean).join(' ')}
         style={{ left: pos.x, top: pos.y }}
         onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
@@ -214,29 +277,40 @@ export default function DZRobot() {
         onMouseLeave={() => { if (!isDragging && !isAngry) setIsHappy(false) }}
       >
         {showMsg && !isExploding && (
-          <div className={`dzr-bubble${isAngry ? ' dzr-bubble--angry' : ''}`} dir="rtl">
-            <span>{messages[msgIdx]}</span>
-            <button className="dzr-bubble-close" onClick={e => { e.stopPropagation(); setShowMsg(false) }}>×</button>
+          <div
+            className={[
+              'dzr-bubble',
+              isAngry   ? 'dzr-bubble--angry'   : '',
+              isHoliday ? 'dzr-bubble--holiday' : '',
+            ].filter(Boolean).join(' ')}
+            dir="rtl"
+          >
+            <span>{currentMsg}</span>
+            <button
+              className="dzr-bubble-close"
+              onClick={e => { e.stopPropagation(); setShowMsg(false) }}
+            >×</button>
           </div>
         )}
 
         <svg
           className={[
             'dzr-svg',
-            isDragging ? 'dzr-svg--held' : '',
-            isAngry ? 'dzr-svg--angry' : '',
+            isDragging ? 'dzr-svg--held'  : '',
+            isAngry    ? 'dzr-svg--angry' : '',
+            isHoliday  ? 'dzr-svg--holiday' : '',
           ].filter(Boolean).join(' ')}
           viewBox="0 0 80 100"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
             <linearGradient id="rg1" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={isAngry ? '#ff4444' : '#c8ff00'} />
-              <stop offset="100%" stopColor={isAngry ? '#ff0000' : '#00d4aa'} />
+              <stop offset="0%" stopColor={bodyGradStart} />
+              <stop offset="100%" stopColor={bodyGradEnd} />
             </linearGradient>
             <linearGradient id="rg2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={isAngry ? '#2a0a0a' : '#1a2a1a'} />
-              <stop offset="100%" stopColor={isAngry ? '#1a0000' : '#0a1a0a'} />
+              <stop offset="0%" stopColor={bgGradStart} />
+              <stop offset="100%" stopColor={bgGradEnd} />
             </linearGradient>
             <filter id="rglow">
               <feGaussianBlur stdDeviation="2" result="blur" />
@@ -247,10 +321,19 @@ export default function DZRobot() {
           <line x1="40" y1="6" x2="40" y2="18" stroke="url(#rg1)" strokeWidth="2" strokeLinecap="round" />
           <circle cx="40" cy="4" r="4" fill="url(#rg1)" filter="url(#rglow)" className="dzr-antenna-ball" />
 
+          {/* Holiday hat */}
+          {isHoliday && (
+            <>
+              <polygon points="40,0 30,12 50,12" fill="#FF6B6B" stroke="#FFD700" strokeWidth="1" />
+              <rect x="29" y="12" width="22" height="3" rx="1.5" fill="#FFD700" />
+              <circle cx="40" cy="1" r="2.5" fill="#FFD700" />
+            </>
+          )}
+
           <rect x="14" y="18" width="52" height="40" rx="12" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.5" />
 
-          <circle cx="28" cy="35" r="8" fill={isAngry ? '#2a0000' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
-          <circle cx="52" cy="35" r="8" fill={isAngry ? '#2a0000' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
+          <circle cx="28" cy="35" r="8" fill={isAngry ? '#2a0000' : isHoliday ? '#1a0800' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
+          <circle cx="52" cy="35" r="8" fill={isAngry ? '#2a0000' : isHoliday ? '#1a0800' : '#0d1f0d'} stroke="url(#rg1)" strokeWidth="1.5" />
 
           {isAngry && (
             <>
@@ -261,13 +344,13 @@ export default function DZRobot() {
 
           {blink ? (
             <>
-              <rect x="22" y="33" width="12" height="3" rx="1.5" fill={isAngry ? '#ff4444' : '#c8ff00'} />
-              <rect x="46" y="33" width="12" height="3" rx="1.5" fill={isAngry ? '#ff4444' : '#c8ff00'} />
+              <rect x="22" y="33" width="12" height="3" rx="1.5" fill={eyeColor} />
+              <rect x="46" y="33" width="12" height="3" rx="1.5" fill={eyeColor} />
             </>
           ) : (
             <>
-              <circle cx="28" cy="35" r={isHappy ? 5 : 4} fill="url(#rg1)" className="dzr-eye" />
-              <circle cx="52" cy="35" r={isHappy ? 5 : 4} fill="url(#rg1)" className="dzr-eye" />
+              <circle cx="28" cy="35" r={isHappy || isHoliday ? 5 : 4} fill="url(#rg1)" className="dzr-eye" />
+              <circle cx="52" cy="35" r={isHappy || isHoliday ? 5 : 4} fill="url(#rg1)" className="dzr-eye" />
               <circle cx="30" cy="33" r="1.5" fill="white" opacity="0.7" />
               <circle cx="54" cy="33" r="1.5" fill="white" opacity="0.7" />
             </>
@@ -275,7 +358,7 @@ export default function DZRobot() {
 
           {isAngry ? (
             <path d="M27 55 Q40 49 53 55" stroke="#ff4444" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-          ) : isHappy ? (
+          ) : (isHappy || isHoliday) ? (
             <path d="M27 50 Q40 58 53 50" stroke="url(#rg1)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
           ) : (
             <path d="M28 52 Q40 56 52 52" stroke="url(#rg1)" strokeWidth="2" strokeLinecap="round" fill="none" />
@@ -285,7 +368,12 @@ export default function DZRobot() {
           <rect x="26" y="66" width="28" height="5" rx="2.5" fill="url(#rg1)" opacity="0.6" />
           <rect x="29" y="75" width="22" height="4" rx="2" fill="url(#rg1)" opacity="0.4" />
 
-          <rect x="6" y="62" width="10" height="20" rx="5" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2"
+          {/* Holiday badge on body */}
+          {isHoliday && (
+            <text x="40" y="82" textAnchor="middle" fontSize="8" fill="#FFD700">🎊</text>
+          )}
+
+          <rect x="6"  y="62" width="10" height="20" rx="5" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2"
             className={isDragging ? 'dzr-arm-r' : isAngry ? 'dzr-arm-angry-r' : ''} />
           <rect x="64" y="62" width="10" height="20" rx="5" fill="url(#rg2)" stroke="url(#rg1)" strokeWidth="1.2"
             className={isDragging ? 'dzr-arm-l' : isAngry ? 'dzr-arm-angry-l' : ''} />
@@ -294,7 +382,9 @@ export default function DZRobot() {
           <circle cx="59" cy="62" r="3" fill="url(#rg1)" opacity="0.5" filter="url(#rglow)" className="dzr-chest-led" />
         </svg>
 
-        <div className={`dzr-label${isAngry ? ' dzr-label--angry' : ''}`}>DZ Agent</div>
+        <div className={`dzr-label${isAngry ? ' dzr-label--angry' : ''}${isHoliday ? ' dzr-label--holiday' : ''}`}>
+          {isHoliday ? holiday?.emoji || '🎊' : 'DZ Agent'}
+        </div>
 
         <button
           className="dzr-hide-btn"

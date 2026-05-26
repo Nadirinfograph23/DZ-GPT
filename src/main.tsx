@@ -6,7 +6,6 @@ import './styles/mini-player.css'
 import App from './App.tsx'
 import DZHome from './pages/DZHome.tsx'
 import DZAgent from './pages/DZAgent.tsx'
-import DZAgentV3 from './pages/DZAgentV3.tsx'
 import AIQuran from './pages/AIQuran.tsx'
 import DZChat from './pages/DZChat.tsx'
 import DZTube from './pages/DZTube.tsx'
@@ -64,7 +63,6 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/" element={<DZHome />} />
             <Route path="/chat" element={<App />} />
             <Route path="/dz-agent" element={<DZAgent />} />
-            <Route path="/agent" element={<DZAgentV3 />} />
             <Route path="/quran" element={<AIQuran />} />
             <Route path="/dzchat" element={<DZChat />} />
             <Route path="/dz-tube" element={<DZTube />} />

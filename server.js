@@ -14913,6 +14913,8 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
     ]
 
     send({ type: 'detail', step: 'generate', text: `✅ موقع ${detectedSiteType} جاهز (${(generatedHtml.length / 1024).toFixed(1)} KB)` })
+    // Send generated HTML for live preview before publishing
+    send({ type: 'preview', html: generatedHtml, siteType: detectedSiteType })
     send({ type: 'step', step: 'generate', status: 'done' })
 
     // ── STEP 3: Push to GitHub ────────────────────────────────────────────────
@@ -15054,6 +15056,116 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
     console.error('[AgentBuild]', err.message)
   }
 
+  res.end()
+})
+
+// ===== AGENT EDIT — تعديل موقع منشور وإعادة نشره =====
+// POST /api/dz-agent/github/agent-edit  (SSE)
+// يعدّل index.html الموجود بناءً على طلب المستخدم ويعيد النشر
+app.post('/api/dz-agent/github/agent-edit', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+
+  const { owner, repo, editRequest, currentHtml } = req.body
+  if (!owner || !repo || !editRequest) {
+    send({ type: 'error', message: 'owner, repo, editRequest مطلوبة' })
+    return res.end()
+  }
+
+  const tok = resolveGitHubToken()
+  if (!tok) { send({ type: 'error', message: 'GITHUB_TOKEN غير مضبوط' }); return res.end() }
+
+  try {
+    // STEP 1: Fetch current HTML from GitHub
+    send({ type: 'step', step: 'fetch', status: 'running', detail: 'جلب الكود الحالي من GitHub...' })
+
+    let existingHtml = currentHtml || ''
+    if (!existingHtml) {
+      const fileRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html`, {
+        headers: ghHeaders(tok), signal: AbortSignal.timeout(10000),
+      })
+      if (fileRes.ok) {
+        const fileData = await fileRes.json()
+        existingHtml = Buffer.from(fileData.content, 'base64').toString('utf-8')
+        send({ type: 'detail', step: 'fetch', text: `✅ جُلب index.html (${(existingHtml.length / 1024).toFixed(1)} KB)` })
+      } else {
+        send({ type: 'detail', step: 'fetch', text: '⚠️ لم يُعثر على index.html — سيتم التوليد من الصفر' })
+      }
+    } else {
+      send({ type: 'detail', step: 'fetch', text: `✅ استُخدم HTML المحلي (${(existingHtml.length / 1024).toFixed(1)} KB)` })
+    }
+    send({ type: 'step', step: 'fetch', status: 'done' })
+
+    // STEP 2: AI modifies the HTML
+    send({ type: 'step', step: 'modify', status: 'running', detail: 'الذكاء الاصطناعي يعدّل الموقع...' })
+
+    const editSystem = `You are an expert web developer. The user wants to modify an existing HTML website.
+Apply ONLY the requested changes. Keep all other parts of the site exactly as they are.
+Return ONLY the complete modified HTML file — no explanations, no markdown fences.
+The output must be a valid, complete HTML file starting with <!DOCTYPE html>.`
+
+    const editUser = existingHtml
+      ? `CURRENT WEBSITE HTML:\n\`\`\`html\n${existingHtml.slice(0, 12000)}\n\`\`\`\n\nREQUESTED CHANGE: "${editRequest}"\n\nReturn the complete modified HTML.`
+      : `Create a new website with this request: "${editRequest}"\nReturn complete HTML only.`
+
+    const aiResult = await safeGenerateAI({
+      messages: [
+        { role: 'system', content: editSystem },
+        { role: 'user',   content: editUser },
+      ],
+      query: editRequest,
+      max_tokens: 8000,
+      taskHint: 'web-builder',
+    })
+
+    const modifiedHtml = extractHtmlFromResponse(aiResult.content || '') || aiResult.content || ''
+    const valid = validateHtmlOutput(modifiedHtml)
+
+    if (!valid.ok) {
+      send({ type: 'error', message: `فشل توليد HTML: ${valid.reason}` })
+      return res.end()
+    }
+
+    send({ type: 'detail', step: 'modify', text: `✅ HTML معدَّل (${(modifiedHtml.length / 1024).toFixed(1)} KB)` })
+    send({ type: 'preview', html: modifiedHtml })
+    send({ type: 'step', step: 'modify', status: 'done' })
+
+    // STEP 3: Push modified file to GitHub
+    send({ type: 'step', step: 'push', status: 'running', detail: 'رفع التعديلات إلى GitHub...' })
+
+    const { waitForMainBranch } = await import('./lib/github-pages/index.js')
+    const branchInfo = await waitForMainBranch(tok, owner, repo)
+
+    const pushResult = await ghPagesBatchPush(
+      tok, owner, repo,
+      [{ path: 'index.html', content: modifiedHtml }],
+      `✏️ تعديل: ${editRequest.slice(0, 80)} — DZ Agent 🤖`,
+      branchInfo.branch
+    )
+    const commitSha = typeof pushResult === 'string' ? pushResult : pushResult?.sha || ''
+    send({ type: 'detail', step: 'push', text: `✅ commit: ${commitSha.slice(0, 12)}` })
+    send({ type: 'step', step: 'push', status: 'done' })
+
+    send({
+      type: 'result',
+      data: {
+        repoUrl:   `https://github.com/${owner}/${repo}`,
+        pagesUrl:  `https://${owner}.github.io/${repo}`,
+        commitSha,
+        modifiedHtml,
+      },
+    })
+
+    console.log(`[AgentEdit] ✅ ${owner}/${repo} — "${editRequest.slice(0, 60)}"`)
+  } catch (err) {
+    send({ type: 'error', message: err.message })
+    console.error('[AgentEdit]', err.message)
+  }
   res.end()
 })
 

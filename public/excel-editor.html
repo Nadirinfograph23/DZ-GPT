@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DZ Excel Editor</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{width:100%;height:100%;overflow:hidden;background:#1e1e2e;color:#cdd6f4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
+
+    /* ── TOOLBAR ── */
+    #toolbar{
+      display:flex;align-items:center;gap:2px;padding:4px 8px;
+      background:#181825;border-bottom:1px solid #313244;
+      flex-wrap:wrap;flex-shrink:0;min-height:38px;
+    }
+    .tb-sep{width:1px;height:20px;background:#313244;margin:0 4px}
+    .tb-btn{
+      display:flex;align-items:center;justify-content:center;gap:4px;
+      padding:4px 8px;border:none;border-radius:4px;cursor:pointer;
+      background:transparent;color:#cdd6f4;font-size:12px;
+      transition:background .15s;white-space:nowrap;
+    }
+    .tb-btn:hover{background:#313244}
+    .tb-btn.active{background:#45475a;color:#cba6f7}
+    .tb-btn svg{width:14px;height:14px;flex-shrink:0}
+    .tb-select{
+      background:#181825;border:1px solid #313244;color:#cdd6f4;
+      padding:3px 6px;border-radius:4px;font-size:12px;cursor:pointer;
+    }
+    .tb-color{
+      width:22px;height:22px;border-radius:4px;border:1px solid #313244;
+      cursor:pointer;padding:1px;background:transparent;
+    }
+
+    /* ── FORMULA BAR ── */
+    #formula-bar{
+      display:flex;align-items:center;gap:8px;padding:3px 8px;
+      background:#181825;border-bottom:1px solid #313244;flex-shrink:0;
+    }
+    #cell-ref{
+      min-width:56px;text-align:center;font-family:monospace;font-size:12px;
+      background:#313244;border-radius:4px;padding:2px 6px;color:#a6e3a1;
+      border:1px solid #45475a;cursor:default;user-select:none;
+    }
+    #formula-input{
+      flex:1;background:#11111b;border:1px solid #45475a;color:#cdd6f4;
+      padding:3px 8px;border-radius:4px;font-size:13px;font-family:monospace;
+      direction:ltr;text-align:left;
+    }
+    #formula-input:focus{outline:none;border-color:#cba6f7}
+
+    /* ── GRID ── */
+    #grid-wrap{
+      flex:1;overflow:auto;position:relative;
+    }
+    #grid-wrap::-webkit-scrollbar{width:8px;height:8px}
+    #grid-wrap::-webkit-scrollbar-track{background:#181825}
+    #grid-wrap::-webkit-scrollbar-thumb{background:#45475a;border-radius:4px}
+    #grid-wrap::-webkit-scrollbar-corner{background:#181825}
+
+    table#grid{border-collapse:collapse;table-layout:fixed;direction:ltr}
+
+    th.col-header{
+      position:sticky;top:0;z-index:10;
+      background:#181825;border:1px solid #313244;
+      min-width:80px;max-width:80px;padding:3px 4px;
+      text-align:center;color:#7f849c;font-weight:600;font-size:11px;
+      user-select:none;cursor:default;
+    }
+    th.row-header{
+      position:sticky;left:0;z-index:10;
+      background:#181825;border:1px solid #313244;
+      min-width:40px;max-width:40px;padding:3px 4px;
+      text-align:center;color:#7f849c;font-weight:600;font-size:11px;
+      user-select:none;cursor:default;
+    }
+    th.corner{position:sticky;top:0;left:0;z-index:20;background:#181825}
+
+    td.cell{
+      border:1px solid #313244;min-width:80px;max-width:80px;
+      height:22px;padding:0 4px;vertical-align:middle;
+      overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+      cursor:cell;position:relative;
+      background:#1e1e2e;color:#cdd6f4;font-size:12px;
+    }
+    td.cell.selected{outline:2px solid #89b4fa;outline-offset:-1px;z-index:5}
+    td.cell.in-range{background:#313244}
+    td.cell.header-cell{background:#181825;color:#cba6f7;font-weight:700}
+    td.cell:hover:not(.selected){background:#252535}
+
+    /* alignment */
+    td.cell.align-center{text-align:center}
+    td.cell.align-right{text-align:right}
+    td.cell.align-left{text-align:left}
+
+    /* ── INLINE EDITOR ── */
+    #cell-editor{
+      position:absolute;z-index:100;display:none;
+      background:#11111b;border:2px solid #89b4fa;
+      color:#cdd6f4;padding:0 4px;font-size:12px;
+      font-family:inherit;direction:ltr;text-align:left;
+      box-shadow:0 2px 8px rgba(0,0,0,.4);
+    }
+
+    /* ── CONTEXT MENU ── */
+    #ctx-menu{
+      display:none;position:fixed;z-index:200;
+      background:#181825;border:1px solid #45475a;border-radius:6px;
+      padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,.5);
+    }
+    .ctx-item{
+      padding:6px 14px;cursor:pointer;font-size:12px;color:#cdd6f4;
+    }
+    .ctx-item:hover{background:#313244}
+    .ctx-sep{height:1px;background:#313244;margin:3px 0}
+
+    /* ── STATUS BAR ── */
+    #status-bar{
+      display:flex;align-items:center;gap:16px;padding:2px 10px;
+      background:#181825;border-top:1px solid #313244;
+      font-size:11px;color:#7f849c;flex-shrink:0;
+    }
+    #status-sel{color:#a6e3a1}
+    #status-sum{color:#f9e2af}
+    #status-avg{color:#89b4fa}
+
+    /* ── LAYOUT ── */
+    #app{display:flex;flex-direction:column;height:100vh}
+    #grid-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+    /* ── LOADING ── */
+    #loading{
+      position:fixed;inset:0;background:#1e1e2e;z-index:999;
+      display:flex;align-items:center;justify-content:center;
+      flex-direction:column;gap:12px;font-size:14px;color:#7f849c;
+    }
+    .spinner{
+      width:32px;height:32px;border:3px solid #313244;
+      border-top-color:#89b4fa;border-radius:50%;animation:spin .8s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div><span>جارٍ تحميل محرر Excel...</span></div>
+<div id="app" style="display:none">
+
+  <!-- TOOLBAR -->
+  <div id="toolbar">
+    <!-- Undo/Redo -->
+    <button class="tb-btn" id="btn-undo" title="تراجع (Ctrl+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 0 10H3"/><polyline points="7 6 3 10 7 14"/></svg>
+    </button>
+    <button class="tb-btn" id="btn-redo" title="إعادة (Ctrl+Y)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 0 0 0 10h10"/><polyline points="17 6 21 10 17 14"/></svg>
+    </button>
+    <div class="tb-sep"></div>
+
+    <!-- Font size -->
+    <select class="tb-select" id="sel-size" title="حجم الخط">
+      <option>10</option><option>11</option><option selected>12</option>
+      <option>13</option><option>14</option><option>16</option>
+      <option>18</option><option>20</option><option>24</option>
+    </select>
+    <div class="tb-sep"></div>
+
+    <!-- Format -->
+    <button class="tb-btn" id="btn-bold" title="عريض (Ctrl+B)"><b>B</b></button>
+    <button class="tb-btn" id="btn-italic" title="مائل (Ctrl+I)"><i>I</i></button>
+    <button class="tb-btn" id="btn-under" title="تسطير (Ctrl+U)"><u>U</u></button>
+    <div class="tb-sep"></div>
+
+    <!-- Color -->
+    <label title="لون النص">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;pointer-events:none"><path d="M4 20h16M12 4l6 12H6L12 4z"/></svg>
+      <input type="color" id="pick-color" class="tb-color" value="#cdd6f4" title="لون النص">
+    </label>
+    <label title="لون الخلفية">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;pointer-events:none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+      <input type="color" id="pick-bg" class="tb-color" value="#1e1e2e" title="لون الخلفية">
+    </label>
+    <div class="tb-sep"></div>
+
+    <!-- Align -->
+    <button class="tb-btn" id="btn-left" title="يسار">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>
+    </button>
+    <button class="tb-btn" id="btn-center" title="وسط">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="tb-btn" id="btn-right" title="يمين">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="tb-sep"></div>
+
+    <!-- Rows/Cols -->
+    <button class="tb-btn" id="btn-add-row" title="إضافة صف">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      صف
+    </button>
+    <button class="tb-btn" id="btn-add-col" title="إضافة عمود">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      عمود
+    </button>
+    <div class="tb-sep"></div>
+
+    <!-- Import / Export -->
+    <button class="tb-btn" id="btn-import" title="استيراد Excel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      استيراد
+    </button>
+    <button class="tb-btn" id="btn-export" title="تصدير Excel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      تصدير Excel
+    </button>
+    <button class="tb-btn" id="btn-clear" title="مسح الكل" style="color:#f38ba8">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      مسح الكل
+    </button>
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none">
+  </div>
+
+  <!-- FORMULA BAR -->
+  <div id="formula-bar">
+    <span id="cell-ref">A1</span>
+    <span style="color:#45475a;font-size:11px">fx</span>
+    <input id="formula-input" placeholder="اكتب قيمة أو معادلة مثال: =SUM(A1:A10)" spellcheck="false">
+  </div>
+
+  <!-- GRID AREA -->
+  <div id="grid-area">
+    <div id="grid-wrap">
+      <table id="grid"></table>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div id="status-bar">
+    <span id="status-sel">A1</span>
+    <span id="status-count">عدد: 0</span>
+    <span id="status-sum">مجموع: 0</span>
+    <span id="status-avg">متوسط: 0</span>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" data-action="copy">نسخ</div>
+  <div class="ctx-item" data-action="paste">لصق</div>
+  <div class="ctx-item" data-action="cut">قص</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="insert-row-above">إدراج صف فوق</div>
+  <div class="ctx-item" data-action="insert-row-below">إدراج صف أسفل</div>
+  <div class="ctx-item" data-action="insert-col-left">إدراج عمود يسار</div>
+  <div class="ctx-item" data-action="insert-col-right">إدراج عمود يمين</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="del-row" style="color:#f38ba8">حذف الصف</div>
+  <div class="ctx-item" data-action="del-col" style="color:#f38ba8">حذف العمود</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="clear-cell">مسح الخلية</div>
+</div>
+
+<!-- INLINE EDITOR -->
+<input id="cell-editor" spellcheck="false">
+
+<script>
+// ══════════════════════════════════════════════
+// DZ Excel Engine — Vanilla JS Spreadsheet
+// ══════════════════════════════════════════════
+
+const ROWS_INIT = 50, COLS_INIT = 20;
+let ROWS = ROWS_INIT, COLS = COLS_INIT;
+
+// Data stores
+let data = [];    // data[r][c] = raw string
+let vals = [];    // vals[r][c] = computed value
+let fmts = [];    // fmts[r][c] = { bold, italic, under, color, bg, align, size }
+
+// Selection
+let sel = { r: 0, c: 0 };
+let rangeStart = null, rangeEnd = null;
+
+// History for undo/redo
+let history = [], histIdx = -1;
+
+// Clipboard
+let clipboard = null;
+
+// Init data stores
+function initStores() {
+  data = Array.from({length: ROWS}, () => Array(COLS).fill(''));
+  vals = Array.from({length: ROWS}, () => Array(COLS).fill(''));
+  fmts = Array.from({length: ROWS}, () => Array(COLS).fill(null).map(() => ({
+    bold:false, italic:false, under:false, color:'', bg:'', align:'left', size:12
+  })));
+}
+
+// ── Column label (0→A, 25→Z, 26→AA ...) ──
+function colLabel(c) {
+  let s = '';
+  c++;
+  while (c > 0) {
+    c--;
+    s = String.fromCharCode(65 + (c % 26)) + s;
+    c = Math.floor(c / 26);
+  }
+  return s;
+}
+
+function cellRef(r, c) { return colLabel(c) + (r + 1); }
+
+// ── Parse cell reference ──
+function parseRef(ref) {
+  const m = ref.toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!m) return null;
+  let col = 0;
+  for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64);
+  col--;
+  const row = parseInt(m[2]) - 1;
+  return (row >= 0 && row < ROWS && col >= 0 && col < COLS) ? {r: row, c: col} : null;
+}
+
+// ── Parse range A1:B5 → array of {r,c} ──
+function parseRange(range) {
+  const [a, b] = range.split(':');
+  const s = parseRef(a), e = b ? parseRef(b) : s;
+  if (!s) return [];
+  const cells = [];
+  const r1=Math.min(s.r,e.r), r2=Math.max(s.r,e.r);
+  const c1=Math.min(s.c,e.c), c2=Math.max(s.c,e.c);
+  for (let r=r1;r<=r2;r++) for (let c=c1;c<=c2;c++) cells.push({r,c});
+  return cells;
+}
+
+// ── Formula evaluator ──
+function evalCell(r, c, visited = new Set()) {
+  const raw = (data[r] && data[r][c]) ? data[r][c].trim() : '';
+  if (!raw) return '';
+  if (!raw.startsWith('=')) {
+    const n = parseFloat(raw.replace(/,/g, '.'));
+    return isNaN(n) ? raw : n;
+  }
+
+  const key = `${r},${c}`;
+  if (visited.has(key)) return '#REF!';
+  visited.add(key);
+
+  const expr = raw.slice(1).trim().toUpperCase();
+
+  // Get numeric values from a range/ref
+  const getRange = (rangeStr) => {
+    if (rangeStr.includes(':')) {
+      return parseRange(rangeStr).map(({r:rr,c:cc}) => {
+        const v = evalCell(rr, cc, new Set(visited));
+        return typeof v === 'number' ? v : parseFloat(v);
+      }).filter(v => !isNaN(v));
+    } else {
+      const ref = parseRef(rangeStr);
+      if (!ref) return [];
+      const v = evalCell(ref.r, ref.c, new Set(visited));
+      const n = typeof v === 'number' ? v : parseFloat(v);
+      return isNaN(n) ? [] : [n];
+    }
+  };
+
+  // Built-in functions
+  const fnMatch = expr.match(/^([A-Z]+)\((.+)\)$/s);
+  if (fnMatch) {
+    const fn = fnMatch[1];
+    const arg = fnMatch[2].trim();
+
+    if (fn === 'SUM') {
+      return getRange(arg).reduce((a,b)=>a+b, 0);
+    }
+    if (fn === 'AVERAGE' || fn === 'AVG') {
+      const ns = getRange(arg);
+      return ns.length ? ns.reduce((a,b)=>a+b,0)/ns.length : 0;
+    }
+    if (fn === 'COUNT') {
+      return getRange(arg).filter(v=>!isNaN(v)).length;
+    }
+    if (fn === 'MAX') {
+      const ns = getRange(arg); return ns.length ? Math.max(...ns) : 0;
+    }
+    if (fn === 'MIN') {
+      const ns = getRange(arg); return ns.length ? Math.min(...ns) : 0;
+    }
+    if (fn === 'ABS') {
+      const v = getRange(arg)[0]; return isNaN(v) ? 0 : Math.abs(v);
+    }
+    if (fn === 'ROUND') {
+      const parts = arg.split(',');
+      const v = getRange(parts[0].trim())[0] || 0;
+      const d = parseInt(parts[1] || '0');
+      return parseFloat(v.toFixed(d));
+    }
+    if (fn === 'IF') {
+      const parts = splitArgs(arg);
+      if (parts.length < 3) return '#ARG!';
+      const cond = evalExpr(parts[0].trim(), r, c, visited);
+      return cond ? evalExpr(parts[1].trim(), r, c, visited)
+                  : evalExpr(parts[2].trim(), r, c, visited);
+    }
+    if (fn === 'CONCAT' || fn === 'CONCATENATE') {
+      return splitArgs(arg).map(a => {
+        const v = evalExpr(a.trim(), r, c, visited);
+        return v !== null && v !== undefined ? String(v) : '';
+      }).join('');
+    }
+    if (fn === 'LEFT') {
+      const ps = splitArgs(arg);
+      const s = String(evalExpr(ps[0].trim(), r, c, visited) || '');
+      return s.slice(0, parseInt(ps[1] || '1'));
+    }
+    if (fn === 'RIGHT') {
+      const ps = splitArgs(arg);
+      const s = String(evalExpr(ps[0].trim(), r, c, visited) || '');
+      return s.slice(-parseInt(ps[1] || '1'));
+    }
+    if (fn === 'LEN') {
+      return String(evalExpr(arg, r, c, visited) || '').length;
+    }
+    if (fn === 'UPPER') return String(evalExpr(arg,r,c,visited)||'').toUpperCase();
+    if (fn === 'LOWER') return String(evalExpr(arg,r,c,visited)||'').toLowerCase();
+    if (fn === 'TODAY') return new Date().toLocaleDateString('fr-DZ');
+    if (fn === 'NOW')   return new Date().toLocaleString('fr-DZ');
+    if (fn === 'YEAR')  { const d=new Date(String(evalExpr(arg,r,c,visited)||'')); return isNaN(d)?'#ERR!':d.getFullYear(); }
+  }
+
+  // Expression with operators
+  return evalExpr(expr, r, c, visited);
+}
+
+function splitArgs(s) {
+  const parts=[], depth={p:0,b:0};
+  let cur='';
+  for (const ch of s) {
+    if (ch==='('){ depth.p++; cur+=ch; }
+    else if (ch===')'){ depth.p--; cur+=ch; }
+    else if (ch===',' && depth.p===0){ parts.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
+function evalExpr(expr, r, c, visited) {
+  const e = expr.trim();
+  // String literal
+  if (e.startsWith('"') && e.endsWith('"')) return e.slice(1,-1);
+  // Number
+  const n = parseFloat(e);
+  if (!isNaN(n)) return n;
+  // Cell reference
+  const ref = parseRef(e);
+  if (ref) return evalCell(ref.r, ref.c, new Set(visited));
+  // Boolean
+  if (e === 'TRUE') return true;
+  if (e === 'FALSE') return false;
+  // Comparison operators
+  for (const op of ['<=','>=','<>','<','>','=']) {
+    const idx = e.indexOf(op);
+    if (idx > 0) {
+      const left  = evalExpr(e.slice(0,idx).trim(), r, c, visited);
+      const right = evalExpr(e.slice(idx+op.length).trim(), r, c, visited);
+      if (op==='<=') return left<=right;
+      if (op==='>=') return left>=right;
+      if (op==='<>') return left!=right;
+      if (op==='<')  return left<right;
+      if (op==='>') return left>right;
+      if (op==='=')  return left==right;
+    }
+  }
+  // Nested function
+  const fm = e.match(/^([A-Z]+)\((.+)\)$/s);
+  if (fm) {
+    // Re-evaluate as a formula
+    const tmp = data[r][c];
+    data[r][c] = '=' + e;
+    const result = evalCell(r, c, visited);
+    data[r][c] = tmp;
+    return result;
+  }
+  // Arithmetic (simple left-to-right)
+  try {
+    const safe = e.replace(/[^0-9+\-*/.() ]/g,'');
+    // eslint-disable-next-line no-new-func
+    return Function('"use strict";return(' + safe + ')')();
+  } catch { return '#ERR!'; }
+}
+
+// ── Recompute all cells ──
+function recompute() {
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+    try { vals[r][c] = evalCell(r, c); }
+    catch { vals[r][c] = '#ERR!'; }
+  }
+}
+
+// ── Build the grid DOM ──
+function buildGrid() {
+  const table = document.getElementById('grid');
+  table.innerHTML = '';
+
+  // Header row
+  const thead = table.createTHead();
+  const hr = thead.insertRow();
+  const corner = document.createElement('th');
+  corner.className='col-header corner';
+  hr.appendChild(corner);
+  for (let c=0;c<COLS;c++) {
+    const th = document.createElement('th');
+    th.className='col-header';
+    th.textContent = colLabel(c);
+    hr.appendChild(th);
+  }
+
+  // Data rows
+  const tbody = table.createTBody();
+  for (let r=0;r<ROWS;r++) {
+    const tr = tbody.insertRow();
+    const rh = document.createElement('th');
+    rh.className='row-header';
+    rh.textContent = r+1;
+    tr.appendChild(rh);
+    for (let c=0;c<COLS;c++) {
+      const td = tr.insertCell();
+      td.className='cell';
+      td.dataset.r = r;
+      td.dataset.c = c;
+      td.tabIndex = -1;
+      tr.appendChild(td);
+    }
+  }
+}
+
+// ── Render a single cell ──
+function renderCell(r, c) {
+  const td = getCell(r, c);
+  if (!td) return;
+  const fmt = fmts[r][c];
+  const v = vals[r][c];
+  td.textContent = v !== null && v !== undefined ? String(v) : '';
+  td.style.fontWeight   = fmt.bold ? 'bold' : '';
+  td.style.fontStyle    = fmt.italic ? 'italic' : '';
+  td.style.textDecoration= fmt.under ? 'underline' : '';
+  td.style.color        = fmt.color || '';
+  td.style.backgroundColor = fmt.bg || '';
+  td.style.fontSize     = (fmt.size || 12) + 'px';
+  td.className = 'cell' + (fmt.align ? ` align-${fmt.align}` : '');
+  if (r === sel.r && c === sel.c) td.classList.add('selected');
+}
+
+// ── Render all cells ──
+function renderAll() {
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) renderCell(r,c);
+  updateStatus();
+}
+
+// ── Get TD element ──
+function getCell(r, c) {
+  const tbody = document.querySelector('#grid tbody');
+  if (!tbody || !tbody.rows[r]) return null;
+  return tbody.rows[r].cells[c+1];
+}
+
+// ── Select a cell ──
+function selectCell(r, c, scroll=true) {
+  const prev = getCell(sel.r, sel.c);
+  if (prev) { prev.classList.remove('selected'); }
+  sel.r = Math.max(0, Math.min(ROWS-1, r));
+  sel.c = Math.max(0, Math.min(COLS-1, c));
+  const td = getCell(sel.r, sel.c);
+  if (td) {
+    td.classList.add('selected');
+    if (scroll) td.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  const ref = cellRef(sel.r, sel.c);
+  document.getElementById('cell-ref').textContent = ref;
+  document.getElementById('formula-input').value = data[sel.r][sel.c] || '';
+  updateStatus();
+}
+
+// ── Status bar ──
+function updateStatus() {
+  const ref = cellRef(sel.r, sel.c);
+  document.getElementById('status-sel').textContent = ref;
+  // Numeric stats for selection
+  const v = vals[sel.r][sel.c];
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  document.getElementById('status-sum').textContent = isNaN(n) ? 'مجموع: -' : `مجموع: ${n}`;
+  document.getElementById('status-avg').textContent = isNaN(n) ? 'متوسط: -' : `متوسط: ${n}`;
+  document.getElementById('status-count').textContent = `عدد: 1`;
+}
+
+// ── Set cell value ──
+function setCellValue(r, c, raw, addHistory=true) {
+  if (addHistory) pushHistory();
+  data[r][c] = raw;
+  recompute();
+  renderAll();
+  if (r===sel.r && c===sel.c) {
+    document.getElementById('formula-input').value = raw;
+  }
+}
+
+// ── Format operations ──
+function setFormat(key, value) {
+  pushHistory();
+  fmts[sel.r][sel.c][key] = value;
+  renderCell(sel.r, sel.c);
+}
+
+// ── History ──
+function pushHistory() {
+  const snap = {
+    data: data.map(r=>[...r]),
+    fmts: fmts.map(r=>r.map(f=>({...f})))
+  };
+  history = history.slice(0, histIdx+1);
+  history.push(snap);
+  histIdx = history.length - 1;
+  if (history.length > 100) { history.shift(); histIdx--; }
+}
+
+function undo() {
+  if (histIdx <= 0) return;
+  histIdx--;
+  const snap = history[histIdx];
+  data = snap.data.map(r=>[...r]);
+  fmts = snap.fmts.map(r=>r.map(f=>({...f})));
+  recompute(); renderAll();
+}
+
+function redo() {
+  if (histIdx >= history.length-1) return;
+  histIdx++;
+  const snap = history[histIdx];
+  data = snap.data.map(r=>[...r]);
+  fmts = snap.fmts.map(r=>r.map(f=>({...f})));
+  recompute(); renderAll();
+}
+
+// ── Inline editor ──
+const editor = document.getElementById('cell-editor');
+let editing = false;
+
+function startEdit(r, c, initialVal) {
+  const td = getCell(r, c);
+  if (!td) return;
+  editing = true;
+  const rect = td.getBoundingClientRect();
+  const wrapRect = document.getElementById('grid-wrap').getBoundingClientRect();
+  editor.style.display = 'block';
+  editor.style.left  = (rect.left - wrapRect.left + document.getElementById('grid-wrap').scrollLeft) + 'px';
+  editor.style.top   = (rect.top  - wrapRect.top  + document.getElementById('grid-wrap').scrollTop)  + 'px';
+  editor.style.width  = Math.max(rect.width, 120) + 'px';
+  editor.style.height = rect.height + 'px';
+  editor.style.fontSize = (fmts[r][c].size || 12) + 'px';
+  editor.value = initialVal !== undefined ? initialVal : (data[r][c] || '');
+  editor.focus();
+  editor.select();
+  // Position editor inside grid-wrap
+  document.getElementById('grid-wrap').appendChild(editor);
+}
+
+function commitEdit() {
+  if (!editing) return;
+  editing = false;
+  editor.style.display = 'none';
+  setCellValue(sel.r, sel.c, editor.value);
+}
+
+function cancelEdit() {
+  editing = false;
+  editor.style.display = 'none';
+}
+
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { commitEdit(); e.preventDefault(); selectCell(sel.r+1, sel.c); }
+  if (e.key === 'Tab')   { commitEdit(); e.preventDefault(); selectCell(sel.r, sel.c+1); }
+  if (e.key === 'Escape'){ cancelEdit(); }
+});
+
+// ── Grid keyboard nav ──
+document.addEventListener('keydown', e => {
+  if (editing) return;
+  if (e.target === document.getElementById('formula-input')) return;
+
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z') { undo(); e.preventDefault(); return; }
+    if (e.key === 'y') { redo(); e.preventDefault(); return; }
+    if (e.key === 'b') { setFormat('bold', !fmts[sel.r][sel.c].bold); e.preventDefault(); return; }
+    if (e.key === 'i') { setFormat('italic', !fmts[sel.r][sel.c].italic); e.preventDefault(); return; }
+    if (e.key === 'u') { setFormat('under', !fmts[sel.r][sel.c].under); e.preventDefault(); return; }
+    if (e.key === 'c') { clipboard = { data: data[sel.r][sel.c], fmt: {...fmts[sel.r][sel.c]} }; return; }
+    if (e.key === 'v') {
+      if (clipboard) {
+        setCellValue(sel.r, sel.c, clipboard.data);
+        fmts[sel.r][sel.c] = {...clipboard.fmt};
+        renderCell(sel.r, sel.c);
+      }
+      return;
+    }
+  }
+
+  const nav = {ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  if (nav[e.key]) {
+    selectCell(sel.r+nav[e.key][0], sel.c+nav[e.key][1]);
+    e.preventDefault(); return;
+  }
+  if (e.key === 'Tab')   { selectCell(sel.r, sel.c+1); e.preventDefault(); return; }
+  if (e.key === 'Enter') { startEdit(sel.r, sel.c, undefined); e.preventDefault(); return; }
+  if (e.key === 'Delete'||e.key==='Backspace') {
+    if (!editing) { setCellValue(sel.r, sel.c, ''); e.preventDefault(); return; }
+  }
+  if (e.key === 'F2') { startEdit(sel.r, sel.c, undefined); e.preventDefault(); return; }
+  // Start typing → open editor
+  if (e.key.length===1 && !e.ctrlKey && !e.metaKey) {
+    startEdit(sel.r, sel.c, e.key);
+    e.preventDefault();
+  }
+});
+
+// ── Grid click ──
+document.getElementById('grid').addEventListener('mousedown', e => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  if (editing) commitEdit();
+  const r = parseInt(td.dataset.r), c = parseInt(td.dataset.c);
+  selectCell(r, c);
+  if (e.detail === 2) startEdit(r, c, undefined);
+});
+
+// ── Formula bar ──
+const fInput = document.getElementById('formula-input');
+fInput.addEventListener('change', () => {
+  setCellValue(sel.r, sel.c, fInput.value);
+  recompute(); renderAll();
+});
+fInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    setCellValue(sel.r, sel.c, fInput.value);
+    recompute(); renderAll();
+    e.preventDefault();
+  }
+});
+
+// ── TOOLBAR BINDINGS ──
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-redo').addEventListener('click', redo);
+document.getElementById('btn-bold').addEventListener('click', () => setFormat('bold', !fmts[sel.r][sel.c].bold));
+document.getElementById('btn-italic').addEventListener('click', () => setFormat('italic', !fmts[sel.r][sel.c].italic));
+document.getElementById('btn-under').addEventListener('click', () => setFormat('under', !fmts[sel.r][sel.c].under));
+document.getElementById('pick-color').addEventListener('input', e => setFormat('color', e.target.value));
+document.getElementById('pick-bg').addEventListener('input', e => setFormat('bg', e.target.value));
+document.getElementById('btn-left').addEventListener('click', () => setFormat('align', 'left'));
+document.getElementById('btn-center').addEventListener('click', () => setFormat('align', 'center'));
+document.getElementById('btn-right').addEventListener('click', () => setFormat('align', 'right'));
+document.getElementById('sel-size').addEventListener('change', e => setFormat('size', parseInt(e.target.value)));
+
+document.getElementById('btn-add-row').addEventListener('click', () => {
+  pushHistory();
+  ROWS++;
+  data.push(Array(COLS).fill(''));
+  vals.push(Array(COLS).fill(''));
+  fmts.push(Array(COLS).fill(null).map(() => ({bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12})));
+  buildGrid(); recompute(); renderAll();
+});
+
+document.getElementById('btn-add-col').addEventListener('click', () => {
+  pushHistory();
+  COLS++;
+  for (let r=0;r<ROWS;r++) { data[r].push(''); vals[r].push(''); fmts[r].push({bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12}); }
+  buildGrid(); recompute(); renderAll();
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('مسح جميع البيانات؟')) return;
+  pushHistory();
+  ROWS = ROWS_INIT; COLS = COLS_INIT;
+  initStores(); buildGrid(); recompute(); renderAll();
+});
+
+// ── EXPORT ──
+document.getElementById('btn-export').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+  const aoa = [];
+  for (let r=0;r<ROWS;r++) {
+    const row = [];
+    for (let c=0;c<COLS;c++) {
+      const v = vals[r][c];
+      row.push(v !== '' ? v : null);
+    }
+    aoa.push(row);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  XLSX.utils.book_append_sheet(wb, ws, 'DZ Excel');
+  XLSX.writeFile(wb, 'dz-excel.xlsx');
+});
+
+// ── IMPORT ──
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(ev.target.result, {type:'binary'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1});
+    loadAOA(aoa);
+  };
+  reader.readAsBinaryString(file);
+  e.target.value = '';
+});
+
+function loadAOA(aoa) {
+  pushHistory();
+  ROWS = Math.max(ROWS_INIT, aoa.length + 10);
+  COLS = Math.max(COLS_INIT, Math.max(...aoa.map(r=>r.length)) + 5);
+  initStores();
+  for (let r=0;r<aoa.length;r++) {
+    for (let c=0;c<(aoa[r]||[]).length;c++) {
+      const v = aoa[r][c];
+      if (v !== null && v !== undefined && v !== '') {
+        data[r][c] = String(v);
+      }
+    }
+  }
+  buildGrid(); recompute(); renderAll();
+  selectCell(0, 0);
+}
+
+// ── CONTEXT MENU ──
+const ctxMenu = document.getElementById('ctx-menu');
+document.getElementById('grid').addEventListener('contextmenu', e => {
+  const td = e.target.closest('td.cell');
+  if (!td) return;
+  e.preventDefault();
+  const r=parseInt(td.dataset.r), c=parseInt(td.dataset.c);
+  if (r!==sel.r||c!==sel.c) selectCell(r,c);
+  ctxMenu.style.display='block';
+  ctxMenu.style.left=e.clientX+'px';
+  ctxMenu.style.top=e.clientY+'px';
+});
+
+document.addEventListener('click', () => { ctxMenu.style.display='none'; });
+
+ctxMenu.querySelectorAll('.ctx-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const action = item.dataset.action;
+    if (action==='copy') { clipboard={data:data[sel.r][sel.c],fmt:{...fmts[sel.r][sel.c]}}; }
+    if (action==='paste' && clipboard) { setCellValue(sel.r,sel.c,clipboard.data); fmts[sel.r][sel.c]={...clipboard.fmt}; renderCell(sel.r,sel.c); }
+    if (action==='cut') { clipboard={data:data[sel.r][sel.c],fmt:{...fmts[sel.r][sel.c]}}; setCellValue(sel.r,sel.c,''); }
+    if (action==='clear-cell') setCellValue(sel.r,sel.c,'');
+    if (action==='insert-row-above') {
+      pushHistory();
+      data.splice(sel.r,0,Array(COLS).fill(''));
+      vals.splice(sel.r,0,Array(COLS).fill(''));
+      fmts.splice(sel.r,0,Array(COLS).fill(null).map(()=>({bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12})));
+      ROWS++; buildGrid(); recompute(); renderAll();
+    }
+    if (action==='insert-row-below') {
+      pushHistory();
+      data.splice(sel.r+1,0,Array(COLS).fill(''));
+      vals.splice(sel.r+1,0,Array(COLS).fill(''));
+      fmts.splice(sel.r+1,0,Array(COLS).fill(null).map(()=>({bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12})));
+      ROWS++; buildGrid(); recompute(); renderAll();
+    }
+    if (action==='insert-col-left') {
+      pushHistory();
+      for(let r=0;r<ROWS;r++){data[r].splice(sel.c,0,'');vals[r].splice(sel.c,0,'');fmts[r].splice(sel.c,0,{bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12});}
+      COLS++; buildGrid(); recompute(); renderAll();
+    }
+    if (action==='insert-col-right') {
+      pushHistory();
+      for(let r=0;r<ROWS;r++){data[r].splice(sel.c+1,0,'');vals[r].splice(sel.c+1,0,'');fmts[r].splice(sel.c+1,0,{bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12});}
+      COLS++; buildGrid(); recompute(); renderAll();
+    }
+    if (action==='del-row' && ROWS>1) {
+      pushHistory();
+      data.splice(sel.r,1); vals.splice(sel.r,1); fmts.splice(sel.r,1); ROWS--;
+      buildGrid(); recompute(); renderAll(); selectCell(Math.min(sel.r,ROWS-1),sel.c);
+    }
+    if (action==='del-col' && COLS>1) {
+      pushHistory();
+      for(let r=0;r<ROWS;r++){data[r].splice(sel.c,1);vals[r].splice(sel.c,1);fmts[r].splice(sel.c,1);}
+      COLS--; buildGrid(); recompute(); renderAll(); selectCell(sel.r,Math.min(sel.c,COLS-1));
+    }
+    ctxMenu.style.display='none';
+  });
+});
+
+// ══════════════════════════════════════════
+// postMessage API — communication with parent
+// ══════════════════════════════════════════
+window.addEventListener('message', e => {
+  const msg = e.data;
+  if (!msg || !msg.action) return;
+
+  if (msg.action === 'loadData') {
+    // msg.rows: array of arrays
+    const aoa = msg.rows || [];
+    loadAOA(aoa);
+    if (msg.headers) {
+      // Apply header styling to first row
+      for (let c=0;c<msg.headers.length && c<COLS;c++) {
+        fmts[0][c].bold=true;
+        fmts[0][c].bg='#1e3a5f';
+        fmts[0][c].color='#89b4fa';
+      }
+      renderAll();
+    }
+  }
+
+  if (msg.action === 'runMacro') {
+    // msg.code: JS string using spreadsheet API
+    try {
+      // Expose API
+      const api = { data, vals, fmts, ROWS, COLS,
+        setCell: (r,c,v) => setCellValue(r,c,String(v)),
+        setFmt: (r,c,k,v) => { fmts[r][c][k]=v; renderCell(r,c); },
+        renderAll, recompute, colLabel, cellRef, parseRef,
+        loadAOA,
+      };
+      // eslint-disable-next-line no-new-func
+      new Function('api', 'with(api){' + msg.code + '}')(api);
+      recompute(); renderAll();
+      window.parent.postMessage({type:'macroResult', ok:true}, '*');
+    } catch(err) {
+      window.parent.postMessage({type:'macroResult', ok:false, error:err.message}, '*');
+    }
+  }
+
+  if (msg.action === 'getData') {
+    // Return current data as AOA
+    window.parent.postMessage({
+      type: 'sheetData',
+      rows: data.slice(0,ROWS).map(r=>r.slice(0,COLS)),
+      vals: vals.slice(0,ROWS).map(r=>r.slice(0,COLS)),
+    }, '*');
+  }
+});
+
+// ══════════════════════════════════
+// INIT
+// ══════════════════════════════════
+initStores();
+buildGrid();
+pushHistory(); // Initial snapshot
+recompute();
+renderAll();
+selectCell(0, 0);
+
+// Hide loading, show app
+document.getElementById('loading').style.display = 'none';
+document.getElementById('app').style.display     = 'flex';
+
+// Notify parent
+window.parent.postMessage({type:'ready'}, '*');
+
+console.log('[DZ Excel] محرر Excel جاهز ✅');
+</script>
+</body>
+</html>

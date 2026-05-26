@@ -14817,66 +14817,102 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
     send({ type: 'detail', step: 'analyze', text: `اسم المستودع: ${repoOwner}/${safeRepo}` })
     send({ type: 'step', step: 'analyze', status: 'done' })
 
-    // ── STEP 2: Generate code with AI ────────────────────────────────────────
-    send({ type: 'step', step: 'generate', status: 'running', detail: 'توليد الكود بالذكاء الاصطناعي...' })
+    // ── STEP 2: Generate code with AI (ULTRA_MODERN_MODE) ────────────────────
+    send({ type: 'step', step: 'generate', status: 'running', detail: 'توليد موقع عصري بالذكاء الاصطناعي...' })
 
-    const aiPrompt = `أنت مهندس ويب خبير. المهمة: "${task}"
+    // Detect site type from task text for correct image pool + design mode
+    const taskForType = task.toLowerCase()
+    let detectedSiteType = 'landing'
+    for (const [key, poolKey] of Object.entries(SITE_TYPE_TO_IMAGE_KEY)) {
+      if (taskForType.includes(key)) { detectedSiteType = poolKey; break }
+    }
+    send({ type: 'detail', step: 'generate', text: `🎨 نمط التصميم: ${detectedSiteType.toUpperCase()}` })
 
-أنشئ مشروعاً ويب كاملاً. أرجع JSON فقط بهذا الشكل بدون أي نص خارج الـ JSON:
-{
-  "files": [
-    { "path": "index.html", "content": "..." },
-    { "path": "style.css", "content": "..." },
-    { "path": "script.js", "content": "..." },
-    { "path": "README.md", "content": "..." }
-  ]
-}
+    // Build image pool block (real Unsplash CDN images)
+    const imagePoolBlock = buildImagePoolBlock(detectedSiteType)
 
-القواعد الصارمة:
-- HTML/CSS/JS نقي فقط (بدون Node.js أو build step)
-- واجهة جميلة وعصرية ومتجاوبة مع الجوال
-- كود كامل قابل للتشغيل مباشرة في المتصفح
-- لا placeholder ولا TODO
-- استخدم ألوان داكنة عصرية إذا لم يحدد المستخدم`
+    // Use the same elite prompt as the Web Builder
+    const agentBuildSystem = WEBSITE_BUILDER_SYSTEM_PROMPT + imagePoolBlock
+    const agentBuildUser   = `Design request: "${task}"\n[Site type: ${detectedSiteType} | Repo: ${safeRepo} | Deploy: https://${repoOwner}.github.io/${safeRepo}]`
 
-    let projectFiles = []
+    let generatedHtml = ''
     try {
-      const aiKeys = getGroqKeys()
-      if (aiKeys.length > 0) {
-        const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${aiKeys[0]}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: aiPrompt }],
-            max_tokens: 8000,
-            temperature: 0.7,
-          }),
-          signal: AbortSignal.timeout(50000),
-        })
-        const aiData = await aiRes.json()
-        const aiText = aiData.choices?.[0]?.message?.content || ''
-        const jsonMatch = aiText.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0])
-          projectFiles = Array.isArray(parsed.files) ? parsed.files : []
-        }
-      }
+      const aiResult = await safeGenerateAI({
+        messages: [
+          { role: 'system', content: agentBuildSystem },
+          { role: 'user',   content: agentBuildUser },
+        ],
+        query: task,
+        max_tokens: 8000,
+        taskHint: 'web-builder',
+      })
+      generatedHtml = extractHtmlFromResponse(aiResult.content || '') || aiResult.content || ''
     } catch (aiErr) {
-      send({ type: 'detail', step: 'generate', text: `⚠️ AI timeout — استخدام template افتراضي` })
+      send({ type: 'detail', step: 'generate', text: `⚠️ AI timeout — استخدام template عصري` })
     }
 
-    // Fallback template
-    if (!projectFiles.length) {
-      projectFiles = [
-        { path: 'index.html', content: `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeRepo}</title><link rel="stylesheet" href="style.css"></head><body><header><h1>🤖 ${task}</h1><p>تم الإنشاء بواسطة DZ Agent</p></header><main id="app"></main><script src="script.js"></script></body></html>` },
-        { path: 'style.css', content: `*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}header{display:flex;flex-direction:column;gap:16px}h1{font-size:2.5rem;font-weight:800;background:linear-gradient(135deg,#58a6ff,#3fb950);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;font-size:1.1rem}` },
-        { path: 'script.js', content: `console.log('🚀 DZ Agent — ${safeRepo} — جاهز!')` },
-        { path: 'README.md', content: `# ${safeRepo}\n\n> ${task}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dz-gpt.vercel.app) 🤖\n\n## 🚀 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}` },
-      ]
+    // Validate HTML quality
+    const htmlValid = validateHtmlOutput(generatedHtml)
+
+    // Modern fallback template (only if AI fully fails)
+    if (!htmlValid.ok) {
+      send({ type: 'detail', step: 'generate', text: `⚠️ ${htmlValid.reason} — fallback template` })
+      const imgPool = getWebBuilderImagePool(detectedSiteType)
+      const hero = imgPool[0] || ''
+      generatedHtml = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${task}</title>
+  <meta name="description" content="${task} — أُنشئ بواسطة DZ Agent">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    :root{--primary:#6366f1;--accent:#a855f7;--bg:#0a0a0f;--surface:#111118;}
+    *{font-family:'Inter',sans-serif;box-sizing:border-box;}
+    body{background:var(--bg);color:#f1f5f9;margin:0;}
+    .gradient-text{background:linear-gradient(135deg,#fff 0%,var(--primary) 50%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .glass-card{background:rgba(255,255,255,0.03);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.08);border-radius:16px;transition:all .3s ease;}
+    .glass-card:hover{background:rgba(255,255,255,0.06);transform:translateY(-4px);}
+    .btn-glow{background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:50px;padding:14px 32px;font-weight:700;color:#fff;border:none;cursor:pointer;transition:all .3s;box-shadow:0 4px 24px rgba(99,102,241,.4);}
+    .btn-glow:hover{transform:translateY(-2px);box-shadow:0 8px 40px rgba(99,102,241,.6);}
+    .mesh-hero{background:radial-gradient(ellipse 80% 60% at 20% 40%,rgba(99,102,241,.25) 0%,transparent 60%),radial-gradient(ellipse 60% 80% at 80% 60%,rgba(168,85,247,.15) 0%,transparent 60%),var(--bg);}
+    nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(20px);background:rgba(10,10,15,.8);border-bottom:1px solid rgba(255,255,255,.06);}
+  </style>
+</head>
+<body>
+  <nav class="px-8 py-4 flex justify-between items-center">
+    <div class="text-xl font-bold gradient-text">${task}</div>
+    <button class="btn-glow text-sm px-6 py-2">ابدأ الآن</button>
+  </nav>
+  <section class="mesh-hero min-h-screen flex flex-col items-center justify-center text-center px-6 py-20">
+    ${hero ? `<img src="${hero}" alt="hero" class="w-full max-w-2xl rounded-2xl mb-10 shadow-2xl object-cover" style="max-height:400px;" onerror="this.style.display='none'">` : ''}
+    <div class="text-sm font-semibold text-indigo-400 tracking-widest mb-4 uppercase">أُنشئ بواسطة DZ Agent 🤖</div>
+    <h1 class="text-5xl md:text-7xl font-black mb-6 gradient-text leading-tight">${task}</h1>
+    <p class="text-slate-400 text-xl max-w-xl mb-10">منصة متكاملة وعصرية — مصمّمة بأحدث تقنيات 2026</p>
+    <div class="flex gap-4 flex-wrap justify-center">
+      <button class="btn-glow">اكتشف المزيد <i class="fa fa-arrow-left mr-2"></i></button>
+      <button class="glass-card px-8 py-4 font-semibold">تواصل معنا</button>
+    </div>
+  </section>
+  <footer class="text-center py-8 text-slate-500 text-sm border-t border-white/5">
+    © <span id="yr"></span> — ${task} — تطوير DZ Agent 🇩🇿
+  </footer>
+  <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+  <script>AOS.init({duration:700,once:true});document.getElementById('yr').textContent=new Date().getFullYear();</script>
+</body>
+</html>`
     }
 
-    send({ type: 'detail', step: 'generate', text: `✅ تم توليد ${projectFiles.length} ملفات` })
+    const projectFiles = [
+      { path: 'index.html', content: generatedHtml },
+      { path: 'README.md',  content: `# ${safeRepo}\n\n> ${task}\n\n**نوع التصميم:** ${detectedSiteType}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dz-gpt.vercel.app) 🤖\n\n## 🌐 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}\n\n## 🚀 تقنيات مستخدمة\n- Tailwind CSS\n- Font Awesome 6\n- AOS Animations\n- Google Fonts` },
+    ]
+
+    send({ type: 'detail', step: 'generate', text: `✅ موقع ${detectedSiteType} جاهز (${(generatedHtml.length / 1024).toFixed(1)} KB)` })
     send({ type: 'step', step: 'generate', status: 'done' })
 
     // ── STEP 3: Push to GitHub ────────────────────────────────────────────────

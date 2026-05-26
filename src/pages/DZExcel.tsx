@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   FileSpreadsheet, Send, Loader2, Sparkles, ChevronDown,
   ChevronRight, Download, Trash2, CheckCircle2, AlertCircle,
-  LayoutTemplate, Bot, X
+  LayoutTemplate, Bot
 } from 'lucide-react'
 import '../styles/dz-excel.css'
 
@@ -117,8 +117,9 @@ export default function DZExcel() {
         action,
       }])
     } else if (action === 'macro' && d.macro) {
-      setMacroLog(p => [...p, `▶ تشغيل macro:\n${d.macro.slice(0, 120)}...`])
-      postToSheet({ action: 'runMacro', code: d.macro })
+      const macroCode = d.macro
+      setMacroLog(p => [...p, `▶ تشغيل macro:\n${macroCode.slice(0, 120)}...`])
+      postToSheet({ action: 'runMacro', code: macroCode })
       setMessages(p => [...p, {
         role: 'assistant',
         text: `⚡ تم تشغيل الـ Macro!\n\n${d.message || ''}`,

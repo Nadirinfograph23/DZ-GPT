@@ -311,7 +311,7 @@ export default function DZAgentGitHub() {
         <header className="dzgh-header">
           <div className="dzgh-header-title">
             <GitBranch size={18} />
-            <span>GitHub Workflow Engine</span>
+            <span>DZ Agent Workflow Engine</span>
           </div>
           <div className="dzgh-header-right">
             {previewHtml && (

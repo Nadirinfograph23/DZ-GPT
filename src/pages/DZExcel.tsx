@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   FileSpreadsheet, Send, Loader2, Sparkles, ChevronDown,
   ChevronRight, Download, Trash2, CheckCircle2, AlertCircle,
-  LayoutTemplate, Bot
+  LayoutTemplate, Bot, List, X, ChevronUp,
 } from 'lucide-react'
 import '../styles/dz-excel.css'
 
@@ -32,23 +32,117 @@ const TEMPLATES: Template[] = [
   { id: 'schedule',   label: 'جدول أعمال أسبوعي',    icon: '🗓️', desc: 'توزيع المهام على أيام الأسبوع' },
 ]
 
+const AI_FUNCTIONS = [
+  {
+    cat: '📐 معادلات Excel',
+    items: [
+      { label: 'SUM — مجموع نطاق',         p: 'أضف معادلة SUM في آخر صف لحساب مجموع كل عمود رقمي' },
+      { label: 'AVERAGE — المتوسط',         p: 'أضف صف المتوسطات أسفل الجدول باستخدام AVERAGE' },
+      { label: 'IF — شرط منطقي',            p: 'أضف عمود الحالة: إذا كانت القيمة ≥ 50 اكتب "ناجح" وإلا "راسب"' },
+      { label: 'COUNTIF — عدّ شرطي',        p: 'أضف عمود يعدّ تكرار كل قيمة في الجدول باستخدام COUNTIF' },
+      { label: 'SUMIF — مجموع شرطي',        p: 'احسب مجموع المبيعات لكل فئة على حدة باستخدام SUMIF' },
+      { label: 'MAX / MIN — أعلى وأدنى',   p: 'أضف صفاً يظهر أعلى وأدنى قيمة في كل عمود رقمي' },
+      { label: 'ROUND — تقريب',             p: 'قرّب كل الأعداد العشرية في الجدول إلى منزلتين باستخدام ROUND' },
+      { label: 'معادلة مخصصة...',           p: 'أضف المعادلة التالية: ' },
+    ],
+  },
+  {
+    cat: '📋 إنشاء الجداول',
+    items: [
+      { label: 'جدول مخزون',               p: 'أنشئ جدول مخزون: رمز المنتج، الاسم، الكمية، سعر الشراء، سعر البيع، الربح' },
+      { label: 'فاتورة بيع',               p: 'أنشئ فاتورة بيع احترافية: رقم الفاتورة، التاريخ، الزبون، البنود، الكميات، الأسعار، الإجمالي' },
+      { label: 'كشف رواتب',               p: 'أنشئ كشف رواتب: الاسم، الوظيفة، الراتب الأساسي، العلاوات، الخصومات، الصافي' },
+      { label: 'كشف نقاط الطلاب',        p: 'أنشئ جدول نقاط: أسماء الطلاب، المواد، الدرجات، المعدل، الترتيب' },
+      { label: 'ميزانية مشروع',           p: 'أنشئ ميزانية مشروع: البنود، التكلفة المتوقعة، الفعلية، الفرق، النسبة المئوية' },
+      { label: 'جدول متابعة المهام',      p: 'أنشئ جدول مهام: المهمة، المسؤول، تاريخ البدء، الموعد النهائي، الحالة، الأولوية' },
+      { label: 'قائمة الزبائن',           p: 'أنشئ جدول زبائن: الاسم، الهاتف، البريد، العنوان، تاريخ آخر تعامل، إجمالي المشتريات' },
+    ],
+  },
+  {
+    cat: '🎨 التنسيق والتلوين',
+    items: [
+      { label: 'لوّن رأس الجدول',             p: 'لوّن صف الرأس باللون الأزرق الداكن مع نص أبيض عريض ومُوسَّط' },
+      { label: 'تناوب ألوان الصفوف (Zebra)',  p: 'طبّق تنسيق zebra: صفوف فردية بيضاء وزوجية رمادية فاتحة' },
+      { label: 'تلوين شرطي حسب القيمة',      p: 'لوّن الخلايا تلقائياً: أحمر إذا < 0، أخضر إذا > 0، أصفر إذا = 0' },
+      { label: 'تمييز أعلى قيمة',             p: 'ميّز الصف ذا أعلى قيمة إجمالية باللون الذهبي والخط العريض' },
+      { label: 'تنسيق أعمدة الأسعار',         p: 'نسّق كل أعمدة المبالغ: فاصلة آلاف، منزلتان عشريتان، رمز DA' },
+      { label: 'حدود واضحة للجدول',           p: 'أضف حدوداً واضحة لكل الخلايا وضبط عرض الأعمدة تلقائياً' },
+    ],
+  },
+  {
+    cat: '⚡ Macros وإجراءات',
+    items: [
+      { label: 'ترتيب تصاعدي',               p: 'رتّب الجدول تصاعدياً حسب العمود الأول بـ Macro' },
+      { label: 'إضافة صف الإجماليات',        p: 'أضف صف الإجماليات في آخر الجدول: مجموع كل عمود رقمي' },
+      { label: 'حذف الصفوف المكررة',         p: 'احذف تلقائياً الصفوف المكررة بناءً على قيمة العمود الأول' },
+      { label: 'تعبئة تسلسل أرقام',          p: 'عبّئ عمود الرقم التسلسلي من 1 حتى آخر صف بيانات' },
+      { label: 'حذف الصفوف الفارغة',         p: 'احذف كل الصفوف الفارغة أو شبه الفارغة من الجدول' },
+      { label: 'إعادة حساب كل المعادلات',   p: 'أعد حساب وتحديث كل المعادلات والإجماليات في الجدول' },
+    ],
+  },
+  {
+    cat: '✅ عناصر تفاعلية',
+    items: [
+      { label: 'خانات تأشير Checkbox',        p: 'أضف عمود خانات تأشير في بداية الجدول لتحديد الصفوف' },
+      { label: 'قائمة منسدلة Dropdown',       p: 'أضف قائمة منسدلة في عمود الحالة: "قيد التنفيذ" | "مكتمل" | "ملغي" | "معلق"' },
+      { label: 'زر Macro وظيفي',             p: 'أضف زر "🔄 تحديث الإجماليات" يعيد حساب كل الأعمدة الرقمية عند الضغط' },
+      { label: 'تفعيل الفلتر التلقائي',       p: 'فعّل الفلتر التلقائي لكل أعمدة الجدول لتمكين التصفية والبحث' },
+      { label: 'مؤشر تقدم بالألوان',         p: 'أضف عمود مؤشر تقدم ملوّن: أحمر 0-33%، أصفر 34-66%، أخضر 67-100%' },
+    ],
+  },
+  {
+    cat: '📊 المخططات البيانية',
+    items: [
+      { label: 'مخطط أعمدة',                p: 'أنشئ مخطط أعمدة يقارن بين أعمدة الجدول الرئيسية' },
+      { label: 'مخطط خطي',                  p: 'أنشئ مخطط خطي يظهر تطور القيم والاتجاهات عبر الزمن' },
+      { label: 'مخطط دائري',                p: 'أنشئ مخطط دائري يظهر توزيع الفئات بالنسب المئوية' },
+      { label: 'مخطط شريطي أفقي',           p: 'أنشئ مخطط شريطي أفقي لمقارنة الأداء بين العناصر' },
+    ],
+  },
+]
+
 export default function DZExcel() {
   const iframeRef  = useRef<HTMLIFrameElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
+  const fnPanelRef = useRef<HTMLDivElement>(null)
 
-  const [ready,      setReady]      = useState(false)
-  const [messages,   setMessages]   = useState<AiMessage[]>([{
+  const [ready,          setReady]          = useState(false)
+  const [messages,       setMessages]       = useState<AiMessage[]>([{
     role: 'assistant',
-    text: 'مرحباً! أنا مساعدك في DZ Excel 📊\n\nيمكنني:\n• إنشاء قوالب جاهزة (مخزون، فواتير، رواتب...)\n• كتابة معادلات Excel\n• تشغيل Macros لتعبئة البيانات تلقائياً\n• تحليل جدولك الحالي\n\nاختر قالباً أو اكتب طلبك!',
+    text: 'مرحباً! أنا مساعدك في DZ Excel 📊\n\nيمكنني:\n• إنشاء قوالب جاهزة (مخزون، فواتير، رواتب...)\n• كتابة معادلات Excel (SUM، IF، COUNTIF...)\n• تشغيل Macros لتعبئة البيانات تلقائياً\n• إنشاء مخططات بيانية ملوّنة\n• تنسيق الجداول وإضافة عناصر تفاعلية\n\nاضغط زر ⚡ دوال الوكيل لاستعراض كل القدرات!',
   }])
-  const [input,      setInput]      = useState('')
-  const [loading,    setLoading]    = useState(false)
-  const [sideOpen,   setSideOpen]   = useState(true)
-  const [activeTab,  setActiveTab]  = useState<'ai'|'templates'>('ai')
-  const [macroLog,   setMacroLog]   = useState<string[]>([])
-  const [showLog,    setShowLog]    = useState(false)
-  const [lastAction, setLastAction] = useState<string | null>(null)
+  const [input,          setInput]          = useState('')
+  const [loading,        setLoading]        = useState(false)
+  const [sideOpen,       setSideOpen]       = useState(true)
+  const [activeTab,      setActiveTab]      = useState<'ai'|'templates'>('ai')
+  const [macroLog,       setMacroLog]       = useState<string[]>([])
+  const [showLog,        setShowLog]        = useState(false)
+  const [lastAction,     setLastAction]     = useState<string | null>(null)
+  const [showFunctions,  setShowFunctions]  = useState(false)
+  const [activeFnCat,    setActiveFnCat]    = useState(0)
+  const [miniPlayerActive, setMiniPlayerActive] = useState(false)
+
+  // ── Detect mini player ──
+  useEffect(() => {
+    const check = () => setMiniPlayerActive(document.body.classList.contains('dz-mini-active'))
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+    check()
+    return () => observer.disconnect()
+  }, [])
+
+  // ── Close functions panel on outside click ──
+  useEffect(() => {
+    if (!showFunctions) return
+    const handler = (e: MouseEvent) => {
+      if (fnPanelRef.current && !fnPanelRef.current.contains(e.target as Node)) {
+        setShowFunctions(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showFunctions])
 
   // ── Listen for messages from iframe ──
   useEffect(() => {
@@ -168,9 +262,8 @@ export default function DZExcel() {
     setInput('')
     setLoading(true)
     try {
-      // Get current sheet data for context
       postToSheet({ action: 'getData' })
-      await new Promise(r => setTimeout(r, 300)) // brief wait for response
+      await new Promise(r => setTimeout(r, 300))
 
       const res = await fetch('/api/dz-excel/ai', {
         method: 'POST',
@@ -192,8 +285,14 @@ export default function DZExcel() {
       .getElementById('btn-export')?.dispatchEvent(new MouseEvent('click'))
   }
 
+  const pickFnItem = (prompt: string) => {
+    setInput(prompt)
+    setShowFunctions(false)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
   return (
-    <div className="dzxl-layout">
+    <div className={`dzxl-layout${miniPlayerActive ? ' dzxl-mini-active' : ''}`}>
 
       {/* ── TOP BAR ── */}
       <header className="dzxl-topbar">
@@ -323,6 +422,57 @@ export default function DZExcel() {
                   </div>
                 )}
 
+                {/* ── AI FUNCTIONS PANEL ── */}
+                {showFunctions && (
+                  <div className="dzxl-fn-panel" ref={fnPanelRef}>
+                    <div className="dzxl-fn-header">
+                      <span className="dzxl-fn-title">⚡ دوال وقدرات الوكيل</span>
+                      <button className="dzxl-fn-close" onClick={() => setShowFunctions(false)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    {/* Category tabs */}
+                    <div className="dzxl-fn-cats">
+                      {AI_FUNCTIONS.map((g, i) => (
+                        <button
+                          key={i}
+                          className={`dzxl-fn-cat-btn ${activeFnCat === i ? 'active' : ''}`}
+                          onClick={() => setActiveFnCat(i)}
+                        >
+                          {g.cat.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Items */}
+                    <div className="dzxl-fn-items">
+                      <div className="dzxl-fn-cat-label">{AI_FUNCTIONS[activeFnCat].cat}</div>
+                      {AI_FUNCTIONS[activeFnCat].items.map((item, j) => (
+                        <button
+                          key={j}
+                          className="dzxl-fn-item"
+                          onClick={() => pickFnItem(item.p)}
+                        >
+                          <span className="dzxl-fn-item-label">{item.label}</span>
+                          <ChevronRight size={11} className="dzxl-fn-item-arr" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Toolbar row — functions button */}
+                <div className="dzxl-toolbar">
+                  <button
+                    className={`dzxl-fn-toggle-btn ${showFunctions ? 'active' : ''}`}
+                    onClick={() => setShowFunctions(p => !p)}
+                    title="دوال وقدرات الوكيل"
+                  >
+                    <List size={13} />
+                    <span>دوال الوكيل</span>
+                    {showFunctions ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
+                  </button>
+                </div>
+
                 {/* Chat input */}
                 <div className="dzxl-input-wrap">
                   <textarea
@@ -333,8 +483,8 @@ export default function DZExcel() {
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
                     }}
-                    placeholder={'مثال: أضف عمود الإجمالي = الكمية × السعر\nمثال: أنشئ فاتورة للزبون أحمد\nمثال: ما هي دالة حساب المعدل؟'}
-                    rows={3}
+                    placeholder={'مثال: أضف عمود الإجمالي = الكمية × السعر\nمثال: أنشئ فاتورة للزبون أحمد'}
+                    rows={2}
                     disabled={loading}
                   />
                   <button

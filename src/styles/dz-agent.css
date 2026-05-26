@@ -145,6 +145,83 @@
 .dza-lang-code { font-size: 12px; font-weight: 600; }
 .dza-lang-label { font-size: 13px; }
 
+/* ===== GITHUB OAUTH SECTION ===== */
+.dza-github-section {
+  margin: 6px 12px 2px;
+  flex-shrink: 0;
+}
+
+.dza-github-connect-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, rgba(36,41,47,0.8), rgba(22,27,34,0.9));
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  color: #e6edf3;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+.dza-github-connect-btn:hover {
+  background: linear-gradient(135deg, rgba(48,54,61,0.9), rgba(33,38,45,0.95));
+  border-color: rgba(255,255,255,0.22);
+  color: #fff;
+}
+.dza-github-connect-btn span {
+  flex: 1;
+}
+.dza-github-arrow {
+  opacity: 0.6;
+}
+
+.dza-github-connected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(35,134,54,0.1);
+  border: 1px solid rgba(35,134,54,0.25);
+  border-radius: 10px;
+}
+.dza-github-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(35,134,54,0.4);
+  flex-shrink: 0;
+}
+.dza-github-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+.dza-github-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #3fb950;
+  font-weight: 600;
+}
+.dza-github-check {
+  color: #3fb950;
+}
+.dza-github-login {
+  font-size: 12px;
+  color: #e6edf3;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ===== NEW CHAT BUTTON ===== */
 .dza-new-chat-btn {
   display: flex;

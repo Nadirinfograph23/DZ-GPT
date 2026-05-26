@@ -139,8 +139,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: isProd
-        ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com']
-        : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com'],
+        ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
+        : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co'],
       connectSrc: isProd
@@ -14405,6 +14405,109 @@ app.post('/api/dz-agent/github/pr', async (req, res) => {
   } catch (err) {
     console.error('PR error:', err)
     return res.status(500).json({ error: 'PR creation failed.' })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════
+// DZ EXCEL — AI Assistant Endpoint
+// ═══════════════════════════════════════════════════════════
+app.post('/api/dz-excel/ai', aiLimiter, async (req, res) => {
+  const { message = '', type = '' } = req.body
+  if (!message) return res.status(400).json({ error: 'message required' })
+
+  const TEMPLATE_SYSTEM = `أنت مساعد Excel ذكي متخصص في إنشاء جداول البيانات للشركات الجزائرية.
+عند طلب قالب، أعد JSON بالتنسيق التالي بالضبط:
+{
+  "action": "template",
+  "templateName": "اسم القالب",
+  "headers": ["العمود1","العمود2",...],
+  "rows": [
+    ["القيمة1","القيمة2",...],
+    ...
+  ],
+  "message": "شرح قصير"
+}
+
+قواعد:
+- الصف الأول (rows[0]) = رؤوس الأعمدة (headers) بتنسيق عريض
+- أضف 10-15 صف نموذجية بيانات واقعية
+- استخدم معادلات Excel حقيقية مثل =SUM(C2:C11) للإجماليات
+- الأعداد بالأرقام فقط (بدون رموز عملة في الخلايا الرقمية)
+- التواريخ بصيغة DD/MM/YYYY
+- للـ macro: action="macro" وحقل "macro" يحتوي كود JS
+
+عند سؤال عن معادلة أو شرح: action="answer" و message فقط.
+
+قوالب متاحة:
+- inventory: مخزون (رمز، منتج، كمية، سعر الشراء، سعر البيع، الإجمالي، ملاحظة)
+- invoice: فاتورة (رقم، المنتج، الكمية، الوحدة، سعر الوحدة، الإجمالي)
+- payroll: رواتب (الاسم، الوظيفة، الراتب الأساسي، السكن، المواصلات، الغيابات، الاقتطاع CNAS، الصافي)
+- hr: موارد بشرية (الاسم، رقم الموظف، الوظيفة، القسم، تاريخ التوظيف، الهاتف، نوع العقد)
+- leave: عطل (الموظف، نوع العطلة، تاريخ البداية، تاريخ النهاية، عدد الأيام، الحالة، ملاحظة)
+- tasks: تكليف بمهمة (المهمة، المكلف، الأولوية، تاريخ البدء، الموعد النهائي، النسبة %, الحالة)
+- grades: كشف نقاط (الطالب، رياضيات، علوم، عربية، فرنسية، إنجليزية، تاريخ، التربية البدنية، المعدل)
+- customers: زبائن (الاسم، الهاتف، البريد الإلكتروني، العنوان، المدينة، رقم الزبون، الرصيد، آخر معاملة)
+- budget: ميزانية (البند، النوع، المبلغ المتوقع، المبلغ الفعلي، الفارق، الملاحظة)
+- schedule: جدول أعمال (المهمة، المسؤول، الأحد، الإثنين، الثلاثاء، الأربعاء، الخميس)`
+
+  try {
+    const aiResponse = await safeGenerateAI({
+      system: TEMPLATE_SYSTEM,
+      user: message,
+      maxTokens: 2000,
+      temperature: 0.3,
+    })
+
+    if (!aiResponse) {
+      return res.json({ action: 'answer', message: 'عذراً، تعذّر توليد الرد. حاول مرة أخرى.' })
+    }
+
+    // Try to parse JSON from AI response
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0])
+        // Validate structure
+        if (parsed.action === 'template' && Array.isArray(parsed.rows)) {
+          // Prepend header row if not already included
+          const allRows = parsed.rows
+          if (parsed.headers && allRows[0]?.join('') !== parsed.headers.join('')) {
+            allRows.unshift(parsed.headers)
+          }
+          return res.json({
+            action: 'template',
+            templateName: parsed.templateName || 'قالب جديد',
+            rows: allRows,
+            headers: parsed.headers || [],
+            message: parsed.message || `تم إنشاء قالب ${parsed.templateName || ''} بنجاح ✅`,
+          })
+        }
+        if (parsed.action === 'macro' && parsed.macro) {
+          return res.json({
+            action: 'macro',
+            macro: parsed.macro,
+            message: parsed.message || 'تم إنشاء الـ Macro وتشغيله ✅',
+          })
+        }
+        if (parsed.action === 'data' && Array.isArray(parsed.rows)) {
+          return res.json({
+            action: 'data',
+            rows: parsed.rows,
+            headers: parsed.headers || [],
+            message: parsed.message || 'تم تحميل البيانات ✅',
+          })
+        }
+        if (parsed.action === 'answer' && parsed.message) {
+          return res.json({ action: 'answer', message: parsed.message })
+        }
+      } catch (_) { /* fall through to text response */ }
+    }
+
+    // Fallback: return as plain answer
+    return res.json({ action: 'answer', message: aiResponse })
+  } catch (err) {
+    console.error('[DZ Excel AI]', err.message)
+    return res.status(500).json({ action: 'answer', message: 'حدث خطأ في الخادم. حاول مرة أخرى.' })
   }
 })
 

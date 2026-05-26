@@ -1,0 +1,443 @@
+/* ═══════════════════════════════════════════
+   DZ Excel — Styles
+═══════════════════════════════════════════ */
+
+.dzxl-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0f0f1a;
+  color: #cdd6f4;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  direction: rtl;
+  overflow: hidden;
+}
+
+/* ── TOP BAR ── */
+.dzxl-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 48px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.dzxl-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dzxl-topbar-icon {
+  color: #a6e3a1;
+}
+
+.dzxl-topbar-title {
+  font-weight: 700;
+  font-size: 15px;
+  background: linear-gradient(135deg, #a6e3a1 0%, #89b4fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dzxl-topbar-sub {
+  font-size: 11px;
+  color: #7f849c;
+}
+
+.dzxl-ready-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a6e3a1;
+  box-shadow: 0 0 6px #a6e3a1;
+  animation: dzxl-pulse 2s infinite;
+}
+
+@keyframes dzxl-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.dzxl-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dzxl-tb-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  background: transparent;
+  color: #cdd6f4;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.dzxl-tb-btn:hover  { background: #313244; }
+.dzxl-tb-btn.active { background: #1e3a5f; border-color: #89b4fa; color: #89b4fa; }
+
+/* ── WORKSPACE ── */
+.dzxl-workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── SPREADSHEET AREA ── */
+.dzxl-sheet-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #1e1e2e;
+}
+
+.dzxl-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #7f849c;
+  font-size: 14px;
+  z-index: 10;
+}
+
+.dzxl-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  transition: opacity .3s;
+}
+
+/* ── SIDE PANEL ── */
+.dzxl-side {
+  width: 300px;
+  flex-shrink: 0;
+  background: #181825;
+  border-right: 1px solid #313244;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── TABS ── */
+.dzxl-tabs {
+  display: flex;
+  border-bottom: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.dzxl-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 4px;
+  border: none;
+  background: transparent;
+  color: #7f849c;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.dzxl-tab:hover { color: #cdd6f4; }
+.dzxl-tab.active { color: #89b4fa; border-bottom-color: #89b4fa; }
+
+/* ── CHAT ── */
+.dzxl-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dzxl-chat::-webkit-scrollbar { width: 4px; }
+.dzxl-chat::-webkit-scrollbar-track { background: transparent; }
+.dzxl-chat::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+
+/* ── MESSAGES ── */
+.dzxl-msg {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.dzxl-msg--user {
+  flex-direction: row-reverse;
+}
+
+.dzxl-msg-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #313244, #45475a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #89b4fa;
+}
+
+.dzxl-msg-bubble {
+  max-width: 85%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dzxl-msg--assistant .dzxl-msg-bubble {
+  background: #252538;
+  border: 1px solid #313244;
+  color: #cdd6f4;
+  border-radius: 4px 10px 10px 10px;
+}
+
+.dzxl-msg--user .dzxl-msg-bubble {
+  background: linear-gradient(135deg, #1e3a5f, #1a2f4a);
+  border: 1px solid #2a4a7f;
+  color: #cdd6f4;
+  border-radius: 10px 4px 10px 10px;
+}
+
+.dzxl-bullet {
+  display: block;
+  padding-right: 4px;
+  color: #89b4fa;
+}
+
+.dzxl-msg-tag {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  background: #313244;
+  color: #a6e3a1;
+}
+
+/* ── TYPING INDICATOR ── */
+.dzxl-typing {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px !important;
+}
+
+.dzxl-typing span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #89b4fa;
+  animation: dzxl-bounce .8s infinite;
+}
+.dzxl-typing span:nth-child(2) { animation-delay: .15s; }
+.dzxl-typing span:nth-child(3) { animation-delay: .30s; }
+
+@keyframes dzxl-bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: .5; }
+  40%           { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── MACRO LOG ── */
+.dzxl-log {
+  flex-shrink: 0;
+  border-top: 1px solid #313244;
+  background: #11111b;
+}
+
+.dzxl-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 5px 10px;
+  background: transparent;
+  border: none;
+  color: #7f849c;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: right;
+}
+.dzxl-log-toggle:hover { color: #cdd6f4; }
+
+.dzxl-log-body {
+  padding: 4px 10px 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.dzxl-log-line {
+  font-size: 10px;
+  font-family: monospace;
+  color: #7f849c;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-bottom: 2px;
+  direction: ltr;
+  text-align: left;
+}
+
+.dzxl-log-clear {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: #f38ba8;
+  font-size: 10px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+/* ── INPUT AREA ── */
+.dzxl-input-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid #313244;
+  flex-shrink: 0;
+}
+
+.dzxl-input {
+  flex: 1;
+  background: #11111b;
+  border: 1px solid #45475a;
+  border-radius: 8px;
+  color: #cdd6f4;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: none;
+  direction: rtl;
+  transition: border-color .15s;
+  line-height: 1.5;
+}
+.dzxl-input:focus      { outline: none; border-color: #89b4fa; }
+.dzxl-input:disabled   { opacity: .5; cursor: not-allowed; }
+.dzxl-input::placeholder { color: #45475a; font-size: 11px; }
+
+.dzxl-send-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #a6e3a1, #89b4fa);
+  border: none;
+  color: #11111b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .15s, transform .1s;
+}
+.dzxl-send-btn:hover    { opacity: .9; transform: scale(1.05); }
+.dzxl-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+.dzxl-hint {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: #45475a;
+  padding: 0 10px 6px;
+}
+
+/* ── TEMPLATES ── */
+.dzxl-templates {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dzxl-templates::-webkit-scrollbar { width: 4px; }
+.dzxl-templates::-webkit-scrollbar-thumb { background: #45475a; border-radius: 2px; }
+
+.dzxl-templates-title {
+  font-size: 11px;
+  color: #7f849c;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid #313244;
+  margin-bottom: 4px;
+}
+
+.dzxl-tpl-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #252538;
+  cursor: pointer;
+  text-align: right;
+  transition: background .15s, border-color .15s;
+  color: #cdd6f4;
+}
+.dzxl-tpl-btn:hover    { background: #313244; border-color: #45475a; }
+.dzxl-tpl-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.dzxl-tpl-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.dzxl-tpl-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.dzxl-tpl-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+
+.dzxl-tpl-desc {
+  font-size: 10px;
+  color: #7f849c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.dzxl-tpl-arr {
+  color: #45475a;
+  flex-shrink: 0;
+  transform: rotate(180deg);
+}
+
+/* ── SPINNER ── */
+.dzxl-spin {
+  animation: dzxl-spin .7s linear infinite;
+}
+@keyframes dzxl-spin { to { transform: rotate(360deg); } }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  .dzxl-side { width: 100%; position: absolute; inset: 48px 0 0 0; z-index: 50; }
+  .dzxl-topbar-sub { display: none; }
+}

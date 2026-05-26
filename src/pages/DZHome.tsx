@@ -180,6 +180,25 @@ const SECTIONS = [
     ),
   },
   {
+    id: 'excel',
+    label: 'DZ EXCEL',
+    sublabel: 'محرر جداول ذكي + AI',
+    path: '/excel',
+    gradient: 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
+    bgGlow: 'rgba(22,163,74,0.18)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="6" width="36" height="36" rx="4" stroke="currentColor" strokeWidth="2.5"/>
+        <line x1="6" y1="18" x2="42" y2="18" stroke="currentColor" strokeWidth="2"/>
+        <line x1="6" y1="30" x2="42" y2="30" stroke="currentColor" strokeWidth="2"/>
+        <line x1="18" y1="6" x2="18" y2="42" stroke="currentColor" strokeWidth="2"/>
+        <path d="M10 24l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
+        <text x="22" y="28" fontSize="9" fontWeight="bold" fill="currentColor" opacity="0.9">Σ</text>
+        <text x="32" y="28" fontSize="7" fill="currentColor" opacity="0.7">AI</text>
+      </svg>
+    ),
+  },
+  {
     id: 'github-agent',
     label: 'DZ GITHUB',
     sublabel: 'بناء ونشر المستودعات',

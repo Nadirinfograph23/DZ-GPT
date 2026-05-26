@@ -686,24 +686,27 @@ ${devInfoSection}`
   }
 
   // ── Highlight search word inside verse text ──────────────────────────────
+  const normArabic = (s: string) =>
+    s.normalize('NFKD')
+     .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '')
+     .replace(/[أإآٱ]/g, 'ا')
+     .replace(/ة/g, 'ه')
+     .trim()
+
   const renderHighlightedText = (text: string, word: string) => {
     if (!word || !text) return <>{text}</>
-    const stripped = word.replace(/[\u064B-\u065F\u0670]/g, '')
-    if (!stripped) return <>{text}</>
-    try {
-      const parts = text.split(new RegExp(`(${stripped})`, 'g'))
-      return (
-        <>
-          {parts.map((part, i) =>
-            part === stripped
-              ? <mark key={i} className="aq-kw-highlight">{part}</mark>
-              : <span key={i}>{part}</span>
-          )}
-        </>
-      )
-    } catch {
-      return <>{text}</>
-    }
+    const normWord = normArabic(word)
+    if (!normWord || normWord.length < 2) return <>{text}</>
+    const tokens = text.split(/(\s+)/)
+    return (
+      <>
+        {tokens.map((tok, i) =>
+          normArabic(tok).includes(normWord)
+            ? <mark key={i} className="aq-kw-highlight">{tok}</mark>
+            : <span key={i}>{tok}</span>
+        )}
+      </>
+    )
   }
 
   const filteredChapters = chapters.filter(ch =>
@@ -1435,7 +1438,9 @@ ${devInfoSection}`
                           </div>
                           <div className="aq-kw-surah-meta">
                             <span className="aq-kw-surah-count">{group.count} مرة</span>
-                            <span className="aq-kw-expand-icon">{kwExpandedSurah === group.surahNum ? '▲' : '▼'}</span>
+                            <span className={`aq-kw-expand-icon ${kwExpandedSurah === group.surahNum ? 'aq-kw-expand-icon--open' : ''}`}>
+                              {kwExpandedSurah === group.surahNum ? '−' : '+'}
+                            </span>
                           </div>
                         </div>
 

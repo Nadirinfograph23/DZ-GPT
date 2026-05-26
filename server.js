@@ -131,6 +131,7 @@ import { createAdminRouter } from './routes/admin.js'
 import { createExcelRouter } from './routes/excel.js'
 import { createHealthRouter } from './routes/health.js'
 import { createOwnerRouter } from './routes/owner.js'
+import { createGitHubRouter } from './routes/github.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -868,6 +869,7 @@ app.use('/api', createHealthRouter({
   getRouterHealthSnapshot,
 }))
 app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
+app.use('/api', createGitHubRouter({ githubLimiter }))
 // ═══════════════════════════════════════════════════════════════
 
 app.post('/api/dz-agent/ratings', (req, res) => {

@@ -794,13 +794,18 @@ function evalExpr(expr, r, c, visited) {
   // Replace cell refs (like A1, B12, AA3) with their computed numeric values
   try {
     // First replace all cell references with their evaluated numeric values
+    // If any referenced cell contains text (non-numeric), return #VALUE! immediately
+    let textCellFound = false;
     const resolved = e.replace(/\b([A-Z]{1,3}\d{1,7})\b/g, (match) => {
       const cr = parseRef(match);
       if (!cr) return '0';
       const v = evalCell(cr.r, cr.c, new Set(visited));
+      if (v === '' || v === null || v === undefined) return '0'; // empty cell = 0
       const n = toNum(v);
-      return isNaN(n) ? '0' : String(n);
+      if (isNaN(n)) { textCellFound = true; return '0'; } // text cell — flag error
+      return String(n);
     });
+    if (textCellFound) return '#VALUE!'; // arithmetic on text cell is invalid
     // Allow only safe arithmetic characters
     const safe = resolved.replace(/[^0-9+\-*/.() %^Ee]/g, '');
     if (!safe.trim()) return '#ERR!';

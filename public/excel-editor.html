@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>DZ Excel Editor</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#1e1e2e;color:#cdd6f4;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
@@ -144,6 +145,33 @@
       border-top-color:#89b4fa;border-radius:50%;animation:spin .8s linear infinite;
     }
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── CHART PANEL ── */
+    #chart-panel{
+      display:none;flex-direction:column;flex-shrink:0;
+      height:300px;background:#181825;border-top:2px solid #313244;
+      position:relative;
+    }
+    #chart-header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:6px 12px;background:#11111b;border-bottom:1px solid #313244;
+      flex-shrink:0;
+    }
+    #chart-title-text{font-size:13px;font-weight:600;color:#cba6f7}
+    #chart-type-btns{display:flex;gap:4px}
+    .chart-type-btn{
+      padding:2px 8px;border:1px solid #45475a;border-radius:4px;
+      background:transparent;color:#a6adc8;font-size:11px;cursor:pointer;
+      transition:all .15s;
+    }
+    .chart-type-btn:hover,.chart-type-btn.active{background:#313244;color:#cba6f7;border-color:#cba6f7}
+    #btn-close-chart{
+      background:transparent;border:none;color:#6c7086;cursor:pointer;
+      font-size:16px;line-height:1;padding:2px 6px;border-radius:4px;
+    }
+    #btn-close-chart:hover{background:#313244;color:#f38ba8}
+    #chart-canvas-wrap{flex:1;padding:8px 16px;overflow:hidden}
+    #chart-canvas{max-height:240px}
   </style>
 </head>
 <body>
@@ -236,6 +264,23 @@
   <div id="grid-area">
     <div id="grid-wrap">
       <table id="grid"></table>
+    </div>
+  </div>
+
+  <!-- CHART PANEL -->
+  <div id="chart-panel">
+    <div id="chart-header">
+      <span id="chart-title-text">المخطط</span>
+      <div id="chart-type-btns">
+        <button class="chart-type-btn active" data-type="bar">📊 أعمدة</button>
+        <button class="chart-type-btn" data-type="line">📈 خطي</button>
+        <button class="chart-type-btn" data-type="pie">🥧 دائري</button>
+        <button class="chart-type-btn" data-type="doughnut">🍩 حلقي</button>
+      </div>
+      <button id="btn-close-chart" title="إغلاق المخطط">✕</button>
+    </div>
+    <div id="chart-canvas-wrap">
+      <canvas id="chart-canvas"></canvas>
     </div>
   </div>
 
@@ -826,6 +871,152 @@ function recompute() {
   }
 }
 
+// ══════════════════════════════════════════
+// CHART ENGINE — Chart.js integration
+// ══════════════════════════════════════════
+let _chartInstance = null;
+let _chartLastLabels = [];
+let _chartLastDatasets = [];
+
+const CHART_PALETTE = [
+  '#89b4fa','#a6e3a1','#f38ba8','#fab387',
+  '#f9e2af','#cba6f7','#89dceb','#94e2d5',
+  '#74c7ec','#b4befe','#eba0ac','#45475a'
+];
+
+function createChart(type, labels, datasets, title, opts) {
+  const panel = document.getElementById('chart-panel');
+  panel.style.display = 'flex';
+  if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+
+  _chartLastLabels   = labels;
+  _chartLastDatasets = datasets;
+  const canvas = document.getElementById('chart-canvas');
+  const ctx    = canvas.getContext('2d');
+  const isPie  = type === 'pie' || type === 'doughnut';
+  const isLine = type === 'line' || type === 'area';
+  const chartType = type === 'area' ? 'line' : type;
+
+  const ds = Array.isArray(datasets) && typeof datasets[0] === 'object' && !Array.isArray(datasets[0])
+    ? datasets.map((d, i) => ({
+        label: d.label || `Series ${i+1}`,
+        data: d.data,
+        backgroundColor: isPie ? CHART_PALETTE : (isLine ? CHART_PALETTE[i%CHART_PALETTE.length]+'44' : CHART_PALETTE[i%CHART_PALETTE.length]),
+        borderColor: CHART_PALETTE[i%CHART_PALETTE.length],
+        borderWidth: 2,
+        fill: isLine,
+        tension: 0.4,
+        pointRadius: isLine ? 4 : 0,
+        pointHoverRadius: isLine ? 6 : 0,
+      }))
+    : [{ label: title || 'Data', data: datasets,
+         backgroundColor: isPie ? CHART_PALETTE : CHART_PALETTE[0]+'bb',
+         borderColor: CHART_PALETTE[0], borderWidth: 2, fill: isLine, tension: 0.4 }];
+
+  _chartInstance = new Chart(ctx, {
+    type: chartType,
+    data: { labels, datasets: ds },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      plugins: {
+        legend: { labels: { color: '#cdd6f4', font: { size: 11 }, boxWidth: 14 } },
+        title: title
+          ? { display: true, text: title, color: '#cba6f7', font: { size: 13, weight: 'bold' }, padding: { bottom: 8 } }
+          : { display: false },
+        tooltip: { backgroundColor: '#181825', borderColor: '#45475a', borderWidth: 1,
+          titleColor: '#cdd6f4', bodyColor: '#a6adc8' }
+      },
+      scales: !isPie ? {
+        x: { ticks: { color: '#a6adc8', font: { size: 11 } }, grid: { color: '#313244' } },
+        y: { ticks: { color: '#a6adc8', font: { size: 11 } }, grid: { color: '#313244' } }
+      } : undefined,
+      ...(opts || {})
+    }
+  });
+
+  document.getElementById('chart-title-text').textContent = title || 'المخطط';
+  document.querySelectorAll('.chart-type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === chartType);
+  });
+  window.parent.postMessage({ type: 'chartCreated', chartType: type, title }, '*');
+}
+
+function closeChart() {
+  document.getElementById('chart-panel').style.display = 'none';
+  if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
+}
+
+// Chart type switch buttons
+document.querySelectorAll('.chart-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (_chartLastLabels.length && _chartLastDatasets.length) {
+      const title = document.getElementById('chart-title-text').textContent;
+      createChart(btn.dataset.type, _chartLastLabels, _chartLastDatasets, title);
+    }
+  });
+});
+document.getElementById('btn-close-chart').addEventListener('click', closeChart);
+
+// ══════════════════════════════════════════
+// TABLE STYLING HELPERS
+// ══════════════════════════════════════════
+const TABLE_THEMES = {
+  blue:   { hBg:'#1e3a5f', hColor:'#89b4fa', evenBg:'#181825', oddBg:'#1e1e2e' },
+  green:  { hBg:'#1a3a2a', hColor:'#a6e3a1', evenBg:'#1a2e1a', oddBg:'#1e1e2e' },
+  purple: { hBg:'#2a1e4a', hColor:'#cba6f7', evenBg:'#261e3a', oddBg:'#1e1e2e' },
+  red:    { hBg:'#3a1e1e', hColor:'#f38ba8', evenBg:'#2e1e1e', oddBg:'#1e1e2e' },
+  gold:   { hBg:'#3a2e10', hColor:'#f9e2af', evenBg:'#2e2810', oddBg:'#1e1e2e' },
+  teal:   { hBg:'#103a3a', hColor:'#94e2d5', evenBg:'#102e2e', oddBg:'#1e1e2e' },
+};
+
+function applyTableStyle(r1, c1, r2, c2, theme) {
+  const t = TABLE_THEMES[theme] || TABLE_THEMES.blue;
+  for (let c = c1; c <= Math.min(c2, COLS-1); c++) {
+    fmts[r1][c].bold  = true;
+    fmts[r1][c].bg    = t.hBg;
+    fmts[r1][c].color = t.hColor;
+    fmts[r1][c].align = 'center';
+    fmts[r1][c].size  = 12;
+  }
+  for (let r = r1+1; r <= Math.min(r2, ROWS-1); r++) {
+    const bg = r % 2 === 0 ? t.evenBg : t.oddBg;
+    for (let c = c1; c <= Math.min(c2, COLS-1); c++) {
+      fmts[r][c].bg = bg;
+    }
+  }
+  renderAll();
+}
+
+function formatRange(r1, c1, r2, c2, fmtObj) {
+  for (let r = r1; r <= Math.min(r2, ROWS-1); r++) {
+    for (let c = c1; c <= Math.min(c2, COLS-1); c++) {
+      Object.keys(fmtObj).forEach(k => { fmts[r][c][k] = fmtObj[k]; });
+    }
+  }
+  renderAll();
+}
+
+// Build chart from a selected range in the grid
+function chartFromRange(dataR1, dataR2, labelCol, valCols, chartType, title) {
+  const labels   = [];
+  const datasets = [];
+  for (let r = dataR1; r <= Math.min(dataR2, ROWS-1); r++) {
+    labels.push(String(vals[r][labelCol] ?? data[r][labelCol] ?? `R${r+1}`));
+  }
+  valCols.forEach((c, i) => {
+    const series = [];
+    for (let r = dataR1; r <= Math.min(dataR2, ROWS-1); r++) {
+      const n = Number(vals[r][c]);
+      series.push(isNaN(n) ? 0 : n);
+    }
+    const hdr = vals[0] ? String(vals[0][c] || data[0][c] || `S${i+1}`) : `S${i+1}`;
+    datasets.push({ label: hdr, data: series });
+  });
+  createChart(chartType || 'bar', labels, datasets, title || 'مخطط البيانات');
+}
+
 // ── Build the grid DOM ──
 function buildGrid() {
   const table = document.getElementById('grid');
@@ -1230,37 +1421,83 @@ window.addEventListener('message', e => {
   if (!msg || !msg.action) return;
 
   if (msg.action === 'loadData') {
-    // msg.rows: array of arrays
     const aoa = msg.rows || [];
     loadAOA(aoa);
-    if (msg.headers) {
-      // Apply header styling to first row
-      for (let c=0;c<msg.headers.length && c<COLS;c++) {
-        fmts[0][c].bold=true;
-        fmts[0][c].bg='#1e3a5f';
-        fmts[0][c].color='#89b4fa';
+    // Auto-apply professional table styling
+    const numCols = aoa[0] ? aoa[0].length : COLS;
+    const numRows = aoa.length;
+    const theme   = msg.theme || 'blue';
+    const t       = TABLE_THEMES[theme] || TABLE_THEMES.blue;
+    // Header row
+    for (let c = 0; c < numCols && c < COLS; c++) {
+      fmts[0][c].bold  = true;
+      fmts[0][c].bg    = t.hBg;
+      fmts[0][c].color = t.hColor;
+      fmts[0][c].align = 'center';
+      fmts[0][c].size  = 12;
+    }
+    // Data rows — alternating colors
+    for (let r = 1; r < numRows && r < ROWS; r++) {
+      const bg = r % 2 === 0 ? t.evenBg : t.oddBg;
+      for (let c = 0; c < numCols && c < COLS; c++) {
+        fmts[r][c].bg = bg;
       }
-      renderAll();
+    }
+    renderAll();
+    // Auto-chart if requested
+    if (msg.autoChart) {
+      const ac = msg.autoChart;
+      setTimeout(() => chartFromRange(
+        ac.r1 ?? 1, ac.r2 ?? numRows-1,
+        ac.labelCol ?? 0,
+        ac.valCols  ?? [1],
+        ac.type     ?? 'bar',
+        ac.title    ?? 'مخطط البيانات'
+      ), 200);
     }
   }
 
   if (msg.action === 'runMacro') {
-    // msg.code: JS string using spreadsheet API
     try {
-      // Expose API
-      const api = { data, vals, fmts, ROWS, COLS,
-        setCell: (r,c,v) => setCellValue(r,c,String(v)),
-        setFmt: (r,c,k,v) => { fmts[r][c][k]=v; renderCell(r,c); },
-        renderAll, recompute, colLabel, cellRef, parseRef,
-        loadAOA,
+      const api = {
+        // Core data access
+        data, vals, fmts, ROWS, COLS,
+        // Cell operations
+        setCell:   (r,c,v)     => setCellValue(r,c,String(v)),
+        setFmt:    (r,c,k,v)   => { fmts[r][c][k]=v; renderCell(r,c); },
+        // Bulk formatting
+        formatRange,
+        applyTableStyle,
+        // Chart creation
+        createChart,
+        chartFromRange,
+        // Utils
+        renderAll, recompute, colLabel, cellRef, parseRef, loadAOA,
+        // Add rows/cols dynamically
+        addRows: (n=1) => {
+          for(let i=0;i<n;i++){
+            data.push(Array(COLS).fill(''));
+            vals.push(Array(COLS).fill(''));
+            fmts.push(Array(COLS).fill(null).map(()=>({bold:false,italic:false,under:false,color:'',bg:'',align:'left',size:12})));
+            ROWS++;
+          }
+          buildGrid();
+        },
+        // Value helpers
+        toNum: v => { const n=Number(String(v??'').replace(/,/g,'.')); return isNaN(n)?0:n; },
+        tableThemes: TABLE_THEMES,
+        chartPalette: CHART_PALETTE,
       };
-      // eslint-disable-next-line no-new-func
       new Function('api', 'with(api){' + msg.code + '}')(api);
       recompute(); renderAll();
       window.parent.postMessage({type:'macroResult', ok:true}, '*');
     } catch(err) {
       window.parent.postMessage({type:'macroResult', ok:false, error:err.message}, '*');
     }
+  }
+
+  if (msg.action === 'createChart') {
+    createChart(msg.chartType||'bar', msg.labels||[], msg.datasets||[], msg.title||'', msg.opts||{});
   }
 
   if (msg.action === 'getData') {

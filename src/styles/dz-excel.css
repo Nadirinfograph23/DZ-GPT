@@ -436,8 +436,49 @@
 }
 @keyframes dzxl-spin { to { transform: rotate(360deg); } }
 
-/* ── RESPONSIVE ── */
+/* ── RESPONSIVE — Portrait Mobile ── */
 @media (max-width: 640px) {
-  .dzxl-side { width: 100%; position: absolute; inset: 48px 0 0 0; z-index: 50; }
+  /* Remove hidden overflow so the page can scroll */
+  .dzxl-layout {
+    overflow: auto;
+    height: 100dvh;
+  }
+
+  /* Stack sheet + panel vertically */
+  .dzxl-workspace {
+    flex-direction: column;
+    overflow: visible;
+    height: auto;
+  }
+
+  /* Top half — spreadsheet */
+  .dzxl-sheet-area {
+    flex: none;
+    height: 50dvh;
+    overflow-y: auto;
+  }
+
+  /* Bottom half — AI panel, always visible */
+  .dzxl-side {
+    width: 100%;
+    flex-shrink: 0;
+    position: static;
+    height: 50dvh;
+    overflow-y: auto;
+    border-right: none;
+    border-top: 1px solid #313244;
+  }
+
+  /* Hide "المساعد" toggle button — panel is always open on mobile */
+  .dzxl-tb-btn[title="المساعد الذكي"] {
+    display: none;
+  }
+
   .dzxl-topbar-sub { display: none; }
+
+  /* Make chat fill the available space within the panel */
+  .dzxl-chat {
+    max-height: calc(50dvh - 140px);
+    overflow-y: auto;
+  }
 }

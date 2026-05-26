@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   FileSpreadsheet, Send, Loader2, Sparkles, ChevronDown,
   ChevronRight, Download, Trash2, CheckCircle2, AlertCircle,
-  LayoutTemplate, Bot, List, X, ChevronUp,
+  LayoutTemplate, Bot, List, X, ChevronUp, Upload, FileUp,
 } from 'lucide-react'
 import '../styles/dz-excel.css'
 
@@ -10,6 +10,15 @@ interface AiMessage {
   role: 'user' | 'assistant'
   text: string
   action?: string
+  importInfo?: ImportInfo
+}
+
+interface ImportInfo {
+  name: string
+  rows: number
+  cols: number
+  headers: string[]
+  sheets: string[]
 }
 
 interface Template {
@@ -165,6 +174,23 @@ export default function DZExcel() {
         setLastAction('macro_ok')
         setShowLog(true)
       }
+      if (msg.type === 'fileImported') {
+        const info: ImportInfo = {
+          name: msg.name || 'ملف',
+          rows: msg.rows || 0,
+          cols: msg.cols || 0,
+          headers: msg.headers || [],
+          sheets: msg.sheets || [],
+        }
+        setActiveTab('ai')
+        setSideOpen(true)
+        setMessages(p => [...p, {
+          role: 'assistant',
+          text: `✅ تم استيراد **${info.name}** بنجاح!\n\n📊 ${info.rows} صف × ${info.cols} عمود`,
+          action: 'import',
+          importInfo: info,
+        }])
+      }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
@@ -285,6 +311,17 @@ export default function DZExcel() {
       .getElementById('btn-export')?.dispatchEvent(new MouseEvent('click'))
   }
 
+  const triggerImport = () => {
+    iframeRef.current?.contentWindow?.document
+      .getElementById('btn-import')?.dispatchEvent(new MouseEvent('click'))
+  }
+
+  const sendImportAnalysis = (prompt: string) => {
+    setInput(prompt)
+    setActiveTab('ai')
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
   const pickFnItem = (prompt: string) => {
     setInput(prompt)
     setShowFunctions(false)
@@ -303,6 +340,9 @@ export default function DZExcel() {
           {ready && <span className="dzxl-ready-dot" title="جاهز" />}
         </div>
         <div className="dzxl-topbar-actions">
+          <button className="dzxl-tb-btn dzxl-tb-btn--import" onClick={triggerImport} title="استيراد ملف Excel أو CSV">
+            <Upload size={14} /> استيراد
+          </button>
           <button className="dzxl-tb-btn" onClick={exportSheet} title="تصدير Excel">
             <Download size={14} /> تصدير
           </button>
@@ -379,6 +419,44 @@ export default function DZExcel() {
                         )}
                         {m.action === 'macro' && (
                           <div className="dzxl-msg-tag" style={{ color: '#f9e2af' }}>⚡ Macro</div>
+                        )}
+                        {m.action === 'import' && m.importInfo && (
+                          <div className="dzxl-import-card">
+                            <div className="dzxl-import-card-header">
+                              <FileUp size={14} className="dzxl-import-card-icon" />
+                              <span className="dzxl-import-card-name">{m.importInfo.name}</span>
+                            </div>
+                            {m.importInfo.headers.length > 0 && (
+                              <div className="dzxl-import-card-headers">
+                                {m.importInfo.headers.slice(0, 6).map((h, hi) => (
+                                  <span key={hi} className="dzxl-import-card-header-chip">{h}</span>
+                                ))}
+                                {m.importInfo.headers.length > 6 && (
+                                  <span className="dzxl-import-card-header-chip dzxl-import-card-header-chip--more">
+                                    +{m.importInfo.headers.length - 6}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <div className="dzxl-import-card-label">ماذا تريد أن أفعل بهذا الملف؟</div>
+                            <div className="dzxl-import-quick-btns">
+                              {[
+                                { icon: '📊', label: 'تحليل البيانات', p: 'حلّل البيانات الموجودة في الجدول وأعطني ملخصاً إحصائياً' },
+                                { icon: '🔢', label: 'إضافة المعادلات', p: 'أضف معادلات SUM وAVERAGE وMAX وMIN لكل عمود رقمي' },
+                                { icon: '📈', label: 'إنشاء مخطط', p: 'أنشئ مخططاً بيانياً يمثل البيانات الموجودة في الجدول' },
+                                { icon: '🎨', label: 'تنسيق احترافي', p: 'نسّق الجدول بتنسيق احترافي ملون مع تمييز الرأس' },
+                                { icon: '🔍', label: 'كشف مشاكل', p: 'ابحث عن الخلايا الفارغة أو القيم الشاذة أو الأخطاء في الجدول' },
+                              ].map((btn, bi) => (
+                                <button
+                                  key={bi}
+                                  className="dzxl-import-quick-btn"
+                                  onClick={() => sendImportAnalysis(btn.p)}
+                                >
+                                  <span>{btn.icon}</span> {btn.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

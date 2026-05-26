@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -59,6 +59,14 @@ export default function DZAgent() {
   })
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [githubStatus, setGithubStatus] = useState<{ ok: boolean; login?: string; avatar?: string } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/dz-agent/github/agent-status')
+      .then(r => r.json())
+      .then(d => setGithubStatus(d))
+      .catch(() => setGithubStatus({ ok: false }))
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('dz-agent-chats', JSON.stringify(chats))
@@ -147,6 +155,34 @@ export default function DZAgent() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* ===== GITHUB OAUTH ===== */}
+        <div className="dza-github-section">
+          {githubStatus?.ok ? (
+            <div className="dza-github-connected">
+              {githubStatus.avatar && (
+                <img src={githubStatus.avatar} alt="avatar" className="dza-github-avatar" />
+              )}
+              <div className="dza-github-info">
+                <div className="dza-github-label">
+                  <CheckCircle2 size={12} className="dza-github-check" />
+                  متصل بـ GitHub
+                </div>
+                <div className="dza-github-login">@{githubStatus.login}</div>
+              </div>
+            </div>
+          ) : (
+            <a
+              href="/api/auth/github"
+              className="dza-github-connect-btn"
+              title="اتصل بـ GitHub عبر OAuth"
+            >
+              <Github size={15} />
+              <span>اتصل بـ GitHub</span>
+              <LogIn size={13} className="dza-github-arrow" />
+            </a>
+          )}
         </div>
 
         <button className="dza-new-chat-btn" onClick={createNewChat}>

@@ -44,12 +44,22 @@ interface AiMessage {
   streaming?: boolean
 }
 
-interface QuranSearchResult {
-  verse_key: string
-  surah: number
-  ayah: number
+interface QuranVerseMatch {
+  verseKey: string
   text: string
-  tafsir: string | null
+}
+
+interface QuranSurahGroup {
+  surahNum: number
+  surahName: string
+  count: number
+  verses: QuranVerseMatch[]
+}
+
+interface QuranSearchStats {
+  word: string
+  total: number
+  surahGroups: QuranSurahGroup[]
 }
 
 interface BookmarkedAyah {
@@ -138,9 +148,8 @@ export default function AIQuran() {
   const [aiTab, setAiTab] = useState<'chat' | 'search'>('chat')
   const [kwSearch, setKwSearch] = useState('')
   const [kwLoading, setKwLoading] = useState(false)
-  const [kwResults, setKwResults] = useState<QuranSearchResult[]>([])
-  const [kwTotal, setKwTotal] = useState(0)
-  const [kwExpanded, setKwExpanded] = useState<string | null>(null)
+  const [kwStats, setKwStats] = useState<QuranSearchStats | null>(null)
+  const [kwExpandedSurah, setKwExpandedSurah] = useState<number | null>(null)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
@@ -659,18 +668,41 @@ ${devInfoSection}`
     const q = kwSearch.trim()
     if (!q || kwLoading) return
     setKwLoading(true)
-    setKwResults([])
-    setKwTotal(0)
-    setKwExpanded(null)
+    setKwStats(null)
+    setKwExpandedSurah(null)
     try {
-      const r = await fetch(`/api/quran/search?q=${encodeURIComponent(q)}&size=7`)
+      const r = await fetch(`/api/quran/search?q=${encodeURIComponent(q)}`)
       const d = await r.json()
-      setKwResults(d.results || [])
-      setKwTotal(d.total || 0)
+      if (d.ok && Array.isArray(d.surahGroups)) {
+        setKwStats({ word: q, total: d.total || 0, surahGroups: d.surahGroups })
+      } else {
+        setKwStats({ word: q, total: 0, surahGroups: [] })
+      }
     } catch {
-      setKwResults([])
+      setKwStats({ word: kwSearch.trim(), total: 0, surahGroups: [] })
     } finally {
       setKwLoading(false)
+    }
+  }
+
+  // ── Highlight search word inside verse text ──────────────────────────────
+  const renderHighlightedText = (text: string, word: string) => {
+    if (!word || !text) return <>{text}</>
+    const stripped = word.replace(/[\u064B-\u065F\u0670]/g, '')
+    if (!stripped) return <>{text}</>
+    try {
+      const parts = text.split(new RegExp(`(${stripped})`, 'g'))
+      return (
+        <>
+          {parts.map((part, i) =>
+            part === stripped
+              ? <mark key={i} className="aq-kw-highlight">{part}</mark>
+              : <span key={i}>{part}</span>
+          )}
+        </>
+      )
+    } catch {
+      return <>{text}</>
     }
   }
 
@@ -1356,7 +1388,7 @@ ${devInfoSection}`
                   <div className="aq-kw-input-row">
                     <input
                       className="aq-kw-input"
-                      placeholder="ابحث بكلمة... مثال: الصبر، الرزق، الجنة"
+                      placeholder="ابحث بكلمة... مثال: الصبر، الرزق، الناس"
                       value={kwSearch}
                       onChange={e => setKwSearch(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') runKwSearch() }}
@@ -1371,41 +1403,64 @@ ${devInfoSection}`
                     </button>
                   </div>
 
-                  {kwTotal > 0 && (
-                    <div className="aq-kw-total">
-                      وُجد <strong>{kwTotal}</strong> نتيجة — يُعرض أفضل {kwResults.length}
+                  {/* ── Statistics banner ── */}
+                  {kwStats && kwStats.total > 0 && (
+                    <div className="aq-kw-stats-banner">
+                      <span className="aq-kw-stats-word">«{kwStats.word}»</span>
+                      {' '}ذُكرت{' '}
+                      <strong>{kwStats.total}</strong>
+                      {' '}مرة في{' '}
+                      <strong>{kwStats.surahGroups.length}</strong>
+                      {' '}سورة
                     </div>
                   )}
 
                   <div className="aq-kw-results">
-                    {kwResults.length === 0 && !kwLoading && kwSearch && (
-                      <div className="aq-kw-empty">لا نتائج للكلمة «{kwSearch}»</div>
+                    {/* No results */}
+                    {kwStats && kwStats.total === 0 && !kwLoading && (
+                      <div className="aq-kw-empty">لا نتائج للكلمة «{kwStats.word}»</div>
                     )}
-                    {kwResults.map((r) => (
-                      <div key={r.verse_key} className="aq-kw-card">
-                        <div className="aq-kw-card-header" onClick={() => setKwExpanded(kwExpanded === r.verse_key ? null : r.verse_key)}>
-                          <span className="aq-kw-verse-key">{r.verse_key}</span>
-                          <span className="aq-kw-expand-icon">{kwExpanded === r.verse_key ? '▲' : '▼'}</span>
+
+                    {/* Surah index list */}
+                    {kwStats && kwStats.surahGroups.map((group) => (
+                      <div key={group.surahNum} className="aq-kw-surah-block">
+                        {/* Surah header — clickable to expand verses */}
+                        <div
+                          className={`aq-kw-surah-header ${kwExpandedSurah === group.surahNum ? 'aq-kw-surah-header--open' : ''}`}
+                          onClick={() => setKwExpandedSurah(kwExpandedSurah === group.surahNum ? null : group.surahNum)}
+                        >
+                          <div className="aq-kw-surah-info">
+                            <span className="aq-kw-surah-num">{group.surahNum}</span>
+                            <span className="aq-kw-surah-name">{group.surahName}</span>
+                          </div>
+                          <div className="aq-kw-surah-meta">
+                            <span className="aq-kw-surah-count">{group.count} مرة</span>
+                            <span className="aq-kw-expand-icon">{kwExpandedSurah === group.surahNum ? '▲' : '▼'}</span>
+                          </div>
                         </div>
-                        <p className="aq-kw-verse-text" dir="rtl">{r.text}</p>
-                        {kwExpanded === r.verse_key && r.tafsir && (
-                          <div className="aq-kw-tafsir">
-                            <span className="aq-kw-tafsir-label">تفسير ابن كثير</span>
-                            <p>{r.tafsir}</p>
+
+                        {/* Verses — shown on expand */}
+                        {kwExpandedSurah === group.surahNum && (
+                          <div className="aq-kw-verses-list">
+                            {group.verses.map((v) => (
+                              <div key={v.verseKey} className="aq-kw-verse-item">
+                                <span className="aq-kw-verse-key">{v.verseKey}</span>
+                                <p className="aq-kw-verse-text" dir="rtl">
+                                  {renderHighlightedText(v.text, kwStats.word)}
+                                </p>
+                                <button
+                                  className="aq-kw-ask-btn"
+                                  onClick={() => {
+                                    setAiTab('chat')
+                                    setAiInput(`فسّر لي الآية ${v.verseKey}:\n${v.text}`)
+                                  }}
+                                >
+                                  <Bot size={12} /> اسأل المساعد عن هذه الآية
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         )}
-                        {kwExpanded === r.verse_key && !r.tafsir && (
-                          <div className="aq-kw-tafsir aq-kw-tafsir--empty">لا يتوفر تفسير مباشر لهذه الآية</div>
-                        )}
-                        <button
-                          className="aq-kw-ask-btn"
-                          onClick={() => {
-                            setAiTab('chat')
-                            setAiInput(`فسّر لي الآية ${r.verse_key}:\n${r.text}`)
-                          }}
-                        >
-                          <Bot size={12} /> اسأل المساعد عن هذه الآية
-                        </button>
                       </div>
                     ))}
                   </div>

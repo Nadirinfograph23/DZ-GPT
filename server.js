@@ -125,6 +125,13 @@ import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, 
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
 import { streamAIResponse } from './lib/ai-sdk-stream.js'
 
+// ── Modular route modules — Phase 1 refactoring ───────────────
+import { createQuranRouter } from './routes/quran.js'
+import { createAdminRouter } from './routes/admin.js'
+import { createExcelRouter } from './routes/excel.js'
+import { createHealthRouter } from './routes/health.js'
+import { createOwnerRouter } from './routes/owner.js'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
 const PORT = 5000
@@ -838,6 +845,30 @@ async function preloadEssentialData() {
 
 // ── Message Ratings ─────────────────────────────────────────────
 const MESSAGE_RATINGS = new Map() // msgId → { vote, query, ts }
+
+// ═══════════════════════════════════════════════════════════════
+// MODULAR ROUTE MOUNTS — Phase 1 Refactoring
+// These routers shadow the inline route definitions below.
+// Inline routes remain for backward compatibility during migration.
+// ═══════════════════════════════════════════════════════════════
+app.use('/api', createQuranRouter())
+app.use('/api', createAdminRouter({ getGroqKeys, callGroqWithFallback, PORT }))
+app.use('/api', createExcelRouter({ safeGenerateAI, aiLimiter }))
+app.use('/api', createHealthRouter({
+  MESSAGE_RATINGS,
+  PRELOAD_CACHE,
+  WEATHER_CACHE_V2,
+  CURRENCY_CACHE_V2,
+  SPORTS_CACHE_V2,
+  resilientFetch,
+  MAX_REQ_PER_SEC,
+  getGroqKeys,
+  systemHealthSnapshot,
+  getProviderStatus,
+  getRouterHealthSnapshot,
+}))
+app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
+// ═══════════════════════════════════════════════════════════════
 
 app.post('/api/dz-agent/ratings', (req, res) => {
   const { messageId, vote, query } = req.body || {}

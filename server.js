@@ -14781,6 +14781,246 @@ app.post('/api/dz-agent/github/smart-push', async (req, res) => {
   }
 })
 
+// ===== DZ AGENT BUILD — SSE pipeline: analyze → generate → push → pages → vercel =====
+// POST /api/dz-agent/github/agent-build
+app.post('/api/dz-agent/github/agent-build', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+
+  const { task, repoName, repoOwner = 'Nadirinfograph23' } = req.body
+  if (!task) { send({ type: 'error', message: 'task مطلوب' }); return res.end() }
+
+  const tok = resolveGitHubToken()
+  if (!tok) { send({ type: 'error', message: 'GITHUB_TOKEN غير مضبوط' }); return res.end() }
+
+  const hdr = ghHeaders(tok)
+  const safeRepo = sanitizeString(
+    repoName || task.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 40),
+    60
+  ).replace(/^-+|-+$/g, '') || 'dz-agent-project'
+
+  try {
+    // ── STEP 1: Analyze ──────────────────────────────────────────────────────
+    send({ type: 'step', step: 'analyze', status: 'running', detail: 'تحليل المهمة وتحديد نوع المشروع...' })
+    const taskLower = task.toLowerCase()
+    const projectType = taskLower.includes('react') || taskLower.includes('vite') ? 'React'
+      : taskLower.includes('bootstrap') ? 'Bootstrap'
+      : taskLower.includes('dashboard') || taskLower.includes('لوحة') ? 'Dashboard'
+      : 'HTML/CSS/JS'
+    send({ type: 'detail', step: 'analyze', text: `نوع المشروع: ${projectType}` })
+    send({ type: 'detail', step: 'analyze', text: `اسم المستودع: ${repoOwner}/${safeRepo}` })
+    send({ type: 'step', step: 'analyze', status: 'done' })
+
+    // ── STEP 2: Generate code with AI ────────────────────────────────────────
+    send({ type: 'step', step: 'generate', status: 'running', detail: 'توليد الكود بالذكاء الاصطناعي...' })
+
+    const aiPrompt = `أنت مهندس ويب خبير. المهمة: "${task}"
+
+أنشئ مشروعاً ويب كاملاً. أرجع JSON فقط بهذا الشكل بدون أي نص خارج الـ JSON:
+{
+  "files": [
+    { "path": "index.html", "content": "..." },
+    { "path": "style.css", "content": "..." },
+    { "path": "script.js", "content": "..." },
+    { "path": "README.md", "content": "..." }
+  ]
+}
+
+القواعد الصارمة:
+- HTML/CSS/JS نقي فقط (بدون Node.js أو build step)
+- واجهة جميلة وعصرية ومتجاوبة مع الجوال
+- كود كامل قابل للتشغيل مباشرة في المتصفح
+- لا placeholder ولا TODO
+- استخدم ألوان داكنة عصرية إذا لم يحدد المستخدم`
+
+    let projectFiles = []
+    try {
+      const aiKeys = getGroqKeys()
+      if (aiKeys.length > 0) {
+        const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${aiKeys[0]}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: [{ role: 'user', content: aiPrompt }],
+            max_tokens: 8000,
+            temperature: 0.7,
+          }),
+          signal: AbortSignal.timeout(50000),
+        })
+        const aiData = await aiRes.json()
+        const aiText = aiData.choices?.[0]?.message?.content || ''
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0])
+          projectFiles = Array.isArray(parsed.files) ? parsed.files : []
+        }
+      }
+    } catch (aiErr) {
+      send({ type: 'detail', step: 'generate', text: `⚠️ AI timeout — استخدام template افتراضي` })
+    }
+
+    // Fallback template
+    if (!projectFiles.length) {
+      projectFiles = [
+        { path: 'index.html', content: `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeRepo}</title><link rel="stylesheet" href="style.css"></head><body><header><h1>🤖 ${task}</h1><p>تم الإنشاء بواسطة DZ Agent</p></header><main id="app"></main><script src="script.js"></script></body></html>` },
+        { path: 'style.css', content: `*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}header{display:flex;flex-direction:column;gap:16px}h1{font-size:2.5rem;font-weight:800;background:linear-gradient(135deg,#58a6ff,#3fb950);-webkit-background-clip:text;-webkit-text-fill-color:transparent}p{color:#8b949e;font-size:1.1rem}` },
+        { path: 'script.js', content: `console.log('🚀 DZ Agent — ${safeRepo} — جاهز!')` },
+        { path: 'README.md', content: `# ${safeRepo}\n\n> ${task}\n\nتم الإنشاء تلقائياً بواسطة [DZ Agent](https://dz-gpt.vercel.app) 🤖\n\n## 🚀 عرض مباشر\nhttps://${repoOwner}.github.io/${safeRepo}` },
+      ]
+    }
+
+    send({ type: 'detail', step: 'generate', text: `✅ تم توليد ${projectFiles.length} ملفات` })
+    send({ type: 'step', step: 'generate', status: 'done' })
+
+    // ── STEP 3: Push to GitHub ────────────────────────────────────────────────
+    send({ type: 'step', step: 'push', status: 'running', detail: `إنشاء/فحص المستودع ${repoOwner}/${safeRepo}...` })
+
+    // Check if repo exists
+    const repoCheck = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}`, {
+      headers: hdr, signal: AbortSignal.timeout(8000),
+    })
+
+    if (!repoCheck.ok) {
+      send({ type: 'detail', step: 'push', text: `📦 إنشاء مستودع جديد: ${safeRepo}` })
+      const createRes = await fetch(`https://api.github.com/user/repos`, {
+        method: 'POST', headers: hdr, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          name: safeRepo,
+          description: task.slice(0, 100),
+          auto_init: true,
+          private: false,
+          homepage: `https://${repoOwner}.github.io/${safeRepo}`,
+        }),
+      })
+      if (!createRes.ok) {
+        const err = await createRes.json()
+        throw new Error(`فشل إنشاء المستودع: ${err.message}`)
+      }
+      await new Promise(r => setTimeout(r, 2500))
+    } else {
+      send({ type: 'detail', step: 'push', text: `✅ المستودع موجود: ${safeRepo}` })
+    }
+
+    // Push files one by one
+    const pushedFiles = []
+    let lastCommitSha = null
+    for (const file of projectFiles) {
+      if (!file.path || !file.content) continue
+      let fileSha = null
+      try {
+        const getRes = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${safeRepo}/contents/${encodeURIComponent(file.path)}`,
+          { headers: hdr, signal: AbortSignal.timeout(6000) }
+        )
+        if (getRes.ok) fileSha = (await getRes.json()).sha
+      } catch {}
+
+      const putRes = await fetch(
+        `https://api.github.com/repos/${repoOwner}/${safeRepo}/contents/${encodeURIComponent(file.path)}`,
+        {
+          method: 'PUT', headers: hdr, signal: AbortSignal.timeout(15000),
+          body: JSON.stringify({
+            message: `🤖 DZ Agent: add ${file.path}`,
+            content: Buffer.from(file.content).toString('base64'),
+            ...(fileSha ? { sha: fileSha } : {}),
+          }),
+        }
+      )
+      if (putRes.ok) {
+        const pd = await putRes.json()
+        pushedFiles.push(file.path)
+        lastCommitSha = pd.commit?.sha || lastCommitSha
+        send({ type: 'detail', step: 'push', text: `✅ ${file.path}` })
+      } else {
+        const e = await putRes.json().catch(() => ({}))
+        send({ type: 'detail', step: 'push', text: `❌ ${file.path}: ${e.message || putRes.status}` })
+      }
+    }
+
+    send({ type: 'step', step: 'push', status: 'done' })
+
+    // ── STEP 4: GitHub Pages ──────────────────────────────────────────────────
+    send({ type: 'step', step: 'deploy', status: 'running', detail: 'تفعيل GitHub Pages...' })
+
+    let pagesUrl = null
+    const pagesRes = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}/pages`, {
+      method: 'POST', headers: hdr, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ source: { branch: 'main', path: '/' } }),
+    })
+
+    if (pagesRes.ok || pagesRes.status === 409) {
+      pagesUrl = `https://${repoOwner}.github.io/${safeRepo}`
+      send({ type: 'detail', step: 'deploy', text: `✅ GitHub Pages: ${pagesUrl}` })
+    } else {
+      const pe = await pagesRes.json().catch(() => ({}))
+      send({ type: 'detail', step: 'deploy', text: `⚠️ Pages: ${pe.message || pagesRes.status} (قد يحتاج تفعيلاً يدوياً)` })
+    }
+
+    send({ type: 'step', step: 'deploy', status: 'done' })
+
+    // ── STEP 5: Vercel sync ───────────────────────────────────────────────────
+    send({ type: 'step', step: 'verify', status: 'running', detail: 'مزامنة DZ-GPT مع Vercel...' })
+
+    let vercelDeployId = null
+    const vercelToken = process.env.VERCEL_TOKEN
+    if (vercelToken) {
+      try {
+        const vr = await fetch('https://api.vercel.com/v13/deployments', {
+          method: 'POST', signal: AbortSignal.timeout(20000),
+          headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'dz-gpt',
+            project: SYNC_VERCEL_PROJECT_ID,
+            target: 'production',
+            gitSource: {
+              type: 'github',
+              repoId: '1191199822',
+              ref: PRODUCTION_BRANCH,
+            },
+          }),
+        })
+        const vd = await vr.json()
+        vercelDeployId = vd.id || null
+        send({ type: 'detail', step: 'verify', text: vr.ok ? `✅ Vercel deploy triggered: ${(vd.id || '').slice(0, 12)}` : `⚠️ Vercel: ${vd.error?.message || vr.status}` })
+      } catch (ve) {
+        send({ type: 'detail', step: 'verify', text: `⚠️ Vercel: ${ve.message}` })
+      }
+    } else {
+      send({ type: 'detail', step: 'verify', text: '⚠️ VERCEL_TOKEN غير مضبوط' })
+    }
+
+    send({ type: 'step', step: 'verify', status: 'done' })
+
+    // ── Final result ──────────────────────────────────────────────────────────
+    send({
+      type: 'result',
+      data: {
+        repoUrl: `https://github.com/${repoOwner}/${safeRepo}`,
+        pagesUrl,
+        vercelUrl: 'https://dz-gpt.vercel.app',
+        commitSha: lastCommitSha,
+        files: pushedFiles,
+        vercelDeployId,
+      },
+    })
+
+    console.log(`[AgentBuild] ✅ ${repoOwner}/${safeRepo} — ${pushedFiles.length} files — Pages: ${pagesUrl}`)
+
+  } catch (err) {
+    send({ type: 'error', message: err.message })
+    console.error('[AgentBuild]', err.message)
+  }
+
+  res.end()
+})
+
 // ===== GITHUB AGENT — وكيل GitHub التنفيذي الموحّد =====
 // POST /api/dz-agent/github/agent
 // يكشف النية تلقائياً ويُنفّذ: create_repo | pages_deploy | update_files | delete_file | list | status

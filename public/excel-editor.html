@@ -342,8 +342,9 @@ function evalCell(r, c, visited = new Set()) {
   const raw = (data[r] && data[r][c]) ? data[r][c].trim() : '';
   if (!raw) return '';
   if (!raw.startsWith('=')) {
-    const n = parseFloat(raw.replace(/,/g, '.'));
-    return isNaN(n) ? raw : n;
+    // Strict number parse: must be entirely numeric
+    const n = Number(raw.replace(/,/g, '.'));
+    return (!isNaN(n) && raw.replace(/,/g,'.').trim() !== '') ? n : raw;
   }
 
   const key = `${r},${c}`;
@@ -352,145 +353,463 @@ function evalCell(r, c, visited = new Set()) {
 
   const expr = raw.slice(1).trim().toUpperCase();
 
-  // Get numeric values from a range/ref
-  const getRange = (rangeStr) => {
-    if (rangeStr.includes(':')) {
-      return parseRange(rangeStr).map(({r:rr,c:cc}) => {
-        const v = evalCell(rr, cc, new Set(visited));
-        return typeof v === 'number' ? v : parseFloat(v);
-      }).filter(v => !isNaN(v));
-    } else {
-      const ref = parseRef(rangeStr);
-      if (!ref) return [];
-      const v = evalCell(ref.r, ref.c, new Set(visited));
-      const n = typeof v === 'number' ? v : parseFloat(v);
-      return isNaN(n) ? [] : [n];
+  // ── Collect numeric values from one or more ranges/refs separated by commas ──
+  const getMultiRange = (argStr) => {
+    const parts = splitArgs(argStr);
+    const nums = [];
+    for (const part of parts) {
+      const p = part.trim();
+      if (p.includes(':')) {
+        parseRange(p).forEach(({r:rr,c:cc}) => {
+          const v = evalCell(rr, cc, new Set(visited));
+          const n = toNum(v);
+          if (!isNaN(n)) nums.push(n);
+        });
+      } else {
+        const ref = parseRef(p);
+        if (ref) {
+          const v = evalCell(ref.r, ref.c, new Set(visited));
+          const n = toNum(v);
+          if (!isNaN(n)) nums.push(n);
+        } else {
+          const n = toNum(evalExpr(p, r, c, new Set(visited)));
+          if (!isNaN(n)) nums.push(n);
+        }
+      }
     }
+    return nums;
   };
 
-  // Built-in functions
-  const fnMatch = expr.match(/^([A-Z]+)\((.+)\)$/s);
-  if (fnMatch) {
-    const fn = fnMatch[1];
-    const arg = fnMatch[2].trim();
-
-    if (fn === 'SUM') {
-      return getRange(arg).reduce((a,b)=>a+b, 0);
+  // ── Collect ALL cell values (including non-numeric) for COUNTA ──
+  const getMultiAll = (argStr) => {
+    const parts = splitArgs(argStr);
+    const vals2 = [];
+    for (const part of parts) {
+      const p = part.trim();
+      if (p.includes(':')) {
+        parseRange(p).forEach(({r:rr,c:cc}) => {
+          const v = evalCell(rr, cc, new Set(visited));
+          if (v !== '' && v !== null && v !== undefined) vals2.push(v);
+        });
+      } else {
+        const ref = parseRef(p);
+        if (ref) {
+          const v = evalCell(ref.r, ref.c, new Set(visited));
+          if (v !== '' && v !== null && v !== undefined) vals2.push(v);
+        }
+      }
     }
-    if (fn === 'AVERAGE' || fn === 'AVG') {
-      const ns = getRange(arg);
-      return ns.length ? ns.reduce((a,b)=>a+b,0)/ns.length : 0;
+    return vals2;
+  };
+
+  // ── Built-in functions ──
+  const fnMatch = expr.match(/^([A-Z][A-Z0-9]*)\((.+)\)$/s);
+  if (fnMatch) {
+    const fn  = fnMatch[1];
+    const arg = fnMatch[2].trim();
+    const ps  = splitArgs(arg);   // pre-split args
+
+    // Aggregation
+    if (fn === 'SUM') {
+      return getMultiRange(arg).reduce((a,b)=>a+b, 0);
+    }
+    if (fn === 'AVERAGE' || fn === 'AVG' || fn === 'MEAN') {
+      const ns = getMultiRange(arg);
+      return ns.length ? ns.reduce((a,b)=>a+b,0)/ns.length : '#DIV/0!';
     }
     if (fn === 'COUNT') {
-      return getRange(arg).filter(v=>!isNaN(v)).length;
+      return getMultiRange(arg).length;
+    }
+    if (fn === 'COUNTA') {
+      return getMultiAll(arg).length;
     }
     if (fn === 'MAX') {
-      const ns = getRange(arg); return ns.length ? Math.max(...ns) : 0;
+      const ns = getMultiRange(arg); return ns.length ? Math.max(...ns) : 0;
     }
     if (fn === 'MIN') {
-      const ns = getRange(arg); return ns.length ? Math.min(...ns) : 0;
+      const ns = getMultiRange(arg); return ns.length ? Math.min(...ns) : 0;
     }
+    if (fn === 'PRODUCT') {
+      return getMultiRange(arg).reduce((a,b)=>a*b, 1);
+    }
+
+    // Math
     if (fn === 'ABS') {
-      const v = getRange(arg)[0]; return isNaN(v) ? 0 : Math.abs(v);
+      return Math.abs(toNum(evalExpr(arg, r, c, new Set(visited))));
+    }
+    if (fn === 'SQRT') {
+      const v = toNum(evalExpr(arg, r, c, new Set(visited)));
+      return v < 0 ? '#NUM!' : Math.sqrt(v);
+    }
+    if (fn === 'POWER' || fn === 'POW') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const e2 = toNum(evalExpr(ps[1]?.trim() || '2', r, c, new Set(visited)));
+      return Math.pow(v, e2);
+    }
+    if (fn === 'MOD') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const d = toNum(evalExpr(ps[1]?.trim() || '1', r, c, new Set(visited)));
+      return d === 0 ? '#DIV/0!' : v % d;
+    }
+    if (fn === 'INT' || fn === 'TRUNC') {
+      return Math.trunc(toNum(evalExpr(arg, r, c, new Set(visited))));
+    }
+    if (fn === 'FLOOR') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const s = toNum(evalExpr(ps[1]?.trim() || '1', r, c, new Set(visited)));
+      return Math.floor(v / s) * s;
+    }
+    if (fn === 'CEILING' || fn === 'CEIL') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const s = toNum(evalExpr(ps[1]?.trim() || '1', r, c, new Set(visited)));
+      return Math.ceil(v / s) * s;
     }
     if (fn === 'ROUND') {
-      const parts = arg.split(',');
-      const v = getRange(parts[0].trim())[0] || 0;
-      const d = parseInt(parts[1] || '0');
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const d = parseInt(ps[1]?.trim() || '0');
       return parseFloat(v.toFixed(d));
     }
-    if (fn === 'IF') {
-      const parts = splitArgs(arg);
-      if (parts.length < 3) return '#ARG!';
-      const cond = evalExpr(parts[0].trim(), r, c, visited);
-      return cond ? evalExpr(parts[1].trim(), r, c, visited)
-                  : evalExpr(parts[2].trim(), r, c, visited);
+    if (fn === 'ROUNDUP') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const d = parseInt(ps[1]?.trim() || '0');
+      const f = Math.pow(10, d);
+      return Math.ceil(v * f) / f;
     }
+    if (fn === 'ROUNDDOWN') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const d = parseInt(ps[1]?.trim() || '0');
+      const f = Math.pow(10, d);
+      return Math.floor(v * f) / f;
+    }
+    if (fn === 'LN')   return Math.log(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'LOG10') return Math.log10(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'LOG') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const base = ps[1] ? toNum(evalExpr(ps[1].trim(), r, c, new Set(visited))) : 10;
+      return Math.log(v) / Math.log(base);
+    }
+    if (fn === 'EXP')   return Math.exp(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'PI')    return Math.PI;
+    if (fn === 'SIN')   return Math.sin(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'COS')   return Math.cos(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'TAN')   return Math.tan(toNum(evalExpr(arg, r, c, new Set(visited))));
+    if (fn === 'RAND')  return Math.random();
+    if (fn === 'RANDBETWEEN') {
+      const lo = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const hi = toNum(evalExpr(ps[1]?.trim() || '100', r, c, new Set(visited)));
+      return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    }
+
+    // Logic
+    if (fn === 'IF') {
+      if (ps.length < 2) return '#ARG!';
+      const cond = evalExpr(ps[0].trim(), r, c, new Set(visited));
+      const truthy = !!(typeof cond === 'number' ? cond !== 0 : cond);
+      if (ps.length === 2) return truthy ? evalExpr(ps[1].trim(), r, c, new Set(visited)) : '';
+      return truthy ? evalExpr(ps[1].trim(), r, c, new Set(visited))
+                    : evalExpr(ps[2].trim(), r, c, new Set(visited));
+    }
+    if (fn === 'IFERROR') {
+      try {
+        const v = evalExpr(ps[0].trim(), r, c, new Set(visited));
+        if (typeof v === 'string' && v.startsWith('#')) throw new Error(v);
+        return v;
+      } catch { return ps[1] ? evalExpr(ps[1].trim(), r, c, new Set(visited)) : ''; }
+    }
+    if (fn === 'AND') {
+      return ps.every(a => !!evalExpr(a.trim(), r, c, new Set(visited)));
+    }
+    if (fn === 'OR') {
+      return ps.some(a => !!evalExpr(a.trim(), r, c, new Set(visited)));
+    }
+    if (fn === 'NOT') {
+      return !evalExpr(arg, r, c, new Set(visited));
+    }
+    if (fn === 'ISNUMBER') {
+      const v = evalExpr(arg, r, c, new Set(visited));
+      return typeof v === 'number' && !isNaN(v);
+    }
+    if (fn === 'ISTEXT') {
+      const v = evalExpr(arg, r, c, new Set(visited));
+      return typeof v === 'string';
+    }
+    if (fn === 'ISBLANK') {
+      const v = evalExpr(arg, r, c, new Set(visited));
+      return v === '' || v === null || v === undefined;
+    }
+
+    // Text
     if (fn === 'CONCAT' || fn === 'CONCATENATE') {
-      return splitArgs(arg).map(a => {
-        const v = evalExpr(a.trim(), r, c, visited);
+      return ps.map(a => {
+        const v = evalExpr(a.trim(), r, c, new Set(visited));
         return v !== null && v !== undefined ? String(v) : '';
       }).join('');
     }
     if (fn === 'LEFT') {
-      const ps = splitArgs(arg);
-      const s = String(evalExpr(ps[0].trim(), r, c, visited) || '');
-      return s.slice(0, parseInt(ps[1] || '1'));
+      const s = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      return s.slice(0, parseInt(ps[1]?.trim() || '1'));
     }
     if (fn === 'RIGHT') {
-      const ps = splitArgs(arg);
-      const s = String(evalExpr(ps[0].trim(), r, c, visited) || '');
-      return s.slice(-parseInt(ps[1] || '1'));
+      const s = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      const n2 = parseInt(ps[1]?.trim() || '1');
+      return s.slice(-n2);
+    }
+    if (fn === 'MID') {
+      const s = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      const start = parseInt(ps[1]?.trim() || '1') - 1;
+      const len2 = parseInt(ps[2]?.trim() || '1');
+      return s.slice(start, start + len2);
     }
     if (fn === 'LEN') {
-      return String(evalExpr(arg, r, c, visited) || '').length;
+      return String(evalExpr(arg, r, c, new Set(visited)) ?? '').length;
     }
-    if (fn === 'UPPER') return String(evalExpr(arg,r,c,visited)||'').toUpperCase();
-    if (fn === 'LOWER') return String(evalExpr(arg,r,c,visited)||'').toLowerCase();
+    if (fn === 'UPPER')  return String(evalExpr(arg,r,c,new Set(visited))??'').toUpperCase();
+    if (fn === 'LOWER')  return String(evalExpr(arg,r,c,new Set(visited))??'').toLowerCase();
+    if (fn === 'TRIM')   return String(evalExpr(arg,r,c,new Set(visited))??'').trim();
+    if (fn === 'TEXT') {
+      const v = toNum(evalExpr(ps[0].trim(), r, c, new Set(visited)));
+      const fmt2 = (ps[1]?.trim() || '').replace(/^"|"$/g, '');
+      if (fmt2.includes('%')) return (v * 100).toFixed(fmt2.replace(/[^0]/g,'').length) + '%';
+      const dec = (fmt2.match(/\.([0#]+)/) || [,''])[1].length;
+      return v.toFixed(dec);
+    }
+    if (fn === 'VALUE') {
+      const v = toNum(evalExpr(arg, r, c, new Set(visited)));
+      return isNaN(v) ? '#VALUE!' : v;
+    }
+    if (fn === 'FIND' || fn === 'SEARCH') {
+      const needle = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      const haystack = String(evalExpr(ps[1].trim(), r, c, new Set(visited)) ?? '');
+      const idx2 = fn === 'SEARCH'
+        ? haystack.toLowerCase().indexOf(needle.toLowerCase())
+        : haystack.indexOf(needle);
+      return idx2 === -1 ? '#VALUE!' : idx2 + 1;
+    }
+    if (fn === 'SUBSTITUTE') {
+      const s = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      const old2 = String(evalExpr(ps[1].trim(), r, c, new Set(visited)) ?? '');
+      const newStr = String(evalExpr(ps[2].trim(), r, c, new Set(visited)) ?? '');
+      return s.split(old2).join(newStr);
+    }
+    if (fn === 'REPT') {
+      const s = String(evalExpr(ps[0].trim(), r, c, new Set(visited)) ?? '');
+      const times = parseInt(evalExpr(ps[1]?.trim() || '1', r, c, new Set(visited)));
+      return s.repeat(Math.max(0, times));
+    }
+
+    // Date
     if (fn === 'TODAY') return new Date().toLocaleDateString('fr-DZ');
     if (fn === 'NOW')   return new Date().toLocaleString('fr-DZ');
-    if (fn === 'YEAR')  { const d=new Date(String(evalExpr(arg,r,c,visited)||'')); return isNaN(d)?'#ERR!':d.getFullYear(); }
+    if (fn === 'YEAR')  {
+      const d = new Date(String(evalExpr(arg,r,c,new Set(visited))??''));
+      return isNaN(d.getTime()) ? '#VALUE!' : d.getFullYear();
+    }
+    if (fn === 'MONTH') {
+      const d = new Date(String(evalExpr(arg,r,c,new Set(visited))??''));
+      return isNaN(d.getTime()) ? '#VALUE!' : d.getMonth() + 1;
+    }
+    if (fn === 'DAY') {
+      const d = new Date(String(evalExpr(arg,r,c,new Set(visited))??''));
+      return isNaN(d.getTime()) ? '#VALUE!' : d.getDate();
+    }
+
+    // SUMIF
+    if (fn === 'SUMIF') {
+      if (ps.length < 3) return '#ARG!';
+      const rangeCells = parseRange(ps[0].trim());
+      const criteriaRaw = evalExpr(ps[1].trim(), r, c, new Set(visited));
+      const sumRange = ps[2] ? parseRange(ps[2].trim()) : rangeCells;
+      let total = 0;
+      rangeCells.forEach(({r:rr,c:cc}, i) => {
+        const cv = evalCell(rr, cc, new Set(visited));
+        if (matchesCriteria(cv, criteriaRaw)) {
+          const sr = sumRange[i] || {r:rr,c:cc};
+          const sv = evalCell(sr.r, sr.c, new Set(visited));
+          total += toNum(sv) || 0;
+        }
+      });
+      return total;
+    }
+    if (fn === 'COUNTIF') {
+      const rangeCells = parseRange(ps[0].trim());
+      const criteriaRaw = evalExpr(ps[1].trim(), r, c, new Set(visited));
+      return rangeCells.filter(({r:rr,c:cc}) => {
+        return matchesCriteria(evalCell(rr, cc, new Set(visited)), criteriaRaw);
+      }).length;
+    }
+
+    // VLOOKUP
+    if (fn === 'VLOOKUP') {
+      if (ps.length < 3) return '#ARG!';
+      const lookup = evalExpr(ps[0].trim(), r, c, new Set(visited));
+      const tableRange = parseRange(ps[1].trim());
+      const colIdx = toNum(evalExpr(ps[2].trim(), r, c, new Set(visited))) - 1;
+      const exact = ps[3] ? evalExpr(ps[3].trim(), r, c, new Set(visited)) === false : true;
+      const rows2 = {};
+      tableRange.forEach(({r:rr,c:cc}) => { if (!rows2[rr]) rows2[rr]=[]; rows2[rr][cc]=evalCell(rr,cc,new Set(visited)); });
+      const minCol = Math.min(...tableRange.map(x=>x.c));
+      for (const rr of Object.keys(rows2).map(Number).sort((a,b)=>a-b)) {
+        const key2 = rows2[rr][minCol];
+        if (exact ? key2 == lookup : toNum(key2) <= toNum(lookup)) {
+          const targetCol = minCol + colIdx;
+          return rows2[rr][targetCol] ?? '#N/A';
+        }
+      }
+      return '#N/A';
+    }
   }
 
-  // Expression with operators
+  // Expression with operators (handles arithmetic + cell refs + comparisons)
   return evalExpr(expr, r, c, visited);
 }
 
-function splitArgs(s) {
-  const parts=[], depth={p:0,b:0};
-  let cur='';
-  for (const ch of s) {
-    if (ch==='('){ depth.p++; cur+=ch; }
-    else if (ch===')'){ depth.p--; cur+=ch; }
-    else if (ch===',' && depth.p===0){ parts.push(cur); cur=''; }
-    else cur+=ch;
+// ── Helper: convert value to number ──
+function toNum(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  const n = Number(String(v ?? '').replace(/,/g, '.').replace(/\s/g, ''));
+  return isNaN(n) ? NaN : n;
+}
+
+// ── Helper: SUMIF/COUNTIF criteria matching ──
+function matchesCriteria(val, criteria) {
+  if (typeof criteria === 'string') {
+    const opM = criteria.match(/^(<=|>=|<>|<|>|=)\s*(.+)$/);
+    if (opM) {
+      const [, op, right] = opM;
+      const l = toNum(val), rr = toNum(right);
+      if (op === '<=') return l <= rr;
+      if (op === '>=') return l >= rr;
+      if (op === '<>') return String(val) !== right;
+      if (op === '<')  return l < rr;
+      if (op === '>')  return l > rr;
+      if (op === '=')  return String(val) === right;
+    }
+    return String(val).toLowerCase() === String(criteria).toLowerCase();
   }
-  if (cur) parts.push(cur);
+  return val == criteria;
+}
+
+function splitArgs(s) {
+  const parts = [];
+  let cur = '', depth = 0;
+  for (const ch of s) {
+    if (ch === '(') { depth++; cur += ch; }
+    else if (ch === ')') { depth--; cur += ch; }
+    else if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  if (cur !== '' || parts.length > 0) parts.push(cur);
   return parts;
 }
 
+// ── Find operator index respecting parentheses ──
+function findOpIdx(e, op) {
+  let depth = 0;
+  // Search from right for + and - (lowest precedence), left for * / ^ (higher)
+  const rightAssoc = (op === '+' || op === '-' || op === '&');
+  const start = rightAssoc ? e.length - op.length : 0;
+  const step  = rightAssoc ? -1 : 1;
+  let i = start;
+  while (rightAssoc ? i >= 0 : i <= e.length - op.length) {
+    const ch = e[i];
+    if (ch === ')') depth++;
+    else if (ch === '(') depth--;
+    if (depth === 0 && e.slice(i, i + op.length) === op) {
+      // Don't pick up '-' that's really a unary minus (nothing meaningful before it)
+      if (op === '-' && i === 0) { i += step; continue; }
+      if (op === '-' && i > 0 && /[+\-*/^(]/.test(e[i-1])) { i += step; continue; }
+      return i;
+    }
+    i += step;
+  }
+  return -1;
+}
+
 function evalExpr(expr, r, c, visited) {
-  const e = expr.trim();
+  let e = expr.trim();
+  if (!e) return '';
+
   // String literal
-  if (e.startsWith('"') && e.endsWith('"')) return e.slice(1,-1);
-  // Number
-  const n = parseFloat(e);
-  if (!isNaN(n)) return n;
-  // Cell reference
+  if (e.startsWith('"') && e.endsWith('"') && e.length >= 2) return e.slice(1, -1);
+
+  // Pure number — strict: entire string is a valid finite number
+  const asNum = Number(e.replace(/,/g, '.'));
+  if (e !== '' && !isNaN(asNum) && isFinite(asNum) && !/[a-zA-Z(]/.test(e)) return asNum;
+
+  // Single cell reference
   const ref = parseRef(e);
   if (ref) return evalCell(ref.r, ref.c, new Set(visited));
-  // Boolean
-  if (e === 'TRUE') return true;
+
+  // Boolean literals
+  if (e === 'TRUE')  return true;
   if (e === 'FALSE') return false;
-  // Comparison operators
-  for (const op of ['<=','>=','<>','<','>','=']) {
-    const idx = e.indexOf(op);
-    if (idx > 0) {
-      const left  = evalExpr(e.slice(0,idx).trim(), r, c, visited);
-      const right = evalExpr(e.slice(idx+op.length).trim(), r, c, visited);
-      if (op==='<=') return left<=right;
-      if (op==='>=') return left>=right;
-      if (op==='<>') return left!=right;
-      if (op==='<')  return left<right;
-      if (op==='>') return left>right;
-      if (op==='=')  return left==right;
+
+  // Parenthesised expression: (expr)
+  if (e.startsWith('(') && e.endsWith(')')) {
+    // Verify the parens are balanced as a group
+    let d = 0; let balanced = false;
+    for (let i = 0; i < e.length; i++) {
+      if (e[i] === '(') d++;
+      else if (e[i] === ')') { d--; if (d === 0 && i === e.length - 1) balanced = true; }
     }
+    if (balanced) return evalExpr(e.slice(1, -1), r, c, visited);
   }
-  // Nested function
-  const fm = e.match(/^([A-Z]+)\((.+)\)$/s);
+
+  // Nested function call
+  const fm = e.match(/^([A-Z][A-Z0-9]*)\((.+)\)$/s);
   if (fm) {
-    // Re-evaluate as a formula
     const tmp = data[r][c];
     data[r][c] = '=' + e;
-    const result = evalCell(r, c, visited);
+    const result = evalCell(r, c, new Set(visited));
     data[r][c] = tmp;
     return result;
   }
-  // Arithmetic (simple left-to-right)
+
+  // String concatenation with &
+  const ampIdx = findOpIdx(e, '&');
+  if (ampIdx > 0) {
+    const left  = evalExpr(e.slice(0, ampIdx).trim(), r, c, visited);
+    const right = evalExpr(e.slice(ampIdx + 1).trim(), r, c, visited);
+    return String(left ?? '') + String(right ?? '');
+  }
+
+  // Comparison operators (multi-char first)
+  for (const op of ['<=', '>=', '<>', '<>', '<', '>', '=']) {
+    const idx = findOpIdx(e, op);
+    if (idx > 0) {
+      const left  = evalExpr(e.slice(0, idx).trim(), r, c, visited);
+      const right = evalExpr(e.slice(idx + op.length).trim(), r, c, visited);
+      const l = toNum(left), ri = toNum(right);
+      if (op === '<=') return isNaN(l)||isNaN(ri) ? String(left)<=String(right) : l<=ri;
+      if (op === '>=') return isNaN(l)||isNaN(ri) ? String(left)>=String(right) : l>=ri;
+      if (op === '<>') return left != right;
+      if (op === '<')  return isNaN(l)||isNaN(ri) ? String(left)<String(right)  : l<ri;
+      if (op === '>')  return isNaN(l)||isNaN(ri) ? String(left)>String(right)  : l>ri;
+      if (op === '=')  return left == right;
+    }
+  }
+
+  // Arithmetic: resolve cell refs, then evaluate safely
+  // Replace cell refs (like A1, B12, AA3) with their computed numeric values
   try {
-    const safe = e.replace(/[^0-9+\-*/.() ]/g,'');
+    // First replace all cell references with their evaluated numeric values
+    const resolved = e.replace(/\b([A-Z]{1,3}\d{1,7})\b/g, (match) => {
+      const cr = parseRef(match);
+      if (!cr) return '0';
+      const v = evalCell(cr.r, cr.c, new Set(visited));
+      const n = toNum(v);
+      return isNaN(n) ? '0' : String(n);
+    });
+    // Allow only safe arithmetic characters
+    const safe = resolved.replace(/[^0-9+\-*/.() %^Ee]/g, '');
+    if (!safe.trim()) return '#ERR!';
+    // Handle ^ as power operator
+    const withPow = safe.replace(/(\d+(?:\.\d+)?(?:[Ee][+\-]?\d+)?)\^(\d+(?:\.\d+)?)/g,
+      (_, a2, b2) => `Math.pow(${a2},${b2})`);
     // eslint-disable-next-line no-new-func
-    return Function('"use strict";return(' + safe + ')')();
+    const result = Function('"use strict";return(' + withPow + ')')();
+    return typeof result === 'number' && isFinite(result) ? result : '#ERR!';
   } catch { return '#ERR!'; }
 }
 

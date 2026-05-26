@@ -13,64 +13,82 @@ import { sanitizeString } from '../lib/server-utils.js'
 export function createQuranRouter() {
   const router = Router()
 
-  // ── Quran keyword search with tafsir injection (RAG) ─────────
+  // ── Quran full-text cache (loaded once from CDN) ─────────────────────────
+  let _quranCache = null
+  let _quranCacheLoading = false
+  let _quranCacheCallbacks = []
+
+  async function getQuranData() {
+    if (_quranCache) return _quranCache
+    if (_quranCacheLoading) {
+      return new Promise((resolve, reject) => _quranCacheCallbacks.push({ resolve, reject }))
+    }
+    _quranCacheLoading = true
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 20000)
+      const r = await fetch('https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json', { signal: ctrl.signal })
+      clearTimeout(t)
+      if (!r.ok) throw new Error('CDN error ' + r.status)
+      _quranCache = await r.json()
+      _quranCacheCallbacks.forEach(cb => cb.resolve(_quranCache))
+      _quranCacheCallbacks = []
+      return _quranCache
+    } catch (e) {
+      _quranCacheLoading = false
+      _quranCacheCallbacks.forEach(cb => cb.reject(e))
+      _quranCacheCallbacks = []
+      throw e
+    }
+  }
+
+  // Normalize Arabic text for flexible search:
+  // 1. Remove all tashkeel (diacritics)
+  // 2. Normalize alef variants (أإآٱ) → ا
+  // 3. Normalize teh marbuta ة → ه
+  // 4. Remove tatweel ـ
+  function normalizeArabic(s) {
+    return s
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7\u06E8\u06EA-\u06ED]/g, '')
+      .replace(/\u0640/g, '')
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627')
+      .replace(/\u0629/g, '\u0647')
+  }
+
+  // ── Quran keyword search — local full-text with surah statistics ──────────
   router.get('/quran/search', async (req, res) => {
     const q = sanitizeString(String(req.query.q || '').trim(), 200)
     if (!q || q.length < 2) {
       return res.status(400).json({ ok: false, error: 'كلمة البحث مطلوبة (حرفان على الأقل)' })
     }
 
-    const CDN = 'https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir'
-    const size = Math.min(parseInt(req.query.size, 10) || 5, 10)
-
     try {
-      const searchCtrl = new AbortController()
-      const searchTimer = setTimeout(() => searchCtrl.abort(), 8000)
-      const searchRes = await fetch(
-        `https://api.quran.com/api/v4/search?q=${encodeURIComponent(q)}&size=${size}&language=ar`,
-        { signal: searchCtrl.signal }
-      )
-      clearTimeout(searchTimer)
+      const quran = await getQuranData()
+      const needle = normalizeArabic(q)
+      const surahMap = new Map()
+      let total = 0
 
-      if (!searchRes.ok) {
-        return res.json({ ok: true, query: q, results: [], note: 'تعذر الوصول إلى قاعدة بيانات القرآن الكريم' })
+      for (const surah of quran) {
+        for (const verse of surah.verses) {
+          const strippedText = normalizeArabic(verse.text)
+          if (!strippedText.includes(needle)) continue
+          total++
+          const sNum = surah.id
+          const sName = surah.name || `سورة ${sNum}`
+          const verseKey = `${sNum}:${verse.id}`
+          if (!surahMap.has(sNum)) {
+            surahMap.set(sNum, { surahNum: sNum, surahName: sName, count: 0, verses: [] })
+          }
+          const entry = surahMap.get(sNum)
+          entry.count++
+          entry.verses.push({ verseKey, text: verse.text })
+        }
       }
 
-      const searchData = await searchRes.json()
-      const rawResults = searchData.search?.results || []
-      if (!rawResults.length) return res.json({ ok: true, query: q, results: [], total: 0 })
-
-      const withTafsir = await Promise.allSettled(
-        rawResults.slice(0, 3).map(async (r) => {
-          const [surah, ayah] = (r.verse_key || '').split(':').map(Number)
-          let tafsir = ''
-          if (surah && ayah) {
-            try {
-              const ctrl = new AbortController()
-              const t = setTimeout(() => ctrl.abort(), 5000)
-              const tf = await fetch(`${CDN}/ar-tafsir-ibn-kathir/${surah}/${ayah}.json`, { signal: ctrl.signal })
-              clearTimeout(t)
-              if (tf.ok) {
-                const td = await tf.json()
-                tafsir = (td.text || '').slice(0, 600)
-              }
-            } catch {}
-          }
-          return { verse_key: r.verse_key, surah, ayah, text: r.text || '', tafsir: tafsir || null }
-        })
-      )
-
-      const results = [
-        ...withTafsir.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean),
-        ...rawResults.slice(3).map(r => {
-          const [surah, ayah] = (r.verse_key || '').split(':').map(Number)
-          return { verse_key: r.verse_key, surah, ayah, text: r.text || '', tafsir: null }
-        }),
-      ]
-
-      res.json({ ok: true, query: q, total: searchData.search?.total_results || results.length, results })
+      const surahGroups = Array.from(surahMap.values()).sort((a, b) => a.surahNum - b.surahNum)
+      res.json({ ok: true, query: q, total, surahGroups })
     } catch (e) {
-      res.json({ ok: true, query: q, results: [], note: 'خطأ في البحث: ' + e.message })
+      res.json({ ok: true, query: q, total: 0, surahGroups: [], note: 'خطأ في البحث: ' + (e.message || 'unknown') })
     }
   })
 

@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn } from 'lucide-react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn, Key, Eye, EyeOff, Save, Zap } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -34,8 +34,21 @@ const LABELS: Record<Lang, { newChat: string; noChats: string; title: string }> 
   fr: { newChat: 'Nouvelle conversation', noChats: 'Aucune conversation', title: 'DZ Agent' },
 }
 
+const MAX_KEYS = 6
+
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+}
+
+function loadStoredKeys(): string[] {
+  try {
+    const saved = localStorage.getItem('dz-groq-keys')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+  return Array(MAX_KEYS).fill('')
 }
 
 export default function DZAgent() {
@@ -61,11 +74,43 @@ export default function DZAgent() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [githubStatus, setGithubStatus] = useState<{ ok: boolean; login?: string; avatar?: string } | null>(null)
 
+  // ===== GROQ KEYS STATE =====
+  const [groqKeys, setGroqKeys] = useState<string[]>(loadStoredKeys)
+  const [showKeys, setShowKeys] = useState<boolean[]>(Array(MAX_KEYS).fill(false))
+  const [keysExpanded, setKeysExpanded] = useState(false)
+  const [keysSaving, setKeysSaving] = useState(false)
+  const [keysSaved, setKeysSaved] = useState(false)
+  const [keysStatus, setKeysStatus] = useState<{ total: number; env: number; runtime: number } | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     fetch('/api/dz-agent/github/agent-status')
       .then(r => r.json())
       .then(d => setGithubStatus(d))
       .catch(() => setGithubStatus({ ok: false }))
+  }, [])
+
+  // Load key status from server on mount
+  useEffect(() => {
+    fetch('/api/admin/groq-keys')
+      .then(r => r.json())
+      .then(d => setKeysStatus({ total: d.total, env: d.env, runtime: d.runtime }))
+      .catch(() => {})
+  }, [])
+
+  // Sync stored keys to server on mount
+  useEffect(() => {
+    const stored = loadStoredKeys().filter(k => k.trim().length > 0)
+    if (stored.length > 0) {
+      fetch('/api/admin/groq-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: stored }),
+      })
+        .then(r => r.json())
+        .then(d => setKeysStatus(prev => prev ? { ...prev, runtime: d.added, total: d.total } : { total: d.total, env: 0, runtime: d.added }))
+        .catch(() => {})
+    }
   }, [])
 
   useEffect(() => {
@@ -103,7 +148,47 @@ export default function DZAgent() {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c))
   }, [])
 
+  const handleKeyChange = useCallback((idx: number, val: string) => {
+    setGroqKeys(prev => {
+      const next = [...prev]
+      next[idx] = val
+      return next
+    })
+    setKeysSaved(false)
+  }, [])
+
+  const toggleShowKey = useCallback((idx: number) => {
+    setShowKeys(prev => {
+      const next = [...prev]
+      next[idx] = !next[idx]
+      return next
+    })
+  }, [])
+
+  const saveGroqKeys = useCallback(async () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    setKeysSaving(true)
+    const valid = groqKeys.filter(k => k.trim().length > 0)
+    try {
+      localStorage.setItem('dz-groq-keys', JSON.stringify(groqKeys))
+      const res = await fetch('/api/admin/groq-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: valid }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setKeysStatus(prev => prev ? { ...prev, runtime: data.added, total: data.total } : { total: data.total, env: 0, runtime: data.added })
+        setKeysSaved(true)
+        saveTimerRef.current = setTimeout(() => setKeysSaved(false), 3000)
+      }
+    } catch {}
+    setKeysSaving(false)
+  }, [groqKeys])
+
   const labels = LABELS[language]
+  const activeKeyCount = groqKeys.filter(k => k.trim().length > 0).length
+  const totalKeys = keysStatus?.total ?? 0
 
   return (
     <div className="dza-layout" data-theme={theme}>
@@ -155,6 +240,106 @@ export default function DZAgent() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* ===== GROQ KEYS PANEL ===== */}
+        <div className="dza-groq-section">
+          <button
+            className="dza-groq-header"
+            onClick={() => setKeysExpanded(e => !e)}
+          >
+            <div className="dza-groq-header-left">
+              <Key size={13} className="dza-groq-icon" />
+              <span className="dza-groq-title">مفاتيح Groq</span>
+              {totalKeys > 0 && (
+                <span className="dza-groq-count-badge">
+                  <Zap size={9} />
+                  {totalKeys}
+                </span>
+              )}
+            </div>
+            <span className={`dza-groq-chevron ${keysExpanded ? 'dza-groq-chevron--open' : ''}`}>▾</span>
+          </button>
+
+          {keysExpanded && (
+            <div className="dza-groq-body">
+              <p className="dza-groq-hint">
+                أضف مفاتيح Groq مجانية من{' '}
+                <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">
+                  console.groq.com
+                </a>{' '}
+                للتدوير التلقائي وتجنب حدود الطلبات.
+              </p>
+
+              <div className="dza-groq-fields">
+                {Array.from({ length: MAX_KEYS }, (_, i) => (
+                  <div key={i} className="dza-groq-field-row">
+                    <span className="dza-groq-field-label">
+                      {groqKeys[i]?.trim() ? (
+                        <span className="dza-groq-dot dza-groq-dot--active" title="مفتاح نشط" />
+                      ) : (
+                        <span className="dza-groq-dot" title="فارغ" />
+                      )}
+                      K{i + 1}
+                    </span>
+                    <div className="dza-groq-input-wrap">
+                      <input
+                        type={showKeys[i] ? 'text' : 'password'}
+                        className="dza-groq-input"
+                        value={groqKeys[i] || ''}
+                        onChange={e => handleKeyChange(i, e.target.value)}
+                        placeholder={`gsk_...`}
+                        spellCheck={false}
+                        autoComplete="off"
+                        dir="ltr"
+                      />
+                      <button
+                        className="dza-groq-eye-btn"
+                        onClick={() => toggleShowKey(i)}
+                        title={showKeys[i] ? 'إخفاء' : 'إظهار'}
+                        type="button"
+                      >
+                        {showKeys[i] ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="dza-groq-footer">
+                {keysStatus && (
+                  <span className="dza-groq-status">
+                    🔑 {keysStatus.env} بيئة · ✨ {keysStatus.runtime} واجهة · المجموع: <strong>{keysStatus.total}</strong>
+                  </span>
+                )}
+                <button
+                  className={`dza-groq-save-btn ${keysSaved ? 'dza-groq-save-btn--saved' : ''}`}
+                  onClick={saveGroqKeys}
+                  disabled={keysSaving}
+                >
+                  {keysSaving ? (
+                    <span className="dza-groq-saving-dot" />
+                  ) : keysSaved ? (
+                    <><CheckCircle2 size={12} /> تم الحفظ</>
+                  ) : (
+                    <><Save size={12} /> حفظ وتفعيل</>
+                  )}
+                </button>
+              </div>
+
+              {activeKeyCount > 0 && (
+                <div className="dza-groq-active-bar">
+                  {Array.from({ length: MAX_KEYS }, (_, i) => (
+                    <div
+                      key={i}
+                      className={`dza-groq-bar-seg ${groqKeys[i]?.trim() ? 'dza-groq-bar-seg--on' : ''}`}
+                      title={groqKeys[i]?.trim() ? `K${i+1}: نشط` : `K${i+1}: فارغ`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ===== GITHUB OAUTH ===== */}
@@ -239,7 +424,9 @@ export default function DZAgent() {
               <span className="dz-agent-tagline">BY NADIR HOUAMRIA</span>
             </div>
           </div>
-          <div className="dz-agent-badge">FREE · AI</div>
+          <div className="dz-agent-badge">
+            {totalKeys > 0 ? `${totalKeys} 🔑` : 'FREE'} · AI
+          </div>
         </header>
 
         <div className="dz-agent-body">

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -34,8 +34,6 @@ export default function AgentModeBar({ state, onChange, githubUser }: AgentModeB
   const [repos, setRepos]         = useState<Repo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [repoError, setRepoError] = useState('')
-  const [tokenInput, setTokenInput] = useState(state.githubToken)
-  const [showToken, setShowToken] = useState(false)
   const [showCmds, setShowCmds]   = useState(false)
 
   const toggle = useCallback(() => {
@@ -49,29 +47,21 @@ export default function AgentModeBar({ state, onChange, githubUser }: AgentModeB
   }, [state, onChange])
 
   const connectGitHub = useCallback(async () => {
-    const tok = tokenInput.trim()
-    if (!tok) return
     setLoadingRepos(true)
     setRepoError('')
     try {
-      const r = await fetch('https://api.github.com/user', {
-        headers: { Authorization: `token ${tok}`, 'User-Agent': 'DZ-GPT/1.0' },
-      })
-      if (!r.ok) throw new Error('Token غير صالح')
-      await r.json()
       const rr = await fetch('https://api.github.com/user/repos?sort=updated&per_page=20', {
-        headers: { Authorization: `token ${tok}`, 'User-Agent': 'DZ-GPT/1.0' },
+        headers: { Authorization: `token ${state.githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
       })
       const repoData: Repo[] = await rr.json()
       setRepos(Array.isArray(repoData) ? repoData : [])
-      onChange({ ...state, active: true, githubToken: tok, selectedRepo: repoData[0]?.full_name || '' })
-      sessionStorage.setItem('dz-agent-gh-token', tok)
+      onChange({ ...state, active: true, selectedRepo: repoData[0]?.full_name || '' })
     } catch (e) {
       setRepoError((e as Error).message)
     } finally {
       setLoadingRepos(false)
     }
-  }, [tokenInput, state, onChange])
+  }, [state, onChange])
 
   const loadRepos = useCallback(async () => {
     if (!state.githubToken || repos.length) return
@@ -200,40 +190,22 @@ export default function AgentModeBar({ state, onChange, githubUser }: AgentModeB
               </button>
             </div>
           ) : (
-            <div className="amb-token-row">
-              <div className="amb-token-field">
-                <input
-                  type={showToken ? 'text' : 'password'}
-                  className="amb-token-input"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxx"
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && connectGitHub()}
-                />
-                <button className="amb-eye-btn" onClick={() => setShowToken(v => !v)}>
-                  {showToken ? <EyeOff size={13} /> : <Eye size={13} />}
-                </button>
-              </div>
-              <button className="amb-connect-btn" onClick={connectGitHub} disabled={loadingRepos || !tokenInput.trim()}>
-                {loadingRepos ? <Loader2 size={13} className="amb-spin" /> : <Github size={13} />}
-                اتصل
-              </button>
+            <div className="amb-oauth-section">
+              <a href="/api/auth/github" className="amb-oauth-btn">
+                <Github size={14} />
+                اتصل بـ GitHub
+              </a>
+              <p className="amb-oauth-hint">
+                😉 عاود أخرج من GitHub الفوق، دير تسجيل خروج و عاود دير تسجيل دخول
+              </p>
             </div>
           )}
 
           {repoError && (
             <div className="amb-error">
-              <AlertCircle size={13} /> {repoError}
+              <Github size={13} /> {repoError}
             </div>
           )}
-
-          <p className="amb-tip">
-            احصل على <strong>Personal Access Token</strong> من{' '}
-            <a href="https://github.com/settings/tokens/new?scopes=repo,read:user" target="_blank" rel="noopener noreferrer">
-              github.com/settings/tokens
-            </a>
-            {' '}— حدد صلاحيات <code>repo</code> و<code>read:user</code>
-          </p>
         </div>
       )}
 

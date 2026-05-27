@@ -3203,23 +3203,12 @@ function StatsPanel({ stats }: { stats: RepoStats }) {
 // ===== GITHUB TOKEN PANEL =====
 function GitHubTokenPanel({
   token,
-  onSave,
   onClear,
 }: {
   token: string
   onSave: (t: string) => void
   onClear: () => void
 }) {
-  const [input, setInput] = useState('')
-  const [show, setShow] = useState(false)
-
-  const handleSave = () => {
-    if (input.trim()) {
-      onSave(input.trim())
-      setInput('')
-    }
-  }
-
   if (token) {
     return (
       <div className="gh-token-set">
@@ -3233,30 +3222,12 @@ function GitHubTokenPanel({
   }
 
   return (
-    <div className="gh-token-panel">
-      <button className="gh-token-toggle" onClick={() => setShow(!show)}>
+    <div className="gh-oauth-section">
+      <a href="/api/auth/github" className="gh-oauth-connect-btn">
         <Github size={14} />
-        ربط GitHub (اختياري)
-        <ChevronDown size={13} className={show ? 'rotated' : ''} />
-      </button>
-      {show && (
-        <div className="gh-token-input-row">
-          <input
-            type="password"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="ghp_xxxxxxxxxxxxxxxx"
-            className="gh-token-input"
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
-          />
-          <button className="gh-token-save" onClick={handleSave}>
-            ربط
-          </button>
-        </div>
-      )}
-      <p className="gh-token-hint">
-        يُحفظ الـ Token محلياً فقط · لا يُرسل لأي طرف خارجي
-      </p>
+        الاتصال بـ GitHub
+      </a>
+      <span className="gh-oauth-optional">😉 عاود أخرج من GitHub الفوق، دير تسجيل خروج و عاود دير تسجيل دخول</span>
     </div>
   )
 }

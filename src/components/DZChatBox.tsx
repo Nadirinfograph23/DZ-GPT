@@ -446,6 +446,7 @@ interface DZMessage {
   taskPlan?: TaskPlan
   taskPlanQuery?: string
   claudeMode?: boolean
+  responseTime?: number
 }
 
 interface ActionLogEntry {
@@ -2110,6 +2111,33 @@ function YouTubePanel({
 }
 
 // ===== TYPING EFFECT =====
+const THINKING_TIPS = [
+  'راني نخمم أصبر... 🧠',
+  'نبحث على المعلومات... 🔍',
+  'نحضّر الجواب... ✍️',
+  'نحلل السؤال... 💡',
+  'نشاور الذاكرة... 🧩',
+  'نشغّل الوكلاء... 🤖',
+  'قريباً يجي الجواب... ⚡',
+  'نتحقق من البيانات... 📊',
+]
+
+function formatModelName(model: string): string {
+  if (!model) return ''
+  if (model.includes('llama-3.3-70b')) return '🦙 Llama 3.3 70B'
+  if (model.includes('llama-3.1-70b')) return '🦙 Llama 3.1 70B'
+  if (model.includes('llama-3.1-8b')) return '🦙 Llama 3.1 8B'
+  if (model.includes('llama-4')) return '🦙 Llama 4'
+  if (model.includes('meta-llama')) return '🦙 Llama'
+  if (model.includes('gemini')) return '♊ Gemini'
+  if (model.includes('mistral')) return '🌊 Mistral'
+  if (model.includes('deepseek')) return '🐋 DeepSeek'
+  if (model.includes('pollinations')) return '🌸 Pollinations'
+  if (model.includes('cohere')) return '🔵 Cohere'
+  if (model.includes('openrouter')) return '🔀 OpenRouter'
+  return '🤖 ' + model.split('/').pop()?.slice(0, 20) || model
+}
+
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('')
   const indexRef  = useRef(0)
@@ -3398,6 +3426,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
+  const [thinkingTipIdx, setThinkingTipIdx] = useState(0)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
@@ -3498,6 +3527,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
+
+  // Rotate thinking tips while loading
+  useEffect(() => {
+    if (!isLoading) { setThinkingTipIdx(0); return }
+    const iv = setInterval(() => setThinkingTipIdx(i => (i + 1) % THINKING_TIPS.length), 2500)
+    return () => clearInterval(iv)
+  }, [isLoading])
 
   // Check server GitHub connection on mount
   useEffect(() => {
@@ -5083,6 +5119,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       // Run thinking trace in parallel with main response fetch
       let data: Record<string, unknown> = {}
       let attempts = 0
+      const _fetchT0 = Date.now()
       while (attempts < 3) {
         if (attempts === 0) await thinkingTracePromise.catch(() => {})
         data = await fetchAgentResponse()
@@ -5319,6 +5356,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
           quickSuggestions: autoSuggestions,
           thinkingTrace: thinkingTraceRoles ?? undefined,
+          model: typeof data.model === 'string' ? data.model : (typeof data.fallbackModel === 'string' ? data.fallbackModel : undefined),
+          responseTime: Math.round(Date.now() - _fetchT0),
         })
       }
     } catch (err: unknown) {
@@ -5671,6 +5710,20 @@ ${rows}
                             td({ children }) { return <td dir="auto">{children}</td> },
                           }}
                         >{msg.content}</ReactMarkdown>
+                      )}
+                      {msg.model && (
+                        <div className="dz-msg-meta">
+                          <span className="dz-model-badge" title={msg.model}>
+                            {formatModelName(msg.model)}
+                          </span>
+                          {msg.responseTime && msg.responseTime > 0 && (
+                            <span className="dz-response-time">
+                              {msg.responseTime < 1000
+                                ? `${msg.responseTime}ms`
+                                : `${(msg.responseTime / 1000).toFixed(1)}s`}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {msg.hasMoreNews && msg.newsQuery && (
                         <button
@@ -6087,7 +6140,7 @@ ${rows}
                 </div>
               ) : (
                 <div className="dz-thinking-step">
-                  <span className="dz-thinking-label">راني نخمم أصبر...</span>
+                  <span key={thinkingTipIdx} className="dz-thinking-label">{THINKING_TIPS[thinkingTipIdx]}</span>
                   <div className="dz-typing-indicator">
                     <span /><span /><span />
                   </div>

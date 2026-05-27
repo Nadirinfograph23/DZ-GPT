@@ -1800,6 +1800,27 @@
   color: #5a6475;
 }
 
+/* ===== PROJECT MEMORY BADGE ===== */
+.dz-project-memory-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, rgba(16,163,127,0.08), rgba(13,146,104,0.05));
+  border: 1px solid rgba(16,163,127,0.22);
+  border-radius: 20px;
+  color: #10a37f;
+  font-size: 11px;
+  margin-bottom: 6px;
+  animation: dz-pm-fade-in 0.4s ease;
+}
+.dz-project-memory-badge strong { color: #12c08f; }
+
+@keyframes dz-pm-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ===== AUTH ERROR ===== */
 .dz-auth-error {
   display: flex;

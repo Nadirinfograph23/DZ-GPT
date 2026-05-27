@@ -9785,3 +9785,174 @@
     max-height: 320px;
   }
 }
+
+/* ===== IMAGE STYLE PICKER (Feature 2) ===== */
+.dz-image-card {
+  position: relative;
+}
+
+.dz-image-card__regen-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 10;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 13px;
+}
+
+.dz-image-card__regen-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top-color: #7c6eff;
+  border-radius: 50%;
+  animation: dz-spin 0.7s linear infinite;
+}
+
+@keyframes dz-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dz-image-card__img--loading {
+  opacity: 0.4;
+  filter: blur(2px);
+}
+
+.dz-image-style-picker {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 8px 10px 4px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.15);
+}
+
+.dz-image-style-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #888;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.dz-image-style-btn:hover:not(:disabled) {
+  background: rgba(124,110,255,0.15);
+  border-color: rgba(124,110,255,0.4);
+  color: #bbb;
+}
+
+.dz-image-style-btn--active {
+  background: rgba(124,110,255,0.25);
+  border-color: rgba(124,110,255,0.6);
+  color: #c4baff;
+  font-weight: 600;
+}
+
+.dz-image-style-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== INPUT TOP BUTTONS ROW (Feature 3) ===== */
+.dz-input-top-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.dz-input-top-btns .dz-clear-btn {
+  margin-bottom: 0;
+}
+
+.dz-pdf-btn {
+  background: none;
+  border: 1px solid rgba(124,110,255,0.3);
+  color: #7c6eff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.dz-pdf-btn:hover {
+  background: rgba(124,110,255,0.1);
+  border-color: rgba(124,110,255,0.6);
+}
+
+/* ===== WELCOME-BACK BANNER (Feature 1) ===== */
+.dz-welcome-back {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 0 0 6px;
+  background: linear-gradient(135deg, rgba(124,110,255,0.12) 0%, rgba(0,200,150,0.08) 100%);
+  border: 1px solid rgba(124,110,255,0.2);
+  border-radius: 12px;
+  font-size: 13px;
+  color: #aaa;
+  animation: dz-slide-in 0.4s ease;
+  flex-wrap: wrap;
+}
+
+@keyframes dz-slide-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dz-welcome-back__icon {
+  font-size: 18px;
+}
+
+.dz-welcome-back__text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.dz-welcome-back__topics {
+  color: #7c6eff;
+  font-size: 12px;
+}
+
+.dz-welcome-back__close {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.dz-welcome-back__close:hover {
+  color: #888;
+}
+
+@media (max-width: 768px) {
+  .dz-image-style-picker {
+    gap: 4px;
+  }
+  .dz-image-style-btn {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+  .dz-welcome-back {
+    font-size: 12px;
+  }
+}

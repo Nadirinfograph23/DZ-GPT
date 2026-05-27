@@ -27,6 +27,7 @@ import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
 import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
+import AgentModeBar, { type AgentModeState } from './AgentModeBar'
 
 // ===== RATING PERSISTENCE =====
 // ===== THINKING TRACE TYPES =====
@@ -3457,6 +3458,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
   const [ghAgentAutoExecute, setGhAgentAutoExecute] = useState(false)
   const [showGhAgentInput, setShowGhAgentInput] = useState(false)
+
+  // ===== HYBRID AGENT MODE =====
+  const [agentMode, setAgentMode] = useState<AgentModeState>(() => {
+    const tok = (() => { try { return sessionStorage.getItem('dz-agent-gh-token') || '' } catch { return '' } })()
+    return { active: false, githubToken: tok, selectedRepo: '', autoConfirm: false }
+  })
+  // Pending confirmation dialog for destructive actions
+  const [pendingAgentCmd, setPendingAgentCmd] = useState<{
+    cmd: string; args: string; label: string; resolve: (ok: boolean) => void
+  } | null>(null)
   const [dismissedNavSuggestions, setDismissedNavSuggestions] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -4743,6 +4754,193 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     })
   }, [githubToken, addAssistantMessage])
 
+  // ===== HYBRID AGENT: confirm destructive action =====
+  const confirmAgentAction = useCallback((cmd: string, args: string, label: string): Promise<boolean> => {
+    return new Promise(resolve => {
+      setPendingAgentCmd({ cmd, args, label, resolve })
+    })
+  }, [])
+
+  // ===== HYBRID AGENT: execute slash command =====
+  const executeSlashCommand = useCallback(async (cmd: string, args: string) => {
+    const repo = agentMode.selectedRepo
+    const tok  = agentMode.githubToken || githubToken
+
+    if (!tok) {
+      addAssistantMessage({ content: '🔐 **وضع الوكيل**: ربط GitHub مطلوب — فعّل وضع الوكيل وأدخل الـ Token أولاً.', richType: 'text', isError: true })
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      // /ls — list files
+      if (cmd === '/ls' || cmd === '/list') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const path = args.trim() || ''
+        setThinkingStep({ type: 'list', label: `عرض ملفات ${repo}${path ? '/' + path : ''}...` })
+        await fetchFiles(repo, path)
+        return
+      }
+
+      // /read — read file content
+      if (cmd === '/read') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const path = args.trim()
+        if (!path) { addAssistantMessage({ content: '⚠️ صيغة: `/read <مسار الملف>` — مثال: `/read src/App.tsx`', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'read', label: `قراءة ${path}...` })
+        await fetchFileContent(repo, path)
+        return
+      }
+
+      // /scan — scan repo for issues
+      if (cmd === '/scan') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const focus = args.trim() || undefined
+        setThinkingStep({ type: 'scan', label: `فحص ${repo}...` })
+        await scanRepo({ name: repo.split('/')[1] || repo, full_name: repo, description: null, language: null, private: false, default_branch: 'main', html_url: `https://github.com/${repo}` }, focus as 'bugs' | 'security' | 'suggest' | 'fix' | 'report' | undefined)
+        return
+      }
+
+      // /suggest — suggestions
+      if (cmd === '/suggest') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'analyze', label: `جلب اقتراحات لـ ${repo}...` })
+        await scanRepo({ name: repo.split('/')[1] || repo, full_name: repo, description: null, language: null, private: false, default_branch: 'main', html_url: `https://github.com/${repo}` }, 'suggest')
+        return
+      }
+
+      // /deploy — deploy to GitHub Pages
+      if (cmd === '/deploy') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const needConfirm = !agentMode.autoConfirm
+        if (needConfirm) {
+          const ok = await confirmAgentAction(cmd, repo, `نشر \`${repo}\` على GitHub Pages`)
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء النشر.', richType: 'text' }); return }
+        }
+        setThinkingStep({ type: 'deploy', label: `نشر ${repo} على GitHub Pages...` })
+        await deployToGitHubPages({ name: repo.split('/')[1] || repo, full_name: repo, description: null, language: null, private: false, default_branch: 'main', html_url: `https://github.com/${repo}` })
+        return
+      }
+
+      // /diff — show diff (informational — route to AI with context)
+      if (cmd === '/diff') {
+        const diffArgs = args.trim() || 'main'
+        addAssistantMessage({ content: `📊 **Git Diff** — \`${repo || 'لم يُحدد مستودع'}\`\n\nالوكيل يحلل الفرق بين: \`${diffArgs}\`\n\n> استخدم \`/scan\` لتحليل الكود مباشرة.`, richType: 'text' })
+        return
+      }
+
+      // /edit — AI edit (destructive → confirmation)
+      if (cmd === '/edit') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const parts = args.trim().split(/\s+/)
+        const filePath = parts[0] || ''
+        const instruction = parts.slice(1).join(' ')
+        if (!filePath) { addAssistantMessage({ content: '⚠️ صيغة: `/edit <مسار> <تعليمات>` — مثال: `/edit server.js أضف route /ping`', richType: 'text', isError: true }); return }
+
+        const needConfirm = !agentMode.autoConfirm
+        if (needConfirm) {
+          const ok = await confirmAgentAction(cmd, `${repo}/${filePath}`, `تعديل \`${filePath}\` في \`${repo}\`${instruction ? ` — "${instruction}"` : ''}`)
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء التعديل.', richType: 'text' }); return }
+        }
+
+        setThinkingStep({ type: 'write', label: `تعديل ${filePath}...` })
+        addToLog({ type: 'code-action', description: `Edit ${filePath}: ${instruction}`, status: 'pending', repo })
+
+        try {
+          const res = await fetch('/api/dz-agent/github/smart-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok, repo, path: filePath, instruction: instruction || 'تحسين الكود', message: `agent: edit ${filePath}` }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Edit failed')
+          addAssistantMessage({ content: `✅ **تم تعديل الملف**: \`${filePath}\`\n\n**الكوميت:** \`${data.sha?.slice(0,8) || 'N/A'}\`\n\n[عرض على GitHub](https://github.com/${repo}/blob/main/${filePath})`, richType: 'text' })
+          addToLog({ type: 'code-action', description: `Edited ${filePath} — ${data.sha?.slice(0,8)}`, status: 'success', repo })
+        } catch (err) {
+          const msg = (err as Error).message
+          addAssistantMessage({ content: `❌ فشل التعديل: ${msg}`, richType: 'text', isError: true })
+          addToLog({ type: 'code-action', description: `Edit error: ${msg}`, status: 'error', repo })
+        }
+        return
+      }
+
+      // /commit — commit a message (destructive → confirmation)
+      if (cmd === '/commit') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const message = args.replace(/^["']|["']$/g, '').trim() || 'chore: تحديث'
+
+        const needConfirm = !agentMode.autoConfirm
+        if (needConfirm) {
+          const ok = await confirmAgentAction(cmd, repo, `كوميت في \`${repo}\` — "${message}"`)
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء الكوميت.', richType: 'text' }); return }
+        }
+
+        setThinkingStep({ type: 'commit', label: `حفظ التغييرات في ${repo}...` })
+        addToLog({ type: 'commit', description: `Commit: "${message}"`, status: 'pending', repo })
+
+        try {
+          const res = await fetch('/api/dz-agent/github/commit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok, repo, message, branch: 'main', path: 'README.md', content: btoa(`# ${repo.split('/')[1]}\n\n> ${message}\n`) }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Commit failed')
+          addAssistantMessage({ content: `✅ **تم الكوميت**: "${message}"\n\n**SHA:** \`${(data.sha || data.commit?.sha || 'N/A').toString().slice(0,10)}\`\n\n[عرض على GitHub](https://github.com/${repo})`, richType: 'text' })
+          addToLog({ type: 'commit', description: `Committed: "${message}"`, status: 'success', repo })
+        } catch (err) {
+          const msg = (err as Error).message
+          addAssistantMessage({ content: `❌ فشل الكوميت: ${msg}`, richType: 'text', isError: true })
+          addToLog({ type: 'commit', description: `Commit error: ${msg}`, status: 'error', repo })
+        }
+        return
+      }
+
+      // /pr — create pull request (destructive → confirmation)
+      if (cmd === '/pr') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const title = args.replace(/^["']|["']$/g, '').trim() || 'feat: تحديث جديد'
+
+        const needConfirm = !agentMode.autoConfirm
+        if (needConfirm) {
+          const ok = await confirmAgentAction(cmd, repo, `إنشاء Pull Request في \`${repo}\` — "${title}"`)
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء إنشاء PR.', richType: 'text' }); return }
+        }
+
+        setThinkingStep({ type: 'pr', label: `إنشاء PR في ${repo}...` })
+        addToLog({ type: 'create-pr', description: `PR: "${title}"`, status: 'pending', repo })
+
+        try {
+          const res = await fetch('/api/dz-agent/github/pr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok, repo, title, body: `PR أُنشئ بواسطة DZ Agent Hybrid Mode`, branch: 'feature/dz-agent', base: 'main' }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'PR creation failed')
+          addAssistantMessage({ content: `✅ **Pull Request مُنشأ**: "${title}"\n\n[عرض PR](${data.html_url})`, richType: 'text' })
+          addToLog({ type: 'create-pr', description: `PR created: "${title}"`, status: 'success', repo })
+        } catch (err) {
+          const msg = (err as Error).message
+          addAssistantMessage({ content: `❌ فشل إنشاء PR: ${msg}`, richType: 'text', isError: true })
+          addToLog({ type: 'create-pr', description: `PR error: ${msg}`, status: 'error', repo })
+        }
+        return
+      }
+
+      // unknown command
+      addAssistantMessage({
+        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\``,
+        richType: 'text',
+        isError: true,
+      })
+    } finally {
+      setIsLoading(false)
+      setThinkingStep(null)
+    }
+  }, [agentMode, githubToken, addAssistantMessage, addToLog, fetchFiles, fetchFileContent, scanRepo, deployToGitHubPages, confirmAgentAction, setThinkingStep])
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -4752,6 +4950,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const now = Date.now()
     if (now - lastSendRef.current < 400) return
     lastSendRef.current = now
+
+    // ── Hybrid Agent Mode: intercept slash commands ──────────────────────────
+    if (agentMode.active && text.startsWith('/')) {
+      const spaceIdx = text.indexOf(' ')
+      const cmd  = spaceIdx > -1 ? text.slice(0, spaceIdx).toLowerCase() : text.toLowerCase()
+      const args = spaceIdx > -1 ? text.slice(spaceIdx + 1) : ''
+      setMessages(prev => [...prev, { id: generateId(), role: 'user' as const, content: text, richType: 'text' as const }])
+      setInput('')
+      await executeSlashCommand(cmd, args)
+      return
+    }
+
+    // ── Hybrid Agent Mode: natural language with repo context ────────────────
+    // If agent mode is active + repo selected, inject context into the message
+    const agentCtxInject = (agentMode.active && agentMode.selectedRepo)
+      ? `\n\n[وضع الوكيل — المستودع: ${agentMode.selectedRepo}]`
+      : ''
 
     // Track user behavior (intent + query)
     trackQuery(text)
@@ -4767,14 +4982,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         : m.content,
     }))
 
-    // Inject behavior context + persistent memory into the last user message
+    // Inject behavior context + persistent memory + agent context into the last user message
     const memoryCtx = buildMemoryContext()
-    if ((behaviorCtx || memoryCtx) && outboundMessages.length > 0) {
+    if ((behaviorCtx || memoryCtx || agentCtxInject) && outboundMessages.length > 0) {
       const last = outboundMessages[outboundMessages.length - 1]
       if (last.role === 'user') {
         outboundMessages[outboundMessages.length - 1] = {
           ...last,
-          content: last.content + behaviorCtx + memoryCtx,
+          content: last.content + behaviorCtx + memoryCtx + agentCtxInject,
         }
       }
     }
@@ -6177,6 +6392,45 @@ ${rows}
         {messages.length > 0 && (
           <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
         )}
+
+        {/* ===== HYBRID AGENT MODE BAR ===== */}
+        <AgentModeBar
+          state={agentMode}
+          onChange={s => {
+            setAgentMode(s)
+            if (s.githubToken) {
+              try { sessionStorage.setItem('dz-agent-gh-token', s.githubToken) } catch {}
+            }
+          }}
+          githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
+        />
+
+        {/* ===== AGENT CONFIRMATION DIALOG ===== */}
+        {pendingAgentCmd && (
+          <div className="amb-confirm-wrap">
+            <div className="amb-confirm-title">
+              <span>⚠️</span> تأكيد الإجراء
+            </div>
+            <div className="amb-confirm-detail">
+              {pendingAgentCmd.label}
+            </div>
+            <div className="amb-confirm-btns">
+              <button
+                className="amb-confirm-yes"
+                onClick={() => { pendingAgentCmd.resolve(true); setPendingAgentCmd(null) }}
+              >
+                ✅ تأكيد
+              </button>
+              <button
+                className="amb-confirm-no"
+                onClick={() => { pendingAgentCmd.resolve(false); setPendingAgentCmd(null) }}
+              >
+                ✕ إلغاء
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* DZ GitHub Agent — repo bar */}
         {showGhAgentInput && (
           <div className="gh-agent-repo-bar">

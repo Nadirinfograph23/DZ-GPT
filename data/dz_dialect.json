@@ -1,8 +1,8 @@
 {
   "meta": {
     "dialect": "Algerian Darija",
-    "version": "2.0.0",
-    "total": 277,
+    "version": "3.0.0",
+    "total": 391,
     "sources": [
       "mo3jam.com",
       "curated",
@@ -4776,6 +4776,1883 @@
         "نقدر نعاونك في هذا"
       ],
       "category": "dz_agent"
+    },
+    {
+      "word": "يتعطل",
+      "meaning_ar": "يتأخر",
+      "meaning_fr": "il est en retard",
+      "meaning_en": "delayed / late",
+      "synonyms": [
+        "يتأخر"
+      ],
+      "variants": [
+        "تعطل"
+      ],
+      "usage": [
+        "راه يتعطل بزاف",
+        "تعطل في الطريق"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتزرب",
+      "meaning_ar": "يتسرع",
+      "meaning_fr": "il se précipite",
+      "meaning_en": "rushes / hurries",
+      "synonyms": [
+        "يتسرع",
+        "يتعجل"
+      ],
+      "variants": [
+        "تزرب"
+      ],
+      "usage": [
+        "ما تتزربش",
+        "راه يتزرب دايما"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "ينظم",
+      "meaning_ar": "يرتب",
+      "meaning_fr": "il organise",
+      "meaning_en": "organizes / arranges",
+      "synonyms": [
+        "يرتب",
+        "ينظم"
+      ],
+      "variants": [
+        "نظّم"
+      ],
+      "usage": [
+        "نظّم الأفكار",
+        "يلزم تنظم"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يفرق",
+      "meaning_ar": "يفرق / يميز",
+      "meaning_fr": "il distingue",
+      "meaning_en": "distinguishes / separates",
+      "synonyms": [
+        "يميز",
+        "يفصل"
+      ],
+      "variants": [
+        "فرّق"
+      ],
+      "usage": [
+        "يفرق بين الصح والغلط",
+        "فرّق بينهم"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يلم",
+      "meaning_ar": "يجمع",
+      "meaning_fr": "il rassemble / il collecte",
+      "meaning_en": "gathers / collects",
+      "synonyms": [
+        "يجمع"
+      ],
+      "variants": [
+        "لمّ",
+        "لمّيت"
+      ],
+      "usage": [
+        "لمّ الأشياء",
+        "يلم المعلومات"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "ينقي",
+      "meaning_ar": "يختار",
+      "meaning_fr": "il choisit",
+      "meaning_en": "chooses / selects",
+      "synonyms": [
+        "يختار",
+        "يحدد"
+      ],
+      "variants": [
+        "نقّى",
+        "نقيت"
+      ],
+      "usage": [
+        "نقّي اللي تبغي",
+        "ينقي الأحسن"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يحسم",
+      "meaning_ar": "يقرر",
+      "meaning_fr": "il décide",
+      "meaning_en": "decides / resolves",
+      "synonyms": [
+        "يقرر",
+        "يحدد"
+      ],
+      "variants": [
+        "حسم"
+      ],
+      "usage": [
+        "حسم الأمر",
+        "يلزم تحسم"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتبع",
+      "meaning_ar": "يتابع / يراقب",
+      "meaning_fr": "il suit",
+      "meaning_en": "follows / monitors",
+      "synonyms": [
+        "يتابع",
+        "يراقب"
+      ],
+      "variants": [
+        "تبع",
+        "يتبعوا"
+      ],
+      "usage": [
+        "يتبع الأخبار",
+        "تبع الخطوات"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يسلم",
+      "meaning_ar": "يودع",
+      "meaning_fr": "il dit au revoir",
+      "meaning_en": "says goodbye",
+      "synonyms": [
+        "يودع",
+        "يصافح"
+      ],
+      "variants": [
+        "سلّم",
+        "سلّمت"
+      ],
+      "usage": [
+        "سلّم عليه",
+        "روح تسلم عليه"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يبرد",
+      "meaning_ar": "يهدأ",
+      "meaning_fr": "il se calme",
+      "meaning_en": "calms down / cools down",
+      "synonyms": [
+        "يهدأ",
+        "يهدى"
+      ],
+      "variants": [
+        "برد",
+        "بردت"
+      ],
+      "usage": [
+        "برد شوية",
+        "يبرد بالوقت"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يديها",
+      "meaning_ar": "يفوز",
+      "meaning_fr": "il gagne",
+      "meaning_en": "wins / nails it",
+      "synonyms": [
+        "يفوز",
+        "ينجح"
+      ],
+      "variants": [
+        "داها"
+      ],
+      "usage": [
+        "داها هذه المرة",
+        "يديها دايما"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يصبر",
+      "meaning_ar": "يتحمل",
+      "meaning_fr": "il supporte / il tient",
+      "meaning_en": "endures / tolerates",
+      "synonyms": [
+        "يتحمل",
+        "يصبر"
+      ],
+      "variants": [
+        "صبر",
+        "صبرت"
+      ],
+      "usage": [
+        "صبر على الأمر",
+        "يصبر حتى يخلص"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يعيى",
+      "meaning_ar": "يتعب",
+      "meaning_fr": "il se fatigue",
+      "meaning_en": "gets tired",
+      "synonyms": [
+        "يتعب",
+        "يعيا"
+      ],
+      "variants": [
+        "عيى",
+        "عييت"
+      ],
+      "usage": [
+        "عيى من الخدمة",
+        "يعيى بزاف"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتصدم",
+      "meaning_ar": "يتفاجأ",
+      "meaning_fr": "il est choqué / surpris",
+      "meaning_en": "gets shocked / surprised",
+      "synonyms": [
+        "يتفاجأ",
+        "يندهش"
+      ],
+      "variants": [
+        "تصدم",
+        "تصدمت"
+      ],
+      "usage": [
+        "تصدمت من الخبر",
+        "يتصدم من الأشياء"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يقلد",
+      "meaning_ar": "يقلد / يحاكي",
+      "meaning_fr": "il imite",
+      "meaning_en": "imitates / copies",
+      "synonyms": [
+        "يحاكي",
+        "يتقيس"
+      ],
+      "variants": [
+        "قلّد",
+        "قلّدت"
+      ],
+      "usage": [
+        "يقلد طريقة الكلام",
+        "ما تقلدش الناس"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يطيح",
+      "meaning_ar": "يفشل / يسقط",
+      "meaning_fr": "il tombe / il échoue",
+      "meaning_en": "fails / falls",
+      "synonyms": [
+        "يفشل",
+        "يسقط"
+      ],
+      "variants": [
+        "طاح",
+        "طاحت"
+      ],
+      "usage": [
+        "طاح فالامتحان",
+        "الموقع طاح"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "ينبه",
+      "meaning_ar": "يحذر",
+      "meaning_fr": "il avertit",
+      "meaning_en": "warns / alerts",
+      "synonyms": [
+        "يحذر",
+        "يُنبّه"
+      ],
+      "variants": [
+        "نبّه",
+        "نبّهني"
+      ],
+      "usage": [
+        "نبّهني على المشكل",
+        "ينبه الناس"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتمسخر",
+      "meaning_ar": "يمزح",
+      "meaning_fr": "il plaisante / il rigole",
+      "meaning_en": "jokes / messes around",
+      "synonyms": [
+        "يمزح",
+        "يهزر"
+      ],
+      "variants": [
+        "تمسخر",
+        "تمسخرنا"
+      ],
+      "usage": [
+        "ما كنتش نتمسخر",
+        "يتمسخر مع الناس"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يضحك عليه",
+      "meaning_ar": "يستهزئ",
+      "meaning_fr": "il se moque de lui",
+      "meaning_en": "mocks / makes fun of",
+      "synonyms": [
+        "يستهزئ",
+        "يسخر"
+      ],
+      "variants": [
+        "ضحك عليه"
+      ],
+      "usage": [
+        "ضحك عليه قدام الناس",
+        "ما يضحكوش عليك"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتهنى",
+      "meaning_ar": "يطمئن / يرتاح",
+      "meaning_fr": "il se repose / il est apaisé",
+      "meaning_en": "relaxes / feels at ease",
+      "synonyms": [
+        "يرتاح",
+        "يطمئن"
+      ],
+      "variants": [
+        "تهنى",
+        "تهنيت"
+      ],
+      "usage": [
+        "تهنى بالخبر",
+        "يتهنى في داره"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يحتار",
+      "meaning_ar": "يتردد",
+      "meaning_fr": "il hésite",
+      "meaning_en": "hesitates / is confused",
+      "synonyms": [
+        "يتردد",
+        "يتحير"
+      ],
+      "variants": [
+        "حتار",
+        "حتارت"
+      ],
+      "usage": [
+        "حتارت ما عرفتش",
+        "يحتار بين الخيارات"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتفادى",
+      "meaning_ar": "يتجنب",
+      "meaning_fr": "il évite",
+      "meaning_en": "avoids",
+      "synonyms": [
+        "يتجنب",
+        "يحذر"
+      ],
+      "variants": [
+        "تفادى",
+        "تفاديت"
+      ],
+      "usage": [
+        "تفادى المشكل",
+        "يتفادى الأخطاء"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يغامر",
+      "meaning_ar": "يتحدى / يجازف",
+      "meaning_fr": "il ose / il risque",
+      "meaning_en": "dares / takes risks",
+      "synonyms": [
+        "يجازف",
+        "يتحدى"
+      ],
+      "variants": [
+        "غامر"
+      ],
+      "usage": [
+        "غامر وجرب",
+        "يغامر دايما"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يسيطر",
+      "meaning_ar": "يتحكم",
+      "meaning_fr": "il contrôle / il domine",
+      "meaning_en": "controls / dominates",
+      "synonyms": [
+        "يتحكم",
+        "يهيمن"
+      ],
+      "variants": [
+        "سيطر",
+        "يسيطروا"
+      ],
+      "usage": [
+        "يسيطر على الوضع",
+        "سيطر على نفسه"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يخمم",
+      "meaning_ar": "يفكر",
+      "meaning_fr": "il réfléchit / il pense",
+      "meaning_en": "thinks / reflects",
+      "synonyms": [
+        "يفكر",
+        "يأمل"
+      ],
+      "variants": [
+        "خمّم",
+        "خمّمت"
+      ],
+      "usage": [
+        "خمّم مليح قبل",
+        "يخمم بزاف"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يتخلط",
+      "meaning_ar": "يتشتت",
+      "meaning_fr": "il est confus / perturbé",
+      "meaning_en": "gets confused / scattered",
+      "synonyms": [
+        "يتشتت",
+        "يرتبك"
+      ],
+      "variants": [
+        "تخلط",
+        "تخلطت"
+      ],
+      "usage": [
+        "تخلطت عليا الأشياء",
+        "يتخلط في الكلام"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "يسرح",
+      "meaning_ar": "يتأمل / يحلم",
+      "meaning_fr": "il rêvasse / il contemple",
+      "meaning_en": "daydreams / contemplates",
+      "synonyms": [
+        "يتأمل",
+        "يحلم"
+      ],
+      "variants": [
+        "سرح",
+        "سرحت"
+      ],
+      "usage": [
+        "سرح في أفكاره",
+        "يسرح بزاف"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "باه",
+      "meaning_ar": "لكي / من أجل",
+      "meaning_fr": "pour que / afin de",
+      "meaning_en": "so that / in order to",
+      "synonyms": [
+        "لكي",
+        "من أجل"
+      ],
+      "variants": [],
+      "usage": [
+        "دير هذا باه تنجح",
+        "جيت باه نعاونك"
+      ],
+      "category": "connective"
+    },
+    {
+      "word": "تاني",
+      "meaning_ar": "أيضاً",
+      "meaning_fr": "aussi / également",
+      "meaning_en": "also / too",
+      "synonyms": [
+        "أيضاً",
+        "كذلك"
+      ],
+      "variants": [],
+      "usage": [
+        "أنا تاني",
+        "هذا تاني مليح"
+      ],
+      "category": "connective"
+    },
+    {
+      "word": "ديجا",
+      "meaning_ar": "بالفعل / سبق",
+      "meaning_fr": "déjà",
+      "meaning_en": "already",
+      "synonyms": [
+        "بالفعل",
+        "سبق"
+      ],
+      "variants": [],
+      "usage": [
+        "ديجا خلصت",
+        "ديجا قلتلك"
+      ],
+      "category": "adverb"
+    },
+    {
+      "word": "صحيت",
+      "meaning_ar": "أحسنت",
+      "meaning_fr": "bravo / bien fait",
+      "meaning_en": "well done / bravo",
+      "synonyms": [
+        "أحسنت",
+        "بارك الله فيك"
+      ],
+      "variants": [],
+      "usage": [
+        "صحيت على الكلام",
+        "صحيت والله"
+      ],
+      "category": "exclamation"
+    },
+    {
+      "word": "واه",
+      "meaning_ar": "نعم",
+      "meaning_fr": "oui",
+      "meaning_en": "yes",
+      "synonyms": [
+        "نعم",
+        "إيه",
+        "صح"
+      ],
+      "variants": [],
+      "usage": [
+        "واه كذا",
+        "واه أنا هنا"
+      ],
+      "category": "affirmation"
+    },
+    {
+      "word": "هيه",
+      "meaning_ar": "نعم",
+      "meaning_fr": "oui / ouais",
+      "meaning_en": "yeah / yes",
+      "synonyms": [
+        "نعم",
+        "واه",
+        "إيه"
+      ],
+      "variants": [],
+      "usage": [
+        "هيه فهمت",
+        "هيه هذا صح"
+      ],
+      "category": "affirmation"
+    },
+    {
+      "word": "ممبعد",
+      "meaning_ar": "بعد ذلك",
+      "meaning_fr": "après ça / ensuite",
+      "meaning_en": "after that / then",
+      "synonyms": [
+        "بعدين",
+        "بعد ذلك"
+      ],
+      "variants": [],
+      "usage": [
+        "ممبعد شوف",
+        "ممبعد نحكيوا"
+      ],
+      "category": "connective"
+    },
+    {
+      "word": "فوقاش",
+      "meaning_ar": "متى",
+      "meaning_fr": "quand",
+      "meaning_en": "when",
+      "synonyms": [
+        "وقتاش",
+        "متى"
+      ],
+      "variants": [],
+      "usage": [
+        "فوقاش تجي؟",
+        "فوقاش يخلص؟"
+      ],
+      "category": "question"
+    },
+    {
+      "word": "كاش",
+      "meaning_ar": "أي / بعض",
+      "meaning_fr": "quel / quelque",
+      "meaning_en": "any / some",
+      "synonyms": [
+        "أي",
+        "بعض"
+      ],
+      "variants": [],
+      "usage": [
+        "كاش حاجة",
+        "كاش واحد"
+      ],
+      "category": "determiner"
+    },
+    {
+      "word": "وحدو",
+      "meaning_ar": "وحده",
+      "meaning_fr": "tout seul",
+      "meaning_en": "alone / by himself",
+      "synonyms": [
+        "وحده",
+        "منفرد"
+      ],
+      "variants": [
+        "وحدها",
+        "وحدهم"
+      ],
+      "usage": [
+        "مشى وحدو",
+        "خدم وحدو"
+      ],
+      "category": "adverb"
+    },
+    {
+      "word": "بالخف",
+      "meaning_ar": "بهدوء",
+      "meaning_fr": "doucement / calmement",
+      "meaning_en": "quietly / calmly",
+      "synonyms": [
+        "بهدوء",
+        "بشوية"
+      ],
+      "variants": [],
+      "usage": [
+        "امشي بالخف",
+        "هدر بالخف"
+      ],
+      "category": "adverb"
+    },
+    {
+      "word": "بالصح",
+      "meaning_ar": "فعلاً / حقاً",
+      "meaning_fr": "vraiment / en vérité",
+      "meaning_en": "really / truly / indeed",
+      "synonyms": [
+        "فعلاً",
+        "صراحة"
+      ],
+      "variants": [],
+      "usage": [
+        "بالصح هذا مليح",
+        "بالصح ما عرفتش"
+      ],
+      "category": "adverb"
+    },
+    {
+      "word": "ياك",
+      "meaning_ar": "أليس كذلك",
+      "meaning_fr": "n'est-ce pas / non",
+      "meaning_en": "right? / isn't it?",
+      "synonyms": [
+        "أليس كذلك",
+        "مش كذا"
+      ],
+      "variants": [],
+      "usage": [
+        "مليح ياك؟",
+        "فهمت ياك؟"
+      ],
+      "category": "question"
+    },
+    {
+      "word": "زعفان",
+      "meaning_ar": "غاضب",
+      "meaning_fr": "en colère / fâché",
+      "meaning_en": "angry / annoyed",
+      "synonyms": [
+        "غاضب",
+        "مقلق"
+      ],
+      "variants": [
+        "زعفانة"
+      ],
+      "usage": [
+        "راه زعفان عليك",
+        "ما تزعفنيش"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "حاسد",
+      "meaning_ar": "يغار / حسود",
+      "meaning_fr": "jaloux",
+      "meaning_en": "jealous / envious",
+      "synonyms": [
+        "غيور",
+        "حسود"
+      ],
+      "variants": [
+        "حاسدة"
+      ],
+      "usage": [
+        "هو حاسد عليك",
+        "ما كونش حاسد"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "حشمان",
+      "meaning_ar": "خجول",
+      "meaning_fr": "timide / gêné",
+      "meaning_en": "shy / embarrassed",
+      "synonyms": [
+        "خجول",
+        "حيا"
+      ],
+      "variants": [
+        "حشمانة"
+      ],
+      "usage": [
+        "هو حشمان بزاف",
+        "ما تكونش حشمان"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "مخلوع",
+      "meaning_ar": "خائف",
+      "meaning_fr": "effrayé / apeuré",
+      "meaning_en": "scared / frightened",
+      "synonyms": [
+        "خائف",
+        "مرعوب"
+      ],
+      "variants": [
+        "مخلوعة"
+      ],
+      "usage": [
+        "راه مخلوع بزاف",
+        "ما تخلعش"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "مصدوم",
+      "meaning_ar": "متفاجئ / مذهول",
+      "meaning_fr": "choqué / stupéfait",
+      "meaning_en": "shocked / stunned",
+      "synonyms": [
+        "متفاجئ",
+        "مندهش"
+      ],
+      "variants": [
+        "مصدومة"
+      ],
+      "usage": [
+        "مصدوم من الخبر",
+        "كلش مصدوم"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "مغلب",
+      "meaning_ar": "مرهق / متعب",
+      "meaning_fr": "épuisé / crevé",
+      "meaning_en": "exhausted / worn out",
+      "synonyms": [
+        "مرهق",
+        "عيان"
+      ],
+      "variants": [
+        "مغلبة"
+      ],
+      "usage": [
+        "راني مغلب بزاف",
+        "يبان عليه مغلب"
+      ],
+      "category": "state"
+    },
+    {
+      "word": "قاسح",
+      "meaning_ar": "قوي / صلب",
+      "meaning_fr": "fort / dur",
+      "meaning_en": "strong / tough / hard",
+      "synonyms": [
+        "قوي",
+        "صلب"
+      ],
+      "variants": [
+        "قاسحة"
+      ],
+      "usage": [
+        "الكود قاسح",
+        "هو قاسح في الكلام"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "رخو",
+      "meaning_ar": "ضعيف / ليّن",
+      "meaning_fr": "mou / faible",
+      "meaning_en": "weak / soft / loose",
+      "synonyms": [
+        "ضعيف",
+        "ليّن"
+      ],
+      "variants": [
+        "رخوة"
+      ],
+      "usage": [
+        "الإنترنت رخو ليوم",
+        "الكود رخو"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "مهشم",
+      "meaning_ar": "مكسور",
+      "meaning_fr": "cassé / brisé",
+      "meaning_en": "broken / smashed",
+      "synonyms": [
+        "مكسور",
+        "خايب"
+      ],
+      "variants": [
+        "مهشمة"
+      ],
+      "usage": [
+        "التليفون مهشم",
+        "الكود مهشم"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "مخربق",
+      "meaning_ar": "فوضوي / مشوش",
+      "meaning_fr": "en désordre / brouillon",
+      "meaning_en": "messy / chaotic",
+      "synonyms": [
+        "فوضوي",
+        "مشوش"
+      ],
+      "variants": [
+        "مخربقة"
+      ],
+      "usage": [
+        "الكود مخربق",
+        "الأفكار مخربقة"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "منظم",
+      "meaning_ar": "مرتب",
+      "meaning_fr": "organisé / ordonné",
+      "meaning_en": "organized / tidy",
+      "synonyms": [
+        "مرتب",
+        "مظبوط"
+      ],
+      "variants": [
+        "منظمة"
+      ],
+      "usage": [
+        "الكود منظم مليح",
+        "الملفات منظمة"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "ناشف",
+      "meaning_ar": "يابس",
+      "meaning_fr": "sec",
+      "meaning_en": "dry",
+      "synonyms": [
+        "يابس",
+        "جاف"
+      ],
+      "variants": [
+        "ناشفة"
+      ],
+      "usage": [
+        "الجو ناشف",
+        "ناشف بزاف"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "مبلل",
+      "meaning_ar": "رطب",
+      "meaning_fr": "mouillé / humide",
+      "meaning_en": "wet / damp",
+      "synonyms": [
+        "رطب",
+        "مبلول"
+      ],
+      "variants": [
+        "مبللة"
+      ],
+      "usage": [
+        "الأرض مبللة",
+        "كان مبلل من المطر"
+      ],
+      "category": "adjective"
+    },
+    {
+      "word": "واش كاين",
+      "meaning_ar": "ماذا يوجد / ما الجديد",
+      "meaning_fr": "qu'est-ce qu'il y a / quoi de neuf",
+      "meaning_en": "what's up / what's there",
+      "synonyms": [
+        "ما الجديد",
+        "ماذا يوجد"
+      ],
+      "variants": [],
+      "usage": [
+        "واش كاين اليوم؟",
+        "واش كاين معك؟"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "واش صاري",
+      "meaning_ar": "ماذا حدث",
+      "meaning_fr": "qu'est-ce qui s'est passé",
+      "meaning_en": "what happened",
+      "synonyms": [
+        "ماذا حدث",
+        "واش وقع"
+      ],
+      "variants": [],
+      "usage": [
+        "واش صاري؟",
+        "فسرلي واش صاري"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "واش حوالك",
+      "meaning_ar": "كيف الأحوال",
+      "meaning_fr": "comment ça va / comment tu vas",
+      "meaning_en": "how are things / how are you",
+      "synonyms": [
+        "كيف الأحوال",
+        "واشراك"
+      ],
+      "variants": [],
+      "usage": [
+        "واش حوالك يا خويا؟",
+        "واش حوالك مع الخدمة؟"
+      ],
+      "category": "greeting"
+    },
+    {
+      "word": "كلش مليح",
+      "meaning_ar": "كل شيء جيد",
+      "meaning_fr": "tout va bien",
+      "meaning_en": "everything is fine",
+      "synonyms": [
+        "كل شيء بخير"
+      ],
+      "variants": [],
+      "usage": [
+        "كلش مليح والحمد لله",
+        "كلش مليح لا تقلق"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "ما علاباليش",
+      "meaning_ar": "لا أعلم / لا أهتم",
+      "meaning_fr": "je ne sais pas / je m'en fiche",
+      "meaning_en": "I don't know / I don't care",
+      "synonyms": [
+        "ما نعرفش",
+        "لا يهمني"
+      ],
+      "variants": [],
+      "usage": [
+        "ما علاباليش والله",
+        "ما علاباليش من الأمر"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "معليش",
+      "meaning_ar": "لا بأس / معذرة",
+      "meaning_fr": "pas grave / pardon",
+      "meaning_en": "never mind / it's okay",
+      "synonyms": [
+        "لا بأس",
+        "عادي",
+        "ماشي مشكل"
+      ],
+      "variants": [],
+      "usage": [
+        "معليش غلطت",
+        "معليش هذا نورمال"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "ربي يسهل",
+      "meaning_ar": "أتمنى التوفيق",
+      "meaning_fr": "que Dieu facilite / bonne chance",
+      "meaning_en": "may God make it easy",
+      "synonyms": [
+        "بالتوفيق",
+        "الله يعاون"
+      ],
+      "variants": [],
+      "usage": [
+        "ربي يسهل عليك",
+        "ربي يسهل الأمر"
+      ],
+      "category": "exclamation"
+    },
+    {
+      "word": "الله يجيب الخير",
+      "meaning_ar": "نتمنى الأفضل",
+      "meaning_fr": "que Dieu amène le bien",
+      "meaning_en": "may God bring good",
+      "synonyms": [
+        "نتمنى الخير"
+      ],
+      "variants": [],
+      "usage": [
+        "الله يجيب الخير إن شاء الله",
+        "الله يجيب الخير ليك"
+      ],
+      "category": "exclamation"
+    },
+    {
+      "word": "ربي يوفقك",
+      "meaning_ar": "بالتوفيق",
+      "meaning_fr": "que Dieu te guide",
+      "meaning_en": "good luck / may God guide you",
+      "synonyms": [
+        "بالتوفيق",
+        "حظاً موفقاً"
+      ],
+      "variants": [],
+      "usage": [
+        "ربي يوفقك في الامتحان",
+        "ربي يوفقك دايما"
+      ],
+      "category": "exclamation"
+    },
+    {
+      "word": "دير بالك",
+      "meaning_ar": "انتبه",
+      "meaning_fr": "fais attention",
+      "meaning_en": "pay attention / be careful",
+      "synonyms": [
+        "انتبه",
+        "رد بالك"
+      ],
+      "variants": [],
+      "usage": [
+        "دير بالك من الخطأ",
+        "دير بالك مزيان"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "هادي سهلة",
+      "meaning_ar": "هذا سهل",
+      "meaning_fr": "c'est facile",
+      "meaning_en": "this is easy",
+      "synonyms": [
+        "هذا سهل",
+        "ساهل"
+      ],
+      "variants": [],
+      "usage": [
+        "هادي سهلة راني نحلها",
+        "هادي سهلة خلها عليا"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "هادي صعيبة",
+      "meaning_ar": "هذا صعب",
+      "meaning_fr": "c'est difficile",
+      "meaning_en": "this is hard",
+      "synonyms": [
+        "هذا صعب",
+        "صعيب"
+      ],
+      "variants": [],
+      "usage": [
+        "هادي صعيبة بزاف",
+        "هادي صعيبة بصح ممكن"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "راك غالط",
+      "meaning_ar": "أنت مخطئ",
+      "meaning_fr": "tu as tort",
+      "meaning_en": "you are wrong",
+      "synonyms": [
+        "أنت مخطئ"
+      ],
+      "variants": [],
+      "usage": [
+        "راك غالط في الحل",
+        "راك غالط مليح"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "راك قريب",
+      "meaning_ar": "أنت قريب من الحل",
+      "meaning_fr": "tu es proche",
+      "meaning_en": "you are close / almost there",
+      "synonyms": [
+        "أنت قريب"
+      ],
+      "variants": [],
+      "usage": [
+        "راك قريب، زيد شوية",
+        "راك قريب من الجواب"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "راك بعيد",
+      "meaning_ar": "بعيد عن الحل",
+      "meaning_fr": "tu es loin",
+      "meaning_en": "you are far / off track",
+      "synonyms": [
+        "بعيد عن الصواب"
+      ],
+      "variants": [],
+      "usage": [
+        "راك بعيد على الحل",
+        "راك بعيد، خمم تاني"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "فوتها",
+      "meaning_ar": "تجاهلها / تجاوزها",
+      "meaning_fr": "passe / ignore",
+      "meaning_en": "skip it / pass it",
+      "synonyms": [
+        "تجاوزها",
+        "خليها"
+      ],
+      "variants": [],
+      "usage": [
+        "فوتها ما تستاهلش",
+        "فوت هذه المرحلة"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "كمل",
+      "meaning_ar": "أكمل / استمر",
+      "meaning_fr": "continue / finis",
+      "meaning_en": "continue / complete",
+      "synonyms": [
+        "أكمل",
+        "استمر"
+      ],
+      "variants": [
+        "كملت",
+        "كمل معايا"
+      ],
+      "usage": [
+        "كمل الشرح",
+        "كمل الكود"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "شد",
+      "meaning_ar": "خذ / أمسك",
+      "meaning_fr": "tiens / attrape",
+      "meaning_en": "take / hold",
+      "synonyms": [
+        "خذ",
+        "أمسك"
+      ],
+      "variants": [
+        "شدي",
+        "شديت"
+      ],
+      "usage": [
+        "شد الفرصة",
+        "شد الكود"
+      ],
+      "category": "verb"
+    },
+    {
+      "word": "مدلي",
+      "meaning_ar": "أعطني",
+      "meaning_fr": "donne-moi",
+      "meaning_en": "give me",
+      "synonyms": [
+        "أعطني",
+        "اعطيني"
+      ],
+      "variants": [],
+      "usage": [
+        "مدلي الفيشي",
+        "مدلي اللينك"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "سمحلي",
+      "meaning_ar": "اعذرني / سامحني",
+      "meaning_fr": "excuse-moi / pardon",
+      "meaning_en": "excuse me / forgive me",
+      "synonyms": [
+        "اعذرني",
+        "معذرة"
+      ],
+      "variants": [],
+      "usage": [
+        "سمحلي على التأخر",
+        "سمحلي ما قصدتش"
+      ],
+      "category": "expression"
+    },
+    {
+      "word": "صح فطورك",
+      "meaning_ar": "تقبل الله / رمضان مبارك",
+      "meaning_fr": "bon ramadan / bonne rupture du jeûne",
+      "meaning_en": "blessed iftar / Ramadan greeting",
+      "synonyms": [
+        "تقبل الله"
+      ],
+      "variants": [],
+      "usage": [
+        "صح فطورك يا خويا"
+      ],
+      "category": "greeting"
+    },
+    {
+      "word": "صحا عيدك",
+      "meaning_ar": "عيد مبارك",
+      "meaning_fr": "bonne fête",
+      "meaning_en": "happy Eid",
+      "synonyms": [
+        "عيد مبارك"
+      ],
+      "variants": [],
+      "usage": [
+        "صحا عيدك وعيد قاع المسلمين"
+      ],
+      "category": "greeting"
+    },
+    {
+      "word": "يعطيك العافية",
+      "meaning_ar": "يعطيك الصحة",
+      "meaning_fr": "que Dieu te donne la santé",
+      "meaning_en": "thank you (lit: may God give you health)",
+      "synonyms": [
+        "يعطيك الصحة",
+        "شكراً"
+      ],
+      "variants": [],
+      "usage": [
+        "يعطيك العافية على الخدمة"
+      ],
+      "category": "gratitude"
+    },
+    {
+      "word": "براوزر",
+      "meaning_ar": "متصفح",
+      "meaning_fr": "navigateur",
+      "meaning_en": "browser",
+      "synonyms": [
+        "متصفح"
+      ],
+      "variants": [],
+      "usage": [
+        "افتح البراوزر",
+        "البراوزر تاعك خايب"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "إنترفاس",
+      "meaning_ar": "واجهة",
+      "meaning_fr": "interface",
+      "meaning_en": "interface",
+      "synonyms": [
+        "واجهة"
+      ],
+      "variants": [],
+      "usage": [
+        "الإنترفاس زوين",
+        "عدّل الإنترفاس"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "ألغوريتم",
+      "meaning_ar": "خوارزمية",
+      "meaning_fr": "algorithme",
+      "meaning_en": "algorithm",
+      "synonyms": [
+        "خوارزمية"
+      ],
+      "variants": [],
+      "usage": [
+        "الألغوريتم مليح",
+        "غير الألغوريتم"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "ستوراج",
+      "meaning_ar": "تخزين",
+      "meaning_fr": "stockage",
+      "meaning_en": "storage",
+      "synonyms": [
+        "تخزين"
+      ],
+      "variants": [],
+      "usage": [
+        "الستوراج عامر",
+        "زيد الستوراج"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "نيطوار",
+      "meaning_ar": "شبكة",
+      "meaning_fr": "réseau",
+      "meaning_en": "network",
+      "synonyms": [
+        "شبكة"
+      ],
+      "variants": [],
+      "usage": [
+        "النيطوار رخو",
+        "مشكل في النيطوار"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "تيليفون",
+      "meaning_ar": "هاتف",
+      "meaning_fr": "téléphone",
+      "meaning_en": "phone / telephone",
+      "synonyms": [
+        "هاتف",
+        "موبايل"
+      ],
+      "variants": [],
+      "usage": [
+        "عيط عليه بالتيليفون",
+        "التيليفون تاعي"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "بي سي",
+      "meaning_ar": "حاسوب",
+      "meaning_fr": "PC / ordinateur",
+      "meaning_en": "PC / computer",
+      "synonyms": [
+        "حاسوب",
+        "كمبيوتر"
+      ],
+      "variants": [],
+      "usage": [
+        "الكود يخدم على البي سي",
+        "بي سي جديد"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "بروسيسور",
+      "meaning_ar": "معالج",
+      "meaning_fr": "processeur",
+      "meaning_en": "processor / CPU",
+      "synonyms": [
+        "معالج"
+      ],
+      "variants": [],
+      "usage": [
+        "البروسيسور ساخن",
+        "البروسيسور قوي"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "رام",
+      "meaning_ar": "ذاكرة",
+      "meaning_fr": "RAM / mémoire",
+      "meaning_en": "RAM / memory",
+      "synonyms": [
+        "ذاكرة"
+      ],
+      "variants": [],
+      "usage": [
+        "الرام عامر",
+        "زيد الرام"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "إكران",
+      "meaning_ar": "شاشة",
+      "meaning_fr": "écran",
+      "meaning_en": "screen / display",
+      "synonyms": [
+        "شاشة"
+      ],
+      "variants": [],
+      "usage": [
+        "الإكران مهشم",
+        "إكران كبير"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "كلافيي",
+      "meaning_ar": "لوحة مفاتيح",
+      "meaning_fr": "clavier",
+      "meaning_en": "keyboard",
+      "synonyms": [
+        "لوحة مفاتيح"
+      ],
+      "variants": [],
+      "usage": [
+        "الكلافيي خايب",
+        "كتب على الكلافيي"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "سوريس",
+      "meaning_ar": "فأرة",
+      "meaning_fr": "souris",
+      "meaning_en": "mouse",
+      "synonyms": [
+        "فأرة"
+      ],
+      "variants": [],
+      "usage": [
+        "السوريس ما تخدمش",
+        "شد السوريس"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "سيتينغ",
+      "meaning_ar": "إعدادات",
+      "meaning_fr": "paramètres / settings",
+      "meaning_en": "settings",
+      "synonyms": [
+        "إعدادات"
+      ],
+      "variants": [],
+      "usage": [
+        "روح للسيتينغ",
+        "غير من السيتينغ"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "سيكيوريتي",
+      "meaning_ar": "حماية / أمان",
+      "meaning_fr": "sécurité",
+      "meaning_en": "security",
+      "synonyms": [
+        "حماية",
+        "أمان"
+      ],
+      "variants": [],
+      "usage": [
+        "السيكيوريتي مهمة",
+        "مشكل في السيكيوريتي"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "كريبطاج",
+      "meaning_ar": "تشفير",
+      "meaning_fr": "chiffrement / cryptage",
+      "meaning_en": "encryption / cryptography",
+      "synonyms": [
+        "تشفير"
+      ],
+      "variants": [],
+      "usage": [
+        "الكريبطاج قوي",
+        "دير كريبطاج"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "باكاب",
+      "meaning_ar": "نسخة احتياطية",
+      "meaning_fr": "sauvegarde / backup",
+      "meaning_en": "backup",
+      "synonyms": [
+        "نسخة احتياطية"
+      ],
+      "variants": [],
+      "usage": [
+        "دير باكاب دايما",
+        "الباكاب مهم"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "إكستنشن",
+      "meaning_ar": "ملحق / إضافة",
+      "meaning_fr": "extension",
+      "meaning_en": "extension / add-on",
+      "synonyms": [
+        "ملحق",
+        "إضافة"
+      ],
+      "variants": [],
+      "usage": [
+        "حط الإكستنشن",
+        "الإكستنشن مليح"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "تول",
+      "meaning_ar": "أداة",
+      "meaning_fr": "outil",
+      "meaning_en": "tool",
+      "synonyms": [
+        "أداة"
+      ],
+      "variants": [
+        "تولز"
+      ],
+      "usage": [
+        "هذا تول مليح",
+        "استعمل التول"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "موتور دو ريشارش",
+      "meaning_ar": "محرك بحث",
+      "meaning_fr": "moteur de recherche",
+      "meaning_en": "search engine",
+      "synonyms": [
+        "محرك بحث"
+      ],
+      "variants": [],
+      "usage": [
+        "قلب في موتور دو ريشارش",
+        "Google موتور دو ريشارش مشهور"
+      ],
+      "category": "tech"
+    },
+    {
+      "word": "راك فالقمة",
+      "meaning_ar": "أنت في القمة / ممتاز",
+      "meaning_fr": "tu es au top",
+      "meaning_en": "you're at the top / excellent",
+      "synonyms": [
+        "أنت رائع",
+        "ممتاز"
+      ],
+      "variants": [],
+      "usage": [
+        "راك فالقمة خويا"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "هذا يحمس",
+      "meaning_ar": "هذا مثير",
+      "meaning_fr": "c'est motivant / excitant",
+      "meaning_en": "this is exciting / motivating",
+      "synonyms": [
+        "مثير",
+        "رائع"
+      ],
+      "variants": [],
+      "usage": [
+        "هذا يحمس بزاف",
+        "الفكرة هذا يحمس"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الفكرة عجبتني",
+      "meaning_ar": "الفكرة أعجبتني",
+      "meaning_fr": "l'idée me plaît",
+      "meaning_en": "I like this idea",
+      "synonyms": [
+        "الفكرة جيدة"
+      ],
+      "variants": [],
+      "usage": [
+        "الفكرة عجبتني بزاف"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "خدمة نقية",
+      "meaning_ar": "عمل نظيف / ممتاز",
+      "meaning_fr": "travail propre / parfait",
+      "meaning_en": "clean work / well done",
+      "synonyms": [
+        "عمل نظيف",
+        "ممتاز"
+      ],
+      "variants": [],
+      "usage": [
+        "خدمة نقية هادي"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "راك داير جو",
+      "meaning_ar": "أنت منجز الأشياء",
+      "meaning_fr": "tu assures / tu gères",
+      "meaning_en": "you're killing it / on fire",
+      "synonyms": [
+        "أنت رائع"
+      ],
+      "variants": [],
+      "usage": [
+        "راك داير جو يا خويا"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "النتيجة خرجت شباب",
+      "meaning_ar": "النتيجة ممتازة",
+      "meaning_fr": "le résultat est excellent",
+      "meaning_en": "the result came out great",
+      "synonyms": [
+        "النتيجة ممتازة"
+      ],
+      "variants": [],
+      "usage": [
+        "النتيجة خرجت شباب، برافو"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "هذا احترافي بزاف",
+      "meaning_ar": "هذا احترافي جداً",
+      "meaning_fr": "c'est très professionnel",
+      "meaning_en": "this is very professional",
+      "synonyms": [
+        "احترافي"
+      ],
+      "variants": [],
+      "usage": [
+        "الكود هذا احترافي بزاف"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "كاين تقدم مليح",
+      "meaning_ar": "هناك تقدم جيد",
+      "meaning_fr": "il y a du progrès",
+      "meaning_en": "there is good progress",
+      "synonyms": [
+        "تقدم جيد"
+      ],
+      "variants": [],
+      "usage": [
+        "كاين تقدم مليح في المشروع"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "كلش تحت السيطرة",
+      "meaning_ar": "كل شيء تحت السيطرة",
+      "meaning_fr": "tout est sous contrôle",
+      "meaning_en": "everything under control",
+      "synonyms": [
+        "كل شيء تحت السيطرة"
+      ],
+      "variants": [],
+      "usage": [
+        "ما تقلقش كلش تحت السيطرة"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الأمور واضحة",
+      "meaning_ar": "الأمور واضحة",
+      "meaning_fr": "les choses sont claires",
+      "meaning_en": "things are clear",
+      "synonyms": [
+        "واضح"
+      ],
+      "variants": [],
+      "usage": [
+        "الأمور واضحة ما كاينش مشكل"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "هذي ضربة معلم",
+      "meaning_ar": "هذا عمل رائع",
+      "meaning_fr": "c'est du grand travail / masterstroke",
+      "meaning_en": "masterstroke / brilliant move",
+      "synonyms": [
+        "عمل رائع",
+        "نار"
+      ],
+      "variants": [],
+      "usage": [
+        "هذي ضربة معلم بصح"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الفكرة مدروسة",
+      "meaning_ar": "الفكرة مدروسة جيداً",
+      "meaning_fr": "l'idée est bien réfléchie",
+      "meaning_en": "the idea is well thought out",
+      "synonyms": [
+        "مدروسة"
+      ],
+      "variants": [],
+      "usage": [
+        "الفكرة مدروسة نعتمد عليها"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "هذا يخدم بلا مشاكل",
+      "meaning_ar": "هذا يعمل بدون مشاكل",
+      "meaning_fr": "ça fonctionne sans problèmes",
+      "meaning_en": "this works without issues",
+      "synonyms": [
+        "يعمل بدون مشاكل"
+      ],
+      "variants": [],
+      "usage": [
+        "الكود هذا يخدم بلا مشاكل"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "النظام مستقر",
+      "meaning_ar": "النظام مستقر",
+      "meaning_fr": "le système est stable",
+      "meaning_en": "the system is stable",
+      "synonyms": [
+        "مستقر"
+      ],
+      "variants": [],
+      "usage": [
+        "النظام مستقر لا تقلق"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "السرعة مليحة",
+      "meaning_ar": "السرعة جيدة",
+      "meaning_fr": "la vitesse est bonne",
+      "meaning_en": "the speed is good",
+      "synonyms": [
+        "سريع"
+      ],
+      "variants": [],
+      "usage": [
+        "السرعة مليحة البيرفورمانس تمام"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الواجهة تفتح النفس",
+      "meaning_ar": "الواجهة جميلة",
+      "meaning_fr": "l'interface est agréable",
+      "meaning_en": "the interface is pleasant / nice-looking",
+      "synonyms": [
+        "الواجهة جميلة"
+      ],
+      "variants": [],
+      "usage": [
+        "الواجهة تفتح النفس مليح"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "النتيجة فوق المتوقع",
+      "meaning_ar": "النتيجة أفضل من المتوقع",
+      "meaning_fr": "le résultat dépasse les attentes",
+      "meaning_en": "the result exceeds expectations",
+      "synonyms": [
+        "أفضل من المتوقع"
+      ],
+      "variants": [],
+      "usage": [
+        "النتيجة فوق المتوقع فور"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الوكيل راهو يفهم مليح",
+      "meaning_ar": "الوكيل يفهم جيداً",
+      "meaning_fr": "l'agent comprend bien",
+      "meaning_en": "the agent understands well",
+      "synonyms": [
+        "يفهم جيداً"
+      ],
+      "variants": [],
+      "usage": [
+        "الوكيل راهو يفهم مليح واش تقول"
+      ],
+      "category": "dz_agent"
+    },
+    {
+      "word": "الردود طبيعية بزاف",
+      "meaning_ar": "الردود طبيعية جداً",
+      "meaning_fr": "les réponses sont très naturelles",
+      "meaning_en": "the responses are very natural",
+      "synonyms": [
+        "طبيعي"
+      ],
+      "variants": [],
+      "usage": [
+        "الردود طبيعية بزاف كيما واحد يهدر"
+      ],
+      "category": "dz_agent"
     }
   ],
   "slang_map": {
@@ -4957,7 +6834,98 @@
     "لالا": "لا",
     "كيفاه": "كيف",
     "واش راك": "كيف حالك",
-    "لاباس الحمد لله": "أنا بخير"
+    "لاباس الحمد لله": "أنا بخير",
+    "يتعطل": "يتأخر",
+    "يتزرب": "يتسرع",
+    "ينظم": "يرتب",
+    "يفرق": "يميز",
+    "يلم": "يجمع",
+    "ينقي": "يختار",
+    "يحسم": "يقرر",
+    "يتبع": "يتابع",
+    "يسلم": "يودع",
+    "يبرد": "يهدأ",
+    "يديها": "يفوز",
+    "يصبر": "يتحمل",
+    "يعيى": "يتعب",
+    "يتصدم": "يتفاجأ",
+    "يقلد": "يحاكي",
+    "يطلع": "ينجح",
+    "يطيح": "يفشل",
+    "ينبه": "يحذر",
+    "يتمسخر": "يمزح",
+    "يتهنى": "يرتاح",
+    "يحتار": "يتردد",
+    "يتفادى": "يتجنب",
+    "يغامر": "يجازف",
+    "يسيطر": "يتحكم",
+    "يخمم": "يفكر",
+    "يتخلط": "يرتبك",
+    "يسرح": "يتأمل",
+    "كمل": "أكمل",
+    "شد": "خذ",
+    "باه": "لكي",
+    "تاني": "أيضاً",
+    "ديجا": "بالفعل",
+    "صحيت": "أحسنت",
+    "واه": "نعم",
+    "هيه": "نعم",
+    "ممبعد": "بعد ذلك",
+    "فوقاش": "متى",
+    "كاش": "أي",
+    "وحدو": "وحده",
+    "بالخف": "بهدوء",
+    "بالصح": "فعلاً",
+    "ياك": "أليس كذلك",
+    "زعفان": "غاضب",
+    "حاسد": "غيور",
+    "حشمان": "خجول",
+    "مخلوع": "خائف",
+    "مصدوم": "متفاجئ",
+    "مغلب": "مرهق",
+    "قاسح": "قوي",
+    "رخو": "ضعيف",
+    "مهشم": "مكسور",
+    "مخربق": "فوضوي",
+    "منظم": "مرتب",
+    "ناشف": "يابس",
+    "مبلل": "رطب",
+    "واش كاين": "ما الجديد",
+    "واش صاري": "ماذا حدث",
+    "واش حوالك": "كيف الأحوال",
+    "كلش مليح": "كل شيء جيد",
+    "ما علاباليش": "لا أعلم",
+    "معليش": "لا بأس",
+    "ربي يسهل": "بالتوفيق",
+    "ربي يوفقك": "بالتوفيق",
+    "دير بالك": "انتبه",
+    "هادي سهلة": "هذا سهل",
+    "هادي صعيبة": "هذا صعب",
+    "راك غالط": "أنت مخطئ",
+    "راك قريب": "أنت قريب",
+    "راك بعيد": "أنت بعيد",
+    "فوتها": "تجاوزها",
+    "مدلي": "أعطني",
+    "سمحلي": "اعذرني",
+    "يعطيك العافية": "شكراً",
+    "براوزر": "متصفح",
+    "إنترفاس": "واجهة",
+    "ألغوريتم": "خوارزمية",
+    "ستوراج": "تخزين",
+    "نيطوار": "شبكة",
+    "تيليفون": "هاتف",
+    "بي سي": "حاسوب",
+    "بروسيسور": "معالج",
+    "رام": "ذاكرة",
+    "إكران": "شاشة",
+    "كلافيي": "لوحة مفاتيح",
+    "سوريس": "فأرة",
+    "سيتينغ": "إعدادات",
+    "سيكيوريتي": "حماية",
+    "كريبطاج": "تشفير",
+    "باكاب": "نسخة احتياطية",
+    "إكستنشن": "ملحق",
+    "تول": "أداة"
   },
   "response_map": {
     "كثير": "بزاف",
@@ -5091,8 +7059,52 @@
     "يوجد مشكلة": "كاين مشكل",
     "حاول مرة أخرى": "عاود جرب",
     "شكراً": "يعطيك الصحة",
-    "نعم": "إيه",
-    "كيف حالك": "واش راك"
+    "نعم": "واه",
+    "كيف حالك": "واش راك",
+    "يتأخر": "يتعطل",
+    "يتسرع": "يتزرب",
+    "يرتب": "ينظم",
+    "يجمع": "يلم",
+    "يختار": "ينقي",
+    "يقرر": "يحسم",
+    "يتابع": "يتبع",
+    "يودع": "يسلم",
+    "يهدأ": "يبرد",
+    "يفوز": "يديها",
+    "يتحمل": "يصبر",
+    "يتعب": "يعيى",
+    "يتفاجأ": "يتصدم",
+    "يمزح": "يتمسخر",
+    "يرتاح": "يتهنى",
+    "يتردد": "يحتار",
+    "يتجنب": "يتفادى",
+    "يتحكم": "يسيطر",
+    "يفكر": "يخمم",
+    "أيضاً": "تاني",
+    "بالفعل": "ديجا",
+    "أحسنت": "صحيت",
+    "بعد ذلك": "ممبعد",
+    "وحده": "وحدو",
+    "بهدوء": "بالخف",
+    "فعلاً": "بالصح",
+    "غاضب": "زعفان",
+    "خجول": "حشمان",
+    "خائف": "مخلوع",
+    "متفاجئ": "مصدوم",
+    "مرهق": "مغلب",
+    "قوي": "قاسح",
+    "فوضوي": "مخربق",
+    "مرتب": "منظم",
+    "انتبه": "دير بالك",
+    "متصفح": "براوزر",
+    "واجهة": "إنترفاس",
+    "شبكة": "نيطوار",
+    "هاتف": "تيليفون",
+    "شاشة": "إكران",
+    "إعدادات": "سيتينغ",
+    "حماية": "سيكيوريتي",
+    "تشفير": "كريبطاج",
+    "أداة": "تول"
   },
   "intent_patterns": {
     "question": [
@@ -5108,7 +7120,12 @@
       "?",
       "؟",
       "واش رايك",
-      "وقتاش"
+      "وقتاش",
+      "واش كاين",
+      "واش صاري",
+      "واش حوالك",
+      "فوقاش",
+      "ياك"
     ],
     "request": [
       "عطيني",
@@ -5137,7 +7154,12 @@
       "يجاوب",
       "استنى",
       "عاود",
-      "رد بالك"
+      "رد بالك",
+      "كمل",
+      "شد",
+      "مدلي",
+      "فوتها",
+      "دير بالك"
     ],
     "greeting": [
       "واشراك",
@@ -5146,7 +7168,11 @@
       "سلام",
       "مرحبا",
       "صباح الخير",
-      "مساء الخير"
+      "مساء الخير",
+      "واش حوالك",
+      "واش صاري",
+      "صحا عيدك",
+      "صح فطورك"
     ],
     "gratitude": [
       "شكراً",
@@ -5155,7 +7181,9 @@
       "مرسي",
       "ميرسي",
       "يعطيك الصحة",
-      "يرحم والديك"
+      "يرحم والديك",
+      "يعطيك العافية",
+      "ربي يوفقك"
     ],
     "build_web": [
       "ابني موقع",

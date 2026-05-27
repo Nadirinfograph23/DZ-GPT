@@ -3287,9 +3287,55 @@
 
 .dz-thinking-label {
   font-size: 13px;
-  color: #999;
+  color: #10b981;
   font-style: italic;
   white-space: nowrap;
+  transition: opacity 0.4s ease;
+  animation: dz-tip-fade 0.4s ease;
+}
+
+@keyframes dz-tip-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dz-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.dz-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.15);
+  border-radius: 20px;
+  padding: 2px 8px;
+  letter-spacing: 0.2px;
+  transition: background 0.2s;
+  cursor: default;
+  user-select: none;
+}
+
+.dz-model-badge:hover {
+  background: rgba(16, 163, 127, 0.1);
+  border-color: rgba(16, 163, 127, 0.25);
+  color: #10b981;
+}
+
+.dz-response-time {
+  font-size: 10.5px;
+  color: #9ca3af;
+  padding: 2px 6px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 10px;
 }
 
 /* ===== GENERIC LIST PANEL (branches/issues/PRs) ===== */

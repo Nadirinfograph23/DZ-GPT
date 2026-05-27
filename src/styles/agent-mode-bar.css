@@ -239,6 +239,39 @@
 .amb-tip a:hover { text-decoration: underline; }
 .amb-tip code { background: rgba(255,255,255,0.06); border-radius: 4px; padding: 1px 4px; font-size: 0.68rem; }
 
+/* ── OAuth section ── */
+.amb-oauth-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.amb-oauth-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: rgba(16,163,127,0.12);
+  border: 1px solid rgba(16,163,127,0.35);
+  border-radius: 8px;
+  color: #10a37f;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.18s;
+  align-self: flex-start;
+}
+.amb-oauth-btn:hover {
+  background: rgba(16,163,127,0.22);
+  border-color: rgba(16,163,127,0.55);
+}
+.amb-oauth-hint {
+  font-size: 0.73rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* ── Active repo panel ── */
 .amb-active-panel {
   margin: 0 10px 8px;

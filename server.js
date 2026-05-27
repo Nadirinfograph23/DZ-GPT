@@ -1529,7 +1529,30 @@ function validateAIContent(text, query = '') {
   if (/^(null|undefined|n\/a|none|empty|---+|\.\.\.+)\s*$/i.test(cleaned)) return false
   // Catch the model echoing the system prompt header back instead of answering
   if (cleaned.length < 30 && /^(system|assistant|user)\s*:/i.test(cleaned)) return false
+  // ── CJK pollution guard: reject responses in Chinese/Japanese/Korean
+  //    unless the user's query was in Chinese
+  if (!hasCJKQuery(query) && isCJKPolluted(cleaned)) return false
   return true
+}
+
+// Detect Chinese/Japanese/Korean characters in a string
+function countCJK(str) {
+  return (str.match(/[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF]/g) || []).length
+}
+function isCJKPolluted(text) {
+  if (!text || text.length < 20) return false
+  const cjk = countCJK(text)
+  const ratio = cjk / text.length
+  return ratio > 0.15  // >15% CJK chars → polluted
+}
+function hasCJKQuery(query) {
+  if (!query) return false
+  return countCJK(query) > 3
+}
+
+// Strip CJK characters and replace with space (used for fallback cleanup)
+function stripCJK(text) {
+  return text.replace(/[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF]+/g, '').replace(/\s{2,}/g, ' ').trim()
 }
 
 // ===== ISSUE 4 FIX — GLOBAL RESPONSE GUARD =====
@@ -13510,6 +13533,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
+    `⚠️ قاعدة اللغة الإلزامية: أجب دائماً بنفس لغة المستخدم. إذا كتب بالعربية → أجب بالعربية. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي لغة أخرى لم يستخدمها المستخدم. ❌ لا تستخدم رموزاً أو حروفاً غير مفهومة لا علاقة لها بالسؤال. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى.`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
 • الهوية: DZ Agent — وكيل الجزائر الذكي الأول من نوعه، يعمل 24/7، أنشأه Nadir Houamria
@@ -13905,8 +13929,9 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
-    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بلغة المستخدم.`,
+    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
     `❌ لا تخترع أخباراً أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط.`,
+    `⚠️ قاعدة اللغة الصارمة: ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي رموز غير مفهومة. أجب بالعربية إذا كتب المستخدم بالعربية، وبالفرنسية إذا كتب بالفرنسية، وبالإنجليزية إذا كتب بالإنجليزية.`,
     _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
   ].filter(Boolean).join('\n')
 

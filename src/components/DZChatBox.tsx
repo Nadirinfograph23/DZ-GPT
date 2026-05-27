@@ -294,6 +294,7 @@ type RichType =
   | 'task-plan'
   | 'github-react'
   | 'github-agent'
+  | 'image'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -516,6 +517,9 @@ interface DZMessage {
   taskPlanQuery?: string
   claudeMode?: boolean
   responseTime?: number
+  imageUrl?: string
+  imagePrompt?: string
+  imageModel?: string
 }
 
 interface ActionLogEntry {
@@ -5086,6 +5090,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [agentMode, githubToken, addAssistantMessage, addToLog, fetchFiles, fetchFileContent, scanRepo, deployToGitHubPages, confirmAgentAction, setThinkingStep])
 
+  // ===== IMAGE DETECTION (zero-token, Pollinations) =====
+  const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
+
+  function extractImagePrompt(text: string): string {
+    const cleaned = text
+      .replace(/(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image(?:\s*of)?|create\s*(?:an?\s*)?image(?:\s*of)?|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image(?:\s*of)?|sketch\s*(?:me\s*)?(?:a\s*)?|dessine(?:\s*moi)?\s*(?:un[e]?\s*)?|cr[ée]+\s*une?\s*image\s*(?:de\s*|d')?|g[ée]n[eè]re?\s*une?\s*image\s*(?:de\s*|d')?|fais\s*une?\s*image\s*(?:de\s*|d')?)/ig, '')
+      .trim()
+    return cleaned || text.trim()
+  }
+
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     const text = (overrideInput ?? input).trim()
@@ -5168,6 +5182,41 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     try {
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
+
+      // ── Image Generation (zero-token — Pollinations.ai free & unlimited) ──────
+      if (IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
+        const prompt = extractImagePrompt(text)
+        const loadingId = generateId()
+        setMessages(prev => [...prev, {
+          id: loadingId, role: 'assistant', content: '🎨 جاري توليد الصورة...', richType: 'text', isStreaming: true,
+        }])
+        try {
+          const imgRes = await fetch('/api/tools/img-gen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, model: 'flux' }),
+            signal,
+          })
+          const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; error?: string }
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          if (imgData.imageUrl || imgData.imageBase64) {
+            addAssistantMessage({
+              content: `🎨 **صورة:** ${prompt}`,
+              richType: 'image',
+              imageUrl: imgData.imageUrl || imgData.imageBase64,
+              imagePrompt: prompt,
+              imageModel: imgData.model || 'FLUX',
+            })
+          } else {
+            addAssistantMessage({ content: '⚠️ تعذّر توليد الصورة، حاول مرة أخرى.', richType: 'text', isError: true })
+          }
+        } catch {
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          addAssistantMessage({ content: '⚠️ انقطع الاتصال أثناء توليد الصورة.', richType: 'text', isError: true })
+        }
+        setIsLoading(false)
+        return
+      }
 
       // ── DZ GitHub Agent mode — any GitHub URL or explicit repo in ghAgentRepo ──
       const ghUrlMatch = text.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i)
@@ -6271,6 +6320,39 @@ ${rows}
                             sendMessage(`ناقش معي موضوع هذا الفيديو: "${ytResult.title}"`)
                           }}
                         />
+                      )}
+                      {msg.richType === 'image' && msg.imageUrl && (
+                        <div className="dz-image-card">
+                          <img
+                            src={msg.imageUrl}
+                            alt={msg.imagePrompt || 'صورة مولّدة'}
+                            className="dz-image-card__img"
+                            loading="lazy"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                          <div className="dz-image-card__footer">
+                            <span className="dz-image-card__model">✨ {msg.imageModel || 'FLUX'}</span>
+                            <div className="dz-image-card__actions">
+                              <a
+                                href={msg.imageUrl}
+                                download={`dz-image-${Date.now()}.jpg`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="dz-image-card__btn"
+                                title="تحميل الصورة"
+                              >
+                                ⬇ تحميل
+                              </a>
+                              <button
+                                className="dz-image-card__btn"
+                                onClick={() => sendMessage(`ارسم ${msg.imagePrompt}`)}
+                                title="توليد نسخة جديدة"
+                              >
+                                🔄 نسخة جديدة
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       )}
                       {msg.richType === 'github-profile' && msg.githubProfile && (
                         <div style={{

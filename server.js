@@ -10331,7 +10331,14 @@ const _agentCache = new Map()
 const _CACHE_TTL_MS = 5 * 60 * 1000
 const _CACHE_MAX = 200
 function _cacheKey(msg) {
-  return msg.trim().toLowerCase().slice(0, 120)
+  const base = msg.trim().toLowerCase().slice(0, 120)
+  try {
+    // FIX: استخدام النص المعياري بعد تحويل الدارجة — نفس السؤال بطرق مختلفة = نفس مفتاح الـ cache
+    const norm = normalizeDarija(base)
+    return (norm?.normalized || base).trim().toLowerCase().slice(0, 120)
+  } catch {
+    return base
+  }
 }
 function _cacheGet(msg) {
   const k = _cacheKey(msg)

@@ -1,0 +1,321 @@
+/* ===== AGENT MODE BAR ===== */
+.amb-wrap {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.amb-wrap--active {
+  background: rgba(16,163,127,0.04);
+  border-bottom-color: rgba(16,163,127,0.18);
+}
+
+/* ── Toggle row ── */
+.amb-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  flex-wrap: wrap;
+}
+
+.amb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.amb-toggle:hover { border-color: rgba(16,163,127,0.4); color: #10a37f; }
+.amb-toggle--on {
+  background: rgba(16,163,127,0.12);
+  border-color: rgba(16,163,127,0.5);
+  color: #10a37f;
+}
+
+.amb-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #555;
+  transition: background 0.2s;
+}
+.amb-dot--on { background: #10a37f; box-shadow: 0 0 6px rgba(16,163,127,0.6); animation: amb-pulse 2s infinite; }
+@keyframes amb-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+/* ── Repo select ── */
+.amb-repo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 3px 8px;
+  color: #94a3b8;
+  min-width: 0;
+  flex: 1;
+  max-width: 240px;
+  cursor: pointer;
+}
+.amb-repo-select {
+  background: transparent;
+  border: none;
+  color: #e2e8f0;
+  font-size: 0.76rem;
+  outline: none;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.amb-repo-select option { background: #1e1e1e; }
+
+/* ── Auto confirm ── */
+.amb-auto-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.amb-auto-label input { accent-color: #f59e0b; cursor: pointer; }
+
+/* ── Buttons ── */
+.amb-cmds-btn, .amb-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent;
+  color: #64748b;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.amb-cmds-btn:hover, .amb-expand-btn:hover { color: #e2e8f0; border-color: rgba(255,255,255,0.2); }
+.amb-cmds-btn--on { background: rgba(99,102,241,0.12); color: #818cf8; border-color: rgba(99,102,241,0.3); }
+
+.amb-status-badge {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; color: #10a37f; padding: 2px 8px;
+  border-radius: 12px; background: rgba(16,163,127,0.08);
+  border: 1px solid rgba(16,163,127,0.2);
+}
+
+/* ── Commands sheet ── */
+.amb-cmds-sheet {
+  margin: 0 10px 8px;
+  background: rgba(30,30,30,0.95);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: amb-slide 0.15s ease;
+}
+@keyframes amb-slide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+.amb-cmds-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  background: rgba(99,102,241,0.08);
+  color: #818cf8;
+  font-size: 0.78rem; font-weight: 600;
+}
+.amb-cmds-header button { margin-right: auto; background: none; border: none; color: #64748b; cursor: pointer; }
+.amb-cmds-header button:hover { color: #e2e8f0; }
+
+.amb-cmds-list {
+  padding: 6px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.amb-cmd-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.amb-cmd-row:last-child { border-bottom: none; }
+.amb-cmd-row:hover { background: rgba(255,255,255,0.03); }
+.amb-cmd-code { color: #10a37f; font-size: 0.76rem; font-family: 'SF Mono', monospace; }
+.amb-cmd-desc { color: #94a3b8; font-size: 0.74rem; }
+.amb-cmd-ex { color: #475569; font-size: 0.69rem; font-family: 'SF Mono', monospace; display: none; }
+@media(min-width:600px){ .amb-cmd-ex { display: block; } }
+
+.amb-cmds-tip {
+  padding: 6px 14px 8px;
+  font-size: 0.71rem;
+  color: #475569;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ── Setup panel ── */
+.amb-setup-panel {
+  margin: 0 10px 10px;
+  padding: 12px 14px;
+  background: rgba(17,24,39,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  animation: amb-slide 0.15s ease;
+}
+.amb-setup-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; font-weight: 700; color: #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.amb-gh-user {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.78rem; color: #94a3b8;
+  margin-bottom: 10px;
+}
+.amb-gh-avatar { width: 24px; height: 24px; border-radius: 50%; }
+.amb-check { color: #10a37f; }
+
+.amb-token-row {
+  display: flex; gap: 8px; margin-bottom: 8px;
+}
+.amb-token-field {
+  flex: 1;
+  display: flex;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.amb-token-input {
+  flex: 1; padding: 6px 10px;
+  background: transparent; border: none; outline: none;
+  color: #e2e8f0; font-size: 0.78rem; font-family: 'SF Mono', monospace;
+}
+.amb-token-input::placeholder { color: #475569; }
+.amb-eye-btn {
+  padding: 0 8px;
+  background: none; border: none; border-left: 1px solid rgba(255,255,255,0.08);
+  color: #475569; cursor: pointer;
+}
+.amb-eye-btn:hover { color: #94a3b8; }
+.amb-connect-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 14px;
+  background: rgba(16,163,127,0.12);
+  border: 1px solid rgba(16,163,127,0.3);
+  border-radius: 8px;
+  color: #10a37f; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: all 0.15s;
+}
+.amb-connect-btn:hover:not(:disabled) { background: rgba(16,163,127,0.22); }
+.amb-connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.amb-error {
+  display: flex; align-items: center; gap: 6px;
+  color: #f87171; font-size: 0.76rem; margin-bottom: 8px;
+  padding: 6px 10px;
+  background: rgba(239,68,68,0.08);
+  border-radius: 6px;
+}
+.amb-tip {
+  font-size: 0.72rem; color: #475569; line-height: 1.5; margin-top: 8px;
+}
+.amb-tip a { color: #818cf8; text-decoration: none; }
+.amb-tip a:hover { text-decoration: underline; }
+.amb-tip code { background: rgba(255,255,255,0.06); border-radius: 4px; padding: 1px 4px; font-size: 0.68rem; }
+
+/* ── Active repo panel ── */
+.amb-active-panel {
+  margin: 0 10px 8px;
+  padding: 8px 12px;
+  background: rgba(16,163,127,0.06);
+  border: 1px solid rgba(16,163,127,0.15);
+  border-radius: 8px;
+  animation: amb-slide 0.15s ease;
+}
+.amb-active-repo {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; color: #94a3b8; margin-bottom: 4px;
+}
+.amb-active-repo strong { color: #e2e8f0; }
+.amb-ext-link { color: #64748b; display: flex; transition: color 0.15s; }
+.amb-ext-link:hover { color: #10a37f; }
+.amb-active-hint {
+  font-size: 0.72rem; color: #475569;
+}
+.amb-active-hint code { background: rgba(255,255,255,0.06); border-radius: 3px; padding: 0 4px; font-size: 0.68rem; }
+
+/* ── Spinner ── */
+.amb-spin { animation: amb-rotate 0.8s linear infinite; }
+@keyframes amb-rotate { to { transform: rotate(360deg); } }
+
+/* ── Confirmation dialog ── */
+.amb-confirm-wrap {
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  background: rgba(245,158,11,0.07);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 10px;
+  animation: amb-slide 0.15s ease;
+}
+.amb-confirm-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; font-weight: 700; color: #fbbf24; margin-bottom: 6px;
+}
+.amb-confirm-detail {
+  font-size: 0.76rem; color: #94a3b8; margin-bottom: 10px;
+  line-height: 1.5;
+}
+.amb-confirm-detail code {
+  background: rgba(255,255,255,0.06); border-radius: 4px;
+  padding: 1px 5px; font-family: 'SF Mono', monospace; font-size: 0.72rem;
+  color: #e2e8f0;
+}
+.amb-confirm-btns { display: flex; gap: 8px; }
+.amb-confirm-yes {
+  padding: 5px 16px;
+  background: rgba(16,163,127,0.15);
+  border: 1px solid rgba(16,163,127,0.4);
+  border-radius: 7px; color: #10a37f; font-size: 0.78rem;
+  font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.amb-confirm-yes:hover { background: rgba(16,163,127,0.28); }
+.amb-confirm-no {
+  padding: 5px 14px;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 7px; color: #f87171; font-size: 0.78rem;
+  cursor: pointer; transition: all 0.15s;
+}
+.amb-confirm-no:hover { background: rgba(239,68,68,0.2); }
+
+/* ── Agent mode indicator in chat ── */
+.amb-agent-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  background: rgba(16,163,127,0.1);
+  border: 1px solid rgba(16,163,127,0.25);
+  border-radius: 12px;
+  font-size: 0.68rem; font-weight: 600; color: #10a37f;
+  margin-left: 6px;
+}
+.amb-agent-badge--exec {
+  background: rgba(245,158,11,0.1);
+  border-color: rgba(245,158,11,0.3);
+  color: #fbbf24;
+}

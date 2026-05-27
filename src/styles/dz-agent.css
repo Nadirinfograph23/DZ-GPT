@@ -361,6 +361,43 @@
   .dza-menu-btn { display: none; }
 }
 
+/* ===== MOBILE: optimize chat area spacing ===== */
+@media (max-width: 768px) {
+  .dza-layout {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .dza-main {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+  }
+  .dz-agent-body {
+    width: 100%;
+    min-width: 0;
+  }
+  .dz-chatbox {
+    width: 100%;
+    min-width: 0;
+  }
+  .dz-messages {
+    padding: 12px 10px;
+    gap: 14px;
+  }
+  .dz-input-area {
+    padding: 8px 10px 14px;
+  }
+  .dz-input-container {
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+  .dz-agent-header {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+}
+
 /* ===== DZ AGENT PAGE (legacy, kept for chatbox inner styles) ===== */
 .dz-agent-page {
   display: flex;

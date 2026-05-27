@@ -6104,18 +6104,13 @@ ${rows}
                           }}
                         >{msg.content}</ReactMarkdown>
                       )}
-                      {msg.model && (
+                      {msg.model && msg.responseTime && msg.responseTime > 0 && (
                         <div className="dz-msg-meta">
-                          <span className="dz-model-badge" title={msg.model}>
-                            {formatModelName(msg.model)}
+                          <span className="dz-response-time">
+                            {msg.responseTime < 1000
+                              ? `${msg.responseTime}ms`
+                              : `${(msg.responseTime / 1000).toFixed(1)}s`}
                           </span>
-                          {msg.responseTime && msg.responseTime > 0 && (
-                            <span className="dz-response-time">
-                              {msg.responseTime < 1000
-                                ? `${msg.responseTime}ms`
-                                : `${(msg.responseTime / 1000).toFixed(1)}s`}
-                            </span>
-                          )}
                         </div>
                       )}
                       {msg.hasMoreNews && msg.newsQuery && (

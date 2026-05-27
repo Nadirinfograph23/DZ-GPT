@@ -4993,9 +4993,105 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // /memory — view, save, refresh or clear the project memory (dz-agent.md)
+      if (cmd === '/memory') {
+        const sub = args.trim().split(/\s+/)[0]?.toLowerCase() || 'show'
+        const noteText = args.trim().startsWith(sub) ? args.trim().slice(sub.length).trim() : args.trim()
+
+        if (sub === 'clear') {
+          projectMemoryRef.current = ''
+          setProjectMemoryLoaded('')
+          addAssistantMessage({ content: '🗑️ **ذاكرة المشروع مُفرَّغة** من الجلسة الحالية — ستُعاد قراءتها تلقائياً عند اختيار الـ repo مجدداً.', richType: 'text' })
+          return
+        }
+
+        if (sub === 'refresh') {
+          if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+          setProjectMemoryLoaded('')
+          projectMemoryRef.current = ''
+          setThinkingStep({ type: 'read', label: `تحميل dz-agent.md من ${repo}...` })
+          try {
+            const params = new URLSearchParams({ repo, branch: 'main', token: tok })
+            const r = await fetch(`/api/dz-agent/github/project-memory?${params}`)
+            const d = await r.json()
+            if (d.exists && d.content) {
+              projectMemoryRef.current = d.content
+              setProjectMemoryLoaded(repo)
+              addAssistantMessage({
+                content: `✅ **تم تحديث الذاكرة** من \`${repo}/dz-agent.md\`\n\n\`\`\`markdown\n${d.content.slice(0, 1800)}\n\`\`\``,
+                richType: 'text',
+                quickSuggestions: ['/memory save', '/memory clear'],
+              })
+            } else {
+              addAssistantMessage({
+                content: `📭 لا يوجد ملف \`dz-agent.md\` في \`${repo}\` بعد.\n\nاستخدم \`/memory save\` لإنشائه الآن.`,
+                richType: 'text',
+                quickSuggestions: ['/memory save'],
+              })
+            }
+          } catch (e) {
+            addAssistantMessage({ content: `❌ خطأ في التحميل: ${(e as Error).message}`, richType: 'text', isError: true })
+          }
+          return
+        }
+
+        if (sub === 'save') {
+          if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+          setThinkingStep({ type: 'commit', label: `حفظ ذاكرة المشروع في ${repo}...` })
+          const projCtx = loadProjectContext()
+          try {
+            const res = await fetch('/api/dz-agent/github/project-memory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                repo,
+                branch: 'main',
+                token: tok,
+                context: {
+                  mainLang:    projCtx.lang    || '',
+                  projectType: projCtx.stack   || '',
+                  keyFiles:    projCtx.files   || [],
+                  lastTask:    projCtx.lastAction || '',
+                  notes:       noteText || '',
+                },
+              }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Save failed')
+            addAssistantMessage({
+              content: `✅ **تم حفظ ذاكرة المشروع** في \`${repo}/dz-agent.md\`\n\n**Commit:** \`${String(data.commit || 'N/A').slice(0, 10)}\`\n\n> ستُحمَّل تلقائياً في الجلسة القادمة عند اختيار هذا المستودع.`,
+              richType: 'text',
+              quickSuggestions: ['/memory refresh', '/memory clear'],
+            })
+            setProjectMemoryLoaded('')  // trigger re-fetch on next interaction
+          } catch (err) {
+            addAssistantMessage({ content: `❌ فشل الحفظ: ${(err as Error).message}`, richType: 'text', isError: true })
+          }
+          return
+        }
+
+        // Default: /memory (show cached content)
+        if (projectMemoryRef.current) {
+          addAssistantMessage({
+            content: `📋 **ذاكرة المشروع المحمّلة** — \`${repo || 'غير محدد'}\`\n\n\`\`\`markdown\n${projectMemoryRef.current.slice(0, 2000)}\n\`\`\`\n\n> **أوامر:** \`/memory save [ملاحظات]\` لتحديثها · \`/memory refresh\` لإعادة تحميلها · \`/memory clear\` لمسحها`,
+            richType: 'text',
+            quickSuggestions: ['/memory save', '/memory refresh', '/memory clear'],
+          })
+        } else {
+          addAssistantMessage({
+            content: repo
+              ? `📭 **لا توجد ذاكرة محمّلة** للمستودع \`${repo}\`\n\nملف \`dz-agent.md\` غير موجود أو لم يُنشأ بعد.\n\n> استخدم \`/memory save\` لإنشائه الآن — يُحفَظ في جذر المستودع ويُحمَّل تلقائياً في كل جلسة.`
+              : `⚠️ حدد مستودعاً في شريط الوكيل أولاً، ثم استخدم \`/memory\`.`,
+            richType: 'text',
+            quickSuggestions: repo ? ['/memory save', '/memory refresh'] : [],
+          })
+        }
+        return
+      }
+
       // unknown command
       addAssistantMessage({
-        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\``,
+        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\` \`/memory\``,
         richType: 'text',
         isError: true,
       })

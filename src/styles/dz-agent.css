@@ -9392,3 +9392,252 @@
   font-family: inherit;
 }
 .dz-nav-no:hover { background: rgba(255,255,255,0.05); color: #94a3b8; }
+
+/* ===== GROQ KEYS PANEL ===== */
+.dza-groq-section {
+  margin: 4px 10px 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(16,163,127,0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(16,163,127,0.03);
+}
+
+.dza-groq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #c8d8d0;
+  transition: background 0.18s;
+}
+.dza-groq-header:hover {
+  background: rgba(16,163,127,0.07);
+}
+
+.dza-groq-header-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dza-groq-icon {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.dza-groq-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #c8d8d0;
+}
+
+.dza-groq-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16,163,127,0.15);
+  border-radius: 20px;
+  padding: 1px 6px;
+}
+
+.dza-groq-chevron {
+  font-size: 14px;
+  color: #64748b;
+  transition: transform 0.25s ease;
+  line-height: 1;
+}
+.dza-groq-chevron--open {
+  transform: rotate(180deg);
+}
+
+.dza-groq-body {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: dza-groq-slide 0.22s ease;
+}
+
+@keyframes dza-groq-slide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dza-groq-hint {
+  font-size: 11px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+  text-align: right;
+}
+.dza-groq-hint a {
+  color: #10b981;
+  text-decoration: none;
+}
+.dza-groq-hint a:hover {
+  text-decoration: underline;
+}
+
+.dza-groq-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dza-groq-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dza-groq-field-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  min-width: 30px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dza-groq-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #334155;
+  flex-shrink: 0;
+}
+.dza-groq-dot--active {
+  background: #10b981;
+  box-shadow: 0 0 5px rgba(16,185,129,0.5);
+}
+
+.dza-groq-input-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.dza-groq-input {
+  width: 100%;
+  padding: 5px 28px 5px 8px;
+  background: rgba(15,23,42,0.6);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 7px;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  outline: none;
+  transition: border-color 0.18s;
+  direction: ltr;
+  text-align: left;
+  box-sizing: border-box;
+}
+.dza-groq-input:focus {
+  border-color: rgba(16,163,127,0.4);
+  background: rgba(15,23,42,0.8);
+}
+.dza-groq-input::placeholder {
+  color: #334155;
+}
+
+.dza-groq-eye-btn {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.dza-groq-eye-btn:hover {
+  color: #94a3b8;
+}
+
+.dza-groq-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.dza-groq-status {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.dza-groq-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, #10a37f, #0d9268);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.18s, transform 0.18s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.dza-groq-save-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+.dza-groq-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.dza-groq-save-btn--saved {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.dza-groq-saving-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  animation: dza-spin 0.6s linear infinite;
+}
+@keyframes dza-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dza-groq-active-bar {
+  display: flex;
+  gap: 4px;
+  height: 4px;
+}
+
+.dza-groq-bar-seg {
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.07);
+  transition: background 0.3s;
+}
+.dza-groq-bar-seg--on {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16,185,129,0.4);
+}

@@ -157,21 +157,89 @@ function persistRating(msgId: string, vote: RatingVote): RatingsStore {
 // ===== PERSISTENT MEMORY (Feature A) =====
 const MEMORY_KEY = 'dz-user-memory'
 const CONV_COUNT_KEY = 'dz-conv-count'
-interface UserMemory { conversationCount: number; lastTopics: string[]; lastSeen: string }
+const PROJECT_CTX_KEY = 'dz-project-ctx'
+
+interface UserMemory {
+  conversationCount: number
+  lastTopics: string[]
+  lastSeen: string
+  lastCodeLanguage?: string
+  projectStack?: string
+}
+
+interface ProjectContext {
+  stack: string
+  lang: string
+  files: string[]
+  lastAction: string
+}
+
 function loadUserMemory(): UserMemory {
   try { return { conversationCount: 0, lastTopics: [], lastSeen: '', ...JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}') } } catch { return { conversationCount: 0, lastTopics: [], lastSeen: '' } }
 }
 function saveUserMemory(patch: Partial<UserMemory>) {
   try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...loadUserMemory(), ...patch, lastSeen: new Date().toISOString() })) } catch {}
 }
+
+function loadProjectContext(): ProjectContext {
+  try { return { stack: '', lang: '', files: [], lastAction: '', ...JSON.parse(sessionStorage.getItem(PROJECT_CTX_KEY) || '{}') } } catch { return { stack: '', lang: '', files: [], lastAction: '' } }
+}
+function saveProjectContext(patch: Partial<ProjectContext> & { addFile?: string }) {
+  try {
+    const cur = loadProjectContext()
+    const updated: ProjectContext = { ...cur, ...patch }
+    if (patch.addFile) updated.files = [...new Set([patch.addFile, ...cur.files])].slice(0, 8)
+    delete (updated as Record<string, unknown>).addFile
+    sessionStorage.setItem(PROJECT_CTX_KEY, JSON.stringify(updated))
+  } catch {}
+}
+
+function detectCodeLanguage(text: string): string {
+  const t = text.toLowerCase()
+  if (/typescript|\.tsx|\.ts\b|interface |type /.test(t)) return 'TypeScript'
+  if (/\bpython\b|\.py\b|def |import os|pip install|requirements\.txt/.test(t)) return 'Python'
+  if (/\bphp\b|\.php|laravel|composer|<\?php/.test(t)) return 'PHP'
+  if (/react|jsx|next\.js|nextjs|vite/.test(t)) return 'React'
+  if (/\bcss\b|scss|styled-components|tailwind/.test(t)) return 'CSS'
+  if (/<!doctype|<html|\.html/.test(t)) return 'HTML'
+  if (/\bsql\b|select .* from|create table|sqlite/.test(t)) return 'SQL'
+  if (/\bjavascript\b|\.js\b|node\.js|express/.test(t)) return 'JavaScript'
+  if (/docker|dockerfile|nginx|bash|shell script/.test(t)) return 'DevOps'
+  return ''
+}
+
+function detectProjectStack(text: string): string {
+  const t = text.toLowerCase()
+  if (/next\.js|nextjs/.test(t)) return 'Next.js'
+  if (/laravel/.test(t)) return 'Laravel/PHP'
+  if (/django/.test(t)) return 'Django'
+  if (/fastapi/.test(t)) return 'FastAPI'
+  if (/flask/.test(t)) return 'Flask'
+  if (/react|vite/.test(t)) return 'React'
+  if (/nestjs/.test(t)) return 'NestJS'
+  if (/express/.test(t)) return 'Express/Node'
+  if (/wordpress/.test(t)) return 'WordPress'
+  return ''
+}
+
+function extractFileNames(text: string): string[] {
+  const matches = text.match(/\b[\w\-.]+\.(tsx?|jsx?|py|php|css|scss|html|sql|json|yaml|yml|md|sh)\b/g) || []
+  return [...new Set(matches)].slice(0, 5)
+}
+
 function buildMemoryContext(): string {
   const m = loadUserMemory()
-  if (!m.lastTopics?.length && !m.conversationCount) return ''
+  const p = loadProjectContext()
   const parts: string[] = []
-  if (m.conversationCount > 0) parts.push(`هذه محادثتك رقم ${m.conversationCount + 1} مع DZ Agent`)
-  if (m.lastTopics?.length > 0) parts.push(`مواضيع محادثاتك الأخيرة: ${m.lastTopics.slice(0, 3).join('، ')}`)
-  return parts.length > 0 ? `\n[ذاكرة: ${parts.join(' — ')}]` : ''
+  if (m.conversationCount > 0) parts.push(`محادثة رقم ${m.conversationCount + 1}`)
+  if (m.lastTopics?.length > 0) parts.push(`مواضيع سابقة: ${m.lastTopics.slice(0, 3).join('، ')}`)
+  if (p.stack) parts.push(`المشروع: ${p.stack}`)
+  if (p.lang) parts.push(`لغة الكود: ${p.lang}`)
+  if (p.files?.length > 0) parts.push(`ملفات المنشأة: ${p.files.slice(0, 4).join(', ')}`)
+  if (p.lastAction) parts.push(`آخر إجراء: ${p.lastAction}`)
+  return parts.length > 0 ? `\n[سياق: ${parts.join(' — ')}]` : ''
 }
+
 function incrementConvCount() {
   const c = parseInt(localStorage.getItem(CONV_COUNT_KEY) || '0', 10) + 1
   localStorage.setItem(CONV_COUNT_KEY, String(c))
@@ -4964,8 +5032,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         }
       }
     }
-    // Update memory with this query topic
-    saveUserMemory({ lastTopics: [text.slice(0, 60), ...loadUserMemory().lastTopics].slice(0, 5) })
+    // Update memory + project context with this query
+    const _detectedLang  = detectCodeLanguage(text)
+    const _detectedStack = detectProjectStack(text)
+    const _detectedFiles = extractFileNames(text)
+    saveUserMemory({
+      lastTopics: [text.slice(0, 60), ...loadUserMemory().lastTopics].slice(0, 5),
+      ...(_detectedLang  ? { lastCodeLanguage: _detectedLang }  : {}),
+      ...(_detectedStack ? { projectStack: _detectedStack }     : {}),
+    })
+    if (_detectedLang || _detectedStack || _detectedFiles.length) {
+      saveProjectContext({
+        ...(_detectedLang  ? { lang: _detectedLang }   : {}),
+        ...(_detectedStack ? { stack: _detectedStack } : {}),
+        lastAction: text.slice(0, 80),
+      })
+      _detectedFiles.forEach(f => saveProjectContext({ addFile: f }))
+    }
 
     setMessages(prev => [...prev, userMessage])
     setInput('')

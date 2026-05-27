@@ -3529,6 +3529,31 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const activeYouTubeVideoRef = useRef<YouTubeVideoData | null>(null)
   // Smart Video Selection — stores last search results so they can be sent as candidates
   const youtubeCandidatesRef = useRef<YouTubeResult[]>([])
+  // Project Memory — stores dz-agent.md content fetched from the selected repo
+  const projectMemoryRef = useRef<string>('')
+  const [projectMemoryLoaded, setProjectMemoryLoaded] = useState<string>('')  // repo name when loaded
+
+  // ===== PROJECT MEMORY: auto-fetch dz-agent.md when repo is selected =====
+  useEffect(() => {
+    const repo = agentMode.selectedRepo
+    if (!repo) { projectMemoryRef.current = ''; setProjectMemoryLoaded(''); return }
+    // Already loaded for this repo
+    if (projectMemoryLoaded === repo) return
+    const tok = agentMode.githubToken || githubToken
+    const params = new URLSearchParams({ repo, branch: 'main', ...(tok ? { token: tok } : {}) })
+    fetch(`/api/dz-agent/github/project-memory?${params}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.exists && d.content) {
+          projectMemoryRef.current = d.content
+          setProjectMemoryLoaded(repo)
+        } else {
+          projectMemoryRef.current = ''
+          setProjectMemoryLoaded('')
+        }
+      })
+      .catch(() => { projectMemoryRef.current = ''; setProjectMemoryLoaded('') })
+  }, [agentMode.selectedRepo, agentMode.githubToken, githubToken, projectMemoryLoaded])
 
   const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
     const updated = persistRating(msgId, vote)
@@ -5021,14 +5046,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         : m.content,
     }))
 
-    // Inject behavior context + persistent memory + agent context into the last user message
+    // Inject behavior context + persistent memory + project memory + agent context
     const memoryCtx = buildMemoryContext()
-    if ((behaviorCtx || memoryCtx || agentCtxInject) && outboundMessages.length > 0) {
+    const projectMemCtx = projectMemoryRef.current
+      ? `\n\n[ذاكرة المشروع من dz-agent.md]\n${projectMemoryRef.current.slice(0, 2000)}\n[/ذاكرة المشروع]`
+      : ''
+    if ((behaviorCtx || memoryCtx || projectMemCtx || agentCtxInject) && outboundMessages.length > 0) {
       const last = outboundMessages[outboundMessages.length - 1]
       if (last.role === 'user') {
         outboundMessages[outboundMessages.length - 1] = {
           ...last,
-          content: last.content + behaviorCtx + memoryCtx + agentCtxInject,
+          content: last.content + behaviorCtx + memoryCtx + projectMemCtx + agentCtxInject,
         }
       }
     }
@@ -6458,6 +6486,14 @@ ${rows}
           }}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
         />
+
+        {/* ===== PROJECT MEMORY BADGE ===== */}
+        {projectMemoryLoaded && (
+          <div className="dz-project-memory-badge">
+            <Brain size={11} />
+            <span>ذاكرة المشروع محمّلة: <strong>{projectMemoryLoaded.split('/')[1] || projectMemoryLoaded}</strong></span>
+          </div>
+        )}
 
         {/* ===== AGENT CONFIRMATION DIALOG ===== */}
         {pendingAgentCmd && (

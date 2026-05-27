@@ -7,6 +7,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { readFile } from 'fs/promises'
+import { readFileSync as _readFileSync } from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
@@ -10585,6 +10586,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     lines.push('⚠️ لا تُعلم المستخدم بأي معالجة لغوية — طبّق الأسلوب بصمت تام.')
     lines.push('⚠️ لا تقل "لم أفهم" — حاول دائماً تفسير القصد والإجابة بشكل مفيد.')
     lines.push('⚠️ إذا كانت كلمة دارجة غير معروفة → اعتبرها سياقاً وأجب بشكل طبيعي.')
+
+    // ── IMPROVEMENT: حقن آخر كلمات دارجة متعلَّمة في system prompt ──────────
+    // يضمن أن الـ AI يعرف معاني الكلمات الجديدة التي تعلّمها من المستخدمين
+    try {
+      const _learnedRaw = _readFileSync(path.join(process.cwd(), 'data', 'dz_learned.json'), 'utf8')
+      const _learnedData = JSON.parse(_learnedRaw)
+      const _recentWords = (_learnedData.learned || [])
+        .filter(w => w.word && w.guessed_meaning)
+        .slice(-25)
+      if (_recentWords.length > 0) {
+        lines.push('')
+        lines.push('📖 كلمات دارجة جزائرية تعلّمها النظام مؤخراً (استخدمها إذا وردت في السياق):')
+        lines.push(_recentWords.map(w => `  • ${w.word} = ${w.guessed_meaning}`).join('\n'))
+      }
+    } catch { /* لا تكسر الـ request إذا فشل تحميل الكلمات */ }
+
     return lines.join('\n')
   })()
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
@@ -13552,9 +13569,42 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       .replace(/^\s*\n/, '').trim()
 
     const _finalContent = _cleanRawUrls(_stripThinking(aiResult.content))
+
+    // ── QA Score: تحقق من جودة الرد قبل الإرسال ─────────────────────────────
+    // إذا كانت الجودة منخفضة → نحاول مرة ثانية بمزود مختلف (تقني أو استرجاع)
+    const _qaScore = (() => {
+      const t = _finalContent || ''
+      let score = 0
+      if (t.length >= 30)  score++                                            // طول كافٍ
+      if (t.length >= 100) score++                                            // رد مفصّل
+      if (/[\u0600-\u06FF]{5,}/.test(t)) score++                             // محتوى عربي حقيقي
+      if (!/(لا أعلم|لست متأكد){2,}/.test(t)) score++                       // لا تكرار شك
+      if (!/(\.{3,}|…)\s*$/.test(t)) score++                                 // غير مقطوع
+      return score // من 5
+    })()
+
+    let _finalResult = aiResult
+    if (_qaScore <= 2 && !_hasSearchCtx) {
+      // الجودة ضعيفة → نحاول مرة ثانية مع hint مختلف
+      try {
+        const _altHint = (_taskHint === 'multilingual') ? 'reasoning' : 'multilingual'
+        const _retryResult = await safeGenerateAI({
+          messages: reasonedMessages,
+          query: lastUserMessage,
+          max_tokens: _chatTokens,
+          taskHint: _altHint,
+        })
+        if (_retryResult?.content && _retryResult.content.length > _finalContent.length + 30) {
+          _finalResult = _retryResult
+          console.log(`[QA] رد ضعيف (score=${_qaScore}) → retry نجح مع hint=${_altHint}`)
+        }
+      } catch { /* لا تكسر الـ request عند فشل الـ retry */ }
+    }
+
+    const _bestContent = _cleanRawUrls(_stripThinking(_finalResult.content))
     const _responsePayload = {
-      content: _finalContent,
-      fallbackModel: aiResult.model,
+      content: _bestContent,
+      fallbackModel: _finalResult.model,
       reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
@@ -13562,7 +13612,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // ── Cache write — only simple, non-live-data, single-turn queries ────────
-    if (!currentRepo && !githubToken && !_NOCACHE_RE.test(lastUserMessage) && messages.length <= 2 && _finalContent.length > 20) {
+    if (!currentRepo && !githubToken && !_NOCACHE_RE.test(lastUserMessage) && messages.length <= 2 && _bestContent.length > 20 && _qaScore >= 3) {
       _cacheSet(lastUserMessage, _responsePayload)
     }
 

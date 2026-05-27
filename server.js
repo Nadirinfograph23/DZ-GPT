@@ -1876,6 +1876,18 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   const _isHeavyGen = taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
   const effectiveTokens = _isHeavyGen ? Math.min(max_tokens, 8000) : Math.min(max_tokens, 4096)
 
+  // ── DeepSeek FIRST for code/technical tasks (best code quality) ────────────
+  const _isCodeTask = taskHint === 'code' || taskHint === 'technical' || taskHint === 'website' || taskHint === 'html'
+  if (_isCodeTask && process.env.DEEPSEEK_API_KEY) {
+    try {
+      const dsContent = await callDeepSeek(trimmed, { max_tokens: effectiveTokens, timeoutMs: 15000 })
+      if (validateAIContent(dsContent, query)) {
+        console.log('[AI] ✓ DeepSeek first — code task')
+        return { content: dsContent, model: 'deepseek-chat' }
+      }
+    } catch (e) { console.warn('[AI] DeepSeek (first) failed:', e.message) }
+  }
+
   // ── Smart model selection ────────────────────────────────────────────────────
   // Complex queries (Arabic, long, knowledge-heavy) → skip 8b, go straight to 70b
   // Simple/conversational → 8b-instant first (ultra-fast ~0.4s)
@@ -7615,6 +7627,111 @@ app.post('/api/dz-agent/github/create-file', async (req, res) => {
   }
 })
 
+// ===== PROJECT MEMORY ENGINE — dz-agent.md =====
+// Saves AI work context inside the repo. Next session reads this file → no full re-scan.
+// Every successful push auto-updates it. Saves hundreds of tokens per session.
+
+function buildProjectMemoryMd({ description = '', projectType = '', mainLang = '', lastTask = '', completedTasks = [], pendingTasks = [], keyFiles = [], commands = [], notes = '', commitSha = '' } = {}) {
+  const d = new Date().toISOString().slice(0, 10)
+  const lines = [
+    `<!-- dz-agent-memory v1 -->`,
+    `# ذاكرة المشروع — DZ Agent`,
+    `> آخر تحديث: ${d} · يُحدَّث تلقائياً بعد كل عملية · لا تعدّل يدوياً`,
+    ``,
+  ]
+  if (projectType || mainLang || description) {
+    lines.push(`## المشروع`)
+    if (projectType) lines.push(`- **النوع**: ${projectType}`)
+    if (mainLang)    lines.push(`- **اللغة**: ${mainLang}`)
+    if (description) lines.push(`- **الوصف**: ${String(description).slice(0, 200)}`)
+    lines.push(``)
+  }
+  lines.push(`## آخر جلسة`)
+  lines.push(`- **التاريخ**: ${d}`)
+  if (lastTask)  lines.push(`- **المهمة**: ${String(lastTask).slice(0, 200)}`)
+  if (commitSha) lines.push(`- **Commit**: \`${String(commitSha).slice(0, 10)}\``)
+  lines.push(``)
+  if (keyFiles.length) {
+    lines.push(`## الملفات الأساسية`)
+    keyFiles.slice(0, 15).forEach(f => lines.push(`- \`${f}\``))
+    lines.push(``)
+  }
+  if (completedTasks.length) {
+    lines.push(`## منجز ✅`)
+    completedTasks.slice(0, 8).forEach(t => lines.push(`- [x] ${t}`))
+    lines.push(``)
+  }
+  if (pendingTasks.length) {
+    lines.push(`## متبقٍ 🔲`)
+    pendingTasks.slice(0, 8).forEach(t => lines.push(`- [ ] ${t}`))
+    lines.push(``)
+  }
+  if (commands.length) {
+    lines.push(`## الأوامر`)
+    lines.push(`\`\`\`bash`)
+    commands.slice(0, 5).forEach(c => lines.push(c))
+    lines.push(`\`\`\``)
+    lines.push(``)
+  }
+  if (notes) {
+    lines.push(`## ملاحظات للـ AI`)
+    lines.push(String(notes).slice(0, 600))
+    lines.push(``)
+  }
+  return lines.join('\n')
+}
+
+async function saveProjectMemory(tok, repo, branch, ctx = {}) {
+  try {
+    const md = buildProjectMemoryMd(ctx)
+    const ghH = { Authorization: `token ${tok}`, 'User-Agent': 'DZ-GPT/1.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
+    let sha
+    try {
+      const rr = await fetch(`https://api.github.com/repos/${repo}/contents/dz-agent.md?ref=${encodeURIComponent(branch)}`, { headers: ghH, signal: AbortSignal.timeout(6000) })
+      if (rr.ok) { const dd = await rr.json(); sha = dd.sha }
+    } catch {}
+    const body = { message: '📋 DZ Agent: حفظ ذاكرة المشروع [skip ci]', content: Buffer.from(md).toString('base64'), branch }
+    if (sha) body.sha = sha
+    const putR = await fetch(`https://api.github.com/repos/${repo}/contents/dz-agent.md`, {
+      method: 'PUT', headers: ghH, body: JSON.stringify(body), signal: AbortSignal.timeout(12000),
+    })
+    const r = await putR.json()
+    if (r?.commit?.sha) console.log(`[ProjectMemory] ✅ saved ${repo}/dz-agent.md — ${r.commit.sha.slice(0, 8)}`)
+    return r?.commit?.sha || null
+  } catch (e) { console.warn('[ProjectMemory] save failed:', e.message); return null }
+}
+
+// GET /api/dz-agent/github/project-memory?repo=owner/repo&branch=main
+app.get('/api/dz-agent/github/project-memory', async (req, res) => {
+  const { repo, branch = 'main', token } = req.query
+  if (!repo || !isValidGithubRepo(String(repo))) return res.status(400).json({ exists: false, error: 'repo required (owner/repo)' })
+  const tok = sanitizeString(String(token || process.env.GITHUB_TOKEN || ''), 300)
+  if (!tok) return res.json({ exists: false, error: 'GITHUB_TOKEN not configured' })
+  try {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/dz-agent.md?ref=${encodeURIComponent(String(branch))}`, {
+      headers: { Authorization: `token ${tok}`, 'User-Agent': 'DZ-GPT/1.0', Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return res.json({ exists: false })
+    const d = await r.json()
+    const content = Buffer.from((d.content || '').replace(/\n/g, ''), 'base64').toString('utf8')
+    if (!content.includes('dz-agent-memory')) return res.json({ exists: false })
+    return res.json({ exists: true, content, sha: d.sha })
+  } catch (e) { return res.json({ exists: false, error: e.message }) }
+})
+
+// POST /api/dz-agent/github/project-memory
+app.post('/api/dz-agent/github/project-memory', async (req, res) => {
+  const { repo, branch = 'main', token, context = {} } = req.body
+  if (!repo || !isValidGithubRepo(String(repo))) return res.status(400).json({ error: 'repo required' })
+  const tok = sanitizeString(String(token || process.env.GITHUB_TOKEN || ''), 300)
+  if (!tok) return res.status(500).json({ error: 'GITHUB_TOKEN not configured' })
+  try {
+    const commitSha = await saveProjectMemory(tok, String(repo), String(branch), context)
+    return res.json({ success: !!commitSha, commit: commitSha })
+  } catch (e) { return res.status(500).json({ error: e.message }) }
+})
+
 // ===== GITHUB AI: ANALYZE PROJECT (read key files → AI comprehensive analysis) =====
 app.post('/api/dz-agent/github/analyze-project', async (req, res) => {
   const { repo, branch = 'main', token } = req.body
@@ -7946,6 +8063,14 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
     const prData = await prRes.json()
 
     console.log(`[GitHub:generate-and-push] ${repo} → branch=${newBranch} files=${pushedFiles.length} pr=${!!prData.html_url}`)
+
+    // Auto-save project memory to dz-agent.md (fire-and-forget — never blocks the response)
+    saveProjectMemory(tok, repo, newBranch, {
+      lastTask: description,
+      keyFiles: pushedFiles,
+      completedTasks: [`${description.slice(0, 80)} (${pushedFiles.length} ملف)`],
+      notes: `الفرع: ${newBranch}. الملفات: ${pushedFiles.slice(0, 8).join(', ')}`,
+    }).catch(() => {})
 
     return res.json({
       success: true,

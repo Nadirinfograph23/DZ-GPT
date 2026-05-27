@@ -1427,6 +1427,9 @@ const KEY_MAX_ERRORS = 3                  // disable key after 3 consecutive err
 
 const keyStats = new Map() // key -> { requests, errors, lastError, cooldownUntil, totalMs, avgMs }
 
+// Runtime keys injected from the UI (stored in memory — reset on server restart)
+let _runtimeGroqKeys = []
+
 function getGroqKeys() {
   const seen = new Set()
   const keys = []
@@ -1434,6 +1437,7 @@ function getGroqKeys() {
     process.env.GROQ_API_KEY,
     process.env.AI_API_KEY,
     ...Array.from({ length: 9 }, (_, i) => process.env[`AI_API_KEY_${i + 2}`]),
+    ..._runtimeGroqKeys,
   ]
   for (const k of candidates) {
     if (k && k.trim() && !seen.has(k)) {
@@ -2465,6 +2469,47 @@ app.get('/api/admin/full-report', async (_req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }
+})
+
+// ===== GROQ RUNTIME KEYS API =====
+app.get('/api/admin/groq-keys', (_req, res) => {
+  const envKeys = [
+    process.env.GROQ_API_KEY,
+    process.env.AI_API_KEY,
+    ...Array.from({ length: 9 }, (_, i) => process.env[`AI_API_KEY_${i + 2}`]),
+  ].filter(k => k && k.trim())
+  const allKeys = getGroqKeys()
+  res.json({
+    total: allKeys.length,
+    env: envKeys.length,
+    runtime: _runtimeGroqKeys.length,
+    keys: allKeys.map((k, i) => {
+      const s = keyStats.get(k) || {}
+      const masked = k.slice(0, 8) + '••••••••' + k.slice(-4)
+      const isRuntime = _runtimeGroqKeys.includes(k)
+      const isCooling = Date.now() < (s.cooldownUntil || 0)
+      return {
+        index: i + 1,
+        masked,
+        requests: s.requests || 0,
+        errors: s.errors || 0,
+        avgMs: s.avgMs || 0,
+        status: isCooling ? 'cooling' : (s.consecutiveErrors >= KEY_MAX_ERRORS ? 'error' : 'ok'),
+        source: isRuntime ? 'ui' : 'env',
+      }
+    }),
+  })
+})
+
+app.post('/api/admin/groq-keys', (req, res) => {
+  const rawKeys = req.body.keys
+  if (!Array.isArray(rawKeys)) return res.status(400).json({ error: 'keys must be array' })
+  const valid = rawKeys
+    .map(k => (typeof k === 'string' ? k.trim() : ''))
+    .filter(k => k.length > 20 && k.startsWith('gsk_'))
+  _runtimeGroqKeys = valid
+  console.log(`[GroqKeys] Runtime keys updated: ${valid.length} key(s) added`)
+  res.json({ ok: true, added: valid.length, total: getGroqKeys().length })
 })
 
 // ===== /api/chat/stream — SSE Streaming (Improvement #1: Real-time token output) =====

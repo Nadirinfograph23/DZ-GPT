@@ -189,7 +189,7 @@ function saveProjectContext(patch: Partial<ProjectContext> & { addFile?: string 
     const cur = loadProjectContext()
     const updated: ProjectContext = { ...cur, ...patch }
     if (patch.addFile) updated.files = [...new Set([patch.addFile, ...cur.files])].slice(0, 8)
-    delete (updated as Record<string, unknown>).addFile
+    delete (updated as unknown as Record<string, unknown>).addFile
     sessionStorage.setItem(PROJECT_CTX_KEY, JSON.stringify(updated))
   } catch {}
 }
@@ -2191,21 +2191,6 @@ const THINKING_TIPS = [
   'نتحقق من البيانات... 📊',
 ]
 
-function formatModelName(model: string): string {
-  if (!model) return ''
-  if (model.includes('llama-3.3-70b')) return '🦙 Llama 3.3 70B'
-  if (model.includes('llama-3.1-70b')) return '🦙 Llama 3.1 70B'
-  if (model.includes('llama-3.1-8b')) return '🦙 Llama 3.1 8B'
-  if (model.includes('llama-4')) return '🦙 Llama 4'
-  if (model.includes('meta-llama')) return '🦙 Llama'
-  if (model.includes('gemini')) return '♊ Gemini'
-  if (model.includes('mistral')) return '🌊 Mistral'
-  if (model.includes('deepseek')) return '🐋 DeepSeek'
-  if (model.includes('pollinations')) return '🌸 Pollinations'
-  if (model.includes('cohere')) return '🔵 Cohere'
-  if (model.includes('openrouter')) return '🔀 OpenRouter'
-  return '🤖 ' + model.split('/').pop()?.slice(0, 20) || model
-}
 
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('')

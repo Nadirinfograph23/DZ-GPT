@@ -20,26 +20,42 @@ const LEARN_PATH = join(DATA_DIR, 'dz_learned.json')
 
 // ─── Load dictionaries ───────────────────────────────────────────────────────
 let _dict = null
+let _dictLoadedAt = 0
 let _learned = null
+let _learnedLoadedAt = 0
+const _DICT_TTL_MS    = 10 * 60 * 1000   // إعادة تحميل القاموس كل 10 دقائق تلقائياً
+const _LEARNED_TTL_MS =  5 * 60 * 1000   // إعادة تحميل الكلمات المتعلَّمة كل 5 دقائق
 
 function loadDict() {
-  if (_dict) return _dict
+  const now = Date.now()
+  if (_dict && (now - _dictLoadedAt) < _DICT_TTL_MS) return _dict
   try {
     _dict = JSON.parse(readFileSync(DICT_PATH, 'utf8'))
+    _dictLoadedAt = now
   } catch {
-    _dict = { words: [], slang_map: {}, response_map: {}, intent_patterns: {} }
+    if (!_dict) _dict = { words: [], slang_map: {}, response_map: {}, intent_patterns: {} }
   }
   return _dict
 }
 
 function loadLearned() {
-  if (_learned) return _learned
+  const now = Date.now()
+  if (_learned && (now - _learnedLoadedAt) < _LEARNED_TTL_MS) return _learned
   try {
     _learned = JSON.parse(readFileSync(LEARN_PATH, 'utf8'))
+    _learnedLoadedAt = now
   } catch {
-    _learned = { learned: [] }
+    if (!_learned) _learned = { learned: [] }
   }
   return _learned
+}
+
+/** إجبار إعادة تحميل القاموس فوراً (مثلاً بعد تحديث الملف) */
+export function reloadDict() {
+  _dictLoadedAt = 0
+  _learnedLoadedAt = 0
+  _dict = null
+  _learned = null
 }
 
 function saveLearned(data) {
@@ -86,20 +102,28 @@ export function normalize(text) {
   normalized = normalized.replace(/(.)\1{2,}/g, '$1$1')
 
   // 4. Replace Darija slang words with standard Arabic (longest match first)
+  // FIX: استخدام حدود مسافة/ترقيم بدل حدود حروف عربية — تعمل مع الدارجة الجزائرية
   const replacements = []
   const sortedKeys = Object.keys(slangMap).sort((a, b) => b.length - a.length)
+  const _SEP = '[\\s،,;؛!?؟.\\n\\r\\t]'
+
+  // إضافة newlines كـ padding لضمان تطابق الكلمات في بداية/نهاية الجملة
+  let padded = '\n' + normalized + '\n'
 
   for (const darija of sortedKeys) {
     const standard = slangMap[darija]
-    const regex = new RegExp(`(?<![\\u0600-\\u06FF])${escapeRegex(darija)}(?![\\u0600-\\u06FF])`, 'g')
-    if (regex.test(normalized)) {
-      normalized = normalized.replace(
-        new RegExp(`(?<![\\u0600-\\u06FF])${escapeRegex(darija)}(?![\\u0600-\\u06FF])`, 'g'),
-        standard
-      )
-      replacements.push({ darija, standard })
+    try {
+      const re = new RegExp(`(?<=${_SEP})${escapeRegex(darija)}(?=${_SEP})`, 'g')
+      const updated = padded.replace(re, standard)
+      if (updated !== padded) {
+        replacements.push({ darija, standard })
+        padded = updated
+      }
+    } catch {
+      // fallback: إذا فشل الـ regex، تخطى الكلمة
     }
   }
+  normalized = padded.slice(1, -1)  // إزالة الـ padding
 
   // 5. Detect languages present
   const languages = detectLanguages(text)
@@ -293,11 +317,17 @@ export function toDarija(arabicText) {
   // Sort by length descending to replace longer phrases first
   const phrases = Object.keys(responseMap).sort((a, b) => b.length - a.length)
 
+  // FIX: same boundary approach as normalize() — padding + separator lookbehind/ahead
+  const _SEP_R = '[\\s،,;؛!?؟.\\n\\r\\t]'
+  let paddedD = '\n' + darija + '\n'
   for (const arabic of phrases) {
     const dzWord = responseMap[arabic]
-    const regex = new RegExp(`(?<![\\u0600-\\u06FF])${escapeRegex(arabic)}(?![\\u0600-\\u06FF])`, 'g')
-    darija = darija.replace(regex, dzWord)
+    try {
+      const re = new RegExp(`(?<=${_SEP_R})${escapeRegex(arabic)}(?=${_SEP_R})`, 'g')
+      paddedD = paddedD.replace(re, dzWord)
+    } catch { /* skip invalid patterns */ }
   }
+  darija = paddedD.slice(1, -1)
 
   // Add Darija-style sentence starters and enders
   darija = addDarijaFlair(darija)
@@ -306,23 +336,26 @@ export function toDarija(arabicText) {
 }
 
 function addDarijaFlair(text) {
-  // Add natural Darija connectors/expressions at appropriate points
-  const enhancements = [
-    { trigger: /^هذا/,    prefix: 'والله ' },
-    { trigger: /^نعم/,    prefix: 'إيه، ' },
-    { trigger: /^لا/,     prefix: 'ماشي، ' },
-    { trigger: /كثير$/,   suffix: ' بزاف' },
-    { trigger: /جيد$/,    suffix: ' مليح والله' },
-  ]
-
+  if (!text || text.length < 5) return text
   let result = text
-  for (const e of enhancements) {
-    if (e.trigger.test(result)) {
-      if (e.prefix && !result.startsWith(e.prefix)) {
-        // Don't add redundant prefix
-      }
-    }
-  }
+  // استبدال كلمات فصحى شائعة بالدارجة في ردود الـ AI
+  const wordSwaps = [
+    [/\bكثيراً\b/g,   'بزاف'],
+    [/\bكثيرًا\b/g,   'بزاف'],
+    [/\bجيد جداً\b/g, 'مليح بزاف'],
+    [/\bجيداً\b/g,    'مليح'],
+    [/\bصحيح\b/g,     'صاح'],
+    [/\bيمكنك\b/g,    'تنجم'],
+    [/\bيمكنني\b/g,   'نجم'],
+    [/\bأستطيع\b/g,   'نجم'],
+    [/\bلا يمكن\b/g,  'ما ينجمش'],
+    [/\bانتهى\b/g,    'خلاص'],
+    [/\bحسناً\b/g,    'طيب'],
+    [/\bانتظر\b/g,    'استنى'],
+    [/\bاذهب\b/g,     'روح'],
+    [/\bتعال\b/g,     'أجي'],
+  ]
+  for (const [re, dz] of wordSwaps) result = result.replace(re, dz)
   return result
 }
 
@@ -460,7 +493,7 @@ export function isDarijaText(text) {
   for (const token of tokens) {
     if (dict.slang_map[token] || findInDict(token, dict)) darijaCount++
   }
-  return darijaCount >= 1 || /واشراك|كيفاش|بزاف|مليح|خايب|نتا|راني|راه|درك|يلا|ماشي|برك|بصح|علاه|علاش/.test(text)
+  return darijaCount >= 1 || /واشراك|كيفاش|بزاف|مليح|خايب|نتا|راني|راه|درك|دروك|ضرك|يلا|ماشي|برك|بصح|علاه|علاش|واش|وين|فين|شكون|لاباس|تاني|ياسر|قاع|فالو|خلاص|والله|مزيان|مخربق|زعفان|مهبول|يخمم|يعيى|يسقسي|ديجا|واه|هيه|ياك|باه|ممبعد|معليش|ربي يسهل|واش كاين|واش صاري|فوقاش|كلش مليح|هادي سهلة|راك غالط/.test(text)
 }
 
 // ─── FULL PIPELINE ────────────────────────────────────────────────────────────

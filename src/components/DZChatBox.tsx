@@ -165,6 +165,41 @@ interface UserMemory {
   lastSeen: string
   lastCodeLanguage?: string
   projectStack?: string
+  preferences?: Record<string, string>
+}
+
+// ── Server memory sync (best-effort, non-blocking) ────────────────────────
+function syncMemoryToServer(memory: UserMemory): void {
+  try {
+    const topics = memory.lastTopics?.slice(0, 5) || []
+    if (topics.length === 0) return
+    fetch('/api/memory/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'user-preference',
+        content: `مواضيع المستخدم: ${topics.join('، ')}`,
+        metadata: { topics, lastSeen: memory.lastSeen, stack: memory.projectStack || '' }
+      })
+    }).catch(() => {})
+  } catch {}
+}
+
+async function fetchServerMemory(): Promise<Partial<UserMemory>> {
+  try {
+    const r = await fetch('/api/memory/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'مواضيع المستخدم', type: 'user-preference', limit: 1 })
+    })
+    if (!r.ok) return {}
+    const d = await r.json()
+    const meta = d?.results?.[0]?.metadata
+    if (meta?.topics && Array.isArray(meta.topics)) {
+      return { lastTopics: meta.topics, lastSeen: meta.lastSeen || '', projectStack: meta.stack || '' }
+    }
+    return {}
+  } catch { return {} }
 }
 
 interface ProjectContext {
@@ -178,7 +213,12 @@ function loadUserMemory(): UserMemory {
   try { return { conversationCount: 0, lastTopics: [], lastSeen: '', ...JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}') } } catch { return { conversationCount: 0, lastTopics: [], lastSeen: '' } }
 }
 function saveUserMemory(patch: Partial<UserMemory>) {
-  try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ ...loadUserMemory(), ...patch, lastSeen: new Date().toISOString() })) } catch {}
+  try {
+    const updated = { ...loadUserMemory(), ...patch, lastSeen: new Date().toISOString(),
+      conversationCount: (loadUserMemory().conversationCount || 0) + 1 }
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(updated))
+    syncMemoryToServer(updated)
+  } catch {}
 }
 
 function loadProjectContext(): ProjectContext {
@@ -267,6 +307,14 @@ function generateClientSuggestions(content: string, query: string): string[] {
     return ['أضف قسم تواصل للموقع', 'اجعل الموقع متجاوباً مع الجوال', 'غيّر الألوان والخطوط']
   if (t.includes('سير') || t.includes('cv') || t.includes('resume') || t.includes('وظيفة'))
     return ['انتقل لمولد السيرة الذاتية', 'كيف أُحسّن سيرتي الذاتية؟', 'أسئلة المقابلات الشائعة']
+  if (t.includes('صورة') || t.includes('ارسم') || t.includes('رسم') || t.includes('image') || t.includes('draw'))
+    return ['ارسم نسخة مختلفة', 'غيّر الأسلوب لأنيمي', 'غيّر الأسلوب لواقعي ثلاثي الأبعاد']
+  if (t.includes('قانون') || t.includes('عقد') || t.includes('قضاء') || t.includes('محامي'))
+    return ['ما شروط هذا العقد؟', 'اشرح مصطلح قانوني', 'انتقل لأداة قانونية']
+  if (t.includes('صح') || t.includes('طب') || t.includes('مرض') || t.includes('دواء') || t.includes('doctor'))
+    return ['البحث عن طبيب قريب', 'ما أعراض هذا المرض؟', 'ما البديل الطبيعي لهذا الدواء؟']
+  if (t.includes('excel') || t.includes('جدول') || t.includes('بيانات') || t.includes('إكسل'))
+    return ['انتقل لـ DZ Excel', 'كيف أعمل جدول محوري؟', 'اشرح دالة VLOOKUP']
   return ['أخبرني المزيد عن هذا', 'اشرح لي بشكل مبسط', 'أعطني أمثلة عملية']
 }
 
@@ -520,6 +568,7 @@ interface DZMessage {
   imageUrl?: string
   imagePrompt?: string
   imageModel?: string
+  imageStyle?: string
 }
 
 interface ActionLogEntry {
@@ -3481,6 +3530,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false)
+  const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
   const [currentPath, setCurrentPath] = useState<string>('')
   // DZ GitHub Agent mode
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
@@ -3609,6 +3660,26 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         if (d.user) setGithubUser(d.user)
       })
       .catch(() => {})
+  }, [])
+
+  // ── Feature 1: Cross-session memory sync on mount ─────────────────────────
+  useEffect(() => {
+    const local = loadUserMemory()
+    // Show welcome-back banner for returning users
+    if (local.conversationCount > 0 && local.lastSeen) {
+      const daysSince = (Date.now() - new Date(local.lastSeen).getTime()) / 86400000
+      if (daysSince < 30) setShowWelcomeBack(true)
+    }
+    // Merge server memory (non-blocking)
+    fetchServerMemory().then(serverMem => {
+      if (!serverMem.lastTopics?.length) return
+      const merged = {
+        ...local,
+        lastTopics: [...new Set([...(local.lastTopics || []), ...(serverMem.lastTopics || [])])].slice(0, 8),
+        projectStack: local.projectStack || serverMem.projectStack || '',
+      }
+      try { localStorage.setItem(MEMORY_KEY, JSON.stringify(merged)) } catch {}
+    }).catch(() => {})
   }, [])
 
   // Save messages to localStorage when they change
@@ -5091,6 +5162,70 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   }, [agentMode, githubToken, addAssistantMessage, addToLog, fetchFiles, fetchFileContent, scanRepo, deployToGitHubPages, confirmAgentAction, setThinkingStep])
 
   // ===== IMAGE DETECTION (zero-token, Pollinations) =====
+  // ── Feature 2: regenerate image with different style ──────────────────────
+  const IMAGE_STYLES = [
+    { label: 'واقعي',     model: 'flux-realism', emoji: '📷' },
+    { label: 'أنيمي',     model: 'flux-anime',   emoji: '🎌' },
+    { label: 'ثلاثي الأبعاد', model: 'flux-3d', emoji: '🧊' },
+    { label: 'خيالي',     model: 'turbo',        emoji: '✨' },
+    { label: 'افتراضي',   model: 'flux',         emoji: '🎨' },
+  ] as const
+
+  const regenerateImageWithStyle = useCallback(async (
+    msgId: string, prompt: string, model: string
+  ) => {
+    if (imgRegenLoading) return
+    setImgRegenLoading(msgId)
+    try {
+      const res = await fetch('/api/tools/img-gen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, model }),
+      })
+      const data = await res.json() as { imageUrl?: string; imageBase64?: string; model?: string; error?: string }
+      if (data.imageUrl || data.imageBase64) {
+        setMessages(prev => prev.map(m =>
+          m.id === msgId
+            ? { ...m, imageUrl: data.imageUrl || data.imageBase64, imageModel: data.model || model.toUpperCase(), imageStyle: model }
+            : m
+        ))
+      }
+    } catch {}
+    setImgRegenLoading(null)
+  }, [imgRegenLoading])
+
+  // ── Feature 3: export conversation as PDF ─────────────────────────────────
+  const exportToPDF = useCallback(() => {
+    const printWin = window.open('', '_blank', 'width=800,height=900')
+    if (!printWin) return
+    const rows = messages.map(m => {
+      const who = m.role === 'user' ? 'أنت' : 'DZ Agent'
+      const cls = m.role === 'user' ? 'user' : 'bot'
+      const body = m.richType === 'image' && m.imageUrl
+        ? `<img src="${m.imageUrl}" style="max-width:400px;border-radius:8px" /><p style="color:#666;font-size:12px">${m.imagePrompt || ''}</p>`
+        : `<p style="white-space:pre-wrap;margin:0">${(m.content || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`
+      return `<div class="msg ${cls}"><strong>${who}</strong>${body}</div>`
+    }).join('')
+    printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head>
+      <meta charset="UTF-8"><title>محادثة DZ-GPT</title>
+      <style>
+        body{font-family:Arial,sans-serif;margin:24px;color:#111;direction:rtl}
+        h1{font-size:18px;color:#1a73e8;margin-bottom:16px}
+        .msg{margin-bottom:12px;padding:10px 14px;border-radius:8px;max-width:90%}
+        .user{background:#e8f0fe;margin-right:auto;text-align:right}
+        .bot{background:#f1f3f4;margin-left:auto}
+        strong{display:block;font-size:12px;color:#888;margin-bottom:4px}
+        @media print{.no-print{display:none}}
+      </style></head><body>
+      <h1>🤖 محادثة DZ-GPT — ${new Date().toLocaleDateString('ar-DZ')}</h1>
+      ${rows}
+      <p style="font-size:11px;color:#aaa;margin-top:24px;border-top:1px solid #eee;padding-top:8px">dz-gpt.vercel.app</p>
+    </body></html>`)
+    printWin.document.close()
+    printWin.focus()
+    setTimeout(() => { printWin.print() }, 400)
+  }, [messages])
+
   const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
 
   function extractImagePrompt(text: string): string {
@@ -5206,6 +5341,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               imageUrl: imgData.imageUrl || imgData.imageBase64,
               imagePrompt: prompt,
               imageModel: imgData.model || 'FLUX',
+              imageStyle: 'flux',
+              quickSuggestions: ['ارسم نسخة مختلفة', 'غيّر الأسلوب لأنيمي', 'اضف تفاصيل أكثر', 'غيّر الخلفية'],
             })
           } else {
             addAssistantMessage({ content: '⚠️ تعذّر توليد الصورة، حاول مرة أخرى.', richType: 'text', isError: true })
@@ -6323,13 +6460,33 @@ ${rows}
                       )}
                       {msg.richType === 'image' && msg.imageUrl && (
                         <div className="dz-image-card">
+                          {imgRegenLoading === msg.id && (
+                            <div className="dz-image-card__regen-overlay">
+                              <div className="dz-image-card__regen-spinner" />
+                              <span>جارٍ التوليد…</span>
+                            </div>
+                          )}
                           <img
                             src={msg.imageUrl}
                             alt={msg.imagePrompt || 'صورة مولّدة'}
-                            className="dz-image-card__img"
+                            className={`dz-image-card__img${imgRegenLoading === msg.id ? ' dz-image-card__img--loading' : ''}`}
                             loading="lazy"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                           />
+                          {/* Feature 2: Style picker */}
+                          <div className="dz-image-style-picker">
+                            {IMAGE_STYLES.map(s => (
+                              <button
+                                key={s.model}
+                                className={`dz-image-style-btn${msg.imageStyle === s.model ? ' dz-image-style-btn--active' : ''}`}
+                                onClick={() => msg.imagePrompt && regenerateImageWithStyle(msg.id, msg.imagePrompt, s.model)}
+                                disabled={!!imgRegenLoading}
+                                title={s.label}
+                              >
+                                {s.emoji} {s.label}
+                              </button>
+                            ))}
+                          </div>
                           <div className="dz-image-card__footer">
                             <span className="dz-image-card__model">✨ {msg.imageModel || 'FLUX'}</span>
                             <div className="dz-image-card__actions">
@@ -6627,10 +6784,27 @@ ${rows}
       </div>
       )}
 
+      {/* Feature 1: Welcome-back banner */}
+      {showWelcomeBack && messages.length === 0 && (
+        <div className="dz-welcome-back">
+          <span className="dz-welcome-back__icon">👋</span>
+          <span className="dz-welcome-back__text">
+            مرحباً بعودتك! ذاكرتي محمّلة من جلستك السابقة
+            {loadUserMemory().lastTopics?.length > 0 && (
+              <span className="dz-welcome-back__topics"> — {loadUserMemory().lastTopics.slice(0, 2).map(t => t.slice(0, 25)).join(' · ')}</span>
+            )}
+          </span>
+          <button className="dz-welcome-back__close" onClick={() => setShowWelcomeBack(false)}>✕</button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="dz-input-area">
         {messages.length > 0 && (
-          <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
+          <div className="dz-input-top-btns">
+            <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
+            <button className="dz-pdf-btn" onClick={exportToPDF} title="تصدير المحادثة كـ PDF">📄 PDF</button>
+          </div>
         )}
 
         {/* ===== HYBRID AGENT MODE BAR ===== */}

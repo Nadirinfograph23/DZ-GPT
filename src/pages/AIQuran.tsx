@@ -6,7 +6,6 @@ import {
   Home, Bot as BotIcon,
   Bookmark, BookmarkCheck, Trash2, MoreVertical,
   SkipBack, SkipForward, Repeat, RotateCcw,
-  Zap,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -42,24 +41,6 @@ interface AiMessage {
   content: string
   showDevCard?: boolean
   streaming?: boolean
-}
-
-interface QuranVerseMatch {
-  verseKey: string
-  text: string
-}
-
-interface QuranSurahGroup {
-  surahNum: number
-  surahName: string
-  count: number
-  verses: QuranVerseMatch[]
-}
-
-interface QuranSearchStats {
-  word: string
-  total: number
-  surahGroups: QuranSurahGroup[]
 }
 
 interface BookmarkedAyah {
@@ -145,11 +126,6 @@ export default function AIQuran() {
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
-  const [aiTab, setAiTab] = useState<'chat' | 'search'>('chat')
-  const [kwSearch, setKwSearch] = useState('')
-  const [kwLoading, setKwLoading] = useState(false)
-  const [kwStats, setKwStats] = useState<QuranSearchStats | null>(null)
-  const [kwExpandedSurah, setKwExpandedSurah] = useState<number | null>(null)
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [wordOccurrences, setWordOccurrences] = useState<{ word: string; count: number; surahs: string[] } | null>(null)
@@ -661,52 +637,6 @@ ${devInfoSection}`
     } finally {
       setAiLoading(false)
     }
-  }
-
-  // ── Keyword ayah search ───────────────────────────────────────────────────
-  const runKwSearch = async () => {
-    const q = kwSearch.trim()
-    if (!q || kwLoading) return
-    setKwLoading(true)
-    setKwStats(null)
-    setKwExpandedSurah(null)
-    try {
-      const r = await fetch(`/api/quran/search?q=${encodeURIComponent(q)}`)
-      const d = await r.json()
-      if (d.ok && Array.isArray(d.surahGroups)) {
-        setKwStats({ word: q, total: d.total || 0, surahGroups: d.surahGroups })
-      } else {
-        setKwStats({ word: q, total: 0, surahGroups: [] })
-      }
-    } catch {
-      setKwStats({ word: kwSearch.trim(), total: 0, surahGroups: [] })
-    } finally {
-      setKwLoading(false)
-    }
-  }
-
-  // ── Highlight search word inside verse text ──────────────────────────────
-  const normArabic = (s: string) =>
-    s.normalize('NFKD')
-     .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '')
-     .replace(/[أإآٱ]/g, 'ا')
-     .replace(/ة/g, 'ه')
-     .trim()
-
-  const renderHighlightedText = (text: string, word: string) => {
-    if (!word || !text) return <>{text}</>
-    const normWord = normArabic(word)
-    if (!normWord || normWord.length < 2) return <>{text}</>
-    const tokens = text.split(/(\s+)/)
-    return (
-      <>
-        {tokens.map((tok, i) =>
-          normArabic(tok).includes(normWord)
-            ? <mark key={i} className="aq-kw-highlight">{tok}</mark>
-            : <span key={i}>{tok}</span>
-        )}
-      </>
-    )
   }
 
   const filteredChapters = chapters.filter(ch =>
@@ -1309,27 +1239,8 @@ ${devInfoSection}`
               </button>
             </div>
 
-            {/* ── Tab bar ── */}
-            <div className="aq-ai-tabs">
-              <button
-                className={`aq-ai-tab ${aiTab === 'chat' ? 'aq-ai-tab--active' : ''}`}
-                onClick={() => setAiTab('chat')}
-              >
-                <Bot size={13} /> محادثة
-              </button>
-              <button
-                className={`aq-ai-tab ${aiTab === 'search' ? 'aq-ai-tab--active' : ''}`}
-                onClick={() => setAiTab('search')}
-              >
-                <Search size={13} /> بحث في الآيات
-              </button>
-            </div>
-
             <div className="aq-ai-body">
-
-              {/* ── CHAT TAB ── */}
-              {aiTab === 'chat' && (<>
-                <div className="aq-ai-messages">
+              <div className="aq-ai-messages">
                   {aiMessages.length === 0 && (
                     <div className="aq-ai-welcome">
                       <Bot size={22} />
@@ -1383,94 +1294,6 @@ ${devInfoSection}`
                     {aiLoading ? <Loader2 size={14} className="aq-spin" /> : <><Send size={14} /><span className="aq-ai-send-label">إرسال</span></>}
                   </button>
                 </div>
-              </>)}
-
-              {/* ── SEARCH TAB ── */}
-              {aiTab === 'search' && (
-                <div className="aq-kw-panel">
-                  <div className="aq-kw-input-row">
-                    <input
-                      className="aq-kw-input"
-                      placeholder="ابحث بكلمة... مثال: الصبر، الرزق، الناس"
-                      value={kwSearch}
-                      onChange={e => setKwSearch(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') runKwSearch() }}
-                      autoFocus
-                    />
-                    <button
-                      className="aq-kw-search-btn"
-                      onClick={runKwSearch}
-                      disabled={kwLoading || !kwSearch.trim()}
-                    >
-                      {kwLoading ? <Loader2 size={14} className="aq-spin" /> : <><Zap size={14} /> بحث</>}
-                    </button>
-                  </div>
-
-                  {/* ── Statistics banner ── */}
-                  {kwStats && kwStats.total > 0 && (
-                    <div className="aq-kw-stats-banner">
-                      <span className="aq-kw-stats-word">«{kwStats.word}»</span>
-                      {' '}ذُكرت{' '}
-                      <strong>{kwStats.total}</strong>
-                      {' '}مرة في{' '}
-                      <strong>{kwStats.surahGroups.length}</strong>
-                      {' '}سورة
-                    </div>
-                  )}
-
-                  <div className="aq-kw-results">
-                    {/* No results */}
-                    {kwStats && kwStats.total === 0 && !kwLoading && (
-                      <div className="aq-kw-empty">لا نتائج للكلمة «{kwStats.word}»</div>
-                    )}
-
-                    {/* Surah index list */}
-                    {kwStats && kwStats.surahGroups.map((group) => (
-                      <div key={group.surahNum} className="aq-kw-surah-block">
-                        {/* Surah header — clickable to expand verses */}
-                        <div
-                          className={`aq-kw-surah-header ${kwExpandedSurah === group.surahNum ? 'aq-kw-surah-header--open' : ''}`}
-                          onClick={() => setKwExpandedSurah(kwExpandedSurah === group.surahNum ? null : group.surahNum)}
-                        >
-                          <div className="aq-kw-surah-info">
-                            <span className="aq-kw-surah-num">{group.surahNum}</span>
-                            <span className="aq-kw-surah-name">{group.surahName}</span>
-                          </div>
-                          <div className="aq-kw-surah-meta">
-                            <span className="aq-kw-surah-count">{group.count} مرة</span>
-                            <span className={`aq-kw-expand-icon ${kwExpandedSurah === group.surahNum ? 'aq-kw-expand-icon--open' : ''}`}>
-                              {kwExpandedSurah === group.surahNum ? '−' : '+'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Verses — shown on expand */}
-                        {kwExpandedSurah === group.surahNum && (
-                          <div className="aq-kw-verses-list">
-                            {group.verses.map((v) => (
-                              <div key={v.verseKey} className="aq-kw-verse-item">
-                                <span className="aq-kw-verse-key">{v.verseKey}</span>
-                                <p className="aq-kw-verse-text" dir="rtl">
-                                  {renderHighlightedText(v.text, kwStats.word)}
-                                </p>
-                                <button
-                                  className="aq-kw-ask-btn"
-                                  onClick={() => {
-                                    setAiTab('chat')
-                                    setAiInput(`فسّر لي الآية ${v.verseKey}:\n${v.text}`)
-                                  }}
-                                >
-                                  <Bot size={12} /> اسأل المساعد عن هذه الآية
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </aside>
         )}

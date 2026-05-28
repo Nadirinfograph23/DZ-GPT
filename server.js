@@ -153,8 +153,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org'],
       connectSrc: isProd
-        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org']
-        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org'],
+        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
+        : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info'],
       mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
       fontSrc: ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'data:'],
       objectSrc: ["'none'"],
@@ -21205,6 +21205,48 @@ app.get('/api/radio/stream/:station', async (req, res) => {
 
 app.get('/api/radio/stations', (_req, res) => {
   res.json(Object.entries(DZ_RADIO_STREAMS).map(([id, s]) => ({ id, name: s.name })))
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/radio/browser/algeria — proxy Radio Browser API (CSP bypass)
+// GET /api/radio/browser/search?name=X — search stations
+// ═══════════════════════════════════════════════════════════════════
+const RADIO_BROWSER_HOSTS = [
+  'https://de1.api.radio-browser.info',
+  'https://nl1.api.radio-browser.info',
+  'https://at1.api.radio-browser.info',
+]
+async function fetchRadioBrowser(path) {
+  for (const host of RADIO_BROWSER_HOSTS) {
+    try {
+      const r = await fetch(`${host}/json/${path}`, {
+        headers: { 'User-Agent': 'DZ-GPT/1.0:dz-gpt.vercel.app' },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (r.ok) return r.json()
+    } catch {}
+  }
+  throw new Error('Radio Browser API unavailable')
+}
+
+app.get('/api/radio/browser/algeria', async (_req, res) => {
+  try {
+    const data = await fetchRadioBrowser('stations/bycountry/algeria?hidebroken=true&order=votes&reverse=true&limit=80')
+    res.json(data)
+  } catch (err) {
+    res.status(503).json({ error: 'Radio Browser unavailable', message: err.message })
+  }
+})
+
+app.get('/api/radio/browser/search', async (req, res) => {
+  const name = (req.query.name || '').toString().trim()
+  if (!name) return res.status(400).json({ error: 'name query param required' })
+  try {
+    const data = await fetchRadioBrowser(`stations/search?name=${encodeURIComponent(name)}&hidebroken=true&order=votes&reverse=true&limit=30`)
+    res.json(data)
+  } catch (err) {
+    res.status(503).json({ error: 'Radio Browser unavailable', message: err.message })
+  }
 })
 
 // ═══════════════════════════════════════════════════════════════════

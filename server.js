@@ -2380,16 +2380,35 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   const _isHeavyGen = taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
   const effectiveTokens = _isHeavyGen ? Math.min(max_tokens, 8000) : Math.min(max_tokens, 4096)
 
-  // ── DeepSeek FIRST for code/technical tasks (best code quality) ────────────
+  // ── Groq Coder FIRST for code/technical tasks (qwen-2.5-coder-32b — FREE) ───
   const _isCodeTask = taskHint === 'code' || taskHint === 'technical' || taskHint === 'website' || taskHint === 'html'
-  if (_isCodeTask && process.env.DEEPSEEK_API_KEY) {
+  if (_isCodeTask) {
     try {
-      const dsContent = await callDeepSeek(trimmed, { max_tokens: effectiveTokens, timeoutMs: 15000 })
-      if (validateAIContent(dsContent, query)) {
-        console.log('[AI] ✓ DeepSeek first — code task')
-        return { content: dsContent, model: 'deepseek-chat' }
+      const { content: coderContent } = await callGroqWithFallback({
+        model: 'qwen-2.5-coder-32b',
+        messages: trimmed,
+        max_tokens: effectiveTokens,
+      })
+      if (validateAIContent(coderContent, query)) {
+        console.log('[AI] ✓ Groq Coder first — qwen-2.5-coder-32b')
+        return { content: coderContent, model: 'groq:qwen-2.5-coder-32b' }
       }
-    } catch (e) { console.warn('[AI] DeepSeek (first) failed:', e.message) }
+    } catch (e) { console.warn('[AI] Groq Coder (first) failed:', e.message) }
+  }
+
+  // ── Groq Reasoning for deep reasoning tasks (deepseek-r1 on Groq — FREE) ───
+  if (taskHint === 'reasoning') {
+    try {
+      const { content: r1Content } = await callGroqWithFallback({
+        model: 'deepseek-r1-distill-llama-70b',
+        messages: trimmed,
+        max_tokens: effectiveTokens,
+      })
+      if (validateAIContent(r1Content, query)) {
+        console.log('[AI] ✓ Groq Reasoning — deepseek-r1-distill-llama-70b')
+        return { content: r1Content, model: 'groq:deepseek-r1-distill-llama-70b' }
+      }
+    } catch (e) { console.warn('[AI] Groq Reasoning (first) failed:', e.message) }
   }
 
   // ── Smart model selection ────────────────────────────────────────────────────
@@ -2404,8 +2423,10 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
     taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
   )
 
-  // Max 2 Groq attempts: right model first, one backup — never iterate all 4 models
-  const groqModels = _isComplex
+  // Max 2 Groq attempts: right model first, one backup
+  const groqModels = _isCodeTask
+    ? ['qwen-2.5-coder-32b', 'llama-3.3-70b-versatile']
+    : _isComplex
     ? ['llama-3.3-70b-versatile', 'meta-llama/llama-4-scout-17b-16e-instruct']
     : ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile']
 

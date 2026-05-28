@@ -5326,9 +5326,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         let imageUrl: string | undefined
         let imageModel = 'FLUX AI'
 
+        let fallbackEnglishPrompt = prompt.trim()
         try {
           const ctrl = new AbortController()
-          const timer = setTimeout(() => ctrl.abort(), 20000)
+          const timer = setTimeout(() => ctrl.abort(), 30000)
           const imgRes = await fetch('/api/tools/img-gen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5337,16 +5338,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           })
           clearTimeout(timer)
           const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; translated?: boolean; englishPrompt?: string; error?: string }
+          if (imgData.englishPrompt) fallbackEnglishPrompt = imgData.englishPrompt
           if (imgData.imageUrl || imgData.imageBase64) {
             imageUrl = imgData.imageUrl || imgData.imageBase64
             imageModel = imgData.model || 'FLUX AI'
           }
         } catch { /* timeout — use Pollinations direct URL fallback */ }
 
-        // Fallback: direct Pollinations URL — instant, no server needed
+        // Fallback: use translated English prompt (from server) for best Pollinations results
         if (!imageUrl) {
           const seed = Math.floor(Math.random() * 99999999)
-          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&safe=false`
+          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fallbackEnglishPrompt)}?model=flux&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&safe=false`
           imageModel = 'FLUX (Pollinations)'
         }
 

@@ -308,6 +308,7 @@ function generateClientSuggestions(content: string, query: string): string[] {
 type RichType =
   | 'text'
   | 'repos'
+  | 'repos-suggest'
   | 'files'
   | 'file-content'
   | 'approval'
@@ -430,6 +431,16 @@ interface RepoItem {
   html_url: string
 }
 
+interface SuggestedRepo {
+  full_name: string
+  description: string
+  stars: number
+  language: string
+  category: string
+  icon: string
+  html_url: string
+}
+
 interface FileItem {
   name: string
   path: string
@@ -510,6 +521,7 @@ interface DZMessage {
   mapHtml?: string
   mapMeta?: Record<string, unknown>
   webBuilderMeta?: { type: string; style: string; title: string; description: string; icon: string }
+  suggestedRepos?: SuggestedRepo[]
   hasMoreNews?: boolean
   newsQuery?: string
   executionLang?: string
@@ -2285,6 +2297,70 @@ function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
 }
 
 // ===== REPOS LIST =====
+// ===== REPOS SUGGEST PANEL — DZ GitHub Recommender =====
+const REPO_CATEGORIES = [
+  { id: 'all',     label: 'الكل',         icon: '🌐' },
+  { id: 'web',     label: 'ويب',           icon: '🌍' },
+  { id: 'ai',      label: 'ذكاء اصطناعي', icon: '🤖' },
+  { id: 'arabic',  label: 'عربي / 🇩🇿',   icon: '🇩🇿' },
+  { id: 'backend', label: 'خلفية',         icon: '⚙️' },
+  { id: 'mobile',  label: 'موبايل',        icon: '📱' },
+  { id: 'data',    label: 'بيانات',        icon: '📊' },
+  { id: 'tools',   label: 'أدوات',         icon: '🔧' },
+  { id: 'live',    label: 'نتائج حية',     icon: '🔴' },
+]
+
+function ReposSuggestPanel({ repos }: { repos: SuggestedRepo[] }) {
+  const [filter, setFilter] = useState('all')
+  const filtered = filter === 'all' ? repos : repos.filter(r => r.category === filter)
+  const available = REPO_CATEGORIES.filter(c => c.id === 'all' || repos.some(r => r.category === c.id))
+  const fmtStars = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n)
+
+  return (
+    <div className="dz-repos-suggest">
+      <div className="dz-repos-suggest-header">
+        <span>🔍 مستودعات GitHub مقترحة</span>
+        <span className="dz-repos-suggest-count">{filtered.length} مستودع</span>
+      </div>
+      <div className="dz-repos-suggest-cats">
+        {available.map(c => (
+          <button
+            key={c.id}
+            className={`dz-rsc-cat ${filter === c.id ? 'dz-rsc-cat--active' : ''}`}
+            onClick={() => setFilter(c.id)}
+          >
+            {c.icon} {c.label}
+          </button>
+        ))}
+      </div>
+      <div className="dz-repos-suggest-grid">
+        {filtered.map(repo => (
+          <a
+            key={repo.full_name}
+            href={repo.html_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="dz-rsc-card"
+          >
+            <div className="dz-rsc-top">
+              <span className="dz-rsc-icon">{repo.icon}</span>
+              <span className="dz-rsc-name">{repo.full_name}</span>
+              <span className="dz-rsc-stars">⭐ {fmtStars(repo.stars)}</span>
+            </div>
+            <p className="dz-rsc-desc">{repo.description}</p>
+            <div className="dz-rsc-footer">
+              {repo.language && repo.language !== 'N/A' && (
+                <span className="dz-rsc-lang">{repo.language}</span>
+              )}
+              <span className="dz-rsc-link">فتح ↗</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ReposList({
   repos,
   onSelect,
@@ -4940,6 +5016,33 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // /repos — suggest GitHub repos by category or query
+      if (cmd === '/repos') {
+        const query = args.trim()
+        setThinkingStep({ type: 'search', label: `جلب مستودعات GitHub${query ? ` لـ "${query}"` : ''}...` })
+        try {
+          const res = await fetch('/api/dz-agent/github/repos-suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query || 'all', token: tok }),
+          })
+          const data = await res.json()
+          if (data.repos && data.repos.length > 0) {
+            addAssistantMessage({
+              content: `🔍 **مستودعات GitHub مقترحة**${query ? ` لـ "${query}"` : ''} — ${data.repos.length} مستودع:`,
+              richType: 'repos-suggest',
+              suggestedRepos: data.repos,
+            })
+          } else {
+            addAssistantMessage({ content: `لم أجد مستودعات. جرّب: \`/repos web\` أو \`/repos ai\` أو \`/repos arabic\``, richType: 'text' })
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Unknown error'
+          addAssistantMessage({ content: `فشل جلب المستودعات: ${msg}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
       // /diff — show diff (informational — route to AI with context)
       if (cmd === '/diff') {
         const diffArgs = args.trim() || 'main'
@@ -5144,7 +5247,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
       // unknown command
       addAssistantMessage({
-        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\` \`/memory\``,
+        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\` \`/repos\` \`/memory\``,
         richType: 'text',
         isError: true,
       })
@@ -6428,6 +6531,9 @@ ${rows}
                           onSelect={selectRepo}
                           onExport={handleExportRepos}
                         />
+                      )}
+                      {msg.richType === 'repos-suggest' && msg.suggestedRepos && (
+                        <ReposSuggestPanel repos={msg.suggestedRepos} />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (
                         <RepoActionPanel

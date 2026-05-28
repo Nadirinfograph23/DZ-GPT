@@ -167,11 +167,24 @@ export default function DZWebBuilder() {
     const type  = SITE_TYPES.find(t => t.id === siteType)
     const style = STYLE_PRESETS.find(s => s.id === stylePreset)
     const feats = techFeatures.map(f => TECH_FEATURES.find(t => t.id === f)?.label).filter(Boolean).join(', ')
-    return `أنشئ موقع ويب احترافي من النوع "${type?.label}" (${type?.hint}).
-النمط المرئي: ${style?.label} — استخدم ألوان ${style?.colors.join(', ')}.
-الميزات التقنية المطلوبة: ${feats || 'Tailwind CSS, Animations'}.
-${prompt ? `متطلبات إضافية: ${prompt}` : ''}
-اجعله production-ready بجودة عالمية (Vercel / Stripe / Linear مستوى).`
+    const year  = new Date().getFullYear()
+    return `أنشئ موقع ويب احترافي كامل من النوع "${type?.label}" (${type?.hint}).
+
+التصميم المطلوب:
+- النمط المرئي: ${style?.label} — استخدم بالضبط هذه الألوان: ${style?.colors.join(', ')}
+- الميزات التقنية: ${feats || 'Tailwind CSS, Smooth Animations, Font Awesome Icons'}
+${prompt ? `- متطلبات إضافية: ${prompt}` : ''}
+
+قواعد صارمة:
+1. الكود يجب أن يكون HTML كامل ومكتفٍ بذاته (DOCTYPE + head + body)
+2. استخدم CDN فقط (Tailwind CDN، Font Awesome CDN)
+3. التصميم حديث جداً لسنة ${year} — لا تستخدم أي تصميم قديم
+4. حقوق النشر: © ${year} — استخدم السنة الصحيحة دائماً
+5. الموقع متجاوب 100% (mobile-first)
+6. أضف animations ناعمة على العناصر (fade-in, slide-up)
+7. الجودة يجب أن تكون على مستوى Vercel/Linear/Stripe
+
+ابدأ الكود مباشرة بـ <!DOCTYPE html>`
   }, [prompt, siteType, stylePreset, techFeatures])
 
   const generate = useCallback(async () => {
@@ -200,13 +213,20 @@ ${prompt ? `متطلبات إضافية: ${prompt}` : ''}
       clearInterval(stInt)
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data = await res.json()
-      if (data.isWebsite && data.htmlCode) {
-        setResult({ htmlCode: data.htmlCode, message: data.content || '✅ تم إنشاء الموقع بنجاح!', meta: data.webBuilderMeta })
-        setPreviewHtml(data.htmlCode)
+      let htmlCode = data.htmlCode || ''
+      if (!htmlCode && data.content) {
+        const m = data.content.match(/```(?:html)?\s*([\s\S]*?)```/i)
+        if (m) htmlCode = m[1].trim()
+        else if (/<html|<!DOCTYPE/i.test(data.content)) htmlCode = data.content
+      }
+      if ((data.isWebsite && data.htmlCode) || htmlCode) {
+        const finalHtml = htmlCode || data.htmlCode
+        setResult({ htmlCode: finalHtml, message: data.content || '✅ تم إنشاء الموقع بنجاح!', meta: data.webBuilderMeta })
+        setPreviewHtml(finalHtml)
         setActiveTab('preview')
         setStatusText('✅ اكتمل البناء!')
       } else {
-        setErrorMsg(data.content || 'لم يتم توليد موقع. حاول صياغة الطلب بشكل أوضح.')
+        setErrorMsg(data.content || data.error || 'لم يتم توليد موقع — تحقق من مفاتيح الـ API.')
       }
     } catch (err: unknown) {
       clearInterval(stInt)

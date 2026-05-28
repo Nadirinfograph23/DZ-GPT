@@ -40,6 +40,66 @@ interface ThinkingTraceRole {
   output: string
 }
 
+// ===== PRESENTATION VIEWER =====
+function PresentationViewer({
+  title, subtitle, color, slides,
+}: {
+  title: string
+  subtitle?: string
+  color: string
+  slides: Array<{ title: string; bullets: string[]; icon: string; note?: string }>
+}) {
+  const [current, setCurrent] = useState(0)
+  const total = slides.length
+  const slide = slides[current] || slides[0]
+  if (!slide) return null
+  return (
+    <div className="dz-pres" style={{ '--pres-color': color } as React.CSSProperties}>
+      <div className="dz-pres__header">
+        <span className="dz-pres__title-main">{title}</span>
+        {subtitle && <span className="dz-pres__subtitle">{subtitle}</span>}
+        <span className="dz-pres__count">{current + 1} / {total}</span>
+      </div>
+      <div className="dz-pres__slide">
+        <div className="dz-pres__slide-icon">{slide.icon}</div>
+        <h3 className="dz-pres__slide-title">{slide.title}</h3>
+        <ul className="dz-pres__bullets">
+          {slide.bullets.map((b, i) => (
+            <li key={i} className="dz-pres__bullet">
+              <span className="dz-pres__bullet-dot" />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+        {slide.note && (
+          <div className="dz-pres__note">💡 {slide.note}</div>
+        )}
+      </div>
+      <div className="dz-pres__nav">
+        <button
+          className="dz-pres__nav-btn"
+          onClick={() => setCurrent(c => Math.max(0, c - 1))}
+          disabled={current === 0}
+        >‹ السابق</button>
+        <div className="dz-pres__dots">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              className={`dz-pres__dot ${i === current ? 'dz-pres__dot--active' : ''}`}
+              onClick={() => setCurrent(i)}
+            />
+          ))}
+        </div>
+        <button
+          className="dz-pres__nav-btn"
+          onClick={() => setCurrent(c => Math.min(total - 1, c + 1))}
+          disabled={current === total - 1}
+        >التالي ›</button>
+      </div>
+    </div>
+  )
+}
+
 // ===== THINKING TRACE PANEL =====
 function ThinkingTracePanel({ roles }: { roles: ThinkingTraceRole[] }) {
   const [open, setOpen] = useState(false)
@@ -343,6 +403,9 @@ type RichType =
   | 'github-react'
   | 'github-agent'
   | 'image'
+  | 'qr'
+  | 'books'
+  | 'presentation'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -569,6 +632,19 @@ interface DZMessage {
   imagePrompt?: string
   imageModel?: string
   imageStyle?: string
+  qrData?: string
+  qrTitle?: string
+  books?: Array<{
+    key: string; title: string; authors: string[];
+    year: number | null; cover: string | null;
+    pages: number | null; subjects: string[]; url: string | null;
+  }>
+  booksQuery?: string
+  booksTotal?: number
+  slides?: Array<{ title: string; bullets: string[]; icon: string; note?: string }>
+  presentationTitle?: string
+  presentationSubtitle?: string
+  presentationColor?: string
 }
 
 interface ActionLogEntry {
@@ -5355,6 +5431,94 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // ── QR Code Generation (free — api.qrserver.com, no key) ─────────────────
+      const QR_RE = /(?:اعمل|أنشئ|انشئ|ولد|اصنع|create|generate|make|faire)\s*(?:كود\s*)?qr|qr\s*code\s*(?:ل|لـ|of|pour|for)|رمز\s*(?:الـ\s*)?qr|qr\s*كود/i
+      if (QR_RE.test(text)) {
+        const qrData = text.replace(QR_RE, '').replace(/^[\s:لـل،,]+|[\s:،,]+$/g, '').trim() || text.trim()
+        const qrTitle = qrData.length > 60 ? qrData.slice(0, 60) + '…' : qrData
+        addAssistantMessage({
+          content: `📋 **QR Code جاهز:** ${qrTitle}`,
+          richType: 'qr',
+          qrData,
+          qrTitle,
+          quickSuggestions: ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب', 'QR لبريدي الإلكتروني'],
+        })
+        setIsLoading(false)
+        return
+      }
+
+      // ── Open Library Book Search (free — openlibrary.org) ─────────────────────
+      const BOOK_RE = /(?:ابحث|أعطني|اعطني|جيبلي|هات|اقترح|اقتراح|بحث)\s*(?:عن\s*)?(?:كتب|كتاب|روايات|رواية|مؤلفات)|(?:كتب|كتاب|روايات)\s*(?:عن|ل|ب|في)|(?:book|books|novel|novels)\s*(?:about|by|on)|(?:find|search|show)\s*books/i
+      if (BOOK_RE.test(text)) {
+        const loadingId = generateId()
+        setMessages(prev => [...prev, {
+          id: loadingId, role: 'assistant' as const, content: '📖 جاري البحث في مكتبة Open Library...', richType: 'text' as const, isStreaming: true,
+        }])
+        try {
+          const booksRes = await fetch(`/api/tools/books?q=${encodeURIComponent(text)}&limit=8`, { signal: abortRef.current!.signal })
+          const booksData = await booksRes.json() as { books: DZMessage['books']; total: number; error?: string }
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          if (booksData.books && booksData.books.length > 0) {
+            addAssistantMessage({
+              content: `📚 **وجدت ${booksData.books.length} كتاباً** من أصل ${booksData.total?.toLocaleString() ?? '?'} نتيجة`,
+              richType: 'books',
+              books: booksData.books,
+              booksQuery: text,
+              booksTotal: booksData.total,
+              quickSuggestions: ['اقترح كتباً مشابهة', 'كتب عربية في نفس المجال', 'أفضل 5 كتب في هذا الموضوع'],
+            })
+          } else {
+            addAssistantMessage({ content: '📭 لم أجد نتائج — جرّب كلمة بحث مختلفة.', richType: 'text' })
+          }
+        } catch {
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          addAssistantMessage({ content: '⚠️ تعذّر الوصول إلى مكتبة الكتب.', richType: 'text', isError: true })
+        }
+        setIsLoading(false)
+        return
+      }
+
+      // ── Presentation Generator (AI-powered, free models) ──────────────────────
+      const PRES_RE = /(?:اعمل|أنشئ|انشئ|اصنع|ولد|جهّز|جهز|أعطني|اعطني|create|generate|make|faire|cr[ée]e)\s*(?:عرض|بريزنتيشن|شرائح|سلايدات|بوربوينت|slides?|presentation|powerpoint|diaporama)|(?:عرض|شرائح)\s*(?:تقديمي|عن|حول|powerpoint|ppt)|(?:ppt|powerpoint)\s*(?:عن|ل|about)/i
+      if (PRES_RE.test(text)) {
+        const topic = text.replace(PRES_RE, '').replace(/^[\s:لـل،,]+|[\s:،,]+$/g, '').trim() || text.trim()
+        const loadingId = generateId()
+        setMessages(prev => [...prev, {
+          id: loadingId, role: 'assistant' as const, content: '📊 جاري إعداد العرض التقديمي...', richType: 'text' as const, isStreaming: true,
+        }])
+        try {
+          const presRes = await fetch('/api/tools/presentation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, lang: language, slideCount: 6 }),
+            signal: abortRef.current!.signal,
+          })
+          const presData = await presRes.json() as {
+            title?: string; subtitle?: string; color?: string;
+            slides?: DZMessage['slides']; error?: string
+          }
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          if (presData.slides && presData.slides.length > 0) {
+            addAssistantMessage({
+              content: `📊 **${presData.title || topic}** — ${presData.slides.length} شرائح جاهزة`,
+              richType: 'presentation',
+              slides: presData.slides,
+              presentationTitle: presData.title || topic,
+              presentationSubtitle: presData.subtitle,
+              presentationColor: presData.color || '#7c6eff',
+              quickSuggestions: ['أضف شريحة ملخص', 'اعمل عرضاً أطول', 'ترجم العرض للإنجليزية'],
+            })
+          } else {
+            addAssistantMessage({ content: `⚠️ ${presData.error || 'تعذّر إنشاء العرض — حاول مجدداً.'}`, richType: 'text', isError: true })
+          }
+        } catch {
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          addAssistantMessage({ content: '⚠️ انقطع الاتصال أثناء إعداد العرض.', richType: 'text', isError: true })
+        }
+        setIsLoading(false)
+        return
+      }
+
       // ── DZ GitHub Agent mode — any GitHub URL or explicit repo in ghAgentRepo ──
       const ghUrlMatch = text.match(/github\.com\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)/i)
       const activeGhRepo = ghAgentRepo.trim() || (ghUrlMatch ? ghUrlMatch[1].replace(/\.git$/, '') : '')
@@ -6511,6 +6675,86 @@ ${rows}
                           </div>
                         </div>
                       )}
+                      {msg.richType === 'qr' && msg.qrData && (
+                        <div className="dz-qr-card">
+                          <div className="dz-qr-card__header">
+                            <span className="dz-qr-card__icon">📋</span>
+                            <span className="dz-qr-card__label">QR Code</span>
+                          </div>
+                          <div className="dz-qr-card__body">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(msg.qrData)}&size=260x260&format=png&margin=10`}
+                              alt="QR Code"
+                              className="dz-qr-card__img"
+                              onError={(e) => { (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(msg.qrData!)}&size=200x200` }}
+                            />
+                          </div>
+                          <div className="dz-qr-card__data">{msg.qrTitle}</div>
+                          <div className="dz-qr-card__actions">
+                            <a
+                              href={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(msg.qrData)}&size=500x500&format=png`}
+                              download="qr-code.png"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="dz-qr-card__btn"
+                            >⬇ تحميل PNG</a>
+                            <button
+                              className="dz-qr-card__btn"
+                              onClick={() => navigator.clipboard?.writeText(msg.qrData!)}
+                            >📋 نسخ النص</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.richType === 'books' && Array.isArray(msg.books) && msg.books.length > 0 && (
+                        <div className="dz-books-card">
+                          <div className="dz-books-card__header">
+                            <span>📚</span>
+                            <span>{msg.books.length} كتاب</span>
+                            {msg.booksTotal && msg.booksTotal > msg.books.length && (
+                              <span className="dz-books-card__total">من {msg.booksTotal.toLocaleString()} نتيجة</span>
+                            )}
+                          </div>
+                          <div className="dz-books-card__grid">
+                            {msg.books.map((book, i) => (
+                              <a
+                                key={book.key || i}
+                                href={book.url || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="dz-book-item"
+                              >
+                                <div className="dz-book-item__cover">
+                                  {book.cover
+                                    ? <img src={book.cover} alt={book.title} loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display='none'; ((e.target as HTMLImageElement).nextSibling as HTMLElement).style.display='flex' }} />
+                                    : null}
+                                  <div className="dz-book-item__cover-placeholder" style={{ display: book.cover ? 'none' : 'flex' }}>📖</div>
+                                </div>
+                                <div className="dz-book-item__info">
+                                  <span className="dz-book-item__title">{book.title}</span>
+                                  {book.authors.length > 0 && (
+                                    <span className="dz-book-item__author">{book.authors[0]}</span>
+                                  )}
+                                  <div className="dz-book-item__meta">
+                                    {book.year && <span>📅 {book.year}</span>}
+                                    {book.pages && <span>📄 {book.pages} ص</span>}
+                                  </div>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.richType === 'presentation' && Array.isArray(msg.slides) && msg.slides.length > 0 && (
+                        <PresentationViewer
+                          title={msg.presentationTitle || ''}
+                          subtitle={msg.presentationSubtitle}
+                          color={msg.presentationColor || '#7c6eff'}
+                          slides={msg.slides}
+                        />
+                      )}
+
                       {msg.richType === 'github-profile' && msg.githubProfile && (
                         <div style={{
                           background: 'linear-gradient(135deg, #0d1117 0%, #161b22 100%)',

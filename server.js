@@ -1334,6 +1334,48 @@ function normalizeChatMessages(messages) {
     .filter(Boolean)
 }
 
+// ── Smart Topic Change Detection ──────────────────────────────────────────
+// Returns true if the new message is about a completely different topic
+// from the recent conversation history — so we can trim context.
+function detectTopicChange(messages) {
+  if (!Array.isArray(messages) || messages.length < 3) return false
+  const newMsg = [...messages].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || ''
+  if (!newMsg || newMsg.length < 8) return false
+
+  // Get last 4 user messages excluding the newest
+  const prevUserMsgs = messages
+    .filter(m => m.role === 'user')
+    .slice(-5, -1)
+    .map(m => m.content.toLowerCase())
+
+  if (!prevUserMsgs.length) return false
+
+  // Extract key tokens (words ≥4 chars) from each message
+  const tokenize = (s) => s.replace(/[^\u0600-\u06FFa-z0-9\s]/g, ' ')
+    .split(/\s+/).filter(w => w.length >= 4)
+
+  const newTokens = new Set(tokenize(newMsg))
+  const prevText  = prevUserMsgs.join(' ')
+  const prevTokens = new Set(tokenize(prevText))
+
+  if (!newTokens.size || !prevTokens.size) return false
+
+  // Count shared tokens
+  let shared = 0
+  for (const t of newTokens) { if (prevTokens.has(t)) shared++ }
+
+  const overlapRatio = shared / newTokens.size
+
+  // Topic changed if less than 15% token overlap AND new message is substantial
+  if (overlapRatio < 0.15 && newMsg.length > 15) {
+    // Extra guard: don't reset on short follow-up words
+    const CONTINUATION_RE = /^(نعم|لا|أكمل|اكمل|تابع|وأيضا|وكمان|زيد|زيدني|وبعد|وكذلك|أيضا|ايضا|وش|وشن|شنو|yes|no|ok|okay|continue|more|and|also|بالضبط|صح|غلط|عندي|سؤال|اسأل)/i
+    if (CONTINUATION_RE.test(newMsg.trim())) return false
+    return true
+  }
+  return false
+}
+
 function hasDeployAuthorization(req) {
   const expected = process.env.DEPLOY_ADMIN_TOKEN
   if (!expected) return false
@@ -10508,10 +10550,18 @@ const _NOCACHE_RE = /أخبار|طقس|مباراة|سعر|صرف|الآن|ال�
 
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
-  const messages = normalizeChatMessages(req.body.messages)
+  let messages = normalizeChatMessages(req.body.messages)
 
   if (!messages?.length) {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
+  }
+
+  // ── Smart Topic Isolation — إذا السؤال الجديد موضوع مختلف تماماً، نقطع السياق ──
+  const _topicChanged = detectTopicChange(messages)
+  if (_topicChanged) {
+    const _lastUser = [...messages].reverse().find(m => m.role === 'user')
+    messages = _lastUser ? [_lastUser] : messages
+    console.log(`[TopicChange] موضوع جديد كُشف — تم إعادة ضبط السياق`)
   }
 
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)

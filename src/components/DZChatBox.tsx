@@ -403,6 +403,7 @@ type RichType =
   | 'github-react'
   | 'github-agent'
   | 'image'
+  | 'imageGrid'
   | 'qr'
   | 'books'
   | 'presentation'

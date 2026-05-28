@@ -1337,217 +1337,394 @@ function normalizeChatMessages(messages) {
 
 // ── Tool Redirect Map — أدوات لها صفحات متخصصة ────────────────────────────
 const TOOL_REDIRECT_MAP = [
+  // ── CV / Resume ─────────────────────────────────────────────────────────
   {
     id: 'cv',
     toolName: 'مولّد السيرة الذاتية',
     toolUrl: '/tools?tool=cv',
     toolIcon: '📄',
     toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية مع نماذج تفاعلية وتحميل PDF',
-    patterns: [/سيرة\s*ذاتية|سيرة ذاتية|cv\s*(احترافية|جزائري|بالعربي|بالفرنسية)?|resume\s*(algérien)?|curriculum\s*vitae|تحضير.*cv|انشئ.*cv|اعمل.*cv/i],
+    patterns: [
+      /سيرة\s*ذاتية|curriculum\s*vitae/i,
+      /(?:اعمل|انشئ|أنشئ|حضر|جهز|دير|صنع|اصنع|بغيت|حابب|نحتاج|محتاج)\s*(?:لي\s*)?(?:cv|سيرة|résumé|resume)/i,
+      /cv\s*(?:احترافي|جزائري|بالعربي|بالفرنسية|pour|professionnel)/i,
+    ],
   },
+  // ── Business Plan ────────────────────────────────────────────────────────
   {
     id: 'bizplan',
     toolName: 'خطة العمل Business Plan',
     toolUrl: '/tools?tool=bizplan',
     toolIcon: '📊',
     toolDesc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية وتحليل السوق',
-    patterns: [/خطة\s*(عمل|مشروع|business)|business\s*plan|plan\s*(d'affaires|de\s*business)|دراسة\s*جدوى|مشروع\s*(اقتصادي|استثماري)/i],
+    patterns: [
+      /خطة\s*(?:عمل|مشروع)|business\s*plan|plan\s*(?:d'affaires|de\s*business)/i,
+      /دراسة\s*جدوى|مشروع\s*(?:اقتصادي|استثماري|تجاري)/i,
+      /(?:اعمل|انشئ|أنشئ|حضر|جهز)\s*(?:لي\s*)?(?:خطة\s*مشروع|بيزنس\s*بلان)/i,
+    ],
   },
+  // ── Invoice ──────────────────────────────────────────────────────────────
   {
     id: 'invoice',
     toolName: 'مولّد الفواتير',
     toolUrl: '/tools?tool=invoice',
     toolIcon: '🧾',
     toolDesc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF فوري',
-    patterns: [/فاتورة|فواتير|invoice|facture|TVA|TTC|HT|ضريبة.*قيمة.*مضافة/i],
+    patterns: [
+      /فاتورة|فواتير|invoice|facture/i,
+      /(?:اعمل|انشئ|أنشئ|حضر|دير)\s*(?:لي\s*)?(?:فاتورة|facture)/i,
+      /TVA|TTC\b|ضريبة.*قيمة.*مضافة/i,
+    ],
   },
+  // ── Tax ──────────────────────────────────────────────────────────────────
   {
     id: 'tax',
     toolName: 'مُحاسب الضرائب',
     toolUrl: '/tools?tool=tax',
     toolIcon: '🧮',
     toolDesc: 'احسب IRG و IBS والضرائب الجزائرية للأفراد والشركات',
-    patterns: [/(?:احسب|حساب|ضريبة)\s*(IRG|IBS|الدخل|الشركات)|ضريبة.*دخل.*جزائر|IRG.*حساب|IBS.*حساب/i],
+    patterns: [
+      /(?:احسب|حساب|ضريبة)\s*(?:IRG|IBS|الدخل|الشركات)/i,
+      /ضريبة.*دخل.*جزائر|IRG.*حساب|IBS.*حساب/i,
+      /(?:كم|حساب)\s*(?:ضرائب|الضريبة)\s*(?:على\s*)?(?:راتبي|دخلي|مرتبي)/i,
+    ],
   },
+  // ── Pension / CNAS ───────────────────────────────────────────────────────
   {
     id: 'pension',
     toolName: 'حاسبة التقاعد CNAS',
     toolUrl: '/tools?tool=pension',
     toolIcon: '🏦',
     toolDesc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل',
-    patterns: [/تقاعد|معاش|CNAS|CASNOS|pension|retraite|اشتراكات.*تأمين/i],
+    patterns: [
+      /تقاعد|معاش\s*(?:تقاعد|الشيخوخة)|CNAS|CASNOS|pension|retraite/i,
+      /(?:اشتراكات|تأمين)\s*(?:اجتماعي|مهني)/i,
+      /(?:كم|احسب)\s*(?:معاشي|تقاعدي|pension)/i,
+    ],
   },
+  // ── Zakat ────────────────────────────────────────────────────────────────
   {
     id: 'zakat',
     toolName: 'حاسبة الزكاة الشاملة',
     toolUrl: '/tools?tool=zakat',
     toolIcon: '☪️',
     toolDesc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع بالدينار الجزائري',
-    patterns: [/زكاة|زكاتي|حساب.*زكاة|زكاة.*مال|زكاة.*ذهب|نصاب/i],
+    patterns: [
+      /زكاة|زكاتي|نصاب/i,
+      /(?:احسب|حساب)\s*(?:زكاة|الزكاة)/i,
+      /زكاة\s*(?:مال|ذهب|فضة|تجارة|زروع)/i,
+    ],
   },
+  // ── Business Card ────────────────────────────────────────────────────────
   {
     id: 'bizcard',
     toolName: 'بطاقة العمل',
     toolUrl: '/tools?tool=bizcard',
     toolIcon: '🪪',
     toolDesc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF',
-    patterns: [/بطاقة\s*(عمل|أعمال|business)|business\s*card|carte\s*(de\s*visite|professionnelle)|كارت\s*شخصي/i],
+    patterns: [
+      /بطاقة\s*(?:عمل|أعمال|business)|business\s*card|carte\s*(?:de\s*visite|professionnelle)/i,
+      /كارت\s*(?:شخصي|أعمال|vizit)/i,
+      /(?:صمم|اعمل|انشئ|أنشئ|دير)\s*(?:لي\s*)?(?:بطاقة\s*عمل|كارت\s*شخصي)/i,
+    ],
   },
+  // ── QR Code — NOT handled natively, always redirect ─────────────────────
+  {
+    id: 'qrcode',
+    toolName: 'مولّد QR Code',
+    toolUrl: '/tools?tool=qrcode',
+    toolIcon: '🔲',
+    toolDesc: 'أنشئ QR Code فورياً من أي رابط أو نص أو معلومات تواصل — تحميل PNG مجاناً',
+    patterns: [
+      /qr\s*code|qr\b/i,
+      /رمز\s*(?:qr|الاستجابة\s*السريعة)/i,
+      /(?:اعمل|انشئ|أنشئ|ولّد|دير|صنع|اصنع|بغيت|نبغي|حابب)\s*(?:لي\s*)?(?:qr|رمز\s*qr|code\s*qr)/i,
+    ],
+  },
+  // ── Project Planner ──────────────────────────────────────────────────────
+  {
+    id: 'planner',
+    toolName: 'مخطط المشاريع',
+    toolUrl: '/tools?tool=planner',
+    toolIcon: '🗂️',
+    toolDesc: 'حوّل فكرتك إلى خطة مهام وجدول زمني منظّم — تصدير PDF',
+    patterns: [
+      /(?:خطة|مخطط)\s*(?:مشروع|مهام|تنفيذ|عمل\s*تفصيل)/i,
+      /(?:نظّم|رتّب|خطّط)\s*(?:لي\s*)?(?:مهام|مشروع|خطوات)/i,
+      /project\s*plan(?:ner)?|task\s*list|gantt/i,
+      /(?:اعمل|انشئ|حضر|دير)\s*(?:لي\s*)?(?:جدول\s*(?:مهام|زمني)|خطة\s*تنفيذ)/i,
+    ],
+  },
+  // ── Business Docs ────────────────────────────────────────────────────────
+  {
+    id: 'docs',
+    toolName: 'وثائق الأعمال',
+    toolUrl: '/tools?tool=docs',
+    toolIcon: '📋',
+    toolDesc: 'عقود • مقترحات • محاضر اجتماع احترافية بالعربية والفرنسية',
+    patterns: [
+      /عقد\s*(?:عمل|تجاري|إيجار|خدمات)|contrat\s*(?:de\s*travail|commercial)/i,
+      /محضر\s*(?:اجتماع|جلسة)|procès[\s-]verbal/i,
+      /مقترح\s*(?:عمل|تجاري|مشروع)|proposition\s*(?:commerciale|de\s*projet)/i,
+      /(?:اعمل|انشئ|أنشئ|حضر|دير)\s*(?:لي\s*)?(?:عقد|محضر|وثيقة\s*رسمية)/i,
+    ],
+  },
+  // ── Darija Translator ────────────────────────────────────────────────────
   {
     id: 'darija',
     toolName: 'مترجم الدارجة الجزائرية',
     toolUrl: '/tools?tool=darija',
     toolIcon: '🗣️',
     toolDesc: 'ترجمة من وإلى الدارجة الجزائرية — شرق · غرب · وسط · جنوب',
-    patterns: [/ترجم.*دارجة|دارجة.*ترجم|دارجة.*جزائرية|عربي.*دارجة|دارجة.*عربي|دارجة.*فرنسي|فرنسي.*دارجة/i],
+    patterns: [
+      /(?:ترجم|ترجمة)\s*(?:\w+\s*){0,3}(?:إلى|ل|لل)\s*(?:ال)?(?:دارجة|darija)/i,
+      /(?:ترجم|ترجمة)\s*(?:إلى|ل|لل)?\s*(?:ال)?(?:دارجة|darija)/i,
+      /(?:دارجة|darija).*(?:ترجم|ترجمة)/i,
+      /(?:عربي|فرنسي|إنجليزي)\s*(?:إلى|ل|لل)?\s*(?:ال)?(?:دارجة|darija)/i,
+      /(?:قول|كيف\s*(?:نقول|يقولوها?))\s*.+\s*(?:بالدارجة|في\s*الدارجة|بالدارجة\s*الجزائرية)/i,
+      /(?:ترجملي|ترجم\s*لي|ترجملنا)\s*.+\s*(?:دارجة|darija)/i,
+      /(?:بالدارجة|للدارجة|إلى\s*الدارجة)/i,
+      /(?:دارجة|darija)\s*(?:جزائرية|algérienne)/i,
+    ],
   },
+  // ── Hashtag Generator ───────────────────────────────────────────────────
   {
     id: 'hashtag',
     toolName: 'مولّد الهاشتاغ',
     toolUrl: '/tools?tool=hashtag',
     toolIcon: '#️⃣',
     toolDesc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن',
-    patterns: [/هاشتاغ|هاشتاق|hashtag|#.*جزائر|ولد.*هاشتاغ|اعمل.*هاشتاغ/i],
+    patterns: [
+      /هاشتاغ|هاشتاق|hashtag/i,
+      /(?:ولّد|اعمل|انشئ|أنشئ|عطيني|دير)\s*(?:لي\s*)?(?:هاشتاغ|#)/i,
+      /#.*(?:جزائر|algerie|dz)\b/i,
+    ],
   },
+  // ── Text to Speech ──────────────────────────────────────────────────────
   {
     id: 'tts',
     toolName: 'تحويل نص إلى صوت',
     toolUrl: '/tools?tool=tts',
     toolIcon: '🔊',
     toolDesc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية — تحميل MP3',
-    patterns: [/نص.*صوت|text.*speech|TTS|حول.*نص.*صوت|اقرأ.*نص|صوّت.*نص|audio.*نص|mp3.*نص/i],
+    patterns: [
+      /(?:نص|text)\s*(?:إلى|to)\s*(?:صوت|speech|audio|mp3)/i,
+      /TTS\b|text[\s-]to[\s-]speech/i,
+      /(?:حوّل|حول|اقرأ|صوّت)\s*(?:هذا\s*)?(?:النص|الكلام)\s*(?:إلى\s*)?(?:صوت|ملف\s*صوتي)/i,
+    ],
   },
+  // ── Website Screenshot ──────────────────────────────────────────────────
   {
     id: 'screenshot',
     toolName: 'تصوير المواقع',
     toolUrl: '/tools?tool=screenshot',
     toolIcon: '📸',
     toolDesc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF',
-    patterns: [/صورة.*موقع|screenshot.*موقع|التقط.*موقع|capture.*site|لقطة.*شاشة.*موقع/i],
+    patterns: [
+      /(?:صورة|لقطة|screenshot|capture)\s*(?:من\s*)?(?:موقع|site)/i,
+      /(?:التقط|صوّر|خذ\s*صورة)\s*(?:الموقع|لموقع|من\s*الموقع)/i,
+      /screenshot\s*(?:of\s*)?(?:a\s*)?(?:website|site|page)/i,
+    ],
   },
+  // ── Data Analysis ───────────────────────────────────────────────────────
   {
     id: 'dataanalysis',
     toolName: 'محلل البيانات',
     toolUrl: '/tools?tool=dataanalysis',
     toolIcon: '📈',
     toolDesc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI',
-    patterns: [/تحليل.*بيانات.*ملف|ارفع.*excel.*تحليل|csv.*تحليل|upload.*data.*anal|تحليل.*csv|تحليل.*xlsx/i],
+    patterns: [
+      /(?:تحليل|analyse)\s*(?:ملف|بيانات\s*من\s*ملف|excel|csv|xlsx)/i,
+      /(?:ارفع|upload)\s*(?:ملف|excel|csv).*(?:تحليل|analyse)/i,
+      /(?:تحليل|analyse)\s*(?:csv|xlsx|بيانات)\s*(?:ملف|مرفوع)/i,
+    ],
   },
+  // ── OCR ─────────────────────────────────────────────────────────────────
   {
     id: 'ocr-dz',
     toolName: 'قارئ الوثائق OCR',
     toolUrl: '/ocr-dz',
     toolIcon: '📷',
     toolDesc: 'ارفع صورة أو PDF واستخرج النص بدقة عالية مع تصحيح AI',
-    patterns: [/ocr.*ملف|ارفع.*صورة.*نص|استخرج.*نص.*pdf|pdf.*استخرج|ملف.*pdf.*نص|digitize|تحويل.*pdf.*نص/i],
+    patterns: [
+      /\bocr\b/i,
+      /(?:استخرج|اقرأ|تحويل)\s*(?:نص\s*من\s*)?(?:صورة|pdf|وثيقة|مستند)/i,
+      /(?:ارفع|upload)\s*(?:صورة|pdf).*(?:نص|text|استخرج)/i,
+      /(?:نص\s*من\s*)?(?:صورة|pdf)\s*(?:إلى\s*)?(?:نص|text)/i,
+    ],
   },
+  // ── Excel Editor ────────────────────────────────────────────────────────
   {
     id: 'excel',
     toolName: 'محرر Excel الذكي',
     toolUrl: '/excel',
     toolIcon: '📊',
     toolDesc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX',
-    patterns: [/(?:افتح|اعمل|انشئ|أنشئ)\s*(جدول|ملف)\s*(excel|إكسيل|اكسيل|xlsx|spreadsheet)|تحرير.*excel|excel.*editor|spreadsheet.*(?:افتح|اعمل)/i],
+    patterns: [
+      /(?:افتح|اعمل|انشئ|أنشئ|دير)\s*(?:جدول|ملف)\s*(?:excel|إكسيل|اكسيل|xlsx|spreadsheet)/i,
+      /(?:محرر|editor)\s*(?:excel|إكسيل|اكسيل|spreadsheet)/i,
+      /(?:ابغي|بغيت|حابب|نحتاج)\s*(?:جدول\s*)?(?:excel|إكسيل|اكسيل)/i,
+    ],
   },
+  // ── Image Studio ────────────────────────────────────────────────────────
+  {
+    id: 'imgstudio',
+    toolName: 'استوديو الصور',
+    toolUrl: '/tools?tool=imgproc',
+    toolIcon: '🎨',
+    toolDesc: 'معالجة الصور بالذكاء الاصطناعي — إزالة الخلفية • تحسين الجودة • فلاتر',
+    patterns: [
+      /(?:أزل|ازل|احذف|إزالة)\s*(?:الخلفية|background)\s*(?:من\s*صورة)?/i,
+      /(?:حسّن|improve|enhance)\s*(?:جودة\s*)?(?:صورة|photo|image)/i,
+      /(?:معالجة|تحرير|edit)\s*(?:الصورة|صورة|photo)\s*(?:بالذكاء|AI)?/i,
+      /remove\s*background|background\s*remov/i,
+    ],
+  },
+  // ── Web Builder ─────────────────────────────────────────────────────────
   {
     id: 'web-builder',
     toolName: 'Web Builder — بانيّ المواقع',
     toolUrl: '/web-builder',
     toolIcon: '🌐',
     toolDesc: 'أنشئ موقعاً كاملاً بالذكاء الاصطناعي أو استنسخ موقعاً موجوداً',
-    patterns: [/(?:انشئ|أنشئ|ابني|اصنع|اعمل|صمم)\s*(موقع|سايت|ويب\s*سايت|landing\s*page|صفحة\s*هبوط)|website\s*builder|استنسخ\s*موقع|clone\s*site|web\s*builder/i],
+    patterns: [
+      /(?:انشئ|أنشئ|ابني|اصنع|اعمل|صمم|دير)\s*(?:لي\s*)?(?:موقع|سايت|ويب\s*سايت|landing\s*page|صفحة\s*هبوط)/i,
+      /website\s*builder|web\s*builder/i,
+      /(?:استنسخ|clone)\s*(?:موقع|site)/i,
+      /(?:بغيت|نبغي|نحتاج|حابب)\s*(?:موقع|سايت)\s*(?:خاص|احترافي)?/i,
+    ],
   },
+  // ── GitHub Agent ────────────────────────────────────────────────────────
   {
     id: 'github-agent',
     toolName: 'GitHub Agent — وكيل النشر',
     toolUrl: '/github-agent',
     toolIcon: '⚡',
     toolDesc: 'انشر مشروعك تلقائياً على GitHub وVercel بأمر واحد',
-    patterns: [/انشر.*مشروع.*github|نشر.*vercel.*تلقائي|deploy.*github.*auto|github\s*agent|وكيل.*github/i],
+    patterns: [
+      /(?:انشر|deploy|نشر)\s*(?:مشروع|تطبيق).*(?:github|vercel)/i,
+      /github\s*agent|وكيل.*github/i,
+      /(?:نشر|deploy)\s*(?:تلقائي|automatically?).*(?:github|vercel)/i,
+    ],
   },
+  // ── Radio ───────────────────────────────────────────────────────────────
   {
     id: 'radio',
     toolName: 'DZ Radio — إذاعة جزائرية',
     toolUrl: '/radio',
     toolIcon: '📻',
     toolDesc: '8 قنوات جزائرية حية — إذاعة وطنية، القرآن، جيل FM وأكثر',
-    patterns: [/إذاعة|اذاعة|radio\s*(جزائر|algérie)?|بث.*صوتي|استمع.*راديو|قناة.*راديو|جيل.*fm|chaîne/i],
+    patterns: [
+      /(?:إذاعة|اذاعة|راديو|radio)\s*(?:جزائرية?|algérie?)?/i,
+      /(?:استمع|دير|شغّل)\s*(?:إلى\s*)?(?:راديو|إذاعة)/i,
+      /(?:جيل\s*fm|quran\s*fm|البهجة|الإذاعة\s*الوطنية)/i,
+    ],
   },
+  // ── Community Chat ──────────────────────────────────────────────────────
   {
     id: 'dzchat',
     toolName: 'DZ Chat — دردشة مجتمعية',
     toolUrl: '/dzchat',
     toolIcon: '💬',
     toolDesc: 'غرفة دردشة جماعية مع مستخدمين آخرين ووكلاء AI في الوقت الحقيقي',
-    patterns: [/دردشة.*جماعية|غرفة.*دردشة|chat.*room|community\s*chat|دردشة.*مع.*آخرين|مجتمع.*دردشة/i],
+    patterns: [
+      /(?:دردشة|chat)\s*(?:جماعية|مجتمعية|مع\s*آخرين)/i,
+      /(?:غرفة|room)\s*(?:دردشة|chat)/i,
+      /(?:community|مجتمع)\s*(?:chat|دردشة)/i,
+    ],
   },
+  // ── DZ Le3ba (Games) ────────────────────────────────────────────────────
   {
     id: 'le3ba',
     toolName: 'DZ Le3ba — ألعاب عربية',
     toolUrl: '/le3ba',
     toolIcon: '🎮',
     toolDesc: 'ألعاب لغوية عربية — Wordle بالعربي، وصلة (كلمات متقاطعة)',
-    patterns: [/ألعاب|العاب|لعبة.*لغوية|wordle.*عربي|كلمة.*مخفية|وصلة.*لعبة|لعبة.*كلمات|تقاطع.*كلمات|crossword/i],
+    patterns: [
+      /(?:ألعاب|العاب|لعبة)\s*(?:لغوية|عربية|كلمات)/i,
+      /wordle.*عربي|عربي.*wordle/i,
+      /(?:وصلة|كلمات\s*متقاطعة|crossword)\s*(?:عربي)?/i,
+      /(?:العب|لعبة)\s*(?:بالعربي|عربية)/i,
+    ],
   },
+  // ── Quran (audio / recitation) ──────────────────────────────────────────
   {
     id: 'quran-audio',
     toolName: 'القرآن الكريم — تلاوة وتفسير',
     toolUrl: '/quran',
     toolIcon: '📖',
     toolDesc: 'استمع لتلاوات بأصوات مختلفة، تفسير AI وبحث بالآيات',
-    patterns: [/(?:استمع|سماع|تلاوة|تلاوات|صوت|بث)\s*(قرآن|قرآني|سورة|آية|ورتل)|قرآن.*صوت|recitation.*quran|reciters?|مقرئ|مقارئ/i],
+    patterns: [
+      /(?:استمع|اسمع|سماع)\s*(?:إلى|ل|لل|على)?\s*(?:ال)?(?:قرآن|سورة|تلاوة)/i,
+      /(?:تلاوة|تلاوات|ورتّل|ترتيل)\s*(?:من\s*)?(?:قرآن|سورة|آية)/i,
+      /(?:صوت|بصوت)\s*(?:قرآن|قرآني|مقرئ)/i,
+      /(?:مقرئ|قارئ|reciters?|recitation)/i,
+      /قرآن.*(?:صوت|audio|استمع|سماع|اسمع)/i,
+      /(?:شغّل|شغل|دير)\s*(?:سورة|قرآن|تلاوة)/i,
+    ],
   },
+  // ── Jobs ────────────────────────────────────────────────────────────────
   {
     id: 'jobs',
     toolName: 'بحث وظيفي',
     toolUrl: '/tools?tool=jobs',
     toolIcon: '💼',
     toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم',
-    patterns: [/(?:ابحث|بحث)\s*(?:عن\s*)?(?:وظيفة|عمل|منصب|مناصب|شغل)\s*(?:في\s*الجزائر|في\s*جزائر|بالجزائر)?|offre.*emploi.*algér|emploi.*algér|job.*algérie/i],
+    patterns: [
+      /(?:ابحث|نبحث|دور)\s*(?:على|عن)\s*(?:وظيفة|عمل|منصب|شغل)/i,
+      /(?:وظيفة|عمل|شغل)\s*(?:في\s*)?(?:الجزائر|جزائر)/i,
+      /offre\s*(?:d')?emploi|emploi.*algér|job.*algérie/i,
+      /(?:نبغي|بغيت|حابب)\s*(?:نخدم|نلقى\s*خدمة|وظيفة)/i,
+    ],
   },
+  // ── Health ──────────────────────────────────────────────────────────────
   {
     id: 'health',
     toolName: 'وكيل الصحة',
     toolUrl: '/tools?tool=health',
     toolIcon: '🏥',
     toolDesc: 'ابحث عن طبيب، تحليل الأعراض ونصائح صحية مخصصة للجزائر',
-    patterns: [/ابحث.*طبيب.*قريب|أقرب.*مستشفى|صيدلية.*قريب|doctor.*near|hôpital.*algér|find.*doctor.*near/i],
+    patterns: [
+      /(?:ابحث|نلقى|دور)\s*(?:على|عن)\s*(?:طبيب|دكتور|مستشفى|صيدلية)\s*(?:قريب|قريبة)?/i,
+      /(?:أقرب|قريب)\s*(?:طبيب|مستشفى|صيدلية|عيادة)/i,
+      /(?:doctor|hôpital|clinique)\s*(?:near|algér|proche)/i,
+    ],
   },
 ]
 
 // Detect if the user message should redirect to a specific tool page
 function detectToolRedirect(msg) {
   if (!msg || msg.length < 5) return null
-  const clean = msg.trim().toLowerCase()
 
-  // ── Hard exclusions — DZ Agent handles these natively, NEVER redirect ────
-  // Image generation
-  if (/ارسم|أرسم|رسم\s*لي|صورة\s*عن|اصنع\s*صورة|أنشئ\s*صورة|generate\s*image|create\s*image|draw\s*me/i.test(msg)) return null
-  // Presentations
-  if (/عرض\s*تقديمي|شرائح|بوربوينت|powerpoint|ppt|presentation/i.test(msg)) return null
-  // QR codes — handled inline
-  if (/qr\s*code|رمز.*qr|اعمل.*qr/i.test(msg)) return null
-  // YouTube / videos / songs
-  if (/يوتيوب|youtube|اغنية|أغنية|فيديو\s*شرح|فيديو\s*تعليمي|video/i.test(msg)) return null
-  // Books search
-  if (/ابحث.*كتاب|books?.*search/i.test(msg)) return null
-  // Weather / news
-  if (/طقس|أخبار|جو.*اليوم|weather|news/i.test(msg)) return null
-  // Code questions
-  if (/كود|برمجة|javascript|python|react|bug|خطأ.*في.*الكود|اشرح.*الكود/i.test(msg)) return null
-  // Maps
-  if (/خريطة|خرائط|اتجاه.*إلى|map\b|route/i.test(msg)) return null
-  // Quran questions (tafsir, meaning) — NOT audio
-  if (/تفسير|معنى.*آية|اشرح.*آية|فسر|tafsir/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
-  // Web reading (URLs)
+  // ── Hard exclusions — DZ Agent يتعامل مع هذه نيتفاً، لا توجيه أبداً ───
+  // Image GENERATION (not search — search has its own handler)
+  if (/ارسم|أرسم|رسم\s*لي|صورة\s*عن|اصنع\s*صورة|أنشئ\s*صورة|generate\s*image|create\s*image|draw\s*me|text[\s-]to[\s-]image/i.test(msg)) return null
+  // Presentations (handled natively by DZ Agent)
+  if (/عرض\s*تقديمي|شرائح|بوربوينت|powerpoint|ppt\b|presentation/i.test(msg)) return null
+  // YouTube / video search — DZ Agent handles this via DZ-Tube integration
+  if (/يوتيوب|youtube|(?:ابحث|دور)\s*(?:على|عن)\s*(?:فيديو|مقطع)|اغنية|أغنية|فيديو\s*(?:شرح|تعليمي|درس)/i.test(msg)) return null
+  // Book search — DZ Agent searches directly
+  if (/ابحث\s*(?:على|عن)\s*كتاب|books?\s*search/i.test(msg)) return null
+  // Weather / news — handled natively
+  if (/(?:كيف|ما)\s*(?:الطقس|الجو)|طقس\s*(?:اليوم|غداً)|أخبار\s*(?:اليوم|الجزائر)|weather\s*today|news\s*today/i.test(msg)) return null
+  // Code help — handled natively
+  if (/(?:اشرح|افهمني|ساعدني\s*في)\s*(?:الكود|البرمجة)|خطأ\s*(?:في|ب)\s*(?:الكود|البرنامج)|debug\b|javascript|python|react\b/i.test(msg)) return null
+  // Maps / directions — handled natively
+  if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
+  // Quran tafsir / meaning — handled natively (NOT audio which should redirect)
+  if (/(?:تفسير|معنى|شرح|فسّر)\s*(?:آية|سورة|الآية)|tafsir\b/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
+  // Web reading (URLs) — handled natively
   if (/https?:\/\//i.test(msg)) return null
-  // GitHub operations — handled inline
-  if (/github\.com\/|مستودع.*github|push.*commit|commit.*push/i.test(msg)) return null
-  // General Quran (reading + AI) — only redirect for audio
-  if (/سورة|آية|قرآن/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
-  // Excel data analysis from chat (single value)
-  if (/excel.*formula|دالة.*excel|vlookup|sumif/i.test(msg)) return null
+  // GitHub operations (repo management, push, commit) — handled natively via GitHub Agent
+  if (/github\.com\/|(?:push|commit)\s*(?:to\s*)?github|(?:مستودع|repo)\s*github/i.test(msg)) return null
+  // Quran (text/AI answer) — only redirect for audio/recitation
+  if (/(?:سورة|آية|قرآن)\s*(?:كريم)?$/i.test(msg.trim()) && !/(?:صوت|تلاوة|استمع|مقرئ|سماع)/i.test(msg)) return null
+  // Excel formulas / single cell questions — answered in chat directly
+  if (/(?:دالة|formula)\s*(?:excel|إكسيل)|vlookup|sumif|hlookup|countif/i.test(msg) && !/(?:افتح|انشئ|أنشئ|جدول)/i.test(msg)) return null
+  // Image search — has its own dedicated handler (not a tool redirect)
+  if (/(?:جيبلي|جيب|ابحث)\s*(?:لي\s*)?صورة|بحث.*صور|image\s*search/i.test(msg)) return null
 
+  // ── Match against tool map ──────────────────────────────────────────────
   for (const tool of TOOL_REDIRECT_MAP) {
     if (tool.patterns.some(p => p.test(msg))) {
       return {
@@ -1555,7 +1732,8 @@ function detectToolRedirect(msg) {
         toolUrl:  tool.toolUrl,
         toolIcon: tool.toolIcon,
         toolDesc: tool.toolDesc,
-        message:  `لديّ أداة متخصصة لهذا الطلب ✨`,
+        message:  `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
+        id:       tool.id,
       }
     }
   }

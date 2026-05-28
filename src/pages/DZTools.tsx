@@ -4704,7 +4704,16 @@ function ScreenshotTool() {
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
 export default function DZTools() {
   const navigate = useNavigate()
-  const [active, setActive] = useState<ToolId>('cv')
+
+  // Deep-link support: /tools?tool=cv opens CV tool directly
+  const [active, setActive] = useState<ToolId>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const t = params.get('tool') as ToolId | null
+      if (t && ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot'].includes(t)) return t
+    } catch {}
+    return 'cv'
+  })
   const { track } = useMiniPlayer()
   const miniPlayerActive = !!track
 

@@ -20538,7 +20538,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
   if (token) {
     try {
-      const hf = await huggingFaceFlux(prompt, negativePrompt, { timeoutMs: 35000 })
+      const hf = await huggingFaceFlux(prompt, negativePrompt, { timeoutMs: 8000 })
       if (hf) {
         console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
         return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell', provider: 'huggingface' })

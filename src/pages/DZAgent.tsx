@@ -149,25 +149,26 @@ export default function DZAgent() {
   return (
     <div className="dza-layout" data-theme={theme}>
 
-      {/* ===== CONTINUE DIALOG ===== */}
+      {/* ===== CONTINUE TOAST ===== */}
       {continueDialog?.show && (
-        <div className="dza-continue-overlay" onClick={dismissDialog}>
-          <div className="dza-continue-dialog" onClick={e => e.stopPropagation()}>
-            <div className="dza-continue-icon">
-              <MessageCircle size={22} />
+        <div className="dza-continue-toast" dir="rtl" role="dialog" aria-label="متابعة المحادثة">
+          <div className="dza-continue-toast__header">
+            <div className="dza-continue-toast__icon">
+              <MessageCircle size={15} />
             </div>
-            <div className="dza-continue-body">
-              <p className="dza-continue-question">هل تريد استكمال المحادثة حول:</p>
-              <p className="dza-continue-topic">"{continueDialog.topic}"</p>
-            </div>
-            <div className="dza-continue-actions">
-              <button className="dza-continue-btn dza-continue-btn--yes" onClick={dismissDialog}>
-                ✅ استكمال المحادثة
-              </button>
-              <button className="dza-continue-btn dza-continue-btn--no" onClick={handleNewFromDialog}>
-                ✨ موضوع جديد
-              </button>
-            </div>
+            <span className="dza-continue-toast__title">متابعة المحادثة؟</span>
+            <button className="dza-continue-toast__close" onClick={dismissDialog} aria-label="إغلاق">
+              <X size={13} />
+            </button>
+          </div>
+          <p className="dza-continue-toast__topic">"{continueDialog.topic}"</p>
+          <div className="dza-continue-toast__actions">
+            <button className="dza-continue-toast__btn dza-continue-toast__btn--yes" onClick={dismissDialog}>
+              <span>✅</span> استكمل المحادثة
+            </button>
+            <button className="dza-continue-toast__btn dza-continue-toast__btn--no" onClick={handleNewFromDialog}>
+              <span>✨</span> محادثة جديدة
+            </button>
           </div>
         </div>
       )}

@@ -26,7 +26,7 @@ import type { ReActStep } from './GitHubReActPanel'
 import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
-import { trackQuery, buildBehaviorContext, trackFeatureUsage, withRetry } from '../utils/dzMemory'
+import { trackFeatureUsage, withRetry } from '../utils/dzMemory'
 import AgentModeBar, { type AgentModeState } from './AgentModeBar'
 
 // ===== RATING PERSISTENCE =====
@@ -214,53 +214,8 @@ function persistRating(msgId: string, vote: RatingVote): RatingsStore {
   return store
 }
 
-// ===== PERSISTENT MEMORY (Feature A) =====
-const MEMORY_KEY = 'dz-user-memory'
-const CONV_COUNT_KEY = 'dz-conv-count'
+// ===== PROJECT CONTEXT (session-only, not persisted cross-session) =====
 const PROJECT_CTX_KEY = 'dz-project-ctx'
-
-interface UserMemory {
-  conversationCount: number
-  lastTopics: string[]
-  lastSeen: string
-  lastCodeLanguage?: string
-  projectStack?: string
-  preferences?: Record<string, string>
-}
-
-// ── Server memory sync (best-effort, non-blocking) ────────────────────────
-function syncMemoryToServer(memory: UserMemory): void {
-  try {
-    const topics = memory.lastTopics?.slice(0, 5) || []
-    if (topics.length === 0) return
-    fetch('/api/memory/store', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'user-preference',
-        content: `مواضيع المستخدم: ${topics.join('، ')}`,
-        metadata: { topics, lastSeen: memory.lastSeen, stack: memory.projectStack || '' }
-      })
-    }).catch(() => {})
-  } catch {}
-}
-
-async function fetchServerMemory(): Promise<Partial<UserMemory>> {
-  try {
-    const r = await fetch('/api/memory/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: 'مواضيع المستخدم', type: 'user-preference', limit: 1 })
-    })
-    if (!r.ok) return {}
-    const d = await r.json()
-    const meta = d?.results?.[0]?.metadata
-    if (meta?.topics && Array.isArray(meta.topics)) {
-      return { lastTopics: meta.topics, lastSeen: meta.lastSeen || '', projectStack: meta.stack || '' }
-    }
-    return {}
-  } catch { return {} }
-}
 
 interface ProjectContext {
   stack: string
@@ -269,17 +224,6 @@ interface ProjectContext {
   lastAction: string
 }
 
-function loadUserMemory(): UserMemory {
-  try { return { conversationCount: 0, lastTopics: [], lastSeen: '', ...JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}') } } catch { return { conversationCount: 0, lastTopics: [], lastSeen: '' } }
-}
-function saveUserMemory(patch: Partial<UserMemory>) {
-  try {
-    const updated = { ...loadUserMemory(), ...patch, lastSeen: new Date().toISOString(),
-      conversationCount: (loadUserMemory().conversationCount || 0) + 1 }
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(updated))
-    syncMemoryToServer(updated)
-  } catch {}
-}
 
 function loadProjectContext(): ProjectContext {
   try { return { stack: '', lang: '', files: [], lastAction: '', ...JSON.parse(sessionStorage.getItem(PROJECT_CTX_KEY) || '{}') } } catch { return { stack: '', lang: '', files: [], lastAction: '' } }
@@ -327,24 +271,6 @@ function extractFileNames(text: string): string[] {
   return [...new Set(matches)].slice(0, 5)
 }
 
-function buildMemoryContext(): string {
-  const m = loadUserMemory()
-  const p = loadProjectContext()
-  const parts: string[] = []
-  if (m.conversationCount > 0) parts.push(`محادثة رقم ${m.conversationCount + 1}`)
-  if (m.lastTopics?.length > 0) parts.push(`مواضيع سابقة: ${m.lastTopics.slice(0, 3).join('، ')}`)
-  if (p.stack) parts.push(`المشروع: ${p.stack}`)
-  if (p.lang) parts.push(`لغة الكود: ${p.lang}`)
-  if (p.files?.length > 0) parts.push(`ملفات المنشأة: ${p.files.slice(0, 4).join(', ')}`)
-  if (p.lastAction) parts.push(`آخر إجراء: ${p.lastAction}`)
-  return parts.length > 0 ? `\n[سياق: ${parts.join(' — ')}]` : ''
-}
-
-function incrementConvCount() {
-  const c = parseInt(localStorage.getItem(CONV_COUNT_KEY) || '0', 10) + 1
-  localStorage.setItem(CONV_COUNT_KEY, String(c))
-  saveUserMemory({ conversationCount: c })
-}
 
 // ===== CLIENT-SIDE SUGGESTIONS (Feature I) =====
 function generateClientSuggestions(content: string, query: string): string[] {
@@ -3616,7 +3542,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
-  const [showWelcomeBack, setShowWelcomeBack] = useState(false)
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
   const [currentPath, setCurrentPath] = useState<string>('')
   // DZ GitHub Agent mode
@@ -3748,25 +3673,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       .catch(() => {})
   }, [])
 
-  // ── Feature 1: Cross-session memory sync on mount ─────────────────────────
-  useEffect(() => {
-    const local = loadUserMemory()
-    // Show welcome-back banner for returning users
-    if (local.conversationCount > 0 && local.lastSeen) {
-      const daysSince = (Date.now() - new Date(local.lastSeen).getTime()) / 86400000
-      if (daysSince < 30) setShowWelcomeBack(true)
-    }
-    // Merge server memory (non-blocking)
-    fetchServerMemory().then(serverMem => {
-      if (!serverMem.lastTopics?.length) return
-      const merged = {
-        ...local,
-        lastTopics: [...new Set([...(local.lastTopics || []), ...(serverMem.lastTopics || [])])].slice(0, 8),
-        projectStack: local.projectStack || serverMem.projectStack || '',
-      }
-      try { localStorage.setItem(MEMORY_KEY, JSON.stringify(merged)) } catch {}
-    }).catch(() => {})
-  }, [])
 
   // Save messages to localStorage when they change
   useEffect(() => {
@@ -5316,12 +5222,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       ? `\n\n[وضع الوكيل — المستودع: ${agentMode.selectedRepo}]`
       : ''
 
-    // Track user behavior (intent + query)
-    trackQuery(text)
-
-    // Build behavior context hint to inject into the request
-    const behaviorCtx = buildBehaviorContext(3)
-
     const userMessage: DZMessage = { id: generateId(), role: 'user', content: text, richType: 'text' }
     const outboundMessages = [...messages, userMessage].map((m, index, arr) => ({
       role: m.role,
@@ -5330,29 +5230,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         : m.content,
     }))
 
-    // Inject behavior context + persistent memory + project memory + agent context
-    const memoryCtx = buildMemoryContext()
+    // Inject project file/stack context + agent context (session-only, no cross-session memory)
     const projectMemCtx = projectMemoryRef.current
       ? `\n\n[ذاكرة المشروع من dz-agent.md]\n${projectMemoryRef.current.slice(0, 2000)}\n[/ذاكرة المشروع]`
       : ''
-    if ((behaviorCtx || memoryCtx || projectMemCtx || agentCtxInject) && outboundMessages.length > 0) {
+    if ((projectMemCtx || agentCtxInject) && outboundMessages.length > 0) {
       const last = outboundMessages[outboundMessages.length - 1]
       if (last.role === 'user') {
         outboundMessages[outboundMessages.length - 1] = {
           ...last,
-          content: last.content + behaviorCtx + memoryCtx + projectMemCtx + agentCtxInject,
+          content: last.content + projectMemCtx + agentCtxInject,
         }
       }
     }
-    // Update memory + project context with this query
+    // Update session-only project context (not persisted cross-session)
     const _detectedLang  = detectCodeLanguage(text)
     const _detectedStack = detectProjectStack(text)
     const _detectedFiles = extractFileNames(text)
-    saveUserMemory({
-      lastTopics: [text.slice(0, 60), ...loadUserMemory().lastTopics].slice(0, 5),
-      ...(_detectedLang  ? { lastCodeLanguage: _detectedLang }  : {}),
-      ...(_detectedStack ? { projectStack: _detectedStack }     : {}),
-    })
     if (_detectedLang || _detectedStack || _detectedFiles.length) {
       saveProjectContext({
         ...(_detectedLang  ? { lang: _detectedLang }   : {}),
@@ -6272,7 +6166,6 @@ ${rows}
 
   const clearChat = () => {
     abortRef.current?.abort()
-    if (messages.length > 1) incrementConvCount()
     setMessages([])
     setIsLoading(false)
     setTypingId(null)
@@ -7142,19 +7035,6 @@ ${rows}
       </div>
       )}
 
-      {/* Feature 1: Welcome-back banner */}
-      {showWelcomeBack && messages.length === 0 && (
-        <div className="dz-welcome-back">
-          <span className="dz-welcome-back__icon">👋</span>
-          <span className="dz-welcome-back__text">
-            مرحباً بعودتك! ذاكرتي محمّلة من جلستك السابقة
-            {loadUserMemory().lastTopics?.length > 0 && (
-              <span className="dz-welcome-back__topics"> — {loadUserMemory().lastTopics.slice(0, 2).map(t => t.slice(0, 25)).join(' · ')}</span>
-            )}
-          </span>
-          <button className="dz-welcome-back__close" onClick={() => setShowWelcomeBack(false)}>✕</button>
-        </div>
-      )}
 
       {/* Input */}
       <div className="dz-input-area">

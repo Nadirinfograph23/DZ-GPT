@@ -406,6 +406,7 @@ type RichType =
   | 'qr'
   | 'books'
   | 'presentation'
+  | 'tool-redirect'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -645,6 +646,13 @@ interface DZMessage {
   presentationTitle?: string
   presentationSubtitle?: string
   presentationColor?: string
+  toolRedirect?: {
+    toolName: string
+    toolUrl: string
+    toolIcon: string
+    toolDesc: string
+    message: string
+  }
 }
 
 interface ActionLogEntry {
@@ -5835,6 +5843,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
       }
 
+      // ── Tool Redirect — show navigation card when a dedicated tool exists ──
+      if (data._toolRedirect && typeof data._toolRedirect === 'object') {
+        const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string }
+        addAssistantMessage({
+          content: tr.message,
+          richType: 'tool-redirect',
+          toolRedirect: tr,
+        })
+        return
+      }
+
       if (data.action === 'list-repos') {
         trackFeatureUsage('github-repos')
         // Guard: if no token yet, show connect prompt instead of the cryptic fetchRepos error
@@ -6721,6 +6740,24 @@ ${rows}
                           color={msg.presentationColor || '#7c6eff'}
                           slides={msg.slides}
                         />
+                      )}
+
+                      {msg.richType === 'tool-redirect' && msg.toolRedirect && (
+                        <div className="dz-tool-redirect-card">
+                          <div className="dz-tool-redirect-card__icon">{msg.toolRedirect.toolIcon}</div>
+                          <div className="dz-tool-redirect-card__body">
+                            <div className="dz-tool-redirect-card__name">{msg.toolRedirect.toolName}</div>
+                            <div className="dz-tool-redirect-card__desc">{msg.toolRedirect.toolDesc}</div>
+                          </div>
+                          <a
+                            className="dz-tool-redirect-card__btn"
+                            href={msg.toolRedirect.toolUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            فتح الأداة ←
+                          </a>
+                        </div>
                       )}
 
                       {msg.richType === 'github-profile' && msg.githubProfile && (

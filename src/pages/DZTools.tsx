@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createWorker } from 'tesseract.js'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowRight, Copy, Check, Printer, Download, Search, Heart, FileText, ImageIcon, RotateCcw, ScanSearch, Upload, Calculator, QrCode, BarChart2 } from 'lucide-react'
 import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar } from 'recharts'
 import ReactMarkdown from 'react-markdown'
@@ -4702,18 +4702,29 @@ function ScreenshotTool() {
 }
 
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot']
+
+function getToolFromSearch(search: string): ToolId | null {
+  try {
+    const t = new URLSearchParams(search).get('tool') as ToolId | null
+    if (t && VALID_TOOL_IDS.includes(t)) return t
+  } catch {}
+  return null
+}
+
 export default function DZTools() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Deep-link support: /tools?tool=cv opens CV tool directly
-  const [active, setActive] = useState<ToolId>(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const t = params.get('tool') as ToolId | null
-      if (t && ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot'].includes(t)) return t
-    } catch {}
-    return 'cv'
-  })
+  const [active, setActive] = useState<ToolId>(() => getToolFromSearch(window.location.search) ?? 'cv')
+
+  // React to in-app navigation (e.g. from DZ Agent tool-redirect button)
+  useEffect(() => {
+    const t = getToolFromSearch(location.search)
+    if (t) setActive(t)
+  }, [location.search])
+
   const { track } = useMiniPlayer()
   const miniPlayerActive = !!track
 

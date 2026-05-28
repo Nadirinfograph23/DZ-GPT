@@ -18,9 +18,12 @@ import DZAgentGitHub from './pages/DZAgentGitHub.tsx'
 import DZExcel from './pages/DZExcel.tsx'
 import DZRadio from './pages/DZRadio.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
+import { RadioPlayerProvider } from './context/RadioPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
+import RadioMiniPlayer from './components/RadioMiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
 import GlobalRobot from './components/GlobalRobot.tsx'
+import './styles/radio-mini-player.css'
 
 const HIDE_MINIPLAYER_ROUTES = ['/web-builder']
 
@@ -60,6 +63,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <BrowserRouter>
         <MiniPlayerProvider>
+          <RadioPlayerProvider>
           <Routes>
             <Route path="/" element={<DZHome />} />
             <Route path="/chat" element={<App />} />
@@ -81,8 +85,10 @@ createRoot(document.getElementById('root')!).render(
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <ConditionalMiniPlayer />
+          <RadioMiniPlayer />
           <QuickNav />
           <GlobalRobot />
+          </RadioPlayerProvider>
         </MiniPlayerProvider>
       </BrowserRouter>
     </ErrorBoundary>

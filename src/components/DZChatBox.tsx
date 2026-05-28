@@ -5270,38 +5270,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setImgRegenLoading(null)
   }, [imgRegenLoading])
 
-  // ── Feature 3: export conversation as PDF ─────────────────────────────────
-  const exportToPDF = useCallback(() => {
-    const printWin = window.open('', '_blank', 'width=800,height=900')
-    if (!printWin) return
-    const rows = messages.map(m => {
-      const who = m.role === 'user' ? 'أنت' : 'DZ Agent'
-      const cls = m.role === 'user' ? 'user' : 'bot'
-      const body = m.richType === 'image' && m.imageUrl
-        ? `<img src="${m.imageUrl}" style="max-width:400px;border-radius:8px" /><p style="color:#666;font-size:12px">${m.imagePrompt || ''}</p>`
-        : `<p style="white-space:pre-wrap;margin:0">${(m.content || '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`
-      return `<div class="msg ${cls}"><strong>${who}</strong>${body}</div>`
-    }).join('')
-    printWin.document.write(`<!DOCTYPE html><html dir="rtl"><head>
-      <meta charset="UTF-8"><title>محادثة DZ-GPT</title>
-      <style>
-        body{font-family:Arial,sans-serif;margin:24px;color:#111;direction:rtl}
-        h1{font-size:18px;color:#1a73e8;margin-bottom:16px}
-        .msg{margin-bottom:12px;padding:10px 14px;border-radius:8px;max-width:90%}
-        .user{background:#e8f0fe;margin-right:auto;text-align:right}
-        .bot{background:#f1f3f4;margin-left:auto}
-        strong{display:block;font-size:12px;color:#888;margin-bottom:4px}
-        @media print{.no-print{display:none}}
-      </style></head><body>
-      <h1>🤖 محادثة DZ-GPT — ${new Date().toLocaleDateString('ar-DZ')}</h1>
-      ${rows}
-      <p style="font-size:11px;color:#aaa;margin-top:24px;border-top:1px solid #eee;padding-top:8px">dz-gpt.vercel.app</p>
-    </body></html>`)
-    printWin.document.close()
-    printWin.focus()
-    setTimeout(() => { printWin.print() }, 400)
-  }, [messages])
-
   const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
 
   function extractImagePrompt(text: string): string {

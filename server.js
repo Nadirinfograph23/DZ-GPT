@@ -16195,8 +16195,23 @@ function chatId() {
 // Handles Vietnamese (U+1E00-U+1EFF), Thai, CJK, Korean, Devanagari, etc.
 function stripForeignLang(txt) {
   if (!txt) return txt
+  // Rule 1: Remove whole tokens containing Vietnamese-specific diacritics (Latin Extended Additional)
+  // Covers: ả ị ọ ụ ắ ặ ế ệ ợ ờ ứ ự ỳ ỵ ơ ư ăđ etc. (U+1E00–U+1EFF)
   txt = txt.replace(/\S*[\u1E00-\u1EFF]\S*/g, '')
+  // Rule 2: Remove Thai, CJK (Chinese/Japanese), Korean, Devanagari script blocks
   txt = txt.replace(/[\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1100-\u11FF\u0900-\u097F]+/g, '')
+  // Rule 3: Remove known Vietnamese phrase patterns (for words that use basic accents shared with French)
+  // "giải thích", "thích", "không", "được", "những", "trong", "biết" in Arabic context
+  txt = txt.replace(/\b(gi[aả]i\s*th[iíị]ch|th[iíị]ch|kh[oô]ng|đ[uưừ][oợ]c|nh[uư][nữ]g|c[aáạ]ch\s+gi[aả]i|bi[eếệ]t|v[iì]\s+v[aậ]y)\b/gi, '')
+  // Rule 4: Remove isolated lowercase-only Latin words (no digits, no uppercase → not code/proper noun)
+  //         sandwiched between Arabic words — catches remaining foreign word fragments
+  txt = txt.replace(/([\u0600-\u06FF])\s+([a-z][a-z\u00C0-\u024F]{1,9}(?:\s+[a-z][a-z\u00C0-\u024F]{1,9}){0,1})\s+([\u0600-\u06FF،؟!.])/g,
+    (m, pre, word, post) => {
+      // Keep if word looks like a known French/English function word or starts with capital
+      const keep = /^(de|du|la|le|les|des|en|et|ou|un|une|the|is|in|of|to|for|a|an|on|at|with|من|في)$/i.test(word.trim())
+      return keep ? m : pre + ' ' + post
+    })
+  // Cleanup
   return txt.replace(/ {2,}/g, ' ').replace(/\s*,\s*,/g, ',').trim()
 }
 

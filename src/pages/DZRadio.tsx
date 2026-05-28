@@ -1,313 +1,271 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Radio, Play, Pause, Volume2, VolumeX,
-  Loader2, Wifi, WifiOff, RefreshCw,
+  Loader2, Search, RefreshCw, Wifi, WifiOff, X
 } from 'lucide-react'
+import { useRadioPlayer, RadioStation } from '../context/RadioPlayerContext'
 import '../styles/dz-radio.css'
 
-interface Station {
-  id: string
-  name: string
-  nameAr: string
-  genre: string
-  genreAr: string
-  emoji: string
-  color: string
-  website?: string
+function getStationEmoji(station: RadioStation): string {
+  const n = station.name.toLowerCase()
+  const t = (station.tags || '').toLowerCase()
+  if (n.includes('quran') || n.includes('قرآن') || t.includes('quran') || t.includes('islamic')) return '🕌'
+  if (n.includes('chaine 1') || n.includes('chain 1')) return '🇩🇿'
+  if (n.includes('chaine 2') || n.includes('chain 2')) return '🎭'
+  if (n.includes('chaine 3') || n.includes('chain 3')) return '🎙️'
+  if (n.includes('beur') || n.includes('maghreb') || n.includes('france')) return '🌍'
+  if (n.includes('jil') || n.includes('hit') || t.includes('pop')) return '🎵'
+  if (t.includes('jazz')) return '🎷'
+  if (t.includes('rock')) return '🎸'
+  if (t.includes('classical') || t.includes('classique')) return '🎻'
+  if (t.includes('news') || t.includes('info') || t.includes('actualité')) return '📰'
+  if (t.includes('sport')) return '⚽'
+  if (t.includes('children') || t.includes('kids')) return '🧒'
+  return '📻'
 }
 
-const STATIONS: Station[] = [
-  {
-    id: 'coran',
-    name: 'Radio Coran',
-    nameAr: 'إذاعة القرآن الكريم',
-    genre: 'Quran',
-    genreAr: 'قرآن كريم',
-    emoji: '🕌',
-    color: '#2ecc71',
-    website: 'https://www.radioalgerie.dz',
-  },
-  {
-    id: 'chaine1',
-    name: 'Chaîne 1',
-    nameAr: 'الإذاعة الوطنية',
-    genre: 'National',
-    genreAr: 'وطنية',
-    emoji: '🇩🇿',
-    color: '#3498db',
-    website: 'https://www.radioalgerie.dz',
-  },
-  {
-    id: 'chaine2',
-    name: 'Chaîne 2',
-    nameAr: 'الإذاعة الثقافية',
-    genre: 'Culture',
-    genreAr: 'ثقافية',
-    emoji: '🎭',
-    color: '#9b59b6',
-    website: 'https://www.radioalgerie.dz',
-  },
-  {
-    id: 'chaine3',
-    name: 'Chaîne 3',
-    nameAr: 'إذاعة فرانس',
-    genre: 'Française',
-    genreAr: 'فرنسية',
-    emoji: '🎙️',
-    color: '#e67e22',
-    website: 'https://www.radioalgerie.dz',
-  },
-  {
-    id: 'jil',
-    name: 'Jil FM',
-    nameAr: 'جيل إف إم',
-    genre: 'Music',
-    genreAr: 'موسيقى',
-    emoji: '🎵',
-    color: '#e74c3c',
-    website: 'https://www.jilfm.dz',
-  },
-  {
-    id: 'bahdja',
-    name: 'El Bahdja',
-    nameAr: 'البهجة',
-    genre: 'Music',
-    genreAr: 'موسيقى',
-    emoji: '🎶',
-    color: '#f39c12',
-    website: 'https://www.elbahdjafm.dz',
-  },
-  {
-    id: 'ifrikiya',
-    name: 'Ifrikiya Sound',
-    nameAr: 'إفريقيا ساوند',
-    genre: 'Maghreb',
-    genreAr: 'مغاربية',
-    emoji: '🌍',
-    color: '#1abc9c',
-  },
-  {
-    id: 'alger_chaines',
-    name: 'Algérie Inter.',
-    nameAr: 'جزائر الدولية',
-    genre: 'International',
-    genreAr: 'دولية',
-    emoji: '🌐',
-    color: '#667eea',
-    website: 'https://www.radioalgerie.dz',
-  },
-]
+function getStationColor(station: RadioStation): string {
+  const n = station.name.toLowerCase()
+  const t = (station.tags || '').toLowerCase()
+  if (n.includes('quran') || t.includes('quran') || t.includes('islamic')) return '#10b981'
+  if (n.includes('chaine 1')) return '#3b82f6'
+  if (n.includes('chaine 2')) return '#8b5cf6'
+  if (n.includes('chaine 3')) return '#f59e0b'
+  if (t.includes('pop') || t.includes('hit') || n.includes('hit')) return '#ef4444'
+  if (t.includes('jazz')) return '#6366f1'
+  if (t.includes('rock')) return '#dc2626'
+  if (t.includes('news') || t.includes('info')) return '#0ea5e9'
+  return '#6366f1'
+}
 
-type PlayerState = 'idle' | 'loading' | 'playing' | 'error'
+function StationCard({ station }: { station: RadioStation }) {
+  const { currentStation, playing, loading, error, playStation } = useRadioPlayer()
+  const isActive  = currentStation?.stationuuid === station.stationuuid
+  const isPlaying = isActive && playing
+  const isLoading = isActive && loading
+  const isError   = isActive && !!error
+  const [bars, setBars] = useState<number[]>([])
+
+  useEffect(() => {
+    if (!isPlaying) { setBars([]); return }
+    const id = setInterval(() => setBars(Array.from({ length: 5 }, () => Math.random() * 70 + 30)), 150)
+    return () => clearInterval(id)
+  }, [isPlaying])
+
+  const emoji = getStationEmoji(station)
+  const color = getStationColor(station)
+
+  return (
+    <button
+      className={`dzr-card ${isActive ? 'dzr-card--active' : ''} ${isError ? 'dzr-card--error' : ''}`}
+      style={{ '--card-color': color } as React.CSSProperties}
+      onClick={() => playStation(station)}
+      title={station.name}
+    >
+      <div className="dzr-card-emoji">{emoji}</div>
+      <div className="dzr-card-body">
+        <span className="dzr-card-name">{station.name}</span>
+        <span className="dzr-card-meta">
+          {station.bitrate > 0 ? `${station.bitrate}kbps` : station.codec || 'LIVE'}
+          {station.language ? ` · ${station.language.split(',')[0]}` : ''}
+        </span>
+      </div>
+      <div className="dzr-card-btn">
+        {isLoading ? <Loader2 size={18} className="dzr-spin" />
+         : isPlaying ? <Pause size={18} />
+         : isError   ? <WifiOff size={18} />
+         : <Play size={18} />}
+      </div>
+      {isPlaying && bars.length > 0 && (
+        <div className="dzr-card-wave">
+          {bars.map((h, i) => <span key={i} className="dzr-bar" style={{ height: `${h}%` }} />)}
+        </div>
+      )}
+      {isActive && <div className="dzr-card-glow" />}
+    </button>
+  )
+}
 
 export default function DZRadio() {
   const navigate = useNavigate()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [activeStation, setActiveStation] = useState<string | null>(null)
-  const [playerState, setPlayerState] = useState<PlayerState>('idle')
-  const [volume, setVolume] = useState(0.8)
-  const [muted, setMuted] = useState(false)
-  const [errorMsg, setErrorMsg] = useState<string>('')
-  const [visualizer, setVisualizer] = useState<number[]>([])
+  const {
+    stations, searchResults, loadingStations,
+    currentStation, playing, loading, error,
+    volume, muted,
+    searchQuery, setSearchQuery,
+    searchStations, playStation, stop, toggle, setVolume, setMuted
+  } = useRadioPlayer()
 
+  const [bars, setBars] = useState<number[]>([])
+  const [tab, setTab] = useState<'algeria' | 'search'>('algeria')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Visualizer on now-playing bar
   useEffect(() => {
-    const audio = new Audio()
-    audio.preload = 'none'
-    audio.crossOrigin = 'anonymous'
-    audioRef.current = audio
+    if (!playing) { setBars([]); return }
+    const id = setInterval(() => setBars(Array.from({ length: 14 }, () => Math.random() * 80 + 20)), 130)
+    return () => clearInterval(id)
+  }, [playing])
 
-    const onPlaying = () => setPlayerState('playing')
-    const onWaiting  = () => setPlayerState('loading')
-    const onError    = () => { setPlayerState('error'); setErrorMsg('تعذّر الاتصال بالإذاعة') }
-    const onStalled  = () => setPlayerState('loading')
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (!q.trim()) return
+    setTab('search')
+    searchTimerRef.current = setTimeout(() => searchStations(q), 500)
+  }, [setSearchQuery, searchStations])
 
-    audio.addEventListener('playing', onPlaying)
-    audio.addEventListener('waiting',  onWaiting)
-    audio.addEventListener('error',    onError)
-    audio.addEventListener('stalled',  onStalled)
-
-    return () => {
-      audio.pause()
-      audio.src = ''
-      audio.removeEventListener('playing', onPlaying)
-      audio.removeEventListener('waiting',  onWaiting)
-      audio.removeEventListener('error',    onError)
-      audio.removeEventListener('stalled',  onStalled)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = muted ? 0 : volume
-    }
-  }, [volume, muted])
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null
-    if (playerState === 'playing') {
-      interval = setInterval(() => {
-        const bars = Array.from({ length: 12 }, () => Math.random() * 80 + 20)
-        setVisualizer(bars)
-      }, 120)
-    } else {
-      setVisualizer([])
-    }
-    return () => { if (interval) clearInterval(interval) }
-  }, [playerState])
-
-  const playStation = useCallback((stationId: string) => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    if (activeStation === stationId && playerState === 'playing') {
-      audio.pause()
-      audio.src = ''
-      setActiveStation(null)
-      setPlayerState('idle')
-      return
-    }
-
-    audio.pause()
-    setActiveStation(stationId)
-    setPlayerState('loading')
-    setErrorMsg('')
-
-    const streamUrl = `/api/radio/stream/${stationId}`
-    audio.src = streamUrl
-    audio.volume = muted ? 0 : volume
-    audio.play().catch(() => {
-      setPlayerState('error')
-      setErrorMsg('يتعذّر تشغيل البث — حاول مجدداً')
-    })
-  }, [activeStation, playerState, volume, muted])
-
-  const retry = () => {
-    if (activeStation) {
-      const audio = audioRef.current
-      if (audio) {
-        audio.load()
-        audio.play().catch(() => setPlayerState('error'))
-        setPlayerState('loading')
-      }
-    }
+  const clearSearch = () => {
+    setSearchQuery('')
+    setTab('algeria')
   }
 
-  const activeInfo = STATIONS.find(s => s.id === activeStation)
+  const displayStations = tab === 'search' && searchQuery.trim() ? searchResults : stations
 
   return (
-    <div className="dzradio-page">
-      <div className="dzradio-header">
-        <button className="dzradio-back-btn" onClick={() => navigate(-1)}>
+    <div className="dzr-page">
+      {/* Header */}
+      <div className="dzr-header">
+        <button className="dzr-back-btn" onClick={() => navigate(-1)}>
           <ArrowLeft size={18} />
         </button>
-        <div className="dzradio-header-title">
-          <Radio size={22} className="dzradio-icon-spin" />
+        <div className="dzr-header-title">
+          <Radio size={22} className={playing ? 'dzr-icon-spin' : ''} />
           <span>DZ Radio</span>
-          <span className="dzradio-subtitle">راديو جزائري مباشر</span>
+          <span className="dzr-subtitle">بث مباشر</span>
         </div>
-        <div className="dzradio-live-badge">
-          <span className="dzradio-live-dot" />
+        <div className={`dzr-live-badge ${playing ? 'dzr-live-badge--active' : ''}`}>
+          <span className="dzr-live-dot" />
           LIVE
         </div>
       </div>
 
-      {activeStation && (
-        <div className="dzradio-now-playing" style={{ '--station-color': activeInfo?.color } as React.CSSProperties}>
-          <div className="dzradio-np-left">
-            <span className="dzradio-np-emoji">{activeInfo?.emoji}</span>
-            <div className="dzradio-np-info">
-              <span className="dzradio-np-name">{activeInfo?.nameAr}</span>
-              <span className="dzradio-np-genre">{activeInfo?.genreAr}</span>
+      {/* Search bar */}
+      <div className="dzr-search-row">
+        <div className="dzr-search-wrap">
+          <Search size={15} className="dzr-search-icon" />
+          <input
+            type="text"
+            className="dzr-search-input"
+            placeholder="ابحث عن إذاعة (مثال: chaîne, quran, jil)..."
+            value={searchQuery}
+            onChange={e => handleSearch(e.target.value)}
+            dir="auto"
+          />
+          {searchQuery && (
+            <button className="dzr-search-clear" onClick={clearSearch}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        <div className="dzr-tabs">
+          <button
+            className={`dzr-tab ${tab === 'algeria' ? 'dzr-tab--active' : ''}`}
+            onClick={() => { setTab('algeria'); setSearchQuery('') }}
+          >
+            🇩🇿 جزائر
+          </button>
+          <button
+            className={`dzr-tab ${tab === 'search' ? 'dzr-tab--active' : ''}`}
+            onClick={() => setTab('search')}
+            disabled={!searchQuery.trim()}
+          >
+            🔍 نتائج
+            {tab === 'search' && searchResults.length > 0 && (
+              <span className="dzr-tab-count">{searchResults.length}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Now Playing bar */}
+      {currentStation && (
+        <div className="dzr-now-playing" style={{ '--station-color': getStationColor(currentStation) } as React.CSSProperties}>
+          <div className="dzr-np-left">
+            <span className="dzr-np-emoji">{getStationEmoji(currentStation)}</span>
+            <div className="dzr-np-info">
+              <span className="dzr-np-name">{currentStation.name}</span>
+              <span className="dzr-np-status">
+                {error ? error : loading ? 'جاري الاتصال...' : playing ? '● يُبثّ الآن' : '◼ متوقف'}
+              </span>
             </div>
           </div>
-          <div className="dzradio-np-right">
-            {playerState === 'loading' && (
-              <div className="dzradio-np-status">
-                <Loader2 size={16} className="dzradio-spin" />
-                <span>جاري الاتصال...</span>
+
+          <div className="dzr-np-center">
+            {playing && bars.length > 0 && (
+              <div className="dzr-visualizer">
+                {bars.map((h, i) => <div key={i} className="dzr-vis-bar" style={{ height: `${h}%` }} />)}
               </div>
             )}
-            {playerState === 'playing' && (
-              <div className="dzradio-visualizer">
-                {visualizer.map((h, i) => (
-                  <div key={i} className="dzradio-bar" style={{ height: `${h}%` }} />
-                ))}
-              </div>
-            )}
-            {playerState === 'error' && (
-              <div className="dzradio-np-status dzradio-error">
-                <WifiOff size={14} />
-                <span>{errorMsg}</span>
-                <button className="dzradio-retry-btn" onClick={retry}>
-                  <RefreshCw size={12} />
-                </button>
-              </div>
+            {loading && <Loader2 size={16} className="dzr-spin" />}
+          </div>
+
+          <div className="dzr-np-right">
+            {/* Volume */}
+            <button className="dzr-vol-btn" onClick={() => setMuted(!muted)} title="كتم الصوت">
+              {muted || volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            </button>
+            <input
+              type="range" min={0} max={1} step={0.02}
+              value={muted ? 0 : volume}
+              onChange={e => { setVolume(+e.target.value) }}
+              className="dzr-vol-slider"
+              title="مستوى الصوت"
+            />
+            {/* Play / Pause */}
+            <button className="dzr-np-play-btn" onClick={toggle}>
+              {loading ? <Loader2 size={18} className="dzr-spin" />
+               : playing ? <Pause size={18} />
+               : <Play size={18} />}
+            </button>
+            {/* Retry / stop */}
+            {error ? (
+              <button className="dzr-np-retry-btn" onClick={() => playStation(currentStation)} title="إعادة المحاولة">
+                <RefreshCw size={14} />
+              </button>
+            ) : (
+              <button className="dzr-np-stop-btn" onClick={stop} title="إيقاف">
+                <X size={14} />
+              </button>
             )}
           </div>
         </div>
       )}
 
-      <div className="dzradio-volume-bar">
-        <button className="dzradio-mute-btn" onClick={() => setMuted(m => !m)}>
-          {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.02}
-          value={muted ? 0 : volume}
-          onChange={e => { setVolume(+e.target.value); setMuted(false) }}
-          className="dzradio-volume-slider"
-        />
-        <span className="dzradio-volume-val">{Math.round((muted ? 0 : volume) * 100)}%</span>
+      {/* Station grid */}
+      <div className="dzr-grid-wrap">
+        {loadingStations && tab === 'algeria' ? (
+          <div className="dzr-loading">
+            <Loader2 size={28} className="dzr-spin" />
+            <span>جاري تحميل الإذاعات...</span>
+          </div>
+        ) : displayStations.length === 0 ? (
+          <div className="dzr-empty">
+            {tab === 'search'
+              ? <><Search size={32} /><span>لا توجد نتائج — جرّب كلمة أخرى</span></>
+              : <><Wifi size={32} /><span>لا توجد إذاعات متاحة</span></>
+            }
+          </div>
+        ) : (
+          <>
+            <div className="dzr-section-label">
+              {tab === 'algeria'
+                ? `🇩🇿 ${displayStations.length} إذاعة جزائرية`
+                : `🔍 ${displayStations.length} نتيجة للبحث`}
+            </div>
+            <div className="dzr-grid">
+              {displayStations.map(s => (
+                <StationCard key={s.stationuuid} station={s} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="dzradio-grid">
-        {STATIONS.map(station => {
-          const isActive = activeStation === station.id
-          const isLoading = isActive && playerState === 'loading'
-          const isPlaying = isActive && playerState === 'playing'
-          const isError   = isActive && playerState === 'error'
-
-          return (
-            <button
-              key={station.id}
-              className={`dzradio-card ${isActive ? 'dzradio-card--active' : ''} ${isError ? 'dzradio-card--error' : ''}`}
-              style={{ '--card-color': station.color } as React.CSSProperties}
-              onClick={() => playStation(station.id)}
-            >
-              <div className="dzradio-card-emoji">{station.emoji}</div>
-              <div className="dzradio-card-body">
-                <span className="dzradio-card-name">{station.nameAr}</span>
-                <span className="dzradio-card-genre">{station.genreAr}</span>
-              </div>
-              <div className="dzradio-card-btn">
-                {isLoading ? (
-                  <Loader2 size={18} className="dzradio-spin" />
-                ) : isPlaying ? (
-                  <Pause size={18} />
-                ) : isError ? (
-                  <WifiOff size={18} />
-                ) : (
-                  <Play size={18} />
-                )}
-              </div>
-              {isPlaying && (
-                <div className="dzradio-card-wave">
-                  {[1,2,3].map(i => <span key={i} className="dzradio-card-wave-bar" />)}
-                </div>
-              )}
-              {isActive && <div className="dzradio-card-glow" />}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="dzradio-footer">
-        <Wifi size={13} />
-        <span>البث مباشر عبر الإنترنت — تأكد من اتصالك</span>
+      <div className="dzr-footer">
+        <Wifi size={12} />
+        <span>البث مباشر — المصدر: Radio Browser API · تأكد من اتصالك</span>
       </div>
     </div>
   )

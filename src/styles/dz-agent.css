@@ -10254,3 +10254,101 @@
   width: 18px;
   border-radius: 4px;
 }
+
+/* ===== CONTINUE CONVERSATION DIALOG ===== */
+.dza-continue-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: dza-fade-in 0.25s ease;
+}
+@keyframes dza-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.dza-continue-dialog {
+  background: var(--dza-bg-card, #1e2433);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 28px 24px 22px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: dza-slide-up 0.3s cubic-bezier(.34,1.56,.64,1);
+  text-align: center;
+}
+@keyframes dza-slide-up {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.dza-continue-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--dza-accent,#10a37f), #0d9268);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: #fff;
+}
+.dza-continue-body {
+  margin-bottom: 20px;
+}
+.dza-continue-question {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  margin: 0 0 8px;
+}
+.dza-continue-topic {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+  line-height: 1.5;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 10px;
+  border-inline-start: 3px solid var(--dza-accent,#10a37f);
+  text-align: start;
+  direction: auto;
+  word-break: break-word;
+}
+.dza-continue-actions {
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+}
+.dza-continue-btn {
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.dza-continue-btn--yes {
+  background: linear-gradient(135deg, var(--dza-accent,#10a37f), #0d9268);
+  color: #fff;
+}
+.dza-continue-btn--yes:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.dza-continue-btn--no {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.dza-continue-btn--no:hover {
+  background: rgba(255,255,255,0.14);
+  transform: translateY(-1px);
+}

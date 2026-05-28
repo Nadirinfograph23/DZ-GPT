@@ -10255,28 +10255,47 @@
   border-radius: 4px;
 }
 
-/* ===== CONTINUE CONVERSATION DIALOG ===== */
-/* ===== CONTINUE TOAST (RTL corner notification) ===== */
+/* ===== CONTINUE CONVERSATION TOAST ===== */
 @keyframes dza-toast-in {
-  from { opacity: 0; transform: translateX(30px) scale(0.95); }
-  to   { opacity: 1; transform: translateX(0) scale(1); }
+  from { opacity: 0; transform: translateY(16px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+@keyframes dza-toast-out {
+  from { opacity: 1; transform: translateY(0)   scale(1); }
+  to   { opacity: 0; transform: translateY(12px) scale(0.95); }
 }
 
 .dza-continue-toast {
   position: fixed;
-  bottom: 90px;
-  left: 16px;
-  z-index: 99999;
-  width: clamp(280px, 90vw, 340px);
+  /* على الجانب الأيمن بعيداً عن السيدبار */
+  bottom: clamp(80px, 10vh, 110px);
+  right: 20px;
+  left: auto;
+  z-index: 2147483647; /* أعلى z-index ممكن */
+  width: clamp(290px, 88vw, 360px);
   background: linear-gradient(145deg, #1a2235, #141c2e);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-top: 2px solid #10a37f;
   border-radius: 16px;
   padding: 14px 14px 12px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(16,163,127,0.15);
-  animation: dza-toast-in 0.35s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(16,163,127,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: dza-toast-in 0.4s cubic-bezier(.34,1.56,.64,1) forwards;
   direction: rtl;
   text-align: right;
-  overflow: visible;
+  pointer-events: auto;
+}
+
+/* على الموبايل نجعله في المنتصف بالأسفل */
+@media (max-width: 600px) {
+  .dza-continue-toast {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: 90px;
+  }
 }
 
 .dza-continue-toast__header {

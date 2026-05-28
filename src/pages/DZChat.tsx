@@ -462,6 +462,11 @@ export default function DZChat() {
     ws.onclose = () => {
       wsConnectedRef.current = false
       if (sessionIdRef.current) startPolling()
+      setTimeout(() => {
+        if (!wsConnectedRef.current && sessionIdRef.current && localUser) {
+          connectWebSocket(localUser, [])
+        }
+      }, 4000)
     }
 
     wsRef.current = ws

@@ -864,6 +864,10 @@ function App() {
                 <span style={{ fontSize: 14 }}>🌐</span>
                 <span>Web Builder</span>
               </button>
+              <button className="sidebar-nav-item" onClick={() => { navigate('/radio'); setSidebarOpen(false); setNavDropdownOpen(false) }}>
+                <span style={{ fontSize: 14 }}>📻</span>
+                <span>DZ Radio</span>
+              </button>
             </div>
           )}
         </div>

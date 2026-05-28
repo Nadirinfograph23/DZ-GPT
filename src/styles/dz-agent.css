@@ -10264,9 +10264,9 @@
 
 .dza-continue-toast {
   position: fixed;
-  bottom: 20px;
+  bottom: 90px;
   left: 16px;
-  z-index: 9999;
+  z-index: 99999;
   width: clamp(280px, 90vw, 340px);
   background: linear-gradient(145deg, #1a2235, #141c2e);
   border: 1px solid rgba(255,255,255,0.12);
@@ -10276,6 +10276,7 @@
   animation: dza-toast-in 0.35s cubic-bezier(.34,1.56,.64,1);
   direction: rtl;
   text-align: right;
+  overflow: visible;
 }
 
 .dza-continue-toast__header {
@@ -10373,6 +10374,81 @@
 }
 .dza-continue-toast__btn--no:hover {
   background: rgba(255,255,255,0.13);
+  transform: translateY(-1px);
+}
+
+/* ===== IMAGE GRID (بحث الصور — شبكة 9 صور) ===== */
+.dz-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dz-image-grid__item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+  background: rgba(255,255,255,0.05);
+}
+
+.dz-image-grid__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.25s ease, filter 0.25s ease;
+  display: block;
+}
+
+.dz-image-grid__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  font-size: 13px;
+  color: transparent;
+}
+
+.dz-image-grid__item:hover .dz-image-grid__img {
+  transform: scale(1.06);
+  filter: brightness(0.75);
+}
+.dz-image-grid__item:hover .dz-image-grid__overlay {
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+}
+
+.dz-image-grid__footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 2px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.dz-image-grid__gen-btn {
+  background: rgba(16,163,127,0.15);
+  border: 1px solid rgba(16,163,127,0.3);
+  border-radius: 8px;
+  color: #10a37f;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.dz-image-grid__gen-btn:hover {
+  background: rgba(16,163,127,0.25);
   transform: translateY(-1px);
 }
 

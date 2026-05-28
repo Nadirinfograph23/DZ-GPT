@@ -257,6 +257,12 @@ const cloneLimiter = rateLimit({
 
 app.use('/api/chat', aiLimiter)
 app.use('/api/dz-agent-chat', aiLimiter)
+app.use('/api/dz-agent-stream', aiLimiter)
+app.use('/api/dz-agent-v2/chat', aiLimiter)
+app.use('/api/dz-agent-v3/run', aiLimiter)
+app.use('/api/dz-agent-v4/smart', aiLimiter)
+app.use('/api/dz-agent-v5/chat', aiLimiter)
+app.use('/api/dz-agent/thinking-trace', aiLimiter)
 app.use('/api/dz-agent/github', githubLimiter)
 app.use('/api/dz-agent-search', searchLimiter)
 app.use('/api/dz-agent/search', searchLimiter)

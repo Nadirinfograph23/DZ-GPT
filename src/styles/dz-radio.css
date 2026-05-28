@@ -1,0 +1,316 @@
+.dzradio-page {
+  min-height: 100vh;
+  background: #0f0f14;
+  color: #e8e8f0;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2rem;
+}
+
+/* Header */
+.dzradio-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.dzradio-back-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #e8e8f0;
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.2s;
+}
+.dzradio-back-btn:hover { background: rgba(255,255,255,0.12) }
+.dzradio-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.dzradio-subtitle {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  font-weight: 400;
+}
+.dzradio-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ff4455;
+  background: rgba(255, 68, 85, 0.15);
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,68,85,0.3);
+}
+.dzradio-live-dot {
+  width: 7px; height: 7px;
+  background: #ff4455;
+  border-radius: 50%;
+  animation: dz-radio-pulse 1.2s infinite;
+}
+@keyframes dz-radio-pulse {
+  0%,100% { opacity: 1; transform: scale(1) }
+  50% { opacity: 0.4; transform: scale(0.8) }
+}
+
+/* Now Playing Bar */
+.dzradio-now-playing {
+  margin: 1rem 1.2rem 0;
+  background: linear-gradient(135deg, rgba(var(--station-color-rgb, 255,255,255),0.08), rgba(255,255,255,0.04));
+  border: 1px solid color-mix(in srgb, var(--station-color, #7c6eff) 40%, transparent);
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  animation: dz-slide-down 0.3s ease;
+}
+@keyframes dz-slide-down {
+  from { opacity: 0; transform: translateY(-8px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+.dzradio-np-left {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.dzradio-np-emoji { font-size: 2rem; }
+.dzradio-np-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dzradio-np-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+.dzradio-np-genre {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.5);
+}
+.dzradio-np-right {
+  display: flex;
+  align-items: center;
+}
+.dzradio-np-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.6);
+}
+.dzradio-np-status.dzradio-error { color: #ff6b6b }
+.dzradio-retry-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #fff;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+/* Visualizer */
+.dzradio-visualizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 32px;
+}
+.dzradio-bar {
+  width: 4px;
+  background: var(--station-color, #7c6eff);
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  min-height: 4px;
+}
+
+/* Volume */
+.dzradio-volume-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
+  margin-top: 0.5rem;
+}
+.dzradio-mute-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+.dzradio-mute-btn:hover { color: #fff }
+.dzradio-volume-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  outline: none;
+  cursor: pointer;
+}
+.dzradio-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #7c6eff;
+  cursor: pointer;
+}
+.dzradio-volume-val {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  min-width: 32px;
+  text-align: center;
+}
+
+/* Grid */
+.dzradio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
+}
+
+/* Card */
+.dzradio-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: right;
+  color: #e8e8f0;
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+.dzradio-card:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.15);
+  transform: translateY(-2px);
+}
+.dzradio-card--active {
+  border-color: color-mix(in srgb, var(--card-color) 60%, transparent) !important;
+  background: color-mix(in srgb, var(--card-color) 10%, #0f0f14) !important;
+}
+.dzradio-card--error {
+  border-color: rgba(255,68,68,0.4) !important;
+}
+.dzradio-card-emoji {
+  font-size: 2.2rem;
+  flex-shrink: 0;
+}
+.dzradio-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dzradio-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+}
+.dzradio-card-genre {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.4);
+}
+.dzradio-card-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--card-color) 20%, rgba(255,255,255,0.08));
+  color: var(--card-color, #7c6eff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.dzradio-card:hover .dzradio-card-btn {
+  background: color-mix(in srgb, var(--card-color) 35%, rgba(255,255,255,0.1));
+}
+.dzradio-card-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-color) 50%, transparent);
+  animation: dz-glow-pulse 2s ease infinite;
+}
+@keyframes dz-glow-pulse {
+  0%,100% { opacity: 0.6 }
+  50% { opacity: 1 }
+}
+
+/* Wave animation (mini) */
+.dzradio-card-wave {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.dzradio-card-wave-bar {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--card-color, #7c6eff);
+  animation: dz-wave-bar 0.8s ease infinite;
+}
+.dzradio-card-wave-bar:nth-child(1) { animation-delay: 0s;    height: 8px }
+.dzradio-card-wave-bar:nth-child(2) { animation-delay: 0.15s; height: 14px }
+.dzradio-card-wave-bar:nth-child(3) { animation-delay: 0.3s;  height: 8px }
+@keyframes dz-wave-bar {
+  0%,100% { transform: scaleY(1) }
+  50%     { transform: scaleY(0.3) }
+}
+
+/* Spin */
+.dzradio-spin { animation: dz-spin 1s linear infinite }
+.dzradio-icon-spin { animation: dz-spin 4s linear infinite }
+@keyframes dz-spin { to { transform: rotate(360deg) } }
+
+/* Footer */
+.dzradio-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: auto;
+  padding: 1rem;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.25);
+}
+
+@media (max-width: 600px) {
+  .dzradio-grid { grid-template-columns: 1fr }
+}

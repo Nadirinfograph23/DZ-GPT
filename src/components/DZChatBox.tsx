@@ -5381,10 +5381,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           content: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools — إنشاء سريع ومجاني.',
           richType: 'tool-redirect',
           toolRedirect: {
-            toolName: 'منشئ QR Code',
-            toolUrl: '/tools',
-            toolIcon: '📋',
-            toolDesc: 'أنشئ رموز QR لأي رابط، رقم هاتف، واتساب، أو بريد إلكتروني بنقرة واحدة.',
+            toolName: 'مولّد QR Code',
+            toolUrl: '/tools?tool=qrcode',
+            toolIcon: '📲',
+            toolDesc: 'أنشئ QR Code فورياً من أي رابط أو نص أو بيانات تواصل — تحميل PNG مجاناً بدون انتظار.',
             message: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools.',
           },
           quickSuggestions: ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب'],
@@ -6754,14 +6754,12 @@ ${rows}
                             <div className="dz-tool-redirect-card__name">{msg.toolRedirect.toolName}</div>
                             <div className="dz-tool-redirect-card__desc">{msg.toolRedirect.toolDesc}</div>
                           </div>
-                          <a
+                          <button
                             className="dz-tool-redirect-card__btn"
-                            href={msg.toolRedirect.toolUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            onClick={() => navigate(msg.toolRedirect!.toolUrl)}
                           >
                             فتح الأداة ←
-                          </a>
+                          </button>
                         </div>
                       )}
 

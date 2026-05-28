@@ -14440,7 +14440,17 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
-  // ── Step 2: Live-data detection — redirect to full endpoint ──────────────
+  // ── Step 2: Tool Redirect — forward to full endpoint (has rich UI card) ──
+  const _streamToolRedirect = detectToolRedirect(lastUserMessage)
+  if (_streamToolRedirect) {
+    console.log(`[Stream→ToolRedirect] → ${_streamToolRedirect.toolUrl} for: "${lastUserMessage.slice(0, 50)}"`)
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
+  // ── Step 2b: Live-data detection — redirect to full endpoint ─────────────
   if (_LIVE_DATA_RE.test(lastUserMessage)) {
     _streamSSEHeaders(res)
     res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)

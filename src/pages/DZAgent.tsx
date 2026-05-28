@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn } from 'lucide-react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn, MessageCircle } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -38,6 +38,18 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 }
 
+function getLastUserMessageFromChat(chatId: string): string {
+  try {
+    const raw = localStorage.getItem(`dz-agent-msgs-${chatId}`)
+    if (!raw) return ''
+    const msgs: { role: string; content: string }[] = JSON.parse(raw)
+    const userMsgs = msgs.filter(m => m.role === 'user')
+    if (!userMsgs.length) return ''
+    const last = userMsgs[userMsgs.length - 1].content || ''
+    return last.slice(0, 80).replace(/\n/g, ' ').trim()
+  } catch { return '' }
+}
+
 export default function DZAgent() {
   const [chats, setChats] = useState<DZChat[]>(() => {
     try {
@@ -60,6 +72,34 @@ export default function DZAgent() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [githubStatus, setGithubStatus] = useState<{ ok: boolean; login?: string; avatar?: string } | null>(null)
+
+  // ── Continue conversation dialog ──────────────────────────────────────────
+  const [continueDialog, setContinueDialog] = useState<{ show: boolean; topic: string; chatTitle: string } | null>(null)
+  const dialogShownRef = useRef(false)
+
+  useEffect(() => {
+    if (dialogShownRef.current) return
+    if (!activeChatId) return
+    const savedChats: DZChat[] = (() => {
+      try { return JSON.parse(localStorage.getItem('dz-agent-chats') || '[]') } catch { return [] }
+    })()
+    const activeChat = savedChats.find(c => c.id === activeChatId)
+    if (!activeChat) return
+    const lastMsg = getLastUserMessageFromChat(activeChatId)
+    if (!lastMsg) return
+    dialogShownRef.current = true
+    setContinueDialog({ show: true, topic: lastMsg, chatTitle: activeChat.title })
+  }, [activeChatId])
+
+  const dismissDialog = useCallback(() => setContinueDialog(null), [])
+
+  const handleNewFromDialog = useCallback(() => {
+    setContinueDialog(null)
+    const chat: DZChat = { id: generateId(), title: LABELS[language].newChat, createdAt: Date.now() }
+    setChats(prev => [chat, ...prev])
+    setActiveChatId(chat.id)
+    setSidebarOpen(false)
+  }, [language])
 
   useEffect(() => {
     fetch('/api/dz-agent/github/agent-status')
@@ -90,6 +130,7 @@ export default function DZAgent() {
     setChats(prev => [chat, ...prev])
     setActiveChatId(chat.id)
     setSidebarOpen(false)
+    setContinueDialog(null)
   }, [language])
 
   const deleteChat = useCallback((id: string, e: React.MouseEvent) => {
@@ -107,6 +148,30 @@ export default function DZAgent() {
 
   return (
     <div className="dza-layout" data-theme={theme}>
+
+      {/* ===== CONTINUE DIALOG ===== */}
+      {continueDialog?.show && (
+        <div className="dza-continue-overlay" onClick={dismissDialog}>
+          <div className="dza-continue-dialog" onClick={e => e.stopPropagation()}>
+            <div className="dza-continue-icon">
+              <MessageCircle size={22} />
+            </div>
+            <div className="dza-continue-body">
+              <p className="dza-continue-question">هل تريد استكمال المحادثة حول:</p>
+              <p className="dza-continue-topic">"{continueDialog.topic}"</p>
+            </div>
+            <div className="dza-continue-actions">
+              <button className="dza-continue-btn dza-continue-btn--yes" onClick={dismissDialog}>
+                ✅ استكمال المحادثة
+              </button>
+              <button className="dza-continue-btn dza-continue-btn--no" onClick={handleNewFromDialog}>
+                ✨ موضوع جديد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== SIDEBAR ===== */}
       <div className={`dza-sidebar ${sidebarOpen ? 'dza-sidebar--open' : ''}`}>
         <div className="dza-sidebar-header">

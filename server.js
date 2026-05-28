@@ -22101,44 +22101,14 @@ app.post('/api/tools/image-analyze', async (req, res) => {
 })
 
 // ── Image Processing Tools ─────────────────────────────────────────────────
-const REMBG_PORT = 7000
-let rembgReady = false
 
-// POST /api/tools/img-remove-bg — rembg+alpha-matting (primary) → flood-fill (Vercel)
+// POST /api/tools/img-remove-bg — حذف خلفية الصورة (BFS flood-fill)
 app.post('/api/tools/img-remove-bg', express.json({ limit: '25mb' }), async (req, res) => {
   const { imageBase64 } = req.body
   if (!imageBase64) return res.status(400).json({ error: 'imageBase64 مطلوب' })
   const b64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64
 
-  // ── Primary: rembg + alpha matting (Replit / self-hosted) ─────────────────
-  if (!process.env.VERCEL) {
-    const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'scripts', 'remove_bg.py')
-    const pythonLibs = path.join(path.dirname(fileURLToPath(import.meta.url)), '.pythonlibs', 'lib', 'python3.11', 'site-packages')
-    const payload = JSON.stringify({ image: b64, method: 'alpha_matting' })
-    try {
-      const result = await new Promise((resolve, reject) => {
-        const proc = spawn('python3', [scriptPath], {
-          env: { ...process.env, PYTHONPATH: pythonLibs },
-          stdio: ['pipe', 'pipe', 'pipe'],
-        })
-        const chunks = [], errChunks = []
-        proc.stdout.on('data', d => chunks.push(d))
-        proc.stderr.on('data', d => errChunks.push(d))
-        proc.on('close', code => {
-          if (code !== 0) return reject(new Error(Buffer.concat(errChunks).toString().slice(0, 300)))
-          resolve(Buffer.concat(chunks).toString().trim())
-        })
-        proc.on('error', reject)
-        proc.stdin.write(payload); proc.stdin.end()
-      })
-      console.log('[RemoveBG:rembg+matting] ok —', result.length, 'chars')
-      return res.json({ imageBase64: `data:image/png;base64,${result}` })
-    } catch (e) {
-      console.warn('[RemoveBG:rembg+matting] error:', e.message.slice(0, 150), '— falling back')
-    }
-  }
-
-  // ── Fallback: BFS flood-fill from borders + feathered edges (Vercel-safe) ──
+  // ── BFS flood-fill from borders + feathered edges ──
   try {
     const sharp = (await import('sharp')).default
     const imgBytes = Buffer.from(b64, 'base64')
@@ -23133,34 +23103,6 @@ if (isMain) {
     res.json({ results, vercelUrl });
   });
 
-  // ── Start rembg HTTP server locally (skip on Vercel) ───────────────────────
-  if (!process.env.VERCEL) {
-    const rembgScript = path.join(process.cwd(), 'scripts', 'rembg_server.py')
-    const rembgPythonPath = path.join(process.cwd(), '.pythonlibs/lib/python3.11/site-packages')
-    const startRembg = () => {
-      const proc = spawn('python3', [rembgScript, '--port', String(REMBG_PORT)], {
-        env: { ...process.env, PYTHONPATH: rembgPythonPath },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      const markReady = (d) => {
-        const msg = d.toString()
-        console.log('[rembg]', msg.trim())
-        if (/listening on port/i.test(msg)) rembgReady = true
-      }
-      proc.stdout.on('data', markReady)
-      proc.stderr.on('data', markReady)
-      proc.on('exit', (code) => {
-        console.log(`[rembg] exited (${code}), restarting in 5s…`)
-        rembgReady = false
-        setTimeout(startRembg, 5000)
-      })
-      proc.on('error', (e) => console.warn('[rembg] spawn error:', e.message))
-      // Fallback: assume ready after 20s
-      setTimeout(() => { rembgReady = true }, 20000)
-      console.log('[rembg] starting background removal server on port', REMBG_PORT)
-    }
-    startRembg()
-  }
 
 
 // ═══════════════════════════════════════════════════════════════════

@@ -10352,3 +10352,59 @@
   background: rgba(255,255,255,0.14);
   transform: translateY(-1px);
 }
+
+/* ===== TOOL REDIRECT CARD ===== */
+.dz-tool-redirect-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(16,163,127,0.12), rgba(13,146,104,0.08));
+  border: 1px solid rgba(16,163,127,0.3);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-top: 12px;
+  max-width: 420px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  animation: dza-slide-up 0.3s cubic-bezier(.34,1.56,.64,1);
+}
+.dz-tool-redirect-card__icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.dz-tool-redirect-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.dz-tool-redirect-card__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 3px;
+}
+.dz-tool-redirect-card__desc {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.4;
+}
+.dz-tool-redirect-card__btn {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #10a37f, #0d9268);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+.dz-tool-redirect-card__btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16,163,127,0.4);
+}

@@ -16203,14 +16203,19 @@ function stripForeignLang(txt) {
   // Rule 3: Remove known Vietnamese phrase patterns (for words that use basic accents shared with French)
   // "giải thích", "thích", "không", "được", "những", "trong", "biết" in Arabic context
   txt = txt.replace(/\b(gi[aả]i\s*th[iíị]ch|th[iíị]ch|kh[oô]ng|đ[uưừ][oợ]c|nh[uư][nữ]g|c[aáạ]ch\s+gi[aả]i|bi[eếệ]t|v[iì]\s+v[aậ]y)\b/gi, '')
-  // Rule 4: Remove isolated lowercase-only Latin words (no digits, no uppercase → not code/proper noun)
-  //         sandwiched between Arabic words — catches remaining foreign word fragments
-  txt = txt.replace(/([\u0600-\u06FF])\s+([a-z][a-z\u00C0-\u024F]{1,9}(?:\s+[a-z][a-z\u00C0-\u024F]{1,9}){0,1})\s+([\u0600-\u06FF،؟!.])/g,
+  // Rule 4: Remove Latin words WITH diacritics (≥1 accented char U+00C0–U+024F) sandwiched
+  //         between Arabic text — catches Vietnamese "thích" (í) etc. while PRESERVING plain
+  //         ASCII tech terms like "react", "node", "python" (no accented chars → not matched)
+  txt = txt.replace(
+    /([\u0600-\u06FF])\s+((?:[a-z\u00C0-\u024F]{1,12}\s*){1,3})\s*([\u0600-\u06FF،؟!.])/g,
     (m, pre, word, post) => {
-      // Keep if word looks like a known French/English function word or starts with capital
-      const keep = /^(de|du|la|le|les|des|en|et|ou|un|une|the|is|in|of|to|for|a|an|on|at|with|من|في)$/i.test(word.trim())
-      return keep ? m : pre + ' ' + post
-    })
+      // Only act if the word segment contains at least one diacritical Latin char (not pure ASCII)
+      if (!/[\u00C0-\u024F]/.test(word)) return m
+      // Keep known French/English function words even if accented
+      if (/^(de|du|la|le|les|des|en|et|ou|un|une|résumé|café)$/i.test(word.trim())) return m
+      return pre + ' ' + post
+    }
+  )
   // Cleanup
   return txt.replace(/ {2,}/g, ' ').replace(/\s*,\s*,/g, ',').trim()
 }

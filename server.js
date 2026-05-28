@@ -14748,6 +14748,122 @@ app.post('/api/dz-agent/github/repos', async (req, res) => {
   }
 })
 
+// ===== DZ GitHub Repos Recommender =====
+const DZ_CURATED_REPOS = [
+  // Web Frontend
+  { full_name: 'facebook/react',        description: 'مكتبة JavaScript لبناء واجهات المستخدم التفاعلية',        stars: 228000, language: 'JavaScript',  category: 'web',     icon: '⚛️', html_url: 'https://github.com/facebook/react' },
+  { full_name: 'vitejs/vite',           description: 'أداة بناء للجيل القادم من تطبيقات الويب — سريعة جداً',  stars: 68000,  language: 'TypeScript',  category: 'web',     icon: '⚡', html_url: 'https://github.com/vitejs/vite' },
+  { full_name: 'tailwindlabs/tailwindcss', description: 'إطار CSS utility-first للتصميم السريع والمتجاوب',   stars: 82000,  language: 'CSS',         category: 'web',     icon: '🎨', html_url: 'https://github.com/tailwindlabs/tailwindcss' },
+  { full_name: 'shadcn-ui/ui',          description: 'مكونات UI قابلة للتخصيص مبنية بـ Radix UI وTailwind',   stars: 80000,  language: 'TypeScript',  category: 'web',     icon: '🎨', html_url: 'https://github.com/shadcn-ui/ui' },
+  { full_name: 'vercel/next.js',        description: 'إطار React للإنتاج — SSR وSSG وAPI Routes',             stars: 126000, language: 'JavaScript',  category: 'web',     icon: '▲',  html_url: 'https://github.com/vercel/next.js' },
+  { full_name: 'solidjs/solid',         description: 'مكتبة JavaScript تفاعلية عالية الأداء بدون Virtual DOM', stars: 32000,  language: 'TypeScript',  category: 'web',     icon: '💎', html_url: 'https://github.com/solidjs/solid' },
+  { full_name: 'trpc/trpc',             description: 'بناء APIs آمنة من النوع بدون توليد كود',                 stars: 34000,  language: 'TypeScript',  category: 'web',     icon: '🔗', html_url: 'https://github.com/trpc/trpc' },
+  // AI & ML
+  { full_name: 'ollama/ollama',         description: 'شغّل نماذج LLM محلياً على جهازك بسهولة',                 stars: 92000,  language: 'Go',          category: 'ai',      icon: '🤖', html_url: 'https://github.com/ollama/ollama' },
+  { full_name: 'huggingface/transformers', description: 'نماذج ML جاهزة بـ PyTorch/TensorFlow — BERT وGPT والمزيد', stars: 135000, language: 'Python', category: 'ai',    icon: '🤗', html_url: 'https://github.com/huggingface/transformers' },
+  { full_name: 'langchain-ai/langchain', description: 'بناء تطبيقات LLM وRAG وAgents بسهولة',                 stars: 95000,  language: 'Python',      category: 'ai',      icon: '🦜', html_url: 'https://github.com/langchain-ai/langchain' },
+  { full_name: 'ggerganov/llama.cpp',   description: 'تشغيل LLaMA وDeepSeek بـ C/C++ على CPU',                 stars: 68000,  language: 'C++',         category: 'ai',      icon: '🦙', html_url: 'https://github.com/ggerganov/llama.cpp' },
+  { full_name: 'groq/groq-python',      description: 'مكتبة Python الرسمية لـ Groq API',                       stars: 1200,   language: 'Python',      category: 'ai',      icon: '⚡', html_url: 'https://github.com/groq/groq-python' },
+  { full_name: 'microsoft/autogen',     description: 'إطار بناء Multi-Agent AI من Microsoft',                  stars: 35000,  language: 'Python',      category: 'ai',      icon: '🤖', html_url: 'https://github.com/microsoft/autogen' },
+  { full_name: 'deepseek-ai/DeepSeek-V3', description: 'نموذج DeepSeek V3 مفتوح المصدر — من الأقوى عالمياً', stars: 88000,  language: 'Python',      category: 'ai',      icon: '🌊', html_url: 'https://github.com/deepseek-ai/DeepSeek-V3' },
+  { full_name: 'openai/openai-python',  description: 'المكتبة الرسمية Python لـ OpenAI API',                   stars: 23000,  language: 'Python',      category: 'ai',      icon: '🧠', html_url: 'https://github.com/openai/openai-python' },
+  // Arabic & Algeria 🇩🇿
+  { full_name: 'Nadirinfograph23/DZ-GPT', description: 'منصة الذكاء الاصطناعي الجزائرية — دارجة + عربية + فرنسية', stars: 5, language: 'TypeScript', category: 'arabic', icon: '🇩🇿', html_url: 'https://github.com/Nadirinfograph23/DZ-GPT' },
+  { full_name: 'CAMeL-Lab/camel_tools', description: 'حزمة NLP شاملة للغة العربية من جامعة الإمارات',          stars: 650,    language: 'Python',      category: 'arabic',  icon: '🐪', html_url: 'https://github.com/CAMeL-Lab/camel_tools' },
+  { full_name: 'ARBML/masader',         description: 'أكبر قاعدة بيانات عربية لمجموعات بيانات AI — 500+ مجموعة', stars: 350, language: 'Python',      category: 'arabic',  icon: '📊', html_url: 'https://github.com/ARBML/masader' },
+  { full_name: 'linuxscout/pyarabic',   description: 'مكتبة Python لمعالجة النصوص العربية',                   stars: 520,    language: 'Python',      category: 'arabic',  icon: '📚', html_url: 'https://github.com/linuxscout/pyarabic' },
+  { full_name: 'bakrianoo/sinai',       description: 'نموذج لغوي عربي مبني على BERT لتحليل المشاعر',           stars: 430,    language: 'Python',      category: 'arabic',  icon: '🧠', html_url: 'https://github.com/bakrianoo/sinai' },
+  // Backend
+  { full_name: 'expressjs/express',     description: 'إطار الويب الأسرع والأبسط لـ Node.js',                   stars: 65000,  language: 'JavaScript',  category: 'backend', icon: '🚀', html_url: 'https://github.com/expressjs/express' },
+  { full_name: 'fastapi/fastapi',       description: 'بناء APIs حديثة بـ Python بأعلى أداء ممكن',              stars: 78000,  language: 'Python',      category: 'backend', icon: '⚡', html_url: 'https://github.com/fastapi/fastapi' },
+  { full_name: 'prisma/prisma',         description: 'ORM عصري لـ Node.js وTypeScript — استعلامات آمنة',       stars: 39000,  language: 'TypeScript',  category: 'backend', icon: '🔺', html_url: 'https://github.com/prisma/prisma' },
+  { full_name: 'supabase/supabase',     description: 'بديل Firebase مفتوح المصدر — قاعدة بيانات + Auth + Storage', stars: 73000, language: 'TypeScript', category: 'backend', icon: '⚡', html_url: 'https://github.com/supabase/supabase' },
+  { full_name: 'honojs/hono',           description: 'إطار ويب صغير وسريع جداً للـ Edge Runtime',              stars: 21000,  language: 'TypeScript',  category: 'backend', icon: '🔥', html_url: 'https://github.com/honojs/hono' },
+  { full_name: 'drizzle-team/drizzle-orm', description: 'ORM TypeScript خفيف وآمن للأنواع',                   stars: 24000,  language: 'TypeScript',  category: 'backend', icon: '💧', html_url: 'https://github.com/drizzle-team/drizzle-orm' },
+  // Mobile
+  { full_name: 'expo/expo',             description: 'منصة React Native لبناء تطبيقات iOS وAndroid سريعاً',   stars: 35000,  language: 'TypeScript',  category: 'mobile',  icon: '📱', html_url: 'https://github.com/expo/expo' },
+  { full_name: 'flutter/flutter',       description: 'مجموعة أدوات Google لبناء تطبيقات جميلة متعددة المنصات', stars: 164000, language: 'Dart',        category: 'mobile',  icon: '🦋', html_url: 'https://github.com/flutter/flutter' },
+  // Data
+  { full_name: 'apache/superset',       description: 'منصة تصور البيانات الحديثة — BI Tool مفتوح المصدر',      stars: 62000,  language: 'Python',      category: 'data',    icon: '📈', html_url: 'https://github.com/apache/superset' },
+  { full_name: 'grafana/grafana',       description: 'منصة observability وتصور البيانات في الوقت الحقيقي',    stars: 65000,  language: 'TypeScript',  category: 'data',    icon: '📊', html_url: 'https://github.com/grafana/grafana' },
+  { full_name: 'pandas-dev/pandas',     description: 'مكتبة تحليل البيانات القوية بـ Python',                  stars: 43000,  language: 'Python',      category: 'data',    icon: '🐼', html_url: 'https://github.com/pandas-dev/pandas' },
+  { full_name: 'ClickHouse/ClickHouse', description: 'قاعدة بيانات عمودية سريعة للتحليلات الكبيرة',            stars: 38000,  language: 'C++',         category: 'data',    icon: '🖱️', html_url: 'https://github.com/ClickHouse/ClickHouse' },
+  // DevTools
+  { full_name: 'microsoft/vscode',      description: 'محرر الكود الأكثر شعبية — مفتوح المصدر من Microsoft',    stars: 164000, language: 'TypeScript',  category: 'tools',   icon: '💻', html_url: 'https://github.com/microsoft/vscode' },
+  { full_name: 'charmbracelet/glow',    description: 'عرض Markdown جميل مباشرة في الـ terminal',               stars: 16000,  language: 'Go',          category: 'tools',   icon: '✨', html_url: 'https://github.com/charmbracelet/glow' },
+  { full_name: 'BurntSushi/ripgrep',    description: 'بحث سريع للغاية عبر ملفات المشروع',                      stars: 48000,  language: 'Rust',        category: 'tools',   icon: '🔍', html_url: 'https://github.com/BurntSushi/ripgrep' },
+  { full_name: 'junegunn/fzf',          description: 'أداة البحث التفاعلي command-line الأسرع',                 stars: 64000,  language: 'Go',          category: 'tools',   icon: '🔎', html_url: 'https://github.com/junegunn/fzf' },
+  { full_name: 'cli/cli',               description: 'GitHub CLI الرسمي — إدارة GitHub من سطر الأوامر',         stars: 37000,  language: 'Go',          category: 'tools',   icon: '🐙', html_url: 'https://github.com/cli/cli' },
+]
+
+const CATEGORY_ALIASES = {
+  'ويب': 'web', 'web': 'web', 'frontend': 'web', 'واجهة': 'web', 'موقع': 'web',
+  'ذكاء': 'ai', 'ai': 'ai', 'ml': 'ai', 'نماذج': 'ai', 'llm': 'ai', 'اصطناعي': 'ai',
+  'عربي': 'arabic', 'arabic': 'arabic', 'جزائري': 'arabic', 'دارجة': 'arabic', 'algeria': 'arabic', 'عربية': 'arabic',
+  'خلفية': 'backend', 'backend': 'backend', 'api': 'backend', 'server': 'backend', 'سيرفر': 'backend',
+  'موبايل': 'mobile', 'mobile': 'mobile', 'app': 'mobile', 'تطبيق': 'mobile',
+  'بيانات': 'data', 'data': 'data', 'analytics': 'data', 'تحليل': 'data',
+  'أدوات': 'tools', 'tools': 'tools', 'devtools': 'tools', 'ادوات': 'tools',
+}
+
+app.post('/api/dz-agent/github/repos-suggest', async (req, res) => {
+  const { query = '', category = 'all', token } = req.body
+  const q = (query || '').toLowerCase().trim()
+
+  let repos = [...DZ_CURATED_REPOS]
+
+  // Filter by explicit category param
+  if (category && category !== 'all') {
+    repos = repos.filter(r => r.category === category)
+  }
+
+  // Filter/map by query
+  if (q && q !== 'all') {
+    const mappedCat = CATEGORY_ALIASES[q]
+    if (mappedCat) {
+      repos = DZ_CURATED_REPOS.filter(r => r.category === mappedCat)
+    } else {
+      repos = repos.filter(r =>
+        r.full_name.toLowerCase().includes(q) ||
+        r.description.includes(q) ||
+        (r.language || '').toLowerCase().includes(q) ||
+        r.category.includes(q)
+      )
+    }
+  }
+
+  // Enrich with live GitHub Search API if token + non-trivial query
+  if (token && q && q.length > 2 && q !== 'all' && !CATEGORY_ALIASES[q]) {
+    try {
+      const searchRes = await fetch(
+        `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&per_page=6`,
+        {
+          headers: { Authorization: `token ${token}`, 'User-Agent': 'DZ-GPT/1.0', Accept: 'application/vnd.github.v3+json' },
+          signal: AbortSignal.timeout(7000),
+        }
+      )
+      if (searchRes.ok) {
+        const sd = await searchRes.json()
+        const live = (sd.items || []).slice(0, 6).map(r => ({
+          full_name: r.full_name,
+          description: r.description || 'لا يوجد وصف',
+          stars: r.stargazers_count || 0,
+          language: r.language || 'N/A',
+          category: 'live',
+          icon: '🔴',
+          html_url: r.html_url,
+        }))
+        // Merge: curated first, live at end (no duplicates)
+        const existing = new Set(repos.map(r => r.full_name))
+        const deduped = live.filter(r => !existing.has(r.full_name))
+        repos = [...repos.slice(0, 8), ...deduped]
+      }
+    } catch (_) { /* GitHub Search optional — don't fail */ }
+  }
+
+  return res.status(200).json({ repos: repos.slice(0, 20), query: q })
+})
+
 // Create a new repository
 app.post('/api/dz-agent/github/create-repo', async (req, res) => {
   const token = req.body.token || process.env.GITHUB_TOKEN || ''

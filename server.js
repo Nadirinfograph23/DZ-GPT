@@ -118,6 +118,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
+import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification } from './lib/smart-clarify.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
@@ -11059,6 +11060,35 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         mode: 'clarification',
         clarificationCase: _ambiguity.caseId,
       })
+    }
+  }
+
+  // ── Image Search Engine — بحث عن صور حقيقية (≠ توليد) ───────────────────
+  // يُفعَّل عند: جيبلي صورة / ابحث عن صورة / find photo / show me image...
+  if (isImageSearchQuery(lastUserMessage)) {
+    console.log(`[ImageSearch] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const imgResult = await searchImages({
+        query: lastUserMessage,
+        aiGenerate: safeGenerateAI,
+        limit: 6,
+      })
+      const content = formatImageSearchResponse({
+        images: imgResult.images,
+        query: imgResult.query,
+        originalQuery: imgResult.originalQuery,
+        translated: imgResult.translated,
+      })
+      return res.status(200).json({
+        content,
+        mode: 'image-search',
+        _imageSearch: true,
+        images: imgResult.images,
+        totalFound: imgResult.total,
+      })
+    } catch (imgErr) {
+      console.error('[ImageSearch] Error:', imgErr.message)
+      // نتابع الطريق الطبيعي بدل إرجاع خطأ
     }
   }
 

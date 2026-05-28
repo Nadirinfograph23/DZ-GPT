@@ -7047,7 +7047,6 @@ ${rows}
         {messages.length > 0 && (
           <div className="dz-input-top-btns">
             <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
-            <button className="dz-pdf-btn" onClick={exportToPDF} title="تصدير المحادثة كـ PDF">📄 PDF</button>
           </div>
         )}
 

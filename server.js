@@ -1334,6 +1334,233 @@ function normalizeChatMessages(messages) {
     .filter(Boolean)
 }
 
+// ── Tool Redirect Map — أدوات لها صفحات متخصصة ────────────────────────────
+const TOOL_REDIRECT_MAP = [
+  {
+    id: 'cv',
+    toolName: 'مولّد السيرة الذاتية',
+    toolUrl: '/tools?tool=cv',
+    toolIcon: '📄',
+    toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية مع نماذج تفاعلية وتحميل PDF',
+    patterns: [/سيرة\s*ذاتية|سيرة ذاتية|cv\s*(احترافية|جزائري|بالعربي|بالفرنسية)?|resume\s*(algérien)?|curriculum\s*vitae|تحضير.*cv|انشئ.*cv|اعمل.*cv/i],
+  },
+  {
+    id: 'bizplan',
+    toolName: 'خطة العمل Business Plan',
+    toolUrl: '/tools?tool=bizplan',
+    toolIcon: '📊',
+    toolDesc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية وتحليل السوق',
+    patterns: [/خطة\s*(عمل|مشروع|business)|business\s*plan|plan\s*(d'affaires|de\s*business)|دراسة\s*جدوى|مشروع\s*(اقتصادي|استثماري)/i],
+  },
+  {
+    id: 'invoice',
+    toolName: 'مولّد الفواتير',
+    toolUrl: '/tools?tool=invoice',
+    toolIcon: '🧾',
+    toolDesc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF فوري',
+    patterns: [/فاتورة|فواتير|invoice|facture|TVA|TTC|HT|ضريبة.*قيمة.*مضافة/i],
+  },
+  {
+    id: 'tax',
+    toolName: 'مُحاسب الضرائب',
+    toolUrl: '/tools?tool=tax',
+    toolIcon: '🧮',
+    toolDesc: 'احسب IRG و IBS والضرائب الجزائرية للأفراد والشركات',
+    patterns: [/(?:احسب|حساب|ضريبة)\s*(IRG|IBS|الدخل|الشركات)|ضريبة.*دخل.*جزائر|IRG.*حساب|IBS.*حساب/i],
+  },
+  {
+    id: 'pension',
+    toolName: 'حاسبة التقاعد CNAS',
+    toolUrl: '/tools?tool=pension',
+    toolIcon: '🏦',
+    toolDesc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل',
+    patterns: [/تقاعد|معاش|CNAS|CASNOS|pension|retraite|اشتراكات.*تأمين/i],
+  },
+  {
+    id: 'zakat',
+    toolName: 'حاسبة الزكاة الشاملة',
+    toolUrl: '/tools?tool=zakat',
+    toolIcon: '☪️',
+    toolDesc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع بالدينار الجزائري',
+    patterns: [/زكاة|زكاتي|حساب.*زكاة|زكاة.*مال|زكاة.*ذهب|نصاب/i],
+  },
+  {
+    id: 'bizcard',
+    toolName: 'بطاقة العمل',
+    toolUrl: '/tools?tool=bizcard',
+    toolIcon: '🪪',
+    toolDesc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF',
+    patterns: [/بطاقة\s*(عمل|أعمال|business)|business\s*card|carte\s*(de\s*visite|professionnelle)|كارت\s*شخصي/i],
+  },
+  {
+    id: 'darija',
+    toolName: 'مترجم الدارجة الجزائرية',
+    toolUrl: '/tools?tool=darija',
+    toolIcon: '🗣️',
+    toolDesc: 'ترجمة من وإلى الدارجة الجزائرية — شرق · غرب · وسط · جنوب',
+    patterns: [/ترجم.*دارجة|دارجة.*ترجم|دارجة.*جزائرية|عربي.*دارجة|دارجة.*عربي|دارجة.*فرنسي|فرنسي.*دارجة/i],
+  },
+  {
+    id: 'hashtag',
+    toolName: 'مولّد الهاشتاغ',
+    toolUrl: '/tools?tool=hashtag',
+    toolIcon: '#️⃣',
+    toolDesc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن',
+    patterns: [/هاشتاغ|هاشتاق|hashtag|#.*جزائر|ولد.*هاشتاغ|اعمل.*هاشتاغ/i],
+  },
+  {
+    id: 'tts',
+    toolName: 'تحويل نص إلى صوت',
+    toolUrl: '/tools?tool=tts',
+    toolIcon: '🔊',
+    toolDesc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية — تحميل MP3',
+    patterns: [/نص.*صوت|text.*speech|TTS|حول.*نص.*صوت|اقرأ.*نص|صوّت.*نص|audio.*نص|mp3.*نص/i],
+  },
+  {
+    id: 'screenshot',
+    toolName: 'تصوير المواقع',
+    toolUrl: '/tools?tool=screenshot',
+    toolIcon: '📸',
+    toolDesc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF',
+    patterns: [/صورة.*موقع|screenshot.*موقع|التقط.*موقع|capture.*site|لقطة.*شاشة.*موقع/i],
+  },
+  {
+    id: 'dataanalysis',
+    toolName: 'محلل البيانات',
+    toolUrl: '/tools?tool=dataanalysis',
+    toolIcon: '📈',
+    toolDesc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI',
+    patterns: [/تحليل.*بيانات.*ملف|ارفع.*excel.*تحليل|csv.*تحليل|upload.*data.*anal|تحليل.*csv|تحليل.*xlsx/i],
+  },
+  {
+    id: 'ocr-dz',
+    toolName: 'قارئ الوثائق OCR',
+    toolUrl: '/ocr-dz',
+    toolIcon: '📷',
+    toolDesc: 'ارفع صورة أو PDF واستخرج النص بدقة عالية مع تصحيح AI',
+    patterns: [/ocr.*ملف|ارفع.*صورة.*نص|استخرج.*نص.*pdf|pdf.*استخرج|ملف.*pdf.*نص|digitize|تحويل.*pdf.*نص/i],
+  },
+  {
+    id: 'excel',
+    toolName: 'محرر Excel الذكي',
+    toolUrl: '/excel',
+    toolIcon: '📊',
+    toolDesc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX',
+    patterns: [/(?:افتح|اعمل|انشئ|أنشئ)\s*(جدول|ملف)\s*(excel|إكسيل|اكسيل|xlsx|spreadsheet)|تحرير.*excel|excel.*editor|spreadsheet.*(?:افتح|اعمل)/i],
+  },
+  {
+    id: 'web-builder',
+    toolName: 'Web Builder — بانيّ المواقع',
+    toolUrl: '/web-builder',
+    toolIcon: '🌐',
+    toolDesc: 'أنشئ موقعاً كاملاً بالذكاء الاصطناعي أو استنسخ موقعاً موجوداً',
+    patterns: [/(?:انشئ|أنشئ|ابني|اصنع|اعمل|صمم)\s*(موقع|سايت|ويب\s*سايت|landing\s*page|صفحة\s*هبوط)|website\s*builder|استنسخ\s*موقع|clone\s*site|web\s*builder/i],
+  },
+  {
+    id: 'github-agent',
+    toolName: 'GitHub Agent — وكيل النشر',
+    toolUrl: '/github-agent',
+    toolIcon: '⚡',
+    toolDesc: 'انشر مشروعك تلقائياً على GitHub وVercel بأمر واحد',
+    patterns: [/انشر.*مشروع.*github|نشر.*vercel.*تلقائي|deploy.*github.*auto|github\s*agent|وكيل.*github/i],
+  },
+  {
+    id: 'radio',
+    toolName: 'DZ Radio — إذاعة جزائرية',
+    toolUrl: '/radio',
+    toolIcon: '📻',
+    toolDesc: '8 قنوات جزائرية حية — إذاعة وطنية، القرآن، جيل FM وأكثر',
+    patterns: [/إذاعة|اذاعة|radio\s*(جزائر|algérie)?|بث.*صوتي|استمع.*راديو|قناة.*راديو|جيل.*fm|chaîne/i],
+  },
+  {
+    id: 'dzchat',
+    toolName: 'DZ Chat — دردشة مجتمعية',
+    toolUrl: '/dzchat',
+    toolIcon: '💬',
+    toolDesc: 'غرفة دردشة جماعية مع مستخدمين آخرين ووكلاء AI في الوقت الحقيقي',
+    patterns: [/دردشة.*جماعية|غرفة.*دردشة|chat.*room|community\s*chat|دردشة.*مع.*آخرين|مجتمع.*دردشة/i],
+  },
+  {
+    id: 'le3ba',
+    toolName: 'DZ Le3ba — ألعاب عربية',
+    toolUrl: '/le3ba',
+    toolIcon: '🎮',
+    toolDesc: 'ألعاب لغوية عربية — Wordle بالعربي، وصلة (كلمات متقاطعة)',
+    patterns: [/ألعاب|العاب|لعبة.*لغوية|wordle.*عربي|كلمة.*مخفية|وصلة.*لعبة|لعبة.*كلمات|تقاطع.*كلمات|crossword/i],
+  },
+  {
+    id: 'quran-audio',
+    toolName: 'القرآن الكريم — تلاوة وتفسير',
+    toolUrl: '/quran',
+    toolIcon: '📖',
+    toolDesc: 'استمع لتلاوات بأصوات مختلفة، تفسير AI وبحث بالآيات',
+    patterns: [/(?:استمع|سماع|تلاوة|تلاوات|صوت|بث)\s*(قرآن|قرآني|سورة|آية|ورتل)|قرآن.*صوت|recitation.*quran|reciters?|مقرئ|مقارئ/i],
+  },
+  {
+    id: 'jobs',
+    toolName: 'بحث وظيفي',
+    toolUrl: '/tools?tool=jobs',
+    toolIcon: '💼',
+    toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم',
+    patterns: [/(?:ابحث|بحث)\s*(?:عن\s*)?(?:وظيفة|عمل|منصب|مناصب|شغل)\s*(?:في\s*الجزائر|في\s*جزائر|بالجزائر)?|offre.*emploi.*algér|emploi.*algér|job.*algérie/i],
+  },
+  {
+    id: 'health',
+    toolName: 'وكيل الصحة',
+    toolUrl: '/tools?tool=health',
+    toolIcon: '🏥',
+    toolDesc: 'ابحث عن طبيب، تحليل الأعراض ونصائح صحية مخصصة للجزائر',
+    patterns: [/ابحث.*طبيب.*قريب|أقرب.*مستشفى|صيدلية.*قريب|doctor.*near|hôpital.*algér|find.*doctor.*near/i],
+  },
+]
+
+// Detect if the user message should redirect to a specific tool page
+function detectToolRedirect(msg) {
+  if (!msg || msg.length < 5) return null
+  const clean = msg.trim().toLowerCase()
+
+  // ── Hard exclusions — DZ Agent handles these natively, NEVER redirect ────
+  // Image generation
+  if (/ارسم|أرسم|رسم\s*لي|صورة\s*عن|اصنع\s*صورة|أنشئ\s*صورة|generate\s*image|create\s*image|draw\s*me/i.test(msg)) return null
+  // Presentations
+  if (/عرض\s*تقديمي|شرائح|بوربوينت|powerpoint|ppt|presentation/i.test(msg)) return null
+  // QR codes — handled inline
+  if (/qr\s*code|رمز.*qr|اعمل.*qr/i.test(msg)) return null
+  // YouTube / videos / songs
+  if (/يوتيوب|youtube|اغنية|أغنية|فيديو\s*شرح|فيديو\s*تعليمي|video/i.test(msg)) return null
+  // Books search
+  if (/ابحث.*كتاب|books?.*search/i.test(msg)) return null
+  // Weather / news
+  if (/طقس|أخبار|جو.*اليوم|weather|news/i.test(msg)) return null
+  // Code questions
+  if (/كود|برمجة|javascript|python|react|bug|خطأ.*في.*الكود|اشرح.*الكود/i.test(msg)) return null
+  // Maps
+  if (/خريطة|خرائط|اتجاه.*إلى|map\b|route/i.test(msg)) return null
+  // Quran questions (tafsir, meaning) — NOT audio
+  if (/تفسير|معنى.*آية|اشرح.*آية|فسر|tafsir/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
+  // Web reading (URLs)
+  if (/https?:\/\//i.test(msg)) return null
+  // GitHub operations — handled inline
+  if (/github\.com\/|مستودع.*github|push.*commit|commit.*push/i.test(msg)) return null
+  // General Quran (reading + AI) — only redirect for audio
+  if (/سورة|آية|قرآن/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
+  // Excel data analysis from chat (single value)
+  if (/excel.*formula|دالة.*excel|vlookup|sumif/i.test(msg)) return null
+
+  for (const tool of TOOL_REDIRECT_MAP) {
+    if (tool.patterns.some(p => p.test(msg))) {
+      return {
+        toolName: tool.toolName,
+        toolUrl:  tool.toolUrl,
+        toolIcon: tool.toolIcon,
+        toolDesc: tool.toolDesc,
+        message:  `لديّ أداة متخصصة لهذا الطلب ✨`,
+      }
+    }
+  }
+  return null
+}
+
 // ── Smart Topic Change Detection ──────────────────────────────────────────
 // Returns true if the new message is about a completely different topic
 // from the recent conversation history — so we can trim context.
@@ -10562,6 +10789,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _lastUser = [...messages].reverse().find(m => m.role === 'user')
     messages = _lastUser ? [_lastUser] : messages
     console.log(`[TopicChange] موضوع جديد كُشف — تم إعادة ضبط السياق`)
+  }
+
+  // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────
+  const _rawLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+  const _toolRedirect = detectToolRedirect(_rawLastMsg)
+  if (_toolRedirect) {
+    console.log(`[ToolRedirect] → ${_toolRedirect.toolUrl} for: "${_rawLastMsg.slice(0, 50)}"`)
+    return res.status(200).json({ _toolRedirect })
   }
 
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)

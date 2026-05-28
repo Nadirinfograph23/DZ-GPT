@@ -211,6 +211,27 @@ const SECTIONS = [
       </svg>
     ),
   },
+  {
+    id: 'radio',
+    label: 'DZ RADIO',
+    sublabel: 'إذاعات جزائرية مباشرة',
+    path: '/radio',
+    gradient: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
+    bgGlow: 'rgba(14,165,233,0.18)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="20" width="36" height="22" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <circle cx="17" cy="31" r="5" stroke="currentColor" strokeWidth="2.2" />
+        <circle cx="17" cy="31" r="2" fill="currentColor" opacity="0.7" />
+        <line x1="27" y1="26" x2="36" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <line x1="27" y1="31" x2="36" y2="31" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <line x1="27" y1="36" x2="33" y2="36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M15 14l-5-6M33 14l5-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.5" />
+        <path d="M20 12l-2-7M28 12l2-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+        <path d="M24 10V20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ]
 
 export default function DZHome() {

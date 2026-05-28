@@ -582,7 +582,7 @@ ${devInfoSection}`
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages, model: 'llama-70b' }),
         })
-        if (!r.ok || !r.body) throw new Error('stream failed')
+        if (!r.ok || !r.body) throw new Error(`stream failed: ${r.status}`)
 
         const reader = r.body.getReader()
         const dec = new TextDecoder()
@@ -626,11 +626,27 @@ ${devInfoSection}`
           return next
         })
       } catch {
-        setAiMessages(prev => {
-          const next = [...prev]
-          if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }
-          return next
-        })
+        // Fallback: use dz-agent-chat if streaming fails
+        try {
+          const fb = await fetch('/api/dz-agent-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: messages.slice(-6), lang: 'ar' }),
+          })
+          const fd = await fb.json()
+          const fallbackText = fd.content || fd.text || 'تعذر الاتصال، حاول لاحقاً.'
+          setAiMessages(prev => {
+            const next = [...prev]
+            if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: fallbackText }
+            return next
+          })
+        } catch {
+          setAiMessages(prev => {
+            const next = [...prev]
+            if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }
+            return next
+          })
+        }
       }
     } catch {
       setAiMessages(prev => [...prev, { role: 'assistant', content: 'تعذر الاتصال، حاول لاحقاً.' }])
@@ -1055,7 +1071,7 @@ ${devInfoSection}`
                           </button>
                         </div>
                       </div>
-                      <p className="aq-verse-text aq-verse-text--clickable" style={{ fontSize: fontSize + 'px' }}>
+                      <p className="aq-verse-text aq-verse-text--clickable" dir="rtl" style={{ fontSize: fontSize + 'px' }}>
                         {v.text_uthmani.split(/(\s+)/).map((part, idx) => {
                           if (!part.trim()) return part
                           const isHighlighted = normalizedVerseSearch && normalizeQuranSearch(part).includes(normalizedVerseSearch)

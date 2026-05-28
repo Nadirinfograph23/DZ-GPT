@@ -7055,6 +7055,10 @@ ${rows}
             }
           }}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
+          onCommandSelect={cmd => {
+            setInput(cmd)
+            setTimeout(() => textareaRef.current?.focus(), 50)
+          }}
         />
 
         {/* ===== PROJECT MEMORY BADGE ===== */}

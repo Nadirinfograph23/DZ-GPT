@@ -219,8 +219,38 @@ export function RadioPlayerProvider({ children }: { children: ReactNode }) {
 
   const searchStations = useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults([]); return }
+
+    // Translate Arabic/Darija radio terms → Latin so radio-browser.info can find them
+    const AR_RADIO_MAP: [string, string][] = [
+      ['الجزائر', 'Algeria'], ['جزائرية', 'Algerian'], ['وطنية', 'nationale'],
+      ['القرآن الكريم', 'quran'], ['القرآن', 'quran'], ['قرآن', 'quran'], ['قرآنية', 'quran'],
+      ['الشباب', 'jeunes'], ['شباب', 'jeunes'], ['موسيقى', 'music'], ['إذاعة', ''],
+      ['أمازيغية', 'kabyle'], ['قبائلية', 'kabyle'], ['أطفال', 'kids'], ['رياضة', 'sport'],
+      ['أخبار', 'news'], ['وهران', 'oran'], ['قسنطينة', 'constantine'],
+      ['عنابة', 'annaba'], ['تلمسان', 'tlemcen'], ['بجاية', 'bejaia'],
+      ['سطيف', 'setif'], ['باتنة', 'batna'], ['بسكرة', 'biskra'],
+      ['السلسلة الأولى', 'chaine 1'], ['الأولى', 'chaine 1'],
+      ['السلسلة الثانية', 'chaine 2'], ['الثانية', 'chaine 2'],
+      ['السلسلة الثالثة', 'chaine 3'], ['الثالثة', 'chaine 3'],
+      ['ديني', 'islamic'], ['دينية', 'islamic'], ['إسلامية', 'islamic'],
+      ['بربرية', 'berber'], ['ثقافية', 'culture'],
+    ]
+
+    let searchTerm = q
+    for (const [ar, en] of AR_RADIO_MAP) {
+      if (searchTerm.includes(ar)) searchTerm = searchTerm.split(ar).join(en)
+    }
+    // Remove any remaining Arabic chars if translation happened
+    const hasArabic = /[\u0600-\u06FF]/.test(searchTerm)
+    if (hasArabic && searchTerm !== q) {
+      searchTerm = searchTerm.replace(/[\u0600-\u06FF\s]+/g, ' ').trim()
+    } else if (hasArabic) {
+      searchTerm = q // keep original if no translation matched — server may handle it
+    }
+    searchTerm = searchTerm.replace(/\s+/g, ' ').trim() || q.trim()
+
     try {
-      const r = await fetch(`${PROXY_BASE}/search?name=${encodeURIComponent(q)}`)
+      const r = await fetch(`${PROXY_BASE}/search?name=${encodeURIComponent(searchTerm)}`)
       const data: RadioStation[] = await r.json()
       setSearchResults(data.filter(s => s.url_resolved?.startsWith('http')))
     } catch {

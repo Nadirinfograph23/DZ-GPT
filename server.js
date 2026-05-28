@@ -13818,7 +13818,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
     `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
-    `⚠️ قاعدة اللغة الإلزامية: أجب دائماً بنفس لغة المستخدم. إذا كتب بالعربية → أجب بالعربية. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي لغة أخرى لم يستخدمها المستخدم. ❌ لا تستخدم رموزاً أو حروفاً غير مفهومة لا علاقة لها بالسؤال. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى.`,
+    `⚠️ قاعدة اللغة الإلزامية (صارمة جداً): أجب دائماً بنفس لغة المستخدم فقط. إذا كتب بالعربية → أجب بالعربية الفصحى أو الدارجة الجزائرية حصراً. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً وبشكل مطلق إدراج أي كلمة أو مقطع بالفيتنامية أو الصينية أو اليابانية أو الكورية أو التايلاندية أو الهندية أو الإندونيسية أو الملايوية أو البرتغالية أو الروسية أو أي لغة أخرى غير مطلوبة — حتى كلمة واحدة. ❌ لا تستبدل كلمة عربية بمرادفها في لغة أجنبية مهما كان السبب. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى. لا استثناءات.`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
 • الهوية: DZ Agent — وكيل الجزائر الذكي الأول من نوعه، يعمل 24/7، أنشأه Nadir Houamria
@@ -14002,7 +14002,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       .replace(/(?:^|\n)(?:النية|التصنيف|ما يريده المستخدم حقاً?)[^\n]*\n?/gi, '')
       .replace(/^\s*\n/, '').trim()
 
-    const _finalContent = _cleanRawUrls(_stripThinking(aiResult.content))
+    // ── Strip foreign-language words injected by AI (Vietnamese, Thai, CJK…) ──
+    // Removes any word/token containing characters outside Arabic/Latin/French/common symbols.
+    // Targeted ranges: Latin Extended Additional U+1E00-U+1EFF (almost exclusively Vietnamese),
+    // Thai U+0E00-U+0E7F, CJK U+4E00-U+9FFF, Hiragana/Katakana U+3040-U+30FF,
+    // Korean U+AC00-U+D7AF, Devanagari U+0900-U+097F, other non-Latin/Arabic blocks.
+    const _stripForeignLang = (txt) => {
+      if (!txt) return txt
+      // Remove whole words that contain Vietnamese-specific diacritics (Latin Extended Additional)
+      // e.g. "giải" "thích" "giải thích" → removed
+      txt = txt.replace(/\S*[\u1E00-\u1EFF]\S*/g, '')
+      // Remove blocks of Thai, CJK, Hiragana/Katakana, Korean, Devanagari
+      txt = txt.replace(/[\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1100-\u11FF\u0900-\u097F]+/g, '')
+      // Clean up stray punctuation / double spaces left after removal
+      txt = txt.replace(/ {2,}/g, ' ').replace(/\s*,\s*,/g, ',').trim()
+      return txt
+    }
+
+    const _finalContent = _cleanRawUrls(_stripForeignLang(_stripThinking(aiResult.content)))
 
     // ── QA Score: تحقق من جودة الرد قبل الإرسال ─────────────────────────────
     // إذا كانت الجودة منخفضة → نحاول مرة ثانية بمزود مختلف (تقني أو استرجاع)
@@ -16174,6 +16191,15 @@ function chatId() {
   return Math.random().toString(36).slice(2, 9) + Date.now().toString(36)
 }
 
+// ── Global post-processor: remove foreign-language words from any AI response ──
+// Handles Vietnamese (U+1E00-U+1EFF), Thai, CJK, Korean, Devanagari, etc.
+function stripForeignLang(txt) {
+  if (!txt) return txt
+  txt = txt.replace(/\S*[\u1E00-\u1EFF]\S*/g, '')
+  txt = txt.replace(/[\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1100-\u11FF\u0900-\u097F]+/g, '')
+  return txt.replace(/ {2,}/g, ' ').replace(/\s*,\s*,/g, ',').trim()
+}
+
 function getClientIp(reqOrHeaders) {
   const headers = reqOrHeaders?.headers || reqOrHeaders || {}
   const forwarded = headers['x-forwarded-for'] || headers['x-real-ip'] || ''
@@ -16396,7 +16422,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
       from: isAgent ? 'DZ Agent' : 'DZ GPT',
       fromId: 'bot',
       gender: 'bot',
-      text: result.content ? result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`) : 'عذراً، حدث خطأ في المعالجة.',
+      text: result.content ? stripForeignLang(result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`)) : 'عذراً، حدث خطأ في المعالجة.',
       timestamp: Date.now(),
       isBot: true,
       botType: isAgent ? 'agent' : 'gpt',

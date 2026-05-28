@@ -3426,6 +3426,13 @@ function detectWebsiteBuilderQuery(msg) {
 function detectCodeExecutionQuery(msg) {
   const lower = msg.toLowerCase()
 
+  // Guard: website build requests are NOT code execution
+  // "أنشئ موقع" / "ابني موقع" / "صمم موقع" → website builder, not code runner
+  if (/(?:أنشئ|انشئ|ابني|اصنع|اعمل|صمم)\s+(?:موقع|سايت|صفحة\s*هبوط|landing\s*page)/i.test(msg)) return null
+  // Web builder system prompt markers
+  if (/قواعد\s*صارمة.*DOCTYPE|ابدأ\s*الكود\s*مباشرة\s*بـ\s*<!DOCTYPE/i.test(msg)) return null
+  if (/موقع\s*ويب\s*احترافي\s*كامل/i.test(msg)) return null
+
   // Strong programming signals — if ANY of these exist, it's definitely code
   const hasLangKw = /(?:python|javascript|js\b|typescript|ts\b|react|node|html|css|php|java\b|c\+\+|c#|rust|go\b|sql|bash|shell|بايثون|جافاسكريبت)/i.test(lower)
   const hasCodeKw = /(?:كود|دالة|function|class|سكريبت|script|برنامج|program|algorithm|خوارزمية|مصفوفة|array|loop|حلقة|متغير|variable|API|json|regex)/i.test(lower)
@@ -4448,6 +4455,1312 @@ function getWebBuilderImagePool(siteType) {
 }
 
 const _IMG_ONERROR = `this.onerror=null;this.style.cssText='background:linear-gradient(135deg,#1e293b,#334155);min-height:220px;display:block;border-radius:8px;width:100%'`
+
+// ── Direct Website Builder AI (bypasses circuit breakers — for when ai-router is exhausted) ──
+async function directWebBuilderGenerate(messages, maxTokens = 8000) {
+  const geminiKeyCheck = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  const mistralKeyCheck = process.env.MISTRAL_API_KEY
+  const orKeyCheck = process.env.OPENROUTER_API_KEY
+  const cohereKeyCheck = process.env.COHERE_API_KEY
+  console.log(`[DirectWebBuilder] keys: gemini=${!!geminiKeyCheck} mistral=${!!mistralKeyCheck} openrouter=${!!orKeyCheck} cohere=${!!cohereKeyCheck}`)
+
+  const postJSONDirect = async (url, body, timeoutMs = 28000) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`)
+    return res.json()
+  }
+
+  // 1. Direct Gemini (gemini-2.5-flash / gemini-2.0-flash)
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  if (geminiKey) {
+    try {
+      const systemMsg = messages.find(m => m.role === 'system')
+      const convMsgs = messages.filter(m => m.role !== 'system')
+      const body = {
+        contents: convMsgs.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: { maxOutputTokens: Math.min(maxTokens, 32768), temperature: 0.7 },
+      }
+      if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] }
+      for (const model of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']) {
+        try {
+          const data = await postJSONDirect(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+            body, 28000,
+          )
+          const content = data.candidates?.[0]?.content?.parts?.[0]?.text || null
+          if (content && content.trim().length > 100) {
+            console.log(`[DirectWebBuilder] ✓ Gemini ${model}`)
+            return { content, model: `gemini:${model}` }
+          }
+        } catch (e) { console.warn(`[DirectWebBuilder] Gemini ${model} failed:`, e.message) }
+      }
+    } catch (e) { console.warn('[DirectWebBuilder] Gemini all failed:', e.message) }
+  }
+
+  // 2. Direct Mistral
+  const mistralKey = process.env.MISTRAL_API_KEY
+  if (mistralKey) {
+    try {
+      const data = await postJSONDirect('https://api.mistral.ai/v1/chat/completions', {
+        model: 'mistral-large-latest',
+        messages,
+        max_tokens: Math.min(maxTokens, 8192),
+        temperature: 0.7,
+      }, 28000)
+      const content = data.choices?.[0]?.message?.content || null
+      if (content && content.trim().length > 100) {
+        console.log('[DirectWebBuilder] ✓ Mistral')
+        return { content, model: 'mistral:mistral-large-latest' }
+      }
+    } catch (e) { console.warn('[DirectWebBuilder] Mistral failed:', e.message) }
+  }
+
+  // 3. Direct OpenRouter (free models)
+  const orKey = process.env.OPENROUTER_API_KEY
+  if (orKey) {
+    for (const orModel of ['google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-coder-32b-instruct:free']) {
+      try {
+        const data = await postJSONDirect('https://openrouter.ai/api/v1/chat/completions', {
+          model: orModel,
+          messages,
+          max_tokens: Math.min(maxTokens, 8192),
+        }, 28000)
+        const content = data.choices?.[0]?.message?.content || null
+        if (content && content.trim().length > 100) {
+          console.log(`[DirectWebBuilder] ✓ OpenRouter ${orModel}`)
+          return { content, model: `openrouter:${orModel}` }
+        }
+      } catch (e) { console.warn(`[DirectWebBuilder] OpenRouter ${orModel} failed:`, e.message) }
+    }
+  }
+
+  // 4. Direct Cohere
+  const cohereKey = process.env.COHERE_API_KEY
+  if (cohereKey) {
+    try {
+      const systemMsg = messages.find(m => m.role === 'system')
+      const convMsgs = messages.filter(m => m.role !== 'system')
+      const data = await postJSONDirect('https://api.cohere.com/v2/chat', {
+        model: 'command-r-plus-08-2024',
+        messages: [
+          ...(systemMsg ? [{ role: 'system', content: systemMsg.content }] : []),
+          ...convMsgs,
+        ],
+        max_tokens: Math.min(maxTokens, 4096),
+      }, 28000)
+      const content = data.message?.content?.[0]?.text || data.text || null
+      if (content && content.trim().length > 100) {
+        console.log('[DirectWebBuilder] ✓ Cohere')
+        return { content, model: 'cohere:command-r-plus' }
+      }
+    } catch (e) { console.warn('[DirectWebBuilder] Cohere failed:', e.message) }
+  }
+
+  // 5. Pollinations.ai (no key needed)
+  for (const polModel of ['openai-large', 'mistral', 'claude-hybridspace']) {
+    try {
+      const res = await fetch('https://text.pollinations.ai/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: polModel, messages, private: true }),
+        signal: AbortSignal.timeout(30000),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const content = data.choices?.[0]?.message?.content || null
+        if (content && content.trim().length > 200) {
+          console.log(`[DirectWebBuilder] ✓ Pollinations ${polModel}`)
+          return { content, model: `pollinations:${polModel}` }
+        }
+      }
+    } catch (e) { console.warn(`[DirectWebBuilder] Pollinations ${polModel} failed:`, e.message) }
+  }
+
+  // 6. Template-based HTML fallback (no AI needed — always works)
+  const templateHtml = generateWebBuilderTemplate(messages)
+  if (templateHtml) {
+    console.log('[DirectWebBuilder] ✓ Template fallback (no AI key)')
+    return { content: templateHtml, model: 'template:built-in' }
+  }
+
+  return { content: null, model: null }
+}
+
+// ── Built-in HTML Template Generator (no AI needed) ───────────────────────────
+function generateWebBuilderTemplate(messages) {
+  // Extract user message to detect site type
+  const userMsg = messages.filter(m => m.role === 'user').map(m => m.content).join(' ')
+
+  let type = 'landing'
+  if (/متجر|بقالة|محل|e-commerce|shop|store|منتجات/i.test(userMsg)) type = 'store'
+  else if (/portfolio|بورتفوليو|شخصي|personal|أعمالي/i.test(userMsg)) type = 'portfolio'
+  else if (/مطعم|كافيه|restaurant|café|food|أكل/i.test(userMsg)) type = 'restaurant'
+  else if (/dashboard|لوحة تحكم|analytics|إحصاء/i.test(userMsg)) type = 'dashboard'
+  else if (/وكالة|agency|startup|saas/i.test(userMsg)) type = 'agency'
+  else if (/مدرسة|تعليم|دورة|education|course/i.test(userMsg)) type = 'education'
+
+  const isDark = /dark|داكن|أسود|glassmorphism|glass/i.test(userMsg)
+  const accent = /#([0-9a-f]{6})/i.exec(userMsg)?.[0] || (isDark ? '#6366f1' : '#6366f1')
+
+  const templates = {
+    landing: _tplLanding(isDark, accent),
+    store: _tplStore(isDark, accent),
+    portfolio: _tplPortfolio(isDark, accent),
+    restaurant: _tplRestaurant(isDark, accent),
+    dashboard: _tplDashboard(isDark, accent),
+    agency: _tplAgency(isDark, accent),
+    education: _tplEducation(isDark, accent),
+  }
+  return templates[type] || templates.landing
+}
+
+function _tplLanding(dark, accent) {
+  const bg = dark ? '#0f172a' : '#ffffff'
+  const text = dark ? '#f1f5f9' : '#1e293b'
+  const cardBg = dark ? 'rgba(255,255,255,0.05)' : '#f8fafc'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>موقع احترافي 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--accent:${accent};--bg:${bg};--text:${text};--card:${cardBg}}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;direction:rtl}
+  .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,${accent}22 0%,${accent}08 50%,transparent 100%);
+    position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse 80% 80% at 50% -20%,${accent}33,transparent)}
+  .hero-content{text-align:center;padding:2rem;max-width:800px}
+  .badge{display:inline-block;padding:.4rem 1.2rem;border-radius:999px;
+    background:${accent}22;color:${accent};font-size:.85rem;font-weight:600;
+    border:1px solid ${accent}44;margin-bottom:1.5rem}
+  h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:900;line-height:1.1;
+    background:linear-gradient(135deg,${text},${accent});-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:1.2rem}
+  .hero p{font-size:1.2rem;opacity:.7;max-width:560px;margin:0 auto 2.5rem;line-height:1.7}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 2rem;
+    border-radius:12px;font-weight:700;font-size:1rem;text-decoration:none;
+    transition:all .3s cubic-bezier(.4,0,.2,1);cursor:pointer;border:none}
+  .btn-primary{background:${accent};color:#fff;box-shadow:0 0 30px ${accent}44}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 40px ${accent}66}
+  .btn-ghost{background:transparent;color:var(--text);border:1.5px solid ${accent}44;margin-right:1rem}
+  .btn-ghost:hover{background:${accent}11;border-color:${accent}}
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;
+    background:${bg}cc;backdrop-filter:blur(20px);
+    border-bottom:1px solid ${accent}11;padding:1rem 2rem;
+    display:flex;align-items:center;justify-content:space-between}
+  .logo{font-size:1.4rem;font-weight:800;color:${accent};text-decoration:none}
+  .nav-links{display:flex;gap:2rem;list-style:none}
+  .nav-links a{color:var(--text);text-decoration:none;opacity:.7;font-weight:500;
+    transition:opacity .2s}
+  .nav-links a:hover{opacity:1;color:${accent}}
+  .features{padding:6rem 2rem;max-width:1100px;margin:0 auto}
+  .features h2{text-align:center;font-size:2.5rem;font-weight:800;margin-bottom:1rem}
+  .features .sub{text-align:center;opacity:.6;margin-bottom:3rem;font-size:1.1rem}
+  .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
+  .card{background:var(--card);border:1px solid ${accent}22;border-radius:16px;
+    padding:2rem;transition:all .3s}
+  .card:hover{transform:translateY(-4px);border-color:${accent}66;box-shadow:0 20px 60px ${accent}22}
+  .card-icon{width:52px;height:52px;border-radius:12px;background:${accent}22;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;color:${accent};margin-bottom:1.2rem}
+  .card h3{font-size:1.1rem;font-weight:700;margin-bottom:.6rem}
+  .card p{opacity:.65;line-height:1.6;font-size:.95rem}
+  .pricing{padding:6rem 2rem;background:${accent}08;text-align:center}
+  .pricing h2{font-size:2.5rem;font-weight:800;margin-bottom:3rem}
+  .pricing-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:1.5rem;max-width:900px;margin:0 auto}
+  .price-card{background:var(--bg);border:1.5px solid ${accent}22;border-radius:20px;
+    padding:2.5rem 2rem;position:relative;transition:all .3s}
+  .price-card.featured{border-color:${accent};box-shadow:0 0 60px ${accent}33}
+  .price-badge{position:absolute;top:-12px;right:50%;transform:translateX(50%);
+    background:${accent};color:#fff;padding:.3rem 1rem;border-radius:999px;
+    font-size:.8rem;font-weight:700}
+  .price{font-size:3rem;font-weight:900;color:${accent}}
+  .price span{font-size:1rem;opacity:.6}
+  .price-features{list-style:none;margin:1.5rem 0;text-align:right}
+  .price-features li{padding:.5rem 0;border-bottom:1px solid ${accent}11;
+    display:flex;align-items:center;gap:.6rem;opacity:.8;font-size:.95rem}
+  .price-features li i{color:${accent};width:16px}
+  .cta{padding:6rem 2rem;text-align:center;
+    background:linear-gradient(135deg,${accent}22,${accent}08)}
+  .cta h2{font-size:2.8rem;font-weight:900;margin-bottom:1rem}
+  .cta p{opacity:.7;font-size:1.1rem;margin-bottom:2rem}
+  footer{padding:3rem 2rem;text-align:center;opacity:.5;font-size:.9rem;
+    border-top:1px solid ${accent}22}
+  @media(max-width:768px){.nav-links{display:none}.hero{padding-top:5rem}}
+</style>
+</head>
+<body>
+<nav>
+  <a class="logo" href="#"><i class="fas fa-bolt"></i> DZ Brand</a>
+  <ul class="nav-links">
+    <li><a href="#features">الميزات</a></li>
+    <li><a href="#pricing">الأسعار</a></li>
+    <li><a href="#contact">تواصل</a></li>
+  </ul>
+  <a href="#" class="btn btn-primary" style="padding:.6rem 1.2rem;font-size:.9rem">ابدأ مجاناً</a>
+</nav>
+
+<section class="hero" id="home">
+  <div class="hero-content">
+    <div class="badge" data-aos="fade-down"><i class="fas fa-star"></i> جديد 2026 — AI-Powered</div>
+    <h1 data-aos="fade-up" data-aos-delay="100">مستقبل<br>الذكاء الاصطناعي<br><span style="color:${accent};-webkit-text-fill-color:${accent}">في متناول يدك</span></h1>
+    <p data-aos="fade-up" data-aos-delay="200">منصة متكاملة تجمع قوة الذكاء الاصطناعي مع تجربة مستخدم استثنائية. ابنِ، حلّل، وأنشئ بسرعة لا مثيل لها.</p>
+    <div data-aos="fade-up" data-aos-delay="300">
+      <a href="#" class="btn btn-ghost"><i class="fas fa-play-circle"></i> شاهد الديمو</a>
+      <a href="#" class="btn btn-primary"><i class="fas fa-rocket"></i> ابدأ مجاناً</a>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <h2 data-aos="fade-up">ميزات لا مثيل لها</h2>
+  <p class="sub" data-aos="fade-up" data-aos-delay="100">كل ما تحتاجه في مكان واحد</p>
+  <div class="grid-3">
+    <div class="card" data-aos="fade-up" data-aos-delay="100">
+      <div class="card-icon"><i class="fas fa-brain"></i></div>
+      <h3>ذكاء اصطناعي متقدم</h3>
+      <p>نماذج AI من الجيل الجديد تعمل في الوقت الحقيقي لتقديم أفضل النتائج</p>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="150">
+      <div class="card-icon"><i class="fas fa-bolt"></i></div>
+      <h3>سرعة استثنائية</h3>
+      <p>استجابة فورية بأقل من 100ms — تجربة مستخدم تنافس أفضل المنصات العالمية</p>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="200">
+      <div class="card-icon"><i class="fas fa-shield-alt"></i></div>
+      <h3>أمان عالي المستوى</h3>
+      <p>تشفير من طرف إلى طرف وحماية كاملة لبياناتك وخصوصيتك</p>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="250">
+      <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+      <h3>تحليلات ذكية</h3>
+      <p>لوحة تحكم شاملة مع رؤى عميقة وتقارير آنية لاتخاذ قرارات أذكى</p>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="300">
+      <div class="card-icon"><i class="fas fa-plug"></i></div>
+      <h3>تكامل سلس</h3>
+      <p>يتصل بأكثر من 100 أداة ومنصة — Slack، Notion، GitHub وغيرها</p>
+    </div>
+    <div class="card" data-aos="fade-up" data-aos-delay="350">
+      <div class="card-icon"><i class="fas fa-mobile-alt"></i></div>
+      <h3>متجاوب 100%</h3>
+      <p>تجربة مثالية على كل الأجهزة — هاتف، لوحة، حاسوب</p>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <h2 data-aos="fade-up">اختر خطتك</h2>
+  <div class="pricing-grid">
+    <div class="price-card" data-aos="fade-up" data-aos-delay="100">
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:.5rem">مجاني</div>
+      <div class="price">0 <span>دج/شهر</span></div>
+      <ul class="price-features">
+        <li><i class="fas fa-check"></i> 10 طلبات يومياً</li>
+        <li><i class="fas fa-check"></i> الميزات الأساسية</li>
+        <li><i class="fas fa-check"></i> دعم المجتمع</li>
+        <li><i class="fas fa-times" style="color:#ef4444"></i> ميزات متقدمة</li>
+      </ul>
+      <a href="#" class="btn btn-ghost" style="width:100%;justify-content:center">ابدأ مجاناً</a>
+    </div>
+    <div class="price-card featured" data-aos="fade-up" data-aos-delay="200">
+      <div class="price-badge">الأكثر شعبية</div>
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:.5rem">احترافي</div>
+      <div class="price">2500 <span>دج/شهر</span></div>
+      <ul class="price-features">
+        <li><i class="fas fa-check"></i> طلبات غير محدودة</li>
+        <li><i class="fas fa-check"></i> جميع الميزات</li>
+        <li><i class="fas fa-check"></i> دعم أولوية 24/7</li>
+        <li><i class="fas fa-check"></i> تكاملات متقدمة</li>
+      </ul>
+      <a href="#" class="btn btn-primary" style="width:100%;justify-content:center">اشترك الآن</a>
+    </div>
+    <div class="price-card" data-aos="fade-up" data-aos-delay="300">
+      <div style="font-size:1.1rem;font-weight:700;margin-bottom:.5rem">مؤسسي</div>
+      <div class="price">على حسب الطلب</div>
+      <ul class="price-features">
+        <li><i class="fas fa-check"></i> حل مخصص</li>
+        <li><i class="fas fa-check"></i> SLA مضمون</li>
+        <li><i class="fas fa-check"></i> مدير حساب مخصص</li>
+        <li><i class="fas fa-check"></i> نشر على سيرفراتك</li>
+      </ul>
+      <a href="#" class="btn btn-ghost" style="width:100%;justify-content:center">تواصل معنا</a>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="contact">
+  <h2 data-aos="fade-up">جاهز للانطلاق؟</h2>
+  <p data-aos="fade-up" data-aos-delay="100">انضم لآلاف المستخدمين الجزائريين الذين يثقون بـ DZ-GPT يومياً</p>
+  <a href="#" class="btn btn-primary" data-aos="fade-up" data-aos-delay="200" style="font-size:1.1rem;padding:1rem 2.5rem">
+    <i class="fas fa-rocket"></i> ابدأ رحلتك الآن — مجاناً
+  </a>
+</section>
+
+<footer>
+  <p>© 2026 DZ Brand — صُنع بـ ❤️ في الجزائر | <a href="#" style="color:${accent}">سياسة الخصوصية</a></p>
+</footer>
+
+<script>AOS.init({duration:700,once:true,easing:'ease-out-cubic'})</script>
+</body>
+</html>`
+}
+
+function _tplPortfolio(dark, accent) {
+  const bg = dark ? '#0a0a0f' : '#ffffff'
+  const text = dark ? '#e2e8f0' : '#1e293b'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>بورتفوليو احترافي</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl}
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 3rem;
+    display:flex;align-items:center;justify-content:space-between;
+    background:${bg}ee;backdrop-filter:blur(20px);border-bottom:1px solid ${accent}22}
+  .logo{font-size:1.5rem;font-weight:900;color:${accent}}
+  .nav-links{display:flex;gap:2rem;list-style:none}
+  .nav-links a{color:${text};text-decoration:none;opacity:.7;font-weight:500;transition:all .2s}
+  .nav-links a:hover{opacity:1;color:${accent}}
+  .hero{min-height:100vh;display:flex;align-items:center;padding:0 3rem;
+    background:radial-gradient(ellipse 60% 60% at 70% 50%,${accent}22,transparent)}
+  .hero-left{max-width:560px}
+  .greeting{font-size:1.1rem;color:${accent};font-weight:600;margin-bottom:1rem}
+  h1{font-size:clamp(3rem,7vw,5rem);font-weight:900;line-height:1.05;margin-bottom:1.5rem}
+  .role{background:linear-gradient(135deg,${accent},${accent}aa);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{font-size:1.1rem;opacity:.7;line-height:1.7;margin-bottom:2rem}
+  .socials{display:flex;gap:1rem;margin-bottom:2.5rem}
+  .social-btn{width:44px;height:44px;border-radius:10px;border:1.5px solid ${accent}44;
+    display:flex;align-items:center;justify-content:center;color:${text};
+    text-decoration:none;transition:all .3s;font-size:1.1rem}
+  .social-btn:hover{background:${accent};border-color:${accent};color:#fff;transform:translateY(-3px)}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.85rem 2rem;
+    border-radius:12px;font-weight:700;text-decoration:none;transition:all .3s}
+  .btn-primary{background:${accent};color:#fff;box-shadow:0 0 30px ${accent}44}
+  .btn-ghost{background:transparent;color:${text};border:1.5px solid ${accent}44;margin-left:1rem}
+  .skills{padding:5rem 3rem;background:${accent}08}
+  .skills h2{font-size:2rem;font-weight:800;margin-bottom:2.5rem;text-align:center}
+  .skill-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;max-width:900px;margin:0 auto}
+  .skill-card{background:${bg};border:1px solid ${accent}22;border-radius:14px;
+    padding:1.5rem;text-align:center;transition:all .3s}
+  .skill-card:hover{border-color:${accent};transform:translateY(-3px)}
+  .skill-icon{font-size:2.5rem;margin-bottom:.8rem}
+  .projects{padding:5rem 3rem}
+  .projects h2{font-size:2rem;font-weight:800;margin-bottom:2.5rem;text-align:center}
+  .proj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;max-width:1000px;margin:0 auto}
+  .proj-card{background:${bg};border:1px solid ${accent}22;border-radius:16px;
+    overflow:hidden;transition:all .3s}
+  .proj-card:hover{border-color:${accent};transform:translateY(-4px);box-shadow:0 20px 40px ${accent}22}
+  .proj-thumb{height:180px;background:linear-gradient(135deg,${accent}33,${accent}11);
+    display:flex;align-items:center;justify-content:center;font-size:3rem}
+  .proj-body{padding:1.5rem}
+  .proj-body h3{font-weight:700;margin-bottom:.5rem}
+  .proj-body p{opacity:.65;font-size:.9rem;margin-bottom:1rem}
+  .tags{display:flex;gap:.5rem;flex-wrap:wrap}
+  .tag{padding:.25rem .7rem;background:${accent}22;color:${accent};
+    border-radius:999px;font-size:.75rem;font-weight:600}
+  footer{padding:3rem;text-align:center;opacity:.5;border-top:1px solid ${accent}22}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">AN</div>
+  <ul class="nav-links">
+    <li><a href="#skills">مهاراتي</a></li>
+    <li><a href="#projects">أعمالي</a></li>
+    <li><a href="#contact">تواصل</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <div class="hero-left" data-aos="fade-right">
+    <div class="greeting">👋 أهلاً بكم</div>
+    <h1>أنا <span class="role">مطوّر</span><br>ومصمم<br>رقمي</h1>
+    <p>أبني تجارب رقمية استثنائية بأحدث تقنيات الويب والذكاء الاصطناعي. شغفي هو تحويل الأفكار الإبداعية إلى منتجات حقيقية.</p>
+    <div class="socials">
+      <a href="#" class="social-btn"><i class="fab fa-github"></i></a>
+      <a href="#" class="social-btn"><i class="fab fa-linkedin"></i></a>
+      <a href="#" class="social-btn"><i class="fab fa-twitter"></i></a>
+      <a href="#" class="social-btn"><i class="fas fa-envelope"></i></a>
+    </div>
+    <a href="#projects" class="btn btn-primary"><i class="fas fa-eye"></i> شاهد أعمالي</a>
+    <a href="#contact" class="btn btn-ghost"><i class="fas fa-envelope"></i> تواصل معي</a>
+  </div>
+</section>
+
+<section class="skills" id="skills">
+  <h2 data-aos="fade-up">مهاراتي التقنية</h2>
+  <div class="skill-grid">
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="50"><div class="skill-icon">⚛️</div><div style="font-weight:700">React / Next.js</div></div>
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="100"><div class="skill-icon">🟩</div><div style="font-weight:700">Node.js / Express</div></div>
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="150"><div class="skill-icon">🐍</div><div style="font-weight:700">Python / FastAPI</div></div>
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="200"><div class="skill-icon">🤖</div><div style="font-weight:700">AI / ML</div></div>
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="250"><div class="skill-icon">🎨</div><div style="font-weight:700">UI/UX Design</div></div>
+    <div class="skill-card" data-aos="fade-up" data-aos-delay="300"><div class="skill-icon">🗄️</div><div style="font-weight:700">PostgreSQL / MongoDB</div></div>
+  </div>
+</section>
+
+<section class="projects" id="projects">
+  <h2 data-aos="fade-up">أعمالي المميزة</h2>
+  <div class="proj-grid">
+    <div class="proj-card" data-aos="fade-up" data-aos-delay="100">
+      <div class="proj-thumb">🚀</div>
+      <div class="proj-body">
+        <h3>منصة AI متكاملة</h3>
+        <p>منصة ذكاء اصطناعي شاملة تدعم اللغة العربية والدارجة الجزائرية</p>
+        <div class="tags"><span class="tag">React</span><span class="tag">Node.js</span><span class="tag">AI</span></div>
+      </div>
+    </div>
+    <div class="proj-card" data-aos="fade-up" data-aos-delay="150">
+      <div class="proj-thumb">📊</div>
+      <div class="proj-body">
+        <h3>لوحة تحليل البيانات</h3>
+        <p>نظام تحليل بيانات متقدم مع تصورات تفاعلية وتقارير ذكية</p>
+        <div class="tags"><span class="tag">Python</span><span class="tag">D3.js</span><span class="tag">ML</span></div>
+      </div>
+    </div>
+    <div class="proj-card" data-aos="fade-up" data-aos-delay="200">
+      <div class="proj-thumb">🛒</div>
+      <div class="proj-body">
+        <h3>متجر إلكتروني ذكي</h3>
+        <p>تجربة تسوق مخصصة بتوصيات AI وواجهة سلسة وسريعة</p>
+        <div class="tags"><span class="tag">Next.js</span><span class="tag">Stripe</span><span class="tag">PostgreSQL</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer id="contact">
+  <p>© 2026 — صُنع بـ ❤️ في الجزائر | <a href="mailto:contact@example.dz" style="color:${accent}">contact@example.dz</a></p>
+</footer>
+
+<script>AOS.init({duration:700,once:true})</script>
+</body>
+</html>`
+}
+
+function _tplRestaurant(dark, accent) {
+  const bg = dark ? '#0d0a07' : '#fff8f0'
+  const text = dark ? '#fef3c7' : '#1c1917'
+  const warm = '#f59e0b'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مطعم فاخر 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl}
+  nav{position:fixed;top:0;width:100%;z-index:100;padding:1.2rem 2rem;
+    display:flex;align-items:center;justify-content:space-between;
+    background:${bg}ee;backdrop-filter:blur(20px);border-bottom:1px solid ${warm}33}
+  .logo{font-size:1.5rem;font-weight:900;color:${warm}}
+  .nav-links{list-style:none;display:flex;gap:2rem}
+  .nav-links a{color:${text};text-decoration:none;opacity:.8;font-weight:500}
+  .nav-links a:hover{color:${warm}}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.75rem 1.8rem;
+    border-radius:10px;font-weight:700;text-decoration:none;transition:all .3s;border:none;cursor:pointer}
+  .btn-warm{background:${warm};color:#1c1917}
+  .btn-warm:hover{transform:translateY(-2px);box-shadow:0 8px 30px ${warm}44}
+  .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:0 2rem;
+    background:linear-gradient(180deg,${bg},${warm}11)}
+  .hero-badge{background:${warm}22;color:${warm};padding:.4rem 1rem;border-radius:999px;
+    font-size:.85rem;font-weight:600;border:1px solid ${warm}44;margin-bottom:1.5rem;display:inline-block}
+  h1{font-size:clamp(3rem,7vw,5.5rem);font-weight:900;line-height:1.1;margin-bottom:1.2rem}
+  .hero p{font-size:1.15rem;opacity:.75;max-width:560px;margin:0 auto 2.5rem;line-height:1.7}
+  .menu-section{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+  .menu-section h2{text-align:center;font-size:2.5rem;font-weight:800;margin-bottom:.5rem}
+  .menu-sub{text-align:center;opacity:.65;margin-bottom:3rem;font-size:1.05rem}
+  .menu-cats{display:flex;gap:1rem;justify-content:center;margin-bottom:2rem;flex-wrap:wrap}
+  .cat-btn{padding:.5rem 1.3rem;border-radius:999px;border:1.5px solid ${warm}44;
+    background:transparent;color:${text};cursor:pointer;font-weight:600;transition:all .2s}
+  .cat-btn.active,.cat-btn:hover{background:${warm};color:#1c1917;border-color:${warm}}
+  .menu-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem}
+  .menu-card{background:${dark?'#1c1613':'#fffbf5'};border:1px solid ${warm}22;
+    border-radius:16px;overflow:hidden;transition:all .3s}
+  .menu-card:hover{transform:translateY(-4px);box-shadow:0 16px 40px ${warm}22}
+  .menu-thumb{height:200px;display:flex;align-items:center;justify-content:center;
+    font-size:4rem;background:linear-gradient(135deg,${warm}22,${warm}11)}
+  .menu-body{padding:1.2rem}
+  .menu-body h3{font-weight:700;margin-bottom:.4rem}
+  .menu-body p{opacity:.65;font-size:.9rem;margin-bottom:.8rem}
+  .price-row{display:flex;align-items:center;justify-content:space-between}
+  .dish-price{color:${warm};font-weight:800;font-size:1.1rem}
+  .about{padding:5rem 2rem;background:${warm}0a;text-align:center}
+  .about h2{font-size:2.2rem;font-weight:800;margin-bottom:1rem}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;max-width:600px;margin:3rem auto 0}
+  .stat{text-align:center}
+  .stat-num{font-size:3rem;font-weight:900;color:${warm}}
+  .stat-label{opacity:.65;font-size:.9rem}
+  footer{padding:2.5rem;text-align:center;opacity:.5;border-top:1px solid ${warm}22}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">🍽️ La Casbah</div>
+  <ul class="nav-links">
+    <li><a href="#menu">القائمة</a></li>
+    <li><a href="#about">عنا</a></li>
+    <li><a href="#reservation">حجز</a></li>
+  </ul>
+  <a href="#reservation" class="btn btn-warm">احجز طاولة</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge" data-aos="fade-down"><i class="fas fa-star"></i> تجربة جزائرية فاخرة</div>
+  <h1 data-aos="fade-up" data-aos-delay="100">نكهات<br><span style="color:${warm}">الجزائر</span><br>الأصيلة</h1>
+  <p data-aos="fade-up" data-aos-delay="200">اكتشف سحر المطبخ الجزائري الأصيل في أجواء راقية وخدمة لا مثيل لها</p>
+  <div data-aos="fade-up" data-aos-delay="300">
+    <a href="#menu" class="btn btn-warm" style="font-size:1.05rem;padding:.9rem 2.2rem">
+      <i class="fas fa-utensils"></i> اكتشف القائمة
+    </a>
+  </div>
+</section>
+
+<section class="menu-section" id="menu">
+  <h2 data-aos="fade-up">قائمة الطعام</h2>
+  <p class="menu-sub" data-aos="fade-up" data-aos-delay="50">أشهى الوصفات التقليدية والعصرية</p>
+  <div class="menu-cats" data-aos="fade-up" data-aos-delay="100">
+    <button class="cat-btn active">الجميع</button>
+    <button class="cat-btn">مقبلات</button>
+    <button class="cat-btn">أطباق رئيسية</button>
+    <button class="cat-btn">حلويات</button>
+    <button class="cat-btn">مشروبات</button>
+  </div>
+  <div class="menu-grid">
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="100">
+      <div class="menu-thumb">🥘</div>
+      <div class="menu-body">
+        <h3>الشرشم الأصيل</h3>
+        <p>طبق جزائري تقليدي بالخضروات الموسمية وزيت الزيتون الطبيعي</p>
+        <div class="price-row"><span class="dish-price">850 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="150">
+      <div class="menu-thumb">🍖</div>
+      <div class="menu-body">
+        <h3>كسكس بالدجاج</h3>
+        <p>الكسكس التقليدي مع الدجاج البلدي والخضروات المشوية</p>
+        <div class="price-row"><span class="dish-price">1200 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="200">
+      <div class="menu-thumb">🥗</div>
+      <div class="menu-body">
+        <h3>سلطة الدار</h3>
+        <p>مزيج طازج من خضروات الموسم بتتبيلة ليمون وأعشاب عطرية</p>
+        <div class="price-row"><span class="dish-price">450 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="250">
+      <div class="menu-thumb">🍯</div>
+      <div class="menu-body">
+        <h3>قطايف العسل</h3>
+        <p>حلوى تقليدية بالمكسرات والعسل الطبيعي من مناحل أولاد نائل</p>
+        <div class="price-row"><span class="dish-price">600 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="300">
+      <div class="menu-thumb">☕</div>
+      <div class="menu-body">
+        <h3>قهوة ورّق الغار</h3>
+        <p>قهوة جزائرية أصيلة بنكهة الهيل وورق الغار</p>
+        <div class="price-row"><span class="dish-price">250 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+    <div class="menu-card" data-aos="fade-up" data-aos-delay="350">
+      <div class="menu-thumb">🫕</div>
+      <div class="menu-body">
+        <h3>التابولة الجزائرية</h3>
+        <p>سلطة البرغل بالتوابل الجزائرية الخاصة ونكهة البحر الأبيض المتوسط</p>
+        <div class="price-row"><span class="dish-price">500 دج</span>
+        <button class="btn btn-warm" style="padding:.35rem .9rem;font-size:.85rem">أضف للسلة</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="about" id="about">
+  <h2 data-aos="fade-up">لماذا نحن؟</h2>
+  <p data-aos="fade-up" data-aos-delay="100" style="opacity:.7;max-width:500px;margin:0 auto;line-height:1.7">أكثر من 15 سنة من الخبرة في تقديم أشهى الأطباق الجزائرية بأعلى معايير الجودة والنظافة</p>
+  <div class="stats">
+    <div class="stat" data-aos="fade-up" data-aos-delay="100"><div class="stat-num">15+</div><div class="stat-label">سنة خبرة</div></div>
+    <div class="stat" data-aos="fade-up" data-aos-delay="200"><div class="stat-num">50K+</div><div class="stat-label">زبون سعيد</div></div>
+    <div class="stat" data-aos="fade-up" data-aos-delay="300"><div class="stat-num">100+</div><div class="stat-label">وصفة أصيلة</div></div>
+  </div>
+</section>
+
+<section style="padding:4rem 2rem;text-align:center" id="reservation">
+  <h2 data-aos="fade-up" style="font-size:2rem;font-weight:800;margin-bottom:1rem">احجز طاولتك</h2>
+  <p data-aos="fade-up" data-aos-delay="100" style="opacity:.65;margin-bottom:2rem">للحجز: <strong style="color:${warm}">+213 555 123 456</strong> أو عبر النموذج</p>
+  <a href="tel:+213555123456" class="btn btn-warm" data-aos="fade-up" data-aos-delay="200" style="font-size:1.05rem">
+    <i class="fas fa-phone"></i> اتصل الآن
+  </a>
+</section>
+
+<footer>
+  <p>© 2026 La Casbah — مطعم فاخر | الجزائر العاصمة</p>
+</footer>
+
+<script>AOS.init({duration:700,once:true})</script>
+</body>
+</html>`
+}
+
+function _tplStore(dark, accent) {
+  const bg = dark ? '#0f172a' : '#ffffff'
+  const text = dark ? '#e2e8f0' : '#1e293b'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>متجر إلكتروني 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl}
+  nav{position:sticky;top:0;z-index:100;padding:1rem 2rem;
+    background:${bg};border-bottom:1px solid ${accent}22;
+    display:flex;align-items:center;justify-content:space-between;gap:1rem}
+  .logo{font-size:1.4rem;font-weight:800;color:${accent};white-space:nowrap}
+  .search{flex:1;max-width:400px;position:relative}
+  .search input{width:100%;padding:.65rem 1rem .65rem 2.5rem;border:1.5px solid ${accent}33;
+    border-radius:10px;background:${dark?'#1e293b':'#f8fafc'};color:${text};font-size:.95rem}
+  .search i{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:${accent};opacity:.6}
+  .nav-actions{display:flex;gap:.8rem}
+  .icon-btn{width:40px;height:40px;border-radius:8px;border:1.5px solid ${accent}22;
+    display:flex;align-items:center;justify-content:center;color:${text};
+    background:transparent;cursor:pointer;position:relative;transition:all .2s}
+  .icon-btn:hover{border-color:${accent};color:${accent}}
+  .cart-badge{position:absolute;top:-5px;right:-5px;width:18px;height:18px;
+    background:${accent};color:#fff;border-radius:50%;font-size:.65rem;
+    display:flex;align-items:center;justify-content:center;font-weight:700}
+  .hero{padding:4rem 2rem;text-align:center;
+    background:linear-gradient(135deg,${accent}15,${accent}05)}
+  .hero h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;margin-bottom:.8rem}
+  .hero p{opacity:.7;font-size:1.05rem;margin-bottom:1.5rem}
+  .promo-badge{display:inline-block;padding:.3rem .9rem;background:${accent};
+    color:#fff;border-radius:999px;font-size:.85rem;font-weight:700;margin-bottom:1rem}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.75rem 1.8rem;
+    border-radius:10px;font-weight:700;text-decoration:none;transition:all .3s;border:none;cursor:pointer}
+  .btn-primary{background:${accent};color:#fff}
+  .categories{padding:3rem 2rem;max-width:1100px;margin:0 auto}
+  .categories h2{font-size:1.7rem;font-weight:800;margin-bottom:1.5rem}
+  .cat-pills{display:flex;gap:.8rem;flex-wrap:wrap;margin-bottom:2rem}
+  .cat-pill{padding:.5rem 1.2rem;border-radius:999px;border:1.5px solid ${accent}33;
+    background:transparent;color:${text};cursor:pointer;font-weight:600;transition:all .2s}
+  .cat-pill.active,.cat-pill:hover{background:${accent};color:#fff;border-color:${accent}}
+  .products{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5rem}
+  .product-card{background:${dark?'#1e293b':'#f8fafc'};border:1px solid ${accent}11;
+    border-radius:16px;overflow:hidden;transition:all .3s;cursor:pointer}
+  .product-card:hover{transform:translateY(-4px);box-shadow:0 16px 40px ${accent}22;border-color:${accent}44}
+  .product-img{height:200px;background:linear-gradient(135deg,${accent}22,${accent}11);
+    display:flex;align-items:center;justify-content:center;font-size:4rem;position:relative}
+  .product-badge{position:absolute;top:.7rem;right:.7rem;padding:.2rem .6rem;
+    background:${accent};color:#fff;border-radius:6px;font-size:.75rem;font-weight:700}
+  .product-body{padding:1rem}
+  .product-name{font-weight:700;margin-bottom:.3rem}
+  .product-desc{opacity:.6;font-size:.85rem;margin-bottom:.8rem}
+  .product-footer{display:flex;align-items:center;justify-content:space-between}
+  .product-price{font-size:1.15rem;font-weight:800;color:${accent}}
+  .add-btn{width:36px;height:36px;background:${accent};color:#fff;border-radius:8px;
+    border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:1.1rem;transition:transform .2s}
+  .add-btn:hover{transform:scale(1.1)}
+  footer{padding:2.5rem;text-align:center;opacity:.5;border-top:1px solid ${accent}22;margin-top:4rem}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo"><i class="fas fa-store"></i> DZ Shop</div>
+  <div class="search"><i class="fas fa-search"></i><input type="text" placeholder="ابحث عن منتج..."></div>
+  <div class="nav-actions">
+    <button class="icon-btn"><i class="far fa-heart"></i></button>
+    <button class="icon-btn"><i class="fas fa-shopping-cart"></i><span class="cart-badge">3</span></button>
+    <button class="icon-btn"><i class="far fa-user"></i></button>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="promo-badge" data-aos="fade-down"><i class="fas fa-fire"></i> تخفيضات الصيف — حتى 50%</div>
+  <h1 data-aos="fade-up" data-aos-delay="100">أفضل المنتجات<br><span style="color:${accent}">بأسعار جزائرية</span></h1>
+  <p data-aos="fade-up" data-aos-delay="200">آلاف المنتجات الأصيلة — توصيل سريع لكل ولايات الجزائر</p>
+  <a href="#products" class="btn btn-primary" data-aos="fade-up" data-aos-delay="300">
+    <i class="fas fa-shopping-bag"></i> تسوق الآن
+  </a>
+</section>
+
+<section class="categories" id="products">
+  <h2 data-aos="fade-up">تسوق حسب الفئة</h2>
+  <div class="cat-pills" data-aos="fade-up" data-aos-delay="100">
+    <button class="cat-pill active">الكل</button>
+    <button class="cat-pill">إلكترونيات</button>
+    <button class="cat-pill">ملابس</button>
+    <button class="cat-pill">منزل وحديقة</button>
+    <button class="cat-pill">رياضة</button>
+    <button class="cat-pill">جمال وصحة</button>
+  </div>
+  <div class="products">
+    ${['📱 هاتف ذكي Pro Max 2026:آخر إصدار بكاميرا 200MP:85000 دج:جديد',
+       '💻 لابتوب Ultra Slim:معالج AI مدمج وشاشة OLED 14":120000 دج:',
+       '🎧 سماعات Pro Wireless:صوت احترافي 360°:12000 دج:تخفيض',
+       '⌚ ساعة ذكية Sport:تتبع الصحة 24/7:18000 دج:',
+       '📷 كاميرا Mirror 4K:تصوير احترافي في كل الإضاءات:65000 دج:جديد',
+       '🎮 جهاز ألعاب Next Gen:الجيل القادم من الترفيه:75000 دج:'].map(p => {
+      const [e,d,pr,b] = p.split(':')
+      return `<div class="product-card" data-aos="fade-up">
+        <div class="product-img">${e.split(' ')[0]}${b?`<span class="product-badge">${b}</span>`:''}
+        </div>
+        <div class="product-body">
+          <div class="product-name">${e.substring(2)}</div>
+          <div class="product-desc">${d}</div>
+          <div class="product-footer">
+            <span class="product-price">${pr}</span>
+            <button class="add-btn" onclick="this.textContent='✓'"><i class="fas fa-plus"></i></button>
+          </div>
+        </div>
+      </div>`}).join('')}
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 DZ Shop | توصيل لجميع ولايات الجزائر — 100% أصلي ومضمون</p>
+</footer>
+
+<script>
+AOS.init({duration:600,once:true});
+document.querySelectorAll('.cat-pill').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.cat-pill').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>`
+}
+
+function _tplDashboard(dark, accent) {
+  const bg = dark ? '#0f172a' : '#f1f5f9'
+  const panel = dark ? '#1e293b' : '#ffffff'
+  const text = dark ? '#e2e8f0' : '#1e293b'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>لوحة التحكم</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl;display:flex}
+  .sidebar{width:240px;min-height:100vh;background:${panel};border-left:1px solid ${accent}22;
+    padding:1.5rem;flex-shrink:0}
+  .sidebar-logo{font-size:1.3rem;font-weight:800;color:${accent};margin-bottom:2rem;
+    display:flex;align-items:center;gap:.6rem}
+  .nav-item{display:flex;align-items:center;gap:.7rem;padding:.7rem 1rem;
+    border-radius:10px;margin-bottom:.3rem;cursor:pointer;color:${text};
+    text-decoration:none;font-weight:500;transition:all .2s;opacity:.7}
+  .nav-item:hover,.nav-item.active{background:${accent}22;color:${accent};opacity:1}
+  .nav-item i{width:20px;text-align:center}
+  .main{flex:1;padding:2rem;overflow-x:hidden}
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem}
+  .header h1{font-size:1.6rem;font-weight:800}
+  .header-actions{display:flex;gap:.8rem;align-items:center}
+  .badge{display:inline-block;padding:.3rem .8rem;border-radius:999px;
+    background:${accent}22;color:${accent};font-size:.8rem;font-weight:600}
+  .avatar{width:38px;height:38px;border-radius:50%;background:${accent};
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.2rem;margin-bottom:2rem}
+  .stat-card{background:${panel};border-radius:14px;padding:1.5rem;
+    border:1px solid ${accent}11;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:-20px;right:-20px;
+    width:80px;height:80px;border-radius:50%;background:${accent}11}
+  .stat-label{font-size:.85rem;opacity:.6;margin-bottom:.4rem}
+  .stat-value{font-size:2rem;font-weight:900;color:${accent}}
+  .stat-change{font-size:.8rem;margin-top:.3rem;color:#22c55e}
+  .charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:1.2rem;margin-bottom:2rem}
+  .chart-card{background:${panel};border-radius:14px;padding:1.5rem;border:1px solid ${accent}11}
+  .chart-card h3{font-weight:700;margin-bottom:1rem;font-size:.95rem;opacity:.8}
+  .table-card{background:${panel};border-radius:14px;padding:1.5rem;border:1px solid ${accent}11}
+  .table-card h3{font-weight:700;margin-bottom:1rem;font-size:.95rem;opacity:.8}
+  table{width:100%;border-collapse:collapse}
+  th{padding:.6rem;text-align:right;font-size:.8rem;opacity:.5;font-weight:600;border-bottom:1px solid ${accent}22}
+  td{padding:.75rem .6rem;font-size:.9rem;border-bottom:1px solid ${accent}11}
+  .status{padding:.2rem .6rem;border-radius:6px;font-size:.75rem;font-weight:700}
+  .status.done{background:#22c55e22;color:#22c55e}
+  .status.pending{background:#f59e0b22;color:#f59e0b}
+  .status.fail{background:#ef444422;color:#ef4444}
+  @media(max-width:768px){.sidebar{display:none}.charts-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-logo"><i class="fas fa-cube"></i> DashPro</div>
+  <a class="nav-item active" href="#"><i class="fas fa-chart-pie"></i> لوحة التحكم</a>
+  <a class="nav-item" href="#"><i class="fas fa-chart-line"></i> التحليلات</a>
+  <a class="nav-item" href="#"><i class="fas fa-users"></i> المستخدمون</a>
+  <a class="nav-item" href="#"><i class="fas fa-box"></i> المنتجات</a>
+  <a class="nav-item" href="#"><i class="fas fa-shopping-cart"></i> الطلبات</a>
+  <a class="nav-item" href="#"><i class="fas fa-cog"></i> الإعدادات</a>
+  <div style="position:absolute;bottom:1.5rem;left:1.5rem;right:1.5rem">
+    <a class="nav-item" href="#"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</a>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="header">
+    <div>
+      <h1>لوحة التحكم</h1>
+      <p style="opacity:.55;font-size:.9rem">الخميس، 29 مايو 2026</p>
+    </div>
+    <div class="header-actions">
+      <span class="badge"><i class="fas fa-bell"></i> 3 إشعارات</span>
+      <div class="avatar">أ</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">إجمالي الإيرادات</div>
+      <div class="stat-value">1.2M</div>
+      <div class="stat-change"><i class="fas fa-arrow-up"></i> +18% هذا الشهر</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">المستخدمون النشطون</div>
+      <div class="stat-value">8,432</div>
+      <div class="stat-change"><i class="fas fa-arrow-up"></i> +5.2% هذا الأسبوع</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">الطلبات الجديدة</div>
+      <div class="stat-value">246</div>
+      <div class="stat-change"><i class="fas fa-arrow-up"></i> +12% اليوم</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">معدل التحويل</div>
+      <div class="stat-value">3.8%</div>
+      <div class="stat-change"><i class="fas fa-arrow-down" style="color:#ef4444"></i> -0.3%</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3><i class="fas fa-chart-area" style="color:${accent}"></i> نمو الإيرادات — 2026</h3>
+      <canvas id="revenueChart" height="100"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3><i class="fas fa-chart-doughnut" style="color:${accent}"></i> توزيع المبيعات</h3>
+      <canvas id="donutChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <h3><i class="fas fa-list" style="color:${accent}"></i> آخر الطلبات</h3>
+    <table>
+      <thead><tr><th>#</th><th>العميل</th><th>المنتج</th><th>المبلغ</th><th>الحالة</th></tr></thead>
+      <tbody>
+        <tr><td>#1042</td><td>أحمد بن علي</td><td>لابتوب Pro</td><td>120,000 دج</td><td><span class="status done">مكتمل</span></td></tr>
+        <tr><td>#1041</td><td>فاطمة زهرة</td><td>هاتف X15</td><td>85,000 دج</td><td><span class="status pending">قيد المعالجة</span></td></tr>
+        <tr><td>#1040</td><td>يوسف مختار</td><td>سماعات Pro</td><td>12,000 دج</td><td><span class="status done">مكتمل</span></td></tr>
+        <tr><td>#1039</td><td>نادية حميد</td><td>ساعة Smart</td><td>18,000 دج</td><td><span class="status fail">ملغى</span></td></tr>
+        <tr><td>#1038</td><td>عمر بوعلام</td><td>كاميرا 4K</td><td>65,000 دج</td><td><span class="status pending">قيد الشحن</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const accent = '${accent}';
+new Chart(document.getElementById('revenueChart'), {
+  type:'line',
+  data:{
+    labels:['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'],
+    datasets:[{
+      label:'الإيرادات (ألف دج)',
+      data:[480,520,610,580,720,850,780,930,1050,980,1150,1200],
+      borderColor:accent,
+      backgroundColor:accent+'22',
+      borderWidth:2.5,
+      fill:true,
+      tension:.4,
+      pointBackgroundColor:accent,
+      pointRadius:4
+    }]
+  },
+  options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}
+});
+new Chart(document.getElementById('donutChart'), {
+  type:'doughnut',
+  data:{
+    labels:['إلكترونيات','ملابس','منزل','رياضة'],
+    datasets:[{data:[45,25,18,12],backgroundColor:[accent,'#22c55e','#f59e0b','#06b6d4'],borderWidth:0}]
+  },
+  options:{plugins:{legend:{position:'bottom'}},cutout:'65%'}
+});
+</script>
+</body>
+</html>`
+}
+
+function _tplAgency(dark, accent) {
+  const bg = dark ? '#030712' : '#ffffff'
+  const text = dark ? '#f1f5f9' : '#0f172a'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>وكالة إبداعية 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl;overflow-x:hidden}
+  nav{position:fixed;top:0;width:100%;z-index:100;padding:1.2rem 3rem;
+    display:flex;align-items:center;justify-content:space-between;
+    background:${bg}cc;backdrop-filter:blur(24px);border-bottom:1px solid ${accent}22}
+  .logo{font-size:1.4rem;font-weight:900;background:linear-gradient(135deg,${accent},${accent}aa);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .nav-links{list-style:none;display:flex;gap:2.5rem}
+  .nav-links a{color:${text};text-decoration:none;font-weight:500;opacity:.7;transition:all .2s}
+  .nav-links a:hover{opacity:1;color:${accent}}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.75rem 1.8rem;
+    border-radius:12px;font-weight:700;text-decoration:none;transition:all .3s;border:none;cursor:pointer}
+  .btn-primary{background:${accent};color:#fff;box-shadow:0 0 40px ${accent}44}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 50px ${accent}66}
+  .hero{min-height:100vh;display:flex;align-items:center;padding:0 3rem;
+    position:relative;overflow:hidden}
+  .hero-bg{position:absolute;inset:0;
+    background:radial-gradient(ellipse 80% 80% at 0% 50%,${accent}22,transparent)}
+  .hero-content{position:relative;max-width:650px}
+  .hero-eyebrow{color:${accent};font-weight:600;font-size:1rem;margin-bottom:1.2rem;
+    display:flex;align-items:center;gap:.5rem}
+  h1{font-size:clamp(3.5rem,8vw,6rem);font-weight:900;line-height:1;margin-bottom:1.5rem;letter-spacing:-2px}
+  .gradient-text{background:linear-gradient(135deg,${accent},#8b5cf6,#06b6d4);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{font-size:1.2rem;opacity:.7;line-height:1.7;margin-bottom:2.5rem;max-width:500px}
+  .services{padding:6rem 3rem;max-width:1200px;margin:0 auto}
+  .services h2{font-size:3rem;font-weight:900;margin-bottom:.5rem;letter-spacing:-1px}
+  .services-sub{opacity:.65;font-size:1.1rem;margin-bottom:3.5rem}
+  .services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+  .service-card{border:1px solid ${accent}22;border-radius:20px;padding:2.5rem;
+    position:relative;overflow:hidden;transition:all .4s;background:${dark?'#0f172a':'#f8fafc'}}
+  .service-card::before{content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,${accent}08,transparent);opacity:0;transition:opacity .3s}
+  .service-card:hover::before{opacity:1}
+  .service-card:hover{border-color:${accent};transform:translateY(-6px);box-shadow:0 24px 60px ${accent}22}
+  .service-num{font-size:4rem;font-weight:900;color:${accent}22;position:absolute;top:1rem;left:1.5rem}
+  .service-icon{width:56px;height:56px;border-radius:14px;background:${accent}22;
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;color:${accent};margin-bottom:1.5rem}
+  .service-card h3{font-size:1.2rem;font-weight:800;margin-bottom:.7rem}
+  .service-card p{opacity:.65;line-height:1.6;font-size:.95rem}
+  .works{padding:5rem 3rem;background:${accent}08}
+  .works h2{font-size:2.5rem;font-weight:900;margin-bottom:3rem;text-align:center}
+  .works-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;max-width:1000px;margin:0 auto}
+  .work-item{aspect-ratio:1;border-radius:16px;background:linear-gradient(135deg,${accent}33,${accent}11);
+    display:flex;align-items:center;justify-content:center;font-size:3rem;
+    transition:all .3s;cursor:pointer;overflow:hidden;position:relative}
+  .work-item:hover{transform:scale(1.03);box-shadow:0 16px 40px ${accent}33}
+  .work-item:first-child{grid-column:span 2;aspect-ratio:2/1}
+  .work-overlay{position:absolute;inset:0;background:${accent}cc;
+    display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;
+    color:#fff;font-size:1.5rem;font-weight:700}
+  .work-item:hover .work-overlay{opacity:1}
+  .cta{padding:6rem 3rem;text-align:center}
+  .cta h2{font-size:3.5rem;font-weight:900;margin-bottom:1rem;letter-spacing:-1px}
+  .cta p{opacity:.65;font-size:1.1rem;margin-bottom:2.5rem}
+  footer{padding:2rem 3rem;opacity:.45;border-top:1px solid ${accent}22;
+    display:flex;align-items:center;justify-content:space-between;font-size:.9rem}
+  @media(max-width:768px){.nav-links,.works-grid{display:none}.hero{padding:6rem 1.5rem 3rem}.works-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">Creative Studio</div>
+  <ul class="nav-links">
+    <li><a href="#services">خدماتنا</a></li>
+    <li><a href="#works">أعمالنا</a></li>
+    <li><a href="#cta">تواصل</a></li>
+  </ul>
+  <a href="#cta" class="btn btn-primary">ابدأ مشروعك</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow" data-aos="fade-down"><i class="fas fa-bolt"></i> وكالة رقمية متكاملة</div>
+    <h1 data-aos="fade-up" data-aos-delay="100">نبني<br><span class="gradient-text">المستقبل</span><br>الرقمي</h1>
+    <p data-aos="fade-up" data-aos-delay="200">من الهوية البصرية إلى تجارب المستخدم الاستثنائية — نحول رؤيتك إلى واقع رقمي مؤثر.</p>
+    <div data-aos="fade-up" data-aos-delay="300">
+      <a href="#works" class="btn btn-primary" style="font-size:1.05rem"><i class="fas fa-eye"></i> اكتشف أعمالنا</a>
+    </div>
+  </div>
+</section>
+
+<section class="services" id="services">
+  <h2 data-aos="fade-up">خدماتنا</h2>
+  <p class="services-sub" data-aos="fade-up" data-aos-delay="50">كل ما تحتاجه لحضور رقمي مميز</p>
+  <div class="services-grid">
+    <div class="service-card" data-aos="fade-up" data-aos-delay="100">
+      <div class="service-num">01</div>
+      <div class="service-icon"><i class="fas fa-palette"></i></div>
+      <h3>تصميم الهوية البصرية</h3>
+      <p>نبني هويات بصرية قوية تترك أثراً لا يُنسى — شعار، ألوان، خطوط، وكل تفاصيل علامتك التجارية</p>
+    </div>
+    <div class="service-card" data-aos="fade-up" data-aos-delay="150">
+      <div class="service-num">02</div>
+      <div class="service-icon"><i class="fas fa-code"></i></div>
+      <h3>تطوير الويب والتطبيقات</h3>
+      <p>مواقع وتطبيقات بأحدث تقنيات React وNext.js بأداء استثنائي وتجربة مستخدم لا مثيل لها</p>
+    </div>
+    <div class="service-card" data-aos="fade-up" data-aos-delay="200">
+      <div class="service-num">03</div>
+      <div class="service-icon"><i class="fas fa-brain"></i></div>
+      <h3>حلول الذكاء الاصطناعي</h3>
+      <p>ندمج أحدث نماذج AI في منتجاتك — chatbots، تحليل البيانات، التخصيص الذكي</p>
+    </div>
+    <div class="service-card" data-aos="fade-up" data-aos-delay="250">
+      <div class="service-num">04</div>
+      <div class="service-icon"><i class="fas fa-chart-line"></i></div>
+      <h3>التسويق الرقمي</h3>
+      <p>استراتيجيات تسويق مبنية على البيانات — SEO، إعلانات رقمية، وتحسين معدلات التحويل</p>
+    </div>
+    <div class="service-card" data-aos="fade-up" data-aos-delay="300">
+      <div class="service-num">05</div>
+      <div class="service-icon"><i class="fas fa-mobile-alt"></i></div>
+      <h3>تصميم تجربة المستخدم</h3>
+      <p>نصمم تجارب رقمية تتمحور حول المستخدم — بحث، wireframes، prototypes تفاعلية</p>
+    </div>
+    <div class="service-card" data-aos="fade-up" data-aos-delay="350">
+      <div class="service-num">06</div>
+      <div class="service-icon"><i class="fas fa-server"></i></div>
+      <h3>البنية التحتية السحابية</h3>
+      <p>نشر وإدارة مشاريعك على AWS، Vercel، Cloudflare بأعلى معايير الأمان والأداء</p>
+    </div>
+  </div>
+</section>
+
+<section class="works" id="works">
+  <h2 data-aos="fade-up">أعمالنا المميزة</h2>
+  <div class="works-grid" data-aos="fade-up" data-aos-delay="100">
+    <div class="work-item"><span>🚀</span><div class="work-overlay">منصة SaaS</div></div>
+    <div class="work-item"><span>🛒</span><div class="work-overlay">متجر إلكتروني</div></div>
+    <div class="work-item"><span>📊</span><div class="work-overlay">لوحة تحكم</div></div>
+    <div class="work-item"><span>🤖</span><div class="work-overlay">AI Chatbot</div></div>
+  </div>
+</section>
+
+<section class="cta" id="cta">
+  <h2 data-aos="fade-up">جاهز لتحويل<br><span class="gradient-text">رؤيتك</span> إلى واقع؟</h2>
+  <p data-aos="fade-up" data-aos-delay="100">تحدث معنا اليوم وابدأ مشروعك — استشارة أولى مجانية تماماً</p>
+  <a href="mailto:hello@creativestudio.dz" class="btn btn-primary" data-aos="fade-up" data-aos-delay="200" style="font-size:1.1rem;padding:1rem 2.5rem">
+    <i class="fas fa-envelope"></i> ابدأ مشروعك الآن
+  </a>
+</section>
+
+<footer>
+  <span>© 2026 Creative Studio — الجزائر</span>
+  <div style="display:flex;gap:1rem">
+    <a href="#" style="color:inherit"><i class="fab fa-behance"></i></a>
+    <a href="#" style="color:inherit"><i class="fab fa-dribbble"></i></a>
+    <a href="#" style="color:inherit"><i class="fab fa-instagram"></i></a>
+    <a href="#" style="color:inherit"><i class="fab fa-linkedin"></i></a>
+  </div>
+</footer>
+
+<script>AOS.init({duration:700,once:true,easing:'ease-out-cubic'})</script>
+</body>
+</html>`
+}
+
+function _tplEducation(dark, accent) {
+  const bg = dark ? '#0f172a' : '#f0f9ff'
+  const text = dark ? '#e2e8f0' : '#1e293b'
+  const blue = '#0ea5e9'
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>منصة تعليمية 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://unpkg.com/aos@2.3.4/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:${bg};color:${text};font-family:'Segoe UI',system-ui,sans-serif;direction:rtl}
+  nav{position:sticky;top:0;z-index:100;padding:1rem 2rem;
+    display:flex;align-items:center;justify-content:space-between;
+    background:${bg}ee;backdrop-filter:blur(20px);border-bottom:1px solid ${blue}22}
+  .logo{font-size:1.4rem;font-weight:800;color:${blue};display:flex;align-items:center;gap:.5rem}
+  .nav-links{list-style:none;display:flex;gap:2rem}
+  .nav-links a{color:${text};text-decoration:none;font-weight:500;opacity:.7;transition:.2s}
+  .nav-links a:hover{opacity:1;color:${blue}}
+  .btn{display:inline-flex;align-items:center;gap:.6rem;padding:.7rem 1.6rem;
+    border-radius:10px;font-weight:700;text-decoration:none;transition:all .3s;border:none;cursor:pointer}
+  .btn-blue{background:${blue};color:#fff}
+  .btn-blue:hover{transform:translateY(-2px);box-shadow:0 8px 30px ${blue}44}
+  .btn-ghost{background:transparent;border:1.5px solid ${blue}44;color:${text};margin-left:1rem}
+  .hero{padding:5rem 2rem 4rem;text-align:center;
+    background:linear-gradient(135deg,${blue}15,${blue}05)}
+  .hero-badge{display:inline-block;padding:.35rem 1rem;background:${blue}22;color:${blue};
+    border-radius:999px;font-size:.85rem;font-weight:600;border:1px solid ${blue}44;margin-bottom:1.5rem}
+  h1{font-size:clamp(2.5rem,6vw,4rem);font-weight:900;line-height:1.1;margin-bottom:1.2rem}
+  .hero p{opacity:.7;font-size:1.1rem;max-width:560px;margin:0 auto 2.5rem;line-height:1.7}
+  .hero-stats{display:flex;gap:3rem;justify-content:center;margin-top:3rem;flex-wrap:wrap}
+  .hero-stat{text-align:center}
+  .hero-stat-num{font-size:2.5rem;font-weight:900;color:${blue}}
+  .hero-stat-label{opacity:.6;font-size:.9rem}
+  .courses{padding:5rem 2rem;max-width:1100px;margin:0 auto}
+  .courses h2{font-size:2rem;font-weight:800;margin-bottom:1.5rem}
+  .course-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+  .course-card{background:${dark?'#1e293b':'#ffffff'};border:1px solid ${blue}22;
+    border-radius:16px;overflow:hidden;transition:all .3s}
+  .course-card:hover{transform:translateY(-4px);box-shadow:0 16px 40px ${blue}22;border-color:${blue}44}
+  .course-thumb{height:180px;display:flex;align-items:center;justify-content:center;
+    font-size:4rem;background:linear-gradient(135deg,${blue}22,${blue}11)}
+  .course-body{padding:1.5rem}
+  .course-level{display:inline-block;padding:.2rem .7rem;border-radius:6px;
+    background:${blue}22;color:${blue};font-size:.75rem;font-weight:700;margin-bottom:.7rem}
+  .course-body h3{font-weight:700;margin-bottom:.5rem}
+  .course-body p{opacity:.65;font-size:.9rem;margin-bottom:1rem;line-height:1.5}
+  .course-footer{display:flex;align-items:center;justify-content:space-between;
+    border-top:1px solid ${blue}11;padding-top:1rem}
+  .course-price{font-weight:800;color:${blue};font-size:1.05rem}
+  .rating{display:flex;align-items:center;gap:.3rem;font-size:.85rem;opacity:.7}
+  .progress-bar{height:4px;background:${blue}22;border-radius:4px;margin-top:.5rem}
+  .progress-fill{height:100%;background:${blue};border-radius:4px}
+  footer{padding:2.5rem;text-align:center;opacity:.5;border-top:1px solid ${blue}22;margin-top:4rem}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo"><i class="fas fa-graduation-cap"></i> EduDZ</div>
+  <ul class="nav-links">
+    <li><a href="#courses">الدورات</a></li>
+    <li><a href="#about">عنا</a></li>
+    <li><a href="#enroll">التسجيل</a></li>
+  </ul>
+  <div><a href="#" class="btn btn-ghost" style="font-size:.9rem">تسجيل الدخول</a>
+  <a href="#enroll" class="btn btn-blue" style="font-size:.9rem">ابدأ التعلم</a></div>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge" data-aos="fade-down"><i class="fas fa-star"></i> أفضل منصة تعليمية في الجزائر</div>
+  <h1 data-aos="fade-up" data-aos-delay="100">تعلّم بالعربية<br><span style="color:${blue}">وبنِ مستقبلك</span></h1>
+  <p data-aos="fade-up" data-aos-delay="200">أكثر من 500 دورة في البرمجة، الذكاء الاصطناعي، التصميم، والأعمال — بأسعار جزائرية وشهادات معتمدة</p>
+  <div data-aos="fade-up" data-aos-delay="300">
+    <a href="#courses" class="btn btn-ghost"><i class="fas fa-play"></i> تصفح الدورات</a>
+    <a href="#enroll" class="btn btn-blue"><i class="fas fa-rocket"></i> ابدأ مجاناً</a>
+  </div>
+  <div class="hero-stats" data-aos="fade-up" data-aos-delay="400">
+    <div class="hero-stat"><div class="hero-stat-num">500+</div><div class="hero-stat-label">دورة متاحة</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">50K+</div><div class="hero-stat-label">طالب مسجل</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">98%</div><div class="hero-stat-label">معدل الرضا</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">200+</div><div class="hero-stat-label">مدرب خبير</div></div>
+  </div>
+</section>
+
+<section class="courses" id="courses">
+  <h2 data-aos="fade-up">الدورات الأكثر طلباً</h2>
+  <div class="course-grid">
+    <div class="course-card" data-aos="fade-up" data-aos-delay="100">
+      <div class="course-thumb">🤖</div>
+      <div class="course-body">
+        <span class="course-level">متقدم</span>
+        <h3>الذكاء الاصطناعي من الصفر</h3>
+        <p>تعلم Python، TensorFlow، وبناء نماذج AI احترافية خطوة بخطوة</p>
+        <div class="rating"><i class="fas fa-star" style="color:#f59e0b"></i> 4.9 (2,341 تقييم)</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:78%"></div></div>
+        <div class="course-footer">
+          <span class="course-price">4500 دج</span>
+          <a href="#" class="btn btn-blue" style="padding:.4rem .9rem;font-size:.85rem">سجّل الآن</a>
+        </div>
+      </div>
+    </div>
+    <div class="course-card" data-aos="fade-up" data-aos-delay="150">
+      <div class="course-thumb">⚛️</div>
+      <div class="course-body">
+        <span class="course-level">متوسط</span>
+        <h3>React وNext.js الشامل</h3>
+        <p>بناء تطبيقات ويب حديثة بأحدث تقنيات React 19 وNext.js 15</p>
+        <div class="rating"><i class="fas fa-star" style="color:#f59e0b"></i> 4.8 (1,892 تقييم)</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
+        <div class="course-footer">
+          <span class="course-price">3500 دج</span>
+          <a href="#" class="btn btn-blue" style="padding:.4rem .9rem;font-size:.85rem">سجّل الآن</a>
+        </div>
+      </div>
+    </div>
+    <div class="course-card" data-aos="fade-up" data-aos-delay="200">
+      <div class="course-thumb">🎨</div>
+      <div class="course-body">
+        <span class="course-level">مبتدئ</span>
+        <h3>UI/UX Design بـ Figma</h3>
+        <p>تصميم واجهات مستخدم احترافية — من الفكرة إلى النموذج الأولي</p>
+        <div class="rating"><i class="fas fa-star" style="color:#f59e0b"></i> 4.7 (1,234 تقييم)</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:45%"></div></div>
+        <div class="course-footer">
+          <span class="course-price">2800 دج</span>
+          <a href="#" class="btn btn-blue" style="padding:.4rem .9rem;font-size:.85rem">سجّل الآن</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:4rem 2rem;text-align:center;background:${blue}0a" id="enroll">
+  <h2 data-aos="fade-up" style="font-size:2rem;font-weight:800;margin-bottom:1rem">ابدأ رحلة التعلم اليوم</h2>
+  <p data-aos="fade-up" data-aos-delay="100" style="opacity:.65;max-width:500px;margin:0 auto 2rem">أول 7 أيام مجانية — لا بطاقة بنكية مطلوبة. انضم لـ 50,000 طالب يتعلمون معنا</p>
+  <a href="#" class="btn btn-blue" data-aos="fade-up" data-aos-delay="200" style="font-size:1.05rem;padding:.9rem 2.5rem">
+    <i class="fas fa-graduation-cap"></i> ابدأ مجاناً — 7 أيام
+  </a>
+</section>
+
+<footer>
+  <p>© 2026 EduDZ — التعليم الجزائري الرقمي | <a href="#" style="color:${blue}">سياسة الخصوصية</a></p>
+</footer>
+
+<script>AOS.init({duration:700,once:true})</script>
+</body>
+</html>`
+}
 
 function buildImagePoolBlock(siteType) {
   const images = getWebBuilderImagePool(siteType)
@@ -11044,8 +12357,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────
+  // Skip redirect when request comes from a specialized tool (e.g. web-builder calling itself)
   const _rawLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-  const _toolRedirect = detectToolRedirect(_rawLastMsg)
+  const _skipToolRedirect = req.body.source === 'web-builder' || req.body.skipToolRedirect === true
+  const _toolRedirect = !_skipToolRedirect ? detectToolRedirect(_rawLastMsg) : null
   if (_toolRedirect) {
     console.log(`[ToolRedirect] → ${_toolRedirect.toolUrl} for: "${_rawLastMsg.slice(0, 50)}"`)
     return res.status(200).json({ _toolRedirect })
@@ -11804,8 +13119,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Code Execution Mode (Programming Section ONLY) ─────────────────────────
-  const execLang = detectCodeExecutionQuery(lastUserMessage)
-  if (execLang) {
+  // Guard: never intercept web-builder requests (they contain "html"+"كود" which triggers false positive)
+  const _isFromWebBuilder = req.body.source === 'web-builder'
+  const execLang = !_isFromWebBuilder ? detectCodeExecutionQuery(lastUserMessage) : null
+  if (execLang && !detectWebsiteBuilderQuery(lastUserMessage)) {
     console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
 
     try {
@@ -12900,7 +14217,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        const wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 7000, taskHint: 'website' })
+        // Try directWebBuilderGenerate first (bypasses circuit breakers), then safeGenerateAI as fallback
+        let wbResult = await directWebBuilderGenerate(wbMessages, 8000)
+        if (!wbResult.content) {
+          console.warn(`[Website Builder v6] directWebBuilderGenerate returned null — falling back to safeGenerateAI`)
+          wbResult = await safeGenerateAI({ messages: wbMessages, query: lastUserMessage, max_tokens: 7000, taskHint: 'website' })
+        }
         console.log(`[Website Builder v6] model=${wbResult.model || 'null'} | content=${(wbResult.content||'').length}chars | type=${wbMeta.type}`)
         const rawOutput = wbResult.content || ''
         const htmlCode = extractHtmlFromResponse(rawOutput) || rawOutput

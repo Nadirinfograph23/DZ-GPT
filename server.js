@@ -19793,30 +19793,82 @@ app.get('/api/tools/image-search', async (req, res) => {
   const q = sanitizeString(String(req.query.q || ''), 200).trim()
   if (!q) return res.status(400).json({ error: 'query required', results: [] })
 
-  // Translate Arabic keywords to English — apply ALL matches (not just first)
+  // Translate Arabic keywords to English — expanded map with Algerian landmarks + Groq fallback
   const AR_EN_MAP = [
-    ['الجزائر العاصمة', 'Algiers capital Algeria'],
-    ['الجزائر', 'Algeria'],   ['جزائر', 'Algeria'],
-    ['وهران', 'Oran Algeria'],['قسنطينة', 'Constantine Algeria'],
-    ['عنابة', 'Annaba Algeria'], ['بجاية', 'Bejaia Algeria'],
-    ['سطيف', 'Setif Algeria'], ['تلمسان', 'Tlemcen Algeria'],
-    ['باتنة', 'Batna Algeria'], ['بسكرة', 'Biskra Algeria'],
-    ['ورقلة', 'Ouargla Algeria'], ['تيزي وزو', 'Tizi Ouzou Algeria'],
-    ['شروق', 'sunrise'], ['غروب', 'sunset'],
-    ['بحر', 'sea'], ['جبل', 'mountain'], ['صحراء', 'sahara desert'],
-    ['غابة', 'forest'], ['علم', 'flag'], ['مسجد', 'mosque'],
-    ['قصبة', 'Casbah'], ['سوق', 'market'], ['شاطئ', 'beach'],
-    ['مدينة', 'city'], ['قرية', 'village'], ['طبيعة', 'nature'],
-    ['تقليدي', 'traditional'], ['ثقافة', 'culture'], ['تاريخ', 'history'],
-    ['أزرق', 'blue'], ['أحمر', 'red'], ['أخضر', 'green'],
+    // Algerian cities
+    ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائر','Algeria'],
+    ['وهران','Oran Algeria'],['قسنطينة','Constantine Algeria'],['عنابة','Annaba Algeria'],
+    ['بجاية','Bejaia Algeria'],['سطيف','Setif Algeria'],['تلمسان','Tlemcen Algeria'],
+    ['باتنة','Batna Algeria'],['بسكرة','Biskra Algeria'],['ورقلة','Ouargla Algeria'],
+    ['تيزي وزو','Tizi Ouzou Algeria'],['غرداية','Ghardaia Algeria'],
+    ['تمنراست','Tamanrasset Algeria'],['إليزي','Illizi Algeria'],
+    ['جيجل','Jijel Algeria'],['سكيكدة','Skikda Algeria'],['خنشلة','Khenchela Algeria'],
+    ['المدية','Medea Algeria'],['بومرداس','Boumerdes Algeria'],['تيبازة','Tipaza Algeria'],
+    ['الشلف','Chlef Algeria'],['مستغانم','Mostaganem Algeria'],['البويرة','Bouira Algeria'],
+    ['بجاية','Bejaia Algeria'],['الأغواط','Laghouat Algeria'],['النعامة','Naama Algeria'],
+    // Famous Algerian landmarks & monuments
+    ['مقام الشهيد','Maqam Echahid martyrs memorial monument Algiers Algeria'],
+    ['جامع الجزائر الأعظم','Great Mosque of Algiers Algeria'],
+    ['جامع الجزائر','Great Mosque of Algiers Algeria'],
+    ['مسجد الجزائر الأعظم','Great Mosque of Algiers Algeria'],
+    ['قصبة الجزائر','Casbah of Algiers UNESCO heritage Algeria'],
+    ['القصبة','Casbah Algiers old city Algeria'],
+    ['رياض الفتح','Riad El Feth Algiers Algeria'],
+    ['تيمقاد','Timgad Roman ruins Algeria UNESCO Batna'],
+    ['جميلة','Djemila Roman ruins Algeria UNESCO Setif'],
+    ['تيبازة الأثرية','Tipaza ancient ruins Algeria UNESCO'],
+    ['قلعة بني حماد','Qalaa of Beni Hammad medieval Algeria UNESCO'],
+    ['تاسيلي ناجر','Tassili N\'Ajjer rock art Algeria UNESCO'],
+    ['الهقار','Ahaggar mountains Tamanrasset Algeria'],
+    ['ميزاب','M\'Zab valley Ghardaia Algeria UNESCO'],
+    ['الجرف الأخضر','Ain Temouchent Algeria coast'],
+    ['منتزه بلدة','Belloua national park Algeria'],
+    ['سد تاقسبت','Taksept dam Algeria'],
+    ['معلقة قسنطينة','Constantine suspended bridges Algeria'],
+    ['جسر سيدي راشد','Sidi Rached bridge Constantine Algeria'],
+    ['حمام بوحنيفية','Hammam Bouhanifa Algeria'],
+    ['واحة بسكرة','Biskra oasis Algeria'],
+    ['ميناء الجزائر','Port of Algiers harbour Algeria'],
+    ['برج الفلك','Algiers tower landmark'],
+    ['ضريح تيبازة','Tipaza mausoleum Algeria'],
+    ['متحف الجيش','Army museum Algiers Algeria'],
+    ['النصب التذكاري','Algeria war memorial monument'],
+    // Nature
+    ['شروق الشمس','sunrise Algeria'],['غروب الشمس','sunset Algeria'],
+    ['شروق','sunrise'],['غروب','sunset'],
+    ['بحر','sea coast'],['جبل','mountain'],['صحراء','sahara desert'],
+    ['غابة','forest'],['علم','flag'],['مسجد','mosque architecture'],
+    ['قصبة','Casbah old city'],['سوق','market souk'],['شاطئ','beach'],
+    ['مدينة','city'],['قرية','village'],['طبيعة','nature landscape'],
+    ['تقليدي','traditional'],['ثقافة','culture'],['تاريخ','historical'],
+    ['أزرق','blue'],['أحمر','red'],['أخضر','green'],['أصفر','yellow'],
+    ['جامعة','university Algeria'],['متحف','museum Algeria'],['مطار','airport Algeria'],
+    ['قلعة','fortress castle Algeria'],['برج','tower Algeria'],['ميناء','port harbour Algeria'],
   ]
   let searchQ = q
   for (const [ar, en] of AR_EN_MAP) {
     if (searchQ.includes(ar)) searchQ = searchQ.split(ar).join(en)
   }
-  const stillHasArabic = /[\u0600-\u06FF]/.test(searchQ)
-  if (stillHasArabic) {
-    searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
+  // If Arabic remains after static dict → ask Groq for translation (handles unknown terms)
+  if (/[\u0600-\u06FF]/.test(searchQ)) {
+    try {
+      const { content } = await callGroqWithFallback({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: 'Translate this Arabic image search query to a concise English phrase. Output ONLY the English query, no explanation. If the topic is Algerian, append "Algeria".' },
+          { role: 'user', content: q },
+        ],
+        max_tokens: 60,
+        temperature: 0.1,
+      })
+      if (content && !/[\u0600-\u06FF]/.test(content) && content.length < 200) {
+        searchQ = content.trim()
+      } else {
+        searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
+      }
+    } catch (_) {
+      searchQ = searchQ.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, '').trim() + ' Algeria'
+    }
   }
   searchQ = searchQ.replace(/\s+/g, ' ').trim() || 'Algeria'
   console.log(`[ImageSearch] original="${q}" searchQ="${searchQ}"`)
@@ -19845,6 +19897,7 @@ app.get('/api/tools/image-search', async (req, res) => {
 
   // ── Source 2: Wikimedia Commons (completely free, no key) ──
   const fetchWikimedia = async () => {
+
     const params = new URLSearchParams({
       action: 'query',
       generator: 'search',
@@ -19909,6 +19962,60 @@ app.get('/api/tools/image-search', async (req, res) => {
         source = results.length > 0 ? (results[0].source === 'openverse' ? 'openverse+wikimedia' : 'wikimedia') : 'none'
       } catch (wmErr) {
         console.warn(`[ImageSearch:Wikimedia] also failed: ${wmErr.message}`)
+      }
+    }
+
+    // ── Source 3: Wikipedia Article Images (main photo of famous places/landmarks) ──
+    if (results.length < 8) {
+      try {
+        const wpSearchParams = new URLSearchParams({
+          action: 'query', list: 'search', srsearch: searchQ, srlimit: '5',
+          format: 'json', origin: '*',
+        })
+        const wpSearchRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpSearchParams}`, {
+          headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (wpSearchRes.ok) {
+          const wpSearchData = await wpSearchRes.json()
+          const wpTitles = (wpSearchData.query?.search || []).map(s => s.title).slice(0, 5)
+          if (wpTitles.length) {
+            const wpImgParams = new URLSearchParams({
+              action: 'query', titles: wpTitles.join('|'),
+              prop: 'pageimages', pithumbsize: '800', pilimit: '10',
+              format: 'json', origin: '*',
+            })
+            const wpImgRes = await fetch(`https://en.wikipedia.org/w/api.php?${wpImgParams}`, {
+              headers: { 'User-Agent': 'DZ-GPT/2.0 (dz-gpt.vercel.app)' },
+              signal: AbortSignal.timeout(8000),
+            })
+            if (wpImgRes.ok) {
+              const wpImgData = await wpImgRes.json()
+              const wpPages = Object.values(wpImgData.query?.pages || {})
+              const wpResults = wpPages
+                .filter(p => p.thumbnail?.source)
+                .map(p => ({
+                  id: `wp-${p.pageid}`,
+                  title: p.title || searchQ,
+                  url: p.thumbnail.source,
+                  thumbnail: p.thumbnail.source,
+                  source: 'wikipedia',
+                  license: 'CC',
+                  creator: 'Wikipedia',
+                  width: p.thumbnail.width || 0,
+                  height: p.thumbnail.height || 0,
+                }))
+              console.log(`[ImageSearch:Wikipedia] q="${searchQ}" results=${wpResults.length}`)
+              const existingUrls = new Set(results.map(r => r.url))
+              const wpNew = wpResults.filter(r => !existingUrls.has(r.url))
+              results = [...wpNew, ...results]  // Wikipedia first — most relevant for landmarks
+              total = results.length
+              source = source === 'none' ? 'wikipedia' : source + '+wikipedia'
+            }
+          }
+        }
+      } catch (wpErr) {
+        console.warn(`[ImageSearch:Wikipedia] failed: ${wpErr.message}`)
       }
     }
 
@@ -20579,6 +20686,23 @@ const IMG_AR_EN_MAP = [
   ['باتنة','Batna Algeria'],['بسكرة','Biskra Algeria'],['ورقلة','Ouargla Algeria'],
   ['تيزي وزو','Tizi Ouzou Algeria'],['غرداية','Ghardaia Algeria'],
   ['تمنراست','Tamanrasset Sahara Algeria'],['جرجرة','Djurdjura mountains Algeria'],
+  // Algeria landmarks & monuments
+  ['مقام الشهيد','Maqam Echahid martyrs memorial monument Algiers Algeria'],
+  ['جامع الجزائر الأعظم','Great Mosque of Algiers Algeria'],
+  ['جامع الجزائر','Great Mosque of Algiers Algeria'],
+  ['قصبة الجزائر','Casbah of Algiers UNESCO old city Algeria'],
+  ['القصبة','Casbah Algiers Algeria'],
+  ['رياض الفتح','Riad El Feth Algiers Algeria'],
+  ['تيمقاد','Timgad Roman ruins Algeria UNESCO'],
+  ['جميلة','Djemila Roman ruins Algeria UNESCO'],
+  ['تيبازة الأثرية','Tipaza ancient ruins Algeria UNESCO'],
+  ['قلعة بني حماد','Qalaa of Beni Hammad Algeria UNESCO'],
+  ['تاسيلي ناجر','Tassili N\'Ajjer rock art Algeria UNESCO'],
+  ['الهقار','Ahaggar mountains Tamanrasset Algeria'],
+  ['ميزاب','M\'Zab valley Ghardaia Algeria UNESCO'],
+  ['معلقة قسنطينة','Constantine suspended bridges Algeria'],
+  ['جسر سيدي راشد','Sidi Rached bridge Constantine Algeria'],
+  ['ميناء الجزائر','Port of Algiers harbour Algeria'],
   // Nature / scenery
   ['في المستقبل','futuristic, cyberpunk, neon lights, advanced technology'],
   ['مستقبل','futuristic'],['مستقبلي','futuristic'],['خيال علمي','sci-fi'],

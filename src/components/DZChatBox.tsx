@@ -5370,6 +5370,41 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
+      // ── Image Web Search — fetch real photo from internet (e.g. "صورة للأمير عبد القادر") ──
+      const IMAGE_FETCH_RE = /(?:^|\s)صورة\s*(?:ل[لـ]?|الـ|لـ)\s*\S/i
+      if (IMAGE_FETCH_RE.test(text) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
+        const subject = text.replace(/^صورة\s*(?:ل[لـ]?|الـ|لـ)\s*/i, '').trim() || text.trim()
+        const loadingId = generateId()
+        setMessages(prev => [...prev, {
+          id: loadingId, role: 'assistant' as const, content: `🔍 جاري البحث عن صورة "${subject}"...`, richType: 'text' as const, isStreaming: true,
+        }])
+        try {
+          const imgFetchRes = await fetch(`/api/tools/image-search?q=${encodeURIComponent(subject)}`, { signal })
+          const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string }> }
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          const results = imgFetchData.results || []
+          if (results.length > 0) {
+            const first = results[0]
+            addAssistantMessage({
+              content: `🔍 **صورة:** ${subject}`,
+              richType: 'image',
+              imageUrl: first.thumbnail || first.url,
+              imagePrompt: subject,
+              imageModel: 'بحث الويب',
+              imageStyle: 'web',
+              quickSuggestions: ['ابحث عن صورة أخرى', 'أعطني المزيد من الصور', 'أنشئ صورة بالذكاء الاصطناعي'],
+            })
+          } else {
+            addAssistantMessage({ content: `⚠️ لم أجد صورة لـ "${subject}" على الإنترنت. هل تريد توليد صورة بالذكاء الاصطناعي؟`, richType: 'text' })
+          }
+        } catch {
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          addAssistantMessage({ content: '⚠️ تعذّر البحث عن الصورة.', richType: 'text', isError: true })
+        }
+        setIsLoading(false)
+        return
+      }
+
       // ── Image Generation (zero-token — Pollinations.ai free & unlimited) ──────
       if (IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const prompt = extractImagePrompt(text)
@@ -5407,17 +5442,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
-      // ── QR Code Generation (free — api.qrserver.com, no key) ─────────────────
+      // ── QR Code → redirect to DZTools QR generator ───────────────────────────
       const QR_RE = /(?:اعمل|أنشئ|انشئ|ولد|اصنع|create|generate|make|faire)\s*(?:كود\s*)?qr|qr\s*code\s*(?:ل|لـ|of|pour|for)|رمز\s*(?:الـ\s*)?qr|qr\s*كود/i
       if (QR_RE.test(text)) {
-        const qrData = text.replace(QR_RE, '').replace(/^[\s:لـل،,]+|[\s:،,]+$/g, '').trim() || text.trim()
-        const qrTitle = qrData.length > 60 ? qrData.slice(0, 60) + '…' : qrData
         addAssistantMessage({
-          content: `📋 **QR Code جاهز:** ${qrTitle}`,
-          richType: 'qr',
-          qrData,
-          qrTitle,
-          quickSuggestions: ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب', 'QR لبريدي الإلكتروني'],
+          content: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools — إنشاء سريع ومجاني.',
+          richType: 'tool-redirect',
+          toolRedirect: {
+            toolName: 'منشئ QR Code',
+            toolUrl: '/tools',
+            toolIcon: '📋',
+            toolDesc: 'أنشئ رموز QR لأي رابط، رقم هاتف، واتساب، أو بريد إلكتروني بنقرة واحدة.',
+            message: 'لإنشاء رمز QR، استخدم أداة QR Code المخصصة في DZ Tools.',
+          },
+          quickSuggestions: ['اعمل QR لرابط موقعي', 'QR لرقم هاتفي', 'QR لواتساب'],
         })
         setIsLoading(false)
         return

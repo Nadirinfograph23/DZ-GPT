@@ -2248,6 +2248,140 @@
 }
 
 /* ===== REPOS LIST ===== */
+/* ===== DZ Repos Suggest Panel ===== */
+.dz-repos-suggest {
+  margin-top: 10px;
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dz-repos-suggest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  background: rgba(16, 163, 127, 0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 13px;
+  font-weight: 600;
+  color: #10a37f;
+  direction: rtl;
+}
+
+.dz-repos-suggest-count {
+  font-size: 11px;
+  color: #666;
+  font-weight: 400;
+}
+
+.dz-repos-suggest-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  direction: rtl;
+}
+
+.dz-rsc-cat {
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: #999;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.dz-rsc-cat:hover { background: rgba(16, 163, 127, 0.12); border-color: #10a37f; color: #10a37f; }
+.dz-rsc-cat--active { background: rgba(16, 163, 127, 0.18); border-color: #10a37f; color: #10a37f; font-weight: 600; }
+
+.dz-repos-suggest-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 12px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+@media (max-width: 600px) { .dz-repos-suggest-grid { grid-template-columns: 1fr; } }
+
+.dz-rsc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 10px 11px;
+  text-decoration: none;
+  transition: all 0.18s;
+  direction: rtl;
+}
+.dz-rsc-card:hover {
+  background: #1f1f1f;
+  border-color: rgba(16, 163, 127, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.dz-rsc-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dz-rsc-icon { font-size: 14px; flex-shrink: 0; }
+.dz-rsc-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ddd;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  text-align: left;
+}
+.dz-rsc-stars { font-size: 11px; color: #f5a623; white-space: nowrap; flex-shrink: 0; }
+
+.dz-rsc-desc {
+  font-size: 11px;
+  color: #999;
+  margin: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dz-rsc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.dz-rsc-lang {
+  font-size: 10px;
+  color: #10a37f;
+  background: rgba(16, 163, 127, 0.1);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.dz-rsc-link {
+  font-size: 10px;
+  color: #555;
+  transition: color 0.15s;
+}
+.dz-rsc-card:hover .dz-rsc-link { color: #10a37f; }
+
+/* =================== */
 .gh-repos-list {
   margin-top: 8px;
 }

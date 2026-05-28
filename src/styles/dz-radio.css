@@ -475,8 +475,12 @@
 
 /* ── Mobile ── */
 @media (max-width: 480px) {
+  .dzr-page { padding-bottom: 140px; }
   .dzr-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .dzr-grid-wrap { padding: 10px 10px; overflow-y: auto; }
   .dzr-vol-slider { width: 45px; }
   .dzr-now-playing { padding: 10px; }
   .dzr-np-center { width: 32px; }
+  .dzr-np-right { gap: 6px; }
+  .dzr-footer { padding: 8px; font-size: 10px; }
 }

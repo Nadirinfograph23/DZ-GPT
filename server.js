@@ -1344,6 +1344,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=cv',
     toolIcon: '📄',
     toolDesc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية مع نماذج تفاعلية وتحميل PDF',
+    smartMessage: 'لديّ أداة **مولّد السيرة الذاتية** المتخصصة — تُنشئ لك CV احترافياً في دقيقتين بنماذج تفاعلية وألوان قابلة للتخصيص، وتحميل PDF فوري بدون تنسيق يدوي.',
     patterns: [
       /سيرة\s*ذاتية|curriculum\s*vitae/i,
       /(?:اعمل|انشئ|أنشئ|حضر|جهز|دير|صنع|اصنع|بغيت|حابب|نحتاج|محتاج)\s*(?:لي\s*)?(?:cv|سيرة|résumé|resume)/i,
@@ -1357,6 +1358,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=bizplan',
     toolIcon: '📊',
     toolDesc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية وتحليل السوق',
+    smartMessage: 'لديّ أداة **Business Plan** مُدرَّبة على السوق الجزائري — تُولّد لك خطة عمل كاملة مع تحليل SWOT وأرقام مالية واقعية وخطة تسويقية، في دقائق لا ساعات.',
     patterns: [
       /خطة\s*(?:عمل|مشروع)|business\s*plan|plan\s*(?:d'affaires|de\s*business)/i,
       /دراسة\s*جدوى|مشروع\s*(?:اقتصادي|استثماري|تجاري)/i,
@@ -1370,6 +1372,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=invoice',
     toolIcon: '🧾',
     toolDesc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF فوري',
+    smartMessage: 'لديّ **مولّد الفواتير الجزائري** — يحسب TVA وHT وTTC تلقائياً بناءً على النشاط، ويُصدر فاتورة PDF احترافية جاهزة للطباعة في ثانية واحدة.',
     patterns: [
       /فاتورة|فواتير|invoice|facture/i,
       /(?:اعمل|انشئ|أنشئ|حضر|دير)\s*(?:لي\s*)?(?:فاتورة|facture)/i,
@@ -1383,6 +1386,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=tax',
     toolIcon: '🧮',
     toolDesc: 'احسب IRG و IBS والضرائب الجزائرية للأفراد والشركات',
+    smartMessage: 'لديّ **حاسبة الضرائب الجزائرية** المتخصصة — تحسب IRG وIBS بالشرائح الجزائرية المحدّثة لسنة 2024، للأفراد والشركات، مع تفصيل كامل للاستقطاعات.',
     patterns: [
       /(?:احسب|حساب|ضريبة)\s*(?:IRG|IBS|الدخل|الشركات)/i,
       /ضريبة.*دخل.*جزائر|IRG.*حساب|IBS.*حساب/i,
@@ -1396,6 +1400,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=pension',
     toolIcon: '🏦',
     toolDesc: 'احسب اشتراكاتك ومعاشك المتوقع — CNAS موظف · CASNOS مستقل',
+    smartMessage: 'لديّ **حاسبة التقاعد CNAS/CASNOS** — أدخل راتبك وسنوات عملك واحصل على حساب دقيق لاشتراكاتك الشهرية ومعاشك المتوقع عند التقاعد.',
     patterns: [
       /تقاعد|معاش\s*(?:تقاعد|الشيخوخة)|CNAS|CASNOS|pension|retraite/i,
       /(?:اشتراكات|تأمين)\s*(?:اجتماعي|مهني)/i,
@@ -1409,6 +1414,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=zakat',
     toolIcon: '☪️',
     toolDesc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع بالدينار الجزائري',
+    smartMessage: 'لديّ **حاسبة الزكاة الشاملة** بالدينار الجزائري — تحسب زكاة المال والذهب والفضة والتجارة والزروع مع نصاب محدَّث تلقائياً.',
     patterns: [
       /زكاة|زكاتي|نصاب/i,
       /(?:احسب|حساب)\s*(?:زكاة|الزكاة)/i,
@@ -1422,6 +1428,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=bizcard',
     toolIcon: '🪪',
     toolDesc: 'صمّم بطاقة عمل احترافية بالعربية والفرنسية — تصدير PDF',
+    smartMessage: 'لديّ **مصمّم بطاقة العمل** — اختر تصميمك وألوانك وأدخل معلوماتك، واحصل على بطاقة احترافية بالعربية والفرنسية جاهزة للطباعة أو PDF في ثوانٍ.',
     patterns: [
       /بطاقة\s*(?:عمل|أعمال|business)|business\s*card|carte\s*(?:de\s*visite|professionnelle)/i,
       /كارت\s*(?:شخصي|أعمال|vizit)/i,
@@ -1435,6 +1442,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=qrcode',
     toolIcon: '🔲',
     toolDesc: 'أنشئ QR Code فورياً من أي رابط أو نص أو معلومات تواصل — تحميل PNG مجاناً',
+    smartMessage: 'لديّ أداة **QR Code** تُنشئ رمزك فورياً في ثانية واحدة — من أي رابط أو نص أو بيانات تواصل، مع تحميل PNG مجاناً وبلا انتظار.',
     patterns: [
       /qr\s*code|qr\b/i,
       /رمز\s*(?:qr|الاستجابة\s*السريعة)/i,
@@ -1448,6 +1456,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=planner',
     toolIcon: '🗂️',
     toolDesc: 'حوّل فكرتك إلى خطة مهام وجدول زمني منظّم — تصدير PDF',
+    smartMessage: 'لديّ **مخطط المشاريع** الذكي — يُحوّل فكرتك إلى قائمة مهام مُرتّبة وجدول زمني احترافي مع أولويات وتواريخ، مع تصدير PDF جاهز للعرض.',
     patterns: [
       /(?:خطة|مخطط)\s*(?:مشروع|مهام|تنفيذ|عمل\s*تفصيل)/i,
       /(?:نظّم|رتّب|خطّط)\s*(?:لي\s*)?(?:مهام|مشروع|خطوات)/i,
@@ -1462,6 +1471,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=docs',
     toolIcon: '📋',
     toolDesc: 'عقود • مقترحات • محاضر اجتماع احترافية بالعربية والفرنسية',
+    smartMessage: 'لديّ **مولّد وثائق الأعمال** — يكتب لك عقوداً ومحاضر اجتماع ومقترحات تجارية احترافية بالعربية والفرنسية، مُعيارة على الصيغ الجزائرية الرسمية.',
     patterns: [
       /عقد\s*(?:عمل|تجاري|إيجار|خدمات)|contrat\s*(?:de\s*travail|commercial)/i,
       /محضر\s*(?:اجتماع|جلسة)|procès[\s-]verbal/i,
@@ -1476,6 +1486,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=darija',
     toolIcon: '🗣️',
     toolDesc: 'ترجمة من وإلى الدارجة الجزائرية — شرق · غرب · وسط · جنوب',
+    smartMessage: 'لديّ **مترجم الدارجة الجزائرية** المتخصص — يدعم لهجات الشرق والغرب والوسط والجنوب مع الفروق الدقيقة بينها، أدق بكثير من أي ترجمة عامة.',
     patterns: [
       /(?:ترجم|ترجمة)\s*(?:\w+\s*){0,3}(?:إلى|ل|لل)\s*(?:ال)?(?:دارجة|darija)/i,
       /(?:ترجم|ترجمة)\s*(?:إلى|ل|لل)?\s*(?:ال)?(?:دارجة|darija)/i,
@@ -1494,6 +1505,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=hashtag',
     toolIcon: '#️⃣',
     toolDesc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن',
+    smartMessage: 'لديّ **مولّد الهاشتاغ** المُحسَّن للجزائر — يُولّد هاشتاغات ذكية لـ Instagram وTikTok وX مُصنَّفة حسب التخصص والانتشار المحلي، مع إحصائيات.',
     patterns: [
       /هاشتاغ|هاشتاق|hashtag/i,
       /(?:ولّد|اعمل|انشئ|أنشئ|عطيني|دير)\s*(?:لي\s*)?(?:هاشتاغ|#)/i,
@@ -1507,6 +1519,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=tts',
     toolIcon: '🔊',
     toolDesc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية — تحميل MP3',
+    smartMessage: 'لديّ أداة **تحويل النص إلى صوت** — تُنتج صوتاً طبيعياً بالعربية والفرنسية بأصوات متعددة، مع تحميل ملف MP3 مجاناً بدون قيود.',
     patterns: [
       /(?:نص|text)\s*(?:إلى|to)\s*(?:صوت|speech|audio|mp3)/i,
       /TTS\b|text[\s-]to[\s-]speech/i,
@@ -1520,6 +1533,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=screenshot',
     toolIcon: '📸',
     toolDesc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF',
+    smartMessage: 'لديّ أداة **تصوير المواقع** — تلتقط صورة كاملة (full-page) لأي موقع بعرض Desktop أو Mobile، وتُصدرها PNG أو PDF بدون تثبيت أي إضافات.',
     patterns: [
       /(?:صورة|لقطة|screenshot|capture)\s*(?:من\s*)?(?:موقع|site)/i,
       /(?:التقط|صوّر|خذ\s*صورة)\s*(?:الموقع|لموقع|من\s*الموقع)/i,
@@ -1533,6 +1547,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=dataanalysis',
     toolIcon: '📈',
     toolDesc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI',
+    smartMessage: 'لديّ **محلل البيانات** الذكي — ارفع ملف Excel أو CSV واحصل فوراً على رسوم بيانية تفاعلية، إحصائيات تلقائية، وملخص تحليلي بالذكاء الاصطناعي.',
     patterns: [
       /(?:تحليل|analyse)\s*(?:ملف|بيانات\s*من\s*ملف|excel|csv|xlsx)/i,
       /(?:ارفع|upload)\s*(?:ملف|excel|csv).*(?:تحليل|analyse)/i,
@@ -1546,6 +1561,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/ocr-dz',
     toolIcon: '📷',
     toolDesc: 'ارفع صورة أو PDF واستخرج النص بدقة عالية مع تصحيح AI',
+    smartMessage: 'لديّ **قارئ OCR** مُدرَّب على الخطوط العربية — يستخرج النص من صورتك أو PDF باستخدام Tesseract مع طبقة تصحيح AI للنتائج، بدقة أعلى من المحادثة العادية.',
     patterns: [
       /\bocr\b/i,
       /(?:استخرج|اقرأ|تحويل)\s*(?:نص\s*من\s*)?(?:صورة|pdf|وثيقة|مستند)/i,
@@ -1560,6 +1576,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/excel',
     toolIcon: '📊',
     toolDesc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX',
+    smartMessage: 'لديّ **محرر Excel** الذكي — جدول بيانات كامل مع 30 دالة مُدمجة ومساعد AI يشرح الدوال ويُولّد الصيغ تلقائياً، مع استيراد وتصدير XLSX فوري.',
     patterns: [
       /(?:افتح|اعمل|انشئ|أنشئ|دير)\s*(?:جدول|ملف)\s*(?:excel|إكسيل|اكسيل|xlsx|spreadsheet)/i,
       /(?:محرر|editor)\s*(?:excel|إكسيل|اكسيل|spreadsheet)/i,
@@ -1573,6 +1590,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=imgproc',
     toolIcon: '🎨',
     toolDesc: 'معالجة الصور بالذكاء الاصطناعي — إزالة الخلفية • تحسين الجودة • فلاتر',
+    smartMessage: 'لديّ **استوديو الصور** بالذكاء الاصطناعي — يُزيل الخلفية ويُحسّن الجودة ويُطبّق فلاتر على صورتك مباشرةً في المتصفح، بدون تحميل أي برنامج.',
     patterns: [
       /(?:أزل|ازل|احذف|إزالة)\s*(?:الخلفية|background)\s*(?:من\s*صورة)?/i,
       /(?:حسّن|improve|enhance)\s*(?:جودة\s*)?(?:صورة|photo|image)/i,
@@ -1587,6 +1605,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/web-builder',
     toolIcon: '🌐',
     toolDesc: 'أنشئ موقعاً كاملاً بالذكاء الاصطناعي أو استنسخ موقعاً موجوداً',
+    smartMessage: 'لديّ **Web Builder** يبني موقعك الكامل بأمر واحد — HTML+CSS+JS جاهز للنشر، أو يستنسخ أي موقع موجود بدقة عالية، مع نشر تلقائي على GitHub Pages.',
     patterns: [
       /(?:انشئ|أنشئ|ابني|اصنع|اعمل|صمم|دير)\s*(?:لي\s*)?(?:موقع|سايت|ويب\s*سايت|landing\s*page|صفحة\s*هبوط)/i,
       /website\s*builder|web\s*builder/i,
@@ -1601,6 +1620,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/github-agent',
     toolIcon: '⚡',
     toolDesc: 'انشر مشروعك تلقائياً على GitHub وVercel بأمر واحد',
+    smartMessage: 'لديّ **GitHub Agent** المستقل — يُنشئ Repository، يرفع ملفاتك، يفتح Pull Request، وينشر على Vercel، كل ذلك بأمر واحد دون تدخل يدوي.',
     patterns: [
       /(?:انشر|deploy|نشر)\s*(?:مشروع|تطبيق).*(?:github|vercel)/i,
       /github\s*agent|وكيل.*github/i,
@@ -1614,6 +1634,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/radio',
     toolIcon: '📻',
     toolDesc: '8 قنوات جزائرية حية — إذاعة وطنية، القرآن، جيل FM وأكثر',
+    smartMessage: 'لديّ **DZ Radio** — استمع للإذاعات الجزائرية مباشرةً: وطنية، قرآن كريم، جيل FM، البهجة، وأكثر من 200 محطة، كلها بث حي بدون تسجيل.',
     patterns: [
       /(?:إذاعة|اذاعة|راديو|radio)\s*(?:جزائرية?|algérie?)?/i,
       /(?:استمع|دير|شغّل)\s*(?:إلى\s*)?(?:راديو|إذاعة)/i,
@@ -1627,6 +1648,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/dzchat',
     toolIcon: '💬',
     toolDesc: 'غرفة دردشة جماعية مع مستخدمين آخرين ووكلاء AI في الوقت الحقيقي',
+    smartMessage: 'لديّ **DZ Chat** — غرفة دردشة جماعية حية مع مستخدمين آخرين ووكلاء AI متخصصين في الوقت الحقيقي عبر WebSocket، مع تفاعلات emoji.',
     patterns: [
       /(?:دردشة|chat)\s*(?:جماعية|مجتمعية|مع\s*آخرين)/i,
       /(?:غرفة|room)\s*(?:دردشة|chat)/i,
@@ -1640,6 +1662,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/le3ba',
     toolIcon: '🎮',
     toolDesc: 'ألعاب لغوية عربية — Wordle بالعربي، وصلة (كلمات متقاطعة)',
+    smartMessage: 'لديّ **DZ Le3ba** — ألعاب لغوية عربية حصرية: Wordle بالعربي مع مفردات جزائرية، ووصلة الكلمات المتقاطعة. تحدٍّ يومي جديد وممتع!',
     patterns: [
       /(?:ألعاب|العاب|لعبة)\s*(?:لغوية|عربية|كلمات)/i,
       /wordle.*عربي|عربي.*wordle/i,
@@ -1654,6 +1677,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/quran',
     toolIcon: '📖',
     toolDesc: 'استمع لتلاوات بأصوات مختلفة، تفسير AI وبحث بالآيات',
+    smartMessage: 'لديّ صفحة **القرآن الكريم** المتخصصة — استمع لتلاوات بأصوات كبار المقرئين، وابحث في الآيات، واقرأ التفسير بالذكاء الاصطناعي، كل ذلك في مكان واحد.',
     patterns: [
       /(?:استمع|اسمع|سماع)\s*(?:إلى|ل|لل|على)?\s*(?:ال)?(?:قرآن|سورة|تلاوة)/i,
       /(?:تلاوة|تلاوات|ورتّل|ترتيل)\s*(?:من\s*)?(?:قرآن|سورة|آية)/i,
@@ -1670,6 +1694,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=jobs',
     toolIcon: '💼',
     toolDesc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم',
+    smartMessage: 'لديّ **وكيل البحث الوظيفي** — يبحث عن الوظائف في الجزائر ويُولّد لك رسالة تقدم مخصصة ويُقدّم نصائح مقابلة العمل، كل ذلك في مكان واحد.',
     patterns: [
       /(?:ابحث|نبحث|دور)\s*(?:على|عن)\s*(?:وظيفة|عمل|منصب|شغل)/i,
       /(?:وظيفة|عمل|شغل)\s*(?:في\s*)?(?:الجزائر|جزائر)/i,
@@ -1684,6 +1709,7 @@ const TOOL_REDIRECT_MAP = [
     toolUrl: '/tools?tool=health',
     toolIcon: '🏥',
     toolDesc: 'ابحث عن طبيب، تحليل الأعراض ونصائح صحية مخصصة للجزائر',
+    smartMessage: 'لديّ **وكيل الصحة** المتخصص في الجزائر — يُحلّل أعراضك، يبحث عن أقرب أطباء متخصصين في ولايتك، ويُقدّم نصائح صحية موثوقة ومخصصة.',
     patterns: [
       /(?:ابحث|نلقى|دور)\s*(?:على|عن)\s*(?:طبيب|دكتور|مستشفى|صيدلية)\s*(?:قريب|قريبة)?/i,
       /(?:أقرب|قريب)\s*(?:طبيب|مستشفى|صيدلية|عيادة)/i,
@@ -1728,12 +1754,13 @@ function detectToolRedirect(msg) {
   for (const tool of TOOL_REDIRECT_MAP) {
     if (tool.patterns.some(p => p.test(msg))) {
       return {
-        toolName: tool.toolName,
-        toolUrl:  tool.toolUrl,
-        toolIcon: tool.toolIcon,
-        toolDesc: tool.toolDesc,
-        message:  `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
-        id:       tool.id,
+        toolName:     tool.toolName,
+        toolUrl:      tool.toolUrl,
+        toolIcon:     tool.toolIcon,
+        toolDesc:     tool.toolDesc,
+        smartMessage: tool.smartMessage || `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
+        message:      tool.smartMessage || `${tool.toolIcon} لديّ أداة متخصصة لهذا — **${tool.toolName}**`,
+        id:           tool.id,
       }
     }
   }
@@ -2828,6 +2855,25 @@ app.post('/api/owner/breaking-feeds/poll', async (req, res) => {
   if (!await _ownerAuth(req, res)) return
   triggerPollNow().catch(() => {})
   res.json({ ok: true, message: 'بدأ الفحص الفوري — النتائج ستُبث عبر SSE إذا وُجدت أخبار عاجلة' })
+})
+
+// ===== GENERATE REPORT — PDF تقرير DZ Agent التقني =====
+app.get('/api/generate-report', async (_req, res) => {
+  try {
+    const { createReadStream, existsSync } = await import('fs')
+    const { join: _join } = await import('path')
+    const reportPath = _join(process.cwd(), 'reports', 'DZ-Agent-Report.pdf')
+    if (!existsSync(reportPath)) {
+      return res.status(404).json({ error: 'التقرير غير متوفر. يرجى توليده أولاً.' })
+    }
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', 'attachment; filename="DZ-Agent-Report.pdf"')
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    createReadStream(reportPath).pipe(res)
+  } catch (e) {
+    console.error('[generate-report] error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ===== ADMIN: ROUTER DIAGNOSTIC SUMMARY =====

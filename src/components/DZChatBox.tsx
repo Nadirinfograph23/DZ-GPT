@@ -5280,11 +5280,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setImgRegenLoading(null)
   }, [imgRegenLoading])
 
-  const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
+  const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل(?:ـ|ي)?|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|إنشأ\s*صورة|انشأ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|دير\s*(?:لي\s*)?صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|صمم\s*(?:لي\s*)?صورة|اصنع\s*لي\s*صورة|بعثلي\s*صورة|حقق\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|imagine\s*(?:a\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
 
   function extractImagePrompt(text: string): string {
     const cleaned = text
-      .replace(/(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|generate\s*(?:an?\s*)?image(?:\s*of)?|create\s*(?:an?\s*)?image(?:\s*of)?|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image(?:\s*of)?|sketch\s*(?:me\s*)?(?:a\s*)?|dessine(?:\s*moi)?\s*(?:un[e]?\s*)?|cr[ée]+\s*une?\s*image\s*(?:de\s*|d')?|g[ée]n[eè]re?\s*une?\s*image\s*(?:de\s*|d')?|fais\s*une?\s*image\s*(?:de\s*|d')?)/ig, '')
+      .replace(/(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل(?:ـ|ي)?\s*|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|إنشأ\s*صورة|انشأ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|دير\s*(?:لي\s*)?صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|صمم\s*(?:لي\s*)?صورة|اصنع\s*لي\s*صورة|بعثلي\s*صورة|حقق\s*صورة|generate\s*(?:an?\s*)?image(?:\s*of)?|create\s*(?:an?\s*)?image(?:\s*of)?|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image(?:\s*of)?|sketch\s*(?:me\s*)?(?:a\s*)?|imagine\s*(?:a\s*)?|dessine(?:\s*moi)?\s*(?:un[e]?\s*)?|cr[ée]+\s*une?\s*image\s*(?:de\s*|d')?|g[ée]n[eè]re?\s*une?\s*image\s*(?:de\s*|d')?|fais\s*une?\s*image\s*(?:de\s*|d')?)/ig, '')
       .trim()
     return cleaned || text.trim()
   }
@@ -5373,10 +5373,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       const signal = abortRef.current.signal
 
       // ── Image Web Search — شبكة 9 صور حقيقية من الإنترنت ──────────────────────
-      const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن)|صورة\s*(?:ل[لـ]?|الـ|لـ))\s*\S/i
+      const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)|صورة\s*(?:ل[لـ]?|الـ|لـ|عن|من)|أعطني\s*صور|اعطني\s*صور|أرني\s*صور|ارني\s*صور|وريني\s*صور|عارضلي\s*صور|ابحث\s*عن\s*صور|بحث\s*عن\s*صور|جيبلي\s*صور|fetch\s*images?(?:\s*of)?|show\s*me\s*(?:some\s*)?images?(?:\s*of)?|search\s*(?:for\s*)?images?(?:\s*of)?)\s*\S/i
       if (IMAGE_FETCH_RE.test(text) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const subject = text
-          .replace(/^(?:صور|صورة)\s*(?:ل[لـ]?|الـ|لـ|عن)\s*/i, '')
+          .replace(/^(?:أعطني|اعطني|أرني|ارني|وريني|عارضلي|جيبلي)\s*صور(?:ة)?\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)?\s*/i, '')
+          .replace(/^(?:ابحث|بحث)\s*عن\s*صور\s*/i, '')
+          .replace(/^(?:صور|صورة)\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)\s*/i, '')
+          .replace(/^(?:fetch\s*images?\s*of|show\s*me\s*(?:some\s*)?images?\s*of|search\s*(?:for\s*)?images?\s*of)\s*/i, '')
           .trim() || text.trim()
         const loadingId = generateId()
         setMessages(prev => [...prev, {
@@ -5415,51 +5418,60 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
-      // ── Image Generation — Pollinations.ai (مجاني + فوري) ─────────────────────
+      // ── Image Generation — Pollinations.ai FLUX (مجاني + ترجمة عربي→إنجليزي) ──────
       if (IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const prompt = extractImagePrompt(text)
+        const shortTopic = prompt.slice(0, 40) + (prompt.length > 40 ? '…' : '')
         const loadingId = generateId()
         setMessages(prev => [...prev, {
-          id: loadingId, role: 'assistant', content: '🎨 جاري توليد الصورة...', richType: 'text', isStreaming: true,
+          id: loadingId, role: 'assistant' as const,
+          content: `🎨 جاري توليد صورة: **${shortTopic}**\n_ترجمة البرومبت وإرساله لـ FLUX AI..._`,
+          richType: 'text' as const, isStreaming: true,
         }])
 
         let imageUrl: string | undefined
         let imageModel = 'FLUX AI'
 
         try {
-          // Try server (HuggingFace quality) with 12s timeout
           const ctrl = new AbortController()
-          const timer = setTimeout(() => ctrl.abort(), 12000)
+          const timer = setTimeout(() => ctrl.abort(), 20000)
           const imgRes = await fetch('/api/tools/img-gen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model: 'flux' }),
+            body: JSON.stringify({ prompt, model: 'flux', width: 1024, height: 1024 }),
             signal: ctrl.signal,
           })
           clearTimeout(timer)
-          const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; error?: string }
+          const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; translated?: boolean; englishPrompt?: string; error?: string }
           if (imgData.imageUrl || imgData.imageBase64) {
             imageUrl = imgData.imageUrl || imgData.imageBase64
             imageModel = imgData.model || 'FLUX AI'
           }
-        } catch { /* timeout or network error — use Pollinations direct URL below */ }
+        } catch { /* timeout — use Pollinations direct URL fallback */ }
 
         // Fallback: direct Pollinations URL — instant, no server needed
         if (!imageUrl) {
           const seed = Math.floor(Math.random() * 99999999)
-          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=768&height=768&seed=${seed}&nologo=true&safe=false`
+          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&safe=false`
           imageModel = 'FLUX (Pollinations)'
         }
 
         setMessages(prev => prev.filter(m => m.id !== loadingId))
         addAssistantMessage({
           content: `🎨 **صورة AI:** ${prompt}`,
-          richType: 'image',
+          richType: 'image' as const,
           imageUrl,
           imagePrompt: prompt,
           imageModel,
           imageStyle: 'flux',
-          quickSuggestions: ['ارسم نسخة مختلفة', '🎌 أسلوب أنيمي', '📷 أسلوب واقعي', '🧊 ثلاثي الأبعاد', 'اضف تفاصيل أكثر'],
+          quickSuggestions: [
+            `🔄 نسخة جديدة من "${shortTopic}"`,
+            '🎌 أسلوب أنيمي',
+            '📷 واقعي احترافي',
+            '🧊 ثلاثي الأبعاد',
+            '✨ نسخة مستقبلية',
+            'أضف تفاصيل أكثر',
+          ],
         })
         setIsLoading(false)
         return

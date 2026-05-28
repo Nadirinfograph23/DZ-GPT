@@ -580,6 +580,7 @@ interface DZMessage {
     toolIcon: string
     toolDesc: string
     message: string
+    smartMessage?: string
   }
 }
 
@@ -5814,9 +5815,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
 
       // ── Tool Redirect — show navigation card when a dedicated tool exists ──
       if (data._toolRedirect && typeof data._toolRedirect === 'object') {
-        const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string }
+        const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string; smartMessage?: string }
         addAssistantMessage({
-          content: tr.message,
+          content: tr.smartMessage || tr.message,
           richType: 'tool-redirect',
           toolRedirect: tr,
         })

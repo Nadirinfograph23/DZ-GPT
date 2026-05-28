@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn, MessageCircle } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, Github, CheckCircle2, LogIn } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -38,17 +38,6 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 }
 
-function getLastUserMessageFromChat(chatId: string): string {
-  try {
-    const raw = localStorage.getItem(`dz-agent-msgs-${chatId}`)
-    if (!raw) return ''
-    const msgs: { role: string; content: string }[] = JSON.parse(raw)
-    const userMsgs = msgs.filter(m => m.role === 'user')
-    if (!userMsgs.length) return ''
-    const last = userMsgs[userMsgs.length - 1].content || ''
-    return last.slice(0, 80).replace(/\n/g, ' ').trim()
-  } catch { return '' }
-}
 
 export default function DZAgent() {
   const [chats, setChats] = useState<DZChat[]>(() => {
@@ -73,39 +62,6 @@ export default function DZAgent() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [githubStatus, setGithubStatus] = useState<{ ok: boolean; login?: string; avatar?: string } | null>(null)
 
-  // ── Continue conversation dialog ──────────────────────────────────────────
-  const [continueDialog, setContinueDialog] = useState<{ topic: string; chatTitle: string } | null>(null)
-  // Track which chatIds have already shown the toast this session
-  const shownChatsRef = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!activeChatId) { setContinueDialog(null); return }
-    // Already shown for this chat in this session
-    if (shownChatsRef.current.has(activeChatId)) return
-    // Small delay so the chat UI renders first
-    const tid = setTimeout(() => {
-      const savedChats: DZChat[] = (() => {
-        try { return JSON.parse(localStorage.getItem('dz-agent-chats') || '[]') } catch { return [] }
-      })()
-      const activeChat = savedChats.find(c => c.id === activeChatId)
-      if (!activeChat) return
-      const lastMsg = getLastUserMessageFromChat(activeChatId)
-      if (!lastMsg) return
-      shownChatsRef.current.add(activeChatId)
-      setContinueDialog({ topic: lastMsg, chatTitle: activeChat.title })
-    }, 400)
-    return () => clearTimeout(tid)
-  }, [activeChatId])
-
-  const dismissDialog = useCallback(() => setContinueDialog(null), [])
-
-  const handleNewFromDialog = useCallback(() => {
-    setContinueDialog(null)
-    const chat: DZChat = { id: generateId(), title: LABELS[language].newChat, createdAt: Date.now() }
-    setChats(prev => [chat, ...prev])
-    setActiveChatId(chat.id)
-    setSidebarOpen(false)
-  }, [language])
 
   useEffect(() => {
     fetch('/api/dz-agent/github/agent-status')
@@ -136,7 +92,6 @@ export default function DZAgent() {
     setChats(prev => [chat, ...prev])
     setActiveChatId(chat.id)
     setSidebarOpen(false)
-    setContinueDialog(null)
   }, [language])
 
   const deleteChat = useCallback((id: string, e: React.MouseEvent) => {
@@ -302,35 +257,6 @@ export default function DZAgent() {
       </div>
     </div>
 
-    {/* ===== CONTINUE TOAST — خارج dza-layout لضمان الظهور الكامل ===== */}
-    {continueDialog && (
-      <div className="dza-continue-toast" dir="rtl" role="dialog" aria-label="متابعة المحادثة">
-        <div className="dza-continue-toast__header">
-          <div className="dza-continue-toast__icon">
-            <MessageCircle size={15} />
-          </div>
-          <span className="dza-continue-toast__title">متابعة المحادثة؟</span>
-          <button className="dza-continue-toast__close" onClick={dismissDialog} aria-label="إغلاق">
-            <X size={13} />
-          </button>
-        </div>
-        <p className="dza-continue-toast__topic">"{continueDialog.topic}"</p>
-        <div className="dza-continue-toast__actions">
-          <button
-            className="dza-continue-toast__btn dza-continue-toast__btn--yes"
-            onClick={dismissDialog}
-          >
-            <span>✅</span> استكمل المحادثة
-          </button>
-          <button
-            className="dza-continue-toast__btn dza-continue-toast__btn--no"
-            onClick={handleNewFromDialog}
-          >
-            <span>✨</span> محادثة جديدة
-          </button>
-        </div>
-      </div>
-    )}
     </>
   )
 }

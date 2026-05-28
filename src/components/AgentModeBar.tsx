@@ -56,7 +56,10 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
   const doDeactivate = useCallback(() => {
     setConfirmDeactivate(false)
     setShowCmds(false)
-    onChange({ ...state, active: false })
+    setExpanded(false)
+    setRepos([])
+    setRepoError('')
+    onChange({ ...state, active: false, githubToken: '', selectedRepo: '' })
   }, [state, onChange])
 
   const connectGitHub = useCallback(async () => {
@@ -67,8 +70,13 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         headers: { Authorization: `token ${state.githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
       })
       const repoData: Repo[] = await rr.json()
-      setRepos(Array.isArray(repoData) ? repoData : [])
-      onChange({ ...state, active: true, selectedRepo: repoData[0]?.full_name || '' })
+      const validRepos = Array.isArray(repoData) ? repoData : []
+      setRepos(validRepos)
+      if (validRepos.length === 0) {
+        setRepoError('😉👌 عاود تسجيل خروج من الفوق و عاود ادخل تسجيل دخول')
+        return
+      }
+      onChange({ ...state, active: true, selectedRepo: validRepos[0]?.full_name || '' })
     } catch (e) {
       setRepoError((e as Error).message)
     } finally {
@@ -84,7 +92,11 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         headers: { Authorization: `token ${state.githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
       })
       const data: Repo[] = await rr.json()
-      setRepos(Array.isArray(data) ? data : [])
+      const validRepos = Array.isArray(data) ? data : []
+      setRepos(validRepos)
+      if (validRepos.length === 0) {
+        setRepoError('😉👌 عاود تسجيل خروج من الفوق و عاود ادخل تسجيل دخول')
+      }
     } catch {}
     finally { setLoadingRepos(false) }
   }, [state.githubToken, repos.length])

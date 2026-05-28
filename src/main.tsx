@@ -16,6 +16,7 @@ import OCRDZ from './pages/OCRDZ.tsx'
 import DZLe3ba from './pages/DZLe3ba.tsx'
 import DZAgentGitHub from './pages/DZAgentGitHub.tsx'
 import DZExcel from './pages/DZExcel.tsx'
+import DZRadio from './pages/DZRadio.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
@@ -75,6 +76,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/le3ba" element={<DZLe3ba />} />
             <Route path="/github-agent" element={<DZAgentGitHub />} />
             <Route path="/excel" element={<DZExcel />} />
+            <Route path="/radio" element={<DZRadio />} />
+            <Route path="/dz-radio" element={<Navigate to="/radio" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <ConditionalMiniPlayer />

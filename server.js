@@ -151,7 +151,7 @@ app.use(helmet({
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org'],
       connectSrc: isProd
         ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org'],
@@ -20880,6 +20880,109 @@ if (isMain) {
     }
     startRembg()
   }
+
+
+// ═══════════════════════════════════════════════════════════════════
+// DZ RADIO — Stream proxy (HTTP→HTTPS bridge for Algerian stations)
+// ═══════════════════════════════════════════════════════════════════
+const DZ_RADIO_STREAMS = {
+  chaine1:  { name: 'الإذاعة الوطنية',      url: 'http://webcast.eppRadioAlger.dz/Chaine1/AAC' },
+  chaine2:  { name: 'الإذاعة الثقافية',     url: 'http://webcast.eppRadioAlger.dz/Chaine2/AAC' },
+  chaine3:  { name: 'إذاعة فرانس',          url: 'http://webcast.eppRadioAlger.dz/Chaine3/AAC' },
+  coran:    { name: 'إذاعة القرآن الكريم',  url: 'http://webcast.eppRadioAlger.dz/Coran/AAC' },
+  jil:      { name: 'Jil FM',               url: 'http://jil-fm.ice.infomaniak.ch/jil-fm-128.mp3' },
+  bahdja:   { name: 'البهجة',               url: 'http://el-bahdja.ice.infomaniak.ch/el-bahdja-128.mp3' },
+  ifrikiya: { name: 'إفريقيا ساوند',        url: 'http://ifrikiya.ice.infomaniak.ch/ifrikiya-128.mp3' },
+  alger_chaines: { name: 'جزائر الدولية',   url: 'http://radio-algerie-inter.ice.infomaniak.ch/radio-algerie-inter-128.mp3' },
+}
+
+app.get('/api/radio/stream/:station', async (req, res) => {
+  const st = DZ_RADIO_STREAMS[req.params.station]
+  if (!st) return res.status(404).json({ error: 'Station not found' })
+  try {
+    const { Readable } = await import('stream')
+    const controller = new AbortController()
+    req.on('close', () => controller.abort())
+    const upstream = await fetch(st.url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'DZ-GPT-Radio/1.0' }
+    })
+    if (!upstream.ok) return res.status(502).json({ error: 'Upstream error', status: upstream.status })
+    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg')
+    res.setHeader('Cache-Control', 'no-cache, no-store')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Transfer-Encoding', 'chunked')
+    Readable.fromWeb(upstream.body).pipe(res)
+  } catch (err) {
+    if (!res.headersSent) res.status(503).json({ error: 'Stream unavailable' })
+  }
+})
+
+app.get('/api/radio/stations', (_req, res) => {
+  res.json(Object.entries(DZ_RADIO_STREAMS).map(([id, s]) => ({ id, name: s.name })))
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/tools/books — Open Library free book search (no API key)
+// ═══════════════════════════════════════════════════════════════════
+app.get('/api/tools/books', async (req, res) => {
+  const q     = (req.query.q || '').toString().trim()
+  const limit = Math.min(Number(req.query.limit) || 8, 20)
+  if (!q) return res.status(400).json({ error: 'q is required' })
+  try {
+    const fields = 'key,title,author_name,first_publish_year,cover_i,subject,number_of_pages_median,language'
+    const url = 'https://openlibrary.org/search.json?q=' + encodeURIComponent(q) + '&fields=' + fields + '&limit=' + limit
+    const r = await fetch(url, { headers: { 'User-Agent': 'DZ-GPT/1.0' }, signal: AbortSignal.timeout(10000) })
+    if (!r.ok) throw new Error('OpenLibrary error')
+    const data = await r.json()
+    const books = (data.docs || []).map(b => ({
+      key: b.key,
+      title: b.title || 'بدون عنوان',
+      authors: Array.isArray(b.author_name) ? b.author_name.slice(0, 3) : [],
+      year: b.first_publish_year || null,
+      cover: b.cover_i ? ('https://covers.openlibrary.org/b/id/' + b.cover_i + '-M.jpg') : null,
+      pages: b.number_of_pages_median || null,
+      subjects: Array.isArray(b.subject) ? b.subject.slice(0, 3) : [],
+      url: b.key ? ('https://openlibrary.org' + b.key) : null,
+    }))
+    res.json({ total: data.numFound, books })
+  } catch (err) {
+    res.status(503).json({ error: 'Open Library unavailable', message: err.message })
+  }
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/tools/presentation — AI-powered slide generator (free)
+// ═══════════════════════════════════════════════════════════════════
+app.post('/api/tools/presentation', express.json(), async (req, res) => {
+  const { topic, lang = 'ar', slideCount = 6 } = req.body || {}
+  if (!topic) return res.status(400).json({ error: 'topic required' })
+  const count = Math.min(Math.max(Number(slideCount) || 6, 3), 12)
+
+  const langLabel = lang === 'fr' ? 'French' : lang === 'en' ? 'English' : 'Arabic'
+  const systemPrompt = 'You are a presentation expert. Generate a professional presentation in ' + langLabel + '. Return ONLY valid JSON with this shape: {"title":"...","subtitle":"...","color":"#hexcolor","slides":[{"title":"...","bullets":["..."],"icon":"emoji","note":"..."}]}. Exactly ' + count + ' slides, 3-5 bullets each. All text in ' + langLabel + '. Return pure JSON only, no markdown.'
+
+  try {
+    const { content: raw, error: aiErr } = await callGroqWithFallback({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: 'Create a presentation about: ' + topic }
+      ],
+      max_tokens: 2048,
+      temperature: 0.7,
+    })
+    if (aiErr) throw new Error(aiErr)
+    let pres
+    try { pres = JSON.parse(raw) } catch { pres = { title: topic, slides: [] } }
+    pres.slides = Array.isArray(pres.slides) ? pres.slides : []
+    pres.title  = pres.title  || topic
+    pres.color  = pres.color  || '#7c6eff'
+    res.json(pres)
+  } catch (err) {
+    res.status(503).json({ error: 'AI unavailable', message: err.message })
+  }
+})
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

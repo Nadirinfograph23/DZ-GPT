@@ -20523,43 +20523,140 @@ async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {
   return { imageBase64: `data:${ct};base64,${buf.toString('base64')}`, mime: ct }
 }
 
-// POST /api/tools/img-gen — Text-to-Image (instant URL-based, no proxy delay)
-// Strategy: return direct Pollinations URL (browser loads image directly = instant response)
-// Falls back to HuggingFace base64 if HF_TOKEN is set and Pollinations fails
+// ── Translate Arabic/French image prompt → English for Pollinations FLUX ────────
+const IMG_TRANSLATE_CACHE = new Map()
+const IMG_AR_EN_MAP = [
+  // Algeria
+  ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائر','Algeria'],
+  ['وهران','Oran Algeria'],['قسنطينة','Constantine Algeria'],['عنابة','Annaba Algeria'],
+  ['بجاية','Bejaia Algeria'],['سطيف','Setif Algeria'],['تلمسان','Tlemcen Algeria'],
+  ['باتنة','Batna Algeria'],['بسكرة','Biskra Algeria'],['ورقلة','Ouargla Algeria'],
+  ['تيزي وزو','Tizi Ouzou Algeria'],['غرداية','Ghardaia Algeria'],
+  ['تمنراست','Tamanrasset Sahara Algeria'],['جرجرة','Djurdjura mountains Algeria'],
+  // Nature / scenery
+  ['في المستقبل','futuristic, cyberpunk, neon lights, advanced technology'],
+  ['مستقبل','futuristic'],['مستقبلي','futuristic'],['خيال علمي','sci-fi'],
+  ['شروق الشمس','sunrise, golden hour'],['غروب الشمس','sunset, warm light'],
+  ['صحراء','vast sahara desert, sand dunes'],['جبال','mountains'],
+  ['بحر','ocean sea'],['شاطئ','sandy beach'],['غابة','lush forest'],
+  ['طبيعة','nature landscape'],['سماء','sky'],['سحاب','clouds'],['نجوم','stars at night'],
+  ['قمر','moon'],['شمس','sun'],
+  // Architecture
+  ['مسجد','mosque, Islamic architecture'],['قصبة','Casbah old city'],
+  ['منزل','house'],['مدينة','city skyline'],['قرية','village'],
+  ['قديم','ancient historic'],['حديث','modern'],['تقليدي','traditional'],
+  // People
+  ['شاب','young man'],['شابة','young woman'],['رجل','man'],['امرأة','woman'],
+  ['طفل','child'],['عائلة','family'],['مجموعة','group of people'],
+  // Art styles
+  ['رسم كاريكاتير','cartoon style illustration'],['أنيمي','anime style'],
+  ['زيت','oil painting'],['ألوان مائية','watercolor painting'],
+  ['رسم','drawing illustration'],['لوحة','painting artwork'],
+  ['ثلاثي الأبعاد','3D render, volumetric lighting'],['واقعي','photorealistic, 8k'],
+  ['احترافي','professional photography'],['سينمائي','cinematic, movie scene'],
+  ['مضيء','bright, well-lit'],['مظلم','dark, moody lighting'],
+  // Colors
+  ['أحمر','red'],['أزرق','blue'],['أخضر','green'],['أصفر','yellow'],
+  ['برتقالي','orange'],['بنفسجي','purple'],['ذهبي','golden'],
+  ['أبيض','white'],['أسود','black'],['رمادي','grey'],
+  // Food & objects
+  ['قهوة','arabic coffee cup'],['شاي','tea'],['تمر','dates'],
+  ['كسكس','couscous Algerian dish'],['برك','brik Algerian food'],
+  ['سيارة','car'],['دراجة','motorcycle'],['طائرة','airplane'],
+  // Time / weather
+  ['ليلاً','at night, night scene'],['نهاراً','daytime'],
+  ['صباحاً','morning light'],['مساءً','evening, dusk'],
+  ['شتاء','winter, snow'],['صيف','summer'],['ربيع','spring flowers'],
+  ['مطر','rain, rainy'],['ثلج','snow'],
+]
+
+async function translateImgPrompt(rawPrompt) {
+  const cacheKey = rawPrompt.slice(0, 120)
+  if (IMG_TRANSLATE_CACHE.has(cacheKey)) return IMG_TRANSLATE_CACHE.get(cacheKey)
+  const hasArabic = /[\u0600-\u06FF]/.test(rawPrompt)
+  if (!hasArabic) return rawPrompt
+
+  // Step 1: apply static dictionary
+  let translated = rawPrompt
+  for (const [ar, en] of IMG_AR_EN_MAP) {
+    translated = translated.split(ar).join(en)
+  }
+
+  // Step 2: if Arabic chars still present, ask Groq for a quick translation
+  if (/[\u0600-\u06FF]/.test(translated)) {
+    try {
+      const { content } = await callGroqWithFallback({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Keep all visual details. Output ONLY the English prompt, no explanation.' },
+          { role: 'user', content: rawPrompt },
+        ],
+        max_tokens: 150,
+        temperature: 0.2,
+      })
+      if (content && !/[\u0600-\u06FF]/.test(content) && content.length < 400) {
+        translated = content.trim()
+      }
+    } catch (_) {}
+  }
+
+  // Step 3: append quality suffix
+  if (!/4k|high quality|detailed/i.test(translated)) {
+    translated = translated.trim() + ', high quality, detailed, sharp focus'
+  }
+
+  IMG_TRANSLATE_CACHE.set(cacheKey, translated)
+  return translated
+}
+
+// POST /api/tools/img-gen — Text-to-Image with Arabic→English translation + Pollinations FLUX
 app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
-  const { prompt, negativePrompt, width = 768, height = 768, model: reqModel } = req.body
+  const { prompt, negativePrompt, width = 1024, height = 1024, model: reqModel } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
 
-  const w = Math.min(Number(width) || 768, 1024)
-  const h = Math.min(Number(height) || 768, 1024)
+  const w = Math.min(Number(width) || 1024, 1024)
+  const h = Math.min(Number(height) || 1024, 1024)
   const seed = Math.floor(Math.random() * 99999999)
+
+  // ── Translate Arabic/French → English for best FLUX quality ──
+  let englishPrompt = prompt.trim()
+  let translatedFlag = false
+  try {
+    const tr = await translateImgPrompt(prompt.trim())
+    if (tr && tr !== prompt.trim()) {
+      englishPrompt = tr
+      translatedFlag = true
+    }
+  } catch (_) {}
+  console.log(`[img-gen] prompt: "${prompt.slice(0,50)}" → "${englishPrompt.slice(0,60)}" translated=${translatedFlag}`)
 
   // ── Priority 1: HuggingFace FLUX.1-schnell (high quality, needs HF_TOKEN) ──
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
   if (token) {
     try {
-      const hf = await huggingFaceFlux(prompt, negativePrompt, { timeoutMs: 8000 })
+      const hf = await huggingFaceFlux(englishPrompt, negativePrompt, { timeoutMs: 10000 })
       if (hf) {
         console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
-        return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell', provider: 'huggingface' })
+        return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell (HF)', provider: 'huggingface', translated: translatedFlag, englishPrompt })
       }
     } catch (e) { console.warn('[img-gen:hf]', e.message) }
   }
 
-  // ── Priority 2: Pollinations direct URL (INSTANT — no proxy, browser loads directly) ──
-  // Supports models: flux | flux-realism | flux-anime | flux-3d | flux-pro | turbo | dreamshaper
+  // ── Priority 2: Pollinations direct URL (instant, always works) ──
   const MODELS = ['flux', 'flux-realism', 'flux-3d', 'turbo']
   const chosenModel = reqModel && MODELS.includes(reqModel) ? reqModel : 'flux'
-  const encoded = encodeURIComponent(prompt.trim())
+  const encoded = encodeURIComponent(englishPrompt.trim())
   const negEnc  = negativePrompt ? `&negative=${encodeURIComponent(negativePrompt)}` : ''
-  const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&safe=false${negEnc}`
+  const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&enhance=true&safe=false${negEnc}`
 
-  console.log('[img-gen] ✓ Pollinations direct URL', chosenModel)
+  console.log('[img-gen] ✓ Pollinations URL', chosenModel)
   return res.json({
     imageUrl,
-    model: `FLUX via Pollinations (${chosenModel})`,
+    model: `FLUX (${chosenModel})`,
     provider: 'pollinations',
     seed,
+    translated: translatedFlag,
+    englishPrompt,
     allModels: MODELS,
   })
 })

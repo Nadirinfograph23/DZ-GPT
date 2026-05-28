@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -15,6 +15,7 @@ interface AgentModeBarProps {
   state: AgentModeState
   onChange: (s: AgentModeState) => void
   githubUser?: { login: string; avatar: string } | null
+  onCommandSelect?: (cmd: string) => void
 }
 
 const SLASH_COMMANDS = [
@@ -29,21 +30,32 @@ const SLASH_COMMANDS = [
   { cmd: '/deploy',  desc: 'انشر على GitHub Pages',     example: '/deploy' },
 ]
 
-export default function AgentModeBar({ state, onChange, githubUser }: AgentModeBarProps) {
-  const [expanded, setExpanded]   = useState(false)
-  const [repos, setRepos]         = useState<Repo[]>([])
+export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect }: AgentModeBarProps) {
+  const [expanded, setExpanded]         = useState(false)
+  const [repos, setRepos]               = useState<Repo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
-  const [repoError, setRepoError] = useState('')
-  const [showCmds, setShowCmds]   = useState(false)
+  const [repoError, setRepoError]       = useState('')
+  const [showCmds, setShowCmds]         = useState(false)
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
   const toggle = useCallback(() => {
-    if (!state.active && !state.githubToken) {
+    if (state.active) {
+      setConfirmDeactivate(true)
+      return
+    }
+    if (!state.githubToken) {
       setExpanded(true)
       onChange({ ...state, active: false })
       return
     }
     onChange({ ...state, active: !state.active })
     if (!state.active) setExpanded(true)
+  }, [state, onChange])
+
+  const doDeactivate = useCallback(() => {
+    setConfirmDeactivate(false)
+    setShowCmds(false)
+    onChange({ ...state, active: false })
   }, [state, onChange])
 
   const connectGitHub = useCallback(async () => {
@@ -76,8 +88,31 @@ export default function AgentModeBar({ state, onChange, githubUser }: AgentModeB
     finally { setLoadingRepos(false) }
   }, [state.githubToken, repos.length])
 
+  const handleCommandClick = (example: string) => {
+    if (onCommandSelect) {
+      onCommandSelect(example)
+      setShowCmds(false)
+    }
+  }
+
   return (
     <div className={`amb-wrap ${state.active ? 'amb-wrap--active' : ''}`}>
+
+      {/* ── Deactivate confirmation dialog ── */}
+      {confirmDeactivate && (
+        <div className="amb-deactivate-confirm">
+          <div className="amb-deactivate-icon"><AlertTriangle size={16} /></div>
+          <div className="amb-deactivate-text">
+            <strong>إيقاف وضع الوكيل؟</strong>
+            <span>سيتم قطع الاتصال بـ GitHub وإنهاء الجلسة الحالية.</span>
+          </div>
+          <div className="amb-deactivate-btns">
+            <button className="amb-deactivate-yes" onClick={doDeactivate}>إيقاف</button>
+            <button className="amb-deactivate-no" onClick={() => setConfirmDeactivate(false)}>إلغاء</button>
+          </div>
+        </div>
+      )}
+
       {/* ── Toggle row ── */}
       <div className="amb-row">
         <button
@@ -154,15 +189,21 @@ export default function AgentModeBar({ state, onChange, githubUser }: AgentModeB
         <div className="amb-cmds-sheet">
           <div className="amb-cmds-header">
             <Terminal size={13} />
-            <span>أوامر الوكيل المتاحة</span>
+            <span>أوامر الوكيل المتاحة — انقر لإدراج الأمر</span>
             <button onClick={() => setShowCmds(false)}><X size={12} /></button>
           </div>
           <div className="amb-cmds-list">
             {SLASH_COMMANDS.map(c => (
-              <div key={c.cmd} className="amb-cmd-row">
+              <div
+                key={c.cmd}
+                className="amb-cmd-row amb-cmd-row--clickable"
+                onClick={() => handleCommandClick(c.example)}
+                title={`انقر لإدراج: ${c.example}`}
+              >
                 <code className="amb-cmd-code">{c.cmd}</code>
                 <span className="amb-cmd-desc">{c.desc}</span>
                 <code className="amb-cmd-ex">{c.example}</code>
+                <span className="amb-cmd-insert-hint">← انقر</span>
               </div>
             ))}
           </div>

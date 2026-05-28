@@ -19,15 +19,16 @@ interface AgentModeBarProps {
 }
 
 const SLASH_COMMANDS = [
-  { cmd: '/read',    desc: 'اقرأ محتوى ملف',           example: '/read src/App.tsx' },
-  { cmd: '/edit',    desc: 'عدّل ملف (يطلب تأكيد)',     example: '/edit server.js أضف route جديد' },
-  { cmd: '/commit',  desc: 'احفظ التغييرات مع رسالة',  example: '/commit "fix: إصلاح bug الطقس"' },
-  { cmd: '/diff',    desc: 'اعرض الفرق بين نسختين',    example: '/diff main..feature' },
-  { cmd: '/pr',      desc: 'أنشئ Pull Request',         example: '/pr "feat: dark mode"' },
-  { cmd: '/ls',      desc: 'اعرض ملفات المستودع',       example: '/ls src/' },
-  { cmd: '/scan',    desc: 'افحص الكود عن أخطاء',       example: '/scan' },
-  { cmd: '/suggest', desc: 'اقترح تحسينات',             example: '/suggest' },
-  { cmd: '/deploy',  desc: 'انشر على GitHub Pages',     example: '/deploy' },
+  { cmd: '/read',    desc: 'اقرأ محتوى ملف',             example: '/read src/App.tsx' },
+  { cmd: '/edit',    desc: 'عدّل ملف (يطلب تأكيد)',       example: '/edit server.js أضف route جديد' },
+  { cmd: '/commit',  desc: 'احفظ التغييرات مع رسالة',    example: '/commit "fix: إصلاح bug الطقس"' },
+  { cmd: '/diff',    desc: 'اعرض الفرق بين نسختين',      example: '/diff main..feature' },
+  { cmd: '/pr',      desc: 'أنشئ Pull Request',           example: '/pr "feat: dark mode"' },
+  { cmd: '/ls',      desc: 'اعرض ملفات المستودع',         example: '/ls src/' },
+  { cmd: '/scan',    desc: 'افحص الكود عن أخطاء',         example: '/scan' },
+  { cmd: '/suggest', desc: 'اقترح تحسينات للكود',         example: '/suggest' },
+  { cmd: '/deploy',  desc: 'انشر على GitHub Pages',       example: '/deploy' },
+  { cmd: '/repos',   desc: 'اقترح مستودعات GitHub مفيدة', example: '/repos ai' },
 ]
 
 export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect }: AgentModeBarProps) {

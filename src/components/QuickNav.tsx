@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, Home, Bot, MessageCircle, BookOpen,
   Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight,
-  FileSpreadsheet, Gamepad2, Github
+  FileSpreadsheet, Gamepad2, Github, Radio
 } from 'lucide-react'
 import '../styles/quick-nav.css'
 
@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/excel',        label: 'DZ Excel',     labelEn: 'Smart Sheets', icon: <FileSpreadsheet size={18} />, color: '#4ade80' },
   { path: '/le3ba',        label: 'DZ Le3ba',     labelEn: 'Word Games',   icon: <Gamepad2 size={18} />,        color: '#fb7185' },
   { path: '/github-agent', label: 'DZ GitHub',    labelEn: 'Git Deploy',   icon: <Github size={18} />,          color: '#60a5fa' },
+  { path: '/radio',        label: 'DZ Radio',     labelEn: 'Live Radio',   icon: <Radio size={18} />,           color: '#38bdf8' },
 ]
 
 const HIDE_ON: string[] = []

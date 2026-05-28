@@ -633,6 +633,7 @@ interface DZMessage {
   imagePrompt?: string
   imageModel?: string
   imageStyle?: string
+  imageGrid?: string[]
   qrData?: string
   qrTitle?: string
   books?: Array<{
@@ -5278,11 +5279,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setImgRegenLoading(null)
   }, [imgRegenLoading])
 
-  const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
+  const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
 
   function extractImagePrompt(text: string): string {
     const cleaned = text
-      .replace(/(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|generate\s*(?:an?\s*)?image(?:\s*of)?|create\s*(?:an?\s*)?image(?:\s*of)?|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image(?:\s*of)?|sketch\s*(?:me\s*)?(?:a\s*)?|dessine(?:\s*moi)?\s*(?:un[e]?\s*)?|cr[ée]+\s*une?\s*image\s*(?:de\s*|d')?|g[ée]n[eè]re?\s*une?\s*image\s*(?:de\s*|d')?|fais\s*une?\s*image\s*(?:de\s*|d')?)/ig, '')
+      .replace(/(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|generate\s*(?:an?\s*)?image(?:\s*of)?|create\s*(?:an?\s*)?image(?:\s*of)?|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image(?:\s*of)?|sketch\s*(?:me\s*)?(?:a\s*)?|dessine(?:\s*moi)?\s*(?:un[e]?\s*)?|cr[ée]+\s*une?\s*image\s*(?:de\s*|d')?|g[ée]n[eè]re?\s*une?\s*image\s*(?:de\s*|d')?|fais\s*une?\s*image\s*(?:de\s*|d')?)/ig, '')
       .trim()
     return cleaned || text.trim()
   }
@@ -5370,13 +5371,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // ── Image Web Search — fetch real photo from internet (e.g. "صورة للأمير عبد القادر") ──
-      const IMAGE_FETCH_RE = /(?:^|\s)صورة\s*(?:ل[لـ]?|الـ|لـ)\s*\S/i
+      // ── Image Web Search — شبكة 9 صور حقيقية من الإنترنت ──────────────────────
+      const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن)|صورة\s*(?:ل[لـ]?|الـ|لـ))\s*\S/i
       if (IMAGE_FETCH_RE.test(text) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
-        const subject = text.replace(/^صورة\s*(?:ل[لـ]?|الـ|لـ)\s*/i, '').trim() || text.trim()
+        const subject = text
+          .replace(/^(?:صور|صورة)\s*(?:ل[لـ]?|الـ|لـ|عن)\s*/i, '')
+          .trim() || text.trim()
         const loadingId = generateId()
         setMessages(prev => [...prev, {
-          id: loadingId, role: 'assistant' as const, content: `🔍 جاري البحث عن صورة "${subject}"...`, richType: 'text' as const, isStreaming: true,
+          id: loadingId, role: 'assistant' as const,
+          content: `🔍 جاري البحث عن صور "${subject}"...`,
+          richType: 'text' as const, isStreaming: true,
         }])
         try {
           const imgFetchRes = await fetch(`/api/tools/image-search?q=${encodeURIComponent(subject)}`, { signal })
@@ -5384,60 +5389,77 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           setMessages(prev => prev.filter(m => m.id !== loadingId))
           const results = imgFetchData.results || []
           if (results.length > 0) {
-            const first = results[0]
+            const gridUrls = results.slice(0, 9).map(r => r.thumbnail || r.url).filter(Boolean)
             addAssistantMessage({
-              content: `🔍 **صورة:** ${subject}`,
-              richType: 'image',
-              imageUrl: first.thumbnail || first.url,
+              content: `🔍 **${results.length} صورة لـ "${subject}"** — اضغط لفتح الصورة بالحجم الكامل`,
+              richType: 'imageGrid' as const,
+              imageGrid: gridUrls,
               imagePrompt: subject,
               imageModel: 'بحث الويب',
               imageStyle: 'web',
-              quickSuggestions: ['ابحث عن صورة أخرى', 'أعطني المزيد من الصور', 'أنشئ صورة بالذكاء الاصطناعي'],
+              quickSuggestions: [`صور أخرى لـ ${subject}`, `ارسم ${subject} بالذكاء الاصطناعي`, `معلومات عن ${subject}`],
             })
           } else {
-            addAssistantMessage({ content: `⚠️ لم أجد صورة لـ "${subject}" على الإنترنت. هل تريد توليد صورة بالذكاء الاصطناعي؟`, richType: 'text' })
+            addAssistantMessage({
+              content: `⚠️ لم أجد صوراً لـ "${subject}" على الإنترنت.\nيمكنك توليد صورة بالذكاء الاصطناعي بدلاً من ذلك.`,
+              richType: 'text' as const,
+              quickSuggestions: [`ارسم ${subject}`, `توليد صورة ${subject}`, `إنشاء صورة ${subject}`],
+            })
           }
         } catch {
           setMessages(prev => prev.filter(m => m.id !== loadingId))
-          addAssistantMessage({ content: '⚠️ تعذّر البحث عن الصورة.', richType: 'text', isError: true })
+          addAssistantMessage({ content: '⚠️ تعذّر البحث عن الصورة. تحقق من الاتصال.', richType: 'text', isError: true })
         }
         setIsLoading(false)
         return
       }
 
-      // ── Image Generation (zero-token — Pollinations.ai free & unlimited) ──────
+      // ── Image Generation — Pollinations.ai (مجاني + فوري) ─────────────────────
       if (IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const prompt = extractImagePrompt(text)
         const loadingId = generateId()
         setMessages(prev => [...prev, {
           id: loadingId, role: 'assistant', content: '🎨 جاري توليد الصورة...', richType: 'text', isStreaming: true,
         }])
+
+        let imageUrl: string | undefined
+        let imageModel = 'FLUX AI'
+
         try {
+          // Try server (HuggingFace quality) with 12s timeout
+          const ctrl = new AbortController()
+          const timer = setTimeout(() => ctrl.abort(), 12000)
           const imgRes = await fetch('/api/tools/img-gen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt, model: 'flux' }),
-            signal,
+            signal: ctrl.signal,
           })
+          clearTimeout(timer)
           const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; error?: string }
-          setMessages(prev => prev.filter(m => m.id !== loadingId))
           if (imgData.imageUrl || imgData.imageBase64) {
-            addAssistantMessage({
-              content: `🎨 **صورة:** ${prompt}`,
-              richType: 'image',
-              imageUrl: imgData.imageUrl || imgData.imageBase64,
-              imagePrompt: prompt,
-              imageModel: imgData.model || 'FLUX',
-              imageStyle: 'flux',
-              quickSuggestions: ['ارسم نسخة مختلفة', 'غيّر الأسلوب لأنيمي', 'اضف تفاصيل أكثر', 'غيّر الخلفية'],
-            })
-          } else {
-            addAssistantMessage({ content: '⚠️ تعذّر توليد الصورة، حاول مرة أخرى.', richType: 'text', isError: true })
+            imageUrl = imgData.imageUrl || imgData.imageBase64
+            imageModel = imgData.model || 'FLUX AI'
           }
-        } catch {
-          setMessages(prev => prev.filter(m => m.id !== loadingId))
-          addAssistantMessage({ content: '⚠️ انقطع الاتصال أثناء توليد الصورة.', richType: 'text', isError: true })
+        } catch { /* timeout or network error — use Pollinations direct URL below */ }
+
+        // Fallback: direct Pollinations URL — instant, no server needed
+        if (!imageUrl) {
+          const seed = Math.floor(Math.random() * 99999999)
+          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.trim())}?model=flux&width=768&height=768&seed=${seed}&nologo=true&safe=false`
+          imageModel = 'FLUX (Pollinations)'
         }
+
+        setMessages(prev => prev.filter(m => m.id !== loadingId))
+        addAssistantMessage({
+          content: `🎨 **صورة AI:** ${prompt}`,
+          richType: 'image',
+          imageUrl,
+          imagePrompt: prompt,
+          imageModel,
+          imageStyle: 'flux',
+          quickSuggestions: ['ارسم نسخة مختلفة', '🎌 أسلوب أنيمي', '📷 أسلوب واقعي', '🧊 ثلاثي الأبعاد', 'اضف تفاصيل أكثر'],
+        })
         setIsLoading(false)
         return
       }
@@ -6647,6 +6669,42 @@ ${rows}
                           }}
                         />
                       )}
+                      {msg.richType === 'imageGrid' && msg.imageGrid && msg.imageGrid.length > 0 && (
+                        <div className="dz-image-grid">
+                          {msg.imageGrid.map((url, idx) => (
+                            <a
+                              key={idx}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="dz-image-grid__item"
+                              title={`${msg.imagePrompt} — صورة ${idx + 1}`}
+                            >
+                              <img
+                                src={url}
+                                alt={`${msg.imagePrompt || 'صورة'} ${idx + 1}`}
+                                className="dz-image-grid__img"
+                                loading="lazy"
+                                onError={(e) => { (e.target as HTMLImageElement).closest('.dz-image-grid__item')?.remove() }}
+                              />
+                              <div className="dz-image-grid__overlay">
+                                <span>🔍 فتح</span>
+                              </div>
+                            </a>
+                          ))}
+                          <div className="dz-image-grid__footer">
+                            <span>🌐 بحث الويب · {msg.imageGrid.length} صورة</span>
+                            <button
+                              className="dz-image-grid__gen-btn"
+                              onClick={() => sendMessage(`ارسم ${msg.imagePrompt}`)}
+                              title="توليد بالذكاء الاصطناعي"
+                            >
+                              🎨 توليد AI
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {msg.richType === 'image' && msg.imageUrl && (
                         <div className="dz-image-card">
                           {imgRegenLoading === msg.id && (

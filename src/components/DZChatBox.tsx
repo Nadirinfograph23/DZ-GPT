@@ -3911,8 +3911,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [githubToken, addToLog, addAssistantMessage])
 
-  const fetchFiles = useCallback(async (repo: string, path = '', branch?: string) => {
-    if (!githubToken && !serverGithubConnected) return
+  const fetchFiles = useCallback(async (repo: string, path = '', branch?: string, passedToken?: string) => {
+    const effectiveTok = passedToken || githubToken
+    if (!effectiveTok && !serverGithubConnected) {
+      addAssistantMessage({ content: '🔐 يجب الاتصال بـ GitHub أولاً — انقر على زر **وكيل** في الأسفل ثم "اتصل بـ GitHub".', richType: 'text', isError: true })
+      return
+    }
     // Strip leading/trailing slashes to avoid GitHub API 404
     const cleanPath = path.replace(/^\/+|\/+$/g, '')
     setIsLoading(true)
@@ -3922,30 +3926,34 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       const res = await fetch('/api/dz-agent/github/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken, repo, path: cleanPath, ...(branch ? { branch } : {}) }),
+        body: JSON.stringify({ token: effectiveTok, repo, path: cleanPath, ...(branch ? { branch } : {}) }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to fetch files')
       setCurrentRepo(repo)
       setCurrentPath(cleanPath)
-      if (data.empty) {
-        addAssistantMessage({ content: `📂 المستودع **${repo}** فارغ — لا توجد ملفات بعد.`, richType: 'text' })
+      if (data.empty || !data.files || data.files.length === 0) {
+        addAssistantMessage({ content: `📂 المجلد \`${cleanPath || '/'}\` في **${repo}** فارغ أو لا توجد ملفات.`, richType: 'text' })
       } else {
         addAssistantMessage({ content: `Files in ${repo}${cleanPath ? '/' + cleanPath : '/'}:`, richType: 'files', files: data.files })
       }
       addToLog({ type: 'list-files', description: `Listed ${(data.files || []).length} files in ${repo}`, status: 'success', repo })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
+      addAssistantMessage({ content: `❌ فشل جلب الملفات: ${msg}`, richType: 'text', isError: true })
       addToLog({ type: 'list-files', description: `Error: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, addToLog, addAssistantMessage])
+  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
 
-  const fetchFileContent = useCallback(async (repo: string, path: string) => {
-    if (!githubToken && !serverGithubConnected) return
+  const fetchFileContent = useCallback(async (repo: string, path: string, passedToken?: string) => {
+    const effectiveTok = passedToken || githubToken
+    if (!effectiveTok && !serverGithubConnected) {
+      addAssistantMessage({ content: '🔐 يجب الاتصال بـ GitHub أولاً — انقر على زر **وكيل** في الأسفل ثم "اتصل بـ GitHub".', richType: 'text', isError: true })
+      return
+    }
     setIsLoading(true)
     setThinkingStep({ type: 'read', label: `قراءة الملف: ${path.split('/').pop()}...` })
     addToLog({ type: 'read-file', description: `Reading ${path} from ${repo}`, status: 'pending', repo })
@@ -3953,7 +3961,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       const res = await fetch('/api/dz-agent/github/file-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken, repo, path }),
+        body: JSON.stringify({ token: effectiveTok, repo, path }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to read file')
@@ -3961,13 +3969,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       addToLog({ type: 'read-file', description: `Read ${path} (${data.content.split('\n').length} lines)`, status: 'success', repo })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
+      addAssistantMessage({ content: `❌ فشل قراءة الملف: ${msg}`, richType: 'text', isError: true })
       addToLog({ type: 'read-file', description: `Error reading ${path}: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
       setThinkingStep(null)
     }
-  }, [githubToken, addToLog, addAssistantMessage])
+  }, [githubToken, serverGithubConnected, addToLog, addAssistantMessage])
 
   const analyzeCode = useCallback(async (repo: string, path: string, content: string) => {
     setIsLoading(true)
@@ -4991,7 +4999,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
         const path = args.trim() || ''
         setThinkingStep({ type: 'list', label: `عرض ملفات ${repo}${path ? '/' + path : ''}...` })
-        await fetchFiles(repo, path)
+        await fetchFiles(repo, path, undefined, tok)
         return
       }
 
@@ -5001,7 +5009,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         const path = args.trim()
         if (!path) { addAssistantMessage({ content: '⚠️ صيغة: `/read <مسار الملف>` — مثال: `/read src/App.tsx`', richType: 'text', isError: true }); return }
         setThinkingStep({ type: 'read', label: `قراءة ${path}...` })
-        await fetchFileContent(repo, path)
+        await fetchFileContent(repo, path, tok)
         return
       }
 

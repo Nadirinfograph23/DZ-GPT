@@ -1704,19 +1704,20 @@
 }
 
 .dz-ticker-inner {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: nowrap;
+  width: max-content;
   white-space: nowrap;
   color: #d1d5db;
   font-size: 11.5px;
   line-height: 1;
-  direction: rtl;
-  animation: dz-ticker-scroll 55s linear infinite;
+  animation: dz-ticker-scroll 80s linear infinite;
   will-change: transform;
 }
 
 .dz-ticker-copy {
-  padding-left: 80px;
   flex-shrink: 0;
+  padding-right: 100px;
 }
 
 .dz-ticker-inner:hover {
@@ -1724,14 +1725,14 @@
 }
 
 @keyframes dz-ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 
 @media (max-width: 600px) {
   .dz-ticker-inner {
     font-size: 10.5px;
-    animation-duration: 45s;
+    animation-duration: 60s;
   }
 }
 

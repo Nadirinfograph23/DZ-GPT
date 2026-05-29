@@ -203,19 +203,43 @@ const NON_MAP_REGEXES = [
   /اهداف مباراة/i,
   /احصائيات الفريق/i,
 
-  // Website/app/tech creation — موقع means "website" in this context
+  // ── WEBSITE / APP / PROGRAMMING CONTEXT ──────────────────────────────────
+  // "موقع" = WEBSITE (not location) when paired with ANY of these patterns.
+  // RULE: if the message is about building/creating something → NEVER a map query.
+
+  // Creation verb + موقع/صفحة/تطبيق
   /(?:إنشاء|بناء|ابني|أنشئ|اصنع|اعمل|صمم|طور|انشاء|عمل|دير|ديرلي|صنعلي|اعملي|عملي|بغيت|نحتاج|نبغي)\s+(موقع|تطبيق|صفحة)/i,
-  /(?:موقع|صفحة)\s+(?:مطعم|فندق|متجر|شركة|وكالة|مدرسة|مستشفى|صيدلية|نادي|جمعية|مؤسسة|تجاري|احترافي|إلكتروني|الكتروني|شخصي|ويب|web|html)/i,
-  /(?:create|build|make|design|generate)\s+(?:a\s+)?(?:restaurant|hotel|store|shop|agency|school|business)\s+(?:website|site|page)/i,
+
+  // "موقع/صفحة" + any business/service type (WITH or WITHOUT creation verb)
+  // e.g. "موقع مطعم" / "موقع فندق" / "صفحة شركة" → WEBSITE not map location
+  /(?:موقع|صفحة|سايت)\s+(?:مطعم|فندق|متجر|شركة|وكالة|مدرسة|جامعة|مستشفى|صيدلية|نادي|جمعية|مؤسسة|مقهى|قهوة|حلاق|مصبغة|ميكانيكي|محل|دكان|بوتيك|سبا|عيادة|مركز|تجاري|احترافي|إلكتروني|الكتروني|شخصي|ويب|web|html|خاص|أعمال|تجارة)/i,
+
+  // Business/service type + "موقع" (reversed order)
+  // e.g. "مطعم موقع" / "فندق سايت"
+  /(?:مطعم|فندق|متجر|شركة|وكالة|مدرسة|جامعة|نادي|جمعية|مؤسسة|محل|عيادة|مركز)\s+(?:موقع|صفحة|سايت|ويب)/i,
+
+  // English: [creation verb] + [business type] + website/site/page
+  /(?:create|build|make|design|generate)\s+(?:a\s+)?(?:restaurant|hotel|store|shop|agency|school|business|clinic|salon|bakery|cafe)\s+(?:website|site|page|app)/i,
+
+  // English: [business type] website (without explicit verb — still clearly a web request)
+  /(?:restaurant|hotel|store|shop|agency|school|business|clinic|salon)\s+(?:website|site|webpage|web\s*app)/i,
+
+  // French
   /(?:crée|créer|faire|construire)\s+(?:un\s+)?(?:site|page)\s+(?:restaurant|hôtel|boutique|agence)/i,
+  /site\s+(?:restaurant|hôtel|hotel|boutique|agence|école|entreprise)/i,
+
+  // Web tech markers — any of these = definitely a website/programming context
   /موقع\s+(ويب|الكتروني|إلكتروني|انترنت|web)/i,
   /ويب\s*سايت/i,
   /web\s*site/i,
   /webpage/i,
   /landing\s*page/i,
-  /صفحة\s+(ويب|الكترونية|رئيسية)/i,
+  /صفحة\s+(ويب|الكترونية|رئيسية|هبوط)/i,
   /تطبيق (جوال|موبايل|هاتف)/i,
   /اعمل لي (موقع|تطبيق)/i,
+
+  // Pure programming context — any tech keyword = not a map query
+  /(?:html|css|javascript|react|vue|angular|node\.?js|python|php|django|flask|express|laravel|next\.?js|nuxt|vite|bootstrap|tailwind)/i,
 
   // ── WEB FILE / INDEX REFERENCES ─────────────────────────────────────────
   // "موقع index" / "صفحة index.html" / "ملف index" → web dev context, NEVER map
@@ -355,7 +379,10 @@ export function isMapQuery(msg) {
   // Step 4c — POI keyword alone (no location) → trigger GPS fallback
   // e.g. "صيدلية", "مطعم", "مسجد", "محطة المسافرين" → show GPS nearby request
   // Guard: skip if message has non-map informational modifier
-  if (hasPoi && !NON_MAP_POI_MODIFIERS.test(msg)) return true
+  // Guard: skip if message has WEBSITE context — "موقع" / "سايت" / web tech keywords
+  //        e.g. "موقع مطعم" = restaurant WEBSITE, NOT restaurant location on map
+  const _hasWebCtx = /(?:موقع|صفحة|سايت|ويب|web|site|webpage|html|css|javascript|react|vue|تطبيق\s+(?:ويب|جوال|موبايل)|landing)/i.test(msg)
+  if (hasPoi && !NON_MAP_POI_MODIFIERS.test(msg) && !_hasWebCtx) return true
 
   return false
 }

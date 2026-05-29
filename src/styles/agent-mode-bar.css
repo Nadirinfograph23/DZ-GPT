@@ -13,10 +13,13 @@
 .amb-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.amb-row::-webkit-scrollbar { display: none; }
 
 .amb-toggle {
   display: flex;
@@ -96,18 +99,17 @@
 .amb-cmds-btn, .amb-expand-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 7px;
-  border: 1px solid rgba(255,255,255,0.08);
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.07);
   background: transparent;
   color: #64748b;
-  font-size: 0.72rem;
   cursor: pointer;
   transition: all 0.15s;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
-.amb-cmds-btn:hover, .amb-expand-btn:hover { color: #e2e8f0; border-color: rgba(255,255,255,0.2); }
+.amb-cmds-btn:hover, .amb-expand-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
 .amb-cmds-btn--on { background: rgba(99,102,241,0.12); color: #818cf8; border-color: rgba(99,102,241,0.3); }
 
 .amb-status-badge {
@@ -541,18 +543,18 @@
 
 /* ── Deploy button in toolbar ── */
 .amb-deploy-btn {
-  display: flex; align-items: center; gap: 4px;
-  padding: 4px 9px; border-radius: 6px;
-  border: 1px solid rgba(99,102,241,0.35);
-  background: rgba(99,102,241,0.08);
-  color: #818cf8; font-size: 0.74rem; font-weight: 600;
-  cursor: pointer; transition: all 0.18s; white-space: nowrap;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px 6px; border-radius: 6px;
+  border: 1px solid rgba(99,102,241,0.3);
+  background: rgba(99,102,241,0.07);
+  color: #6366f1;
+  cursor: pointer; transition: all 0.18s; flex-shrink: 0;
 }
 .amb-deploy-btn:hover:not(:disabled) {
-  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.6); color: #a5b4fc;
+  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.55); color: #a5b4fc;
 }
 .amb-deploy-btn--on {
-  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.6); color: #a5b4fc;
+  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.55); color: #a5b4fc;
 }
 .amb-deploy-btn--loading { opacity: 0.7; cursor: not-allowed; }
 .amb-deploy-btn:disabled { opacity: 0.5; cursor: not-allowed; }

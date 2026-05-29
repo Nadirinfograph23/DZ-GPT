@@ -10,7 +10,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -335,6 +335,7 @@ type RichType =
   | 'books'
   | 'presentation'
   | 'tool-redirect'
+  | 'find-input'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -595,6 +596,7 @@ interface DZMessage {
     smartMessage?: string
   }
   actionButtons?: Array<{ label: string; cmd: string }>
+  findRepo?: string
 }
 
 interface ActionLogEntry {
@@ -3546,6 +3548,40 @@ interface DZChatBoxProps {
 
 type DashboardContext = { priority: 'weather'; city: string }
 
+// ===== FIND INPUT CARD =====
+function FindInputCard({ repo, onSearch }: { repo: string; onSearch: (pattern: string) => void }) {
+  const [pattern, setPattern] = useState('')
+  const repoName = repo.split('/')[1] || repo
+  return (
+    <div className="dzc-find-card">
+      <div className="dzc-find-title">
+        <Search size={14} />
+        <span>بحث عن ملف في <code>{repoName}</code></span>
+      </div>
+      <div className="dzc-find-row">
+        <input
+          className="dzc-find-input"
+          placeholder="مثال: App.tsx أو *.config.js أو README"
+          value={pattern}
+          onChange={e => setPattern(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && pattern.trim()) onSearch(pattern.trim()) }}
+          dir="ltr"
+          autoFocus
+        />
+        <button
+          className="dzc-find-search-btn"
+          disabled={!pattern.trim()}
+          onClick={() => { if (pattern.trim()) onSearch(pattern.trim()) }}
+        >
+          <Search size={13} />
+          <span>بحث</span>
+        </button>
+      </div>
+      <p className="dzc-find-hint">أدخل اسم ملف أو امتداده مثل <code>*.tsx</code> — يبحث في كل مجلدات المستودع</p>
+    </div>
+  )
+}
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
@@ -5318,7 +5354,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       if (cmd === '/find') {
         if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
         const pattern = args.trim()
-        if (!pattern) { addAssistantMessage({ content: '⚠️ صيغة: `/find <نمط>` — مثال: `/find App.tsx` أو `/find *.config.js`', richType: 'text', isError: true }); return }
+        if (!pattern) {
+          addAssistantMessage({ content: 'ابحث عن ملف في المستودع:', richType: 'find-input', findRepo: repo })
+          setIsLoading(false)
+          return
+        }
         setThinkingStep({ type: 'search', label: `بحث عن ملفات "${pattern}"...` })
         try {
           const tok2 = agentMode.githubToken || githubToken
@@ -6777,6 +6817,26 @@ ${rows}
       <div className="dz-gh-bar">
         <div className="dz-toolbar-spacer" />
         <div className="dz-toolbar-actions">
+          {agentMode.active && agentMode.selectedRepo && (
+            <>
+              <button
+                className="gh-log-toggle dz-agent-quick-btn"
+                onClick={() => { setInput('/find '); setTimeout(() => textareaRef.current?.focus(), 50) }}
+                title="بحث عن ملف في المستودع"
+              >
+                <Search size={13} />
+                بحث
+              </button>
+              <button
+                className="gh-log-toggle dz-agent-quick-btn"
+                onClick={() => sendMessage('/scan')}
+                title="فحص الكود عن أخطاء"
+              >
+                <ScanSearch size={13} />
+                فحص
+              </button>
+            </>
+          )}
           {messages.length > 0 && (
             <button
               className="gh-log-toggle"
@@ -6787,6 +6847,14 @@ ${rows}
               PDF تصدير
             </button>
           )}
+          <button
+            className="gh-log-toggle"
+            onClick={() => window.open('/quran', '_blank')}
+            title="القرآن الكريم بالذكاء الاصطناعي"
+          >
+            <BookOpen size={13} />
+            قرآن
+          </button>
           <button
             className="gh-log-toggle"
             onClick={() => window.open('/stats', '_blank')}
@@ -7452,6 +7520,12 @@ ${rows}
                   msg.content
                 )}
               </div>
+              {msg.richType === 'find-input' && msg.findRepo && (
+                <FindInputCard
+                  repo={msg.findRepo}
+                  onSearch={pattern => sendMessage(`/find ${pattern}`)}
+                />
+              )}
               {msg.actionButtons && msg.actionButtons.length > 0 && (
                 <div className="dzc-action-btns-row">
                   {msg.actionButtons.map((ab, i) => (
@@ -7599,7 +7673,7 @@ ${rows}
       <div className="dz-input-area">
         {messages.length > 0 && (
           <div className="dz-input-top-btns">
-            <button className="dz-clear-btn" onClick={clearChat}>مسح المحادثة</button>
+            <button className="dz-clear-btn" onClick={clearChat} title="مسح المحادثة"><Trash2 size={14} /></button>
           </div>
         )}
 

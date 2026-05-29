@@ -2157,6 +2157,66 @@
   color: #10a37f;
 }
 
+/* Agent bar toggle button */
+.dz-agent-bar-toggle {
+  border-radius: 6px;
+  position: relative;
+}
+.dz-agent-bar-toggle.active {
+  color: #10a37f !important;
+  background: rgba(16,163,127,0.08) !important;
+}
+
+/* Clear button in toolbar */
+.dz-toolbar-clear-btn {
+  color: #3f3f4e !important;
+  transition: color 0.15s, background 0.15s !important;
+}
+.dz-toolbar-clear-btn:hover {
+  color: #f87171 !important;
+  background: rgba(239,68,68,0.08) !important;
+}
+
+/* Tool suggestion chips */
+.dz-toolbar-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 1;
+  min-width: 0;
+  padding: 1px 0;
+}
+.dz-toolbar-chips::-webkit-scrollbar { display: none; }
+
+.dz-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: #5a5a70;
+  font-size: 10.5px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.dz-tool-chip:hover {
+  color: #10a37f;
+  background: rgba(16,163,127,0.08);
+  border-color: rgba(16,163,127,0.3);
+}
+
+@media (max-width: 480px) {
+  .dz-toolbar-chips {
+    max-width: 140px;
+  }
+}
+
 .gh-tools-btn::after {
   content: '';
   display: block;

@@ -12811,6 +12811,37 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     } catch { /* لا تكسر الـ request إذا فشل تحميل الكلمات */ }
 
+    // ── حقن قاموس الدارجة الحواري — عبارات تُستخدم بشكل طبيعي في السياق ──────
+    try {
+      const _dictRaw  = _readFileSync(path.join(process.cwd(), 'data', 'dz_dialect.json'), 'utf8')
+      const _dictData = JSON.parse(_dictRaw)
+      const _convAll  = _dictData.conversation_phrases || []
+      if (_convAll.length > 0) {
+        // أولويات: تحيات + ردود + حالات + تقنية + إشعارات + أسئلة
+        const _PRIO = ['greeting','gratitude','farewell','state','response',
+                       'affirmation','negation','question','warning','tech',
+                       'notification','phrase','verb','adjective','emotion']
+        const _sorted = [..._convAll].sort((a, b) => {
+          const ai = _PRIO.indexOf(a.ctx), bi = _PRIO.indexOf(b.ctx)
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+        })
+        // مجموعات مختصرة — 8 مجموعات، 5 أمثلة لكل مجموعة
+        const _groups = {}
+        for (const p of _sorted) {
+          if (!_groups[p.ctx]) _groups[p.ctx] = []
+          if (_groups[p.ctx].length < 5) _groups[p.ctx].push(`${p.ar} ← ${p.dz}`)
+        }
+        const _groupLines = Object.entries(_groups)
+          .slice(0, 10)
+          .map(([ctx, items]) => `  [${ctx}] ${items.join(' | ')}`)
+          .join('\n')
+        lines.push('')
+        lines.push('🗣️ قاموس الدارجة الجزائرية الحواري (استعمل هذه العبارات بشكل طبيعي في سياق الرد حين تكون مناسبة — لا تحشوها جميعاً دفعةً واحدة):')
+        lines.push(_groupLines)
+        lines.push('  📌 المبدأ: إذا كانت الجملة تقتضي كلمة دارجة، فضّلها على الفصحى في الموضع المناسب فقط.')
+      }
+    } catch { /* لا تكسر الـ request */ }
+
     return lines.join('\n')
   })()
   // ── Local knowledge base — unified developer/owner + capabilities intents ─

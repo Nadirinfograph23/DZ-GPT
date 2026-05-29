@@ -5296,9 +5296,392 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // ── /grep — بحث نصي داخل ملفات المستودع ─────────────────────
+      if (cmd === '/grep') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const parts = args.trim().split(/\s+/)
+        const query = parts[0] || ''
+        const searchPath = parts.slice(1).join(' ') || ''
+        if (!query) { addAssistantMessage({ content: '⚠️ صيغة: `/grep <نص> [مسار]` — مثال: `/grep useState src/`', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'read', label: `بحث عن "${query}"${searchPath ? ` في ${searchPath}` : ''}...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/grep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, query, path: searchPath }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Grep failed')
+          if (!data.results || data.results.length === 0) {
+            addAssistantMessage({ content: `🔍 **لم يُعثر على** \`${query}\` في ${data.files_searched || 0} ملف${searchPath ? ` (${searchPath})` : ''}.`, richType: 'text' })
+          } else {
+            const lines = data.results.map((r: { path: string; matches: Array<{ line: number; text: string }> }) =>
+              `**📄 \`${r.path}\`** — ${r.matches.length} تطابق\n` +
+              r.matches.map((m: { line: number; text: string }) => `  \`L${m.line}\` ${m.text}`).join('\n')
+            ).join('\n\n')
+            addAssistantMessage({
+              content: `🔍 **نتائج البحث عن \`${query}\`** — ${data.results.length} ملف من ${data.files_searched} مفحوص:\n\n${lines}`,
+              richType: 'text',
+              quickSuggestions: [`/read ${data.results[0]?.path || ''}`, `/grep ${query} src/`, `/find ${query}`],
+            })
+          }
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل البحث: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /find — بحث عن ملف بالاسم ──────────────────────────────
+      if (cmd === '/find') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const pattern = args.trim()
+        if (!pattern) { addAssistantMessage({ content: '⚠️ صيغة: `/find <نمط>` — مثال: `/find App.tsx` أو `/find *.config.js`', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'search', label: `بحث عن ملفات "${pattern}"...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/find-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, pattern }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Find failed')
+          if (!data.matches || data.matches.length === 0) {
+            addAssistantMessage({ content: `🔎 **لم يُعثر على ملفات** بنمط \`${pattern}\` في \`${repo}\`.`, richType: 'text' })
+          } else {
+            const list = data.matches.map((m: { path: string; size: number }) =>
+              `\`${m.path}\` ${m.size ? `_(${(m.size / 1024).toFixed(1)} KB)_` : ''}`
+            ).join('\n')
+            addAssistantMessage({
+              content: `🔎 **${data.count} ملف** بنمط \`${pattern}\` في \`${repo}\`:\n\n${list}`,
+              richType: 'text',
+              quickSuggestions: data.matches.slice(0, 3).map((m: { path: string }) => `/read ${m.path}`),
+            })
+          }
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل البحث: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /history — تاريخ الـ commits ────────────────────────────
+      if (cmd === '/history') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const parts = args.trim().split(/\s+/)
+        const n = parseInt(parts[0]) || 15
+        const branch = parts[1] || ''
+        setThinkingStep({ type: 'read', label: `جلب آخر ${n} commits...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, per_page: n, branch }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'History failed')
+          if (!data.commits || data.commits.length === 0) {
+            addAssistantMessage({ content: `📭 لا توجد commits في \`${repo}\`.`, richType: 'text' })
+          } else {
+            const conclusionIcon = (c: string) => c === 'success' ? '✅' : c === 'failure' ? '❌' : '⏳'
+            const list = data.commits.map((c: { sha: string; message: string; author: string; date: string; url: string }, i: number) => {
+              const d = c.date ? new Date(c.date).toLocaleDateString('ar-DZ', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+              return `${i + 1}. \`${c.sha}\` **${c.message}**\n   👤 ${c.author || 'unknown'} · 📅 ${d}`
+            }).join('\n\n')
+            addAssistantMessage({
+              content: `📜 **آخر ${data.commits.length} commits** في \`${repo}\`${branch ? ` (${branch})` : ''}:\n\n${list}\n\n[عرض على GitHub](https://github.com/${repo}/commits)`,
+              richType: 'text',
+              quickSuggestions: [`/diff ${data.commits[data.commits.length-1]?.sha || 'HEAD~5'} ${data.commits[0]?.sha || 'HEAD'}`, `/history ${n * 2}`],
+            })
+          }
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل جلب التاريخ: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /tree — شجرة مرئية للمستودع ─────────────────────────────
+      if (cmd === '/tree') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const treePath = args.trim()
+        setThinkingStep({ type: 'list', label: `بناء شجرة ${treePath || 'المستودع'}...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/tree', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, path: treePath }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Tree failed')
+          const items: Array<{ path: string; type: string }> = data.items || []
+          const prefix = treePath ? treePath.replace(/\/$/, '') + '/' : ''
+          const buildTree = (items: Array<{ path: string; type: string }>, prefix: string): string => {
+            const seen = new Set<string>()
+            const lines: string[] = []
+            items.forEach(item => {
+              const rel = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path
+              const parts = rel.split('/')
+              const depth = parts.length - 1
+              const name = parts[parts.length - 1]
+              const indent = '  '.repeat(depth)
+              const icon = item.type === 'tree' ? '📁' : '📄'
+              const key = parts.slice(0, depth).join('/')
+              if (!seen.has(key) && depth > 0) { seen.add(key) }
+              lines.push(`${indent}${icon} ${name}`)
+            })
+            return lines.slice(0, 150).join('\n')
+          }
+          addAssistantMessage({
+            content: `🌳 **شجرة** \`${repo}${treePath ? '/' + treePath : ''}\` — ${items.length} عنصر:\n\n\`\`\`\n${buildTree(items, prefix)}\n\`\`\``,
+            richType: 'text',
+            quickSuggestions: [`/ls ${treePath}`, `/grep TODO ${treePath}`, '/scan'],
+          })
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل بناء الشجرة: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /diff — فرق حقيقي بين فرعين ─────────────────────────────
+      if (cmd === '/diff') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const diffArgs = args.trim()
+        const parts = diffArgs.replace(/\.{2,3}/, ' ').split(/\s+/)
+        if (parts.length < 2) {
+          addAssistantMessage({ content: '⚠️ صيغة: `/diff <base> <head>` — مثال: `/diff main feature/login`', richType: 'text', isError: true })
+          return
+        }
+        const [base, head] = parts
+        setThinkingStep({ type: 'analyze', label: `مقارنة ${base}...${head}` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/real-diff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, base, head }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Diff failed')
+          const statusEmoji: Record<string, string> = { ahead: '⬆️', behind: '⬇️', diverged: '↔️', identical: '🟰' }
+          const fileLines = (data.files || []).slice(0, 10).map((f: { filename: string; status: string; additions: number; deletions: number; patch: string }) => {
+            const statusMap: Record<string, string> = { added: '🟢', removed: '🔴', modified: '🟡', renamed: '🔵' }
+            const s = statusMap[f.status] || '⚪'
+            return `${s} \`${f.filename}\` +${f.additions} -${f.deletions}${f.patch ? `\n\`\`\`diff\n${f.patch.slice(0, 300)}\n\`\`\`` : ''}`
+          }).join('\n\n')
+          addAssistantMessage({
+            content: `📊 **Git Diff** \`${repo}\`: \`${base}\` ← \`${head}\`\n\n${statusEmoji[data.status] || '🔍'} **${data.status}** · ⬆️ ${data.ahead_by} commits أمام · ⬇️ ${data.behind_by} commits خلف\n\n**الملفات المتغيرة (${(data.files || []).length}):**\n\n${fileLines || '_لا تغييرات_'}`,
+            richType: 'text',
+            quickSuggestions: [`/history 10`, `/pr "${head} → ${base}"`, '/scan'],
+          })
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل الـ diff: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /issues — إدارة GitHub Issues ────────────────────────────
+      if (cmd === '/issues') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const sub = args.trim().split(/\s+/)[0]?.toLowerCase() || ''
+        const rest = args.trim().replace(/^\S+\s*/, '').trim()
+        const tok2 = agentMode.githubToken || githubToken
+
+        if (sub === 'new' || sub === 'create') {
+          if (!rest) { addAssistantMessage({ content: '⚠️ صيغة: `/issues new <عنوان المشكلة>`', richType: 'text', isError: true }); return }
+          const ok = !agentMode.autoConfirm ? await confirmAgentAction(cmd, repo, `إنشاء issue: "${rest}"`) : true
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء إنشاء الـ issue.', richType: 'text' }); return }
+          setThinkingStep({ type: 'write', label: `إنشاء issue: "${rest}"...` })
+          try {
+            const res = await fetch('/api/dz-agent/github/issues-manage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: tok2, repo, action: 'create', title: rest }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Failed')
+            addAssistantMessage({ content: `✅ **Issue #${data.number} مُنشأة**: "${data.title}"\n\n[عرض على GitHub](${data.html_url})`, richType: 'text', quickSuggestions: ['/issues', `/issues close ${data.number}`] })
+          } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+          return
+        }
+
+        if (sub === 'close') {
+          const num = parseInt(rest)
+          if (!num) { addAssistantMessage({ content: '⚠️ صيغة: `/issues close <رقم>`', richType: 'text', isError: true }); return }
+          const ok = !agentMode.autoConfirm ? await confirmAgentAction(cmd, repo, `إغلاق issue #${num}`) : true
+          if (!ok) { addAssistantMessage({ content: 'تم إلغاء الإغلاق.', richType: 'text' }); return }
+          setThinkingStep({ type: 'write', label: `إغلاق issue #${num}...` })
+          try {
+            const res = await fetch('/api/dz-agent/github/issues-manage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token: tok2, repo, action: 'close', issue_number: num }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Failed')
+            addAssistantMessage({ content: `✅ **Issue #${data.number} مغلقة**\n\n[عرض على GitHub](${data.html_url})`, richType: 'text', quickSuggestions: ['/issues', '/issues closed'] })
+          } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+          return
+        }
+
+        // Default: list issues
+        const stateArg = sub === 'closed' ? 'closed' : sub === 'all' ? 'all' : 'open'
+        setThinkingStep({ type: 'read', label: `جلب ${stateArg === 'open' ? 'المشاكل المفتوحة' : 'المشاكل'}...` })
+        try {
+          const res = await fetch('/api/dz-agent/github/issues-manage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, action: 'list', state: stateArg }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Failed')
+          if (!data.issues || data.issues.length === 0) {
+            addAssistantMessage({ content: `📭 **لا توجد issues ${stateArg === 'open' ? 'مفتوحة' : stateArg === 'closed' ? 'مغلقة' : ''}** في \`${repo}\`.`, richType: 'text', quickSuggestions: ['/issues new أضف ميزة جديدة', '/issues all'] })
+          } else {
+            const list = data.issues.map((i: { number: number; title: string; state: string; user: string; labels: string[]; comments: number; html_url: string }) =>
+              `**#${i.number}** ${i.state === 'open' ? '🟢' : '🔴'} ${i.title?.slice(0, 80)}\n   👤 ${i.user} · 💬 ${i.comments} · ${i.labels?.length ? i.labels.join(', ') : '_بدون label_'}`
+            ).join('\n\n')
+            addAssistantMessage({
+              content: `🐛 **${data.count} Issues** في \`${repo}\` (${stateArg}):\n\n${list}\n\n[عرض كل Issues على GitHub](https://github.com/${repo}/issues)`,
+              richType: 'text',
+              quickSuggestions: ['/issues new مشكلة جديدة', '/issues closed', `/issues close ${data.issues[0]?.number}`],
+            })
+          }
+        } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+        return
+      }
+
+      // ── /actions — حالة GitHub Actions ──────────────────────────
+      if (cmd === '/actions') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'analyze', label: `جلب حالة GitHub Actions...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/actions-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, per_page: 8 }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Actions failed')
+          if (!data.runs || data.runs.length === 0) {
+            addAssistantMessage({ content: `📭 لا توجد GitHub Actions في \`${repo}\`.`, richType: 'text' })
+          } else {
+            const conclusionMap: Record<string, string> = { success: '✅', failure: '❌', cancelled: '⚫', skipped: '⏭️', timed_out: '⏰', action_required: '⚠️' }
+            const statusMap: Record<string, string> = { completed: '🏁', in_progress: '⏳', queued: '🔄', waiting: '⏱️' }
+            const list = data.runs.map((r: { id: number; name: string; status: string; conclusion: string; branch: string; sha: string; created_at: string; html_url: string }) => {
+              const icon = r.conclusion ? (conclusionMap[r.conclusion] || '❓') : (statusMap[r.status] || '❓')
+              const d = r.created_at ? new Date(r.created_at).toLocaleDateString('ar-DZ') : ''
+              return `${icon} **${r.name}** · \`${r.branch}\` · \`${r.sha || ''}\`\n   📅 ${d} · [عرض](${r.html_url})`
+            }).join('\n\n')
+            addAssistantMessage({
+              content: `⚙️ **GitHub Actions** — \`${repo}\` (${data.runs.length} runs):\n\n${list}\n\n[عرض كل Actions](https://github.com/${repo}/actions)`,
+              richType: 'text',
+              quickSuggestions: ['/history 10', '/diff main HEAD~1', '/scan'],
+            })
+          }
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل جلب Actions: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /release — إنشاء GitHub Release ──────────────────────────
+      if (cmd === '/release') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const parts = args.trim().split(/\s+/)
+        const tag = parts[0] || ''
+        const releaseName = parts.slice(1).join(' ')
+        if (!tag) { addAssistantMessage({ content: '⚠️ صيغة: `/release <tag> [وصف]` — مثال: `/release v1.2.0 ميزات جديدة`', richType: 'text', isError: true }); return }
+        const ok = !agentMode.autoConfirm ? await confirmAgentAction(cmd, repo, `إنشاء Release \`${tag}\` في \`${repo}\``) : true
+        if (!ok) { addAssistantMessage({ content: 'تم إلغاء إنشاء الـ release.', richType: 'text' }); return }
+        setThinkingStep({ type: 'deploy', label: `إنشاء release ${tag}...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/create-release', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, tag, name: releaseName || tag, body: releaseName ? `## ${releaseName}\n\nنُشر بواسطة DZ Agent` : '' }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Release failed')
+          addAssistantMessage({
+            content: `🚀 **Release \`${data.tag}\` مُنشأ**: ${data.name}\n\n[عرض على GitHub](${data.html_url})`,
+            richType: 'text',
+            quickSuggestions: ['/history 5', '/actions'],
+          })
+          addToLog({ type: 'deploy', description: `Release ${data.tag} created`, status: 'success', repo })
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل إنشاء الـ release: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /delete — حذف ملف ────────────────────────────────────────
+      if (cmd === '/delete' || cmd === '/rm') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const filePath = args.trim()
+        if (!filePath) { addAssistantMessage({ content: '⚠️ صيغة: `/delete <مسار الملف>` — مثال: `/delete src/old-component.tsx`', richType: 'text', isError: true }); return }
+        const ok = await confirmAgentAction(cmd, `${repo}/${filePath}`, `🗑️ حذف \`${filePath}\` من \`${repo}\` — **لا يمكن التراجع!**`)
+        if (!ok) { addAssistantMessage({ content: 'تم إلغاء الحذف.', richType: 'text' }); return }
+        setThinkingStep({ type: 'write', label: `حذف ${filePath}...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/delete-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, path: filePath, message: `🗑️ delete: ${filePath}` }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Delete failed')
+          addAssistantMessage({
+            content: `🗑️ **تم حذف** \`${filePath}\`\n\n**Commit:** \`${data.commit || 'N/A'}\`\n\n[عرض المستودع](https://github.com/${repo})`,
+            richType: 'text',
+            quickSuggestions: ['/ls', '/history 5'],
+          })
+          addToLog({ type: 'code-action', description: `Deleted ${filePath}`, status: 'success', repo })
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل الحذف: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
+      // ── /review — مراجعة AI لـ Pull Request ─────────────────────
+      if (cmd === '/review') {
+        if (!repo) { addAssistantMessage({ content: '⚠️ حدد مستودعاً في شريط الوكيل أولاً.', richType: 'text', isError: true }); return }
+        const prNum = parseInt(args.trim())
+        if (!prNum) { addAssistantMessage({ content: '⚠️ صيغة: `/review <رقم PR>` — مثال: `/review 7`', richType: 'text', isError: true }); return }
+        setThinkingStep({ type: 'analyze', label: `قراءة PR #${prNum}...` })
+        try {
+          const tok2 = agentMode.githubToken || githubToken
+          const res = await fetch('/api/dz-agent/github/review-pr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tok2, repo, pull_number: prNum }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Review failed')
+          const filesSum = (data.files || []).map((f: { filename: string; status: string; additions: number; deletions: number }) =>
+            `• \`${f.filename}\` — ${f.status} +${f.additions} -${f.deletions}`
+          ).join('\n')
+          const patchContext = (data.files || []).slice(0, 3).map((f: { filename: string; patch: string }) =>
+            f.patch ? `**\`${f.filename}\`:**\n\`\`\`diff\n${f.patch.slice(0, 400)}\n\`\`\`` : ''
+          ).filter(Boolean).join('\n\n')
+          addAssistantMessage({
+            content: `🔍 **PR #${data.number}**: ${data.title}\n**${data.head}** → **${data.base}** · ${data.state === 'open' ? '🟢 مفتوح' : '🟣 مغلق'}\n\n**الملفات المتغيرة (${data.files?.length || 0}):**\n${filesSum}\n\n${patchContext}\n\n> للمراجعة الكاملة: [عرض PR على GitHub](${data.html_url})`,
+            richType: 'text',
+            quickSuggestions: [`/diff ${data.base} ${data.head}`, '/issues', '/scan'],
+          })
+        } catch (err) {
+          addAssistantMessage({ content: `❌ فشل جلب PR: ${(err as Error).message}`, richType: 'text', isError: true })
+        }
+        return
+      }
+
       // unknown command
       addAssistantMessage({
-        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة: \`/read\` \`/edit\` \`/commit\` \`/diff\` \`/pr\` \`/ls\` \`/scan\` \`/suggest\` \`/deploy\` \`/repos\` \`/memory\``,
+        content: `⚠️ **أمر غير معروف**: \`${cmd}\`\n\nالأوامر المتاحة:\n\`/read\` \`/edit\` \`/ls\` \`/tree\` \`/grep\` \`/find\` \`/history\` \`/diff\` \`/delete\`\n\`/issues\` \`/actions\` \`/release\` \`/review\` \`/commit\` \`/pr\` \`/scan\` \`/suggest\` \`/deploy\` \`/repos\` \`/memory\``,
         richType: 'text',
         isError: true,
       })
@@ -5369,6 +5752,73 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setInput('')
       await executeSlashCommand(cmd, args)
       return
+    }
+
+    // ── Hybrid Agent Mode: NL → slash command conversion ─────────────────────
+    // إذا كان وضع الوكيل نشطاً، نكشف على الطلبات الطبيعية ونحوّلها لأوامر
+    if (agentMode.active && agentMode.selectedRepo) {
+      const t = text.trim()
+      const runCmd = async (cmd: string, args: string) => {
+        setMessages(prev => [...prev, { id: generateId(), role: 'user' as const, content: text, richType: 'text' as const }])
+        setInput('')
+        await executeSlashCommand(cmd, args)
+      }
+
+      // /grep — ابحث عن نص في ملفات المستودع
+      const grepM = t.match(/^(?:ابحث|بحث|grep|search|جد|اجد|ابحث\s*عن)\s+(?:عن\s+)?["']?([^"'\s]+)["']?\s+(?:في|in|داخل|ضمن)\s+(.+)/i)
+      if (grepM) { await runCmd('/grep', `${grepM[1].trim()} ${grepM[2].trim()}`); return }
+      const grepM2 = t.match(/^(?:ابحث|بحث|grep|search)\s+(?:عن\s+)?["']([^"']+)["']\s+(?:في|in|داخل)?\s*(.+)?/i)
+      if (grepM2 && !t.match(/مستودع|repo|ملف\s*محدد/i)) { await runCmd('/grep', `${grepM2[1].trim()} ${grepM2[2]?.trim() || ''}`); return }
+
+      // /find — ابحث عن ملف بالاسم أو النوع
+      const findM = t.match(/^(?:أين|اين|جد\s+ملف|find\s+file|ابحث\s+عن\s+ملف|أين\s+(?:يوجد|ملف))\s+(.+)/i)
+      if (findM) { await runCmd('/find', findM[1].trim()); return }
+      const findM2 = t.match(/^(?:ابحث|find)\s+(?:عن\s+)?(\S+\.\w+)\s*$/i)
+      if (findM2) { await runCmd('/find', findM2[1].trim()); return }
+
+      // /history — تاريخ الـ commits
+      if (/(?:تاريخ|سجل|history|commits?\s+log|كوميتات|التزامات)\s*(?:المشروع|المستودع|الـ)?/i.test(t)) {
+        const numM = t.match(/(\d+)\s*(?:commits?|كوميت|آخر)?/i)
+        await runCmd('/history', numM ? numM[1] : '15'); return
+      }
+
+      // /tree — شجرة الملفات
+      if (/(?:شجرة|tree|هيكل|بنية)\s*(?:الملفات?|المستودع|المجلد|المشروع|الـ)?/i.test(t)) {
+        const pM = t.match(/(?:شجرة|tree|هيكل|بنية)\s+(\S+)/i)
+        await runCmd('/tree', pM ? pM[1] : ''); return
+      }
+
+      // /issues list
+      if (/(?:اعرض|عرض|أرني|قائمة|list|عندي)\s*(?:المشاكل|الـ\s*issues?|الأخطاء|bugs?)\s*(?:المفتوح(?:ة|ة)?)?/i.test(t)) {
+        await runCmd('/issues', ''); return
+      }
+      // /issues new
+      const issueNewM = t.match(/(?:أنشئ|انشئ|اضف|أضف|افتح|اعمل|create|open|add|new)\s+(?:مشكلة|issue|bug|خطأ|بلاغ)\s*(?:جديد(?:ة)?)?\s*[:\-–]?\s*(.+)/i)
+      if (issueNewM) { await runCmd('/issues', `new ${issueNewM[1].trim()}`); return }
+      // /issues close
+      const issueCloseM = t.match(/(?:أغلق|اغلق|close|إغلاق|غلّق)\s+(?:issue|المشكلة|بلاغ)?\s*#?\s*(\d+)/i)
+      if (issueCloseM) { await runCmd('/issues', `close ${issueCloseM[1]}`); return }
+
+      // /actions — GitHub Actions
+      if (/(?:حالة|status|نتائج|نتيجة)\s*(?:الـ\s*)?(?:actions?|ci|cd|workflows?|pipeline)|github\s*actions?/i.test(t)) {
+        await runCmd('/actions', ''); return
+      }
+
+      // /diff — فرق بين فرعين
+      const diffM = t.match(/(?:الفرق|diff|مقارنة|compare)\s+(?:بين\s+)?(\S+)\s+(?:و|and|\.{2,3})\s*(\S+)/i)
+      if (diffM) { await runCmd('/diff', `${diffM[1]} ${diffM[2]}`); return }
+
+      // /release — إنشاء إصدار
+      const releaseM = t.match(/(?:أنشئ|انشئ|اعمل|create|make)\s+(?:إصدار|release|version|نسخة)\s+(?:جديد(?:ة)?)?\s*(v?[\d.]+)/i)
+      if (releaseM) { await runCmd('/release', releaseM[1]); return }
+
+      // /delete — حذف ملف
+      const deleteM = t.match(/(?:احذف|حذف|امسح|مسح|delete|remove)\s+(?:ملف\s+)?(\S+(?:\.\w+|\/))/i)
+      if (deleteM) { await runCmd('/delete', deleteM[1].trim()); return }
+
+      // /review — مراجعة PR
+      const reviewM = t.match(/(?:راجع|مراجعة|review|افحص|review)\s+(?:الـ\s*)?(?:PR|pull\s*request)\s*#?\s*(\d+)/i)
+      if (reviewM) { await runCmd('/review', reviewM[1]); return }
     }
 
     // ── Hybrid Agent Mode: natural language with repo context ────────────────

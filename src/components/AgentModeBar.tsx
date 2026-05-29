@@ -20,16 +20,26 @@ interface AgentModeBarProps {
 }
 
 const SLASH_COMMANDS = [
-  { cmd: '/read',    desc: 'اقرأ محتوى ملف',             example: '/read src/App.tsx' },
-  { cmd: '/edit',    desc: 'عدّل ملف (يطلب تأكيد)',       example: '/edit server.js أضف route جديد' },
-  { cmd: '/commit',  desc: 'احفظ التغييرات مع رسالة',    example: '/commit "fix: إصلاح bug الطقس"' },
-  { cmd: '/diff',    desc: 'اعرض الفرق بين نسختين',      example: '/diff main..feature' },
-  { cmd: '/pr',      desc: 'أنشئ Pull Request',           example: '/pr "feat: dark mode"' },
-  { cmd: '/ls',      desc: 'اعرض ملفات المستودع',         example: '/ls src/' },
-  { cmd: '/scan',    desc: 'افحص الكود عن أخطاء',         example: '/scan' },
-  { cmd: '/suggest', desc: 'اقترح تحسينات للكود',         example: '/suggest' },
-  { cmd: '/deploy',  desc: 'انشر على GitHub Pages',       example: '/deploy' },
-  { cmd: '/repos',   desc: 'اقترح مستودعات GitHub مفيدة', example: '/repos ai' },
+  { cmd: '/read',    desc: 'اقرأ محتوى ملف',                  example: '/read src/App.tsx' },
+  { cmd: '/edit',    desc: 'عدّل ملف بتعليمة (يطلب تأكيد)',   example: '/edit server.js أضف route جديد' },
+  { cmd: '/ls',      desc: 'اعرض ملفات مجلد',                 example: '/ls src/' },
+  { cmd: '/tree',    desc: 'شجرة كاملة لهيكل المستودع',        example: '/tree src/' },
+  { cmd: '/grep',    desc: 'ابحث عن نص داخل ملفات المستودع',   example: '/grep useState src/' },
+  { cmd: '/find',    desc: 'ابحث عن ملف بالاسم أو النوع',     example: '/find *.config.js' },
+  { cmd: '/history', desc: 'عرض آخر commits للمستودع',         example: '/history 15' },
+  { cmd: '/diff',    desc: 'الفرق الحقيقي بين فرعين',         example: '/diff main feature/login' },
+  { cmd: '/issues',  desc: 'إدارة GitHub Issues (عرض/إضافة/إغلاق)', example: '/issues new خطأ في login' },
+  { cmd: '/actions', desc: 'حالة GitHub Actions (CI/CD)',      example: '/actions' },
+  { cmd: '/release', desc: 'أنشئ إصداراً جديداً',              example: '/release v1.2.0 ميزات جديدة' },
+  { cmd: '/review',  desc: 'مراجعة AI لـ Pull Request',        example: '/review 7' },
+  { cmd: '/delete',  desc: 'احذف ملفاً من المستودع (يطلب تأكيد)', example: '/delete src/old.tsx' },
+  { cmd: '/commit',  desc: 'احفظ التغييرات مع رسالة',         example: '/commit "fix: إصلاح bug الطقس"' },
+  { cmd: '/pr',      desc: 'أنشئ Pull Request',                example: '/pr "feat: dark mode"' },
+  { cmd: '/scan',    desc: 'افحص الكود عن أخطاء وثغرات',       example: '/scan' },
+  { cmd: '/suggest', desc: 'اقترح تحسينات للكود',              example: '/suggest' },
+  { cmd: '/deploy',  desc: 'انشر على GitHub Pages',            example: '/deploy' },
+  { cmd: '/repos',   desc: 'اقترح مستودعات GitHub مفيدة',      example: '/repos ai' },
+  { cmd: '/memory',  desc: 'ذاكرة المشروع (حفظ/عرض/تحديث)',   example: '/memory save ملاحظاتي' },
 ]
 
 export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect, clientGithubToken }: AgentModeBarProps) {

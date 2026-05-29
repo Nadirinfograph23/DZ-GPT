@@ -6373,6 +6373,113 @@
   .dzc-qs-chip { font-size: 11px; padding: 5px 10px; }
 }
 
+/* ===== FIND INPUT CARD ===== */
+.dzc-find-card {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.07), rgba(79,70,229,0.04));
+  border: 1.5px solid rgba(99,102,241,0.2);
+  border-radius: 12px;
+  direction: rtl;
+}
+
+.dzc-find-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a5b4fc;
+  margin-bottom: 10px;
+}
+
+.dzc-find-title code {
+  background: rgba(99,102,241,0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: #c7d2fe;
+}
+
+.dzc-find-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dzc-find-input {
+  flex: 1;
+  background: rgba(15,15,20,0.8);
+  border: 1px solid rgba(99,102,241,0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #e2e8f0;
+  outline: none;
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+
+.dzc-find-input:focus {
+  border-color: rgba(99,102,241,0.55);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
+}
+
+.dzc-find-input::placeholder { color: #4b5563; }
+
+.dzc-find-search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(99,102,241,0.18);
+  border: 1px solid rgba(99,102,241,0.35);
+  color: #a5b4fc;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.17s ease;
+  white-space: nowrap;
+}
+
+.dzc-find-search-btn:hover:not(:disabled) {
+  background: rgba(99,102,241,0.3);
+  border-color: rgba(99,102,241,0.55);
+  color: #c7d2fe;
+}
+
+.dzc-find-search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dzc-find-hint {
+  font-size: 11px;
+  color: #4b5563;
+  margin: 0;
+  direction: rtl;
+}
+
+.dzc-find-hint code {
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: #6b7280;
+}
+
+/* agent quick buttons in top bar */
+.dz-agent-quick-btn {
+  background: rgba(16,163,127,0.08) !important;
+  border-color: rgba(16,163,127,0.2) !important;
+  color: #10a37f !important;
+}
+.dz-agent-quick-btn:hover {
+  background: rgba(16,163,127,0.15) !important;
+  border-color: rgba(16,163,127,0.4) !important;
+}
+
 /* ===== ACTION COMMAND BUTTONS (e.g. "عرض ملفات المجلد") ===== */
 .dzc-action-btns-row {
   display: flex;

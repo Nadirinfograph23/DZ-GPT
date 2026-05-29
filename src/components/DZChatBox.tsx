@@ -6957,28 +6957,28 @@ ${rows}
           <Bot size={13} />
         </button>
 
-        {/* Quick tool suggestion chips */}
-        {showAgentBar && (
-          <div className="dz-toolbar-chips">
+        {/* Scrolling ticker — DZ Agent services */}
+        <div className="dz-ticker-wrap" aria-hidden="true">
+          <span className="dz-ticker-inner">
             {[
-              { label: '/scan',    title: 'فحص الكود عن أخطاء' },
-              { label: '/suggest', title: 'اقتراحات تحسين' },
-              { label: '/deploy',  title: 'نشر على GitHub Pages' },
-              { label: '/repos',   title: 'اقتراح مستودعات' },
-              { label: '/history', title: 'آخر commits' },
-              { label: '/memory',  title: 'ذاكرة المشروع' },
-            ].map(t => (
-              <button
-                key={t.label}
-                className="dz-tool-chip"
-                title={t.title}
-                onClick={() => { setInput(t.label); setTimeout(() => { textareaRef.current?.focus(); textareaRef.current?.select() }, 50) }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
+              '🏥 يمكنك البحث عن طبيب أو صيدلية قريبة منك',
+              '🕌 يمكنك معرفة المسجد الأقرب إليك وأوقات الصلاة',
+              '🎬 يمكنك البحث بالفيديو والحصول على ملخص فوري',
+              '🌐 يمكنك بناء موقع ويب كامل بجملة واحدة فقط',
+              '💻 يمكنك كتابة وتصحيح الكود بكل لغات البرمجة',
+              '⚽ يمكنك متابعة نتائج الدوري الجزائري لحظة بلحظة',
+              '💱 يمكنك معرفة سعر الصرف الجزائري في الوقت الفعلي',
+              '🗣️ يمكنك ترجمة الدارجة الجزائرية بدقة متناهية',
+              '🚀 يمكنك رفع مشروعك على GitHub مباشرةً من هنا',
+              '📖 يمكنك البحث في القرآن الكريم والاستماع إليه',
+              '🗺️ يمكنك البحث عن أي مكان في الجزائر بسهولة',
+              '📊 يمكنك إنشاء تقارير وإحصاءات باحترافية',
+              '🎓 يمكنك البحث في موضوعات التعليم والدراسة',
+              '📰 يمكنك قراءة آخر الأخبار الجزائرية والعربية',
+              '🤖 DZ Agent — مساعدك الجزائري الذكي على مدار الساعة',
+            ].join('   ◈   ')}
+          </span>
+        </div>
 
         <div className="dz-toolbar-spacer" />
 

@@ -5384,7 +5384,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           if (!data.commits || data.commits.length === 0) {
             addAssistantMessage({ content: `📭 لا توجد commits في \`${repo}\`.`, richType: 'text' })
           } else {
-            const conclusionIcon = (c: string) => c === 'success' ? '✅' : c === 'failure' ? '❌' : '⏳'
             const list = data.commits.map((c: { sha: string; message: string; author: string; date: string; url: string }, i: number) => {
               const d = c.date ? new Date(c.date).toLocaleDateString('ar-DZ', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
               return `${i + 1}. \`${c.sha}\` **${c.message}**\n   👤 ${c.author || 'unknown'} · 📅 ${d}`

@@ -23,6 +23,7 @@ import AgentStepsPanel from './AgentStepsPanel'
 import type { AgentStep } from './AgentStepsPanel'
 import GitHubReActPanel from './GitHubReActPanel'
 import type { ReActStep } from './GitHubReActPanel'
+import SmartRepoSuggestion from './SmartRepoSuggestion'
 import GitHubLoadingIndicator from './GitHubLoadingIndicator'
 import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
@@ -336,6 +337,7 @@ type RichType =
   | 'presentation'
   | 'tool-redirect'
   | 'find-input'
+  | 'smart-repo-suggestion'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -565,6 +567,7 @@ interface DZMessage {
   navigateSuggestion?: { path: string; title: string; description: string }
   ghAgentAutoExecute?: boolean
   ghAgentRawText?: string
+  smartRepoSuggestions?: Array<{ url: string; name: string; owner: string; category: string; descAr: string; install: { type: string; pkg: string }; starterFiles: Record<string, string>; score?: number }>
   taskPlan?: TaskPlan
   taskPlanQuery?: string
   claudeMode?: boolean
@@ -5148,6 +5151,35 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         return
       }
 
+      // /smart-import — استيراد مستودع ذكي وتوليد ملفات Starter
+      if (cmd === '/smart-import') {
+        const repoName = args.trim()
+        if (!repoName) {
+          addAssistantMessage({ content: '⚠️ صيغة: `/smart-import <اسم المستودع>` — مثال: `/smart-import yt-dlp`', richType: 'text', isError: true })
+          return
+        }
+        setThinkingStep({ type: 'write', label: `استيراد ${repoName}...` })
+        try {
+          const res = await fetch('/api/dz-agent/smart-repos/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repoName, currentRepo: repo || '', token: tok || '' }),
+          })
+          const data = await res.json()
+          if (data.success) {
+            addAssistantMessage({
+              content: data.message || `✅ تم استيراد **${repoName}**`,
+              richType: 'text',
+            })
+          } else {
+            addAssistantMessage({ content: `⚠️ ${data.error || 'حدث خطأ'}`, richType: 'text', isError: true })
+          }
+        } catch {
+          addAssistantMessage({ content: '⚠️ حدث خطأ أثناء الاستيراد.', richType: 'text', isError: true })
+        }
+        return
+      }
+
       // /repos — suggest GitHub repos by category or query
       if (cmd === '/repos') {
         const query = args.trim()
@@ -6740,6 +6772,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           model: typeof data.model === 'string' ? data.model : (typeof data.fallbackModel === 'string' ? data.fallbackModel : undefined),
           responseTime: Math.round(Date.now() - _fetchT0),
         })
+
+        // Smart Repo Suggestion — if agent mode active and message describes a project
+        if (agentMode.active && /أريد|أبني|أنشئ|أصنع|أطور|اعمل|ابني|انشئ|بناء|إنشاء|مشروع|موقع|تطبيق|برنامج|build|create|make/i.test(text)) {
+          fetch('/api/dz-agent/smart-repos/suggest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text }),
+          }).then(r => r.json()).then(d => {
+            if (d.repos && d.repos.length > 0) {
+              addAssistantMessage({
+                content: `💡 **DZ Agent يقترح** — بناءً على مشروعك، هذه المستودعات قد تفيدك:`,
+                richType: 'smart-repo-suggestion',
+                smartRepoSuggestions: d.repos,
+              })
+            }
+          }).catch(() => {})
+        }
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
@@ -7071,6 +7120,14 @@ ${rows}
                       )}
                       {msg.richType === 'repos-suggest' && msg.suggestedRepos && (
                         <ReposSuggestPanel repos={msg.suggestedRepos} />
+                      )}
+                      {msg.richType === 'smart-repo-suggestion' && msg.smartRepoSuggestions && msg.smartRepoSuggestions.length > 0 && (
+                        <SmartRepoSuggestion
+                          repos={msg.smartRepoSuggestions}
+                          currentRepo={agentMode.selectedRepo || currentRepo || undefined}
+                          githubToken={agentMode.githubToken || githubToken || undefined}
+                          onImportDone={(repoName, message) => addAssistantMessage({ content: message, richType: 'text' })}
+                        />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (
                         <RepoActionPanel

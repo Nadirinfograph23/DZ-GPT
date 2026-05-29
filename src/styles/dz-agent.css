@@ -8941,6 +8941,97 @@
 .gh-agent-toggle-btn:hover { color: #58a6ff; border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.08); }
 .gh-agent-toggle-btn.active { color: #58a6ff; background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); }
 
+/* ── Web Reader toggle button in input bar ── */
+.web-reader-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #555;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.web-reader-toggle-btn:hover {
+  color: #10a37f;
+  border-color: rgba(16,163,127,.3);
+  background: rgba(16,163,127,.07);
+}
+.web-reader-toggle-btn.active {
+  color: #10a37f;
+  background: rgba(16,163,127,.12);
+  border-color: rgba(16,163,127,.4);
+}
+
+/* ── Web Reader URL bar ── */
+.web-reader-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(16,163,127,.05);
+  border: 1px solid rgba(16,163,127,.22);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  animation: webReaderBarIn .15s ease;
+}
+@keyframes webReaderBarIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.web-reader-bar-icon {
+  color: #10a37f;
+  flex-shrink: 0;
+}
+.web-reader-url-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #cdd9e5;
+  font-family: 'monospace', monospace;
+  font-size: 12.5px;
+  min-width: 0;
+  direction: ltr;
+}
+.web-reader-url-input::placeholder { color: #3a5a4a; }
+.web-reader-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid rgba(16,163,127,.35);
+  background: rgba(16,163,127,.1);
+  color: #10a37f;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, opacity .15s;
+}
+.web-reader-send-btn:hover:not(:disabled) {
+  background: rgba(16,163,127,.22);
+}
+.web-reader-send-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.web-reader-bar-clear {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color .15s;
+}
+.web-reader-bar-clear:hover { color: #f85149; }
+
 /* ═══════════════════════════════════════════════════
    THINKING TRACE PANEL — 6-Role Deliberation UI
    ═══════════════════════════════════════════════════ */

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, Home, Bot, MessageCircle, BookOpen,
   Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight,
-  FileSpreadsheet, Gamepad2, Github, Radio
+  FileSpreadsheet, Gamepad2, Github, Radio, Award
 } from 'lucide-react'
 import '../styles/quick-nav.css'
 
@@ -13,6 +13,7 @@ interface NavItem {
   labelEn: string
   icon: React.ReactNode
   color: string
+  external?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -29,6 +30,14 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/le3ba',        label: 'DZ Le3ba',     labelEn: 'Word Games',   icon: <Gamepad2 size={18} />,        color: '#fb7185' },
   { path: '/github-agent', label: 'DZ GitHub',    labelEn: 'Git Deploy',   icon: <Github size={18} />,          color: '#60a5fa' },
   { path: '/radio',        label: 'DZ Radio',     labelEn: 'Live Radio',   icon: <Radio size={18} />,           color: '#38bdf8' },
+  {
+    path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
+    label: 'Certificate',
+    labelEn: 'شهادة DZ Agent',
+    icon: <Award size={18} />,
+    color: '#f59e0b',
+    external: true,
+  },
 ]
 
 const HIDE_ON: string[] = []
@@ -69,9 +78,13 @@ export default function QuickNav() {
 
   if (!visible) return null
 
-  const go = (path: string) => {
+  const go = (item: NavItem) => {
     setOpen(false)
-    navigate(path)
+    if (item.external) {
+      window.open(item.path, '_blank')
+    } else {
+      navigate(item.path)
+    }
   }
 
   return (
@@ -97,14 +110,14 @@ export default function QuickNav() {
 
         <nav className="qnav-list">
           {NAV_ITEMS.map(item => {
-            const active = pathname === item.path ||
-              (item.path !== '/' && pathname.startsWith(item.path))
+            const active = !item.external && (pathname === item.path ||
+              (item.path !== '/' && pathname.startsWith(item.path)))
             return (
               <button
                 key={item.path}
                 className={`qnav-item${active ? ' qnav-item--active' : ''}`}
                 style={{ '--item-color': item.color } as React.CSSProperties}
-                onClick={() => go(item.path)}
+                onClick={() => go(item)}
               >
                 <span className="qnav-item-icon">{item.icon}</span>
                 <span className="qnav-item-text">

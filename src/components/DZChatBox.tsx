@@ -3683,6 +3683,45 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       .catch(() => { projectMemoryRef.current = ''; setProjectMemoryLoaded('') })
   }, [agentMode.selectedRepo, agentMode.githubToken, githubToken, projectMemoryLoaded])
 
+  // ===== WORKSPACE ACTIVATION: show welcome/resume message in chat =====
+  const prevActivatedRepoRef = useRef<string>('')
+  useEffect(() => {
+    if (!agentMode.active || !agentMode.selectedRepo) return
+    if (prevActivatedRepoRef.current === agentMode.selectedRepo) return
+    prevActivatedRepoRef.current = agentMode.selectedRepo
+
+    // Sync currentRepo immediately
+    setCurrentRepo(agentMode.selectedRepo)
+
+    const repo = agentMode.selectedRepo
+    const repoName = repo.split('/')[1] || repo
+    const repoUrl = `https://github.com/${repo}`
+
+    // Wait 900ms for project memory fetch to settle, then show welcome message
+    const tid = setTimeout(() => {
+      if (projectMemoryRef.current) {
+        // Resume session — memory loaded
+        const memPreview = projectMemoryRef.current
+          .split('\n')
+          .filter(l => l.startsWith('- **') || l.startsWith('- [x]') || l.startsWith('- [ ]'))
+          .slice(0, 6)
+          .join('\n')
+        addAssistantMessage({
+          content: `📋 **استئناف العمل — [\`${repoName}\`](${repoUrl})**\n\nوجدت سجل جلسة سابقة في \`dz-agent.md\`:\n\n${memPreview || projectMemoryRef.current.slice(0, 400)}\n\n> **الوكيل جاهز للاستكمال من حيث توقفنا.** أخبرني ماذا تريد فعله.`,
+          richType: 'text',
+        })
+      } else {
+        // Fresh workspace — no memory yet
+        addAssistantMessage({
+          content: `🚀 **الوكيل نشط — مستودع العمل: [\`${repoName}\`](${repoUrl})**\n\nلا يوجد سجل عمل سابق في هذا المستودع.\n\nسيُنشئ الوكيل ملف \`dz-agent.md\` تلقائياً بعد أول عملية — يُخزّن فيه:\n- 📌 هيكل المشروع\n- ✅ المهام المنجزة\n- 🔲 المهام المتبقية\n- 📎 الملفات الأساسية\n\n> **ابدأ بإخباري ماذا تريد بناءه أو تعديله.**`,
+          richType: 'text',
+        })
+      }
+    }, 900)
+    return () => clearTimeout(tid)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentMode.active, agentMode.selectedRepo])
+
   const sendRating = useCallback((msgId: string, vote: RatingVote, query: string) => {
     const updated = persistRating(msgId, vote)
     setRatings(updated)

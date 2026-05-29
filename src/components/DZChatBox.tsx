@@ -3683,6 +3683,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       .catch(() => { projectMemoryRef.current = ''; setProjectMemoryLoaded('') })
   }, [agentMode.selectedRepo, agentMode.githubToken, githubToken, projectMemoryLoaded])
 
+  // ===== SYNC agentMode token → githubToken so all API calls work =====
+  useEffect(() => {
+    if (agentMode.githubToken && agentMode.githubToken !== githubToken) {
+      saveToken(agentMode.githubToken)
+    }
+  }, [agentMode.githubToken])
+
   // ===== WORKSPACE ACTIVATION: show welcome/resume message in chat =====
   const prevActivatedRepoRef = useRef<string>('')
   useEffect(() => {
@@ -3900,7 +3907,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   }, [])
 
   // ===== GITHUB AUTH ERROR MESSAGE (دارجة) =====
-  const GH_AUTH_ERR = 'أول حاجة لازم عليك تسجل خروج من github الفوق و تعاود تسجل الدخول، مبعد أرواح نكملوا 😎'
+  const GH_AUTH_ERR = '⚠️ فشل الاتصال بـ GitHub. تحقق من صلاحيات التوكن أو أعد الاتصال من زر **وكيل** في الأسفل.'
 
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
@@ -6794,59 +6801,8 @@ ${rows}
   // ===== RENDER =====
   return (
     <div className="dz-chatbox" dir="rtl">
-      {/* GitHub Bar */}
+      {/* GitHub Bar — connection button removed, kept toolbar only */}
       <div className="dz-gh-bar">
-        {isGithubConnected ? (
-          <div className="gh-connected-wrapper" style={{ position: 'relative' }}>
-            <button
-              className="gh-token-set gh-connected-btn"
-              onClick={() => setShowGhMenu(v => !v)}
-              title="خيارات GitHub"
-            >
-              {githubUser?.avatar ? (
-                <>
-                  <img src={githubUser.avatar} alt={githubUser.login} className="gh-user-avatar" />
-                  <span className="gh-user-name">{githubUser.name || githubUser.login}</span>
-                  <span className="gh-user-repos">({githubUser.repos} repos)</span>
-                </>
-              ) : (
-                <>
-                  <Github size={13} />
-                  <span>GitHub متصل ✓</span>
-                </>
-              )}
-              <ChevronDown size={12} className={showGhMenu ? 'rotated' : ''} />
-            </button>
-            {showGhMenu && (
-              <div className="gh-dropdown-menu">
-                <button className="gh-dropdown-item" onClick={() => { setShowGhMenu(false); fetchRepos() }}>
-                  <FolderOpen size={13} />
-                  عرض مستودعاتي
-                </button>
-                {githubUser?.url && (
-                  <a href={githubUser.url} target="_blank" rel="noreferrer" className="gh-dropdown-item">
-                    <Github size={13} />
-                    فتح الملف الشخصي
-                  </a>
-                )}
-                <button className="gh-dropdown-item gh-dropdown-item--danger" onClick={clearToken}>
-                  <Trash2 size={13} />
-                  تسجيل الخروج
-                </button>
-              </div>
-            )}
-          </div>
-        ) : oauthEnabled ? (
-          <div className="gh-oauth-section">
-            <a href="/api/auth/github" className="gh-oauth-connect-btn">
-              <Github size={14} />
-              الاتصال بـ GitHub
-            </a>
-            <span className="gh-oauth-optional">اختياري · للمشاريع والكود</span>
-          </div>
-        ) : (
-          <GitHubTokenPanel token={githubToken} onSave={saveToken} onClear={clearToken} />
-        )}
         <div className="dz-toolbar-spacer" />
         <div className="dz-toolbar-actions">
           {messages.length > 0 && (

@@ -16,6 +16,7 @@ interface AgentModeBarProps {
   onChange: (s: AgentModeState) => void
   githubUser?: { login: string; avatar: string } | null
   onCommandSelect?: (cmd: string) => void
+  clientGithubToken?: string
 }
 
 const SLASH_COMMANDS = [
@@ -31,7 +32,7 @@ const SLASH_COMMANDS = [
   { cmd: '/repos',   desc: 'اقترح مستودعات GitHub مفيدة', example: '/repos ai' },
 ]
 
-export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect }: AgentModeBarProps) {
+export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect, clientGithubToken }: AgentModeBarProps) {
   const [expanded, setExpanded]         = useState(false)
   const [repos, setRepos]               = useState<Repo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
@@ -69,15 +70,16 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
   }, [state, onChange])
 
   const fetchReposFromServer = useCallback(async (): Promise<Repo[]> => {
+    const tok = state.githubToken || clientGithubToken || ''
     const res = await fetch('/api/dz-agent/github/repos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: state.githubToken }),
+      body: JSON.stringify({ token: tok }),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'فشل جلب المستودعات')
     return Array.isArray(data.repos) ? data.repos : []
-  }, [state.githubToken])
+  }, [state.githubToken, clientGithubToken])
 
   // Called from "تحميل المستودعات" button — fetches repos then shows workspace picker
   const connectGitHub = useCallback(async () => {
@@ -129,10 +131,11 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     setCreatingRepo(true)
     setRepoError('')
     try {
+      const tok = state.githubToken || clientGithubToken || ''
       const res = await fetch('/api/dz-agent/github/create-repo-full', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoName: name, token: state.githubToken }),
+        body: JSON.stringify({ repoName: name, token: tok }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'فشل إنشاء المستودع')

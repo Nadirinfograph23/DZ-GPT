@@ -996,6 +996,39 @@ function App() {
             <FacebookIcon size={20} />
           </a>
 
+          {/* Algeria Certificate Badge */}
+          <a
+            href="https://dz-gpt.vercel.app/dz-agent-certificate.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="شهادة DZ Agent الجزائرية"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%)',
+              boxShadow: '0 0 0 2px #c8860a, 0 2px 8px rgba(200,134,10,0.5)',
+              textDecoration: 'none',
+              fontSize: 18,
+              flexShrink: 0,
+              cursor: 'pointer',
+              transition: 'transform 0.15s, box-shadow 0.15s',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1.12)'
+              ;(e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 3px #c8860a, 0 4px 16px rgba(200,134,10,0.7)'
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.transform = 'scale(1)'
+              ;(e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 2px #c8860a, 0 2px 8px rgba(200,134,10,0.5)'
+            }}
+          >
+            🇩🇿
+          </a>
+
           {/* Mobile model dropdown */}
           <div className="mobile-model-dropdown">
             <button

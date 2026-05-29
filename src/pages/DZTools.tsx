@@ -3490,8 +3490,8 @@ function ZakatTool() {
       <div className="dzt-tool-desc">
         <div className="dzt-tool-desc-icon">☪️</div>
         <div>
-          <div className="dzt-tool-desc-title">حاسبة الزكاة الشاملة — 2025</div>
-          <div className="dzt-tool-desc-text">احسب زكاة المال والذهب والفضة والتجارة والزروع بالدينار الجزائري — بناءً على أسعار 2025 والنصاب الشرعي</div>
+          <div className="dzt-tool-desc-title">حاسبة الزكاة الشاملة — 2026</div>
+          <div className="dzt-tool-desc-text">احسب زكاة المال والذهب والفضة والتجارة والزروع بالدينار الجزائري — بناءً على أسعار 2026 والنصاب الشرعي</div>
         </div>
       </div>
 

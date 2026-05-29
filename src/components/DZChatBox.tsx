@@ -7836,7 +7836,15 @@ ${rows}
           }}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
           clientGithubToken={githubToken}
-          onClose={() => setShowAgentBar(false)}
+          onClose={() => {
+            setShowAgentBar(false)
+            addToast({
+              type: 'info',
+              title: '⬆️ تقدر ترجع شريط الوكيل Dz Agent',
+              desc: 'كليكي على أيقونة الروبوت 🤖',
+              duration: 8000,
+            })
+          }}
           onCommandSelect={cmd => {
             if (cmd.startsWith('/find')) {
               setShowFindDialog(true)

@@ -850,6 +850,21 @@ async function preloadEssentialData() {
     }
   }))
   console.log('[Preload] Essential data preloaded:', results)
+
+  // Preload news feeds in background so first request is instant
+  setImmediate(async () => {
+    try {
+      await Promise.allSettled([
+        fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
+        fetchGNRSSArticles(GN_RSS_FEEDS.ar),
+        fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
+      ])
+      console.log('[Preload] News & sports feeds cached in background')
+    } catch (err) {
+      console.warn('[Preload] Background news preload error:', err.message)
+    }
+  })
+
   return results
 }
 
@@ -13438,7 +13453,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _tok2 = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
       if (!_tok2) {
         return res.status(200).json({
-          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nانقر على زر **"ربط GitHub"** في الأعلى لعرض بروفايلك.',
+          content: 'كونكتي في github لتحت في شريط وكيل 😎',
           githubAction: 'needs-connect',
         })
       }
@@ -13507,7 +13522,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
       if (!_tok) {
         return res.status(200).json({
-          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلإنشاء مستودع، انقر على زر **"ربط GitHub"** في الأعلى للمصادقة بحسابك.\n\nبعد الاتصال، كرر طلبك وسيُنشئ DZ Agent المستودع مباشرةً باسم حسابك الحقيقي.',
+          content: 'كونكتي في github لتحت في شريط وكيل 😎',
           githubAction: 'needs-connect',
         })
       }
@@ -13594,7 +13609,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       console.log(`[GH:BranchCmd] repo="${_targetRepoName}" create-branch msg="${lastUserMessage.slice(0,60)}"`)
       const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
       if (!_tok) {
-        return res.status(200).json({ content: `⚠️ يجب الاتصال بـ GitHub أولاً.`, githubAction: 'needs-connect' })
+        return res.status(200).json({ content: 'كونكتي في github لتحت في شريط وكيل 😎', githubAction: 'needs-connect' })
       }
       const _ghH2 = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
       try {
@@ -13674,7 +13689,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── 2c. تفعيل GitHub Pages لمستودع محدد ─────────────────────────────
     if (_targetRepoName && _isEnablePages) {
       const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
-      if (!_tok) return res.status(200).json({ content: `⚠️ يجب الاتصال بـ GitHub أولاً.`, githubAction: 'needs-connect' })
+      if (!_tok) return res.status(200).json({ content: 'كونكتي في github لتحت في شريط وكيل 😎', githubAction: 'needs-connect' })
       const _ghH3 = { Authorization: `token ${_tok}`, 'User-Agent': 'DZ-Agent/5.0', Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }
       try {
         const _uR3 = await fetch('https://api.github.com/user', { headers: _ghH3, signal: AbortSignal.timeout(8000) })
@@ -13738,7 +13753,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _tok = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
       if (!_tok) {
         return res.status(200).json({
-          content: `⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nأضف \`GITHUB_TOKEN\` في أسرار Replit أو انقر **"ربط GitHub"**.`,
+          content: 'كونكتي في github لتحت في شريط وكيل 😎',
           githubAction: 'needs-connect',
         })
       }
@@ -14280,7 +14295,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const effectiveToken = sanitizeString(req.body.githubToken || '', 300) || process.env.GITHUB_TOKEN || ''
     if (!effectiveToken) {
       return res.status(200).json({
-        content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلنشر موقعك على GitHub Pages:\n1. انقر على زر **"ربط GitHub"** في الأعلى\n2. أو أضف `GITHUB_TOKEN` في أسرار Replit بصلاحية `repo` + `pages`\n\n[احصل على token مجاني](https://github.com/settings/tokens/new?scopes=repo,workflow)',
+        content: 'كونكتي في github لتحت في شريط وكيل 😎',
         githubAction: 'needs-connect',
       })
     }
@@ -14922,7 +14937,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       // No token → ask user to connect GitHub
       if (!effectiveToken) {
         return res.status(200).json({
-          content: '⚠️ **يجب الاتصال بـ GitHub أولاً**\n\nلإنشاء مستودع، انقر على زر **"ربط GitHub"** في الأعلى للمصادقة بحسابك.\n\nبعد الاتصال، كرر طلبك وسيُنشئ DZ Agent المستودع مباشرةً باسم حسابك الحقيقي.',
+          content: 'كونكتي في github لتحت في شريط وكيل 😎',
           githubAction: 'needs-connect',
         })
       }
@@ -18341,13 +18356,38 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
         for (const [, cached] of GN_RSS_CACHE.entries()) {
           if (cached?.data) allArticles.push(...cached.data)
         }
+        // Also pull from RSS_CACHE (classic feeds)
+        for (const [, cached] of RSS_CACHE.entries()) {
+          if (cached?.data?.items) allArticles.push(...cached.data.items.map(i => ({ ...i, source: cached.data.name })))
+        }
         if (allArticles.length > 0) {
-          liveContext += '\n\n📰 آخر الأخبار المتاحة:\n' +
-            allArticles.slice(0, 8).map(a => {
-              const src = a.source || 'المصدر'
+          // Deduplicate and sort by recency
+          const seen = new Set()
+          const unique = allArticles.filter(a => {
+            const key = (a.title || '').slice(0, 60)
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+          // Group by category/source
+          const categorized = {
+            '🇩🇿 أخبار الجزائر': unique.filter(a => /جزائر|الجزائر|دز|DZ|Algeria/i.test((a.title || '') + (a.source || ''))),
+            '🌍 أخبار دولية': unique.filter(a => !/جزائر|الجزائر|دز|DZ|Algeria/i.test((a.title || '') + (a.source || '')) && !/رياضة|كرة|مباراة|football|sport/i.test(a.title || '')),
+            '⚽ رياضة': unique.filter(a => /رياضة|كرة|مباراة|football|sport|هدف|دوري/i.test(a.title || '')),
+          }
+          let newsBlock = '\n\n---\n📰 **آخر الأخبار — مرتبة حسب الفئة:**\n'
+          for (const [cat, items] of Object.entries(categorized)) {
+            if (items.length === 0) continue
+            newsBlock += `\n**${cat}**\n`
+            newsBlock += items.slice(0, 4).map(a => {
+              const src = a.source || a.gnSource || 'المصدر'
               const url = a.link || a.url
-              return `• ${a.title}${url ? ` — [${src}](${url})` : src ? ` (${src})` : ''}`
+              const date = a.pubDate ? ` _(${new Date(a.pubDate).toLocaleDateString('ar-DZ', { month: 'short', day: 'numeric' })})_` : ''
+              return `• **${a.title}**${date}${url ? `\n  🔗 [${src}](${url})` : src ? ` _(${src})_` : ''}`
             }).join('\n')
+            newsBlock += '\n'
+          }
+          liveContext += newsBlock + '---'
         }
       }
 

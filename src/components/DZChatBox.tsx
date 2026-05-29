@@ -594,6 +594,7 @@ interface DZMessage {
     message: string
     smartMessage?: string
   }
+  actionButtons?: Array<{ label: string; cmd: string }>
 }
 
 interface ActionLogEntry {
@@ -3933,7 +3934,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       setCurrentRepo(repo)
       setCurrentPath(cleanPath)
       if (data.empty || !data.files || data.files.length === 0) {
-        addAssistantMessage({ content: `📂 المجلد \`${cleanPath || '/'}\` في **${repo}** فارغ أو لا توجد ملفات.`, richType: 'text' })
+        const treePath = cleanPath || ''
+        addAssistantMessage({
+          content: `📂 المجلد \`${cleanPath || '/'}\` في **${repo}** لا يحتوي على ملفات مباشرة.\n\n> للتأكد، يمكنك عرض الشجرة الكاملة للمجلد باستخدام الأمر \`/tree${treePath ? ' ' + treePath : ''}\``,
+          richType: 'text',
+          actionButtons: [{ label: '🌳 عرض ملفات المجلد', cmd: `/tree${treePath ? ' ' + treePath : ''}` }],
+        })
       } else {
         addAssistantMessage({ content: `Files in ${repo}${cleanPath ? '/' + cleanPath : '/'}:`, richType: 'files', files: data.files })
       }
@@ -7446,6 +7452,19 @@ ${rows}
                   msg.content
                 )}
               </div>
+              {msg.actionButtons && msg.actionButtons.length > 0 && (
+                <div className="dzc-action-btns-row">
+                  {msg.actionButtons.map((ab, i) => (
+                    <button
+                      key={i}
+                      className="dzc-action-cmd-btn"
+                      onClick={() => sendMessage(ab.cmd)}
+                    >
+                      {ab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
                 <div className="dzc-quick-suggestions">
                   <span className="dzc-qs-label">💡 اقتراحات:</span>

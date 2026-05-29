@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -39,24 +39,30 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
   const [showCmds, setShowCmds]         = useState(false)
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
+  // Workspace selection state
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [workspaceTab, setWorkspaceTab]     = useState<'select' | 'create'>('select')
+  const [selectedWorkspace, setSelectedWorkspace] = useState('')
+  const [newRepoName, setNewRepoName]       = useState('')
+  const [creatingRepo, setCreatingRepo]     = useState(false)
+
   const toggle = useCallback(() => {
     if (state.active) {
       setConfirmDeactivate(true)
       return
     }
-    if (!state.githubToken) {
-      setExpanded(true)
-      onChange({ ...state, active: false })
-      return
-    }
-    onChange({ ...state, active: !state.active })
-    if (!state.active) setExpanded(true)
+    setExpanded(true)
+    onChange({ ...state, active: false })
   }, [state, onChange])
 
   const doDeactivate = useCallback(() => {
     setConfirmDeactivate(false)
     setShowCmds(false)
     setExpanded(false)
+    setWorkspaceReady(false)
+    setWorkspaceTab('select')
+    setSelectedWorkspace('')
+    setNewRepoName('')
     setRepos([])
     setRepoError('')
     onChange({ ...state, active: false, githubToken: '', selectedRepo: '' })
@@ -73,6 +79,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     return Array.isArray(data.repos) ? data.repos : []
   }, [state.githubToken])
 
+  // Called from "تحميل المستودعات" button — fetches repos then shows workspace picker
   const connectGitHub = useCallback(async () => {
     setLoadingRepos(true)
     setRepoError('')
@@ -83,14 +90,16 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         setRepoError('😉👌 عاود تسجيل خروج من الفوق و عاود ادخل تسجيل دخول')
         return
       }
-      onChange({ ...state, active: true, selectedRepo: validRepos[0]?.full_name || '' })
+      setSelectedWorkspace(validRepos[0]?.full_name || '')
+      setWorkspaceReady(true)
     } catch (e) {
       setRepoError((e as Error).message)
     } finally {
       setLoadingRepos(false)
     }
-  }, [state, onChange, fetchReposFromServer])
+  }, [fetchReposFromServer])
 
+  // Called from active repo dropdown to refresh list
   const loadRepos = useCallback(async () => {
     if (repos.length) return
     setLoadingRepos(true)
@@ -103,6 +112,40 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     } catch {}
     finally { setLoadingRepos(false) }
   }, [repos.length, fetchReposFromServer])
+
+  // Confirm workspace selection (existing repo)
+  const handleSelectWorkspace = useCallback(() => {
+    const repo = selectedWorkspace || repos[0]?.full_name || ''
+    if (!repo) return
+    setWorkspaceReady(false)
+    setExpanded(false)
+    onChange({ ...state, active: true, selectedRepo: repo })
+  }, [selectedWorkspace, repos, state, onChange])
+
+  // Create new repo then activate
+  const handleCreateWorkspace = useCallback(async () => {
+    const name = newRepoName.trim()
+    if (!name) { setRepoError('اكتب اسم المستودع أولاً'); return }
+    setCreatingRepo(true)
+    setRepoError('')
+    try {
+      const res = await fetch('/api/dz-agent/github/create-repo-full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoName: name, token: state.githubToken }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'فشل إنشاء المستودع')
+      const fullName = `${data.owner}/${data.repo}`
+      setWorkspaceReady(false)
+      setExpanded(false)
+      onChange({ ...state, active: true, selectedRepo: fullName })
+    } catch (e) {
+      setRepoError((e as Error).message)
+    } finally {
+      setCreatingRepo(false)
+    }
+  }, [newRepoName, state, onChange])
 
   const handleCommandClick = (example: string) => {
     if (onCommandSelect) {
@@ -193,7 +236,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         )}
 
         {/* Status badge */}
-        {!state.active && state.githubToken && (
+        {!state.active && !expanded && (githubUser || state.githubToken) && (
           <span className="amb-status-badge amb-status-badge--idle">
             <Github size={11} /> GitHub مُتصل
           </span>
@@ -229,23 +272,27 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
         </div>
       )}
 
-      {/* ── Expanded panel (token + repo setup) ── */}
-      {expanded && !state.active && (
+      {/* ── Setup panel (not active + expanded) ── */}
+      {expanded && !state.active && !workspaceReady && (
         <div className="amb-setup-panel">
           <div className="amb-setup-title">
             <Github size={14} /> تفعيل وضع الوكيل البرمجي
           </div>
 
           {githubUser ? (
-            <div className="amb-gh-user">
-              <img src={githubUser.avatar} alt="" className="amb-gh-avatar" />
-              <span>متصل كـ <strong>@{githubUser.login}</strong></span>
-              <CheckCircle2 size={14} className="amb-check" />
-              <button className="amb-connect-btn" onClick={connectGitHub} disabled={loadingRepos}>
-                {loadingRepos ? <Loader2 size={13} className="amb-spin" /> : null}
-                تحميل المستودعات
-              </button>
-            </div>
+            <>
+              <div className="amb-gh-user">
+                <img src={githubUser.avatar} alt="" className="amb-gh-avatar" />
+                <span>متصل كـ <strong>@{githubUser.login}</strong></span>
+                <CheckCircle2 size={14} className="amb-check" />
+                <button className="amb-connect-btn" onClick={connectGitHub} disabled={loadingRepos}>
+                  {loadingRepos
+                    ? <><Loader2 size={13} className="amb-spin" /> جاري الجلب...</>
+                    : <><FolderOpen size={13} /> عرض المستودعات</>
+                  }
+                </button>
+              </div>
+            </>
           ) : (
             <div className="amb-oauth-section">
               <a href="/api/auth/github" className="amb-oauth-btn">
@@ -260,6 +307,95 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
 
           {repoError && (
             <div className="amb-error">
+              <Github size={13} /> {repoError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Workspace picker (repos fetched, waiting for user to select) ── */}
+      {workspaceReady && !state.active && (
+        <div className="amb-workspace-panel">
+          <div className="amb-workspace-title">
+            <GitBranch size={14} />
+            <span>اختر مستودع العمل</span>
+          </div>
+
+          {/* Tabs */}
+          <div className="amb-workspace-tabs">
+            <button
+              className={`amb-workspace-tab ${workspaceTab === 'select' ? 'amb-workspace-tab--active' : ''}`}
+              onClick={() => setWorkspaceTab('select')}
+            >
+              <FolderOpen size={12} /> مستودع موجود
+            </button>
+            <button
+              className={`amb-workspace-tab ${workspaceTab === 'create' ? 'amb-workspace-tab--active' : ''}`}
+              onClick={() => setWorkspaceTab('create')}
+            >
+              <Plus size={12} /> مستودع جديد
+            </button>
+          </div>
+
+          {/* Select existing repo */}
+          {workspaceTab === 'select' && (
+            <div className="amb-workspace-body">
+              <div className="amb-workspace-select-wrap">
+                <GitBranch size={13} className="amb-workspace-select-icon" />
+                <select
+                  className="amb-workspace-select"
+                  value={selectedWorkspace}
+                  onChange={e => setSelectedWorkspace(e.target.value)}
+                >
+                  {repos.map(r => (
+                    <option key={r.full_name} value={r.full_name}>
+                      {r.name}{r.private ? ' 🔒' : ''}{r.language ? ` · ${r.language}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="amb-workspace-hint">
+                سيحمّل الوكيل ذاكرة المشروع <code>dz-agent.md</code> تلقائياً ويستكمل من حيث توقفت
+              </p>
+              <button className="amb-workspace-start-btn" onClick={handleSelectWorkspace}>
+                <CheckCircle2 size={14} /> بدء العمل
+              </button>
+            </div>
+          )}
+
+          {/* Create new repo */}
+          {workspaceTab === 'create' && (
+            <div className="amb-workspace-body">
+              <div className="amb-workspace-input-wrap">
+                <Github size={13} className="amb-workspace-select-icon" />
+                <input
+                  className="amb-workspace-input"
+                  type="text"
+                  placeholder="اسم المستودع الجديد (بالإنجليزية)"
+                  value={newRepoName}
+                  onChange={e => setNewRepoName(e.target.value.replace(/\s+/g, '-').toLowerCase())}
+                  onKeyDown={e => e.key === 'Enter' && !creatingRepo && handleCreateWorkspace()}
+                  dir="ltr"
+                />
+              </div>
+              <p className="amb-workspace-hint">
+                سيُنشئ مستودعاً جديداً مع <code>README.md</code> و<code>dz-agent.md</code> لتتبع كل العمليات
+              </p>
+              <button
+                className="amb-workspace-start-btn"
+                onClick={handleCreateWorkspace}
+                disabled={creatingRepo || !newRepoName.trim()}
+              >
+                {creatingRepo
+                  ? <><Loader2 size={13} className="amb-spin" /> جاري الإنشاء...</>
+                  : <><Plus size={13} /> إنشاء والبدء</>
+                }
+              </button>
+            </div>
+          )}
+
+          {repoError && (
+            <div className="amb-error" style={{ marginTop: 8 }}>
               <Github size={13} /> {repoError}
             </div>
           )}

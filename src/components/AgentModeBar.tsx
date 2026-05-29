@@ -62,15 +62,22 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     onChange({ ...state, active: false, githubToken: '', selectedRepo: '' })
   }, [state, onChange])
 
+  const fetchReposFromServer = useCallback(async (): Promise<Repo[]> => {
+    const res = await fetch('/api/dz-agent/github/repos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: state.githubToken }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'فشل جلب المستودعات')
+    return Array.isArray(data.repos) ? data.repos : []
+  }, [state.githubToken])
+
   const connectGitHub = useCallback(async () => {
     setLoadingRepos(true)
     setRepoError('')
     try {
-      const rr = await fetch('https://api.github.com/user/repos?sort=updated&per_page=20', {
-        headers: { Authorization: `token ${state.githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
-      })
-      const repoData: Repo[] = await rr.json()
-      const validRepos = Array.isArray(repoData) ? repoData : []
+      const validRepos = await fetchReposFromServer()
       setRepos(validRepos)
       if (validRepos.length === 0) {
         setRepoError('😉👌 عاود تسجيل خروج من الفوق و عاود ادخل تسجيل دخول')
@@ -82,24 +89,20 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     } finally {
       setLoadingRepos(false)
     }
-  }, [state, onChange])
+  }, [state, onChange, fetchReposFromServer])
 
   const loadRepos = useCallback(async () => {
-    if (!state.githubToken || repos.length) return
+    if (repos.length) return
     setLoadingRepos(true)
     try {
-      const rr = await fetch('https://api.github.com/user/repos?sort=updated&per_page=20', {
-        headers: { Authorization: `token ${state.githubToken}`, 'User-Agent': 'DZ-GPT/1.0' },
-      })
-      const data: Repo[] = await rr.json()
-      const validRepos = Array.isArray(data) ? data : []
+      const validRepos = await fetchReposFromServer()
       setRepos(validRepos)
       if (validRepos.length === 0) {
         setRepoError('😉👌 عاود تسجيل خروج من الفوق و عاود ادخل تسجيل دخول')
       }
     } catch {}
     finally { setLoadingRepos(false) }
-  }, [state.githubToken, repos.length])
+  }, [repos.length, fetchReposFromServer])
 
   const handleCommandClick = (example: string) => {
     if (onCommandSelect) {

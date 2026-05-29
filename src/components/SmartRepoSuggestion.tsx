@@ -40,9 +40,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   ui: 'واجهات', visualization: 'بيانات وعرض',
 }
 
-const INSTALL_COLORS: Record<string, string> = {
-  pip: '#3b82f6', npm: '#f59e0b', npx: '#8b5cf6',
-}
 
 export default function SmartRepoSuggestion({ repos, currentRepo, githubToken, onImportDone }: Props) {
   const [importing, setImporting] = useState<string | null>(null)

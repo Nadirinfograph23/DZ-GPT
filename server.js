@@ -65,6 +65,7 @@ import { mountDzAgentV4 } from './lib/dz-v4/mount.js'
 import { mountDesignIntelligence } from './lib/design-intelligence/mount.js'
 import { mountDzAgentV5 } from './lib/dz-v5/mount.js'
 import { mountAutonomousAgent } from './lib/autonomous/mount.js'
+import { matchReposToProject, getRepoByName, CATEGORY_LABELS, CATEGORY_ICONS } from './lib/tools/smart-repos.js'
 import { runReActLoop, shouldUseReActLoop } from './lib/agent-loop/react.js'
 import { runClaudeReActLoop } from './lib/agent-loop/claude-react.js'
 import claudeProxyRouter from './lib/claude-proxy/index.js'
@@ -16395,6 +16396,65 @@ app.post('/api/dz-agent/github/repos-suggest', async (req, res) => {
   }
 
   return res.status(200).json({ repos: repos.slice(0, 20), query: q })
+})
+
+// ── Smart Repos Suggestion — مطابقة وصف المشروع مع المستودعات ──────────────
+app.post('/api/dz-agent/smart-repos/suggest', async (req, res) => {
+  const { message = '' } = req.body
+  if (!message.trim()) return res.status(400).json({ error: 'message required' })
+  const matches = matchReposToProject(message)
+  return res.status(200).json({ repos: matches, count: matches.length })
+})
+
+// ── Smart Repos Import — توليد ملفات Starter وإرجاعها ──────────────────────
+app.post('/api/dz-agent/smart-repos/import', async (req, res) => {
+  const { repoName = '', currentRepo = '', token = '', projectContext = '' } = req.body
+  const repo = getRepoByName(repoName)
+  if (!repo) return res.status(404).json({ error: `لم يُعثر على مستودع: ${repoName}` })
+
+  const files = repo.starterFiles || {}
+  const fileList = Object.entries(files).map(([path, content]) => ({ path, content, lines: content.split('\n').length }))
+
+  // If GitHub token + repo provided → push files via GitHub API
+  if (token && currentRepo && isValidGithubRepo(currentRepo)) {
+    try {
+      const pushed = []
+      for (const { path, content } of fileList) {
+        const ghPath = `smart-import/${repo.name.toLowerCase()}/${path}`
+        // Get existing SHA
+        let sha = null
+        try {
+          const r = await ghFetch(`/repos/${currentRepo}/contents/${ghPath}`, token)
+          if (r.ok) { const d = await r.json(); sha = d.sha }
+        } catch (_) {}
+        const body = { message: `feat: استيراد ${repo.name} — ${path}`, content: Buffer.from(content).toString('base64') }
+        if (sha) body.sha = sha
+        const pr = await ghFetch(`/repos/${currentRepo}/contents/${ghPath}`, token, { method: 'PUT', body: JSON.stringify(body) })
+        if (pr.ok) pushed.push(ghPath)
+      }
+      return res.status(200).json({
+        success: true,
+        repo: repo.name,
+        pushedFiles: pushed,
+        files: fileList,
+        install: repo.install,
+        message: `✅ تم استيراد **${repo.name}** إلى مستودع \`${currentRepo}\` — ${pushed.length} ملفات في مجلد \`smart-import/${repo.name.toLowerCase()}/\``,
+      })
+    } catch (err) {
+      console.error(`[SmartImport] GitHub push error:`, err.message)
+    }
+  }
+
+  // Return files only (no GitHub push)
+  return res.status(200).json({
+    success: true,
+    repo: repo.name,
+    category: repo.category,
+    categoryLabel: CATEGORY_LABELS[repo.category] || repo.category,
+    files: fileList,
+    install: repo.install,
+    message: `✅ ملفات **${repo.name}** جاهزة — ${fileList.length} ملفات`,
+  })
 })
 
 // Create a new repository

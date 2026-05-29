@@ -288,10 +288,31 @@
 .amb-active-repo strong { color: #e2e8f0; }
 .amb-ext-link { color: #64748b; display: flex; transition: color 0.15s; }
 .amb-ext-link:hover { color: #10a37f; }
-.amb-active-hint {
-  font-size: 0.72rem; color: #475569;
+.amb-quick-cmd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
 }
-.amb-active-hint code { background: rgba(255,255,255,0.06); border-radius: 3px; padding: 0 4px; font-size: 0.68rem; }
+
+.amb-qcmd-chip {
+  background: rgba(16,163,127,0.08);
+  border: 1px solid rgba(16,163,127,0.2);
+  color: #64748b;
+  font-size: 11px;
+  font-family: 'Fira Code', monospace, sans-serif;
+  padding: 3px 9px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.amb-qcmd-chip:hover {
+  background: rgba(16,163,127,0.18);
+  border-color: rgba(16,163,127,0.45);
+  color: #10a37f;
+}
 
 /* ── Spinner ── */
 .amb-spin { animation: amb-rotate 0.8s linear infinite; }

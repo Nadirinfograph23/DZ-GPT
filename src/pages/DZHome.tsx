@@ -232,6 +232,25 @@ const SECTIONS = [
       </svg>
     ),
   },
+  {
+    id: 'certificate',
+    label: 'Certificate',
+    sublabel: 'شهادة DZ Agent',
+    path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
+    external: true,
+    gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%)',
+    bgGlow: 'rgba(245,158,11,0.25)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="5" y="8" width="38" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M13 18h22M13 24h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <circle cx="34" cy="34" r="8" fill="#0a0a0f" stroke="currentColor" strokeWidth="2.2" />
+        <path d="M30.5 34l2.5 2.5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M28 42l6-3 6 3v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+        <circle cx="13" cy="13" r="2" fill="currentColor" opacity="0.5" />
+      </svg>
+    ),
+  },
 ]
 
 export default function DZHome() {
@@ -303,7 +322,7 @@ export default function DZHome() {
             <button
               key={section.id}
               className="dz-home-card"
-              onClick={() => navigate(section.path)}
+              onClick={() => section.external ? window.open(section.path, '_blank') : navigate(section.path)}
               style={{ '--card-glow': section.bgGlow } as React.CSSProperties}
               aria-label={section.label}
             >

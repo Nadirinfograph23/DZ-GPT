@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen, Globe, ExternalLink } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -39,6 +39,13 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
   const [repoError, setRepoError]       = useState('')
   const [showCmds, setShowCmds]         = useState(false)
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
+
+  // Deploy panel state
+  const [deployOpen, setDeployOpen]     = useState(false)
+  const [deploying, setDeploying]       = useState(false)
+  const [deploySteps, setDeploySteps]   = useState<Array<{ id: string; label: string; done: boolean }>>([])
+  const [deployResult, setDeployResult] = useState<null | Record<string, unknown>>(null)
+  const [deployError, setDeployError]   = useState('')
 
   // Workspace selection state
   const [workspaceReady, setWorkspaceReady] = useState(false)
@@ -150,6 +157,57 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
     }
   }, [newRepoName, state, onChange])
 
+  const runDeploy = useCallback(async () => {
+    if (!state.selectedRepo || deploying) return
+    const tok = state.githubToken || clientGithubToken || ''
+    setDeploying(true)
+    setDeploySteps([])
+    setDeployResult(null)
+    setDeployError('')
+    try {
+      const res = await fetch('/api/dz-agent/github/pages/deploy-existing-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tok, repo: state.selectedRepo }),
+      })
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({})) as Record<string, string>
+        throw new Error(err.error || 'فشل الاتصال بالسيرفر')
+      }
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const event = JSON.parse(line.slice(6).trim())
+            if (event.type === 'step' && event.step) {
+              setDeploySteps(prev => {
+                const idx = prev.findIndex(s => s.id === event.step.id)
+                if (idx > -1) { const next = [...prev]; next[idx] = event.step; return next }
+                return [...prev, event.step]
+              })
+            } else if (event.type === 'done') {
+              setDeployResult(event)
+            } else if (event.type === 'error') {
+              setDeployError(String(event.error || 'خطأ غير معروف'))
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (err) {
+      setDeployError((err as Error).message)
+    } finally {
+      setDeploying(false)
+    }
+  }, [state.selectedRepo, state.githubToken, clientGithubToken, deploying])
+
   const handleCommandClick = (example: string) => {
     if (onCommandSelect) {
       onCommandSelect(example)
@@ -231,6 +289,19 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               <span>أوامر</span>
             </button>
 
+            {/* Deploy to GitHub Pages */}
+            {state.selectedRepo && (
+              <button
+                className={`amb-deploy-btn ${deployOpen ? 'amb-deploy-btn--on' : ''} ${deploying ? 'amb-deploy-btn--loading' : ''}`}
+                onClick={() => { setDeployOpen(v => !v); if (!deployOpen) { setDeployResult(null); setDeploySteps([]); setDeployError('') } }}
+                title="نشر على GitHub Pages"
+                disabled={deploying}
+              >
+                {deploying ? <Loader2 size={12} className="amb-spin" /> : <Globe size={12} />}
+                <span>{deploying ? 'جاري النشر...' : 'نشر'}</span>
+              </button>
+            )}
+
             {/* Expand/collapse */}
             <button className="amb-expand-btn" onClick={() => setExpanded(v => !v)}>
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -272,6 +343,132 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
           <div className="amb-cmds-tip">
             💡 يمكنك أيضاً الكتابة بالطبيعي — الوكيل يفهم الدارجة والعربية والإنجليزية
           </div>
+        </div>
+      )}
+
+      {/* ── Deploy Panel ── */}
+      {state.active && deployOpen && (
+        <div className="amb-deploy-panel">
+          <div className="amb-deploy-header">
+            <Globe size={14} />
+            <span>نشر على GitHub Pages</span>
+            {!deploying && (
+              <button className="amb-deploy-close" onClick={() => setDeployOpen(false)}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Steps progress */}
+          {deploySteps.length > 0 && (
+            <div className="amb-deploy-steps">
+              {deploySteps.map(s => (
+                <div key={s.id} className={`amb-deploy-step ${s.done ? 'amb-deploy-step--done' : 'amb-deploy-step--running'}`}>
+                  {s.done
+                    ? <span className="amb-deploy-step-icon">✅</span>
+                    : <Loader2 size={11} className="amb-spin amb-deploy-step-icon" />}
+                  <span>{s.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Result card */}
+          {deployResult && (deployResult.success as boolean) && (
+            <div className="amb-deploy-result">
+              <div className="amb-deploy-result-title">🎉 تم النشر بنجاح!</div>
+
+              {deployResult.siteUrl && (
+                <a
+                  href={String(deployResult.siteUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="amb-deploy-site-link"
+                >
+                  <Globe size={12} />
+                  <span>{String(deployResult.siteUrl)}</span>
+                  <ExternalLink size={11} />
+                </a>
+              )}
+
+              <div className="amb-deploy-report">
+                <div className="amb-deploy-report-row">
+                  <span>📦 المستودع</span>
+                  <code>{String(deployResult.owner)}/{String(deployResult.repo)}</code>
+                </div>
+                {deployResult.commitSha && (
+                  <div className="amb-deploy-report-row">
+                    <span>🔖 Commit</span>
+                    <code>{String(deployResult.commitSha)}</code>
+                  </div>
+                )}
+                <div className="amb-deploy-report-row">
+                  <span>📁 الملفات</span>
+                  <code>{String(deployResult.fileCount)} ملف — {String(deployResult.stack)}</code>
+                </div>
+                <div className="amb-deploy-report-row">
+                  <span>🌿 الفرع</span>
+                  <code>{String(deployResult.defaultBranch)}</code>
+                </div>
+                <div className="amb-deploy-report-row">
+                  <span>📅 التاريخ</span>
+                  <code>{new Date(String(deployResult.deployedAt)).toLocaleString('ar-DZ')}</code>
+                </div>
+                <div className="amb-deploy-report-row">
+                  <span>⚡ الحالة</span>
+                  <code className={deployResult.buildOk ? 'amb-deploy-ok' : 'amb-deploy-building'}>
+                    {deployResult.buildOk ? '✅ مبني' : '🟡 يتم البناء...'}
+                  </code>
+                </div>
+              </div>
+
+              <div className="amb-deploy-actions">
+                <a href={String(deployResult.repoUrl)} target="_blank" rel="noopener noreferrer" className="amb-deploy-action-btn">
+                  <Github size={12} /> المستودع
+                </a>
+                {deployResult.siteUrl && (
+                  <a href={String(deployResult.siteUrl)} target="_blank" rel="noopener noreferrer" className="amb-deploy-action-btn amb-deploy-action-btn--primary">
+                    <Globe size={12} /> فتح الموقع
+                  </a>
+                )}
+                <button className="amb-deploy-action-btn" onClick={runDeploy} disabled={deploying}>
+                  <Loader2 size={12} /> إعادة النشر
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {deployError && (
+            <div className="amb-error" style={{ margin: '10px 0' }}>
+              ❌ {deployError}
+              <button className="amb-deploy-retry" onClick={runDeploy}>إعادة المحاولة</button>
+            </div>
+          )}
+
+          {/* Initial state — ready to deploy */}
+          {!deploying && !deployResult && !deployError && deploySteps.length === 0 && (
+            <div className="amb-deploy-ready">
+              <div className="amb-deploy-ready-repo">
+                <GitBranch size={13} />
+                <span>{state.selectedRepo}</span>
+              </div>
+              <p className="amb-deploy-ready-hint">
+                سيتم تفعيل GitHub Pages تلقائياً وإعطائك رابط موقعك الحي مباشرةً
+              </p>
+              <button className="amb-deploy-go-btn" onClick={runDeploy}>
+                <Globe size={14} /> ابدأ النشر الآن
+              </button>
+            </div>
+          )}
+
+          {/* Loading indicator */}
+          {deploying && deploySteps.length === 0 && (
+            <div className="amb-deploy-connecting">
+              <Loader2 size={16} className="amb-spin" />
+              <span>جاري الاتصال بـ GitHub...</span>
+            </div>
+          )}
         </div>
       )}
 

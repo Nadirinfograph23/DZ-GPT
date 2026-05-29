@@ -3582,6 +3582,65 @@ function FindInputCard({ repo, onSearch }: { repo: string; onSearch: (pattern: s
   )
 }
 
+function FindDialog({ repo, onSearch, onClose }: { repo: string; onSearch: (pattern: string) => void; onClose: () => void }) {
+  const [pattern, setPattern] = useState('')
+  const repoName = repo ? (repo.split('/')[1] || repo) : ''
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const handleSearch = () => {
+    const p = pattern.trim()
+    if (p) onSearch(p)
+  }
+
+  return (
+    <div className="dzc-find-dialog-overlay" onClick={onClose}>
+      <div className="dzc-find-dialog" onClick={e => e.stopPropagation()} dir="rtl">
+        <div className="dzc-find-dialog-header">
+          <div className="dzc-find-dialog-title">
+            <Search size={16} />
+            <span>بحث عن ملف{repoName ? <> في <code>{repoName}</code></> : ''}</span>
+          </div>
+          <button className="dzc-find-dialog-close" onClick={onClose}>
+            <X size={15} />
+          </button>
+        </div>
+        <div className="dzc-find-dialog-body">
+          <input
+            ref={inputRef}
+            className="dzc-find-dialog-input"
+            placeholder="اسم الملف أو النمط — مثال: App.tsx أو *.config.js"
+            value={pattern}
+            onChange={e => setPattern(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
+            dir="ltr"
+          />
+          <button
+            className="dzc-find-dialog-btn"
+            disabled={!pattern.trim()}
+            onClick={handleSearch}
+          >
+            <Search size={14} />
+            <span>بحث</span>
+          </button>
+        </div>
+        <p className="dzc-find-dialog-hint">
+          يمكنك استخدام <code>*</code> كبطاقة بدل — مثل <code>*.tsx</code> أو <code>*.config.js</code>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
@@ -3592,6 +3651,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     } catch { return [] }
   })
   const [input, setInput] = useState('')
+  const [showFindDialog, setShowFindDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
@@ -6821,7 +6881,7 @@ ${rows}
             <>
               <button
                 className="gh-log-toggle dz-agent-quick-btn"
-                onClick={() => { setInput('/find '); setTimeout(() => textareaRef.current?.focus(), 50) }}
+                onClick={() => setShowFindDialog(true)}
                 title="بحث عن ملف في المستودع"
               >
                 <Search size={13} />
@@ -7689,6 +7749,10 @@ ${rows}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
           clientGithubToken={githubToken}
           onCommandSelect={cmd => {
+            if (cmd.startsWith('/find')) {
+              setShowFindDialog(true)
+              return
+            }
             setInput(cmd)
             setTimeout(() => textareaRef.current?.focus(), 50)
           }}
@@ -7801,6 +7865,19 @@ ${rows}
         </div>
         <p className="dz-disclaimer">قد يُخطئ DZ Agent. راجع دائماً قبل الموافقة على إجراءات GitHub.</p>
       </div>
+
+      {/* ===== FLOATING FIND DIALOG ===== */}
+      {showFindDialog && createPortal(
+        <FindDialog
+          repo={agentMode.selectedRepo}
+          onSearch={pattern => {
+            setShowFindDialog(false)
+            sendMessage(`/find ${pattern}`)
+          }}
+          onClose={() => setShowFindDialog(false)}
+        />,
+        document.body
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import DZToast, { type Toast } from './DZToast'
 import { useNavigate } from 'react-router-dom'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
@@ -3668,6 +3669,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
@@ -3903,6 +3905,15 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       ...entry,
       timestamp: new Date().toLocaleTimeString(),
     }, ...prev])
+  }, [])
+
+  const addToast = useCallback((t: Omit<Toast, 'id'>) => {
+    const id = Math.random().toString(36).slice(2)
+    setToasts(prev => [...prev.slice(-2), { ...t, id }])
+  }, [])
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
   const saveToken = useCallback((t: string) => {
@@ -4391,6 +4402,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           richType: 'text',
         })
         addToLog({ type: 'commit', description: `Pushed ${data.files?.length || 0} files — PR ${data.pr?.number || 'N/A'}`, status: 'success', repo: repo.full_name })
+        addToast({ type: 'commit', title: `تم الرفع ✓ — ${repo.name}`, desc: `${data.files?.length || 0} ملف${data.pr?.url ? ' · PR مفتوح' : ''}`, link: data.pr?.url, linkLabel: data.pr?.url ? `PR #${data.pr.number}` : undefined })
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -4426,6 +4438,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         richType: 'text',
       })
       addToLog({ type: 'commit', description: `Design improved — ${data.files?.length || 0} files`, status: 'success', repo: repo.full_name })
+      addToast({ type: 'push', title: `تم تحسين التصميم 🎨 — ${repo.name}`, desc: `${data.files?.length || 0} ملف مُحدَّث`, link: data.pr?.url, linkLabel: data.pr?.url ? `PR #${data.pr.number}` : undefined })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       addAssistantMessage({ content: `❌ فشل تحسين التصميم: ${msg}`, richType: 'text', isError: true })
@@ -4456,6 +4469,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         richType: 'text',
       })
       addToLog({ type: 'deploy', description: `GitHub Pages deploy triggered — ${siteUrl}`, status: 'success', repo: repo.full_name })
+      addToast({ type: 'deploy', title: `تم بدء النشر — ${repo.name}`, desc: 'يستغرق 1-2 دقيقة', link: siteUrl, linkLabel: siteUrl })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       addAssistantMessage({ content: `❌ فشل النشر على GitHub Pages: ${msg}`, richType: 'text', isError: true })
@@ -5001,7 +5015,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       reactSteps: finalSteps,
       claudeMode: true,
     })
-  }, [githubToken, addAssistantMessage])
+    if (!finalContent?.startsWith('⚠️')) {
+      addToast({ type: 'commit', title: 'اكتملت عمليات GitHub ✓', desc: 'Claude Mode' })
+    }
+  }, [githubToken, addAssistantMessage, addToast])
 
   // ===== GITHUB REACT SSE RUNNER =====
   const runGithubReActSSE = useCallback(async (
@@ -5080,7 +5097,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       richType: 'github-react',
       reactSteps: finalSteps,
     })
-  }, [githubToken, addAssistantMessage])
+    if (!finalContent?.startsWith('⚠️')) {
+      addToast({ type: 'commit', title: 'اكتملت عمليات GitHub ✓', desc: 'DZ GitHub Agent' })
+    }
+  }, [githubToken, addAssistantMessage, addToast])
 
   // ===== HYBRID AGENT: confirm destructive action =====
   const confirmAgentAction = useCallback((cmd: string, args: string, label: string): Promise<boolean> => {
@@ -7126,7 +7146,10 @@ ${rows}
                           repos={msg.smartRepoSuggestions}
                           currentRepo={agentMode.selectedRepo || currentRepo || undefined}
                           githubToken={agentMode.githubToken || githubToken || undefined}
-                          onImportDone={(_repoName, message) => addAssistantMessage({ content: message, richType: 'text' })}
+                          onImportDone={(_repoName, message) => {
+                            addAssistantMessage({ content: message, richType: 'text' })
+                            addToast({ type: 'import', title: `تم استيراد ${_repoName} ✓`, desc: 'المستودع جاهز للاستخدام' })
+                          }}
                         />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (
@@ -7943,6 +7966,8 @@ ${rows}
         />,
         document.body
       )}
+
+      <DZToast toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

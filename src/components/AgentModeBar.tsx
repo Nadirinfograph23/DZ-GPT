@@ -286,7 +286,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               title="أوامر الوكيل"
             >
               <Terminal size={12} />
-              <span>أوامر</span>
             </button>
 
             {/* Deploy to GitHub Pages */}
@@ -294,17 +293,16 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               <button
                 className={`amb-deploy-btn ${deployOpen ? 'amb-deploy-btn--on' : ''} ${deploying ? 'amb-deploy-btn--loading' : ''}`}
                 onClick={() => { setDeployOpen(v => !v); if (!deployOpen) { setDeployResult(null); setDeploySteps([]); setDeployError('') } }}
-                title="نشر على GitHub Pages"
+                title={deploying ? 'جاري النشر...' : 'نشر على GitHub Pages'}
                 disabled={deploying}
               >
                 {deploying ? <Loader2 size={12} className="amb-spin" /> : <Globe size={12} />}
-                <span>{deploying ? 'جاري النشر...' : 'نشر'}</span>
               </button>
             )}
 
             {/* Expand/collapse */}
-            <button className="amb-expand-btn" onClick={() => setExpanded(v => !v)}>
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <button className="amb-expand-btn" onClick={() => setExpanded(v => !v)} title={expanded ? 'إخفاء' : 'إعدادات'}>
+              {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
           </>
         )}

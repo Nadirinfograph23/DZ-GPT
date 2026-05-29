@@ -415,6 +415,84 @@
 }
 .amb-deactivate-no:hover { background: rgba(255,255,255,0.08); color: #cbd5e1; }
 
+/* ── Workspace picker panel ── */
+.amb-workspace-panel {
+  margin: 0 10px 10px;
+  padding: 12px 14px;
+  background: rgba(17,24,39,0.7);
+  border: 1px solid rgba(16,163,127,0.2);
+  border-radius: 10px;
+  animation: amb-slide 0.15s ease;
+}
+.amb-workspace-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.82rem; font-weight: 700; color: #e2e8f0;
+  margin-bottom: 10px;
+}
+.amb-workspace-tabs {
+  display: flex; gap: 6px; margin-bottom: 10px;
+}
+.amb-workspace-tab {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: #64748b; font-size: 0.76rem; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.amb-workspace-tab:hover { color: #94a3b8; border-color: rgba(255,255,255,0.18); }
+.amb-workspace-tab--active {
+  background: rgba(16,163,127,0.12);
+  border-color: rgba(16,163,127,0.4);
+  color: #10a37f;
+}
+.amb-workspace-body {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.amb-workspace-select-wrap,
+.amb-workspace-input-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.amb-workspace-select-icon { color: #64748b; flex-shrink: 0; }
+.amb-workspace-select {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e2e8f0; font-size: 0.78rem; cursor: pointer;
+}
+.amb-workspace-select option { background: #1e1e1e; }
+.amb-workspace-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e2e8f0; font-size: 0.78rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.amb-workspace-input::placeholder { color: #475569; }
+.amb-workspace-hint {
+  font-size: 0.72rem; color: #475569; line-height: 1.5; margin: 0;
+}
+.amb-workspace-hint code {
+  background: rgba(255,255,255,0.06); border-radius: 3px;
+  padding: 1px 4px; font-size: 0.68rem;
+}
+.amb-workspace-start-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 16px;
+  background: rgba(16,163,127,0.15);
+  border: 1px solid rgba(16,163,127,0.4);
+  border-radius: 8px;
+  color: #10a37f; font-size: 0.8rem; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+  align-self: flex-start;
+}
+.amb-workspace-start-btn:hover:not(:disabled) {
+  background: rgba(16,163,127,0.28);
+  border-color: rgba(16,163,127,0.6);
+}
+.amb-workspace-start-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* ── Clickable command rows ── */
 .amb-cmd-row--clickable {
   cursor: pointer;

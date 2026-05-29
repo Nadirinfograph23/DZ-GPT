@@ -241,18 +241,34 @@ export function createGitHubRouter(deps = {}) {
   // ── POST /dz-agent/github/files ─────────────────────────────
   router.post('/dz-agent/github/files', githubLimiter, async (req, res) => {
     const token = req.body.token || process.env.GITHUB_TOKEN || ''
-    const { repo, path = '' } = req.body
+    const { repo, branch } = req.body
+    // Sanitize path: strip leading/trailing slashes
+    const rawPath = typeof req.body.path === 'string' ? req.body.path : ''
+    const path = rawPath.replace(/^\/+|\/+$/g, '')
+
     if (!token || !repo) return res.status(400).json({ error: 'Token and repo required.' })
     if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repository name.' })
     if (path && !isValidGithubPath(path)) return res.status(400).json({ error: 'Invalid path.' })
+
+    // Build URL — append ?ref=branch if provided
+    const refParam = branch ? `?ref=${encodeURIComponent(branch)}` : ''
+    const endpoint = `/repos/${repo}/contents/${path}${refParam}`
+
     try {
-      const response = await ghFetch(`/repos/${repo}/contents/${path}`, token)
+      const response = await ghFetch(endpoint, token)
       const data = await response.json()
+
+      // Handle empty repo (409) gracefully
+      if (response.status === 409) {
+        return res.json({ files: [], empty: true, message: 'المستودع فارغ' })
+      }
+
       if (!response.ok) return res.status(response.status).json({ error: data.message || 'Failed to list files' })
+
       const files = Array.isArray(data) ? data.map(f => ({
         name: f.name, path: f.path, type: f.type === 'dir' ? 'dir' : 'file', size: f.size,
       })) : []
-      res.json({ files })
+      res.json({ files, path: path || '/', repo })
     } catch (err) {
       console.error('[github/files]', err.message)
       res.status(500).json({ error: 'Failed to list files.' })

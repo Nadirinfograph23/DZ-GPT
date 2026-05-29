@@ -378,7 +378,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
             <div className="amb-deploy-result">
               <div className="amb-deploy-result-title">🎉 تم النشر بنجاح!</div>
 
-              {deployResult.siteUrl && (
+              {!!deployResult.siteUrl && (
                 <a
                   href={String(deployResult.siteUrl)}
                   target="_blank"
@@ -396,7 +396,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
                   <span>📦 المستودع</span>
                   <code>{String(deployResult.owner)}/{String(deployResult.repo)}</code>
                 </div>
-                {deployResult.commitSha && (
+                {!!deployResult.commitSha && (
                   <div className="amb-deploy-report-row">
                     <span>🔖 Commit</span>
                     <code>{String(deployResult.commitSha)}</code>
@@ -426,7 +426,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
                 <a href={String(deployResult.repoUrl)} target="_blank" rel="noopener noreferrer" className="amb-deploy-action-btn">
                   <Github size={12} /> المستودع
                 </a>
-                {deployResult.siteUrl && (
+                {!!deployResult.siteUrl && (
                   <a href={String(deployResult.siteUrl)} target="_blank" rel="noopener noreferrer" className="amb-deploy-action-btn amb-deploy-action-btn--primary">
                     <Globe size={12} /> فتح الموقع
                   </a>

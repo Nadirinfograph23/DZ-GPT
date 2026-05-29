@@ -2,39 +2,55 @@
 
 .dzt-container {
   position: fixed;
-  top: 60px;
-  left: 16px;
+  top: 56px;
+  right: 16px;
+  left: auto;
   z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 8px;
   pointer-events: none;
-  max-width: 320px;
+  max-width: 300px;
   width: calc(100vw - 32px);
+  direction: rtl;
+}
+
+/* Arrow pointing UP toward the robot toggle button */
+.dzt-container::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  right: 24px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 10px solid rgba(16,163,127,0.85);
+  filter: drop-shadow(0 -2px 4px rgba(16,163,127,0.4));
+  pointer-events: none;
 }
 
 .dzt-item {
   pointer-events: all;
   position: relative;
-  background: #1e1e2e;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-right: 3px solid var(--dzt-color, #10a37f);
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 3px solid var(--dzt-color, #10a37f);
   border-radius: 10px;
   padding: 11px 14px 14px;
   display: flex;
   align-items: flex-start;
   gap: 10px;
   cursor: pointer;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
   overflow: hidden;
-  animation: dzt-slide-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: dzt-slide-in 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
   transition: transform 0.15s ease, opacity 0.15s ease;
+  text-align: right;
 }
 
 .dzt-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.12);
-  border-right-color: var(--dzt-color, #10a37f);
+  border-color: rgba(255,255,255,0.14);
+  border-left-color: var(--dzt-color, #10a37f);
 }
 
 .dzt-icon {
@@ -42,6 +58,7 @@
   color: var(--dzt-color, #10a37f);
   margin-top: 1px;
   opacity: 0.95;
+  order: 2;
 }
 
 .dzt-body {
@@ -50,14 +67,17 @@
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  order: 1;
+  text-align: right;
 }
 
 .dzt-title {
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
   color: #e2e8f0;
   line-height: 1.4;
   letter-spacing: 0.01em;
+  direction: rtl;
 }
 
 .dzt-desc {
@@ -67,6 +87,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  direction: rtl;
 }
 
 .dzt-link {
@@ -87,10 +108,11 @@
   text-decoration: underline;
 }
 
-/* Progress bar — animates from 100% to 0 */
+/* Progress bar */
 .dzt-progress {
   position: absolute;
   bottom: 0;
+  left: 0;
   right: 0;
   height: 2px;
   width: 100%;
@@ -102,7 +124,7 @@
 @keyframes dzt-slide-in {
   from {
     opacity: 0;
-    transform: translateX(-24px) scale(0.95);
+    transform: translateX(24px) scale(0.95);
   }
   to {
     opacity: 1;
@@ -113,10 +135,9 @@
 /* Mobile */
 @media (max-width: 480px) {
   .dzt-container {
-    top: auto;
-    bottom: 80px;
-    left: 8px;
+    top: 56px;
     right: 8px;
+    left: 8px;
     max-width: none;
     width: auto;
   }

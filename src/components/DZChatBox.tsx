@@ -3671,6 +3671,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [showAgentBar, setShowAgentBar] = useState(true)
+  const [agentHintGlow, setAgentHintGlow] = useState(false)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
@@ -6950,8 +6951,8 @@ ${rows}
       <div className="dz-gh-bar">
         {/* Agent bar toggle button */}
         <button
-          className={`gh-log-toggle dz-agent-bar-toggle ${showAgentBar ? 'active' : ''}`}
-          onClick={() => setShowAgentBar(v => !v)}
+          className={`gh-log-toggle dz-agent-bar-toggle ${showAgentBar ? 'active' : ''} ${agentHintGlow ? 'dz-agent-bar-toggle--glow' : ''}`}
+          onClick={() => { setShowAgentBar(v => !v); setAgentHintGlow(false) }}
           title={showAgentBar ? 'إخفاء شريط الوكيل' : 'إظهار شريط الوكيل'}
         >
           <Bot size={13} />
@@ -7838,12 +7839,14 @@ ${rows}
           clientGithubToken={githubToken}
           onClose={() => {
             setShowAgentBar(false)
+            setAgentHintGlow(true)
             addToast({
               type: 'info',
-              title: '⬆️ تقدر ترجع شريط الوكيل Dz Agent',
-              desc: 'كليكي على أيقونة الروبوت 🤖',
+              title: 'تقدر ترجع شريط الوكيل Dz Agent',
+              desc: 'كليكي على أيقونة الروبوت 🤖 ⬆️',
               duration: 8000,
             })
+            setTimeout(() => setAgentHintGlow(false), 8000)
           }}
           onCommandSelect={cmd => {
             if (cmd.startsWith('/find')) {

@@ -1694,24 +1694,25 @@
 .dz-ticker-wrap {
   flex: 1;
   min-width: 0;
-  max-width: calc(100% - 180px);
+  max-width: calc(100% - 80px);
   overflow: hidden;
   height: 36px;
   display: flex;
   align-items: center;
-  mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
+  mask-image: linear-gradient(to left, transparent 0%, #000 5%, #000 95%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, transparent 0%, #000 5%, #000 95%, transparent 100%);
 }
 
 .dz-ticker-inner {
   display: inline-block;
   white-space: nowrap;
-  color: #ffffff;
-  font-size: 11px;
+  color: #d1d5db;
+  font-size: 11.5px;
   line-height: 1;
   direction: rtl;
-  animation: dz-ticker-scroll 100s linear infinite;
+  animation: dz-ticker-scroll 55s linear infinite;
   will-change: transform;
+  padding-left: 100%;
 }
 
 .dz-ticker-inner:hover {
@@ -1719,14 +1720,14 @@
 }
 
 @keyframes dz-ticker-scroll {
-  0%   { transform: translateX(-30%); }
-  100% { transform: translateX(110%); }
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
 
 @media (max-width: 600px) {
   .dz-ticker-inner {
-    font-size: 10px;
-    animation-duration: 80s;
+    font-size: 10.5px;
+    animation-duration: 45s;
   }
 }
 
@@ -2200,10 +2201,35 @@
 .dz-agent-bar-toggle {
   border-radius: 6px;
   position: relative;
+  transition: box-shadow 0.2s, color 0.2s;
 }
 .dz-agent-bar-toggle.active {
   color: #10a37f !important;
   background: rgba(16,163,127,0.08) !important;
+}
+
+/* Glow animation when toast hint is shown */
+.dz-agent-bar-toggle--glow {
+  animation: dz-bot-glow 1.2s ease-in-out infinite !important;
+  color: #10a37f !important;
+}
+
+@keyframes dz-bot-glow {
+  0%,100% {
+    box-shadow: 0 0 0 0 rgba(16,163,127,0);
+    color: #10a37f;
+    transform: scale(1);
+  }
+  40% {
+    box-shadow: 0 0 0 5px rgba(16,163,127,0.35), 0 0 14px 4px rgba(16,163,127,0.25);
+    color: #34d399;
+    transform: scale(1.18);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgba(16,163,127,0.2);
+    color: #10a37f;
+    transform: scale(1.08);
+  }
 }
 
 /* Clear button in toolbar */

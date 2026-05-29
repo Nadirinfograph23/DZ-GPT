@@ -502,6 +502,309 @@ export function createGitHubRouter(deps = {}) {
     }
   })
 
+  // ── POST /dz-agent/github/grep ──────────────────────────────
+  router.post('/dz-agent/github/grep', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, query, path: searchPath = '', branch } = req.body
+    if (!token || !repo || !query) return res.status(400).json({ error: 'token, repo, query required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      // Step 1: Get tree to list all files
+      const branchName = branch || 'main'
+      const branchRes = await ghFetch(`/repos/${repo}/branches/${encodeURIComponent(branchName)}`, token)
+      if (!branchRes.ok) return res.status(404).json({ error: `Branch "${branchName}" not found` })
+      const branchData = await branchRes.json()
+      const treeSha = branchData.commit?.commit?.tree?.sha
+      if (!treeSha) return res.status(500).json({ error: 'Cannot get tree SHA' })
+
+      const treeRes = await ghFetch(`/repos/${repo}/git/trees/${treeSha}?recursive=1`, token)
+      const treeData = await treeRes.json()
+      const files = (treeData.tree || [])
+        .filter(f => f.type === 'blob' && (!searchPath || f.path.startsWith(searchPath.replace(/\/$/, ''))))
+        .slice(0, 50) // limit for performance
+
+      // Step 2: Search each file for the query (parallel, max 15 files)
+      const lq = query.toLowerCase()
+      const results = []
+      const batch = files.slice(0, 15)
+      await Promise.allSettled(batch.map(async (f) => {
+        try {
+          const r = await ghFetch(`/repos/${repo}/contents/${f.path}${branch ? `?ref=${encodeURIComponent(branch)}` : ''}`, token)
+          if (!r.ok) return
+          const d = await r.json()
+          if (!d.content) return
+          const content = Buffer.from(d.content, 'base64').toString('utf-8')
+          const lines = content.split('\n')
+          const matches = []
+          lines.forEach((line, i) => {
+            if (line.toLowerCase().includes(lq)) {
+              matches.push({ line: i + 1, text: line.trim().slice(0, 200) })
+            }
+          })
+          if (matches.length > 0) results.push({ path: f.path, matches: matches.slice(0, 10) })
+        } catch {}
+      }))
+      results.sort((a, b) => b.matches.length - a.matches.length)
+      res.json({ repo, query, searchPath: searchPath || '/', files_searched: batch.length, results })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/find-files ────────────────────────
+  router.post('/dz-agent/github/find-files', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, pattern, branch } = req.body
+    if (!token || !repo || !pattern) return res.status(400).json({ error: 'token, repo, pattern required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const branchName = branch || 'main'
+      const branchRes = await ghFetch(`/repos/${repo}/branches/${encodeURIComponent(branchName)}`, token)
+      if (!branchRes.ok) return res.status(404).json({ error: `Branch "${branchName}" not found` })
+      const branchData = await branchRes.json()
+      const treeSha = branchData.commit?.commit?.tree?.sha
+      const treeRes = await ghFetch(`/repos/${repo}/git/trees/${treeSha}?recursive=1`, token)
+      const treeData = await treeRes.json()
+      const regex = new RegExp(pattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
+      const matches = (treeData.tree || [])
+        .filter(f => f.type === 'blob' && regex.test(f.path.split('/').pop() || f.path))
+        .map(f => ({ path: f.path, size: f.size }))
+      res.json({ repo, pattern, count: matches.length, matches })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/history ───────────────────────────
+  router.post('/dz-agent/github/history', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, branch, per_page = 15 } = req.body
+    if (!token || !repo) return res.status(400).json({ error: 'token and repo required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    const n = Math.min(Number(per_page) || 15, 30)
+    const branchParam = branch ? `&sha=${encodeURIComponent(branch)}` : ''
+    try {
+      const r = await ghFetch(`/repos/${repo}/commits?per_page=${n}${branchParam}`, token)
+      const data = await r.json()
+      if (!r.ok) return res.status(r.status).json({ error: data.message || 'Failed to get commits' })
+      const commits = (Array.isArray(data) ? data : []).map(c => ({
+        sha: c.sha?.slice(0, 7),
+        message: c.commit?.message?.split('\n')[0]?.slice(0, 120),
+        author: c.commit?.author?.name,
+        date: c.commit?.author?.date,
+        url: c.html_url,
+      }))
+      res.json({ repo, branch: branch || 'default', commits })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/delete-file ───────────────────────
+  router.post('/dz-agent/github/delete-file', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, path: filePath, message = 'Delete file via DZ Agent', branch = 'main' } = req.body
+    if (!token || !repo || !filePath) return res.status(400).json({ error: 'token, repo, path required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    if (!isValidGithubPath(filePath)) return res.status(400).json({ error: 'Invalid path.' })
+    try {
+      const check = await ghFetch(`/repos/${repo}/contents/${filePath}?ref=${encodeURIComponent(branch)}`, token)
+      if (!check.ok) {
+        const cd = await check.json()
+        return res.status(404).json({ error: cd.message || 'File not found' })
+      }
+      const { sha } = await check.json()
+      const r = await ghFetch(`/repos/${repo}/contents/${filePath}`, token, {
+        method: 'DELETE',
+        body: JSON.stringify({ message: sanitizeString(message, 500), sha, branch }),
+      })
+      if (r.status === 200) {
+        const d = await r.json()
+        return res.json({ success: true, path: filePath, repo, commit: d.commit?.sha?.slice(0, 7) })
+      }
+      const rd = await r.json()
+      res.status(r.status).json({ error: rd.message || 'Failed to delete file' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/tree ──────────────────────────────
+  router.post('/dz-agent/github/tree', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, path: treePath = '', branch } = req.body
+    if (!token || !repo) return res.status(400).json({ error: 'token and repo required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const branchName = branch || 'main'
+      const branchRes = await ghFetch(`/repos/${repo}/branches/${encodeURIComponent(branchName)}`, token)
+      if (!branchRes.ok) return res.status(404).json({ error: `Branch "${branchName}" not found` })
+      const branchData = await branchRes.json()
+      const treeSha = branchData.commit?.commit?.tree?.sha
+      if (!treeSha) return res.status(500).json({ error: 'Cannot get tree SHA' })
+      const treeRes = await ghFetch(`/repos/${repo}/git/trees/${treeSha}?recursive=1`, token)
+      const treeData = await treeRes.json()
+      const prefix = treePath ? treePath.replace(/\/$/, '') + '/' : ''
+      const items = (treeData.tree || [])
+        .filter(f => !prefix || f.path.startsWith(prefix))
+        .map(f => ({ path: f.path, type: f.type, size: f.size }))
+        .slice(0, 300)
+      res.json({ repo, branch: branchName, root: treePath || '/', items })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/real-diff ─────────────────────────
+  router.post('/dz-agent/github/real-diff', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, base, head } = req.body
+    if (!token || !repo || !base || !head) return res.status(400).json({ error: 'token, repo, base, head required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const r = await ghFetch(`/repos/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`, token)
+      const data = await r.json()
+      if (!r.ok) return res.status(r.status).json({ error: data.message || 'Diff failed' })
+      res.json({
+        repo, base, head,
+        ahead_by: data.ahead_by,
+        behind_by: data.behind_by,
+        status: data.status,
+        commits: (data.commits || []).map(c => ({ sha: c.sha?.slice(0, 7), message: c.commit?.message?.split('\n')[0] })),
+        files: (data.files || []).map(f => ({
+          filename: f.filename, status: f.status,
+          additions: f.additions, deletions: f.deletions,
+          patch: f.patch?.slice(0, 800),
+        })),
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/issues-manage ─────────────────────
+  router.post('/dz-agent/github/issues-manage', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, action = 'list', issue_number, title, body: issueBody = '', labels = [], state = 'open' } = req.body
+    if (!token || !repo) return res.status(400).json({ error: 'token and repo required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      if (action === 'list') {
+        const safeState = ['open', 'closed', 'all'].includes(state) ? state : 'open'
+        const r = await ghFetch(`/repos/${repo}/issues?state=${safeState}&per_page=20&sort=updated`, token)
+        const data = await r.json()
+        if (!r.ok) return res.status(r.status).json({ error: data.message })
+        const issues = data.filter(i => !i.pull_request).map(i => ({
+          number: i.number, title: i.title?.slice(0, 150), state: i.state,
+          user: i.user?.login, labels: (i.labels || []).map(l => l.name),
+          created_at: i.created_at, comments: i.comments, html_url: i.html_url,
+        }))
+        return res.json({ repo, state: safeState, count: issues.length, issues })
+      }
+      if (action === 'create') {
+        if (!title) return res.status(400).json({ error: 'title required for create.' })
+        const r = await ghFetch(`/repos/${repo}/issues`, token, {
+          method: 'POST',
+          body: JSON.stringify({ title: sanitizeString(title, 256), body: sanitizeString(issueBody, 2000), labels }),
+        })
+        const data = await r.json()
+        if (!r.ok) return res.status(r.status).json({ error: data.message })
+        return res.json({ success: true, number: data.number, title: data.title, html_url: data.html_url })
+      }
+      if (action === 'close') {
+        if (!issue_number) return res.status(400).json({ error: 'issue_number required for close.' })
+        const r = await ghFetch(`/repos/${repo}/issues/${issue_number}`, token, {
+          method: 'PATCH', body: JSON.stringify({ state: 'closed' }),
+        })
+        const data = await r.json()
+        if (!r.ok) return res.status(r.status).json({ error: data.message })
+        return res.json({ success: true, number: data.number, state: data.state, html_url: data.html_url })
+      }
+      if (action === 'reopen') {
+        if (!issue_number) return res.status(400).json({ error: 'issue_number required for reopen.' })
+        const r = await ghFetch(`/repos/${repo}/issues/${issue_number}`, token, {
+          method: 'PATCH', body: JSON.stringify({ state: 'open' }),
+        })
+        const data = await r.json()
+        if (!r.ok) return res.status(r.status).json({ error: data.message })
+        return res.json({ success: true, number: data.number, state: data.state, html_url: data.html_url })
+      }
+      res.status(400).json({ error: `Unknown action "${action}". Use: list, create, close, reopen` })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/actions-status ────────────────────
+  router.post('/dz-agent/github/actions-status', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, per_page = 8 } = req.body
+    if (!token || !repo) return res.status(400).json({ error: 'token and repo required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const n = Math.min(Number(per_page) || 8, 10)
+      const r = await ghFetch(`/repos/${repo}/actions/runs?per_page=${n}`, token)
+      const data = await r.json()
+      if (!r.ok) return res.status(r.status).json({ error: data.message || 'Actions not available' })
+      const runs = (data.workflow_runs || []).map(run => ({
+        id: run.id, name: run.name, status: run.status, conclusion: run.conclusion,
+        branch: run.head_branch, sha: run.head_sha?.slice(0, 7),
+        created_at: run.created_at, updated_at: run.updated_at, html_url: run.html_url,
+      }))
+      res.json({ repo, total: data.total_count, runs })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/create-release ────────────────────
+  router.post('/dz-agent/github/create-release', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, tag, name, body: releaseBody = '', prerelease = false } = req.body
+    if (!token || !repo || !tag) return res.status(400).json({ error: 'token, repo, tag required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const r = await ghFetch(`/repos/${repo}/releases`, token, {
+        method: 'POST',
+        body: JSON.stringify({ tag_name: tag, name: name || tag, body: sanitizeString(releaseBody, 2000), prerelease }),
+      })
+      const data = await r.json()
+      if (!r.ok) return res.status(r.status).json({ error: data.message || 'Failed to create release' })
+      res.json({ success: true, id: data.id, tag: data.tag_name, name: data.name, html_url: data.html_url })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── POST /dz-agent/github/review-pr ─────────────────────────
+  router.post('/dz-agent/github/review-pr', githubLimiter, async (req, res) => {
+    const token = req.body.token || process.env.GITHUB_TOKEN || ''
+    const { repo, pull_number } = req.body
+    if (!token || !repo || !pull_number) return res.status(400).json({ error: 'token, repo, pull_number required.' })
+    if (!isValidGithubRepo(repo)) return res.status(400).json({ error: 'Invalid repo.' })
+    try {
+      const [prRes, filesRes] = await Promise.all([
+        ghFetch(`/repos/${repo}/pulls/${pull_number}`, token),
+        ghFetch(`/repos/${repo}/pulls/${pull_number}/files?per_page=30`, token),
+      ])
+      const prData = await prRes.json()
+      if (!prRes.ok) return res.status(prRes.status).json({ error: prData.message || 'PR not found' })
+      const filesData = await filesRes.json()
+      res.json({
+        repo, number: prData.number, title: prData.title, state: prData.state,
+        head: prData.head?.ref, base: prData.base?.ref, html_url: prData.html_url,
+        body: prData.body?.slice(0, 500),
+        files: (Array.isArray(filesData) ? filesData : []).map(f => ({
+          filename: f.filename, status: f.status,
+          additions: f.additions, deletions: f.deletions,
+          patch: f.patch?.slice(0, 800),
+        })),
+      })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── POST /dz-agent/github/react/enable-pages ────────────────
   router.post('/dz-agent/github/react/enable-pages', githubLimiter, async (req, res) => {
     const { repo } = req.body

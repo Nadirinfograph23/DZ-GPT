@@ -510,7 +510,7 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
                 اتصل بـ GitHub
               </a>
               <p className="amb-oauth-hint">
-                😉 عاود أخرج من GitHub الفوق، دير تسجيل خروج و عاود دير تسجيل دخول
+                انقر للاتصال بحسابك على GitHub وجلب مستوداتك
               </p>
             </div>
           )}

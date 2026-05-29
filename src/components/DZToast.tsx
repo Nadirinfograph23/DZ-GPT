@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Github, Globe, Download, CheckCircle2, XCircle, Info, Zap } from 'lucide-react'
+import { Github, Globe, Download, CheckCircle2, XCircle, Info } from 'lucide-react'
 import '../styles/dz-toast.css'
 
 export type ToastType = 'commit' | 'deploy' | 'import' | 'success' | 'error' | 'info' | 'push'
@@ -92,8 +92,3 @@ export default function DZToast({ toasts, onDismiss }: Props) {
   )
 }
 
-export function useToastState() {
-  const [toasts, setToasts] = (globalThis as unknown as { __dzt_useState?: typeof import('react').useState })
-    .__dzt_useState?.([]) ?? [[], () => {}]
-  return { toasts, setToasts }
-}

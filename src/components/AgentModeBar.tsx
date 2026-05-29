@@ -17,6 +17,7 @@ interface AgentModeBarProps {
   githubUser?: { login: string; avatar: string } | null
   onCommandSelect?: (cmd: string) => void
   clientGithubToken?: string
+  onClose?: () => void
 }
 
 const SLASH_COMMANDS = [
@@ -42,7 +43,7 @@ const SLASH_COMMANDS = [
   { cmd: '/memory',  desc: 'ذاكرة المشروع (حفظ/عرض/تحديث)',   example: '/memory save ملاحظاتي' },
 ]
 
-export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect, clientGithubToken }: AgentModeBarProps) {
+export default function AgentModeBar({ state, onChange, githubUser, onCommandSelect, clientGithubToken, onClose }: AgentModeBarProps) {
   const [expanded, setExpanded]         = useState(false)
   const [repos, setRepos]               = useState<Repo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
@@ -312,6 +313,17 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
           <span className="amb-status-badge amb-status-badge--idle">
             <Github size={11} /> GitHub مُتصل
           </span>
+        )}
+
+        {/* Close / hide toolbar button */}
+        {onClose && (
+          <button
+            className="amb-close-btn"
+            onClick={onClose}
+            title="إخفاء أدوات الوكيل"
+          >
+            <X size={13} />
+          </button>
         )}
       </div>
 

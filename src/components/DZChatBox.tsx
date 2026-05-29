@@ -3670,6 +3670,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [showAgentBar, setShowAgentBar] = useState(true)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [githubToken, setGithubToken] = useState<string>(() => {
     try {
@@ -6947,7 +6948,40 @@ ${rows}
     <div className="dz-chatbox" dir="rtl">
       {/* Compact icon-only toolbar */}
       <div className="dz-gh-bar">
+        {/* Agent bar toggle button */}
+        <button
+          className={`gh-log-toggle dz-agent-bar-toggle ${showAgentBar ? 'active' : ''}`}
+          onClick={() => setShowAgentBar(v => !v)}
+          title={showAgentBar ? 'إخفاء شريط الوكيل' : 'إظهار شريط الوكيل'}
+        >
+          <Bot size={13} />
+        </button>
+
+        {/* Quick tool suggestion chips */}
+        {showAgentBar && (
+          <div className="dz-toolbar-chips">
+            {[
+              { label: '/scan',    title: 'فحص الكود عن أخطاء' },
+              { label: '/suggest', title: 'اقتراحات تحسين' },
+              { label: '/deploy',  title: 'نشر على GitHub Pages' },
+              { label: '/repos',   title: 'اقتراح مستودعات' },
+              { label: '/history', title: 'آخر commits' },
+              { label: '/memory',  title: 'ذاكرة المشروع' },
+            ].map(t => (
+              <button
+                key={t.label}
+                className="dz-tool-chip"
+                title={t.title}
+                onClick={() => { setInput(t.label); setTimeout(() => { textareaRef.current?.focus(); textareaRef.current?.select() }, 50) }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="dz-toolbar-spacer" />
+
         <div className="dz-toolbar-actions">
           {agentMode.active && agentMode.selectedRepo && (
             <>
@@ -6978,6 +7012,15 @@ ${rows}
             <Terminal size={13} />
             {actionLog.length > 0 && <span className="dz-log-badge">{actionLog.length}</span>}
           </button>
+          {/* Clear button — far right */}
+          {messages.length > 0 && (
+            <>
+              <div className="dz-toolbar-sep" />
+              <button className="gh-log-toggle dz-toolbar-clear-btn" onClick={clearChat} title="مسح المحادثة">
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -7783,7 +7826,7 @@ ${rows}
       <div className="dz-input-area">
 
         {/* ===== HYBRID AGENT MODE BAR ===== */}
-        <AgentModeBar
+        {showAgentBar && <AgentModeBar
           state={agentMode}
           onChange={s => {
             setAgentMode(s)
@@ -7801,7 +7844,7 @@ ${rows}
             setInput(cmd)
             setTimeout(() => textareaRef.current?.focus(), 50)
           }}
-        />
+        />}
 
         {/* ===== PROJECT MEMORY BADGE ===== */}
         {projectMemoryLoaded && (
@@ -7924,11 +7967,6 @@ ${rows}
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
-            {messages.length > 0 && (
-              <button className="dz-clear-btn-inline" onClick={clearChat} title="مسح المحادثة">
-                <Trash2 size={14} />
-              </button>
-            )}
             <button
               className={`web-reader-toggle-btn ${showWebReaderBar ? 'active' : ''}`}
               title="قراءة وتحليل صفحة ويب"

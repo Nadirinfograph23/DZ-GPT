@@ -5,7 +5,7 @@ import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
   FolderOpen, FileText, ChevronRight, ChevronDown, AlertCircle,
   CheckCircle2, XCircle, GitCommit, GitPullRequest,
-  Key, Trash2, RefreshCw, Terminal, Zap,
+  RefreshCw, Terminal, Zap,
   ShieldAlert, Bug, Gauge, Lightbulb, GitBranch, ScanSearch, Wrench, Info,
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
@@ -3816,7 +3816,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
     try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
-  }, [])
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  }, []) // kept for programmatic use by agentMode deactivation
 
   const copyMessage = useCallback((id: string, content: string) => {
     navigator.clipboard.writeText(content)

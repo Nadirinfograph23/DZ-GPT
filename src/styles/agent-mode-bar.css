@@ -513,3 +513,156 @@
   opacity: 1;
   color: #10a37f;
 }
+
+/* ═══════════════════════════════════════════════════════
+   DEPLOY PANEL
+═══════════════════════════════════════════════════════ */
+
+/* ── Deploy button in toolbar ── */
+.amb-deploy-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 9px; border-radius: 6px;
+  border: 1px solid rgba(99,102,241,0.35);
+  background: rgba(99,102,241,0.08);
+  color: #818cf8; font-size: 0.74rem; font-weight: 600;
+  cursor: pointer; transition: all 0.18s; white-space: nowrap;
+}
+.amb-deploy-btn:hover:not(:disabled) {
+  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.6); color: #a5b4fc;
+}
+.amb-deploy-btn--on {
+  background: rgba(99,102,241,0.18); border-color: rgba(99,102,241,0.6); color: #a5b4fc;
+}
+.amb-deploy-btn--loading { opacity: 0.7; cursor: not-allowed; }
+.amb-deploy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Deploy panel container ── */
+.amb-deploy-panel {
+  border-top: 1px solid rgba(99,102,241,0.15);
+  background: rgba(99,102,241,0.04);
+  padding: 12px 14px;
+  animation: amb-slide-in 0.18s ease;
+}
+
+/* ── Header ── */
+.amb-deploy-header {
+  display: flex; align-items: center; gap: 7px;
+  color: #818cf8; font-size: 0.8rem; font-weight: 700;
+  margin-bottom: 10px;
+}
+.amb-deploy-header span { flex: 1; }
+.amb-deploy-close {
+  background: none; border: none; color: #64748b;
+  cursor: pointer; padding: 2px; border-radius: 4px; line-height: 1;
+  transition: color 0.15s;
+}
+.amb-deploy-close:hover { color: #f87171; }
+
+/* ── Steps list ── */
+.amb-deploy-steps {
+  display: flex; flex-direction: column; gap: 5px;
+  margin-bottom: 12px;
+}
+.amb-deploy-step {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.76rem; line-height: 1.4; color: #94a3b8;
+  padding: 4px 8px; border-radius: 5px;
+  background: rgba(255,255,255,0.03);
+}
+.amb-deploy-step--done { color: #cbd5e1; }
+.amb-deploy-step--running { color: #818cf8; }
+.amb-deploy-step-icon { flex-shrink: 0; font-size: 0.8rem; }
+
+/* ── Ready to deploy state ── */
+.amb-deploy-ready {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.amb-deploy-ready-repo {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; color: #94a3b8; font-family: monospace;
+}
+.amb-deploy-ready-hint {
+  font-size: 0.74rem; color: #64748b; line-height: 1.5; margin: 0;
+}
+.amb-deploy-go-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 7px;
+  border: 1px solid rgba(99,102,241,0.5);
+  background: rgba(99,102,241,0.15);
+  color: #a5b4fc; font-size: 0.78rem; font-weight: 700;
+  cursor: pointer; transition: all 0.18s; align-self: flex-start;
+}
+.amb-deploy-go-btn:hover { background: rgba(99,102,241,0.28); border-color: rgba(99,102,241,0.7); }
+
+/* ── Connecting indicator ── */
+.amb-deploy-connecting {
+  display: flex; align-items: center; gap: 8px;
+  color: #818cf8; font-size: 0.78rem; padding: 8px 0;
+}
+
+/* ── Result card ── */
+.amb-deploy-result {
+  display: flex; flex-direction: column; gap: 10px;
+  animation: amb-slide-in 0.2s ease;
+}
+.amb-deploy-result-title {
+  font-size: 0.85rem; font-weight: 700; color: #a5b4fc;
+}
+
+/* ── Live site link ── */
+.amb-deploy-site-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 7px;
+  border: 1px solid rgba(99,102,241,0.4);
+  background: rgba(99,102,241,0.1);
+  color: #a5b4fc; font-size: 0.78rem; font-weight: 600;
+  text-decoration: none; transition: all 0.15s;
+  word-break: break-all;
+}
+.amb-deploy-site-link:hover { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.7); }
+.amb-deploy-site-link span { flex: 1; }
+
+/* ── Report table ── */
+.amb-deploy-report {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 7px; padding: 9px 11px;
+  background: rgba(0,0,0,0.15);
+}
+.amb-deploy-report-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; font-size: 0.72rem; color: #64748b;
+}
+.amb-deploy-report-row code {
+  font-size: 0.71rem; color: #94a3b8;
+  background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;
+}
+.amb-deploy-ok   { color: #4ade80 !important; }
+.amb-deploy-building { color: #fbbf24 !important; }
+
+/* ── Action buttons row ── */
+.amb-deploy-actions {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.amb-deploy-action-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8; font-size: 0.73rem; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.amb-deploy-action-btn:hover { background: rgba(255,255,255,0.08); color: #cbd5e1; }
+.amb-deploy-action-btn--primary {
+  border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.12); color: #a5b4fc;
+}
+.amb-deploy-action-btn--primary:hover { background: rgba(99,102,241,0.22); color: #c7d2fe; }
+.amb-deploy-action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Retry button ── */
+.amb-deploy-retry {
+  background: none; border: none;
+  color: #818cf8; font-size: 0.72rem; cursor: pointer;
+  text-decoration: underline; margin-right: 8px;
+}

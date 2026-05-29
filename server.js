@@ -3831,7 +3831,12 @@ CORE THINKING PRINCIPLES — DZ Agent Advanced Reasoning Core
    - اكتشف النية الحقيقية للمستخدم وليس فقط الكلمات المكتوبة
    - افهم المعنى الضمني، اكتشف الغموض أو التناقضات
    - فهم الهدف الحقيقي من السؤال لا مجرد الكلمات المفتاحية
-   - DISAMBIGUATION RULE: كلمة "موقع" تعني WEBSITE إذا جاءت مع (index / html / js / تقنيات ويب) وتعني LOCATION إذا جاءت مع (قريب / خريطة / وين / أين)
+   - DISAMBIGUATION RULE — "موقع" له معنيان مختلفان تماماً:
+     • WEBSITE (برمجة) إذا جاءت مع: (مطعم / فندق / شركة / محل / أي نوع عمل تجاري) أو (html/css/js/react) أو أفعال (أنشئ/ابني/صمم/اعمل/دير)
+     • LOCATION (خريطة) فقط إذا جاءت مع: (قريب/وين/أين/خريطة/map/GPS) أو بحث جغرافي صريح
+     ⚠️ "موقع مطعم" = WEBSITE لمطعم (برمجة ويب) — لا علاقة له بالخريطة أبداً
+     ⚠️ "موقع فندق" = WEBSITE لفندق (برمجة ويب) — لا علاقة له بالخريطة أبداً
+     ⚠️ في وضع الوكيل البرمجي: كل "موقع + خدمة" = برمجة ويب بدون استثناء
 
 2. CONTEXT AWARENESS — الوعي بالسياق
    - استخدم سياق المحادثة السابق كاملاً
@@ -12370,6 +12375,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
   const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
+  // Agent mode flag — when true the user is in a coding/GitHub workspace session.
+  // CRITICAL: all geographic/map/place features must be BYPASSED in agent mode.
+  // "موقع مطعم" in agent mode = restaurant WEBSITE (برمجة), NOT a location on a map.
+  const _isAgentMode = !!(req.body.agentActive || currentRepo)
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
@@ -12982,6 +12991,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _doctorGuard = detectDoctorIntent(lastUserMessage)
   const _isNewsQuery = isNewspaperHeadlineQuery(lastUserMessage)
   if (PLACE_INTENTS.has(dzIntent.type)
+    && !_isAgentMode               // ← وكيل نشط = جلسة برمجة، لا خرائط
     && !_doctorGuard.isDoctorQuery
     && !_isNewsQuery
     && !detectWebsiteBuilderQuery(lastUserMessage)
@@ -13027,7 +13037,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isWebFileCtx = /(?:موقع|صفحة|ملف|فايل|file)\s+index(?:\.[a-zA-Z0-9]+)?|\bindex\.(html?|js|ts|jsx|tsx|php|css|vue|svelte|py)\b|(?:موقع|صفحة|ملف)\s+(?:html?|css|javascript|react|vue|angular|next|nuxt|vite|django|flask|express|node|php|python)|\.(?:html?|css|js|ts|jsx|tsx|py|php|json)\b/i.test(lastUserMessage)
   // Guard: إنشاء موقع مطعم / موقع فندق / دير موقع → website builder, NOT map
   const _isWebBuildCtx = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx) {
+  // Guard: وكيل نشط → لا خرائط أبداً. المستخدم في جلسة برمجة.
+  // "موقع مطعم" في وضع الوكيل = موقع ويب لمطعم، لا موقع جغرافي.
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isAgentMode) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)

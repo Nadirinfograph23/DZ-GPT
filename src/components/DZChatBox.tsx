@@ -10,7 +10,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -7126,7 +7126,7 @@ ${rows}
                           repos={msg.smartRepoSuggestions}
                           currentRepo={agentMode.selectedRepo || currentRepo || undefined}
                           githubToken={agentMode.githubToken || githubToken || undefined}
-                          onImportDone={(repoName, message) => addAssistantMessage({ content: message, richType: 'text' })}
+                          onImportDone={(_repoName, message) => addAssistantMessage({ content: message, richType: 'text' })}
                         />
                       )}
                       {msg.richType === 'repo-selected' && msg.selectedRepo && (

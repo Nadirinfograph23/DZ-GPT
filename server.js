@@ -10442,6 +10442,189 @@ app.post('/api/dz-agent/github/pages/stream-deploy', async (req, res) => {
   }
 })
 
+// ── POST /api/dz-agent/github/pages/deploy-existing-stream ─────────────────
+// SSE: Deploy/redeploy an EXISTING repo to GitHub Pages + stream live progress
+app.post('/api/dz-agent/github/pages/deploy-existing-stream', async (req, res) => {
+  const token = req.body.token
+    ? sanitizeString(String(req.body.token), 300)
+    : process.env.GITHUB_TOKEN || ''
+  if (!token) return res.status(401).json({ error: 'GitHub token مطلوب. ارتبط أولاً.' })
+
+  const repoFull = sanitizeString(String(req.body.repo || ''), 200)
+  if (!repoFull || !isValidGithubRepo(repoFull))
+    return res.status(400).json({ error: 'repo مطلوب بصيغة owner/repo' })
+  const [owner, repoName] = repoFull.split('/')
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+
+  const ghHeaders = {
+    Authorization: `token ${token}`,
+    'User-Agent': 'DZ-Agent/5.0',
+    Accept: 'application/vnd.github+json',
+  }
+
+  const send = (type, payload = {}) => {
+    try { res.write(`data: ${JSON.stringify({ type, ...payload })}\n\n`); res.flush?.() } catch (_) {}
+  }
+
+  const stepMap = new Map()
+  const step = (id, label, done = false) => {
+    stepMap.set(id, { id, label, done })
+    send('step', { step: { id, label, done } })
+    console.log(`[deploy-existing] ${done ? '✅' : '⏳'} ${label}`)
+  }
+
+  try {
+    // ── 1. Auth ──────────────────────────────────────────────────────────────
+    step('auth', '🔑 التحقق من هوية GitHub...')
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: ghHeaders, signal: AbortSignal.timeout(8000),
+    })
+    if (!userRes.ok) throw new Error('GitHub token غير صالح — تحقق من الـ token أو أعد الربط')
+    const userData = await userRes.json()
+    step('auth', `✅ مرحباً @${userData.login}`, true)
+
+    // ── 2. Check repo ────────────────────────────────────────────────────────
+    step('repo', `📦 فحص المستودع ${owner}/${repoName}...`)
+    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
+      headers: ghHeaders, signal: AbortSignal.timeout(8000),
+    })
+    if (!repoRes.ok) throw new Error(`المستودع ${owner}/${repoName} غير موجود أو لا تملك صلاحية الوصول`)
+    const repoData = await repoRes.json()
+    const defaultBranch = repoData.default_branch || 'main'
+    step('repo', `✅ المستودع موجود — الفرع: ${defaultBranch}`, true)
+
+    // ── 3. Check current Pages status ────────────────────────────────────────
+    step('status', '🌐 فحص حالة GitHub Pages...')
+    const pagesStatusBefore = await getPagesStatus(token, owner, repoName)
+    const wasEnabled = !!pagesStatusBefore
+    step('status', wasEnabled
+      ? '♻️ GitHub Pages مُفعَّل مسبقاً — سيُعاد النشر'
+      : '📡 GitHub Pages غير مُفعَّل — سيتم التفعيل الآن', true)
+
+    // ── 4. Scan repo files ────────────────────────────────────────────────────
+    step('scan', '🔍 فحص هيكل المشروع...')
+    let fileCount = 0; let hasIndexHtml = false; let detectedStack = 'static'
+    const allFiles = []
+    try {
+      const treeRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repoName}/git/trees/${defaultBranch}?recursive=1`,
+        { headers: ghHeaders, signal: AbortSignal.timeout(8000) }
+      )
+      if (treeRes.ok) {
+        const tree = await treeRes.json()
+        const blobs = (tree.tree || []).filter(f => f.type === 'blob').map(f => f.path)
+        fileCount = blobs.length
+        allFiles.push(...blobs)
+        hasIndexHtml = blobs.some(f => ['index.html','public/index.html','dist/index.html'].includes(f))
+        if (blobs.some(f => f === 'package.json')) detectedStack = 'Node.js'
+        if (blobs.some(f => f.endsWith('.vue')))    detectedStack = 'Vue.js'
+        if (blobs.some(f => f.endsWith('.tsx') || f.endsWith('.jsx'))) detectedStack = 'React'
+        if (blobs.some(f => f.endsWith('.py')))     detectedStack = 'Python'
+        send('files', { count: fileCount, hasIndexHtml, stack: detectedStack, branch: defaultBranch, files: blobs.slice(0, 30) })
+      }
+    } catch (_) {}
+    step('scan', `✅ ${fileCount} ملف — Stack: ${detectedStack}${hasIndexHtml ? ' · index.html ✓' : ''}`, true)
+
+    // ── 5. Push deploy-stamp commit (triggers Pages rebuild) ─────────────────
+    step('commit', '📝 إنشاء commit لإعادة تشغيل البناء...')
+    const now = new Date().toISOString()
+    let commitSha = ''
+    try {
+      const stampPath = '.dz-deploy'
+      const stampContent = `DZ Agent Deploy\nDate: ${now}\nRepo: ${owner}/${repoName}\nStack: ${detectedStack}\nFiles: ${fileCount}\n`
+      let existingSha = null
+      try {
+        const existRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repoName}/contents/${stampPath}?ref=${defaultBranch}`,
+          { headers: ghHeaders, signal: AbortSignal.timeout(5000) }
+        )
+        if (existRes.ok) existingSha = (await existRes.json()).sha
+      } catch (_) {}
+
+      const putRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repoName}/contents/${stampPath}`,
+        {
+          method: 'PUT',
+          headers: { ...ghHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: `🚀 Deploy to GitHub Pages via DZ Agent — ${now.slice(0, 10)}`,
+            content: Buffer.from(stampContent).toString('base64'),
+            branch: defaultBranch,
+            ...(existingSha ? { sha: existingSha } : {}),
+          }),
+          signal: AbortSignal.timeout(12000),
+        }
+      )
+      if (putRes.ok) commitSha = ((await putRes.json()).commit?.sha || '').slice(0, 7)
+    } catch (commitErr) {
+      console.warn('[deploy-existing] commit warning:', commitErr.message)
+    }
+    step('commit', commitSha ? `✅ Commit ${commitSha} — تم رفعه` : '⚠️ Commit اختياري — نواصل...', true)
+
+    // ── 6. Enable / re-enable GitHub Pages ───────────────────────────────────
+    step('pages', wasEnabled ? '🔄 إعادة تفعيل GitHub Pages...' : '🌐 تفعيل GitHub Pages...')
+    let pagesEnabled = wasEnabled; let pagesStatus = 'building'
+    try {
+      const pagesResult = await ghPagesEnable(token, owner, repoName)
+      pagesEnabled = true
+      pagesStatus = pagesResult?.status || 'building'
+    } catch (pErr) {
+      console.warn('[deploy-existing] Pages enable:', pErr.message)
+    }
+    step('pages', '✅ GitHub Pages مُفعَّل — جاري البناء...', true)
+
+    // ── 7. Poll build status (max 60s / 6 polls) ─────────────────────────────
+    step('build', '⏳ انتظار اكتمال البناء...')
+    const siteUrl = `https://${owner}.github.io/${repoName}`
+    let buildOk = false
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 10000))
+      try {
+        const pollStatus = await getPagesStatus(token, owner, repoName)
+        if (pollStatus?.status) {
+          pagesStatus = pollStatus.status
+          if (pagesStatus === 'built' || pagesStatus === 'enabled') { buildOk = true; break }
+        }
+      } catch (_) {}
+      send('step', { step: { id: 'build', label: `⏳ البناء جارٍ... ${(i + 1) * 10}s`, done: false } })
+    }
+    step('build', buildOk
+      ? '✅ الموقع جاهز تماماً!'
+      : '🟡 البناء قد يستغرق دقيقتين — الرابط سيصبح نشطاً قريباً', true)
+
+    // ── 8. Final report ───────────────────────────────────────────────────────
+    const repoUrl = `https://github.com/${owner}/${repoName}`
+    send('done', {
+      success: true,
+      siteUrl,
+      repoUrl,
+      commitSha,
+      pagesEnabled,
+      pagesStatus,
+      buildOk,
+      owner,
+      repo: repoName,
+      fileCount,
+      stack: detectedStack,
+      defaultBranch,
+      hasIndexHtml,
+      deployedAt: now,
+    })
+
+  } catch (err) {
+    console.error('[deploy-existing-stream]', err.message)
+    send('error', { error: err.message })
+    send('done', { success: false, error: err.message })
+  } finally {
+    res.end()
+  }
+})
+
 // ── POST /api/dz-agent/github/pages/list-repos ─────────────────────────────
 // List user's GitHub repos that have Pages enabled
 app.post('/api/dz-agent/github/pages/list-repos', async (req, res) => {

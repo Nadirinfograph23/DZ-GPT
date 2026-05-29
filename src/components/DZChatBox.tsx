@@ -6954,8 +6954,26 @@ ${rows}
           className={`gh-log-toggle dz-agent-bar-toggle ${showAgentBar ? 'active' : ''} ${agentHintGlow ? 'dz-agent-bar-toggle--glow' : ''}`}
           onClick={() => { setShowAgentBar(v => !v); setAgentHintGlow(false) }}
           title={showAgentBar ? 'إخفاء شريط الوكيل' : 'إظهار شريط الوكيل'}
+          style={{ position: 'relative' }}
         >
           <Bot size={13} />
+          {/* Badge — يظهر فقط عندما يكون الشريط مخفياً والوكيل شغّال */}
+          {!showAgentBar && isLoading && (
+            <span
+              key="loading-badge"
+              className="dz-bot-badge"
+              title="الوكيل يعالج طلبك…"
+            >
+              {isGithubReActLoading ? 'GH' : '●'}
+            </span>
+          )}
+          {!showAgentBar && !isLoading && toasts.length > 0 && (
+            <span
+              key="toast-badge"
+              className="dz-bot-badge dz-bot-badge--dot"
+              title={`${toasts.length} إشعار`}
+            />
+          )}
         </button>
 
         {/* Scrolling ticker — DZ Agent services */}

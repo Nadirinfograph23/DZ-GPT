@@ -279,16 +279,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               {loadingRepos && <Loader2 size={12} className="amb-spin" />}
             </div>
 
-            {/* Auto-confirm toggle */}
-            <label className="amb-auto-label" title="تنفيذ مباشر بدون تأكيد">
-              <input
-                type="checkbox"
-                checked={state.autoConfirm}
-                onChange={e => onChange({ ...state, autoConfirm: e.target.checked })}
-              />
-              <span>تنفيذ تلقائي</span>
-            </label>
-
             {/* Commands help */}
             <button
               className={`amb-cmds-btn ${showCmds ? 'amb-cmds-btn--on' : ''}`}
@@ -628,9 +618,17 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
               <Github size={12} />
             </a>
           </div>
-          <div className="amb-active-hint">
-            الوكيل يعمل على هذا المستودع — كل أمر <code>/edit</code> أو <code>/commit</code> يطلب تأكيدك أولاً
-            {state.autoConfirm && ' (التنفيذ التلقائي مُفعَّل ⚡)'}
+          <div className="amb-quick-cmd-row">
+            {['/ls', '/tree', '/find', '/scan', '/history 10', '/issues'].map(cmd => (
+              <button
+                key={cmd}
+                className="amb-qcmd-chip"
+                onClick={() => onCommandSelect && onCommandSelect(cmd)}
+                title={cmd}
+              >
+                {cmd}
+              </button>
+            ))}
           </div>
         </div>
       )}

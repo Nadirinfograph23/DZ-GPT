@@ -12153,12 +12153,20 @@ app.post('/api/dz-agent/github/react/stream', async (req, res) => {
     } catch (_) {}
   }
 
+  const activeRepo = sanitizeString(String(req.body.repo || ''), 200)
+  const projectMemory = req.body.projectMemory ? sanitizeString(String(req.body.projectMemory), 2000) : ''
+  const enrichedQuery = [
+    activeRepo ? `[المستودع النشط: ${activeRepo}]` : '',
+    projectMemory ? `[ذاكرة المشروع]\n${projectMemory}\n[/ذاكرة المشروع]` : '',
+    query,
+  ].filter(Boolean).join('\n')
+
   send('start', { message: 'بدء GitHub ReAct Agent...' })
 
   try {
     const collectedSteps = []
     const result = await runReActLoop({
-      query,
+      query: enrichedQuery,
       messages,
       aiGenerate: safeGenerateAI,
       githubToken,
@@ -12260,6 +12268,14 @@ app.post('/api/dz-agent/github/claude/stream', async (req, res) => {
     } catch (_) {}
   }
 
+  const activeRepo2 = sanitizeString(String(req.body.repo || ''), 200)
+  const projectMemory2 = req.body.projectMemory ? sanitizeString(String(req.body.projectMemory), 2000) : ''
+  const enrichedQuery2 = [
+    activeRepo2 ? `[المستودع النشط: ${activeRepo2}]` : '',
+    projectMemory2 ? `[ذاكرة المشروع]\n${projectMemory2}\n[/ذاكرة المشروع]` : '',
+    query,
+  ].filter(Boolean).join('\n')
+
   send('start', { message: '🤖 Claude Mode — بدء التنفيذ...' })
 
   try {
@@ -12268,7 +12284,7 @@ app.post('/api/dz-agent/github/claude/stream', async (req, res) => {
     req.on('close', () => ac.abort())
 
     const result = await runClaudeReActLoop({
-      query,
+      query: enrichedQuery2,
       messages,
       githubToken,
       signal: ac.signal,

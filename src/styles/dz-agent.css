@@ -1704,7 +1704,7 @@
 }
 
 .dz-ticker-inner {
-  display: inline-block;
+  display: inline-flex;
   white-space: nowrap;
   color: #d1d5db;
   font-size: 11.5px;
@@ -1712,7 +1712,11 @@
   direction: rtl;
   animation: dz-ticker-scroll 55s linear infinite;
   will-change: transform;
-  padding-left: 100%;
+}
+
+.dz-ticker-copy {
+  padding-left: 80px;
+  flex-shrink: 0;
 }
 
 .dz-ticker-inner:hover {
@@ -1721,7 +1725,7 @@
 
 @keyframes dz-ticker-scroll {
   0%   { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  100% { transform: translateX(-50%); }
 }
 
 @media (max-width: 600px) {

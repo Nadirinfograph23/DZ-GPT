@@ -3395,37 +3395,6 @@ function StatsPanel({ stats }: { stats: RepoStats }) {
   )
 }
 
-// ===== GITHUB TOKEN PANEL =====
-function GitHubTokenPanel({
-  token,
-  onClear,
-}: {
-  token: string
-  onSave: (t: string) => void
-  onClear: () => void
-}) {
-  if (token) {
-    return (
-      <div className="gh-token-set">
-        <Key size={13} />
-        <span>GitHub Connected</span>
-        <button className="gh-token-clear" onClick={onClear}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="gh-oauth-section">
-      <a href="/api/auth/github" className="gh-oauth-connect-btn">
-        <Github size={14} />
-        الاتصال بـ GitHub
-      </a>
-      <span className="gh-oauth-optional">😉 عاود أخرج من GitHub الفوق، دير تسجيل خروج و عاود دير تسجيل دخول</span>
-    </div>
-  )
-}
 
 // ===== SUGGESTION CARDS =====
 interface SuggestionCard {
@@ -3615,7 +3584,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     followers?: number; following?: number; joinYear?: string | number;
   } | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [showGhMenu, setShowGhMenu] = useState(false)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
@@ -3845,7 +3813,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     setGithubToken('')
     setGithubUser(null)
     setServerGithubConnected(false)
-    setShowGhMenu(false)
     sessionStorage.removeItem('dz-agent-gh-token')
     localStorage.removeItem('dz-agent-gh-token')
     try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}

@@ -6873,71 +6873,38 @@ ${rows}
   // ===== RENDER =====
   return (
     <div className="dz-chatbox" dir="rtl">
-      {/* GitHub Bar — connection button removed, kept toolbar only */}
+      {/* Compact icon-only toolbar */}
       <div className="dz-gh-bar">
         <div className="dz-toolbar-spacer" />
         <div className="dz-toolbar-actions">
           {agentMode.active && agentMode.selectedRepo && (
             <>
-              <button
-                className="gh-log-toggle dz-agent-quick-btn"
-                onClick={() => setShowFindDialog(true)}
-                title="بحث عن ملف في المستودع"
-              >
+              <button className="gh-log-toggle dz-agent-quick-btn" onClick={() => setShowFindDialog(true)} title="بحث عن ملف في المستودع">
                 <Search size={13} />
-                بحث
               </button>
-              <button
-                className="gh-log-toggle dz-agent-quick-btn"
-                onClick={() => sendMessage('/scan')}
-                title="فحص الكود عن أخطاء"
-              >
+              <button className="gh-log-toggle dz-agent-quick-btn" onClick={() => sendMessage('/scan')} title="فحص الكود عن أخطاء">
                 <ScanSearch size={13} />
-                فحص
               </button>
+              <div className="dz-toolbar-sep" />
             </>
           )}
           {messages.length > 0 && (
-            <button
-              className="gh-log-toggle"
-              onClick={exportAsMarkdown}
-              title="تصدير المحادثة كـ PDF بدعم العربية"
-            >
+            <button className="gh-log-toggle" onClick={exportAsMarkdown} title="تصدير المحادثة PDF">
               <Download size={13} />
-              PDF تصدير
             </button>
           )}
-          <button
-            className="gh-log-toggle"
-            onClick={() => window.open('/quran', '_blank')}
-            title="القرآن الكريم بالذكاء الاصطناعي"
-          >
+          <button className="gh-log-toggle" onClick={() => window.open('/quran', '_blank')} title="القرآن الكريم">
             <BookOpen size={13} />
-            قرآن
           </button>
-          <button
-            className="gh-log-toggle"
-            onClick={() => window.open('/stats', '_blank')}
-            title="إحصاءاتك"
-          >
+          <button className="gh-log-toggle" onClick={() => window.open('/stats', '_blank')} title="إحصاءاتك">
             <BarChart2 size={13} />
-            إحصاءات
           </button>
-          <button
-            className="gh-log-toggle gh-tools-btn"
-            onClick={() => window.open('/tools', '_blank')}
-            title="أدوات ذكية: سيرة ذاتية، مخطط مشاريع، تحليل قانوني"
-          >
+          <button className="gh-log-toggle gh-tools-btn" onClick={() => window.open('/tools', '_blank')} title="أدوات ذكية">
             <Wrench size={13} />
-            أدوات
           </button>
-          <button
-            className={`gh-log-toggle ${showLog ? 'active' : ''}`}
-            onClick={() => setShowLog(!showLog)}
-            title="سجل الإجراءات"
-          >
+          <button className={`gh-log-toggle ${showLog ? 'active' : ''}`} onClick={() => setShowLog(!showLog)} title="سجل الإجراءات">
             <Terminal size={13} />
-            السجل {actionLog.length > 0 && <span className="dz-log-badge">{actionLog.length}</span>}
+            {actionLog.length > 0 && <span className="dz-log-badge">{actionLog.length}</span>}
           </button>
         </div>
       </div>
@@ -7731,11 +7698,6 @@ ${rows}
 
       {/* Input */}
       <div className="dz-input-area">
-        {messages.length > 0 && (
-          <div className="dz-input-top-btns">
-            <button className="dz-clear-btn" onClick={clearChat} title="مسح المحادثة"><Trash2 size={14} /></button>
-          </div>
-        )}
 
         {/* ===== HYBRID AGENT MODE BAR ===== */}
         <AgentModeBar
@@ -7841,6 +7803,11 @@ ${rows}
             className="dz-chat-input"
           />
           <div className="dz-input-actions">
+            {messages.length > 0 && (
+              <button className="dz-clear-btn-inline" onClick={clearChat} title="مسح المحادثة">
+                <Trash2 size={14} />
+              </button>
+            )}
             <button
               className={`gh-agent-toggle-btn ${showGhAgentInput ? 'active' : ''}`}
               title="وضع DZ GitHub Agent"

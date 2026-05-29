@@ -5915,6 +5915,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               messages: outboundMessages,
               githubToken: githubToken || undefined,
               currentRepo: currentRepo || undefined,
+              agentActive: agentMode.active || undefined,
               dashboardContext,
               youtubeContext: activeYouTubeVideoRef.current || undefined,
               youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,

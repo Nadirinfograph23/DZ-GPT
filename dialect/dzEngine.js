@@ -496,6 +496,50 @@ export function isDarijaText(text) {
   return darijaCount >= 1 || /واشراك|كيفاش|بزاف|مليح|خايب|نتا|راني|راه|درك|دروك|ضرك|يلا|ماشي|برك|بصح|علاه|علاش|واش|وين|فين|شكون|لاباس|تاني|ياسر|قاع|فالو|خلاص|والله|مزيان|مخربق|زعفان|مهبول|يخمم|يعيى|يسقسي|ديجا|واه|هيه|ياك|باه|ممبعد|معليش|ربي يسهل|واش كاين|واش صاري|فوقاش|كلش مليح|هادي سهلة|راك غالط/.test(text)
 }
 
+// ─── CONVERSATION PHRASES SAMPLER ─────────────────────────────────────────────
+/**
+ * getConversationPhrases(opts)
+ * Returns a curated sample of conversation phrases for system prompt injection.
+ * opts.categories  — filter by context tag (e.g. ['greeting','gratitude','tech'])
+ * opts.limit       — max entries (default 60)
+ * opts.format      — 'compact' (default) | 'grouped'
+ */
+export function getConversationPhrases({ categories = null, limit = 60, format = 'compact' } = {}) {
+  const dict = loadDict()
+  const all  = dict.conversation_phrases || []
+
+  const PRIORITY = ['greeting','gratitude','farewell','state','response','affirmation',
+                    'negation','question','warning','tech','notification','phrase','verb',
+                    'adjective','noun','adverb','direction','quantity','location','emotion','time','weather']
+
+  let filtered = categories
+    ? all.filter(p => categories.includes(p.ctx))
+    : all
+
+  // Sort by priority category, then alphabetically
+  filtered = [...filtered].sort((a, b) => {
+    const ai = PRIORITY.indexOf(a.ctx), bi = PRIORITY.indexOf(b.ctx)
+    if (ai !== bi) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+    return a.ar.localeCompare(b.ar)
+  })
+
+  const sample = filtered.slice(0, limit)
+
+  if (format === 'grouped') {
+    const groups = {}
+    for (const p of sample) {
+      if (!groups[p.ctx]) groups[p.ctx] = []
+      groups[p.ctx].push(`${p.ar} ← ${p.dz}`)
+    }
+    return Object.entries(groups)
+      .map(([ctx, lines]) => `[${ctx}]\n${lines.join('\n')}`)
+      .join('\n\n')
+  }
+
+  // compact: one line per phrase
+  return sample.map(p => `${p.ar} ← ${p.dz}`).join('\n')
+}
+
 // ─── FULL PIPELINE ────────────────────────────────────────────────────────────
 /**
  * fullPipeline(userMessage)

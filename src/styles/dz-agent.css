@@ -11053,3 +11053,174 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16,163,127,0.4);
 }
+
+/* ═══════════════════════════════════════════════════
+   SMART REPO SUGGESTION CARDS
+═══════════════════════════════════════════════════ */
+.srs-container {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.srs-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 600;
+  padding: 0 2px;
+}
+.srs-header-icon { font-size: 14px; }
+.srs-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.srs-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color .18s, background .18s;
+}
+.srs-card:hover {
+  background: rgba(255,255,255,0.045);
+  border-color: color-mix(in srgb, var(--srs-accent) 30%, transparent);
+}
+.srs-card-top {
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.srs-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.srs-category-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.srs-install-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.srs-install-pip  { background: rgba(59,130,246,.15); color: #60a5fa; }
+.srs-install-npm  { background: rgba(245,158,11,.15); color: #fbbf24; }
+.srs-install-npx  { background: rgba(139,92,246,.15); color: #a78bfa; }
+.srs-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.srs-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
+}
+.srs-gh-link {
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  transition: color .15s;
+}
+.srs-gh-link:hover { color: #9ca3af; }
+.srs-desc {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+.srs-install-cmd {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0,0,0,.35);
+  border-radius: 5px;
+  padding: 3px 8px;
+  width: fit-content;
+}
+.srs-install-cmd code {
+  font-size: 11px;
+  color: #10a37f;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+}
+.srs-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  flex-wrap: wrap;
+}
+.srs-files-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: #4b5563;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 0;
+  transition: color .15s;
+}
+.srs-files-toggle:hover { color: #9ca3af; }
+.srs-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all .18s;
+  white-space: nowrap;
+  margin-right: auto;
+}
+.srs-import-btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.srs-import-btn:disabled { opacity: 0.7; cursor: default; transform: none; }
+.srs-import-done { cursor: default; }
+.srs-files-list {
+  padding: 6px 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.srs-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563;
+  font-size: 11px;
+}
+.srs-file-item code {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+.srs-spin {
+  animation: srs-spin-anim 0.8s linear infinite;
+}
+@keyframes srs-spin-anim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

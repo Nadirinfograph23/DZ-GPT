@@ -7836,6 +7836,7 @@ ${rows}
           }}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
           clientGithubToken={githubToken}
+          onClose={() => setShowAgentBar(false)}
           onCommandSelect={cmd => {
             if (cmd.startsWith('/find')) {
               setShowFindDialog(true)

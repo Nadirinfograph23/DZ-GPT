@@ -2,7 +2,7 @@
 
 .dzt-container {
   position: fixed;
-  top: 56px;
+  top: 110px;
   right: 16px;
   left: auto;
   z-index: 9999;
@@ -135,7 +135,7 @@
 /* Mobile */
 @media (max-width: 480px) {
   .dzt-container {
-    top: 56px;
+    top: 110px;
     right: 8px;
     left: 8px;
     max-width: none;

@@ -103,7 +103,7 @@ interface PinnedMessage {
 const MALE_ICON = '♂'
 const FEMALE_ICON = '♀'
 const ADMIN_NAME = 'Nadir Infograph | نذير حوامرية'
-const AT_SUGGESTIONS = ['@dzagent', '@dzgpt']
+const AT_SUGGESTIONS = ['@dzagent']
 
 function genderIcon(gender: string) {
   if (gender === 'female') return <span className="dzc-gender dzc-gender--female">{FEMALE_ICON}</span>
@@ -320,7 +320,7 @@ export default function DZChat() {
       if (msg) {
         addMessages([msg])
         const lower = (msg.text || '').toLowerCase()
-        if (msg.fromId !== sessionIdRef.current && (lower.startsWith('@dzgpt') || lower.startsWith('@dzagent'))) {
+        if (msg.fromId !== sessionIdRef.current && lower.startsWith('@dzagent')) {
           setAiTyping(true)
         }
         if (
@@ -562,7 +562,7 @@ export default function DZChat() {
         from: 'System',
         fromId: 'system',
         gender: 'bot',
-        text: 'مرحباً بك في DZ Chat! هذه دردشة عامة لمستخدمي DZ GPT. يمكنك استدعاء الذكاء الاصطناعي باستخدام @dzgpt أو @dzagent متبوعاً بسؤالك.',
+        text: 'مرحباً بك في DZ Chat! هذه دردشة عامة لمستخدمي DZ GPT. يمكنك استدعاء الذكاء الاصطناعي باستخدام @dzagent متبوعاً بسؤالك.',
         timestamp: Date.now(),
         isSystem: true,
       }
@@ -711,7 +711,7 @@ export default function DZChat() {
         if (isDmSend) setDmTarget(null)
       } else {
         const lower = text.toLowerCase()
-        const isAiCall = lower.startsWith('@dzgpt') || lower.startsWith('@dzagent')
+        const isAiCall = lower.startsWith('@dzagent')
         if (isAiCall) setAiTyping(true)
         const r = await fetch('/api/chat-room/send', {
           method: 'POST',
@@ -744,7 +744,7 @@ export default function DZChat() {
         }
       }
       const lower2 = text.toLowerCase()
-      if ((lower2.startsWith('@dzgpt') || lower2.startsWith('@dzagent')) && wsRef.current?.readyState === 1) setAiTyping(true)
+      if (lower2.startsWith('@dzagent') && wsRef.current?.readyState === 1) setAiTyping(true)
     } catch {}
     finally { setSending(false); inputRef.current?.focus() }
   }, [inputText, sending, dmTarget, localUser, addMessages])
@@ -1309,7 +1309,7 @@ export default function DZChat() {
                       </span>
                     )}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
-                    {msg.isBot && <span className={`dzc-msg-bot-label dzc-msg-bot-label--${msg.botType || 'gpt'}`}>{msg.botType === 'agent' ? 'DZ Agent' : 'DZ GPT'}</span>}
+                    {msg.isBot && <span className="dzc-msg-bot-label dzc-msg-bot-label--agent">DZ Agent</span>}
                     {msg.triggeredBy && <span className="dzc-msg-triggered">↩ {msg.triggeredBy}</span>}
                     <span className="dzc-msg-time">{formatTime(msg.timestamp)}</span>
                     {/* Bot message actions: copy + delete */}
@@ -1447,7 +1447,7 @@ export default function DZChat() {
             {/* @ mention hint banner */}
             {!isMuted && (
               <div className="dzc-at-hint-bar">
-                💡 اكتب <strong>@dzagent</strong> للبحث الذكي المباشر أو <strong>@dzgpt</strong> للدردشة مع الذكاء الاصطناعي
+                💡 اكتب <strong>@dzagent</strong> للبحث الذكي المباشر مع الذكاء الاصطناعي
               </div>
             )}
             {/* @ mention dropdown */}
@@ -1461,7 +1461,7 @@ export default function DZChat() {
                   >
                     <Bot size={13} className="dzc-at-icon" />
                     <span className="dzc-at-name">{s}</span>
-                    <span className="dzc-at-desc">{s === '@dzagent' ? 'وكيل ذكي مع بحث مباشر' : 'نموذج دردشة سريع'}</span>
+                    <span className="dzc-at-desc">وكيل ذكي مع بحث مباشر</span>
                   </button>
                 ))}
               </div>
@@ -1470,7 +1470,7 @@ export default function DZChat() {
               <input
                 ref={inputRef}
                 className={`dzc-input${isMuted ? ' dzc-input--muted' : ''}`}
-                placeholder={isMuted ? `🔇 أنت مكتوم — ينتهي الكتم خلال ${formatMuteRemain(muteRemainSec)}` : dmTarget ? `رسالة خاصة لـ ${dmTarget.name}...` : 'اكتب رسالتك... أو @dzgpt / @dzagent لاستدعاء الذكاء الاصطناعي'}
+                placeholder={isMuted ? `🔇 أنت مكتوم — ينتهي الكتم خلال ${formatMuteRemain(muteRemainSec)}` : dmTarget ? `رسالة خاصة لـ ${dmTarget.name}...` : 'اكتب رسالتك... أو @dzagent لاستدعاء الذكاء الاصطناعي'}
                 value={inputText}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}

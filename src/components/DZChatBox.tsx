@@ -3645,6 +3645,39 @@ function FindDialog({ repo, onSearch, onClose }: { repo: string; onSearch: (patt
   )
 }
 
+const TICKER_ITEMS = [
+  '🏥 يمكنك البحث عن طبيب أو صيدلية قريبة منك',
+  '🕌 يمكنك معرفة المسجد الأقرب إليك وأوقات الصلاة',
+  '🎬 يمكنك البحث بالفيديو والحصول على ملخص فوري',
+  '🌐 يمكنك بناء موقع ويب كامل بجملة واحدة فقط',
+  '💻 يمكنك كتابة وتصحيح الكود بكل لغات البرمجة',
+  '⚽ يمكنك متابعة نتائج الدوري الجزائري لحظة بلحظة',
+  '💱 يمكنك معرفة سعر الصرف الجزائري في الوقت الفعلي',
+  '🗣️ يمكنك ترجمة الدارجة الجزائرية بدقة متناهية',
+  '🚀 يمكنك رفع مشروعك على GitHub مباشرةً من هنا',
+  '📖 يمكنك البحث في القرآن الكريم والاستماع إليه',
+  '🗺️ يمكنك البحث عن أي مكان في الجزائر بسهولة',
+  '📊 يمكنك إنشاء تقارير وإحصاءات باحترافية',
+  '🎓 يمكنك البحث في موضوعات التعليم والدراسة',
+  '📰 يمكنك قراءة آخر الأخبار الجزائرية والعربية',
+  '🤖 DZ Agent — مساعدك الجزائري الذكي على مدار الساعة',
+  '🖼️ يمكنك توليد صور احترافية بالذكاء الاصطناعي',
+  '🎙️ يمكنك التحدث بصوتك والحصول على ردود فورية',
+  '📂 يمكنك تحليل ملفات Excel وCSV وPDF في ثوانٍ',
+  '🔍 يمكنك البحث الحي على الإنترنت والحصول على نتائج دقيقة',
+  '✍️ يمكنك كتابة مقالات ورسائل وخطابات احترافية',
+  '📱 يمكنك تصميم تطبيقات جوال بالوصف فقط',
+  '🧮 يمكنك حل المسائل الرياضية والفيزيائية المعقدة',
+  '🌍 يمكنك الترجمة بين العربية والفرنسية والإنجليزية بدقة',
+  '🎨 يمكنك تصميم واجهات ويب جميلة بالذكاء الاصطناعي',
+  '📋 يمكنك استخراج النصوص من الصور وملفات PDF',
+  '🔒 يمكنك مراجعة الكود أمنياً واكتشاف الثغرات',
+  '📡 يمكنك متابعة الطقس في كل ولايات الجزائر',
+  '🎵 يمكنك البحث في الراديو الجزائري والاستماع إليه مباشرة',
+  '🏗️ يمكنك إنشاء قواعد بيانات ونماذج برمجية جاهزة',
+  '💡 يمكنك الحصول على أفكار إبداعية لمشاريعك',
+]
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
@@ -3670,6 +3703,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [tickerIdx, setTickerIdx] = useState(0)
+  const [tickerPhase, setTickerPhase] = useState<'enter' | 'exit'>('enter')
   const [showAgentBar, setShowAgentBar] = useState(true)
   const [agentHintGlow, setAgentHintGlow] = useState(false)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
@@ -3764,6 +3799,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       saveToken(agentMode.githubToken)
     }
   }, [agentMode.githubToken])
+
+  // ===== VERTICAL TICKER — cycle one item at a time =====
+  useEffect(() => {
+    const SHOW_MS = 3200
+    const ANIM_MS = 450
+    const timer = setInterval(() => {
+      setTickerPhase('exit')
+      setTimeout(() => {
+        setTickerIdx(prev => (prev + 1) % TICKER_ITEMS.length)
+        setTickerPhase('enter')
+      }, ANIM_MS)
+    }, SHOW_MS + ANIM_MS)
+    return () => clearInterval(timer)
+  }, [])
 
   // ===== WORKSPACE ACTIVATION: show welcome/resume message in chat =====
   const prevActivatedRepoRef = useRef<string>('')
@@ -6976,49 +7025,13 @@ ${rows}
           )}
         </button>
 
-        {/* Scrolling ticker — DZ Agent services (duplicated for seamless loop) */}
+        {/* Vertical ticker — one item at a time, slides top→bottom */}
         <div className="dz-ticker-wrap" aria-hidden="true">
-          <span className="dz-ticker-inner">
-            {(() => {
-              const items = [
-                '🏥 يمكنك البحث عن طبيب أو صيدلية قريبة منك',
-                '🕌 يمكنك معرفة المسجد الأقرب إليك وأوقات الصلاة',
-                '🎬 يمكنك البحث بالفيديو والحصول على ملخص فوري',
-                '🌐 يمكنك بناء موقع ويب كامل بجملة واحدة فقط',
-                '💻 يمكنك كتابة وتصحيح الكود بكل لغات البرمجة',
-                '⚽ يمكنك متابعة نتائج الدوري الجزائري لحظة بلحظة',
-                '💱 يمكنك معرفة سعر الصرف الجزائري في الوقت الفعلي',
-                '🗣️ يمكنك ترجمة الدارجة الجزائرية بدقة متناهية',
-                '🚀 يمكنك رفع مشروعك على GitHub مباشرةً من هنا',
-                '📖 يمكنك البحث في القرآن الكريم والاستماع إليه',
-                '🗺️ يمكنك البحث عن أي مكان في الجزائر بسهولة',
-                '📊 يمكنك إنشاء تقارير وإحصاءات باحترافية',
-                '🎓 يمكنك البحث في موضوعات التعليم والدراسة',
-                '📰 يمكنك قراءة آخر الأخبار الجزائرية والعربية',
-                '🤖 DZ Agent — مساعدك الجزائري الذكي على مدار الساعة',
-                '🖼️ يمكنك توليد صور احترافية بالذكاء الاصطناعي',
-                '🎙️ يمكنك التحدث بصوتك والحصول على ردود فورية',
-                '📂 يمكنك تحليل ملفات Excel وCSV وPDF في ثوانٍ',
-                '🔍 يمكنك البحث الحي على الإنترنت والحصول على نتائج دقيقة',
-                '✍️ يمكنك كتابة مقالات ورسائل وخطابات احترافية',
-                '📱 يمكنك تصميم تطبيقات جوال بالوصف فقط',
-                '🧮 يمكنك حل المسائل الرياضية والفيزيائية المعقدة',
-                '🌍 يمكنك الترجمة بين العربية والفرنسية والإنجليزية بدقة',
-                '🎨 يمكنك تصميم واجهات ويب جميلة بالذكاء الاصطناعي',
-                '📋 يمكنك استخراج النصوص من الصور وملفات PDF',
-                '🔒 يمكنك مراجعة الكود أمنياً واكتشاف الثغرات',
-                '📡 يمكنك متابعة الطقس في كل ولايات الجزائر',
-                '🎵 يمكنك البحث في الراديو الجزائري والاستماع إليه مباشرة',
-                '🏗️ يمكنك إنشاء قواعد بيانات ونماذج برمجية جاهزة',
-                '💡 يمكنك الحصول على أفكار إبداعية لمشاريعك',
-              ].join('   ◈   ')
-              return (
-                <>
-                  <span className="dz-ticker-copy">{items}</span>
-                  <span className="dz-ticker-copy">{items}</span>
-                </>
-              )
-            })()}
+          <span
+            key={tickerIdx}
+            className={`dz-ticker-item dz-ticker-item--${tickerPhase}`}
+          >
+            {TICKER_ITEMS[tickerIdx]}
           </span>
         </div>
 

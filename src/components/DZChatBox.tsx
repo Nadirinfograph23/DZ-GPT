@@ -3745,6 +3745,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
         sessionStorage.setItem('dz-agent-gh-token', token)
         localStorage.removeItem('dz-agent-gh-token')
         try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
+        // Sync OAuth token into agentMode so AgentModeBar can use it immediately
+        setAgentMode(prev => ({ ...prev, githubToken: token }))
         window.history.replaceState(null, '', '/dz-agent')
         // Auto-fetch user info and repos after OAuth connect
         fetch('https://api.github.com/user', {
@@ -7206,6 +7208,7 @@ ${rows}
             }
           }}
           githubUser={githubUser ? { login: githubUser.login, avatar: githubUser.avatar } : null}
+          clientGithubToken={githubToken}
           onCommandSelect={cmd => {
             setInput(cmd)
             setTimeout(() => textareaRef.current?.focus(), 50)

@@ -1985,46 +1985,42 @@
 .dz-gh-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-bottom: 1px solid #111;
-  background: #080808;
-  flex-wrap: wrap;
-  row-gap: 4px;
-  min-height: 42px;
+  gap: 4px;
+  padding: 3px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: rgba(8,8,8,0.6);
+  flex-wrap: nowrap;
+  min-height: 32px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.dz-gh-bar::-webkit-scrollbar { display: none; }
 
 .dz-toolbar-spacer {
   flex: 1;
-  min-width: 8px;
+  min-width: 4px;
+}
+
+.dz-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255,255,255,0.08);
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 .dz-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid #1c1c1c;
-  border-radius: 10px;
-  padding: 2px;
+  gap: 0px;
   flex-shrink: 0;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: none;
 }
-.dz-toolbar-actions::-webkit-scrollbar { display: none; }
 
 @media (max-width: 600px) {
   .dz-gh-bar {
-    padding: 4px 10px;
-    row-gap: 6px;
+    padding: 3px 8px;
   }
-  .dz-toolbar-actions {
-    width: 100%;
-    justify-content: space-around;
-  }
-  .dz-toolbar-spacer { display: none; }
 }
 
 /* ===== GITHUB TOKEN PANEL ===== */
@@ -2140,35 +2136,25 @@
 .gh-log-toggle {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
   background: none;
   border: none;
-  border-radius: 7px;
-  color: #555;
+  border-radius: 6px;
+  color: #4a4a5a;
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 8px;
-  transition: all 0.18s;
-  white-space: nowrap;
-  font-family: 'Cairo', system-ui, sans-serif;
+  padding: 5px 6px;
+  transition: color 0.15s, background 0.15s;
   flex-shrink: 0;
+  position: relative;
 }
 .gh-log-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #aaa;
+  background: rgba(255,255,255,0.07);
+  color: #9ca3af;
 }
 .gh-log-toggle.active {
-  background: rgba(16, 163, 127, 0.08);
+  background: rgba(16,163,127,0.1);
   color: #10a37f;
-}
-@media (max-width: 480px) {
-  .gh-log-toggle span:not(.dz-log-badge) {
-    display: none;
-  }
-  .gh-log-toggle {
-    padding: 6px;
-  }
 }
 
 .gh-tools-btn::after {
@@ -6616,13 +6602,32 @@
 
 /* agent quick buttons in top bar */
 .dz-agent-quick-btn {
-  background: rgba(16,163,127,0.08) !important;
-  border-color: rgba(16,163,127,0.2) !important;
   color: #10a37f !important;
 }
 .dz-agent-quick-btn:hover {
-  background: rgba(16,163,127,0.15) !important;
-  border-color: rgba(16,163,127,0.4) !important;
+  background: rgba(16,163,127,0.1) !important;
+  color: #34d399 !important;
+}
+
+/* inline clear button inside input container */
+.dz-clear-btn-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: transparent;
+  color: #3f3f4e;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.dz-clear-btn-inline:hover {
+  color: #f87171;
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.25);
 }
 
 /* ===== ACTION COMMAND BUTTONS (e.g. "عرض ملفات المجلد") ===== */

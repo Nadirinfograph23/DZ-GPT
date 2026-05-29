@@ -1694,22 +1694,23 @@
 .dz-ticker-wrap {
   flex: 1;
   min-width: 0;
+  max-width: calc(100% - 180px);
   overflow: hidden;
-  height: 24px;
+  height: 36px;
   display: flex;
   align-items: center;
-  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 6%, #000 94%, transparent 100%);
 }
 
 .dz-ticker-inner {
   display: inline-block;
   white-space: nowrap;
-  color: #4a4a5e;
+  color: #ffffff;
   font-size: 11px;
   line-height: 1;
   direction: rtl;
-  animation: dz-ticker-scroll 55s linear infinite;
+  animation: dz-ticker-scroll 100s linear infinite;
   will-change: transform;
 }
 
@@ -1725,7 +1726,7 @@
 @media (max-width: 600px) {
   .dz-ticker-inner {
     font-size: 10px;
-    animation-duration: 45s;
+    animation-duration: 80s;
   }
 }
 

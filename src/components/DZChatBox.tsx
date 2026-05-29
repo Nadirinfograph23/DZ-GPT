@@ -3809,16 +3809,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
   }, [])
 
-  const clearToken = useCallback(() => {
-    setGithubToken('')
-    setGithubUser(null)
-    setServerGithubConnected(false)
-    sessionStorage.removeItem('dz-agent-gh-token')
-    localStorage.removeItem('dz-agent-gh-token')
-    try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  }, []) // kept for programmatic use by agentMode deactivation
-
   const copyMessage = useCallback((id: string, content: string) => {
     navigator.clipboard.writeText(content)
     setCopiedId(id)

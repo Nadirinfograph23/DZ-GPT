@@ -4852,6 +4852,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           query,
           messages: outboundMessages,
           githubToken: githubToken || undefined,
+          repo: agentMode.selectedRepo || currentRepo || undefined,
+          projectMemory: projectMemoryRef.current ? projectMemoryRef.current.slice(0, 1500) : undefined,
         }),
         signal,
       })
@@ -4929,6 +4931,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           query,
           messages: outboundMessages,
           githubToken: githubToken || undefined,
+          repo: agentMode.selectedRepo || currentRepo || undefined,
+          projectMemory: projectMemoryRef.current ? projectMemoryRef.current.slice(0, 1500) : undefined,
         }),
         signal,
       })
@@ -4998,7 +5002,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     const repo = agentMode.selectedRepo
     const tok  = agentMode.githubToken || githubToken
 
-    if (!tok) {
+    if (!tok && !serverGithubConnected) {
       addAssistantMessage({ content: '🔐 **وضع الوكيل**: ربط GitHub مطلوب — فعّل وضع الوكيل وأدخل الـ Token أولاً.', richType: 'text', isError: true })
       return
     }
@@ -5727,6 +5731,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       // ── GitHub ReAct SSE pipeline ─────────────────────────────────────────
       // Matches same patterns as shouldUseReActLoop() on the server side
       const isGithubReActQuery = !activeGhRepo && (
+        (agentMode.active && !!agentMode.selectedRepo) ||
         (/\bgithub\b/i.test(text) && /\b(create|push|add|delete|update|list|show|read|deploy|merge|clone|fork|commit|انشئ|ارفع|احذف|عدل|اعرض|نشر|رفع)\b/i.test(text)) ||
         /أنش[ئئيى]\s*(مستودع|ريبو|repo|repository|فرع|branch|pull)/i.test(text) ||
         /اعرض|عطيني.*مستودع|شوفلي.*مستودع/i.test(text) ||

@@ -3899,6 +3899,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     return id
   }, [])
 
+  // ===== GITHUB AUTH ERROR MESSAGE (دارجة) =====
+  const GH_AUTH_ERR = 'أول حاجة لازم عليك تسجل خروج من github الفوق و تعاود تسجل الدخول، مبعد أرواح نكملوا 😎'
+
   // ===== GITHUB ACTIONS =====
   const fetchRepos = useCallback(async () => {
     if (!githubToken && !serverGithubConnected) {
@@ -3968,7 +3971,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       addToLog({ type: 'list-files', description: `Listed ${(data.files || []).length} files in ${repo}`, status: 'success', repo })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      addAssistantMessage({ content: `فشل عرض الملفات: ${msg}`, richType: 'text', isError: true })
+      addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
       addToLog({ type: 'list-files', description: `Error: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
@@ -3993,7 +3996,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       addToLog({ type: 'read-file', description: `Read ${path} (${data.content.split('\n').length} lines)`, status: 'success', repo })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      addAssistantMessage({ content: `Failed to read file: ${msg}`, richType: 'text', isError: true })
+      addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
       addToLog({ type: 'read-file', description: `Error reading ${path}: ${msg}`, status: 'error' })
     } finally {
       setIsLoading(false)
@@ -5088,8 +5091,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             addAssistantMessage({ content: `لم أجد مستودعات. جرّب: \`/repos web\` أو \`/repos ai\` أو \`/repos arabic\``, richType: 'text' })
           }
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Unknown error'
-          addAssistantMessage({ content: `فشل جلب المستودعات: ${msg}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5130,7 +5133,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           addToLog({ type: 'code-action', description: `Edited ${filePath} — ${data.sha?.slice(0,8)}`, status: 'success', repo })
         } catch (err) {
           const msg = (err as Error).message
-          addAssistantMessage({ content: `❌ فشل التعديل: ${msg}`, richType: 'text', isError: true })
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
           addToLog({ type: 'code-action', description: `Edit error: ${msg}`, status: 'error', repo })
         }
         return
@@ -5162,7 +5165,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           addToLog({ type: 'commit', description: `Committed: "${message}"`, status: 'success', repo })
         } catch (err) {
           const msg = (err as Error).message
-          addAssistantMessage({ content: `❌ فشل الكوميت: ${msg}`, richType: 'text', isError: true })
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
           addToLog({ type: 'commit', description: `Commit error: ${msg}`, status: 'error', repo })
         }
         return
@@ -5194,7 +5197,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           addToLog({ type: 'create-pr', description: `PR created: "${title}"`, status: 'success', repo })
         } catch (err) {
           const msg = (err as Error).message
-          addAssistantMessage({ content: `❌ فشل إنشاء PR: ${msg}`, richType: 'text', isError: true })
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
           addToLog({ type: 'create-pr', description: `PR error: ${msg}`, status: 'error', repo })
         }
         return
@@ -5438,7 +5441,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             quickSuggestions: [`/ls ${treePath}`, `/grep TODO ${treePath}`, '/scan'],
           })
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل بناء الشجرة: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5475,7 +5479,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             quickSuggestions: [`/history 10`, `/pr "${head} → ${base}"`, '/scan'],
           })
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل الـ diff: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5501,7 +5506,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Failed')
             addAssistantMessage({ content: `✅ **Issue #${data.number} مُنشأة**: "${data.title}"\n\n[عرض على GitHub](${data.html_url})`, richType: 'text', quickSuggestions: ['/issues', `/issues close ${data.number}`] })
-          } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+          } catch (err) { void err; addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true }) }
           return
         }
 
@@ -5520,7 +5525,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Failed')
             addAssistantMessage({ content: `✅ **Issue #${data.number} مغلقة**\n\n[عرض على GitHub](${data.html_url})`, richType: 'text', quickSuggestions: ['/issues', '/issues closed'] })
-          } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+          } catch (err) { void err; addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true }) }
           return
         }
 
@@ -5547,7 +5552,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
               quickSuggestions: ['/issues new مشكلة جديدة', '/issues closed', `/issues close ${data.issues[0]?.number}`],
             })
           }
-        } catch (err) { addAssistantMessage({ content: `❌ ${(err as Error).message}`, richType: 'text', isError: true }) }
+        } catch (err) { void err; addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true }) }
         return
       }
 
@@ -5581,7 +5586,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             })
           }
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل جلب Actions: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5612,7 +5618,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           })
           addToLog({ type: 'deploy', description: `Release ${data.tag} created`, status: 'success', repo })
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل إنشاء الـ release: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5641,7 +5648,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
           })
           addToLog({ type: 'code-action', description: `Deleted ${filePath}`, status: 'success', repo })
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل الحذف: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }
@@ -5673,7 +5681,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
             quickSuggestions: [`/diff ${data.base} ${data.head}`, '/issues', '/scan'],
           })
         } catch (err) {
-          addAssistantMessage({ content: `❌ فشل جلب PR: ${(err as Error).message}`, richType: 'text', isError: true })
+          void err
+          addAssistantMessage({ content: GH_AUTH_ERR, richType: 'text', isError: true })
         }
         return
       }

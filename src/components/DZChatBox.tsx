@@ -3690,6 +3690,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
   const [ghAgentAutoExecute, setGhAgentAutoExecute] = useState(false)
   const [showGhAgentInput, setShowGhAgentInput] = useState(false)
+  // Web Reader bar
+  const [showWebReaderBar, setShowWebReaderBar] = useState(false)
+  const [webReaderUrl, setWebReaderUrl] = useState('')
 
   // ===== HYBRID AGENT MODE =====
   const [agentMode, setAgentMode] = useState<AgentModeState>(() => {
@@ -7776,6 +7779,44 @@ ${rows}
             <button className="gh-agent-repo-bar-clear" onClick={() => { setGhAgentRepo(''); setShowGhAgentInput(false) }}>✕</button>
           </div>
         )}
+
+        {/* Web Reader bar */}
+        {showWebReaderBar && (
+          <div className="web-reader-bar">
+            <Globe size={13} className="web-reader-bar-icon" />
+            <input
+              className="web-reader-url-input"
+              placeholder="الصق رابط الصفحة لتحليلها... https://example.com"
+              value={webReaderUrl}
+              autoFocus
+              onChange={e => setWebReaderUrl(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && webReaderUrl.trim()) {
+                  const url = webReaderUrl.trim()
+                  setWebReaderUrl('')
+                  setShowWebReaderBar(false)
+                  sendMessage(url)
+                }
+                if (e.key === 'Escape') { setShowWebReaderBar(false); setWebReaderUrl('') }
+              }}
+            />
+            <button
+              className="web-reader-send-btn"
+              disabled={!webReaderUrl.trim()}
+              title="تحليل الصفحة"
+              onClick={() => {
+                const url = webReaderUrl.trim()
+                if (!url) return
+                setWebReaderUrl('')
+                setShowWebReaderBar(false)
+                sendMessage(url)
+              }}
+            >
+              <Send size={12} />
+            </button>
+            <button className="web-reader-bar-clear" onClick={() => { setShowWebReaderBar(false); setWebReaderUrl('') }}>✕</button>
+          </div>
+        )}
         {activeYouTubeVideo && (
           <div className="dzc-yt-ctx-bar">
             <span className="dzc-yt-ctx-icon">🎬</span>
@@ -7809,11 +7850,11 @@ ${rows}
               </button>
             )}
             <button
-              className={`gh-agent-toggle-btn ${showGhAgentInput ? 'active' : ''}`}
-              title="وضع DZ GitHub Agent"
-              onClick={() => setShowGhAgentInput(v => !v)}
+              className={`web-reader-toggle-btn ${showWebReaderBar ? 'active' : ''}`}
+              title="قراءة وتحليل صفحة ويب"
+              onClick={() => { setShowWebReaderBar(v => !v); setWebReaderUrl('') }}
             >
-              <Github size={15} />
+              <Globe size={15} />
             </button>
             <VoicePanel
               onTranscript={(t) => {

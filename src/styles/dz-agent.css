@@ -6469,6 +6469,151 @@
   color: #6b7280;
 }
 
+/* ===== FLOATING FIND DIALOG ===== */
+.dzc-find-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: dzc-fade-in 0.15s ease;
+}
+
+@keyframes dzc-fade-in {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+.dzc-find-dialog {
+  background: #141420;
+  border: 1.5px solid rgba(99,102,241,0.35);
+  border-radius: 16px;
+  padding: 20px 22px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1);
+  animation: dzc-slide-up 0.18s ease;
+}
+
+@keyframes dzc-slide-up {
+  from { transform: translateY(14px); opacity: 0 }
+  to   { transform: translateY(0);    opacity: 1 }
+}
+
+.dzc-find-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.dzc-find-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #a5b4fc;
+}
+
+.dzc-find-dialog-title code {
+  background: rgba(99,102,241,0.15);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 12px;
+  color: #c7d2fe;
+}
+
+.dzc-find-dialog-close {
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.dzc-find-dialog-close:hover {
+  color: #e2e8f0;
+  background: rgba(255,255,255,0.06);
+}
+
+.dzc-find-dialog-body {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.dzc-find-dialog-input {
+  flex: 1;
+  background: rgba(15,15,20,0.85);
+  border: 1.5px solid rgba(99,102,241,0.28);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #e2e8f0;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dzc-find-dialog-input:focus {
+  border-color: rgba(99,102,241,0.6);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+
+.dzc-find-dialog-input::placeholder { color: #4b5563; }
+
+.dzc-find-dialog-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.17s, transform 0.12s;
+}
+
+.dzc-find-dialog-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.dzc-find-dialog-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dzc-find-dialog-hint {
+  font-size: 11.5px;
+  color: #4b5563;
+  margin: 0;
+  direction: rtl;
+  line-height: 1.5;
+}
+
+.dzc-find-dialog-hint code {
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+  padding: 0 5px;
+  color: #6366f1;
+}
+
 /* agent quick buttons in top bar */
 .dz-agent-quick-btn {
   background: rgba(16,163,127,0.08) !important;

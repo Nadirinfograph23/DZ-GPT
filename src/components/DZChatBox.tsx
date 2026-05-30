@@ -3519,14 +3519,14 @@ function FindDialog({ repo, onSearch, onClose }: { repo: string; onSearch: (patt
 }
 
 const QUICK_ACTIONS = [
-  { icon: '💻', label: 'اكتب كود',      cmd: 'اكتب لي كود Python يحسب متتالية فيبوناتشي' },
-  { icon: '🌤️', label: 'الطقس الآن',   cmd: 'ما طقس الجزائر العاصمة الآن؟' },
-  { icon: '📰', label: 'آخر الأخبار',   cmd: 'أخبرني بآخر أخبار الجزائر اليوم' },
-  { icon: '🌐', label: 'أنشئ موقعاً',  cmd: 'أنشئ لي صفحة ويب احترافية باللغة العربية' },
-  { icon: '⚽', label: 'مباريات اليوم', cmd: 'نتائج مباريات كرة القدم اليوم وجدول الدوري الجزائري' },
-  { icon: '💱', label: 'سعر الصرف',    cmd: 'سعر الدولار واليورو مقابل الدينار الجزائري اليوم' },
-  { icon: '🐙', label: 'GitHub',        cmd: 'اعرض مستودعاتي على GitHub' },
-  { icon: '🔧', label: 'تحليل كود',    cmd: 'ما هي أفضل ممارسات تصميم REST API؟ مع أمثلة عملية' },
+  { icon: '💻', label: 'اكتب كود',      desc: 'Python · JavaScript · أي لغة',  color: '#10a37f', cmd: 'اكتب لي كود Python يحسب متتالية فيبوناتشي' },
+  { icon: '🌤️', label: 'الطقس الآن',   desc: 'الجزائر والمدن',                color: '#38bdf8', cmd: 'ما طقس الجزائر العاصمة الآن؟' },
+  { icon: '📰', label: 'آخر الأخبار',   desc: 'جزائر · عرب · عالم',           color: '#f59e0b', cmd: 'أخبرني بآخر أخبار الجزائر اليوم' },
+  { icon: '🌐', label: 'أنشئ موقعاً',  desc: 'HTML · CSS · تصميم احترافي',   color: '#a78bfa', cmd: 'أنشئ لي صفحة ويب احترافية باللغة العربية' },
+  { icon: '⚽', label: 'مباريات اليوم', desc: 'دوري جزائري · LFP',            color: '#4ade80', cmd: 'نتائج مباريات كرة القدم اليوم وجدول الدوري الجزائري' },
+  { icon: '💱', label: 'سعر الصرف',    desc: 'دولار · يورو · دينار',          color: '#fbbf24', cmd: 'سعر الدولار واليورو مقابل الدينار الجزائري اليوم' },
+  { icon: '🐙', label: 'GitHub',        desc: 'مستودعات · كود · نشر',         color: '#94a3b8', cmd: 'اعرض مستودعاتي على GitHub' },
+  { icon: '🤖', label: 'ذكاء اصطناعي', desc: 'ChatGPT · Gemini · نماذج',     color: '#fb923c', cmd: 'ما هي أبرز أخبار الذكاء الاصطناعي هذا الأسبوع؟' },
 ]
 
 const TICKER_ITEMS = [
@@ -7150,9 +7150,19 @@ ${rows}
 
           <div className="dz-quick-actions">
             {QUICK_ACTIONS.map((a, i) => (
-              <button key={i} className="dz-qa-btn" onClick={() => sendMessage(a.cmd)}>
-                <span className="dz-qa-icon">{a.icon}</span>
-                <span>{a.label}</span>
+              <button
+                key={i}
+                className="dz-qa-btn"
+                onClick={() => sendMessage(a.cmd)}
+                style={{ '--qa-color': a.color, '--qa-color-bg': a.color + '14', '--qa-color-border': a.color + '30' } as React.CSSProperties}
+              >
+                <span className="dz-qa-icon-wrap">
+                  <span className="dz-qa-icon">{a.icon}</span>
+                </span>
+                <span className="dz-qa-text">
+                  <span className="dz-qa-label">{a.label}</span>
+                  <span className="dz-qa-desc">{a.desc}</span>
+                </span>
               </button>
             ))}
           </div>

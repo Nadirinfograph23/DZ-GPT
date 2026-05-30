@@ -1,0 +1,172 @@
+.dz-ob-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: dz-ob-fade-in 0.3s ease;
+  padding: 16px;
+}
+.dz-ob-backdrop--hide {
+  animation: dz-ob-fade-out 0.35s ease forwards;
+}
+
+.dz-ob-modal {
+  background: #12121a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  position: relative;
+  animation: dz-ob-slide-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.dz-ob-modal--hide {
+  animation: dz-ob-slide-out 0.3s ease forwards;
+}
+
+.dz-ob-close {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: none;
+  border-radius: 8px;
+  color: #888;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.dz-ob-close:hover { background: rgba(255, 255, 255, 0.13); color: #fff; }
+
+.dz-ob-progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.dz-ob-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.dz-ob-dot--active {
+  width: 24px;
+  border-radius: 4px;
+  background: #10a37f;
+}
+.dz-ob-dot--done { background: rgba(16, 163, 127, 0.5); }
+
+.dz-ob-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.dz-ob-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 10px;
+  line-height: 1.4;
+  direction: rtl;
+}
+
+.dz-ob-desc {
+  font-size: 0.92rem;
+  color: #aaa;
+  line-height: 1.7;
+  margin: 0 0 16px;
+  direction: rtl;
+}
+
+.dz-ob-hint {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: #888;
+  font-style: italic;
+  direction: rtl;
+  margin-bottom: 24px;
+}
+
+.dz-ob-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dz-ob-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s, transform 0.15s;
+  direction: rtl;
+}
+.dz-ob-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.dz-ob-btn:active { transform: translateY(0); }
+
+.dz-ob-btn--next {
+  color: #fff;
+  flex: 1;
+  justify-content: center;
+  max-width: 200px;
+}
+
+.dz-ob-btn--back {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ccc;
+  min-width: 90px;
+  justify-content: center;
+}
+
+.dz-ob-skip {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.dz-ob-skip:hover { color: #888; }
+
+@keyframes dz-ob-fade-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes dz-ob-fade-out { from { opacity: 1 } to { opacity: 0 } }
+@keyframes dz-ob-slide-in { from { opacity: 0; transform: scale(0.88) translateY(24px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+@keyframes dz-ob-slide-out{ from { opacity: 1; transform: scale(1) } to { opacity: 0; transform: scale(0.92) translateY(16px) } }
+
+@media (max-width: 480px) {
+  .dz-ob-modal { padding: 24px 18px 20px; border-radius: 16px; }
+  .dz-ob-title { font-size: 1.05rem; }
+}

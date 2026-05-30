@@ -75,6 +75,7 @@ import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import { mountGitHubSkill } from './lib/skills/mount.js'
+import { generateAndroidProject, detectAndroidBuildQuery } from './lib/android-builder/index.js'
 import { mountMetaClaw, injectSkills as metaClawInject } from './lib/skills/dz-metaclaw-skill.js'
 import {
   deployGitHubPages,
@@ -17884,6 +17885,134 @@ app.post('/api/dz-agent/github/agent-build', async (req, res) => {
     console.error('[AgentBuild]', err.message)
   }
 
+  res.end()
+})
+
+// ===== ANDROID APK BUILDER — بناء تطبيق أندرويد من موقع ويب =====
+// POST /api/dz-agent/android/build  (SSE)
+app.post('/api/dz-agent/android/build', async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
+
+  const { task, appName, repoOwner = 'Nadirinfograph23' } = req.body
+  if (!task) { send({ type: 'error', message: 'task مطلوب' }); return res.end() }
+
+  const tok = resolveGitHubToken()
+  if (!tok) { send({ type: 'error', message: 'GITHUB_TOKEN غير مضبوط' }); return res.end() }
+  const hdr = ghHeaders(tok)
+
+  const safeAppName = appName || task.slice(0, 40).trim() || 'DZ App'
+  const safeRepo = (safeAppName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dz-android-app') + '-android'
+
+  try {
+    // ── STEP 1: Generate web content with AI ────────────────────────────────
+    send({ type: 'step', step: 'web', status: 'running', detail: '🌐 توليد موقع الويب بالذكاء الاصطناعي...' })
+
+    let htmlContent = ''
+    try {
+      const aiRes = await safeGenerateAI({
+        messages: [
+          { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
+          { role: 'user', content: `أنشئ تطبيق ويب احترافي لـ: "${task}"\nالنتيجة ستُحمَّل داخل WebView أندرويد — استخدم HTML/CSS/JS كامل في ملف واحد، بدون خطوط خارجية، بدون CDN خارجي، بدون روابط خارجية. كل الأنماط مضمّنة inline.` },
+        ],
+        query: task,
+        max_tokens: 8000,
+        taskHint: 'web-builder',
+      })
+      htmlContent = extractHtmlFromResponse(aiRes.content || '') || aiRes.content || ''
+      send({ type: 'detail', step: 'web', text: `✅ تم توليد الموقع (${Math.round(htmlContent.length / 1024)} KB)` })
+    } catch (aiErr) {
+      send({ type: 'detail', step: 'web', text: `⚠️ AI timeout — استخدام template افتراضي` })
+      htmlContent = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeAppName}</title><style>body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-align:center;padding:20px}h1{font-size:2rem;margin-bottom:1rem}p{opacity:.85}</style></head><body><h1>📱 ${safeAppName}</h1><p>تطبيق مُنشأ بواسطة DZ Agent</p></body></html>`
+    }
+    send({ type: 'step', step: 'web', status: 'done' })
+
+    // ── STEP 2: Generate Android project files ───────────────────────────────
+    send({ type: 'step', step: 'android', status: 'running', detail: '🤖 توليد ملفات مشروع أندرويد...' })
+    const packageName = `com.dzapp.${safeRepo.replace(/-android$/, '').replace(/[^a-z0-9]/g, '')}`
+    const projectFiles = generateAndroidProject({
+      appName: safeAppName,
+      packageName,
+      htmlContent,
+      themeColor: '#1a73e8',
+    })
+    send({ type: 'detail', step: 'android', text: `✅ ${projectFiles.length} ملف مُولَّد (Gradle + AndroidManifest + WebView + GitHub Actions)` })
+    send({ type: 'step', step: 'android', status: 'done' })
+
+    // ── STEP 3: Create GitHub repo & push files ──────────────────────────────
+    send({ type: 'step', step: 'push', status: 'running', detail: `📦 رفع المشروع على GitHub: ${repoOwner}/${safeRepo}...` })
+
+    const repoCheck = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}`, {
+      headers: hdr, signal: AbortSignal.timeout(8000),
+    })
+    if (!repoCheck.ok) {
+      send({ type: 'detail', step: 'push', text: `📦 إنشاء مستودع جديد: ${safeRepo}` })
+      const cr = await fetch('https://api.github.com/user/repos', {
+        method: 'POST', headers: hdr, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ name: safeRepo, description: `📱 ${safeAppName} — Android app by DZ Agent`, auto_init: true, private: false }),
+      })
+      if (!cr.ok) { const e = await cr.json(); throw new Error(`فشل إنشاء المستودع: ${e.message}`) }
+      await new Promise(r => setTimeout(r, 2500))
+    } else {
+      send({ type: 'detail', step: 'push', text: `✅ المستودع موجود: ${safeRepo}` })
+    }
+
+    let pushedCount = 0
+    for (const file of projectFiles) {
+      if (!file.path || file.content === undefined) continue
+      let fileSha = null
+      try {
+        const g = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}/contents/${encodeURIComponent(file.path)}`, {
+          headers: hdr, signal: AbortSignal.timeout(6000),
+        })
+        if (g.ok) fileSha = (await g.json()).sha
+      } catch {}
+      const pr = await fetch(`https://api.github.com/repos/${repoOwner}/${safeRepo}/contents/${encodeURIComponent(file.path)}`, {
+        method: 'PUT', headers: hdr, signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          message: `🤖 DZ Agent: add ${file.path}`,
+          content: Buffer.from(file.content).toString('base64'),
+          ...(fileSha ? { sha: fileSha } : {}),
+        }),
+      })
+      if (pr.ok) {
+        pushedCount++
+        send({ type: 'detail', step: 'push', text: `✅ ${file.path}` })
+      } else {
+        const e = await pr.json().catch(() => ({}))
+        send({ type: 'detail', step: 'push', text: `❌ ${file.path}: ${e.message || pr.status}` })
+      }
+    }
+    send({ type: 'step', step: 'push', status: 'done' })
+
+    // ── STEP 4: Return result ────────────────────────────────────────────────
+    const repoUrl = `https://github.com/${repoOwner}/${safeRepo}`
+    const actionsUrl = `${repoUrl}/actions`
+    const releasesUrl = `${repoUrl}/releases`
+
+    send({
+      type: 'result',
+      data: {
+        appName: safeAppName,
+        packageName,
+        repoUrl,
+        actionsUrl,
+        releasesUrl,
+        filesCount: pushedCount,
+      },
+    })
+
+    console.log(`[AndroidBuilder] ✅ ${repoOwner}/${safeRepo} — ${pushedCount} files pushed`)
+
+  } catch (err) {
+    send({ type: 'error', message: err.message })
+    console.error('[AndroidBuilder]', err.message)
+  }
   res.end()
 })
 

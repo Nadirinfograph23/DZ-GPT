@@ -281,16 +281,16 @@ function App() {
 
   // Persist to localStorage
   useEffect(() => {
-    localStorage.setItem('dz-gpt-chats', JSON.stringify(chats))
+    try { localStorage.setItem('dz-gpt-chats', JSON.stringify(chats)) } catch {}
   }, [chats])
 
   useEffect(() => {
-    localStorage.setItem('dz-gpt-lang', language)
+    try { localStorage.setItem('dz-gpt-lang', language) } catch {}
   }, [language])
 
   useEffect(() => {
     if (activeChatId) {
-      localStorage.setItem('dz-gpt-active-chat', activeChatId)
+      try { localStorage.setItem('dz-gpt-active-chat', activeChatId) } catch {}
     }
   }, [activeChatId])
 

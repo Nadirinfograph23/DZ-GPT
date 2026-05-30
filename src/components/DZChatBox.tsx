@@ -3965,7 +3965,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const fetchRepos = useCallback(async () => {
     if (!githubToken && !serverGithubConnected) {
       addAssistantMessage({
-        content: '🔐 **لعرض مستودعاتك على GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى، ثم عُد واضغط على **عرض مستودعاتي** مجدداً.',
+        content: '😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub',
         richType: 'text',
       })
       return
@@ -5095,7 +5095,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     const tok  = agentMode.githubToken || githubToken
 
     if (!tok && !serverGithubConnected) {
-      addAssistantMessage({ content: '🔐 **وضع الوكيل**: ربط GitHub مطلوب — فعّل وضع الوكيل وأدخل الـ Token أولاً.', richType: 'text', isError: true })
+      addAssistantMessage({ content: '😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub', richType: 'text', isError: true })
       return
     }
 
@@ -6337,7 +6337,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         // Guard: token required for all GitHub direct actions
         if (!githubToken) {
           addAssistantMessage({
-            content: '🔐 **لاستخدام ميزات GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى لربط حسابك، ثم كرر الطلب.',
+            content: '😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub',
             richType: 'text',
           })
           return
@@ -6630,7 +6630,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         // Guard: if no token yet, show connect prompt instead of the cryptic fetchRepos error
         if (!githubToken && !serverGithubConnected) {
           addAssistantMessage({
-            content: '🔐 **لاستخدام ميزات GitHub**\n\nانقر على زر **"ربط GitHub"** في شريط الأدوات بالأعلى لربط حسابك، ثم كرر الطلب.',
+            content: '😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub',
             richType: 'text',
           })
           return

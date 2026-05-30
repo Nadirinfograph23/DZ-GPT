@@ -3703,8 +3703,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
-  const [tickerIdx, setTickerIdx] = useState(0)
-  const [tickerPhase, setTickerPhase] = useState<'enter' | 'exit'>('enter')
+  const [twText, setTwText]   = useState('')
+  const [twIdx,  setTwIdx]    = useState(0)
+  const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
   const [showAgentBar, setShowAgentBar] = useState(true)
   const [agentHintGlow, setAgentHintGlow] = useState(false)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
@@ -3800,19 +3801,38 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
     }
   }, [agentMode.githubToken])
 
-  // ===== VERTICAL TICKER — cycle one item at a time =====
+  // ===== TYPEWRITER TICKER =====
   useEffect(() => {
-    const SHOW_MS = 3200
-    const ANIM_MS = 450
-    const timer = setInterval(() => {
-      setTickerPhase('exit')
-      setTimeout(() => {
-        setTickerIdx(prev => (prev + 1) % TICKER_ITEMS.length)
-        setTickerPhase('enter')
-      }, ANIM_MS)
-    }, SHOW_MS + ANIM_MS)
-    return () => clearInterval(timer)
-  }, [])
+    const FULL = TICKER_ITEMS[twIdx]
+    const TYPE_SPEED   = 38
+    const DELETE_SPEED = 22
+    const PAUSE_MS     = 2400
+
+    if (twPhase === 'typing') {
+      if (twText.length < FULL.length) {
+        const t = setTimeout(() => setTwText(FULL.slice(0, twText.length + 1)), TYPE_SPEED)
+        return () => clearTimeout(t)
+      } else {
+        const t = setTimeout(() => setTwPhase('pausing'), PAUSE_MS)
+        return () => clearTimeout(t)
+      }
+    }
+
+    if (twPhase === 'pausing') {
+      setTwPhase('deleting')
+      return
+    }
+
+    if (twPhase === 'deleting') {
+      if (twText.length > 0) {
+        const t = setTimeout(() => setTwText(prev => prev.slice(0, -1)), DELETE_SPEED)
+        return () => clearTimeout(t)
+      } else {
+        setTwIdx(prev => (prev + 1) % TICKER_ITEMS.length)
+        setTwPhase('typing')
+      }
+    }
+  }, [twText, twIdx, twPhase])
 
   // ===== WORKSPACE ACTIVATION: show welcome/resume message in chat =====
   const prevActivatedRepoRef = useRef<string>('')
@@ -7025,13 +7045,11 @@ ${rows}
           )}
         </button>
 
-        {/* Vertical ticker — one item at a time, slides top→bottom */}
+        {/* Typewriter ticker */}
         <div className="dz-ticker-wrap" aria-hidden="true">
-          <span
-            key={tickerIdx}
-            className={`dz-ticker-item dz-ticker-item--${tickerPhase}`}
-          >
-            {TICKER_ITEMS[tickerIdx]}
+          <span className="dz-ticker-item">
+            {twText}
+            <span className={`dz-tw-cursor${twPhase === 'pausing' ? ' dz-tw-cursor--blink' : ''}`}>|</span>
           </span>
         </div>
 

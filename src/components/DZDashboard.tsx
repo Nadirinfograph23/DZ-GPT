@@ -842,7 +842,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               </div>
             ) : (visibleMatches.length === 0 && data?.sports?.length === 0) ? (
               <div className="dzd-empty-state">
-                <p>لا توجد بيانات حالياً</p>
+                <p>لا توجد مبارايات حاليا</p>
                 <button className="dzd-retry-btn" onClick={() => loadDashboard({ force: true })}>إعادة المحاولة</button>
               </div>
             ) : (

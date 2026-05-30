@@ -27,6 +27,10 @@ import {
 } from './lib/owner-commands.js'
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 
+// ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
+// تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
+import { buildUnderstandingContext } from './lib/dz-understanding.js'
+
 // ── Breaking News Detector ────────────────────────────────────────────────────
 import {
   startBreakingNewsPoller,
@@ -15756,6 +15760,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     )
   }
 
+  // ── عقل الفهم — DZ Understanding Brain ──────────────────────────────────────
+  // تحليل عميق للسؤال: نوع الدارجة + الحاجة الضمنية + السياق الجزائري
+  // يعمل بعد فحوصات المالك → آمن تماماً — لا يؤثر على الإجابات المبرمجة
+  let _understandingBlock = ''
+  try {
+    _understandingBlock = buildUnderstandingContext(lastUserMessage) || ''
+  } catch (_ue) {
+    // fail silently — understanding is enhancement, not critical path
+  }
+
   // ── DZ Memory Layer — استرجاع الذكريات ذات الصلة قبل بناء systemPrompt ──
   // يُستبدل كامل تاريخ المحادثة بذكريات مُختارة → تقليل tokens
   const _memProjectId = currentRepo || req.body.projectId || null
@@ -15873,6 +15887,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
+    // ── عقل الفهم: تحليل عميق للسؤال (نوع + حاجة ضمنية + سياق جزائري) ────
+    _understandingBlock || '',
     _memoryContext ? `\n${_memoryContext}` : '',
 
     // ── Owner Training Injection (facts / qa / behaviors from admin) ──────

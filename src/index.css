@@ -7,3 +7,36 @@
   }
 }
 
+/* ── Streaming cursor animation ─────────────────────────────────────────── */
+@keyframes dz-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.dz-stream-text {
+  display: inline;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dz-stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: #10a37f;
+  border-radius: 1px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: dz-cursor-blink 0.8s steps(1) infinite;
+  font-size: 0;
+}
+
+/* ── Analytics badge (feature usage indicator) ──────────────────────────── */
+.dz-analytics-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10a37f;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+

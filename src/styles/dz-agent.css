@@ -541,6 +541,26 @@
   user-select: none;
 }
 
+/* ─── Sidebar logo animation (mirrors header anim) ─── */
+.dza-sidebar-logo-icon--anim-flip-out {
+  animation: dza-flip-out 0.28s ease-in forwards;
+}
+.dza-sidebar-logo-icon--anim-flag {
+  animation: dza-flag-pulse 1.1s ease-in-out infinite;
+  background: linear-gradient(135deg, rgba(16,163,127,0.3), rgba(255,255,255,0.08)) !important;
+  border-color: rgba(16,163,127,0.7) !important;
+}
+.dza-sidebar-logo-icon--anim-flip-in {
+  animation: dza-flip-in 0.28s ease-out forwards;
+}
+.dza-sidebar-logo-icon--anim-idle { animation: none; }
+
+.dza-sidebar-logo-flag {
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+}
+
 .dz-agent-logo-spark {
   position: absolute;
   top: -4px;

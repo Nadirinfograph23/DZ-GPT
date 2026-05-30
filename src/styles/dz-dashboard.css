@@ -39,7 +39,7 @@
   --dzd-red:           #f87171;
   --dzd-line:          rgba(129,140,248,.1);
   /* ─── Tab active state tokens ─── */
-  --dzd-tab-active-bg:   rgba(100,116,139,.28);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #c7d2fe;
   --dzd-tab-active-bar:  #818cf8;
   /* legacy compat — all point to same accent */
@@ -66,7 +66,7 @@
   --dzd-card-bg:         rgba(16,163,127,.055);
   --dzd-card-border:     rgba(16,163,127,.14);
   --dzd-line:            rgba(16,163,127,.1);
-  --dzd-tab-active-bg:   rgba(148,163,184,.22);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #6ee7d0;
   --dzd-tab-active-bar:  #10a37f;
 }
@@ -79,7 +79,7 @@
   --dzd-card-bg:         rgba(148,163,184,.055);
   --dzd-card-border:     rgba(148,163,184,.14);
   --dzd-line:            rgba(148,163,184,.1);
-  --dzd-tab-active-bg:   rgba(148,163,184,.26);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #e2e8f0;
   --dzd-tab-active-bar:  #94a3b8;
 }
@@ -92,7 +92,7 @@
   --dzd-card-bg:         rgba(251,113,133,.055);
   --dzd-card-border:     rgba(251,113,133,.14);
   --dzd-line:            rgba(251,113,133,.1);
-  --dzd-tab-active-bg:   rgba(71,85,105,.32);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #fda4af;
   --dzd-tab-active-bar:  #fb7185;
 }
@@ -105,7 +105,7 @@
   --dzd-card-bg:         rgba(251,191,36,.055);
   --dzd-card-border:     rgba(251,191,36,.14);
   --dzd-line:            rgba(251,191,36,.1);
-  --dzd-tab-active-bg:   rgba(203,213,225,.18);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #fde68a;
   --dzd-tab-active-bar:  #fbbf24;
 }
@@ -118,7 +118,7 @@
   --dzd-card-bg:         rgba(56,189,248,.055);
   --dzd-card-border:     rgba(56,189,248,.14);
   --dzd-line:            rgba(56,189,248,.1);
-  --dzd-tab-active-bg:   rgba(148,163,184,.20);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #bae6fd;
   --dzd-tab-active-bar:  #38bdf8;
 }
@@ -131,7 +131,7 @@
   --dzd-card-bg:         rgba(129,140,248,.055);
   --dzd-card-border:     rgba(129,140,248,.14);
   --dzd-line:            rgba(129,140,248,.1);
-  --dzd-tab-active-bg:   rgba(100,116,139,.28);
+  --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #c7d2fe;
   --dzd-tab-active-bar:  #818cf8;
 }

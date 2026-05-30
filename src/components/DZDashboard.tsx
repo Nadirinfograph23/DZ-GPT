@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Newspaper, Trophy, Wind, Droplets, ExternalLink, RefreshCw,
   MapPin, Thermometer, Cpu, TrendingUp, Navigation, Eye,
-  BookOpen,
+  BookOpen, Moon, Sunrise, Sun, CloudSun, Sunset, CloudMoon,
+  Cloud, Globe, DollarSign, ArrowLeftRight, BarChart2,
+  CalendarDays, CheckCircle2, Radio, Layers, Clock,
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
@@ -78,11 +80,21 @@ interface CurrencyData {
 }
 
 
-const PRAYER_ICONS: Record<string, string> = {
-  'الفجر': '🌄', 'الشروق': '🌅', 'الظهر': '☀️', 'العصر': '🌤️', 'المغرب': '🌇', 'العشاء': '🌙',
+const PRAYER_ICON_CMP: Record<string, React.ReactNode> = {
+  'الفجر':   <Moon    size={16} />,
+  'الشروق':  <Sunrise size={16} />,
+  'الظهر':   <Sun     size={16} />,
+  'العصر':   <CloudSun size={16} />,
+  'المغرب':  <Sunset  size={16} />,
+  'العشاء':  <CloudMoon size={16} />,
 }
 const PRAYER_COLORS: Record<string, string> = {
-  'الفجر': '#818cf8', 'الشروق': '#fb923c', 'الظهر': '#facc15', 'العصر': '#34d399', 'المغرب': '#f472b6', 'العشاء': '#a78bfa',
+  'الفجر':  '#818cf8',
+  'الشروق': '#a5b4fc',
+  'الظهر':  '#c7d2fe',
+  'العصر':  '#818cf8',
+  'المغرب': '#a5b4fc',
+  'العشاء': '#6366f1',
 }
 
 // 58 Wilayas of Algeria — { en: API name, ar: display name }
@@ -558,17 +570,17 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
     loadDollar()
   }, [])
 
-  const tabs = [
-    { key: 'quran' as const, label: 'القرآن الكريم', icon: '📖', isNav: true },
-    { key: 'prayer' as const, label: 'مواقيت الصلاة', icon: '🕌' },
-    { key: 'weather' as const, label: 'الطقس', icon: '🌤️' },
-    { key: 'news' as const, label: 'الأخبار', icon: '📰' },
-    { key: 'dollar' as const, label: 'سوق الصرف', icon: '💵' },
-    { key: 'sports' as const, label: 'الدوري الجزائري', icon: '⚽' },
-    { key: 'standings' as const, label: 'الترتيب', icon: '🏆' },
-    { key: 'global' as const, label: 'الدوريات العالمية', icon: '🌍' },
-    { key: 'tech' as const, label: 'الأخبار التقنية', icon: '💻' },
-    { key: 'currency' as const, label: 'أسعار الصرف', icon: '💱' },
+  const tabs: { key: typeof activeSection; label: string; icon: React.ReactNode; isNav?: boolean }[] = [
+    { key: 'quran'    as const, label: 'القرآن',         icon: <BookOpen    size={12} />, isNav: true },
+    { key: 'prayer'   as const, label: 'الصلاة',         icon: <Moon        size={12} /> },
+    { key: 'weather'  as const, label: 'الطقس',          icon: <Cloud       size={12} /> },
+    { key: 'news'     as const, label: 'الأخبار',        icon: <Newspaper   size={12} /> },
+    { key: 'dollar'   as const, label: 'سوق الصرف',     icon: <DollarSign  size={12} /> },
+    { key: 'sports'   as const, label: 'الدوري',         icon: <Trophy      size={12} /> },
+    { key: 'standings'as const, label: 'الترتيب',        icon: <BarChart2   size={12} /> },
+    { key: 'global'   as const, label: 'عالمي',          icon: <Globe       size={12} /> },
+    { key: 'tech'     as const, label: 'تقنية',          icon: <Cpu         size={12} /> },
+    { key: 'currency' as const, label: 'الصرف',          icon: <ArrowLeftRight size={12} /> },
   ]
 
   const matches = data?.lfp?.matches || []
@@ -645,7 +657,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
             >
               <span className="dzd-tab-icon">{tab.icon}</span>
               <span className="dzd-tab-label">{tab.label}</span>
-              {tab.key === 'quran' && <BookOpen size={10} className="dzd-tab-quran-icon" />}
             </button>
           ))}
         </div>
@@ -683,7 +694,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                       className="dzd-prayer-card"
                       style={{ '--p-color': PRAYER_COLORS[name] || '#a78bfa' } as React.CSSProperties}
                     >
-                      <span className="dzd-prayer-card-icon">{PRAYER_ICONS[name] || '🕐'}</span>
+                      <span className="dzd-prayer-card-icon">{PRAYER_ICON_CMP[name] || <Clock size={16} />}</span>
                       <span className="dzd-prayer-card-name">{name}</span>
                       <span className="dzd-prayer-card-time">{time}</span>
                     </div>
@@ -826,15 +837,15 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                 {loading ? 'جاري التحديث…' : 'تحديث سريع'}
               </button>
             </div>
-            <div className="dzd-sports-header" style={{ display: 'flex', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
-              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هو ترتيب الدوري الجزائري المحترف؟')}>
-                🏆 الترتيب
+            <div className="dzd-sports-header-bar">
+              <button className="dzd-sports-action-btn" onClick={() => onSend('ما هو ترتيب الدوري الجزائري المحترف؟')}>
+                <BarChart2 size={13} /> الترتيب
               </button>
-              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هي مباريات الدوري الجزائري القادمة؟')}>
-                📅 المباريات القادمة
+              <button className="dzd-sports-action-btn" onClick={() => onSend('ما هي مباريات الدوري الجزائري القادمة؟')}>
+                <CalendarDays size={13} /> القادمة
               </button>
-              <button className="dzd-retry-btn" style={{ flex: 1 }} onClick={() => onSend('ما هي نتائج مباريات الدوري الجزائري الأخيرة؟')}>
-                ✅ النتائج
+              <button className="dzd-sports-action-btn" onClick={() => onSend('ما هي نتائج مباريات الدوري الجزائري الأخيرة؟')}>
+                <CheckCircle2 size={13} /> النتائج
               </button>
             </div>
             {loading ? (
@@ -908,7 +919,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {activeSection === 'standings' && (
           <div className="dzd-sports-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0', gap: '8px', flexWrap: 'wrap' }}>
-              <span>🏆 ترتيب الدوري الجزائري المحترف</span>
+              <span style={{ display:'flex', alignItems:'center', gap:'6px', color:'var(--dzd-accent)', fontWeight:700 }}><BarChart2 size={13} /> ترتيب الدوري الجزائري المحترف</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 {standingsData?.source && <span style={{ fontSize: '10px' }}>المصدر: {standingsData.source}</span>}
                 <button
@@ -973,7 +984,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {activeSection === 'global' && (
           <div className="dzd-sports-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 4px 8px', fontSize: '11px', color: '#a0a0b0', gap: '8px', flexWrap: 'wrap' }}>
-              <span>🌍 الدوريات العالمية — {globalLeagues?.date || new Date().toLocaleDateString('ar-DZ')}</span>
+              <span style={{ display:'flex', alignItems:'center', gap:'6px', color:'var(--dzd-accent)', fontWeight:700 }}><Globe size={13} /> الدوريات العالمية — {globalLeagues?.date || new Date().toLocaleDateString('ar-DZ')}</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                 {globalLeagues?.source && <span style={{ fontSize: '10px' }}>المصدر: {globalLeagues.source}</span>}
                 <button
@@ -988,9 +999,9 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                 </button>
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+            <div className="dzd-league-filter-bar">
               {['بريميرليغ', 'ليغا', 'تشامبيونز ليغ', 'بوندسليغا', 'سيريا إيه'].map(league => (
-                <button key={league} className="dzd-retry-btn" style={{ fontSize: '11px', padding: '3px 8px' }} onClick={() => onSend(`مباريات ${league} اليوم`)}>
+                <button key={league} className="dzd-league-filter-btn" onClick={() => onSend(`مباريات ${league} اليوم`)}>
                   {league}
                 </button>
               ))}
@@ -1003,8 +1014,8 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               <div className="dzd-match-list">
                 {globalLeagues.leagues.map((league, li) => (
                   <div key={li} style={{ marginBottom: '12px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#a78bfa', padding: '4px 0', borderBottom: '1px solid rgba(167,139,250,0.2)', marginBottom: '6px' }}>
-                      🏟️ {league.name}
+                    <div className="dzd-league-title">
+                      <Layers size={12} /> {league.name}
                     </div>
                     {league.matches.map((match, mi) => (
                       <div
@@ -1023,7 +1034,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
                           <span>{match.awayTeam}</span>
                         </div>
                         {match.statusType === 'inprogress' && (
-                          <div style={{ textAlign: 'center', fontSize: '10px', color: '#f87171', marginTop: '2px' }}>🔴 جارية الآن</div>
+                          <div className="dzd-live-badge"><Radio size={9} /> جارية الآن</div>
                         )}
                       </div>
                     ))}
@@ -1049,7 +1060,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         {activeSection === 'dollar' && (
           <div className="dzd-dollar-panel">
             <div className="dzd-dollar-header">
-              <span className="dzd-dollar-title">💵 سوق الصرف — الدينار الجزائري</span>
+              <span className="dzd-dollar-title"><DollarSign size={15} /> سوق الصرف — الدينار الجزائري</span>
               <button className="dzd-retry-btn" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={loadDollar} disabled={dollarLoading}>
                 <RefreshCw size={10} className={dollarLoading ? 'dzd-spin' : ''} />
                 {dollarLoading ? 'جاري...' : 'تحديث'}
@@ -1100,7 +1111,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
             )}
 
             <div className="dzd-dollar-info">
-              <div className="dzd-dollar-info-title">📈 أسئلة شائعة</div>
+              <div className="dzd-dollar-info-title"><TrendingUp size={13} /> أسئلة شائعة</div>
               <div className="dzd-dollar-qa-list">
                 {[
                   'كم سعر الدولار الأسود اليوم؟',

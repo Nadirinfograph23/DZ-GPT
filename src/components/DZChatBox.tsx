@@ -3591,6 +3591,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [twIdx,  setTwIdx]    = useState(0)
   const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
+  const [ttsLoadingId,  setTtsLoadingId]  = useState<string | null>(null)
   const [cmdHistory, setCmdHistory] = useState<string[]>([])
   const historyIdxRef = useRef<number>(-1)
   const [showAgentBar, setShowAgentBar] = useState(true)
@@ -3695,13 +3696,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const _ttsAudioRef = useRef<HTMLAudioElement | null>(null)
 
   const speakVoice = useCallback(async (msgId: string, text: string) => {
-    // Stop if already speaking this message
-    if (speakingMsgId === msgId) {
+    // Stop if already speaking or loading this message
+    if (speakingMsgId === msgId || ttsLoadingId === msgId) {
       if (_ttsAudioRef.current) {
         _ttsAudioRef.current.pause()
         _ttsAudioRef.current = null
       }
       setSpeakingMsgId(null)
+      setTtsLoadingId(null)
       return
     }
     // Stop any current playback
@@ -3709,12 +3711,24 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       _ttsAudioRef.current.pause()
       _ttsAudioRef.current = null
     }
-    setSpeakingMsgId(msgId)
+    setSpeakingMsgId(null)
+    setTtsLoadingId(msgId)  // ← show loading spinner
 
     const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
-    if (!clean) { setSpeakingMsgId(null); return }
+    if (!clean) { setTtsLoadingId(null); return }
 
     const lang = language === 'fr' ? 'fr' : language === 'en' ? 'en' : 'ar'
+
+    const _startPlay = (blob: Blob) => {
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      _ttsAudioRef.current = audio
+      setTtsLoadingId(null)    // ← hide spinner
+      setSpeakingMsgId(msgId)  // ← show playing state
+      audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+      audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+      audio.play().catch(() => setSpeakingMsgId(null))
+    }
 
     try {
       const res = await fetch('/api/tts', {
@@ -3731,30 +3745,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: clean, lang }),
         })
-        if (!retry.ok) { setSpeakingMsgId(null); return }
-        const blob = await retry.blob()
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        _ttsAudioRef.current = audio
-        audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-        audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-        audio.play().catch(() => setSpeakingMsgId(null))
+        if (!retry.ok) { setTtsLoadingId(null); return }
+        _startPlay(await retry.blob())
         return
       }
 
-      if (!res.ok) { setSpeakingMsgId(null); return }
-
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      _ttsAudioRef.current = audio
-      audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-      audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-      audio.play().catch(() => setSpeakingMsgId(null))
+      if (!res.ok) { setTtsLoadingId(null); return }
+      _startPlay(await res.blob())
     } catch {
+      setTtsLoadingId(null)
       setSpeakingMsgId(null)
     }
-  }, [speakingMsgId, language])
+  }, [speakingMsgId, ttsLoadingId, language])
 
   // ===== TYPEWRITER TICKER =====
   useEffect(() => {
@@ -7900,12 +7902,16 @@ ${rows}
                   )}
                   {msg.content && (
                     <button
-                      className={`dz-action-btn dz-action-btn--voice${speakingMsgId === msg.id ? ' dz-action-btn--speaking' : ''}`}
+                      className={`dz-action-btn dz-action-btn--voice${ttsLoadingId === msg.id ? ' dz-action-btn--tts-loading' : speakingMsgId === msg.id ? ' dz-action-btn--speaking' : ''}`}
                       onClick={() => speakVoice(msg.id, msg.content)}
-                      title={speakingMsgId === msg.id ? 'إيقاف الصوت' : 'استماع'}
+                      title={ttsLoadingId === msg.id ? 'جارٍ التحميل...' : speakingMsgId === msg.id ? 'إيقاف الصوت' : 'استماع'}
+                      disabled={ttsLoadingId !== null && ttsLoadingId !== msg.id}
                     >
-                      {speakingMsgId === msg.id ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                      {speakingMsgId === msg.id ? 'إيقاف' : 'استماع'}
+                      {ttsLoadingId === msg.id
+                        ? <><Loader2 size={13} className="dz-tts-spin" /> جارٍ...</>
+                        : speakingMsgId === msg.id
+                          ? <><VolumeX size={13} /> إيقاف</>
+                          : <><Volume2 size={13} /> استماع</>}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (

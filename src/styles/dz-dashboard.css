@@ -38,6 +38,10 @@
   --dzd-amber:         #fbbf24;
   --dzd-red:           #f87171;
   --dzd-line:          rgba(129,140,248,.1);
+  /* ─── Tab active state tokens ─── */
+  --dzd-tab-active-bg:   rgba(129,140,248,.17);
+  --dzd-tab-active-text: #c7d2fe;
+  --dzd-tab-active-bar:  #818cf8;
   /* legacy compat — all point to same accent */
   --dzd-quran:    var(--dzd-accent);
   --dzd-prayer:   var(--dzd-accent);
@@ -54,64 +58,82 @@
 
 /* ─── Theme-aware accent: sync with sidebar data-theme ─── */
 .dza-layout[data-theme="teal"] .dzd-root {
-  --dzd-accent:        #10a37f;
-  --dzd-accent-2:      #0d9268;
-  --dzd-accent-dim:    rgba(16,163,127,.1);
-  --dzd-accent-border: rgba(16,163,127,.22);
-  --dzd-accent-hover:  rgba(16,163,127,.16);
-  --dzd-card-bg:       rgba(16,163,127,.055);
-  --dzd-card-border:   rgba(16,163,127,.14);
-  --dzd-line:          rgba(16,163,127,.1);
+  --dzd-accent:          #10a37f;
+  --dzd-accent-2:        #0d9268;
+  --dzd-accent-dim:      rgba(16,163,127,.1);
+  --dzd-accent-border:   rgba(16,163,127,.22);
+  --dzd-accent-hover:    rgba(16,163,127,.16);
+  --dzd-card-bg:         rgba(16,163,127,.055);
+  --dzd-card-border:     rgba(16,163,127,.14);
+  --dzd-line:            rgba(16,163,127,.1);
+  --dzd-tab-active-bg:   rgba(16,163,127,.18);
+  --dzd-tab-active-text: #6ee7d0;
+  --dzd-tab-active-bar:  #10a37f;
 }
 .dza-layout[data-theme="gray"] .dzd-root {
-  --dzd-accent:        #94a3b8;
-  --dzd-accent-2:      #64748b;
-  --dzd-accent-dim:    rgba(148,163,184,.1);
-  --dzd-accent-border: rgba(148,163,184,.22);
-  --dzd-accent-hover:  rgba(148,163,184,.16);
-  --dzd-card-bg:       rgba(148,163,184,.055);
-  --dzd-card-border:   rgba(148,163,184,.14);
-  --dzd-line:          rgba(148,163,184,.1);
+  --dzd-accent:          #94a3b8;
+  --dzd-accent-2:        #64748b;
+  --dzd-accent-dim:      rgba(148,163,184,.1);
+  --dzd-accent-border:   rgba(148,163,184,.22);
+  --dzd-accent-hover:    rgba(148,163,184,.16);
+  --dzd-card-bg:         rgba(148,163,184,.055);
+  --dzd-card-border:     rgba(148,163,184,.14);
+  --dzd-line:            rgba(148,163,184,.1);
+  --dzd-tab-active-bg:   rgba(148,163,184,.16);
+  --dzd-tab-active-text: #e2e8f0;
+  --dzd-tab-active-bar:  #94a3b8;
 }
 .dza-layout[data-theme="rose"] .dzd-root {
-  --dzd-accent:        #fb7185;
-  --dzd-accent-2:      #f43f5e;
-  --dzd-accent-dim:    rgba(251,113,133,.1);
-  --dzd-accent-border: rgba(251,113,133,.22);
-  --dzd-accent-hover:  rgba(251,113,133,.16);
-  --dzd-card-bg:       rgba(251,113,133,.055);
-  --dzd-card-border:   rgba(251,113,133,.14);
-  --dzd-line:          rgba(251,113,133,.1);
+  --dzd-accent:          #fb7185;
+  --dzd-accent-2:        #f43f5e;
+  --dzd-accent-dim:      rgba(251,113,133,.1);
+  --dzd-accent-border:   rgba(251,113,133,.22);
+  --dzd-accent-hover:    rgba(251,113,133,.16);
+  --dzd-card-bg:         rgba(251,113,133,.055);
+  --dzd-card-border:     rgba(251,113,133,.14);
+  --dzd-line:            rgba(251,113,133,.1);
+  --dzd-tab-active-bg:   rgba(251,113,133,.16);
+  --dzd-tab-active-text: #fda4af;
+  --dzd-tab-active-bar:  #fb7185;
 }
 .dza-layout[data-theme="amber"] .dzd-root {
-  --dzd-accent:        #fbbf24;
-  --dzd-accent-2:      #f59e0b;
-  --dzd-accent-dim:    rgba(251,191,36,.1);
-  --dzd-accent-border: rgba(251,191,36,.22);
-  --dzd-accent-hover:  rgba(251,191,36,.16);
-  --dzd-card-bg:       rgba(251,191,36,.055);
-  --dzd-card-border:   rgba(251,191,36,.14);
-  --dzd-line:          rgba(251,191,36,.1);
+  --dzd-accent:          #fbbf24;
+  --dzd-accent-2:        #f59e0b;
+  --dzd-accent-dim:      rgba(251,191,36,.1);
+  --dzd-accent-border:   rgba(251,191,36,.22);
+  --dzd-accent-hover:    rgba(251,191,36,.16);
+  --dzd-card-bg:         rgba(251,191,36,.055);
+  --dzd-card-border:     rgba(251,191,36,.14);
+  --dzd-line:            rgba(251,191,36,.1);
+  --dzd-tab-active-bg:   rgba(251,191,36,.15);
+  --dzd-tab-active-text: #fde68a;
+  --dzd-tab-active-bar:  #fbbf24;
 }
 .dza-layout[data-theme="sky"] .dzd-root {
-  --dzd-accent:        #38bdf8;
-  --dzd-accent-2:      #0ea5e9;
-  --dzd-accent-dim:    rgba(56,189,248,.1);
-  --dzd-accent-border: rgba(56,189,248,.22);
-  --dzd-accent-hover:  rgba(56,189,248,.16);
-  --dzd-card-bg:       rgba(56,189,248,.055);
-  --dzd-card-border:   rgba(56,189,248,.14);
-  --dzd-line:          rgba(56,189,248,.1);
+  --dzd-accent:          #38bdf8;
+  --dzd-accent-2:        #0ea5e9;
+  --dzd-accent-dim:      rgba(56,189,248,.1);
+  --dzd-accent-border:   rgba(56,189,248,.22);
+  --dzd-accent-hover:    rgba(56,189,248,.16);
+  --dzd-card-bg:         rgba(56,189,248,.055);
+  --dzd-card-border:     rgba(56,189,248,.14);
+  --dzd-line:            rgba(56,189,248,.1);
+  --dzd-tab-active-bg:   rgba(56,189,248,.16);
+  --dzd-tab-active-text: #bae6fd;
+  --dzd-tab-active-bar:  #38bdf8;
 }
 .dza-layout[data-theme="indigo"] .dzd-root {
-  --dzd-accent:        #818cf8;
-  --dzd-accent-2:      #6366f1;
-  --dzd-accent-dim:    rgba(129,140,248,.1);
-  --dzd-accent-border: rgba(129,140,248,.22);
-  --dzd-accent-hover:  rgba(129,140,248,.16);
-  --dzd-card-bg:       rgba(129,140,248,.055);
-  --dzd-card-border:   rgba(129,140,248,.14);
-  --dzd-line:          rgba(129,140,248,.1);
+  --dzd-accent:          #818cf8;
+  --dzd-accent-2:        #6366f1;
+  --dzd-accent-dim:      rgba(129,140,248,.1);
+  --dzd-accent-border:   rgba(129,140,248,.22);
+  --dzd-accent-hover:    rgba(129,140,248,.16);
+  --dzd-card-bg:         rgba(129,140,248,.055);
+  --dzd-card-border:     rgba(129,140,248,.14);
+  --dzd-line:            rgba(129,140,248,.1);
+  --dzd-tab-active-bg:   rgba(129,140,248,.17);
+  --dzd-tab-active-text: #c7d2fe;
+  --dzd-tab-active-bar:  #818cf8;
 }
 
 /* ===== ROOT ===== */
@@ -170,15 +192,31 @@
 }
 .dzd-tab:hover { color: var(--dzd-text-2); background: var(--dzd-accent-dim); }
 
-/* ─── Active tab ─── */
+/* ─── Active tab — dark tinted bg + theme text ─── */
 .dzd-tab--active {
-  color: var(--dzd-accent);
-  border-bottom-color: var(--dzd-accent);
+  color:              var(--dzd-tab-active-text, var(--dzd-accent));
+  background:         var(--dzd-tab-active-bg,   var(--dzd-accent-dim));
+  border-bottom-color:var(--dzd-tab-active-bar,  var(--dzd-accent));
+  border-radius: 6px 6px 0 0;
 }
-/* All data-tab active → same accent */
-.dzd-tab[data-tab].dzd-tab--active { color: var(--dzd-accent); border-bottom-color: var(--dzd-accent); }
-.dzd-tab[data-tab="dollar"].dzd-tab--active  { color: var(--dzd-amber); border-bottom-color: var(--dzd-amber); }
-.dzd-tab[data-tab="quran"].dzd-tab--active   { color: #c8a96e; border-bottom-color: #c8a96e; }
+/* All data-tab active → same theme tab */
+.dzd-tab[data-tab].dzd-tab--active {
+  color:               var(--dzd-tab-active-text, var(--dzd-accent));
+  background:          var(--dzd-tab-active-bg,   var(--dzd-accent-dim));
+  border-bottom-color: var(--dzd-tab-active-bar,  var(--dzd-accent));
+}
+/* Dollar tab — keep amber */
+.dzd-tab[data-tab="dollar"].dzd-tab--active {
+  color:               #fde68a;
+  background:          rgba(251,191,36,.15);
+  border-bottom-color: var(--dzd-amber);
+}
+/* Quran tab — keep gold */
+.dzd-tab[data-tab="quran"].dzd-tab--active {
+  color:               #e8d5a3;
+  background:          rgba(200,169,110,.13);
+  border-bottom-color: #c8a96e;
+}
 
 .dzd-tab-icon  { display: flex; align-items: center; opacity: .8; }
 .dzd-tab-label { font-size: 10.5px; }

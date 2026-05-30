@@ -212,7 +212,7 @@ function persistRating(msgId: string, vote: RatingVote): RatingsStore {
   } else {
     store[msgId] = vote
   }
-  localStorage.setItem(RATINGS_KEY, JSON.stringify(store))
+  try { localStorage.setItem(RATINGS_KEY, JSON.stringify(store)) } catch {}
   return store
 }
 

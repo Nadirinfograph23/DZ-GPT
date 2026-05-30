@@ -7501,15 +7501,42 @@ const SPORTS_FEEDS_DASHBOARD = [
 ]
 
 // ===== TECH INTELLIGENCE MODULE — RSS FEEDS =====
+// المصادر العربية المتخصصة في التقنية، الذكاء الاصطناعي، والرقمنة
 const TECH_FEEDS_DASHBOARD = [
-  { name: 'تقنية تايمز', url: 'https://taqniatimes.com/rss-feeds/feed/category/latest-news' },
+  // ── مصادر عربية متخصصة في التقنية ──────────────────────────────────────
+  { name: 'تك عربي',            url: 'https://techarabi.com/feed/' },
+  { name: 'عالم التقنية',        url: 'https://www.3arb-tech.com/feed/' },
+  { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
+  { name: 'Wamda ريادة الأعمال', url: 'https://wamda.com/feed/' },
+  // ── Google News عربي — ذكاء اصطناعي وتكنولوجيا ──────────────────────────
+  { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+AI+2025&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تحول رقمي',     url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 const TECH_CATEGORY_KEYWORDS = {
-  'AI 🤖': ['ai', 'artificial intelligence', 'machine learning', 'gpt', 'llm', 'neural', 'model', 'openai', 'gemini', 'claude', 'deepseek', 'llama'],
-  'Cybersecurity 🔐': ['security', 'hack', 'breach', 'vulnerability', 'cyber', 'malware', 'ransomware', 'phishing', 'exploit', 'cve'],
-  'Startups 🚀': ['startup', 'raise', 'funding', 'series a', 'series b', 'venture', 'vc', 'valuation', 'acquisition', 'ipo'],
-  'Big Tech 🏢': ['google', 'apple', 'microsoft', 'meta', 'amazon', 'nvidia', 'tesla', 'samsung', 'intel', 'qualcomm'],
+  'ذكاء اصطناعي 🤖': [
+    'ai', 'artificial intelligence', 'machine learning', 'gpt', 'llm', 'neural', 'model',
+    'openai', 'gemini', 'claude', 'deepseek', 'llama', 'copilot', 'chatgpt', 'mistral',
+    'ذكاء اصطناعي', 'تعلم الآلة', 'نموذج لغوي', 'روبوت ذكي', 'تعلم عميق',
+  ],
+  'أمن المعلومات 🔐': [
+    'security', 'hack', 'breach', 'vulnerability', 'cyber', 'malware', 'ransomware',
+    'phishing', 'exploit', 'cve', 'اختراق', 'أمن سيبراني', 'ثغرة', 'فيروس',
+  ],
+  'ريادة الأعمال 🚀': [
+    'startup', 'raise', 'funding', 'series a', 'venture', 'vc', 'acquisition', 'ipo',
+    'شركة ناشئة', 'تمويل', 'استثمار', 'ريادة', 'مشروع تقني',
+  ],
+  'شركات التقنية الكبرى 🏢': [
+    'google', 'apple', 'microsoft', 'meta', 'amazon', 'nvidia', 'tesla', 'samsung',
+    'intel', 'qualcomm', 'huawei', 'xiaomi', 'جوجل', 'أبل', 'مايكروسوفت',
+  ],
+  'تحول رقمي 💡': [
+    'digital', 'blockchain', 'cloud', 'metaverse', 'iot', 'web3', 'fintech',
+    'رقمنة', 'تحول رقمي', 'سحابة', 'بلوكتشين', 'الجيل الخامس', '5g',
+  ],
 }
 
 function classifyTechArticle(title = '', desc = '') {
@@ -7534,8 +7561,8 @@ function computeTrendingScore(item, allItems) {
     else if (ageH < 24) score += 20
     else if (ageH < 72) score += 10
   }
-  const credibleSources = ['techcrunch', 'verge', 'wired', 'arstechnica']
-  if (credibleSources.some(s => (item.feedName || '').toLowerCase().includes(s) || (item.source || '').toLowerCase().includes(s))) {
+  const credibleSources = ['تك عربي', 'techarabi', 'menabytes', 'wamda', 'عالم التقنية', '3arb-tech', 'ذكاء اصطناعي', 'تكنولوجيا', 'techcrunch', 'verge', 'wired', 'arstechnica']
+  if (credibleSources.some(s => (item.feedName || '').toLowerCase().includes(s.toLowerCase()) || (item.source || '').toLowerCase().includes(s.toLowerCase()))) {
     score += 15
   }
   return Math.min(score, 100)

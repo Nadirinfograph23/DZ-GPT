@@ -23,7 +23,7 @@ function playAlertTone(type: 'breaking' | 'currency') {
     if (type === 'breaking') {
       const freqs = [880, 660, 880]
       let t = ctx.currentTime + 0.05
-      freqs.forEach((f, i) => {
+      freqs.forEach((f) => {
         const o = ctx.createOscillator(); const g = ctx.createGain()
         o.connect(g); g.connect(ctx.destination)
         o.type = 'square'; o.frequency.value = f

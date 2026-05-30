@@ -5005,6 +5005,16 @@
 .dz-wp-btn--zip:hover:not(:disabled) { opacity: 0.88; background: linear-gradient(135deg, #0e7490, #155e75); }
 .dz-wp-btn--zip:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* ── WebsitePreview — save button ───────────────────────────────────── */
+.dz-wp-btn--save {
+  background: linear-gradient(135deg, #10a37f, #059669);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+.dz-wp-btn--save:hover:not(:disabled) { opacity: 0.88; background: linear-gradient(135deg, #059669, #047857); }
+.dz-wp-btn--save:disabled { opacity: 0.55; cursor: not-allowed; }
+
 /* ── WebsitePreview — success state (shared) ─────────────────────────── */
 .dz-wp-btn--ok {
   background: linear-gradient(135deg, #16a34a, #15803d) !important;

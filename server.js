@@ -3370,6 +3370,13 @@ function detectWebsiteBuilderQuery(msg) {
   const _hasExplicitBuildWithWeb = /(?:ابني|اصنع|أنشئ|انشئ|صمم|اعمل|أعمل|دير|create|build|make|design)\s+(?:موقع|صفحة|تطبيق|site|page|app|html)/i.test(msg)
   if (_hasVideoIntent && !_hasExplicitBuildWithWeb) return false
 
+  // ── GUARD: "كود HTML/CSS/JS" — طلب مقتطف كود وليس إنشاء موقع كامل ──
+  // "أنشئ كود html" / "اكتب كود html" / "html code" → PROGRAMMING_REQUEST لا website builder
+  // يُفعَّل فقط إذا لم يكن هناك سياق موقع صريح (موقع شركة / لاندينج باج / ...)
+  const _isCodeSnippetReq = /(?:(?:أنش[أئ]|انش[أئ]|اكتب|اعمل|أعمل|دير|اصنع)\s+كود\s+(?:html|css|javascript|js|php)|كود\s+(?:html|css|javascript|js)\b|(?:html|css|javascript|js)\s+(?:code|snippet|كود)\b|write\s+html\b|write\s+css\b|create\s+html\s+code|html\s+snippet)/i.test(msg)
+  const _hasSiteContext = /(?:موقع\s*(?:شركة|متجر|فندق|مطعم|عيادة|نادي|جمعية|احترافي|كامل|ويب|إلكتروني)|صفحة\s*هبوط|لاندينج\s*(?:باج|page)|landing\s*page|portfolio\s*(?:site|website|موقع)|بورتفوليو\s*موقع|full\s*(?:website|site))/i.test(msg)
+  if (_isCodeSnippetReq && !_hasSiteContext) return false
+
   // ── GUARD: Simple search / question queries — NOT website build ──
   // "ابحث عن X" / "ما هو X" / "من هو X" → search/info request, not build
   if (/^(?:ابحث|ابحثلي|جيبلي|عطيني|اخبرني|ما هو|ما هي|من هو|من هي|متى|أين|كم|شكون|وش|علاش)\s/i.test(msg.trim())) return false
@@ -3408,7 +3415,7 @@ function detectWebsiteBuilderQuery(msg) {
     'site restaurant', 'site hôtel', 'site hotel', 'site boutique', 'site école',
     'لوحة تحكم', 'لوحة إدارة', 'صفحة متجر',
     'اصنع لي موقع', 'ابني لي موقع', 'عمل موقع', 'نريد موقع',
-    'موقع HTML', 'موقع html', 'كود موقع', 'كود HTML', 'كود html',
+    'موقع HTML', 'موقع html', 'كود موقع',
     'صفحة ويب', 'اعمل صفحة', 'صمم لي موقع', 'طورلي موقع',
     'انشئ لي موقع', 'أنشئ لي موقع', 'إنشأ لي موقع', 'أنشئلي موقع', 'انشئلي موقع',
     // Darija (Algerian)

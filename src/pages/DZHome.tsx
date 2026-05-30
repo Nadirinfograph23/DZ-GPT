@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, X, MessageSquare } from 'lucide-react'
 import PwaInstallBanner from '../PwaInstallBanner'
+import DZOnboarding from '../components/DZOnboarding'
 import '../styles/dz-home.css'
 
 const FB_URL  = 'https://www.facebook.com/nadir.infograph23'
@@ -355,9 +356,10 @@ export default function DZHome() {
         <p className="dz-home-copy">تطوير : نذير حوامرية 2026 🇩🇿</p>
       </footer>
 
-      {/* ===== PWA + PRIVACY TOAST ===== */}
+      {/* ===== PWA + PRIVACY TOAST + ONBOARDING ===== */}
       <PwaInstallBanner />
       <PrivacyToast />
+      <DZOnboarding />
 
       {/* Robot is now managed globally via GlobalRobot in main.tsx */}
     </div>

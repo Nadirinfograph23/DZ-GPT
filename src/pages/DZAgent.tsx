@@ -208,12 +208,18 @@ export default function DZAgent() {
               <span className="dz-agent-tagline">BY NADIR HOUAMRIA</span>
             </div>
           </div>
-          {activeRepo && (
-            <div className="dz-agent-repo-pill" title={activeRepo}>
-              <span className="dz-agent-repo-dot">●</span>
-              <span className="dz-agent-repo-name">{activeRepo.split('/')[1] || activeRepo}</span>
-            </div>
-          )}
+          {activeRepo && (() => {
+            const shortName = activeRepo.split('/')[1] || activeRepo
+            const needsScroll = shortName.length > 13
+            return (
+              <div className="dz-agent-repo-pill" title={activeRepo}>
+                <span className="dz-agent-repo-dot">●</span>
+                <span className={`dz-agent-repo-name${needsScroll ? ' dz-agent-repo-name--scroll' : ''}`}>
+                  {shortName}
+                </span>
+              </div>
+            )
+          })()}
           <div className="dz-agent-badge">AI</div>
         </header>
 

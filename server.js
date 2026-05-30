@@ -14607,7 +14607,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   if (githubUrlMatch && !githubToken) {
     return res.status(200).json({
-      content: '⚠️ تم اكتشاف رابط GitHub. يرجى ربط GitHub Token أولاً بالضغط على زر GitHub في أعلى المحادثة.',
+      content: '😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub',
     })
   }
 
@@ -15695,7 +15695,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         `📦 المستودع الحالي: ${currentRepo ? `✅ ${currentRepo}` : '⚠️ لم يُحدد — اطلب "اعرض مستودعاتي"'}`,
         `🤖 الوضع: ${currentRepo ? 'AGENT MODE — تنفيذ مباشر داخل ' + currentRepo : 'STANDBY — بانتظار اختيار مستودع'}`,
         currentRepo ? `📋 الأوامر المتاحة: أنشئ ملف | عدّل | أنشئ فرع | commit | انشر | حلّل المشروع | أصلح خطأ` : '',
-      ].filter(Boolean).join('\n') : `💻 CODE: GitHub غير متصل. للعمل داخل مستودع، اطلب "ربط GitHub" أو أرسل رابط المستودع.`,
+      ].filter(Boolean).join('\n') : `😎 لتحت اختار **وكيل** وسجّل الدخول إلى GitHub`,
     ].filter(Boolean).join('\n') : '',
 
     // ── ALGERIAN ADMIN (admin / howto queries only) ───────────────────────

@@ -1093,6 +1093,12 @@
   cursor: pointer;
   transition: transform .12s ease, opacity .15s ease;
   font-family: inherit;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 6px;
 }
 .dzd-doctor-modal-btn:active { transform: scale(.97); }
 .dzd-doctor-modal-btn--primary {

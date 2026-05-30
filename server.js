@@ -1756,8 +1756,13 @@ function detectToolRedirect(msg) {
   if (/ابحث\s*(?:على|عن)\s*كتاب|books?\s*search/i.test(msg)) return null
   // Weather / news — handled natively
   if (/(?:كيف|ما)\s*(?:الطقس|الجو)|طقس\s*(?:اليوم|غداً)|أخبار\s*(?:اليوم|الجزائر)|weather\s*today|news\s*today/i.test(msg)) return null
-  // Code help — handled natively
+  // Code help — handled natively (ALL code/algorithm/programming requests)
   if (/(?:اشرح|افهمني|ساعدني\s*في)\s*(?:الكود|البرمجة)|خطأ\s*(?:في|ب)\s*(?:الكود|البرنامج)|debug\b|javascript|python|react\b/i.test(msg)) return null
+  if (/(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|اصنع|برمج|نفذ|شغل|اكتبلي|اكتب\s*لي)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)/i.test(msg)) return null
+  if (/(?:كيف\s*أكتب|كيف\s*أبرمج|كيف\s*أنشئ|كيف\s*أعمل)\s*(?:برنامج|كود|سكريبت|دالة)/i.test(msg)) return null
+  if (/(?:متتالية|خوارزمية|algorithm|fibonacci|فيبوناتشي|مرتّب|ترتيب|sort|search|بحث\s*ثنائي|binary\s*search|recursion|تعاود)/i.test(msg)) return null
+  if (/\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php|ruby|swift|kotlin|sql|bash|shell)\b.*(?:كود|برنامج|احسب|اكتب|دالة|function|script)/i.test(msg)) return null
+  if (/(?:كود|برنامج|script|function)\b.*\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php)/i.test(msg)) return null
   // Maps / directions — handled natively
   if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
   // Quran tafsir / meaning — handled natively (NOT audio which should redirect)
@@ -5889,7 +5894,7 @@ function detectQueryIntent(msg) {
     sports:      ['كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','منتخب','رياضة','football','soccer','sport','match','score','goal','team','league','cup','fifa','ligue'],
     economy:     ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
     politics:    ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
-    tech:        ['تقنية','تكنولوجيا','ذكاء','برمجة','تطبيق','هاكر','أمن','tech','technology','ai','software','app','cyber','security','startup','code','programming'],
+    tech:        ['تقنية','تكنولوجيا','ذكاء','اصطناعي','نموذج','نماذج','برمجة','تطبيق','هاكر','أمن','روبوت','شات','جيبيتي','كلود','جيميني','ميسترال','لاما','برمجة','tech','technology','ai','artificial intelligence','llm','chatgpt','claude','gemini','mistral','llama','openai','software','app','cyber','security','startup','code','programming','model','robot'],
     news:        ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','news','latest','today','breaking','recent','actualité'],
     celebrities: ['نجم','نجمة','فنان','فنانة','ممثل','ممثلة','مطرب','مطربة','رياضي','شخصية','مشهور','مشهورة','سيلبريتي','celebrity','celebrities','actor','actress','singer','star','famous','influencer','vedette'],
     incidents:   ['حادثة','حادث','كارثة','انفجار','زلزال','فيضان','حريق','اعتداء','هجوم','اغتيال','وفاة','مات','مقتل','accident','incident','disaster','explosion','earthquake','flood','fire','attack','death','killed','tragedy'],
@@ -5900,7 +5905,7 @@ function detectQueryIntent(msg) {
     if (kws.some(k => lower.includes(k))) detected.push(intent)
   }
 
-  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant','أخيراً','مؤخراً','recently']
+  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant','أخيراً','مؤخراً','recently','هذا الأسبوع','هذا الشهر','هذه السنة','الأسبوع الماضي','الشهر الماضي','الأسبوع','الأخيرة','الأخير','هذه الفترة','جديدة','جديد','جديداً','حديثاً','حديث']
   const isTemporal = temporalMarkers.some(m => lower.includes(m)) || /\b(20[2-9]\d)\b/.test(msg)
     || detected.includes('celebrities') || detected.includes('incidents')
 
@@ -15394,9 +15399,38 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
+    const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
+    else if (_isTechAIQuery) feedsToFetch = [...RSS_FEEDS.national]
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
+
+    // For tech/AI queries, augment with AI-specific Google News RSS
+    if (_isTechAIQuery) {
+      try {
+        const aiNewsLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
+        const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج 2026' : 'artificial intelligence AI news 2026'
+        const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=${aiNewsLang === 'ar' ? 'DZ' : 'US'}&ceid=${aiNewsLang === 'ar' ? 'DZ:ar' : 'US:en'}`
+        const aiArticles = await searchGoogleNewsRSS(aiRssUrl)
+        if (aiArticles.length > 0) {
+          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let aiCtx = `\n\n--- 🤖 أخبار الذكاء الاصطناعي والتقنية — ${date} ---\n`
+          for (const art of aiArticles.slice(0, 15)) {
+            const title = art.title || art.headline || ''
+            const url = art.link || art.url
+            const src = art.source || 'المصدر'
+            aiCtx += `• ${title}`
+            if (url) aiCtx += ` — [${src}](${url})`
+            aiCtx += '\n'
+          }
+          aiCtx += '\n---\n'
+          rssContext = rssContext ? rssContext + aiCtx : aiCtx
+          console.log(`[DZ Agent] AI News RSS: ${aiArticles.length} articles`)
+        }
+      } catch (err) {
+        console.warn('[DZ Agent] AI News RSS failed:', err.message)
+      }
+    }
 
     const feedResults = await fetchMultipleFeeds(feedsToFetch)
     if (feedResults.length > 0) {
@@ -15434,7 +15468,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
   const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial
+  const _isDirectCodeRequest = /(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|برمج|نفذ)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)|(?:متتالية|خوارزمية|fibonacci|فيبوناتشي|مرتّب|sort|recursion|تعاود)/i.test(lastUserMessage)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest
 
   if (!skipSearch) {
     try {
@@ -19834,6 +19869,54 @@ app.get('/api/dz-tube/related', async (req, res) => {
   }
 
   return res.json({ results: [], source: 'none' })
+})
+
+// ── TTS Endpoint — Arabic/French/English male voice via HF MMS ───────────────
+app.post('/api/tts', async (req, res) => {
+  const { text, lang = 'ar' } = req.body || {}
+  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required' })
+
+  const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
+  if (!clean) return res.status(400).json({ error: 'empty text' })
+
+  const HF = process.env.HF_TOKEN
+  if (!HF) return res.status(503).json({ error: 'HF_TOKEN not set' })
+
+  // Model selection based on language
+  const modelMap = {
+    ar: 'facebook/mms-tts-ara',
+    fr: 'facebook/mms-tts-fra',
+    en: 'facebook/mms-tts-eng',
+  }
+  const model = modelMap[lang] || modelMap.ar
+
+  try {
+    const hfRes = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HF}`,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/wav',
+      },
+      body: JSON.stringify({ inputs: clean }),
+    })
+
+    if (!hfRes.ok) {
+      const err = await hfRes.text()
+      // Model loading (503) — return a clear signal to client to retry
+      if (hfRes.status === 503) return res.status(503).json({ error: 'model_loading', retry: true })
+      throw new Error(`HF API ${hfRes.status}: ${err.slice(0, 200)}`)
+    }
+
+    const buf = Buffer.from(await hfRes.arrayBuffer())
+    res.setHeader('Content-Type', 'audio/wav')
+    res.setHeader('Content-Length', buf.length)
+    res.setHeader('Cache-Control', 'no-store')
+    return res.send(buf)
+  } catch (err) {
+    console.error('[TTS] HF API error:', err.message)
+    return res.status(500).json({ error: err.message })
+  }
 })
 
 // Get direct audio stream URL (for background playback via HTML5 audio)

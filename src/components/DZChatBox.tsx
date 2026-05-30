@@ -11,7 +11,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, VolumeX,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -3548,6 +3548,7 @@ interface DZChatBoxProps {
   chatId?: string | null
   language?: 'ar' | 'en' | 'fr'
   onTitleChange?: (title: string) => void
+  onAgentModeChange?: (state: AgentModeState) => void
 }
 
 type DashboardContext = { priority: 'weather'; city: string }
@@ -3645,6 +3646,13 @@ function FindDialog({ repo, onSearch, onClose }: { repo: string; onSearch: (patt
   )
 }
 
+const QUICK_ACTIONS = [
+  { icon: '💻', label: 'اكتب كود',    cmd: 'اكتب لي كود Python يحسب متتالية فيبوناتشي' },
+  { icon: '🌤️', label: 'الطقس الآن', cmd: 'ما طقس الجزائر العاصمة الآن؟' },
+  { icon: '📰', label: 'آخر الأخبار', cmd: 'أخبرني بآخر أخبار الجزائر اليوم' },
+  { icon: '🌐', label: 'أنشئ موقعاً', cmd: 'أنشئ لي صفحة ويب احترافية باللغة العربية' },
+]
+
 const TICKER_ITEMS = [
   '🏥 يمكنك البحث عن طبيب أو صيدلية قريبة منك',
   '🕌 يمكنك معرفة المسجد الأقرب إليك وأوقات الصلاة',
@@ -3678,7 +3686,7 @@ const TICKER_ITEMS = [
   '💡 يمكنك الحصول على أفكار إبداعية لمشاريعك',
 ]
 
-export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZChatBoxProps) {
+export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
     if (!chatId) return []
@@ -3706,6 +3714,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
   const [twText, setTwText]   = useState('')
   const [twIdx,  setTwIdx]    = useState(0)
   const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
+  const [cmdHistory, setCmdHistory] = useState<string[]>([])
+  const historyIdxRef = useRef<number>(-1)
   const [showAgentBar, setShowAgentBar] = useState(true)
   const [agentHintGlow, setAgentHintGlow] = useState(false)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
@@ -3800,6 +3811,28 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange }: DZ
       saveToken(agentMode.githubToken)
     }
   }, [agentMode.githubToken])
+
+  // ===== NOTIFY PARENT OF AGENT MODE CHANGES =====
+  useEffect(() => { onAgentModeChange?.(agentMode) }, [agentMode, onAgentModeChange])
+
+  // ===== VOICE PLAYBACK (Web Speech API) =====
+  const speakVoice = useCallback((msgId: string, text: string) => {
+    if (!window.speechSynthesis) return
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel()
+      setSpeakingMsgId(null)
+      return
+    }
+    window.speechSynthesis.cancel()
+    const clean = text.replace(/[#*`_~\[\]>]/g, '').slice(0, 600)
+    const utter = new SpeechSynthesisUtterance(clean)
+    utter.lang = language === 'fr' ? 'fr-FR' : language === 'en' ? 'en-US' : 'ar-SA'
+    utter.rate = 1.05
+    utter.onend  = () => setSpeakingMsgId(null)
+    utter.onerror = () => setSpeakingMsgId(null)
+    setSpeakingMsgId(msgId)
+    window.speechSynthesis.speak(utter)
+  }, [speakingMsgId, language])
 
   // ===== TYPEWRITER TICKER =====
   useEffect(() => {
@@ -6999,7 +7032,27 @@ ${rows}
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
+      if (input.trim()) {
+        setCmdHistory(prev => [input.trim(), ...prev.slice(0, 49)])
+        historyIdxRef.current = -1
+      }
       sendMessage()
+      return
+    }
+    if (e.key === 'ArrowUp' && !input.trim()) {
+      e.preventDefault()
+      if (cmdHistory.length === 0) return
+      const newIdx = Math.min(historyIdxRef.current + 1, cmdHistory.length - 1)
+      historyIdxRef.current = newIdx
+      setInput(cmdHistory[newIdx])
+      return
+    }
+    if (e.key === 'ArrowDown' && historyIdxRef.current >= 0) {
+      e.preventDefault()
+      if (historyIdxRef.current <= 0) { historyIdxRef.current = -1; setInput(''); return }
+      const newIdx = historyIdxRef.current - 1
+      historyIdxRef.current = newIdx
+      setInput(cmdHistory[newIdx])
     }
   }
 
@@ -7145,6 +7198,15 @@ ${rows}
               )}
             </div>
           )}
+
+          <div className="dz-quick-actions">
+            {QUICK_ACTIONS.map((a, i) => (
+              <button key={i} className="dz-qa-btn" onClick={() => sendMessage(a.cmd)}>
+                <span className="dz-qa-icon">{a.icon}</span>
+                <span>{a.label}</span>
+              </button>
+            ))}
+          </div>
 
           <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
         </div>
@@ -7789,6 +7851,16 @@ ${rows}
                       {copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
                     </button>
                   )}
+                  {msg.content && (
+                    <button
+                      className={`dz-action-btn dz-action-btn--voice${speakingMsgId === msg.id ? ' dz-action-btn--speaking' : ''}`}
+                      onClick={() => speakVoice(msg.id, msg.content)}
+                      title={speakingMsgId === msg.id ? 'إيقاف الصوت' : 'استماع'}
+                    >
+                      {speakingMsgId === msg.id ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                      {speakingMsgId === msg.id ? 'إيقاف' : 'استماع'}
+                    </button>
+                  )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (
                     <button className="dz-action-btn" onClick={regenerate}>
                       <RotateCcw size={13} />
@@ -7938,15 +8010,35 @@ ${rows}
           </div>
         )}
 
+        {/* ===== RUNNING TASKS PANEL ===== */}
+        {agentMode.active && actionLog.length > 0 && (
+          <div className="dz-tasks-panel">
+            <span className="dz-tasks-label">📋 المهام</span>
+            <div className="dz-tasks-list">
+              {[...actionLog].reverse().slice(0, 3).map((entry, i) => (
+                <div key={i} className={`dz-task-item dz-task-item--${entry.status}`}>
+                  <span className="dz-task-dot" />
+                  <span className="dz-task-desc">{entry.description}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ===== AGENT CONFIRMATION DIALOG ===== */}
         {pendingAgentCmd && (
-          <div className="amb-confirm-wrap">
+          <div className={`amb-confirm-wrap${pendingAgentCmd.cmd === '/delete' || pendingAgentCmd.cmd === '/rm' ? ' amb-confirm-wrap--danger' : ''}`}>
             <div className="amb-confirm-title">
-              <span>⚠️</span> تأكيد الإجراء
+              <span>{pendingAgentCmd.cmd === '/delete' || pendingAgentCmd.cmd === '/rm' ? '🗑️' : pendingAgentCmd.cmd === '/edit' ? '✏️' : '⚠️'}</span>
+              {pendingAgentCmd.cmd === '/delete' || pendingAgentCmd.cmd === '/rm' ? 'تحذير: حذف دائم' : 'تأكيد الإجراء'}
             </div>
+            <div className="amb-confirm-cmd-badge">{pendingAgentCmd.cmd}</div>
             <div className="amb-confirm-detail">
               {pendingAgentCmd.label}
             </div>
+            {(pendingAgentCmd.cmd === '/delete' || pendingAgentCmd.cmd === '/rm') && (
+              <div className="amb-confirm-danger-note">⚠️ هذا الإجراء لا يمكن التراجع عنه</div>
+            )}
             <div className="amb-confirm-btns">
               <button
                 className="amb-confirm-yes"

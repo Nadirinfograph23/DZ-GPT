@@ -244,7 +244,9 @@ function extractCodeBlock(text: string): { code: string; lang: string } | null {
   const m = text.match(/```(python|py|javascript|js|typescript|ts)\s*\n([\s\S]*?)```/i)
   if (!m) return null
   const rawLang = m[1].toLowerCase()
-  const lang = (rawLang === 'py' || rawLang === 'python') ? 'python' : 'javascript'
+  const lang = (rawLang === 'py' || rawLang === 'python') ? 'python'
+             : (rawLang === 'typescript' || rawLang === 'ts') ? 'typescript'
+             : 'javascript'
   const code = m[2].trim()
   if (!code || code.length < 5) return null
   return { code, lang }
@@ -1557,6 +1559,37 @@ main();
       if (iframeRef.current) {
         iframeRef.current.srcdoc = pyHtml
       }
+    } else if (lang === 'typescript') {
+      // TypeScript execution via Babel Standalone (transpile TS → JS in iframe)
+      const tsHtml = `<!DOCTYPE html><html><head>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"><\/script>
+</head><body>
+<pre id="out" style="font-family:monospace;font-size:14px;color:#e0e0e0;background:#1a1a2e;padding:16px;margin:0;min-height:200px;white-space:pre-wrap;"></pre>
+<script>
+const out = document.getElementById('out');
+const logs = [];
+console.log  = (...args) => { const t = args.map(a => typeof a === 'object' ? JSON.stringify(a,null,2) : String(a)).join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.error = (...args) => { const t = '❌ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+console.warn  = (...args) => { const t = '⚠️ ' + args.join(' '); logs.push(t); out.textContent += t + '\\n'; };
+try {
+  out.textContent = '⏳ جاري ترجمة TypeScript...\\n';
+  const compiled = Babel.transform(${JSON.stringify(code)}, {
+    presets: [['typescript', { allExtensions: true }]],
+    filename: 'code.ts'
+  }).code;
+  out.textContent = '▶ جاري التنفيذ...\\n\\n';
+  eval(compiled);
+  if (logs.length === 0) out.textContent += '\\n✅ تم التنفيذ بنجاح (بدون مخرجات)';
+  else out.textContent += '\\n✅ انتهى التنفيذ';
+  window.parent.postMessage({ type: 'exec-done', logs }, '*');
+} catch (e) {
+  out.textContent += '\\n❌ خطأ: ' + e.message;
+  window.parent.postMessage({ type: 'exec-error', error: e.message }, '*');
+}
+<\/script></body></html>`
+      if (iframeRef.current) {
+        iframeRef.current.srcdoc = tsHtml
+      }
     } else {
       // JavaScript execution via sandboxed iframe
       const jsHtml = `<!DOCTYPE html><html><head></head><body>
@@ -1620,14 +1653,13 @@ try {
   }
 
   const getSmartFilename = useCallback(() => {
-    const ext = lang === 'python' ? 'py' : 'js'
+    const ext = lang === 'python' ? 'py' : lang === 'typescript' ? 'ts' : 'js'
     // Try to extract a meaningful name from function/class/variable definitions
     const fnMatch = code.match(/^(?:def|async def)\s+(\w+)/m)
     const classMatch = code.match(/^class\s+(\w+)/m)
     const varMatch = code.match(/^(?:const|let|var|function)\s+(\w+)/m)
     const name = fnMatch?.[1] || classMatch?.[1] || varMatch?.[1]
     if (name && name.length > 1 && name.length < 30) {
-      // Convert camelCase/PascalCase to snake_case for Python
       const safe = lang === 'python'
         ? name.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '')
         : name
@@ -1650,8 +1682,8 @@ try {
     setTimeout(() => setDownloaded(false), 2500)
   }
 
-  const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
-  const fileExt   = lang === 'python' ? '.py' : '.js'
+  const langLabel = lang === 'python' ? '🐍 Python' : lang === 'typescript' ? '🔷 TypeScript' : '⚡ JavaScript'
+  const fileExt   = lang === 'python' ? '.py' : lang === 'typescript' ? '.ts' : '.js'
 
   return (
     <div className="dz-exec-root">

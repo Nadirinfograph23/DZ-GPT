@@ -6163,9 +6163,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
+      // ── Code-request guard — prevent book/other handlers hijacking code requests ──
+      const CODE_REQUEST_RE = /(?:اكتب|اكتبي|اشرح|ابني|انشئ|أنشئ|اعمل|اصنع|جيبلي|هاتلي|ولد|أعطني|اعطني|write|create|make|generate|show|give)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|فانكشن|كلاس|خوارزمية|كلاس|code|script|function|class|algorithm|program)|(?:python|javascript|js|typescript|ts|بايثون|جافاسكريبت)\s*(?:code|كود|برنامج|سكريبت|دالة)?|(?:كود|برنامج|سكريبت)\s*(?:python|javascript|js|typescript|بايثون|جافا)|```(?:python|javascript|js|ts)/i
+      const isCodeRequest = CODE_REQUEST_RE.test(text)
+
       // ── Open Library Book Search (free — openlibrary.org) ─────────────────────
-      const BOOK_RE = /(?:ابحث|أعطني|اعطني|جيبلي|هات|اقترح|اقتراح|بحث)\s*(?:عن\s*)?(?:كتب|كتاب|روايات|رواية|مؤلفات)|(?:كتب|كتاب|روايات)\s*(?:عن|ل|ب|في)|(?:book|books|novel|novels)\s*(?:about|by|on)|(?:find|search|show)\s*books/i
-      if (BOOK_RE.test(text)) {
+      // Fix: require "كتب" to appear as standalone word (not inside "اكتب" etc.)
+      const BOOK_RE = /(?:ابحث|أعطني|اعطني|جيبلي|هات|اقترح|اقتراح|بحث)\s*(?:عن\s*)?(?:كتب|كتاب|روايات|رواية|مؤلفات)|(?<![ا-ي])(?:كتب|كتاب|روايات)\s*(?:عن|ب|في)|(?:book|books|novel|novels)\s*(?:about|by|on)|(?:find|search|show)\s*books/i
+      if (BOOK_RE.test(text) && !isCodeRequest) {
         const loadingId = generateId()
         setMessages(prev => [...prev, {
           id: loadingId, role: 'assistant' as const, content: '📖 جاري البحث في مكتبة Open Library...', richType: 'text' as const, isStreaming: true,

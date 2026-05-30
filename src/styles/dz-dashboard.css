@@ -52,6 +52,68 @@
   --dzd-default:  var(--dzd-accent);
 }
 
+/* ─── Theme-aware accent: sync with sidebar data-theme ─── */
+.dza-layout[data-theme="teal"] .dzd-root {
+  --dzd-accent:        #10a37f;
+  --dzd-accent-2:      #0d9268;
+  --dzd-accent-dim:    rgba(16,163,127,.1);
+  --dzd-accent-border: rgba(16,163,127,.22);
+  --dzd-accent-hover:  rgba(16,163,127,.16);
+  --dzd-card-bg:       rgba(16,163,127,.055);
+  --dzd-card-border:   rgba(16,163,127,.14);
+  --dzd-line:          rgba(16,163,127,.1);
+}
+.dza-layout[data-theme="gray"] .dzd-root {
+  --dzd-accent:        #94a3b8;
+  --dzd-accent-2:      #64748b;
+  --dzd-accent-dim:    rgba(148,163,184,.1);
+  --dzd-accent-border: rgba(148,163,184,.22);
+  --dzd-accent-hover:  rgba(148,163,184,.16);
+  --dzd-card-bg:       rgba(148,163,184,.055);
+  --dzd-card-border:   rgba(148,163,184,.14);
+  --dzd-line:          rgba(148,163,184,.1);
+}
+.dza-layout[data-theme="rose"] .dzd-root {
+  --dzd-accent:        #fb7185;
+  --dzd-accent-2:      #f43f5e;
+  --dzd-accent-dim:    rgba(251,113,133,.1);
+  --dzd-accent-border: rgba(251,113,133,.22);
+  --dzd-accent-hover:  rgba(251,113,133,.16);
+  --dzd-card-bg:       rgba(251,113,133,.055);
+  --dzd-card-border:   rgba(251,113,133,.14);
+  --dzd-line:          rgba(251,113,133,.1);
+}
+.dza-layout[data-theme="amber"] .dzd-root {
+  --dzd-accent:        #fbbf24;
+  --dzd-accent-2:      #f59e0b;
+  --dzd-accent-dim:    rgba(251,191,36,.1);
+  --dzd-accent-border: rgba(251,191,36,.22);
+  --dzd-accent-hover:  rgba(251,191,36,.16);
+  --dzd-card-bg:       rgba(251,191,36,.055);
+  --dzd-card-border:   rgba(251,191,36,.14);
+  --dzd-line:          rgba(251,191,36,.1);
+}
+.dza-layout[data-theme="sky"] .dzd-root {
+  --dzd-accent:        #38bdf8;
+  --dzd-accent-2:      #0ea5e9;
+  --dzd-accent-dim:    rgba(56,189,248,.1);
+  --dzd-accent-border: rgba(56,189,248,.22);
+  --dzd-accent-hover:  rgba(56,189,248,.16);
+  --dzd-card-bg:       rgba(56,189,248,.055);
+  --dzd-card-border:   rgba(56,189,248,.14);
+  --dzd-line:          rgba(56,189,248,.1);
+}
+.dza-layout[data-theme="indigo"] .dzd-root {
+  --dzd-accent:        #818cf8;
+  --dzd-accent-2:      #6366f1;
+  --dzd-accent-dim:    rgba(129,140,248,.1);
+  --dzd-accent-border: rgba(129,140,248,.22);
+  --dzd-accent-hover:  rgba(129,140,248,.16);
+  --dzd-card-bg:       rgba(129,140,248,.055);
+  --dzd-card-border:   rgba(129,140,248,.14);
+  --dzd-line:          rgba(129,140,248,.1);
+}
+
 /* ===== ROOT ===== */
 .dzd-root {
   width: 100%;

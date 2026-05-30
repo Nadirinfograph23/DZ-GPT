@@ -1655,6 +1655,20 @@
   border-color: rgba(248, 113, 113, 0.4);
 }
 
+/* ===== VOICE BUTTON ===== */
+.dz-action-btn--voice { color: #6b7280; }
+.dz-action-btn--voice:hover { color: #10a37f; border-color: rgba(16,163,127,0.3); background: rgba(16,163,127,0.07); }
+.dz-action-btn--speaking {
+  color: #10a37f !important;
+  border-color: rgba(16,163,127,0.4) !important;
+  background: rgba(16,163,127,0.10) !important;
+  animation: dz-voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes dz-voice-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(16,163,127,0.25); }
+  50%      { box-shadow: 0 0 0 5px rgba(16,163,127,0); }
+}
+
 /* ===== LOAD MORE NEWS BUTTON ===== */
 .dz-load-more-news-btn {
   display: inline-flex;
@@ -11410,4 +11424,133 @@
 @keyframes srs-spin-anim {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ===== QUICK ACTIONS BAR (Normal Mode Welcome) ===== */
+.dz-quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 10px 0 6px;
+}
+.dz-qa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 20px;
+  color: #c4c4c4;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.dz-qa-btn:hover {
+  background: rgba(16,163,127,0.10);
+  border-color: rgba(16,163,127,0.35);
+  color: #10a37f;
+  transform: translateY(-1px);
+}
+.dz-qa-icon { font-size: 14px; line-height: 1; }
+
+/* ===== ACTIVE REPO PILL (DZAgent Header) ===== */
+.dz-agent-repo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 7px;
+  background: rgba(16,163,127,0.08);
+  border: 1px solid rgba(16,163,127,0.25);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #10a37f;
+  max-width: 140px;
+  overflow: hidden;
+  flex-shrink: 0;
+  animation: dz-repo-fadein 0.3s ease;
+}
+@keyframes dz-repo-fadein { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+.dz-agent-repo-dot {
+  font-size: 8px;
+  color: #4ade80;
+  animation: dz-repo-dot-blink 1.8s ease-in-out infinite;
+}
+@keyframes dz-repo-dot-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.dz-agent-repo-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== RUNNING TASKS PANEL (Agent Mode) ===== */
+.dz-tasks-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 7px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  animation: amb-slide 0.15s ease;
+}
+.dz-tasks-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+.dz-tasks-list { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.dz-task-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+.dz-task-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #6b7280;
+}
+.dz-task-item--success .dz-task-dot { background: #10a37f; }
+.dz-task-item--error   .dz-task-dot { background: #f87171; }
+.dz-task-item--pending .dz-task-dot { background: #fbbf24; animation: dz-task-blink 0.9s step-end infinite; }
+@keyframes dz-task-blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.dz-task-item--success { color: #6ee7b7; }
+.dz-task-item--error   { color: #fca5a5; }
+.dz-task-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+/* ===== ENHANCED CONFIRM DIALOG VARIANTS ===== */
+.amb-confirm-wrap--danger {
+  background: rgba(239,68,68,0.07) !important;
+  border-color: rgba(239,68,68,0.3) !important;
+}
+.amb-confirm-wrap--danger .amb-confirm-title { color: #f87171 !important; }
+.amb-confirm-cmd-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  font-family: 'SF Mono', monospace;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+.amb-confirm-danger-note {
+  font-size: 11px;
+  color: #f87171;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: rgba(239,68,68,0.1);
+  border-radius: 5px;
+  border: 1px solid rgba(239,68,68,0.2);
 }

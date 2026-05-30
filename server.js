@@ -6809,36 +6809,33 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 const RSS_FEEDS = {
   national: [
-    { name: 'APS وكالة الأنباء', url: 'https://www.aps.dz/ar/feed' },
-    { name: 'راديو الجزائر', url: 'https://news.radioalgerie.dz/ar/rss.xml' },
+    // ── Algerian newspapers (verified working) ──
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
     { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-    { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
-    { name: 'البلاد', url: 'https://www.elbilad.net/rss' },
-    { name: 'الفجر', url: 'https://www.al-fadjr.com/feed/' },
-    { name: 'الحياة', url: 'https://elhayatdz.dz/feed/' },
+    { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
-    { name: 'الوطن', url: 'https://www.el-watan.com/feed/' },
-    { name: 'جزاير تيوب', url: 'https://www.dzairtube.dz/feed/' },
-    { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
+    { name: 'Liberté Algérie', url: 'https://www.liberte-algerie.com/feed' },
+    // ── Pan-Arab sources (verified working) ──
     { name: 'الجزيرة عربي', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
-    { name: 'BBC عربي', url: 'http://feeds.bbci.co.uk/arabic/rss.xml' },
-    { name: 'رويترز عربي', url: 'https://feeds.reuters.com/reuters/arabicNews' },
+    { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
     { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
+    { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss.xml' },
+    { name: 'أخبار الأمم المتحدة', url: 'https://news.un.org/feed/subscribe/ar/news/all/rss.xml' },
+    // ── Google News Algeria (always fresh) ──
     { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=algerie&hl=fr&gl=DZ&ceid=DZ:fr' },
   ],
   sports: [
-    { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
-    { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
-    { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
-    { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
+    // ── Algerian & regional sports (verified working) ──
+    { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+    { name: 'سبورت 360 عربي', url: 'https://arabic.sport360.com/feed/' },
+    // ── International sports (verified working) ──
     { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
     { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
     { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-    { name: 'Sky Sports', url: 'https://feeds.skynews.com/feeds/rss/sports.xml' },
-    { name: 'CAF Football', url: 'https://www.cafonline.com/rss-feed/' },
     { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
+    // ── Google News Sports Algeria ──
+    { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=رياضة+جزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   tech: [
     { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
@@ -6866,11 +6863,11 @@ const FOOTBALL_CACHE = new Map()
 const FOOTBALL_CACHE_TTL = 5 * 60 * 1000 // 5 min for live match data
 
 const INTL_FOOTBALL_FEEDS = [
-  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
-  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
+  { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
   { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-  { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
-  { name: 'CAF Football', url: 'https://www.cafonline.com/rss-feed/' },
+  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
+  { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 async function fetchSofaScoreFootball(dateStr) {
@@ -7514,15 +7511,18 @@ const DASHBOARD_CACHE = { data: null, ts: 0 }
 const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
 
 const NEWS_FEEDS_DASHBOARD = [
-  { name: 'APS', url: 'https://www.aps.dz/ar/feed' },
+  // ── Verified working Algerian sources ──
   { name: 'الشروق', url: 'https://www.echoroukonline.com/feed' },
   { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-  { name: 'الخبر', url: 'https://www.elkhabar.com/rss' },
-  { name: 'البلاد', url: 'https://www.elbilad.net/feed/' },
-  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
-  { name: 'جزايرس', url: 'https://www.djazairess.com/rss' },
-  { name: 'الجزيرة', url: 'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9' },
+  { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
+  { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
+  { name: 'Liberté', url: 'https://www.liberte-algerie.com/feed' },
+  // ── Pan-Arab verified sources ──
+  { name: 'الجزيرة', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
   { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
+  { name: 'فرانس 24', url: 'https://www.france24.com/ar/rss' },
+  { name: 'سكاي نيوز', url: 'https://www.skynewsarabia.com/rss.xml' },
+  // ── Google News Algeria ──
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
@@ -7532,9 +7532,11 @@ const NEWS_FEEDS_DASHBOARD = [
 // sourced from lfp.dz only. Generic football news is sourced from
 // Algeria-focused / international football feeds only.
 const SPORTS_FEEDS_DASHBOARD = [
-  { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
-  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
-  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
+  { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+  { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
+  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
+  { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 
 // ===== TECH INTELLIGENCE MODULE — RSS FEEDS =====
@@ -7542,9 +7544,7 @@ const SPORTS_FEEDS_DASHBOARD = [
 const TECH_FEEDS_DASHBOARD = [
   // ── مصادر عربية متخصصة في التقنية ──────────────────────────────────────
   { name: 'تك عربي',            url: 'https://techarabi.com/feed/' },
-  { name: 'عالم التقنية',        url: 'https://www.3arb-tech.com/feed/' },
   { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
-  { name: 'Wamda ريادة الأعمال', url: 'https://wamda.com/feed/' },
   // ── Google News عربي — ذكاء اصطناعي وتكنولوجيا ──────────────────────────
   { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
@@ -23939,6 +23939,89 @@ app.post('/api/tools/presentation', express.json(), async (req, res) => {
   } catch (err) {
     res.status(503).json({ error: 'AI unavailable', message: err.message })
   }
+})
+
+// ===== WEB BUILDER PROJECT SAVE/LOAD =====
+const WB_PROJECTS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'wb-projects.json')
+
+function loadWbProjects() {
+  try { return JSON.parse(fs.readFileSync(WB_PROJECTS_FILE, 'utf8')) } catch { return [] }
+}
+function saveWbProjects(projects) {
+  fs.writeFileSync(WB_PROJECTS_FILE, JSON.stringify(projects, null, 2))
+}
+
+app.post('/api/wb/save', express.json({ limit: '2mb' }), (req, res) => {
+  try {
+    const { title, html, css, js, type, icon } = req.body
+    if (!html) return res.status(400).json({ error: 'html required' })
+    const projects = loadWbProjects()
+    const id = crypto.randomUUID()
+    const project = { id, title: title || 'مشروع بدون عنوان', html, css: css || '', js: js || '', type: type || 'landing', icon: icon || '🌐', savedAt: new Date().toISOString() }
+    projects.unshift(project)
+    const trimmed = projects.slice(0, 50)
+    saveWbProjects(trimmed)
+    res.json({ ok: true, id, savedAt: project.savedAt })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/wb/projects', (_req, res) => {
+  try {
+    const projects = loadWbProjects().map(p => ({ id: p.id, title: p.title, type: p.type, icon: p.icon, savedAt: p.savedAt, sizeKb: Math.round(new Blob([p.html]).size / 1024) }))
+    res.json({ ok: true, projects })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/wb/projects/:id', (req, res) => {
+  try {
+    const project = loadWbProjects().find(p => p.id === req.params.id)
+    if (!project) return res.status(404).json({ error: 'not found' })
+    res.json({ ok: true, project })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/wb/projects/:id', (req, res) => {
+  try {
+    const projects = loadWbProjects().filter(p => p.id !== req.params.id)
+    saveWbProjects(projects)
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+// ===== USAGE ANALYTICS (lightweight — server-side event log) =====
+const DZ_ANALYTICS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'analytics.json')
+const _analyticsCache = { stats: null, ts: 0 }
+
+function appendAnalyticEvent(event) {
+  try {
+    let data = []
+    try { data = JSON.parse(fs.readFileSync(DZ_ANALYTICS_FILE, 'utf8')) } catch {}
+    data.push(event)
+    if (data.length > 5000) data = data.slice(-5000)
+    fs.writeFileSync(DZ_ANALYTICS_FILE, JSON.stringify(data))
+    _analyticsCache.ts = 0
+  } catch {}
+}
+
+app.post('/api/analytics/track', express.json(), (req, res) => {
+  const { event, page, data: evData } = req.body || {}
+  if (!event) return res.status(400).json({ error: 'event required' })
+  appendAnalyticEvent({ event, page, data: evData, ts: Date.now() })
+  res.json({ ok: true })
+})
+
+app.get('/api/analytics/stats', (_req, res) => {
+  try {
+    if (_analyticsCache.stats && Date.now() - _analyticsCache.ts < 60000) return res.json(_analyticsCache.stats)
+    let data = []
+    try { data = JSON.parse(fs.readFileSync(DZ_ANALYTICS_FILE, 'utf8')) } catch {}
+    const counts = {}
+    data.forEach(e => { counts[e.event] = (counts[e.event] || 0) + 1 })
+    const result = { ok: true, total: data.length, events: counts, since: data[0]?.ts || null }
+    _analyticsCache.stats = result
+    _analyticsCache.ts = Date.now()
+    res.json(result)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
   if (isProd) {

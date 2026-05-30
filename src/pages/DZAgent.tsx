@@ -89,16 +89,18 @@ export default function DZAgent() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    localStorage.setItem('dz-agent-chats', JSON.stringify(chats))
+    try { localStorage.setItem('dz-agent-chats', JSON.stringify(chats)) } catch {}
   }, [chats])
 
   useEffect(() => {
-    if (activeChatId) localStorage.setItem('dz-agent-active', activeChatId)
-    else localStorage.removeItem('dz-agent-active')
+    try {
+      if (activeChatId) localStorage.setItem('dz-agent-active', activeChatId)
+      else localStorage.removeItem('dz-agent-active')
+    } catch {}
   }, [activeChatId])
 
   useEffect(() => {
-    localStorage.setItem('dz-agent-lang', language)
+    try { localStorage.setItem('dz-agent-lang', language) } catch {}
   }, [language])
 
   useEffect(() => {
@@ -113,7 +115,7 @@ export default function DZAgent() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem('dza-theme', theme)
+    try { localStorage.setItem('dza-theme', theme) } catch {}
   }, [theme])
 
   const createNewChat = useCallback(() => {

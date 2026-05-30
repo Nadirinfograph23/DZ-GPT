@@ -1619,12 +1619,29 @@ try {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleDownload = () => {
+  const getSmartFilename = useCallback(() => {
     const ext = lang === 'python' ? 'py' : 'js'
+    // Try to extract a meaningful name from function/class/variable definitions
+    const fnMatch = code.match(/^(?:def|async def)\s+(\w+)/m)
+    const classMatch = code.match(/^class\s+(\w+)/m)
+    const varMatch = code.match(/^(?:const|let|var|function)\s+(\w+)/m)
+    const name = fnMatch?.[1] || classMatch?.[1] || varMatch?.[1]
+    if (name && name.length > 1 && name.length < 30) {
+      // Convert camelCase/PascalCase to snake_case for Python
+      const safe = lang === 'python'
+        ? name.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, '')
+        : name
+      return `${safe}.${ext}`
+    }
+    return `dz-agent-code.${ext}`
+  }, [code, lang])
+
+  const handleDownload = () => {
+    const filename = getSmartFilename()
     const blob = new Blob([code], { type: 'text/plain' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `dz-agent-code.${ext}`
+    a.download = filename
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -1634,6 +1651,7 @@ try {
   }
 
   const langLabel = lang === 'python' ? '🐍 Python' : '⚡ JavaScript'
+  const fileExt   = lang === 'python' ? '.py' : '.js'
 
   return (
     <div className="dz-exec-root">
@@ -1654,8 +1672,12 @@ try {
           <button className="dz-exec-btn" onClick={handleCopy} title="نسخ الكود">
             {copied ? '✓ تم' : '📋 نسخ'}
           </button>
-          <button className="dz-exec-btn" onClick={handleDownload} title="تحميل الملف">
-            {downloaded ? '✓ تم' : '⬇ تحميل'}
+          <button
+            className="dz-exec-btn dz-exec-btn--save"
+            onClick={handleDownload}
+            title={`حفظ الملف كـ ${getSmartFilename()}`}
+          >
+            {downloaded ? '✓ محفوظ' : `💾 حفظ${fileExt}`}
           </button>
         </div>
       </div>

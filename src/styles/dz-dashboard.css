@@ -192,18 +192,18 @@
 }
 .dzd-tab:hover { color: var(--dzd-text-2); background: var(--dzd-accent-dim); }
 
-/* ─── Active tab — dark tinted bg + theme text ─── */
+/* ─── Active tab — solid grey bg (always) + theme text/bar ─── */
 .dzd-tab--active {
   color:              var(--dzd-tab-active-text, var(--dzd-accent));
-  background:         var(--dzd-tab-active-bg,   var(--dzd-accent-dim));
-  border-bottom-color:var(--dzd-tab-active-bar,  var(--dzd-accent));
+  background:         rgba(71, 85, 105, 0.65) !important;
+  border-bottom-color:var(--dzd-tab-active-bar, var(--dzd-accent));
   border-radius: 6px 6px 0 0;
 }
-/* All data-tab active → same theme tab */
+/* All data-tab active → same solid grey */
 .dzd-tab[data-tab].dzd-tab--active {
   color:               var(--dzd-tab-active-text, var(--dzd-accent));
-  background:          var(--dzd-tab-active-bg,   var(--dzd-accent-dim));
-  border-bottom-color: var(--dzd-tab-active-bar,  var(--dzd-accent));
+  background:          rgba(71, 85, 105, 0.65) !important;
+  border-bottom-color: var(--dzd-tab-active-bar, var(--dzd-accent));
 }
 /* Dollar tab — keep amber */
 .dzd-tab[data-tab="dollar"].dzd-tab--active {

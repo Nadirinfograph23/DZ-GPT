@@ -3691,23 +3691,69 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   // ===== NOTIFY PARENT OF AGENT MODE CHANGES =====
   useEffect(() => { onAgentModeChange?.(agentMode) }, [agentMode, onAgentModeChange])
 
-  // ===== VOICE PLAYBACK (Web Speech API) =====
-  const speakVoice = useCallback((msgId: string, text: string) => {
-    if (!window.speechSynthesis) return
+  // ===== VOICE PLAYBACK (HF MMS TTS backend — male voice) =====
+  const _ttsAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  const speakVoice = useCallback(async (msgId: string, text: string) => {
+    // Stop if already speaking this message
     if (speakingMsgId === msgId) {
-      window.speechSynthesis.cancel()
+      if (_ttsAudioRef.current) {
+        _ttsAudioRef.current.pause()
+        _ttsAudioRef.current = null
+      }
       setSpeakingMsgId(null)
       return
     }
-    window.speechSynthesis.cancel()
-    const clean = text.replace(/[#*`_~\[\]>]/g, '').slice(0, 600)
-    const utter = new SpeechSynthesisUtterance(clean)
-    utter.lang = language === 'fr' ? 'fr-FR' : language === 'en' ? 'en-US' : 'ar-SA'
-    utter.rate = 1.05
-    utter.onend  = () => setSpeakingMsgId(null)
-    utter.onerror = () => setSpeakingMsgId(null)
+    // Stop any current playback
+    if (_ttsAudioRef.current) {
+      _ttsAudioRef.current.pause()
+      _ttsAudioRef.current = null
+    }
     setSpeakingMsgId(msgId)
-    window.speechSynthesis.speak(utter)
+
+    const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
+    if (!clean) { setSpeakingMsgId(null); return }
+
+    const lang = language === 'fr' ? 'fr' : language === 'en' ? 'en' : 'ar'
+
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean, lang }),
+      })
+
+      if (res.status === 503) {
+        // Model still loading — retry once after 8 seconds
+        await new Promise(r => setTimeout(r, 8000))
+        const retry = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: clean, lang }),
+        })
+        if (!retry.ok) { setSpeakingMsgId(null); return }
+        const blob = await retry.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        _ttsAudioRef.current = audio
+        audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+        audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+        audio.play().catch(() => setSpeakingMsgId(null))
+        return
+      }
+
+      if (!res.ok) { setSpeakingMsgId(null); return }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      _ttsAudioRef.current = audio
+      audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+      audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
+      audio.play().catch(() => setSpeakingMsgId(null))
+    } catch {
+      setSpeakingMsgId(null)
+    }
   }, [speakingMsgId, language])
 
   // ===== TYPEWRITER TICKER =====

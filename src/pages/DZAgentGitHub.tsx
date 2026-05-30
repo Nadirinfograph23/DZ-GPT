@@ -90,7 +90,7 @@ export default function DZAgentGitHub() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem('dz-agent-gh-history', JSON.stringify(history.slice(0, 50)))
+    try { localStorage.setItem('dz-agent-gh-history', JSON.stringify(history.slice(0, 50))) } catch {}
   }, [history])
 
   const resetPipeline = () => {

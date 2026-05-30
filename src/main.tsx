@@ -47,10 +47,34 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 20, color: 'red', background: '#111', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-          <h2>React Error</h2>
-          <p>{this.state.error.message}</p>
-          <pre>{this.state.error.stack}</pre>
+        <div dir="rtl" style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 100%)', fontFamily: "'Cairo', 'Segoe UI', sans-serif",
+          padding: '24px',
+        }}>
+          <div style={{
+            background: '#1e293b', border: '1px solid rgba(99,102,241,.3)', borderRadius: '20px',
+            padding: '40px 32px', maxWidth: '440px', width: '100%', textAlign: 'center',
+            boxShadow: '0 24px 64px rgba(0,0,0,.6)',
+          }}>
+            <div style={{ fontSize: '52px', marginBottom: '16px' }}>⚠️</div>
+            <h2 style={{ color: '#f1f5f9', fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>
+              حدث خطأ غير متوقع
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: 1.7, margin: '0 0 28px' }}>
+              عذراً، واجه DZ Agent مشكلة داخلية. يمكنك إعادة تحميل الصفحة للمتابعة.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: '#fff', border: 'none',
+                borderRadius: '12px', padding: '12px 32px', fontSize: '15px', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              🔄 إعادة التحميل
+            </button>
+          </div>
         </div>
       )
     }

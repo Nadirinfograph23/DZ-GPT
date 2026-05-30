@@ -633,6 +633,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
           {tabs.map(tab => (
             <button
               key={tab.key}
+              data-tab={tab.key}
               className={`dzd-tab ${activeSection === tab.key ? 'dzd-tab--active' : ''} ${tab.key === 'quran' ? 'dzd-tab--quran' : ''}`}
               onClick={() => {
                 if (tab.key === 'quran') {

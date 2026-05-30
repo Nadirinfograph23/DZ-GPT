@@ -1,9 +1,32 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
+
+function playCheerfulSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50]
+    const durations = [0.12, 0.12, 0.12, 0.22, 0.10, 0.28]
+    let startTime = ctx.currentTime + 0.05
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, startTime)
+      gain.gain.setValueAtTime(0, startTime)
+      gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + durations[i])
+      osc.start(startTime)
+      osc.stop(startTime + durations[i])
+      startTime += durations[i]
+    })
+  } catch {}
+}
 
 type Lang = 'ar' | 'en' | 'fr'
 
@@ -41,6 +64,7 @@ function generateId(): string {
 
 
 export default function DZAgent() {
+  const [logoAnim, setLogoAnim] = useState<'idle' | 'flip-out' | 'flag' | 'flip-in'>('idle')
   const [activeRepo, setActiveRepo] = useState<string>('')
   const [chats, setChats] = useState<DZChat[]>(() => {
     try {
@@ -75,6 +99,17 @@ export default function DZAgent() {
   useEffect(() => {
     localStorage.setItem('dz-agent-lang', language)
   }, [language])
+
+  useEffect(() => {
+    const t1 = setTimeout(() => {
+      setLogoAnim('flip-out')
+      playCheerfulSound()
+    }, 600)
+    const t2 = setTimeout(() => setLogoAnim('flag'),  900)
+    const t3 = setTimeout(() => setLogoAnim('flip-in'), 2800)
+    const t4 = setTimeout(() => setLogoAnim('idle'),   3100)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4) }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('dza-theme', theme)
@@ -199,9 +234,15 @@ export default function DZAgent() {
             </button>
           </div>
           <div className="dz-agent-logo">
-            <div className="dz-agent-logo-icon">
-              <Bot size={20} />
-              <Sparkles size={12} className="dz-agent-logo-spark" />
+            <div className={`dz-agent-logo-icon dz-agent-logo-icon--anim-${logoAnim}`}>
+              {logoAnim === 'flag' ? (
+                <span className="dz-agent-logo-flag">🇩🇿</span>
+              ) : (
+                <>
+                  <Bot size={20} />
+                  <Sparkles size={12} className="dz-agent-logo-spark" />
+                </>
+              )}
             </div>
             <div className="dz-agent-logo-text">
               <span className="dz-agent-name">DZ Agent</span>

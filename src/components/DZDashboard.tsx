@@ -1139,7 +1139,6 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
               <>
                 <div className="dzd-currency-head">
                   <span>{currencyData.status === 'live' ? 'مباشر' : 'بيانات محفوظة'}</span>
-                  <small>{currencyData.provider}</small>
                 </div>
                 <div className="dzd-currency-grid">
                   {priorityCurrencies.filter(code => currencyData.rates[code]).map(code => {

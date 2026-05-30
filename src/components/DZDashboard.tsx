@@ -206,20 +206,27 @@ function getArName(enName: string) {
 
 type DashboardContext = { priority: 'weather'; city: string }
 
+type ModalStep = 'ask' | 'loading' | 'denied' | 'error'
+
 function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
   onSend: (q: string, context?: DashboardContext) => void
   onDoctorGpsReady?: (lat: number, lon: number, city: string) => void
 }) {
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<string>('')
   const [showPopup, setShowPopup] = useState(false)
+  const [modalStep, setModalStep] = useState<ModalStep>('ask')
+  const [loadingMsg, setLoadingMsg] = useState('')
 
   const openPopup = () => {
-    if (busy) return
+    setModalStep('ask')
+    setLoadingMsg('')
     setShowPopup(true)
   }
 
-  const closePopup = () => setShowPopup(false)
+  const closePopup = () => {
+    setShowPopup(false)
+    setModalStep('ask')
+    setLoadingMsg('')
+  }
 
   const handleManual = () => {
     closePopup()
@@ -227,39 +234,37 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
   }
 
   const handleUseGps = async () => {
-    closePopup()
     if (!('geolocation' in navigator)) {
+      closePopup()
       onSend('أريد طبيب')
       return
     }
-    setBusy(true)
-    setStatus('جاري طلب تفعيل GPS...')
+    // Keep modal OPEN — switch to loading so user sees GPS request
+    setModalStep('loading')
+    setLoadingMsg('في انتظار إذن GPS من المتصفح...')
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 5 * 60 * 1000,
+          timeout: 15000,
+          maximumAge: 0,
         })
       })
       const { latitude, longitude } = pos.coords
-      setStatus('جاري تحديد موقعك...')
+      setLoadingMsg('جاري تحديد اسم المدينة...')
       let city = ''
       try {
         const r = await fetch(
           `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
-          { headers: { 'Accept': 'application/json' } }
+          { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
         )
         if (r.ok) {
           const j = await r.json()
           const a = j.address || {}
           city = a.city || a.town || a.village || a.municipality || a.county || a.state || ''
         }
-      } catch { /* reverse-geocode failure — ignore */ }
-
-      setStatus('تم تحديد موقعك ✅')
-      setTimeout(() => setStatus(''), 2000)
-
+      } catch { /* reverse-geocode failure is non-fatal */ }
+      closePopup()
       if (onDoctorGpsReady) {
         onDoctorGpsReady(latitude, longitude, city)
       } else {
@@ -267,14 +272,89 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
         if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
         else onSend(`أريد طبيب${gpsTag}`)
       }
-    } catch (err: any) {
-      const denied = err && (err.code === 1 || /denied|permission/i.test(String(err.message || '')))
-      setStatus(denied ? 'لم يتم تفعيل GPS — سنكمل يدوياً' : 'تعذّر تحديد الموقع')
-      setTimeout(() => setStatus(''), 2500)
-      onSend('أريد طبيب')
-    } finally {
-      setBusy(false)
+    } catch (err: unknown) {
+      const code = (err as GeolocationPositionError)?.code
+      if (code === 1) {
+        setModalStep('denied')
+        setLoadingMsg('')
+      } else {
+        setModalStep('error')
+        setLoadingMsg('تعذّر تحديد الموقع. تحقق من اتصالك أو أذونات الموقع.')
+      }
     }
+  }
+
+  const renderModalBody = () => {
+    if (modalStep === 'loading') {
+      return (
+        <>
+          <div className="dzd-doctor-modal-icon">📡</div>
+          <h3 className="dzd-doctor-modal-title">جاري تفعيل GPS</h3>
+          <div className="dzd-gps-spinner" />
+          <p className="dzd-doctor-modal-text" style={{ marginTop: '14px' }}>
+            {loadingMsg}
+            <br />
+            <span style={{ fontSize: '12px', opacity: .72 }}>
+              اسمح للمتصفح بالوصول إلى موقعك عند ظهور الطلب
+            </span>
+          </p>
+        </>
+      )
+    }
+    if (modalStep === 'denied') {
+      return (
+        <>
+          <div className="dzd-doctor-modal-icon">🚫</div>
+          <h3 className="dzd-doctor-modal-title">تم رفض إذن GPS</h3>
+          <p className="dzd-doctor-modal-text">
+            لم يُسمح بالوصول إلى موقعك. يمكنك البحث يدوياً عن طبيب بدون موقع.
+          </p>
+          <div className="dzd-doctor-modal-actions">
+            <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--secondary" onClick={handleManual}>
+              🔍 أبحث يدوياً
+            </button>
+            <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--ghost" onClick={closePopup}>
+              إلغاء
+            </button>
+          </div>
+        </>
+      )
+    }
+    if (modalStep === 'error') {
+      return (
+        <>
+          <div className="dzd-doctor-modal-icon">⚠️</div>
+          <h3 className="dzd-doctor-modal-title">خطأ في تحديد الموقع</h3>
+          <p className="dzd-doctor-modal-text">{loadingMsg}</p>
+          <div className="dzd-doctor-modal-actions">
+            <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--primary" onClick={handleUseGps}>
+              🔄 إعادة المحاولة
+            </button>
+            <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--secondary" onClick={handleManual}>
+              🔍 أبحث يدوياً
+            </button>
+          </div>
+        </>
+      )
+    }
+    // default: 'ask'
+    return (
+      <>
+        <div className="dzd-doctor-modal-icon">📍</div>
+        <h3 id="dzd-doctor-modal-title" className="dzd-doctor-modal-title">تحديد الموقع</h3>
+        <p className="dzd-doctor-modal-text">
+          هل تريد من DZ Agent تحديد موقعك لمعرفة الأطباء الأقرب إليك؟
+        </p>
+        <div className="dzd-doctor-modal-actions">
+          <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--primary" onClick={handleUseGps}>
+            📍 نعم، حدد موقعي
+          </button>
+          <button type="button" className="dzd-doctor-modal-btn dzd-doctor-modal-btn--secondary" onClick={handleManual}>
+            🔍 سأبحث يدوياً
+          </button>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -283,15 +363,13 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
         type="button"
         className="dzd-doctor-card"
         onClick={openPopup}
-        disabled={busy}
+        disabled={showPopup}
         aria-label="ابحث عن طبيب قريب منك"
       >
-        <span className="dzd-doctor-icon">{busy ? '📡' : '🔎'}</span>
+        <span className="dzd-doctor-icon">🔎</span>
         <span className="dzd-doctor-text">
           <span className="dzd-doctor-title">نحوس على طبيب؟</span>
-          <span className="dzd-doctor-sub">
-            {status || 'GPS اختياري — للبحث قرب موقعك'}
-          </span>
+          <span className="dzd-doctor-sub">GPS اختياري — للبحث قرب موقعك</span>
         </span>
         <span className="dzd-doctor-arrow">›</span>
       </button>
@@ -299,7 +377,7 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
       {showPopup && (
         <div
           className="dzd-doctor-modal-backdrop"
-          onClick={closePopup}
+          onClick={modalStep === 'ask' ? closePopup : undefined}
           role="presentation"
         >
           <div
@@ -310,29 +388,7 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
             onClick={(e) => e.stopPropagation()}
             dir="rtl"
           >
-            <div className="dzd-doctor-modal-icon">📍</div>
-            <h3 id="dzd-doctor-modal-title" className="dzd-doctor-modal-title">
-              تحديد الموقع
-            </h3>
-            <p className="dzd-doctor-modal-text">
-              هل تريد من DZ Agent تحديد موقعك لمعرفة الأطباء الأقرب إليك؟
-            </p>
-            <div className="dzd-doctor-modal-actions">
-              <button
-                type="button"
-                className="dzd-doctor-modal-btn dzd-doctor-modal-btn--primary"
-                onClick={handleUseGps}
-              >
-                ✅ نعم
-              </button>
-              <button
-                type="button"
-                className="dzd-doctor-modal-btn dzd-doctor-modal-btn--secondary"
-                onClick={handleManual}
-              >
-                ❌ سأبحث يدوياً
-              </button>
-            </div>
+            {renderModalBody()}
           </div>
         </div>
       )}

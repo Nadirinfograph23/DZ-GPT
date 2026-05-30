@@ -25,6 +25,7 @@ import {
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
+import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 
 // ── Breaking News Detector ────────────────────────────────────────────────────
 import {
@@ -12873,6 +12874,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         lines.push('  📌 المبدأ: إذا كانت الجملة تقتضي كلمة دارجة، فضّلها على الفصحى في الموضع المناسب فقط.')
       }
     } catch { /* لا تكسر الـ request */ }
+
+    // ── DARIJA CORPUS: حقن مكتبة الدارجة الكاملة + أمثلة few-shot ──────────
+    // buildDarijaPromptBlock يختار مفردات + نماذج محادثة حسب موضوع السؤال
+    try {
+      const _darijaBlock = buildDarijaPromptBlock(lastUserMessage)
+      if (_darijaBlock) {
+        lines.push('')
+        lines.push(_darijaBlock)
+      }
+    } catch (e) {
+      console.warn('[DarijaPrompt] error:', e.message)
+    }
 
     return lines.join('\n')
   })()

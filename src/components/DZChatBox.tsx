@@ -11,7 +11,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, VolumeX,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -238,6 +238,16 @@ function saveProjectContext(patch: Partial<ProjectContext> & { addFile?: string 
     delete (updated as unknown as Record<string, unknown>).addFile
     sessionStorage.setItem(PROJECT_CTX_KEY, JSON.stringify(updated))
   } catch {}
+}
+
+function extractCodeBlock(text: string): { code: string; lang: string } | null {
+  const m = text.match(/```(python|py|javascript|js|typescript|ts)\s*\n([\s\S]*?)```/i)
+  if (!m) return null
+  const rawLang = m[1].toLowerCase()
+  const lang = (rawLang === 'py' || rawLang === 'python') ? 'python' : 'javascript'
+  const code = m[2].trim()
+  if (!code || code.length < 5) return null
+  return { code, lang }
 }
 
 function detectCodeLanguage(text: string): string {
@@ -3983,26 +3993,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       youtubeCandidatesRef.current = msg.youtubeResults
     }
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
-    // Auto-speak the full text reply via the voice system (no-op if muted).
-    // The TTS engine chunks long replies into sentences so nothing is truncated.
-    if ((msg.richType === 'text' || !msg.richType) && msg.content) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dvis = (typeof window !== 'undefined' ? (window as any).__dvis : null)
-      if (dvis && !dvis.getPrefs?.()?.muted) {
-        // Strip markdown / code so we don't read syntax aloud.
-        const clean = String(msg.content)
-          .replace(/```[\s\S]*?```/g, '')
-          .replace(/`[^`]*`/g, '')
-          .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-          .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-          .replace(/[#>*_~|]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim()
-        if (clean) {
-          try { dvis.speak(clean) } catch { /* never block chat */ }
-        }
-      }
-    }
     return id
   }, [])
 
@@ -6881,6 +6871,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           ? (data.quickSuggestions as string[])
           : undefined
         const autoSuggestions = serverSuggestions || generateClientSuggestions(responseContent, text)
+        const codeExtract = extractCodeBlock(responseContent)
         addAssistantMessage({
           content: responseContent,
           richType: 'text',
@@ -6892,6 +6883,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           thinkingTrace: thinkingTraceRoles ?? undefined,
           model: typeof data.model === 'string' ? data.model : (typeof data.fallbackModel === 'string' ? data.fallbackModel : undefined),
           responseTime: Math.round(Date.now() - _fetchT0),
+          executionCode: codeExtract?.code,
+          executionLang: codeExtract?.lang,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -7286,6 +7279,9 @@ ${rows}
                             td({ children }) { return <td dir="auto">{children}</td> },
                           }}
                         >{msg.content}</ReactMarkdown>
+                      )}
+                      {msg.richType === 'text' && msg.executionCode && (
+                        <CodeExecutionPreview code={msg.executionCode} lang={msg.executionLang || 'python'} />
                       )}
                       {msg.model && msg.responseTime && msg.responseTime > 0 && (
                         <div className="dz-msg-meta">
@@ -7898,20 +7894,6 @@ ${rows}
                     <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
                       {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
                       {copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
-                    </button>
-                  )}
-                  {msg.content && (
-                    <button
-                      className={`dz-action-btn dz-action-btn--voice${ttsLoadingId === msg.id ? ' dz-action-btn--tts-loading' : speakingMsgId === msg.id ? ' dz-action-btn--speaking' : ''}`}
-                      onClick={() => speakVoice(msg.id, msg.content)}
-                      title={ttsLoadingId === msg.id ? 'جارٍ التحميل...' : speakingMsgId === msg.id ? 'إيقاف الصوت' : 'استماع'}
-                      disabled={ttsLoadingId !== null && ttsLoadingId !== msg.id}
-                    >
-                      {ttsLoadingId === msg.id
-                        ? <><Loader2 size={13} className="dz-tts-spin" /> جارٍ...</>
-                        : speakingMsgId === msg.id
-                          ? <><VolumeX size={13} /> إيقاف</>
-                          : <><Volume2 size={13} /> استماع</>}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (

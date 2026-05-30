@@ -6831,13 +6831,9 @@ const FOOTBALL_CACHE_TTL = 5 * 60 * 1000 // 5 min for live match data
 const INTL_FOOTBALL_FEEDS = [
   { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
   { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
-  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
   { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-  { name: 'Sky Sports', url: 'https://feeds.skynews.com/feeds/rss/sports.xml' },
-  { name: 'سبورت 360', url: 'https://arabic.sport360.com/feed/' },
   { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
   { name: 'CAF Football', url: 'https://www.cafonline.com/rss-feed/' },
-  { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
 ]
 
 async function fetchSofaScoreFootball(dateStr) {
@@ -7090,6 +7086,10 @@ function detectLFPQuery(msg) {
     'مباريات اليوم الجزائر', 'الفريق الجزائري', 'شباب الجزائر', 'مولودية الجزائر',
     'مولودية وهران', 'شبيبة القبائل', 'اتحاد العاصمة', 'نصر حسين داي', 'بلوزداد',
     'وفاق سطيف', 'شباب بلوزداد', 'جمعية الشلف', 'أهلي برج', 'أهلي شلف',
+    // ── Additional: standalone match queries in Algerian context ──
+    'مباريات القادمة', 'المباريات القادمة', 'نتائج المباريات', 'مباريات اليوم',
+    'جدول المباريات', 'نتائج مباريات', 'المباريات الجزائرية', 'كرة القدم الجزائرية',
+    'lfp.dz', 'ligue professionnelle',
   ]
   return lfpKw.some(k => lower.includes(k))
 }
@@ -7495,11 +7495,9 @@ const NEWS_FEEDS_DASHBOARD = [
 // sourced from lfp.dz only. Generic football news is sourced from
 // Algeria-focused / international football feeds only.
 const SPORTS_FEEDS_DASHBOARD = [
-  // Removed: الجزيرة الرياضة (per user request — keeps the Algerian league
-  // section uncontaminated by Al Jazeera Sport content)
   { name: 'كووورة', url: 'https://www.kooora.com/?feed=rss' },
-  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
-  { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+  { name: 'APS رياضة', url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'الهداف', url: 'https://www.elheddaf.com/feed' },
 ]
 
 // ===== TECH INTELLIGENCE MODULE — RSS FEEDS =====
@@ -15138,9 +15136,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   ] = await Promise.allSettled([
     hasWeatherPriority ? fetchCityWeatherResilient(weatherCity) : Promise.resolve(null),
     isPrayerQuery ? fetchPrayerTimesAladhan(detectCityFromQuery(lastUserMessage)) : Promise.resolve(null),
-    isLFPQuery ? fetchLFPData() : Promise.resolve(null),
+    (isLFPQuery || isStandingsQuery) ? fetchLFPData() : Promise.resolve(null),
     isCurrencyQuery ? fetchCurrencyData() : Promise.resolve(null),
-    (isFootballQuery && !isLFPQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
+    (isFootballQuery && !isLFPQuery && !isStandingsQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
     // Use jdwel.com (same source as the card) with SofaScore as a fallback
     isGlobalLeaguesQuery ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today)]) : Promise.resolve(null),
@@ -15181,41 +15179,54 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // LFP context
   let lfpContext = ''
-  if (isLFPQuery) {
+  if (isLFPQuery || isStandingsQuery) {
     const lfpData = lfpResult.status === 'fulfilled' ? lfpResult.value : null
-    if (lfpData && (lfpData.matches.length > 0 || lfpData.articles.length > 0)) {
-      console.log('[DZ Agent] LFP query — injecting live data from lfp.dz')
+    if (lfpData) {
+      console.log('[DZ Agent] LFP query — injecting live data from lfp.dz/ar/calendar')
       const fetchDate = lfpData.fetchedAt ? new Date(lfpData.fetchedAt).toLocaleString('ar-DZ') : ''
-      lfpContext = `\n\n--- ⚽ الرابطة الجزائرية المحترفة (LFP) — المصدر: lfp.dz — ${fetchDate} ---\n`
+      lfpContext = `## ⚽ الدوري الجزائري المحترف (LFP)\n> 📡 المصدر: **[lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)** — ${fetchDate}\n`
       const played = lfpData.matches.filter(m => m.played)
       const upcoming = lfpData.matches.filter(m => !m.played)
+
       if (played.length > 0) {
-        lfpContext += `\n**نتائج المباريات:**\n`
+        lfpContext += `\n### 📊 نتائج المباريات\n`
         for (const m of played) {
-          lfpContext += `• ${m.round}: ${m.home} **${m.homeScore} - ${m.awayScore}** ${m.away}`
-          if (m.date) lfpContext += ` (${m.date})`
+          lfpContext += `• **${m.home}** ${m.homeScore} - ${m.awayScore} **${m.away}**`
+          if (m.round) lfpContext += ` _(${m.round})_`
+          if (m.date) lfpContext += ` — ${m.date}`
           if (m.link) lfpContext += ` — [التفاصيل](${m.link})`
           lfpContext += '\n'
         }
       }
+
       if (upcoming.length > 0) {
-        lfpContext += `\n**مباريات قادمة:**\n`
-        for (const m of upcoming.slice(0, 6)) {
-          lfpContext += `• ${m.round}: ${m.home} vs ${m.away}`
+        lfpContext += `\n### 📅 المباريات القادمة\n`
+        for (const m of upcoming.slice(0, 8)) {
+          lfpContext += `• **${m.home}** vs **${m.away}**`
+          if (m.round) lfpContext += ` _(${m.round})_`
           if (m.date) lfpContext += ` — ${m.date}`
-          if (m.time) lfpContext += ` ${m.time}`
+          if (m.time) lfpContext += ` 🕐 ${m.time}`
+          if (m.link) lfpContext += ` — [التفاصيل](${m.link})`
           lfpContext += '\n'
         }
       }
-      if (lfpData.articles.length > 0) {
-        lfpContext += `\n**أخبار رابطة LFP:**\n`
-        for (const a of lfpData.articles.slice(0, 5)) {
+
+      if (played.length === 0 && upcoming.length === 0) {
+        lfpContext += `\n> ⚠️ **لا توجد مباريات حالياً** في جدول الدوري الجزائري المحترف.\n`
+        lfpContext += `> يمكنك متابعة آخر المستجدات على [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)\n`
+      }
+
+      if (lfpData.articles && lfpData.articles.length > 0) {
+        lfpContext += `\n### 📰 أخبار رابطة LFP\n`
+        for (const a of lfpData.articles.slice(0, 4)) {
           lfpContext += `• ${a.title}`
           if (a.link) lfpContext += ` — [اقرأ المزيد](${a.link})`
           lfpContext += '\n'
         }
       }
-      lfpContext += '\n---'
+    } else {
+      // LFP fetch failed — still provide a source-attributed fallback
+      lfpContext = `## ⚽ الدوري الجزائري المحترف (LFP)\n> ⚠️ تعذّر جلب البيانات حالياً. تابع المستجدات مباشرة على [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)\n`
     }
   }
 
@@ -15245,16 +15256,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let standingsContext = ''
   if (isStandingsQuery) {
     const stData = standingsResult.status === 'fulfilled' ? standingsResult.value : null
+    // Determine the canonical source label — always lfp.dz/kooora.com only
+    const _stSource = stData?.source === 'lfp.dz (calculated)' ? 'lfp.dz/ar/calendar (محسوب)' : (stData?.source || 'kooora.com')
     if (stData?.standings?.length > 0) {
-      console.log(`[DZ Agent] Standings — injecting ${stData.standings.length} teams from ${stData.source}`)
-      standingsContext = `\n\n--- 🏆 جدول ترتيب الدوري الجزائري المحترف — المصدر: ${stData.source} — ${new Date(stData.fetchedAt).toLocaleString('ar-DZ')} ---\n`
-      standingsContext += `\n| # | الفريق | ل | ف | ت | خ | ن |\n|---|--------|---|---|---|---|---|\n`
+      console.log(`[DZ Agent] Standings — injecting ${stData.standings.length} teams from ${_stSource}`)
+      standingsContext = `\n## 🏆 ترتيب الدوري الجزائري المحترف\n> 📡 المصدر: **${_stSource}** — ${new Date(stData.fetchedAt).toLocaleString('ar-DZ')}\n\n`
+      standingsContext += `| # | الفريق | ل | ف | ت | خ | ن |\n|---|--------|---|---|---|---|---|\n`
       for (const row of stData.standings.slice(0, 20)) {
         standingsContext += `| ${row.rank} | ${row.team} | ${row.played} | ${row.wins} | ${row.draws} | ${row.losses} | **${row.points}** |\n`
       }
-      standingsContext += `\nملاحظة: ل=لعب، ف=فوز، ت=تعادل، خ=خسارة، ن=نقاط\n---`
+      standingsContext += `\n_ل=لعب · ف=فوز · ت=تعادل · خ=خسارة · ن=نقاط_`
     } else {
-      standingsContext = `\n\n--- 🏆 جدول الترتيب ---\nتعذّر جلب جدول الترتيب حالياً. يرجى التحقق من kooora.com أو lfp.dz.\n---`
+      standingsContext = `\n## 🏆 ترتيب الدوري الجزائري المحترف\n> ⚠️ تعذّر جلب جدول الترتيب حالياً. تابع على [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)\n`
     }
   }
 
@@ -15394,7 +15407,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
   const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial
 
   if (!skipSearch) {
     try {
@@ -15783,20 +15796,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: formattedWeather })
   }
 
-  // ── LFP + Standings fast-path: return table directly — no AI needed ──────
-  // When live LFP or standings data is available, skip AI to guarantee table format.
-  const _hasFootballDirectData = (isLFPQuery && lfpContext && lfpContext.length > 50)
-    || (isStandingsQuery && standingsContext && !standingsContext.includes('تعذّر') && standingsContext.includes('|'))
-  if (_hasFootballDirectData && !webReaderContext && !_isAgentMode) {
+  // ── LFP + Standings fast-path: return directly — no AI needed ───────────
+  // lfpContext is now always populated when isLFPQuery or isStandingsQuery.
+  // Return it directly to guarantee: source = lfp.dz only, no BBC/SofaScore.
+  if ((isLFPQuery || isStandingsQuery) && !webReaderContext && !_isAgentMode) {
     const parts = []
-    if (lfpContext && lfpContext.length > 50) parts.push(lfpContext)
-    if (standingsContext && !standingsContext.includes('تعذّر') && standingsContext.includes('|')) {
-      parts.push(standingsContext)
+    if (lfpContext && lfpContext.length > 30) parts.push(lfpContext.trim())
+    if (isStandingsQuery && standingsContext && standingsContext.length > 30) {
+      parts.push(standingsContext.trim())
     }
     if (parts.length > 0) {
-      console.log(`[Football Fast-Path] Returning LFP/standings directly without AI`)
-      const combined = parts.join('\n\n')
-      return res.status(200).json({ content: combined })
+      console.log(`[LFP Fast-Path] Returning LFP/standings directly (source: lfp.dz + kooora.com, no AI)`)
+      return res.status(200).json({ content: parts.join('\n\n---\n\n') })
     }
   }
 
@@ -16010,7 +16021,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   return res.status(200).json({
-    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**⚽ ذكاء كرة القدم:**\n- 🇩🇿 الدوري الجزائري (LFP)، المنتخب الوطني\n- 🌍 البريميرليغ، الليغا، البوندسليغا، السيريا، دوري الأبطال، كأس العالم، كأس أمم أفريقيا\n- 📡 SofaScore (مباشر)، BBC Sport، ESPN، كووورة\n\n**💱 أسعار الصرف (DZD):**\n- سعر الدولار، اليورو، الجنيه الإسترليني، الريال السعودي، الدرهم وغيرها\n- تحويل العملات مباشر (FloatRates)\n\n**📰 أخبار وخدمات:**\n- أخبار الجزائر والعالم (APS، الشروق، BBC)\n- 🕌 مواقيت الصلاة لكل المدن\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وكتابة الأكواد\n\nجرّب: **"سعر الدولار اليوم"** أو **"مباريات اليوم"** أو **"اعرض مستودعاتي"**',
+    content: 'مرحباً! أنا **DZ Agent** — مساعدك الذكي الجزائري 🇩🇿\n\n**⚽ ذكاء كرة القدم:**\n- 🇩🇿 الدوري الجزائري (LFP)، المنتخب الوطني\n- 🌍 البريميرليغ، الليغا، البوندسليغا، السيريا، دوري الأبطال، كأس العالم، كأس أمم أفريقيا\n- 📡 SofaScore (مباشر)، lfp.dz، كووورة، الهداف\n\n**💱 أسعار الصرف (DZD):**\n- سعر الدولار، اليورو، الجنيه الإسترليني، الريال السعودي، الدرهم وغيرها\n- تحويل العملات مباشر (FloatRates)\n\n**📰 أخبار وخدمات:**\n- أخبار الجزائر والعالم (APS، الشروق، BBC)\n- 🕌 مواقيت الصلاة لكل المدن\n- 🗂️ إدارة مستودعات GitHub\n- 💻 تحليل وكتابة الأكواد\n\nجرّب: **"سعر الدولار اليوم"** أو **"مباريات اليوم"** أو **"اعرض مستودعاتي"**',
   })
 })
 

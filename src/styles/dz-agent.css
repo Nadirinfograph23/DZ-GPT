@@ -571,6 +571,13 @@
   color: #666;
 }
 
+.dzn-header-slot {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
 .dz-agent-badge {
   padding: 4px 10px;
   background: rgba(16, 163, 127, 0.08);

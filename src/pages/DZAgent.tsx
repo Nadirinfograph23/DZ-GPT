@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
+import DZNotifications from '../components/DZNotifications'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -261,6 +262,9 @@ export default function DZAgent() {
               </div>
             )
           })()}
+          <div className="dzn-header-slot">
+            <DZNotifications theme={theme} />
+          </div>
           <div className="dz-agent-badge">AI</div>
         </header>
 

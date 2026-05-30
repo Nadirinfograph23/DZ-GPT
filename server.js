@@ -16279,6 +16279,47 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   await streamAIResponse(res, apiMessages, { maxTokens: _streamTokens })
 })
 
+// ===== SIMPLE ANALYTICS ENDPOINT =====
+// Lightweight feature-usage tracking — in-memory + periodic disk flush
+const _analyticsData = { sessions: 0, features: {}, events: [], _dirty: false }
+const _analyticsFile = './data/dz_analytics.json'
+
+;(async () => {
+  try {
+    const { readFileSync } = await import('fs')
+    const saved = JSON.parse(readFileSync(_analyticsFile, 'utf8'))
+    Object.assign(_analyticsData, saved)
+  } catch {}
+})()
+
+setInterval(async () => {
+  if (!_analyticsData._dirty) return
+  try {
+    const { writeFileSync, mkdirSync } = await import('fs')
+    mkdirSync('./data', { recursive: true })
+    const { _dirty, ...toSave } = _analyticsData
+    writeFileSync(_analyticsFile, JSON.stringify(toSave, null, 2))
+    _analyticsData._dirty = false
+  } catch {}
+}, 30_000)
+
+app.post('/api/analytics/track', (req, res) => {
+  const { feature, event, meta } = req.body || {}
+  if (!feature || !event) return res.status(400).json({ error: 'feature + event required' })
+  if (!_analyticsData.features[feature]) _analyticsData.features[feature] = {}
+  _analyticsData.features[feature][event] = (_analyticsData.features[feature][event] || 0) + 1
+  _analyticsData.events.push({ feature, event, meta: meta || null, ts: Date.now() })
+  if (_analyticsData.events.length > 500) _analyticsData.events = _analyticsData.events.slice(-400)
+  _analyticsData._dirty = true
+  res.json({ ok: true })
+})
+
+app.get('/api/analytics/summary', (req, res) => {
+  const { _dirty, events, ...summary } = _analyticsData
+  const recent = events.slice(-50)
+  res.json({ ...summary, recentEvents: recent })
+})
+
 // ===== DZ AGENT GITHUB API ROUTES =====
 
 // Helper: GitHub API fetch with token

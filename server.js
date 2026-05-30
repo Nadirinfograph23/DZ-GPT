@@ -3373,7 +3373,7 @@ function detectWebsiteBuilderQuery(msg) {
   // ── GUARD: "كود HTML/CSS/JS" — طلب مقتطف كود وليس إنشاء موقع كامل ──
   // "أنشئ كود html" / "اكتب كود html" / "html code" → PROGRAMMING_REQUEST لا website builder
   // يُفعَّل فقط إذا لم يكن هناك سياق موقع صريح (موقع شركة / لاندينج باج / ...)
-  const _isCodeSnippetReq = /(?:(?:أنش[أئ]|انش[أئ]|اكتب|اعمل|أعمل|دير|اصنع)\s+كود\s+(?:html|css|javascript|js|php)|كود\s+(?:html|css|javascript|js)\b|(?:html|css|javascript|js)\s+(?:code|snippet|كود)\b|write\s+html\b|write\s+css\b|create\s+html\s+code|html\s+snippet)/i.test(msg)
+  const _isCodeSnippetReq = /(?:(?:أنش[أئ]|انش[أئ]|اكتب|اعمل|أعمل|دير|اصنع)\s+كود\s+(?:html|css|javascript|js|php)|كود\s+(?:html|css|javascript|js)\b|(?:html|css|javascript|js)\s+(?:code|snippet|كود)\b|write\s+html\b|write\s+css\b|create\s+html\s+code|html\s+snippet|دير\s+(?:لي\s+)?(?:html|css|javascript|js|كود)|بغيت\s+(?:كود|code)\s*(?:html|css|js|javascript)|عطيني\s+(?:كود|code)\s*(?:html|css|js|javascript)|جيبلي\s+(?:كود|code)\s*(?:html|css|js|javascript)|حتاج\s+كود|dir\s+(?:li\s+)?(?:code|html|css|js)\b|bghit\s+(?:code|html)\b|3tini\s+(?:code|html)\b|wld\s+li\s+code\b)/i.test(msg)
   const _hasSiteContext = /(?:موقع\s*(?:شركة|متجر|فندق|مطعم|عيادة|نادي|جمعية|احترافي|كامل|ويب|إلكتروني)|صفحة\s*هبوط|لاندينج\s*(?:باج|page)|landing\s*page|portfolio\s*(?:site|website|موقع)|بورتفوليو\s*موقع|full\s*(?:website|site))/i.test(msg)
   if (_isCodeSnippetReq && !_hasSiteContext) return false
 
@@ -3489,25 +3489,44 @@ function detectCodeExecutionQuery(msg) {
     'écris un code','créer un programme','écrire une fonction',
     'اكتب لي','اكتب لي كود','اكتب لي دالة','اكتب لي برنامج',
     'اعملي كود','اعملي دالة','اعملي برنامج',
+    // Darija (دارجة جزائرية)
+    'دير لي كود','دير لي html','دير لي css','دير لي javascript','دير لي script',
+    'دير لي دالة','دير لي برنامج','دير لينا كود',
+    'بغيت كود','بغيت html code','بغيت css code','بغيت code',
+    'عطيني كود','جيبلي كود','حتاج كود','نحتاج كود','نبغي كود',
+    'صنعلي كود','عملي كود','ولد لي كود',
+    // Franco-Arab (فرانكو-عربي جزائري)
+    'dir code','dir li code','dir lina code',
+    'dir li html','dir li css','dir li script','dir li programme',
+    'bghit code','bghit html','bghit css',
+    '3tini code','3tini html','3tini css',
+    'wld li code','sina code','7tani code',
+    'code html stp','code css stp','code js stp',
   ]
   if (execVerbs.some(k => lower.includes(k))) {
     return detectExecLanguage(lower)
   }
 
-  // Pattern: coding verb + language keyword
-  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|write|create|build|make|run|execute)\s/i
+  // Pattern: coding verb + language keyword (Arabic + Darija + Franco-Arab)
+  const codingVerb = /(?:اكتب|أنشئ|انشئ|نفذ|شغل|اعمل|دير|اصنع|بغيت|عطيني|جيبلي|حتاج|صنعلي|ولد|write|create|build|make|run|execute|dir|bghit|3tini|wld)\s/i
   if (codingVerb.test(msg) && hasLangKw) {
     return detectExecLanguage(lower)
   }
 
   // Direct code-related commands
   const directCode = [
-    'كود python','كود javascript','كود js','كود html',
+    'كود python','كود javascript','كود js','كود html','كود css',
     'دالة python','دالة javascript','دالة js',
     'سكريبت python','سكريبت javascript','سكريبت bash',
-    'python code','javascript code','js code',
+    'python code','javascript code','js code','html code','css code',
     'python function','javascript function',
     'python script','javascript script','bash script',
+    // Darija direct
+    'كود html','كود css','كود js',
+    'بغيت html','بغيت css','بغيت javascript',
+    'عطيني html','عطيني css','عطيني javascript',
+    // Franco-Arab direct
+    'code html','code css','code js','code javascript',
   ]
   if (directCode.some(k => lower.includes(k))) {
     return detectExecLanguage(lower)

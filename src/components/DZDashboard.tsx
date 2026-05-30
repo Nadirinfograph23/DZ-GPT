@@ -206,7 +206,10 @@ function getArName(enName: string) {
 
 type DashboardContext = { priority: 'weather'; city: string }
 
-function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
+function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
+  onSend: (q: string, context?: DashboardContext) => void
+  onDoctorGpsReady?: (lat: number, lon: number, city: string) => void
+}) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string>('')
   const [showPopup, setShowPopup] = useState(false)
@@ -240,7 +243,7 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
         })
       })
       const { latitude, longitude } = pos.coords
-      setStatus('جاري تحديد الولاية...')
+      setStatus('جاري تحديد موقعك...')
       let city = ''
       try {
         const r = await fetch(
@@ -254,16 +257,23 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
         }
       } catch { /* reverse-geocode failure — ignore */ }
 
-      const gpsTag = ` [GPS:${latitude.toFixed(5)},${longitude.toFixed(5)}]`
-      if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
-      else onSend(`أريد طبيب${gpsTag}`)
+      setStatus('تم تحديد موقعك ✅')
+      setTimeout(() => setStatus(''), 2000)
+
+      if (onDoctorGpsReady) {
+        onDoctorGpsReady(latitude, longitude, city)
+      } else {
+        const gpsTag = ` [GPS:${latitude.toFixed(5)},${longitude.toFixed(5)}]`
+        if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
+        else onSend(`أريد طبيب${gpsTag}`)
+      }
     } catch (err: any) {
       const denied = err && (err.code === 1 || /denied|permission/i.test(String(err.message || '')))
-      if (denied) setStatus('لم يتم تفعيل GPS — سنكمل بدون موقعك')
+      setStatus(denied ? 'لم يتم تفعيل GPS — سنكمل يدوياً' : 'تعذّر تحديد الموقع')
+      setTimeout(() => setStatus(''), 2500)
       onSend('أريد طبيب')
     } finally {
       setBusy(false)
-      setTimeout(() => setStatus(''), 2500)
     }
   }
 
@@ -330,7 +340,10 @@ function DoctorSearchCard({ onSend }: { onSend: (q: string, context?: DashboardC
   )
 }
 
-export default function DZDashboard({ onSend }: { onSend: (q: string, context?: DashboardContext) => void }) {
+export default function DZDashboard({ onSend, onDoctorGpsReady }: {
+  onSend: (q: string, context?: DashboardContext) => void
+  onDoctorGpsReady?: (lat: number, lon: number, city: string) => void
+}) {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1208,7 +1221,7 @@ export default function DZDashboard({ onSend }: { onSend: (q: string, context?: 
         )}
 
         {/* DOCTOR SEARCH ENTRY ── pinned at bottom of dashboard */}
-        <DoctorSearchCard onSend={onSend} />
+        <DoctorSearchCard onSend={onSend} onDoctorGpsReady={onDoctorGpsReady} />
 
       </div>
     </div>

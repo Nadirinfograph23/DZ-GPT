@@ -31,8 +31,8 @@
 .dzt-item {
   pointer-events: all;
   position: relative;
-  background: #1a1a2e;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(135deg, rgba(16,163,127,0.10), rgba(13,146,104,0.06));
+  border: 1px solid rgba(16,163,127,0.35);
   border-left: 3px solid var(--dzt-color, #10a37f);
   border-radius: 10px;
   padding: 11px 14px 14px;
@@ -40,7 +40,7 @@
   align-items: flex-start;
   gap: 10px;
   cursor: pointer;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(16,163,127,0.15);
   overflow: hidden;
   animation: dzt-slide-in 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
   transition: transform 0.15s ease, opacity 0.15s ease;
@@ -49,7 +49,7 @@
 
 .dzt-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.14);
+  border-color: rgba(16,163,127,0.5);
   border-left-color: var(--dzt-color, #10a37f);
 }
 

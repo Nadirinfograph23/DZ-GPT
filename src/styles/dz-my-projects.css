@@ -1,0 +1,411 @@
+/* ─── DZ My Projects Page ─────────────────────────────────────── */
+.dzmp {
+  min-height: 100vh;
+  background: #0a0a0f;
+  color: #e2e8f0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  padding-bottom: 60px;
+}
+
+/* ── Toast ── */
+.dzmp-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(139,92,246,0.95);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  box-shadow: 0 4px 24px rgba(139,92,246,0.4);
+  animation: toastIn 0.3s ease;
+}
+@keyframes toastIn {
+  from { opacity:0; transform: translateX(-50%) translateY(-10px); }
+  to   { opacity:1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Header ── */
+.dzmp-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02);
+  flex-wrap: wrap;
+}
+.dzmp-back {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.dzmp-back:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+.dzmp-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+.dzmp-header-icon {
+  width: 48px; height: 48px;
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.dzmp-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+}
+.dzmp-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 2px 0 0;
+}
+
+.dzmp-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.dzmp-new-btn {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.dzmp-new-btn:hover { opacity: 0.88; }
+.dzmp-clear-btn {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #ef4444;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.2s;
+}
+.dzmp-clear-btn:hover { background: rgba(239,68,68,0.18); }
+
+/* ── Search ── */
+.dzmp-search-wrap {
+  padding: 16px 24px 8px;
+}
+.dzmp-search {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #e2e8f0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+.dzmp-search:focus { border-color: rgba(139,92,246,0.5); }
+.dzmp-search::placeholder { color: #4b5563; }
+
+/* ── Grid ── */
+.dzmp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 20px 24px;
+}
+
+/* ── Card ── */
+.dzmp-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+.dzmp-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(139,92,246,0.3);
+}
+
+.dzmp-card-preview {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+}
+.dzmp-card-iframe {
+  width: 200%;
+  height: 200%;
+  transform: scale(0.5);
+  transform-origin: top right;
+  border: none;
+  pointer-events: none;
+}
+.dzmp-card-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.dzmp-card-preview:hover .dzmp-card-preview-overlay {
+  background: rgba(0,0,0,0.55);
+}
+.dzmp-preview-btn {
+  background: rgba(139,92,246,0.9);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.2s;
+}
+.dzmp-card-preview:hover .dzmp-preview-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.dzmp-card-body {
+  padding: 14px 16px 10px;
+  flex: 1;
+}
+.dzmp-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dzmp-card-prompt {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+.dzmp-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.dzmp-tag {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.dzmp-tag--type { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.25); }
+.dzmp-tag--style { background: rgba(236,72,153,0.12); color: #f472b6; border: 1px solid rgba(236,72,153,0.2); }
+
+.dzmp-card-date {
+  font-size: 11px;
+  color: #475569;
+  margin: 0;
+}
+
+.dzmp-card-actions {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.dzmp-action {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.dzmp-action:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+.dzmp-action--restore { color: #4ade80; border-color: rgba(74,222,128,0.2); }
+.dzmp-action--restore:hover { background: rgba(74,222,128,0.1); }
+.dzmp-action--preview { color: #818cf8; border-color: rgba(129,140,248,0.2); }
+.dzmp-action--preview:hover { background: rgba(129,140,248,0.1); }
+.dzmp-action--download { flex: 0 0 36px; justify-content: center; }
+.dzmp-action--delete { flex: 0 0 36px; color: #f87171; border-color: rgba(248,113,113,0.2); }
+.dzmp-action--delete:hover { background: rgba(248,113,113,0.1); }
+
+/* ── Empty State ── */
+.dzmp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+.dzmp-empty-icon { font-size: 60px; margin-bottom: 16px; }
+.dzmp-empty-title { font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 8px; }
+.dzmp-empty-sub { font-size: 14px; color: #64748b; margin: 0 0 24px; }
+.dzmp-empty-cta {
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  color: #fff;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.dzmp-empty-cta:hover { opacity: 0.88; }
+
+/* ── Full Preview Modal ── */
+.dzmp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+.dzmp-modal {
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 1100px;
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.7);
+}
+.dzmp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dzmp-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  flex-wrap: wrap;
+}
+.dzmp-modal-tags { display: flex; gap: 6px; }
+.dzmp-modal-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.dzmp-modal-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+.dzmp-modal-btn--restore { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+.dzmp-modal-btn--restore:hover { background: rgba(74,222,128,0.25); }
+.dzmp-modal-btn--download { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.25); }
+.dzmp-modal-btn--download:hover { background: rgba(99,102,241,0.25); }
+.dzmp-modal-close {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.dzmp-modal-close:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.dzmp-modal-iframe {
+  flex: 1;
+  border: none;
+  width: 100%;
+}
+
+/* ── Delete Confirm ── */
+.dzmp-confirm {
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 36px 32px;
+  text-align: center;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+}
+.dzmp-confirm-icon { font-size: 48px; margin-bottom: 16px; }
+.dzmp-confirm-title { font-size: 18px; font-weight: 800; color: #fff; margin: 0 0 8px; }
+.dzmp-confirm-sub { font-size: 13px; color: #64748b; margin: 0 0 24px; }
+.dzmp-confirm-btns { display: flex; gap: 10px; justify-content: center; }
+.dzmp-confirm-yes {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dzmp-confirm-yes:hover { background: #dc2626; }
+.dzmp-confirm-no {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.dzmp-confirm-no:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .dzmp-header { padding: 14px 16px; }
+  .dzmp-grid { grid-template-columns: 1fr; padding: 16px; }
+  .dzmp-modal { height: 92vh; }
+  .dzmp-title { font-size: 17px; }
+}

@@ -2,7 +2,7 @@
   "meta": {
     "dialect": "Algerian Darija",
     "version": "4.0.0",
-    "total": 391,
+    "total": 414,
     "sources": [
       "mo3jam.com",
       "curated",
@@ -10,9 +10,9 @@
       "user-provided-2026-05-27",
       "owner-provided-2026-05-29"
     ],
-    "updated": "2026-05-29",
+    "updated": "2026-05-30",
     "intent_categories": 19,
-    "conv_phrases": 252
+    "conv_phrases": 296
   },
   "words": [
     {
@@ -6656,6 +6656,170 @@
         "الردود طبيعية بزاف كيما واحد يهدر"
       ],
       "category": "dz_agent"
+    },
+    {
+      "word": "مانيش",
+      "meaning_ar": "لست/لا أكون",
+      "meaning_fr": "je ne suis pas",
+      "meaning_en": "I am not",
+      "category": "negation"
+    },
+    {
+      "word": "راهو",
+      "meaning_ar": "إنه/يكون",
+      "meaning_fr": "il est",
+      "meaning_en": "he/it is",
+      "category": "state"
+    },
+    {
+      "word": "راهي",
+      "meaning_ar": "إنها/تكون",
+      "meaning_fr": "elle est",
+      "meaning_en": "she/it is",
+      "category": "state"
+    },
+    {
+      "word": "راهم",
+      "meaning_ar": "إنهم/يكونون",
+      "meaning_fr": "ils sont",
+      "meaning_en": "they are",
+      "category": "state"
+    },
+    {
+      "word": "حنا",
+      "meaning_ar": "نحن",
+      "meaning_fr": "nous",
+      "meaning_en": "we",
+      "category": "pronoun"
+    },
+    {
+      "word": "هوما",
+      "meaning_ar": "هم",
+      "meaning_fr": "ils",
+      "meaning_en": "they",
+      "category": "pronoun"
+    },
+    {
+      "word": "لبارح",
+      "meaning_ar": "أمس",
+      "meaning_fr": "hier",
+      "meaning_en": "yesterday",
+      "variants": [
+        "ولبارح"
+      ],
+      "category": "time"
+    },
+    {
+      "word": "مبعد",
+      "meaning_ar": "بعدها/لاحقاً",
+      "meaning_fr": "après",
+      "meaning_en": "after/later",
+      "category": "time"
+    },
+    {
+      "word": "ديما",
+      "meaning_ar": "دائماً",
+      "meaning_fr": "toujours",
+      "meaning_en": "always",
+      "category": "adverb"
+    },
+    {
+      "word": "يعني",
+      "meaning_ar": "يعني/أي",
+      "meaning_fr": "c'est-à-dire",
+      "meaning_en": "meaning/i.e.",
+      "category": "filler"
+    },
+    {
+      "word": "هكا",
+      "meaning_ar": "هكذا",
+      "meaning_fr": "comme ça",
+      "meaning_en": "like this",
+      "category": "demonstrative"
+    },
+    {
+      "word": "علابالك",
+      "meaning_ar": "هل تعلم/فطنت",
+      "meaning_fr": "tu sais",
+      "meaning_en": "you know/notice",
+      "category": "awareness"
+    },
+    {
+      "word": "وليد",
+      "meaning_ar": "ولد/طفل",
+      "meaning_fr": "garçon/enfant",
+      "meaning_en": "boy/kid",
+      "category": "noun"
+    },
+    {
+      "word": "زوج",
+      "meaning_ar": "اثنان/زوجان",
+      "meaning_fr": "deux/une paire",
+      "meaning_en": "two/a pair",
+      "category": "quantity"
+    },
+    {
+      "word": "بدا",
+      "meaning_ar": "بدأ",
+      "meaning_fr": "a commencé",
+      "meaning_en": "started",
+      "category": "verb"
+    },
+    {
+      "word": "ولى",
+      "meaning_ar": "أصبح/عاد",
+      "meaning_fr": "est devenu",
+      "meaning_en": "became/returned",
+      "category": "verb"
+    },
+    {
+      "word": "عيط",
+      "meaning_ar": "اتصل/صرخ",
+      "meaning_fr": "a appelé/crié",
+      "meaning_en": "called/shouted",
+      "category": "verb"
+    },
+    {
+      "word": "فات",
+      "meaning_ar": "مر/انتهى",
+      "meaning_fr": "est passé",
+      "meaning_en": "passed/ended",
+      "category": "verb"
+    },
+    {
+      "word": "بدل",
+      "meaning_ar": "غيّر",
+      "meaning_fr": "a changé",
+      "meaning_en": "changed",
+      "category": "verb"
+    },
+    {
+      "word": "شغّل",
+      "meaning_ar": "شغّل/ابدأ",
+      "meaning_fr": "lance/démarre",
+      "meaning_en": "run/start",
+      "category": "tech"
+    },
+    {
+      "word": "وقّف",
+      "meaning_ar": "أوقف",
+      "meaning_fr": "arrête",
+      "meaning_en": "stop",
+      "category": "tech"
+    },
+    {
+      "word": "مسح",
+      "meaning_ar": "حذف/مسح",
+      "meaning_fr": "effacer/supprimer",
+      "meaning_en": "delete/clear",
+      "category": "tech"
+    },
+    {
+      "word": "صيفيت",
+      "meaning_ar": "حفظت/سيفت",
+      "meaning_fr": "sauvegardé",
+      "meaning_en": "saved",
+      "category": "tech"
     }
   ],
   "slang_map": {
@@ -7142,7 +7306,72 @@
     "كاين فايلات ناقصين": "هناك ملفات ناقصة",
     "كاين باڨ فالكود": "هناك خطأ في الكود",
     "كاين ريزو ضعيف": "هناك اتصال ضعيف",
-    "كاين داتا جديدة": "هناك بيانات جديدة"
+    "كاين داتا جديدة": "هناك بيانات جديدة",
+    "ملي": "متى/حين",
+    "منين": "من أين",
+    "علابالك": "هل تعلم",
+    "علابالي": "أعلم",
+    "مانيش عارف": "لا أعرف",
+    "نجرب": "أجرب",
+    "نشوف": "أرى",
+    "نمشي": "أذهب",
+    "نجي": "أجيء",
+    "نحكي": "أتحدث",
+    "نعياط": "أتصل/أصرخ",
+    "نبات": "أبيت/أنام",
+    "نفكر": "أفكر",
+    "ندور": "أبحث",
+    "نبدل": "أغير",
+    "نحول": "أحول",
+    "نكمل": "أكمل",
+    "نتعلم": "أتعلم",
+    "نحفظ": "أحفظ",
+    "نحل": "أحل",
+    "نطلع": "أخرج/أرفع",
+    "نحط": "أضع",
+    "نولي": "أصبح/أعود",
+    "محروس": "محظوظ/محمي",
+    "مبرود": "بارد/هادئ",
+    "مشحون": "مشحون/متوتر",
+    "مدروب": "مضروب/مصنوع",
+    "مهضوم": "مقبول/منظم",
+    "مفروض": "مفروض/مطلوب",
+    "معفون": "فاسد/منتن",
+    "مخلط": "مخلوط/مرتبك",
+    "مكيف": "مريح",
+    "معلق": "متوقف/معلق",
+    "ولا حتى": "ولا حتى",
+    "بركا": "يكفي",
+    "حبة": "قليلاً/شوية",
+    "نوضا": "قومي/قم",
+    "لقدام": "للأمام",
+    "للور": "للخلف",
+    "لفوق": "للأعلى",
+    "زيد": "مزيداً/أضف",
+    "زيدي": "أضيفي",
+    "ردد": "كرر",
+    "مفتاح": "كلمة المرور/مفتاح",
+    "بورتابل": "هاتف محمول",
+    "طابليت": "لوح إلكتروني",
+    "ديسك": "قرص صلب",
+    "فلاشة": "وحدة تخزين USB",
+    "ريزو": "شبكة/إنترنت",
+    "واي فاي": "واي فاي",
+    "بلانش": "خطأ/فراغ",
+    "بلوكي": "محظور/معطل",
+    "برامج": "برامج",
+    "الصباح": "الصباح",
+    "المسا": "المساء",
+    "ولبارح": "أمس",
+    "لبارح": "أمس",
+    "هذا النهار": "هذا اليوم",
+    "هذه الليلة": "الليلة",
+    "سريتي": "صديقتي",
+    "صاحبي": "صديقي",
+    "الراجل": "الرجل",
+    "المرا": "المرأة",
+    "الدرّي": "الولد الصغير",
+    "الدريّة": "الأطفال"
   },
   "response_map": {
     "كثير": "بزاف",
@@ -9067,6 +9296,226 @@
       "ar": "هناك بيانات جديدة",
       "dz": "كاين داتا جديدة",
       "ctx": "notification"
+    },
+    {
+      "ar": "لا يعمل",
+      "dz": "ما يخدمش",
+      "ctx": "tech"
+    },
+    {
+      "ar": "أعد التشغيل",
+      "dz": "ريستاري",
+      "ctx": "tech"
+    },
+    {
+      "ar": "حدّث",
+      "dz": "أبدايت / عمّر",
+      "ctx": "tech"
+    },
+    {
+      "ar": "احذف",
+      "dz": "سوبريمي / حيّد",
+      "ctx": "tech"
+    },
+    {
+      "ar": "انتظر",
+      "dz": "استنى / استنا",
+      "ctx": "tech"
+    },
+    {
+      "ar": "انسخ",
+      "dz": "كوبيي",
+      "ctx": "tech"
+    },
+    {
+      "ar": "ابحث",
+      "dz": "ديري سيرش / دور",
+      "ctx": "tech"
+    },
+    {
+      "ar": "كلمة المرور",
+      "dz": "الموت دو باس / المفتاح",
+      "ctx": "tech"
+    },
+    {
+      "ar": "أسرع",
+      "dz": "زرب / فيسا",
+      "ctx": "verb"
+    },
+    {
+      "ar": "تعب",
+      "dz": "عيا",
+      "ctx": "verb"
+    },
+    {
+      "ar": "نام",
+      "dz": "رقد",
+      "ctx": "verb"
+    },
+    {
+      "ar": "أكل",
+      "dz": "كلا / ضرب",
+      "ctx": "verb"
+    },
+    {
+      "ar": "غضب",
+      "dz": "زعف / جن",
+      "ctx": "emotion"
+    },
+    {
+      "ar": "حزن",
+      "dz": "حزن / تهنّن",
+      "ctx": "emotion"
+    },
+    {
+      "ar": "فرح",
+      "dz": "فرح / نبسط",
+      "ctx": "emotion"
+    },
+    {
+      "ar": "تعجّب",
+      "dz": "اندهش / يا سلام",
+      "ctx": "emotion"
+    },
+    {
+      "ar": "كيف حالك؟",
+      "dz": "واش راك؟ / كيداير؟",
+      "ctx": "greeting"
+    },
+    {
+      "ar": "أين أنت؟",
+      "dz": "وين راك؟ / فين نتا؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "ماذا تريد؟",
+      "dz": "واش تبغي؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "هل فهمت؟",
+      "dz": "فهمت؟ / علاباليك؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "ماذا يحدث؟",
+      "dz": "واش صاري؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "من أين أنت؟",
+      "dz": "منين أنت؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "ما رأيك؟",
+      "dz": "واش تحسب؟",
+      "ctx": "question"
+    },
+    {
+      "ar": "بالطبع",
+      "dz": "طبعاً / أكيد",
+      "ctx": "affirmation"
+    },
+    {
+      "ar": "ربما",
+      "dz": "ممكن / يمكن",
+      "ctx": "uncertainty"
+    },
+    {
+      "ar": "لا أعرف",
+      "dz": "ما نعرفش / مانيش عارف",
+      "ctx": "negation"
+    },
+    {
+      "ar": "لا يهمّ",
+      "dz": "ماشي مشكل / معليش",
+      "ctx": "response"
+    },
+    {
+      "ar": "اصبر",
+      "dz": "استنى / صبر",
+      "ctx": "response"
+    },
+    {
+      "ar": "هيا",
+      "dz": "يلا / أرواح",
+      "ctx": "verb"
+    },
+    {
+      "ar": "انتهى الأمر",
+      "dz": "خلاص / سالت",
+      "ctx": "response"
+    },
+    {
+      "ar": "لكن",
+      "dz": "بصح / ولكن",
+      "ctx": "connector"
+    },
+    {
+      "ar": "اتصل بي",
+      "dz": "عيّط ليّ / تيليفوني",
+      "ctx": "phrase"
+    },
+    {
+      "ar": "أخبرني",
+      "dz": "قلّي / حكيلي",
+      "ctx": "phrase"
+    },
+    {
+      "ar": "وضّح لي",
+      "dz": "فسّرلي / وضّحلي",
+      "ctx": "phrase"
+    },
+    {
+      "ar": "أعطني",
+      "dz": "عطيني",
+      "ctx": "phrase"
+    },
+    {
+      "ar": "أرني",
+      "dz": "ورّيني / أرني",
+      "ctx": "phrase"
+    },
+    {
+      "ar": "كثيراً جداً",
+      "dz": "بزاف بزاف / ياسر",
+      "ctx": "quantity"
+    },
+    {
+      "ar": "قليلاً",
+      "dz": "حبة / شوية",
+      "ctx": "quantity"
+    },
+    {
+      "ar": "الآن فوراً",
+      "dz": "درك / دروك / فيسا فيسا",
+      "ctx": "time"
+    },
+    {
+      "ar": "لاحقاً",
+      "dz": "مبعد / بعدين",
+      "ctx": "time"
+    },
+    {
+      "ar": "أمس",
+      "dz": "لبارح / أمس",
+      "ctx": "time"
+    },
+    {
+      "ar": "غداً",
+      "dz": "غدوة / باكر",
+      "ctx": "time"
+    },
+    {
+      "ar": "في الصباح",
+      "dz": "الصباح / الفيح",
+      "ctx": "time"
+    },
+    {
+      "ar": "في المساء",
+      "dz": "المسا / العشية",
+      "ctx": "time"
     }
   ]
 }

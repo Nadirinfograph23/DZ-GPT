@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
+import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
 
@@ -40,6 +41,7 @@ function generateId(): string {
 
 
 export default function DZAgent() {
+  const [activeRepo, setActiveRepo] = useState<string>('')
   const [chats, setChats] = useState<DZChat[]>(() => {
     try {
       const saved = localStorage.getItem('dz-agent-chats')
@@ -206,6 +208,12 @@ export default function DZAgent() {
               <span className="dz-agent-tagline">BY NADIR HOUAMRIA</span>
             </div>
           </div>
+          {activeRepo && (
+            <div className="dz-agent-repo-pill" title={activeRepo}>
+              <span className="dz-agent-repo-dot">●</span>
+              <span className="dz-agent-repo-name">{activeRepo.split('/')[1] || activeRepo}</span>
+            </div>
+          )}
           <div className="dz-agent-badge">AI</div>
         </header>
 
@@ -215,6 +223,7 @@ export default function DZAgent() {
             chatId={activeChatId}
             language={language}
             onTitleChange={activeChatId ? (title) => handleTitleChange(activeChatId, title) : undefined}
+            onAgentModeChange={(s: AgentModeState) => setActiveRepo(s.active && s.selectedRepo ? s.selectedRepo : '')}
           />
         </div>
       </div>

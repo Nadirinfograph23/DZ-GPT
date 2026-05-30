@@ -11,9 +11,9 @@
 const POI_TYPES = {
   hospital: {
     labels: [
-      'مستشفى','مستشفيات','عيادة','عيادات','طوارئ','مركز صحي','صحة','مريض',
-      'إسعاف','صحي','مستعجلات','polyclinique','hôpital','hopital','clinique','urgences','sante',
-      'سبيطار','الطوارئ','مركز طبي',
+      'مستشفى','مستشفيات','عيادة','عيادات','طوارئ','مركز صحي','مركز طبي',
+      'إسعاف','مستعجلات','polyclinique','hôpital','hopital','clinique','urgences','sante',
+      'سبيطار','الطوارئ',
     ],
     osm: 'amenity~"hospital|clinic|doctors"', icon: '🏥', nameAr: 'مستشفى / عيادة',
   },
@@ -253,6 +253,12 @@ const NON_MAP_REGEXES = [
   /(?:function|class\s+\w|variable|const\s+\w|let\s+\w|var\s+\w|import\s+|export\s+|async\s+|await\s+|fetch\(|npm\s+|pip\s+)/i,
   /(?:برمجة|خوارزمية|دالة|متغير|كلاس|مصفوفة|واجهة برمجية|فريمورك|مكتبة|ريبو|repository)/i,
   /\.(html?|css|js|ts|jsx|tsx|py|php|json|xml|yaml|sql|sh)\b/i,
+
+  // Save / correction / training commands — NEVER a map query
+  // e.g. "احفظ التصحيح" / "save correction" / "تذكر هذه المعلومة"
+  /(?:احفظ|إحفظ|خزّن|خزن|تذكّر|تذكر|سجّل|سجل)\s+(?:التصحيح|هذا التصحيح|التصحيحات|الجواب|المعلومة|الحقيقة|الإجابة|هذه المعلومة|هذا الجواب)/i,
+  /(?:save|keep|store|remember)\s+(?:this\s+)?(?:correction|fix|answer|fact|info)/i,
+  /(?:احفظ|إحفظ|تذكر|خزن)\s+(?:هذا|هذه|ذلك)\b/i,
 
   // Explanation / factual / historical queries (not navigation)
   /(?:اشرح|شرح|explain|ما هو|ما هي|ما معنى|ما تعريف|من هو|من هي)\s+\S/i,

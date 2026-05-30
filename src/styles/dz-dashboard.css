@@ -1108,6 +1108,18 @@
 .dzd-doctor-modal-btn--primary:hover  { opacity: .9; }
 .dzd-doctor-modal-btn--secondary      { background: rgba(255,255,255,.05); color: var(--dzd-text-2); border: 1px solid var(--dzd-card-border); }
 .dzd-doctor-modal-btn--secondary:hover{ background: rgba(255,255,255,.09); }
+.dzd-doctor-modal-btn--ghost          { background: transparent; color: var(--dzd-text-2); border: none; font-size: 13px; padding: 8px 14px; opacity: .7; }
+.dzd-doctor-modal-btn--ghost:hover    { opacity: 1; }
+
+/* GPS loading spinner inside modal */
+.dzd-gps-spinner {
+  width: 44px; height: 44px; margin: 10px auto 0;
+  border: 3px solid rgba(99,102,241,.25);
+  border-top-color: var(--dzd-accent, #6366f1);
+  border-radius: 50%;
+  animation: dzdSpin .75s linear infinite;
+}
+@keyframes dzdSpin { to { transform: rotate(360deg); } }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 760px) {

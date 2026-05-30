@@ -3626,6 +3626,54 @@ const TICKER_ITEMS = [
   '💡 أفكار إبداعية لمشاريعك فوراً',
 ]
 
+// ── TickerText: مكوّن معزول تماماً عن إعادات رسم DZChatBox
+// السبب: عند وضع الوكيل تحدث إعادات رسم متكررة جداً (streaming/actionLog/messages)
+// وكانت تُلغي setTimeout قبل أن ينفّذ فيتجمّد النص. React.memo يمنع أي تأثير خارجي.
+const TickerText = React.memo(function TickerText() {
+  const [twText,  setTwText]  = useState('')
+  const [twIdx,   setTwIdx]   = useState(0)
+  const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
+
+  useEffect(() => {
+    const FULL         = TICKER_ITEMS[twIdx]
+    const TYPE_SPEED   = 38
+    const DELETE_SPEED = 22
+    const PAUSE_MS     = 2400
+
+    if (twPhase === 'typing') {
+      if (twText.length < FULL.length) {
+        const t = setTimeout(() => setTwText(FULL.slice(0, twText.length + 1)), TYPE_SPEED)
+        return () => clearTimeout(t)
+      } else {
+        const t = setTimeout(() => setTwPhase('pausing'), PAUSE_MS)
+        return () => clearTimeout(t)
+      }
+    }
+    if (twPhase === 'pausing') {
+      setTwPhase('deleting')
+      return
+    }
+    if (twPhase === 'deleting') {
+      if (twText.length > 0) {
+        const t = setTimeout(() => setTwText(prev => prev.slice(0, -1)), DELETE_SPEED)
+        return () => clearTimeout(t)
+      } else {
+        setTwIdx(prev => (prev + 1) % TICKER_ITEMS.length)
+        setTwPhase('typing')
+      }
+    }
+  }, [twText, twIdx, twPhase])
+
+  return (
+    <div className="dz-ticker-wrap" aria-hidden="true">
+      <span className="dz-ticker-item">
+        {twText}
+        <span className={`dz-tw-cursor${twPhase === 'pausing' ? ' dz-tw-cursor--blink' : ''}`}>|</span>
+      </span>
+    </div>
+  )
+})
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
@@ -3651,9 +3699,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [isGithubReActLoading, setIsGithubReActLoading] = useState(false)
   const [isClaudeMode, setIsClaudeMode] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
-  const [twText, setTwText]   = useState('')
-  const [twIdx,  setTwIdx]    = useState(0)
-  const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
   const [cmdHistory, setCmdHistory] = useState<string[]>([])
   const historyIdxRef = useRef<number>(-1)
   const [showAgentBar, setShowAgentBar] = useState(true)
@@ -3755,38 +3800,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   useEffect(() => { onAgentModeChange?.(agentMode) }, [agentMode, onAgentModeChange])
 
 
-  // ===== TYPEWRITER TICKER =====
-  useEffect(() => {
-    const FULL = TICKER_ITEMS[twIdx]
-    const TYPE_SPEED   = 38
-    const DELETE_SPEED = 22
-    const PAUSE_MS     = 2400
-
-    if (twPhase === 'typing') {
-      if (twText.length < FULL.length) {
-        const t = setTimeout(() => setTwText(FULL.slice(0, twText.length + 1)), TYPE_SPEED)
-        return () => clearTimeout(t)
-      } else {
-        const t = setTimeout(() => setTwPhase('pausing'), PAUSE_MS)
-        return () => clearTimeout(t)
-      }
-    }
-
-    if (twPhase === 'pausing') {
-      setTwPhase('deleting')
-      return
-    }
-
-    if (twPhase === 'deleting') {
-      if (twText.length > 0) {
-        const t = setTimeout(() => setTwText(prev => prev.slice(0, -1)), DELETE_SPEED)
-        return () => clearTimeout(t)
-      } else {
-        setTwIdx(prev => (prev + 1) % TICKER_ITEMS.length)
-        setTwPhase('typing')
-      }
-    }
-  }, [twText, twIdx, twPhase])
 
   // ===== WORKSPACE ACTIVATION: show welcome/resume message in chat =====
   const prevActivatedRepoRef = useRef<string>('')
@@ -7080,13 +7093,8 @@ ${rows}
           )}
         </button>
 
-        {/* Typewriter ticker */}
-        <div className="dz-ticker-wrap" aria-hidden="true">
-          <span className="dz-ticker-item">
-            {twText}
-            <span className={`dz-tw-cursor${twPhase === 'pausing' ? ' dz-tw-cursor--blink' : ''}`}>|</span>
-          </span>
-        </div>
+        {/* Typewriter ticker — مكوّن معزول لا يتأثر بإعادات رسم الوكيل */}
+        <TickerText />
 
         <div className="dz-toolbar-spacer" />
 

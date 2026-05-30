@@ -329,12 +329,12 @@ export default function DZHome() {
       {/* ===== ICONS GRID ===== */}
       <main className="dz-home-grid-wrap">
         <div className="dz-home-grid">
-          {SECTIONS.map((section) => (
+          {SECTIONS.map((section, idx) => (
             <button
               key={section.id}
               className="dz-home-card"
               onClick={() => section.external ? window.open(section.path, '_blank') : navigate(section.path)}
-              style={{ '--card-glow': section.bgGlow } as React.CSSProperties}
+              style={{ '--card-glow': section.bgGlow, '--card-idx': idx } as React.CSSProperties}
               aria-label={section.label}
             >
               <div

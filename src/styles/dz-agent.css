@@ -1706,9 +1706,8 @@
 
 /* ===== TYPEWRITER TICKER ===== */
 .dz-ticker-wrap {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: calc(100% - 80px);
   overflow: hidden;
   height: 28px;
   display: flex;
@@ -2060,8 +2059,8 @@
 .dz-gh-bar::-webkit-scrollbar { display: none; }
 
 .dz-toolbar-spacer {
-  flex: 1;
-  min-width: 4px;
+  flex: 0 0 6px;
+  min-width: 6px;
 }
 
 .dz-toolbar-sep {

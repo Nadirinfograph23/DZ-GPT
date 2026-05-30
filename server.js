@@ -12560,7 +12560,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
-  if (!currentRepo && !req.body.githubToken && messages.length <= 2) {
+  // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
+  // to prevent دينار → دين conflict and ensure live data paths fire correctly
+  const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف/i.test(lastUserMessage)
+  if (!currentRepo && !req.body.githubToken && messages.length <= 2 && !_hasLiveDataKw) {
     const _staticAnswer = lookupStaticFact(lastUserMessage)
     if (_staticAnswer) {
       console.log(`[StaticFact] HIT: "${lastUserMessage.slice(0, 60)}"`)
@@ -15390,7 +15393,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6
+  const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial
 
   if (!skipSearch) {
     try {
@@ -15777,6 +15781,46 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       `> 📡 المصدر: **${source}**`,
     ].filter(Boolean).join('\n')
     return res.status(200).json({ content: formattedWeather })
+  }
+
+  // ── LFP + Standings fast-path: return table directly — no AI needed ──────
+  // When live LFP or standings data is available, skip AI to guarantee table format.
+  const _hasFootballDirectData = (isLFPQuery && lfpContext && lfpContext.length > 50)
+    || (isStandingsQuery && standingsContext && !standingsContext.includes('تعذّر') && standingsContext.includes('|'))
+  if (_hasFootballDirectData && !webReaderContext && !_isAgentMode) {
+    const parts = []
+    if (lfpContext && lfpContext.length > 50) parts.push(lfpContext)
+    if (standingsContext && !standingsContext.includes('تعذّر') && standingsContext.includes('|')) {
+      parts.push(standingsContext)
+    }
+    if (parts.length > 0) {
+      console.log(`[Football Fast-Path] Returning LFP/standings directly without AI`)
+      const combined = parts.join('\n\n')
+      return res.status(200).json({ content: combined })
+    }
+  }
+
+  // ── Currency fast-path: return table directly when live data available ────
+  if (isCurrencyQuery && currencyContext && currencyContext.length > 50 && !_isAgentMode) {
+    console.log(`[Currency Fast-Path] Returning exchange rates directly without AI`)
+    const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const formattedCurrency = [
+      `## 💱 أسعار الصرف — ${today}`,
+      '',
+      `| العملة | 1 دج = | 1 وحدة = دج |`,
+      `|--------|---------|------------|`,
+      ...currencyContext.split('\n')
+        .filter(l => l.startsWith('•'))
+        .map(l => {
+          const m = l.match(/1 DZD = \*\*(.+?)\*\* (.+?) \((.+?)\) \| 1 .+? = \*\*(.+?) DZD\*\*/)
+          if (m) return `| ${m[3]} (${m[2]}) | ${m[1]} | ${m[4]} |`
+          return null
+        })
+        .filter(Boolean),
+      '',
+      `> 📡 المصدر: ${currencyContext.match(/المصدر: (.+?)\)/)?.[1] || 'fawazahmed0/currency-api'}`,
+    ].filter(Boolean).join('\n')
+    return res.status(200).json({ content: formattedCurrency })
   }
 
   // ── Autonomous Reasoning Layer ────────────────────────────────────────────

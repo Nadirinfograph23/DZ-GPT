@@ -277,6 +277,17 @@
 }
 
 /* ===== CARD ===== */
+@keyframes card-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.93);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .dz-home-card {
   position: relative;
   display: flex;
@@ -291,6 +302,8 @@
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease, background 0.2s ease;
   text-align: center;
   overflow: hidden;
+  animation: card-slide-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--card-idx, 0) * 60ms);
 }
 
 .dz-home-card::before {

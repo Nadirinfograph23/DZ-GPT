@@ -26,14 +26,14 @@
   --dzd-accent-dim:    rgba(129,140,248,.1);
   --dzd-accent-border: rgba(129,140,248,.2);
   --dzd-accent-hover:  rgba(129,140,248,.16);
-  --dzd-surface:       #0b0d17;
-  --dzd-surface-2:     #0f1120;
+  --dzd-surface:       #111318;
+  --dzd-surface-2:     #191c23;
   --dzd-card-bg:       rgba(129,140,248,.055);
   --dzd-card-border:   rgba(129,140,248,.14);
   --dzd-card-hover:    rgba(129,140,248,.1);
   --dzd-text-1:        #f1f5f9;
   --dzd-text-2:        #94a3b8;
-  --dzd-text-3:        #475569;
+  --dzd-text-3:        #64748b;
   --dzd-green:         #34d399;
   --dzd-amber:         #fbbf24;
   --dzd-red:           #f87171;
@@ -56,7 +56,7 @@
   --dzd-default:  var(--dzd-accent);
 }
 
-/* ─── Theme-aware accent: sync with sidebar data-theme ─── */
+/* ─── Theme-aware accent + surface: sync with sidebar data-theme ─── */
 .dza-layout[data-theme="teal"] .dzd-root {
   --dzd-accent:          #10a37f;
   --dzd-accent-2:        #0d9268;
@@ -66,6 +66,8 @@
   --dzd-card-bg:         rgba(16,163,127,.055);
   --dzd-card-border:     rgba(16,163,127,.14);
   --dzd-line:            rgba(16,163,127,.1);
+  --dzd-surface:         #111714;
+  --dzd-surface-2:       #181f1c;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #6ee7d0;
   --dzd-tab-active-bar:  #10a37f;
@@ -79,6 +81,8 @@
   --dzd-card-bg:         rgba(148,163,184,.055);
   --dzd-card-border:     rgba(148,163,184,.14);
   --dzd-line:            rgba(148,163,184,.1);
+  --dzd-surface:         #161819;
+  --dzd-surface-2:       #1e2123;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #e2e8f0;
   --dzd-tab-active-bar:  #94a3b8;
@@ -92,6 +96,8 @@
   --dzd-card-bg:         rgba(251,113,133,.055);
   --dzd-card-border:     rgba(251,113,133,.14);
   --dzd-line:            rgba(251,113,133,.1);
+  --dzd-surface:         #171214;
+  --dzd-surface-2:       #1f191b;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #fda4af;
   --dzd-tab-active-bar:  #fb7185;
@@ -105,6 +111,8 @@
   --dzd-card-bg:         rgba(251,191,36,.055);
   --dzd-card-border:     rgba(251,191,36,.14);
   --dzd-line:            rgba(251,191,36,.1);
+  --dzd-surface:         #171511;
+  --dzd-surface-2:       #1f1c17;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #fde68a;
   --dzd-tab-active-bar:  #fbbf24;
@@ -118,6 +126,8 @@
   --dzd-card-bg:         rgba(56,189,248,.055);
   --dzd-card-border:     rgba(56,189,248,.14);
   --dzd-line:            rgba(56,189,248,.1);
+  --dzd-surface:         #111519;
+  --dzd-surface-2:       #181d22;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #bae6fd;
   --dzd-tab-active-bar:  #38bdf8;
@@ -131,6 +141,8 @@
   --dzd-card-bg:         rgba(129,140,248,.055);
   --dzd-card-border:     rgba(129,140,248,.14);
   --dzd-line:            rgba(129,140,248,.1);
+  --dzd-surface:         #131418;
+  --dzd-surface-2:       #1a1c22;
   --dzd-tab-active-bg:   rgba(100,116,139,.50);
   --dzd-tab-active-text: #c7d2fe;
   --dzd-tab-active-bar:  #818cf8;
@@ -181,20 +193,22 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--dzd-text-3);
+  color: var(--dzd-accent);
+  opacity: 0.55;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: color .15s, border-color .15s, background .15s;
+  transition: color .15s, border-color .15s, background .15s, opacity .15s;
   white-space: nowrap;
   margin-bottom: -1px;
   border-radius: 0;
 }
-.dzd-tab:hover { color: var(--dzd-text-2); background: var(--dzd-accent-dim); }
+.dzd-tab:hover { opacity: 0.85; background: var(--dzd-accent-dim); }
 
 /* ─── Active tab — solid grey bg (always) + theme text/bar ─── */
 .dzd-tab--active {
   color:              var(--dzd-tab-active-text, var(--dzd-accent));
+  opacity:            1 !important;
   background:         rgba(71, 85, 105, 0.65) !important;
   border-bottom-color:var(--dzd-tab-active-bar, var(--dzd-accent));
   border-radius: 6px 6px 0 0;
@@ -202,6 +216,7 @@
 /* All data-tab active → same solid grey */
 .dzd-tab[data-tab].dzd-tab--active {
   color:               var(--dzd-tab-active-text, var(--dzd-accent));
+  opacity:             1 !important;
   background:          rgba(71, 85, 105, 0.65) !important;
   border-bottom-color: var(--dzd-tab-active-bar, var(--dzd-accent));
 }

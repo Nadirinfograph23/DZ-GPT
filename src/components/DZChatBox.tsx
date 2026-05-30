@@ -3742,13 +3742,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [showAgentBar, setShowAgentBar] = useState(true)
   const [agentHintGlow, setAgentHintGlow] = useState(false)
   const [_isGeneratingPlan, setIsGeneratingPlan] = useState(false)
-  const [githubToken, setGithubToken] = useState<string>(() => {
-    try {
-      return sessionStorage.getItem('dz-agent-gh-token') || ''
-    } catch {
-      return ''
-    }
-  })
+  const [githubToken, setGithubToken] = useState<string>('')
   const [serverGithubConnected, setServerGithubConnected] = useState(false)
   const [oauthEnabled, setOauthEnabled] = useState(false)
   const [githubUser, setGithubUser] = useState<{
@@ -3771,10 +3765,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [webReaderUrl, setWebReaderUrl] = useState('')
 
   // ===== HYBRID AGENT MODE =====
-  const [agentMode, setAgentMode] = useState<AgentModeState>(() => {
-    const tok = (() => { try { return sessionStorage.getItem('dz-agent-gh-token') || '' } catch { return '' } })()
-    return { active: false, githubToken: tok, selectedRepo: '', autoConfirm: false }
-  })
+  const [agentMode, setAgentMode] = useState<AgentModeState>(() => ({
+    active: false, githubToken: '', selectedRepo: '', autoConfirm: false,
+  }))
   // Pending confirmation dialog for destructive actions
   const [pendingAgentCmd, setPendingAgentCmd] = useState<{
     cmd: string; args: string; label: string; resolve: (ok: boolean) => void
@@ -3899,7 +3892,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       const token = hash.replace('#gh_oauth=', '')
       if (token) {
         setGithubToken(token)
-        sessionStorage.setItem('dz-agent-gh-token', token)
         localStorage.removeItem('dz-agent-gh-token')
         try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
         // Sync OAuth token into agentMode so AgentModeBar can use it immediately
@@ -3995,7 +3987,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
   const saveToken = useCallback((t: string) => {
     setGithubToken(t)
-    sessionStorage.setItem('dz-agent-gh-token', t)
     localStorage.removeItem('dz-agent-gh-token')
     try { window.dispatchEvent(new Event('dz-agent-gh-token-change')) } catch {}
   }, [])

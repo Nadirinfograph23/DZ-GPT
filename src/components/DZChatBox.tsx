@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
 import { useNavigate } from 'react-router-dom'
@@ -3629,7 +3629,7 @@ const TICKER_ITEMS = [
 // ── TickerText: مكوّن معزول تماماً عن إعادات رسم DZChatBox
 // السبب: عند وضع الوكيل تحدث إعادات رسم متكررة جداً (streaming/actionLog/messages)
 // وكانت تُلغي setTimeout قبل أن ينفّذ فيتجمّد النص. React.memo يمنع أي تأثير خارجي.
-const TickerText = React.memo(function TickerText() {
+const TickerText = memo(function TickerText() {
   const [twText,  setTwText]  = useState('')
   const [twIdx,   setTwIdx]   = useState(0)
   const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')

@@ -180,6 +180,8 @@ export default function DZWebBuilder() {
         setPreviewHtml(data.htmlCode)
         setActiveTab('preview')
         setStatusText('✅ تم الاستنساخ!')
+        saveProject({ title: `نسخة ${url.replace(/https?:\/\//,'').slice(0,30)}`, htmlCode: data.htmlCode, siteType, stylePreset, prompt: url })
+        showSaveToast('💾 حُفظ تلقائياً في "مشاريعي"')
       } else {
         setErrorMsg(data.content || 'لم يتم توليد الموقع. يرجى المحاولة مجدداً.')
       }
@@ -257,6 +259,9 @@ ${prompt ? `- متطلبات إضافية: ${prompt}` : ''}
         setPreviewHtml(finalHtml)
         setActiveTab('preview')
         setStatusText('✅ اكتمل البناء!')
+        const autoTitle = data.webBuilderMeta?.title || prompt.slice(0, 40) || `موقع ${new Date().toLocaleDateString('ar-DZ')}`
+        saveProject({ title: autoTitle, htmlCode: finalHtml, siteType, stylePreset, prompt })
+        showSaveToast('💾 حُفظ تلقائياً في "مشاريعي"')
       } else {
         setErrorMsg(data.content || data.error || 'لم يتم توليد موقع — تحقق من مفاتيح الـ API.')
       }

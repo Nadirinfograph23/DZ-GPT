@@ -234,6 +234,25 @@ const SECTIONS = [
     ),
   },
   {
+    id: 'my-projects',
+    label: 'مشاريعي',
+    sublabel: 'مشاريع Web Builder المحفوظة',
+    path: '/my-projects',
+    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+    bgGlow: 'rgba(139,92,246,0.18)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="10" width="36" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M6 17h36" stroke="currentColor" strokeWidth="2.2" />
+        <rect x="12" y="22" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" opacity="0.7"/>
+        <rect x="26" y="22" width="10" height="4" rx="1.5" fill="currentColor" opacity="0.5"/>
+        <rect x="26" y="29" width="7" height="3" rx="1.5" fill="currentColor" opacity="0.35"/>
+        <circle cx="38" cy="38" r="8" fill="#0a0a0f" stroke="currentColor" strokeWidth="2"/>
+        <path d="M35 38h6M38 35v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     id: 'certificate',
     label: 'Certificate',
     sublabel: 'شهادة DZ Agent',

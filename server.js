@@ -21833,9 +21833,27 @@ app.post('/api/chat-room/admin', async (req, res) => {
 // ===== WEBSOCKET CHAT SERVER =====
 function setupChatWebSocket(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/chat' })
+
+  // ── Heartbeat: يمنع قطع الاتصال بسبب الخمول (كل 30 ثانية) ─────────────
+  const _wsHeartbeatInterval = setInterval(() => {
+    wss.clients.forEach(client => {
+      if (client.readyState !== client.OPEN) return
+      if (client.isAlive === false) {
+        console.warn('[WS:Chat] Terminating unresponsive client')
+        client.terminate()
+        return
+      }
+      client.isAlive = false
+      try { client.ping() } catch {}
+    })
+  }, 30_000)
+  wss.on('close', () => clearInterval(_wsHeartbeatInterval))
+
   wss.on('connection', (ws, req) => {
     const clientIp = getClientIp(req)
     if (bannedIPs.has(clientIp)) { ws.close(); return }
+    ws.isAlive = true
+    ws.on('pong', () => { ws.isAlive = true })
     let sid = null
     ws.on('message', async (raw) => {
       try {

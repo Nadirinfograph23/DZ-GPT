@@ -21,6 +21,7 @@ import {
   loadOwnerConfig, saveOwnerConfig,
   detectOwnerCommand, processOwnerCommand,
   processImplicitOwnerLearning,
+  detectAndStorePendingCorrection,
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
@@ -12743,6 +12744,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           return res.status(200).json({
             content: `✅ **تم التسجيل والحفظ تلقائياً:**\n\n${_learnSummary}\n\n> سأعتمد هذا في جميع ردودي القادمة.`,
             _ownerLearned: true,
+          })
+        }
+      }
+    }
+
+    // ── Pending Correction Buffer — تصحيح معلَّق من سياق المحادثة ─────────────
+    // يُفعَّل عندما يختلف المالك مع الرد السابق حتى بدون صيغة صريحة.
+    // المالك يؤكد لاحقاً بكتابة "احفظ التصحيح".
+    const _hasPendingSignal = /^(?:لا[,،]?\s*|لأ[,،]?\s*|كلا[,،]?\s*|غلط[,،]?\s*|خطأ[,،]?\s*|ماشي صحيح|مش صحيح|في الحقيقة|في الواقع)/i.test(lastUserMessage.trim())
+    if (_hasPendingSignal) {
+      const _isOwnerPending = await verifyOwnerToken(_ownerTok)
+      if (_isOwnerPending) {
+        // آخر رد صادر من الوكيل في سجل المحادثة
+        const _lastAgentMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
+        const _pendingResult = detectAndStorePendingCorrection(lastUserMessage, _lastAgentMsg)
+        if (_pendingResult) {
+          console.log(`[PendingCorrection] 🕐 owner disagreement detected — pending stored`)
+          return res.status(200).json({
+            content: `🕐 **لاحظت تصحيحاً محتملاً:**\n\n✔️ **الصواب:** ${_pendingResult.correct}\n${_pendingResult.wrong ? `\n❌ **الخاطئ (ردي السابق):**\n> ${_pendingResult.wrong.slice(0, 120)}${_pendingResult.wrong.length > 120 ? '...' : ''}\n` : ''}\n> اكتب **احفظ التصحيح** لتأكيد الحفظ، أو أكمل المحادثة لتجاهله.`,
+            _pendingCorrection: true,
           })
         }
       }

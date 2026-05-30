@@ -253,6 +253,29 @@ const SECTIONS = [
     ),
   },
   {
+    id: 'agent-v5',
+    label: 'DZ Agent V5',
+    sublabel: 'وكيل ذكي مستقل — ReAct + Multi-Agent',
+    path: '/agent-v5',
+    gradient: 'linear-gradient(135deg, #10a37f 0%, #0ea5e9 100%)',
+    bgGlow: 'rgba(16,163,127,0.22)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="17" stroke="currentColor" strokeWidth="2.5" />
+        <circle cx="24" cy="24" r="8" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="2" />
+        <circle cx="24" cy="24" r="3" fill="currentColor" />
+        <line x1="24" y1="7" x2="24" y2="14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <line x1="24" y1="34" x2="24" y2="41" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <line x1="7" y1="24" x2="14" y2="24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <line x1="34" y1="24" x2="41" y2="24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <circle cx="24" cy="7" r="2.5" fill="currentColor" opacity="0.8" />
+        <circle cx="24" cy="41" r="2.5" fill="currentColor" opacity="0.8" />
+        <circle cx="7" cy="24" r="2.5" fill="currentColor" opacity="0.8" />
+        <circle cx="41" cy="24" r="2.5" fill="currentColor" opacity="0.8" />
+      </svg>
+    ),
+  },
+  {
     id: 'certificate',
     label: 'Certificate',
     sublabel: 'شهادة DZ Agent',

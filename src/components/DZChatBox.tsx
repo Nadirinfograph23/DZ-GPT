@@ -1784,6 +1784,8 @@ function WebsitePreview({
   const [zipped, setZipped]           = useState(false)
   const [fullscreen, setFullscreen]   = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [saving, setSaving]           = useState(false)
+  const [saved, setSaved]             = useState(false)
 
   const cssCode = cssCodeProp || clientExtractCss(htmlCode)
   const jsCode  = jsCodeProp  || clientExtractJs(htmlCode)
@@ -1813,6 +1815,29 @@ function WebsitePreview({
     setEditApplied(true)
     setTimeout(() => setEditApplied(false), 2000)
     setView('preview')
+  }
+
+  const handleSaveProject = async () => {
+    setSaving(true)
+    try {
+      const r = await fetch('/api/wb/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: webBuilderMeta?.title || 'مشروع بدون عنوان',
+          html: previewSrc,
+          css: editedCss,
+          js: editedJs,
+          type: webBuilderMeta?.type || 'landing',
+          icon: webBuilderMeta?.icon || '🌐',
+        }),
+      })
+      if (r.ok) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      }
+    } catch {}
+    finally { setSaving(false) }
   }
 
   const handleDownloadHtml = () => {
@@ -1934,6 +1959,15 @@ function WebsitePreview({
           >
             {zipping ? '⏳' : zipped ? <Check size={13} /> : '🗜'}
             {zipping ? 'جارٍ...' : zipped ? 'تم ✓' : 'ZIP'}
+          </button>
+          <button
+            className={`dz-wp-btn dz-wp-btn--save${saved ? ' dz-wp-btn--ok' : ''}`}
+            onClick={handleSaveProject}
+            disabled={saving}
+            title="حفظ المشروع في السيرفر"
+          >
+            {saving ? '⏳' : saved ? <Check size={13} /> : '💾'}
+            {saving ? 'جارٍ...' : saved ? 'محفوظ ✓' : 'حفظ'}
           </button>
           {onInsertPrompt && (
             <button

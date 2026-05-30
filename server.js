@@ -7504,13 +7504,7 @@ const SPORTS_FEEDS_DASHBOARD = [
 
 // ===== TECH INTELLIGENCE MODULE — RSS FEEDS =====
 const TECH_FEEDS_DASHBOARD = [
-  { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
-  { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
-  { name: 'Wired', url: 'https://www.wired.com/feed/rss' },
-  { name: 'Ars Technica', url: 'https://arstechnica.com/feed/' },
-  { name: 'DEV.to', url: 'https://dev.to/feed' },
-  { name: 'Stack Overflow Blog', url: 'https://stackoverflow.blog/feed/' },
-  { name: 'Google News Tech', url: 'https://news.google.com/rss/search?q=technology+AI&hl=en' },
+  { name: 'تقنية تايمز', url: 'https://taqniatimes.com/rss-feeds/feed/category/latest-news' },
 ]
 
 const TECH_CATEGORY_KEYWORDS = {
@@ -8319,19 +8313,17 @@ async function fetchLFPData() {
     // Issue 1 fix: STRICT source binding — only lfp.dz pages.
     // Primary match source is the official calendar page; /ar is a backup
     // gallery view; /ar/articles is for news only.
-    const [calRes, homeRes, articlesRes] = await Promise.allSettled([
+    // مصدر واحد رسمي فقط: lfp.dz/ar/calendar
+    const [calRes, articlesRes] = await Promise.allSettled([
       resilientFetch('https://lfp.dz/ar/calendar', { timeout: 12000, retries: 3 }),
-      resilientFetch('https://lfp.dz/ar', { timeout: 12000, retries: 2 }),
       resilientFetch('https://lfp.dz/ar/articles', { timeout: 12000, retries: 2 }),
     ])
 
     const calHtml = calRes.status === 'fulfilled' && calRes.value.ok ? await calRes.value.text() : ''
-    const homeHtml = homeRes.status === 'fulfilled' && homeRes.value.ok ? await homeRes.value.text() : ''
     const articlesHtml = articlesRes.status === 'fulfilled' && articlesRes.value.ok ? await articlesRes.value.text() : ''
 
-    // Try calendar first, fall back to homepage
+    // المصدر الوحيد: صفحة الجدول الرسمية
     let matches = calHtml ? parseLFPMatches(calHtml) : []
-    if (matches.length === 0 && homeHtml) matches = parseLFPMatches(homeHtml)
 
     // Issue 1 fix: validate + sanitize before exposing to UI / AI
     matches = sanitizeAlgerianLeague(matches)
@@ -8557,37 +8549,7 @@ async function fetchAlgerianLeague(opts = {}) {
     }
   } catch (err) { diagLog('source_fail', { module: 'algerian-league.lfp', error: err.message }) }
 
-  // Step 2: BACKUP 1 — jdwel.com (Arabic match aggregator, scraped via curl)
-  if (!sources.some(s => s.matches.length > 0)) {
-    try {
-      const jd = await fetchAlgerianLeagueJdwel()
-      if (jd?.matches?.length) sources.push({ ...jd, articles: [] })
-    } catch (err) { diagLog('source_fail', { module: 'algerian-league.jdwel', error: err.message }) }
-  }
-
-  // Step 3: BACKUP 2 — API-Football
-  if (!sources.some(s => s.matches.length > 0)) {
-    try {
-      const api = await fetchAlgerianLeagueAPIFootball()
-      if (api?.matches?.length) sources.push({ ...api, articles: [] })
-    } catch (err) { diagLog('source_fail', { module: 'algerian-league.api-football', error: err.message }) }
-  }
-
-  // Step 3: BACKUP 2 — SofaScore filtered to Algeria
-  if (!sources.some(s => s.matches.length > 0)) {
-    try {
-      const sf = await fetchAlgerianLeagueSofaScore()
-      if (sf?.matches?.length) sources.push({ ...sf, articles: [] })
-    } catch (err) { diagLog('source_fail', { module: 'algerian-league.sofascore', error: err.message }) }
-  }
-
-  // Step 4: BACKUP 3 — Flashscore
-  if (!sources.some(s => s.matches.length > 0)) {
-    try {
-      const fs = await fetchAlgerianLeagueFlashscore()
-      if (fs?.matches?.length) sources.push({ ...fs, articles: [] })
-    } catch (err) { diagLog('source_fail', { module: 'algerian-league.flashscore', error: err.message }) }
-  }
+  // Backup sources disabled — مصدر واحد رسمي فقط: lfp.dz/ar/calendar
 
   // Merge: take first non-empty `matches` source as primary, accumulate articles
   const primary = sources.find(s => s.matches.length > 0) || sources[0] || null
@@ -8599,17 +8561,16 @@ async function fetchAlgerianLeague(opts = {}) {
     matches: dedupedMatches,
     articles: allArticles,
     fetchedAt: new Date().toISOString(),
-    source: primary?.source || 'unavailable',
-    sourcesAttempted: sources.map(s => s.source),
+    source: primary?.source || 'lfp.dz',
+    sourcesAttempted: ['lfp.dz/ar/calendar'],
+    // إذا لا توجد مباريات — رسالة واضحة بدل البيانات القديمة
+    noMatches: dedupedMatches.length === 0,
   }
 
-  // Only cache non-empty success — preserves last-good payload on transient failure
+  // Cache only when matches exist — لا نخزّن بيانات فارغة
   if (dedupedMatches.length > 0 || allArticles.length > 0) {
     ALGERIAN_LEAGUE_CACHE.data = data
     ALGERIAN_LEAGUE_CACHE.ts = Date.now()
-  } else if (ALGERIAN_LEAGUE_CACHE.data) {
-    // Anti-empty: serve stale rather than empty
-    return { ...ALGERIAN_LEAGUE_CACHE.data, stale: true }
   }
   return data
 }
@@ -8626,8 +8587,9 @@ app.get('/api/dz-agent/lfp', async (req, res) => {
       ...data,
       matches: [],
       articles: [],
-      status: 'unavailable',
-      message: '⚠️ بيانات الدوري الجزائري غير متاحة حالياً — يُرجى المحاولة لاحقاً.',
+      status: 'no_matches',
+      noMatches: true,
+      message: 'لا توجد مبارايات حاليا',
     })
   }
   res.json({ ...data, status: 'ok' })

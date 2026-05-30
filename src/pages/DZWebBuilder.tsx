@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom'
 import '../styles/dz-web-builder.css'
+import { saveProject } from './DZMyProjects'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BuildResult {
@@ -70,6 +71,8 @@ const EXAMPLES = [
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function DZWebBuilder() {
   const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [prompt, setPrompt]               = useState('')
   const [siteType, setSiteType]           = useState('landing')
@@ -84,8 +87,37 @@ export default function DZWebBuilder() {
   const [showCloneBar, setShowCloneBar]   = useState(false)
   const [cloneInputVal, setCloneInputVal] = useState('')
   const [previewHtml, setPreviewHtml]     = useState<string>('')
+  const [saveToast, setSaveToast]         = useState('')
 
   const cloneInputRef = { current: null as HTMLInputElement | null }
+
+  // ── Restore project from My Projects page ──────────────────────────────────
+  useEffect(() => {
+    const state = location.state as { restoreProject?: { htmlCode: string; prompt: string; siteType: string; stylePreset: string; title: string } } | null
+    if (state?.restoreProject) {
+      const rp = state.restoreProject
+      setPrompt(rp.prompt || '')
+      setSiteType(rp.siteType || 'landing')
+      setStylePreset(rp.stylePreset || 'glassmorphism')
+      setResult({ htmlCode: rp.htmlCode, message: `✅ تم استعادة "${rp.title}" بنجاح!` })
+      setPreviewHtml(rp.htmlCode)
+      setActiveTab('preview')
+      window.history.replaceState({}, document.title)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const showSaveToast = (msg: string) => {
+    setSaveToast(msg)
+    setTimeout(() => setSaveToast(''), 3000)
+  }
+
+  const handleSaveProject = () => {
+    if (!result?.htmlCode) return
+    const title = result.meta?.title || prompt.slice(0, 40) || `موقع ${new Date().toLocaleDateString('ar-DZ')}`
+    saveProject({ title, htmlCode: result.htmlCode, siteType, stylePreset, prompt })
+    showSaveToast('✅ تم حفظ المشروع في "مشاريعي"')
+  }
 
   // ── Clone bar ───────────────────────────────────────────────────────────────
   const openCloneBar = () => {
@@ -272,6 +304,13 @@ ${prompt ? `- متطلبات إضافية: ${prompt}` : ''}
         </div>
         <div className="dzwb-header-actions">
           <button
+            className="dzwb-action-btn dzwb-action-btn--myprojects"
+            onClick={() => navigate('/my-projects')}
+            title="مشاريعي المحفوظة"
+          >
+            💾 <span className="dzwb-clone-btn-text">مشاريعي</span>
+          </button>
+          <button
             className={`dzwb-action-btn dzwb-action-btn--clone ${showCloneBar ? 'dzwb-action-btn--clone-active' : ''}`}
             onClick={showCloneBar ? closeCloneBar : openCloneBar}
             title="استنسخ أي موقع من رابطه"
@@ -280,6 +319,18 @@ ${prompt ? `- متطلبات إضافية: ${prompt}` : ''}
           </button>
         </div>
       </header>
+
+      {/* ── Save Toast ── */}
+      {saveToast && (
+        <div style={{
+          position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)',
+          background:'rgba(74,222,128,0.95)', color:'#fff', padding:'10px 24px',
+          borderRadius:'30px', fontSize:'14px', fontWeight:700, zIndex:9999,
+          boxShadow:'0 4px 24px rgba(74,222,128,0.4)', animation:'none'
+        }}>
+          {saveToast}
+        </div>
+      )}
 
       {/* ── Clone Bar ── */}
       {showCloneBar && (
@@ -475,6 +526,9 @@ ${prompt ? `- متطلبات إضافية: ${prompt}` : ''}
                     {result.meta?.icon} {result.meta?.title || 'موقع جاهز'}
                   </div>
                   <div className="dzwb-tabs-downloads">
+                    <button className="dzwb-dl-btn dzwb-dl-btn--save" onClick={handleSaveProject} title="حفظ في مشاريعي">
+                      💾 حفظ
+                    </button>
                     <button className="dzwb-dl-btn" onClick={downloadHtml} title="تحميل index.html">
                       ⬇ index.html
                     </button>

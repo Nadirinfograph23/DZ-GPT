@@ -3657,10 +3657,14 @@ function FindDialog({ repo, onSearch, onClose }: { repo: string; onSearch: (patt
 }
 
 const QUICK_ACTIONS = [
-  { icon: '💻', label: 'اكتب كود',    cmd: 'اكتب لي كود Python يحسب متتالية فيبوناتشي' },
-  { icon: '🌤️', label: 'الطقس الآن', cmd: 'ما طقس الجزائر العاصمة الآن؟' },
-  { icon: '📰', label: 'آخر الأخبار', cmd: 'أخبرني بآخر أخبار الجزائر اليوم' },
-  { icon: '🌐', label: 'أنشئ موقعاً', cmd: 'أنشئ لي صفحة ويب احترافية باللغة العربية' },
+  { icon: '💻', label: 'اكتب كود',      cmd: 'اكتب لي كود Python يحسب متتالية فيبوناتشي' },
+  { icon: '🌤️', label: 'الطقس الآن',   cmd: 'ما طقس الجزائر العاصمة الآن؟' },
+  { icon: '📰', label: 'آخر الأخبار',   cmd: 'أخبرني بآخر أخبار الجزائر اليوم' },
+  { icon: '🌐', label: 'أنشئ موقعاً',  cmd: 'أنشئ لي صفحة ويب احترافية باللغة العربية' },
+  { icon: '⚽', label: 'مباريات اليوم', cmd: 'نتائج مباريات كرة القدم اليوم وجدول الدوري الجزائري' },
+  { icon: '💱', label: 'سعر الصرف',    cmd: 'سعر الدولار واليورو مقابل الدينار الجزائري اليوم' },
+  { icon: '🐙', label: 'GitHub',        cmd: 'اعرض مستودعاتي على GitHub' },
+  { icon: '🔧', label: 'تحليل كود',    cmd: 'ما هي أفضل ممارسات تصميم REST API؟ مع أمثلة عملية' },
 ]
 
 const TICKER_ITEMS = [
@@ -7290,8 +7294,6 @@ ${rows}
               </button>
             ))}
           </div>
-
-          <DZSuggestionCards onSend={(cmd) => sendMessage(cmd)} />
         </div>
       ) : (
       /* Messages */

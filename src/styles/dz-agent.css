@@ -1658,6 +1658,8 @@
 /* ===== VOICE BUTTON ===== */
 .dz-action-btn--voice { color: #6b7280; }
 .dz-action-btn--voice:hover { color: #10a37f; border-color: rgba(16,163,127,0.3); background: rgba(16,163,127,0.07); }
+
+/* Playing state */
 .dz-action-btn--speaking {
   color: #10a37f !important;
   border-color: rgba(16,163,127,0.4) !important;
@@ -1667,6 +1669,35 @@
 @keyframes dz-voice-pulse {
   0%,100% { box-shadow: 0 0 0 0 rgba(16,163,127,0.25); }
   50%      { box-shadow: 0 0 0 5px rgba(16,163,127,0); }
+}
+
+/* Loading state — fetching audio from HF */
+.dz-action-btn--tts-loading {
+  color: #818cf8 !important;
+  border-color: rgba(129,140,248,0.35) !important;
+  background: rgba(129,140,248,0.09) !important;
+  cursor: wait !important;
+  pointer-events: auto !important;
+}
+.dz-action-btn--tts-loading:hover {
+  background: rgba(129,140,248,0.13) !important;
+}
+
+/* Spinner icon inside the loading button */
+@keyframes dz-tts-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.dz-tts-spin {
+  animation: dz-tts-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Disabled sibling buttons while one is loading */
+.dz-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* ===== LOAD MORE NEWS BUTTON ===== */

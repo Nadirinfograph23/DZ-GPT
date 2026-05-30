@@ -405,8 +405,77 @@ export function learnWord(word, context, guessedMeaning = '') {
 }
 
 /**
+ * guessDarijaMeaning(word, context, slangMap)
+ * يحاول استنتاج معنى الكلمة الدارجة من:
+ *   ① Levenshtein ≤1 من قاموس الدارجة الموجود
+ *   ② أنماط صرفية جزائرية (ما...ش، ن/ي/ت prefix، جمع)
+ *   ③ الكلمات المعروفة في نفس السياق
+ *   ④ كشف مصطلح دخيل (فرنكو-عربي)
+ */
+function guessDarijaMeaning(word, context, slangMap) {
+  if (!slangMap) return ''
+
+  // ① Levenshtein ≤1 في قاموس الدارجة
+  for (const [k, v] of Object.entries(slangMap)) {
+    if (Math.abs(k.length - word.length) <= 1 && levenshtein(k, word) <= 1) {
+      return `قريب من "${k}": ${v}`
+    }
+  }
+
+  // ② أنماط صرفية جزائرية
+  // ما...ش → نفي (ماخدمش، ماجاش)
+  if (word.startsWith('ما') && word.endsWith('ش') && word.length > 4) {
+    const inner = word.slice(2, -1)
+    const m = slangMap[inner]
+    return m ? `نفي: لا ${m}` : 'نفي الفعل (ما...ش)'
+  }
+  // ن prefix → مضارع المتكلم (نخدم ← خدم)
+  if (word.startsWith('ن') && word.length > 3) {
+    const root = word.slice(1)
+    if (slangMap[root]) return `أنا أفعل: ${slangMap[root]}`
+  }
+  // ي prefix → مضارع الغائب (يخدم ← خدم)
+  if (word.startsWith('ي') && word.length > 3) {
+    const root = word.slice(1)
+    if (slangMap[root]) return `هو يفعل: ${slangMap[root]}`
+  }
+  // ت prefix → مضارع المخاطب / المؤنثة
+  if (word.startsWith('ت') && word.length > 3) {
+    const root = word.slice(1)
+    if (slangMap[root]) return `تفعل: ${slangMap[root]}`
+  }
+  // ات suffix → جمع مؤنث
+  if (word.endsWith('ات') && word.length > 4) {
+    const root = word.slice(0, -2)
+    if (slangMap[root]) return `جمع: ${slangMap[root]}`
+  }
+  // ين suffix → جمع مذكر
+  if (word.endsWith('ين') && word.length > 4) {
+    const root = word.slice(0, -2)
+    if (slangMap[root]) return `جمع: ${slangMap[root]}`
+  }
+  // وا suffix → جمع فعل (راحوا ← راح)
+  if (word.endsWith('وا') && word.length > 4) {
+    const root = word.slice(0, -2)
+    if (slangMap[root]) return `جمع الفعل: ${slangMap[root]}`
+  }
+
+  // ③ كلمات معروفة في السياق
+  const ctxTokens = (context || '').split(/\s+/).filter(t => t !== word && slangMap[t])
+  if (ctxTokens.length > 0) {
+    const meanings = ctxTokens.slice(0, 2).map(t => `${t}=${slangMap[t]}`).join('، ')
+    return `في سياق: ${meanings}`
+  }
+
+  // ④ فرنكو-عربي (كلمة تحتوي على حروف لاتينية)
+  if (/[a-z]{2,}/i.test(word)) return 'مصطلح دخيل (فرنكو-عربي)'
+
+  return ''
+}
+
+/**
  * autoLearnFromText(text)
- * Scans text for unknown Darija words and stores them
+ * Scans text for unknown Darija words and stores them WITH guessed meanings
  */
 export function autoLearnFromText(text) {
   if (!text) return []
@@ -418,7 +487,8 @@ export function autoLearnFromText(text) {
     if (!isArabic(token) || token.length < 3) continue
     const known = findInDict(token, dict)
     if (!known) {
-      const learned = learnWord(token, text)
+      const guessedMeaning = guessDarijaMeaning(token, text, dict.slang_map || {})
+      const learned = learnWord(token, text, guessedMeaning)
       if (learned) newWords.push(token)
     }
   }

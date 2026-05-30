@@ -11612,7 +11612,7 @@
   font-size: 11px;
   font-weight: 600;
   color: #10a37f;
-  max-width: 140px;
+  max-width: 130px;
   overflow: hidden;
   flex-shrink: 0;
   animation: dz-repo-fadein 0.3s ease;
@@ -11621,13 +11621,31 @@
 .dz-agent-repo-dot {
   font-size: 8px;
   color: #4ade80;
+  flex-shrink: 0;
   animation: dz-repo-dot-blink 1.8s ease-in-out infinite;
 }
 @keyframes dz-repo-dot-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ─── Static name (short ≤13 chars) ─── */
 .dz-agent-repo-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-block;
+}
+
+/* ─── Scrolling marquee (long >13 chars) ─── */
+.dz-agent-repo-name--scroll {
+  text-overflow: clip;
+  overflow: visible;
+  animation: dz-repo-name-scroll 6s ease-in-out infinite;
+  /* pause before first scroll */
+  animation-delay: 1.2s;
+}
+@keyframes dz-repo-name-scroll {
+  0%,  22% { transform: translateX(0); }
+  65%, 78% { transform: translateX(-90px); }
+  100%     { transform: translateX(0); }
 }
 
 /* ===== RUNNING TASKS PANEL (Agent Mode) ===== */

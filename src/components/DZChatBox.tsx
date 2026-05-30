@@ -587,6 +587,16 @@ interface DZMessage {
   }>
   booksQuery?: string
   booksTotal?: number
+  androidBuildMeta?: {
+    appName: string
+    packageName: string
+    repoUrl: string
+    actionsUrl: string
+    releasesUrl: string
+    filesCount: number
+    status: 'building' | 'done' | 'error'
+    error?: string
+  }
   slides?: Array<{ title: string; bullets: string[]; icon: string; note?: string }>
   presentationTitle?: string
   presentationSubtitle?: string
@@ -5970,6 +5980,71 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     setImgRegenLoading(null)
   }, [imgRegenLoading])
 
+  // ─── Android APK Builder ─────────────────────────────────────────────────
+  const ANDROID_RE = /(?:تطبيق\s*(?:أندرويد|اندرويد|android)|apk|ملف\s*apk|تنزيل\s*تطبيق|تطبيق\s*(?:جوال|موبايل|للهاتف|للموبايل)|(?:اصنع|أنشئ|انشئ|ابني|اعمل|دير|صمم|بني|صنعلي|اصنعلي)\s+تطبيق|build\s+android|create\s+android\s+app|android\s+app|generate\s+apk|build\s+apk|make\s+apk|mobile\s+app)/i
+
+  const buildAndroidApp = async (task: string) => {
+    const botId = generateId()
+    setMessages(prev => [...prev, {
+      id: botId, role: 'assistant', content: '', richType: 'text',
+      androidBuildMeta: { appName: task.slice(0, 40), packageName: '', repoUrl: '', actionsUrl: '', releasesUrl: '', filesCount: 0, status: 'building' },
+    }])
+    setIsLoading(true)
+
+    const updateMeta = (patch: Partial<NonNullable<DZMessage['androidBuildMeta']>>) => {
+      setMessages(prev => prev.map(m => m.id === botId
+        ? { ...m, androidBuildMeta: { ...m.androidBuildMeta!, ...patch } }
+        : m
+      ))
+    }
+    const appendContent = (text: string) => {
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, content: m.content + text } : m))
+    }
+
+    try {
+      const resp = await fetch('/api/dz-agent/android/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task, appName: task.slice(0, 40) }),
+      })
+      const reader = resp.body!.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.replace(/^data:\s*/, '').trim()
+          if (!line) continue
+          try {
+            const ev = JSON.parse(line)
+            if (ev.type === 'step') {
+              appendContent(`\n**${ev.step === 'web' ? '🌐' : ev.step === 'android' ? '🤖' : ev.step === 'push' ? '📦' : '✅'} ${ev.detail || ev.step}**`)
+            } else if (ev.type === 'detail') {
+              appendContent(`\n${ev.text}`)
+            } else if (ev.type === 'result' && ev.data) {
+              updateMeta({ ...ev.data, status: 'done' })
+              appendContent(`\n\n✅ **تم بناء مشروع أندرويد بنجاح!** سيبدأ GitHub Actions بناء APK تلقائياً.`)
+            } else if (ev.type === 'error') {
+              updateMeta({ status: 'error', error: ev.message })
+              appendContent(`\n\n❌ ${ev.message}`)
+            }
+          } catch {}
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'خطأ غير معروف'
+      updateMeta({ status: 'error', error: msg })
+      appendContent(`\n\n❌ ${msg}`)
+    }
+    setIsLoading(false)
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const IMAGE_REQUEST_RE = /(?:ارسم|أرسم|رسم\s*لي|رسملي|أرسملي|ارسملي|صورة\s*عن|صورلي|صورة\s*ل(?:ـ|ي)?|اصنع\s*صورة|أنشئ\s*صورة|انشئ\s*صورة|إنشاء\s*صورة|إنشأ\s*صورة|انشأ\s*صورة|جيبلي\s*صورة|اعمل\s*صورة|دير\s*(?:لي\s*)?صورة|ولد\s*صورة|توليد\s*صورة|أعطني\s*صورة|اعطني\s*صورة|أنتج\s*صورة|انتج\s*صورة|صمم\s*(?:لي\s*)?صورة|اصنع\s*لي\s*صورة|بعثلي\s*صورة|حقق\s*صورة|generate\s*(?:an?\s*)?image|create\s*(?:an?\s*)?image|draw\s*(?:me\s*)?(?:a\s*)?|make\s*(?:an?\s*)?image|sketch\s*(?:me\s*)?|imagine\s*(?:a\s*)?|dessine(?:\s*moi)?|cr[ée]+\s*une?\s*image|g[ée]n[eè]re?\s*une?\s*image|fais\s*une?\s*image)/i
 
   function extractImagePrompt(text: string): string {
@@ -6072,6 +6147,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     const agentCtxInject = (agentMode.active && agentMode.selectedRepo)
       ? `\n\n[وضع الوكيل — المستودع: ${agentMode.selectedRepo}]`
       : ''
+
+    // ── Android APK Builder intent detection ─────────────────────────────────
+    if (ANDROID_RE.test(text)) {
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: text, richType: 'text' }])
+      setInput('')
+      await buildAndroidApp(text)
+      return
+    }
 
     const userMessage: DZMessage = { id: generateId(), role: 'user', content: text, richType: 'text' }
     const outboundMessages = [...messages, userMessage].map((m, index, arr) => ({
@@ -7440,6 +7523,50 @@ ${rows}
                             </a>
                           )}
                         </>
+                      )}
+                      {msg.androidBuildMeta && (
+                        <div className="dz-android-card">
+                          <div className="dz-android-card__header">
+                            <span className="dz-android-card__icon">🤖</span>
+                            <div>
+                              <div className="dz-android-card__title">
+                                {msg.androidBuildMeta.status === 'building' ? '⏳ جاري بناء تطبيق أندرويد...' : msg.androidBuildMeta.status === 'error' ? '❌ فشل البناء' : `📱 ${msg.androidBuildMeta.appName}`}
+                              </div>
+                              {msg.androidBuildMeta.packageName && (
+                                <div className="dz-android-card__pkg">{msg.androidBuildMeta.packageName}</div>
+                              )}
+                            </div>
+                            {msg.androidBuildMeta.status === 'building' && (
+                              <div className="dz-android-card__spinner" />
+                            )}
+                          </div>
+                          {msg.androidBuildMeta.status === 'done' && msg.androidBuildMeta.repoUrl && (
+                            <div className="dz-android-card__body">
+                              <div className="dz-android-card__info">
+                                <span>📁 {msg.androidBuildMeta.filesCount} ملف مرفوع</span>
+                                <span>⚙️ GitHub Actions يبني APK الآن</span>
+                              </div>
+                              <div className="dz-android-card__actions">
+                                <a href={msg.androidBuildMeta.releasesUrl} target="_blank" rel="noopener noreferrer" className="dz-android-btn dz-android-btn--primary">
+                                  ⬇️ تحميل APK
+                                </a>
+                                <a href={msg.androidBuildMeta.actionsUrl} target="_blank" rel="noopener noreferrer" className="dz-android-btn dz-android-btn--secondary">
+                                  ⚙️ متابعة البناء
+                                </a>
+                                <a href={msg.androidBuildMeta.repoUrl} target="_blank" rel="noopener noreferrer" className="dz-android-btn dz-android-btn--ghost">
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                                  GitHub
+                                </a>
+                              </div>
+                              <div className="dz-android-card__note">
+                                ⚠️ سيستغرق البناء 5-10 دقائق — انقر "تحميل APK" بعد انتهاء Actions
+                              </div>
+                            </div>
+                          )}
+                          {msg.androidBuildMeta.status === 'error' && msg.androidBuildMeta.error && (
+                            <div className="dz-android-card__error">{msg.androidBuildMeta.error}</div>
+                          )}
+                        </div>
                       )}
                       {msg.richType === 'web-reader' && msg.webReaderSiteInfo && (
                         <WebReaderPanel

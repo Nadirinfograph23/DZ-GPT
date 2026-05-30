@@ -3751,6 +3751,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
   const streamingMsgIdRef = useRef<string | null>(null)  // tracks the in-progress SSE message
+  const pendingDoctorGpsRef = useRef<{ lat: number; lon: number; city: string } | null>(null)
   const planApprovalRef = useRef<{
     msgId: string
     resolve: (approved: boolean) => void
@@ -3999,6 +4000,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     if (msg.richType === 'text' || !msg.richType) setTypingId(id)
     return id
   }, [])
+
+  // ===== DOCTOR GPS READY — inject assistant question then wait for specialty =====
+  const handleDoctorGpsReady = useCallback((lat: number, lon: number, city: string) => {
+    pendingDoctorGpsRef.current = { lat, lon, city }
+    const locationLabel = city || 'موقعك'
+    addAssistantMessage({
+      content: `أنت الآن في **${locationLabel}** 📍\nما اختصاص الطبيب الذي تريد أن تبحث عنه؟`,
+      richType: 'text',
+    })
+  }, [addAssistantMessage])
 
   // ===== GITHUB AUTH ERROR MESSAGE (دارجة) =====
   const GH_AUTH_ERR = '⚠️ فشل الاتصال بـ GitHub. تحقق من صلاحيات التوكن أو أعد الاتصال من زر **وكيل** في الأسفل.'
@@ -5964,8 +5975,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
   // ===== SEND MESSAGE =====
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
-    const text = (overrideInput ?? input).trim()
+    let text = (overrideInput ?? input).trim()
     if (!text || isLoading) return
+
+    // If a doctor-GPS session is pending, enrich the specialty query with GPS coords
+    if (pendingDoctorGpsRef.current && !text.includes('[GPS:')) {
+      const { lat, lon, city } = pendingDoctorGpsRef.current
+      const gpsTag = `[GPS:${lat.toFixed(5)},${lon.toFixed(5)}]`
+      const cityPart = city ? `في ${city} ` : ''
+      text = `أريد طبيب ${text} ${cityPart}${gpsTag}`
+      pendingDoctorGpsRef.current = null
+    }
 
     // Debounce: prevent duplicate sends within 400ms
     const now = Date.now()
@@ -7168,7 +7188,7 @@ ${rows}
 
           {/* Live Dashboard Cards — top position, under logo */}
           <div className="dz-dashboard-wrapper">
-            <DZDashboard onSend={(q, context) => sendMessage(q, context)} />
+            <DZDashboard onSend={(q, context) => sendMessage(q, context)} onDoctorGpsReady={handleDoctorGpsReady} />
           </div>
 
           {false ? (

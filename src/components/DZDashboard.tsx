@@ -233,55 +233,55 @@ function DoctorSearchCard({ onSend, onDoctorGpsReady }: {
     onSend('أريد طبيب')
   }
 
-  const handleUseGps = async () => {
+  const handleUseGps = () => {
     if (!('geolocation' in navigator)) {
       closePopup()
       onSend('أريد طبيب')
       return
     }
-    // Keep modal OPEN — switch to loading so user sees GPS request
+    // Switch to loading immediately so user sees the state change
     setModalStep('loading')
     setLoadingMsg('في انتظار إذن GPS من المتصفح...')
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        })
-      })
-      const { latitude, longitude } = pos.coords
-      setLoadingMsg('جاري تحديد اسم المدينة...')
-      let city = ''
-      try {
-        const r = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
-          { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-        )
-        if (r.ok) {
-          const j = await r.json()
-          const a = j.address || {}
-          city = a.city || a.town || a.village || a.municipality || a.county || a.state || ''
+
+    // Call getCurrentPosition directly (not wrapped in async/await)
+    // so the browser recognises this as a direct user-gesture and
+    // shows the native "Allow location?" permission prompt.
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        setLoadingMsg('جاري تحديد اسم المدينة...')
+        let city = ''
+        try {
+          const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ar&zoom=10`,
+            { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+          )
+          if (r.ok) {
+            const j = await r.json()
+            const a = j.address || {}
+            city = a.city || a.town || a.village || a.municipality || a.county || a.state || ''
+          }
+        } catch { /* reverse-geocode failure is non-fatal */ }
+        closePopup()
+        if (onDoctorGpsReady) {
+          onDoctorGpsReady(latitude, longitude, city)
+        } else {
+          const gpsTag = ` [GPS:${latitude.toFixed(5)},${longitude.toFixed(5)}]`
+          if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
+          else onSend(`أريد طبيب${gpsTag}`)
         }
-      } catch { /* reverse-geocode failure is non-fatal */ }
-      closePopup()
-      if (onDoctorGpsReady) {
-        onDoctorGpsReady(latitude, longitude, city)
-      } else {
-        const gpsTag = ` [GPS:${latitude.toFixed(5)},${longitude.toFixed(5)}]`
-        if (city) onSend(`أريد طبيب في ${city}${gpsTag}`)
-        else onSend(`أريد طبيب${gpsTag}`)
-      }
-    } catch (err: unknown) {
-      const code = (err as GeolocationPositionError)?.code
-      if (code === 1) {
-        setModalStep('denied')
-        setLoadingMsg('')
-      } else {
-        setModalStep('error')
-        setLoadingMsg('تعذّر تحديد الموقع. تحقق من اتصالك أو أذونات الموقع.')
-      }
-    }
+      },
+      (err) => {
+        if (err.code === 1) {
+          setModalStep('denied')
+          setLoadingMsg('')
+        } else {
+          setModalStep('error')
+          setLoadingMsg('تعذّر تحديد الموقع. تحقق من اتصالك أو أذونات الموقع.')
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    )
   }
 
   const renderModalBody = () => {

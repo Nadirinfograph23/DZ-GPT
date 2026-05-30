@@ -36,7 +36,7 @@ const COLORS: Record<ToastType, string> = {
   import:  '#a78bfa',
   success: '#10a37f',
   error:   '#ef4444',
-  info:    '#94a3b8',
+  info:    '#10a37f',
 }
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {

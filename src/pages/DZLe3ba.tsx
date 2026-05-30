@@ -51,7 +51,7 @@ function WordleGame() {
       wins: prev.wins + (won ? 1 : 0),
       streak: won ? prev.streak + 1 : 0,
     }
-    localStorage.setItem('dz-le3ba-stats', JSON.stringify(next))
+    try { localStorage.setItem('dz-le3ba-stats', JSON.stringify(next)) } catch {}
     window.dispatchEvent(new Event('storage'))
   }, [])
 

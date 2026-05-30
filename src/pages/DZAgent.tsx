@@ -241,9 +241,15 @@ export default function DZAgent() {
             </button>
           </div>
           <div className="dz-agent-logo">
-            <div className="dz-agent-logo-icon">
-              <Bot size={20} />
-              <Sparkles size={12} className="dz-agent-logo-spark" />
+            <div className={`dz-agent-logo-icon dz-agent-logo-icon--anim-${logoAnim}`}>
+              {logoAnim === 'flag' ? (
+                <span className="dz-agent-logo-flag">🇩🇿</span>
+              ) : (
+                <>
+                  <Bot size={20} />
+                  <Sparkles size={12} className="dz-agent-logo-spark" />
+                </>
+              )}
             </div>
             <div className="dz-agent-logo-text">
               <span className="dz-agent-name">DZ Agent</span>

@@ -3600,8 +3600,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [twText, setTwText]   = useState('')
   const [twIdx,  setTwIdx]    = useState(0)
   const [twPhase, setTwPhase] = useState<'typing' | 'pausing' | 'deleting'>('typing')
-  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null)
-  const [ttsLoadingId,  setTtsLoadingId]  = useState<string | null>(null)
   const [cmdHistory, setCmdHistory] = useState<string[]>([])
   const historyIdxRef = useRef<number>(-1)
   const [showAgentBar, setShowAgentBar] = useState(true)
@@ -3702,71 +3700,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   // ===== NOTIFY PARENT OF AGENT MODE CHANGES =====
   useEffect(() => { onAgentModeChange?.(agentMode) }, [agentMode, onAgentModeChange])
 
-  // ===== VOICE PLAYBACK (HF MMS TTS backend — male voice) =====
-  const _ttsAudioRef = useRef<HTMLAudioElement | null>(null)
-
-  const speakVoice = useCallback(async (msgId: string, text: string) => {
-    // Stop if already speaking or loading this message
-    if (speakingMsgId === msgId || ttsLoadingId === msgId) {
-      if (_ttsAudioRef.current) {
-        _ttsAudioRef.current.pause()
-        _ttsAudioRef.current = null
-      }
-      setSpeakingMsgId(null)
-      setTtsLoadingId(null)
-      return
-    }
-    // Stop any current playback
-    if (_ttsAudioRef.current) {
-      _ttsAudioRef.current.pause()
-      _ttsAudioRef.current = null
-    }
-    setSpeakingMsgId(null)
-    setTtsLoadingId(msgId)  // ← show loading spinner
-
-    const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
-    if (!clean) { setTtsLoadingId(null); return }
-
-    const lang = language === 'fr' ? 'fr' : language === 'en' ? 'en' : 'ar'
-
-    const _startPlay = (blob: Blob) => {
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      _ttsAudioRef.current = audio
-      setTtsLoadingId(null)    // ← hide spinner
-      setSpeakingMsgId(msgId)  // ← show playing state
-      audio.onended = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-      audio.onerror = () => { setSpeakingMsgId(null); URL.revokeObjectURL(url) }
-      audio.play().catch(() => setSpeakingMsgId(null))
-    }
-
-    try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean, lang }),
-      })
-
-      if (res.status === 503) {
-        // Model still loading — retry once after 8 seconds
-        await new Promise(r => setTimeout(r, 8000))
-        const retry = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: clean, lang }),
-        })
-        if (!retry.ok) { setTtsLoadingId(null); return }
-        _startPlay(await retry.blob())
-        return
-      }
-
-      if (!res.ok) { setTtsLoadingId(null); return }
-      _startPlay(await res.blob())
-    } catch {
-      setTtsLoadingId(null)
-      setSpeakingMsgId(null)
-    }
-  }, [speakingMsgId, ttsLoadingId, language])
 
   // ===== TYPEWRITER TICKER =====
   useEffect(() => {

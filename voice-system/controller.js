@@ -36,14 +36,15 @@ export function createDVIS({ baseUrl = '' } = {}) {
   const wakeStt = createSTT()
   const wake    = createWakeWord({ stt: wakeStt })
 
-  let prefs         = loadPrefs()
-  let state         = 'idle'
-  let followUpTimer = null
-  let lastUserText  = ''
-  let lastReplyText = ''
-  let abortCtl      = null
-  let sttBuffer     = ''
+  let prefs           = loadPrefs()
+  let state           = 'idle'
+  let followUpTimer   = null
+  let lastUserText    = ''
+  let lastReplyText   = ''
+  let abortCtl        = null
+  let sttBuffer       = ''
   let sttSilenceTimer = null
+  let sttMaxTimer     = null   // ← حدّ أقصى للاستماع
 
   function setState(s) {
     if (state === s) return
@@ -57,6 +58,24 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
   function clearSilence() {
     if (sttSilenceTimer) { clearTimeout(sttSilenceTimer); sttSilenceTimer = null }
+  }
+
+  function clearMaxTimer() {
+    if (sttMaxTimer) { clearTimeout(sttMaxTimer); sttMaxTimer = null }
+  }
+
+  function startMaxTimer() {
+    clearMaxTimer()
+    sttMaxTimer = setTimeout(() => {
+      if (state === 'listening') {
+        if (sttBuffer.trim()) flushBuffer()
+        else {
+          try { stt.stop() } catch {}
+          setState('idle')
+        }
+        bus.emit('max-listen-reached')
+      }
+    }, TIMINGS.sttMaxListenMs)
   }
 
   function flushBuffer() {
@@ -165,11 +184,13 @@ export function createDVIS({ baseUrl = '' } = {}) {
       try {
         stt.start({ lang: lang || resolveLang(), continuous: true, interim: true })
         setState('listening')
+        startMaxTimer()
       } catch (e) { bus.emit('error', e) }
     },
 
     stopListening() {
       clearFollowUp()
+      clearMaxTimer()
       if (sttBuffer.trim()) flushBuffer()
       try { stt.stop() } catch {}
       setState('idle')
@@ -227,6 +248,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     destroy() {
       clearFollowUp()
       clearSilence()
+      clearMaxTimer()
       sttBuffer = ''
       try { stt.abort() } catch {}
       try { wakeStt.abort() } catch {}

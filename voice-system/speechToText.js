@@ -66,7 +66,11 @@ export function createSTT() {
         else interim += t
       }
       if (interim) bus.emit('result', { text: interim.trim(), isFinal: false, confidence: 0, lang: currentLang })
-      if (final)   bus.emit('result', { text: final.trim(),   isFinal: true,  confidence: conf, lang: currentLang })
+      if (final) {
+        bus.emit('result', { text: final.trim(), isFinal: true, confidence: conf, lang: currentLang })
+        // إيقاف فوري بعد النتيجة النهائية — يضمن تشغيل onend دائماً
+        setTimeout(() => { try { r.stop() } catch {} }, 80)
+      }
     }
 
     r.onerror = async (e) => {

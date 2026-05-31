@@ -150,14 +150,16 @@ export default function DZMediaStudio() {
           body: JSON.stringify({ prompt, width, height, duration: 3 }),
           signal: AbortSignal.timeout(90_000),
         })
-        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota }
+        const data = await res.json() as { ok: boolean; url?: string; frames?: string[]; isFrames?: boolean; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota; note?: string }
         if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
-          setResult({ type: 'video', url: data.url, prompt, model: data.model || 'video', provider: data.provider || '' })
+          const resultType = data.isFrames ? 'image' : 'video'
+          const modelLabel = data.isFrames ? `${data.model || 'DZ Cinematic'} — إطارات سينمائية` : (data.model || 'video')
+          setResult({ type: resultType, url: data.url, prompt, model: modelLabel, provider: data.provider || '' })
         } else if (data.rateLimited) {
           setError(data.error || 'تجاوزت الحدّ اليومي')
         } else {
-          setError(data.error || 'توليد الفيديو غير متاح حالياً. تأكد من وجود HF_TOKEN.')
+          setError(data.error || 'توليد الفيديو غير متاح حالياً.')
         }
 
       } else if (tab === 'img2video') {
@@ -168,14 +170,16 @@ export default function DZMediaStudio() {
           body: JSON.stringify({ imageUrl: imagePreview || imageUrl, prompt: prompt || 'animate smoothly' }),
           signal: AbortSignal.timeout(90_000),
         })
-        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota }
+        const data = await res.json() as { ok: boolean; url?: string; frames?: string[]; isFrames?: boolean; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota; note?: string }
         if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
-          setResult({ type: 'video', url: data.url, prompt, model: data.model || 'img2video', provider: data.provider || '' })
+          const resultType = data.isFrames ? 'image' : 'video'
+          const modelLabel = data.isFrames ? `${data.model || 'DZ Animate'} — إطارات متحركة` : (data.model || 'img2video')
+          setResult({ type: resultType, url: data.url, prompt, model: modelLabel, provider: data.provider || '' })
         } else if (data.rateLimited) {
           setError(data.error || 'تجاوزت الحدّ اليومي')
         } else {
-          setError(data.error || 'تحويل الصورة لفيديو يتطلب HF_TOKEN مع رصيد.')
+          setError(data.error || 'تحويل الصورة لفيديو غير متاح حالياً.')
         }
       }
     } catch (e: unknown) {

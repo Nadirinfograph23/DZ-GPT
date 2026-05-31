@@ -195,10 +195,22 @@ export function createTTS({ defaultGender = DEFAULTS.gender } = {}) {
   async function speak(text, { lang = 'en' } = {}) {
     const trimmed = String(text || '').trim()
     if (!trimmed) return { skipped: true, reason: 'empty' }
-    // External engine (e.g. Piper via WASM) takes priority if registered.
+    // محرك Edge TTS يأخذ الأولوية دائماً
     if (externalEngine && typeof externalEngine.speak === 'function') {
-      try { return await externalEngine.speak(trimmed, { lang, gender, muted }) }
-      catch (e) { console.warn('[dvis-tts] external engine failed, falling back:', e.message) }
+      try {
+        const result = await externalEngine.speak(trimmed, { lang, gender, muted })
+        if (result && result.ok !== false) return result
+        // إذا فشل Edge TTS للعربية، لا تعود للمتصفح (أصوات المتصفح العربية أنثى غالباً)
+        const langBase = (lang || '').split('-')[0].toLowerCase()
+        if (langBase === 'ar') {
+          console.warn('[dvis-tts] Edge TTS failed for Arabic — skipping browser fallback to avoid female voice')
+          return { skipped: true, reason: 'edge-tts-failed' }
+        }
+      } catch (e) {
+        console.warn('[dvis-tts] external engine error:', e.message)
+        const langBase = (lang || '').split('-')[0].toLowerCase()
+        if (langBase === 'ar') return { skipped: true, reason: 'edge-tts-error' }
+      }
     }
     return speakBuiltin(trimmed, { lang })
   }

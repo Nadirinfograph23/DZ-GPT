@@ -1,6 +1,6 @@
 // DZ Voice Panel v5.0 — زر مايك + VAD موجات متحركة حقيقية
 // Web Audio API → AnalyserNode → 5 أشرطة تتحرك بمستوى الصوت الفعلي
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react'
 import { Mic, MicOff, Volume2, AlertTriangle } from 'lucide-react'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error — JS module without .d.ts
@@ -128,6 +128,14 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
   const [micStatus, setMicStatus] = useState<MicStatus>('unknown')
   const [permError, setPermError] = useState<string | null>(null)
 
+  // نحفظ الـ callbacks في refs حتى لا يُعاد إنشاء DVIS عند كل render
+  const onTranscriptRef = useRef(onTranscript)
+  const onReplyRef      = useRef(onReply)
+  useLayoutEffect(() => {
+    onTranscriptRef.current = onTranscript
+    onReplyRef.current      = onReply
+  })
+
   const isListening = state === 'listening' || state === 'wake-listening'
   const isSpeaking  = state === 'speaking'
 
@@ -152,10 +160,10 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
 
     const unState = dvis.on('state', (s: DvisState) => setState(s))
     const unTr    = dvis.on('transcript', ({ text, isFinal }: { text: string; isFinal: boolean }) => {
-      if (isFinal && onTranscript) onTranscript(text)
+      if (isFinal && onTranscriptRef.current) onTranscriptRef.current(text)
     })
     const unReply = dvis.on('reply', ({ text }: { text: string }) => {
-      if (onReply) onReply(text)
+      if (onReplyRef.current) onReplyRef.current(text)
     })
     dvis.preload()
 
@@ -167,13 +175,14 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
 
     return () => {
       unState?.(); unTr?.(); unReply?.()
+      setState('idle')   // إعادة ضبط الواجهة عند تدمير DVIS
       if (typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         delete (window as any).__dvis
       }
       dvis.destroy()
     }
-  }, [onTranscript, onReply])
+  }, [])  // DVIS يُنشأ مرة واحدة فقط — الـ callbacks محفوظة في refs
 
   // ── إغلاق رسالة الخطأ عند النقر خارجها ──────────────────────────────────
   useEffect(() => {

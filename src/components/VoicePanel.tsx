@@ -160,18 +160,19 @@ export default function VoicePanel({ onTranscript }: VoicePanelProps) {
   const startRec = useCallback(async () => {
     setPermError(null)
 
-    // ① هل نحن داخل iframe؟
-    try { if (window.self !== window.top) { setPermError('iframe'); return } }
-    catch { setPermError('iframe'); return }
-
-    // ② طلب إذن الميكروفون صراحةً
+    // ① طلب إذن الميكروفون صراحةً
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       stream.getTracks().forEach(t => t.stop())
     } catch (err) {
       const name = (err as Error)?.name || ''
+      const msg  = (err as Error)?.message || ''
       if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
         setPermError('no-device'); return
+      }
+      // إذا كانت المشكلة سياسة الصلاحيات في iframe مقيّد
+      if (msg.includes('permissions policy') || msg.includes('Permission denied by system')) {
+        try { if (window.self !== window.top) { setPermError('iframe'); return } } catch {}
       }
       setPermError('denied'); return
     }

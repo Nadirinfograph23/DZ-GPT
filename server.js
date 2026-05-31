@@ -24191,16 +24191,160 @@ app.get('/api/analytics/stats', (_req, res) => {
 // Frontend calls /api/dz-agent-v4/* — these routes bridge to existing logic
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Quota tracker (in-memory, resets on server restart)
-const _mediaQuota = { used: 0, limit: 20, resetAt: Date.now() + 86400000 }
-function getMediaQuota() {
-  if (Date.now() > _mediaQuota.resetAt) { _mediaQuota.used = 0; _mediaQuota.resetAt = Date.now() + 86400000 }
-  return { used: _mediaQuota.used, limit: _mediaQuota.limit, remaining: Math.max(0, _mediaQuota.limit - _mediaQuota.used), resetInHours: Math.ceil((_mediaQuota.resetAt - Date.now()) / 3600000) }
+// ── Per-IP daily quota (5 فيديوهات/يوم لكل مستخدم) ─────────────────────────
+const _videoQuotaByIP = new Map()
+const VIDEO_DAILY_LIMIT = 5
+
+function getVideoQuota(ip) {
+  const now = Date.now()
+  let e = _videoQuotaByIP.get(ip)
+  if (!e || now >= e.resetAt) { e = { used: 0, limit: VIDEO_DAILY_LIMIT, resetAt: now + 86400000 }; _videoQuotaByIP.set(ip, e) }
+  return { used: e.used, limit: e.limit, remaining: Math.max(0, e.limit - e.used), resetInHours: Math.ceil((e.resetAt - now) / 3600000) }
+}
+function consumeVideoQuota(ip) {
+  let e = _videoQuotaByIP.get(ip) || { used: 0, limit: VIDEO_DAILY_LIMIT, resetAt: Date.now() + 86400000 }
+  if (e.used >= e.limit) return false
+  e.used++; _videoQuotaByIP.set(ip, e); return true
+}
+
+// ── Model status cache (5 دقائق TTL) ────────────────────────────────────────
+const _modelStatus = new Map()
+const MODEL_STATUS_TTL = 5 * 60 * 1000
+function updateModelStatus(hfId, status) { _modelStatus.set(hfId, { status, ts: Date.now() }) }
+function getModelStatus(hfId) {
+  const e = _modelStatus.get(hfId)
+  if (!e || Date.now() - e.ts > MODEL_STATUS_TTL) return 'unknown'
+  return e.status
+}
+
+// ── نماذج Text-to-Video ──────────────────────────────────────────────────────
+const T2V_MODELS = [
+  { id: 'pollinations', hfId: 'pollinations/wan',                            label: 'Wan (Pollinations)', badge: 'مجاني',    color: '#22c55e' },
+  { id: 'wan2',         hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                     label: 'Wan 2.1',            badge: 'أسرع',     color: '#10b981' },
+  { id: 'ltx',          hfId: 'Lightricks/LTX-Video',                        label: 'LTX Video',          badge: 'خفيف',     color: '#8b5cf6' },
+  { id: 'cogvideo',     hfId: 'THUDM/CogVideoX-2b',                          label: 'CogVideoX 2B',       badge: 'HD',       color: '#6366f1' },
+  { id: 'animatediff',  hfId: 'ByteDance/AnimateDiff-Lightning',              label: 'AnimateDiff',        badge: 'GIF',      color: '#f59e0b' },
+  { id: 'mochi',        hfId: 'genmo/mochi-1-preview',                        label: 'Mochi 1',            badge: 'إبداعي',   color: '#ec4899' },
+  { id: 'modelscope',   hfId: 'ali-vilab/text-to-video-ms-1.7b',              label: 'ModelScope',         badge: 'كلاسيك',   color: '#64748b' },
+  { id: 'zeroscope',    hfId: 'cerspense/zeroscope_v2_576w',                  label: 'ZeroScope v2',       badge: 'واقعي',    color: '#06b6d4' },
+]
+
+// ── نماذج Image-to-Video ─────────────────────────────────────────────────────
+const I2V_MODELS = [
+  { id: 'ltx-i2v',   hfId: 'Lightricks/LTX-Video',                               label: 'LTX Video',       badge: 'سريع', color: '#8b5cf6' },
+  { id: 'svd',       hfId: 'stabilityai/stable-video-diffusion-img2vid',           label: 'Stable Video',    badge: 'HD',   color: '#3b82f6' },
+  { id: 'i2vgen',    hfId: 'ali-vilab/i2vgen-xl',                                  label: 'i2vgen XL',       badge: 'XL',   color: '#10b981' },
+  { id: 'animdiff2', hfId: 'ByteDance/AnimateDiff-Lightning',                       label: 'AnimateDiff',     badge: 'GIF',  color: '#f59e0b' },
+]
+
+// ── HF Video Inference مع retry على 503 ──────────────────────────────────────
+async function callHFVideo(hfId, body, timeoutMs = 90000) {
+  const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
+  if (!token) return null
+  const urls = [
+    `https://router.huggingface.co/hf-inference/models/${hfId}`,
+    `https://api-inference.huggingface.co/models/${hfId}`,
+  ]
+  for (const url of urls) {
+    for (let attempt = 0; attempt <= 5; attempt++) {
+      const ac    = new AbortController()
+      const timer = setTimeout(() => ac.abort(), timeoutMs)
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body), signal: ac.signal,
+        })
+        clearTimeout(timer)
+        if (r.status === 503 || r.status === 504) {
+          updateModelStatus(hfId, 'loading')
+          const wait = Math.max(12000, parseInt(r.headers.get('x-estimated-time') || '0', 10) * 1000)
+          if (attempt < 5) { await new Promise(rs => setTimeout(rs, wait)); continue }
+          break
+        }
+        if (!r.ok) { updateModelStatus(hfId, 'unavailable'); break }
+        const ct  = r.headers.get('content-type') || ''
+        const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length < 500) { updateModelStatus(hfId, 'unavailable'); break }
+        let mime = 'video/mp4'
+        if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) mime = 'image/gif'
+        else if (buf[0] === 0x1A && buf[1] === 0x45) mime = 'video/webm'
+        else if (ct.includes('gif')) mime = 'image/gif'
+        else if (ct.includes('webm')) mime = 'video/webm'
+        updateModelStatus(hfId, 'available')
+        return { buf, mime, hfId }
+      } catch (err) {
+        clearTimeout(timer)
+        updateModelStatus(hfId, 'unavailable'); break
+      }
+    }
+  }
+  updateModelStatus(hfId, 'unavailable'); return null
+}
+
+// ── T2V request body per model ────────────────────────────────────────────────
+function buildT2VBody(hfId, prompt, w, h) {
+  const defaults = { inputs: prompt }
+  const map = {
+    'Wan-AI/Wan2.1-T2V-1.3B':             { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20 } },
+    'THUDM/CogVideoX-2b':                  { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20, guidance_scale: 6 } },
+    'Lightricks/LTX-Video':                { inputs: prompt, parameters: { num_frames: 25, num_inference_steps: 25, width: w||512, height: h||288 } },
+    'ByteDance/AnimateDiff-Lightning':      { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 4 } },
+    'genmo/mochi-1-preview':               { inputs: prompt, parameters: { num_frames: 16 } },
+    'ali-vilab/text-to-video-ms-1.7b':     { inputs: prompt },
+    'cerspense/zeroscope_v2_576w':          { inputs: prompt },
+  }
+  return map[hfId] || defaults
+}
+
+// ── I2V request body per model ────────────────────────────────────────────────
+function buildI2VBody(hfId, imgB64, prompt) {
+  const map = {
+    'Lightricks/LTX-Video':                              { inputs: imgB64, parameters: { prompt, num_frames: 25, num_inference_steps: 25 } },
+    'stabilityai/stable-video-diffusion-img2vid':        { inputs: imgB64, parameters: { decode_chunk_size: 8, num_frames: 14 } },
+    'ali-vilab/i2vgen-xl':                               { inputs: imgB64, parameters: { prompt } },
+    'ByteDance/AnimateDiff-Lightning':                   { inputs: imgB64, parameters: { prompt, num_frames: 16 } },
+  }
+  return map[hfId] || { inputs: imgB64, parameters: { prompt } }
+}
+
+// ── Pollinations Video (بدون token) ──────────────────────────────────────────
+async function tryPollinationsVideo(prompt, w, h) {
+  try {
+    const r = await fetch('https://video.pollinations.ai/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, model: 'wan', width: w, height: h, duration: 3 }),
+      signal: AbortSignal.timeout(60000), redirect: 'follow',
+    })
+    if (r.ok) {
+      const ct = r.headers.get('content-type') || ''
+      if (ct.includes('video') || ct.includes('mp4')) {
+        const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length > 1000) { updateModelStatus('pollinations/wan', 'available'); return { buf, mime: 'video/mp4', hfId: 'pollinations/wan' } }
+      }
+    }
+  } catch {}
+  return null
 }
 
 // GET /api/dz-agent-v4/video/quota
-app.get('/api/dz-agent-v4/video/quota', (_req, res) => {
-  res.json({ ok: true, quota: getMediaQuota() })
+app.get('/api/dz-agent-v4/video/quota', (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  res.json({ ok: true, quota: getVideoQuota(ip) })
+})
+
+// GET /api/dz-agent-v4/video/models — قائمة النماذج مع حالة كل واحد
+app.get('/api/dz-agent-v4/video/models', (req, res) => {
+  const ip       = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  const hasToken = !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY)
+  const quota    = getVideoQuota(ip)
+  const mapStatus = (m) => ({
+    ...m,
+    status: m.hfId === 'pollinations/wan' ? getModelStatus('pollinations/wan')
+          : hasToken ? getModelStatus(m.hfId)
+          : 'unavailable',
+  })
+  res.json({ ok: true, hasToken, quota, t2v: T2V_MODELS.map(mapStatus), i2v: I2V_MODELS.map(mapStatus) })
 })
 
 // POST /api/dz-agent-v4/img2img — Image-to-Image bridge
@@ -24253,113 +24397,93 @@ app.post('/api/dz-agent-v4/img2img', express.json({ limit: '30mb' }), async (req
   return res.json({ ok: true, url, promptUsed: prompt, model: 'FLUX-Realism', provider: 'Pollinations AI', note: 'Stable Horde غير متاح — تم توليد صورة جديدة من النص' })
 })
 
-// POST /api/dz-agent-v4/video — Text-to-Video bridge
+// POST /api/dz-agent-v4/video — Text-to-Video v2 (multi-model + per-IP quota)
 app.post('/api/dz-agent-v4/video', express.json({ limit: '5mb' }), async (req, res) => {
-  const { prompt, width = 576, height = 320 } = req.body
+  const { prompt, width = 576, height = 320, model: preferredId } = req.body
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
 
-  const quota = getMediaQuota()
-  if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي — تجديد خلال ${quota.resetInHours}س`, quota })
+  const ip    = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  const quota = getVideoQuota(ip)
+  if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي (${quota.limit}/يوم) — تجديد خلال ${quota.resetInHours}س`, quota })
 
-  const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
-
-  // Priority 1: ZeroScope real video (HF_TOKEN required)
-  if (hfToken) {
-    try {
-      const r = await fetch('https://router.huggingface.co/hf-inference/models/cerspense/zeroscope_v2_576w', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hfToken}` },
-        body: JSON.stringify({ inputs: prompt }),
-        signal: AbortSignal.timeout(55000),
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && (ct.startsWith('video/') || ct.includes('mp4'))) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        if (buf.length > 5000) {
-          _mediaQuota.used++
-          const url = `data:video/mp4;base64,${buf.toString('base64')}`
-          return res.json({ ok: true, url, model: 'ZeroScope v2 576w', provider: 'HuggingFace', quota: getMediaQuota() })
-        }
-      }
-    } catch (e) { console.warn('[v4/video:zeroscope]', e.message) }
-
-    // AnimateDiff fallback (GIF)
-    try {
-      const r = await fetch('https://router.huggingface.co/hf-inference/models/damo-vilab/text-to-video-ms-1.7b', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${hfToken}` },
-        body: JSON.stringify({ inputs: prompt }),
-        signal: AbortSignal.timeout(55000),
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && (ct.startsWith('video/') || ct.startsWith('image/'))) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        if (buf.length > 5000) {
-          _mediaQuota.used++
-          const mime = ct.startsWith('video/') ? 'video/mp4' : 'image/gif'
-          const url = `data:${mime};base64,${buf.toString('base64')}`
-          return res.json({ ok: true, url, model: 'ModelScope T2V', provider: 'HuggingFace', quota: getMediaQuota() })
-        }
-      }
-    } catch (e) { console.warn('[v4/video:modelscope]', e.message) }
+  // 1. Pollinations (مجاني، بدون token)
+  const polRes = await tryPollinationsVideo(prompt, width, height)
+  if (polRes) {
+    consumeVideoQuota(ip)
+    return res.json({ ok: true, url: `data:${polRes.mime};base64,${polRes.buf.toString('base64')}`, model: 'Wan (Pollinations)', provider: 'Pollinations AI', quota: getVideoQuota(ip) })
   }
 
-  // Fallback: 4 cinematic Pollinations frames (instant, no token needed)
-  const baseSeed = Math.floor(Math.random() * 9000000)
-  const frameStyles = [
-    { suffix: 'wide establishing shot, cinematic, 8k, golden hour', model: 'flux' },
-    { suffix: 'medium shot, soft bokeh, cinematic lighting', model: 'flux-realism' },
-    { suffix: 'close-up detail, cinematic, ultra sharp, moody', model: 'flux' },
-    { suffix: 'aerial wide angle, cinematic pan, dramatic clouds', model: 'turbo' },
-  ]
-  const frames = frameStyles.map((f, i) => {
-    const enc = encodeURIComponent(`${prompt}, ${f.suffix}`)
-    return `https://image.pollinations.ai/prompt/${enc}?model=${f.model}&width=${width}&height=${height}&seed=${baseSeed + i * 31337}&nologo=true`
-  })
-  _mediaQuota.used++
-  return res.json({ ok: true, url: frames[0], frames, model: 'AI DZ Cinematic', provider: 'Pollinations AI', quota: getMediaQuota(), note: 'أضف HF_TOKEN للحصول على فيديو حقيقي' })
+  // 2. HuggingFace — دوّر حسب الاختيار أو round-robin
+  const hasToken = !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY)
+  if (hasToken) {
+    let order = [...T2V_MODELS].filter(m => m.id !== 'pollinations')
+    if (preferredId) {
+      const pref = order.find(m => m.id === preferredId)
+      if (pref) order = [pref, ...order.filter(m => m.id !== preferredId)]
+    }
+    for (const m of order) {
+      const result = await callHFVideo(m.hfId, buildT2VBody(m.hfId, prompt, width, height))
+      if (result) {
+        consumeVideoQuota(ip)
+        return res.json({ ok: true, url: `data:${result.mime};base64,${result.buf.toString('base64')}`, model: m.label, provider: 'HuggingFace', mimeType: result.mime, quota: getVideoQuota(ip) })
+      }
+    }
+  }
+
+  // 3. Fallback: إطارات سينمائية (Pollinations)
+  consumeVideoQuota(ip)
+  const seed   = Math.floor(Math.random() * 9000000)
+  const frames = [
+    { s: 'wide establishing shot, cinematic, 8k, golden hour', m: 'flux' },
+    { s: 'medium shot, soft bokeh, cinematic lighting',         m: 'flux-realism' },
+    { s: 'close-up detail, cinematic, ultra sharp, moody',      m: 'flux' },
+    { s: 'aerial wide angle, cinematic pan, dramatic clouds',   m: 'turbo' },
+  ].map((f, i) => `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${f.s}`)}?model=${f.m}&width=${width}&height=${height}&seed=${seed + i * 31337}&nologo=true`)
+  return res.json({ ok: true, url: frames[0], frames, isFrames: true, model: 'DZ Cinematic AI', provider: 'Pollinations AI', quota: getVideoQuota(ip), note: 'أضف HF_TOKEN للحصول على فيديو حقيقي' })
 })
 
-// POST /api/dz-agent-v4/img2video — Image-to-Video bridge
+// POST /api/dz-agent-v4/img2video — Image-to-Video v2
 app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (req, res) => {
-  const { imageUrl: inputUrl, prompt = 'animate smoothly' } = req.body
+  const { imageUrl: inputUrl, prompt = 'animate smoothly', model: preferredId } = req.body
   if (!inputUrl) return res.status(400).json({ ok: false, error: 'imageUrl مطلوب' })
 
-  const quota = getMediaQuota()
-  if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي — تجديد خلال ${quota.resetInHours}س`, quota })
+  const ip    = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  const quota = getVideoQuota(ip)
+  if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي (${quota.limit}/يوم) — تجديد خلال ${quota.resetInHours}س`, quota })
 
-  const hfToken = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
-
-  // Try Stable Video Diffusion via HF (img2vid)
-  if (hfToken && inputUrl.startsWith('data:')) {
-    const imgB64 = inputUrl.split(',')[1]
+  // استخراج base64 من الصورة
+  let imgB64 = null
+  if (inputUrl.startsWith('data:')) {
+    imgB64 = inputUrl.split(',')[1]
+  } else {
     try {
-      const r = await fetch('https://router.huggingface.co/hf-inference/models/stabilityai/stable-video-diffusion-img2vid', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${hfToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inputs: imgB64 }),
-        signal: AbortSignal.timeout(70000),
-      })
-      const ct = r.headers.get('content-type') || ''
-      if (r.ok && (ct.startsWith('video/') || ct.includes('mp4'))) {
-        const buf = Buffer.from(await r.arrayBuffer())
-        if (buf.length > 5000) {
-          _mediaQuota.used++
-          return res.json({ ok: true, url: `data:video/mp4;base64,${buf.toString('base64')}`, model: 'Stable Video Diffusion', provider: 'HuggingFace', quota: getMediaQuota() })
-        }
+      const r = await fetch(inputUrl, { signal: AbortSignal.timeout(15000) })
+      if (r.ok) imgB64 = Buffer.from(await r.arrayBuffer()).toString('base64')
+    } catch {}
+  }
+  if (!imgB64) return res.json({ ok: false, error: 'فشل تحميل الصورة — جرّب رفع الصورة مباشرة' })
+
+  const hasToken = !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY)
+  if (hasToken) {
+    let order = [...I2V_MODELS]
+    if (preferredId) {
+      const pref = order.find(m => m.id === preferredId)
+      if (pref) order = [pref, ...order.filter(m => m.id !== preferredId)]
+    }
+    for (const m of order) {
+      const result = await callHFVideo(m.hfId, buildI2VBody(m.hfId, imgB64, prompt), 90000)
+      if (result) {
+        consumeVideoQuota(ip)
+        return res.json({ ok: true, url: `data:${result.mime};base64,${result.buf.toString('base64')}`, model: m.label, provider: 'HuggingFace', mimeType: result.mime, quota: getVideoQuota(ip) })
       }
-    } catch (e) { console.warn('[v4/img2video:svd]', e.message) }
+    }
   }
 
-  // Fallback: generate animated frames from the prompt (Ken Burns style)
-  const baseSeed = Math.floor(Math.random() * 9000000)
-  const animPrompt = `${prompt}, cinematic motion, smooth animation, fluid movement`
-  const frames = [0, 1, 2, 3].map(i => {
-    const enc = encodeURIComponent(`${animPrompt}, frame ${i + 1} of 4`)
-    return `https://image.pollinations.ai/prompt/${enc}?model=flux-realism&width=768&height=432&seed=${baseSeed + i * 12345}&nologo=true`
-  })
-  _mediaQuota.used++
-  return res.json({ ok: true, url: frames[0], frames, model: 'AI DZ Cinematic', provider: 'Pollinations AI', quota: getMediaQuota(), note: 'SVD يتطلب HF_TOKEN + رصيد كافٍ' })
+  // Fallback: إطارات متحركة
+  consumeVideoQuota(ip)
+  const seed   = Math.floor(Math.random() * 9000000)
+  const frames = [0,1,2,3].map(i => `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, cinematic motion, smooth animation, frame ${i+1}`)}?model=flux-realism&width=768&height=432&seed=${seed + i * 12345}&nologo=true`)
+  return res.json({ ok: true, url: frames[0], frames, isFrames: true, model: 'DZ Animate AI', provider: 'Pollinations AI', quota: getVideoQuota(ip), note: 'أضف HF_TOKEN لفيديو حقيقي' })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

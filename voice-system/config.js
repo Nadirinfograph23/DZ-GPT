@@ -17,7 +17,8 @@ export const WAKE_WORDS = ['hey dz', 'hi dz', 'dz agent', 'يا دي زي', 'د�
 // Conversation behaviour.
 export const TIMINGS = {
   followUpSilenceMs: 15_000,
-  sttSilenceMs: 1_600,
+  sttSilenceMs: 2_800,      // ← رُفع من 1600 لالتقاط الجمل الكاملة
+  sttMaxListenMs: 60_000,   // ← حدّ أقصى 60 ثانية قبل الإيقاف التلقائي
   sttMaxRetries: 3,
   responseTargetMs: 3_000,
   ttsMaxChunkChars: 200,
@@ -30,7 +31,7 @@ export const DEFAULTS = {
   fastMode: true,
   muted: false,
   wakeWord: false,
-  continuous: true,
+  continuous: false,  // ← false: يتوقف تلقائياً بعد الجملة الواحدة
   language: 'ar',
   // 'edge' = Microsoft Edge TTS (server, natural) | 'browser' = SpeechSynthesis fallback
   ttsEngine: 'edge',

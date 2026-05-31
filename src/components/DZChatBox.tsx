@@ -4995,6 +4995,107 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     })
   }, [addAssistantMessage])
 
+  // ===== V5 REACT LOOP RUNNER — خلف الكواليس دعم DZ Agent الرئيسي =====
+  // يستخدم ReAct loop حقيقي مع 20+ أداة GitHub — يعمل تلقائياً للمهام المركبة
+  const runV5SSE = useCallback(async (
+    _query: string,
+    outboundMessages: Array<{role: string; content: string}>,
+    signal: AbortSignal,
+  ): Promise<boolean> => {
+    setAgentSteps([{ id: 'v5-init', label: '🔬 تحليل المهمة...', icon: 'think', status: 'running' }])
+    let resultContent = ''
+    let resultModel: string | null = null
+    let stepCounter = 0
+
+    try {
+      const response = await fetch('/api/dz-agent-v5/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        body: JSON.stringify({
+          messages: outboundMessages,
+          stream: true,
+          github_token: githubToken || undefined,
+        }),
+        signal,
+      })
+      if (!response.ok || !response.body) return false
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() || ''
+
+        for (const block of blocks) {
+          const lines = block.split('\n')
+          let evName = ''
+          let dataStr = ''
+          for (const ln of lines) {
+            if (ln.startsWith('event: ')) evName = ln.slice(7).trim()
+            else if (ln.startsWith('data: ')) dataStr = ln.slice(6).trim()
+          }
+          if (!dataStr) continue
+          try {
+            const data = JSON.parse(dataStr) as Record<string, unknown>
+            if (evName === 'step') {
+              stepCounter++
+              const { type, message, tool, args } = data as { type?: string; message?: string; tool?: string; args?: Record<string, unknown> }
+              if (type === 'thinking') {
+                setAgentSteps(prev => {
+                  const done_ = prev.map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s)
+                  return [...done_, { id: `v5-think-${stepCounter}`, label: message || 'تحليل...', icon: 'think' as const, status: 'running' as const }]
+                })
+              } else if (type === 'action') {
+                setAgentSteps(prev => {
+                  const done_ = prev.map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s)
+                  return [...done_, {
+                    id: `v5-action-${stepCounter}`,
+                    label: tool ? `${tool}` : 'تنفيذ',
+                    icon: 'build' as const,
+                    status: 'running' as const,
+                    detail: args ? JSON.stringify(args).slice(0, 80) : undefined,
+                  }]
+                })
+              } else if (type === 'observation') {
+                setAgentSteps(prev => prev.map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s))
+              } else if (type === 'error') {
+                setAgentSteps(prev => {
+                  const done_ = prev.map(s => s.status === 'running' ? { ...s, status: 'warn' as const } : s)
+                  return [...done_, { id: `v5-warn-${stepCounter}`, label: (message as string) || 'تحذير', icon: 'warn' as const, status: 'warn' as const }]
+                })
+              }
+            } else if (evName === 'done') {
+              resultContent = (data.content as string) || ''
+              resultModel = (data.model as string) || null
+              setAgentSteps(prev => [
+                ...prev.map(s => ({ ...s, status: 'done' as const })),
+                { id: 'v5-complete', label: 'اكتملت المهمة ✓', icon: 'done' as const, status: 'done' as const },
+              ])
+            } else if (evName === 'error') {
+              setAgentSteps(prev => [...prev.filter(s => s.status !== 'running'), {
+                id: 'v5-fatal', label: (data.message as string) || 'خطأ', icon: 'error' as const, status: 'error' as const,
+              }])
+            }
+          } catch { /* ignore malformed */ }
+        }
+      }
+
+      if (!resultContent) return false
+      addAssistantMessage({ content: resultContent, richType: 'text', model: resultModel ?? undefined })
+      return true
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return false
+      console.warn('[DZChatBox:V5] SSE failed, will fall back:', (err as Error).message)
+      setAgentSteps([])
+      return false
+    }
+  }, [githubToken, addAssistantMessage])
+
   // ===== CLAUDE MODE SSE RUNNER (free-claude-code approach) =====
   const runClaudeReActSSE = useCallback(async (
     query: string,
@@ -6402,6 +6503,15 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           const approved = await generateAndShowPlan(text, outboundMessages, signal, runAutonomousSSE)
           if (!approved) return
         }
+        // V5 ReAct loop — محرك أقوى بـ 20+ أداة GitHub، يُجرَّب أولاً دائماً
+        // إذا أعاد false (فشل أو لا توكن) → يُكمل بالـ autonomous الاعتيادي
+        try {
+          const v5Ok = await runV5SSE(text, outboundMessages, signal)
+          if (v5Ok) return
+        } catch (v5Err) {
+          console.warn('[DZChatBox] V5 fallback to autonomous:', (v5Err as Error).message)
+          setAgentSteps([])
+        }
         try {
           await runAutonomousSSE(text, outboundMessages, signal)
           return
@@ -6970,7 +7080,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       setLiveReActSteps([])
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, detectComplexQuery, generateAndShowPlan, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, detectComplexQuery, generateAndShowPlan, runV5SSE, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
 
   // Feature C — Export conversation as Markdown
   const exportAsMarkdown = useCallback(() => {

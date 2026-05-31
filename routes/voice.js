@@ -69,7 +69,7 @@ async function generateEdgeTTS(voice, text) {
 
 // POST /api/voice/tts
 router.post('/voice/tts', async (req, res) => {
-  const { text, lang = 'ar', gender = 'female' } = req.body || {}
+  const { text, lang = 'ar', gender = 'male' } = req.body || {}
   if (!text || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: 'text مطلوب' })
   }

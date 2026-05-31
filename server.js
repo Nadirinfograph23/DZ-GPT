@@ -23549,15 +23549,104 @@ app.post('/api/tts', async (req, res) => {
 
 app.get('/api/tts/voices', (_req, res) => {
   res.json([
-    { id: 'ar-DZ-AminaNeural',   label: '🇩🇿 عربية جزائرية',        lang: 'ar', engine: 'google' },
-    { id: 'ar-SA-ZariyahNeural', label: '🇸🇦 عربية فصحى',           lang: 'ar', engine: 'google' },
-    { id: 'fr-FR-DeniseNeural',  label: '🇫🇷 فرنسية أنثى',          lang: 'fr', engine: 'kokoro', kokoro: 'ff_siwis' },
-    { id: 'fr-FR-HenriNeural',   label: '🇫🇷 فرنسية ذكر',           lang: 'fr', engine: 'kokoro', kokoro: 'fm_gaston' },
-    { id: 'en-US-JennyNeural',   label: '🇺🇸 إنجليزية أمريكية أنثى', lang: 'en', engine: 'kokoro', kokoro: 'af_heart' },
-    { id: 'en-US-GuyNeural',     label: '🇺🇸 إنجليزية أمريكية ذكر', lang: 'en', engine: 'kokoro', kokoro: 'am_adam' },
-    { id: 'en-GB-SoniaNeural',   label: '🇬🇧 إنجليزية بريطانية أنثى', lang: 'en', engine: 'kokoro', kokoro: 'bf_emma' },
-    { id: 'en-GB-RyanNeural',    label: '🇬🇧 إنجليزية بريطانية ذكر', lang: 'en', engine: 'kokoro', kokoro: 'bm_george' },
+    { id: 'ar-DZ-AminaNeural',              label: '🇩🇿 أمينة — جزائرية أنثى',       lang: 'ar', engine: 'edge' },
+    { id: 'ar-DZ-IsmaelNeural',             label: '🇩🇿 إسماعيل — جزائري ذكر',      lang: 'ar', engine: 'edge' },
+    { id: 'ar-SA-ZariyahNeural',            label: '🇸🇦 زارية — عربية فصحى أنثى',   lang: 'ar', engine: 'edge' },
+    { id: 'ar-EG-ShakirNeural',             label: '🇪🇬 شاكر — مصري ذكر',           lang: 'ar', engine: 'edge' },
+    { id: 'fr-FR-DeniseNeural',             label: '🇫🇷 دنيس — فرنسية أنثى',        lang: 'fr', engine: 'edge' },
+    { id: 'fr-FR-RemyMultilingualNeural',   label: '🇫🇷 ريمي — فرنسي ذكر',          lang: 'fr', engine: 'edge' },
+    { id: 'en-US-JennyNeural',             label: '🇺🇸 جيني — إنجليزية أمريكية أنثى', lang: 'en', engine: 'edge' },
+    { id: 'en-US-GuyNeural',               label: '🇺🇸 غاي — إنجليزي أمريكي ذكر',  lang: 'en', engine: 'edge' },
+    { id: 'en-GB-SoniaNeural',             label: '🇬🇧 سونيا — بريطانية أنثى',      lang: 'en', engine: 'edge' },
+    { id: 'en-GB-RyanNeural',              label: '🇬🇧 ريان — بريطاني ذكر',         lang: 'en', engine: 'edge' },
   ])
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/tts/edge  — Microsoft Edge TTS Neural voices (no API key needed)
+// Algerian Arabic: ar-DZ-AminaNeural / ar-DZ-IsmaelNeural
+// ═══════════════════════════════════════════════════════════════════════════
+
+const EDGE_TTS_ALLOWED_VOICES = new Set([
+  'ar-DZ-AminaNeural', 'ar-DZ-IsmaelNeural',
+  'ar-SA-ZariyahNeural', 'ar-EG-ShakirNeural',
+  'ar-MA-JamalNeural', 'ar-TN-HediNeural',
+  'fr-FR-DeniseNeural', 'fr-FR-RemyMultilingualNeural', 'fr-FR-HenriNeural',
+  'en-US-JennyNeural', 'en-US-GuyNeural',
+  'en-GB-SoniaNeural', 'en-GB-RyanNeural',
+])
+
+const LANG_DEFAULT_VOICE = {
+  ar: 'ar-DZ-AminaNeural',
+  fr: 'fr-FR-DeniseNeural',
+  en: 'en-US-JennyNeural',
+}
+
+// Lazy-loaded Edge TTS (CJS module loaded from ESM context)
+let _EdgeTTS = null
+async function _loadEdgeTTS() {
+  if (_EdgeTTS) return _EdgeTTS
+  const { createRequire } = await import('module')
+  const req = createRequire(import.meta.url)
+  const { MsEdgeTTS, OUTPUT_FORMAT } = req('msedge-tts')
+  _EdgeTTS = { MsEdgeTTS, OUTPUT_FORMAT }
+  return _EdgeTTS
+}
+
+function _cleanForTTS(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]+`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*_~>|]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 3000)
+}
+
+app.post('/api/tts/edge', async (req, res) => {
+  try {
+    const { text, voice, lang = 'ar', rate = '+0%', pitch = '+0Hz' } = req.body || {}
+
+    if (!text || typeof text !== 'string' || !text.trim())
+      return res.status(400).json({ error: 'text is required' })
+
+    const clean = _cleanForTTS(text)
+    if (!clean) return res.status(400).json({ error: 'empty text after cleaning' })
+
+    const selectedVoice = EDGE_TTS_ALLOWED_VOICES.has(voice)
+      ? voice
+      : (LANG_DEFAULT_VOICE[lang] || 'ar-DZ-AminaNeural')
+
+    const { MsEdgeTTS, OUTPUT_FORMAT } = await _loadEdgeTTS()
+    const tts = new MsEdgeTTS()
+    await tts.setMetadata(
+      selectedVoice,
+      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
+    )
+
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-TTS-Voice', selectedVoice)
+
+    const { audioStream } = tts.toStream(clean, { rate, pitch })
+
+    audioStream.on('error', (err) => {
+      logger.warn('[TTS/edge] stream error:', err.message)
+      if (!res.headersSent) res.status(500).json({ error: err.message })
+      else res.end()
+    })
+
+    audioStream.pipe(res)
+
+    req.on('close', () => {
+      try { audioStream.destroy() } catch {}
+    })
+  } catch (err) {
+    logger.error('[TTS/edge] error:', err.message)
+    if (!res.headersSent) res.status(500).json({ error: 'Edge TTS failed: ' + err.message })
+  }
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -27,13 +27,12 @@ export const TIMINGS = {
 
 // Default voice prefs — user can override via UI / localStorage.
 export const DEFAULTS = {
-  gender: 'female',
+  gender: 'male',    // ← صوت إسماعيل الجزائري افتراضياً
   fastMode: true,
   muted: false,
   wakeWord: false,
-  continuous: false,  // ← false: يتوقف تلقائياً بعد الجملة الواحدة
+  continuous: false,
   language: 'ar',
-  // 'edge' = Microsoft Edge TTS (server, natural) | 'browser' = SpeechSynthesis fallback
   ttsEngine: 'edge',
 }
 

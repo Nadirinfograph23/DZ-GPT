@@ -8467,8 +8467,9 @@ ${rows}
               <Globe size={15} />
             </button>
             <VoicePanel
+              onInterim={(t) => setInput(t)}
               onTranscript={(t) => {
-                setInput((cur) => (cur ? `${cur} ${t}` : t))
+                setInput(t)
                 setTimeout(() => sendMessage(t), 50)
               }}
             />

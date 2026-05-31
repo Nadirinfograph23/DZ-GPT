@@ -37,6 +37,9 @@ import {
   listFeeds, addFeed, removeFeed, pauseFeed, resumeFeed, triggerPollNow,
 } from './lib/breaking-news.js'
 
+// ── Logger (environment-aware: info/warn/error; debug in dev only) ───────────
+import logger from './lib/logger.js'
+
 // ── Resilience layer (must import before anything else uses AI) ──────────────
 import {
   aiSemaphore,
@@ -2722,6 +2725,7 @@ app.get('/api/quran/search', async (req, res) => {
 
     res.json({ ok: true, query: q, total: searchData.search?.total_results || results.length, results })
   } catch (e) {
+    logger.warn('[/api/quran/search]', e.message)
     res.json({ ok: true, query: q, results: [], note: 'خطأ في البحث: ' + e.message })
   }
 })
@@ -9856,6 +9860,7 @@ ${fileTreeCtx ? `\nهيكل المشروع الحالي:\n${fileTreeCtx}` : ''}
     generated = _genResult?.content || ''
     if (!generated) return res.status(500).json({ error: 'AI returned empty response' })
   } catch (err) {
+    logger.error('[AI-generation] safeGenerateAI failed', err)
     return res.status(500).json({ error: `AI generation failed: ${err.message}` })
   }
 
@@ -10082,6 +10087,7 @@ FILE: /path/to/file.css
     improved = _impResult?.content || ''
     if (!improved) return res.status(500).json({ error: 'AI returned empty response for design' })
   } catch (err) {
+    logger.error('[AI-design] safeGenerateAI failed', err)
     return res.status(500).json({ error: `Design generation failed: ${err.message}` })
   }
 
@@ -10311,6 +10317,7 @@ app.post('/api/dz-agent/github/react/enable-pages', async (req, res) => {
     const html_url = (result && result.html_url) || `https://${owner}.github.io/${repoName}/`
     return res.json({ success: true, html_url, status: result?.status || 'building' })
   } catch (err) {
+    logger.error('[GitHub/enable-pages]', err)
     return res.status(500).json({ error: err.message })
   }
 })
@@ -12103,6 +12110,7 @@ app.post('/api/telegram/setup', async (req, res) => {
     const data = await r.json()
     res.json(data)
   } catch (err) {
+    logger.error('[Telegram/setWebhook]', err)
     res.status(500).json({ error: String(err.message) })
   }
 })
@@ -16474,6 +16482,7 @@ app.get('/api/github/whoami', async (req, res) => {
       plan: u.plan?.name || null,
     })
   } catch (err) {
+    logger.error('[GitHub/user-info]', err)
     return res.status(500).json({ error: err.message })
   }
 })

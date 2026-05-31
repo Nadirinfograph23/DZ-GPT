@@ -11,7 +11,7 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, Square,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -3729,6 +3729,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
+  const [ttsState, setTtsState] = useState<{ id: string; status: 'loading' | 'playing' } | null>(null)
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
   const [thinkingTipIdx, setThinkingTipIdx] = useState(0)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
@@ -3996,6 +3998,58 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }, [])
+
+  const TTS_VOICE_BY_LANG: Record<string, string> = {
+    ar: 'ar-DZ-AminaNeural',
+    fr: 'fr-FR-DeniseNeural',
+    en: 'en-US-JennyNeural',
+  }
+
+  const speakMessage = useCallback(async (msgId: string, text: string) => {
+    if (ttsState?.id === msgId && ttsState.status === 'playing') {
+      ttsAudioRef.current?.pause()
+      if (ttsAudioRef.current?.src) URL.revokeObjectURL(ttsAudioRef.current.src)
+      ttsAudioRef.current = null
+      setTtsState(null)
+      return
+    }
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause()
+      try { URL.revokeObjectURL(ttsAudioRef.current.src) } catch {}
+      ttsAudioRef.current = null
+    }
+    setTtsState({ id: msgId, status: 'loading' })
+    try {
+      const voice = TTS_VOICE_BY_LANG[language || 'ar'] || 'ar-DZ-AminaNeural'
+      const resp = await fetch('/api/tts/edge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice, lang: language || 'ar' }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'TTS failed' }))
+        throw new Error(err.error || `HTTP ${resp.status}`)
+      }
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      ttsAudioRef.current = audio
+      audio.onended = () => {
+        try { URL.revokeObjectURL(url) } catch {}
+        ttsAudioRef.current = null
+        setTtsState(null)
+      }
+      audio.onerror = () => {
+        try { URL.revokeObjectURL(url) } catch {}
+        ttsAudioRef.current = null
+        setTtsState(null)
+      }
+      await audio.play()
+      setTtsState({ id: msgId, status: 'playing' })
+    } catch {
+      setTtsState(null)
+    }
+  }, [ttsState, language])
 
   const addAssistantMessage = useCallback((msg: Omit<DZMessage, 'id' | 'role'>) => {
     const id = generateId()
@@ -8065,6 +8119,24 @@ ${rows}
                     <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
                       {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
                       {copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
+                    </button>
+                  )}
+                  {msg.content && msg.richType !== 'image' && (
+                    <button
+                      className={`dz-action-btn dz-action-btn--speak${ttsState?.id === msg.id ? ' dz-action-btn--speak-active' : ''}`}
+                      onClick={() => speakMessage(msg.id, msg.content)}
+                      title={ttsState?.id === msg.id && ttsState.status === 'playing' ? 'إيقاف الصوت' : 'استمع بصوت عالٍ'}
+                      disabled={ttsState !== null && ttsState.id !== msg.id && ttsState.status === 'loading'}
+                    >
+                      {ttsState?.id === msg.id && ttsState.status === 'loading' ? (
+                        <Loader2 size={13} className="dz-tts-spin" />
+                      ) : ttsState?.id === msg.id && ttsState.status === 'playing' ? (
+                        <Square size={13} />
+                      ) : (
+                        <Volume2 size={13} />
+                      )}
+                      {ttsState?.id === msg.id && ttsState.status === 'loading' ? '...' :
+                       ttsState?.id === msg.id && ttsState.status === 'playing' ? 'إيقاف' : 'استمع'}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (

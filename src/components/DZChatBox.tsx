@@ -590,6 +590,9 @@ interface DZMessage {
   imageModel?: string
   imageStyle?: string
   imageGrid?: string[]
+  videoUrl?: string
+  videoPrompt?: string
+  videoModel?: string
   qrData?: string
   qrTitle?: string
   books?: Array<{
@@ -7838,6 +7841,25 @@ ${rows}
                           </div>
                         </div>
                       )}
+                      {msg.richType === 'image' && msg.videoUrl && (
+                        <div className="dz-video-card">
+                          <video
+                            src={msg.videoUrl}
+                            className="dz-video-card__video"
+                            controls
+                            autoPlay
+                            loop
+                            playsInline
+                          />
+                          <div className="dz-video-card__footer">
+                            <span className="dz-video-card__model">🎬 {msg.videoModel || 'AI Video'}</span>
+                            <div className="dz-video-card__actions">
+                              <a href={msg.videoUrl} download={`dz-video-${Date.now()}.mp4`} target="_blank" rel="noopener noreferrer" className="dz-image-card__btn">⬇ تحميل</a>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {msg.richType === 'qr' && msg.qrData && (
                         <div className="dz-qr-card">
                           <div className="dz-qr-card__header">

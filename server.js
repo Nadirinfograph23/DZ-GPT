@@ -194,9 +194,9 @@ app.use((req, res, next) => {
       'microphone=(self)',
       'geolocation=(self)',
       'camera=(self)',
-      'speaker-selection=(self)',
       'autoplay=(self)',
       'fullscreen=(self)',
+      'notifications=(self)',
     ].join(', ')
   )
   // إزالة X-Permissions-Policy القديم إن وُجد
@@ -24220,21 +24220,22 @@ function getModelStatus(hfId) {
 // ── نماذج Text-to-Video ──────────────────────────────────────────────────────
 const T2V_MODELS = [
   { id: 'pollinations', hfId: 'pollinations/wan',                            label: 'Wan (Pollinations)', badge: 'مجاني',    color: '#22c55e' },
-  { id: 'wan2',         hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                     label: 'Wan 2.1',            badge: 'أسرع',     color: '#10b981' },
+  { id: 'wan2',         hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                     label: 'Wan 2.1 Fast',       badge: 'أسرع',     color: '#10b981' },
+  { id: 'wan2-14b',     hfId: 'Wan-AI/Wan2.1-T2V-14B-Diffusers',            label: 'Wan 2.1 Pro',        badge: 'جودة',     color: '#06b6d4' },
   { id: 'ltx',          hfId: 'Lightricks/LTX-Video',                        label: 'LTX Video',          badge: 'خفيف',     color: '#8b5cf6' },
-  { id: 'cogvideo',     hfId: 'THUDM/CogVideoX-2b',                          label: 'CogVideoX 2B',       badge: 'HD',       color: '#6366f1' },
+  { id: 'cogvideo',     hfId: 'THUDM/CogVideoX1.5-5B',                       label: 'CogVideoX 5B',       badge: 'HD',       color: '#6366f1' },
+  { id: 'hunyuan',      hfId: 'tencent/HunyuanVideo',                        label: 'HunyuanVideo',       badge: 'احترافي',  color: '#ec4899' },
   { id: 'animatediff',  hfId: 'ByteDance/AnimateDiff-Lightning',              label: 'AnimateDiff',        badge: 'GIF',      color: '#f59e0b' },
-  { id: 'mochi',        hfId: 'genmo/mochi-1-preview',                        label: 'Mochi 1',            badge: 'إبداعي',   color: '#ec4899' },
-  { id: 'modelscope',   hfId: 'ali-vilab/text-to-video-ms-1.7b',              label: 'ModelScope',         badge: 'كلاسيك',   color: '#64748b' },
-  { id: 'zeroscope',    hfId: 'cerspense/zeroscope_v2_576w',                  label: 'ZeroScope v2',       badge: 'واقعي',    color: '#06b6d4' },
+  { id: 'skyreels',     hfId: 'Skywork/SkyReels-V2-DF-1.3B-540P',            label: 'SkyReels V2',        badge: 'جديد',     color: '#0ea5e9' },
 ]
 
 // ── نماذج Image-to-Video ─────────────────────────────────────────────────────
 const I2V_MODELS = [
-  { id: 'ltx-i2v',   hfId: 'Lightricks/LTX-Video',                               label: 'LTX Video',       badge: 'سريع', color: '#8b5cf6' },
-  { id: 'svd',       hfId: 'stabilityai/stable-video-diffusion-img2vid',           label: 'Stable Video',    badge: 'HD',   color: '#3b82f6' },
-  { id: 'i2vgen',    hfId: 'ali-vilab/i2vgen-xl',                                  label: 'i2vgen XL',       badge: 'XL',   color: '#10b981' },
-  { id: 'animdiff2', hfId: 'ByteDance/AnimateDiff-Lightning',                       label: 'AnimateDiff',     badge: 'GIF',  color: '#f59e0b' },
+  { id: 'ltx-i2v',      hfId: 'Lightricks/LTX-Video',                                    label: 'LTX Video',       badge: 'سريع',   color: '#8b5cf6' },
+  { id: 'wan-i2v',      hfId: 'Wan-AI/Wan2.1-I2V-14B-720P-Diffusers',                    label: 'Wan 2.1 I2V',     badge: 'جودة',   color: '#10b981' },
+  { id: 'cogvideo-i2v', hfId: 'THUDM/CogVideoX-5b-I2V',                                  label: 'CogVideoX I2V',   badge: 'HD',     color: '#6366f1' },
+  { id: 'svd',          hfId: 'stabilityai/stable-video-diffusion-img2vid-xt-1-1',        label: 'SVD XT 1.1',      badge: 'ناعم',   color: '#3b82f6' },
+  { id: 'animdiff2',    hfId: 'ByteDance/AnimateDiff-Lightning',                          label: 'AnimateDiff',     badge: 'GIF',    color: '#f59e0b' },
 ]
 
 // ── HF Video Inference مع retry على 503 ──────────────────────────────────────
@@ -24287,12 +24288,12 @@ function buildT2VBody(hfId, prompt, w, h) {
   const defaults = { inputs: prompt }
   const map = {
     'Wan-AI/Wan2.1-T2V-1.3B':             { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20 } },
-    'THUDM/CogVideoX-2b':                  { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20, guidance_scale: 6 } },
-    'Lightricks/LTX-Video':                { inputs: prompt, parameters: { num_frames: 25, num_inference_steps: 25, width: w||512, height: h||288 } },
-    'ByteDance/AnimateDiff-Lightning':      { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 4 } },
-    'genmo/mochi-1-preview':               { inputs: prompt, parameters: { num_frames: 16 } },
-    'ali-vilab/text-to-video-ms-1.7b':     { inputs: prompt },
-    'cerspense/zeroscope_v2_576w':          { inputs: prompt },
+    'Wan-AI/Wan2.1-T2V-14B-Diffusers':    { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20 } },
+    'THUDM/CogVideoX1.5-5B':              { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20, guidance_scale: 6 } },
+    'tencent/HunyuanVideo':               { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20, width: w||512, height: h||288 } },
+    'Lightricks/LTX-Video':               { inputs: prompt, parameters: { num_frames: 25, num_inference_steps: 25, width: w||512, height: h||288 } },
+    'ByteDance/AnimateDiff-Lightning':    { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 4 } },
+    'Skywork/SkyReels-V2-DF-1.3B-540P':  { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20 } },
   }
   return map[hfId] || defaults
 }
@@ -24300,10 +24301,11 @@ function buildT2VBody(hfId, prompt, w, h) {
 // ── I2V request body per model ────────────────────────────────────────────────
 function buildI2VBody(hfId, imgB64, prompt) {
   const map = {
-    'Lightricks/LTX-Video':                              { inputs: imgB64, parameters: { prompt, num_frames: 25, num_inference_steps: 25 } },
-    'stabilityai/stable-video-diffusion-img2vid':        { inputs: imgB64, parameters: { decode_chunk_size: 8, num_frames: 14 } },
-    'ali-vilab/i2vgen-xl':                               { inputs: imgB64, parameters: { prompt } },
-    'ByteDance/AnimateDiff-Lightning':                   { inputs: imgB64, parameters: { prompt, num_frames: 16 } },
+    'Lightricks/LTX-Video':                                       { inputs: imgB64, parameters: { prompt, num_frames: 25, num_inference_steps: 25 } },
+    'Wan-AI/Wan2.1-I2V-14B-720P-Diffusers':                      { inputs: imgB64, parameters: { prompt, num_frames: 16, num_inference_steps: 20 } },
+    'THUDM/CogVideoX-5b-I2V':                                     { inputs: imgB64, parameters: { prompt, num_frames: 16, num_inference_steps: 20, guidance_scale: 6 } },
+    'stabilityai/stable-video-diffusion-img2vid-xt-1-1':          { inputs: imgB64, parameters: { decode_chunk_size: 8, num_frames: 21 } },
+    'ByteDance/AnimateDiff-Lightning':                            { inputs: imgB64, parameters: { prompt, num_frames: 16 } },
   }
   return map[hfId] || { inputs: imgB64, parameters: { prompt } }
 }

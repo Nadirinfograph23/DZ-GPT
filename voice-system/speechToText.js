@@ -57,7 +57,14 @@ export function createSTT() {
   }
 
   function attach(r) {
+    let speechEndTimer = null
+
+    function clearSpeechEndTimer() {
+      if (speechEndTimer) { clearTimeout(speechEndTimer); speechEndTimer = null }
+    }
+
     r.onresult = (e) => {
+      clearSpeechEndTimer()  // كلام جديد — أوقف مؤقت الصمت
       let interim = '', final = '', conf = 0
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i]
@@ -71,6 +78,34 @@ export function createSTT() {
         // إيقاف فوري بعد النتيجة النهائية — يضمن تشغيل onend دائماً
         setTimeout(() => { try { r.stop() } catch {} }, 80)
       }
+    }
+
+    // ── onspeechend: المتصفح اكتشف توقف المستخدم عن الكلام ──────────────────
+    // هذا الحدث يُطلَق فوراً عند الصمت — بدونه المتصفح ينتظر 5-7 ثوانٍ
+    r.onspeechend = () => {
+      clearSpeechEndTimer()
+      // 600ms بعد توقف الكلام → نوقف التسجيل مباشرة
+      speechEndTimer = setTimeout(() => {
+        try { r.stop() } catch {}
+      }, 600)
+    }
+
+    // ── onspeechstart: بدأ الكلام — نلغي أي مؤقت صمت ────────────────────────
+    r.onspeechstart = () => {
+      clearSpeechEndTimer()
+    }
+
+    // ── onsoundend: احتياطي إذا لم يُطلَق onspeechend ──────────────────────
+    r.onsoundend = () => {
+      if (!speechEndTimer) {
+        speechEndTimer = setTimeout(() => {
+          try { r.stop() } catch {}
+        }, 800)
+      }
+    }
+
+    r.onsoundstart = () => {
+      clearSpeechEndTimer()
     }
 
     r.onerror = async (e) => {

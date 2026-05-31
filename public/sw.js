@@ -81,16 +81,22 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push notifications ────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  const data = event.data?.json().catch(() => null) ||
-    { title: 'DZ GPT', body: 'رسالة جديدة' }
+  let data = { title: 'DZ GPT', body: 'رسالة جديدة' }
+  if (event.data) {
+    try { data = event.data.json() } catch {
+      try { data = { title: 'DZ GPT', body: event.data.text() } } catch {}
+    }
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || 'DZ GPT', {
-      body: data.body || '',
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      dir: 'rtl',
-      lang: 'ar',
-      tag: 'dz-gpt',
+      body:    data.body || '',
+      icon:    '/pwa-192x192.png',
+      badge:   '/pwa-192x192.png',
+      dir:     'rtl',
+      lang:    'ar',
+      tag:     data.tag || 'dz-gpt',
+      data:    data,
+      vibrate: [200, 100, 200],
     })
   )
 })

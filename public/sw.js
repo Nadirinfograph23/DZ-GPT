@@ -1,6 +1,6 @@
 // DZ GPT — Service Worker v2.0
 // يدعم: PWA install، offline caching، push notifications، permissions hint
-const SHELL_CACHE = 'dz-gpt-shell-v6'
+const SHELL_CACHE = 'dz-gpt-shell-v7'
 const AUDIO_CACHE = 'dz-tube-audio-v1'
 const ALL_CACHES  = [SHELL_CACHE, AUDIO_CACHE]
 

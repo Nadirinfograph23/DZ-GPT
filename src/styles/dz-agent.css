@@ -1721,6 +1721,26 @@
 .dz-action-btn--voice { color: #6b7280; }
 .dz-action-btn--voice:hover { color: #10a37f; border-color: rgba(16,163,127,0.3); background: rgba(16,163,127,0.07); }
 
+/* ===== TTS SPEAK BUTTON ===== */
+.dz-action-btn--speak {
+  color: rgba(56, 189, 248, 0.7);
+}
+.dz-action-btn--speak:hover {
+  color: #38bdf8;
+  border-color: rgba(56,189,248,0.35);
+  background: rgba(56,189,248,0.09);
+}
+.dz-action-btn--speak-active {
+  color: #4ade80 !important;
+  border-color: rgba(74,222,128,0.45) !important;
+  background: rgba(74,222,128,0.1) !important;
+  animation: dz-speak-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dz-speak-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.3); }
+  50%      { box-shadow: 0 0 0 6px rgba(74,222,128,0); }
+}
+
 /* Playing state */
 .dz-action-btn--speaking {
   color: #10a37f !important;

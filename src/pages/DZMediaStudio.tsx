@@ -429,6 +429,10 @@ export default function DZMediaStudio() {
           )}
         </div>
       </div>
+
+      <footer className="dms-footer">
+        <span className="dms-footer-text">AI DZ MEDIA 2026 ® 🇩🇿</span>
+      </footer>
     </div>
   )
 }

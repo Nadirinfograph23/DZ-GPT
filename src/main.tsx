@@ -18,6 +18,7 @@ import DZAgentGitHub from './pages/DZAgentGitHub.tsx'
 import DZExcel from './pages/DZExcel.tsx'
 import DZRadio from './pages/DZRadio.tsx'
 import DZMyProjects from './pages/DZMyProjects.tsx'
+import DZMediaStudio from './pages/DZMediaStudio.tsx'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import { RadioPlayerProvider } from './context/RadioPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
@@ -172,6 +173,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/radio"        element={pb('DZ Radio',       <DZRadio />)} />
             <Route path="/dz-radio"     element={<Navigate to="/radio" replace />} />
             <Route path="/my-projects"  element={pb('مشاريعي',         <DZMyProjects />)} />
+            <Route path="/media"        element={pb('DZ Media Studio', <DZMediaStudio />)} />
+            <Route path="/dz-media"     element={<Navigate to="/media" replace />} />
             <Route path="*"             element={<Navigate to="/" replace />} />
           </Routes>
           <ConditionalMiniPlayer />

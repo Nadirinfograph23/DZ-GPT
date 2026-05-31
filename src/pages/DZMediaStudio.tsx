@@ -19,6 +19,27 @@ const POLLINATIONS_MODELS = [
   { id: 'flux-3d',      label: '🧊 3D' },
 ]
 
+interface AspectPreset {
+  label: string
+  sub: string
+  w: number
+  h: number
+  shape: 'tall' | 'square' | 'wide' | 'photo'
+}
+
+const IMG_PRESETS: AspectPreset[] = [
+  { label: 'عمودي',   sub: '9:16',  w: 576,  h: 1024, shape: 'tall' },
+  { label: 'مربع',    sub: '1:1',   w: 768,  h: 768,  shape: 'square' },
+  { label: 'أفقي',    sub: '16:9',  w: 1024, h: 576,  shape: 'wide' },
+  { label: 'كلاسيك',  sub: '4:3',   w: 1024, h: 768,  shape: 'photo' },
+]
+
+const VID_PRESETS: AspectPreset[] = [
+  { label: 'عمودي',  sub: '9:16', w: 320, h: 576, shape: 'tall' },
+  { label: 'مربع',   sub: '1:1',  w: 512, h: 512, shape: 'square' },
+  { label: 'أفقي',   sub: '16:9', w: 576, h: 320, shape: 'wide' },
+]
+
 interface Quota {
   remaining: number
   used: number
@@ -52,8 +73,8 @@ export default function DZMediaStudio() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const isVideoTab = tab === 'text2video' || tab === 'img2video'
+  const presets = isVideoTab ? VID_PRESETS : IMG_PRESETS
 
-  // جلب حصة الفيديو عند تغيير التبويب لفيديو
   useEffect(() => {
     if (!isVideoTab) return
     fetch('/api/dz-agent-v4/video/quota')
@@ -61,6 +82,15 @@ export default function DZMediaStudio() {
       .then(d => { if (d.quota) setQuota(d.quota) })
       .catch(() => {})
   }, [isVideoTab])
+
+  const handleTabChange = (newTab: Tab) => {
+    setTab(newTab)
+    setResult(null)
+    setError('')
+    const nextVideo = newTab === 'text2video' || newTab === 'img2video'
+    if (nextVideo) { setWidth(512); setHeight(512) }
+    else { setWidth(768); setHeight(768) }
+  }
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -157,6 +187,7 @@ export default function DZMediaStudio() {
   }, [tab, prompt, model, imageUrl, imagePreview, width, height])
 
   const currentTab = TABS.find(t => t.id === tab)!
+  const isQuotaEmpty = isVideoTab && quota?.remaining === 0
 
   return (
     <div className="dms-root" dir="rtl">
@@ -175,7 +206,7 @@ export default function DZMediaStudio() {
           <button
             key={t.id}
             className={`dms-tab${tab === t.id ? ' dms-tab--active' : ''}`}
-            onClick={() => { setTab(t.id); setResult(null); setError('') }}
+            onClick={() => handleTabChange(t.id)}
           >
             <span className="dms-tab-icon">{t.icon}</span>
             <span className="dms-tab-label">{t.label}</span>
@@ -184,29 +215,29 @@ export default function DZMediaStudio() {
       </div>
 
       <div className="dms-body">
+
+        {/* ========== لوحة الإدخال ========== */}
         <div className="dms-panel">
           <p className="dms-tab-desc">{currentTab.icon} {currentTab.desc}</p>
 
-          {/* شريط الحصة اليومية للفيديو */}
+          {/* شريط الحصة */}
           {isVideoTab && quota && (
-            <div className={`dms-quota-bar ${quota.remaining === 0 ? 'dms-quota-bar--empty' : ''}`}>
+            <div className={`dms-quota-bar${isQuotaEmpty ? ' dms-quota-bar--empty' : ''}`}>
               <div className="dms-quota-info">
                 <span>🎬 الحصة اليومية</span>
                 <span className="dms-quota-count">
-                  {quota.remaining === 0
+                  {isQuotaEmpty
                     ? `⏳ انتهت — تجديد خلال ${quota.resetInHours}س`
                     : `${quota.remaining} متبق من ${quota.limit}`}
                 </span>
               </div>
               <div className="dms-quota-track">
-                <div
-                  className="dms-quota-fill"
-                  style={{ width: `${(quota.used / quota.limit) * 100}%` }}
-                />
+                <div className="dms-quota-fill" style={{ width: `${(quota.used / quota.limit) * 100}%` }} />
               </div>
             </div>
           )}
 
+          {/* رفع صورة */}
           {(tab === 'img2img' || tab === 'img2video') && (
             <div className="dms-upload-zone">
               <input type="file" ref={fileRef} accept="image/*" hidden onChange={handleFileUpload} />
@@ -232,6 +263,7 @@ export default function DZMediaStudio() {
             </div>
           )}
 
+          {/* وصف النص */}
           <div className="dms-prompt-wrap">
             <label className="dms-label">
               {tab === 'img2video' ? '✏️ وصف الحركة (اختياري)' : '✏️ وصف الصورة / الفيديو'}
@@ -251,9 +283,10 @@ export default function DZMediaStudio() {
             />
           </div>
 
+          {/* النموذج — للصور فقط */}
           {tab === 'text2img' && (
-            <div className="dms-models-row">
-              <label className="dms-label">النموذج:</label>
+            <div className="dms-section">
+              <label className="dms-label">النموذج</label>
               <div className="dms-model-btns">
                 {POLLINATIONS_MODELS.map(m => (
                   <button
@@ -268,26 +301,35 @@ export default function DZMediaStudio() {
             </div>
           )}
 
+          {/* مقاييس الإطار */}
           {(tab === 'text2img' || tab === 'text2video') && (
-            <div className="dms-size-row">
-              <label className="dms-label">الحجم:</label>
-              <div className="dms-size-btns">
-                {([[512,512,'مربع'], [768,768,'HD'], [1024,1024,'FHD'], [1024,576,'أفقي'], [576,1024,'عمودي']] as [number,number,string][]).map(([w,h,lbl]) => (
-                  <button
-                    key={`${w}x${h}`}
-                    className={`dms-size-btn${width === w && height === h ? ' dms-size-btn--active' : ''}`}
-                    onClick={() => { setWidth(w); setHeight(h) }}
-                  >
-                    {lbl}<br /><small>{w}×{h}</small>
-                  </button>
-                ))}
+            <div className="dms-section">
+              <label className="dms-label">مقياس الإطار</label>
+              <div className="dms-aspect-row">
+                {presets.map(p => {
+                  const active = width === p.w && height === p.h
+                  return (
+                    <button
+                      key={p.shape}
+                      className={`dms-aspect-btn${active ? ' dms-aspect-btn--active' : ''}`}
+                      onClick={() => { setWidth(p.w); setHeight(p.h) }}
+                      title={`${p.w}×${p.h}`}
+                    >
+                      <span className={`dms-aspect-frame dms-aspect-frame--${p.shape}`} />
+                      <span className="dms-aspect-label">{p.label}</span>
+                      <span className="dms-aspect-sub">{p.sub}</span>
+                    </button>
+                  )
+                })}
               </div>
+              <p className="dms-dim-hint">{width}×{height} px</p>
             </div>
           )}
 
+          {/* مزودو الفيديو */}
           {isVideoTab && (
-            <div className="dms-video-providers">
-              <span className="dms-label">مزودو الفيديو المجانيون:</span>
+            <div className="dms-section">
+              <label className="dms-label">مزودو الفيديو المجانيون</label>
               <div className="dms-provider-chips">
                 <span className="dms-chip">🌊 Pollinations</span>
                 <span className="dms-chip">⚡ Zeroscope</span>
@@ -296,18 +338,18 @@ export default function DZMediaStudio() {
             </div>
           )}
 
-          {error && <div className="dms-error">⚠️ {error}</div>}
+          {error   && <div className="dms-error">⚠️ {error}</div>}
           {loading && <div className="dms-progress">{progress || '⏳ جاري التوليد...'}</div>}
 
           <button
             className="dms-generate-btn"
             onClick={handleGenerate}
-            disabled={loading || (isVideoTab && quota?.remaining === 0)}
+            disabled={loading || isQuotaEmpty}
           >
             {loading ? (
               <><span className="dms-spinner" /> {progress || 'جاري التوليد...'}</>
-            ) : isVideoTab && quota?.remaining === 0 ? (
-              <>⏳ انتهت الحصة — خلال {quota.resetInHours}س</>
+            ) : isQuotaEmpty ? (
+              <>⏳ انتهت الحصة — خلال {quota!.resetInHours}س</>
             ) : (
               <>{currentTab.icon} {
                 tab === 'text2img'   ? 'ولّد الصورة' :
@@ -317,10 +359,10 @@ export default function DZMediaStudio() {
               }</>
             )}
           </button>
-
           <p className="dms-hint">Ctrl+Enter لتوليد سريع</p>
         </div>
 
+        {/* ========== لوحة النتيجة ========== */}
         <div className="dms-result-panel">
           {!result && !loading && (
             <div className="dms-empty-state">
@@ -366,30 +408,20 @@ export default function DZMediaStudio() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="dms-action-btn dms-action-btn--dl"
-                >
-                  ⬇ تحميل
-                </a>
+                >⬇ تحميل</a>
                 {result.type === 'image' && (
                   <button
                     className="dms-action-btn dms-action-btn--use"
-                    onClick={() => { setImagePreview(result.url); setImageUrl(result.url); setTab('img2img') }}
-                  >
-                    🔄 img2img
-                  </button>
+                    onClick={() => { setImagePreview(result.url); setImageUrl(result.url); handleTabChange('img2img') }}
+                  >🔄 img2img</button>
                 )}
                 {result.type === 'image' && (
                   <button
                     className="dms-action-btn dms-action-btn--vid"
-                    onClick={() => { setImagePreview(result.url); setImageUrl(result.url); setTab('img2video') }}
-                  >
-                    🎬 فيديو
-                  </button>
+                    onClick={() => { setImagePreview(result.url); setImageUrl(result.url); handleTabChange('img2video') }}
+                  >🎬 فيديو</button>
                 )}
-                <button
-                  className="dms-action-btn"
-                  onClick={() => handleGenerate()}
-                  disabled={loading}
-                >
+                <button className="dms-action-btn" onClick={() => handleGenerate()} disabled={loading}>
                   🔄 جديد
                 </button>
               </div>

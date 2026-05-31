@@ -1,8 +1,7 @@
-// Thin React wrapper for the dz Voice Intelligence System (DVIS).
-// Pure additive UI — sits next to the existing send button and never
-// interferes with text-mode chat.
+// DZ Voice Panel v2.1 — Edge TTS Neural + STT
+// صوت طبيعي جزائري: ar-DZ-AminaNeural / ar-DZ-IsmaelNeural
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, Volume2, VolumeX, Settings2, Radio } from 'lucide-react'
+import { Mic, MicOff, Volume2, VolumeX, Settings2, Radio, Zap } from 'lucide-react'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-expect-error — JS module without .d.ts
 import { createDVIS } from '../../voice-system/controller.js'
@@ -10,78 +9,55 @@ import { createDVIS } from '../../voice-system/controller.js'
 type DvisState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'wake-listening'
 
 interface Prefs {
-  gender: 'male' | 'female'
-  fastMode: boolean
-  muted: boolean
-  wakeWord: boolean
+  gender:     'male' | 'female'
+  fastMode:   boolean
+  muted:      boolean
+  wakeWord:   boolean
   continuous: boolean
-  language: 'auto' | 'ar' | 'fr' | 'en'
+  language:   'auto' | 'ar' | 'fr' | 'en'
 }
 
 interface VoicePanelProps {
-  /** Called when a final transcript is captured — host can put it into the chat input. */
-  onTranscript?: (text: string) => void
-  /** Called when the AI reply text is received — host can show it in the chat. */
-  onReply?: (text: string) => void
-  /** Optional async hook so DVIS routes through the host's existing send pipeline. */
-  registerHostProcessor?: (handler: (text: string) => Promise<string> | string) => void
+  onTranscript?:         (text: string) => void
+  onReply?:              (text: string) => void
+  registerHostProcessor?:(handler: (text: string) => Promise<string> | string) => void
 }
 
 export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
-  const dvisRef = useRef<ReturnType<typeof createDVIS> | null>(null)
+  const dvisRef           = useRef<ReturnType<typeof createDVIS> | null>(null)
   const [state, setState] = useState<DvisState>('idle')
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [supported, setSupported] = useState({ stt: false, tts: false })
-  // dz Agent voice mode is Arabic-only. We hide the entire voice UI when the
-  // browser cannot speak Arabic (no `ar-*` SpeechSynthesis voice installed),
-  // per product requirement.
-  const [arabicSupported, setArabicSupported] = useState<boolean | null>(null)
+  const [sttOk, setSttOk] = useState(false)
+  const [edgeOk, setEdgeOk] = useState(false)
 
   useEffect(() => {
     const dvis = createDVIS({ baseUrl: '' })
     dvisRef.current = dvis
-    setSupported({ stt: dvis.isSttSupported(), tts: dvis.isTtsSupported() })
+    setSttOk(dvis.isSttSupported())
     setPrefs(dvis.getPrefs())
-    // Probe SpeechSynthesis for an Arabic-capable voice. Chrome populates the
-    // voice list async, so we listen and re-probe.
-    let cancelled = false
-    const probeArabic = async () => {
-      try {
-        if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-          if (!cancelled) setArabicSupported(false)
-          return
-        }
-        const voices = await dvis.listVoices()
-        const hasAr = Array.isArray(voices) && voices.some((v: SpeechSynthesisVoice) =>
-          (v.lang || '').toLowerCase().startsWith('ar')
-        )
-        if (!cancelled) setArabicSupported(hasAr)
-      } catch {
-        if (!cancelled) setArabicSupported(false)
-      }
-    }
-    probeArabic()
-    // Expose globally so the chat can request auto-speak for short replies
-    // even when the user typed (didn't use voice input).
+
+    // فحص Edge TTS (صوت طبيعي)
+    fetch('/api/voice/voices', { signal: AbortSignal.timeout(3000) })
+      .then(r => r.ok && setEdgeOk(true))
+      .catch(() => {})
+
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(window as any).__dvis = dvis
     }
-    const unState = dvis.on('state', (s: DvisState) => setState(s))
-    const unTr = dvis.on('transcript', ({ text, isFinal }: { text: string; isFinal: boolean }) => {
+
+    const unState  = dvis.on('state',      (s: DvisState) => setState(s))
+    const unTr     = dvis.on('transcript', ({ text, isFinal }: { text: string; isFinal: boolean }) => {
       if (isFinal && onTranscript) onTranscript(text)
     })
-    const unReply = dvis.on('reply', ({ text }: { text: string }) => {
+    const unReply  = dvis.on('reply',      ({ text }: { text: string }) => {
       if (onReply) onReply(text)
     })
-    const unPrefs = dvis.on('prefs', (p: Prefs) => setPrefs(p))
+    const unPrefs  = dvis.on('prefs',      (p: Prefs) => setPrefs(p))
     dvis.preload()
-    // Re-probe Arabic voice after preload completes (Chrome populates voices async).
-    const reProbeTimer = setTimeout(probeArabic, 1500)
+
     return () => {
-      cancelled = true
-      clearTimeout(reProbeTimer)
       unState?.(); unTr?.(); unReply?.(); unPrefs?.()
       if (typeof window !== 'undefined') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,37 +68,47 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
   }, [onTranscript, onReply])
 
   if (!prefs) return null
-  if (!supported.stt && !supported.tts) return null
-  // Hide the entire mic / volume / settings UI when the browser has no
-  // Arabic voice — dz Agent voice mode is Arabic-only.
-  if (arabicSupported === false) return null
+  // نُظهر الـ panel دائماً إذا يوجد STT أو Edge TTS
+  if (!sttOk && !edgeOk) return null
 
   const updatePref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
     dvisRef.current?.setPrefs({ [k]: v } as Partial<Prefs>)
   }
 
   const onMicClick = () => {
-    if (!supported.stt) return
+    if (!sttOk) return
     dvisRef.current?.toggleListening()
   }
 
   const stateLabel: Record<DvisState, string> = {
-    idle: '',
-    listening: '🎤 يستمع...',
-    thinking: '...يفكر',
-    speaking: '🔊 يتحدث',
-    'wake-listening': '👂 ينتظر "Hey DZ"',
+    idle:            '',
+    listening:       '🎤 يستمع...',
+    thinking:        '...يفكر',
+    speaking:        '🔊 يتحدث',
+    'wake-listening':'👂 ينتظر "Hey DZ"',
   }
 
   const isMicActive = state === 'listening' || state === 'wake-listening'
+  const isSpeaking  = state === 'speaking'
 
   return (
     <div className="dz-voice-panel" data-state={state}>
+
+      {/* مؤشر الحالة */}
       {state !== 'idle' && (
         <span className="dz-voice-state" aria-live="polite">{stateLabel[state]}</span>
       )}
 
-      {supported.stt && (
+      {/* شارة الصوت الطبيعي */}
+      {edgeOk && (
+        <span className="dz-voice-badge" title="صوت جزائري طبيعي — Microsoft Edge Neural">
+          <Zap size={10} />
+          <span>طبيعي</span>
+        </span>
+      )}
+
+      {/* زر الميكروفون */}
+      {sttOk && (
         <button
           type="button"
           className={`dz-voice-btn ${isMicActive ? 'is-active' : ''}`}
@@ -135,19 +121,19 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
         </button>
       )}
 
-      {supported.tts && (
-        <button
-          type="button"
-          className={`dz-voice-btn ${prefs.muted ? 'is-muted' : ''}`}
-          title={prefs.muted ? 'تشغيل الصوت' : 'كتم الصوت'}
-          onClick={() => updatePref('muted', !prefs.muted)}
-          aria-label="mute"
-          aria-pressed={prefs.muted}
-        >
-          {prefs.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-        </button>
-      )}
+      {/* زر إيقاف/تشغيل الصوت */}
+      <button
+        type="button"
+        className={`dz-voice-btn ${prefs.muted ? 'is-muted' : ''} ${isSpeaking ? 'is-speaking' : ''}`}
+        title={prefs.muted ? 'تشغيل الصوت' : 'كتم الصوت'}
+        onClick={() => updatePref('muted', !prefs.muted)}
+        aria-label="mute"
+        aria-pressed={prefs.muted}
+      >
+        {prefs.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+      </button>
 
+      {/* إعدادات */}
       <button
         type="button"
         className={`dz-voice-btn ${showSettings ? 'is-open' : ''}`}
@@ -161,6 +147,7 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
 
       {showSettings && (
         <div className="dz-voice-settings" role="dialog">
+
           <div className="dz-voice-settings-row">
             <label>الصوت</label>
             <div className="dz-voice-toggle-group">
@@ -168,12 +155,12 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
                 type="button"
                 className={prefs.gender === 'female' ? 'on' : ''}
                 onClick={() => updatePref('gender', 'female')}
-              >👩 أنثى</button>
+              >👩 أمينة</button>
               <button
                 type="button"
                 className={prefs.gender === 'male' ? 'on' : ''}
                 onClick={() => updatePref('gender', 'male')}
-              >👨 ذكر</button>
+              >👨 إسماعيل</button>
             </div>
           </div>
 
@@ -184,9 +171,9 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
               onChange={(e) => updatePref('language', e.target.value as Prefs['language'])}
             >
               <option value="auto">تلقائي 🌍</option>
-              <option value="ar">العربية</option>
-              <option value="fr">Français</option>
-              <option value="en">English</option>
+              <option value="ar">العربية الجزائرية 🇩🇿</option>
+              <option value="fr">Français DZ 🇩🇿</option>
+              <option value="en">English 🇬🇧</option>
             </select>
           </div>
 
@@ -213,18 +200,12 @@ export default function VoicePanel({ onTranscript, onReply }: VoicePanelProps) {
             />
           </div>
 
-          <div className="dz-voice-settings-row">
-            <label htmlFor="dz-pref-fast">⚡ وضع سريع</label>
-            <input
-              id="dz-pref-fast"
-              type="checkbox"
-              checked={prefs.fastMode}
-              onChange={(e) => updatePref('fastMode', e.target.checked)}
-            />
-          </div>
-
           <div className="dz-voice-settings-foot">
-            DVIS v{dvisRef.current?.version || '2.0.0'} — مجاني، يعمل في المتصفح.
+            DVIS v{dvisRef.current?.version || '2.1.0'} —{' '}
+            {edgeOk
+              ? <span style={{ color: '#22c55e' }}>🎙 صوت جزائري طبيعي (Edge Neural)</span>
+              : <span style={{ color: '#f59e0b' }}>⚠ صوت المتصفح (fallback)</span>
+            }
           </div>
         </div>
       )}

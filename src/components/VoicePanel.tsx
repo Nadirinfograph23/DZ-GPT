@@ -1,13 +1,13 @@
-// VoicePanel v6.0 — Direct Web Speech API (Zero Abstraction Layer)
+// VoicePanel v7.0 — Continuous Listen + Manual Stop → Send
 // ─────────────────────────────────────────────────────────────────
-// بعد 5 محاولات فاشلة مع DVIS + controller + STT:
-// هذا الكومبوننت يتحدث مع Web Speech API مباشرة — لا وسيط، لا event bus، لا DVIS.
-// recognition.onresult → onTranscript()  ← نقطة اتصال واحدة لا تنكسر.
+// المنطق الجديد:
+//   1. اضغط الميكروفون → يبدأ الاستماع المستمر (continuous=true)
+//   2. النص يتراكم في accumulatedRef ويُعرض مباشرة (onInterim)
+//   3. اضغط "إيقاف وإرسال" → يُرسل كل ما تم سماعه دفعة واحدة (onTranscript)
 // ─────────────────────────────────────────────────────────────────
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Mic, MicOff, AlertTriangle } from 'lucide-react'
+import { Mic, MicOff, AlertTriangle, SendHorizonal } from 'lucide-react'
 
-// ── نوع لـ SpeechRecognition (بدون @types) ────────────────────────────────
 interface ISpeechRecognition extends EventTarget {
   lang: string
   continuous: boolean
@@ -35,13 +35,12 @@ declare global {
 }
 
 interface VoicePanelProps {
-  onTranscript?:  (text: string) => void
-  onReply?:       (text: string) => void
+  onTranscript?: (text: string) => void   // يُستدعى مرة واحدة عند الإيقاف — يرسل النص
+  onInterim?:    (text: string) => void   // يُستدعى أثناء الاستماع — يعرض النص في الحقل
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerHostProcessor?: (handler: (text: string) => Promise<string> | string) => void
 }
 
-// ── VAD: تصوير مستوى الصوت (اختياري — للبصريات فقط) ──────────────────────
 const BAR_COUNT = 5
 
 function useVAD(active: boolean) {
@@ -115,24 +114,25 @@ function useVAD(active: boolean) {
   return { bars, isVoiceActive: Math.max(...bars) > 0.04 }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-export default function VoicePanel({ onTranscript }: VoicePanelProps) {
+export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps) {
 
-  const [listening,   setListening]   = useState(false)
-  const [interimText, setInterimText] = useState('')  // نص وسيط للعرض داخل الزر
-  const [permError,   setPermError]   = useState<'iframe'|'denied'|'no-device'|null>(null)
-  const recRef   = useRef<ISpeechRecognition | null>(null)
-  const wrapRef  = useRef<HTMLDivElement>(null)
-  const cbRef    = useRef(onTranscript)
+  const [listening,    setListening]    = useState(false)
+  const [interimText,  setInterimText]  = useState('')
+  const [permError,    setPermError]    = useState<'denied'|'no-device'|null>(null)
+
+  const recRef         = useRef<ISpeechRecognition | null>(null)
+  const wrapRef        = useRef<HTMLDivElement>(null)
+  const accumulatedRef = useRef<string>('')       // النص الكامل المتراكم
+  const cbRef          = useRef(onTranscript)
+  const interimCbRef   = useRef(onInterim)
   useEffect(() => { cbRef.current = onTranscript })
+  useEffect(() => { interimCbRef.current = onInterim })
 
   const { bars, isVoiceActive } = useVAD(listening)
 
-  // ── هل المتصفح يدعم Web Speech API؟ ──────────────────────────────────────
   const isSupported = typeof window !== 'undefined' &&
     !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
-  // ── إغلاق رسالة الخطأ بالنقر خارجها ─────────────────────────────────────
   useEffect(() => {
     if (!permError) return
     const h = (e: MouseEvent) => {
@@ -142,100 +142,97 @@ export default function VoicePanel({ onTranscript }: VoicePanelProps) {
     return () => document.removeEventListener('mousedown', h)
   }, [permError])
 
-  // ── إيقاف عند تدمير الكومبوننت ──────────────────────────────────────────
   useEffect(() => () => {
     try { recRef.current?.abort() } catch {}
     recRef.current = null
   }, [])
 
-  // ── وقف التسجيل ──────────────────────────────────────────────────────────
+  // ── إيقاف + إرسال ما تم سماعه ───────────────────────────────────────────
   const stopRec = useCallback(() => {
     try { recRef.current?.stop() } catch {}
     recRef.current = null
     setListening(false)
     setInterimText('')
+
+    const text = accumulatedRef.current.trim()
+    accumulatedRef.current = ''
+
+    if (text) {
+      cbRef.current?.(text)       // ← يرسل النص الكامل للـ parent مرة واحدة
+    }
   }, [])
 
-  // ── بدء التسجيل — Web Speech API مباشرة ──────────────────────────────────
+  // ── بدء الاستماع المستمر ──────────────────────────────────────────────────
   const startRec = useCallback(async () => {
     setPermError(null)
+    accumulatedRef.current = ''
 
-    // ① طلب إذن الميكروفون صراحةً
+    // ① طلب إذن الميكروفون
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       stream.getTracks().forEach(t => t.stop())
     } catch (err) {
       const name = (err as Error)?.name || ''
-      const msg  = (err as Error)?.message || ''
       if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
         setPermError('no-device'); return
-      }
-      // إذا كانت المشكلة سياسة الصلاحيات في iframe مقيّد
-      if (msg.includes('permissions policy') || msg.includes('Permission denied by system')) {
-        try { if (window.self !== window.top) { setPermError('iframe'); return } } catch {}
       }
       setPermError('denied'); return
     }
 
-    // ③ إنشاء Recognition ─────────────────────────────────────────────────
+    // ② إنشاء Recognition
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!Ctor) return
     const rec = new Ctor()
 
-    rec.lang            = 'ar-SA'   // ar-SA: أوسع دعم في Google ASR — يفهم الدارجة
-    rec.continuous      = false     // نهاية تلقائية بعد كل جملة → أبسط وأموثوق
-    rec.interimResults  = true      // نتائج مؤقتة للتعقب البصري
+    rec.lang            = 'ar-SA'
+    rec.continuous      = true    // استماع مستمر حتى يضغط المستخدم إيقاف
+    rec.interimResults  = true
     rec.maxAlternatives = 1
 
-    // ④ onstart ─────────────────────────────────────────────────────────────
     rec.onstart = () => setListening(true)
 
-    // ⑤ onend ───────────────────────────────────────────────────────────────
+    // ③ onend — أعد التشغيل إذا كان المستخدم لم يوقفه بنفسه (حماية من الانقطاع)
     rec.onend = () => {
-      setListening(false)
-      setInterimText('')
-      recRef.current = null
+      if (recRef.current === rec) {
+        // لم يُوقَف يدوياً → أعد التشغيل تلقائياً
+        try { rec.start() } catch {
+          setListening(false)
+          setInterimText('')
+          recRef.current = null
+        }
+      }
     }
 
-    // ⑥ onerror ─────────────────────────────────────────────────────────────
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-      setListening(false)
-      setInterimText('')
-      recRef.current = null
       if (e.error === 'aborted' || e.error === 'no-speech') return
-      if (e.error === 'not-allowed') { setPermError('denied'); return }
-      if (e.error === 'audio-capture') { setPermError('no-device'); return }
+      if (e.error === 'not-allowed') { setPermError('denied'); recRef.current = null; setListening(false); return }
+      if (e.error === 'audio-capture') { setPermError('no-device'); recRef.current = null; setListening(false); return }
       console.warn('[VoicePanel] STT error:', e.error)
     }
 
-    // ⑦ onresult — نقطة الاتصال الوحيدة مع الـ parent ──────────────────────
-    // ⚠️ القاعدة الذهبية: نستدعي cbRef.current (= onTranscript) مرة واحدة فقط
-    //    عند النتيجة النهائية (isFinal=true).
-    //    النتائج المؤقتة تُعرض فقط بصرياً داخل الكومبوننت (interimText state).
-    //    هذا يمنع إرسال رسائل متعددة للنتائج الوسيطة.
+    // ④ onresult — تراكم النص وعرضه مباشرة (لا إرسال)
     rec.onresult = (e: SpeechRecognitionEvent) => {
-      let finalText  = ''
-      let interim    = ''
+      let interim = ''
 
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res  = e.results[i]
         const text = res[0]?.transcript || ''
-        if (res.isFinal) finalText += text
-        else             interim   += text
+        if (res.isFinal) {
+          accumulatedRef.current = (accumulatedRef.current + ' ' + text).trim()
+          // عرض النص المتراكم في حقل الإدخال مباشرة (بدون إرسال)
+          interimCbRef.current?.(accumulatedRef.current)
+        } else {
+          interim = text
+        }
       }
 
-      // عرض النص الوسيط بصرياً فقط (لا يُرسل للـ parent)
-      if (interim) setInterimText(interim.trim())
-
-      // عند اكتمال الجملة → استدعاء onTranscript مرة واحدة فقط
-      if (finalText.trim()) {
-        setInterimText('')
-        cbRef.current?.(finalText.trim())   // ← هذا السطر الوحيد الذي يُخبر الـ parent
-        try { rec.stop() } catch {}
-      }
+      // عرض النص الوسيط + المتراكم للمستخدم
+      const display = accumulatedRef.current
+        ? `${accumulatedRef.current} ${interim}`.trim()
+        : interim
+      setInterimText(display)
     }
 
-    // ⑧ ابدأ ──────────────────────────────────────────────────────────────
     recRef.current = rec
     try {
       rec.start()
@@ -246,41 +243,43 @@ export default function VoicePanel({ onTranscript }: VoicePanelProps) {
     }
   }, [])
 
-  // ── نقر الزر ─────────────────────────────────────────────────────────────
   const handleClick = useCallback(() => {
     setPermError(null)
-    if (listening) {
-      stopRec()
-    } else {
-      startRec()
-    }
+    if (listening) stopRec()
+    else           startRec()
   }, [listening, startRec, stopRec])
 
   if (!isSupported) return null
 
-  // ── CSS Classes ───────────────────────────────────────────────────────────
-  let cls = 'dz-vp-trigger'
-  if (listening)                 cls += ' is-listening'
-  if (permError === 'denied')    cls += ' is-denied'
+  const hasAccumulated = accumulatedRef.current.trim().length > 0
 
-  const title = listening          ? 'إيقاف الاستماع'
-    : permError === 'denied'       ? 'الميكروفون محجوب — انقر للتفاصيل'
-    : permError === 'no-device'    ? 'لا يوجد ميكروفون'
-    :                                'تحدّث بالعربية أو الدارجة'
+  let cls = 'dz-vp-trigger'
+  if (listening)               cls += ' is-listening'
+  if (permError === 'denied')  cls += ' is-denied'
+  if (hasAccumulated)          cls += ' has-text'
+
+  const title = listening
+    ? (hasAccumulated ? 'إيقاف وإرسال' : 'إيقاف الاستماع')
+    : permError === 'denied'    ? 'الميكروفون محجوب'
+    : permError === 'no-device' ? 'لا يوجد ميكروفون'
+    :                              'تحدّث بالعربية أو الدارجة'
 
   return (
     <div className="dz-vp-wrap" ref={wrapRef}>
 
-      {/* ── مؤشر الحالة + النص الوسيط ──────────────────────────────────────── */}
-      {listening && (
+      {/* ── عرض النص المتراكم ─────────────────────────────────────────────── */}
+      {listening && interimText && (
         <span className="dz-voice-state" aria-live="polite">
-          {interimText
-            ? <span className="dz-voice-interim">"{interimText}"</span>
-            : isVoiceActive ? '🎤 يسمعك...' : '🎤 يستمع...'}
+          <span className="dz-voice-interim">"{interimText.slice(-60)}{interimText.length > 60 ? '…' : ''}"</span>
+        </span>
+      )}
+      {listening && !interimText && (
+        <span className="dz-voice-state" aria-live="polite">
+          {isVoiceActive ? '🎤 يسمعك...' : '🎤 يستمع...'}
         </span>
       )}
 
-      {/* ── زر الميكروفون ─────────────────────────────────────────────────── */}
+      {/* ── زر الميكروفون / إيقاف وإرسال ──────────────────────────────────── */}
       <button
         type="button"
         className={cls}
@@ -290,12 +289,13 @@ export default function VoicePanel({ onTranscript }: VoicePanelProps) {
       >
         {permError === 'denied'
           ? <AlertTriangle size={16} />
+          : listening && hasAccumulated
+          ? <SendHorizonal size={16} />
           : listening
           ? <MicOff size={16} />
           : <Mic size={16} />}
 
-        {/* موجات VAD — تظهر فقط أثناء الاستماع */}
-        {listening && (
+        {listening && !hasAccumulated && (
           <span className="dz-vad-bars" aria-hidden="true">
             {bars.map((h, i) => (
               <span
@@ -311,15 +311,7 @@ export default function VoicePanel({ onTranscript }: VoicePanelProps) {
       {/* ── رسائل الخطأ ─────────────────────────────────────────────────── */}
       {permError && (
         <div className="dz-vp-perm-error" style={{ bottom: 'calc(100% + 8px)', insetInlineEnd: 0 }}>
-          {permError === 'iframe' ? (
-            <>
-              <p>🔒 المتصفح يمنع الميكروفون في الـ preview.</p>
-              <button
-                className="dz-vp-perm-link"
-                onClick={() => window.open(window.location.href, '_blank')}
-              >↗ فتح في نافذة جديدة</button>
-            </>
-          ) : permError === 'no-device' ? (
+          {permError === 'no-device' ? (
             <p>🎙 لا يوجد ميكروفون. تحقق من التوصيل.</p>
           ) : (
             <>

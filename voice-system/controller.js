@@ -143,23 +143,30 @@ export function createDVIS({ baseUrl = '' } = {}) {
     abortCtl?.abort?.()
     abortCtl = typeof AbortController !== 'undefined' ? new AbortController() : null
 
-    const language = detectLang(text) || resolveLang()
-    const { text: replyText, source } = await router.ask(text, { language, signal: abortCtl?.signal })
-    lastReplyText = replyText
-    bus.emit('reply', { text: replyText, source, language })
+    // ضمان الخروج من أي حالة بعد 30 ثانية على أقصى حد
+    const safetyTimer = setTimeout(() => {
+      if (state !== 'idle') setState('idle')
+    }, 30_000)
 
-    if (replyText && !prefs.muted) {
-      setState('speaking')
-      // ← نُجبر الـ gender الصحيح قبل كل speak حتى لا يتأثر بـ race conditions
-      tts.setGender(prefs.gender)
-      try {
-        await tts.speak(replyText, { lang: language || 'ar' })
-      } catch (e) { bus.emit('error', e) }
+    try {
+      const language = detectLang(text) || resolveLang()
+      const { text: replyText, source } = await router.ask(text, { language, signal: abortCtl?.signal })
+      lastReplyText = replyText
+      bus.emit('reply', { text: replyText, source, language })
+
+      if (replyText && !prefs.muted) {
+        setState('speaking')
+        tts.setGender(prefs.gender)
+        try {
+          await tts.speak(replyText, { lang: language || 'ar' })
+        } catch (e) { bus.emit('error', e) }
+      }
+    } catch (e) {
+      bus.emit('error', e)
+    } finally {
+      clearTimeout(safetyTimer)
+      setState('idle')
     }
-
-    setState('idle')
-    // وضع أمر صوتي واحد فقط — لا إعادة استماع تلقائية بعد الإجابة
-    // يجب على المستخدم الضغط على زر الميكروفون من جديد للأمر التالي
   }
 
   return {
@@ -193,10 +200,12 @@ export function createDVIS({ baseUrl = '' } = {}) {
       clearFollowUp()
       if (prefs.wakeWord) wake.disable()
       try {
-        // continuous:false — جملة واحدة، يتوقف تلقائياً عند الصمت مثل Replit
-        stt.start({ lang: lang || resolveLang(), continuous: false, interim: true })
-        setState('listening')
-        startMaxTimer()
+        const started = stt.start({ lang: lang || resolveLang(), continuous: false, interim: true })
+        // نضبط 'listening' فقط إذا نجح الإطلاق فعلاً
+        if (started !== false) {
+          setState('listening')
+          startMaxTimer()
+        }
       } catch (e) { bus.emit('error', e) }
     },
 

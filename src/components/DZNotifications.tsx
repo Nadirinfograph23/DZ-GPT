@@ -292,9 +292,48 @@ export default function DZNotifications({ theme }: Props) {
             </div>
           )}
           {'Notification' in window && notifPerm === 'denied' && (
-            <div className="dzn-perm-banner dzn-perm-banner--denied">
-              <BellOff size={13} />
-              <span>الإشعارات محظورة — فعّلها من إعدادات المتصفح</span>
+            <div className="dzn-perm-banner dzn-perm-banner--denied" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BellOff size={13} />
+                <strong>الإشعارات محظورة في هذا المتصفح</strong>
+              </div>
+              <div style={{ fontSize: 11, lineHeight: 1.6, color: 'var(--dzn-denied-text, #f87171)', paddingRight: 4 }}>
+                {(() => {
+                  const ua = navigator.userAgent
+                  if (/Firefox/i.test(ua)) return (
+                    <ol style={{ margin: 0, paddingRight: 16 }}>
+                      <li>انقر على أيقونة 🔒 في شريط العنوان</li>
+                      <li>اختر <b>إذونات الموقع</b></li>
+                      <li>ابحث عن <b>إرسال الإشعارات</b> → اضبطها على <b>السماح</b></li>
+                      <li>أعد تحميل الصفحة</li>
+                    </ol>
+                  )
+                  if (/Edg/i.test(ua)) return (
+                    <ol style={{ margin: 0, paddingRight: 16 }}>
+                      <li>انقر على 🔒 في شريط العنوان</li>
+                      <li>اختر <b>الأذونات لهذا الموقع</b></li>
+                      <li>اضبط <b>الإشعارات</b> على <b>السماح</b></li>
+                      <li>أعد تحميل الصفحة</li>
+                    </ol>
+                  )
+                  if (/OPR|Opera/i.test(ua)) return (
+                    <ol style={{ margin: 0, paddingRight: 16 }}>
+                      <li>انقر على أيقونة القفل 🔒 في شريط العنوان</li>
+                      <li>اختر <b>إعدادات الموقع</b></li>
+                      <li>اضبط <b>الإشعارات</b> على <b>السماح</b></li>
+                    </ol>
+                  )
+                  // Chrome (default)
+                  return (
+                    <ol style={{ margin: 0, paddingRight: 16 }}>
+                      <li>انقر على أيقونة 🔒 يسار شريط العنوان</li>
+                      <li>اختر <b>إعدادات الموقع</b></li>
+                      <li>ابحث عن <b>الإشعارات</b> → اضبطها على <b>السماح</b></li>
+                      <li>أعد تحميل الصفحة</li>
+                    </ol>
+                  )
+                })()}
+              </div>
             </div>
           )}
           {'Notification' in window && notifPerm === 'granted' && (

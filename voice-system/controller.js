@@ -146,6 +146,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     // ضمان الخروج من أي حالة بعد 30 ثانية على أقصى حد
     const safetyTimer = setTimeout(() => {
       if (state !== 'idle') setState('idle')
+      processing = false   // تحرير الحارس حتى لا يمنع المحادثة التالية
     }, 30_000)
 
     try {

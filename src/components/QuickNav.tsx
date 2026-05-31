@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutGrid, Home, Bot, MessageCircle, BookOpen,
   Video, BarChart2, Wrench, Globe, ScanText, X, ChevronRight,
-  FileSpreadsheet, Gamepad2, Github, Radio, Award
+  FileSpreadsheet, Gamepad2, Github, Radio, Award, Clapperboard, FolderOpen
 } from 'lucide-react'
 import '../styles/quick-nav.css'
 
@@ -30,6 +30,8 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/le3ba',        label: 'DZ Le3ba',     labelEn: 'Word Games',   icon: <Gamepad2 size={18} />,        color: '#fb7185' },
   { path: '/github-agent', label: 'DZ GitHub',    labelEn: 'Git Deploy',   icon: <Github size={18} />,          color: '#60a5fa' },
   { path: '/radio',        label: 'DZ Radio',     labelEn: 'Live Radio',   icon: <Radio size={18} />,           color: '#38bdf8' },
+  { path: '/media',        label: 'DZ Media',     labelEn: 'صور وفيديو AI', icon: <Clapperboard size={18} />,   color: '#e879f9' },
+  { path: '/my-projects',  label: 'مشاريعي',      labelEn: 'My Projects',  icon: <FolderOpen size={18} />,      color: '#34d399' },
   {
     path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
     label: 'Certificate',

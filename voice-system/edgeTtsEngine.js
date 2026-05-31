@@ -67,7 +67,7 @@ function splitText(text, maxChars = 300) {
 export const edgeTtsEngine = {
   name: 'EdgeTTS-Neural',
 
-  async speak(text, { lang = 'ar', gender = 'female', muted = false } = {}) {
+  async speak(text, { lang = 'ar', gender = 'male', muted = false } = {}) {
     if (muted) return { skipped: true, reason: 'muted' }
     const trimmed = String(text || '').trim()
     if (!trimmed) return { skipped: true, reason: 'empty' }

@@ -166,22 +166,43 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org'],
       connectSrc: isProd
-        ? ["'self'", 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
+        ? ["'self'", 'wss:', 'ws:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info'],
-      mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:'],
+      mediaSrc: ["'self'", 'https://verses.quran.com', 'https://download.quranicaudio.com', 'https://audio.qurancdn.com', 'https:', 'blob:', 'mediastream:'],
       fontSrc: ["'self'", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'data:'],
       objectSrc: ["'none'"],
+      workerSrc: ["'self'", 'blob:'],
       frameSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
       childSrc: ["'self'", 'https://www.youtube.com', 'https://www.youtube-nocookie.com', 'blob:'],
       frameAncestors: isProd
         ? ["'none'"]
-        : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev'],
+        : ["'self'", 'https://replit.com', 'https://*.replit.com', 'https://*.replit.dev', 'https://*.repl.co'],
     },
   },
   crossOriginEmbedderPolicy: false,
   frameguard: isProd ? { action: 'deny' } : false,
-  crossOriginOpenerPolicy: isProd ? { policy: 'same-origin' } : false,
+  crossOriginOpenerPolicy: false,
 }))
+
+// ===== Permissions-Policy — السماح بالميكروفون والـ GPS =====================
+// crossOriginOpenerPolicy=false + هذا الهيدر يحل مشكلة رفض المتصفح للصلاحيات
+app.use((req, res, next) => {
+  // السماح بالميكروفون + الكاميرا + GPS + الصوت للصفحة نفسها وأي iframe تابع لها
+  res.setHeader(
+    'Permissions-Policy',
+    [
+      'microphone=(self)',
+      'geolocation=(self)',
+      'camera=(self)',
+      'speaker-selection=(self)',
+      'autoplay=(self)',
+      'fullscreen=(self)',
+    ].join(', ')
+  )
+  // إزالة X-Permissions-Policy القديم إن وُجد
+  res.removeHeader('X-Permissions-Policy')
+  next()
+})
 
 // ===== CORS =====
 const allowedOrigins = isProd

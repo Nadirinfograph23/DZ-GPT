@@ -12,6 +12,37 @@
 import { hasSTT, langTag, Emitter, sleep } from './utils.js'
 import { TIMINGS } from './config.js'
 
+// ── فحص صلاحية الميكروفون قبل البدء ──────────────────────────────────────
+// يُستخدم من VoicePanel قبل استدعاء start()
+export async function checkMicPermission() {
+  // إذا لم يدعم المتصفح Permissions API → نفترض أن الإذن مطلوب
+  if (!navigator.permissions) return 'prompt'
+  try {
+    const res = await navigator.permissions.query({ name: 'microphone' })
+    return res.state // 'granted' | 'denied' | 'prompt'
+  } catch {
+    return 'prompt'
+  }
+}
+
+// ── طلب الإذن الصريح عبر getUserMedia ────────────────────────────────────
+export async function requestMicPermission() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    stream.getTracks().forEach(t => t.stop())
+    return { granted: true }
+  } catch (err) {
+    const code = err?.name || 'unknown'
+    if (code === 'NotAllowedError' || code === 'PermissionDeniedError') {
+      return { granted: false, denied: true }
+    }
+    if (code === 'NotFoundError') {
+      return { granted: false, noDevice: true }
+    }
+    return { granted: false, error: code }
+  }
+}
+
 export function createSTT() {
   const bus = new Emitter()
   let recognition = null

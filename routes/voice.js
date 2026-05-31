@@ -78,7 +78,7 @@ router.post('/voice/tts', async (req, res) => {
   const langKey = (lang.split('-')[0] || 'ar').toLowerCase()
   const voices  = VOICE_MAP[langKey]  || VOICE_MAP.ar
   const fallbacks = FALLBACK_VOICE_MAP[langKey] || FALLBACK_VOICE_MAP.ar
-  const g       = (gender === 'male' || gender === 'female') ? gender : 'female'
+  const g       = (gender === 'male' || gender === 'female') ? gender : 'male'
   const voice   = voices[g]
   const cacheKey = `${voice}::${clean}`
 

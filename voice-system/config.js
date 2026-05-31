@@ -17,8 +17,9 @@ export const WAKE_WORDS = ['hey dz', 'hi dz', 'dz agent', 'يا دي زي', 'د�
 // Conversation behaviour.
 export const TIMINGS = {
   followUpSilenceMs: 15_000,
-  sttSilenceMs: 2_800,      // ← رُفع من 1600 لالتقاط الجمل الكاملة
-  sttMaxListenMs: 60_000,   // ← حدّ أقصى 60 ثانية قبل الإيقاف التلقائي
+  sttSilenceMs: 2_800,
+  sttMaxListenMs: 12_000,   // ← حدّ أقصى 12 ثانية — منع العالق في وضع الاستماع
+  sttFinalFlushMs: 400,     // ← إرسال فوري بعد isFinal بـ 400ms
   sttMaxRetries: 3,
   responseTargetMs: 3_000,
   ttsMaxChunkChars: 200,

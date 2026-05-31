@@ -234,6 +234,21 @@ const SECTIONS = [
     ),
   },
   {
+    id: 'dz-media',
+    label: 'DZ MEDIA',
+    sublabel: 'نص/صورة → صورة/فيديو',
+    path: '/media',
+    gradient: 'linear-gradient(135deg, #e879f9 0%, #a855f7 50%, #6366f1 100%)',
+    bgGlow: 'rgba(232,121,249,0.18)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="10" width="40" height="28" rx="4" stroke="currentColor" strokeWidth="2.5" />
+        <circle cx="16" cy="24" r="5" stroke="currentColor" strokeWidth="2" opacity="0.7" />
+        <path d="M29 18l10 6-10 6V18z" fill="currentColor" opacity="0.75" />
+      </svg>
+    ),
+  },
+  {
     id: 'my-projects',
     label: 'مشاريعي',
     sublabel: 'مشاريع Web Builder المحفوظة',

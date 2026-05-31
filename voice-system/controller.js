@@ -33,7 +33,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
   const wakeStt = createSTT()
   const wake    = createWakeWord({ stt: wakeStt })
 
-  let prefs           = loadPrefs()
+  // إجبار وضع الأمر الصوتي الواحد — تجاوز أي قيمة محفوظة في localStorage
+  let prefs           = { ...loadPrefs(), continuous: false, gender: 'male' }
   let state           = 'idle'
   let followUpTimer   = null
   let lastUserText    = ''
@@ -42,6 +43,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
   let sttBuffer       = ''
   let sttSilenceTimer = null
   let sttMaxTimer     = null
+  let processing      = false   // حارس لمنع التشغيل المزدوج
 
   function setState(s) {
     if (state === s) return
@@ -77,12 +79,14 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
   function flushBuffer() {
     clearSilence()
+    clearMaxTimer()
     const text = sttBuffer.trim()
     sttBuffer = ''
-    if (!text) return
+    if (!text || processing) return
+    processing = true
     try { stt.stop() } catch {}
     lastUserText = text
-    handleUserText(text)
+    handleUserText(text).finally(() => { processing = false })
   }
 
   function applyPrefs() {
@@ -148,16 +152,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
     }
 
     setState('idle')
-
-    if (prefs.continuous && !prefs.muted) {
-      followUpTimer = setTimeout(() => {
-        if (state === 'idle') bus.emit('auto-sleep')
-      }, TIMINGS.followUpSilenceMs)
-      try {
-        stt.start({ lang: language, continuous: false, interim: true })
-        setState('listening')
-      } catch {}
-    }
+    // وضع أمر صوتي واحد فقط — لا إعادة استماع تلقائية بعد الإجابة
+    // يجب على المستخدم الضغط على زر الميكروفون من جديد للأمر التالي
   }
 
   return {

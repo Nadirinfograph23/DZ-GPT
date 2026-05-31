@@ -1,12 +1,21 @@
 {
-  "name": "DZ GPT - AI Chat",
+  "name": "DZ GPT - ذكاء اصطناعي جزائري",
   "short_name": "DZ GPT",
-  "description": "AI Chat powered by DZ GPT — by Nadir Houamria",
+  "description": "منصة الذكاء الاصطناعي الجزائرية — DZ GPT by Nadir Houamria",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0d0d0d",
   "theme_color": "#22c55e",
   "orientation": "portrait-primary",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["productivity", "utilities", "education"],
+  "permissions": [
+    "microphone",
+    "geolocation",
+    "notifications"
+  ],
   "icons": [
     {
       "src": "/pwa-192x192.png",
@@ -20,5 +29,21 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "محادثة جديدة",
+      "url": "/dz-chat",
+      "description": "ابدأ محادثة جديدة مع DZ GPT",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "DZ Agent",
+      "url": "/",
+      "description": "وكيل الذكاء الاصطناعي الجزائري",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

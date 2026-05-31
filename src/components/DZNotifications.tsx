@@ -62,9 +62,22 @@ export default function DZNotifications({ theme }: Props) {
   const seenLinks                 = useRef<Set<string>>(new Set())
   const panelRef                  = useRef<HTMLDivElement>(null)
 
-  // ── Sync browser notification permission state ───────────────────────────────
+  // ── Sync + watch browser notification permission state ──────────────────────
   useEffect(() => {
-    if ('Notification' in window) setNotifPerm(Notification.permission)
+    if (!('Notification' in window)) return
+    setNotifPerm(Notification.permission)
+
+    // مراقبة تغييرات الإذن في الوقت الفعلي (Chrome/Edge/Firefox)
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'notifications' as PermissionName })
+        .then(status => {
+          setNotifPerm(status.state === 'granted' ? 'granted' : status.state === 'denied' ? 'denied' : 'default')
+          status.onchange = () => {
+            setNotifPerm(status.state === 'granted' ? 'granted' : status.state === 'denied' ? 'denied' : 'default')
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   // ── Request browser notification permission ──────────────────────────────────
@@ -74,11 +87,10 @@ export default function DZNotifications({ theme }: Props) {
     setNotifPerm(perm)
   }
 
-  // ── Send browser push (only when tab is hidden) ──────────────────────────────
+  // ── Send browser push notification ───────────────────────────────────────────
   const browserPush = useCallback((title: string, body: string) => {
     if (!('Notification' in window)) return
     if (Notification.permission !== 'granted') return
-    if (!document.hidden) return          // tab is visible — in-app toast is enough
 
     // استخدم SW registration إذا كان متاحاً — أكثر موثوقية وأشمل دعماً
     const swReg = (window as any).__swRegistration as ServiceWorkerRegistration | undefined
@@ -87,10 +99,11 @@ export default function DZNotifications({ theme }: Props) {
         body,
         icon:    '/pwa-192x192.png',
         badge:   '/pwa-192x192.png',
-        tag:     'dz-task',
+        tag:     'dz-notif-' + Date.now(),
         dir:     'rtl',
         lang:    'ar',
         vibrate: [200, 100, 200],
+        renotify: true,
       } as NotificationOptions).catch(() => {})
       return
     }
@@ -99,7 +112,7 @@ export default function DZNotifications({ theme }: Props) {
       new Notification(title, {
         body,
         icon: '/pwa-192x192.png',
-        tag:  'dz-task',
+        tag:  'dz-notif-' + Date.now(),
         dir:  'rtl',
         lang: 'ar',
       } as NotificationOptions)

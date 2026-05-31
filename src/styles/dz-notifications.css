@@ -365,6 +365,53 @@
 .dzn-item:hover .dzn-item-dismiss { opacity: 1; }
 .dzn-item-dismiss:hover { color: #94a3b8; }
 
+/* ── Permission banner ── */
+.dzn-perm-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: rgba(251,191,36,.06);
+  border-bottom: 1px solid rgba(251,191,36,.12);
+  font-size: 11px;
+  color: #fde68a;
+  direction: rtl;
+  flex-shrink: 0;
+}
+.dzn-perm-banner span {
+  flex: 1;
+  line-height: 1.4;
+}
+.dzn-perm-btn {
+  background: rgba(251,191,36,.18);
+  border: 1px solid rgba(251,191,36,.35);
+  color: #fde68a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.dzn-perm-btn:hover { background: rgba(251,191,36,.28); }
+.dzn-perm-banner--denied {
+  background: rgba(239,68,68,.05);
+  border-color: rgba(239,68,68,.12);
+  color: #fca5a5;
+}
+.dzn-perm-banner--ok {
+  background: rgba(16,163,127,.06);
+  border-color: rgba(16,163,127,.12);
+  color: #6ee7b7;
+}
+
+/* ── Task notification type ── */
+.dzn-icon--task { color: #34d399; }
+.dzn-item--task.dzn-item--unread { background: rgba(52,211,153,.04); }
+.dzn-item--task.dzn-item--unread::before { background: #34d399; }
+
 /* ── Theme overrides ── */
 [data-theme="teal"]   .dzn-bell-btn--active { color: #6ee7d0; border-color: rgba(16,163,127,.35); background: rgba(16,163,127,.08); }
 [data-theme="sky"]    .dzn-bell-btn--active { color: #7dd3fc; border-color: rgba(56,189,248,.35); background: rgba(56,189,248,.08); }

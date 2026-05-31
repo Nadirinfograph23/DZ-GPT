@@ -145,6 +145,7 @@ import { createExcelRouter } from './routes/excel.js'
 import { createHealthRouter } from './routes/health.js'
 import { createOwnerRouter } from './routes/owner.js'
 import { createGitHubRouter } from './routes/github.js'
+import { router as voiceRouter } from './routes/voice.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -886,6 +887,7 @@ const MESSAGE_RATINGS = new Map() // msgId → { vote, query, ts }
 // These routers shadow the inline route definitions below.
 // Inline routes remain for backward compatibility during migration.
 // ═══════════════════════════════════════════════════════════════
+app.use('/api', voiceRouter)
 app.use('/api', createQuranRouter())
 app.use('/api', createAdminRouter({ getGroqKeys, callGroqWithFallback, PORT }))
 app.use('/api', createExcelRouter({ safeGenerateAI, aiLimiter }))

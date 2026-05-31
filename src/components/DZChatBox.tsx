@@ -5076,6 +5076,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
                 ...prev.map(s => ({ ...s, status: 'done' as const })),
                 { id: 'v5-complete', label: 'اكتملت المهمة ✓', icon: 'done' as const, status: 'done' as const },
               ])
+              // Notify other components (DZNotifications) + browser push if tab hidden
+              const summary = resultContent
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/#{1,6}\s/g, '')
+                .trim()
+                .slice(0, 130)
+              window.dispatchEvent(new CustomEvent('dz:task-complete', {
+                detail: {
+                  title: '✅ اكتملت المهمة',
+                  body: summary || 'تم إنجاز المهمة بنجاح',
+                  model: resultModel,
+                }
+              }))
             } else if (evName === 'error') {
               setAgentSteps(prev => [...prev.filter(s => s.status !== 'running'), {
                 id: 'v5-fatal', label: (data.message as string) || 'خطأ', icon: 'error' as const, status: 'error' as const,

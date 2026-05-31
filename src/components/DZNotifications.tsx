@@ -84,8 +84,7 @@ export default function DZNotifications({ theme }: Props) {
         body,
         icon: '/favicon.ico',
         tag: 'dz-task',
-        renotify: true,
-      })
+      } as NotificationOptions)
     } catch {}
   }, [])
 

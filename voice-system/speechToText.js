@@ -114,16 +114,22 @@ export function createSTT() {
     isActive: () => active,
 
     start({ lang = 'auto', continuous = false, interim = true } = {}) {
-      if (active) return
+      // إلغاء أي جلسة سابقة بالقوة أولاً
+      try { recognition?.abort?.() } catch {}
+      active = false  // إعادة تعيين الحالة قسراً
       manualStop = false
       currentLang = lang
-      try { recognition?.abort?.() } catch {}
       recognition = build(lang)
-      recognition.continuous = continuous   // false = جملة واحدة ثم توقف
+      recognition.continuous = continuous
       recognition.interimResults = interim
       attach(recognition)
-      try { recognition.start() } catch (e) {
+      try {
+        recognition.start()
+        return true  // نجح الإطلاق
+      } catch (e) {
+        active = false
         bus.emit('error', { code: 'start-failed', message: e.message })
+        return false  // فشل الإطلاق
       }
     },
 

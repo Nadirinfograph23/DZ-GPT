@@ -79,11 +79,29 @@ export default function DZNotifications({ theme }: Props) {
     if (!('Notification' in window)) return
     if (Notification.permission !== 'granted') return
     if (!document.hidden) return          // tab is visible — in-app toast is enough
+
+    // استخدم SW registration إذا كان متاحاً — أكثر موثوقية وأشمل دعماً
+    const swReg = (window as any).__swRegistration as ServiceWorkerRegistration | undefined
+    if (swReg?.showNotification) {
+      swReg.showNotification(title, {
+        body,
+        icon:    '/pwa-192x192.png',
+        badge:   '/pwa-192x192.png',
+        tag:     'dz-task',
+        dir:     'rtl',
+        lang:    'ar',
+        vibrate: [200, 100, 200],
+      } as NotificationOptions).catch(() => {})
+      return
+    }
+    // fallback: Notification API المباشر
     try {
       new Notification(title, {
         body,
-        icon: '/favicon.ico',
-        tag: 'dz-task',
+        icon: '/pwa-192x192.png',
+        tag:  'dz-task',
+        dir:  'rtl',
+        lang: 'ar',
       } as NotificationOptions)
     } catch {}
   }, [])

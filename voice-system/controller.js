@@ -1,4 +1,4 @@
-// dz Voice Intelligence System — Controller v2.1
+// dz Voice Intelligence System — Controller v2.2
 // Orchestrates STT → Router → TTS (Edge Neural أولاً، browser fallback)
 // Entry point for VoicePanel and DZChatBox.
 
@@ -10,22 +10,19 @@ import { edgeTtsEngine }     from './edgeTtsEngine.js'
 import { Emitter, detectLang, loadPrefs, savePrefs } from './utils.js'
 import { TIMINGS, DVIS_VERSION, DEFAULTS } from './config.js'
 
-// تسجيل Edge TTS كـ engine رئيسي (مجاني، طبيعي، جزائري)
-// إذا فشل (offline)، textToSpeech.js يرجع تلقائياً لـ SpeechSynthesis
-async function registerEdgeEngine() {
-  try {
-    const ok = await edgeTtsEngine.probe()
-    if (ok) {
-      setEngine(edgeTtsEngine)
-      console.info('[dvis] Edge TTS Neural: نشط ✅ (ar-DZ-AminaNeural/IsmaelNeural)')
-    } else {
-      console.warn('[dvis] Edge TTS غير متاح — استخدام SpeechSynthesis كـ fallback')
-    }
-  } catch {
-    console.warn('[dvis] Edge TTS probe فشل — fallback لـ browser TTS')
+// تسجيل Edge TTS فوراً (بدون انتظار probe) حتى لا يستخدم browser TTS بصوت خاطئ
+setEngine(edgeTtsEngine)
+
+// فحص في الخلفية للـ logging فقط
+edgeTtsEngine.probe().then(ok => {
+  if (ok) {
+    console.info('[dvis] Edge TTS Neural: نشط ✅ (ar-DZ-AminaNeural/IsmaelNeural)')
+  } else {
+    console.warn('[dvis] Edge TTS probe: الخادم لم يرد — سنحاول عند الكلام')
   }
-}
-registerEdgeEngine()
+}).catch(() => {
+  console.warn('[dvis] Edge TTS probe: استثناء — سنحاول عند الكلام')
+})
 
 export function createDVIS({ baseUrl = '' } = {}) {
   const bus    = new Emitter()
@@ -44,7 +41,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
   let abortCtl        = null
   let sttBuffer       = ''
   let sttSilenceTimer = null
-  let sttMaxTimer     = null   // ← حدّ أقصى للاستماع
+  let sttMaxTimer     = null
 
   function setState(s) {
     if (state === s) return
@@ -94,24 +91,34 @@ export function createDVIS({ baseUrl = '' } = {}) {
   }
   applyPrefs()
 
+  // نتيجة STT — مع continuous:false يأتي final مرة واحدة ثم onend
   stt.on('result', ({ text, isFinal, lang }) => {
     bus.emit('transcript', { text, isFinal, lang })
     if (isFinal && text) {
       sttBuffer = sttBuffer ? `${sttBuffer} ${text}` : text
+      // مؤقت احتياطي: إذا لم يُطلَق onend خلال 1.5ث نرسل تلقائياً
       clearSilence()
-      sttSilenceTimer = setTimeout(flushBuffer, TIMINGS.sttSilenceMs)
+      sttSilenceTimer = setTimeout(flushBuffer, 1500)
     }
   })
+
   stt.on('error', (e) => bus.emit('error', e))
-  stt.on('end',   () => {
-    if (sttBuffer.trim()) flushBuffer()
-    if (state === 'listening') setState('idle')
+
+  // onend يُطلَق طبيعياً عند انقطاع الصوت — نرسل الكلام فوراً
+  stt.on('end', () => {
+    clearMaxTimer()
+    if (sttBuffer.trim()) {
+      flushBuffer()
+    } else {
+      if (state === 'listening') setState('idle')
+    }
   })
 
   wake.on('wake', ({ phrase }) => {
     bus.emit('wake', { phrase })
     setState('listening')
-    setTimeout(() => stt.start({ lang: resolveLang(), continuous: true, interim: true }), 60)
+    // continuous:false — يستمع لجملة واحدة بعد كلمة الاستيقاظ
+    setTimeout(() => stt.start({ lang: resolveLang(), continuous: false, interim: true }), 60)
   })
 
   function resolveLang() {
@@ -133,6 +140,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
 
     if (replyText && !prefs.muted) {
       setState('speaking')
+      // ← نُجبر الـ gender الصحيح قبل كل speak حتى لا يتأثر بـ race conditions
+      tts.setGender(prefs.gender)
       try {
         await tts.speak(replyText, { lang: language || 'ar' })
       } catch (e) { bus.emit('error', e) }
@@ -145,7 +154,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
         if (state === 'idle') bus.emit('auto-sleep')
       }, TIMINGS.followUpSilenceMs)
       try {
-        stt.start({ lang: language, continuous: true, interim: true })
+        stt.start({ lang: language, continuous: false, interim: true })
         setState('listening')
       } catch {}
     }
@@ -159,7 +168,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     getState:       () => state,
     getPrefs:       () => ({ ...prefs }),
     isSttSupported: stt.isSupported,
-    isTtsSupported: () => true, // دائماً true — Edge TTS يعمل حتى بدون browser TTS
+    isTtsSupported: () => true,
     listVoices:     tts.listVoices,
 
     setPrefs(patch) {
@@ -182,7 +191,8 @@ export function createDVIS({ baseUrl = '' } = {}) {
       clearFollowUp()
       if (prefs.wakeWord) wake.disable()
       try {
-        stt.start({ lang: lang || resolveLang(), continuous: true, interim: true })
+        // continuous:false — جملة واحدة، يتوقف تلقائياً عند الصمت مثل Replit
+        stt.start({ lang: lang || resolveLang(), continuous: false, interim: true })
         setState('listening')
         startMaxTimer()
       } catch (e) { bus.emit('error', e) }
@@ -191,6 +201,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     stopListening() {
       clearFollowUp()
       clearMaxTimer()
+      clearSilence()
       if (sttBuffer.trim()) flushBuffer()
       try { stt.stop() } catch {}
       setState('idle')
@@ -211,6 +222,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     async speak(text, opts = {}) {
       const lang = opts.lang || resolveLang() || 'ar'
       setState('speaking')
+      tts.setGender(prefs.gender)  // ← إجبار gender صحيح دائماً
       try { await tts.speak(text, { lang }) } finally { setState('idle') }
     },
 
@@ -236,6 +248,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
       if (/https?:\/\/\S{60,}/.test(clean)) return { skipped: 'long-url' }
       const lang = opts.lang || resolveLang() || 'ar'
       setState('speaking')
+      tts.setGender(prefs.gender)  // ← إجبار gender صحيح
       try { await tts.speak(clean, { lang }) } finally { setState('idle') }
       return { ok: true, length: clean.length, lang }
     },

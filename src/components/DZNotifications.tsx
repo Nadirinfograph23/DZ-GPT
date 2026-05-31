@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle } from 'lucide-react'
+import { Bell, X, ExternalLink, TrendingUp, TrendingDown, Newspaper, AlertTriangle, CheckCircle2, BellOff } from 'lucide-react'
 import '../styles/dz-notifications.css'
 
 export interface DZNotif {
   id: string
-  type: 'breaking' | 'currency_up' | 'currency_down' | 'info'
+  type: 'breaking' | 'currency_up' | 'currency_down' | 'info' | 'task'
   title: string
   body: string
   link?: string
@@ -56,10 +56,38 @@ export default function DZNotifications({ theme }: Props) {
   const [notifs, setNotifs]       = useState<DZNotif[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
   const [toast, setToast]         = useState<DZNotif | null>(null)
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>('default')
   const toastTimer                = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevRates                 = useRef<Record<string, number>>({})
   const seenLinks                 = useRef<Set<string>>(new Set())
   const panelRef                  = useRef<HTMLDivElement>(null)
+
+  // ── Sync browser notification permission state ───────────────────────────────
+  useEffect(() => {
+    if ('Notification' in window) setNotifPerm(Notification.permission)
+  }, [])
+
+  // ── Request browser notification permission ──────────────────────────────────
+  async function requestNotifPerm() {
+    if (!('Notification' in window)) return
+    const perm = await Notification.requestPermission()
+    setNotifPerm(perm)
+  }
+
+  // ── Send browser push (only when tab is hidden) ──────────────────────────────
+  const browserPush = useCallback((title: string, body: string) => {
+    if (!('Notification' in window)) return
+    if (Notification.permission !== 'granted') return
+    if (!document.hidden) return          // tab is visible — in-app toast is enough
+    try {
+      new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        tag: 'dz-task',
+        renotify: true,
+      })
+    } catch {}
+  }, [])
 
   const addNotif = useCallback((n: Omit<DZNotif, 'id' | 'time' | 'read'>) => {
     const notif: DZNotif = { ...n, id: genId(), time: Date.now(), read: false }
@@ -67,8 +95,23 @@ export default function DZNotifications({ theme }: Props) {
     setToast(notif)
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 7000)
-    playAlertTone(n.type === 'breaking' ? 'breaking' : 'currency')
+    if (n.type === 'task') {
+      playAlertTone('breaking')
+    } else {
+      playAlertTone(n.type === 'breaking' ? 'breaking' : 'currency')
+    }
   }, [])
+
+  // ── Listen: V5 task-complete custom event ────────────────────────────────────
+  useEffect(() => {
+    function onTaskComplete(e: Event) {
+      const { title, body } = (e as CustomEvent).detail as { title: string; body: string }
+      addNotif({ type: 'task', title, body })
+      browserPush(title, body)
+    }
+    window.addEventListener('dz:task-complete', onTaskComplete)
+    return () => window.removeEventListener('dz:task-complete', onTaskComplete)
+  }, [addNotif, browserPush])
 
   // ── SSE: Breaking News ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -174,9 +217,10 @@ export default function DZNotifications({ theme }: Props) {
 
   function typeIcon(type: DZNotif['type']) {
     switch (type) {
-      case 'breaking':      return <Newspaper  size={14} className="dzn-icon dzn-icon--breaking" />
-      case 'currency_up':   return <TrendingUp  size={14} className="dzn-icon dzn-icon--up" />
+      case 'breaking':      return <Newspaper    size={14} className="dzn-icon dzn-icon--breaking" />
+      case 'currency_up':   return <TrendingUp   size={14} className="dzn-icon dzn-icon--up" />
       case 'currency_down': return <TrendingDown size={14} className="dzn-icon dzn-icon--down" />
+      case 'task':          return <CheckCircle2 size={14} className="dzn-icon dzn-icon--task" />
       default:              return <AlertTriangle size={14} className="dzn-icon dzn-icon--info" />
     }
   }
@@ -239,6 +283,27 @@ export default function DZNotifications({ theme }: Props) {
               </button>
             </div>
           </div>
+
+          {/* Browser notification permission banner */}
+          {'Notification' in window && notifPerm === 'default' && (
+            <div className="dzn-perm-banner">
+              <Bell size={13} />
+              <span>فعّل إشعارات المتصفح لتلقي تنبيهات حتى عند التبديل للتبويب الآخر</span>
+              <button className="dzn-perm-btn" onClick={requestNotifPerm}>تفعيل</button>
+            </div>
+          )}
+          {'Notification' in window && notifPerm === 'denied' && (
+            <div className="dzn-perm-banner dzn-perm-banner--denied">
+              <BellOff size={13} />
+              <span>الإشعارات محظورة — فعّلها من إعدادات المتصفح</span>
+            </div>
+          )}
+          {'Notification' in window && notifPerm === 'granted' && (
+            <div className="dzn-perm-banner dzn-perm-banner--ok">
+              <CheckCircle2 size={13} />
+              <span>إشعارات المتصفح مفعّلة ✓</span>
+            </div>
+          )}
 
           <div className="dzn-panel-list">
             {notifs.length === 0 ? (

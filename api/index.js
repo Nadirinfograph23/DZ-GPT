@@ -1,4 +1,4 @@
-// deploy-trigger: 20260529-1610
+// deploy-trigger: 20260531-fix-video-models
 // Vercel serverless entry point — uses esbuild bundle
 let app
 

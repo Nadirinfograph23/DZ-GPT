@@ -1,58 +1,45 @@
-// VoicePanel v8.0 — الاستماع المستمر بالعربية / الدارجة الجزائرية
-// ─────────────────────────────────────────────────────────────────
+// VoicePanel v9.0 — WhisperLive (Groq Whisper) + Web Speech API fallback
+// ─────────────────────────────────────────────────────────────────────────────
 // المنطق:
-//   1. اضغط الميكروفون → يبدأ الاستماع (لغة: ar-DZ / ar)
-//   2. يعرض النص أثناء الحديث في الحقل مباشرة (interim + final)
-//   3. بعد 2 ثانية من الصمت → يُرسل النص تلقائياً
-//   4. أو اضغط الزر مرة ثانية لإيقاف وإرسال فوري
-// ─────────────────────────────────────────────────────────────────
+//   1. اضغط الميكروفون → MediaRecorder يبدأ التسجيل
+//   2. VAD (AnalyserNode) يراقب الصوت → بعد 2 ثانية صمت يوقف التسجيل
+//   3. الصوت يُرسل لـ /api/voice/transcribe (Groq Whisper) → نص دقيق
+//   4. احتياطي: Web Speech API إذا تعذّر الاتصال بالسيرفر
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Mic, MicOff, AlertTriangle } from 'lucide-react'
-
-interface ISpeechRecognition extends EventTarget {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  maxAlternatives: number
-  start(): void
-  stop(): void
-  abort(): void
-  onstart:  ((e: Event) => void) | null
-  onend:    ((e: Event) => void) | null
-  onerror:  ((e: SpeechRecognitionErrorEvent) => void) | null
-  onresult: ((e: SpeechRecognitionEvent) => void) | null
-}
-interface SpeechRecognitionErrorEvent extends Event { error: string }
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => ISpeechRecognition
-    webkitSpeechRecognition?: new () => ISpeechRecognition
-  }
-}
+import { Mic, MicOff, AlertTriangle, Loader2 } from 'lucide-react'
 
 interface VoicePanelProps {
   onTranscript?: (text: string) => void
   onInterim?:    (text: string) => void
 }
 
-const SILENCE_DELAY = 2000  // 2 ثانية بعد آخر كلمة → إرسال تلقائي
-const BAR_COUNT     = 5
+const BAR_COUNT      = 5
+const SILENCE_DB     = 0.012  // RMS threshold للصمت
+const SILENCE_MS     = 1800   // 1.8 ثانية صمت → إرسال تلقائي
+const SAMPLE_INTERVAL = 80
+const MAX_RECORD_MS  = 30_000
 
-// ── VAD (اكتشاف الصوت بالمايكروفون) ────────────────────────────────────────
-function useVAD(active: boolean) {
-  const [bars, setBars]   = useState<number[]>(Array(BAR_COUNT).fill(0))
-  const rafRef            = useRef<number>(0)
-  const smoothRef         = useRef<number[]>(Array(BAR_COUNT).fill(0))
-  const ctxRef            = useRef<AudioContext | null>(null)
-  const streamRef         = useRef<MediaStream | null>(null)
+// ── VAD bars ──────────────────────────────────────────────────────────────────
+function useVAD(active: boolean, onSilence?: () => void) {
+  const [bars, setBars]    = useState<number[]>(Array(BAR_COUNT).fill(0))
+  const rafRef             = useRef<number>(0)
+  const smoothRef          = useRef<number[]>(Array(BAR_COUNT).fill(0))
+  const ctxRef             = useRef<AudioContext | null>(null)
+  const analyserRef        = useRef<AnalyserNode | null>(null)
+  const streamRef          = useRef<MediaStream | null>(null)
+  const silentMsRef        = useRef(0)
+  const onSilenceCbRef     = useRef(onSilence)
+  const rmsTimerRef        = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => { onSilenceCbRef.current = onSilence }, [onSilence])
 
   useEffect(() => {
     if (!active) {
       cancelAnimationFrame(rafRef.current)
+      if (rmsTimerRef.current) clearInterval(rmsTimerRef.current)
+      rmsTimerRef.current = null
+      silentMsRef.current = 0
       const decay = setInterval(() => {
         smoothRef.current = smoothRef.current.map(v => { const n = v * 0.75; return n < 0.01 ? 0 : n })
         setBars([...smoothRef.current])
@@ -60,18 +47,21 @@ function useVAD(active: boolean) {
       }, 40)
       return () => clearInterval(decay)
     }
+
     let cancelled = false
     async function start() {
       try {
-        const stream  = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        const stream  = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false })
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return }
-        streamRef.current = stream
-        const ctx     = new AudioContext()
-        ctxRef.current = ctx
-        const source  = ctx.createMediaStreamSource(stream)
-        const analyser = ctx.createAnalyser()
-        analyser.fftSize = 64; analyser.smoothingTimeConstant = 0.75
+        streamRef.current  = stream
+        const ctx          = new AudioContext()
+        ctxRef.current     = ctx
+        const source       = ctx.createMediaStreamSource(stream)
+        const analyser     = ctx.createAnalyser()
+        analyserRef.current = analyser
+        analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.5
         source.connect(analyser)
+
         const freqData = new Uint8Array(analyser.frequencyBinCount)
         function tick() {
           if (cancelled) return
@@ -90,12 +80,33 @@ function useVAD(active: boolean) {
           rafRef.current = requestAnimationFrame(tick)
         }
         tick()
+
+        // RMS silence detection
+        const floatData = new Float32Array(analyser.fftSize)
+        rmsTimerRef.current = setInterval(() => {
+          if (cancelled || !analyserRef.current) return
+          analyserRef.current.getFloatTimeDomainData(floatData)
+          let sum = 0
+          for (let i = 0; i < floatData.length; i++) sum += floatData[i] * floatData[i]
+          const rms = Math.sqrt(sum / floatData.length)
+          if (rms < SILENCE_DB) {
+            silentMsRef.current += SAMPLE_INTERVAL
+            if (silentMsRef.current >= SILENCE_MS) {
+              silentMsRef.current = 0
+              onSilenceCbRef.current?.()
+            }
+          } else {
+            silentMsRef.current = 0
+          }
+        }, SAMPLE_INTERVAL)
+
       } catch {}
     }
     start()
     return () => {
       cancelled = true
       cancelAnimationFrame(rafRef.current)
+      if (rmsTimerRef.current) clearInterval(rmsTimerRef.current)
       streamRef.current?.getTracks().forEach(t => t.stop())
       ctxRef.current?.close().catch(() => {})
     }
@@ -104,86 +115,191 @@ function useVAD(active: boolean) {
   return { bars }
 }
 
+// ── تحويل blob إلى base64 ────────────────────────────────────────────────────
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const reader = new FileReader()
+    reader.onload  = () => res((reader.result as string).split(',')[1])
+    reader.onerror = rej
+    reader.readAsDataURL(blob)
+  })
+}
+
+// ── Web Speech API fallback ──────────────────────────────────────────────────
+function startWebSpeech(
+  onResult: (t: string) => void,
+  onEnd: () => void,
+): (() => void) | null {
+  const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  if (!Ctor) return null
+  const rec = new Ctor()
+  rec.lang = 'ar-DZ'; rec.continuous = false; rec.interimResults = true
+  let acc = ''
+  rec.onresult = (e: any) => {
+    let interim = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i]
+      if (r.isFinal) acc = (acc + ' ' + r[0].transcript).trim()
+      else interim = r[0].transcript
+    }
+    onResult((acc + ' ' + interim).trim())
+  }
+  rec.onend = () => { if (acc.trim()) onResult(acc.trim()); onEnd() }
+  rec.onerror = () => onEnd()
+  try { rec.start() } catch { return null }
+  return () => { try { rec.abort() } catch {} }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps) {
-  const [listening,  setListening]  = useState(false)
+  const [state, setState]       = useState<'idle' | 'recording' | 'transcribing'>('idle')
   const [displayText, setDisplayText] = useState('')
-  const [permError,  setPermError]  = useState<'denied' | 'no-device' | null>(null)
-  const [countdown,  setCountdown]  = useState<number | null>(null)
+  const [permError,  setPermError]    = useState<'denied' | 'no-device' | null>(null)
 
-  const recRef         = useRef<ISpeechRecognition | null>(null)
-  const wrapRef        = useRef<HTMLDivElement>(null)
-  const accRef         = useRef('')           // النص الكامل المتراكم
-  const silenceRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cdIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const cbRef          = useRef(onTranscript)
-  const interimCbRef   = useRef(onInterim)
-  const isStoppingRef  = useRef(false)        // يمنع إعادة التشغيل بعد الإيقاف الإرادي
+  const mediaRecRef  = useRef<MediaRecorder | null>(null)
+  const chunksRef    = useRef<Blob[]>([])
+  const maxTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapRef      = useRef<HTMLDivElement>(null)
+  const cbRef        = useRef(onTranscript)
+  const interimCbRef = useRef(onInterim)
+  const wsAbortRef   = useRef<(() => void) | null>(null)
+  const stoppingRef  = useRef(false)
 
-  useEffect(() => { cbRef.current = onTranscript })
-  useEffect(() => { interimCbRef.current = onInterim })
+  useEffect(() => { cbRef.current = onTranscript },  [onTranscript])
+  useEffect(() => { interimCbRef.current = onInterim }, [onInterim])
 
-  const { bars } = useVAD(listening)
+  const listening     = state === 'recording'
+  const transcribing  = state === 'transcribing'
 
-  const isSupported = typeof window !== 'undefined' &&
-    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  // ── إرسال للسيرفر (Groq Whisper) ─────────────────────────────────────────
+  const transcribeChunks = useCallback(async (chunks: Blob[]) => {
+    if (!chunks.length || stoppingRef.current) return
+    const mimeType = chunks[0]?.type || 'audio/webm'
+    const blob     = new Blob(chunks, { type: mimeType })
+    if (blob.size < 1000) return
 
-  // ── إلغاء مؤقت الصمت ─────────────────────────────────────────────────────
-  const clearSilence = useCallback(() => {
-    if (silenceRef.current)    { clearTimeout(silenceRef.current);  silenceRef.current = null }
-    if (cdIntervalRef.current) { clearInterval(cdIntervalRef.current); cdIntervalRef.current = null }
-    setCountdown(null)
+    setState('transcribing')
+    setDisplayText('جاري التحويل...')
+
+    try {
+      const base64 = await blobToBase64(blob)
+      const r      = await fetch('/api/voice/transcribe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ audio: base64, mimeType, language: 'ar' }),
+        signal:  AbortSignal.timeout(20_000),
+      })
+      if (r.ok) {
+        const json = await r.json()
+        const text = (json.text || '').trim()
+        if (text) {
+          setDisplayText(text)
+          cbRef.current?.(text)
+        }
+      } else {
+        // الـ server غير متاح → Web Speech API
+        useFallbackWSA()
+        return
+      }
+    } catch {
+      useFallbackWSA()
+      return
+    }
+    setState('idle')
+    setDisplayText('')
   }, [])
 
-  // ── إيقاف + إرسال ─────────────────────────────────────────────────────────
-  const stopAndSend = useCallback(() => {
-    isStoppingRef.current = true
-    clearSilence()
-    try { recRef.current?.stop() } catch {}
-    recRef.current = null
-    setListening(false)
+  // ── Fallback إلى Web Speech API ───────────────────────────────────────────
+  const useFallbackWSA = useCallback(() => {
+    setState('recording')
     setDisplayText('')
+    const abort = startWebSpeech(
+      (t) => { setDisplayText(t); interimCbRef.current?.(t) },
+      () => { setState('idle'); setDisplayText('') },
+    )
+    if (abort) wsAbortRef.current = abort
+    else setState('idle')
+  }, [])
 
-    const text = accRef.current.trim()
-    accRef.current = ''
-    isStoppingRef.current = false
+  // ── إيقاف التسجيل ─────────────────────────────────────────────────────────
+  const stopRecording = useCallback(() => {
+    if (stoppingRef.current) return
+    stoppingRef.current = true
 
-    if (text) {
-      cbRef.current?.(text)
-    }
-  }, [clearSilence])
+    if (maxTimerRef.current) { clearTimeout(maxTimerRef.current); maxTimerRef.current = null }
 
-  // ── بدء مؤقت الصمت (2 ثانية) ─────────────────────────────────────────────
-  const startSilenceTimer = useCallback(() => {
-    clearSilence()
-    let remaining = 2
-    setCountdown(remaining)
-    cdIntervalRef.current = setInterval(() => {
-      remaining -= 1
-      if (remaining <= 0) {
-        clearInterval(cdIntervalRef.current!)
-        cdIntervalRef.current = null
-        setCountdown(null)
-      } else {
-        setCountdown(remaining)
+    const rec = mediaRecRef.current
+    if (rec && rec.state !== 'inactive') {
+      rec.onstop = async () => {
+        stoppingRef.current = false
+        await transcribeChunks([...chunksRef.current])
+        chunksRef.current = []
       }
-    }, 1000)
-    silenceRef.current = setTimeout(() => {
-      stopAndSend()
-    }, SILENCE_DELAY)
-  }, [clearSilence, stopAndSend])
+      rec.stop()
+    } else {
+      stoppingRef.current = false
+    }
+    mediaRecRef.current = null
+  }, [transcribeChunks])
 
-  // ── إيقاف كامل بدون إرسال ────────────────────────────────────────────────
-  const stopNoSend = useCallback(() => {
-    isStoppingRef.current = true
-    clearSilence()
-    try { recRef.current?.abort() } catch {}
-    recRef.current = null
-    accRef.current = ''
-    setListening(false)
+  // ── صمت مكتشف بالـ VAD ───────────────────────────────────────────────────
+  const handleSilence = useCallback(() => {
+    if (state === 'recording') stopRecording()
+  }, [state, stopRecording])
+
+  const { bars } = useVAD(listening, handleSilence)
+
+  // ── بدء التسجيل ──────────────────────────────────────────────────────────
+  const startRecording = useCallback(async () => {
+    setPermError(null)
+    chunksRef.current  = []
+    stoppingRef.current = false
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
+        video: false,
+      })
+    } catch (err) {
+      const name = (err as Error)?.name || ''
+      if (name === 'NotFoundError' || name === 'DevicesNotFoundError') { setPermError('no-device'); return }
+      setPermError('denied'); return
+    }
+
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4']
+      .find(t => MediaRecorder.isTypeSupported(t)) || ''
+
+    const rec = new MediaRecorder(stream, mimeType ? { mimeType } : {})
+    rec.ondataavailable = (e) => { if (e.data?.size > 0) chunksRef.current.push(e.data) }
+    rec.start(250)
+    mediaRecRef.current = rec
+    setState('recording')
     setDisplayText('')
-    setCountdown(null)
-    setTimeout(() => { isStoppingRef.current = false }, 200)
-  }, [clearSilence])
+
+    // حد أقصى 30 ثانية
+    maxTimerRef.current = setTimeout(() => stopRecording(), MAX_RECORD_MS)
+  }, [stopRecording])
+
+  // ── زر الميكروفون ────────────────────────────────────────────────────────
+  const handleClick = useCallback(() => {
+    setPermError(null)
+    if (state === 'recording') {
+      stopRecording()
+    } else if (state === 'idle') {
+      // إذا كان MediaRecorder غير متاح → Web Speech مباشرة
+      if (typeof MediaRecorder === 'undefined') { useFallbackWSA(); return }
+      startRecording()
+    }
+  }, [state, stopRecording, startRecording, useFallbackWSA])
+
+  // تنظيف عند الإغلاق
+  useEffect(() => () => {
+    if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+      try { mediaRecRef.current.stop() } catch {}
+    }
+    wsAbortRef.current?.()
+  }, [])
 
   useEffect(() => {
     if (!permError) return
@@ -194,160 +310,56 @@ export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps)
     return () => document.removeEventListener('mousedown', h)
   }, [permError])
 
-  useEffect(() => () => {
-    clearSilence()
-    try { recRef.current?.abort() } catch {}
-  }, [clearSilence])
-
-  // ── بدء الاستماع ─────────────────────────────────────────────────────────
-  const startRec = useCallback(async () => {
-    setPermError(null)
-    accRef.current = ''
-    isStoppingRef.current = false
-
-    // طلب إذن الميكروفون
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-      stream.getTracks().forEach(t => t.stop())
-    } catch (err) {
-      const name = (err as Error)?.name || ''
-      if (name === 'NotFoundError' || name === 'DevicesNotFoundError') { setPermError('no-device'); return }
-      setPermError('denied'); return
-    }
-
-    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!Ctor) return
-
-    function createRec() {
-      const rec = new Ctor!()
-
-      // ── اللغة: الدارجة الجزائرية أولاً ────────────────────────────────
-      // ar-DZ = الجزائر العربية | ar-SA كاحتياط
-      rec.lang            = 'ar-DZ'
-      rec.continuous      = false    // false + إعادة التشغيل اليدوية = أفضل دعم متصفح
-      rec.interimResults  = true
-      rec.maxAlternatives = 1
-
-      rec.onstart = () => { setListening(true) }
-
-      // ── onend: أعد التشغيل إذا لم يُوقَف إرادياً ────────────────────
-      rec.onend = () => {
-        if (!isStoppingRef.current && recRef.current === rec) {
-          try {
-            const newRec = createRec()
-            recRef.current = newRec
-            newRec.start()
-          } catch {
-            setListening(false)
-          }
-        }
-      }
-
-      rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-        if (e.error === 'no-speech' || e.error === 'aborted') return
-        if (e.error === 'not-allowed')  { setPermError('denied');    stopNoSend(); return }
-        if (e.error === 'audio-capture'){ setPermError('no-device'); stopNoSend(); return }
-        // language-not-supported → حاول بـ ar
-        if (e.error === 'language-not-supported') {
-          try { rec.lang = 'ar'; rec.start() } catch {}
-          return
-        }
-        console.warn('[VoicePanel] STT error:', e.error)
-      }
-
-      // ── onresult: تراكم النص + مؤقت الصمت ──────────────────────────
-      rec.onresult = (e: SpeechRecognitionEvent) => {
-        let interim = ''
-
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const res  = e.results[i]
-          const text = res[0]?.transcript || ''
-          if (res.isFinal) {
-            accRef.current = (accRef.current + ' ' + text).trim()
-          } else {
-            interim = text
-          }
-        }
-
-        // عرض النص المتراكم + الوسيط في حقل الإدخال
-        const display = accRef.current
-          ? interim ? `${accRef.current} ${interim}` : accRef.current
-          : interim
-        setDisplayText(display)
-        interimCbRef.current?.(display)   // يُحدّث الحقل فوراً
-
-        // إذا وصلت نتيجة نهائية → ابدأ مؤقت الصمت 2 ثانية
-        if (accRef.current) startSilenceTimer()
-      }
-
-      return rec
-    }
-
-    const rec = createRec()
-    recRef.current = rec
-    try {
-      rec.start()
-    } catch (err) {
-      console.error('[VoicePanel] start failed:', err)
-      setListening(false)
-      recRef.current = null
-    }
-  }, [startSilenceTimer, stopNoSend])
-
-  // ── ضغط زر الميكروفون ────────────────────────────────────────────────────
-  const handleClick = useCallback(() => {
-    setPermError(null)
-    if (listening) {
-      // ضغط أثناء الاستماع → إرسال فوري
-      stopAndSend()
-    } else {
-      startRec()
-    }
-  }, [listening, startRec, stopAndSend])
+  // إذا لم يكن MediaRecorder و Web Speech API متاحَين → إخفاء
+  const isSupported = (typeof window !== 'undefined') &&
+    (typeof MediaRecorder !== 'undefined' ||
+     !!(window as any).SpeechRecognition ||
+     !!(window as any).webkitSpeechRecognition)
 
   if (!isSupported) return null
 
   let cls = 'dz-vp-trigger'
-  if (listening)                cls += ' is-listening'
-  if (permError === 'denied')   cls += ' is-denied'
+  if (listening)              cls += ' is-listening'
+  if (transcribing)           cls += ' is-transcribing'
+  if (permError === 'denied') cls += ' is-denied'
 
-  const hasText = accRef.current.trim().length > 0
-
-  const title = listening
-    ? hasText
-      ? `إيقاف وإرسال — ${accRef.current.trim().slice(0, 40)}${accRef.current.length > 40 ? '…' : ''}`
-      : 'يستمع... تحدث بالعربية أو الدارجة'
-    : permError === 'denied'    ? 'الميكروفون محجوب — اضغط للتفاصيل'
-    : permError === 'no-device' ? 'لا يوجد ميكروفون'
-    :                              'اضغط وتحدث — الإرسال تلقائي بعد 2 ثانية صمت'
+  const title = transcribing   ? 'جاري التحويل بـ Whisper...'
+    : listening                ? 'يستمع... اضغط للإرسال'
+    : permError === 'denied'   ? 'الميكروفون محجوب'
+    : permError === 'no-device'? 'لا يوجد ميكروفون'
+    :                            'اضغط وتحدث — إرسال تلقائي بعد 2 ثانية صمت'
 
   return (
     <div className="dz-vp-wrap" ref={wrapRef}>
 
-      {/* ── عرض النص الجاري سماعه ────────────────────────────────────────── */}
-      {listening && displayText && (
+      {/* حالة التسجيل */}
+      {listening && (
         <span className="dz-voice-state" aria-live="polite">
-          <span className="dz-voice-interim">
-            "{displayText.length > 50 ? '…' + displayText.slice(-50) : displayText}"
-          </span>
-          {countdown !== null && (
-            <span className="dz-voice-cd" title="إرسال تلقائي">⏱ {countdown}s</span>
-          )}
+          {displayText
+            ? <span className="dz-voice-interim">"{displayText.length > 50 ? '…' + displayText.slice(-50) : displayText}"</span>
+            : <span>🎤 يستمع...</span>}
         </span>
       )}
-      {listening && !displayText && (
-        <span className="dz-voice-state" aria-live="polite">🎤 يستمع...</span>
+
+      {/* حالة التحويل */}
+      {transcribing && (
+        <span className="dz-voice-state" aria-live="polite">
+          <span className="dz-voice-interim">⚡ Whisper يحوّل الصوت...</span>
+        </span>
       )}
 
-      {/* ── زر الميكروفون ────────────────────────────────────────────────── */}
+      {/* زر الميكروفون */}
       <button
         type="button"
         className={cls}
         title={title}
         onClick={handleClick}
         aria-label={title}
+        disabled={transcribing}
       >
-        {permError === 'denied'
+        {transcribing
+          ? <Loader2 size={16} className="dz-spin" />
+          : permError === 'denied'
           ? <AlertTriangle size={16} />
           : listening
           ? <MicOff size={16} />
@@ -366,7 +378,7 @@ export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps)
         )}
       </button>
 
-      {/* ── رسائل الخطأ ──────────────────────────────────────────────────── */}
+      {/* رسائل الخطأ */}
       {permError && (
         <div className="dz-vp-perm-error" style={{ bottom: 'calc(100% + 8px)', insetInlineEnd: 0 }}>
           {permError === 'no-device' ? (

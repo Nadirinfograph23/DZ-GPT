@@ -3042,7 +3042,14 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
 
   const handleGps = () => {
     if (!navigator.geolocation) {
-      setErrMsg('المتصفح لا يدعم خدمة تحديد الموقع')
+      setErrMsg('المتصفح لا يدعم خدمة تحديد الموقع. جرّب Chrome أو Firefox.')
+      setPhase('error')
+      return
+    }
+    // فحص: هل داخل iframe؟ (Replit preview)
+    const inIframe = (() => { try { return window.self !== window.top } catch { return true } })()
+    if (inIframe) {
+      setErrMsg('📍 خدمة الموقع محجوبة داخل الـ preview. افتح التطبيق في نافذة جديدة من شريط العنوان.')
       setPhase('error')
       return
     }
@@ -3071,11 +3078,20 @@ function GpsNearbyCard({ meta }: { meta: Record<string, unknown> }) {
           setPhase('error')
         }
       },
-      () => {
-        setErrMsg('لم يتم الحصول على إذن الموقع. يرجى السماح للمتصفح بالوصول إلى موقعك ثم أعد المحاولة.')
+      (err) => {
+        if (err.code === 1) {
+          // PERMISSION_DENIED
+          setErrMsg('🔒 تم رفض إذن الموقع. افتح إعدادات المتصفح ← الخصوصية ← الموقع ← اسمح لهذا الموقع، ثم أعد المحاولة.')
+        } else if (err.code === 2) {
+          // POSITION_UNAVAILABLE
+          setErrMsg('📡 تعذّر تحديد الموقع. تأكد من تفعيل GPS في جهازك أو اتصالك بالإنترنت.')
+        } else {
+          // TIMEOUT
+          setErrMsg('⏱ انتهت مهلة تحديد الموقع. تأكد من GPS وأعد المحاولة.')
+        }
         setPhase('error')
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 }
     )
   }
 

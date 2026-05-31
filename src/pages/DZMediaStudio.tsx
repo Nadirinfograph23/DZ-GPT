@@ -1,14 +1,14 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/dz-media-studio.css'
 
 type Tab = 'text2img' | 'img2img' | 'text2video' | 'img2video'
 
 const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
-  { id: 'text2img',  label: 'نص → صورة',   icon: '🎨', desc: 'وصف مشهدك وسيولّد لك FLUX صورة احترافية' },
-  { id: 'img2img',   label: 'صورة → صورة', icon: '🖼️', desc: 'حوّل أو عدّل صورة موجودة بوصف نصي' },
-  { id: 'text2video', label: 'نص → فيديو',  icon: '🎬', desc: 'ولّد فيديو قصير من وصف نصي' },
-  { id: 'img2video', label: 'صورة → فيديو', icon: '📽️', desc: 'حرّك صورة ثابتة وحوّلها لفيديو' },
+  { id: 'text2img',   label: 'نص → صورة',   icon: '🎨', desc: 'وصف مشهدك وسيولّد لك FLUX صورة احترافية' },
+  { id: 'img2img',    label: 'صورة → صورة', icon: '🖼️', desc: 'حوّل أو عدّل صورة موجودة بوصف نصي' },
+  { id: 'text2video', label: 'نص → فيديو',  icon: '🎬', desc: 'ولّد فيديو قصير من وصف نصي — مجاني' },
+  { id: 'img2video',  label: 'صورة → فيديو', icon: '📽️', desc: 'حرّك صورة ثابتة وحوّلها لفيديو' },
 ]
 
 const POLLINATIONS_MODELS = [
@@ -18,6 +18,13 @@ const POLLINATIONS_MODELS = [
   { id: 'flux-anime',   label: '🌸 Anime' },
   { id: 'flux-3d',      label: '🧊 3D' },
 ]
+
+interface Quota {
+  remaining: number
+  used: number
+  limit: number
+  resetInHours: number
+}
 
 interface Result {
   type: 'image' | 'video'
@@ -30,18 +37,30 @@ interface Result {
 
 export default function DZMediaStudio() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('text2img')
-  const [prompt, setPrompt] = useState('')
-  const [model, setModel] = useState('flux')
-  const [imageUrl, setImageUrl] = useState('')
+  const [tab, setTab]               = useState<Tab>('text2img')
+  const [prompt, setPrompt]         = useState('')
+  const [model, setModel]           = useState('flux')
+  const [imageUrl, setImageUrl]     = useState('')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [width, setWidth] = useState(768)
-  const [height, setHeight] = useState(768)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<Result | null>(null)
-  const [error, setError] = useState('')
-  const [progress, setProgress] = useState('')
+  const [width, setWidth]           = useState(768)
+  const [height, setHeight]         = useState(768)
+  const [loading, setLoading]       = useState(false)
+  const [result, setResult]         = useState<Result | null>(null)
+  const [error, setError]           = useState('')
+  const [progress, setProgress]     = useState('')
+  const [quota, setQuota]           = useState<Quota | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const isVideoTab = tab === 'text2video' || tab === 'img2video'
+
+  // جلب حصة الفيديو عند تغيير التبويب لفيديو
+  useEffect(() => {
+    if (!isVideoTab) return
+    fetch('/api/dz-agent-v4/video/quota')
+      .then(r => r.json())
+      .then(d => { if (d.quota) setQuota(d.quota) })
+      .catch(() => {})
+  }, [isVideoTab])
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -94,16 +113,19 @@ export default function DZMediaStudio() {
         }
 
       } else if (tab === 'text2video') {
-        setProgress('🎬 جاري توليد الفيديو... قد يستغرق دقيقة')
+        setProgress('🎬 جاري توليد الفيديو... قد يستغرق دقيقة أو دقيقتين')
         const res = await fetch('/api/dz-agent-v4/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt, width, height, duration: 3 }),
           signal: AbortSignal.timeout(90_000),
         })
-        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string }
+        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota }
+        if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
           setResult({ type: 'video', url: data.url, prompt, model: data.model || 'video', provider: data.provider || '' })
+        } else if (data.rateLimited) {
+          setError(data.error || 'تجاوزت الحدّ اليومي')
         } else {
           setError(data.error || 'توليد الفيديو غير متاح حالياً. تأكد من وجود HF_TOKEN.')
         }
@@ -116,9 +138,12 @@ export default function DZMediaStudio() {
           body: JSON.stringify({ imageUrl: imagePreview || imageUrl, prompt: prompt || 'animate smoothly' }),
           signal: AbortSignal.timeout(90_000),
         })
-        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string }
+        const data = await res.json() as { ok: boolean; url?: string; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota }
+        if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
           setResult({ type: 'video', url: data.url, prompt, model: data.model || 'img2video', provider: data.provider || '' })
+        } else if (data.rateLimited) {
+          setError(data.error || 'تجاوزت الحدّ اليومي')
         } else {
           setError(data.error || 'تحويل الصورة لفيديو يتطلب HF_TOKEN مع رصيد.')
         }
@@ -161,6 +186,26 @@ export default function DZMediaStudio() {
       <div className="dms-body">
         <div className="dms-panel">
           <p className="dms-tab-desc">{currentTab.icon} {currentTab.desc}</p>
+
+          {/* شريط الحصة اليومية للفيديو */}
+          {isVideoTab && quota && (
+            <div className={`dms-quota-bar ${quota.remaining === 0 ? 'dms-quota-bar--empty' : ''}`}>
+              <div className="dms-quota-info">
+                <span>🎬 الحصة اليومية</span>
+                <span className="dms-quota-count">
+                  {quota.remaining === 0
+                    ? `⏳ انتهت — تجديد خلال ${quota.resetInHours}س`
+                    : `${quota.remaining} متبق من ${quota.limit}`}
+                </span>
+              </div>
+              <div className="dms-quota-track">
+                <div
+                  className="dms-quota-fill"
+                  style={{ width: `${(quota.used / quota.limit) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {(tab === 'img2img' || tab === 'img2video') && (
             <div className="dms-upload-zone">
@@ -227,15 +272,26 @@ export default function DZMediaStudio() {
             <div className="dms-size-row">
               <label className="dms-label">الحجم:</label>
               <div className="dms-size-btns">
-                {[[512,512,'مربع'], [768,768,'HD'], [1024,1024,'FHD'], [1024,576,'أفقي'], [576,1024,'عمودي']].map(([w,h,lbl]) => (
+                {([[512,512,'مربع'], [768,768,'HD'], [1024,1024,'FHD'], [1024,576,'أفقي'], [576,1024,'عمودي']] as [number,number,string][]).map(([w,h,lbl]) => (
                   <button
                     key={`${w}x${h}`}
                     className={`dms-size-btn${width === w && height === h ? ' dms-size-btn--active' : ''}`}
-                    onClick={() => { setWidth(w as number); setHeight(h as number) }}
+                    onClick={() => { setWidth(w); setHeight(h) }}
                   >
                     {lbl}<br /><small>{w}×{h}</small>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {isVideoTab && (
+            <div className="dms-video-providers">
+              <span className="dms-label">مزودو الفيديو المجانيون:</span>
+              <div className="dms-provider-chips">
+                <span className="dms-chip">🌊 Pollinations</span>
+                <span className="dms-chip">⚡ Zeroscope</span>
+                <span className="dms-chip">🤗 HuggingFace</span>
               </div>
             </div>
           )}
@@ -246,10 +302,12 @@ export default function DZMediaStudio() {
           <button
             className="dms-generate-btn"
             onClick={handleGenerate}
-            disabled={loading}
+            disabled={loading || (isVideoTab && quota?.remaining === 0)}
           >
             {loading ? (
               <><span className="dms-spinner" /> {progress || 'جاري التوليد...'}</>
+            ) : isVideoTab && quota?.remaining === 0 ? (
+              <>⏳ انتهت الحصة — خلال {quota.resetInHours}س</>
             ) : (
               <>{currentTab.icon} {
                 tab === 'text2img'   ? 'ولّد الصورة' :
@@ -316,7 +374,7 @@ export default function DZMediaStudio() {
                     className="dms-action-btn dms-action-btn--use"
                     onClick={() => { setImagePreview(result.url); setImageUrl(result.url); setTab('img2img') }}
                   >
-                    🔄 استخدم كمدخل img2img
+                    🔄 img2img
                   </button>
                 )}
                 {result.type === 'image' && (
@@ -324,7 +382,7 @@ export default function DZMediaStudio() {
                     className="dms-action-btn dms-action-btn--vid"
                     onClick={() => { setImagePreview(result.url); setImageUrl(result.url); setTab('img2video') }}
                   >
-                    🎬 حوّل لفيديو
+                    🎬 فيديو
                   </button>
                 )}
                 <button
@@ -332,7 +390,7 @@ export default function DZMediaStudio() {
                   onClick={() => handleGenerate()}
                   disabled={loading}
                 >
-                  🔄 نسخة جديدة
+                  🔄 جديد
                 </button>
               </div>
             </div>

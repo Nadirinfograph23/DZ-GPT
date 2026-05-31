@@ -196,7 +196,6 @@ app.use((req, res, next) => {
       'camera=(self)',
       'autoplay=(self)',
       'fullscreen=(self)',
-      'notifications=(self)',
     ].join(', ')
   )
   // إزالة X-Permissions-Policy القديم إن وُجد
@@ -24217,25 +24216,26 @@ function getModelStatus(hfId) {
   return e.status
 }
 
-// ── نماذج Text-to-Video ──────────────────────────────────────────────────────
+// ── نماذج Text-to-Video (HuggingFace فقط — بدون Pollinations) ──────────────
 const T2V_MODELS = [
-  { id: 'pollinations', hfId: 'pollinations/wan',                            label: 'Wan (Pollinations)', badge: 'مجاني',    color: '#22c55e' },
-  { id: 'wan2',         hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                     label: 'Wan 2.1 Fast',       badge: 'أسرع',     color: '#10b981' },
-  { id: 'wan2-14b',     hfId: 'Wan-AI/Wan2.1-T2V-14B-Diffusers',            label: 'Wan 2.1 Pro',        badge: 'جودة',     color: '#06b6d4' },
-  { id: 'ltx',          hfId: 'Lightricks/LTX-Video',                        label: 'LTX Video',          badge: 'خفيف',     color: '#8b5cf6' },
-  { id: 'cogvideo',     hfId: 'THUDM/CogVideoX1.5-5B',                       label: 'CogVideoX 5B',       badge: 'HD',       color: '#6366f1' },
-  { id: 'hunyuan',      hfId: 'tencent/HunyuanVideo',                        label: 'HunyuanVideo',       badge: 'احترافي',  color: '#ec4899' },
-  { id: 'animatediff',  hfId: 'ByteDance/AnimateDiff-Lightning',              label: 'AnimateDiff',        badge: 'GIF',      color: '#f59e0b' },
-  { id: 'skyreels',     hfId: 'Skywork/SkyReels-V2-DF-1.3B-540P',            label: 'SkyReels V2',        badge: 'جديد',     color: '#0ea5e9' },
+  { id: 'wan2',        hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                    label: 'Wan 2.1 Fast',    badge: 'سريع',     color: '#10b981' },
+  { id: 'wan2-14b',    hfId: 'Wan-AI/Wan2.1-T2V-14B-Diffusers',           label: 'Wan 2.1 Pro',     badge: 'جودة',     color: '#06b6d4' },
+  { id: 'ltx',         hfId: 'Lightricks/LTX-Video',                       label: 'LTX Video',       badge: 'خفيف',     color: '#8b5cf6' },
+  { id: 'cogvideo',    hfId: 'THUDM/CogVideoX1.5-5B',                      label: 'CogVideoX 5B',    badge: 'HD',       color: '#6366f1' },
+  { id: 'hunyuan',     hfId: 'tencent/HunyuanVideo',                       label: 'HunyuanVideo',    badge: 'احترافي',  color: '#ec4899' },
+  { id: 'skyreels',    hfId: 'Skywork/SkyReels-V2-DF-1.3B-540P',           label: 'SkyReels V2',     badge: 'جديد',     color: '#0ea5e9' },
+  { id: 'opensora',    hfId: 'hpcai-tech/Open-Sora',                        label: 'Open-Sora 2',     badge: 'مفتوح',    color: '#84cc16' },
+  { id: 'mochi',       hfId: 'genmo/mochi-1-preview',                       label: 'Mochi 1',         badge: 'إبداعي',   color: '#a855f7' },
+  { id: 'animatediff', hfId: 'ByteDance/AnimateDiff-Lightning',             label: 'AnimateDiff',     badge: 'GIF',      color: '#f59e0b' },
 ]
 
 // ── نماذج Image-to-Video ─────────────────────────────────────────────────────
 const I2V_MODELS = [
-  { id: 'ltx-i2v',      hfId: 'Lightricks/LTX-Video',                                    label: 'LTX Video',       badge: 'سريع',   color: '#8b5cf6' },
-  { id: 'wan-i2v',      hfId: 'Wan-AI/Wan2.1-I2V-14B-720P-Diffusers',                    label: 'Wan 2.1 I2V',     badge: 'جودة',   color: '#10b981' },
-  { id: 'cogvideo-i2v', hfId: 'THUDM/CogVideoX-5b-I2V',                                  label: 'CogVideoX I2V',   badge: 'HD',     color: '#6366f1' },
-  { id: 'svd',          hfId: 'stabilityai/stable-video-diffusion-img2vid-xt-1-1',        label: 'SVD XT 1.1',      badge: 'ناعم',   color: '#3b82f6' },
-  { id: 'animdiff2',    hfId: 'ByteDance/AnimateDiff-Lightning',                          label: 'AnimateDiff',     badge: 'GIF',    color: '#f59e0b' },
+  { id: 'wan-i2v',      hfId: 'Wan-AI/Wan2.1-I2V-14B-720P-Diffusers',                   label: 'Wan 2.1 I2V',     badge: 'جودة',   color: '#10b981' },
+  { id: 'ltx-i2v',      hfId: 'Lightricks/LTX-Video',                                   label: 'LTX Video',       badge: 'سريع',   color: '#8b5cf6' },
+  { id: 'cogvideo-i2v', hfId: 'THUDM/CogVideoX-5b-I2V',                                 label: 'CogVideoX I2V',   badge: 'HD',     color: '#6366f1' },
+  { id: 'svd',          hfId: 'stabilityai/stable-video-diffusion-img2vid-xt-1-1',       label: 'SVD XT 1.1',      badge: 'ناعم',   color: '#3b82f6' },
+  { id: 'animdiff2',    hfId: 'ByteDance/AnimateDiff-Lightning',                         label: 'AnimateDiff',     badge: 'GIF',    color: '#f59e0b' },
 ]
 
 // ── HF Video Inference مع retry على 503 ──────────────────────────────────────
@@ -24294,6 +24294,8 @@ function buildT2VBody(hfId, prompt, w, h) {
     'Lightricks/LTX-Video':               { inputs: prompt, parameters: { num_frames: 25, num_inference_steps: 25, width: w||512, height: h||288 } },
     'ByteDance/AnimateDiff-Lightning':    { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 4 } },
     'Skywork/SkyReels-V2-DF-1.3B-540P':  { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20 } },
+    'hpcai-tech/Open-Sora':              { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 20, width: w||512, height: h||288 } },
+    'genmo/mochi-1-preview':             { inputs: prompt, parameters: { num_frames: 16, num_inference_steps: 64, guidance_scale: 4.5 } },
   }
   return map[hfId] || defaults
 }
@@ -24408,17 +24410,10 @@ app.post('/api/dz-agent-v4/video', express.json({ limit: '5mb' }), async (req, r
   const quota = getVideoQuota(ip)
   if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي (${quota.limit}/يوم) — تجديد خلال ${quota.resetInHours}س`, quota })
 
-  // 1. Pollinations (مجاني، بدون token)
-  const polRes = await tryPollinationsVideo(prompt, width, height)
-  if (polRes) {
-    consumeVideoQuota(ip)
-    return res.json({ ok: true, url: `data:${polRes.mime};base64,${polRes.buf.toString('base64')}`, model: 'Wan (Pollinations)', provider: 'Pollinations AI', quota: getVideoQuota(ip) })
-  }
-
-  // 2. HuggingFace — دوّر حسب الاختيار أو round-robin
+  // 1. HuggingFace — دوّر حسب الاختيار أو round-robin
   const hasToken = !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY)
   if (hasToken) {
-    let order = [...T2V_MODELS].filter(m => m.id !== 'pollinations')
+    let order = [...T2V_MODELS]
     if (preferredId) {
       const pref = order.find(m => m.id === preferredId)
       if (pref) order = [pref, ...order.filter(m => m.id !== preferredId)]

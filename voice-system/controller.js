@@ -100,13 +100,18 @@ export function createDVIS({ baseUrl = '' } = {}) {
     bus.emit('transcript', { text, isFinal, lang })
     if (isFinal && text) {
       sttBuffer = sttBuffer ? `${sttBuffer} ${text}` : text
-      // مؤقت احتياطي: إذا لم يُطلَق onend خلال 1.5ث نرسل تلقائياً
+      // مؤقت سريع: 400ms بعد isFinal لضمان إرسال فوري حتى لو لم يُطلَق onend
       clearSilence()
-      sttSilenceTimer = setTimeout(flushBuffer, 1500)
+      sttSilenceTimer = setTimeout(flushBuffer, TIMINGS.sttFinalFlushMs ?? 400)
     }
   })
 
-  stt.on('error', (e) => bus.emit('error', e))
+  stt.on('error', (e) => {
+    // إذا كان هناك كلام مخزّن، نرسله رغم الخطأ
+    if (sttBuffer.trim()) { flushBuffer(); return }
+    if (state === 'listening') setState('idle')
+    bus.emit('error', e)
+  })
 
   // onend يُطلَق طبيعياً عند انقطاع الصوت — نرسل الكلام فوراً
   stt.on('end', () => {
@@ -114,6 +119,7 @@ export function createDVIS({ baseUrl = '' } = {}) {
     if (sttBuffer.trim()) {
       flushBuffer()
     } else {
+      // لا يوجد كلام — نُعيد الحالة إلى idle فوراً
       if (state === 'listening') setState('idle')
     }
   })

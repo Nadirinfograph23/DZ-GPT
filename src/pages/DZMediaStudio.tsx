@@ -3,106 +3,114 @@ import { useNavigate } from 'react-router-dom'
 import '../styles/dz-media-studio.css'
 
 type Tab = 'text2img' | 'img2img'
-type ImgProvider = 'pollinations' | 'aifree'
+
+interface ModelDef {
+  id: string; label: string; badge?: string; tier: 'fast' | 'premium'; provider: string; group: string
+}
+
+interface QuotaInfo {
+  fast:    { remaining: number; used: number; limit: number }
+  premium: { remaining: number; used: number; limit: number }
+  resetInHours: number
+}
+
+interface AspectPreset {
+  label: string; sub: string; w: number; h: number; shape: 'tall'|'square'|'wide'|'photo'
+}
 
 const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
   { id: 'text2img', label: 'نص → صورة',   icon: '🎨', desc: 'وصف مشهدك وسيولّد لك صورة احترافية' },
   { id: 'img2img',  label: 'صورة → صورة', icon: '🖼️', desc: 'حوّل أو عدّل صورة موجودة بوصف نصي' },
 ]
 
-const POLLINATIONS_MODELS = [
-  { id: 'flux',         label: '⚡ Flux' },
-  { id: 'turbo',        label: '🚀 Turbo' },
-  { id: 'flux-realism', label: '📸 Realism' },
-  { id: 'flux-anime',   label: '🌸 Anime' },
-  { id: 'flux-3d',      label: '🧊 3D' },
-]
-
-// Models verified 2026-06-01 — HuggingFace confirmed (HTTP 200, pipeline=text-to-image)
-// Removed: nano-banana-pro (non-existent), seedream (HF 404), gptimage (not a real distinct model)
-const AIFREE_DEFAULT_MODELS = [
-  // Pollinations — fast, free, no key
-  { id: 'flux',           label: '⚡ FLUX',            badge: 'FAST', group: 'Pollinations' },
-  { id: 'turbo',          label: '🚀 Turbo',           badge: 'FAST', group: 'Pollinations' },
-  { id: 'flux-realism',   label: '📸 FLUX Realism',   badge: 'REAL', group: 'Pollinations' },
-  { id: 'flux-anime',     label: '🌸 FLUX Anime',     badge: '',     group: 'Pollinations' },
-  // HuggingFace — verified models (work from Vercel with HF_TOKEN)
-  { id: 'flux-schnell',   label: '⚡ FLUX Schnell',   badge: 'HF',   group: 'HuggingFace'  },
-  { id: 'flux-dev',       label: '🎯 FLUX Dev',       badge: 'HD',   group: 'HuggingFace'  },
-  { id: 'sd35-large',     label: '🖼️ SD 3.5 Large',  badge: 'HD',   group: 'HuggingFace'  },
-  { id: 'sd35-medium',    label: '🖼️ SD 3.5 Medium', badge: '',     group: 'HuggingFace'  },
-  { id: 'sdxl-lightning', label: '⚡ SDXL Lightning', badge: '',     group: 'HuggingFace'  },
-  { id: 'playground',     label: '🎮 Playground 2.5', badge: '',     group: 'HuggingFace'  },
-  { id: 'juggernaut',     label: '💪 Juggernaut XL',  badge: '',     group: 'HuggingFace'  },
-  { id: 'realvisxl',      label: '📷 RealVis XL',     badge: 'REAL', group: 'HuggingFace'  },
-  { id: 'sana',           label: '✨ SANA 1.6B',       badge: 'NEW',  group: 'HuggingFace'  },
-]
-
-interface AspectPreset {
-  label: string; sub: string; w: number; h: number; shape: 'tall'|'square'|'wide'|'photo'
-}
 const IMG_PRESETS: AspectPreset[] = [
-  { label: 'عمودي',  sub: '9:16', w: 576,  h: 1024, shape: 'tall' },
+  { label: 'عمودي',  sub: '9:16', w: 576,  h: 1024, shape: 'tall'   },
   { label: 'مربع',   sub: '1:1',  w: 768,  h: 768,  shape: 'square' },
-  { label: 'أفقي',   sub: '16:9', w: 1024, h: 576,  shape: 'wide' },
-  { label: 'كلاسيك', sub: '4:3',  w: 1024, h: 768,  shape: 'photo' },
+  { label: 'أفقي',   sub: '16:9', w: 1024, h: 576,  shape: 'wide'   },
+  { label: 'كلاسيك', sub: '4:3',  w: 1024, h: 768,  shape: 'photo'  },
 ]
+
+// النماذج الافتراضية — تُحدَّث من الـ API
+const DEFAULT_MODELS: ModelDef[] = [
+  { id: 'gemini-flash-image', label: '⚡ Gemini Flash Image', badge: 'NEW',   tier: 'premium', provider: 'openrouter', group: 'Google'      },
+  { id: 'gemini-pro-image',   label: '🌟 Gemini Pro Image',  badge: 'PRO',   tier: 'premium', provider: 'openrouter', group: 'Google'      },
+  { id: 'gpt-image-2',        label: '🤖 GPT Image 2.0',     badge: 'GPT2',  tier: 'premium', provider: 'openrouter', group: 'OpenAI'      },
+  { id: 'gpt-image-mini',     label: '🤖 GPT Image Mini',    badge: 'GPT',   tier: 'premium', provider: 'openrouter', group: 'OpenAI'      },
+  { id: 'flux-schnell',       label: '⚡ FLUX Schnell',       badge: 'HF',    tier: 'fast',    provider: 'hf',         group: 'HuggingFace' },
+  { id: 'flux-dev',           label: '🎯 FLUX Dev',           badge: 'HD',    tier: 'fast',    provider: 'hf',         group: 'HuggingFace' },
+  { id: 'sd35-large',         label: '🖼️ SD 3.5 Large',      badge: 'HD',    tier: 'fast',    provider: 'hf',         group: 'HuggingFace' },
+  { id: 'realvisxl',          label: '📷 RealVis XL',         badge: 'REAL',  tier: 'fast',    provider: 'hf',         group: 'HuggingFace' },
+  { id: 'juggernaut',         label: '💪 Juggernaut XL',      badge: '',      tier: 'fast',    provider: 'hf',         group: 'HuggingFace' },
+  { id: 'flux',               label: '⚡ FLUX',               badge: 'FAST',  tier: 'fast',    provider: 'pollinations', group: 'Pollinations' },
+  { id: 'turbo',              label: '🚀 Turbo',              badge: 'FAST',  tier: 'fast',    provider: 'pollinations', group: 'Pollinations' },
+  { id: 'flux-realism',       label: '📸 FLUX Realism',       badge: 'REAL',  tier: 'fast',    provider: 'pollinations', group: 'Pollinations' },
+  { id: 'flux-anime',         label: '🌸 FLUX Anime',         badge: '',      tier: 'fast',    provider: 'pollinations', group: 'Pollinations' },
+]
+
+const GROUP_ORDER = ['Google', 'OpenAI', 'HuggingFace', 'Pollinations']
+const TIER_COLOR: Record<string, string> = {
+  premium: 'linear-gradient(135deg,#f59e0b,#d97706)',
+  fast:    'linear-gradient(135deg,#6366f1,#818cf8)',
+}
 
 interface Result {
   type: 'image'
-  url: string; prompt: string; model: string; provider: string; error?: string
+  url: string; prompt: string; model: string; provider: string
+  translatedPrompt?: string
 }
 
 export default function DZMediaStudio() {
   const navigate = useNavigate()
-  const [tab, setTab]                   = useState<Tab>('text2img')
-  const [prompt, setPrompt]             = useState('')
-  const [imgProvider, setImgProvider]   = useState<ImgProvider>('pollinations')
-  const [imgModel, setImgModel]         = useState('flux')
-  const [aifreeModel, setAifreeModel]   = useState('flux-schnell')
-  const [aifreeModels, setAifreeModels] = useState(AIFREE_DEFAULT_MODELS)
-  const [aifreeStatus, setAifreeStatus] = useState<'idle'|'loading'|'online'|'offline'>('idle')
-  const [imageUrl, setImageUrl]         = useState('')
+  const [tab, setTab]               = useState<Tab>('text2img')
+  const [prompt, setPrompt]         = useState('')
+  const [model, setModel]           = useState('flux')
+  const [models, setModels]         = useState<ModelDef[]>(DEFAULT_MODELS)
+  const [quota, setQuota]           = useState<QuotaInfo | null>(null)
+  const [imageUrl, setImageUrl]     = useState('')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [width, setWidth]               = useState(768)
-  const [height, setHeight]             = useState(768)
-  const [loading, setLoading]           = useState(false)
-  const [result, setResult]             = useState<Result | null>(null)
-  const [error, setError]               = useState('')
-  const [progress, setProgress]         = useState('')
-  const [translatedPrompt, setTranslatedPrompt] = useState<string | null>(null)
+  const [width, setWidth]           = useState(768)
+  const [height, setHeight]         = useState(768)
+  const [loading, setLoading]       = useState(false)
+  const [result, setResult]         = useState<Result | null>(null)
+  const [error, setError]           = useState('')
+  const [progress, setProgress]     = useState('')
+  const [imgError, setImgError]     = useState(false)
+  const [activeGroup, setActiveGroup] = useState<string>('all')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // جلب نماذج AiFreeForever عند اختيار المزود
+  // جلب النماذج والحصة عند التحميل
   useEffect(() => {
-    if (imgProvider !== 'aifree' || tab !== 'text2img') return
-    if (aifreeStatus === 'loading' || aifreeStatus === 'online') return
-    setAifreeStatus('loading')
-    fetch('/api/dz-media/aifree/models')
+    fetch('/api/dz-agent-v4/image/models')
       .then(r => r.json())
-      .then(d => {
-        if (d.models?.length) {
-          setAifreeModels(d.models.map((m: {id:string;label:string;badge?:string}) => ({
-            ...m, label: m.label || m.id, badge: m.badge || ''
-          })))
-        }
-        setAifreeStatus('online')
-      })
-      .catch(() => setAifreeStatus('offline'))
-  }, [imgProvider, tab, aifreeStatus])
+      .then(d => { if (d.models?.length) setModels(d.models) })
+      .catch(() => {})
+
+    fetch('/api/dz-agent-v4/image/quota')
+      .then(r => r.json())
+      .then(d => { if (d.quota) setQuota(d.quota) })
+      .catch(() => {})
+  }, [])
+
+  // تحديث الحصة بعد كل توليد
+  const refreshQuota = useCallback(() => {
+    fetch('/api/dz-agent-v4/image/quota')
+      .then(r => r.json())
+      .then(d => { if (d.quota) setQuota(d.quota) })
+      .catch(() => {})
+  }, [])
+
+  const selectedModel = models.find(m => m.id === model) || models[0]
 
   const handleTabChange = (newTab: Tab) => {
-    setTab(newTab)
-    setResult(null)
-    setError('')
-    setWidth(768); setHeight(768)
+    setTab(newTab); setResult(null); setError('')
+    setWidth(768); setHeight(768); setImgError(false)
   }
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = ev => {
       const src = ev.target?.result as string
       setImagePreview(src)
       if (src.startsWith('http')) setImageUrl(src)
@@ -111,74 +119,89 @@ export default function DZMediaStudio() {
   }, [])
 
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) {
-      setError('الرجاء كتابة وصف للصورة'); return
-    }
+    if (!prompt.trim()) { setError('الرجاء كتابة وصف للصورة'); return }
     if (tab === 'img2img' && !imageUrl && !imagePreview) {
       setError('الرجاء رفع صورة أو إدخال رابطها'); return
     }
-    setLoading(true); setError(''); setResult(null); setTranslatedPrompt(null)
+    setLoading(true); setError(''); setResult(null); setImgError(false)
+
+    const selModel = models.find(m => m.id === model)
+    const tier     = selModel?.tier || 'fast'
+    const modelLbl = selModel?.label || model
 
     try {
       if (tab === 'text2img') {
-        if (imgProvider === 'aifree') {
-          const hasArabic = /[\u0600-\u06FF]/.test(prompt)
-          setProgress(
-            hasArabic
-              ? `🔤 جاري ترجمة الوصف للإنجليزية... ثم توليد الصورة عبر AiFreeForever (${aifreeModel})`
-              : `🖼️ جاري توليد الصورة عبر AiFreeForever (${aifreeModel}) — قد يستغرق دقيقة...`
-          )
-          const res  = await fetch('/api/dz-media/aifree/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model: aifreeModel, width, height }),
-            signal: AbortSignal.timeout(110_000),
-          })
-          const data = await res.json() as {
-            ok: boolean; imageUrl?: string; model?: string; provider?: string; error?: string
-            translatedPrompt?: string
-          }
-          if (data.ok && data.imageUrl) {
-            if (data.translatedPrompt) setTranslatedPrompt(data.translatedPrompt)
-            setResult({ type: 'image', url: data.imageUrl, prompt, model: data.model || aifreeModel, provider: 'AiFreeForever' })
-          } else {
-            setError(data.error || 'فشل التوليد عبر AiFreeForever — جرّب نموذجاً آخر أو انتظر قليلاً')
-          }
-        } else {
-          setProgress('🎨 جاري توليد الصورة عبر Pollinations FLUX...')
-          const seed = Math.floor(Math.random() * 999999)
-          const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
-            + `?model=${imgModel}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
-          setResult({ type: 'image', url, prompt, model: `pollinations/${imgModel}`, provider: 'Pollinations AI' })
-        }
-        setProgress('')
+        const hasArabic = /[\u0600-\u06FF]/.test(prompt)
+        setProgress(hasArabic
+          ? `🔤 ترجمة الوصف للإنجليزية ثم التوليد بـ ${modelLbl}...`
+          : `🎨 جاري التوليد بـ ${modelLbl}${tier === 'premium' ? ' (نموذج مميز)' : ''}...`)
 
-      } else if (tab === 'img2img') {
+        const res  = await fetch('/api/dz-agent-v4/image', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ prompt, model, width, height }),
+          signal:  AbortSignal.timeout(90_000),
+        })
+        const data = await res.json() as {
+          ok: boolean; url?: string; promptUsed?: string; model?: string
+          provider?: string; error?: string; quotaExceeded?: boolean; quota?: QuotaInfo
+          translated?: boolean; sourceLanguage?: string
+        }
+
+        if (data.quotaExceeded) {
+          if (data.quota) setQuota(data.quota)
+          setError(data.error || 'تجاوزت الحصة اليومية')
+          return
+        }
+        if (data.ok && data.url) {
+          setResult({
+            type: 'image', url: data.url,
+            prompt: data.promptUsed || prompt,
+            model: data.model || model,
+            provider: data.provider || '',
+            translatedPrompt: data.translated ? data.promptUsed : undefined,
+          })
+          refreshQuota()
+        } else {
+          setError(data.error || 'فشل التوليد — جرّب نموذجاً آخر')
+        }
+
+      } else {
         setProgress('🖼️ جاري تعديل الصورة...')
         const res  = await fetch('/api/dz-agent-v4/img2img', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body:    JSON.stringify({
             prompt,
             imageUrl:    imagePreview || imageUrl,
             imageBase64: imagePreview?.startsWith('data:') ? imagePreview.split(',')[1] : null,
           }),
-          signal: AbortSignal.timeout(60_000),
+          signal: AbortSignal.timeout(75_000),
         })
         const data = await res.json() as { ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string; error?: string }
         if (data.ok && data.url) {
-          setResult({ type: 'image', url: data.url, prompt: data.promptUsed || prompt, model: data.model || 'img2img', provider: data.provider || '' })
+          setResult({
+            type: 'image', url: data.url,
+            prompt: data.promptUsed || prompt,
+            model: data.model || 'img2img',
+            provider: data.provider || '',
+          })
+          refreshQuota()
         } else {
           setError(data.error || 'فشل التحويل، حاول مجدداً')
         }
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      setError(msg.includes('AbortError') ? 'انتهت مهلة الطلب — حاول مجدداً' : msg)
+      setError(msg.includes('AbortError') ? 'انتهت مهلة الطلب (90 ث) — جرّب وصفاً أبسط أو نموذجاً آخر' : msg)
     } finally {
       setLoading(false); setProgress('')
     }
-  }, [tab, prompt, imgModel, aifreeModel, imageUrl, imagePreview, width, height, imgProvider])
+  }, [tab, prompt, model, models, imageUrl, imagePreview, width, height, refreshQuota])
+
+  // تجميع النماذج حسب المجموعة
+  const groups    = GROUP_ORDER.filter(g => models.some(m => m.group === g))
+  const displayed = activeGroup === 'all' ? models : models.filter(m => m.group === activeGroup)
 
   const currentTab = TABS.find(t => t.id === tab)!
 
@@ -191,8 +214,37 @@ export default function DZMediaStudio() {
           <h1>DZ Media Studio</h1>
           <span className="dms-badge">AI</span>
         </div>
-        <p className="dms-header-sub">توليد وتحويل الصور بالذكاء الاصطناعي</p>
+        <p className="dms-header-sub">توليد وتحويل الصور بأحدث نماذج الذكاء الاصطناعي</p>
       </header>
+
+      {/* ── شريط الحصة ── */}
+      {quota && (
+        <div className="dms-quota-bar">
+          <div className="dms-quota-item">
+            <span className="dms-quota-icon">⚡</span>
+            <span>مجاني:</span>
+            <div className="dms-quota-track">
+              <div
+                className="dms-quota-fill dms-quota-fill--fast"
+                style={{ width: `${(quota.fast.remaining / quota.fast.limit) * 100}%` }}
+              />
+            </div>
+            <span className="dms-quota-num">{quota.fast.remaining}/{quota.fast.limit}</span>
+          </div>
+          <div className="dms-quota-item">
+            <span className="dms-quota-icon">✨</span>
+            <span>مميز:</span>
+            <div className="dms-quota-track">
+              <div
+                className="dms-quota-fill dms-quota-fill--premium"
+                style={{ width: `${(quota.premium.remaining / quota.premium.limit) * 100}%` }}
+              />
+            </div>
+            <span className="dms-quota-num">{quota.premium.remaining}/{quota.premium.limit}</span>
+          </div>
+          <span className="dms-quota-reset">يتجدد بعد {quota.resetInHours} ساعة</span>
+        </div>
+      )}
 
       <div className="dms-tabs">
         {TABS.map(t => (
@@ -213,7 +265,7 @@ export default function DZMediaStudio() {
         <div className="dms-panel">
           <p className="dms-tab-desc">{currentTab.icon} {currentTab.desc}</p>
 
-          {/* رفع صورة — img2img فقط */}
+          {/* رفع صورة — img2img */}
           {tab === 'img2img' && (
             <div className="dms-upload-zone">
               <input type="file" ref={fileRef} accept="image/*" hidden onChange={handleFileUpload} />
@@ -247,7 +299,7 @@ export default function DZMediaStudio() {
               rows={3}
               placeholder={
                 tab === 'text2img'
-                  ? 'مثال: قصبة الجزائر عند الغروب بألوان دافئة'
+                  ? 'مثال: قصبة الجزائر عند الغروب بألوان دافئة، فوتوريالستيك، 8K'
                   : 'مثال: نفس الصورة لكن بأسلوب أنيمي ياباني'
               }
               value={prompt}
@@ -256,82 +308,65 @@ export default function DZMediaStudio() {
             />
           </div>
 
-          {/* اختيار مزود الصورة — text2img فقط */}
+          {/* اختيار النموذج — text2img فقط */}
           {tab === 'text2img' && (
             <div className="dms-section">
-              <label className="dms-label">⚡ مزود التوليد</label>
-              <div className="dms-model-btns" style={{ marginBottom: 10 }}>
+              <label className="dms-label">🧠 النموذج</label>
+
+              {/* فلتر المجموعة */}
+              <div className="dms-group-filter">
                 <button
-                  className={`dms-model-btn${imgProvider === 'pollinations' ? ' dms-model-btn--active' : ''}`}
-                  onClick={() => setImgProvider('pollinations')}
-                >
-                  🌸 Pollinations AI
-                </button>
-                <button
-                  className={`dms-model-btn${imgProvider === 'aifree' ? ' dms-model-btn--active' : ''}`}
-                  onClick={() => { setImgProvider('aifree'); setAifreeStatus('idle') }}
-                >
-                  🤖 DZ Image Engine
-                  {aifreeStatus === 'online'  && <span style={{color:'#22c55e',marginRight:4}}>●</span>}
-                  {aifreeStatus === 'loading' && <span style={{color:'#f59e0b',marginRight:4}}>◎</span>}
-                  {aifreeStatus === 'offline' && <span style={{color:'#ef4444',marginRight:4}}>●</span>}
-                </button>
+                  className={`dms-group-btn${activeGroup === 'all' ? ' active' : ''}`}
+                  onClick={() => setActiveGroup('all')}
+                >الكل</button>
+                {groups.map(g => (
+                  <button
+                    key={g}
+                    className={`dms-group-btn${activeGroup === g ? ' active' : ''}`}
+                    onClick={() => setActiveGroup(g)}
+                  >{g}</button>
+                ))}
               </div>
 
-              {/* نماذج Pollinations */}
-              {imgProvider === 'pollinations' && (
-                <>
-                  <label className="dms-label" style={{fontSize:12,opacity:0.7}}>النموذج</label>
-                  <div className="dms-model-btns">
-                    {POLLINATIONS_MODELS.map(m => (
-                      <button
-                        key={m.id}
-                        className={`dms-model-btn${imgModel === m.id ? ' dms-model-btn--active' : ''}`}
-                        onClick={() => setImgModel(m.id)}
+              {/* قائمة النماذج */}
+              <div className="dms-model-grid">
+                {displayed.map(m => (
+                  <button
+                    key={m.id}
+                    className={`dms-model-card${model === m.id ? ' dms-model-card--active' : ''} dms-model-card--${m.tier}`}
+                    onClick={() => setModel(m.id)}
+                    title={`${m.group} · ${m.tier === 'premium' ? 'مميز' : 'مجاني'}`}
+                  >
+                    <span className="dms-model-label">{m.label}</span>
+                    <div className="dms-model-badges">
+                      {m.badge && (
+                        <span className="dms-model-badge dms-model-badge--tag">{m.badge}</span>
+                      )}
+                      <span
+                        className={`dms-model-badge dms-model-badge--tier`}
+                        style={{ background: TIER_COLOR[m.tier] }}
                       >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+                        {m.tier === 'premium' ? '✨' : '⚡'}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-              {/* نماذج AiFreeForever */}
-              {imgProvider === 'aifree' && (
-                <>
-                  <div style={{fontSize:12,opacity:0.65,marginBottom:6,direction:'rtl'}}>
-                    🔓 يتجاوز حماية Cloudflare تلقائياً — أول طلب قد يأخذ 30 ث للتهيئة
-                    {aifreeStatus === 'loading' && ' · جارٍ الاتصال...'}
-                    {aifreeStatus === 'online'  && ' · ✅ متصل'}
-                    {aifreeStatus === 'offline' && ' · ⚠️ غير متاح حالياً'}
-                  </div>
-                  <div className="dms-model-btns" style={{flexWrap:'wrap'}}>
-                    {aifreeModels.map(m => (
-                      <button
-                        key={m.id}
-                        className={`dms-model-btn${aifreeModel === m.id ? ' dms-model-btn--active' : ''}`}
-                        onClick={() => setAifreeModel(m.id)}
-                        style={{position:'relative'}}
-                      >
-                        {m.label}
-                        {m.badge && (
-                          <span style={{
-                            fontSize:9, background:'#7c3aed', color:'#fff',
-                            borderRadius:4, padding:'1px 4px', marginRight:4,
-                            verticalAlign:'middle',
-                          }}>{m.badge}</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </>
+              {selectedModel?.tier === 'premium' && (
+                <div className="dms-premium-note">
+                  ✨ نموذج مميز — يستهلك من حصة <strong>{quota?.premium.remaining ?? '?'}</strong> متبقية
+                  {quota?.premium.remaining === 0 && (
+                    <span style={{ color: '#ef4444', marginRight: 8 }}>⚠️ نفدت الحصة — اختر نموذجاً مجانياً</span>
+                  )}
+                </div>
               )}
             </div>
           )}
 
           {/* مقياس الإطار */}
           <div className="dms-section">
-            <label className="dms-label">مقياس الإطار</label>
+            <label className="dms-label">📐 مقياس الإطار</label>
             <div className="dms-aspect-row">
               {IMG_PRESETS.map(p => {
                 const active = width === p.w && height === p.h
@@ -374,61 +409,89 @@ export default function DZMediaStudio() {
           {!result && !loading && (
             <div className="dms-empty-state">
               <div className="dms-empty-icon">{currentTab.icon}</div>
-              <p>النتيجة ستظهر هنا</p>
+              <p className="dms-empty-title">الصورة ستظهر هنا</p>
+              <p className="dms-empty-sub">
+                {tab === 'text2img'
+                  ? 'اكتب وصفاً واختر نموذجاً وانقر "ولّد الصورة"'
+                  : 'ارفع صورة أضف وصف التعديل وانقر "حوّل الصورة"'}
+              </p>
             </div>
           )}
+
           {loading && (
             <div className="dms-loading-anim">
               <div className="dms-loading-ring" />
-              <p>{progress || 'جاري التوليد...'}</p>
+              <p className="dms-loading-text">{progress || '⏳ جاري التوليد...'}</p>
+              <p className="dms-loading-sub">قد يستغرق 10-60 ثانية حسب النموذج</p>
             </div>
           )}
+
           {result && (
             <div className="dms-result-card">
-              <img
-                src={result.url}
-                alt={result.prompt}
-                className="dms-result-img"
-                loading="lazy"
-                onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
-              />
+              {/* الصورة الحقيقية */}
+              <div className="dms-result-img-wrap">
+                {imgError ? (
+                  <div className="dms-img-fallback">
+                    <span>⚠️</span>
+                    <p>تعذّر عرض الصورة مباشرةً</p>
+                    <a
+                      href={result.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dms-action-btn dms-action-btn--dl"
+                    >
+                      🔗 افتح الصورة في تبويب جديد
+                    </a>
+                  </div>
+                ) : (
+                  <img
+                    src={result.url}
+                    alt={result.prompt}
+                    className="dms-result-img"
+                    loading="eager"
+                    onLoad={() => setImgError(false)}
+                    onError={() => setImgError(true)}
+                  />
+                )}
+              </div>
+
+              {/* معلومات النموذج */}
               <div className="dms-result-meta">
                 <span className="dms-result-model">✨ {result.model}</span>
-                <span className="dms-result-provider">via {result.provider}</span>
+                <span className="dms-result-sep">·</span>
+                <span className="dms-result-provider">{result.provider}</span>
               </div>
-              {translatedPrompt && (
-                <div style={{
-                  background: 'rgba(124,58,237,0.08)',
-                  border: '1px solid rgba(124,58,237,0.25)',
-                  borderRadius: 8,
-                  padding: '8px 12px',
-                  margin: '8px 0 0',
-                  direction: 'rtl',
-                  fontSize: 12,
-                }}>
-                  <div style={{ color: '#7c3aed', fontWeight: 700, marginBottom: 3 }}>
-                    🔤 تُرجم تلقائياً للإنجليزية:
-                  </div>
-                  <div style={{ color: '#334155', fontStyle: 'italic', direction: 'ltr', textAlign: 'left' }}>
-                    "{translatedPrompt}"
-                  </div>
+
+              {/* الوصف المترجم */}
+              {result.translatedPrompt && (
+                <div className="dms-translated-box">
+                  <span className="dms-translated-title">🔤 تُرجم تلقائياً:</span>
+                  <span className="dms-translated-text" dir="ltr">"{result.translatedPrompt}"</span>
                 </div>
               )}
+
+              {/* الإجراءات */}
               <div className="dms-result-actions">
                 <a
                   href={result.url}
-                  download={`dz-media-${Date.now()}.jpg`}
+                  download={`dz-media-${Date.now()}.png`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="dms-action-btn dms-action-btn--dl"
                 >⬇ تحميل</a>
                 <button
                   className="dms-action-btn dms-action-btn--use"
-                  onClick={() => { setImagePreview(result.url); setImageUrl(result.url); handleTabChange('img2img') }}
+                  onClick={() => {
+                    setImagePreview(result.url)
+                    setImageUrl(result.url)
+                    handleTabChange('img2img')
+                  }}
                 >🔄 img2img</button>
-                <button className="dms-action-btn" onClick={() => handleGenerate()} disabled={loading}>
-                  🔄 جديد
-                </button>
+                <button
+                  className="dms-action-btn"
+                  onClick={handleGenerate}
+                  disabled={loading}
+                >🔄 جديد</button>
               </div>
             </div>
           )}
@@ -437,7 +500,7 @@ export default function DZMediaStudio() {
 
       <footer className="dms-footer">
         <span className="dms-footer-text">AI DZ MEDIA 2026 ®</span>
-        <span className="dms-footer-flag"> 🇩🇿</span>
+        <span className="dms-footer-flag">🇩🇿</span>
       </footer>
     </div>
   )

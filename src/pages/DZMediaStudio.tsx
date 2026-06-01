@@ -489,9 +489,28 @@ export default function DZMediaStudio() {
             <div className="dms-section">
               <label className="dms-label">🤖 اختر نموذج التوليد</label>
 
-              {!hasToken && (
-                <div className="dms-no-token-note">
-                  ⚠️ لا يوجد HF_TOKEN — نماذج HuggingFace غير متاحة. سيتم الاستخدام من Pollinations مجاناً.
+              {/* Open-Sora بانر رئيسي */}
+              {tab === 'text2video' && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(132,204,22,0.12), rgba(34,197,94,0.08))',
+                  border: '1px solid rgba(132,204,22,0.35)',
+                  borderRadius: 10, padding: '10px 14px', marginBottom: 10,
+                  direction: 'rtl', display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ fontSize: 22 }}>🎬</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#65a30d', fontSize: 13 }}>
+                      Open-Sora 2.0 — النموذج الرئيسي
+                    </div>
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                      نموذج مفتوح المصدر من{' '}
+                      <a href="https://github.com/hpcaitech/Open-Sora" target="_blank" rel="noopener noreferrer"
+                         style={{ color: '#84cc16', textDecoration: 'underline' }}>
+                        hpcaitech/Open-Sora
+                      </a>
+                      {' '}— تلقائياً في كل مرة، مع AnimateDiff كاحتياط
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -511,13 +530,14 @@ export default function DZMediaStudio() {
                     key={m.id}
                     className={`dms-vid-model-card${videoModelId === m.id ? ' dms-vid-model-card--active' : ''}`}
                     onClick={() => setVideoModelId(m.id)}
-                    title={m.hfId}
+                    title={m.hfId || m.id}
+                    style={m.id === 'opensora' ? { border: '1.5px solid rgba(132,204,22,0.5)' } : {}}
                   >
                     <span
                       className={`dms-vid-status${m.status === 'loading' ? ' dms-vid-status--pulse' : ''}`}
-                      style={{ color: statusColor(m.status) }}
+                      style={{ color: m.id === 'opensora' ? '#84cc16' : statusColor(m.status) }}
                     >
-                      {statusLabel(m.status)}
+                      {m.id === 'opensora' ? '🔓' : statusLabel(m.status)}
                     </span>
                     <span className="dms-vid-name">{m.label}</span>
                     <span
@@ -532,10 +552,10 @@ export default function DZMediaStudio() {
 
               {/* مفتاح لون الحالة */}
               <div className="dms-status-legend">
+                <span><span style={{ color: '#84cc16' }}>🔓</span> Open-Sora</span>
                 <span><span style={{ color: '#22c55e' }}>●</span> متاح</span>
                 <span><span style={{ color: '#f59e0b' }}>◎</span> يُحمَّل</span>
                 <span><span style={{ color: '#ef4444' }}>●</span> غير متاح</span>
-                <span><span style={{ color: '#64748b' }}>○</span> غير معروف</span>
               </div>
             </div>
           )}

@@ -18902,6 +18902,7 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
       isBot: true,
       botType: isAgent ? 'agent' : 'gpt',
       triggeredBy: authorSession.name,
+      showDevCard: isDeveloperOrOwnerQuestion(question),
     })
     broadcastChat({ type: 'message', msg: botMsg })
     return botMsg

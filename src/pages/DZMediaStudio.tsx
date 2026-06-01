@@ -102,10 +102,11 @@ export default function DZMediaStudio() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [width, setWidth]               = useState(768)
   const [height, setHeight]             = useState(768)
-  const [loading, setLoading]           = useState(false)
-  const [result, setResult]             = useState<Result | null>(null)
-  const [error, setError]               = useState('')
-  const [progress, setProgress]         = useState('')
+  const [loading, setLoading]             = useState(false)
+  const [result, setResult]               = useState<Result | null>(null)
+  const [error, setError]                 = useState('')
+  const [progress, setProgress]           = useState('')
+  const [translatedPrompt, setTranslatedPrompt] = useState<string | null>(null)
   const [quota, setQuota]               = useState<Quota | null>(null)
   const [t2vModels, setT2vModels]       = useState<VideoModel[]>([])
   const [i2vModels, setI2vModels]       = useState<VideoModel[]>([])
@@ -178,20 +179,29 @@ export default function DZMediaStudio() {
     if ((tab === 'img2img' || tab === 'img2video') && !imageUrl && !imagePreview) {
       setError('الرجاء رفع صورة أو إدخال رابطها'); return
     }
-    setLoading(true); setError(''); setResult(null)
+    setLoading(true); setError(''); setResult(null); setTranslatedPrompt(null)
 
     try {
       if (tab === 'text2img') {
         if (imgProvider === 'aifree') {
-          setProgress(`🖼️ جاري توليد الصورة عبر AiFreeForever (${aifreeModel}) — قد يستغرق دقيقة...`)
+          const hasArabic = /[\u0600-\u06FF]/.test(prompt)
+          setProgress(
+            hasArabic
+              ? `🔤 جاري ترجمة الوصف للإنجليزية... ثم توليد الصورة عبر AiFreeForever (${aifreeModel})`
+              : `🖼️ جاري توليد الصورة عبر AiFreeForever (${aifreeModel}) — قد يستغرق دقيقة...`
+          )
           const res  = await fetch('/api/dz-media/aifree/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt, model: aifreeModel, width, height }),
             signal: AbortSignal.timeout(110_000),
           })
-          const data = await res.json() as { ok: boolean; imageUrl?: string; model?: string; provider?: string; error?: string }
+          const data = await res.json() as {
+            ok: boolean; imageUrl?: string; model?: string; provider?: string; error?: string
+            translatedPrompt?: string; originalPrompt?: string; detectedLang?: string
+          }
           if (data.ok && data.imageUrl) {
+            if (data.translatedPrompt) setTranslatedPrompt(data.translatedPrompt)
             setResult({ type: 'image', url: data.imageUrl, prompt, model: data.model || aifreeModel, provider: 'AiFreeForever' })
           } else {
             setError(data.error || 'فشل التوليد عبر AiFreeForever — جرّب نموذجاً آخر أو انتظر قليلاً')
@@ -621,6 +631,24 @@ export default function DZMediaStudio() {
                 <span className="dms-result-model">✨ {result.model}</span>
                 <span className="dms-result-provider">via {result.provider}</span>
               </div>
+              {translatedPrompt && (
+                <div style={{
+                  background: 'rgba(124,58,237,0.08)',
+                  border: '1px solid rgba(124,58,237,0.25)',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  margin: '8px 0 0',
+                  direction: 'rtl',
+                  fontSize: 12,
+                }}>
+                  <div style={{ color: '#7c3aed', fontWeight: 700, marginBottom: 3 }}>
+                    🔤 تُرجم تلقائياً للإنجليزية:
+                  </div>
+                  <div style={{ color: '#334155', fontStyle: 'italic', direction: 'ltr', textAlign: 'left' }}>
+                    "{translatedPrompt}"
+                  </div>
+                </div>
+              )}
               {result.note && (
                 <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', textAlign: 'center', direction: 'rtl' }}>
                   💡 {result.note}

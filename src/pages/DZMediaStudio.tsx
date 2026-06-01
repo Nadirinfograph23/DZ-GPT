@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/dz-media-studio.css'
 
@@ -64,6 +64,19 @@ export default function DZMediaStudio() {
   const [error, setError]               = useState('')
   const [progress, setProgress]         = useState('')
   const [activeGroup, setActiveGroup]   = useState<string>('all')
+  const [elapsed, setElapsed]           = useState(0)
+  const timerRef                        = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // ── عداد الوقت أثناء التوليد ──────────────────────────────────────────────
+  useEffect(() => {
+    if (loading) {
+      setElapsed(0)
+      timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    }
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }
+  }, [loading])
 
   useEffect(() => {
     fetch('/api/chatimg/models')
@@ -301,12 +314,17 @@ export default function DZMediaStudio() {
           </div>
 
           {error   && <div className="dms-error">⚠️ {error}</div>}
-          {loading && <div className="dms-progress">{progress || '⏳ جاري العمل...'}</div>}
+          {loading && (
+            <div className="dms-progress">
+              <span>{progress || '⏳ جاري العمل...'}</span>
+              <span className="dms-elapsed-badge">{elapsed}ث</span>
+            </div>
+          )}
 
           <button className="dms-generate-btn" onClick={handleGenerate} disabled={loading}
             style={{ background: loading ? undefined : 'linear-gradient(135deg, #c8ff00, #a3cc00)' }}>
             {loading
-              ? <><span className="dms-spinner" /> {progress || 'جاري...'}</>
+              ? <><span className="dms-spinner" /> {progress || 'جاري...'} <span className="dms-elapsed-inline">{elapsed}ث</span></>
               : <>🎨 ولّد الصورة</>
             }
           </button>
@@ -328,7 +346,13 @@ export default function DZMediaStudio() {
             <div className="dms-loading-anim">
               <div className="dms-loading-ring" style={{ borderTopColor: '#c8ff00' }} />
               <p className="dms-loading-text">{progress || '⏳ جاري التوليد...'}</p>
-              <p className="dms-loading-sub">قد يستغرق 10-60 ثانية حسب النموذج</p>
+              <div className="dms-loading-timer">
+                <span className="dms-timer-count">{elapsed}</span>
+                <span className="dms-timer-unit">ثانية</span>
+                {elapsed >= 10 && <span className="dms-timer-hint"> — يُرجى الانتظار…</span>}
+                {elapsed >= 40 && <span className="dms-timer-hint" style={{color:'#fbbf24'}}> — يجرّب نموذجاً بديلاً…</span>}
+              </div>
+              <p className="dms-loading-sub">قد يستغرق 10–90 ثانية حسب النموذج</p>
             </div>
           )}
 

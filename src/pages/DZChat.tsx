@@ -8,6 +8,7 @@ import {
   Search, Hash, CheckCheck, Globe, Lock, Eye, EyeOff,
 } from 'lucide-react'
 import '../styles/dzchat.css'
+import { DeveloperCard } from '../components/DeveloperCard'
 
 interface ChatUser {
   id: string
@@ -28,6 +29,7 @@ interface ChatMessage {
   timestamp: number
   isBot?: boolean
   botType?: 'agent' | 'gpt'
+  showDevCard?: boolean
   isSystem?: boolean
   isHighlighted?: boolean
   isAdmin?: boolean
@@ -1348,6 +1350,7 @@ export default function DZChat() {
                     )}
                   </div>
                   <div className="dzc-msg-text">{linkifyText(msg.text)}</div>
+                  {msg.isBot && msg.showDevCard && <DeveloperCard />}
                   {/* Read receipt for own DMs */}
                   {isMe && msg.isDM && (
                     <span className={`dzc-read-receipt${(msg.readBy || []).length > 0 ? ' dzc-read-receipt--read' : ''}`} title={(msg.readBy || []).length > 0 ? 'تم القراءة' : 'تم الإرسال'}>

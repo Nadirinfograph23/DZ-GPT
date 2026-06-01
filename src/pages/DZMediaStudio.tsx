@@ -213,17 +213,17 @@ export default function DZMediaStudio() {
 
     /* ─── نص → صورة ─────────────────────────────────── */
     if (tab === 'text2img') {
-      const chatimgIds  = ['auto','nano-banana','gpt-image-2','hf']
-      const isChatIMG   = chatimgIds.includes(model)
+      const dzMediaIds  = ['auto','nano-banana','gpt-image-2','hf']
+      const isDzMedia   = dzMediaIds.includes(model)
       const hasArabic   = /[\u0600-\u06FF]/.test(prompt)
-      const modelQueue  = isChatIMG
-        ? [model, ...chatimgIds.filter(id => id !== model)]          // chatimg fallback قائمة
-        : [model, ...IMG_MODEL_SEQUENCE.filter(id => !chatimgIds.includes(id) && id !== model)]
+      const modelQueue  = isDzMedia
+        ? [model, ...dzMediaIds.filter(id => id !== model)]
+        : [model, ...IMG_MODEL_SEQUENCE.filter(id => !dzMediaIds.includes(id) && id !== model)]
 
       let succeeded = false
       for (let i = 0; i < Math.min(modelQueue.length, 4); i++) {
         const tryModel = modelQueue[i]
-        const tryEP    = chatimgIds.includes(tryModel) ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
+        const tryEP    = dzMediaIds.includes(tryModel) ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
         setProgress(hasArabic && i === 0
           ? `🔤 ترجمة ثم توليد بـ ${selectedModel?.label || model}...`
           : i === 0

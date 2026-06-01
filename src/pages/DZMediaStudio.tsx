@@ -216,7 +216,6 @@ export default function DZMediaStudio() {
       const chatimgIds  = ['auto','nano-banana','gpt-image-2','hf']
       const isChatIMG   = chatimgIds.includes(model)
       const hasArabic   = /[\u0600-\u06FF]/.test(prompt)
-      const endpoint    = isChatIMG ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
       const modelQueue  = isChatIMG
         ? [model, ...chatimgIds.filter(id => id !== model)]          // chatimg fallback قائمة
         : [model, ...IMG_MODEL_SEQUENCE.filter(id => !chatimgIds.includes(id) && id !== model)]

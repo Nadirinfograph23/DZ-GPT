@@ -110,7 +110,7 @@ export default function DZMediaStudio() {
   const [quota, setQuota]               = useState<Quota | null>(null)
   const [t2vModels, setT2vModels]       = useState<VideoModel[]>([])
   const [i2vModels, setI2vModels]       = useState<VideoModel[]>([])
-  const [hasToken, setHasToken]         = useState(true)
+  const [, setHasToken]                 = useState(true)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const isVideoTab = tab === 'text2video' || tab === 'img2video'

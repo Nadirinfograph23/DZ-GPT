@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import '../styles/dz-media-studio.css'
 
 type Tab = 'text2img' | 'img2img' | 'text2video' | 'img2video'
+type ImgProvider = 'pollinations' | 'aifree'
 
 const TABS: { id: Tab; label: string; icon: string; desc: string }[] = [
-  { id: 'text2img',   label: 'نص → صورة',    icon: '🎨', desc: 'وصف مشهدك وسيولّد لك FLUX صورة احترافية' },
+  { id: 'text2img',   label: 'نص → صورة',    icon: '🎨', desc: 'وصف مشهدك وسيولّد لك صورة احترافية' },
   { id: 'img2img',    label: 'صورة → صورة',  icon: '🖼️', desc: 'حوّل أو عدّل صورة موجودة بوصف نصي' },
   { id: 'text2video', label: 'نص → فيديو',   icon: '🎬', desc: 'ولّد فيديو قصير من وصف نصي — مجاني' },
   { id: 'img2video',  label: 'صورة → فيديو', icon: '📽️', desc: 'حرّك صورة ثابتة وحوّلها لفيديو' },
@@ -17,6 +18,17 @@ const POLLINATIONS_MODELS = [
   { id: 'flux-realism', label: '📸 Realism' },
   { id: 'flux-anime',   label: '🌸 Anime' },
   { id: 'flux-3d',      label: '🧊 3D' },
+]
+
+const AIFREE_DEFAULT_MODELS = [
+  { id: 'flux-schnell',                 label: '⚡ FLUX Schnell',   badge: 'FAST' },
+  { id: 'flux-dev',                     label: '🎯 FLUX Dev',       badge: 'HD'   },
+  { id: 'stable-diffusion-3.5-large',   label: '🖼️ SD 3.5 Large',  badge: 'NEW'  },
+  { id: 'stable-diffusion-3.5-medium',  label: '🖼️ SD 3.5 Medium', badge: ''     },
+  { id: 'sdxl-lightning',               label: '⚡ SDXL Lightning', badge: ''     },
+  { id: 'playground-v2.5',              label: '🎮 Playground 2.5', badge: ''     },
+  { id: 'juggernaut-xl',                label: '💪 Juggernaut XL',  badge: ''     },
+  { id: 'realvisxl',                    label: '📷 RealVis XL',     badge: 'REAL' },
 ]
 
 interface AspectPreset {
@@ -80,7 +92,11 @@ export default function DZMediaStudio() {
   const navigate = useNavigate()
   const [tab, setTab]                   = useState<Tab>('text2img')
   const [prompt, setPrompt]             = useState('')
+  const [imgProvider, setImgProvider]   = useState<ImgProvider>('pollinations')
   const [imgModel, setImgModel]         = useState('flux')
+  const [aifreeModel, setAifreeModel]   = useState('flux-schnell')
+  const [aifreeModels, setAifreeModels] = useState(AIFREE_DEFAULT_MODELS)
+  const [aifreeStatus, setAifreeStatus] = useState<'idle'|'loading'|'online'|'offline'>('idle')
   const [videoModelId, setVideoModelId] = useState<string>('auto')
   const [imageUrl, setImageUrl]         = useState('')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -118,6 +134,22 @@ export default function DZMediaStudio() {
       })
   }, [isVideoTab])
 
+  // جلب نماذج AiFreeForever عند اختيار المزود
+  useEffect(() => {
+    if (imgProvider !== 'aifree' || tab !== 'text2img') return
+    if (aifreeStatus === 'loading' || aifreeStatus === 'online') return
+    setAifreeStatus('loading')
+    fetch('/api/dz-media/aifree/models')
+      .then(r => r.json())
+      .then(d => {
+        if (d.models?.length) setAifreeModels(d.models.map((m: {id:string;label:string;badge?:string}) => ({
+          ...m, label: m.label || m.id, badge: m.badge || ''
+        })))
+        setAifreeStatus('online')
+      })
+      .catch(() => setAifreeStatus('offline'))
+  }, [imgProvider, tab, aifreeStatus])
+
   const handleTabChange = (newTab: Tab) => {
     setTab(newTab)
     setResult(null)
@@ -150,11 +182,27 @@ export default function DZMediaStudio() {
 
     try {
       if (tab === 'text2img') {
-        setProgress('🎨 جاري توليد الصورة عبر Pollinations FLUX...')
-        const seed = Math.floor(Math.random() * 999999)
-        const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
-          + `?model=${imgModel}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
-        setResult({ type: 'image', url, prompt, model: `pollinations/${imgModel}`, provider: 'Pollinations AI' })
+        if (imgProvider === 'aifree') {
+          setProgress(`🖼️ جاري توليد الصورة عبر AiFreeForever (${aifreeModel}) — قد يستغرق دقيقة...`)
+          const res  = await fetch('/api/dz-media/aifree/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, model: aifreeModel, width, height }),
+            signal: AbortSignal.timeout(110_000),
+          })
+          const data = await res.json() as { ok: boolean; imageUrl?: string; model?: string; provider?: string; error?: string }
+          if (data.ok && data.imageUrl) {
+            setResult({ type: 'image', url: data.imageUrl, prompt, model: data.model || aifreeModel, provider: 'AiFreeForever' })
+          } else {
+            setError(data.error || 'فشل التوليد عبر AiFreeForever — جرّب نموذجاً آخر أو انتظر قليلاً')
+          }
+        } else {
+          setProgress('🎨 جاري توليد الصورة عبر Pollinations FLUX...')
+          const seed = Math.floor(Math.random() * 999999)
+          const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+            + `?model=${imgModel}&width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false`
+          setResult({ type: 'image', url, prompt, model: `pollinations/${imgModel}`, provider: 'Pollinations AI' })
+        }
         setProgress('')
 
       } else if (tab === 'img2img') {
@@ -352,21 +400,77 @@ export default function DZMediaStudio() {
             />
           </div>
 
-          {/* نموذج الصورة */}
+          {/* اختيار مزود الصورة */}
           {tab === 'text2img' && (
             <div className="dms-section">
-              <label className="dms-label">النموذج</label>
-              <div className="dms-model-btns">
-                {POLLINATIONS_MODELS.map(m => (
-                  <button
-                    key={m.id}
-                    className={`dms-model-btn${imgModel === m.id ? ' dms-model-btn--active' : ''}`}
-                    onClick={() => setImgModel(m.id)}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              <label className="dms-label">⚡ مزود التوليد</label>
+              <div className="dms-model-btns" style={{ marginBottom: 10 }}>
+                <button
+                  className={`dms-model-btn${imgProvider === 'pollinations' ? ' dms-model-btn--active' : ''}`}
+                  onClick={() => setImgProvider('pollinations')}
+                >
+                  🌸 Pollinations AI
+                </button>
+                <button
+                  className={`dms-model-btn${imgProvider === 'aifree' ? ' dms-model-btn--active' : ''}`}
+                  onClick={() => { setImgProvider('aifree'); setAifreeStatus('idle') }}
+                  title="يستخدم تجاوز Cloudflare للوصول إلى aifreeforever.com"
+                >
+                  🔓 AiFreeForever
+                  {aifreeStatus === 'online'   && <span style={{color:'#22c55e',marginRight:4}}>●</span>}
+                  {aifreeStatus === 'loading'  && <span style={{color:'#f59e0b',marginRight:4}}>◎</span>}
+                  {aifreeStatus === 'offline'  && <span style={{color:'#ef4444',marginRight:4}}>●</span>}
+                </button>
               </div>
+
+              {/* نماذج Pollinations */}
+              {imgProvider === 'pollinations' && (
+                <>
+                  <label className="dms-label" style={{fontSize:12,opacity:0.7}}>النموذج</label>
+                  <div className="dms-model-btns">
+                    {POLLINATIONS_MODELS.map(m => (
+                      <button
+                        key={m.id}
+                        className={`dms-model-btn${imgModel === m.id ? ' dms-model-btn--active' : ''}`}
+                        onClick={() => setImgModel(m.id)}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* نماذج AiFreeForever */}
+              {imgProvider === 'aifree' && (
+                <>
+                  <div style={{fontSize:12,opacity:0.65,marginBottom:6,direction:'rtl'}}>
+                    🔓 يتجاوز حماية Cloudflare تلقائياً — أول طلب قد يأخذ 30 ث للتهيئة
+                    {aifreeStatus === 'loading' && ' · جارٍ الاتصال...'}
+                    {aifreeStatus === 'online'  && ' · ✅ متصل'}
+                    {aifreeStatus === 'offline' && ' · ⚠️ غير متاح حالياً'}
+                  </div>
+                  <div className="dms-model-btns" style={{flexWrap:'wrap'}}>
+                    {aifreeModels.map(m => (
+                      <button
+                        key={m.id}
+                        className={`dms-model-btn${aifreeModel === m.id ? ' dms-model-btn--active' : ''}`}
+                        onClick={() => setAifreeModel(m.id)}
+                        style={{position:'relative'}}
+                      >
+                        {m.label}
+                        {m.badge && (
+                          <span style={{
+                            fontSize:9, background:'#7c3aed', color:'#fff',
+                            borderRadius:4, padding:'1px 4px', marginRight:4,
+                            verticalAlign:'middle',
+                          }}>{m.badge}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

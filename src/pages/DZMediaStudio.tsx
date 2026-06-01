@@ -46,33 +46,33 @@ const IMG_PRESETS: AspectPreset[] = [
   { label: 'كلاسيك', sub: '4:3',  w: 1024, h: 768,  shape: 'photo'  },
 ]
 
-/* ── نماذج الصور (بدون أسماء مصادر خارجية) ────────────── */
+/* ── نماذج الصور (أسماء أصلية — المصدر: DZ MEDIA) ──────── */
 const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'auto',         label: '🤖 DZ MEDIA Auto',         badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA'       },
-  { id: 'nano-banana',  label: '🍌 DZ MEDIA PRO Nano',      badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO'   },
-  { id: 'gpt-image-2',  label: '🤖 DZ MEDIA PRO Vision',    badge: 'PRO',   tier: 'premium', group: 'DZ MEDIA PRO'   },
-  { id: 'hf',           label: '⚡ DZ MEDIA FLUX',           badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA'       },
-  { id: 'flux',         label: '⚡ DZ MEDIA BASIC',          badge: 'BASIC', tier: 'fast',    group: 'DZ MEDIA BASIC' },
-  { id: 'turbo',        label: '🚀 DZ MEDIA BASIC Turbo',   badge: 'BASIC', tier: 'fast',    group: 'DZ MEDIA BASIC' },
-  { id: 'flux-realism', label: '📸 DZ MEDIA BASIC Réel',    badge: 'BASIC', tier: 'fast',    group: 'DZ MEDIA BASIC' },
-  { id: 'flux-anime',   label: '🌸 DZ MEDIA BASIC Anime',   badge: 'BASIC', tier: 'fast',    group: 'DZ MEDIA BASIC' },
-  { id: 'flux-schnell', label: '⚡ DZ MEDIA Schnell',        badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
-  { id: 'flux-dev',     label: '🎯 DZ MEDIA Dev',            badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
-  { id: 'sd35-large',   label: '🖼️ DZ MEDIA Ultra HD',      badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
-  { id: 'realvisxl',    label: '📷 DZ MEDIA Réel XL',        badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'auto',         label: '🤖 Auto (Gemini + FLUX)',        badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'nano-banana',  label: '🍌 Gemini 2.0 Flash Image',      badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO'   },
+  { id: 'gpt-image-2',  label: '🤖 GPT Image 2',                 badge: 'PRO',   tier: 'premium', group: 'DZ MEDIA PRO'   },
+  { id: 'hf',           label: '⚡ FLUX.1-schnell (HF)',          badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'flux',         label: '⚡ FLUX (Pollinations)',          badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC' },
+  { id: 'turbo',        label: '🚀 Turbo (Pollinations)',         badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC' },
+  { id: 'flux-realism', label: '📸 FLUX Realism',                badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA BASIC' },
+  { id: 'flux-anime',   label: '🌸 FLUX Anime',                  badge: 'ANIME', tier: 'fast',    group: 'DZ MEDIA BASIC' },
+  { id: 'flux-schnell', label: '⚡ FLUX.1-schnell',               badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'flux-dev',     label: '🎯 FLUX.1-dev',                  badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'sd35-large',   label: '🖼️ Stable Diffusion 3.5 Large',  badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA'       },
+  { id: 'realvisxl',    label: '📷 RealVisXL V4.0',               badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA'       },
 ]
 
 const DEFAULT_VID_T2V: VidModel[] = [
-  { id: 'auto',        label: '🤖 DZ MEDIA Auto',    badge: 'AUTO',   color: '#c8ff00' },
-  { id: 'animatediff', label: '🎞️ DZ MEDIA Classic', badge: 'GIF',    color: '#f59e0b' },
-  { id: 't2v-ms',      label: '⚡ DZ MEDIA Light',   badge: 'خفيف',  color: '#10b981' },
-  { id: 'ltx-hf',      label: '🎬 DZ MEDIA Fast',    badge: 'سريع',  color: '#8b5cf6' },
+  { id: 'auto',        label: '🤖 Auto',                  badge: 'AUTO',   color: '#c8ff00' },
+  { id: 'animatediff', label: '🎞️ AnimateDiff Lightning', badge: 'GIF',    color: '#f59e0b' },
+  { id: 't2v-ms',      label: '⚡ ModelScope T2V 1.7B',   badge: 'خفيف',  color: '#10b981' },
+  { id: 'ltx-hf',      label: '🎬 LTX-Video (HF)',        badge: 'سريع',  color: '#8b5cf6' },
 ]
 const DEFAULT_VID_I2V: VidModel[] = [
-  { id: 'auto',      label: '🤖 DZ MEDIA Auto',    badge: 'AUTO',   color: '#c8ff00' },
-  { id: 'svd',       label: '🌊 DZ MEDIA Smooth',  badge: 'ناعم',  color: '#3b82f6' },
-  { id: 'i2vgen',    label: '⚖️ DZ MEDIA Balance', badge: 'متوازن', color: '#0891b2' },
-  { id: 'animdiff2', label: '🎞️ DZ MEDIA Classic', badge: 'GIF',    color: '#f59e0b' },
+  { id: 'auto',      label: '🤖 Auto',                      badge: 'AUTO',   color: '#c8ff00' },
+  { id: 'svd',       label: '🌊 Stable Video Diffusion XT', badge: 'ناعم',  color: '#3b82f6' },
+  { id: 'i2vgen',    label: '⚖️ I2VGen-XL',                 badge: 'متوازن', color: '#0891b2' },
+  { id: 'animdiff2', label: '🎞️ AnimateDiff Lightning',     badge: 'GIF',    color: '#f59e0b' },
 ]
 
 /* ترتيب المجموعات */

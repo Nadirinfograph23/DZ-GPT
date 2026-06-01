@@ -30,6 +30,8 @@ interface ChatMessage {
   isBot?: boolean
   botType?: 'agent' | 'gpt'
   showDevCard?: boolean
+  redirectUrl?: string
+  redirectLabel?: string
   isSystem?: boolean
   isHighlighted?: boolean
   isAdmin?: boolean
@@ -1351,6 +1353,16 @@ export default function DZChat() {
                   </div>
                   <div className="dzc-msg-text">{linkifyText(msg.text)}</div>
                   {msg.isBot && msg.showDevCard && <DeveloperCard />}
+                  {msg.isBot && msg.redirectUrl && (
+                    <a
+                      href={msg.redirectUrl}
+                      className="dzc-redirect-btn"
+                      onClick={e => { e.preventDefault(); window.location.href = msg.redirectUrl! }}
+                    >
+                      <ExternalLink size={13} />
+                      {msg.redirectLabel || 'انتقل إلى DZ Agent'}
+                    </a>
+                  )}
                   {/* Read receipt for own DMs */}
                   {isMe && msg.isDM && (
                     <span className={`dzc-read-receipt${(msg.readBy || []).length > 0 ? ' dzc-read-receipt--read' : ''}`} title={(msg.readBy || []).length > 0 ? 'تم القراءة' : 'تم الإرسال'}>

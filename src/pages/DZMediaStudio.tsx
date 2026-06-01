@@ -50,6 +50,7 @@ const IMG_PRESETS: AspectPreset[] = [
 const DEFAULT_MODELS: ModelDef[] = [
   { id: 'auto',         label: '🤖 Auto (Gemini + FLUX)',        badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA'       },
   { id: 'nano-banana',  label: '🍌 Gemini 2.0 Flash Image',      badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO'   },
+  { id: 'imgcreator',   label: '🎨 Nano Banana 2 (ImgCreator)',  badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO'   },
   { id: 'gpt-image-2',  label: '🤖 GPT Image 2',                 badge: 'PRO',   tier: 'premium', group: 'DZ MEDIA PRO'   },
   { id: 'hf',           label: '⚡ FLUX.1-schnell (HF)',          badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA'       },
   { id: 'flux',         label: '⚡ FLUX (Pollinations)',          badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC' },

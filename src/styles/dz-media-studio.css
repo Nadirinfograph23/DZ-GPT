@@ -573,12 +573,40 @@
 .dms-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ─── Video tab highlight ───────────────────── */
-.dms-tab--video { border-color: rgba(249,115,22,0.2); }
-.dms-tab--video.dms-tab--active {
-  background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(234,88,12,0.1));
-  border-color: rgba(249,115,22,0.5);
-  color: #fb923c;
+.dms-tab--text2video,
+.dms-tab--img2video { border-color: rgba(249,115,22,0.2); }
+
+/* ─── نقطة النتيجة الجاهزة على التبويب ── */
+.dms-tab { position: relative; }
+.dms-tab-dot {
+  position: absolute;
+  top: 6px; left: 6px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 4px currentColor;
 }
+
+/* ─── إشارات التبويبات الأخرى ─────────────── */
+.dms-other-results-hint {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: center; margin-top: 16px;
+}
+.dms-other-tab-badge {
+  font-size: 11px;
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: #94a3b8; cursor: pointer;
+  font-family: inherit; transition: all .2s;
+}
+.dms-other-tab-badge:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
+
+/* ─── إطار النتيجة الخاص بكل تبويب ─────────── */
+.dms-result-panel--text2img  { border-color: rgba(200,255,0,0.12);  }
+.dms-result-panel--img2img   { border-color: rgba(129,140,248,0.15); }
+.dms-result-panel--text2video { border-color: rgba(249,115,22,0.15); }
+.dms-result-panel--img2video  { border-color: rgba(244,114,182,0.15); }
 
 /* ─── Frames slideshow ───────────────────── */
 .dms-frames-wrap {

@@ -24662,6 +24662,14 @@ app.get('/api/chatimg/models', async (_req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
 })
 
+// GET /api/chatimg/credits — حصة imgcreatorai.io الحالية
+app.get('/api/chatimg/credits', async (_req, res) => {
+  try {
+    const { getImgCreatorCredits } = await import('./lib/chatimg-engine.js')
+    res.json({ ok: true, ...getImgCreatorCredits() })
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
 // POST /api/chatimg/generate — text-to-image via chatimg.ai style
 app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
   const { prompt, model = 'auto', width = 768, height = 768 } = req.body

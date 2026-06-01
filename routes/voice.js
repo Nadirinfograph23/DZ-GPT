@@ -11,13 +11,13 @@ const router = express.Router()
 
 // ── خريطة الأصوات ────────────────────────────────────────────────────────────
 const VOICE_MAP = {
-  ar: { female: 'ar-DZ-AminaNeural',  male: 'ar-DZ-IsmaelNeural' },
-  fr: { female: 'fr-FR-DeniseNeural', male: 'fr-FR-HenriNeural'  },
-  en: { female: 'en-US-JennyNeural',  male: 'en-US-GuyNeural'    },
+  ar: { female: 'ar-DZ-AminaNeural',  male: 'ar-EG-ShakirNeural'              },
+  fr: { female: 'fr-FR-DeniseNeural', male: 'fr-FR-RemyMultilingualNeural'     },
+  en: { female: 'en-US-JennyNeural',  male: 'fr-FR-RemyMultilingualNeural'     },
 }
 const FALLBACK_VOICE_MAP = {
   ar: { female: 'ar-SA-ZariyahNeural', male: 'ar-SA-HamedNeural'  },
-  fr: { female: 'fr-FR-VivienneNeural',male: 'fr-BE-GerardNeural' },
+  fr: { female: 'fr-FR-VivienneNeural',male: 'fr-FR-HenriNeural'  },
   en: { female: 'en-GB-SoniaNeural',   male: 'en-GB-RyanNeural'   },
 }
 

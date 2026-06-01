@@ -362,9 +362,11 @@ const DEVELOPER_RESPONSE = Object.freeze({
 - Multi-Agent Systems & NLP
 - تطوير تطبيقات الذكاء الاصطناعي الموجّهة للمحتوى الجزائري
 
-### 📺 ظهور تلفزيوني
-ضيف في **التلفزيون الوطني الجزائري** في حصة تقصي مع الدكتورة **عوماري فاطمة الزهراء** حول موضوع الذكاء الاصطناعي.
-🎬 [شاهد الحلقة على يوتيوب](https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7)
+### 📺 ظهورات تلفزيونية
+- 🇩🇿 ضيف في **التلفزيون الوطني الجزائري** في حصة تقصي مع الدكتورة **عوماري فاطمة الزهراء** حول الذكاء الاصطناعي
+  🎬 [شاهد الحلقة](https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7)
+- 🌍 ضيف في قناة **الجزائر الدولية AL24** حول الذكاء الاصطناعي
+  🎬 [شاهد على يوتيوب](https://m.youtube.com/watch?v=gAzvBi4N7ic)
 
 ### 🌐 التواصل الاجتماعي
 🔵 [فيسبوك](https://www.facebook.com/share/1AM1jDkz8o/) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2?_r=1&_t=ZS-96pplHnvWo4) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)

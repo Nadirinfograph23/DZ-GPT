@@ -24005,9 +24005,9 @@ app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) 
       Math.min(Math.max(Number(height) || 768, 256), 1536),
       preferModel || null,
     )
-    if (!result)             return res.json({ ok: false, error: 'relay failed' })
-    if (result.quota)        return res.json({ ok: false, quota: true })
-    if (!result.buf)         return res.json({ ok: false, error: 'no image data' })
+    if (!result)      return res.json({ ok: false, error: 'relay failed' })
+    if (result.quota) return res.json({ ok: false, quota: true })
+    if (!result.buf)  return res.json({ ok: false, error: 'no image data' })
 
     res.json({
       ok:               true,
@@ -24021,88 +24021,7 @@ app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) 
     console.error('[chatimg:relay]', e.message)
     res.status(500).json({ ok: false, error: e.message })
   }
-}), async (req, res) => {
-  if (req.headers['x-dz-relay'] !== '1') {
-    return res.status(403).json({ ok: false, error: 'forbidden' })
-  }
-  const { prompt, width = 768, height = 768, preferModel } = req.body || {}
-  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt required' })
-
-  const dbg = []
-  try {
-    dbg.push('start')
-    const { tryImgCreatorRelayDirect } = await import('./lib/chatimg-engine.js')
-    dbg.push('imported')
-
-    // Step 1: fetch session directly here for debug
-    const IC_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    const sr = await fetch('https://imgcreatorai.io', {
-      headers: { 'User-Agent': IC_UA, 'Accept': 'text/html,*/*;q=0.8' },
-      redirect: 'follow', signal: AbortSignal.timeout(20000),
-    })
-    dbg.push(`session_http=${sr.status}`)
-    const shtml = await sr.text()
-    const csrfM = shtml.match(/<meta name="csrf-token" content="([^"]+)"/)
-    dbg.push(`csrf=${csrfM ? 'found' : 'MISSING'}`)
-    const rawCk = sr.headers.getSetCookie?.() || []
-    dbg.push(`cookies=${rawCk.length}`)
-    const cookies = rawCk.map(c => c.split(';')[0]).join('; ')
-
-    if (csrfM && rawCk.length) {
-      // Step 2: try generate directly
-      const gr = await fetch('https://imgcreatorai.io/nanobanana/generate-guest', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': csrfM[1], 'Referer': 'https://imgcreatorai.io', 'Origin': 'https://imgcreatorai.io',
-          'Accept': 'application/json', 'Cookie': cookies, 'User-Agent': IC_UA,
-        },
-        body: JSON.stringify({ prompt: String(prompt).slice(0, 2000), aspect_ratio: '1:1', model: preferModel || 'nano-banana-2', resolution: '1K', pageId: 'nanobanana_page' }),
-        signal: AbortSignal.timeout(20000),
-      })
-      const gd = await gr.json().catch(() => ({}))
-      dbg.push(`gen_http=${gr.status} success=${gd.success} taskId=${gd.task_id || 'none'} msg=${(gd.message||'').slice(0,60)}`)
-
-      if (gd.task_id) {
-        // Step 3: poll once
-        await new Promise(r => setTimeout(r, 6000))
-        const pr = await fetch(`https://imgcreatorai.io/nanobanana/query/${gd.task_id}`, {
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfM[1], 'Accept': 'application/json', 'Cookie': cookies, 'User-Agent': IC_UA, 'Referer': 'https://imgcreatorai.io' },
-          signal: AbortSignal.timeout(12000),
-        })
-        const pd = await pr.json().catch(() => ({}))
-        dbg.push(`poll_http=${pr.status} status=${pd.status} img=${pd.image ? pd.image.length + 'b64chars' : 'none'} url=${pd.image_url || pd.url || 'none'}`)
-      }
-    }
-
-    // Also try the full relay
-    dbg.push('calling_relay_direct')
-    const result = await tryImgCreatorRelayDirect(
-      String(prompt).slice(0, 2000),
-      Math.min(Math.max(Number(width) || 768, 256), 1536),
-      Math.min(Math.max(Number(height) || 768, 256), 1536),
-      preferModel || null,
-    )
-    dbg.push(`relay_result=${result ? JSON.stringify(Object.keys(result)) : 'null'}`)
-
-    if (!result)             return res.json({ ok: false, error: 'relay failed', dbg })
-    if (result.quota)        return res.json({ ok: false, quota: true, dbg })
-    if (!result.buf)         return res.json({ ok: false, error: 'no image data', dbg })
-
-    res.json({
-      ok: true,
-      imageB64: result.buf.toString('base64'),
-      mime: result.mime || 'image/png',
-      model: result.model || 'DZ MEDIA PRO Nano',
-      provider: result.provider || 'DZ MEDIA PRO',
-      remainingCredits: result.remainingCredits ?? null,
-    })
-  } catch (e) {
-    console.error('[chatimg:relay]', e.message)
-    res.status(500).json({ ok: false, error: e.message, dbg })
-  }
 })
-
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 

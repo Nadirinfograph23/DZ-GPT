@@ -23997,6 +23997,37 @@ app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) 
   const { prompt, width = 768, height = 768, preferModel } = req.body || {}
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt required' })
 
+  try {
+    const { tryImgCreatorRelayDirect } = await import('./lib/chatimg-engine.js')
+    const result = await tryImgCreatorRelayDirect(
+      String(prompt).slice(0, 2000),
+      Math.min(Math.max(Number(width)  || 768, 256), 1536),
+      Math.min(Math.max(Number(height) || 768, 256), 1536),
+      preferModel || null,
+    )
+    if (!result)             return res.json({ ok: false, error: 'relay failed' })
+    if (result.quota)        return res.json({ ok: false, quota: true })
+    if (!result.buf)         return res.json({ ok: false, error: 'no image data' })
+
+    res.json({
+      ok:               true,
+      imageB64:         result.buf.toString('base64'),
+      mime:             result.mime || 'image/png',
+      model:            result.model  || 'DZ MEDIA PRO Nano',
+      provider:         result.provider || 'DZ MEDIA PRO',
+      remainingCredits: result.remainingCredits ?? null,
+    })
+  } catch (e) {
+    console.error('[chatimg:relay]', e.message)
+    res.status(500).json({ ok: false, error: e.message })
+  }
+}), async (req, res) => {
+  if (req.headers['x-dz-relay'] !== '1') {
+    return res.status(403).json({ ok: false, error: 'forbidden' })
+  }
+  const { prompt, width = 768, height = 768, preferModel } = req.body || {}
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt required' })
+
   const dbg = []
   try {
     dbg.push('start')

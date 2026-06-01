@@ -164,7 +164,7 @@ app.use(helmet({
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org', 'https://aifreeforever.com', 'https://*.aifreeforever.com'],
       connectSrc: isProd
         ? ["'self'", 'wss:', 'ws:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info'],
@@ -19744,6 +19744,63 @@ async function executeGitHubAgentPlan(repoFullName, parsed, token) {
 
   return report
 }
+
+// ── AiFreeForever CF-Bypass Image Generation ─────────────────────────────────
+let _aifreeModule = null
+async function getAifreeModule() {
+  if (!_aifreeModule) {
+    try { _aifreeModule = await import('./lib/aifree-image/index.js') }
+    catch (e) { console.warn('[aifree] import error:', e.message) }
+  }
+  return _aifreeModule
+}
+
+// GET /api/dz-media/aifree/models
+app.get('/api/dz-media/aifree/models', async (req, res) => {
+  const m = await getAifreeModule()
+  if (!m) return res.json({ ok: false, models: [], error: 'Service unavailable' })
+  try {
+    const models = await m.getModels()
+    res.json({ ok: true, models })
+  } catch (e) {
+    res.json({ ok: false, models: [], error: e.message })
+  }
+})
+
+// GET /api/dz-media/aifree/health
+app.get('/api/dz-media/aifree/health', async (req, res) => {
+  try {
+    const r = await fetch('http://127.0.0.1:7891/health', { signal: AbortSignal.timeout(3000) })
+    const d = await r.json()
+    res.json({ ok: true, ...d })
+  } catch {
+    res.json({ ok: false, status: 'service not running' })
+  }
+})
+
+// POST /api/dz-media/aifree/generate
+app.post('/api/dz-media/aifree/generate', aiLimiter, async (req, res) => {
+  const { prompt, model = 'flux-schnell', width = 768, height = 768, steps = 25 } = req.body || {}
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+
+  const m = await getAifreeModule()
+  if (!m) return res.status(503).json({ ok: false, error: 'CF-bypass service غير متاح' })
+
+  try {
+    const result = await m.generateImage(prompt, { model, width, height, steps })
+    if (!result.ok) return res.status(502).json(result)
+
+    // If we have base64, convert to data-url
+    if (result.imageBase64) {
+      const mime = result.mime || 'image/png'
+      result.imageUrl = `data:${mime};base64,${result.imageBase64}`
+      delete result.imageBase64
+    }
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
 
 // POST /api/dz-github-agent/chat ─────────────────────────────────────────────
 app.post('/api/dz-github-agent/chat', aiLimiter, async (req, res) => {

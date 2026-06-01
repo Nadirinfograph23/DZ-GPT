@@ -19,21 +19,21 @@ const POLLINATIONS_MODELS = [
 ]
 
 const AIFREE_DEFAULT_MODELS = [
-  { id: 'flux-schnell',                label: '⚡ FLUX Schnell',         badge: 'FAST'    },
-  { id: 'flux-dev',                    label: '🎯 FLUX Dev',             badge: 'HD'      },
-  { id: 'flux-pro',                    label: '💎 FLUX Pro',             badge: 'PRO'     },
-  { id: 'flux-1.1-pro',               label: '🚀 FLUX 1.1 Pro',         badge: 'NEW'     },
-  { id: 'stable-diffusion-3.5-large', label: '🖼️ SD 3.5 Large',         badge: 'HD'      },
-  { id: 'stable-diffusion-3.5-medium',label: '🖼️ SD 3.5 Medium',        badge: ''        },
-  { id: 'sdxl-lightning',             label: '⚡ SDXL Lightning',        badge: ''        },
-  { id: 'playground-v2.5',            label: '🎮 Playground 2.5',       badge: ''        },
-  { id: 'juggernaut-xl',              label: '💪 Juggernaut XL',        badge: ''        },
-  { id: 'realvisxl',                  label: '📷 RealVis XL',           badge: 'REAL'    },
-  { id: 'gpt-image-1',               label: '🤖 GPT Image 1',           badge: 'GPT'     },
-  { id: 'gpt-image-2',               label: '✨ GPT Image 2',           badge: 'NEW'     },
-  { id: 'seedream',                   label: '🌱 Seedream',              badge: 'ByteDance'},
-  { id: 'seedream-3',                 label: '🌿 Seedream 3.0',         badge: 'NEW'     },
-  { id: 'nano-banana-pro',            label: '🍌 Nano Banana Pro',      badge: 'PRO'     },
+  { id: 'flux',           label: '⚡ FLUX',            badge: 'FAST'      },
+  { id: 'flux-realism',   label: '📸 FLUX Realism',   badge: 'REAL'      },
+  { id: 'flux-anime',     label: '🌸 FLUX Anime',     badge: ''          },
+  { id: 'turbo',          label: '🚀 Turbo',           badge: 'FAST'      },
+  { id: 'gptimage',       label: '✨ GPT Image',       badge: 'GPT'       },
+  { id: 'flux-schnell',   label: '⚡ FLUX Schnell',    badge: 'HF'        },
+  { id: 'flux-dev',       label: '🎯 FLUX Dev',        badge: 'HD'        },
+  { id: 'sd35-large',     label: '🖼️ SD 3.5 Large',   badge: 'HD'        },
+  { id: 'sd35-medium',    label: '🖼️ SD 3.5 Medium',  badge: ''          },
+  { id: 'sdxl-lightning', label: '⚡ SDXL Lightning',  badge: ''          },
+  { id: 'playground',     label: '🎮 Playground 2.5',  badge: ''          },
+  { id: 'juggernaut',     label: '💪 Juggernaut XL',   badge: ''          },
+  { id: 'realvisxl',      label: '📷 RealVis XL',      badge: 'REAL'      },
+  { id: 'seedream',       label: '🌱 Seedream',         badge: 'ByteDance' },
+  { id: 'nano-banana-pro',label: '🍌 Nano Banana Pro', badge: 'PRO'       },
 ]
 
 interface AspectPreset {
@@ -269,7 +269,7 @@ export default function DZMediaStudio() {
                   className={`dms-model-btn${imgProvider === 'aifree' ? ' dms-model-btn--active' : ''}`}
                   onClick={() => { setImgProvider('aifree'); setAifreeStatus('idle') }}
                 >
-                  🔓 AiFreeForever
+                  🤖 DZ Image Engine
                   {aifreeStatus === 'online'  && <span style={{color:'#22c55e',marginRight:4}}>●</span>}
                   {aifreeStatus === 'loading' && <span style={{color:'#f59e0b',marginRight:4}}>◎</span>}
                   {aifreeStatus === 'offline' && <span style={{color:'#ef4444',marginRight:4}}>●</span>}

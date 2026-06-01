@@ -4084,7 +4084,7 @@ function TTSTool() {
 
   // Map voiceId → actual voice ID sent to server
   const _SRV_VOICE_ID_MAP: Record<string, string> = {
-    'srv:ar':       'ar-DZ-AminaNeural',
+    'srv:ar':       'ar-DZ-IsmaelNeural',
     'srv:ar-fus':   'ar-SA-ZariyahNeural',
     'srv:fr-f':     'fr-FR-DeniseNeural',
     'srv:fr-m':     'fr-FR-HenriNeural',
@@ -4093,7 +4093,7 @@ function TTSTool() {
     'srv:en-gb-f':  'en-GB-SoniaNeural',
     'srv:en-gb-m':  'en-GB-RyanNeural',
   }
-  const srvVoiceId = _SRV_VOICE_ID_MAP[voiceId] ?? 'ar-DZ-AminaNeural'
+  const srvVoiceId = _SRV_VOICE_ID_MAP[voiceId] ?? 'ar-DZ-IsmaelNeural'
 
   // Play via Web Speech API
   const playSys = () => {

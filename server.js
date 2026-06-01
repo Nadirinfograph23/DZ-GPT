@@ -24327,24 +24327,20 @@ function getModelStatus(hfId) {
 
 // ── نماذج Text-to-Video (HuggingFace فقط — بدون Pollinations) ──────────────
 const T2V_MODELS = [
-  { id: 'wan2',        hfId: 'Wan-AI/Wan2.1-T2V-1.3B',                    label: 'Wan 2.1 Fast',    badge: 'سريع',     color: '#10b981' },
-  { id: 'wan2-14b',    hfId: 'Wan-AI/Wan2.1-T2V-14B-Diffusers',           label: 'Wan 2.1 Pro',     badge: 'جودة',     color: '#06b6d4' },
-  { id: 'ltx',         hfId: 'Lightricks/LTX-Video',                       label: 'LTX Video',       badge: 'خفيف',     color: '#8b5cf6' },
-  { id: 'cogvideo',    hfId: 'THUDM/CogVideoX1.5-5B',                      label: 'CogVideoX 5B',    badge: 'HD',       color: '#6366f1' },
-  { id: 'hunyuan',     hfId: 'tencent/HunyuanVideo',                       label: 'HunyuanVideo',    badge: 'احترافي',  color: '#ec4899' },
-  { id: 'skyreels',    hfId: 'Skywork/SkyReels-V2-DF-1.3B-540P',           label: 'SkyReels V2',     badge: 'جديد',     color: '#0ea5e9' },
-  { id: 'opensora',    hfId: 'hpcai-tech/Open-Sora',                        label: 'Open-Sora 2',     badge: 'مفتوح',    color: '#84cc16' },
-  { id: 'mochi',       hfId: 'genmo/mochi-1-preview',                       label: 'Mochi 1',         badge: 'إبداعي',   color: '#a855f7' },
-  { id: 'animatediff', hfId: 'ByteDance/AnimateDiff-Lightning',             label: 'AnimateDiff',     badge: 'GIF',      color: '#f59e0b' },
+  // Open-Sora 2.0 — النموذج الرئيسي (مفتوح المصدر hpcaitech)
+  { id: 'opensora',    label: 'Open-Sora 2.0', badge: 'مفتوح', color: '#84cc16', provider: 'opensora' },
+  // HuggingFace Inference — المجاني الذي يعمل فعلاً
+  { id: 'animatediff', hfId: 'ByteDance/AnimateDiff-Lightning',   label: 'AnimateDiff', badge: 'GIF',   color: '#f59e0b', provider: 'hf' },
+  { id: 't2v-ms',      hfId: 'damo-vilab/text-to-video-ms-1.7b',  label: 'ModelScope',  badge: 'خفيف',  color: '#10b981', provider: 'hf' },
+  { id: 'ltx',         hfId: 'Lightricks/LTX-Video',              label: 'LTX HF',      badge: 'مجاني', color: '#8b5cf6', provider: 'hf' },
 ]
 
 // ── نماذج Image-to-Video ─────────────────────────────────────────────────────
 const I2V_MODELS = [
-  { id: 'wan-i2v',      hfId: 'Wan-AI/Wan2.1-I2V-14B-720P-Diffusers',                   label: 'Wan 2.1 I2V',     badge: 'جودة',   color: '#10b981' },
-  { id: 'ltx-i2v',      hfId: 'Lightricks/LTX-Video',                                   label: 'LTX Video',       badge: 'سريع',   color: '#8b5cf6' },
-  { id: 'cogvideo-i2v', hfId: 'THUDM/CogVideoX-5b-I2V',                                 label: 'CogVideoX I2V',   badge: 'HD',     color: '#6366f1' },
-  { id: 'svd',          hfId: 'stabilityai/stable-video-diffusion-img2vid-xt-1-1',       label: 'SVD XT 1.1',      badge: 'ناعم',   color: '#3b82f6' },
-  { id: 'animdiff2',    hfId: 'ByteDance/AnimateDiff-Lightning',                         label: 'AnimateDiff',     badge: 'GIF',    color: '#f59e0b' },
+  { id: 'svd',      hfId: 'stabilityai/stable-video-diffusion-img2vid-xt-1-1', label: 'SVD XT',      badge: 'ناعم',   color: '#3b82f6', provider: 'hf' },
+  { id: 'i2vgen',   hfId: 'ali-vilab/i2vgen-xl',                              label: 'I2VGen-XL',   badge: 'متوازن', color: '#0891b2', provider: 'hf' },
+  { id: 'animdiff2',hfId: 'ByteDance/AnimateDiff-Lightning',                  label: 'AnimateDiff', badge: 'GIF',    color: '#f59e0b', provider: 'hf' },
+  { id: 'ltx-i2v',  hfId: 'Lightricks/LTX-Video',                             label: 'LTX HF',      badge: 'سريع',   color: '#8b5cf6', provider: 'hf' },
 ]
 
 // ── HF Video Inference مع retry على 503 ──────────────────────────────────────
@@ -24453,7 +24449,8 @@ app.get('/api/dz-agent-v4/video/models', (req, res) => {
   const quota    = getVideoQuota(ip)
   const mapStatus = (m) => ({
     ...m,
-    status: m.hfId === 'pollinations/wan' ? getModelStatus('pollinations/wan')
+    status: m.provider === 'opensora' ? 'unknown'
+          : m.hfId === 'pollinations/wan' ? getModelStatus('pollinations/wan')
           : hasToken ? getModelStatus(m.hfId)
           : 'unavailable',
   })
@@ -24519,10 +24516,22 @@ app.post('/api/dz-agent-v4/video', express.json({ limit: '5mb' }), async (req, r
   const quota = getVideoQuota(ip)
   if (quota.remaining === 0) return res.json({ ok: false, rateLimited: true, error: `تجاوزت الحدّ اليومي (${quota.limit}/يوم) — تجديد خلال ${quota.resetInHours}س`, quota })
 
-  // 1. HuggingFace — دوّر حسب الاختيار أو round-robin
+  // 1. Open-Sora 2.0 — النموذج الرئيسي (Gradio Space)
+  if (!preferredId || preferredId === 'opensora') {
+    try {
+      const { openSoraTextToVideo } = await import('./lib/open-sora/index.js')
+      const result = await openSoraTextToVideo(prompt, { width, height })
+      if (result) {
+        consumeVideoQuota(ip)
+        return res.json({ ok: true, url: `data:${result.mime};base64,${result.buf.toString('base64')}`, model: 'Open-Sora 2.0', provider: 'Open-Sora (hpcaitech)', mimeType: result.mime, quota: getVideoQuota(ip) })
+      }
+    } catch (e) { console.warn('[video:opensora]', e.message) }
+  }
+
+  // 2. HuggingFace — دوّر حسب الاختيار أو round-robin
   const hasToken = !!(process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY)
   if (hasToken) {
-    let order = [...T2V_MODELS]
+    let order = T2V_MODELS.filter(m => m.hfId)
     if (preferredId) {
       const pref = order.find(m => m.id === preferredId)
       if (pref) order = [pref, ...order.filter(m => m.id !== preferredId)]

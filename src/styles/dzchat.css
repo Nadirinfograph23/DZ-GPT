@@ -1704,6 +1704,29 @@
   color: #fff;
 }
 
+/* ── Redirect button (big task) ───────────────────────────────── */
+.dzc-redirect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, #00cc55 0%, #009944 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0,200,80,0.25);
+}
+.dzc-redirect-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
 @keyframes dzc-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }

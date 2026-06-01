@@ -23987,6 +23987,44 @@ app.post('/api/tools/screenshot', async (req, res) => {
   })
 })
 
+// POST /api/chatimg/relay — تدوير IP عبر Vercel
+// كل invocation تأتي من IP مختلف → حصة ضيف imgcreatorai.io جديدة
+// يُستدعى تلقائياً من lib/chatimg-engine.js عند نفاد الحصة المحلية
+app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) => {
+  // فحص بسيط: طلب داخلي فقط
+  if (req.headers['x-dz-relay'] !== '1') {
+    return res.status(403).json({ ok: false, error: 'forbidden' })
+  }
+  const { prompt, width = 768, height = 768, preferModel } = req.body || {}
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt required' })
+
+  try {
+    const { tryImgCreatorRelayDirect } = await import('./lib/chatimg-engine.js')
+    const result = await tryImgCreatorRelayDirect(
+      String(prompt).slice(0, 2000),
+      Math.min(Math.max(Number(width)  || 768, 256), 1536),
+      Math.min(Math.max(Number(height) || 768, 256), 1536),
+      preferModel || null,
+    )
+    if (!result)             return res.json({ ok: false, error: 'relay failed' })
+    if (result.quota)        return res.json({ ok: false, quota: true })
+    if (!result.buf)         return res.json({ ok: false, error: 'no image data' })
+
+    // إرجاع الصورة كـ base64 مباشرة (الـ caller يحوّلها لـ Buffer)
+    res.json({
+      ok:               true,
+      imageB64:         result.buf.toString('base64'),
+      mime:             result.mime || 'image/png',
+      model:            result.model  || 'DZ MEDIA PRO Nano',
+      provider:         result.provider || 'DZ MEDIA PRO',
+      remainingCredits: result.remainingCredits ?? null,
+    })
+  } catch (e) {
+    console.error('[chatimg:relay]', e.message)
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -24699,44 +24737,6 @@ app.get('/api/chatimg/img/:id', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(item.buf)
   } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
-})
-
-// POST /api/chatimg/relay — تدوير IP عبر Vercel
-// كل invocation تأتي من IP مختلف → حصة ضيف imgcreatorai.io جديدة
-// يُستدعى تلقائياً من lib/chatimg-engine.js عند نفاد الحصة المحلية
-app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) => {
-  // فحص بسيط: طلب داخلي فقط
-  if (req.headers['x-dz-relay'] !== '1') {
-    return res.status(403).json({ ok: false, error: 'forbidden' })
-  }
-  const { prompt, width = 768, height = 768, preferModel } = req.body || {}
-  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt required' })
-
-  try {
-    const { tryImgCreatorRelayDirect } = await import('./lib/chatimg-engine.js')
-    const result = await tryImgCreatorRelayDirect(
-      String(prompt).slice(0, 2000),
-      Math.min(Math.max(Number(width)  || 768, 256), 1536),
-      Math.min(Math.max(Number(height) || 768, 256), 1536),
-      preferModel || null,
-    )
-    if (!result)             return res.json({ ok: false, error: 'relay failed' })
-    if (result.quota)        return res.json({ ok: false, quota: true })
-    if (!result.buf)         return res.json({ ok: false, error: 'no image data' })
-
-    // إرجاع الصورة كـ base64 مباشرة (الـ caller يحوّلها لـ Buffer)
-    res.json({
-      ok:               true,
-      imageB64:         result.buf.toString('base64'),
-      mime:             result.mime || 'image/png',
-      model:            result.model  || 'DZ MEDIA PRO Nano',
-      provider:         result.provider || 'DZ MEDIA PRO',
-      remainingCredits: result.remainingCredits ?? null,
-    })
-  } catch (e) {
-    console.error('[chatimg:relay]', e.message)
-    res.status(500).json({ ok: false, error: e.message })
-  }
 })
 
   if (isProd) {

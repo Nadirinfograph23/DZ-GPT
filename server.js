@@ -352,7 +352,7 @@ function isValidGithubRepo(repo) {
 
 // ===== UNIFIED DEVELOPER / OWNER QUESTION DETECTION =====
 const DEVELOPER_RESPONSE = Object.freeze({
-  content: 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي',
+  content: '👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿\n\nخبير جزائري في الذكاء الاصطناعي، مطوّر ومنشئ **DZ Agent** و**DZ-GPT**.\n\n🔵 [تواصل معه على فيسبوك](https://facebook.com/nadir.infograph23)',
   showDevCard: true,
 })
 
@@ -16261,6 +16261,15 @@ app.post('/api/dz-agent-stream', async (req, res) => {
       res.write('data: [DONE]\n\n')
       return res.end()
     }
+  }
+
+  // ── Step 1c: Developer / Owner identity — redirect to full endpoint for DeveloperCard ──
+  if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
+    console.log(`[Stream→Developer] identity question — redirecting to full endpoint`)
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
   }
 
   // ── Step 2b: YouTube / Map / WebBuilder / Clone / Doctor — redirect to full endpoint ──

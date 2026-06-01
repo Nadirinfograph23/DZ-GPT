@@ -40,8 +40,40 @@ interface VideoModel {
   status: 'available' | 'loading' | 'unavailable' | 'unknown'
 }
 interface Result {
-  type: 'image' | 'video' | 'gif'
+  type: 'image' | 'video' | 'gif' | 'frames'
   url: string; prompt: string; model: string; provider: string; error?: string
+  frames?: string[]; note?: string
+}
+
+// ── مكوّن عرض الإطارات كـ slideshow ─────────────────────────────────────────
+function FrameSlideshow({ frames, alt }: { frames: string[]; alt: string }) {
+  const [idx, setIdx] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (frames.length <= 1) return
+    timerRef.current = setInterval(() => setIdx(i => (i + 1) % frames.length), 600)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [frames])
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <img
+        src={frames[idx]}
+        alt={alt}
+        className="dms-result-img"
+        loading="lazy"
+        onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
+      />
+      <div style={{
+        position: 'absolute', bottom: 8, right: 8,
+        background: 'rgba(0,0,0,0.6)', color: '#fff',
+        fontSize: 11, padding: '2px 8px', borderRadius: 8, direction: 'ltr',
+      }}>
+        {idx + 1}/{frames.length}
+      </div>
+    </div>
+  )
 }
 
 export default function DZMediaStudio() {
@@ -148,7 +180,7 @@ export default function DZMediaStudio() {
         const modelName = videoModelId !== 'auto'
           ? (t2vModels.find(m => m.id === videoModelId)?.label || videoModelId)
           : 'Auto'
-        setProgress(`🎬 جاري التوليد بنموذج ${modelName}... قد يستغرق دقيقتين`)
+        setProgress(`🎬 جاري التوليد بنموذج ${modelName}... قد يستغرق 3 دقائق`)
         const res  = await fetch('/api/dz-agent-v4/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -156,15 +188,14 @@ export default function DZMediaStudio() {
             prompt, width, height, duration: 3,
             model: videoModelId !== 'auto' ? videoModelId : undefined,
           }),
-          signal: AbortSignal.timeout(180_000),
+          signal: AbortSignal.timeout(360_000),
         })
         const data = await res.json() as { ok: boolean; url?: string; frames?: string[]; isFrames?: boolean; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota; note?: string }
         if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
-          const rType = data.isFrames ? 'image' : data.url.includes('gif') ? 'gif' : 'video'
+          const rType = data.isFrames ? 'frames' : data.url.includes('gif') ? 'gif' : 'video'
           const rModel = data.isFrames ? `${data.model || 'DZ Cinematic'} — إطارات` : (data.model || 'video')
-          setResult({ type: rType, url: data.url, prompt, model: rModel, provider: data.provider || '' })
-          // تحديث حالة النموذج
+          setResult({ type: rType, url: data.url, frames: data.frames, prompt, model: rModel, provider: data.provider || '', note: data.note })
           if (data.model && !data.isFrames) {
             setT2vModels(prev => prev.map(m => m.label === data.model ? { ...m, status: 'available' } : m))
           }
@@ -178,7 +209,7 @@ export default function DZMediaStudio() {
         const modelName = videoModelId !== 'auto'
           ? (i2vModels.find(m => m.id === videoModelId)?.label || videoModelId)
           : 'Auto'
-        setProgress(`📽️ جاري التحويل بنموذج ${modelName}...`)
+        setProgress(`📽️ جاري التحويل بنموذج ${modelName}... قد يستغرق 3 دقائق`)
         const res  = await fetch('/api/dz-agent-v4/img2video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -187,14 +218,14 @@ export default function DZMediaStudio() {
             prompt:   prompt || 'animate smoothly',
             model:    videoModelId !== 'auto' ? videoModelId : undefined,
           }),
-          signal: AbortSignal.timeout(180_000),
+          signal: AbortSignal.timeout(360_000),
         })
         const data = await res.json() as { ok: boolean; url?: string; frames?: string[]; isFrames?: boolean; model?: string; provider?: string; error?: string; rateLimited?: boolean; quota?: Quota; note?: string }
         if (data.quota) setQuota(data.quota)
         if (data.ok && data.url) {
-          const rType  = data.isFrames ? 'image' : 'video'
+          const rType  = data.isFrames ? 'frames' : 'video'
           const rModel = data.isFrames ? `${data.model || 'DZ Animate'} — إطارات` : (data.model || 'img2video')
-          setResult({ type: rType, url: data.url, prompt, model: rModel, provider: data.provider || '' })
+          setResult({ type: rType, url: data.url, frames: data.frames, prompt, model: rModel, provider: data.provider || '', note: data.note })
         } else if (data.rateLimited) {
           setError(data.error || 'تجاوزت الحدّ اليومي')
         } else {
@@ -469,6 +500,9 @@ export default function DZMediaStudio() {
                   onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
                 />
               )}
+              {result.type === 'frames' && result.frames && result.frames.length > 0 && (
+                <FrameSlideshow frames={result.frames} alt={result.prompt} />
+              )}
               {result.type === 'video' && (
                 <video
                   src={result.url}
@@ -483,6 +517,11 @@ export default function DZMediaStudio() {
                 <span className="dms-result-model">✨ {result.model}</span>
                 <span className="dms-result-provider">via {result.provider}</span>
               </div>
+              {result.note && (
+                <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0', textAlign: 'center', direction: 'rtl' }}>
+                  💡 {result.note}
+                </p>
+              )}
               <div className="dms-result-actions">
                 <a
                   href={result.url}
@@ -491,13 +530,13 @@ export default function DZMediaStudio() {
                   rel="noopener noreferrer"
                   className="dms-action-btn dms-action-btn--dl"
                 >⬇ تحميل</a>
-                {(result.type === 'image' || result.type === 'gif') && (
+                {(result.type === 'image' || result.type === 'gif' || result.type === 'frames') && (
                   <button
                     className="dms-action-btn dms-action-btn--use"
                     onClick={() => { setImagePreview(result.url); setImageUrl(result.url); handleTabChange('img2img') }}
                   >🔄 img2img</button>
                 )}
-                {(result.type === 'image' || result.type === 'gif') && (
+                {(result.type === 'image' || result.type === 'gif' || result.type === 'frames') && (
                   <button
                     className="dms-action-btn dms-action-btn--vid"
                     onClick={() => { setImagePreview(result.url); setImageUrl(result.url); handleTabChange('img2video') }}

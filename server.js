@@ -23534,7 +23534,7 @@ async function _kokoroTTSFetch(text, kokoroVoice, speed = 1.0) {
 }
 
 app.post('/api/tts', async (req, res) => {
-  const { text, voice = 'ar-DZ-IsmaelNeural', speed = 1.0 } = req.body || {}
+  const { text, voice = 'ar-EG-ShakirNeural', speed = 1.0 } = req.body || {}
   if (!text || typeof text !== 'string' || text.trim().length === 0)
     return res.status(400).json({ error: 'text is required' })
   if (text.length > 3000)
@@ -23599,9 +23599,9 @@ const EDGE_TTS_ALLOWED_VOICES = new Set([
 ])
 
 const LANG_DEFAULT_VOICE = {
-  ar: 'ar-DZ-IsmaelNeural',
-  fr: 'fr-FR-HenriNeural',
-  en: 'en-US-GuyNeural',
+  ar: 'ar-EG-ShakirNeural',
+  fr: 'fr-FR-RemyMultilingualNeural',
+  en: 'fr-FR-RemyMultilingualNeural',
 }
 
 // Lazy-loaded Edge TTS (CJS module loaded from ESM context)
@@ -23639,7 +23639,7 @@ app.post('/api/tts/edge', async (req, res) => {
 
     const selectedVoice = EDGE_TTS_ALLOWED_VOICES.has(voice)
       ? voice
-      : (LANG_DEFAULT_VOICE[lang] || 'ar-DZ-IsmaelNeural')
+      : (LANG_DEFAULT_VOICE[lang] || 'ar-EG-ShakirNeural')
 
     const { MsEdgeTTS, OUTPUT_FORMAT } = await _loadEdgeTTS()
     const tts = new MsEdgeTTS()

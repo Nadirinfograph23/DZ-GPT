@@ -1,14 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/dz-media-studio.css'
 
-type Tab = 'text2img' | 'img2img' | 'text2video' | 'img2video'
-
 interface ModelDef {
   id: string; label: string; badge?: string; tier: 'fast' | 'premium'; group: string; waitSecs?: number | null; desc?: string
-}
-interface VidModel {
-  id: string; label: string; badge?: string; color?: string
 }
 interface QuotaInfo {
   fast:    { remaining: number; used: number; limit: number }
@@ -23,21 +18,6 @@ interface ImageResult {
   url: string; prompt: string; model: string; provider: string
   translatedPrompt?: string
 }
-interface VideoResult {
-  type: 'video'
-  url: string; frames?: string[]; isFrames?: boolean
-  prompt: string; model: string; provider: string
-  mimeType?: string; note?: string
-}
-type Result = ImageResult | VideoResult
-
-/* ── نموذج مسار التبويب ───────────────────────────────── */
-const TABS: { id: Tab; label: string; icon: string; desc: string; color: string }[] = [
-  { id: 'text2img',   label: 'نص → صورة',   icon: '🎨', desc: 'اكتب وصفاً وسيولّد الذكاء الاصطناعي صورة احترافية',   color: '#c8ff00' },
-  { id: 'img2img',    label: 'صورة → صورة', icon: '🖼️', desc: 'حوّل أو عدّل صورة موجودة بوصف نصي',                   color: '#818cf8' },
-  { id: 'text2video', label: 'نص → فيديو',   icon: '🎬', desc: 'ولّد مقطع فيديو من وصف نصي بالذكاء الاصطناعي',       color: '#fb923c' },
-  { id: 'img2video',  label: 'صورة → فيديو', icon: '🎥', desc: 'حرّك صورة ثابتة وحوّلها إلى فيديو متحرك',            color: '#f472b6' },
-]
 
 const IMG_PRESETS: AspectPreset[] = [
   { label: 'عمودي',  sub: '9:16', w: 576,  h: 1024, shape: 'tall'   },
@@ -46,7 +26,6 @@ const IMG_PRESETS: AspectPreset[] = [
   { label: 'كلاسيك', sub: '4:3',  w: 1024, h: 768,  shape: 'photo'  },
 ]
 
-/* ── نماذج الصور (أسماء أصلية — المصدر: DZ MEDIA) ──────── */
 const DEFAULT_MODELS: ModelDef[] = [
   { id: 'auto',           label: '🤖 Auto (Gemini + FLUX)',          badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
   { id: 'nano-banana',    label: '🍌 Gemini 2.0 Flash Image',        badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: null },
@@ -64,58 +43,29 @@ const DEFAULT_MODELS: ModelDef[] = [
   { id: 'realvisxl',      label: '📷 RealVisXL V4.0',                 badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
 ]
 
-const DEFAULT_VID_T2V: VidModel[] = [
-  { id: 'auto',        label: '🤖 Auto',                  badge: 'AUTO',   color: '#c8ff00' },
-  { id: 'animatediff', label: '🎞️ AnimateDiff Lightning', badge: 'GIF',    color: '#f59e0b' },
-  { id: 't2v-ms',      label: '⚡ ModelScope T2V 1.7B',   badge: 'خفيف',  color: '#10b981' },
-  { id: 'ltx-hf',      label: '🎬 LTX-Video (HF)',        badge: 'سريع',  color: '#8b5cf6' },
-]
-const DEFAULT_VID_I2V: VidModel[] = [
-  { id: 'auto',      label: '🤖 Auto',                      badge: 'AUTO',   color: '#c8ff00' },
-  { id: 'svd',       label: '🌊 Stable Video Diffusion XT', badge: 'ناعم',  color: '#3b82f6' },
-  { id: 'i2vgen',    label: '⚖️ I2VGen-XL',                 badge: 'متوازن', color: '#0891b2' },
-  { id: 'animdiff2', label: '🎞️ AnimateDiff Lightning',     badge: 'GIF',    color: '#f59e0b' },
-]
-
-/* ترتيب المجموعات */
 const GROUP_ORDER = ['DZ MEDIA PRO', 'DZ MEDIA', 'DZ MEDIA BASIC']
 const TIER_COLOR: Record<string, string> = {
   premium: 'linear-gradient(135deg,#f59e0b,#d97706)',
   fast:    'linear-gradient(135deg,#6366f1,#818cf8)',
 }
 
-/* نماذج الصور المتاحة للـ fallback التلقائي */
 const IMG_MODEL_SEQUENCE = DEFAULT_MODELS.map(m => m.id)
 
-/* ──────────────────────────────────────────────────────── */
 export default function DZMediaStudio() {
   const navigate = useNavigate()
-  const [tab, setTab]                     = useState<Tab>('text2img')
-  const [prompt, setPrompt]               = useState('')
-  const [model, setModel]                 = useState('auto')
-  const [vidModel, setVidModel]           = useState('')
-  const [models, setModels]               = useState<ModelDef[]>(DEFAULT_MODELS)
-  const [t2vModels, setT2vModels]         = useState<VidModel[]>(DEFAULT_VID_T2V)
-  const [i2vModels, setI2vModels]         = useState<VidModel[]>(DEFAULT_VID_I2V)
-  const [quota, setQuota]                 = useState<QuotaInfo | null>(null)
-  const [icCredits, setIcCredits]         = useState<{ remaining: number | null; backoffRemainMin: number } | null>(null)
-  const [imageUrl, setImageUrl]           = useState('')
-  const [imagePreview, setImagePreview]   = useState<string | null>(null)
-  const [width, setWidth]                 = useState(768)
-  const [height, setHeight]               = useState(768)
-  const [loading, setLoading]             = useState(false)
+  const [prompt, setPrompt]             = useState('')
+  const [model, setModel]               = useState('auto')
+  const [models, setModels]             = useState<ModelDef[]>(DEFAULT_MODELS)
+  const [quota, setQuota]               = useState<QuotaInfo | null>(null)
+  const [icCredits, setIcCredits]       = useState<{ remaining: number | null; backoffRemainMin: number } | null>(null)
+  const [width, setWidth]               = useState(768)
+  const [height, setHeight]             = useState(768)
+  const [loading, setLoading]           = useState(false)
+  const [result, setResult]             = useState<ImageResult | null>(null)
+  const [error, setError]               = useState('')
+  const [progress, setProgress]         = useState('')
+  const [activeGroup, setActiveGroup]   = useState<string>('all')
 
-  /* إطار نتيجة منفصل لكل تبويب */
-  const [results, setResults]             = useState<Partial<Record<Tab, Result>>>({})
-  const [errors, setErrors]               = useState<Partial<Record<Tab, string>>>({})
-
-  const [progress, setProgress]           = useState('')
-  const [activeGroup, setActiveGroup]     = useState<string>('all')
-  const [frameIdx, setFrameIdx]           = useState(0)
-  const fileRef  = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  /* ── جلب النماذج والحصة ── */
   useEffect(() => {
     fetch('/api/chatimg/models')
       .then(r => r.json())
@@ -131,42 +81,7 @@ export default function DZMediaStudio() {
       .then(r => r.json())
       .then(d => { if (d.ok) setIcCredits({ remaining: d.remaining, backoffRemainMin: d.backoffRemainMin ?? 0 }) })
       .catch(() => {})
-
-    fetch('/api/dz-agent-v4/video/models')
-      .then(r => r.json())
-      .then(d => {
-        if (d.t2v?.length) {
-          setT2vModels([
-            { id: 'auto', label: '🤖 DZ MEDIA Auto', badge: 'AUTO', color: '#c8ff00' },
-            ...d.t2v.map((m: VidModel & { label: string }) => ({
-              ...m,
-              label: `DZ MEDIA ${m.label || m.id}`,
-            })),
-          ])
-        }
-        if (d.i2v?.length) {
-          setI2vModels([
-            { id: 'auto', label: '🤖 DZ MEDIA Auto', badge: 'AUTO', color: '#c8ff00' },
-            ...d.i2v.map((m: VidModel & { label: string }) => ({
-              ...m,
-              label: `DZ MEDIA ${m.label || m.id}`,
-            })),
-          ])
-        }
-      })
-      .catch(() => {})
   }, [])
-
-  /* Slideshow للإطارات */
-  useEffect(() => {
-    const r = results[tab]
-    if (r?.type !== 'video' || !(r as VideoResult).isFrames || !(r as VideoResult).frames?.length) return
-    const iv = setInterval(() => setFrameIdx(i => (i + 1) % ((r as VideoResult).frames!.length)), 1000)
-    return () => clearInterval(iv)
-  }, [results, tab])
-
-  /* إعادة ضبط المؤشر عند تبديل التبويب */
-  useEffect(() => { setFrameIdx(0) }, [tab])
 
   const refreshQuota = useCallback(() => {
     fetch('/api/dz-agent-v4/image/quota')
@@ -175,263 +90,89 @@ export default function DZMediaStudio() {
       .catch(() => {})
   }, [])
 
-  const setTabResult = (t: Tab, r: Result | null) =>
-    setResults(prev => ({ ...prev, [t]: r ?? undefined }))
-  const setTabError  = (t: Tab, msg: string) =>
-    setErrors(prev => ({ ...prev, [t]: msg }))
-  const clearTabError = (t: Tab) =>
-    setErrors(prev => ({ ...prev, [t]: '' }))
+  const selectedModel = models.find(m => m.id === model) || models[0]
+  const groups        = GROUP_ORDER.filter(g => models.some(m => m.group === g))
+  const displayed     = activeGroup === 'all' ? models : models.filter(m => m.group === activeGroup)
 
-  const selectedModel   = models.find(m => m.id === model) || models[0]
-  const isVideoTab      = tab === 'text2video' || tab === 'img2video'
-  const currentResult   = results[tab] ?? null
-  const currentError    = errors[tab]  ?? ''
-  const currentTab      = TABS.find(t => t.id === tab)!
-  const vidModelList    = tab === 'text2video' ? t2vModels : i2vModels
-
-  const groups    = GROUP_ORDER.filter(g => models.some(m => m.group === g))
-  const displayed = activeGroup === 'all' ? models : models.filter(m => m.group === activeGroup)
-  const vidResult = currentResult?.type === 'video' ? (currentResult as VideoResult) : null
-
-  /* ── تغيير التبويب (بدون مسح النتيجة) ── */
-  const handleTabChange = (t: Tab) => {
-    setTab(t); clearTabError(t)
-  }
-
-  /* ── رفع الصورة ── */
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const src = ev.target?.result as string
-      setImagePreview(src)
-      if (src.startsWith('http')) setImageUrl(src)
-    }
-    reader.readAsDataURL(file)
-  }, [])
-
-  /* ── التوليد مع fallback تلقائي ── */
   const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() && tab !== 'img2video') { setTabError(tab, 'الرجاء كتابة وصف'); return }
-    if ((tab === 'img2img' || tab === 'img2video') && !imageUrl && !imagePreview) {
-      setTabError(tab, 'الرجاء رفع صورة أو إدخال رابطها'); return
-    }
-    setLoading(true); clearTabError(tab)
+    if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
+    setLoading(true); setError('')
 
-    /* ─── نص → صورة ─────────────────────────────────── */
-    if (tab === 'text2img') {
-      const dzMediaIds  = ['auto','nano-banana','imgcreator','imgcreator-gpt','gpt-image-2','hf']
-      const isDzMedia   = dzMediaIds.includes(model)
-      const hasArabic   = /[\u0600-\u06FF]/.test(prompt)
-      const modelQueue  = isDzMedia
-        ? [model, ...dzMediaIds.filter(id => id !== model)]
-        : [model, ...IMG_MODEL_SEQUENCE.filter(id => !dzMediaIds.includes(id) && id !== model)]
+    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','gpt-image-2','hf']
+    const isDzMedia  = dzMediaIds.includes(model)
+    const hasArabic  = /[\u0600-\u06FF]/.test(prompt)
+    const modelQueue = isDzMedia
+      ? [model, ...dzMediaIds.filter(id => id !== model)]
+      : [model, ...IMG_MODEL_SEQUENCE.filter(id => !dzMediaIds.includes(id) && id !== model)]
 
-      const isImgCreator = (id: string) => id === 'imgcreator' || id === 'imgcreator-gpt'
+    const isImgCreator = (id: string) => id === 'imgcreator' || id === 'imgcreator-gpt'
 
-      let succeeded = false
-      for (let i = 0; i < Math.min(modelQueue.length, 4); i++) {
-        const tryModel = modelQueue[i]
-        const tryEP    = dzMediaIds.includes(tryModel) ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
-        const mDef     = DEFAULT_MODELS.find(m => m.id === tryModel)
-        const waitNote = mDef?.waitSecs ? ` (~${mDef.waitSecs}ث)` : ''
-        setProgress(hasArabic && i === 0
-          ? `🔤 ترجمة ثم توليد بـ ${selectedModel?.label || model}${waitNote}...`
-          : i === 0
-            ? `🎨 جاري التوليد بـ ${selectedModel?.label || model}${waitNote}...`
-            : `🔄 نموذج آخر (${i+1}/4)${waitNote}...`)
+    let succeeded = false
+    for (let i = 0; i < Math.min(modelQueue.length, 4); i++) {
+      const tryModel = modelQueue[i]
+      const tryEP    = dzMediaIds.includes(tryModel) ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
+      const mDef     = DEFAULT_MODELS.find(m => m.id === tryModel)
+      const waitNote = mDef?.waitSecs ? ` (~${mDef.waitSecs}ث)` : ''
+      setProgress(hasArabic && i === 0
+        ? `🔤 ترجمة ثم توليد بـ ${selectedModel?.label || model}${waitNote}...`
+        : i === 0
+          ? `🎨 جاري التوليد بـ ${selectedModel?.label || model}${waitNote}...`
+          : `🔄 نموذج آخر (${i+1}/4)${waitNote}...`)
 
-        try {
-          const res  = await fetch(tryEP, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model: tryModel, width, height }),
-            signal: AbortSignal.timeout(100_000),
-          })
-          const data = await res.json() as {
-            ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string
-            error?: string; quotaExceeded?: boolean; quota?: QuotaInfo; translated?: boolean
-            remainingCredits?: number | null
-          }
-          if (data.remainingCredits !== undefined)
-            setIcCredits(prev => ({ remaining: data.remainingCredits ?? null, backoffRemainMin: prev?.backoffRemainMin ?? 0 }))
-          if (data.quotaExceeded) {
-            if (data.quota) setQuota(data.quota)
-            if (isImgCreator(tryModel)) {
-              setIcCredits({ remaining: 0, backoffRemainMin: 60 })
-              continue
-            }
-            setTabError(tab, data.error || 'تجاوزت الحصة'); break
-          }
-          if (data.ok && data.url) {
-            setTabResult(tab, {
-              type: 'image', url: data.url,
-              prompt: data.promptUsed || prompt,
-              model:    maskedModel(data.model || tryModel),
-              provider: maskedProvider(data.provider || ''),
-              translatedPrompt: data.translated ? data.promptUsed : undefined,
-            })
-            refreshQuota(); succeeded = true; break
-          }
-        } catch { /* timeout/network — جرّب التالي */ }
-      }
-      if (!succeeded && !currentError) {
-        setTabError(tab, 'فشلت جميع النماذج — جرّب وصفاً مختلفاً أو حاول لاحقاً')
-      }
-
-    /* ─── صورة → صورة ────────────────────────────────── */
-    } else if (tab === 'img2img') {
-      setProgress('🖼️ جاري تعديل الصورة...')
-      let ok = false
       try {
-        const res  = await fetch('/api/dz-agent-v4/img2img', {
+        const res  = await fetch(tryEP, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt,
-            imageUrl:    imagePreview || imageUrl,
-            imageBase64: imagePreview?.startsWith('data:') ? imagePreview.split(',')[1] : null,
-          }),
-          signal: AbortSignal.timeout(75_000),
+          body: JSON.stringify({ prompt, model: tryModel, width, height }),
+          signal: AbortSignal.timeout(100_000),
         })
-        const data = await res.json() as { ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string; error?: string }
+        const data = await res.json() as {
+          ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string
+          error?: string; quotaExceeded?: boolean; quota?: QuotaInfo; translated?: boolean
+          remainingCredits?: number | null
+        }
+        if (data.remainingCredits !== undefined)
+          setIcCredits(prev => ({ remaining: data.remainingCredits ?? null, backoffRemainMin: prev?.backoffRemainMin ?? 0 }))
+        if (data.quotaExceeded) {
+          if (data.quota) setQuota(data.quota)
+          if (isImgCreator(tryModel)) {
+            setIcCredits({ remaining: 0, backoffRemainMin: 60 })
+            continue
+          }
+          setError(data.error || 'تجاوزت الحصة'); break
+        }
         if (data.ok && data.url) {
-          setTabResult(tab, {
+          setResult({
             type: 'image', url: data.url,
             prompt: data.promptUsed || prompt,
-            model:    maskedModel(data.model || 'img2img'),
+            model:    maskedModel(data.model || tryModel),
             provider: maskedProvider(data.provider || ''),
+            translatedPrompt: data.translated ? data.promptUsed : undefined,
           })
-          ok = true
+          refreshQuota(); succeeded = true; break
         }
-      } catch { /* timeout */ }
-      if (!ok) {
-        // Fallback: Pollinations img2img
-        setProgress('🔄 نموذج احتياطي...')
-        try {
-          const seed    = Math.floor(Math.random() * 9_000_000)
-          const encoded = encodeURIComponent(`${prompt}, ultra detailed, photorealistic, high quality`)
-          const url     = `https://image.pollinations.ai/prompt/${encoded}?model=flux-realism&width=${width}&height=${height}&seed=${seed}&nologo=true`
-          setTabResult(tab, {
-            type: 'image', url,
-            prompt, model: 'DZ MEDIA BASIC', provider: 'DZ MEDIA BASIC',
-          })
-        } catch {
-          setTabError(tab, 'فشل التعديل — جرّب مجدداً')
-        }
-      }
-
-    /* ─── نص → فيديو ─────────────────────────────────── */
-    } else if (tab === 'text2video') {
-      setProgress('🎬 جاري توليد الفيديو... (30-120 ثانية)')
-      let ok = false
-      try {
-        const res  = await fetch('/api/dz-agent-v4/video', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, model: vidModel || undefined, width, height }),
-          signal: AbortSignal.timeout(130_000),
-        })
-        const data = await res.json() as {
-          ok: boolean; url?: string; frames?: string[]; isFrames?: boolean
-          model?: string; provider?: string; mimeType?: string; error?: string; rateLimited?: boolean; note?: string
-        }
-        if (data.rateLimited) { setTabError(tab, data.error || 'تجاوزت الحصة اليومية'); }
-        else if (data.ok && data.url) {
-          setTabResult(tab, {
-            type: 'video',
-            url: data.url, frames: data.frames, isFrames: data.isFrames,
-            prompt,
-            model:    maskedModel(data.model || 'video'),
-            provider: maskedProvider(data.provider || ''),
-            mimeType: data.mimeType, note: data.note,
-          })
-          ok = true
-        }
-      } catch { /* timeout */ }
-      if (!ok && !currentError) {
-        // Fallback: إطارات سينمائية
-        setProgress('🔄 نموذج احتياطي — إطارات سينمائية...')
-        const seed   = Math.floor(Math.random() * 9_000_000)
-        const styles = ['wide establishing shot, cinematic, golden hour', 'medium shot, soft bokeh, cinematic lighting', 'close-up, cinematic, ultra sharp']
-        const frames = styles.map((s, i) =>
-          `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt}, ${s}`)}?model=flux&width=${width}&height=${height}&seed=${seed + i * 7919}&nologo=true`
-        )
-        setTabResult(tab, {
-          type: 'video', url: frames[0], frames, isFrames: true,
-          prompt, model: 'DZ MEDIA BASIC', provider: 'DZ MEDIA BASIC', note: 'إطارات سينمائية (أضف HF_TOKEN لفيديو حقيقي)',
-        })
-      }
-
-    /* ─── صورة → فيديو ───────────────────────────────── */
-    } else if (tab === 'img2video') {
-      setProgress('🎥 جاري تحريك الصورة... (30-120 ثانية)')
-      let ok = false
-      try {
-        const res  = await fetch('/api/dz-agent-v4/img2video', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: imagePreview || imageUrl,
-            prompt:   prompt || 'animate smoothly with natural motion',
-            model:    vidModel || undefined,
-          }),
-          signal: AbortSignal.timeout(130_000),
-        })
-        const data = await res.json() as {
-          ok: boolean; url?: string; frames?: string[]; isFrames?: boolean
-          model?: string; provider?: string; mimeType?: string; error?: string; rateLimited?: boolean; note?: string
-        }
-        if (data.rateLimited) { setTabError(tab, data.error || 'تجاوزت الحصة') }
-        else if (data.ok && data.url) {
-          setTabResult(tab, {
-            type: 'video', url: data.url, frames: data.frames, isFrames: data.isFrames,
-            prompt: prompt || 'animate',
-            model:    maskedModel(data.model || 'i2v'),
-            provider: maskedProvider(data.provider || ''),
-            mimeType: data.mimeType, note: data.note,
-          })
-          ok = true
-        }
-      } catch { /* timeout */ }
-      if (!ok && !currentError) {
-        setProgress('🔄 نموذج احتياطي...')
-        const seed   = Math.floor(Math.random() * 9_000_000)
-        const frames = [0,1,2,3].map(i =>
-          `https://image.pollinations.ai/prompt/${encodeURIComponent(`${prompt || 'animate smoothly'}, cinematic frame ${i+1}`)}?model=flux-realism&width=768&height=432&seed=${seed + i * 12345}&nologo=true`
-        )
-        setTabResult(tab, {
-          type: 'video', url: frames[0], frames, isFrames: true,
-          prompt: prompt || 'animate', model: 'DZ MEDIA BASIC', provider: 'DZ MEDIA BASIC',
-        })
-      }
+      } catch { /* timeout/network */ }
     }
-
+    if (!succeeded && !error) {
+      setError('فشلت جميع النماذج — جرّب وصفاً مختلفاً أو حاول لاحقاً')
+    }
     setLoading(false); setProgress('')
-  }, [tab, prompt, model, vidModel, imageUrl, imagePreview, width, height, selectedModel, currentError, refreshQuota])
+  }, [prompt, model, width, height, selectedModel, error, refreshQuota])
 
-  const downloadVideo = () => {
-    if (!vidResult) return
-    const url = vidResult.isFrames ? vidResult.frames?.[frameIdx] || vidResult.url : vidResult.url
-    const a   = document.createElement('a')
-    a.href = url; a.download = `dz-video-${Date.now()}.${vidResult.mimeType?.includes('gif') ? 'gif' : 'mp4'}`
-    a.target = '_blank'; a.click()
-  }
-
-  /* ════════════════════════════════ JSX ════════════════════════════════ */
   return (
     <div className="dms-root" dir="rtl">
       <header className="dms-header">
         <button className="dms-back-btn" onClick={() => navigate('/')}>← الرئيسية</button>
         <div className="dms-header-title">
-          <span className="dms-header-icon">🎭</span>
+          <span className="dms-header-icon">🎨</span>
           <h1>DZ Media Studio</h1>
           <span className="dms-badge">AI</span>
         </div>
         <p className="dms-header-sub">
-          صور وفيديو بالذكاء الاصطناعي — DZ MEDIA PRO · DZ MEDIA · DZ MEDIA BASIC
+          توليد الصور بالذكاء الاصطناعي — DZ MEDIA PRO · DZ MEDIA · DZ MEDIA BASIC
         </p>
       </header>
 
-      {/* شريط الحصة */}
-      {quota && !isVideoTab && (
+      {quota && (
         <div className="dms-quota-bar">
           <div className="dms-quota-item">
             <span className="dms-quota-icon">⚡</span>
@@ -455,342 +196,172 @@ export default function DZMediaStudio() {
         </div>
       )}
 
-      {/* التبويبات */}
-      <div className="dms-tabs">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={`dms-tab dms-tab--${t.id}${tab === t.id ? ' dms-tab--active' : ''}`}
-            onClick={() => handleTabChange(t.id)}
-            style={tab === t.id ? { borderColor: `${t.color}66`, color: t.color, background: `${t.color}15` } : {}}
-          >
-            <span className="dms-tab-icon">{t.icon}</span>
-            <span className="dms-tab-label">{t.label}</span>
-            {/* نقطة النتيجة الجاهزة */}
-            {results[t.id] && tab !== t.id && (
-              <span className="dms-tab-dot" style={{ background: t.color }} />
-            )}
-          </button>
-        ))}
-      </div>
-
       <div className="dms-body">
 
         {/* ══════ لوحة الإدخال ══════ */}
         <div className="dms-panel">
           <p className="dms-tab-desc">
-            <span style={{ color: currentTab.color }}>{currentTab.icon}</span> {currentTab.desc}
+            <span style={{ color: '#c8ff00' }}>🎨</span> اكتب وصفاً وسيولّد الذكاء الاصطناعي صورة احترافية
           </p>
 
-          {/* رفع الصورة — img2img + img2video */}
-          {(tab === 'img2img' || tab === 'img2video') && (
-            <div className="dms-upload-zone">
-              <input type="file" ref={fileRef} accept="image/*" hidden onChange={handleFileUpload} />
-              {imagePreview ? (
-                <div className="dms-preview-wrap">
-                  <img src={imagePreview} alt="preview" className="dms-img-preview" />
-                  <button className="dms-remove-img" onClick={() => { setImagePreview(null); setImageUrl('') }}>✕ إزالة</button>
-                </div>
-              ) : (
-                <div className="dms-upload-drop" onClick={() => fileRef.current?.click()}>
-                  <span className="dms-upload-icon">📤</span>
-                  <span>اضغط لرفع صورة</span>
-                </div>
-              )}
-              <div className="dms-or-sep">— أو أدخل رابط الصورة —</div>
-              <input
-                className="dms-input" type="url"
-                placeholder="https://example.com/image.jpg"
-                value={imageUrl}
-                onChange={e => setImageUrl(e.target.value)}
-              />
-            </div>
-          )}
-
-          {/* وصف النص */}
           <div className="dms-prompt-wrap">
-            <label className="dms-label">
-              ✏️ {tab === 'img2img' ? 'وصف التعديل' : tab === 'img2video' ? 'وصف الحركة (اختياري)' : 'وصف المشهد'}
-            </label>
+            <label className="dms-label">✏️ وصف المشهد</label>
             <textarea
               className="dms-textarea"
-              rows={tab === 'img2video' ? 2 : 3}
-              placeholder={
-                tab === 'text2img'   ? 'مثال: قصبة الجزائر عند الغروب، فوتوريالستيك، 8K' :
-                tab === 'img2img'    ? 'مثال: نفس الصورة بأسلوب أنيمي ياباني' :
-                tab === 'text2video' ? 'مثال: طائر يحلق فوق جبال الجزائر في غروب الشمس' :
-                'مثال: تحريك ناعم، بانوراما خفيفة (اتركه فارغاً للتحريك التلقائي)'
-              }
+              rows={3}
+              placeholder="مثال: قصبة الجزائر عند الغروب، فوتوريالستيك، 8K"
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate() }}
             />
           </div>
 
-          {/* اختيار نموذج الصور */}
-          {tab === 'text2img' && (
-            <div className="dms-section">
-              <label className="dms-label">🧠 النموذج</label>
-              <div className="dms-group-filter">
-                <button className={`dms-group-btn${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>الكل</button>
-                {groups.map(g => (
-                  <button key={g} className={`dms-group-btn${activeGroup === g ? ' active' : ''}`} onClick={() => setActiveGroup(g)}>{g}</button>
-                ))}
-              </div>
-              <div className="dms-model-grid">
-                {displayed.map(m => {
-                  const isIC = m.id === 'imgcreator' || m.id === 'imgcreator-gpt'
-                  const icBlocked = isIC && icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0
-                  return (
-                    <button
-                      key={m.id}
-                      title={m.desc || m.label}
-                      className={`dms-model-card${model === m.id ? ' dms-model-card--active' : ''} dms-model-card--${m.tier}${icBlocked ? ' dms-model-card--dimmed' : ''}`}
-                      onClick={() => setModel(m.id)}
-                    >
-                      <span className="dms-model-label">{m.label}</span>
-                      <div className="dms-model-badges">
-                        {m.badge && <span className="dms-model-badge dms-model-badge--tag">{m.badge}</span>}
-                        {m.waitSecs && (
-                          <span className="dms-model-badge" style={{ background: '#0f2830', color: '#4ade80', fontSize: '9px', padding: '1px 4px' }}>
-                            ~{m.waitSecs}ث
-                          </span>
-                        )}
-                        {isIC && icCredits?.remaining !== null && icCredits?.remaining !== undefined && (
-                          <span className="dms-model-badge" style={{ background: icCredits.remaining === 0 ? '#2d1010' : '#0d2d1a', color: icCredits.remaining === 0 ? '#f87171' : '#34d399', fontSize: '9px', padding: '1px 4px' }}>
-                            {icCredits.remaining === 0 ? '⛔ نفدت' : `💳 ${icCredits.remaining}`}
-                          </span>
-                        )}
-                        {isIC && icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
-                          <span className="dms-model-badge" style={{ background: '#2d1a00', color: '#fbbf24', fontSize: '9px', padding: '1px 4px' }}>
-                            🔄 {icCredits.backoffRemainMin}د
-                          </span>
-                        ) : null}
-                        <span className="dms-model-badge dms-model-badge--tier" style={{ background: TIER_COLOR[m.tier] }}>
-                          {m.tier === 'premium' ? '✨' : '⚡'}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-              {selectedModel?.tier === 'premium' && (
-                <div className="dms-premium-note">
-                  ✨ نموذج DZ MEDIA PRO — يستهلك من حصة <strong>{quota?.premium.remaining ?? '?'}</strong> متبقية
-                  {quota?.premium.remaining === 0 && <span style={{ color: '#ef4444', marginRight: 8 }}>⚠️ نفدت — اختر DZ MEDIA</span>}
-                </div>
-              )}
-              {(selectedModel?.id === 'imgcreator' || selectedModel?.id === 'imgcreator-gpt') && (
-                <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
-                  🎁 ImgCreator Guest — مجاني تماماً بدون مفتاح API — وقت التوليد ~50 ثانية — 1K فقط
-                  {icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
-                    <span style={{ color: '#fbbf24', marginRight: 8 }}> — الحصة نفدت، تجديد تلقائي بعد {icCredits.backoffRemainMin} دقيقة</span>
-                  ) : null}
-                </div>
-              )}
+          {/* اختيار النموذج */}
+          <div className="dms-section">
+            <label className="dms-label">🧠 النموذج</label>
+            <div className="dms-group-filter">
+              <button className={`dms-group-btn${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>الكل</button>
+              {groups.map(g => (
+                <button key={g} className={`dms-group-btn${activeGroup === g ? ' active' : ''}`} onClick={() => setActiveGroup(g)}>{g}</button>
+              ))}
             </div>
-          )}
-
-          {/* اختيار نموذج الفيديو */}
-          {isVideoTab && (
-            <div className="dms-section">
-              <label className="dms-label">🎬 نموذج DZ MEDIA</label>
-              <div className="dms-vid-model-grid">
-                {vidModelList.map(m => (
+            <div className="dms-model-grid">
+              {displayed.map(m => {
+                const isIC      = m.id === 'imgcreator' || m.id === 'imgcreator-gpt'
+                const icBlocked = isIC && !!icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0
+                return (
                   <button
                     key={m.id}
-                    className={`dms-vid-model-card${vidModel === m.id ? ' dms-vid-model-card--active' : ''}`}
-                    onClick={() => setVidModel(vidModel === m.id ? '' : m.id)}
-                    style={vidModel === m.id ? { borderColor: m.color, boxShadow: `0 0 0 1px ${m.color}22` } : {}}
+                    title={m.desc || m.label}
+                    className={`dms-model-card${model === m.id ? ' dms-model-card--active' : ''} dms-model-card--${m.tier}${icBlocked ? ' dms-model-card--dimmed' : ''}`}
+                    onClick={() => setModel(m.id)}
                   >
-                    <span className="dms-vid-name">{m.label}</span>
-                    {m.badge && (
-                      <span className="dms-vid-badge" style={{ background: `${m.color}22`, color: m.color, border: `1px solid ${m.color}44` }}>
-                        {m.badge}
+                    <span className="dms-model-label">{m.label}</span>
+                    <div className="dms-model-badges">
+                      {m.badge && <span className="dms-model-badge dms-model-badge--tag">{m.badge}</span>}
+                      {m.waitSecs && (
+                        <span className="dms-model-badge" style={{ background: '#0f2830', color: '#4ade80', fontSize: '9px', padding: '1px 4px' }}>
+                          ~{m.waitSecs}ث
+                        </span>
+                      )}
+                      {isIC && icCredits?.remaining !== null && icCredits?.remaining !== undefined && (
+                        <span className="dms-model-badge" style={{ background: icCredits.remaining === 0 ? '#2d1010' : '#0d2d1a', color: icCredits.remaining === 0 ? '#f87171' : '#34d399', fontSize: '9px', padding: '1px 4px' }}>
+                          {icCredits.remaining === 0 ? '⛔ نفدت' : `💳 ${icCredits.remaining}`}
+                        </span>
+                      )}
+                      {isIC && icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
+                        <span className="dms-model-badge" style={{ background: '#2d1a00', color: '#fbbf24', fontSize: '9px', padding: '1px 4px' }}>
+                          🔄 {icCredits.backoffRemainMin}د
+                        </span>
+                      ) : null}
+                      <span className="dms-model-badge dms-model-badge--tier" style={{ background: TIER_COLOR[m.tier] }}>
+                        {m.tier === 'premium' ? '✨' : '⚡'}
                       </span>
-                    )}
+                    </div>
                   </button>
-                ))}
-              </div>
-              <div className="dms-no-token-note">
-                ⚡ اختر نموذجاً أو اترك "Auto" — يتم الانتقال التلقائي عند الفشل
-              </div>
+                )
+              })}
             </div>
-          )}
-
-          {/* مقياس الإطار (للصور) */}
-          {!isVideoTab && (
-            <div className="dms-section">
-              <label className="dms-label">📐 مقياس الإطار</label>
-              <div className="dms-aspect-row">
-                {IMG_PRESETS.map(p => {
-                  const active = width === p.w && height === p.h
-                  return (
-                    <button
-                      key={p.shape}
-                      className={`dms-aspect-btn${active ? ' dms-aspect-btn--active' : ''}`}
-                      onClick={() => { setWidth(p.w); setHeight(p.h) }}
-                      title={`${p.w}×${p.h}`}
-                    >
-                      <span className={`dms-aspect-frame dms-aspect-frame--${p.shape}`} />
-                      <span className="dms-aspect-label">{p.label}</span>
-                      <span className="dms-aspect-sub">{p.sub}</span>
-                    </button>
-                  )
-                })}
+            {selectedModel?.tier === 'premium' && (
+              <div className="dms-premium-note">
+                ✨ نموذج DZ MEDIA PRO — يستهلك من حصة <strong>{quota?.premium.remaining ?? '?'}</strong> متبقية
+                {quota?.premium.remaining === 0 && <span style={{ color: '#ef4444', marginRight: 8 }}>⚠️ نفدت — اختر DZ MEDIA</span>}
               </div>
-              <p className="dms-dim-hint">{width}×{height} px</p>
-            </div>
-          )}
+            )}
+            {(selectedModel?.id === 'imgcreator' || selectedModel?.id === 'imgcreator-gpt') && (
+              <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
+                🎁 ImgCreator Guest — مجاني تماماً بدون مفتاح API — وقت التوليد ~50 ثانية — 1K فقط
+                {icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
+                  <span style={{ color: '#fbbf24', marginRight: 8 }}> — الحصة نفدت، تجديد تلقائي بعد {icCredits.backoffRemainMin} دقيقة</span>
+                ) : null}
+              </div>
+            )}
+          </div>
 
-          {currentError && <div className="dms-error">⚠️ {currentError}</div>}
-          {loading      && <div className="dms-progress">{progress || '⏳ جاري العمل...'}</div>}
+          {/* مقياس الإطار */}
+          <div className="dms-section">
+            <label className="dms-label">📐 مقياس الإطار</label>
+            <div className="dms-aspect-row">
+              {IMG_PRESETS.map(p => {
+                const active = width === p.w && height === p.h
+                return (
+                  <button
+                    key={p.shape}
+                    className={`dms-aspect-btn${active ? ' dms-aspect-btn--active' : ''}`}
+                    onClick={() => { setWidth(p.w); setHeight(p.h) }}
+                    title={`${p.w}×${p.h}`}
+                  >
+                    <span className={`dms-aspect-frame dms-aspect-frame--${p.shape}`} />
+                    <span className="dms-aspect-label">{p.label}</span>
+                    <span className="dms-aspect-sub">{p.sub}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="dms-dim-hint">{width}×{height} px</p>
+          </div>
+
+          {error   && <div className="dms-error">⚠️ {error}</div>}
+          {loading && <div className="dms-progress">{progress || '⏳ جاري العمل...'}</div>}
 
           <button className="dms-generate-btn" onClick={handleGenerate} disabled={loading}
-            style={{ background: loading ? undefined : `linear-gradient(135deg, ${currentTab.color}, ${currentTab.color}bb)` }}>
+            style={{ background: loading ? undefined : 'linear-gradient(135deg, #c8ff00, #a3cc00)' }}>
             {loading
               ? <><span className="dms-spinner" /> {progress || 'جاري...'}</>
-              : <>{currentTab.icon} {
-                  tab === 'text2img'   ? 'ولّد الصورة' :
-                  tab === 'img2img'    ? 'حوّل الصورة' :
-                  tab === 'text2video' ? 'ولّد الفيديو' :
-                  'حرّك الصورة'
-                }</>
+              : <>🎨 ولّد الصورة</>
             }
           </button>
           <p className="dms-hint">Ctrl+Enter للتوليد السريع</p>
         </div>
 
-        {/* ══════ لوحة النتيجة — إطار خاص بكل تبويب ══════ */}
-        <div className={`dms-result-panel dms-result-panel--${tab}`}>
+        {/* ══════ لوحة النتيجة ══════ */}
+        <div className="dms-result-panel dms-result-panel--text2img">
 
-          {/* ── حالة فارغة ── */}
-          {!currentResult && !loading && (
+          {!result && !loading && (
             <div className="dms-empty-state">
-              <div className="dms-empty-icon" style={{ color: currentTab.color }}>{currentTab.icon}</div>
-              <p className="dms-empty-title" style={{ color: currentTab.color }}>
-                {isVideoTab ? 'الفيديو سيظهر هنا' : 'الصورة ستظهر هنا'}
-              </p>
-              <p className="dms-empty-sub">
-                {tab === 'text2img'   ? 'اكتب وصفاً واختر نموذجاً وانقر "ولّد الصورة"' :
-                 tab === 'img2img'    ? 'ارفع صورة وأضف وصف التعديل' :
-                 tab === 'text2video' ? 'اكتب وصف المشهد وانقر "ولّد الفيديو"' :
-                 'ارفع صورة وانقر "حرّك الصورة"'}
-              </p>
-              {/* عرض نتائج التبويبات الأخرى كإشارات */}
-              <div className="dms-other-results-hint">
-                {(Object.entries(results) as [Tab, Result][]).filter(([t]) => t !== tab).map(([t, r]) => {
-                  const ti = TABS.find(x => x.id === t)!
-                  return r ? (
-                    <button key={t} className="dms-other-tab-badge" onClick={() => setTab(t)} style={{ borderColor: `${ti.color}44` }}>
-                      {ti.icon} {ti.label} — جاهز
-                    </button>
-                  ) : null
-                })}
-              </div>
+              <div className="dms-empty-icon" style={{ color: '#c8ff00' }}>🎨</div>
+              <p className="dms-empty-title" style={{ color: '#c8ff00' }}>الصورة ستظهر هنا</p>
+              <p className="dms-empty-sub">اكتب وصفاً واختر نموذجاً وانقر "ولّد الصورة"</p>
             </div>
           )}
 
-          {/* ── جاري التحميل ── */}
           {loading && (
             <div className="dms-loading-anim">
-              <div className="dms-loading-ring" style={{ borderTopColor: currentTab.color }} />
+              <div className="dms-loading-ring" style={{ borderTopColor: '#c8ff00' }} />
               <p className="dms-loading-text">{progress || '⏳ جاري التوليد...'}</p>
-              <p className="dms-loading-sub">
-                {isVideoTab ? 'الفيديو قد يستغرق 30-120 ثانية' : 'قد يستغرق 10-60 ثانية حسب النموذج'}
-              </p>
+              <p className="dms-loading-sub">قد يستغرق 10-60 ثانية حسب النموذج</p>
             </div>
           )}
 
-          {/* ── النتيجة ── */}
-          {currentResult && (
+          {result && (
             <div className="dms-result-card">
-
-              {/* صورة */}
-              {currentResult.type === 'image' && (
-                <div className="dms-result-img-wrap">
-                  <img
-                    src={currentResult.url} alt={currentResult.prompt}
-                    className="dms-result-img" loading="eager"
-                    onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
-                  />
-                </div>
-              )}
-
-              {/* فيديو */}
-              {currentResult.type === 'video' && (
-                <div className="dms-result-img-wrap">
-                  {vidResult?.isFrames ? (
-                    <div className="dms-frames-wrap">
-                      <img
-                        src={vidResult.frames?.[frameIdx] || vidResult.url}
-                        alt={`frame ${frameIdx + 1}`}
-                        className="dms-result-img"
-                      />
-                      <div className="dms-frames-overlay">
-                        <span>🎬 إطار {frameIdx + 1}/{vidResult.frames?.length || 1}</span>
-                        {vidResult.note && <span className="dms-frames-note">💡 {vidResult.note}</span>}
-                      </div>
-                    </div>
-                  ) : (
-                    <video
-                      ref={videoRef}
-                      src={vidResult?.url}
-                      className="dms-result-video"
-                      controls autoPlay loop muted playsInline
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* مؤشر النموذج */}
-              <div className="dms-result-meta">
-                <span className="dms-result-model" style={{ color: currentTab.color }}>
-                  {currentResult.type === 'video' ? '🎬' : '✨'} {currentResult.model}
-                </span>
-                <span className="dms-result-sep">·</span>
-                <span className="dms-result-provider">{currentResult.provider}</span>
+              <div className="dms-result-img-wrap">
+                <img
+                  src={result.url} alt={result.prompt}
+                  className="dms-result-img" loading="eager"
+                  onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
+                />
               </div>
 
-              {/* الوصف المترجم */}
-              {currentResult.type === 'image' && (currentResult as ImageResult).translatedPrompt && (
+              <div className="dms-result-meta">
+                <span className="dms-result-model" style={{ color: '#c8ff00' }}>✨ {result.model}</span>
+                <span className="dms-result-sep">·</span>
+                <span className="dms-result-provider">{result.provider}</span>
+              </div>
+
+              {result.translatedPrompt && (
                 <div className="dms-translated-box">
                   <span className="dms-translated-title">🔤 تُرجم تلقائياً:</span>
-                  <span className="dms-translated-text" dir="ltr">"{(currentResult as ImageResult).translatedPrompt}"</span>
+                  <span className="dms-translated-text" dir="ltr">"{result.translatedPrompt}"</span>
                 </div>
               )}
 
-              {/* أزرار الإجراءات */}
               <div className="dms-result-actions">
-                {currentResult.type === 'image' ? (
-                  <>
-                    <a href={currentResult.url} download={`dz-media-${Date.now()}.png`}
-                      target="_blank" rel="noopener noreferrer" className="dms-action-btn dms-action-btn--dl">
-                      ⬇ تحميل
-                    </a>
-                    <button className="dms-action-btn dms-action-btn--use"
-                      onClick={() => { setImagePreview(currentResult.url); setImageUrl(currentResult.url); handleTabChange('img2img') }}>
-                      🖼️ تعديل
-                    </button>
-                    <button className="dms-action-btn dms-action-btn--vid"
-                      onClick={() => { setImagePreview(currentResult.url); setImageUrl(currentResult.url); handleTabChange('img2video') }}>
-                      🎥 تحريك
-                    </button>
-                    <button className="dms-action-btn" onClick={handleGenerate} disabled={loading}>🔄 جديد</button>
-                  </>
-                ) : (
-                  <>
-                    <button className="dms-action-btn dms-action-btn--dl" onClick={downloadVideo}>⬇ تحميل</button>
-                    {vidResult?.isFrames && (
-                      <button className="dms-action-btn dms-action-btn--use"
-                        onClick={() => {
-                          const u = vidResult.frames?.[frameIdx] || vidResult.url
-                          setImagePreview(u); setImageUrl(u); handleTabChange('img2img')
-                        }}>🖼️ تعديل إطار</button>
-                    )}
-                    <button className="dms-action-btn" onClick={handleGenerate} disabled={loading}>🔄 جديد</button>
-                  </>
-                )}
+                <a href={result.url} download={`dz-media-${Date.now()}.png`}
+                  target="_blank" rel="noopener noreferrer" className="dms-action-btn dms-action-btn--dl">
+                  ⬇ تحميل
+                </a>
+                <button className="dms-action-btn" onClick={handleGenerate} disabled={loading}>🔄 جديد</button>
               </div>
             </div>
           )}
@@ -805,7 +376,6 @@ export default function DZMediaStudio() {
   )
 }
 
-/* ── مساعدات إخفاء أسماء المصادر ── */
 function maskedProvider(raw: string): string {
   const r = raw.toLowerCase()
   if (r.includes('pro') || r.includes('gemini') || r.includes('openai') || r.includes('openrouter') || r.includes('gpt')) return 'DZ MEDIA PRO'
@@ -817,13 +387,8 @@ function maskedModel(raw: string): string {
   if (raw.toLowerCase().startsWith('dz media')) return raw
   const r = raw.toLowerCase()
   if (r.includes('gemini') || r.includes('nano') || r.includes('banana')) return 'DZ MEDIA PRO Nano'
-  if (r.includes('gpt') || r.includes('openai') || r.includes('vision')) return 'DZ MEDIA PRO Vision'
-  if (r.includes('pollinations') || r.includes('basic')) return 'DZ MEDIA BASIC'
+  if (r.includes('gpt') || r.includes('openai') || r.includes('vision'))  return 'DZ MEDIA PRO Vision'
+  if (r.includes('pollinations') || r.includes('basic'))                  return 'DZ MEDIA BASIC'
   if (r.includes('flux') || r.includes('hugging') || r.includes('stable') || r.includes('realvis')) return 'DZ MEDIA FLUX'
-  if (r.includes('open-sora') || r.includes('opensora')) return 'DZ MEDIA Pro Video'
-  if (r.includes('animate') || r.includes('animatediff')) return 'DZ MEDIA Classic'
-  if (r.includes('ltx') || r.includes('modelscope')) return 'DZ MEDIA Fast'
-  if (r.includes('svd') || r.includes('img2vid')) return 'DZ MEDIA Smooth'
-  if (r.includes('i2vgen') || r.includes('i2v')) return 'DZ MEDIA Balance'
   return 'DZ MEDIA'
 }

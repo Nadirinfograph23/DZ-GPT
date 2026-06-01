@@ -19746,42 +19746,32 @@ async function executeGitHubAgentPlan(repoFullName, parsed, token) {
   return report
 }
 
-// ── AiFreeForever CF-Bypass Image Generation ─────────────────────────────────
-let _aifreeModule = null
-async function getAifreeModule() {
-  if (!_aifreeModule) {
-    try { _aifreeModule = await import('./lib/aifree-image/index.js') }
-    catch (e) { console.warn('[aifree] import error:', e.message) }
+// ── DZ Image Engine (HuggingFace + Pollinations — pure JS, no Python) ────────
+let _imgEngine = null
+async function getImgEngine() {
+  if (!_imgEngine) {
+    try { _imgEngine = await import('./lib/aifree-image/engine.js') }
+    catch (e) { console.warn('[img-engine] import error:', e.message) }
   }
-  return _aifreeModule
+  return _imgEngine
 }
 
 // GET /api/dz-media/aifree/models
 app.get('/api/dz-media/aifree/models', async (req, res) => {
-  const m = await getAifreeModule()
-  if (!m) return res.json({ ok: false, models: [], error: 'Service unavailable' })
-  try {
-    const models = await m.getModels()
-    res.json({ ok: true, models })
-  } catch (e) {
-    res.json({ ok: false, models: [], error: e.message })
-  }
+  const eng = await getImgEngine()
+  if (!eng) return res.json({ ok: false, models: [], error: 'Engine unavailable' })
+  res.json({ ok: true, models: eng.getModels() })
 })
 
 // GET /api/dz-media/aifree/health
 app.get('/api/dz-media/aifree/health', async (req, res) => {
-  try {
-    const r = await fetch('http://127.0.0.1:7891/health', { signal: AbortSignal.timeout(3000) })
-    const d = await r.json()
-    res.json({ ok: true, ...d })
-  } catch {
-    res.json({ ok: false, status: 'service not running' })
-  }
+  const eng = await getImgEngine()
+  res.json({ ok: !!eng, service: 'dz-img-engine', providers: ['HuggingFace', 'Pollinations'] })
 })
 
 // POST /api/dz-media/aifree/generate
 app.post('/api/dz-media/aifree/generate', aiLimiter, async (req, res) => {
-  const { prompt, model = 'flux-schnell', width = 768, height = 768, steps = 25 } = req.body || {}
+  const { prompt, model = 'flux', width = 768, height = 768, steps = 25 } = req.body || {}
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
 
   // ── Auto-translate Arabic / French / Darija → English ──────────────────────
@@ -19793,37 +19783,40 @@ app.post('/api/dz-media/aifree/generate', aiLimiter, async (req, res) => {
     const tr = await translateForImage({ aiGenerate: safeGenerateAI, prompt: finalPrompt })
     detectedLang = tr.language
     if (tr.translated && tr.english) {
-      finalPrompt    = tr.english
+      finalPrompt      = tr.english
       translatedPrompt = tr.english
-      console.log(`[aifree] translated (${tr.language}→en): "${prompt.slice(0,40)}" → "${finalPrompt.slice(0,60)}"`)
+      console.log(`[img-engine] translated (${tr.language}→en): "${prompt.slice(0,40)}" → "${finalPrompt.slice(0,60)}"`)
     }
   } catch (e) {
-    console.warn('[aifree] translate error (fallback to original):', e.message)
+    console.warn('[img-engine] translate error (fallback to original):', e.message)
   }
   // ──────────────────────────────────────────────────────────────────────────
 
-  const m = await getAifreeModule()
-  if (!m) return res.status(503).json({ ok: false, error: 'CF-bypass service غير متاح' })
+  const eng = await getImgEngine()
+  if (!eng) return res.status(503).json({ ok: false, error: 'Image engine unavailable' })
 
   try {
-    const result = await m.generateImage(finalPrompt, { model, width, height, steps })
-    if (!result.ok) return res.status(502).json(result)
+    const result = await eng.generateImage(finalPrompt, { model, width, height, steps })
+    if (!result.ok) return res.status(502).json({ ok: false, error: result.error || 'فشل التوليد' })
 
-    // If we have base64, convert to data-url
-    if (result.imageBase64) {
-      const mime = result.mime || 'image/png'
-      result.imageUrl = `data:${mime};base64,${result.imageBase64}`
-      delete result.imageBase64
+    // Convert base64 to data URL for frontend
+    let imageUrl = result.imageUrl
+    if (!imageUrl && result.imageBase64) {
+      const mime = result.mime || 'image/jpeg'
+      imageUrl = `data:${mime};base64,${result.imageBase64}`
     }
-    // Return translation info so the UI can show it
-    if (translatedPrompt) {
-      result.translatedPrompt = translatedPrompt
-      result.originalPrompt  = prompt
-      result.detectedLang    = detectedLang
-    }
-    res.json(result)
+
+    return res.json({
+      ok: true,
+      imageUrl,
+      model:           result.model || model,
+      provider:        result.provider || 'DZ Image Engine',
+      translatedPrompt: translatedPrompt || undefined,
+      detectedLang,
+    })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    console.error('[img-engine] generate error:', e.message)
+    return res.status(500).json({ ok: false, error: e.message || 'خطأ داخلي' })
   }
 })
 

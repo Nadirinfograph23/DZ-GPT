@@ -323,7 +323,7 @@ export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps)
   if (transcribing)           cls += ' is-transcribing'
   if (permError === 'denied') cls += ' is-denied'
 
-  const title = transcribing   ? 'جاري التحويل بـ Whisper...'
+  const title = transcribing   ? 'جاري التحويل بـ DZ Agent...'
     : listening                ? 'يستمع... اضغط للإرسال'
     : permError === 'denied'   ? 'الميكروفون محجوب'
     : permError === 'no-device'? 'لا يوجد ميكروفون'
@@ -344,7 +344,7 @@ export default function VoicePanel({ onTranscript, onInterim }: VoicePanelProps)
       {/* حالة التحويل */}
       {transcribing && (
         <span className="dz-voice-state" aria-live="polite">
-          <span className="dz-voice-interim">⚡ Whisper يحوّل الصوت...</span>
+          <span className="dz-voice-interim">⚡ DZ Agent يحوّل الصوت...</span>
         </span>
       )}
 

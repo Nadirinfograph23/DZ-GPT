@@ -1,4 +1,4 @@
-// deploy-trigger: 20260531-2130
+// deploy-trigger: 20260601-2345
 // Vercel serverless entry point — uses esbuild bundle
 let app
 

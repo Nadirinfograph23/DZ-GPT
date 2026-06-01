@@ -352,7 +352,24 @@ function isValidGithubRepo(repo) {
 
 // ===== UNIFIED DEVELOPER / OWNER QUESTION DETECTION =====
 const DEVELOPER_RESPONSE = Object.freeze({
-  content: '👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿\n\nخبير جزائري في الذكاء الاصطناعي، مطوّر ومنشئ **DZ Agent** و**DZ-GPT**.\n\n🔵 [تواصل معه على فيسبوك](https://facebook.com/nadir.infograph23)',
+  content: `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
+
+مطوّر ومهندس ذكاء اصطناعي جزائري متخصص، من **عنابة** 🇩🇿
+منشئ ومطوّر **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+
+### 🎯 المجالات
+- Full-Stack AI Development
+- Multi-Agent Systems & NLP
+- تطوير تطبيقات الذكاء الاصطناعي الموجّهة للمحتوى الجزائري
+
+### 📺 ظهور تلفزيوني
+ضيف في **التلفزيون الوطني الجزائري** في حصة تقصي مع الدكتورة **عوماري فاطمة الزهراء** حول موضوع الذكاء الاصطناعي.
+🎬 [شاهد الحلقة على يوتيوب](https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7)
+
+### 🌐 التواصل الاجتماعي
+🔵 [فيسبوك](https://www.facebook.com/share/1AM1jDkz8o/) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2?_r=1&_t=ZS-96pplHnvWo4) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)
+
+🌍 الموقع: [dz-gpt.vercel.app](https://dz-gpt.vercel.app) | GitHub: [Nadirinfograph23](https://github.com/Nadirinfograph23)`,
   showDevCard: true,
 })
 

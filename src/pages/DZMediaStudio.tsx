@@ -18,22 +18,24 @@ const POLLINATIONS_MODELS = [
   { id: 'flux-3d',      label: '🧊 3D' },
 ]
 
+// Models verified 2026-06-01 — HuggingFace confirmed (HTTP 200, pipeline=text-to-image)
+// Removed: nano-banana-pro (non-existent), seedream (HF 404), gptimage (not a real distinct model)
 const AIFREE_DEFAULT_MODELS = [
-  { id: 'flux',           label: '⚡ FLUX',            badge: 'FAST'      },
-  { id: 'flux-realism',   label: '📸 FLUX Realism',   badge: 'REAL'      },
-  { id: 'flux-anime',     label: '🌸 FLUX Anime',     badge: ''          },
-  { id: 'turbo',          label: '🚀 Turbo',           badge: 'FAST'      },
-  { id: 'gptimage',       label: '✨ GPT Image',       badge: 'GPT'       },
-  { id: 'flux-schnell',   label: '⚡ FLUX Schnell',    badge: 'HF'        },
-  { id: 'flux-dev',       label: '🎯 FLUX Dev',        badge: 'HD'        },
-  { id: 'sd35-large',     label: '🖼️ SD 3.5 Large',   badge: 'HD'        },
-  { id: 'sd35-medium',    label: '🖼️ SD 3.5 Medium',  badge: ''          },
-  { id: 'sdxl-lightning', label: '⚡ SDXL Lightning',  badge: ''          },
-  { id: 'playground',     label: '🎮 Playground 2.5',  badge: ''          },
-  { id: 'juggernaut',     label: '💪 Juggernaut XL',   badge: ''          },
-  { id: 'realvisxl',      label: '📷 RealVis XL',      badge: 'REAL'      },
-  { id: 'seedream',       label: '🌱 Seedream',         badge: 'ByteDance' },
-  { id: 'nano-banana-pro',label: '🍌 Nano Banana Pro', badge: 'PRO'       },
+  // Pollinations — fast, free, no key
+  { id: 'flux',           label: '⚡ FLUX',            badge: 'FAST', group: 'Pollinations' },
+  { id: 'turbo',          label: '🚀 Turbo',           badge: 'FAST', group: 'Pollinations' },
+  { id: 'flux-realism',   label: '📸 FLUX Realism',   badge: 'REAL', group: 'Pollinations' },
+  { id: 'flux-anime',     label: '🌸 FLUX Anime',     badge: '',     group: 'Pollinations' },
+  // HuggingFace — verified models (work from Vercel with HF_TOKEN)
+  { id: 'flux-schnell',   label: '⚡ FLUX Schnell',   badge: 'HF',   group: 'HuggingFace'  },
+  { id: 'flux-dev',       label: '🎯 FLUX Dev',       badge: 'HD',   group: 'HuggingFace'  },
+  { id: 'sd35-large',     label: '🖼️ SD 3.5 Large',  badge: 'HD',   group: 'HuggingFace'  },
+  { id: 'sd35-medium',    label: '🖼️ SD 3.5 Medium', badge: '',     group: 'HuggingFace'  },
+  { id: 'sdxl-lightning', label: '⚡ SDXL Lightning', badge: '',     group: 'HuggingFace'  },
+  { id: 'playground',     label: '🎮 Playground 2.5', badge: '',     group: 'HuggingFace'  },
+  { id: 'juggernaut',     label: '💪 Juggernaut XL',  badge: '',     group: 'HuggingFace'  },
+  { id: 'realvisxl',      label: '📷 RealVis XL',     badge: 'REAL', group: 'HuggingFace'  },
+  { id: 'sana',           label: '✨ SANA 1.6B',       badge: 'NEW',  group: 'HuggingFace'  },
 ]
 
 interface AspectPreset {

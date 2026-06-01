@@ -19783,11 +19783,29 @@ app.post('/api/dz-media/aifree/generate', aiLimiter, async (req, res) => {
   const { prompt, model = 'flux-schnell', width = 768, height = 768, steps = 25 } = req.body || {}
   if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
 
+  // ── Auto-translate Arabic / French / Darija → English ──────────────────────
+  let finalPrompt = prompt.trim()
+  let translatedPrompt = null
+  let detectedLang = 'en'
+  try {
+    const { translateForImage } = await import('./lib/dz-v4/translate.js')
+    const tr = await translateForImage({ aiGenerate: safeGenerateAI, prompt: finalPrompt })
+    detectedLang = tr.language
+    if (tr.translated && tr.english) {
+      finalPrompt    = tr.english
+      translatedPrompt = tr.english
+      console.log(`[aifree] translated (${tr.language}→en): "${prompt.slice(0,40)}" → "${finalPrompt.slice(0,60)}"`)
+    }
+  } catch (e) {
+    console.warn('[aifree] translate error (fallback to original):', e.message)
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const m = await getAifreeModule()
   if (!m) return res.status(503).json({ ok: false, error: 'CF-bypass service غير متاح' })
 
   try {
-    const result = await m.generateImage(prompt, { model, width, height, steps })
+    const result = await m.generateImage(finalPrompt, { model, width, height, steps })
     if (!result.ok) return res.status(502).json(result)
 
     // If we have base64, convert to data-url
@@ -19795,6 +19813,12 @@ app.post('/api/dz-media/aifree/generate', aiLimiter, async (req, res) => {
       const mime = result.mime || 'image/png'
       result.imageUrl = `data:${mime};base64,${result.imageBase64}`
       delete result.imageBase64
+    }
+    // Return translation info so the UI can show it
+    if (translatedPrompt) {
+      result.translatedPrompt = translatedPrompt
+      result.originalPrompt  = prompt
+      result.detectedLang    = detectedLang
     }
     res.json(result)
   } catch (e) {

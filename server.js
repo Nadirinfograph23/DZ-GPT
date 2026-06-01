@@ -18693,12 +18693,59 @@ function getBreakingNewsFromCache() {
   return breaking.slice(0, 3)
 }
 
+// ── Detect big-task requests that require a dedicated page ──────────────────
+function detectBigTaskRedirect(question) {
+  const q = question.toLowerCase()
+  // Website / web-app creation
+  if (/أنش[يء]\s*موقع|اصنع\s*موقع|ابني\s*موقع|بني\s*موقع|عمل\s*موقع|تصميم\s*موقع|أريد\s*موقع|إنشاء\s*موقع|انشاء\s*موقع|أريد\s*تطبيق\s*ويب|اعمل\s*(?:لي\s*)?(?:موقع|تطبيق)|create\s+(?:a\s+)?(?:website|web\s*app|web\s*site)|build\s+(?:a\s+)?(?:website|web\s*app)|make\s+(?:a\s+)?(?:website|web\s*app)|landing\s+page|crée.{0,10}site|faire.{0,10}site/i.test(q)) {
+    return {
+      url: '/agent',
+      label: '🤖 افتح DZ Agent لإنشاء الموقع',
+      reply: '🌐 طلب إنشاء موقع مكتشَف!\n\nلبناء مواقع وتطبيقات الويب، تحتاج إلى **DZ Agent** — الوكيل المتخصص في البناء والنشر. انقر الزر أدناه للانتقال مباشرةً وابدأ مشروعك! 🚀',
+    }
+  }
+  // Video generation
+  if (/أنش[يء]\s*فيديو|ولّد\s*فيديو|اصنع\s*فيديو|إنشاء\s*فيديو|انشاء\s*فيديو|أريد\s*فيديو.*(?:ذكاء|ai)|توليد\s*فيديو|generate\s+(?:a\s+)?video|text.{0,5}to.{0,5}video|create\s+(?:a\s+)?video|make\s+(?:a\s+)?video|fais.{0,10}vidéo/i.test(q)) {
+    return {
+      url: '/media',
+      label: '🎬 افتح DZ Media Studio',
+      reply: '🎬 طلب توليد فيديو مكتشَف!\n\nتوليد الفيديو بالذكاء الاصطناعي متاح في **DZ Media Studio** — اضغط الزر أدناه للانتقال واختر النموذج المناسب! 🎞️',
+    }
+  }
+  // Image generation
+  if (/أنش[يء]\s*صورة|ولّد\s*صورة|اصنع\s*صورة|رسم\s*(?:لي\s*)?صورة|توليد\s*صورة|صور\s*(?:بالذكاء|ai|ذكاء)|إنشاء\s*صورة|انشاء\s*صورة|generate\s+(?:an?\s+)?image|text.{0,5}to.{0,5}image|create\s+(?:an?\s+)?image|make\s+(?:an?\s+)?image|draw\s+(?:me\s+)?(?:a\s+)?image/i.test(q)) {
+    return {
+      url: '/media',
+      label: '🎨 افتح DZ Media Studio',
+      reply: '🎨 طلب توليد صورة مكتشَف!\n\nتوليد الصور بالذكاء الاصطناعي متاح في **DZ Media Studio** — يدعم نماذج DZ MEDIA PRO وDZ MEDIA BASIC. انقر الزر للانتقال! ✨',
+    }
+  }
+  return null
+}
+
 async function handleAiChatTrigger(rawText, isAgent, authorSession) {
   const trigger = isAgent ? '@dzagent' : '@dzgpt'
   const question = rawText.slice(trigger.length).trim()
   if (!question) return null
 
   try {
+    // ── Big-task redirect (agent only) ───────────────────────────────────
+    if (isAgent) {
+      const bigTask = detectBigTaskRedirect(question)
+      if (bigTask) {
+        const botMsg = pushChatMsg({
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: bigTask.reply,
+          timestamp: Date.now(), isBot: true, botType: 'agent',
+          triggeredBy: authorSession.name,
+          redirectUrl: bigTask.url,
+          redirectLabel: bigTask.label,
+        })
+        broadcastChat({ type: 'message', msg: botMsg })
+        return botMsg
+      }
+    }
+
     // ── Breaking news broadcast (agent only) ─────────────────────────────
     if (isAgent) {
       const breakingArticles = getBreakingNewsFromCache()
@@ -18872,7 +18919,15 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 2. استخدم أرقاماً وحقائق محددة. اذمج المصدر في اسمه [اسم](رابط) — لا تكتب URL خاماً كنص أبداً.
 3. إذا كانت البيانات المباشرة متاحة أدناه، استخدمها أولاً ولا تتجاهلها.
 4. أجب بنفس لغة السؤال (عربية / فرنسية / إنجليزية).
-5. كن موجزاً (3-5 جمل) مع الدقة والحداثة. للطقس والرياضة: استخدم جدولاً Markdown إن أمكن.${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
+5. كن موجزاً (3-5 جمل) مع الدقة والحداثة. للطقس والرياضة: استخدم جدولاً Markdown إن أمكن.
+
+أدوات المنصة المتاحة (وجّه إليها المستخدم عند الطلب):
+- 🤖 بناء مواقع وتطبيقات → **DZ Agent** (الرئيسية)
+- 🎨 توليد صور وفيديو → **DZ Media Studio** (/media)
+- 📖 القرآن والتفسير → **AI Quran** (/quran)
+- 📊 إحصاءات الجزائر → **DZ Stats** (/stats)
+- 🛠️ CV ومخططات وقانون → **DZ Tools** (/tools)
+- 🎵 راديو وموسيقى → **DZ Radio** (/radio)${liveContext ? `\n\n━━━ بيانات مباشرة محدّثة ━━━${liveContext}` : ''}`
       : `أنت DZ GPT، مساعد ذكي عام ومفيد، جزء من منصة DZ-GPT التي طوّرها نذير حوامرية (Nadir Infograph) 🇩🇿.
 
 قواعد الإجابة (إلزامية):

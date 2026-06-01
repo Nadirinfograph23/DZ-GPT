@@ -24596,6 +24596,47 @@ app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (r
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ChatIMG Engine — توليد الصور بأسلوب chatimg.ai (ضد الحظر + تعدد مزودين)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/chatimg/models
+app.get('/api/chatimg/models', async (_req, res) => {
+  try {
+    const { CHATIMG_MODELS } = await import('./lib/chatimg-engine.js')
+    res.json({ ok: true, models: CHATIMG_MODELS })
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
+// POST /api/chatimg/generate — text-to-image via chatimg.ai style
+app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
+  const { prompt, model = 'auto', width = 768, height = 768 } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  try {
+    const { generateWithChatIMG } = await import('./lib/chatimg-engine.js')
+    const result = await generateWithChatIMG(String(prompt).slice(0, 2000), {
+      width:  Math.min(Math.max(Number(width)  || 768, 256), 1536),
+      height: Math.min(Math.max(Number(height) || 768, 256), 1536),
+      preferredModel: String(model || 'auto'),
+      ip,
+    })
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// GET /api/chatimg/img/:id — serve generated image
+app.get('/api/chatimg/img/:id', async (req, res) => {
+  try {
+    const { getStoredResult } = await import('./lib/chatimg-engine.js')
+    const item = getStoredResult(req.params.id)
+    if (!item) return res.status(404).json({ error: 'الصورة غير موجودة أو انتهت صلاحيتها' })
+    res.setHeader('Content-Type', item.mime)
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.send(item.buf)
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

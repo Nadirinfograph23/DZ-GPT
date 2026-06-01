@@ -188,6 +188,8 @@ function CodeBlock({ children, className }: { children: React.ReactNode; classNa
 
 // ===== DEVELOPER QUERY DETECTION =====
 const DEVELOPER_KEYWORDS = [
+  // Direct name mentions — any context
+  'نذير حوامرية', 'حوامرية نذير', 'nadir infograph', 'nadir houamria', 'nadir hawamria',
   // Arabic — developer
   'من هو مطورك', 'من مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك',
   'من طور dz', 'من صمم', 'من هو مطور', 'مطور dz', 'مطور الوكيل', 'مطور الموقع',
@@ -214,7 +216,19 @@ function isDeveloperQuery(text: string): boolean {
   const lower = text.toLowerCase().trim()
   return DEVELOPER_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()))
 }
-const DEVELOPER_RESPONSE = 'المطور هو: **نذير حوامرية - Nadir Infograph** 🇩🇿\nخبير في مجال الذكاء الاصطناعي'
+const DEVELOPER_RESPONSE = `👨‍💻 **نذير حوامرية — Nadir Infograph** 🇩🇿
+
+مطوّر ومهندس ذكاء اصطناعي جزائري من **عنابة**، منشئ **DZ Agent** و**DZ-GPT** — منصة الذكاء الاصطناعي الجزائرية الأولى.
+
+🎯 **تخصصاته:** Full-Stack AI Development · Multi-Agent Systems · NLP · الدارجة الجزائرية
+
+📺 **ظهور تلفزيوني:** ضيف في **التلفزيون الوطني الجزائري** مع الدكتورة **عوماري فاطمة الزهراء** حول الذكاء الاصطناعي
+🎬 [شاهد الحلقة](https://youtu.be/-DPOFfvRS-Q?si=TOkP1VFTApMcktJ7)
+
+🌐 **تواصل معه:**
+🔵 [فيسبوك](https://www.facebook.com/nadir.infograph23) | 📸 [إنستغرام](https://www.instagram.com/nadir.infograph?igsh=ZmJsZGhheXB0emli) | 🎵 [تيكتوك](https://www.tiktok.com/@nadirinfograph2) | ▶️ [يوتيوب](https://www.youtube.com/@Nadirinfograph)
+
+🏅 [شاهد شهادة Replit الرسمية](https://dz-gpt.vercel.app/dz-agent-certificate.html)`
 
 // ===== LANGUAGE DETECTION =====
 type OcrLang = { code: 'ar' | 'fr' | 'en'; label: string; flag: string; dir: 'rtl' | 'ltr' }

@@ -31,7 +31,6 @@ const DEFAULT_MODELS: ModelDef[] = [
   { id: 'nano-banana',    label: '🍌 Gemini 2.0 Flash Image',        badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: null },
   { id: 'imgcreator',     label: '🎨 Nano Banana 2 (ImgCreator)',    badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 50,  desc: 'Gemini backend — 1K — ضيف مجاني' },
   { id: 'imgcreator-gpt', label: '🤖 GPT Image 2 (ImgCreator)',      badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 50,  desc: 'GPT-4o backend — 1K — ضيف مجاني' },
-  { id: 'gpt-image-2',    label: '🤖 GPT Image 2 (OpenRouter)',      badge: 'PRO',   tier: 'premium', group: 'DZ MEDIA PRO',   waitSecs: null },
   { id: 'hf',             label: '⚡ FLUX.1-schnell (HF)',            badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
   { id: 'flux',           label: '⚡ FLUX (Pollinations)',            badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
   { id: 'turbo',          label: '🚀 Turbo (Pollinations)',           badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
@@ -98,7 +97,7 @@ export default function DZMediaStudio() {
     if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
     setLoading(true); setError('')
 
-    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','gpt-image-2','hf']
+    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','hf']
     const isDzMedia  = dzMediaIds.includes(model)
     const hasArabic  = /[\u0600-\u06FF]/.test(prompt)
     const modelQueue = isDzMedia

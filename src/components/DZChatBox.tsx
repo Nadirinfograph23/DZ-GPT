@@ -4019,9 +4019,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   }, [])
 
   const TTS_VOICE_BY_LANG: Record<string, string> = {
-    ar: 'ar-DZ-IsmaelNeural',
-    fr: 'fr-FR-HenriNeural',
-    en: 'en-US-GuyNeural',
+    ar: 'ar-EG-ShakirNeural',
+    fr: 'fr-FR-RemyMultilingualNeural',
+    en: 'fr-FR-RemyMultilingualNeural',
   }
 
   const speakMessage = useCallback(async (msgId: string, text: string) => {
@@ -4039,7 +4039,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     }
     setTtsState({ id: msgId, status: 'loading' })
     try {
-      const voice = TTS_VOICE_BY_LANG[language || 'ar'] || 'ar-DZ-IsmaelNeural'
+      const voice = TTS_VOICE_BY_LANG[language || 'ar'] || 'ar-EG-ShakirNeural'
       const resp = await fetch('/api/tts/edge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

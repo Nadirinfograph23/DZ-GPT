@@ -3538,6 +3538,7 @@ interface DZChatBoxProps {
   language?: 'ar' | 'en' | 'fr'
   onTitleChange?: (title: string) => void
   onAgentModeChange?: (state: AgentModeState) => void
+  cerebrasKey?: string
 }
 
 type DashboardContext = { priority: 'weather'; city: string }
@@ -3731,7 +3732,7 @@ const TickerText = memo(function TickerText() {
   )
 })
 
-export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange }: DZChatBoxProps) {
+export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange, cerebrasKey }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
     if (!chatId) return []
@@ -6865,6 +6866,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
               dashboardContext,
               youtubeContext: activeYouTubeVideoRef.current || undefined,
               youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
+              cerebrasKey: cerebrasKey || undefined,
             }),
             signal,
           })
@@ -7243,6 +7245,7 @@ ${rows}
           body: JSON.stringify({
             messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
             githubToken: githubToken || undefined,
+            cerebrasKey: cerebrasKey || undefined,
           }),
           signal,
         })

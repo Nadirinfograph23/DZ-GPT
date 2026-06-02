@@ -7,7 +7,7 @@ import helmet from 'helmet'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 import { readFile } from 'fs/promises'
-import { readFileSync as _readFileSync } from 'fs'
+import { readFileSync as _readFileSync, writeFileSync as _writeFS, existsSync as _existsFS } from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
@@ -1323,6 +1323,7 @@ import {
   moderateMessage,
   recordPendingLearning,
 } from './lib/dzLanguage.js'
+import { getStaticFallback } from './dialect/dzEngine.js'
 
 // ===== DZ PLACE SEARCH (OpenStreetMap Nominatim — no API key) =====
 import {
@@ -6854,33 +6855,40 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 const RSS_FEEDS = {
   national: [
-    // ── Algerian newspapers (verified working) ──
+    // ── Algerian newspapers ──
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
     { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
     { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'Liberté Algérie', url: 'https://www.liberte-algerie.com/feed' },
-    // ── Pan-Arab sources (verified working) ──
+    { name: 'الشعب', url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'الوطن', url: 'https://www.elwatan.com/feed/' },
+    // ── Pan-Arab sources (stable) ──
     { name: 'الجزيرة عربي', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
     { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
     { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
     { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss.xml' },
+    { name: 'العربية', url: 'https://www.alarabiya.net/ar/rss.xml' },
+    { name: 'RT عربي', url: 'https://arabic.rt.com/rss/' },
     { name: 'أخبار الأمم المتحدة', url: 'https://news.un.org/feed/subscribe/ar/news/all/rss.xml' },
-    // ── Google News Algeria (always fresh) ──
-    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=algerie&hl=fr&gl=DZ&ceid=DZ:fr' },
+    // ── Google News Algeria (always fresh, bypasses blocks) ──
+    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
   ],
   sports: [
-    // ── Algerian & regional sports (verified working) ──
+    // ── Algerian & regional sports ──
     { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
     { name: 'سبورت 360 عربي', url: 'https://arabic.sport360.com/feed/' },
-    // ── International sports (verified working) ──
+    { name: 'FilGoal', url: 'https://www.filgoal.com/feed/' },
+    // ── International sports (stable) ──
     { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
     { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
     { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-    { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
     // ── Google News Sports Algeria ──
-    { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=رياضة+جزائر&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google كرة قدم جزائر', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   tech: [
     { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
@@ -6890,6 +6898,9 @@ const RSS_FEEDS = {
     { name: 'VentureBeat AI', url: 'https://venturebeat.com/category/ai/feed/' },
     { name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index' },
     { name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
+    // ── Arabic tech ──
+    { name: 'Google ذكاء اصطناعي', url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google تكنولوجيا', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
 }
 
@@ -12603,10 +12614,10 @@ app.post('/api/dz-agent/github/claude/stream', async (req, res) => {
   }
 })
 
-// ── In-memory response cache (simple identical queries within 5 min) ──────────
+// ── In-memory response cache (10 min TTL, 500 entries max) ────────────────────
 const _agentCache = new Map()
-const _CACHE_TTL_MS = 5 * 60 * 1000
-const _CACHE_MAX = 200
+const _CACHE_TTL_MS = 10 * 60 * 1000
+const _CACHE_MAX = 500
 function _cacheKey(msg) {
   const base = msg.trim().toLowerCase().slice(0, 120)
   try {
@@ -12632,14 +12643,70 @@ function _cacheSet(msg, value) {
   _agentCache.set(_cacheKey(msg), { value, ts: Date.now() })
 }
 // Queries that should NEVER be cached (live data)
-const _NOCACHE_RE = /أخبار|طقس|مباراة|سعر|صرف|الآن|اليوم|لحظة|live|breaking|latest|news|weather|price/i
+const _NOCACHE_RE = /أخبار|طقس|مباراة|سعر|صرف|الآن|اليوم|لحظة|live|breaking|latest|news|weather|price|وقت|ساعة|تاريخ/i
+
+// ===== DISK SESSION PERSISTENCE — حفظ محادثات DZ Agent على disk =====
+const _SESSIONS_DIR = './data/sessions'
+const _SESSION_MAX_MSGS = 40
+const _SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const _memSessionCache = new Map()
+
+function _getSessionPath(sid) {
+  const safe = sid.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64)
+  return `${_SESSIONS_DIR}/${safe}.json`
+}
+function loadDiskSession(sid) {
+  if (!sid) return []
+  if (_memSessionCache.has(sid)) return _memSessionCache.get(sid)
+  try {
+    const p = _getSessionPath(sid)
+    if (!_existsFS(p)) return []
+    const data = JSON.parse(_readFileSync(p, 'utf8'))
+    if (!Array.isArray(data?.messages)) return []
+    if (Date.now() - (data.updatedAt || 0) > _SESSION_TTL_MS) return []
+    _memSessionCache.set(sid, data.messages)
+    return data.messages
+  } catch { return [] }
+}
+function saveDiskSession(sid, messages) {
+  if (!sid || !messages?.length) return
+  const trimmed = messages.slice(-_SESSION_MAX_MSGS)
+  _memSessionCache.set(sid, trimmed)
+  try {
+    _writeFS(_getSessionPath(sid), JSON.stringify({ sid, messages: trimmed, updatedAt: Date.now() }))
+  } catch (e) { console.warn('[Session] write error:', e.message) }
+}
+function pruneDiskSessions() {
+  try {
+    const { readdirSync, unlinkSync } = fs
+    const files = readdirSync(_SESSIONS_DIR)
+    const now = Date.now()
+    for (const f of files) {
+      try {
+        const data = JSON.parse(_readFileSync(`${_SESSIONS_DIR}/${f}`, 'utf8'))
+        if (now - (data.updatedAt || 0) > _SESSION_TTL_MS) unlinkSync(`${_SESSIONS_DIR}/${f}`)
+      } catch {}
+    }
+  } catch {}
+}
+setInterval(pruneDiskSessions, 6 * 60 * 60 * 1000) // every 6h
 
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
+  const _agentSessionId = sanitizeString(req.body.sessionId || '', 64) || null
   let messages = normalizeChatMessages(req.body.messages)
 
   if (!messages?.length) {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
+  }
+
+  // ── Disk session restore — استعادة المحادثة من disk إن لم يُرسل السياق ──
+  if (_agentSessionId && messages.length <= 1) {
+    const _saved = loadDiskSession(_agentSessionId)
+    if (_saved.length > 1) {
+      messages = [..._saved.slice(-(10)), ...messages].slice(-_SESSION_MAX_MSGS)
+      console.log(`[Session] restored ${_saved.length} msgs for session ${_agentSessionId}`)
+    }
   }
 
   // ── Smart Topic Isolation — إذا السؤال الجديد موضوع مختلف تماماً، نقطع السياق ──
@@ -16133,6 +16200,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _cacheSet(lastUserMessage, _responsePayload)
     }
 
+    // ── Disk session save — حفظ المحادثة على disk ─────────────────────────
+    if (_agentSessionId) {
+      const _toSave = [...messages, { role: 'assistant', content: _bestContent }]
+      saveDiskSession(_agentSessionId, _toSave)
+    }
+
     return res.status(200).json(_responsePayload)
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
@@ -16201,9 +16274,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
 
+    // ── Darija fallback — ردّ فوري بالدارجة بدون LLM ─────────────────────
+    const _darijaFallback = getStaticFallback(lastUserMessage)
     return res.status(200).json({
-      content: `⚠️ **نموذج الذكاء الاصطناعي غير متاح حالياً.**\n\nلا يوجد مفتاح AI مُعيَّن في البيئة — جميع النماذج (Groq، DeepSeek، OpenAI) لم تستجب.\n\n**الحل السريع (مجاني):**\n1. اذهب إلى [console.groq.com/keys](https://console.groq.com/keys) وأنشئ مفتاحاً مجانياً\n2. أضفه في إعدادات المشروع باسم **AI_API_KEY**\n\n**ما يعمل الآن بدون AI:**\n- 💱 أسعار الصرف: "سعر الدولار اليوم"\n- ⚽ مباريات اليوم: "مباريات اليوم"\n- 🕌 مواقيت الصلاة: "مواقيت الصلاة في الجزائر"\n- 📰 أخبار: "أخبار الجزائر اليوم"\n- 🌤️ الطقس: "الطقس في وهران"`,
-      status: 'no_api_key',
+      content: _darijaFallback,
+      status: 'darija_fallback',
     })
   }
 

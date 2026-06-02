@@ -45,12 +45,13 @@ export default function DZMediaStudio() {
   const [models, setModels]   = useState<ModelDef[]>(DEFAULT_MODELS)
   const [width, setWidth]     = useState(768)
   const [height, setHeight]   = useState(768)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState<ImageResult | null>(null)
-  const [error, setError]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [imgLoading, setImgLoading] = useState(false)
+  const [result, setResult]     = useState<ImageResult | null>(null)
+  const [error, setError]       = useState('')
   const [progress, setProgress] = useState('')
-  const [elapsed, setElapsed] = useState(0)
-  const timerRef              = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [elapsed, setElapsed]   = useState(0)
+  const timerRef                = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── عداد الوقت أثناء التوليد ──────────────────────────────────────────────
   useEffect(() => {
@@ -80,17 +81,28 @@ export default function DZMediaStudio() {
     const waitSec = mDef.waitSecs ?? 12
     setProgress(`🎨 جاري التوليد بـ ${mDef.label} (~${waitSec} ثانية)...`)
 
+    const timeoutMs = model === 'horde' ? 175_000 : 65_000
+    const ac = new AbortController()
+    const timeoutId = setTimeout(() => ac.abort(), timeoutMs)
+
     try {
       const res  = await fetch('/api/chatimg/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, model, width, height }),
-        signal: AbortSignal.timeout(model === 'horde' ? 175_000 : 75_000),
+        signal: ac.signal,
       })
+      clearTimeout(timeoutId)
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`)
+      }
       const data = await res.json() as {
-        ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string
-        error?: string; translated?: boolean; remainingCredits?: number | null
+        ok: boolean; url?: string; promptUsed?: string; originalPrompt?: string
+        model?: string; provider?: string; error?: string; translated?: boolean
+        retryable?: boolean; remainingCredits?: number | null
       }
       if (data.ok && data.url) {
+        setImgLoading(true)
         setResult({
           type: 'image', url: data.url,
           prompt: data.promptUsed || prompt,
@@ -102,8 +114,11 @@ export default function DZMediaStudio() {
         setError(data.error || 'فشل التوليد — حاول مجدداً أو جرّب نموذجاً آخر')
       }
     } catch (err: unknown) {
-      const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
-      setError(isTimeout ? 'انتهت مهلة الطلب — جرّب نموذجاً أسرع كـ Turbo' : 'حدث خطأ في الاتصال — تحقق من الشبكة')
+      clearTimeout(timeoutId)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      setError(isAbort
+        ? 'انتهت مهلة الطلب — جرّب نموذجاً أسرع كـ Turbo'
+        : `فشل الاتصال بالخادم — ${err instanceof Error ? err.message.slice(0,80) : 'خطأ غير معروف'}`)
     }
     setLoading(false); setProgress('')
   }, [prompt, model, width, height])
@@ -249,11 +264,27 @@ export default function DZMediaStudio() {
 
           {result && (
             <div className="dms-result-card">
-              <div className="dms-result-img-wrap">
+              <div className="dms-result-img-wrap" style={{ position: 'relative' }}>
+                {imgLoading && (
+                  <div style={{
+                    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.6)', zIndex: 2, borderRadius: '8px',
+                  }}>
+                    <div className="dms-loading-ring" style={{ borderTopColor: '#c8ff00', width: 40, height: 40, marginBottom: 10 }} />
+                    <span style={{ color: '#c8ff00', fontSize: 13 }}>جاري تحميل الصورة…</span>
+                  </div>
+                )}
                 <img
                   src={result.url} alt={result.prompt}
                   className="dms-result-img" loading="eager"
-                  onError={e => { (e.target as HTMLImageElement).style.opacity = '0.3' }}
+                  onLoad={() => setImgLoading(false)}
+                  onError={e => {
+                    setImgLoading(false)
+                    setError('تعذّر تحميل الصورة — قد يكون المزوّد مشغولاً. حاول مرة أخرى.')
+                    ;(e.target as HTMLImageElement).style.display = 'none'
+                  }}
+                  style={{ opacity: imgLoading ? 0 : 1, transition: 'opacity 0.4s' }}
                 />
               </div>
 
@@ -275,7 +306,7 @@ export default function DZMediaStudio() {
                   target="_blank" rel="noopener noreferrer" className="dms-action-btn dms-action-btn--dl">
                   ⬇ تحميل
                 </a>
-                <button className="dms-action-btn" onClick={handleGenerate} disabled={loading}>🔄 جديد</button>
+                <button className="dms-action-btn" onClick={handleGenerate} disabled={loading || imgLoading}>🔄 جديد</button>
               </div>
             </div>
           )}

@@ -75,7 +75,7 @@ export default function DZMediaStudio() {
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setResult(null)
 
     const mDef    = DEFAULT_MODELS.find(m => m.id === model) || DEFAULT_MODELS[0]
     const waitSec = mDef.waitSecs ?? 12
@@ -99,8 +99,13 @@ export default function DZMediaStudio() {
           provider: maskedProvider(data.provider || ''),
           translatedPrompt: data.translated ? data.promptUsed : undefined,
         })
+      } else {
+        setError(data.error || 'فشل التوليد — حاول مجدداً أو جرّب نموذجاً آخر')
       }
-    } catch { /* timeout */ }
+    } catch (err: unknown) {
+      const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
+      setError(isTimeout ? 'انتهت مهلة الطلب — جرّب نموذجاً أسرع كـ Turbo' : 'حدث خطأ في الاتصال — تحقق من الشبكة')
+    }
     setLoading(false); setProgress('')
   }, [prompt, model, width, height])
 
@@ -114,7 +119,7 @@ export default function DZMediaStudio() {
           <span className="dms-badge">AI</span>
         </div>
         <p className="dms-header-sub">
-          توليد الصور بالذكاء الاصطناعي — DZ MEDIA PRO · DZ MEDIA · DZ MEDIA BASIC
+          توليد الصور بالذكاء الاصطناعي
         </p>
       </header>
 

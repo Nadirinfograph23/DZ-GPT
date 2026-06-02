@@ -6958,11 +6958,18 @@ const FOOTBALL_CACHE = new Map()
 const FOOTBALL_CACHE_TTL = 5 * 60 * 1000 // 5 min for live match data
 
 const INTL_FOOTBALL_FEEDS = [
-  { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
-  { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-  { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
-  { name: 'Yahoo Sports', url: 'https://sports.yahoo.com/rss/' },
+  { name: 'Sport DZ',            url: 'https://www.sport-dz.com/feed/' },
+  { name: 'ESPN Soccer',         url: 'https://www.espn.com/espn/rss/soccer/news' },
+  { name: 'BBC Sport Football',  url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+  { name: 'Yahoo Sports',        url: 'https://sports.yahoo.com/rss/' },
   { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── دوريات عالمية ──
+  { name: 'Google Premier League', url: 'https://news.google.com/rss/search?q=Premier+League+match+result&hl=en&gl=GB&ceid=GB:en' },
+  { name: 'Google Ligue 1',        url: 'https://news.google.com/rss/search?q=Ligue+1+match+r%C3%A9sultat&hl=fr&gl=FR&ceid=FR:fr' },
+  { name: 'Google La Liga',        url: 'https://news.google.com/rss/search?q=La+Liga+resultado+jornada&hl=es&gl=ES&ceid=ES:es' },
+  { name: 'Google Serie A',        url: 'https://news.google.com/rss/search?q=Serie+A+risultato+partita&hl=it&gl=IT&ceid=IT:it' },
+  { name: 'Google Bundesliga',     url: 'https://news.google.com/rss/search?q=Bundesliga+Ergebnis+Spiel&hl=de&gl=DE&ceid=DE:de' },
+  { name: 'Google Champions League', url: 'https://news.google.com/rss/search?q=Champions+League+match+result&hl=en&gl=US&ceid=US:en' },
 ]
 
 async function fetchSofaScoreFootball(dateStr) {
@@ -15393,13 +15400,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // Global leagues detection keywords
   const globalLeaguesKeywords = [
+    // ── الدوريات الأوروبية الكبرى ──
     'بريميرليغ', 'premier league', 'ليغا', 'la liga', 'الدوري الإسباني',
     'بوندسليغا', 'bundesliga', 'سيريا', 'serie a', 'ليغ 1', 'ligue 1',
     'دوري أبطال أوروبا', 'champions league', 'تشامبيونز', 'europa league',
     'الدوري الإنجليزي', 'الدوري الفرنسي', 'الدوري الإيطالي', 'الدوري الألماني',
     'الدوريات الأوروبية', 'الدوريات العالمية', 'مباريات اليوم في أوروبا',
+    // ── دوريات أخرى ──
+    'الدوري الأمريكي', 'mls', 'الدوري السعودي', 'saudi pro league',
+    'الدوري الهولندي', 'eredivisie', 'الدوري البرتغالي', 'primeira liga',
+    'الكونفرانس ليغ', 'conference league', 'copa del rey', 'كأس الملك',
+    'كأس فرنسا', 'كأس إنجلترا', 'كأس ألمانيا', 'fa cup', 'league cup',
+    'الدوري التركي', 'الدوري البلجيكي', 'الدوري الروسي', 'الدوري الأرجنتيني',
+    'superliga', 'super league', 'world cup', 'كأس العالم', 'يورو', 'euro 2024',
+    'كأس أمم أفريقيا', 'افريقيا',
+    // ── مباريات اليوم / الليلة (عاملة للاستفسار العام) ──
+    'مباريات اليوم', 'مباريات الليلة', 'مباريات الليلية', 'برنامج المباريات',
+    'جدول المباريات', 'ماتشات اليوم', 'كل المباريات اليوم',
+    'مباراة الليلة', 'مباراة اليوم', 'الدوريات الكبرى',
+    'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
   ]
   const isGlobalLeaguesQuery = globalLeaguesKeywords.some(k => lowerMsg.includes(k))
+  // استفسار عام عن مباريات اليوم (حتى بدون تحديد دوري)
+  const isGeneralMatchesQuery = !isGlobalLeaguesQuery && /مباريات?\s*(?:اليوم|الليلة|الليلية|المباشرة|على\s*الهواء)|برنامج\s*(?:اليوم|المباريات|الرياضي)|ماتشات?\s*اليوم/i.test(lastUserMessage)
 
   // ── PARALLEL context fetching (Tasks 12+16 — fast, resilient) ────────────
   const weatherCity = sanitizeString(dashboardContext?.city || detectCityFromQuery(lastUserMessage), 80)
@@ -15421,7 +15444,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     (isFootballQuery && !isLFPQuery && !isStandingsQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
     // Use jdwel.com (same source as the card) with SofaScore as a fallback
-    isGlobalLeaguesQuery ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today)]) : Promise.resolve(null),
+    (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today)]) : Promise.resolve(null),
   ])
 
   // ── Build context strings from parallel results ────────────────────────────
@@ -15492,8 +15515,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
 
       if (played.length === 0 && upcoming.length === 0) {
-        lfpContext += `\n> ⚠️ **لا توجد مباريات حالياً** في جدول الدوري الجزائري المحترف.\n`
-        lfpContext += `> يمكنك متابعة آخر المستجدات على [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)\n`
+        lfpContext += `\n> 📅 **لا توجد مباريات مجدولة اليوم** في الدوري الجزائري المحترف.\n`
+        // ── Fallback: آخر أخبار كرة القدم الجزائرية من RSS ──────────────────
+        try {
+          const _lfpFallbackFeeds = [
+            { name: 'Google كرة قدم جزائر', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%AF%D9%88%D8%B1%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+            { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+            { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
+          ]
+          const _lfpFallbackResults = await fetchMultipleFeeds(_lfpFallbackFeeds)
+          if (_lfpFallbackResults.length > 0) {
+            const _todayLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            lfpContext += `\n### 📰 آخر أخبار كرة القدم الجزائرية — ${_todayLabel}\n`
+            for (const art of _lfpFallbackResults.slice(0, 6)) {
+              const title = (art.title || art.headline || '').trim()
+              if (!title) continue
+              const url  = art.link || art.url || ''
+              const src  = art.source || 'المصدر'
+              const dStr = art.pubDate ? ` _(${new Date(art.pubDate).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'long' })})_` : ''
+              lfpContext += `• ${title}${dStr}`
+              if (url) lfpContext += ` — [${src}](${url})`
+              lfpContext += '\n'
+            }
+          }
+        } catch { /* لا تكسر الـ request */ }
+        lfpContext += `\n> 🔗 تابع الجدول الكامل على [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar)\n`
       }
 
       if (lfpData.articles && lfpData.articles.length > 0) {
@@ -15601,7 +15647,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       globalLeaguesContext += '\n*ملاحظة: المصدر الأساسي jdwel.com غير متاح حالياً — تم استخدام SofaScore كاحتياط.*\n---'
     } else {
-      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية ---\nتعذّر جلب بيانات المباريات العالمية حالياً من jdwel.com أو SofaScore. يرجى المحاولة لاحقاً أو زيارة: https://jdwel.com/today/\n---`
+      // ── Fallback: لا بيانات مباريات — جلب آخر أخبار كرة القدم من RSS ───────
+      let _globalFallbackCtx = ''
+      try {
+        const _todayLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+        const _todayISO   = new Date().toISOString().split('T')[0]
+        const _globalSportsFeeds = [
+          { name: 'Google football today', url: `https://news.google.com/rss/search?q=football+match+${_todayISO}&hl=ar&gl=DZ&ceid=DZ:ar` },
+          { name: 'BBC Sport Football',    url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+          { name: 'Google Ligue 1',        url: 'https://news.google.com/rss/search?q=Ligue+1+match+r%C3%A9sultat&hl=fr&gl=FR&ceid=FR:fr' },
+          { name: 'Google Premier League', url: 'https://news.google.com/rss/search?q=Premier+League+match+result&hl=en&gl=GB&ceid=GB:en' },
+          { name: 'Google La Liga',        url: 'https://news.google.com/rss/search?q=La+Liga+jornada+resultado&hl=es&gl=ES&ceid=ES:es' },
+          { name: 'ESPN Soccer',           url: 'https://www.espn.com/espn/rss/soccer/news' },
+        ]
+        const _globalFallbackResults = await fetchMultipleFeeds(_globalSportsFeeds)
+        if (_globalFallbackResults.length > 0) {
+          _globalFallbackCtx = `\n\n--- 🌍 آخر أخبار كرة القدم العالمية — ${_todayLabel} ---\n`
+          for (const art of _globalFallbackResults.slice(0, 10)) {
+            const title = (art.title || art.headline || '').trim()
+            if (!title) continue
+            const url  = art.link || art.url || ''
+            const src  = art.source || 'المصدر'
+            const dStr = art.pubDate ? ` _(${new Date(art.pubDate).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'long' })})_` : ''
+            _globalFallbackCtx += `• ${title}${dStr}`
+            if (url) _globalFallbackCtx += ` — [${src}](${url})`
+            _globalFallbackCtx += '\n'
+          }
+          _globalFallbackCtx += `\n> 🔗 [jdwel.com/today](https://jdwel.com/today/) | [livescore.com](https://www.livescore.com)\n---`
+          console.log(`[GlobalLeagues:fallback] RSS news fetched: ${_globalFallbackResults.length} articles`)
+        }
+      } catch (err) {
+        console.warn('[GlobalLeagues:fallback] RSS error:', err.message)
+      }
+      globalLeaguesContext = _globalFallbackCtx ||
+        `\n\n--- 🌍 الدوريات العالمية ---\nتعذّر جلب بيانات المباريات حالياً. تابع على [jdwel.com/today](https://jdwel.com/today/) أو [livescore.com](https://www.livescore.com)\n---`
     }
   }
 
@@ -16065,7 +16144,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     lfpContext       ? `🏆 LFP (lfp.dz):\n${_trim(lfpContext, 1500)}\n> لا تختلق نتائج.` : '',
     footballContext  ? `⚽ كرة القدم:\n${_trim(footballContext, 1500)}\n> لا تخترع نتائج.` : '',
     standingsContext ? `🏆 ترتيب الدوري:\n${_trim(standingsContext, 1000)}\n> لا تخترع نقاطاً.` : '',
-    globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1000)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.` : '',
+    globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1400)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.\n> ⚠️ إذا لم تكن هناك مباريات اليوم، اعرض آخر الأخبار الرياضية المتاحة مع ذكر تاريخها. لا تُعطِ ردوداً سلبية فارغة.` : '',
+    // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────
+    (isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery || isLFPQuery) ? `⚽ SPORTS RULE: إذا لم تكن هناك نتائج مباريات مباشرة لليوم، اعرض بدلاً من ذلك: (أ) آخر المباريات التي جرت مع نتائجها وتاريخها، أو (ب) المباريات القادمة، أو (ج) آخر الأخبار الرياضية من RSS مع ذكر تاريخها. لا تقل أبداً "لا توجد معلومات" أو تُعطِ رداً فارغاً. دائماً قدّم شيئاً مفيداً. اذكر المصدر والتاريخ دائماً.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',

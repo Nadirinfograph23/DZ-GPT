@@ -1868,18 +1868,37 @@ function detectToolRedirect(msg) {
 // ── Smart Topic Change Detection ──────────────────────────────────────────
 // Returns true if the new message is about a completely different topic
 // from the recent conversation history — so we can trim context.
+// تعابير الدارجة التي تعني تحولاً في الموضوع حتى لو كانت قصيرة
+const _DARIJA_CASUAL_SHIFT_RE = /^(واش\s+الدعوة|وش\s+الدعوة|واش\s+الحوايج|واش\s+جديد|وش\s+جديد|واش\s+الأخبار|وش\s+الأخبار|شلونك|كيرانك|كي\s+راك|لاباس\s*(بزاف)?|بخير(\s+الحمد)?|بالمناسبة|على\s+فكرة|حاجة\s+أخرى|سؤال\s+آخر|غير\s+الموضوع|الدعوة\s*(هانية|مزيانة)?)/i
+
 function detectTopicChange(messages) {
   if (!Array.isArray(messages) || messages.length < 3) return false
   const newMsg = [...messages].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || ''
-  if (!newMsg || newMsg.length < 8) return false
+  if (!newMsg || newMsg.length < 4) return false
 
-  // Get last 4 user messages excluding the newest
+  // ── Fast path: تعابير دارجة قصيرة تعني تحول موضوع فوري ──────────────────
   const prevUserMsgs = messages
     .filter(m => m.role === 'user')
     .slice(-5, -1)
     .map(m => m.content.toLowerCase())
 
   if (!prevUserMsgs.length) return false
+
+  // إذا كانت الرسالة الجديدة تعبير دارجة اجتماعي والمحادثة السابقة عن موضوع آخر
+  if (_DARIJA_CASUAL_SHIFT_RE.test(newMsg.trim())) {
+    // تحقق أن السياق السابق لم يكن دردشة هو الآخر
+    const prevText = prevUserMsgs.join(' ')
+    const _prevWasTopic = /كأس|رياضة|بطولة|سياسة|اقتصاد|تقنية|تاريخ|علم|طقس|قانون|كود|برمجة|مشروع|موقع|تطبيق/.test(prevText)
+    if (_prevWasTopic) {
+      console.log(`[TopicChange] Darija casual shift detected: "${newMsg.slice(0,30)}"`)
+      return true
+    }
+  }
+
+  // ── Standard path: token overlap analysis ───────────────────────────────
+  // Extra guard: don't reset on short follow-up words
+  const CONTINUATION_RE = /^(نعم|لا|أكمل|اكمل|تابع|وأيضا|وكمان|زيد|زيدني|وبعد|وكذلك|أيضا|ايضا|yes|no|ok|okay|continue|more|and|also|بالضبط|صح|غلط|عندي|سؤال|اسأل)/i
+  if (CONTINUATION_RE.test(newMsg.trim())) return false
 
   // Extract key tokens (words ≥4 chars) from each message
   const tokenize = (s) => s.replace(/[^\u0600-\u06FFa-z0-9\s]/g, ' ')
@@ -1889,7 +1908,13 @@ function detectTopicChange(messages) {
   const prevText  = prevUserMsgs.join(' ')
   const prevTokens = new Set(tokenize(prevText))
 
-  if (!newTokens.size || !prevTokens.size) return false
+  // رسالة قصيرة جداً لا يمكن قياس overlap — لكن لها معنى اجتماعي
+  if (!newTokens.size) {
+    // رسالة قصيرة بدون tokens → دردشة عابرة، حوّل الموضوع إذا السياق السابق ثقيل
+    const _prevHeavy = prevTokens.size >= 3
+    return newMsg.length >= 4 && _prevHeavy
+  }
+  if (!prevTokens.size) return false
 
   // Count shared tokens
   let shared = 0
@@ -1898,10 +1923,7 @@ function detectTopicChange(messages) {
   const overlapRatio = shared / newTokens.size
 
   // Topic changed if less than 15% token overlap AND new message is substantial
-  if (overlapRatio < 0.15 && newMsg.length > 15) {
-    // Extra guard: don't reset on short follow-up words
-    const CONTINUATION_RE = /^(نعم|لا|أكمل|اكمل|تابع|وأيضا|وكمان|زيد|زيدني|وبعد|وكذلك|أيضا|ايضا|وش|وشن|شنو|yes|no|ok|okay|continue|more|and|also|بالضبط|صح|غلط|عندي|سؤال|اسأل)/i
-    if (CONTINUATION_RE.test(newMsg.trim())) return false
+  if (overlapRatio < 0.15 && newMsg.length > 8) {
     return true
   }
   return false
@@ -12824,6 +12846,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _lastUser = [...messages].reverse().find(m => m.role === 'user')
     messages = _lastUser ? [_lastUser] : messages
     console.log(`[TopicChange] موضوع جديد كُشف — تم إعادة ضبط السياق`)
+  }
+
+  // ── Casual Topic Shift Fast Reply — رد فوري للدردشة اليومية بدون AI ────────
+  // عندما يغيّر المستخدم الموضوع فجأة لتعبير دارجة (واش الدعوة، شلونك...)
+  // نرد مباشرةً بالدارجة بدون انتظار AI
+  if (_topicChanged) {
+    const _shiftMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+    try {
+      const _shiftExpr = detectSocialExpression(_shiftMsg)
+      if (_shiftExpr?.isTopicShift && _shiftExpr?.response) {
+        console.log(`[CasualShift] رد فوري بالدارجة: "${_shiftExpr.response.slice(0,40)}"`)
+        return res.status(200).json({
+          content: _shiftExpr.response,
+          status: 'casual_shift',
+          expression: _shiftExpr.expression,
+        })
+      }
+    } catch {}
   }
 
   // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────

@@ -918,8 +918,22 @@ async function preloadEssentialData() {
   return results
 }
 
-// ── Message Ratings ─────────────────────────────────────────────
+// ── Message Ratings — in-memory + disk persistence ──────────────
+const _RATINGS_FILE = './data/ratings.json'
 const MESSAGE_RATINGS = new Map() // msgId → { vote, query, ts }
+// Load saved ratings from disk on startup
+try {
+  if (_existsFS(_RATINGS_FILE)) {
+    const _saved = JSON.parse(_readFileSync(_RATINGS_FILE, 'utf8'))
+    if (Array.isArray(_saved)) _saved.forEach(([k, v]) => MESSAGE_RATINGS.set(k, v))
+    console.log(`[Ratings] loaded ${MESSAGE_RATINGS.size} ratings from disk`)
+  }
+} catch {}
+function _saveRatingsToDisk() {
+  try {
+    _writeFS(_RATINGS_FILE, JSON.stringify([...MESSAGE_RATINGS.entries()]))
+  } catch {}
+}
 
 // ═══════════════════════════════════════════════════════════════
 // MODULAR ROUTE MOUNTS — Phase 1 Refactoring
@@ -957,6 +971,7 @@ app.post('/api/dz-agent/ratings', (req, res) => {
     query: (query || '').slice(0, 300),
     ts: Date.now(),
   })
+  _saveRatingsToDisk()
   res.json({ ok: true, total: MESSAGE_RATINGS.size })
 })
 
@@ -12730,6 +12745,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
+  const _clientCerebrasKey = typeof req.body.cerebrasKey === 'string' && req.body.cerebrasKey.length > 10
+    ? req.body.cerebrasKey.slice(0, 200) : null
   const dashboardContext = req.body.dashboardContext && typeof req.body.dashboardContext === 'object' ? req.body.dashboardContext : null
   // Agent mode flag — when true the user is in a coding/GitHub workspace session.
   // CRITICAL: all geographic/map/place features must be BYPASSED in agent mode.

@@ -2222,6 +2222,27 @@ function getCurrentDateString(locale = 'ar-DZ') {
   try { return new Date().toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
   catch { return new Date().toISOString().slice(0, 10) }
 }
+function getHijriDateString() {
+  try {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    }).format(new Date())
+  } catch {
+    try {
+      return new Intl.DateTimeFormat('ar-u-ca-islamic', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      }).format(new Date())
+    } catch { return '' }
+  }
+}
+function getCurrentTimeString() {
+  try {
+    return new Date().toLocaleTimeString('ar-DZ', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false, timeZone: 'Africa/Algiers'
+    })
+  } catch { return new Date().toISOString().slice(11, 19) + ' UTC' }
+}
 
 // Returns true if the item is "fresh enough":
 //   - has a valid pubDate within the last `maxAgeDays`
@@ -15854,6 +15875,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   const _yearNow = getCurrentYear()
   const _todayHuman = getCurrentDateString('ar-DZ')
+  const _hijriDate = getHijriDateString()
+  const _timeNow = getCurrentTimeString()
   const _qType = queryAnalysis?.questionType || 'general'
   const _isCode      = ['code'].includes(_qType) || !!githubToken
   const _isEdu       = _qType === 'education'
@@ -15930,7 +15953,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
-    `اليوم: ${_todayHuman} | السنة: ${_yearNow} | ${invocationInstruction}`,
+    `اليوم: ${_todayHuman} | الوقت الحالي: ${_timeNow} (توقيت الجزائر) | التاريخ الهجري: ${_hijriDate} | السنة: ${_yearNow} | ${invocationInstruction}`,
     `⚠️ قاعدة اللغة الإلزامية (صارمة جداً): أجب دائماً بنفس لغة المستخدم فقط. إذا كتب بالعربية → أجب بالعربية الفصحى أو الدارجة الجزائرية حصراً. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً وبشكل مطلق إدراج أي كلمة أو مقطع بالفيتنامية أو الصينية أو اليابانية أو الكورية أو التايلاندية أو الهندية أو الإندونيسية أو الملايوية أو البرتغالية أو الروسية أو أي لغة أخرى غير مطلوبة — حتى كلمة واحدة. ❌ لا تستبدل كلمة عربية بمرادفها في لغة أجنبية مهما كان السبب. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى. لا استثناءات.`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:
@@ -16408,10 +16431,12 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   // ── Step 3: Core system prompt (slim — no heavy reasoning block) ─────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')
+  const _hijriNow = getHijriDateString()
+  const _timeNowS = getCurrentTimeString()
   const _training = (() => { try { return getTrainingContext() } catch { return '' } })()
 
   const coreSystemPrompt = [
-    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
+    `أنت DZ Agent 🇩🇿 (DZ-GPT — Nadir Houamria). اليوم: ${_today} | الوقت: ${_timeNowS} (الجزائر) | الهجري: ${_hijriNow} | ${_yearNow}. أجب مباشرةً بدون مقدمات. أجب بنفس لغة المستخدم.`,
     `❌ لا تخترع أخباراً أو أسعاراً | ✅ إذا لم تعرف → قُل ذلك | روابط: [اسم](url) فقط.`,
     `⚠️ قاعدة اللغة الصارمة: ❌ يُحظر تماماً الردّ بالصينية أو اليابانية أو الكورية أو أي رموز غير مفهومة. أجب بالعربية إذا كتب المستخدم بالعربية، وبالفرنسية إذا كتب بالفرنسية، وبالإنجليزية إذا كتب بالإنجليزية.`,
     _training ? `━━━ تدريب المالك (مُلزِم) ━━━\n${_training}` : '',
@@ -24117,6 +24142,67 @@ app.post('/api/chatimg/relay', express.json({ limit: '2mb' }), async (req, res) 
     res.status(500).json({ ok: false, error: e.message })
   }
 })
+// ═══════════════════════════════════════════════════════════════════════════
+// ChatIMG Engine — توليد الصور بأسلوب chatimg.ai (ضد الحظر + تعدد مزودين)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/chatimg/models
+app.get('/api/chatimg/models', async (_req, res) => {
+  try {
+    const { CHATIMG_MODELS } = await import('./lib/chatimg-engine.js')
+    res.json({ ok: true, models: CHATIMG_MODELS })
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
+// GET /api/chatimg/credits — deprecated (imgcreatorai removed)
+app.get('/api/chatimg/credits', (_req, res) => {
+  res.status(410).json({ ok: false, error: 'endpoint removed — imgcreatorai service no longer available' })
+})
+
+// POST /api/chatimg/enhance-prompt — تحسين البرومبت بالذكاء الاصطناعي
+app.post('/api/chatimg/enhance-prompt', express.json({ limit: '1mb' }), async (req, res) => {
+  const { prompt } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+  try {
+    const { enhancePromptForImage } = await import('./lib/chatimg-engine.js')
+    const result = await enhancePromptForImage(String(prompt).slice(0, 500))
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// POST /api/chatimg/generate — text-to-image via chatimg.ai style
+app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
+  const { prompt, model = 'auto', width = 768, height = 768 } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
+  try {
+    const { generateWithChatIMG } = await import('./lib/chatimg-engine.js')
+    const result = await generateWithChatIMG(String(prompt).slice(0, 2000), {
+      width:  Math.min(Math.max(Number(width)  || 768, 256), 1536),
+      height: Math.min(Math.max(Number(height) || 768, 256), 1536),
+      preferredModel: String(model || 'auto'),
+      ip,
+    })
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
+// GET /api/chatimg/img/:id — serve generated image
+app.get('/api/chatimg/img/:id', async (req, res) => {
+  try {
+    const { getStoredResult } = await import('./lib/chatimg-engine.js')
+    const item = getStoredResult(req.params.id)
+    if (!item) return res.status(404).json({ error: 'الصورة غير موجودة أو انتهت صلاحيتها' })
+    res.setHeader('Content-Type', item.mime)
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    res.send(item.buf)
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 
@@ -24780,66 +24866,6 @@ app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (r
   return res.json({ ok: true, url: frames[0], frames, isFrames: true, model: 'DZ Animate AI', provider: 'Pollinations AI', quota: getVideoQuota(ip), note: 'أضف HF_TOKEN لفيديو حقيقي' })
 })
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ChatIMG Engine — توليد الصور بأسلوب chatimg.ai (ضد الحظر + تعدد مزودين)
-// ═══════════════════════════════════════════════════════════════════════════
-
-// GET /api/chatimg/models
-app.get('/api/chatimg/models', async (_req, res) => {
-  try {
-    const { CHATIMG_MODELS } = await import('./lib/chatimg-engine.js')
-    res.json({ ok: true, models: CHATIMG_MODELS })
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
-})
-
-// GET /api/chatimg/credits — deprecated (imgcreatorai removed)
-app.get('/api/chatimg/credits', (_req, res) => {
-  res.status(410).json({ ok: false, error: 'endpoint removed — imgcreatorai service no longer available' })
-})
-
-// POST /api/chatimg/enhance-prompt — تحسين البرومبت بالذكاء الاصطناعي
-app.post('/api/chatimg/enhance-prompt', express.json({ limit: '1mb' }), async (req, res) => {
-  const { prompt } = req.body
-  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
-  try {
-    const { enhancePromptForImage } = await import('./lib/chatimg-engine.js')
-    const result = await enhancePromptForImage(String(prompt).slice(0, 500))
-    res.json(result)
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
-  }
-})
-
-// POST /api/chatimg/generate — text-to-image via chatimg.ai style
-app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
-  const { prompt, model = 'auto', width = 768, height = 768 } = req.body
-  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'anon'
-  try {
-    const { generateWithChatIMG } = await import('./lib/chatimg-engine.js')
-    const result = await generateWithChatIMG(String(prompt).slice(0, 2000), {
-      width:  Math.min(Math.max(Number(width)  || 768, 256), 1536),
-      height: Math.min(Math.max(Number(height) || 768, 256), 1536),
-      preferredModel: String(model || 'auto'),
-      ip,
-    })
-    res.json(result)
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
-  }
-})
-
-// GET /api/chatimg/img/:id — serve generated image
-app.get('/api/chatimg/img/:id', async (req, res) => {
-  try {
-    const { getStoredResult } = await import('./lib/chatimg-engine.js')
-    const item = getStoredResult(req.params.id)
-    if (!item) return res.status(404).json({ error: 'الصورة غير موجودة أو انتهت صلاحيتها' })
-    res.setHeader('Content-Type', item.mime)
-    res.setHeader('Cache-Control', 'public, max-age=3600')
-    res.send(item.buf)
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
-})
 
   if (isProd) {
     app.use(express.static(distDir, { index: false, fallthrough: true }))

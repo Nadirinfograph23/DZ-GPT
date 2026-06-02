@@ -6200,6 +6200,27 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       pendingDoctorGpsRef.current = null
     }
 
+    // ── Auto GPS injection — للاستفسارات التي تحتاج الموقع الجغرافي ─────────
+    // يُحقَن تلقائياً [GPS:lat,lng] إذا كان السؤال عن خدمة محلية قريبة
+    if (!text.includes('[GPS:') && navigator.geolocation) {
+      const _locationQuery = /(?:أقرب|قريب(?:ة)?|وين\s+نلقى|وين\s+كاين|أين\s+(?:يوجد|أجد|نجد)|دلني\s+عل[ىا]|دلّني|ابحث\s+عن|عندي\s+نبغي\s+طبيب|نبغي\s+طبيب|راني\s+عيان|راني\s+مريض|عندي\s+وجع|عياني|في\s+ولايتي|في\s+منطقتي)\s*(?:طبيب|دكتور|صيدلية|مستشفى|سبيطار|مسجد|جامع|بريد|بنك|بنك\s+الجزائر|إدارة|بلدية|ولاية|مطعم|سوق|حلاق|بقالة|بقال|ميكانيسيان|محطة\s+وقود|وقود|محطة|عيادة|مركز\s+صحي)?|(?:طبيب|دكتور|صيدلية|مستشفى|سبيطار|عيادة|مركز\s+صحي)\s*(?:قريب|في\s+(?:المنطقة|ولايتي|مدينتي|حيّي|حومتي)|عندنا)/i
+      if (_locationQuery.test(text)) {
+        try {
+          const _pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 5000,
+              maximumAge: 300_000,
+              enableHighAccuracy: false,
+            })
+          })
+          const _gpsTag = `[GPS:${_pos.coords.latitude.toFixed(5)},${_pos.coords.longitude.toFixed(5)}]`
+          text = `${text} ${_gpsTag}`
+        } catch {
+          // GPS unavailable — continue without location enrichment
+        }
+      }
+    }
+
     // Debounce: prevent duplicate sends within 400ms
     const now = Date.now()
     if (now - lastSendRef.current < 400) return

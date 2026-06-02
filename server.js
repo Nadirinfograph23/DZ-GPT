@@ -26,6 +26,7 @@ import {
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
+import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -7205,6 +7206,11 @@ async function fetchRSSFeed(feed) {
     return result
   } catch (err) {
     console.error('[RSS] feed fetch failed:', feed.name, err.message)
+    // Stale cache fallback — return expired data rather than nothing
+    if (cached?.data) {
+      console.warn('[RSS] Using stale cache for', feed.name)
+      return { ...cached.data, stale: true }
+    }
     return null
   }
 }
@@ -13079,6 +13085,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     } catch (e) {
       console.warn('[DarijaPrompt] error:', e.message)
+    }
+
+    // ── BEHAVIORAL LAYER: الفهم السلوكي التفاعلي ─────────────────────────────
+    // كشف التعابير الاجتماعية (يعطيك الصحة → بلا مزية، يسلمو → والله يسلمك، ...)
+    // يحقن تعليمات سلوكية صارمة في system prompt حتى يردّ DZ Agent بشكل جزائري أصيل
+    try {
+      const _socialExpr = detectSocialExpression(lastUserMessage)
+      const _behaviorBlock = buildSocialBehaviorPrompt(_socialExpr)
+      lines.push('')
+      lines.push(_behaviorBlock)
+    } catch (e) {
+      console.warn('[DarijaBehavior] error:', e.message)
     }
 
     // ── DARIJA HEALTH & STATE — تمييزات واجبة التطبيق — أولوية قصوى ─────────

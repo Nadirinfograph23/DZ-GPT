@@ -1833,6 +1833,9 @@ function detectToolRedirect(msg) {
   if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
   // Quran tafsir / meaning — handled natively (NOT audio which should redirect)
   if (/(?:تفسير|معنى|شرح|فسّر)\s*(?:آية|سورة|الآية)|tafsir\b/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
+  // Creative writing IN Darija — DZ Agent handles this natively (NOT a translation request)
+  if (/(?:اكتب|اكتبلي|اكتب\s*لي|انشئ|أنشئ|دير|اعمل|قولي)\s*.+\s*(?:بالدارجة|بالدارجة\s*الجزائرية)/i.test(msg)) return null
+  if (/(?:قصيدة|قصة|مقال|نكتة|أغنية|خطبة|رسالة)\s*.+\s*(?:بالدارجة|دارجة)/i.test(msg)) return null
   // Web reading (URLs) — handled natively
   if (/https?:\/\//i.test(msg)) return null
   // GitHub operations (repo management, push, commit) — handled natively via GitHub Agent

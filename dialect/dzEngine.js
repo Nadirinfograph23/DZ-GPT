@@ -632,3 +632,28 @@ export function fullPipeline(userMessage) {
     intent: understanding.intent,
   }
 }
+
+// ─── FALLBACK RESPONSES — بدون LLM ──────────────────────────────────────────
+/**
+ * getStaticFallback(userMessage)
+ * يُرجع رداً قاعدياً من الدارجة عند غياب مفاتيح AI
+ * يعتمد على intent + قاموس الردود الجاهزة
+ */
+const _FALLBACK_MAP = {
+  greeting:  ['واش راك؟ كيفاش تخدم؟ 😊 أنا DZ Agent، كيفاش نعاونك؟',
+               'صباح الخير! أنا DZ Agent جاهز نعاونك. شنو تحتاج؟',
+               'مرحبا بيك! واش تحب تعرف أو تدير؟'],
+  farewell:  ['بالسلامة! ربي يحفظك 🇩🇿', 'نشوفك بخير! أي وقت رجع DZ Agent موجود.', 'إلى اللقاء! دمت في صحة وسلامة.'],
+  gratitude: ['يعطيك الصحة! أنا في خدمتك دائماً 🙏', 'الله يخليك! يسعدني كنت مفيد.', 'شكراً ليك أنت! نكون معك ديما.'],
+  question:  ['سؤال زين! خلّيني نشوف... لكن باش نجاوبك بشكل صحيح، ضيف GEMINI_API_KEY أو AI_API_KEY في إعدادات المشروع، هاكذا نولد ردود كاملة بالذكاء الاصطناعي.'],
+  code_help: ['كود؟ 💻 ممتاز! أضف مفتاح AI (Groq مجاني على console.groq.com) وندّرلك الكود مباشرة.'],
+  build_web_app: ['موقع ويب؟ 🌐 ندّرهولك كامل! فقط أضف AI_API_KEY من Groq وتلقى موقع كامل في دقائق.'],
+  default:   ['أنا DZ Agent — مساعدك الذكي الجزائري 🇩🇿\n\nباش تشتغل كامل، أضف مفتاح AI مجاني:\n• **Groq** (الأسرع): console.groq.com/keys → AI_API_KEY\n• **Gemini** (مجاني 2M token): aistudio.google.com → GEMINI_API_KEY\n\nبعدها نقدر نجاوبك على أي سؤال! 💪'],
+}
+
+export function getStaticFallback(userMessage) {
+  if (!userMessage) return _FALLBACK_MAP.default[0]
+  const { intent } = detectIntent(userMessage, normalize(userMessage).normalized)
+  const pool = _FALLBACK_MAP[intent] || _FALLBACK_MAP.default
+  return pool[Math.floor(Math.random() * pool.length)]
+}

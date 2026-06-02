@@ -13074,6 +13074,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       console.warn('[DarijaPrompt] error:', e.message)
     }
 
+    // ── DARIJA HEALTH & STATE — تمييزات واجبة التطبيق — أولوية قصوى ─────────
+    // هذه أكثر كلمات الدارجة التي يُفسَّر بها خطأً بالفصحى
+    lines.push('')
+    lines.push('🚨 DARIJA HEALTH/STATE — تمييز واجب (لا تخطئ هذه المعاني أبداً):')
+    lines.push('  • عيان / عياني / راني عيان = مريض / تعبان ❌ وليس "playwright" أو اسم علم')
+    lines.push('  • تعبان / تعبانة = متعب / مرهق')
+    lines.push('  • وجعني / يوجعني = يؤلمني')
+    lines.push('  • ضايقني = يزعجني / يضايقني')
+    lines.push('  • حيراني = أربكني / حيّرني')
+    lines.push('  • رايحني = يريحني')
+    lines.push('  • دارلي / دار لي = حدث لي / فعل بي')
+    lines.push('  • مشيتلي = ذهبت إليه')
+    lines.push('  • سبيطار / سبيطال = مستشفى')
+    lines.push('  • طبيب / تبيب / دكتور = médecin/doctor (نفس المعنى)')
+    lines.push('  • دوا = دواء / médicament')
+    lines.push('  • ولّى مريض = أصبح مريضاً')
+    lines.push('')
+    lines.push('🤔 CLARIFICATION RULE — متى تطلب التوضيح:')
+    lines.push('  إذا كانت كلمة الدارجة غامضة ولا تتناسب مع أي سياق واضح,')
+    lines.push('  اسأل المستخدم بأسلوب طبيعي دارج: "واش تقصد بـ [الكلمة]؟ هل تقصد [معنى1] ولا [معنى2]؟"')
+    lines.push('  لا تخمّن خطأً ولا تصمت — الأفضل طلب التوضيح بدل الإجابة الخاطئة.')
+
     return lines.join('\n')
   })()
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
@@ -13170,6 +13192,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     lastUserMessage = lastUserMessage.replace(gpsMatch[0], '').trim()
     const lastUserIndex = messages.map(m => m.role).lastIndexOf('user')
     if (lastUserIndex >= 0) messages[lastUserIndex] = { ...messages[lastUserIndex], content: lastUserMessage }
+  }
+  // ── كشف أقرب ولاية من إحداثيات GPS ─────────────────────────────────────
+  const userWilaya = userLocation ? findNearestWilaya(userLocation.lat, userLocation.lng) : null
+  if (userWilaya) {
+    console.log(`[Location] 📍 User wilaya detected: ${userWilaya.ar} (${userWilaya.en}) — lat=${userLocation.lat.toFixed(4)} lng=${userLocation.lng.toFixed(4)}`)
   }
 
   // ── Emergency intent (Algeria) — answered immediately, before doctor search ──
@@ -16046,6 +16073,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
+    // ── موقع المستخدم الجغرافي (GPS) ─────────────────────────────────────
+    userWilaya ? [
+      `📍 LOCATION CONTEXT — موقع المستخدم المُحدَّد بـ GPS:`,
+      `  ولاية: ${userWilaya.ar} (${userWilaya.en})`,
+      `⚠️ تعليمات الموقع الجغرافي — واجبة التطبيق:`,
+      `  1. خاطب المستخدم كساكن من ولاية ${userWilaya.ar}.`,
+      `  2. عند البحث عن أي خدمة (طبيب، مستشفى، صيدلية، إدارة، بلدية، بريد، بنك، مطعم، سوق، مسجد، مدرسة، وقود، إلخ) — ابدأ دائماً بما هو متاح في ${userWilaya.ar} أو أقرب ولاية مجاورة.`,
+      `  3. إذا ذكر المستخدم منطقة بدون تحديد الولاية، افترض أنه يقصد ${userWilaya.ar}.`,
+      `  4. إذا كانت الخدمة غير متوفرة في ${userWilaya.ar}، أشر إلى أقرب مدينة رئيسية أو ولاية مجاورة.`,
+      `  5. استخدم نبرة المواطن المحلي — ذكر أسماء أحياء أو مناطق محلية معروفة في ${userWilaya.ar} إن أمكن.`,
+    ].join('\n') : '',
     // ── عقل الفهم: تحليل عميق للسؤال (نوع + حاجة ضمنية + سياق جزائري) ────
     _understandingBlock || '',
     _memoryContext ? `\n${_memoryContext}` : '',

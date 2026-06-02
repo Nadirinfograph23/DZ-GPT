@@ -27,46 +27,30 @@ const IMG_PRESETS: AspectPreset[] = [
 ]
 
 const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'auto',           label: '🤖 Auto (أسرع مزود)',              badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 2,   desc: 'يختار تلقائياً أسرع مزود متاح' },
-  { id: 'imgcreator',     label: '🍌 Nano Banana 2 (ImgCreator)',    badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 60,  desc: 'Gemini backend — مجاني + Horde fallback' },
-  { id: 'imgcreator-gpt', label: '🖼️ GPT Image 2 (ImgCreator)',     badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 60,  desc: 'GPT-4o backend — مجاني + Horde fallback' },
-  { id: 'horde',          label: '🌐 Stable Horde (لا نهاية)',        badge: 'FREE∞', tier: 'medium',  group: 'DZ MEDIA',       waitSecs: 90,  desc: 'شبكة مجتمعية مجانية بلا حدود — ~60-120ث' },
-  { id: 'nano-banana',    label: '✨ Gemini 2.0 Flash Image',         badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 5,   desc: 'جودة عالية + Horde fallback' },
-  { id: 'hf',             label: '⚡ FLUX.1 / SDXL (HF)',             badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'HuggingFace — مجاني + Horde fallback' },
-  { id: 'flux',           label: '⚡ FLUX (Pollinations)',            badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'سريع مجاني' },
-  { id: 'turbo',          label: '🚀 Turbo (Pollinations)',           badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'سريع مجاني' },
-  { id: 'flux-realism',   label: '📸 FLUX Realism',                  badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'واقعية فائقة' },
-  { id: 'flux-anime',     label: '🌸 FLUX Anime',                    badge: 'ANIME', tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'أسلوب أنيمي' },
-  { id: 'flux-schnell',   label: '⚡ FLUX.1-schnell',                 badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'جودة عالية سريع' },
-  { id: 'flux-dev',       label: '🎯 FLUX.1-dev',                    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'جودة إبداعية' },
-  { id: 'sd35-large',     label: '🖼️ Stable Diffusion 3.5 Large',    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'SD3.5 جودة عالية' },
-  { id: 'realvisxl',      label: '📷 RealVisXL V4.0',                 badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'صور واقعية فائقة' },
+  { id: 'auto',           label: '⚡ DZ Image (سريع)',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 12,  desc: 'توليد سريع ~12 ثانية — مجاني دائماً' },
+  { id: 'imgcreator',     label: '🍌 Nano Banana 2',                 badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 15,  desc: 'Gemini 2.0 Flash Image — مجاني تماماً' },
+  { id: 'imgcreator-gpt', label: '🖼️ GPT Image 2',                  badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 15,  desc: 'GPT-4o Image — مجاني تماماً' },
+  { id: 'horde',          label: '🌐 Stable Horde (جودة عالية)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة فائقة — ~60-120 ث' },
 ]
 
-const GROUP_ORDER = ['DZ MEDIA PRO', 'DZ MEDIA', 'DZ MEDIA BASIC']
 const TIER_COLOR: Record<string, string> = {
   premium: 'linear-gradient(135deg,#f59e0b,#d97706)',
   fast:    'linear-gradient(135deg,#6366f1,#818cf8)',
 }
 
-const IMG_MODEL_SEQUENCE = DEFAULT_MODELS.map(m => m.id)
-
 export default function DZMediaStudio() {
   const navigate = useNavigate()
   const [prompt, setPrompt]             = useState('')
   const [model, setModel]               = useState('auto')
-  const [models, setModels]             = useState<ModelDef[]>(DEFAULT_MODELS)
-  const [quota, setQuota]               = useState<QuotaInfo | null>(null)
-  const [icCredits, setIcCredits]       = useState<{ remaining: number | null; backoffRemainMin: number } | null>(null)
-  const [width, setWidth]               = useState(768)
-  const [height, setHeight]             = useState(768)
-  const [loading, setLoading]           = useState(false)
-  const [result, setResult]             = useState<ImageResult | null>(null)
-  const [error, setError]               = useState('')
-  const [progress, setProgress]         = useState('')
-  const [activeGroup, setActiveGroup]   = useState<string>('all')
-  const [elapsed, setElapsed]           = useState(0)
-  const timerRef                        = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [models, setModels]   = useState<ModelDef[]>(DEFAULT_MODELS)
+  const [width, setWidth]     = useState(768)
+  const [height, setHeight]   = useState(768)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult]   = useState<ImageResult | null>(null)
+  const [error, setError]     = useState('')
+  const [progress, setProgress] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef              = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── عداد الوقت أثناء التوليد ──────────────────────────────────────────────
   useEffect(() => {
@@ -82,94 +66,42 @@ export default function DZMediaStudio() {
   useEffect(() => {
     fetch('/api/chatimg/models')
       .then(r => r.json())
-      .then(d => { if (d.models?.length) setModels([...d.models, ...DEFAULT_MODELS.filter(dm => !d.models.find((m:ModelDef) => m.id === dm.id))]) })
-      .catch(() => {})
-
-    fetch('/api/dz-agent-v4/image/quota')
-      .then(r => r.json())
-      .then(d => { if (d.quota) setQuota(d.quota) })
-      .catch(() => {})
-
-    fetch('/api/chatimg/credits')
-      .then(r => r.json())
-      .then(d => { if (d.ok) setIcCredits({ remaining: d.remaining, backoffRemainMin: d.backoffRemainMin ?? 0 }) })
-      .catch(() => {})
-  }, [])
-
-  const refreshQuota = useCallback(() => {
-    fetch('/api/dz-agent-v4/image/quota')
-      .then(r => r.json())
-      .then(d => { if (d.quota) setQuota(d.quota) })
+      .then(d => { if (d.models?.length) setModels(d.models) })
       .catch(() => {})
   }, [])
 
   const selectedModel = models.find(m => m.id === model) || models[0]
-  const groups        = GROUP_ORDER.filter(g => models.some(m => m.group === g))
-  const displayed     = activeGroup === 'all' ? models : models.filter(m => m.group === activeGroup)
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
     setLoading(true); setError('')
 
-    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','horde','hf']
-    const isDzMedia  = dzMediaIds.includes(model)
-    const hasArabic  = /[\u0600-\u06FF]/.test(prompt)
-    const modelQueue = isDzMedia
-      ? [model, ...dzMediaIds.filter(id => id !== model)]
-      : [model, ...IMG_MODEL_SEQUENCE.filter(id => !dzMediaIds.includes(id) && id !== model)]
+    const mDef    = DEFAULT_MODELS.find(m => m.id === model) || DEFAULT_MODELS[0]
+    const waitSec = mDef.waitSecs ?? 12
+    setProgress(`🎨 جاري التوليد بـ ${mDef.label} (~${waitSec} ثانية)...`)
 
-    const isImgCreator = (id: string) => id === 'imgcreator' || id === 'imgcreator-gpt'
-
-    let succeeded = false
-    for (let i = 0; i < Math.min(modelQueue.length, 4); i++) {
-      const tryModel = modelQueue[i]
-      const tryEP    = dzMediaIds.includes(tryModel) ? '/api/chatimg/generate' : '/api/dz-agent-v4/image'
-      const mDef     = DEFAULT_MODELS.find(m => m.id === tryModel)
-      const waitNote = mDef?.waitSecs ? ` (~${mDef.waitSecs}ث)` : ''
-      setProgress(hasArabic && i === 0
-        ? `🔤 ترجمة ثم توليد بـ ${selectedModel?.label || model}${waitNote}...`
-        : i === 0
-          ? `🎨 جاري التوليد بـ ${selectedModel?.label || model}${waitNote}...`
-          : `🔄 نموذج آخر (${i+1}/4)${waitNote}...`)
-
-      try {
-        const res  = await fetch(tryEP, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, model: tryModel, width, height }),
-          signal: AbortSignal.timeout(100_000),
+    try {
+      const res  = await fetch('/api/chatimg/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, model, width, height }),
+        signal: AbortSignal.timeout(model === 'horde' ? 175_000 : 75_000),
+      })
+      const data = await res.json() as {
+        ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string
+        error?: string; translated?: boolean; remainingCredits?: number | null
+      }
+      if (data.ok && data.url) {
+        setResult({
+          type: 'image', url: data.url,
+          prompt: data.promptUsed || prompt,
+          model:    maskedModel(data.model || model),
+          provider: maskedProvider(data.provider || ''),
+          translatedPrompt: data.translated ? data.promptUsed : undefined,
         })
-        const data = await res.json() as {
-          ok: boolean; url?: string; promptUsed?: string; model?: string; provider?: string
-          error?: string; quotaExceeded?: boolean; quota?: QuotaInfo; translated?: boolean
-          remainingCredits?: number | null
-        }
-        if (data.remainingCredits !== undefined)
-          setIcCredits(prev => ({ remaining: data.remainingCredits ?? null, backoffRemainMin: prev?.backoffRemainMin ?? 0 }))
-        if (data.quotaExceeded) {
-          if (data.quota) setQuota(data.quota)
-          if (isImgCreator(tryModel)) {
-            setIcCredits({ remaining: 0, backoffRemainMin: 60 })
-            continue
-          }
-          setError(data.error || 'تجاوزت الحصة'); break
-        }
-        if (data.ok && data.url) {
-          setResult({
-            type: 'image', url: data.url,
-            prompt: data.promptUsed || prompt,
-            model:    maskedModel(data.model || tryModel),
-            provider: maskedProvider(data.provider || ''),
-            translatedPrompt: data.translated ? data.promptUsed : undefined,
-          })
-          refreshQuota(); succeeded = true; break
-        }
-      } catch { /* timeout/network */ }
-    }
-    if (!succeeded && !error) {
-      setError('فشلت جميع النماذج — جرّب وصفاً مختلفاً أو حاول لاحقاً')
-    }
+      }
+    } catch { /* timeout */ }
     setLoading(false); setProgress('')
-  }, [prompt, model, width, height, selectedModel, error, refreshQuota])
+  }, [prompt, model, width, height])
 
   return (
     <div className="dms-root" dir="rtl">
@@ -185,29 +117,6 @@ export default function DZMediaStudio() {
         </p>
       </header>
 
-      {quota && (
-        <div className="dms-quota-bar">
-          <div className="dms-quota-item">
-            <span className="dms-quota-icon">⚡</span>
-            <span>مجاني:</span>
-            <div className="dms-quota-track">
-              <div className="dms-quota-fill dms-quota-fill--fast"
-                style={{ width: `${(quota.fast.remaining / quota.fast.limit) * 100}%` }} />
-            </div>
-            <span className="dms-quota-num">{quota.fast.remaining}/{quota.fast.limit}</span>
-          </div>
-          <div className="dms-quota-item">
-            <span className="dms-quota-icon">✨</span>
-            <span>PRO:</span>
-            <div className="dms-quota-track">
-              <div className="dms-quota-fill dms-quota-fill--premium"
-                style={{ width: `${(quota.premium.remaining / quota.premium.limit) * 100}%` }} />
-            </div>
-            <span className="dms-quota-num">{quota.premium.remaining}/{quota.premium.limit}</span>
-          </div>
-          <span className="dms-quota-reset">يتجدد بعد {quota.resetInHours} ساعة</span>
-        </div>
-      )}
 
       <div className="dms-body">
 
@@ -232,66 +141,37 @@ export default function DZMediaStudio() {
           {/* اختيار النموذج */}
           <div className="dms-section">
             <label className="dms-label">🧠 النموذج</label>
-            <div className="dms-group-filter">
-              <button className={`dms-group-btn${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>الكل</button>
-              {groups.map(g => (
-                <button key={g} className={`dms-group-btn${activeGroup === g ? ' active' : ''}`} onClick={() => setActiveGroup(g)}>{g}</button>
+            <div className="dms-model-grid">
+              {models.map(m => (
+                <button
+                  key={m.id}
+                  title={m.desc || m.label}
+                  className={`dms-model-card${model === m.id ? ' dms-model-card--active' : ''} dms-model-card--${m.tier}`}
+                  onClick={() => setModel(m.id)}
+                >
+                  <span className="dms-model-label">{m.label}</span>
+                  <div className="dms-model-badges">
+                    {m.badge && <span className="dms-model-badge dms-model-badge--tag">{m.badge}</span>}
+                    {m.waitSecs && (
+                      <span className="dms-model-badge" style={{ background: '#0f2830', color: '#4ade80', fontSize: '9px', padding: '1px 4px' }}>
+                        ~{m.waitSecs}ث
+                      </span>
+                    )}
+                    <span className="dms-model-badge dms-model-badge--tier" style={{ background: TIER_COLOR[m.tier] || TIER_COLOR.fast }}>
+                      ⚡
+                    </span>
+                  </div>
+                </button>
               ))}
             </div>
-            <div className="dms-model-grid">
-              {displayed.map(m => {
-                const isIC      = m.id === 'imgcreator' || m.id === 'imgcreator-gpt'
-                const icBlocked = isIC && !!icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0
-                return (
-                  <button
-                    key={m.id}
-                    title={m.desc || m.label}
-                    className={`dms-model-card${model === m.id ? ' dms-model-card--active' : ''} dms-model-card--${m.tier}${icBlocked ? ' dms-model-card--dimmed' : ''}`}
-                    onClick={() => setModel(m.id)}
-                  >
-                    <span className="dms-model-label">{m.label}</span>
-                    <div className="dms-model-badges">
-                      {m.badge && <span className="dms-model-badge dms-model-badge--tag">{m.badge}</span>}
-                      {m.waitSecs && (
-                        <span className="dms-model-badge" style={{ background: '#0f2830', color: '#4ade80', fontSize: '9px', padding: '1px 4px' }}>
-                          ~{m.waitSecs}ث
-                        </span>
-                      )}
-                      {isIC && icCredits?.remaining !== null && icCredits?.remaining !== undefined && (
-                        <span className="dms-model-badge" style={{ background: icCredits.remaining === 0 ? '#2d1010' : '#0d2d1a', color: icCredits.remaining === 0 ? '#f87171' : '#34d399', fontSize: '9px', padding: '1px 4px' }}>
-                          {icCredits.remaining === 0 ? '⛔ نفدت' : `💳 ${icCredits.remaining}`}
-                        </span>
-                      )}
-                      {isIC && icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
-                        <span className="dms-model-badge" style={{ background: '#2d1a00', color: '#fbbf24', fontSize: '9px', padding: '1px 4px' }}>
-                          🔄 {icCredits.backoffRemainMin}د
-                        </span>
-                      ) : null}
-                      <span className="dms-model-badge dms-model-badge--tier" style={{ background: TIER_COLOR[m.tier] }}>
-                        {m.tier === 'premium' ? '✨' : '⚡'}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-            {selectedModel?.tier === 'premium' && (
-              <div className="dms-premium-note">
-                ✨ نموذج DZ MEDIA PRO — يستهلك من حصة <strong>{quota?.premium.remaining ?? '?'}</strong> متبقية
-                {quota?.premium.remaining === 0 && <span style={{ color: '#ef4444', marginRight: 8 }}>⚠️ نفدت — اختر DZ MEDIA</span>}
+            {selectedModel?.id === 'horde' && (
+              <div className="dms-premium-note" style={{ borderColor: '#1d4ed8', color: '#93c5fd' }}>
+                🌐 Stable Horde — شبكة GPU مجتمعية مجانية بلا حدود — بدون أي مفتاح API — ~60-120 ثانية
               </div>
             )}
             {(selectedModel?.id === 'imgcreator' || selectedModel?.id === 'imgcreator-gpt') && (
               <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
-                🎁 ImgCreator Guest — مجاني بدون مفتاح API — ~60ث — إذا نفدت الحصة يتولى <strong>Stable Horde</strong> تلقائياً
-                {icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
-                  <span style={{ color: '#fbbf24', marginRight: 8 }}> — الحصة نفدت (تجديد {icCredits.backoffRemainMin}د) → Horde يعمل</span>
-                ) : null}
-              </div>
-            )}
-            {selectedModel?.id === 'horde' && (
-              <div className="dms-premium-note" style={{ borderColor: '#1d4ed8', color: '#93c5fd' }}>
-                🌐 Stable Horde — شبكة GPU مجتمعية مجانية بلا حدود — بدون أي مفتاح API — وقت الانتظار ~60-120 ثانية
+                🎁 {selectedModel.label} — مجاني تماماً بدون مفتاح API — ~15 ثانية
               </div>
             )}
           </div>

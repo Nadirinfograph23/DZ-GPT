@@ -27,10 +27,15 @@ const IMG_PRESETS: AspectPreset[] = [
 ]
 
 const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'auto',           label: '⚡ DZ Image (سريع)',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 12,  desc: 'توليد سريع ~12 ثانية — مجاني دائماً' },
-  { id: 'imgcreator',     label: '🍌 Nano Banana 2',                 badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 15,  desc: 'Gemini 2.0 Flash Image — مجاني تماماً' },
-  { id: 'imgcreator-gpt', label: '🖼️ GPT Image 2',                  badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 15,  desc: 'GPT-4o Image — مجاني تماماً' },
-  { id: 'horde',          label: '🌐 Stable Horde (جودة عالية)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة فائقة — ~60-120 ث' },
+  { id: 'auto',         label: '⚡ DZ Image (FLUX)',      badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 10,  desc: 'FLUX.1 — توليد سريع ~10 ثانية مجاني دائماً' },
+  { id: 'turbo',        label: '🚀 Turbo',                 badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 5,   desc: 'SDXL Turbo — أسرع نموذج ~5 ثانية' },
+  { id: 'flux-realism', label: '📷 FLUX Realism',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'صور واقعية فوتوريالستيك — مجاني تماماً' },
+  { id: 'flux-anime',   label: '🌸 FLUX Anime',            badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'رسوم أنيمي واحترافية — مجاني تماماً' },
+  { id: 'flux-3d',      label: '🧊 FLUX 3D',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'تصيير ثلاثي الأبعاد — مجاني تماماً' },
+  { id: 'flux-cablyai', label: '🎭 FLUX CablyAI',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'فوتوريالستيك احترافي بجودة استوديو' },
+  { id: 'playground',   label: '🎮 Playground v2',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'نموذج جمالي فائق الجودة — مجاني' },
+  { id: 'gemini',       label: '🍌 Gemini Flash Image',    badge: 'PRO',   tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 20,  desc: 'Gemini 2.0 Flash — جودة فائقة مجاني مع API key' },
+  { id: 'horde',        label: '🌐 Stable Horde (HD)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA HD',  waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة عالية جداً ~60-120 ث' },
 ]
 
 const TIER_COLOR: Record<string, string> = {
@@ -164,14 +169,14 @@ export default function DZMediaStudio() {
                 </button>
               ))}
             </div>
-            {selectedModel?.id === 'horde' && (
-              <div className="dms-premium-note" style={{ borderColor: '#1d4ed8', color: '#93c5fd' }}>
-                🌐 Stable Horde — شبكة GPU مجتمعية مجانية بلا حدود — بدون أي مفتاح API — ~60-120 ثانية
+            {selectedModel?.id === 'gemini' && (
+              <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
+                🍌 Gemini Flash Image — جودة فائقة مجاني مع GEMINI_API_KEY — ~20 ثانية
               </div>
             )}
-            {(selectedModel?.id === 'imgcreator' || selectedModel?.id === 'imgcreator-gpt') && (
-              <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
-                🎁 {selectedModel.label} — مجاني تماماً بدون مفتاح API — ~15 ثانية
+            {selectedModel?.id === 'horde' && (
+              <div className="dms-premium-note" style={{ borderColor: '#1d4ed8', color: '#93c5fd' }}>
+                🌐 Stable Horde — شبكة GPU مجتمعية مجانية — جودة عالية جداً — ~60-120 ثانية
               </div>
             )}
           </div>
@@ -278,7 +283,7 @@ export default function DZMediaStudio() {
       </div>
 
       <footer className="dms-footer">
-        <span className="dms-footer-text">DZ MEDIA STUDIO 2026 — PRO · BASIC · AI</span>
+        <span className="dms-footer-text">DZ MEDIA STUDIO 2026</span>
         <span className="dms-footer-flag"> 🇩🇿</span>
       </footer>
     </div>

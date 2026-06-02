@@ -5,11 +5,7 @@ import '../styles/dz-media-studio.css'
 interface ModelDef {
   id: string; label: string; badge?: string; tier: 'fast' | 'premium'; group: string; waitSecs?: number | null; desc?: string
 }
-interface QuotaInfo {
-  fast:    { remaining: number; used: number; limit: number }
-  premium: { remaining: number; used: number; limit: number }
-  resetInHours: number
-}
+
 interface AspectPreset {
   label: string; sub: string; w: number; h: number; shape: 'tall'|'square'|'wide'|'photo'
 }

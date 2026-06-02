@@ -6803,14 +6803,38 @@ async function searchWikipedia(query) {
   const lang = isArabic ? 'ar' : 'en'
   const headers = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
   try {
-    const r = await fetch(
-      `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=2`,
+    const enc = encodeURIComponent(query)
+    // Search first to get page title
+    const sr = await fetch(
+      `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&format=json&srlimit=3&origin=*`,
       { headers, signal: AbortSignal.timeout(5000) }
     )
-    if (!r.ok) return []
-    const d = await r.json()
-    return (d?.query?.search || []).slice(0, 2).map(p => ({
-      source: 'Wikipedia',
+    if (!sr.ok) return []
+    const sd = await sr.json()
+    const pages = sd?.query?.search || []
+    if (!pages.length) return []
+    // Try to get full extract for top result via REST summary API
+    const topTitle = pages[0].title
+    try {
+      const er = await fetch(
+        `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle.replace(/ /g, '_'))}`,
+        { headers, signal: AbortSignal.timeout(4000) }
+      )
+      if (er.ok) {
+        const ed = await er.json()
+        return [{
+          source: 'wikipedia',
+          title: ed.title,
+          snippet: (ed.extract || '').slice(0, 600),
+          url: ed.content_urls?.desktop?.page || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`,
+          publishedDate: ed.timestamp || '',
+          date: '',
+        }]
+      }
+    } catch {}
+    // Fallback: use search snippets
+    return pages.slice(0, 2).map(p => ({
+      source: 'wikipedia',
       title: p.title,
       snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
       url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
@@ -11900,65 +11924,96 @@ function parseResultDate(item) {
 
 async function searchWeb(query) {
   const encodedQ = encodeURIComponent(query)
-  // Add recency hint: prefer recent results
-  const recentQ = encodeURIComponent(query + ' 2024 2025')
+  const recentQ = encodeURIComponent(query + ' 2026')
 
-  // --- Run all engines in parallel ---
-  const [searxResult, ddgResult, djazairessResult] = await Promise.allSettled([
-    // SearXNG with recency sort
-    (async () => {
-      const searxInstances = [
-        `https://searx.be/search?q=${encodedQ}&format=json&time_range=month&language=ar`,
-        `https://search.mdosch.de/search?q=${encodedQ}&format=json&time_range=month`,
-        `https://searx.be/search?q=${recentQ}&format=json&language=ar`,
-      ]
-      for (const url of searxInstances) {
-        try {
-          const r = await fetch(url, {
-            headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
-            signal: AbortSignal.timeout(6000),
-          })
-          if (!r.ok) continue
-          const d = await r.json()
-          const results = (d.results || []).map(item => ({
-            title: item.title,
-            url: item.url,
-            snippet: item.content?.slice(0, 300) || '',
-            publishedDate: item.publishedDate || '',
-            source: 'searxng',
-          }))
-          if (results.length > 0) return results
-        } catch { continue }
-      }
-      return []
-    })(),
-    // DuckDuckGo HTML scraping
-    (async () => {
+  // ── TIER 1: Wikipedia (factual, free, no rate limits) ─────────────────
+  const wikiPromise = searchWikipedia(query)
+
+  // ── TIER 2: SearXNG — try multiple instances with JSON-only check ─────
+  const searxPromise = (async () => {
+    const searxInstances = [
+      `https://search.mdosch.de/search?q=${encodedQ}&format=json`,
+      `https://northboot.xyz/search?q=${encodedQ}&format=json`,
+      `https://searxng.world/search?q=${encodedQ}&format=json`,
+      `https://searx.tiekoetter.com/search?q=${encodedQ}&format=json`,
+      `https://searx.be/search?q=${recentQ}&format=json&language=ar`,
+    ]
+    for (const url of searxInstances) {
       try {
-        const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQ}&df=m`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZAgent/1.0)' },
-          signal: AbortSignal.timeout(7000),
+        const r = await fetch(url, {
+          headers: { 'User-Agent': 'DZ-GPT-Agent/1.0' },
+          signal: AbortSignal.timeout(6000),
         })
-        if (!r.ok) return []
-        const html = await r.text()
-        const results = []
-        const linkRe = /<a class="result__a" href="([^"]+)"[^>]*>([^<]+)<\/a>/g
-        const snippetRe = /<a class="result__snippet"[^>]*>([^<]+)<\/a>/g
-        let lm, sm
-        const links = [], snippets = []
-        while ((lm = linkRe.exec(html)) !== null) links.push({ url: lm[1], title: lm[2] })
-        while ((sm = snippetRe.exec(html)) !== null) snippets.push(sm[1])
-        for (let i = 0; i < Math.min(links.length, 4); i++) {
-          results.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] || '', source: 'duckduckgo' })
+        if (!r.ok) continue
+        const ct = r.headers.get('content-type') || ''
+        if (!ct.includes('json')) continue
+        const d = await r.json()
+        const results = (d.results || []).map(item => ({
+          title: item.title,
+          url: item.url,
+          snippet: item.content?.slice(0, 300) || '',
+          publishedDate: item.publishedDate || '',
+          source: 'searxng',
+        }))
+        if (results.length > 0) return results
+      } catch { continue }
+    }
+    return []
+  })()
+
+  // ── TIER 3: DuckDuckGo HTML — fixed URL decoding + better regex ───────
+  const ddgPromise = (async () => {
+    try {
+      const r = await fetch(`https://html.duckduckgo.com/html/?q=${encodedQ}&df=m`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!r.ok) return []
+      const html = await r.text()
+      // Fix: allow inner HTML tags in title ([\s\S]*?) + handle multiline
+      const linkRe = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+      const snippetRe = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi
+      const links = []
+      const snippets = []
+      let lm
+      while ((lm = linkRe.exec(html)) !== null) {
+        let url = lm[1]
+        // Decode DDG redirect URLs: //duckduckgo.com/l/?uddg=ENCODED_URL
+        if (url.includes('uddg=')) {
+          try {
+            const qs = url.includes('?') ? url.split('?')[1] : url
+            url = new URLSearchParams(qs).get('uddg') || url
+          } catch {}
+        } else if (url.startsWith('//')) {
+          url = 'https:' + url
         }
-        return results
-      } catch { return [] }
-    })(),
-    // Djazairess — for Algeria-related queries
-    searchDjazairess(query),
+        const title = lm[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").trim()
+        if (url && title && url.startsWith('http')) links.push({ url, title })
+      }
+      let sm
+      while ((sm = snippetRe.exec(html)) !== null) {
+        const snippet = sm[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim()
+        if (snippet) snippets.push(snippet)
+      }
+      const results = []
+      for (let i = 0; i < Math.min(links.length, 5); i++) {
+        results.push({ title: links[i].title, url: links[i].url, snippet: snippets[i] || '', source: 'duckduckgo' })
+      }
+      return results
+    } catch { return [] }
+  })()
+
+  // ── Run all tiers in parallel ─────────────────────────────────────────
+  const [wikiResult, searxResult, ddgResult, djazairessResult] = await Promise.allSettled([
+    wikiPromise, searxPromise, ddgPromise, searchDjazairess(query),
   ])
 
   const allResults = [
+    ...(wikiResult.status === 'fulfilled' ? wikiResult.value : []),
     ...(searxResult.status === 'fulfilled' ? searxResult.value : []),
     ...(djazairessResult.status === 'fulfilled' ? djazairessResult.value : []),
     ...(ddgResult.status === 'fulfilled' ? ddgResult.value : []),
@@ -11966,22 +12021,24 @@ async function searchWeb(query) {
 
   if (allResults.length === 0) return { source: 'none', results: [] }
 
-  // Deduplicate by URL
+  // Deduplicate by base URL (strip query params)
   const seen = new Set()
   const deduped = allResults.filter(r => {
-    if (seen.has(r.url)) return false
-    seen.add(r.url)
+    const key = (r.url || '').split('?')[0].replace(/\/$/, '')
+    if (!key || seen.has(key)) return false
+    seen.add(key)
     return true
   })
 
-  // Sort: results with a date go first (newest first), undated results follow
+  // Sort: dated results first (newest first), then undated
   const withDate = deduped.filter(r => parseResultDate(r) > 0)
     .sort((a, b) => parseResultDate(b) - parseResultDate(a))
   const withoutDate = deduped.filter(r => parseResultDate(r) === 0)
 
   const sorted = [...withDate, ...withoutDate].slice(0, 8)
 
-  const primary = sorted.find(r => r.source === 'djazairess') ? 'djazairess+searxng' :
+  const primary = sorted.find(r => r.source === 'djazairess') ? 'djazairess+wiki' :
+    sorted.find(r => r.source === 'wikipedia') ? 'wikipedia' :
     sorted.find(r => r.source === 'searxng') ? 'searxng' : 'duckduckgo'
 
   return { source: primary, results: sorted }
@@ -15814,7 +15871,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isFootballNewsQuery = _isFootballNewsQuery
   const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
   const _isDirectCodeRequest = /(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|برمج|نفذ)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)|(?:متتالية|خوارزمية|fibonacci|فيبوناتشي|مرتّب|sort|recursion|تعاود)/i.test(lastUserMessage)
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest
+  // isTemporal overrides football skip: "متى كأس العالم 2026؟" needs Wikipedia, not SofaScore
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest
 
   if (!skipSearch) {
     try {
@@ -15829,11 +15887,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       console.log(`[DZ Retrieval] Query: "${cseQuery}" | subject="${newsSubject || ''}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
 
-      // Parallel: Google CSE + Google News RSS (always for temporal/news) + legacy web fallback
+      // Parallel: Google CSE + Google News RSS (always for temporal/news) + web fallback (always)
+      // Note: searchWeb now includes Wikipedia API (free, no rate limits) + DDG — always useful
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
         searchGoogleCSE(cseQuery),
         (mustSearch || newsQueryType) ? searchGoogleNewsRSS(rssQuery) : Promise.resolve([]),
-        (!newsQueryType || msgIntent.primary === 'general') ? searchWeb(lastUserMessage) : Promise.resolve({ results: [] }),
+        searchWeb(lastUserMessage),
       ])
 
       const cseResults  = cseRes.status === 'fulfilled' ? cseRes.value : []
@@ -16389,6 +16448,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json(_responsePayload)
   }
   console.warn(`[DZ Agent] All AI models failed validation for query: "${lastUserMessage.slice(0, 80)}"`)
+
+  // ── Search-only fallback: return search results for factual/temporal queries ──
+  // Only trigger for queries that genuinely need live data — not for greetings or general chat
+  const _isFactualNeed = msgIntent.isTemporal
+    || ['sports','news','economy','politics','tech','celebrities','incidents'].includes(msgIntent.primary)
+    || msgIntent.all?.some(i => ['sports','news','economy','politics','tech'].includes(i))
+  if (webSearchContext && webSearchContext.length > 100 && !webSearchContext.includes('لا توجد نتائج') && _isFactualNeed) {
+    console.log(`[DZ Agent] AI failed → returning search context directly (intent=${msgIntent.primary} temporal=${msgIntent.isTemporal})`)
+    return res.status(200).json({
+      content: `🔍 **نتائج البحث:**\n\n${webSearchContext.slice(0, 2500)}\n\n---\n> 💡 هذه النتائج من الإنترنت مباشرةً. لتلقي تلخيص ذكي، تأكد من توفر مفاتيح AI.`,
+      status: 'search_only',
+    })
+  }
 
   if (educationalContext) {
     return res.status(200).json({

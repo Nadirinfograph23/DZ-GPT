@@ -27,19 +27,20 @@ const IMG_PRESETS: AspectPreset[] = [
 ]
 
 const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'auto',           label: '🤖 Auto (Gemini + FLUX)',          badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
-  { id: 'nano-banana',    label: '🍌 Gemini 2.0 Flash Image',        badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: null },
-  { id: 'imgcreator',     label: '🎨 Nano Banana 2 (ImgCreator)',    badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 50,  desc: 'Gemini backend — 1K — ضيف مجاني' },
-  { id: 'imgcreator-gpt', label: '🤖 GPT Image 2 (ImgCreator)',      badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 50,  desc: 'GPT-4o backend — 1K — ضيف مجاني' },
-  { id: 'hf',             label: '⚡ FLUX.1-schnell (HF)',            badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
-  { id: 'flux',           label: '⚡ FLUX (Pollinations)',            badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
-  { id: 'turbo',          label: '🚀 Turbo (Pollinations)',           badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
-  { id: 'flux-realism',   label: '📸 FLUX Realism',                  badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
-  { id: 'flux-anime',     label: '🌸 FLUX Anime',                    badge: 'ANIME', tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: null },
-  { id: 'flux-schnell',   label: '⚡ FLUX.1-schnell',                 badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
-  { id: 'flux-dev',       label: '🎯 FLUX.1-dev',                    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
-  { id: 'sd35-large',     label: '🖼️ Stable Diffusion 3.5 Large',    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
-  { id: 'realvisxl',      label: '📷 RealVisXL V4.0',                 badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: null },
+  { id: 'auto',           label: '🤖 Auto (أسرع مزود)',              badge: 'AUTO',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 2,   desc: 'يختار تلقائياً أسرع مزود متاح' },
+  { id: 'imgcreator',     label: '🍌 Nano Banana 2 (ImgCreator)',    badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 60,  desc: 'Gemini backend — مجاني + Horde fallback' },
+  { id: 'imgcreator-gpt', label: '🖼️ GPT Image 2 (ImgCreator)',     badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 60,  desc: 'GPT-4o backend — مجاني + Horde fallback' },
+  { id: 'horde',          label: '🌐 Stable Horde (لا نهاية)',        badge: 'FREE∞', tier: 'medium',  group: 'DZ MEDIA',       waitSecs: 90,  desc: 'شبكة مجتمعية مجانية بلا حدود — ~60-120ث' },
+  { id: 'nano-banana',    label: '✨ Gemini 2.0 Flash Image',         badge: 'PRO',   tier: 'fast',    group: 'DZ MEDIA PRO',   waitSecs: 5,   desc: 'جودة عالية + Horde fallback' },
+  { id: 'hf',             label: '⚡ FLUX.1 / SDXL (HF)',             badge: 'FAST',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'HuggingFace — مجاني + Horde fallback' },
+  { id: 'flux',           label: '⚡ FLUX (Pollinations)',            badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'سريع مجاني' },
+  { id: 'turbo',          label: '🚀 Turbo (Pollinations)',           badge: 'FREE',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'سريع مجاني' },
+  { id: 'flux-realism',   label: '📸 FLUX Realism',                  badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'واقعية فائقة' },
+  { id: 'flux-anime',     label: '🌸 FLUX Anime',                    badge: 'ANIME', tier: 'fast',    group: 'DZ MEDIA BASIC', waitSecs: 2,   desc: 'أسلوب أنيمي' },
+  { id: 'flux-schnell',   label: '⚡ FLUX.1-schnell',                 badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'جودة عالية سريع' },
+  { id: 'flux-dev',       label: '🎯 FLUX.1-dev',                    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'جودة إبداعية' },
+  { id: 'sd35-large',     label: '🖼️ Stable Diffusion 3.5 Large',    badge: 'HD',    tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'SD3.5 جودة عالية' },
+  { id: 'realvisxl',      label: '📷 RealVisXL V4.0',                 badge: 'REAL',  tier: 'fast',    group: 'DZ MEDIA',       waitSecs: 20,  desc: 'صور واقعية فائقة' },
 ]
 
 const GROUP_ORDER = ['DZ MEDIA PRO', 'DZ MEDIA', 'DZ MEDIA BASIC']
@@ -110,7 +111,7 @@ export default function DZMediaStudio() {
     if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
     setLoading(true); setError('')
 
-    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','hf']
+    const dzMediaIds = ['auto','nano-banana','imgcreator','imgcreator-gpt','horde','hf']
     const isDzMedia  = dzMediaIds.includes(model)
     const hasArabic  = /[\u0600-\u06FF]/.test(prompt)
     const modelQueue = isDzMedia
@@ -282,10 +283,15 @@ export default function DZMediaStudio() {
             )}
             {(selectedModel?.id === 'imgcreator' || selectedModel?.id === 'imgcreator-gpt') && (
               <div className="dms-premium-note" style={{ borderColor: '#134e2a', color: '#86efac' }}>
-                🎁 ImgCreator Guest — مجاني تماماً بدون مفتاح API — وقت التوليد ~50 ثانية — 1K فقط
+                🎁 ImgCreator Guest — مجاني بدون مفتاح API — ~60ث — إذا نفدت الحصة يتولى <strong>Stable Horde</strong> تلقائياً
                 {icCredits?.backoffRemainMin && icCredits.backoffRemainMin > 0 ? (
-                  <span style={{ color: '#fbbf24', marginRight: 8 }}> — الحصة نفدت، تجديد تلقائي بعد {icCredits.backoffRemainMin} دقيقة</span>
+                  <span style={{ color: '#fbbf24', marginRight: 8 }}> — الحصة نفدت (تجديد {icCredits.backoffRemainMin}د) → Horde يعمل</span>
                 ) : null}
+              </div>
+            )}
+            {selectedModel?.id === 'horde' && (
+              <div className="dms-premium-note" style={{ borderColor: '#1d4ed8', color: '#93c5fd' }}>
+                🌐 Stable Horde — شبكة GPU مجتمعية مجانية بلا حدود — بدون أي مفتاح API — وقت الانتظار ~60-120 ثانية
               </div>
             )}
           </div>

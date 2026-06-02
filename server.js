@@ -24797,6 +24797,19 @@ app.get('/api/chatimg/credits', (_req, res) => {
   res.status(410).json({ ok: false, error: 'endpoint removed — imgcreatorai service no longer available' })
 })
 
+// POST /api/chatimg/enhance-prompt — تحسين البرومبت بالذكاء الاصطناعي
+app.post('/api/chatimg/enhance-prompt', express.json({ limit: '1mb' }), async (req, res) => {
+  const { prompt } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+  try {
+    const { enhancePromptForImage } = await import('./lib/chatimg-engine.js')
+    const result = await enhancePromptForImage(String(prompt).slice(0, 500))
+    res.json(result)
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message })
+  }
+})
+
 // POST /api/chatimg/generate — text-to-image via chatimg.ai style
 app.post('/api/chatimg/generate', express.json({ limit: '2mb' }), async (req, res) => {
   const { prompt, model = 'auto', width = 768, height = 768 } = req.body

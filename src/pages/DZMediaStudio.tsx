@@ -30,7 +30,6 @@ const DEFAULT_MODELS: ModelDef[] = [
   { id: 'flux-3d',      label: '🧊 FLUX 3D',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'تصيير ثلاثي الأبعاد — مجاني تماماً' },
   { id: 'flux-cablyai', label: '🎭 FLUX CablyAI',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'فوتوريالستيك احترافي بجودة استوديو' },
   { id: 'playground',   label: '🎮 Playground v2',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'نموذج جمالي فائق الجودة — مجاني' },
-  { id: 'gemini',       label: '🍌 Gemini Flash Image',    badge: 'PRO',   tier: 'fast',   group: 'DZ MEDIA PRO', waitSecs: 20,  desc: 'Gemini 2.0 Flash — جودة فائقة مجاني مع API key' },
   { id: 'horde',        label: '🌐 Stable Horde (HD)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA HD',  waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة عالية جداً ~60-120 ث' },
 ]
 

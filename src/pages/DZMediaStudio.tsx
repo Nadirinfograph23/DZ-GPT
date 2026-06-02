@@ -45,13 +45,15 @@ export default function DZMediaStudio() {
   const [models, setModels]   = useState<ModelDef[]>(DEFAULT_MODELS)
   const [width, setWidth]     = useState(768)
   const [height, setHeight]   = useState(768)
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [enhancing, setEnhancing]   = useState(false)
   const [imgLoading, setImgLoading] = useState(false)
-  const [result, setResult]     = useState<ImageResult | null>(null)
-  const [error, setError]       = useState('')
-  const [progress, setProgress] = useState('')
-  const [elapsed, setElapsed]   = useState(0)
-  const timerRef                = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [result, setResult]         = useState<ImageResult | null>(null)
+  const [error, setError]           = useState('')
+  const [progress, setProgress]     = useState('')
+  const [elapsed, setElapsed]       = useState(0)
+  const [enhancedHint, setEnhancedHint] = useState('')
+  const timerRef                    = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── عداد الوقت أثناء التوليد ──────────────────────────────────────────────
   useEffect(() => {
@@ -72,6 +74,32 @@ export default function DZMediaStudio() {
   }, [])
 
   const selectedModel = models.find(m => m.id === model) || models[0]
+
+  const handleEnhance = useCallback(async () => {
+    if (!prompt.trim()) { setError('الرجاء كتابة وصف أولاً'); return }
+    setEnhancing(true); setError(''); setEnhancedHint('')
+    try {
+      const ac = new AbortController()
+      const tid = setTimeout(() => ac.abort(), 22_000)
+      const res = await fetch('/api/chatimg/enhance-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }), signal: ac.signal,
+      })
+      clearTimeout(tid)
+      const data = await res.json() as { ok: boolean; enhanced?: string; fallback?: boolean; error?: string }
+      if (data.ok && data.enhanced) {
+        setPrompt(data.enhanced)
+        setEnhancedHint(data.fallback ? '✅ تم تحسين البرومبت (قاعدة محلية)' : '✨ تم تحسين البرومبت بالذكاء الاصطناعي!')
+        setTimeout(() => setEnhancedHint(''), 5000)
+      } else {
+        setError(data.error || 'فشل التحسين — حاول مرة أخرى')
+      }
+    } catch (err: unknown) {
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      setError(isAbort ? 'انتهت مهلة التحسين' : 'فشل الاتصال بخادم التحسين')
+    }
+    setEnhancing(false)
+  }, [prompt])
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) { setError('الرجاء كتابة وصف'); return }
@@ -147,15 +175,45 @@ export default function DZMediaStudio() {
           </p>
 
           <div className="dms-prompt-wrap">
-            <label className="dms-label">✏️ وصف المشهد</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <label className="dms-label" style={{ margin: 0 }}>✏️ وصف المشهد</label>
+              <button
+                onClick={handleEnhance}
+                disabled={enhancing || loading || !prompt.trim()}
+                title="يُحوّل وصفك القصير إلى برومبت احترافي مفصّل"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: enhancing ? '#1a2a1a' : 'linear-gradient(135deg,#c8ff00,#a3cc00)',
+                  color: enhancing ? '#c8ff00' : '#0a1a0a',
+                  border: 'none', borderRadius: 8, padding: '4px 10px',
+                  fontSize: 12, fontWeight: 700, cursor: enhancing ? 'wait' : 'pointer',
+                  opacity: (!prompt.trim() || loading) ? 0.5 : 1,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {enhancing
+                  ? <><span className="dms-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> جاري التحسين…</>
+                  : <>✨ تحسين</>
+                }
+              </button>
+            </div>
             <textarea
               className="dms-textarea"
               rows={3}
-              placeholder="مثال: قصبة الجزائر عند الغروب، فوتوريالستيك، 8K"
+              placeholder="مثال: قصبة الجزائر عند الغروب — اكتب بالعربية أو الإنجليزية"
               value={prompt}
-              onChange={e => setPrompt(e.target.value)}
+              onChange={e => { setPrompt(e.target.value); setEnhancedHint('') }}
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleGenerate() }}
             />
+            {enhancedHint && (
+              <div style={{
+                marginTop: 6, padding: '6px 10px', borderRadius: 8,
+                background: '#0f2b0f', border: '1px solid #2d6a2d',
+                color: '#86efac', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {enhancedHint}
+              </div>
+            )}
           </div>
 
           {/* اختيار النموذج */}

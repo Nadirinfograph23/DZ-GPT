@@ -12889,6 +12889,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isAgentMode = !!(req.body.agentActive || currentRepo)
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
+  // ── Moderation EARLY — must run before static facts / cache ─────────────
+  // Content Safety check first so dangerous queries never hit any fast-path
+  const _earlyMod = moderateMessage(lastUserMessage)
+  if (!_earlyMod.ok) {
+    return res.status(200).json({ content: _earlyMod.replyIfBlocked })
+  }
+
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
   // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
   // to prevent دينار → دين conflict and ensure live data paths fire correctly
@@ -12969,11 +12976,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Pipeline: Moderation → Normalization → Intent → Entities → Style
   // ══════════════════════════════════════════════════════════════════════
 
-  // Step 1: Moderation guard
-  const moderation = moderateMessage(lastUserMessage)
-  if (!moderation.ok) {
-    return res.status(200).json({ content: moderation.replyIfBlocked })
-  }
+  // Step 1: Moderation guard (secondary — early guard already ran above)
+  const moderation = _earlyMod
 
   // ── Owner Training & Command Detection ────────────────────────────────────
   const _ownerTok = req.body.githubToken || process.env.GITHUB_TOKEN || ''
@@ -16574,7 +16578,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _tmplCode = generateCodeTemplate(lastUserMessage, _tmplLang)
       console.warn(`[DZ Agent] AI failed for code query → template fallback (lang=${_tmplLang})`)
       return res.status(200).json({
-        content: `✅ **تم توليد الكود بنجاح!**\n\n> ⚙️ **ملاحظة:** نموذج AI غير متاح حالياً — تم استخدام مولّد القوالب كبديل.\n> 💡 لتحصل على إجابات أكثر ذكاءً، أضف مفتاح Groq مجاني: **AI_API_KEY** من [console.groq.com](https://console.groq.com/keys)`,
+        content: `✅ **تم توليد الكود!**\n\n> ⚙️ **ملاحظة:** تم استخدام مولّد القوالب — قدّم تفاصيل أكثر للحصول على كود مخصص.`,
         isExecution: true,
         executionLang: _tmplLang,
         executionCode: _tmplCode,

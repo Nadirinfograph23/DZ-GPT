@@ -4,15 +4,16 @@
     "version": "4.0.0",
     "total": 414,
     "sources": [
+      "community",
       "mo3jam.com",
       "curated",
-      "community",
+      "owner-provided-2026-05-29",
       "user-provided-2026-05-27",
-      "owner-provided-2026-05-29"
+      "owner-provided-2026-06-03"
     ],
-    "updated": "2026-05-30",
+    "updated": "2026-06-03",
     "intent_categories": 19,
-    "conv_phrases": 296
+    "conv_phrases": 305
   },
   "words": [
     {
@@ -9498,6 +9499,51 @@
       "ar": "في المساء",
       "dz": "المسا / العشية",
       "ctx": "time"
+    },
+    {
+      "ar": "أنا عالق / محتار",
+      "dz": "راني حابس",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "لدي فكرة",
+      "dz": "عندي فكرة",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "هل أنت متأكد؟",
+      "dz": "راك متأكد",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "هذا صعب",
+      "dz": "هذا صعيب",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "ليس لدي وقت",
+      "dz": "ما عنديش وقت",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "أعد الشرح",
+      "dz": "عاود شرحها",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "أعطني أسرع طريقة",
+      "dz": "عطيني أسرع طريقة",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "هل لديك اقتراح؟",
+      "dz": "عندك اقتراح",
+      "ctx": "task_context"
+    },
+    {
+      "ar": "أكمل / تابع",
+      "dz": "كمل",
+      "ctx": "task_context"
     }
   ]
 }

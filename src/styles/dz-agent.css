@@ -295,7 +295,7 @@
 .dza-chat-item-del {
   background: none;
   border: none;
-  color: #333;
+  color: #ffffff;
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -303,9 +303,20 @@
   flex-shrink: 0;
   opacity: 0;
   transition: all 0.2s;
+  animation: trashBlink 10s infinite;
 }
 .dza-chat-item:hover .dza-chat-item-del { opacity: 1; }
-.dza-chat-item-del:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+.dza-chat-item-del:hover { color: #ef4444; background: rgba(239,68,68,0.1); animation: none; opacity: 1; }
+@keyframes trashBlink {
+  0%,   72%  { opacity: 0; color: #ffffff; transform: scale(1); }
+  74%         { opacity: 1; color: #ffffff; transform: scale(1.3); }
+  76%         { opacity: 0.3; color: #ffffff; transform: scale(0.9); }
+  78%         { opacity: 1; color: #ffffff; transform: scale(1.2); }
+  80%         { opacity: 0.4; color: #ffffff; transform: scale(1); }
+  82%         { opacity: 1; color: #ffffff; transform: scale(1.1); }
+  84%  { opacity: 0; color: #ffffff; transform: scale(1); }
+  100% { opacity: 0; }
+}
 
 /* ===== MENU BUTTON ===== */
 .dza-menu-btn {

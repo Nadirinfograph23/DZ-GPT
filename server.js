@@ -27,6 +27,7 @@ import {
 } from './lib/owner-commands.js'
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
+import { isRealtimeQuery, fetchRealtimeContext } from './lib/realtime-search.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -16169,6 +16170,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let _metaClawBlock = ''
   try { _metaClawBlock = metaClawInject('', lastUserMessage) } catch { /* fail silently */ }
 
+  // ── Real-Time Internet Search Injection ────────────────────────────────
+  // يبحث تلقائياً في الإنترنت لأي سؤال لحظي (مباريات، أخبار، أسعار...)
+  let _realtimeContext = ''
+  try {
+    if (isRealtimeQuery(lastUserMessage)) {
+      console.log(`[RealtimeSearch] 🔍 triggered for: "${lastUserMessage.slice(0, 60)}"`)
+      _realtimeContext = await fetchRealtimeContext(lastUserMessage) || ''
+      if (_realtimeContext) console.log(`[RealtimeSearch] ✅ context injected (${_realtimeContext.length} chars)`)
+    }
+  } catch (_rse) {
+    console.warn('[RealtimeSearch] failed silently:', _rse.message)
+  }
+
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
@@ -16295,6 +16309,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })(),
 
     _metaClawBlock,
+    _realtimeContext || '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [

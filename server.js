@@ -1191,8 +1191,10 @@ function looksLikeBareArabicName(msg) {
   if (/^(?:من|ما|كيف|أين|متى|لماذا|هل|واش|كيفاش|علاش|فين|وين|إيمتى)$/.test(words[0])) return false
   // لا تحتوي على أفعال أو حروف جر
   if (/(?:هو|هي|هم|في|من|إلى|على|عن|بـ|لـ|كـ|عند|مع)/.test(trimmed)) return false
-  // لا توجد كلمة من قائمة الاستثناء
-  if (words.some(w => _BARE_NAME_EXCLUDE_WORDS.has(w.replace(/^ال/, '')))) return false
+  // للاسم المركب (2+ كلمة): استبعد فقط إذا كانت كل الكلمات في قائمة الاستثناء
+  // مثال: "ياسين وليد" → لا تستبعده لأن "وليد" ليس في القائمة
+  // مثال: "ياسين محمد" → يُستبعد لأن كلتا الكلمتين في القائمة
+  if (words.every(w => _BARE_NAME_EXCLUDE_WORDS.has(w.replace(/^ال/, '')))) return false
   // كل كلمة يجب أن تكون 2+ حرف عربي
   return words.every(w => /^[\u0600-\u06FF]{2,}$/.test(w))
 }
@@ -1230,10 +1232,26 @@ async function fetchPersonFromWikipedia(query) {
   try {
     const { searchPersonWikipedia } = await import('./lib/wikipedia.js')
     // تنظيف الاستعلام: حذف أدوات الأسئلة وإبقاء الاسم فقط
-    const cleanQuery = query
+    let cleanQuery = query
       .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|qui\s+est|c'est\s+qui|parle-moi\s+de|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
       .trim()
-    const result = await searchPersonWikipedia(cleanQuery)
+
+    // ── استخراج الاسم من استعلامات المنصب/الوظيفة ──────────────────────────
+    // مثال: "وزير الفلاحة ياسين وليد" → نجرّب "ياسين وليد" أولاً
+    const positionMatch = cleanQuery.match(
+      /^(?:وزير|رئيس|مدير|والي|أمين|سفير|قائد|نائب|مستشار|وكيل|كاتب\s+الدولة)(?:\s+ال[\u0600-\u06FF]+){0,3}\s+([\u0600-\u06FF][\u0600-\u06FF\s]{2,})/i
+    )
+    const nameOnly = positionMatch ? positionMatch[1].trim() : null
+
+    // ── محاولة البحث: الاسم المجرد أولاً ثم الاستعلام الكامل ───────────────
+    let result = null
+    if (nameOnly && nameOnly !== cleanQuery) {
+      console.log(`[PersonWiki] Trying name-only: "${nameOnly}"`)
+      result = await searchPersonWikipedia(nameOnly)
+    }
+    if (!result) {
+      result = await searchPersonWikipedia(cleanQuery)
+    }
     return result || null
   } catch (err) {
     console.error('[PersonWiki] fetchPersonFromWikipedia error:', err.message)

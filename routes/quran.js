@@ -55,7 +55,34 @@ export function createQuranRouter() {
       .replace(/\u0629/g, '\u0647')
   }
 
-  // ── Quran keyword search — local full-text with surah statistics ──────────
+  // ── Quran keyword search — POST /api/quran/search (body: {query, limit}) ──
+  router.post('/quran/search', async (req, res) => {
+    const raw = req.body?.query || req.body?.q || ''
+    const q = sanitizeString(String(raw).trim(), 200)
+    if (!q || q.length < 2) {
+      return res.status(400).json({ ok: false, error: 'كلمة البحث مطلوبة (حرفان على الأقل)' })
+    }
+    const limit = Math.min(parseInt(req.body?.limit || req.body?.size || 20, 10) || 20, 100)
+    try {
+      const quran = await getQuranData()
+      const needle = normalizeArabic(q)
+      const results = []
+      for (const surah of quran) {
+        for (const verse of surah.verses) {
+          if (normalizeArabic(verse.text).includes(needle)) {
+            results.push({ surah: surah.id, surahName: surah.name, ayah: verse.id, text: verse.text })
+            if (results.length >= limit) break
+          }
+        }
+        if (results.length >= limit) break
+      }
+      return res.json({ ok: true, query: q, total: results.length, results })
+    } catch (e) {
+      return res.json({ ok: true, query: q, total: 0, results: [], note: e.message })
+    }
+  })
+
+  // ── Quran keyword search — GET /api/quran/search?q=&size= ────────────────
   router.get('/quran/search', async (req, res) => {
     const q = sanitizeString(String(req.query.q || '').trim(), 200)
     if (!q || q.length < 2) {

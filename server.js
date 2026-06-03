@@ -1144,6 +1144,63 @@ function isDeveloperOrOwnerQuestion(message) {
   return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))
 }
 
+// ===== PERSON / PERSONALITY QUERY DETECTION =====
+// يكشف الأسئلة عن أشخاص أو شخصيات أو مناصب حكومية
+// الهدف: إجبار DZ Agent على البحث في ويكيبيديا قبل الإجابة
+const _PERSON_QUERY_PATTERNS = [
+  // عربية — اسم + فعل تعريفي
+  /من\s+هو\s+/i, /من\s+هي\s+/i, /من\s+هم\s+/i,
+  /ما\s+هو\s+(?:اسم|دور|منصب|عمل|وظيفة)/i,
+  /تعرف\s+(?:على\s+)?(?:الشخص|الفنان|الممثل|المطرب|المخرج|الوزير|المسؤول|الكاتب|المؤلف)/i,
+  /من\s+(?:هو\s+)?(?:وزير|رئيس|مدير|وكيل|أمين|سفير|والي|قائد|مستشار)\s+/i,
+  /(?:وزير|رئيس|مدير|قائد|والي|أمين|سفير)\s+(?:ال\w+|الجزائر|\w+)/i,
+  /(?:الفنان|الممثل|المطرب|المخرج|الكاتب|المؤلف|الرياضي|اللاعب|الشاعر)\s+/i,
+  /(?:فنان|ممثل|مطرب|مخرج|كاتب|مؤلف|رياضي|لاعب|شاعر|أديب)\s+جزائري/i,
+  /معلومات\s+عن\s+(?:\w+\s+){1,3}/i,
+  /(?:من|ماهو|ما هو)\s+(?:\w+\s+){1,3}(?:الجزائري|المشهور|المعروف|الكبير)/i,
+  /(?:أخبرني|اخبرني|حدثني)\s+عن\s+(?:\w+\s+){1,3}/i,
+  // شخصية — دارجة
+  /شكون\s+هو\s+/i, /شكون\s+هي\s+/i,
+  /واش\s+تعرف\s+(?:\w+\s+){1,3}/i,
+  /علاش\s+مشهور\s+/i,
+  // French
+  /qui\s+est\s+/i, /c'est\s+qui\s+/i, /informations?\s+sur\s+/i,
+  /parle-moi\s+de\s+/i,
+]
+
+// أسماء تُستثنى من البحث (المطور + المصطلحات التقنية الشائعة)
+const _PERSON_QUERY_EXCLUDE = [
+  /^(?:من|ما|كيف|أين|متى|لماذا|هل)\s+(?:هو|هي|هم)?\s*(?:الذكاء|المنهج|النظام|البرنامج|الكود|التطبيق|الموقع)/i,
+  /nadir|نذير\s+حوامرية|nadirinfograph/i,
+]
+
+function isPersonQuery(message) {
+  if (typeof message !== 'string' || message.length < 5) return false
+  // استثناء أسئلة المطور
+  if (isDeveloperOrOwnerQuestion(message)) return false
+  // استثناء الأنماط التقنية
+  if (_PERSON_QUERY_EXCLUDE.some(r => r.test(message))) return false
+  // كشف نمط الشخصية
+  return _PERSON_QUERY_PATTERNS.some(r => r.test(message))
+}
+
+// جلب معلومات شخصية من ويكيبيديا العربية أولاً
+async function fetchPersonFromWikipedia(query) {
+  try {
+    const { searchWikipedia: _wikiSearch } = await import('./lib/wikipedia.js')
+    // ابحث أولاً بالعربية، ثم الفرنسية، ثم الإنجليزية
+    const arResult = await _wikiSearch(query, { lang: 'ar' })
+    if (arResult?.extract && arResult.extract.length > 50) return arResult
+    const frResult = await _wikiSearch(query, { lang: 'fr' })
+    if (frResult?.extract && frResult.extract.length > 50) return frResult
+    const enResult = await _wikiSearch(query, { lang: 'en' })
+    if (enResult?.extract && enResult.extract.length > 50) return enResult
+    return null
+  } catch {
+    return null
+  }
+}
+
 // ===== UNIFIED CAPABILITIES QUESTION DETECTION =====
 const CAPABILITIES_RESPONSE = Object.freeze({
   content: [
@@ -13363,6 +13420,43 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         role: 'system',
         content: `أنت مساعد رقمي جزائري متخصص. أجب دائماً بالعربية البسيطة. عند الإجابة على أسئلة المواطن الجزائري، استخدم دائماً المصادر الرسمية الجزائرية مثل الجريدة الرسمية (joradp.dz)، ONEC، ANEM، AADL، بريد الجزائر، وغيرها. لا تُعطِ معلومات مُبهمة أو خاطئة. إذا لم تعرف، وجّه المستخدم للجهة الرسمية المختصة.`,
       })
+    }
+  }
+
+  // ── Person / Personality Wikipedia Lookup — بحث إجباري في ويكيبيديا ────────
+  // كل سؤال عن شخص أو شخصية أو منصب → يُجبر على البحث في ويكيبيديا العربية أولاً
+  // المبدأ: لا إجابة بدون مصدر موثوق — لا اختلاق أبداً
+  if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
+    console.log(`[PersonWiki] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
+    try {
+      const _personWiki = await fetchPersonFromWikipedia(lastUserMessage)
+      if (_personWiki?.extract) {
+        console.log(`[PersonWiki] ✅ Wikipedia found: "${_personWiki.title}" (${_personWiki.lang}) — ${_personWiki.extract.length} chars`)
+        const _wikiBlock = `[WIKIPEDIA_CONTEXT]\n**المصدر:** ويكيبيديا (${_personWiki.lang === 'ar' ? 'عربية' : _personWiki.lang === 'fr' ? 'فرنسية' : 'إنجليزية'})\n**العنوان:** ${_personWiki.title}\n**المعلومات:**\n${_personWiki.extract}\n**الرابط:** ${_personWiki.url}\n[/WIKIPEDIA_CONTEXT]\n\nبناءً على هذا المصدر فقط، أجب على سؤال المستخدم: "${lastUserMessage}"\nلا تُضف معلومات خارج ما ورد في [WIKIPEDIA_CONTEXT]. أذكر أن المصدر هو ويكيبيديا.`
+
+        const _personMessages = [
+          ...messages.filter(m => m.role !== 'user' || messages.indexOf(m) !== messages.map(m2 => m2.role).lastIndexOf('user')),
+          { role: 'user', content: _wikiBlock },
+        ]
+        const _personResult = await safeGenerateAI({ messages: _personMessages, query: lastUserMessage, max_tokens: 800, taskHint: 'general' })
+        if (_personResult?.content) {
+          const _wikiSuffix = `\n\n📖 [اقرأ المزيد على ويكيبيديا](${_personWiki.url})`
+          return res.status(200).json({
+            content: _personResult.content + _wikiSuffix,
+            model: _personResult.model,
+            _personWiki: { title: _personWiki.title, url: _personWiki.url, lang: _personWiki.lang },
+          })
+        }
+      } else {
+        console.log(`[PersonWiki] ⚠️ No Wikipedia result for: "${lastUserMessage.slice(0, 80)}"`)
+        return res.status(200).json({
+          content: `⚠️ **لا أملك معلومات موثوقة عن هذا الشخص.**\n\nلضمان الدقة، لا أُجيب عن الأشخاص والشخصيات بدون مصدر موثوق.\n\n🔍 يمكنك البحث مباشرة على:\n- [ويكيبيديا العربية](https://ar.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})\n- [ويكيبيديا الفرنسية](https://fr.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+          _personWiki: null,
+        })
+      }
+    } catch (_personErr) {
+      console.error('[PersonWiki] Error:', _personErr.message)
+      // في حالة خطأ → نتابع التدفق الطبيعي مع تحذير
     }
   }
 

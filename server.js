@@ -1168,6 +1168,35 @@ const _PERSON_QUERY_PATTERNS = [
   /parle-moi\s+de\s+/i,
 ]
 
+// ─── كلمات دينية/جغرافية/تقنية تمنع الكشف كاسم مجرد ──────────────────────────
+const _BARE_NAME_EXCLUDE_WORDS = new Set([
+  'سورة','آية','الآيات','قرآن','حديث','دعاء','صلاة','زكاة','جزء','ربع',
+  'مدينة','ولاية','منطقة','دولة','بلدية','دائرة','حي','شارع','وادي','جبل',
+  'الجزائر','المغرب','تونس','ليبيا','موريتانيا','مصر','سوريا','العراق',
+  'كود','برنامج','تطبيق','موقع','شبكة','نظام','خوارزمية','بيانات','خطأ',
+  'الله','الرحمن','الرحيم','محمد','عيسى','موسى','إبراهيم','يوسف','يونس',
+  // الأسماء المفردة شائعة الالتباس
+  'ياسين','يسين','نور','نور الدين','عمر','علي','أحمد','محمد',
+])
+
+// ─── كشف الاسم المجرد (2-4 كلمات عربية بدون أداة سؤال) ────────────────────────
+function looksLikeBareArabicName(msg) {
+  const trimmed = msg.trim()
+  // يجب أن يكون عربياً خالصاً تقريباً
+  if (!/^[\u0600-\u06FF\s\-.'،]+$/.test(trimmed)) return false
+  const words = trimmed.split(/\s+/).filter(Boolean)
+  // 2 إلى 4 كلمات
+  if (words.length < 2 || words.length > 4) return false
+  // لا توجد أداة سؤال في أول كلمة
+  if (/^(?:من|ما|كيف|أين|متى|لماذا|هل|واش|كيفاش|علاش|فين|وين|إيمتى)$/.test(words[0])) return false
+  // لا تحتوي على أفعال أو حروف جر
+  if (/(?:هو|هي|هم|في|من|إلى|على|عن|بـ|لـ|كـ|عند|مع)/.test(trimmed)) return false
+  // لا توجد كلمة من قائمة الاستثناء
+  if (words.some(w => _BARE_NAME_EXCLUDE_WORDS.has(w.replace(/^ال/, '')))) return false
+  // كل كلمة يجب أن تكون 2+ حرف عربي
+  return words.every(w => /^[\u0600-\u06FF]{2,}$/.test(w))
+}
+
 // أسماء تُستثنى من البحث (المطور + المصطلحات التقنية الشائعة)
 const _PERSON_QUERY_EXCLUDE = [
   /^(?:من|ما|كيف|أين|متى|لماذا|هل)\s+(?:هو|هي|هم)?\s*(?:الذكاء|المنهج|النظام|البرنامج|الكود|التطبيق|الموقع)/i,
@@ -1180,21 +1209,48 @@ function isPersonQuery(message) {
   if (isDeveloperOrOwnerQuestion(message)) return false
   // استثناء الأنماط التقنية
   if (_PERSON_QUERY_EXCLUDE.some(r => r.test(message))) return false
-  // كشف نمط الشخصية
-  return _PERSON_QUERY_PATTERNS.some(r => r.test(message))
+  // كشف نمط الشخصية بالأنماط الصريحة
+  if (_PERSON_QUERY_PATTERNS.some(r => r.test(message))) return true
+  // كشف الاسم المجرد (2-4 كلمات عربية)
+  if (looksLikeBareArabicName(message)) return true
+  return false
 }
 
-// جلب معلومات شخصية من ويكيبيديا العربية أولاً
+// ─── التحقق من أن نتيجة ويكيبيديا تخص شخصاً حقيقياً ──────────────────────────
+async function _isPersonWikiResult(result) {
+  if (!result) return false
+  try {
+    const { isPersonArticle } = await import('./lib/wikipedia.js')
+    return isPersonArticle(result)
+  } catch { return false }
+}
+
+// جلب معلومات شخصية من ويكيبيديا مع التحقق من النوع وإعادة المحاولة عند الالتباس
 async function fetchPersonFromWikipedia(query) {
   try {
     const { searchWikipedia: _wikiSearch } = await import('./lib/wikipedia.js')
-    // ابحث أولاً بالعربية، ثم الفرنسية، ثم الإنجليزية
+
+    // ─── محاولة 1: الاسم كما هو بالعربية
     const arResult = await _wikiSearch(query, { lang: 'ar' })
-    if (arResult?.extract && arResult.extract.length > 50) return arResult
+    if (arResult?.extract?.length > 50) {
+      if (await _isPersonWikiResult(arResult)) return arResult
+    }
+
+    // ─── محاولة 2: إضافة "شخصية" لتوضيح النية عند الالتباس
+    const arResult2 = await _wikiSearch(query + ' شخصية', { lang: 'ar' })
+    if (arResult2?.extract?.length > 50 && await _isPersonWikiResult(arResult2)) return arResult2
+
+    // ─── محاولة 3: الفرنسية
     const frResult = await _wikiSearch(query, { lang: 'fr' })
-    if (frResult?.extract && frResult.extract.length > 50) return frResult
+    if (frResult?.extract?.length > 50 && await _isPersonWikiResult(frResult)) return frResult
+
+    // ─── محاولة 4: الإنجليزية
     const enResult = await _wikiSearch(query, { lang: 'en' })
-    if (enResult?.extract && enResult.extract.length > 50) return enResult
+    if (enResult?.extract?.length > 50 && await _isPersonWikiResult(enResult)) return enResult
+
+    // ─── محاولة 5: إذا لم يُتحقق من أي نتيجة، أعِد الأولى على أي حال
+    if (arResult?.extract?.length > 50) return arResult
+
     return null
   } catch {
     return null

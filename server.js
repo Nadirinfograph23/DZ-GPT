@@ -1870,7 +1870,7 @@ function detectToolRedirect(msg) {
 // Returns true if the new message is about a completely different topic
 // from the recent conversation history — so we can trim context.
 // تعابير الدارجة التي تعني تحولاً في الموضوع حتى لو كانت قصيرة
-const _DARIJA_CASUAL_SHIFT_RE = /^(واش\s+الدعوة|وش\s+الدعوة|واش\s+الحوايج|واش\s+جديد|وش\s+جديد|واش\s+الأخبار|وش\s+الأخبار|شلونك|كيرانك|كي\s+راك|لاباس\s*(بزاف)?|بخير(\s+الحمد)?|بالمناسبة|على\s+فكرة|حاجة\s+أخرى|سؤال\s+آخر|غير\s+الموضوع|الدعوة\s*(هانية|مزيانة)?)/i
+const _DARIJA_CASUAL_SHIFT_RE = /^(واش\s+الدعوة|وش\s+الدعوة|واش\s+الحوايج|واش\s+جديد|وش\s+جديد|واش\s+الأخبار|وش\s+الأخبار|شلونك|كيرانك|كي\s+راك|لاباس\s*(بزاف)?|بخير(\s+الحمد)?|بالمناسبة|على\s+فكرة|حاجة\s+أخرى|سؤال\s+آخر|غير\s+الموضوع|الدعوة\s*(هانية|مليحة)?)/i
 
 function detectTopicChange(messages) {
   if (!Array.isArray(messages) || messages.length < 3) return false

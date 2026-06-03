@@ -1225,34 +1225,18 @@ async function _isPersonWikiResult(result) {
   } catch { return false }
 }
 
-// جلب معلومات شخصية من ويكيبيديا مع التحقق من النوع وإعادة المحاولة عند الالتباس
+// جلب معلومات شخصية من ويكيبيديا — يستخدم OpenSearch مثل خانة البحث بالضبط
 async function fetchPersonFromWikipedia(query) {
   try {
-    const { searchWikipedia: _wikiSearch } = await import('./lib/wikipedia.js')
-
-    // ─── محاولة 1: الاسم كما هو بالعربية
-    const arResult = await _wikiSearch(query, { lang: 'ar' })
-    if (arResult?.extract?.length > 50) {
-      if (await _isPersonWikiResult(arResult)) return arResult
-    }
-
-    // ─── محاولة 2: إضافة "شخصية" لتوضيح النية عند الالتباس
-    const arResult2 = await _wikiSearch(query + ' شخصية', { lang: 'ar' })
-    if (arResult2?.extract?.length > 50 && await _isPersonWikiResult(arResult2)) return arResult2
-
-    // ─── محاولة 3: الفرنسية
-    const frResult = await _wikiSearch(query, { lang: 'fr' })
-    if (frResult?.extract?.length > 50 && await _isPersonWikiResult(frResult)) return frResult
-
-    // ─── محاولة 4: الإنجليزية
-    const enResult = await _wikiSearch(query, { lang: 'en' })
-    if (enResult?.extract?.length > 50 && await _isPersonWikiResult(enResult)) return enResult
-
-    // ─── محاولة 5: إذا لم يُتحقق من أي نتيجة، أعِد الأولى على أي حال
-    if (arResult?.extract?.length > 50) return arResult
-
-    return null
-  } catch {
+    const { searchPersonWikipedia } = await import('./lib/wikipedia.js')
+    // تنظيف الاستعلام: حذف أدوات الأسئلة وإبقاء الاسم فقط
+    const cleanQuery = query
+      .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|qui\s+est|c'est\s+qui|parle-moi\s+de|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
+      .trim()
+    const result = await searchPersonWikipedia(cleanQuery)
+    return result || null
+  } catch (err) {
+    console.error('[PersonWiki] fetchPersonFromWikipedia error:', err.message)
     return null
   }
 }

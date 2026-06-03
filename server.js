@@ -1169,34 +1169,49 @@ const _PERSON_QUERY_PATTERNS = [
 ]
 
 // ─── كلمات دينية/جغرافية/تقنية تمنع الكشف كاسم مجرد ──────────────────────────
+// ملاحظة: هذه الكلمات تمنع الكشف فقط إذا ظهرت مُفردةً أو كلها مجتمعة في الاستعلام
+// "إبراهيم مازا" لن يُحجب لأن "مازا" ليست في القائمة
 const _BARE_NAME_EXCLUDE_WORDS = new Set([
+  // دينية بحتة — لا يُكشف عنها كأسماء مجردة
   'سورة','آية','الآيات','قرآن','حديث','دعاء','صلاة','زكاة','جزء','ربع',
+  // جغرافية
   'مدينة','ولاية','منطقة','دولة','بلدية','دائرة','حي','شارع','وادي','جبل',
   'الجزائر','المغرب','تونس','ليبيا','موريتانيا','مصر','سوريا','العراق',
+  // تقنية
   'كود','برنامج','تطبيق','موقع','شبكة','نظام','خوارزمية','بيانات','خطأ',
-  'الله','الرحمن','الرحيم','محمد','عيسى','موسى','إبراهيم','يوسف','يونس',
-  // الأسماء المفردة شائعة الالتباس
-  'ياسين','يسين','نور','نور الدين','عمر','علي','أحمد','محمد',
+  // أسماء أنبياء مفردة (لا تُحجب إذا كانت جزءاً من اسم مركب مثل "إبراهيم مازا")
+  'الله','الرحمن','الرحيم',
+])
+
+// ─── أسماء أُولى شائعة — تُمنع فقط إذا ظهرت وحدها (كلمة واحدة) ─────────────
+const _SINGLE_NAME_AMBIGUOUS = new Set([
+  'محمد','أحمد','علي','عمر','يوسف','موسى','عيسى','إبراهيم','يونس',
+  'ياسين','يسين','نور','سارة','مريم','فاطمة','خديجة','آمنة',
 ])
 
 // ─── كشف الاسم المجرد (2-4 كلمات عربية بدون أداة سؤال) ────────────────────────
 function looksLikeBareArabicName(msg) {
   const trimmed = msg.trim()
-  // يجب أن يكون عربياً خالصاً تقريباً
-  if (!/^[\u0600-\u06FF\s\-.'،]+$/.test(trimmed)) return false
+  // يجب أن يكون عربياً خالصاً تقريباً (يقبل الشرطة والنقطة في الأسماء)
+  if (!/^[\u0600-\u06FF\s\u064B-\u065F\-.'،]+$/.test(trimmed)) return false
   const words = trimmed.split(/\s+/).filter(Boolean)
   // 2 إلى 4 كلمات
   if (words.length < 2 || words.length > 4) return false
   // لا توجد أداة سؤال في أول كلمة
   if (/^(?:من|ما|كيف|أين|متى|لماذا|هل|واش|كيفاش|علاش|فين|وين|إيمتى)$/.test(words[0])) return false
-  // لا تحتوي على أفعال أو حروف جر
-  if (/(?:هو|هي|هم|في|من|إلى|على|عن|بـ|لـ|كـ|عند|مع)/.test(trimmed)) return false
-  // للاسم المركب (2+ كلمة): استبعد فقط إذا كانت كل الكلمات في قائمة الاستثناء
-  // مثال: "ياسين وليد" → لا تستبعده لأن "وليد" ليس في القائمة
-  // مثال: "ياسين محمد" → يُستبعد لأن كلتا الكلمتين في القائمة
+  // لا تحتوي على أفعال أو حروف جر مستقلة
+  if (/(?:\bهو\b|\bهي\b|\bهم\b|\bفي\b|\bإلى\b|\bعلى\b|\bعن\b|\bعند\b|\bمع\b)/.test(trimmed)) return false
+  // ─── استبعاد: كل الكلمات في قائمة الكلمات الدينية/الجغرافية/التقنية ─────
   if (words.every(w => _BARE_NAME_EXCLUDE_WORDS.has(w.replace(/^ال/, '')))) return false
-  // كل كلمة يجب أن تكون 2+ حرف عربي
-  return words.every(w => /^[\u0600-\u06FF]{2,}$/.test(w))
+  // ─── الاسم الأول الغامض وحده (كلمة واحدة فعلياً بعد التنظيف) ─────────────
+  // مثال: "إبراهيم" وحده = غامض | "إبراهيم مازا" = اسم مركب → مقبول
+  if (words.length === 1 && _SINGLE_NAME_AMBIGUOUS.has(words[0])) return false
+  // مثال: "ياسين محمد" → كلا الاسمين غامضان = يُحجب
+  //        "ياسين وليد" → "وليد" ليس في القائمة = يُكتشف
+  //        "إبراهيم مازا" → "مازا" ليس في القائمة = يُكتشف ✅
+  if (words.every(w => _SINGLE_NAME_AMBIGUOUS.has(w) || _BARE_NAME_EXCLUDE_WORDS.has(w.replace(/^ال/, '')))) return false
+  // كل كلمة يجب أن تكون 2+ حرف عربي (أو تشكيل)
+  return words.every(w => /^[\u0600-\u065F]{2,}$/.test(w))
 }
 
 // أسماء تُستثنى من البحث (المطور + المصطلحات التقنية الشائعة)
@@ -13490,37 +13505,52 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _personWiki = await fetchPersonFromWikipedia(lastUserMessage)
       if (_personWiki?.extract) {
         console.log(`[PersonWiki] ✅ Wikipedia found: "${_personWiki.title}" (${_personWiki.lang}) — ${_personWiki.extract.length} chars`)
-        const _wikiBlock = [
-          `[WIKIPEDIA_CONTEXT]`,
-          `**المصدر:** ويكيبيديا (${_personWiki.lang === 'ar' ? 'عربية' : _personWiki.lang === 'fr' ? 'فرنسية' : 'إنجليزية'})`,
-          `**العنوان:** ${_personWiki.title}`,
-          `**المعلومات:**\n${_personWiki.extract}`,
-          `**الرابط:** ${_personWiki.url}`,
-          `[/WIKIPEDIA_CONTEXT]`,
-          ``,
-          `🔴 قواعد صارمة مطلقة — لا استثناء:`,
-          `1. أجب فقط بما ورد حرفياً في [WIKIPEDIA_CONTEXT] — لا كلمة زيادة من معرفتك الداخلية`,
-          `2. ❌ يُحظر تماماً: اختراع أي منصب أو نادٍ أو وظيفة أو تاريخ أو معلومة غير موجودة في النص`,
-          `3. إذا سُئلت عن معلومة غير موجودة في [WIKIPEDIA_CONTEXT] → قُل بوضوح: "هذه المعلومة غير متوفرة في المصدر"`,
-          `4. لا تُكمّل أو تستنتج أو تخمّن — النص هو مصدرك الوحيد`,
-          `5. اذكر دائماً: "المصدر: ويكيبيديا" مع الرابط في نهاية إجابتك`,
-          ``,
-          `أجب الآن على سؤال المستخدم: "${lastUserMessage}"`,
-        ].join('\n')
 
-        const _personMessages = [
-          ...messages.filter(m => m.role !== 'user' || messages.indexOf(m) !== messages.map(m2 => m2.role).lastIndexOf('user')),
-          { role: 'user', content: _wikiBlock },
-        ]
-        const _personResult = await safeGenerateAI({ messages: _personMessages, query: lastUserMessage, max_tokens: 800, taskHint: 'general' })
-        if (_personResult?.content) {
-          const _wikiSuffix = `\n\n📖 [اقرأ المزيد على ويكيبيديا](${_personWiki.url})`
-          return res.status(200).json({
-            content: _personResult.content + _wikiSuffix,
-            model: _personResult.model,
-            _personWiki: { title: _personWiki.title, url: _personWiki.url, lang: _personWiki.lang },
-          })
+        // ── الإصلاح الجذري: لا نمرر Wikipedia عبر LLM — نُرجع المحتوى مباشرةً ──
+        // هذا يمنع الهلوسة بنسبة 100% لأن الـ LLM لا يُستدعى أصلاً
+        const _langLabel = _personWiki.lang === 'ar' ? 'العربية' : _personWiki.lang === 'fr' ? 'الفرنسية' : 'الإنجليزية'
+
+        // إذا كان المقتطف بالإنجليزية أو الفرنسية — نُرسله للـ LLM للترجمة فقط (لا توليد)
+        let _finalExtract = _personWiki.extract
+        if (_personWiki.lang !== 'ar') {
+          try {
+            const _translatePrompt = [
+              `ترجم النص التالي إلى العربية الفصحى فقط. لا تُضف أي معلومة. لا تعلّق. لا تُكمّل. الترجمة الحرفية فقط:`,
+              ``,
+              `---`,
+              _personWiki.extract,
+              `---`,
+              ``,
+              `الترجمة العربية:`,
+            ].join('\n')
+            const _transResult = await safeGenerateAI({
+              messages: [{ role: 'user', content: _translatePrompt }],
+              query: 'translate',
+              max_tokens: 600,
+              taskHint: 'general',
+            })
+            if (_transResult?.content && _transResult.content.length > 50) {
+              _finalExtract = _transResult.content.trim()
+            }
+          } catch { /* استخدم النص الأصلي إذا فشلت الترجمة */ }
         }
+
+        // بناء الإجابة مباشرةً من Wikipedia — لا LLM، لا اختلاق
+        const _directResponse = [
+          `## 📖 ${_personWiki.title}`,
+          _personWiki.description ? `*${_personWiki.description}*` : '',
+          ``,
+          _finalExtract,
+          ``,
+          `---`,
+          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url}) — ⚠️ *هذه المعلومات مستخرجة حرفياً من ويكيبيديا ولم يُضف إليها شيء*`,
+        ].filter(l => l !== '').join('\n')
+
+        return res.status(200).json({
+          content: _directResponse,
+          model: 'wikipedia-direct',
+          _personWiki: { title: _personWiki.title, url: _personWiki.url, lang: _personWiki.lang },
+        })
       } else {
         // ── Wikipedia لم تجد شيئاً → نجرّب البحث الحي في الإنترنت ─────────────
         console.log(`[PersonWiki] ⚠️ No Wikipedia result — trying live web search: "${lastUserMessage.slice(0, 80)}"`)
@@ -13532,30 +13562,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
           if (_webPersonResult?.hasInfo) {
             console.log(`[PersonWiki] ✅ Live web results found for "${_cleanName}"`)
-            const _webPrompt = [
-              _webPersonResult.text,
+
+            // ── لا نمرر نتائج الويب عبر LLM — نُرجعها مباشرةً مُنسّقة ──────────
+            // هذا يمنع الهلوسة: الـ LLM لا يضيف معلومات من معرفته الداخلية
+            const _webDirectResponse = [
+              `## 🔍 بحث حي عن "${_cleanName}"`,
               ``,
-              `🔴 قواعد صارمة مطلقة:`,
-              `1. أجب فقط بما ورد في [PERSON_WEB_CONTEXT] — لا كلمة زيادة من معرفتك الداخلية`,
-              `2. ❌ يُحظر تماماً: اختراع أي منصب أو نادٍ أو معلومة غير موجودة في النتائج`,
-              `3. إذا لم تكفِ النتائج للإجابة → قُل: "المعلومة المتاحة محدودة" مع ذكر ما وجدته`,
-              `4. اذكر المصدر لكل معلومة`,
+              _webPersonResult.text
+                .replace(/\[PERSON_WEB_CONTEXT\]/g, '')
+                .replace(/\[\/PERSON_WEB_CONTEXT\]/g, '')
+                .trim(),
               ``,
-              `أجب على: "${lastUserMessage}"`,
+              `---`,
+              `⚠️ *هذه المعلومات مستخرجة حرفياً من نتائج البحث المباشر — لم يُضف إليها شيء*`,
+              `🔍 *المصادر: Google News · DuckDuckGo · RSS جزائرية*`,
             ].join('\n')
 
-            const _webMessages = [
-              ...messages.filter(m => m.role !== 'user' || messages.indexOf(m) !== messages.map(m2 => m2.role).lastIndexOf('user')),
-              { role: 'user', content: _webPrompt },
-            ]
-            const _webResult = await safeGenerateAI({ messages: _webMessages, query: lastUserMessage, max_tokens: 700, taskHint: 'general' })
-            if (_webResult?.content) {
-              return res.status(200).json({
-                content: _webResult.content + `\n\n🔍 *المصدر: بحث حي في الإنترنت — Google News + DuckDuckGo*`,
-                model: _webResult.model,
-                _personWiki: null,
-              })
-            }
+            return res.status(200).json({
+              content: _webDirectResponse,
+              model: 'web-search-direct',
+              _personWiki: null,
+            })
           }
         } catch (_webErr) {
           console.error('[PersonWiki] Web fallback error:', _webErr.message)

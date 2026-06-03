@@ -149,7 +149,6 @@
       "meaning_en": "good / nice",
       "synonyms": [
         "زين",
-        "مزيان",
         "تمام"
       ],
       "variants": [
@@ -158,7 +157,8 @@
       ],
       "usage": [
         "هذا مليح بزاف",
-        "الأكلة مليحة"
+        "الأكلة مليحة",
+        "راك مليح معناها راك بخير"
       ],
       "category": "evaluation"
     },
@@ -187,8 +187,7 @@
       "meaning_fr": "bien / beau",
       "meaning_en": "good / beautiful",
       "synonyms": [
-        "مليح",
-        "مزيان"
+        "مليح"
       ],
       "variants": [
         "زينة",
@@ -197,23 +196,6 @@
       "usage": [
         "نتا زين",
         "البنت زينة"
-      ],
-      "category": "evaluation"
-    },
-    {
-      "word": "مزيان",
-      "meaning_ar": "جيد جداً",
-      "meaning_fr": "très bien",
-      "meaning_en": "very good",
-      "synonyms": [
-        "مليح",
-        "زين",
-        "تمام"
-      ],
-      "variants": [],
-      "usage": [
-        "عملت مزيان",
-        "هذا مزيان"
       ],
       "category": "evaluation"
     },
@@ -606,7 +588,7 @@
       "synonyms": [
         "بخير",
         "تمام",
-        "مزيان"
+        "مليح"
       ],
       "variants": [
         "لا باس"
@@ -1552,7 +1534,7 @@
       ],
       "variants": [],
       "usage": [
-        "سمعني مزيان",
+        "سمعني مليح",
         "سمعني وعرف"
       ],
       "category": "verb"
@@ -4534,7 +4516,7 @@
       ],
       "variants": [],
       "usage": [
-        "عاود فسر مزيان",
+        "عاود فسر مليح",
         "عاود فسر شوية"
       ],
       "category": "expression"
@@ -4551,7 +4533,7 @@
       "variants": [],
       "usage": [
         "رد بالك من هذا",
-        "رد بالك مزيان"
+        "رد بالك مليح"
       ],
       "category": "expression"
     },
@@ -5885,7 +5867,7 @@
       "variants": [],
       "usage": [
         "دير بالك من الخطأ",
-        "دير بالك مزيان"
+        "دير بالك مليح"
       ],
       "category": "expression"
     },

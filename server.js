@@ -27,7 +27,7 @@ import {
 } from './lib/owner-commands.js'
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
-import { isRealtimeQuery, fetchRealtimeContext } from './lib/realtime-search.js'
+import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -13490,7 +13490,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _personWiki = await fetchPersonFromWikipedia(lastUserMessage)
       if (_personWiki?.extract) {
         console.log(`[PersonWiki] ✅ Wikipedia found: "${_personWiki.title}" (${_personWiki.lang}) — ${_personWiki.extract.length} chars`)
-        const _wikiBlock = `[WIKIPEDIA_CONTEXT]\n**المصدر:** ويكيبيديا (${_personWiki.lang === 'ar' ? 'عربية' : _personWiki.lang === 'fr' ? 'فرنسية' : 'إنجليزية'})\n**العنوان:** ${_personWiki.title}\n**المعلومات:**\n${_personWiki.extract}\n**الرابط:** ${_personWiki.url}\n[/WIKIPEDIA_CONTEXT]\n\nبناءً على هذا المصدر فقط، أجب على سؤال المستخدم: "${lastUserMessage}"\nلا تُضف معلومات خارج ما ورد في [WIKIPEDIA_CONTEXT]. أذكر أن المصدر هو ويكيبيديا.`
+        const _wikiBlock = [
+          `[WIKIPEDIA_CONTEXT]`,
+          `**المصدر:** ويكيبيديا (${_personWiki.lang === 'ar' ? 'عربية' : _personWiki.lang === 'fr' ? 'فرنسية' : 'إنجليزية'})`,
+          `**العنوان:** ${_personWiki.title}`,
+          `**المعلومات:**\n${_personWiki.extract}`,
+          `**الرابط:** ${_personWiki.url}`,
+          `[/WIKIPEDIA_CONTEXT]`,
+          ``,
+          `🔴 قواعد صارمة مطلقة — لا استثناء:`,
+          `1. أجب فقط بما ورد حرفياً في [WIKIPEDIA_CONTEXT] — لا كلمة زيادة من معرفتك الداخلية`,
+          `2. ❌ يُحظر تماماً: اختراع أي منصب أو نادٍ أو وظيفة أو تاريخ أو معلومة غير موجودة في النص`,
+          `3. إذا سُئلت عن معلومة غير موجودة في [WIKIPEDIA_CONTEXT] → قُل بوضوح: "هذه المعلومة غير متوفرة في المصدر"`,
+          `4. لا تُكمّل أو تستنتج أو تخمّن — النص هو مصدرك الوحيد`,
+          `5. اذكر دائماً: "المصدر: ويكيبيديا" مع الرابط في نهاية إجابتك`,
+          ``,
+          `أجب الآن على سؤال المستخدم: "${lastUserMessage}"`,
+        ].join('\n')
 
         const _personMessages = [
           ...messages.filter(m => m.role !== 'user' || messages.indexOf(m) !== messages.map(m2 => m2.role).lastIndexOf('user')),
@@ -13506,9 +13522,57 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           })
         }
       } else {
-        console.log(`[PersonWiki] ⚠️ No Wikipedia result for: "${lastUserMessage.slice(0, 80)}"`)
+        // ── Wikipedia لم تجد شيئاً → نجرّب البحث الحي في الإنترنت ─────────────
+        console.log(`[PersonWiki] ⚠️ No Wikipedia result — trying live web search: "${lastUserMessage.slice(0, 80)}"`)
+        try {
+          const _cleanName = lastUserMessage
+            .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
+            .trim()
+          const _webPersonResult = await searchPersonOnline(_cleanName)
+
+          if (_webPersonResult?.hasInfo) {
+            console.log(`[PersonWiki] ✅ Live web results found for "${_cleanName}"`)
+            const _webPrompt = [
+              _webPersonResult.text,
+              ``,
+              `🔴 قواعد صارمة مطلقة:`,
+              `1. أجب فقط بما ورد في [PERSON_WEB_CONTEXT] — لا كلمة زيادة من معرفتك الداخلية`,
+              `2. ❌ يُحظر تماماً: اختراع أي منصب أو نادٍ أو معلومة غير موجودة في النتائج`,
+              `3. إذا لم تكفِ النتائج للإجابة → قُل: "المعلومة المتاحة محدودة" مع ذكر ما وجدته`,
+              `4. اذكر المصدر لكل معلومة`,
+              ``,
+              `أجب على: "${lastUserMessage}"`,
+            ].join('\n')
+
+            const _webMessages = [
+              ...messages.filter(m => m.role !== 'user' || messages.indexOf(m) !== messages.map(m2 => m2.role).lastIndexOf('user')),
+              { role: 'user', content: _webPrompt },
+            ]
+            const _webResult = await safeGenerateAI({ messages: _webMessages, query: lastUserMessage, max_tokens: 700, taskHint: 'general' })
+            if (_webResult?.content) {
+              return res.status(200).json({
+                content: _webResult.content + `\n\n🔍 *المصدر: بحث حي في الإنترنت — Google News + DuckDuckGo*`,
+                model: _webResult.model,
+                _personWiki: null,
+              })
+            }
+          }
+        } catch (_webErr) {
+          console.error('[PersonWiki] Web fallback error:', _webErr.message)
+        }
+
+        // ── لا Wikipedia ولا بحث حي → رسالة صريحة بدون اختلاق ──────────────
         return res.status(200).json({
-          content: `⚠️ **لا أملك معلومات موثوقة عن هذا الشخص.**\n\nلضمان الدقة، لا أُجيب عن الأشخاص والشخصيات بدون مصدر موثوق.\n\n🔍 يمكنك البحث مباشرة على:\n- [ويكيبيديا العربية](https://ar.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})\n- [ويكيبيديا الفرنسية](https://fr.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+          content: [
+            `⚠️ **لا أملك معلومات موثوقة عن هذا الشخص.**`,
+            ``,
+            `لضمان الدقة، لا أُجيب عن الأشخاص والشخصيات بدون مصدر موثوق (ويكيبيديا أو بحث حي).`,
+            ``,
+            `🔍 يمكنك البحث مباشرة على:`,
+            `- [ويكيبيديا العربية](https://ar.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+            `- [ويكيبيديا الفرنسية](https://fr.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+            `- [Google](https://www.google.com/search?q=${encodeURIComponent(lastUserMessage + ' الجزائر')})`,
+          ].join('\n'),
           _personWiki: null,
         })
       }
@@ -16357,6 +16421,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 • لا تذكر أسماء المزودين (Groq / Gemini / Mistral / DeepSeek / etc) في إجابتك`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
+    `🔴 قاعدة الشخصيات (صارمة — لا استثناء): لا تُجب أبداً عن معلومات تخص شخصاً حقيقياً (رياضي، سياسي، فنان، وزير، مسؤول...) انطلاقاً من معرفتك الداخلية وحدها. يُشترط وجود [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] أو بيانات حية محقونة في الـ prompt. إذا لم يُحقن أي سياق عن الشخص → ❌ لا تخترع منصبه أو ناديه أو معلوماته → ✅ قُل صراحةً "لا أملك مصدراً موثوقاً لهذه المعلومة".`,
     `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`

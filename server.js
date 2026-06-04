@@ -6183,6 +6183,29 @@ function detectQueryIntent(msg) {
   return { primary: detected[0] || 'general', all: detected, isTemporal, isArabic }
 }
 
+// ── Direct Factual Question Detection — يمنع البحث للأسئلة الواقعية المباشرة ─────
+// مثال: "من هو رئيس الجزائر؟" → إجابة مباشرة بدون بحث
+// مثال: "ما هي آخر أخبار الرئيس؟" → بحث في الويب
+function isDirectFactualQuestion(msg) {
+  if (!msg || msg.length < 5) return false
+  // إذا كانت تحتوي على مؤشرات أخبار/زمنية → ليست سؤالاً واقعياً مباشراً
+  const hasNewsIndicator = /أخبار|خبر جديد|آخر\s+(?:أخبار|المستجدات)|جديد.*خبر|اليوم|الآن\s*،|عاجل|أحدث\s+الأخبار|مؤخراً|recently|latest\s+news|breaking\s+news|today'?s?\s+news|actualité|récente?|new developments/i.test(msg)
+  if (hasNewsIndicator) return false
+  // أنماط الأسئلة الواقعية المباشرة (بدون مؤشرات أخبار)
+  const factualPatterns = [
+    /^من\s+هو\s+/i,                    // من هو رئيس الجزائر؟
+    /^من\s+هي\s+/i,                    // من هي وزيرة التعليم؟
+    /^ما\s+ه[وي]\s+/i,                 // ما هو الدستور الجزائري؟
+    /^ما\s+هُو\s+/i,
+    /^what\s+is\s+(?!the\s+latest|the\s+recent|the\s+new)/i,
+    /^who\s+is\s+(?!currently\s+in\s+the\s+news|trending)/i,
+    /^qui\s+est\s+/i,
+    /^c'est\s+qui\s+/i,
+    /^parle-moi\s+de\s+(?!l['ae]actuali|les?\s+nouvelles)/i,
+  ]
+  return factualPatterns.some(p => p.test(msg.trim()))
+}
+
 // ── Build 3 optimized queries (CSE · RSS · Global fallback) ──────────────────
 function buildOptimizedQueries(query, intent) {
   const year = new Date().getFullYear()
@@ -13030,7 +13053,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
   // to prevent دينار → دين conflict and ensure live data paths fire correctly
   const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف/i.test(lastUserMessage)
-  if (!currentRepo && !req.body.githubToken && messages.length <= 2 && !_hasLiveDataKw) {
+  if (!currentRepo && !req.body.githubToken && !_hasLiveDataKw) {
     const _staticAnswer = lookupStaticFact(lastUserMessage)
     if (_staticAnswer) {
       console.log(`[StaticFact] HIT: "${lastUserMessage.slice(0, 60)}"`)
@@ -13535,15 +13558,52 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           } catch { /* استخدم النص الأصلي إذا فشلت الترجمة */ }
         }
 
+        // ── Anti-Hallucination: التحقق من الحقائق المطلوبة في المقتطف ────────────
+        const _extractLower = (_finalExtract || '').toLowerCase()
+        const _queryLower = lastUserMessage.toLowerCase()
+        const _unverifiableNotes = []
+
+        // ناديه/فريقه الحالي
+        if (/(?:ناد|نادي|يلعب|يلعبون|فريق|club|team|joue\s+pour|plays?\s+for)/i.test(lastUserMessage)) {
+          if (!/(?:يلعب|فريق|نادي|club|team|joue)/i.test(_extractLower)) {
+            _unverifiableNotes.push('نادي اللاعب الحالي')
+          }
+        }
+        // جنسيته
+        if (/(?:جنسيت|جنسية|nationality|nationalité)/i.test(lastUserMessage)) {
+          if (!/(?:جزائري|مغربي|تونسي|مصري|فرنسي|algérien|français|moroccan|algerian)/i.test(_extractLower)) {
+            _unverifiableNotes.push('الجنسية')
+          }
+        }
+        // عمره / تاريخ ميلاده
+        if (/(?:عمر|عمره|عمرها|تاريخ.*ميلاد|ولد|وُلد|born|âge|ans)/i.test(lastUserMessage)) {
+          if (!/(?:ولد|وُلد|مواليد|born|\d{4})/i.test(_extractLower)) {
+            _unverifiableNotes.push('تاريخ الميلاد / العمر')
+          }
+        }
+        // منصبه الحالي
+        if (/(?:منصب|وظيفة|يشغل|يعمل|current.*position|poste\s+actuel)/i.test(lastUserMessage)) {
+          if (!/(?:وزير|رئيس|مدير|نائب|أمين|ministre|président|directeur)/i.test(_extractLower)) {
+            _unverifiableNotes.push('المنصب الحالي')
+          }
+        }
+
+        const _unverifiableBlock = _unverifiableNotes.length > 0
+          ? `\n\n> ⚠️ **لا يمكن التحقق من المعلومات التالية من المصدر المتاح:**\n${_unverifiableNotes.map(n => `> - ${n}`).join('\n')}\n> *لم يُذكر هذا في مقالة ويكيبيديا المُسترجعة — لا يمكن الإجابة عنه بيقين.*`
+          : ''
+
         // بناء الإجابة مباشرةً من Wikipedia — لا LLM، لا اختلاق
         const _directResponse = [
           `## 📖 ${_personWiki.title}`,
           _personWiki.description ? `*${_personWiki.description}*` : '',
           ``,
+          `> 🔒 *المعلومات التالية مستخرجة حرفياً من ويكيبيديا فقط — لا إضافات، لا تخمينات، لا اختلاق.*`,
+          ``,
           _finalExtract,
+          _unverifiableBlock,
           ``,
           `---`,
-          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url}) — ⚠️ *هذه المعلومات مستخرجة حرفياً من ويكيبيديا ولم يُضف إليها شيء*`,
+          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url})`,
         ].filter(l => l !== '').join('\n')
 
         return res.status(200).json({
@@ -16159,8 +16219,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isFootballNewsQuery = _isFootballNewsQuery
   const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
   const _isDirectCodeRequest = /(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|برمج|نفذ)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)|(?:متتالية|خوارزمية|fibonacci|فيبوناتشي|مرتّب|sort|recursion|تعاود)/i.test(lastUserMessage)
+  // السؤال الواقعي المباشر (من هو؟ / ما هو؟) بدون مؤشرات أخبار أو زمن → يُجيب مباشرة بدون بحث
+  const _isDirectFactual = isDirectFactualQuestion(lastUserMessage) && !msgIntent.isTemporal && msgIntent.primary !== 'news'
   // isTemporal overrides football skip: "متى كأس العالم 2026؟" needs Wikipedia, not SofaScore
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual
 
   if (!skipSearch) {
     try {

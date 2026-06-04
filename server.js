@@ -16165,6 +16165,66 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isFootballQuery = detectFootballQuery(lastUserMessage)
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
 
+  // ── Extract last known entity from conversation history ──────────────────
+  // Scans previous messages (last 6) to find the most recently mentioned
+  // country, team, or player — used to provide smarter clarification suggestions
+  // when the current question is ambiguous (no clear entity).
+  const _extractLastEntityFromHistory = (msgs) => {
+    const prevMsgs = msgs.slice(0, -1) // all except the current message
+    const COUNTRIES = [
+      { name: 'الجزائر',   aliases: ['الجزائر','جزائر','الجزائري','الجزائرية','dzayer','dzaïr'] },
+      { name: 'مصر',       aliases: ['مصر','مصري','مصرية','المنتخب المصري'] },
+      { name: 'تونس',      aliases: ['تونس','تونسي','تونسية'] },
+      { name: 'المغرب',    aliases: ['المغرب','مغربي','مغربية','الأسود'] },
+      { name: 'ليبيا',     aliases: ['ليبيا','ليبي','ليبية'] },
+      { name: 'موريتانيا', aliases: ['موريتانيا','موريتاني'] },
+      { name: 'السنغال',   aliases: ['السنغال','سنغالي'] },
+      { name: 'نيجيريا',   aliases: ['نيجيريا','نيجيري'] },
+      { name: 'الكاميرون', aliases: ['الكاميرون','كاميروني'] },
+      { name: 'غانا',      aliases: ['غانا','غاني'] },
+      { name: 'كوت ديفوار',aliases: ['كوت ديفوار','عاج'] },
+      { name: 'فرنسا',     aliases: ['فرنسا','فرنسي','الديوك'] },
+      { name: 'إسبانيا',   aliases: ['إسبانيا','إسباني','ماتادور'] },
+      { name: 'ألمانيا',   aliases: ['ألمانيا','ألماني','المانشافت'] },
+      { name: 'إيطاليا',   aliases: ['إيطاليا','إيطالي','الآزوري'] },
+      { name: 'إنجلترا',   aliases: ['إنجلترا','إنجليزي','الأسود الثلاثة'] },
+      { name: 'البرازيل',  aliases: ['البرازيل','برازيلي','السيليساو'] },
+      { name: 'الأرجنتين', aliases: ['الأرجنتين','أرجنتيني','التانغو'] },
+      { name: 'السعودية',  aliases: ['السعودية','سعودي','الأخضر'] },
+      { name: 'تركيا',     aliases: ['تركيا','تركي'] },
+      { name: 'البرتغال',  aliases: ['البرتغال','برتغالي'] },
+      { name: 'هولندا',    aliases: ['هولندا','هولندي','التيوليب'] },
+    ]
+    const TEAMS = [
+      'ريال مدريد','برشلونة','أتلتيكو مدريد',
+      'باريس سان جيرمان','PSG','مارسيليا','ليون',
+      'مانشستر يونايتد','مانشستر سيتي','ليفربول','أرسنال','تشيلسي','توتنهام',
+      'يوفنتوس','ميلان','إنتر ميلان','نابولي',
+      'بايرن ميونخ','بروسيا دورتموند',
+      'الأهلي','الزمالك','الرجاء','الوداد',
+      'شبيبة القبائل','مولودية الجزائر','اتحاد العاصمة','بلوزداد',
+      'شباب بلوزداد','اتحاد الجزائر','أولمبيك','نصر حسين داي',
+    ]
+    const PLAYERS = [
+      'رياض محرز','إسماعيل بن ناصر','سفيان فيغولي','يوسف عطال',
+      'بغداد بونجاح','ياسين براهيمي','سفيان الهاني','أيمن محيوط',
+      'محمد صلاح','محمود تريزيغيه','أيوب الكعبي','حكيم زياش',
+      'كريم بنزيمة','كيليان مبابي','أنطوان غريزمان','أوليفييه جيرو',
+      'ليونيل ميسي','كريستيانو رونالدو','نيمار','فينيسيوس',
+      'زيدان','خاوي','إنيستا','بيبي',
+    ]
+    // Scan from most recent backward (last 6 messages only)
+    for (let i = prevMsgs.length - 1; i >= Math.max(0, prevMsgs.length - 6); i--) {
+      const text = (prevMsgs[i]?.content || '') + ' ' + (prevMsgs[i]?.role === 'assistant' ? prevMsgs[i]?.content || '' : '')
+      for (const p of PLAYERS)   { if (text.includes(p)) return { type: 'player',  name: p } }
+      for (const t of TEAMS)     { if (text.includes(t)) return { type: 'team',    name: t } }
+      for (const c of COUNTRIES) { if (c.aliases.some(a => text.includes(a))) return { type: 'country', name: c.name } }
+    }
+    return null
+  }
+  const _lastKnownEntity = _extractLastEntityFromHistory(messages)
+  if (_lastKnownEntity) console.log(`[EntityContext] آخر كيان مُكتشف: "${_lastKnownEntity.name}" (${_lastKnownEntity.type})`)
+
   // Standings detection keywords (ترتيب + global + classement)
   const standingsKeywords = [
     'ترتيب الدوري', 'جدول الترتيب', 'جدول الدوري', 'الترتيب الحالي',
@@ -16955,7 +17015,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 ❌ ممنوع تماماً: التخمين، الاستنتاج، افتراض الدولة أو الفريق من تلقاء نفسك.
 ✅ الاستثناء الوحيد: إذا كان السياق السابق في المحادثة يحدد الكيان بوضوح → استخدمه.
 ✅ إذا كان DZ Agent مخصصاً للجزائر والسؤال يحتمل الجزائر → اقترح الجزائر أولاً لكن اسأل: "هل تقصد الجزائر أم دولة أخرى؟"
-🚨 قاعدة ذهبية: إعطاء إجابة عشوائية أسوأ بكثير من طلب التوضيح. لا تجب بثقة على سؤال ناقص.`,
+🚨 قاعدة ذهبية: إعطاء إجابة عشوائية أسوأ بكثير من طلب التوضيح. لا تجب بثقة على سؤال ناقص.
+${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المحادثة: "${_lastKnownEntity.name}" (${_lastKnownEntity.type === 'country' ? 'دولة' : _lastKnownEntity.type === 'team' ? 'فريق' : 'لاعب'}) — إذا كان السؤال الحالي غامضاً وبلا كيان محدد، اقترح هذا الكيان أولاً في سؤالك التوضيحي. مثال: "هل تقصد ${_lastKnownEntity.name}؟"` : ''}`,
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
 ① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
    أسئلة المطور تشمل: "ما هو DZ Agent" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ Agent صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ-GPT 🇩🇿

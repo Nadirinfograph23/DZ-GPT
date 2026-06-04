@@ -28,6 +28,7 @@ import {
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
+import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery } from './lib/algeria-gov/ministers.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -16162,6 +16163,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isLFPQuery = detectLFPQuery(lastUserMessage)
   const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
   const isFootballQuery = detectFootballQuery(lastUserMessage)
+  const _isMinisterQuery = isMinisterQuery(lastUserMessage)
 
   // Standings detection keywords (ترتيب + global + classement)
   const standingsKeywords = [
@@ -16222,6 +16224,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     footballResult,
     standingsResult,
     globalLeaguesResult,
+    ministersResult,
   ] = await Promise.allSettled([
     hasWeatherPriority ? fetchCityWeatherResilient(weatherCity) : Promise.resolve(null),
     isPrayerQuery ? fetchPrayerTimesAladhan(detectCityFromQuery(lastUserMessage)) : Promise.resolve(null),
@@ -16231,6 +16234,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
     // Use jdwel.com (same source as the card) with SofaScore + TheSportsDB as fallbacks
     (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today), fetchTheSportsDB(today)]) : Promise.resolve(null),
+    // نظام التحقق من الوزراء الجزائريين — يُجلب فقط عند الحاجة
+    _isMinisterQuery ? fetchAlgeriaMinistersData() : Promise.resolve(null),
   ])
 
   // ── Build context strings from parallel results ────────────────────────────
@@ -16510,6 +16515,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       globalLeaguesContext = _globalFallbackCtx ||
         `\n\n--- 🌍 الدوريات العالمية ---\nتعذّر جلب بيانات المباريات حالياً. تابع على [jdwel.com/today](https://jdwel.com/today/) أو [livescore.com](https://www.livescore.com)\n---`
+    }
+  }
+
+  // ── Algeria Ministers context ─────────────────────────────────────────────
+  let ministersContext = ''
+  if (_isMinisterQuery) {
+    const ministersData = ministersResult?.status === 'fulfilled' ? ministersResult.value : null
+    if (ministersData) {
+      ministersContext = buildMinistersContext(ministersData)
+      console.log(`[AlgGov] 🏛️ Ministers context injected — status: ${ministersData.status} | ${ministersData.ministers?.length ?? 0} entries | source: ${ministersData.source}`)
+    } else {
+      console.warn('[AlgGov] ⚠️ Ministers fetch failed or returned null')
     }
   }
 
@@ -17061,6 +17078,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1400)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.\n> ⚠️ إذا لم تكن هناك مباريات اليوم، اعرض آخر الأخبار الرياضية المتاحة مع ذكر تاريخها. لا تُعطِ ردوداً سلبية فارغة.` : '',
     // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────
     (isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery || isLFPQuery) ? `⚽ SPORTS RULE: إذا لم تكن هناك نتائج مباريات مباشرة لليوم، اعرض بدلاً من ذلك: (أ) آخر المباريات التي جرت مع نتائجها وتاريخها، أو (ب) المباريات القادمة، أو (ج) آخر الأخبار الرياضية من RSS مع ذكر تاريخها. لا تقل أبداً "لا توجد معلومات" أو تُعطِ رداً فارغاً. دائماً قدّم شيئاً مفيداً. اذكر المصدر والتاريخ دائماً.` : '',
+    ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2000)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',

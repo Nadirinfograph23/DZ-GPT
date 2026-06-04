@@ -7255,6 +7255,15 @@ function detectFootballQuery(msg) {
     'algeria', 'fennecs', 'sofascore', 'flashscore', 'live score', 'livescore',
     // French
     'résultat', 'ligue des champions', 'équipe nationale', 'coupe du monde', 'les verts',
+    // ── الدارجة الجزائرية — Algerian dialect football phrases ──────────────────
+    'كاين ماتشات', 'كاين ماتش', 'كاين مقابلات', 'كاين في الكورة',
+    'واش كاين في الكورة', 'واش كاين ماتش', 'واش فيه ماتش',
+    'شكون يلعب', 'شكون راهم يلعبو', 'شكون يلعبو',
+    'برنامج الماتشات', 'برنامج الكورة', 'برنامج المقابلات',
+    'ماتشات اليوم', 'ماتشات الليلة', 'ماتش الليلة', 'ماتش اليوم',
+    'مقابلة اليوم', 'مقابلات اليوم', 'مقابلة الليلة',
+    'يلعبو الليلة', 'يلعب الليلة', 'شكون يلعب اليوم', 'شكون يلعب الليلة',
+    'فين الكورة', 'وين الكورة', 'وين الماتش', 'فين الماتش',
   ]
   return keywords.some(k => lower.includes(k))
 }
@@ -9409,6 +9418,52 @@ async function _spawnCurl(url, timeoutSec = 15) {
       else resolve({ ok: false, error: `exit=${code} stderr=${stderr.slice(0, 200)}` })
     })
   })
+}
+
+// ── TheSportsDB — Free API (no key required, tier "3") ────────────────────────
+// Docs: https://www.thesportsdb.com/free_sports_api.php
+async function fetchTheSportsDB(dateStr = null) {
+  try {
+    const d = dateStr || new Date().toISOString().split('T')[0]
+    const url = `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${d}&s=Soccer`
+    const resp = await fetch(url, { headers: { 'User-Agent': 'DZ-Agent/1.0' }, signal: AbortSignal.timeout(6000) })
+    if (!resp.ok) return null
+    const data = await resp.json()
+    const events = data?.events || []
+    if (!events.length) return null
+
+    const matches = events.map(e => ({
+      homeTeam:    e.strHomeTeam  || '',
+      awayTeam:   e.strAwayTeam  || '',
+      homeScore:  e.intHomeScore !== null ? e.intHomeScore : null,
+      awayScore:  e.intAwayScore !== null ? e.intAwayScore : null,
+      startTime:  e.strTime      || '',
+      league:     e.strLeague    || '',
+      country:    e.strCountry   || '',
+      status:     e.strStatus    || '',
+      venue:      e.strVenue     || '',
+      date:       e.dateEvent    || d,
+      link:       e.idEvent ? `https://www.thesportsdb.com/event/${e.idEvent}` : 'https://www.thesportsdb.com',
+    }))
+
+    // Normalize status to emoji
+    const statusEmoji = (s) => {
+      if (!s) return '📅'
+      const sl = s.toLowerCase()
+      if (sl === 'match finished' || sl === 'ft' || sl === 'aet') return '✅'
+      if (sl.includes('in progress') || sl === 'live' || sl === '1h' || sl === '2h' || sl === 'ht') return '🔴'
+      return '📅'
+    }
+
+    const live     = matches.filter(m => statusEmoji(m.status) === '🔴')
+    const finished = matches.filter(m => statusEmoji(m.status) === '✅')
+    const upcoming = matches.filter(m => statusEmoji(m.status) === '📅')
+
+    return { matches, live, finished, upcoming, total: matches.length, source: 'thesportsdb.com', date: d }
+  } catch (err) {
+    console.warn('[TheSportsDB] fetch failed:', err.message)
+    return null
+  }
 }
 
 async function fetchJdwelMatches(dateStr = null) {
@@ -15897,8 +15952,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
   ]
   const isGlobalLeaguesQuery = globalLeaguesKeywords.some(k => lowerMsg.includes(k))
-  // استفسار عام عن مباريات اليوم (حتى بدون تحديد دوري)
-  const isGeneralMatchesQuery = !isGlobalLeaguesQuery && /مباريات?\s*(?:اليوم|الليلة|الليلية|المباشرة|على\s*الهواء)|برنامج\s*(?:اليوم|المباريات|الرياضي)|ماتشات?\s*اليوم/i.test(lastUserMessage)
+
+  // ── الدارجة الجزائرية — Algerian dialect football queries ──────────────────
+  const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش))/i.test(lastUserMessage)
+
+  // ── Algeria-focused football query — فلترة على مباريات الجزائر ────────────
+  const isAlgeriaFocusedFootball = (isDZDialectFootballQuery || detectFootballQuery(lastUserMessage)) &&
+    /(?:الجزائر|المنتخب\s+الجزائري|منتخب\s+الجزائر|الخضر|الفنك|لالجيري|algeria\b|fennec)/i.test(lastUserMessage)
+
+  // استفسار عام عن مباريات اليوم (حتى بدون تحديد دوري) — يشمل الدارجة الجزائرية
+  const isGeneralMatchesQuery = !isGlobalLeaguesQuery && (
+    isDZDialectFootballQuery ||
+    /مباريات?\s*(?:اليوم|الليلة|الليلية|المباشرة|على\s*الهواء)|برنامج\s*(?:اليوم|المباريات|الرياضي)|ماتشات?\s*اليوم/i.test(lastUserMessage)
+  )
 
   // ── PARALLEL context fetching (Tasks 12+16 — fast, resilient) ────────────
   const weatherCity = sanitizeString(dashboardContext?.city || detectCityFromQuery(lastUserMessage), 80)
@@ -15919,8 +15985,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isCurrencyQuery ? fetchCurrencyData() : Promise.resolve(null),
     (isFootballQuery && !isLFPQuery && !isStandingsQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
-    // Use jdwel.com (same source as the card) with SofaScore as a fallback
-    (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today)]) : Promise.resolve(null),
+    // Use jdwel.com (same source as the card) with SofaScore + TheSportsDB as fallbacks
+    (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today), fetchTheSportsDB(today)]) : Promise.resolve(null),
   ])
 
   // ── Build context strings from parallel results ────────────────────────────
@@ -16075,10 +16141,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Global Leagues context injection — PRIMARY: jdwel.com (matches the card) ──
   let globalLeaguesContext = ''
-  if (isGlobalLeaguesQuery) {
-    const settled = globalLeaguesResult.status === 'fulfilled' ? globalLeaguesResult.value : null
+  if (isGlobalLeaguesQuery || isGeneralMatchesQuery) {
+    const settled   = globalLeaguesResult.status === 'fulfilled' ? globalLeaguesResult.value : null
     const jdwelData = settled && settled[0]?.status === 'fulfilled' ? settled[0].value : null
     const sfData    = settled && settled[1]?.status === 'fulfilled' ? settled[1].value : null
+    const tsdbData  = settled && settled[2]?.status === 'fulfilled' ? settled[2].value : null
+    if (isDZDialectFootballQuery) console.log(`[DZ-Dialect] ⚽ Football query detected: "${lastUserMessage.slice(0,60)}" — Algeria=${isAlgeriaFocusedFootball}`)
+    if (tsdbData?.total > 0) console.log(`[TheSportsDB] ✅ ${tsdbData.total} matches fetched (live=${tsdbData.live.length}, done=${tsdbData.finished.length}, upcoming=${tsdbData.upcoming.length})`)
 
     const formatJdwelMatch = (m) => {
       const t = m.startTime || ''
@@ -16122,6 +16191,46 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
       }
       globalLeaguesContext += '\n*ملاحظة: المصدر الأساسي jdwel.com غير متاح حالياً — تم استخدام SofaScore كاحتياط.*\n---'
+    } else if (tsdbData?.total > 0) {
+      // ── TheSportsDB fallback (free API, no key) ────────────────────────────
+      const _header = isDZDialectFootballQuery
+        ? `برنامج مباريات اليوم — ${today}`
+        : `الدوريات العالمية — ${today}`
+      globalLeaguesContext = `\n\n--- ⚽ ${_header} (المصدر: [thesportsdb.com](https://www.thesportsdb.com)) ---\n`
+
+      // Group by league
+      const _tsdbLeagues = {}
+      for (const m of (isAlgeriaFocusedFootball
+        ? tsdbData.matches.filter(m => /algeria|algérie|algerie/i.test(m.country) || /algeria/i.test(m.league))
+        : tsdbData.matches)) {
+        const lg = m.league || 'أخرى'
+        if (!_tsdbLeagues[lg]) _tsdbLeagues[lg] = []
+        _tsdbLeagues[lg].push(m)
+      }
+
+      const _statusEmoji = (s) => {
+        if (!s) return '📅'
+        const sl = s.toLowerCase()
+        if (sl === 'match finished' || sl === 'ft' || sl === 'aet') return '✅'
+        if (sl.includes('in progress') || sl === 'live' || ['1h','2h','ht'].includes(sl)) return '🔴'
+        return '📅'
+      }
+
+      let _tsdbCount = 0
+      for (const [lg, matches] of Object.entries(_tsdbLeagues).slice(0, 10)) {
+        globalLeaguesContext += `\n**🏟️ ${lg}${matches[0]?.country ? ` (${matches[0].country})` : ''}:**\n`
+        for (const m of matches.slice(0, 6)) {
+          const emoji = _statusEmoji(m.status)
+          const score = (m.homeScore !== null && m.awayScore !== null)
+            ? `**${m.homeScore} - ${m.awayScore}**`
+            : m.startTime ? `(${m.startTime})` : '(قادمة)'
+          globalLeaguesContext += `• ${m.homeTeam} ${emoji} ${score} ${m.awayTeam}`
+          if (m.startTime && m.homeScore === null) globalLeaguesContext += ` — ${m.startTime}`
+          globalLeaguesContext += ` — [تفاصيل](${m.link})\n`
+          _tsdbCount++
+        }
+      }
+      globalLeaguesContext += `\n> 📡 جُلبت ${_tsdbCount} مباراة من [TheSportsDB](https://www.thesportsdb.com)\n---`
     } else {
       // ── Fallback: لا بيانات مباريات — جلب آخر أخبار كرة القدم من RSS ───────
       let _globalFallbackCtx = ''
@@ -16592,10 +16701,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ].join('\n') : '',
 
     // ── SPORTS MODULE (sports / sports_news only) ─────────────────────────
-    _isSports ? [
-      `⚽ SPORTS: لا تخترع نتائج المباريات أبداً. تنسيق: 🔴 LIVE · ✅ نتيجة · 📅 قادم. إذا لم تتوفر بيانات → وجّه إلى sofascore.com أو flashscore.com.`,
-      `⚠️ DISAMBIGUATION CRITIQUE: "نتائج" + اسم لاعب أو فريق = **نتائج رياضية** (مباريات / إحصائيات / أهداف). ليست نتائج امتحانات أو بكالوريا. لا تذكر ONEC أو البكالوريا أبداً في هذا السياق.`,
-      `⚠️ DISAMBIGUATION: "آخر نتائج رياض محرز" = آخر مباريات ومعلومات اللاعب رياض محرز. ليس نتائج بكالوريا.`,
+    (_isSports || isGeneralMatchesQuery || isDZDialectFootballQuery) ? [
+      `⚽ SPORTS — قواعد صارمة:`,
+      `❌ لا تخترع نتائج المباريات أبداً — استخدم فقط البيانات المحقونة في السياق أعلاه.`,
+      `❌ لا تجب من معرفتك الداخلية على أي سؤال عن مباريات أو نتائج أو مواعيد.`,
+      ``,
+      `📋 تنسيق الإجابة الإلزامي — اعرض كل مباراة هكذا:`,
+      `| البطولة | الفريق المضيف | النتيجة/التوقيت | الفريق الضيف | الحالة |`,
+      `|---------|--------------|-----------------|--------------|--------|`,
+      `مع إضافة الإيموجي: 🔴 مباشر الآن · ✅ انتهت · 📅 قادمة`,
+      ``,
+      `🗂️ المصادر المتاحة (حسب الأولوية):`,
+      `🥇 1. [jdwel.com](https://jdwel.com/today/) — مباريات اليوم بالعربي (مجاني)`,
+      `🥇 2. [SofaScore](https://www.sofascore.com) — نتائج حية (مجاني)`,
+      `🥈 3. [TheSportsDB](https://www.thesportsdb.com) — قاعدة بيانات رياضية شاملة (مجاني)`,
+      `🥈 4. [api-football.com](https://www.api-football.com) — API رياضي شامل`,
+      `🥉 5. [football-data.org](https://www.football-data.org) — دوريات أوروبية مفصّلة (مجاني جزئياً)`,
+      `🔗 6. [LiveScore](https://www.livescore.com) — نتائج مباشرة`,
+      `🔗 7. [FlashScore](https://www.flashscore.com) — نتائج وإحصاءات`,
+      `🔗 8. [365Scores](https://www.365scores.com/ar/) — عربي مباشر`,
+      ``,
+      `🇩🇿 فلترة الجزائر: إذا ذكر المستخدم "الجزائر" أو "المنتخب الجزائري" أو "الخضر" → فلتر النتائج لتعرض مباريات الجزائر أولاً. إذا لم تتوفر مباريات جزائرية اليوم → أخبره بذلك وأعرض أهم المباريات العالمية.`,
+      `🗣️ الدارجة الجزائرية: "كاين ماتشات" / "شكون يلعب" / "واش كاين في الكورة" / "برنامج الماتشات" / "كاين مقابلات" / "يلعبو الليلة" → كلها تعني "أعرض برنامج مباريات اليوم".`,
+      ``,
+      `⚠️ DISAMBIGUATION: "نتائج" + اسم لاعب أو فريق = نتائج رياضية (مباريات/أهداف/إحصاءات). ليست نتائج امتحانات. لا تذكر ONEC أو البكالوريا في سياق رياضي.`,
+      `⚠️ DISAMBIGUATION: "آخر نتائج رياض محرز" = آخر مباريات رياض محرز — ليس نتائج بكالوريا.`,
     ].join('\n') : '',
 
     // ── EDUCATION MODE (education queries only) ───────────────────────────

@@ -1961,7 +1961,7 @@ function detectToolRedirect(msg) {
   // Presentations (handled natively by DZ Agent)
   if (/عرض\s*تقديمي|شرائح|بوربوينت|powerpoint|ppt\b|presentation/i.test(msg)) return null
   // YouTube / video search — DZ Agent handles this via DZ-Tube integration
-  if (/يوتيوب|youtube|(?:ابحث|دور)\s*(?:على|عن)\s*(?:فيديو|مقطع)|اغنية|أغنية|فيديو\s*(?:شرح|تعليمي|درس)/i.test(msg)) return null
+  if (/يوتيوب|youtube|بالفيديو|(?:ا?بحث|دور)\s*(?:على|عن)\s*(?:فيديو|مقطع|يوتيوب)|(?:ا?بحث|دور)\s*.*فيديو|فيديو\s*(?:شرح|تعليمي|درس)|اغنية|أغنية/i.test(msg)) return null
   // Book search — DZ Agent searches directly
   if (/ابحث\s*(?:على|عن)\s*كتاب|books?\s*search/i.test(msg)) return null
   // Weather / news — handled natively
@@ -13387,7 +13387,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── YouTube intent — pre-computed EARLY so we can guard other blocks ──────
   // Must be defined before isAlgerianCitizenQuery / detectAmbiguity checks.
   const _ytUrlInMsg_pre = _detectedUrls.find(u => isValidYouTubeUrl(u))
-  const _ytKwRe_pre = /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*فيديو|عطيني.*فيديو|ابحث.*يوتيوب|ابحث.*اغنية|جيبلي.*اغنية|شوفلي.*اغنية|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|كليبات|video\s*clip|music\s*video|نشيد|أنشودة|مقطع.*فيديو|فيديو.*مقطع|شاهد.*فيديو|watch.*video)/i
+  const _ytKwRe_pre = /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ا?بحث.*فيديو|ا?بحث.*يوتيوب|عطيني.*فيديو|ا?بحث.*اغنية|جيبلي.*اغنية|شوفلي.*اغنية|tutorial|documentaire|review\s+(?:de|of|فيديو)|cours?\s+(?:sur|عن|about)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|كليبات|video\s*clip|music\s*video|نشيد|أنشودة|مقطع.*فيديو|فيديو.*مقطع|شاهد.*فيديو|watch.*video)/i
   const _isYouTubeQuery_pre = !!_ytUrlInMsg_pre
     || (_ytKwRe_pre.test(lastUserMessage)
         && !detectWebsiteBuilderQuery(lastUserMessage)

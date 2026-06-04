@@ -132,7 +132,7 @@ import {
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
-import { detectAmbiguity, formatClarification } from './lib/smart-clarify.js'
+import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
@@ -13519,6 +13519,45 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Source Attribution — "من أين حصلت على هذه المعلومة؟" ───────────────────
+  if (!_isAgentMode && isSourceAttributionQuery(lastUserMessage)) {
+    const _sourceMsg = [
+      `## 📚 مصادر DZ Agent`,
+      ``,
+      `عندما أُجيب على سؤالك، أستخدم المصادر التالية **بالترتيب**:`,
+      ``,
+      `| المصدر | الثقة | متى يُستخدم |`,
+      `|--------|-------|------------|`,
+      `| 🔒 **ويكيبيديا** (مستخرج مباشر) | 🟢 85% | أسئلة الأشخاص والسير الذاتية |`,
+      `| 📰 **Google News RSS** | 🟢 80% | أحدث الأخبار والأحداث |`,
+      `| 🔍 **Google CSE** | 🟡 70% | البحث الموضوعي |`,
+      `| 📡 **DuckDuckGo Instant** | 🟡 65% | معلومات عامة سريعة |`,
+      `| 📊 **LFP / SofaScore** | 🟢 90% | نتائج الدوري الجزائري |`,
+      `| ⚡ **Static Facts** | 🟢 95% | الحقائق الثابتة (عواصم، تواريخ...) |`,
+      `| 🧠 **معرفة داخلية** | 🔴 <50% | **لا تُستخدم للحقائق الحساسة** |`,
+      ``,
+      `> ⚠️ **مبدأ صارم:** إذا لم يكن هناك مصدر موثوق مُسترجع، أقول **"لا أملك مصدراً موثوقاً"** ولا أخترع.`,
+      `> 🔍 للتحقق من أي إجابة سابقة، أعد طرح السؤال وسأُشير إلى المصدر في الرد.`,
+    ].join('\n')
+    return res.status(200).json({ content: _sourceMsg, model: 'source-attribution' })
+  }
+
+  // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
+  // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
+  if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
+    const _personAmbig = detectPersonAmbiguity(lastUserMessage)
+    if (_personAmbig?.needsClarification) {
+      console.log(`[EntityDisambig] 🤔 Ambiguous person: "${lastUserMessage.slice(0, 60)}"`)
+      const _disambigLines = [
+        `🤔 **${_personAmbig.question}**\n`,
+        ..._personAmbig.options.map(o => `**${o.n}.** ${o.emoji} ${o.label}`),
+        '',
+        _personAmbig.hint ? `> ${_personAmbig.hint}` : '> اكتب رقماً أو أضف تفاصيل للمتابعة.',
+      ]
+      return res.status(200).json({ content: _disambigLines.join('\n'), mode: 'clarification' })
+    }
+  }
+
   // ── Person / Personality Wikipedia Lookup — بحث إجباري في ويكيبيديا ────────
   // كل سؤال عن شخص أو شخصية أو منصب → يُجبر على البحث في ويكيبيديا العربية أولاً
   // المبدأ: لا إجابة بدون مصدر موثوق — لا اختلاق أبداً
@@ -13592,6 +13631,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           ? `\n\n> ⚠️ **لا يمكن التحقق من المعلومات التالية من المصدر المتاح:**\n${_unverifiableNotes.map(n => `> - ${n}`).join('\n')}\n> *لم يُذكر هذا في مقالة ويكيبيديا المُسترجعة — لا يمكن الإجابة عنه بيقين.*`
           : ''
 
+        // ── Sports Freshness Warning — تحذير قِدَم معلومات الرياضيين ─────────────
+        const _isAboutAthlete = /(?:لاعب|مهاجم|حارس|مدافع|وسط|رياضي|مدرب|footballer|player|striker|goalkeeper|defender|midfielder|coach|manager)/i.test(_finalExtract)
+        const _clubMentioned  = /(?:يلعب|ينتمي إلى|نادي|فريق|club|team|joue pour|signed for|transferred)/i.test(_finalExtract)
+        const _sportsFreshness = (_isAboutAthlete && _clubMentioned)
+          ? `\n\n> ⏰ **تحذير الأداء الرياضي:** معلومات ويكيبيديا قد لا تعكس وضع اللاعب الحالي (الانتقالات الأخيرة، الإصابات، الإحصائيات الجديدة). للتحقق من ناديه الحالي → [Transfermarkt](https://www.transfermarkt.com) | [SofaScore](https://www.sofascore.com)`
+          : ''
+
+        // ── Confidence Score — درجة الثقة بالمعلومة ───────────────────────────────
+        const _confScore = _personWiki.lang === 'ar' ? '🟢 85%' : '🟡 75%'
+        const _confLabel = _personWiki.lang === 'ar' ? 'ويكيبيديا العربية مباشرة' : `ويكيبيديا ${_langLabel} (مترجم)`
+
         // بناء الإجابة مباشرةً من Wikipedia — لا LLM، لا اختلاق
         const _directResponse = [
           `## 📖 ${_personWiki.title}`,
@@ -13601,9 +13651,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           ``,
           _finalExtract,
           _unverifiableBlock,
+          _sportsFreshness,
           ``,
           `---`,
-          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url})`,
+          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url}) | 🎯 **الثقة:** ${_confScore} (${_confLabel})`,
         ].filter(l => l !== '').join('\n')
 
         return res.status(200).json({
@@ -15816,6 +15867,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const standingsKeywords = [
     'ترتيب الدوري', 'جدول الترتيب', 'جدول الدوري', 'الترتيب الحالي',
     'كم نقطة', 'نقاط الدوري', 'المركز الأول', 'الصدارة', 'المتصدر',
+    'يتصدر', 'من يتصدر', 'صدارة الدوري', 'الفريق الأول في',
     'standings', 'classement', 'league table', 'points table',
     'ترتيب LFP', 'ترتيب الرابطة', 'ترتيب الفريق',
   ]
@@ -16511,6 +16563,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
     `🔴 قاعدة الشخصيات (صارمة — لا استثناء): لا تُجب أبداً عن معلومات تخص شخصاً حقيقياً (رياضي، سياسي، فنان، وزير، مسؤول...) انطلاقاً من معرفتك الداخلية وحدها. يُشترط وجود [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] أو بيانات حية محقونة في الـ prompt. إذا لم يُحقن أي سياق عن الشخص → ❌ لا تخترع منصبه أو ناديه أو معلوماته → ✅ قُل صراحةً "لا أملك مصدراً موثوقاً لهذه المعلومة".`,
+    `🏆 قاعدة الترتيبات الرياضية (صارمة): إذا سُئلت عن "من يتصدر الدوري" أو "الترتيب الحالي" ولم يكن هناك [LFP_CONTEXT] أو [STANDINGS_CONTEXT] محقون → ❌ لا تُجب من معرفتك الداخلية → ✅ قُل "لا أملك بيانات الترتيب الحالية — يمكنك التحقق على [LFP](https://lfp.dz) أو [SofaScore](https://www.sofascore.com)".`,
+    `🎯 قاعدة نسب المصادر: عند الإجابة، أشر دائماً إلى المصدر المستخدم: (📚 ويكيبيديا) أو (📰 Google News) أو (🔍 بحث حي) أو (📊 LFP/SofaScore) أو (⚡ حقيقة ثابتة). إذا كان المصدر هو معرفتك الداخلية فقط لمعلومة حساسة → نبّه المستخدم بـ: "(⚠️ هذه معلومة من معرفتي الداخلية — قد تكون غير محدّثة)".`,
     `روابط: ادمج الرابط في اسم المصدر فقط [اسم](url) — لا تكتب URL خاماً كنص أبداً. مثال الصحيح: [الخبر](https://elkhabar.com/...) | مثال خاطئ: https://elkhabar.com/... استخدم Markdown. أجب بلغة المستخدم (عربية/فرنسية/إنجليزية).`,
     queryAnalysis?.suggestions?.length
       ? `اقتراحات المتابعة (أضفها في نهاية إجابتك كـ "💡 قد يهمك أيضاً:"): ${queryAnalysis.suggestions.join(' / ')}`

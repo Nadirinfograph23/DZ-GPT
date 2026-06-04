@@ -135,6 +135,14 @@ import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './l
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
+import {
+  detectPresidentYearQuery, detectPMYearQuery,
+  buildPresidentYearResponse, buildPresidentBeforeResponse, buildPMYearResponse,
+  isFictionalDZEvent, isFictionalDZPlace,
+  getAlgeriaPresidentByYear, isFutureYear, isPreIndependenceQuery,
+  extractYearFromMessage, WORLD_LEADERS_2026, WORLD_FORMER_LEADERS,
+  REAL_DZ_WILAYAS,
+} from './lib/dz-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -13107,6 +13115,43 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: _earlyMod.replyIfBlocked })
   }
 
+  // ── Anti-Hallucination Pre-check — أماكن/أحداث وهمية (قبل static facts) ──
+  // يجب أن يكون قبل static facts لمنع الإجابة الخاطئة
+  if (!_isAgentMode && !currentRepo) {
+    const _preCheckPlace = isFictionalDZPlace(lastUserMessage)
+    if (_preCheckPlace) {
+      console.log(`[AntiHallucination:Pre] Fictional DZ place: "${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ مكان غير موجود`,
+          ``,
+          `**${_preCheckPlace.reason}**`,
+          ``,
+          `لا توجد معلومات موثوقة عن هذا المكان لأنه غير موجود في الجغرافيا الجزائرية الرسمية.`,
+          ``,
+          `🗺️ الجزائر تضم **58 ولاية** رسمية — يمكنك الاستفسار عن أي ولاية حقيقية.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+    const _preCheckEvent = isFictionalDZEvent(lastUserMessage)
+    if (_preCheckEvent) {
+      console.log(`[AntiHallucination:Pre] Fictional DZ event: "${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ تحقق من الحقيقة`,
+          ``,
+          `**هذا الحدث لا وجود له في التاريخ الجزائري الموثق.**`,
+          ``,
+          `لا أملك أي معلومات تُثبت وجود هذا الحدث، ولا يمكنني اختراع تفاصيل عن أحداث غير موجودة.`,
+          ``,
+          `> 🛡️ **مبدأ DZ Agent:** لا اختلاق للحقائق — إذا لم يكن الحدث موثقاً، أقول ذلك صراحةً.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+  }
+
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
   // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
   // to prevent دينار → دين conflict and ensure live data paths fire correctly
@@ -13116,6 +13161,144 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_staticAnswer) {
       console.log(`[StaticFact] HIT: "${lastUserMessage.slice(0, 60)}"`)
       return res.status(200).json({ content: _staticAnswer, _static: true })
+    }
+  }
+
+  // ── Anti-Hallucination Fast-Path — قاعدة المعرفة الجزائرية الثابتة ──────
+  // يُعالج: رؤساء الجزائر بالسنة · أحداث وهمية · أماكن وهمية · أسئلة ما قبل الاستقلال
+  if (!_isAgentMode && !currentRepo) {
+    const _lum = lastUserMessage
+
+    // 1. رئيس الجزائر حسب السنة أو الخليفة
+    const _presQ = detectPresidentYearQuery(_lum)
+    if (_presQ) {
+      let _presResp = null
+      if (_presQ.type === 'president_year') {
+        _presResp = buildPresidentYearResponse(_presQ.year)
+      } else if (_presQ.type === 'president_before') {
+        _presResp = buildPresidentBeforeResponse(_presQ.name)
+      }
+      if (_presResp) {
+        console.log(`[DZKnowledge] President query answered: ${JSON.stringify(_presQ)}`)
+        return res.status(200).json({ content: _presResp, model: 'dz-knowledge-static', _static: true })
+      }
+    }
+
+    // 2. رئيس الحكومة حسب السنة
+    const _pmQ = detectPMYearQuery(_lum)
+    if (_pmQ) {
+      const _pmResp = buildPMYearResponse(_pmQ.year)
+      if (_pmResp) {
+        console.log(`[DZKnowledge] PM query answered: year=${_pmQ.year}`)
+        return res.status(200).json({ content: _pmResp, model: 'dz-knowledge-static', _static: true })
+      }
+    }
+
+    // 3. أحداث وهمية جزائرية
+    const _fictionalEvent = isFictionalDZEvent(_lum)
+    if (_fictionalEvent) {
+      console.log(`[AntiHallucination] Fictional DZ event detected: "${_lum.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ تحقق من الحقيقة`,
+          ``,
+          `**هذا الحدث لا وجود له في التاريخ الجزائري الموثق.**`,
+          ``,
+          `لا أملك أي معلومات تُثبت وجود هذا الحدث، ولا يمكنني اختراع تفاصيل عن أحداث غير موجودة.`,
+          ``,
+          `> 🛡️ **مبدأ DZ Agent:** لا اختلاق للحقائق — إذا لم يكن الحدث موثقاً، أقول ذلك صراحةً.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 4. أماكن وهمية جزائرية
+    const _fictionalPlace = isFictionalDZPlace(_lum)
+    if (_fictionalPlace) {
+      console.log(`[AntiHallucination] Fictional DZ place detected: "${_lum.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ مكان غير موجود`,
+          ``,
+          `**${_fictionalPlace.reason}**`,
+          ``,
+          `لا توجد معلومات موثوقة عن هذا المكان لأنه غير موجود في الجغرافيا الجزائرية الرسمية.`,
+          ``,
+          `🗺️ الجزائر تضم **58 ولاية** رسمية — يمكنك الاستفسار عن أي ولاية حقيقية.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 5. سؤال ما قبل الاستقلال (ولاية/رئيس/وزير جزائري قبل 1962)
+    const _yearInMsg = extractYearFromMessage(_lum)
+    if (_yearInMsg && isPreIndependenceQuery(_lum, _yearInMsg) &&
+        /(?:رئيس|وزير|والي|حكومة|ولاية|جزائر)/i.test(_lum)) {
+      console.log(`[AntiHallucination] Pre-independence query: year=${_yearInMsg}`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ تصحيح تاريخي`,
+          ``,
+          `**الجزائر لم تكن دولةً مستقلة عام ${_yearInMsg}.**`,
+          ``,
+          _yearInMsg >= 1830
+            ? `في تلك الفترة كانت الجزائر تحت **الاستعمار الفرنسي** (1830–1962)، ولم يكن لها رئيس جمهورية أو حكومة وطنية مستقلة.`
+            : `في تلك الحقبة كانت الجزائر إما تحت الحكم العثماني أو كيانات تقليدية سابقة للدولة الحديثة.`,
+          ``,
+          `🗓️ **استقلال الجزائر:** 5 يوليو 1962 | **أول رئيس:** أحمد بن بلة (سبتمبر 1962)`,
+          `📚 **المصدر:** حقيقة تاريخية ثابتة — ثقة 100%`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 6. أحداث رياضية مستقبلية (كأس العالم 2038، دوري 2027...)
+    const _futureYearMatch = _lum.match(/\b(20[3-9]\d|2[1-9]\d{2})\b/)
+    if (_futureYearMatch && isFutureYear(_futureYearMatch[1]) &&
+        /(?:كأس|دوري|بطولة|فاز|ربح|نهائي|نتيجة|نتائج|شكون ربح|من فاز)/i.test(_lum)) {
+      const _futureY = _futureYearMatch[1]
+      console.log(`[AntiHallucination] Future sports event: year=${_futureY}`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ حدث مستقبلي`,
+          ``,
+          `**عام ${_futureY} لم يأتِ بعد** — لا يمكنني معرفة نتائج أحداث لم تقع.`,
+          ``,
+          `لا أخترع نتائج مستقبلية. أي إجابة بخصوص هذا الحدث ستكون تخميناً لا معلومة.`,
+          ``,
+          `> 🛡️ إذا أردت معرفة **آخر نتائج** أي بطولة حالية، اسألني وسأبحث في الوقت الفعلي.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 7. القادة العالميون الحاليون (مع تحديد دقيق)
+    const _worldLeaderQ = _lum.match(
+      /(?:من\s+هو|شكون\s+هو|من\s+هي|شكون\s+هي)\s+(?:ال)?(?:رئيس|ملك|أمين\s+عام|مستشار|وزير\s+أول)\s+(?:ال)?(?:حالي|الحالية|درك|دروك|الآن)?\s*(?:ل|لـ|لل)?\s*([\u0600-\u06FF\s]{3,30})/i
+    )
+    if (_worldLeaderQ) {
+      const _country = _worldLeaderQ[1]?.trim()
+      const _leader = _country && Object.entries(WORLD_LEADERS_2026).find(([k]) =>
+        _country.includes(k) || k.includes(_country.replace(/^(ال|لل|لـ)/, ''))
+      )
+      if (_leader) {
+        const [countryName, info] = _leader
+        console.log(`[DZKnowledge] World leader query: ${countryName}`)
+        return res.status(200).json({
+          content: [
+            `## 🌍 ${info.role_ar} لـ${countryName}`,
+            ``,
+            `**${info.ar}** *(${info.fr})*`,
+            ``,
+            `🗓️ في منصبه منذ **${info.since}**${info.notes ? ` — ${info.notes}` : ''}`,
+            ``,
+            `⚡ **المصدر:** قاعدة بيانات محدَّثة (2025-2026) — ثقة 95%`,
+            `> ⚠️ للتأكد من أي تغيير حديث، يُنصح بمراجعة مصادر إخبارية موثوقة.`,
+          ].join('\n'),
+          model: 'dz-knowledge-static',
+          _static: true,
+        })
+      }
     }
   }
 
@@ -13728,10 +13911,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _cleanName = lastUserMessage
             .replace(/^(?:من\s+هو|من\s+هي|شكون\s+هو|شكون\s+هي|معلومات\s+عن|أخبرني\s+عن|اخبرني\s+عن|حدثني\s+عن|واش\s+تعرف)\s+/i, '')
             .trim()
+
+          // ── Anti-Hallucination: لا نبحث على الويب عن أشخاص خياليين ──────────
+          // اختبار الصلة: إذا كانت نتائج الويب لا تذكر الاسم → الشخص غير موجود
           const _webPersonResult = await searchPersonOnline(_cleanName)
 
           if (_webPersonResult?.hasInfo) {
-            console.log(`[PersonWiki] ✅ Live web results found for "${_cleanName}"`)
+            // ── فحص الصلة: هل تذكر النتائج الاسم المبحوث عنه؟ ─────────────────
+            // نستخرج جزءاً مميزاً من الاسم (الكلمة الأطول > 3 أحرف)
+            const _nameParts = _cleanName.split(/\s+/).filter(w => w.length > 3)
+            const _resultText = (_webPersonResult.text || '').toLowerCase()
+            const _nameFoundInResults = _nameParts.length === 0 || _nameParts.some(part =>
+              _resultText.includes(part.toLowerCase())
+            )
+
+            if (!_nameFoundInResults) {
+              // النتائج لا تذكر الاسم → الشخص غير موجود (هلوسة محتملة)
+              console.log(`[AntiHallucination] Web results irrelevant for "${_cleanName}" — returning not-found`)
+              return res.status(200).json({
+                content: [
+                  `## ⚠️ لا توجد معلومات موثوقة`,
+                  ``,
+                  `**لا أجد معلومات موثوقة عن شخص باسم "${_cleanName}".**`,
+                  ``,
+                  `بحثت في ويكيبيديا والإنترنت ولم أجد ما يُثبت وجود هذه الشخصية.`,
+                  `إذا كان الاسم مختلفاً أو كانت هناك تفاصيل إضافية، يمكنك إعادة السؤال.`,
+                  ``,
+                  `> 🛡️ **مبدأ DZ Agent:** لا اختلاق للأشخاص — أفضّل الاعتراف بعدم المعرفة على اختلاق معلومات.`,
+                ].join('\n'),
+                model: 'anti-hallucination',
+                _personWiki: null,
+              })
+            }
+
+            console.log(`[PersonWiki] ✅ Live web results found and relevant for "${_cleanName}"`)
 
             // ── لا نمرر نتائج الويب عبر LLM — نُرجعها مباشرةً مُنسّقة ──────────
             // هذا يمنع الهلوسة: الـ LLM لا يضيف معلومات من معرفته الداخلية
@@ -16675,6 +16888,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 • لا تذكر أسماء المزودين (Groq / Gemini / Mistral / DeepSeek / etc) في إجابتك`,
     queryAnalysisBlock,
     `❌ لا تخترع أخباراً أو نتائج أو أسعاراً | ❌ لا تستعمل معرفتك الداخلية للأحداث الزمنية | ✅ إذا لم توجد نتائج حديثة → قُل ذلك صراحةً ولا تخترع`,
+    `\n🛡️ ═══ قواعد مقاومة الهلوسة — إلزامية لجميع النماذج ═══ 🛡️
+① رؤساء الجزائر: أحمد بن بلة (1962-65) | هواري بومدين (1965-78) | رابح بيطاط (1978-79 مؤقت) | الشاذلي بن جديد (1979-92) | محمد بوضياف (1992 اغتيل) | علي كافي (1992-94) | اليامين زروال (1994-99) | عبد العزيز بوتفليقة (1999-2019) | عبد القادر بن صالح (2019 مؤقت) | عبد المجيد تبون (2019-الآن) — لا تخرج عن هذه القائمة الموثقة أبداً.
+② ما قبل الاستقلال: الجزائر استعمار فرنسي 1830-1962 — لا رئيس جمهورية جزائري قبل 1962. كل سؤال عن رئيس/وزير/والٍ جزائري قبل 1962 → أجب بأن الجزائر لم تكن دولة مستقلة.
+③ الأشخاص: إذا لم تجد في [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] اسم الشخص المطلوب → قُل "لا أملك معلومات موثوقة" ولا تخترع منصبه أو سيرته.
+④ الأحداث المستقبلية: لا تُجب عن نتائج أحداث بعد ${new Date().getFullYear()} — قُل صراحةً أن الحدث لم يقع بعد.
+⑤ الأماكن الجزائرية: الجزائر تضم 58 ولاية رسمية فقط — لا تخترع أسماء ولايات أو مدن غير موجودة.
+⑥ الأحداث التاريخية: لا تخترع حروباً أو اتفاقيات أو انقلابات لم تُذكر في [WEB_CONTEXT] — قُل "لا أجد توثيقاً لهذا الحدث".
+⑦ عام اليوم: ${new Date().getFullYear()} — لا تُجب عن أحداث بعد هذا العام.`,
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
 ① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
 ② الحقائق الثابتة (عواصم، تواريخ تأسيس، جغرافيا، تعريفات): أجب مباشرةً من معرفتك بدون تحذير.`,

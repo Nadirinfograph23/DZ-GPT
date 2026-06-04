@@ -16940,7 +16940,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 ④ الأحداث المستقبلية: لا تُجب عن نتائج أحداث بعد ${new Date().getFullYear()} — قُل صراحةً أن الحدث لم يقع بعد.
 ⑤ الأماكن الجزائرية: الجزائر تضم 58 ولاية رسمية فقط — لا تخترع أسماء ولايات أو مدن غير موجودة.
 ⑥ الأحداث التاريخية: لا تخترع حروباً أو اتفاقيات أو انقلابات لم تُذكر في [WEB_CONTEXT] — قُل "لا أجد توثيقاً لهذا الحدث".
-⑦ عام اليوم: ${new Date().getFullYear()} — لا تُجب عن أحداث بعد هذا العام.`,
+⑦ عام اليوم: ${new Date().getFullYear()} — لا تُجب عن أحداث بعد هذا العام.
+⑧ 🔴 قاعدة الأسئلة الغامضة — NO GUESSING ALLOWED (إلزامية 100%):
+إذا احتوى السؤال على كلمة ناقصة من هذه القائمة بدون كيان واضح:
+   • "الرئيس السابق" / "الرئيس الحالي" → اسأل: رئيس أي دولة؟
+   • "الوزير" → اسأل: وزير ماذا؟ (وزير أي وزارة أو أي دولة؟)
+   • "المنتخب" / "المنتخب الوطني" → اسأل: منتخب أي دولة؟
+   • "المدرب" → اسأل: مدرب أي فريق؟
+   • "اللاعب" → اسأل: أي لاعب؟
+   • "الفريق" → اسأل: أي فريق؟
+   • "المباراة القادمة" / "المباراة الليلة" → اسأل: مباراة أي فريق أو منتخب؟
+   • "متى استقلت" → اقترح: هل تقصد الجزائر؟ إذا كانت دولة أخرى حددها.
+   • "متى تأسس" / "متى أُسِّس" → اسأل: ما الذي تقصد؟
+❌ ممنوع تماماً: التخمين، الاستنتاج، افتراض الدولة أو الفريق من تلقاء نفسك.
+✅ الاستثناء الوحيد: إذا كان السياق السابق في المحادثة يحدد الكيان بوضوح → استخدمه.
+✅ إذا كان DZ Agent مخصصاً للجزائر والسؤال يحتمل الجزائر → اقترح الجزائر أولاً لكن اسأل: "هل تقصد الجزائر أم دولة أخرى؟"
+🚨 قاعدة ذهبية: إعطاء إجابة عشوائية أسوأ بكثير من طلب التوضيح. لا تجب بثقة على سؤال ناقص.`,
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
 ① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
    أسئلة المطور تشمل: "ما هو DZ Agent" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ Agent صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ-GPT 🇩🇿
@@ -17134,6 +17149,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const source = (wLines.find(l => l.startsWith('source:')) || '').replace('source:', '').trim() || 'open-meteo.com'
     const tableRows = wLines.filter(l => l.startsWith('|')).join('\n')
     const staleNote = wLines.find(l => l.startsWith('⚠️')) || ''
+    // Check if this city came from dashboard (user-set location) or auto-detected
+    const _dashboardCity = dashboardContext?.city || ''
+    const _cityFromDashboard = _dashboardCity && city && _dashboardCity.trim().toLowerCase() === city.trim().toLowerCase()
+    const _cityFromMessage = detectCityFromQuery(lastUserMessage)
+    const _cityNote = (_cityFromDashboard && !_cityFromMessage)
+      ? `\n> 📍 على حد علمي أنت في **${city}** (حسب بطاقة الطقس) — إذا أردت مدينة أخرى، قلي واش البلاصة؟`
+      : ''
     const formattedWeather = [
       `## 🌤️ حالة الطقس في ${city} — اليوم`,
       '',
@@ -17141,6 +17163,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       '',
       staleNote,
       `> 📡 المصدر: **${source}**`,
+      _cityNote,
     ].filter(Boolean).join('\n')
     return res.status(200).json({ content: formattedWeather })
   }

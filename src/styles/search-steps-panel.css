@@ -160,6 +160,31 @@
   to   { transform: rotate(360deg); }
 }
 
+/* ── Mode variants ── */
+.sfp-wrap--weather {
+  background: linear-gradient(135deg, rgba(59,130,246,.07) 0%, rgba(37,99,235,.04) 100%);
+  border-color: rgba(59,130,246,.22);
+}
+.sfp-wrap--weather .sfp-title           { color: #3b82f6; }
+.sfp-wrap--weather .sfp-dot--running    { border-color: #3b82f6; background: rgba(59,130,246,.12); color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+.sfp-wrap--weather .sfp-dot--done       { border-color: #3b82f6; background: #3b82f6; }
+.sfp-wrap--weather .sfp-row--running .sfp-row-label  { color: #3b82f6; }
+.sfp-wrap--weather .sfp-row--done    .sfp-row-label  { color: #1d4ed8; }
+.sfp-wrap--weather .sfp-line--lit    { background: linear-gradient(180deg, #3b82f6 0%, rgba(59,130,246,.35) 100%); }
+.sfp-wrap--weather.sfp-wrap--done    { border-color: rgba(59,130,246,.4); background: linear-gradient(135deg, rgba(59,130,246,.10) 0%, rgba(37,99,235,.06) 100%); }
+
+.sfp-wrap--sports {
+  background: linear-gradient(135deg, rgba(249,115,22,.07) 0%, rgba(234,88,12,.04) 100%);
+  border-color: rgba(249,115,22,.22);
+}
+.sfp-wrap--sports .sfp-title            { color: #f97316; }
+.sfp-wrap--sports .sfp-dot--running     { border-color: #f97316; background: rgba(249,115,22,.12); color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+.sfp-wrap--sports .sfp-dot--done        { border-color: #f97316; background: #f97316; }
+.sfp-wrap--sports .sfp-row--running .sfp-row-label  { color: #f97316; }
+.sfp-wrap--sports .sfp-row--done    .sfp-row-label  { color: #c2410c; }
+.sfp-wrap--sports .sfp-line--lit     { background: linear-gradient(180deg, #f97316 0%, rgba(249,115,22,.35) 100%); }
+.sfp-wrap--sports.sfp-wrap--done     { border-color: rgba(249,115,22,.4); background: linear-gradient(135deg, rgba(249,115,22,.10) 0%, rgba(234,88,12,.06) 100%); }
+
 /* ── Dark mode ── */
 @media (prefers-color-scheme: dark) {
   .sfp-wrap {

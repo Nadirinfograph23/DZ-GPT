@@ -134,6 +134,7 @@ import {
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
+import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import {
@@ -13286,7 +13287,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Smart Topic Isolation — إذا السؤال الجديد موضوع مختلف تماماً، نقطع السياق ──
-  const _topicChanged = detectTopicChange(messages)
+  // استثناء: أسئلة المتابعة بالضمائر (كم عمره؟ ومن قبله؟) تحتاج السياق الكامل
+  const _lastUserRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+  const _isFollowUp = isFollowUpQuery(_lastUserRaw)
+  const _topicChanged = !_isFollowUp && detectTopicChange(messages)
   if (_topicChanged) {
     const _lastUser = [...messages].reverse().find(m => m.role === 'user')
     messages = _lastUser ? [_lastUser] : messages
@@ -13599,8 +13603,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const moderation = _earlyMod
 
   // ── Owner Training & Command Detection ────────────────────────────────────
+  // حماية: detectOwnerCommand يُفعَّل فقط إذا كانت الرسالة تحتوي إشارة صريحة للتدريب
+  // أو رابط URL (إضافة/حذف مصدر) — نمنع بذلك false-positive على الجمل العربية العادية
   const _ownerTok = req.body.githubToken || process.env.GITHUB_TOKEN || ''
-  const _ownerCmd = detectOwnerCommand(lastUserMessage)
+  const _hasOwnerSignal = /(?:تعلّ?م|خزّ?ن|احفظ|اعرف|تذكّ?ر|معلومة\s+جديدة|حقيقة|قاعدة\s+عامة|سلوك\s+عام|أضف.*مصدر|اضف.*مصدر|احذف|امسح|ألغِ|اعرض\s+التدريب|list_training|clear_training|add.*feed|remove.*feed|save.*correction|احفظ\s+التصحيح|صحّ?ح\s*:|تصحيح\s*:|correction\s*:|fix\s+this|https?:\/\/)/i.test(lastUserMessage)
+  const _ownerCmd = _hasOwnerSignal ? detectOwnerCommand(lastUserMessage) : null
 
   if (_ownerCmd) {
     const _isOwner = await verifyOwnerToken(_ownerTok)
@@ -13850,6 +13857,36 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMessage)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // DZ CONTEXT RESOLVER — حلّ الضمائر والإحالات قبل البحث
+  // يُحوّل "كم عمره؟" → "كم عمر تبون؟" باستخدام سجل المحادثة
+  // ══════════════════════════════════════════════════════════════════════
+  if (!isDZToolRequest && !_isYouTubeQuery_pre && !_isAgentMode) {
+    const _ctxResult = resolveContextualQuery(lastUserMessage, messages)
+    if (_ctxResult.wasResolved) {
+      lastUserMessage = _ctxResult.resolved
+      const _lastUserIdx = messages.map(m => m.role).lastIndexOf('user')
+      if (_lastUserIdx >= 0) messages[_lastUserIdx] = { ...messages[_lastUserIdx], content: lastUserMessage }
+      console.log(`[CtxResolver] ✅ entity="${_ctxResult.entity}" → resolved query injected`)
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // DZ AMBIGUITY CLASSIFIER — رياضي + سياسي مبهم بدون كيان
+  // يعمل قبل detectAmbiguity العام — يُغطّي الحالات الجزائرية الخاصة
+  // ══════════════════════════════════════════════════════════════════════
+  if (!isDZToolRequest && !_isYouTubeQuery_pre && !_isAgentMode) {
+    const _dzAmb = detectDZAmbiguity(lastUserMessage)
+    if (_dzAmb?.needsClarification) {
+      console.log(`[DZAmbiguity] 🤔 case=${_dzAmb.caseId} msg="${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: formatDZClarification(_dzAmb.question, _dzAmb.options),
+        mode: 'clarification',
+        clarificationCase: _dzAmb.caseId,
+      })
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════

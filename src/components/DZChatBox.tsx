@@ -6408,7 +6408,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
-      // ── Image Generation — Pollinations.ai FLUX (مجاني + ترجمة عربي→إنجليزي) ──────
+      // ── Image Generation — Multi-provider: HF FLUX → Stable Horde async ───────────
       if (IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const prompt = extractImagePrompt(text)
         const shortTopic = prompt.slice(0, 40) + (prompt.length > 40 ? '…' : '')
@@ -6419,53 +6419,96 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           richType: 'text' as const, isStreaming: true,
         }])
 
-        let imageUrl: string | undefined
-        let imageModel = 'FLUX AI'
+        const showImgResult = (imageUrl: string, imageModel: string) => {
+          setMessages(prev => prev.filter(m => m.id !== loadingId))
+          addAssistantMessage({
+            content: `🎨 **صورة AI:** ${prompt}`,
+            richType: 'image' as const,
+            imageUrl,
+            imagePrompt: prompt,
+            imageModel,
+            imageStyle: 'flux',
+            quickSuggestions: [
+              `🔄 نسخة جديدة من "${shortTopic}"`,
+              '🎌 أسلوب أنيمي',
+              '📷 واقعي احترافي',
+              '🧊 ثلاثي الأبعاد',
+              '✨ نسخة مستقبلية',
+              'أضف تفاصيل أكثر',
+            ],
+          })
+          setIsLoading(false)
+        }
 
-        let fallbackEnglishPrompt = prompt.trim()
+        const showImgError = (msg: string) => {
+          setMessages(prev => prev.map(m => m.id === loadingId ? {
+            ...m, isStreaming: false,
+            content: `⚠️ **تعذّر توليد الصورة**\n${msg}\n\n_جرّب مجدداً أو اكتب "أعد المحاولة"_`,
+          } : m))
+          setIsLoading(false)
+        }
+
         try {
-          const ctrl = new AbortController()
-          const timer = setTimeout(() => ctrl.abort(), 30000)
           const imgRes = await fetch('/api/tools/img-gen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model: 'flux', width: 1024, height: 1024 }),
-            signal: ctrl.signal,
+            body: JSON.stringify({ prompt, model: 'flux', width: 512, height: 512 }),
           })
-          clearTimeout(timer)
-          const imgData = await imgRes.json() as { imageUrl?: string; imageBase64?: string; model?: string; translated?: boolean; englishPrompt?: string; error?: string }
-          if (imgData.englishPrompt) fallbackEnglishPrompt = imgData.englishPrompt
-          if (imgData.imageUrl || imgData.imageBase64) {
-            imageUrl = imgData.imageUrl || imgData.imageBase64
-            imageModel = imgData.model || 'FLUX AI'
+          const imgData = await imgRes.json() as {
+            imageUrl?: string; imageBase64?: string; model?: string
+            jobId?: string; provider?: string; status?: string
+            englishPrompt?: string; error?: string
           }
-        } catch { /* timeout — use Pollinations direct URL fallback */ }
 
-        // Fallback: use translated English prompt (from server) for best Pollinations results
-        if (!imageUrl) {
-          const seed = Math.floor(Math.random() * 99999999)
-          imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fallbackEnglishPrompt)}?model=flux&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&safe=false`
-          imageModel = 'FLUX (Pollinations)'
+          // ── Case 1: got image directly (HF or Stable Horde sync) ──
+          if (imgData.imageBase64) {
+            showImgResult(imgData.imageBase64, imgData.model || 'Stable Diffusion')
+            return
+          }
+
+          // ── Case 2: Stable Horde async — poll until done ──
+          if (imgData.jobId && imgData.provider === 'stable-horde-async') {
+            const jobId = imgData.jobId
+            let pollCount = 0
+            const MAX_POLLS = 30  // 30 × 5s = 150s max
+            const poll = async (): Promise<void> => {
+              if (pollCount++ > MAX_POLLS) {
+                showImgError('استغرق التوليد وقتاً طويلاً — حاول مجدداً لاحقاً')
+                return
+              }
+              try {
+                const st = await fetch(`/api/tools/img-gen/status/${jobId}`)
+                const sd = await st.json() as { done: boolean; imageBase64?: string; waitTime?: number; queuePos?: number; faulted?: boolean; error?: string }
+                if (sd.faulted || sd.error) {
+                  showImgError(sd.error || 'فشل التوليد')
+                  return
+                }
+                if (sd.done && sd.imageBase64) {
+                  showImgResult(sd.imageBase64, 'Stable Diffusion AI')
+                  return
+                }
+                // Update progress message
+                const waitSec = sd.waitTime || 0
+                const qPos = sd.queuePos || 0
+                const waitMin = waitSec > 60 ? `${Math.ceil(waitSec/60)} دقيقة` : `${waitSec} ثانية`
+                setMessages(prev => prev.map(m => m.id === loadingId ? {
+                  ...m,
+                  content: `🎨 جاري توليد صورة: **${shortTopic}**\n⏳ _انتظار ~ ${waitMin}${qPos > 0 ? ` · ${qPos} طلب قبلك` : ''}_`,
+                } : m))
+                setTimeout(poll, 5000)
+              } catch {
+                setTimeout(poll, 6000)
+              }
+            }
+            setTimeout(poll, 5000)
+            return
+          }
+
+          // ── Case 3: error ──
+          showImgError(imgData.error || 'جميع المزودين غير متاحين مؤقتاً — حاول بعد دقيقة')
+        } catch (e) {
+          showImgError('خطأ في الاتصال — تحقق من الإنترنت وأعد المحاولة')
         }
-
-        setMessages(prev => prev.filter(m => m.id !== loadingId))
-        addAssistantMessage({
-          content: `🎨 **صورة AI:** ${prompt}`,
-          richType: 'image' as const,
-          imageUrl,
-          imagePrompt: prompt,
-          imageModel,
-          imageStyle: 'flux',
-          quickSuggestions: [
-            `🔄 نسخة جديدة من "${shortTopic}"`,
-            '🎌 أسلوب أنيمي',
-            '📷 واقعي احترافي',
-            '🧊 ثلاثي الأبعاد',
-            '✨ نسخة مستقبلية',
-            'أضف تفاصيل أكثر',
-          ],
-        })
-        setIsLoading(false)
         return
       }
 

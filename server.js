@@ -6318,6 +6318,202 @@ async function searchGoogleCSE(query) {
   return []
 }
 
+
+// ── DZ SearXNG Integration ─────────────────────────────────────────────────
+
+/**
+ * normalizeDZQuery — Algerian & Moroccan dialect → formal Arabic for search engines
+ * "شكون رئيس الجزائر؟" → "من هو الرئيس الحالي للجزائر"
+ */
+function normalizeDZQuery(text) {
+  if (!text || !/[\u0600-\u06FF]/.test(text)) return text
+  let q = text.trim()
+  // Common dialect words → MSA equivalents
+  // Arabic word boundary: (?<![ء-ي]) = not preceded by Arabic char
+  //                         (?![ء-ي])  = not followed by Arabic char
+  const AR_BOUNDARY_START = '(?<![\\u0621-\\u064A\\u0660-\\u0669])'
+  const AR_BOUNDARY_END   = '(?![\\u0621-\\u064A\\u0660-\\u0669])'
+  const ar = (word) => new RegExp(AR_BOUNDARY_START + word + AR_BOUNDARY_END, 'gu')
+
+  const dialectMap = [
+    [ar('شكون'),              'من هو'],
+    [ar('شكونة'),             'من هي'],
+    [ar('شنوا|شنو'),          'ما هو'],
+    [ar('واش|وش'),            'هل'],
+    [ar('كيفاش|كيفا|علاش'),  'كيف'],
+    [ar('وقتاش|امتى|فين|وين'), 'متى'],
+    [ar('كاين|كاينة|كاينين'), 'يوجد'],
+    [ar('ماشي'),              'ليس'],
+    [ar('بزاف|برشا'),         'كثير'],
+    [ar('شوية'),              'قليل'],
+    [ar('برك'),               'فقط'],
+    [ar('هكذاك|هكاك'),        'هكذا'],
+    [ar('تاع|متاع|نتاع'),     'خاص بـ'],
+    [ar('راه|راهو'),          'إنه'],
+    [ar('يدير'),              'يفعل'],
+    [ar('قاع'),               'كل'],
+    [ar('ماتشات|ماتش'),       'مباريات'],
+    [ar('مزيان|مزيانة'),      'جيد'],
+    [ar('بداش|علاه'),         'لماذا'],
+    [ar('لازم'),              'يجب'],
+    [ar('حبيت'),              'أريد'],
+    [ar('نعرف'),              'أعرف'],
+    [ar('عندي'),              'لدي'],
+    [ar('عندك'),              'لديك'],
+    [ar('عنده|عندها'),        'لديه/لديها'],
+    [ar('درك'),               'الآن'],
+    [ar('البارح'),            'أمس'],
+    [ar('غدوة'),              'غدًا'],
+    [ar('اليوم'),             'اليوم الحالي'],
+    [ar('كرهبة|طوموبيل'),     'سيارة'],
+    [ar('خوك'),              'أخوك'],
+    [/وزير الفلاحة/gu,       'وزير الزراعة الجزائري الحالي'],
+    [ar('دار'),              'منزل'],
+    [ar('روح'),              'اذهب'],
+  ]
+  for (const [from, to] of dialectMap) {
+    q = q.replace(from, to)
+  }
+  // Remove question marks + clean up whitespace
+  q = q.replace(/[؟?]+/g, '').replace(/\s+/g, ' ').trim()
+  // Append "الجزائر" if query seems Algerian but has no country marker
+  if (/وزير|رئيس|حكومة|انتخاب|دستور/i.test(q) && !/الجزائر|جزائر|الجزائري/i.test(q)) {
+    q += ' الجزائر'
+  }
+  return q
+}
+
+/**
+ * searchSearXNG — Meta-search via SearXNG public instances with parallel probing.
+ * Falls back to DuckDuckGo HTML when all instances fail (403/429/blocked).
+ * Smart trigger: only called when existing pipeline returns insufficient results.
+ */
+async function searchSearXNG(query, {
+  categories = 'general,news',
+  language = 'ar',
+  maxResults = 6,
+  timeoutMs = 5000,
+} = {}) {
+  const enc = encodeURIComponent(query)
+  const langParam = language === 'ar' ? '&language=ar&locale=ar-DZ' : `&language=${language}`
+
+  // Randomize instance order to distribute load across runs
+  const ALL_INSTANCES = [
+    'https://search.hbubli.cc',
+    'https://nyc1.sx.ggtyler.dev',
+    'https://search.sapti.me',
+    'https://search.inetol.net',
+    'https://priv.au',
+    'https://etsi.me',
+    'https://searx.tiekoetter.com',
+    'https://searx.lunar.icu',
+    'https://searx.be',
+    'https://paulgo.io',
+    'https://search.mdosch.de',
+    'https://searxng.site',
+    'https://northboot.xyz',
+    'https://searxng.world',
+    'https://searx.work',
+    'https://s.mble.dk',
+    'https://search.privacyguides.net',
+  ]
+  // Shuffle for load distribution
+  const instances = [...ALL_INSTANCES].sort(() => Math.random() - 0.5)
+
+  const HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0',
+    'Accept': 'application/json, text/html;q=0.9, */*;q=0.8',
+    'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8',
+    'Connection': 'keep-alive',
+    'DNT': '1',
+  }
+
+  // Try instances in parallel batches of 3
+  const tryInstance = async (base) => {
+    const url = `${base}/search?q=${enc}&format=json&categories=${categories}${langParam}`
+    try {
+      const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(timeoutMs) })
+      if (!r.ok) return null
+      const ct = r.headers.get('content-type') || ''
+      if (!ct.includes('json')) return null
+      const d = await r.json()
+      const results = (d.results || []).slice(0, maxResults).map(item => ({
+        source: 'SearXNG',
+        title: item.title || '',
+        snippet: (item.content || item.description || '').slice(0, 400),
+        url: item.url || '',
+        date: item.publishedDate || '',
+        engines: Array.isArray(item.engines) ? item.engines.join(', ') : (item.engine || ''),
+      })).filter(r => r.url && r.title)
+      return results.length > 0 ? results : null
+    } catch { return null }
+  }
+
+  // Probe in batches of 3
+  for (let i = 0; i < instances.length; i += 3) {
+    const batch = instances.slice(i, i + 3)
+    const results = await Promise.race([
+      Promise.all(batch.map(tryInstance)).then(rs => rs.find(r => r && r.length > 0) || null),
+      new Promise(resolve => setTimeout(() => resolve(null), timeoutMs + 500)),
+    ])
+    if (results) {
+      console.log(`[SearXNG] ✓ Got ${results.length} results from batch [${batch[0]}...]`)
+      return results
+    }
+  }
+
+  // ── Ultimate fallback: DuckDuckGo HTML scraping ──────────────────────
+  console.log('[SearXNG] All instances failed — falling back to DDG HTML')
+  try {
+    const ddgUrl = `https://html.duckduckgo.com/html/?q=${enc}&kl=ar-dz`
+    const r = await fetch(ddgUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ar,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!r.ok) return []
+    const html = await r.text()
+    const linkRe = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+    const snippetRe = /<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi
+    const links = [], snippets = []
+    let m
+    while ((m = linkRe.exec(html)) !== null) {
+      let url = m[1]
+      if (url.includes('uddg=')) {
+        try { url = new URLSearchParams(url.split('?')[1]).get('uddg') || url } catch {}
+      } else if (url.startsWith('//')) { url = 'https:' + url }
+      const title = m[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim()
+      if (url && title && url.startsWith('http')) links.push({ url, title })
+    }
+    while ((m = snippetRe.exec(html)) !== null) {
+      snippets.push(m[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim())
+    }
+    return links.slice(0, maxResults).map((l, i) => ({
+      source: 'DuckDuckGo', title: l.title, url: l.url,
+      snippet: snippets[i] || '', date: '',
+    }))
+  } catch (e) {
+    console.warn('[SearXNG] DDG fallback failed:', e.message)
+    return []
+  }
+}
+
+// ── SearXNG result formatter (same format as existing webSearchContext builder) ──
+function formatSearXNGContext(results, query) {
+  if (!results.length) return ''
+  const lines = results.map((r, i) => {
+    const url = r.url || ''
+    const title = (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim()
+    const snippet = r.snippet ? ` — ${r.snippet.slice(0, 200)}` : ''
+    const src = url ? `[${r.source || 'Web'}](${url})` : (r.source || 'Web')
+    return `• ${title}${snippet} — ${src}`
+  }).join('\n\n')
+  return `🔎 SearXNG Fallback | بحث مباشر: "${query}"\n\n${lines}`
+}
+
 function stripHtml(html = '') {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -12202,12 +12398,12 @@ async function searchWeb(query) {
 
   // ── TIER 2: SearXNG — try multiple instances with JSON-only check ─────
   const searxPromise = (async () => {
+    // Dedicated searchSearXNG() is used as fallback in dz-agent-chat.
+    // searchWeb() still tries 3 fast instances as a secondary tier.
     const searxInstances = [
-      `https://search.mdosch.de/search?q=${encodedQ}&format=json`,
-      `https://northboot.xyz/search?q=${encodedQ}&format=json`,
-      `https://searxng.world/search?q=${encodedQ}&format=json`,
-      `https://searx.tiekoetter.com/search?q=${encodedQ}&format=json`,
-      `https://searx.be/search?q=${recentQ}&format=json&language=ar`,
+      `https://search.hbubli.cc/search?q=${encodedQ}&format=json&categories=general,news`,
+      `https://search.sapti.me/search?q=${encodedQ}&format=json&categories=general,news`,
+      `https://search.inetol.net/search?q=${encodedQ}&format=json&categories=general,news`,
     ]
     for (const url of searxInstances) {
       try {
@@ -16776,6 +16972,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               .sort((a, b) => b._score - a._score).slice(0, 8)
             scoredResults = freshScored
             console.log(`[DZ Retrieval] Re-search returned ${freshResults.length} results`)
+          } else {
+            // Stale re-search also failed → inject SearXNG results directly
+            try {
+              const searxQ = normalizeDZQuery(retrievalQuery || lastUserMessage)
+              console.log(`[SearXNG Stale] Trying after stale re-search: "${searxQ.slice(0,60)}"`)
+              const staleResults = await searchSearXNG(searxQ, { timeoutMs: 7000, maxResults: 5 })
+              if (staleResults.length > 0) {
+                // Merge with existing stale results to get best of both
+                const searxScored = staleResults.map(r => ({
+                  ...r, _score: scoreResult(r, lastUserMessage) + 5,
+                  source: 'SearXNG',
+                }))
+                scoredResults = [...searxScored, ...scoredResults.slice(0, 3)]
+                console.log(`[SearXNG Stale] ✓ Added ${staleResults.length} fresh SearXNG results`)
+              }
+            } catch (_) {}
           }
         }
       }
@@ -16849,8 +17061,35 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         hasNewsResults = true
         console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (mustSearch) {
-        webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
-        console.log('[DZ Retrieval] No results found for mandatory search')
+        // ── SearXNG Fallback — try when CSE/GN-RSS/DDG all return nothing ──
+        // Normalize Algerian dialect → formal Arabic before sending to SearXNG
+        try {
+          const searxQuery = normalizeDZQuery(retrievalQuery || lastUserMessage)
+          console.log(`[SearXNG Fallback] Trying: "${searxQuery.slice(0,60)}" (normalized from: "${(retrievalQuery||lastUserMessage).slice(0,40)}")`)
+          const searxResults = await searchSearXNG(searxQuery, { timeoutMs: 8000, maxResults: 6 })
+          if (searxResults.length > 0) {
+            webSearchContext = formatSearXNGContext(searxResults, searxQuery)
+            hasNewsResults = true
+            console.log(`[SearXNG Fallback] ✓ ${searxResults.length} results — context built`)
+          } else {
+            // SearXNG also returned nothing — try English query as last resort
+            const enQuery = /[؀-ۿ]/.test(searxQuery)
+              ? searxQuery.replace(/[؟?]/g, '').trim() + ' Algeria'
+              : searxQuery
+            const enResults = await searchSearXNG(enQuery, { language: 'en', timeoutMs: 6000, maxResults: 4 })
+            if (enResults.length > 0) {
+              webSearchContext = formatSearXNGContext(enResults, enQuery)
+              hasNewsResults = true
+              console.log(`[SearXNG Fallback] ✓ English fallback: ${enResults.length} results`)
+            } else {
+              webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
+              console.log('[SearXNG Fallback] All sources exhausted — no results')
+            }
+          }
+        } catch (searxErr) {
+          console.warn('[SearXNG Fallback] Error:', searxErr.message)
+          webSearchContext = `⚠️ لا توجد نتائج حديثة مؤكدة من المصادر المتاحة. يرجى الرجوع إلى مصادر موثوقة مثل BBC أو Reuters أو الجزيرة.`
+        }
       }
     } catch (err) { console.error('[DZ Agent] Retrieval error:', err.message) }
   }

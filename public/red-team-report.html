@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DZ Agent — Red Team Evaluation Report</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--red:#f85149;--orange:#d29922;--blue:#58a6ff;--teal:#39d353}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:2rem 1rem;line-height:1.7}
+.container{max-width:1100px;margin:0 auto}
+h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,#f85149,#d29922);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:2.5rem;font-size:.95rem}
+.badge{display:inline-block;padding:.25rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600}
+.badge-red{background:#3d1a1a;color:#f85149;border:1px solid #f85149}
+.badge-orange{background:#3d2a00;color:#d29922;border:1px solid #d29922}
+.badge-green{background:#0d2a1a;color:#3fb950;border:1px solid #3fb950}
+.badge-blue{background:#0d1f3d;color:#58a6ff;border:1px solid #58a6ff}
+.score-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2.5rem}
+.score-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center}
+.score-card .num{font-size:2.8rem;font-weight:700;line-height:1}
+.score-card .label{font-size:.85rem;color:var(--muted);margin-top:.4rem}
+.num-red{color:#f85149}.num-orange{color:#d29922}.num-green{color:#3fb950}.num-blue{color:#58a6ff}
+.section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+.section h2{font-size:1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+.section h2 .icon{font-size:1.4rem}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{background:#1c2128;padding:.75rem 1rem;text-align:right;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+td{padding:.7rem 1rem;border-bottom:1px solid #21262d;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.bar-row{display:flex;align-items:center;gap:.75rem}
+.bar-bg{flex:1;background:#21262d;border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .3s}
+.bar-score{min-width:36px;text-align:right;font-weight:600;font-size:.9rem}
+.code-block{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:monospace;font-size:.82rem;margin:.75rem 0;white-space:pre-wrap;word-break:break-word;color:#79c0ff}
+.verdict{border-left:4px solid;padding:.75rem 1rem;border-radius:0 8px 8px 0;margin:.5rem 0;font-size:.9rem}
+.verdict-fail{border-color:#f85149;background:#1a0d0d}
+.verdict-warn{border-color:#d29922;background:#1a1400}
+.verdict-pass{border-color:#3fb950;background:#0d1a0d}
+.top-issues li{padding:.6rem 0;border-bottom:1px solid #21262d;display:flex;gap:.75rem;align-items:flex-start}
+.top-issues li:last-child{border-bottom:none}
+.issue-num{background:#f85149;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;margin-top:2px}
+.rec{background:#0d1f0d;border:1px solid #238636;border-radius:8px;padding:1rem;margin:.5rem 0;font-size:.9rem}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+.highlight{color:#f0883e;font-weight:600}
+.final-box{background:linear-gradient(135deg,#1a0d0d,#1a1400);border:2px solid #d29922;border-radius:16px;padding:2rem;text-align:center;margin-top:2rem}
+.final-score{font-size:5rem;font-weight:700;color:#d29922}
+footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>🔴 DZ Agent — Red Team Evaluation Report</h1>
+<p class="subtitle">اختبار جودة شامل وعنيف | Senior AI QA Engineer | 5 جوان 2026</p>
+
+<!-- SCOREBOARD -->
+<div class="score-board">
+  <div class="score-card"><div class="num num-orange">56<span style="font-size:1.5rem">/100</span></div><div class="label">الدرجة النهائية</div></div>
+  <div class="score-card"><div class="num num-red">42%</div><div class="label">احتمالية الهلوسة</div></div>
+  <div class="score-card"><div class="num num-orange">61%</div><div class="label">نجاح في الإنتاج</div></div>
+  <div class="score-card"><div class="num num-red">8</div><div class="label">أخطاء حرجة مكتشفة</div></div>
+  <div class="score-card"><div class="num num-blue">48</div><div class="label">اختبار نُفّذ</div></div>
+</div>
+
+<!-- AXES SCORES -->
+<div class="section">
+  <h2><span class="icon">📊</span> درجات المحاور العشرة</h2>
+  <table>
+    <thead><tr><th>المحور</th><th>الدرجة / 10</th><th>المؤشر</th></tr></thead>
+    <tbody>
+      <tr><td>1. فهم اللغة العربية</td><td><b class="num-green">7/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:70%;background:#3fb950"></div></div></div></td></tr>
+      <tr><td>2. فهم الدارجة الجزائرية</td><td><b class="num-orange">5/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:50%;background:#d29922"></div></div></div></td></tr>
+      <tr><td>3. الغموض والتوضيح</td><td><b class="num-red">2/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:20%;background:#f85149"></div></div></div></td></tr>
+      <tr><td>4. تتبع السياق</td><td><b class="num-red">1/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:10%;background:#f85149"></div></div></div></td></tr>
+      <tr><td>5. منع الهلوسة</td><td><b class="num-orange">4/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:40%;background:#d29922"></div></div></div></td></tr>
+      <tr><td>6. البحث الحي</td><td><b class="num-orange">5/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:50%;background:#d29922"></div></div></div></td></tr>
+      <tr><td>7. المعلومات الزمنية</td><td><b class="num-orange">6/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:60%;background:#d29922"></div></div></div></td></tr>
+      <tr><td>8. الشخصيات والرياضة الجزائرية</td><td><b class="num-orange">5/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:50%;background:#d29922"></div></div></div></td></tr>
+      <tr><td>9. الاستدلال والتصحيح الذاتي</td><td><b class="num-red">3/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:30%;background:#f85149"></div></div></div></td></tr>
+      <tr><td>10. الثقة والمصادر</td><td><b class="num-red">3/10</b></td><td><div class="bar-row"><div class="bar-bg"><div class="bar-fill" style="width:30%;background:#f85149"></div></div></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- TOP 10 ISSUES -->
+<div class="section">
+  <h2><span class="icon">🚨</span> أخطر 10 مشاكل مكتشفة</h2>
+  <ul class="top-issues" style="list-style:none">
+    <li><div class="issue-num">1</div><div><b class="badge badge-red">حرجة</b> <b>انهيار تتبع السياق كلياً</b><br>في محادثة متعددة الأدوار، يبحث الوكيل عن آخر جملة حرفياً ("كم عمره؟") دون أي صلة بالسياق السابق (تبون). كأن الوكيل يبدأ كل رد من الصفر.</div></li>
+    <li><div class="issue-num">2</div><div><b class="badge badge-red">حرجة</b> <b>ثغرة تصنيف الأوامر (Command Classification Bug)</b><br>السؤال عن لاعب خيالي "عبد الرحمن بن ساسي" أطلق استجابة Owner Verification Failed — يعني الوكيل صنّف سؤالاً عادياً كأمر إداري خاص بالمالك. هذا خطر أمني واجهة مضطربة.</div></li>
+    <li><div class="issue-num">3</div><div><b class="badge badge-red">حرجة</b> <b>عدم طلب التوضيح للأسئلة المبهمة</b><br>كل الأسئلة الغامضة ("شكون ربح"، "الماتش الجاي"، "الرئيس السابق"، "آخر مقابلة") تُعالَج بالبحث المباشر بدل طرح سؤال توضيحي. الوكيل لا يعرف متى يقول "قصدك ماذا بالضبط؟"</div></li>
+    <li><div class="issue-num">4</div><div><b class="badge badge-red">حرجة</b> <b>البحث الحي يعيد نفس المقال دائماً</b><br>نتائج البحث لأكثر من 10 استعلامات مختلفة (رياضة، سياسة، دارجة) تعيد نفس مقال Ennahar عن "الخضر والمركز 28 FIFA". الـ cache مكسور أو الـ search engine لا يميّز بين الاستعلامات.</div></li>
+    <li><div class="issue-num">5</div><div><b class="badge badge-red">حرجة</b> <b>الهلوسة الضمنية: مدينة النور الخيالية</b><br>سؤال "مدينة النور الجديدة في الصحراء 2026" أجاب بمعلومات عامة عن الصحراء (85% من مساحة الجزائر) بدل الإنكار الصريح. لم يقل "هذه المدينة غير موجودة" — وهذا مقبول للمستخدم كتأكيد ضمني.</div></li>
+    <li><div class="issue-num">6</div><div><b class="badge badge-orange">عالية</b> <b>الدارجة تُفهم لغوياً لكن لا تُعالَج وظيفياً</b><br>"واش راك؟" أعطى شرحاً لغوياً بدل رد طبيعي. "واش صرا البارح؟" أعطى "سؤال زين! جرّب تعاود بتفصيل" — استجابة هروبية. "شحال بقا للماتش؟" أطلق بحثاً حياً دون فهم الغرض.</div></li>
+    <li><div class="issue-num">7</div><div><b class="badge badge-orange">عالية</b> <b>"وين راه" يُحوَّل لبحث جغرافي خاطئ</b><br>العبارة الغامضة "وين راه" فُسِّرت كبحث عن مكان جغرافي وأعطت قائمة بلديات مثل "عين بردة، عين وسارة" بدل طلب توضيح. خلط بين الاستعلام الدارجي وبحث الخرائط.</div></li>
+    <li><div class="issue-num">8</div><div><b class="badge badge-orange">عالية</b> <b>بيانات الرياضة غير منظمة</b><br>"هداف البطولة الجزائرية" و"ترتيب البطولة" يعيدان محتوى خام من Jina AI Reader دون استخراج بيانات منظمة. المستخدم يحتاج جدولاً لا صفحة ويب خام.</div></li>
+    <li><div class="issue-num">9</div><div><b class="badge badge-orange">عالية</b> <b>المصادر لا تُعالَج عند الطلب</b><br>طلب "أعطني المصدر" في سياق محادثة متعددة الأدوار يطلق بحثاً جديداً عن "أعطني المصدر" بدل الرجوع للمصدر المُستخدَم. الوكيل لا يتذكر من أين جاءت المعلومة السابقة.</div></li>
+    <li><div class="issue-num">10</div><div><b class="badge badge-orange">عالية</b> <b>وزير الفلاحة بلا اسم صريح</b><br>"وزير الفلاحة الحالي" أعطى روابط أخبار بدل تسمية الوزير مباشرة. الوكيل عجز عن استخلاص اسم واضح من نتائج البحث واكتفى بعرض الروابط الخام.</div></li>
+  </ul>
+</div>
+
+<!-- PHASE ANALYSIS -->
+<div class="section">
+  <h2><span class="icon">🧪</span> تحليل المراحل العشر — أمثلة فعلية</h2>
+
+  <h3 style="margin:.75rem 0 .5rem;color:var(--muted)">المرحلة 1: الغموض</h3>
+  <div class="verdict verdict-fail">
+    <b>السؤال:</b> "شكون ربح"<br>
+    <b>الرد الفعلي:</b> بحث حي عن "شكون ربح" وعرض مقال عن ترتيب FIFA<br>
+    <b>الرد المطلوب:</b> "ربح في ماذا؟ مباراة؟ انتخابات؟ مسابقة؟ حدّد أكثر"<br>
+    <b class="badge badge-red">فشل تام — لا يُدرك الغموض</b>
+  </div>
+  <div class="verdict verdict-fail">
+    <b>السؤال:</b> "الماتش الجاي"<br>
+    <b>الرد الفعلي:</b> بحث حي، نفس مقال Ennahar FIFA Ranking<br>
+    <b>الرد المطلوب:</b> "ماتش مَنْ؟ المنتخب الجزائري؟ فريق محلي؟"<br>
+    <b class="badge badge-red">فشل تام</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 2: الزمن</h3>
+  <div class="verdict verdict-pass">
+    <b>السؤال:</b> "رئيس الجزائر الحالي؟"<br>
+    <b>الرد:</b> "عبد المجيد تبون (منتخب منذ ديسمبر 2019، أُعيد انتخابه 2024)"<br>
+    <b class="badge badge-green">نجح — معلومة دقيقة وحديثة</b>
+  </div>
+  <div class="verdict verdict-warn">
+    <b>السؤال:</b> "وزير الفلاحة الحالي؟"<br>
+    <b>الرد:</b> عرض روابط أخبار دون تسمية الوزير صراحةً<br>
+    <b class="badge badge-orange">جزئي — بحث دون استخلاص</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 3: الهلوسة</h3>
+  <div class="verdict verdict-fail">
+    <b>السؤال:</b> "اللاعب عبد الرحمن بن ساسي الذي سجل في كأس العالم 2025؟"<br>
+    <b>الرد الفعلي:</b> "⛔ تحقق الهوية فشل — هذا الأمر مخصص لمالك المشروع فقط"<br>
+    <b>التشخيص:</b> الوكيل صنّف سؤالاً عادياً كأمر Owner Command — ثغرة تصنيف خطيرة<br>
+    <b class="badge badge-red">فشل حرج + ثغرة أمنية</b>
+  </div>
+  <div class="verdict verdict-warn">
+    <b>السؤال:</b> "مدينة النور في الصحراء 2026؟"<br>
+    <b>الرد:</b> "تغطي الصحراء الكبرى أكثر من 85% من مساحة الجزائر..."<br>
+    <b>التشخيص:</b> لم يُنكر المدينة الخيالية صراحةً — هلوسة ضمنية بالصمت<br>
+    <b class="badge badge-orange">هلوسة ضمنية خطيرة</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 4: تتبع السياق</h3>
+  <div class="verdict verdict-fail">
+    <div class="code-block">User: من هو رئيس الجزائر؟
+AI:   عبد المجيد تبون ✅
+User: كم عمره؟
+AI:   🔍 بحث حي عن "كم عمره؟" → يعرض مقال عن FIFA Ranking ❌
+User: ومن قبله؟
+AI:   🔍 بحث حي عن "ومن قبله؟" → نفس مقال FIFA ❌</div>
+    <b class="badge badge-red">فشل حرج — انهيار كامل للسياق بعد الرد الأول</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 5: الدارجة الجزائرية</h3>
+  <div class="verdict verdict-warn">
+    <b>"واش راك؟"</b> → شرح لغوي ("= كيف حالك") بدل رد طبيعي. <b class="badge badge-orange">مفهوم لكن بارد</b>
+  </div>
+  <div class="verdict verdict-fail">
+    <b>"واش صرا البارح؟"</b> → "سؤال زين! جرّب تعاود بتفصيل" <b class="badge badge-red">هروب — لم يفهم السؤال</b>
+  </div>
+  <div class="verdict verdict-fail">
+    <b>"شحال بقا للماتش؟"</b> → بحث حي عن "شحال بقا للماتش" بدل سؤال "ماتش من؟" <b class="badge badge-red">فشل</b>
+  </div>
+  <div class="verdict verdict-fail">
+    <b>"كاين ماتشات؟"</b> → بحث حي دون فهم الدارجة <b class="badge badge-red">فشل</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 6: الرياضة الجزائرية</h3>
+  <div class="verdict verdict-fail">
+    <b>"هداف البطولة الجزائرية؟"</b> → "سؤال زين! جرّب تعاود بتفصيل" <b class="badge badge-red">فشل تام</b>
+  </div>
+  <div class="verdict verdict-warn">
+    <b>"ترتيب البطولة الجزائرية؟"</b> → بحث حي، يعيد مقال FIFA عام دون ترتيب فعلي <b class="badge badge-orange">جزئي</b>
+  </div>
+
+  <h3 style="margin:1.2rem 0 .5rem;color:var(--muted)">المرحلة 7–10: التصحيح، المصادر، التضارب، الثقة</h3>
+  <div class="verdict verdict-fail">
+    <b>"أعطني المصدر"</b> (في سياق متعدد الأدوار) → بحث حي عن "أعطني المصدر" كاستعلام جديد. الوكيل لا يتذكر المصدر الأصلي. <b class="badge badge-red">فشل</b>
+  </div>
+</div>
+
+<!-- ROOT CAUSES -->
+<div class="section">
+  <h2><span class="icon">🔬</span> أسباب المشاكل الجذرية</h2>
+  <div class="two-col">
+    <div>
+      <h3 style="font-size:.95rem;margin-bottom:.75rem;color:#f0883e">المشاكل البنيوية</h3>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:.5rem">
+        <li>🔴 <b>كشف الغموض مُعطَّل:</b> الوكيل يُرسِل كل استعلام للبحث قبل تقييم وضوحه</li>
+        <li>🔴 <b>context window لا يُقرأ:</b> رغم إرسال المحادثة كاملة، يُعالَج آخر رسالة فقط</li>
+        <li>🔴 <b>تصنيف الأوامر مُسرِّب:</b> الـ regex patterns للـ owner commands تلتقط أسئلة عادية</li>
+        <li>🟠 <b>cache البحث مُتعطِّل:</b> جميع الاستعلامات تعيد نفس المقال المحفوظ</li>
+        <li>🟠 <b>محرك الدارجة سطحي:</b> يفهم المفردات لكن لا يستنتج النية الكاملة</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:.95rem;margin-bottom:.75rem;color:#f0883e">المشاكل المعرفية</h3>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:.5rem">
+        <li>🟠 <b>لا يوجد Hallucination Guard:</b> لا توجد آلية لرفض الشخصيات أو الأحداث الخيالية</li>
+        <li>🟠 <b>لا استخلاص منظم:</b> نتائج البحث تُعرض خاماً دون تحليل</li>
+        <li>🟡 <b>البيانات الرياضية ليست real-time:</b> لا API مباشر لمباريات الدوري الجزائري</li>
+        <li>🟡 <b>عدم الاعتراف بالجهل:</b> يجيب بدل "لا أعرف" في حالات يجب أن يرفض فيها</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- TECHNICAL RECOMMENDATIONS -->
+<div class="section">
+  <h2><span class="icon">⚙️</span> التوصيات التقنية</h2>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">1. إصلاح تتبع السياق (الأولوية القصوى)</h3>
+  <div class="rec">
+في دالة معالجة الرسائل المتعددة، استخدم الـ <code>messages</code> array كاملاً لبناء الـ context قبل أي استدعاء AI.
+الحل: عند بناء البرومبت، احقن ملخص المحادثة السابقة صراحةً:
+<br><code>systemContext += buildConversationSummary(messages.slice(0,-1))</code>
+<br>وعدّل <code>isRealtimeQuery()</code> لتمرير السياق كاملاً لا آخر رسالة فقط.
+  </div>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">2. إضافة Ambiguity Detector قبل البحث</h3>
+  <div class="rec">
+أضف طبقة قبل <code>isRealtimeQuery()</code> تكتشف الاستعلامات المبهمة:
+<br><code>const AMBIGUOUS_TRIGGERS = ['شكون', 'وين راه', 'الماتش', 'شحال', 'آخر', 'السابق']</code>
+<br>إذا كان الاستعلام قصيراً (&lt; 5 كلمات) ويحتوي trigger غامض → اطرح سؤال توضيحي بدل البحث.
+  </div>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">3. Hallucination Guard للشخصيات والأحداث</h3>
+  <div class="rec">
+أضف في البرومبت الرئيسي:
+<br><i>"إذا سُئلت عن شخصية أو حدث أو مكان لا تجد له ذكراً في مصادرك، قل صراحةً: 'لا أجد معلومات موثوقة عن هذا — قد يكون غير موجود أو خارج نطاق معرفتي'"</i>
+<br>وأضف قائمة سوداء للأحداث المستحيلة (كأس العالم 2025 لا وجود له).
+  </div>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">4. إصلاح تصنيف Owner Commands</h3>
+  <div class="rec">
+راجع الـ regex في <code>lib/owner-commands.js</code> — الأنماط الحالية تلتقط جملاً عادية.
+أضف threshold: الأمر يجب أن يبدأ بكلمة trigger صريحة ("/owner"، "@dz") وليس أي سؤال يحتوي اسم شخص.
+  </div>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">5. إصلاح cache البحث الحي</h3>
+  <div class="rec">
+المشكلة: جميع الاستعلامات تعيد نفس النتيجة المحفوظة.
+الحل: أضف cache key يشمل hash الاستعلام + تاريخ اليوم:
+<br><code>const cacheKey = `search:${sha256(query)}:${today()}`</code>
+<br>وتحقق من TTL — الـ cache لا يُفرَّق بين الاستعلامات المختلفة حالياً.
+  </div>
+
+  <h3 style="font-size:1rem;margin:.75rem 0 .5rem;color:#58a6ff">6. تعديل محرك الدارجة</h3>
+  <div class="rec">
+في <code>lib/darija-prompt.js</code>، أضف قاموس النوايا الضمنية:
+<br>• <code>واش صرا البارح</code> → نية: "أخبار الأمس"
+<br>• <code>شحال بقا للماتش</code> → نية: "موعد مباراة قادمة"
+<br>• <code>كاين ماتشات</code> → نية: "جدول مباريات اليوم"
+<br>الدارجة الجزائرية محددة — ليست مغربية ولا مشرقية — وتحتاج قاموس نوايا خاص.
+  </div>
+</div>
+
+<!-- PROMPT CHANGES -->
+<div class="section">
+  <h2><span class="icon">📝</span> تعديلات البرومبت المقترحة</h2>
+  <div class="two-col">
+    <div>
+      <h3 style="font-size:.9rem;margin-bottom:.5rem;color:#f85149">إزالة من البرومبت</h3>
+      <ul style="font-size:.9rem;line-height:2">
+        <li>❌ أي تعليمات تُشجع على الإجابة دون تحقق</li>
+        <li>❌ "حاول دائماً تقديم إجابة" — يجب حذفه</li>
+        <li>❌ التحيّز نحو نتائج بحث Jina الأولى فقط</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:.9rem;margin-bottom:.5rem;color:#3fb950">إضافة للبرومبت</h3>
+      <ul style="font-size:.9rem;line-height:2">
+        <li>✅ "إذا كان السؤال غامضاً، اطلب توضيحاً أولاً"</li>
+        <li>✅ "إذا تعددت الأدوار، لا تنسَ من نتحدث عنه"</li>
+        <li>✅ "اعترف بعدم اليقين: قل لا أعرف عند الحاجة"</li>
+        <li>✅ "رفض الشخصيات الخيالية بوضوح وصراحة"</li>
+        <li>✅ "استخلص المعلومة الجوهرية من البحث — لا تعرض الخام"</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- RAG & SEARCH -->
+<div class="section">
+  <h2><span class="icon">🔍</span> تعديلات RAG والبحث الحي</h2>
+  <table>
+    <thead><tr><th>المشكلة</th><th>الإصلاح المقترح</th><th>الأولوية</th></tr></thead>
+    <tbody>
+      <tr><td>نفس النتيجة لكل الاستعلامات</td><td>cache key فريد لكل query + إعادة بناء الـ search index</td><td><span class="badge badge-red">فوري</span></td></tr>
+      <tr><td>عرض HTML خام من Jina</td><td>استخلاص النص الجوهري فقط + تلخيصه قبل الإرسال للـ AI</td><td><span class="badge badge-red">فوري</span></td></tr>
+      <tr><td>لا بيانات رياضة محلية</td><td>إضافة API موثوق: DZFoot API أو scraping رسمي للرابطة</td><td><span class="badge badge-orange">عالية</span></td></tr>
+      <tr><td>وزير/مسؤول حكومي بلا اسم</td><td>RAG خاص بالحكومة الجزائرية محدَّث شهرياً</td><td><span class="badge badge-orange">عالية</span></td></tr>
+      <tr><td>مصادر الأخبار تتكرر</td><td>تنويع المصادر: El Watan، Le Buteur، Echorouk، APS</td><td><span class="badge badge-orange">متوسطة</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- FINAL VERDICT -->
+<div class="final-box">
+  <div class="final-score">56<span style="font-size:2.5rem">/100</span></div>
+  <p style="font-size:1.2rem;margin:.75rem 0;color:#d29922">⚠️ جاهز جزئياً — غير مؤهّل للإنتاج بدون إصلاحات</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:500px;margin:1.5rem auto 0">
+    <div style="background:#0d1117;border-radius:8px;padding:1rem">
+      <div style="font-size:2rem;font-weight:700;color:#f85149">42%</div>
+      <div style="color:var(--muted);font-size:.85rem">احتمالية الهلوسة</div>
+    </div>
+    <div style="background:#0d1117;border-radius:8px;padding:1rem">
+      <div style="font-size:2rem;font-weight:700;color:#d29922">61%</div>
+      <div style="color:var(--muted);font-size:.85rem">نجاح في الإنتاج</div>
+    </div>
+  </div>
+  <p style="color:var(--muted);font-size:.85rem;margin-top:1.5rem">الإصلاحات الحرجة المطلوبة: (1) تتبع السياق، (2) كشف الغموض، (3) Hallucination Guard، (4) cache البحث</p>
+</div>
+
+<footer>
+  <p>DZ Agent Red Team Report — تقرير سري للاستخدام الداخلي فقط</p>
+  <p>تاريخ الاختبار: 5 جوان 2026 | 48 اختبار نُفِّذ | مدة: ~45 دقيقة</p>
+</footer>
+
+</div>
+</body>
+</html>

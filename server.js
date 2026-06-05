@@ -14458,8 +14458,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
       const _cleanedPersonQuery = _cleanQuerySFP(lastUserMessage)
 
-      // ── أولاً: Wikidata ──────────────────────────────────────────────────
-      const _wikidataResult = await searchWikidata(_cleanedPersonQuery, 'ar').catch(() => null)
+      // ── أولاً: Wikidata + بحث حي بالتوازي ───────────────────────────────
+      const [_wikidataResult, _liveWebResult] = await Promise.all([
+        searchWikidata(_cleanedPersonQuery, 'ar').catch(() => null),
+        searchPersonOnline(_cleanedPersonQuery).catch(() => null),
+      ])
       // FIX-①: خفض العتبة من 80% → 65% لأن اللاعبين الشباب يحصلون على 75% فقط
       if (_wikidataResult && _wikidataResult.confidence >= 65) {
         console.log(`[VerifyPolicy] ✅ Wikidata found: "${_wikidataResult.label}" confidence=${_wikidataResult.confidence}%`)
@@ -14516,6 +14519,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ? `📚 **المصادر:** [Wikidata](${_wikidataResult.url}) | ${_wikiSourceLink} | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
             : `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
 
+          // ── أخبار حية — تُضاف دائماً إن وُجدت نتائج ويب ────────────────────
+          let _liveNewsBlock = ''
+          if (_liveWebResult?.hasInfo) {
+            const _rawNews = (_liveWebResult.text || '')
+              .replace(/\[PERSON_WEB_CONTEXT\]/g, '')
+              .replace(/\[\/PERSON_WEB_CONTEXT\]/g, '')
+              .trim()
+            if (_rawNews.length > 50) {
+              _liveNewsBlock = [
+                ``,
+                `---`,
+                `### 📰 آخر الأخبار`,
+                ``,
+                _rawNews,
+                ``,
+                `> ⚡ *مستخرج من الويب مباشرة — يعكس الوضع الحالي*`,
+              ].join('\n')
+              console.log(`[LiveNews] ✅ Injected live web block for "${_cleanedPersonQuery}" (${_rawNews.length} chars)`)
+            }
+          }
+
           const _response = [
             `## 📖 ${_wdPersonWiki.title}`,
             _wdPersonWiki.description ? `*${_wdPersonWiki.description}*` : '',
@@ -14525,6 +14549,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             _finalExtract,
             _sportsBlock,
             _uncertBlock,
+            _liveNewsBlock,
             ``,
             `---`,
             _sourceLine,
@@ -14532,7 +14557,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
           return res.status(200).json({
             content: _response,
-            model: 'wikidata+wikipedia',
+            model: 'wikidata+wikipedia+live',
             _personWiki: { title: _wdPersonWiki.title, url: _wdPersonWiki.url, lang: _wdPersonWiki.lang, wikidata: _wikidataResult.url },
           })
         }

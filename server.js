@@ -150,6 +150,15 @@ import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
 import {
+  injectHALSystemPrompt,
+  classifyQueryRisk,
+  buildGrounding,
+  hardenMessages,
+  validateOutput,
+  enrichResponse,
+  RISK,
+} from './lib/anti-hallucination/index.js'
+import {
   classifyQuery,
   detectAmbiguity as detectDTAmbiguity,
   buildAmbiguityResponse as buildDTAmbiguityResponse,
@@ -2701,7 +2710,10 @@ async function callOllama(messages, { timeoutMs = 25000 } = {}) {
 // taskHint (optional): 'realtime'|'multilingual'|'technical'|'retrieval'|'reasoning'|'general'|'website'|'html'|'code'
 // Used by the capability-aware AI router when all primary providers fail.
 async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, taskHint = 'general' }) {
-  const trimmed = trimRelevantContext(messages, 8)
+  // L3-fast: حقن قواعد HAL الأساسية في جميع استدعاءات LLM
+  // يُطبَّق على 100% من المحادثات — يمنع الهلوسة بالمعرفة الداخلية
+  const halMessages = injectHALSystemPrompt(messages)
+  const trimmed = trimRelevantContext(halMessages, 8)
   // Website/code generation needs more tokens — allow up to 8000; all others capped at 4096
   const _isHeavyGen = taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
   const effectiveTokens = _isHeavyGen ? Math.min(max_tokens, 8000) : Math.min(max_tokens, 4096)
@@ -18391,6 +18403,20 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     hasSearch: _hasSearchCtx,
   })
 
+  // ── HAL — Hallucination Assessment Layer (L1 + L2 + L3) ──────────────────
+  // L1: تصنيف درجة خطر الهلوسة
+  const _halRisk = classifyQueryRisk(lastUserMessage)
+  // L2: بناء سياق الحقائق من dz-knowledge (سريع — لا I/O)
+  const _halGrounding = buildGrounding(lastUserMessage, {
+    sourceText: webSearchContext || rssContext || '',
+    sources: [],
+  })
+  // L3: تصليب رسائل المحادثة بالحقائق المثبّتة إن وُجدت (HIGH risk فقط)
+  // injectHALSystemPrompt يُطبَّق مسبقاً على كل استدعاءات LLM في _safeGenerateAI_inner
+  const _halMessages = _halRisk.risk === RISK.HIGH
+    ? hardenMessages(reasonedMessages, _halGrounding, RISK.HIGH)
+    : reasonedMessages
+
   // ── Validated fallback chain: DeepSeek → Ollama → Groq (with response validation) ───
   // Each step's output is validated for non-empty, meaningful content before returning.
   // History is trimmed to last 8 turns to keep context relevant and reduce off-topic answers.
@@ -18405,7 +18431,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   )
 
   const aiResult = await safeGenerateAI({
-    messages: reasonedMessages,
+    messages: _halMessages,
     query: lastUserMessage,
     max_tokens: _chatTokens,
     taskHint: _taskHint,
@@ -18474,7 +18500,38 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       } catch { /* لا تكسر الـ request عند فشل الـ retry */ }
     }
 
-    const _bestContent = _cleanRawUrls(_stripThinking(_finalResult.content))
+    let _bestContent = _cleanRawUrls(_stripThinking(_finalResult.content))
+
+    // ── HAL L4+L5: التحقق والإثراء (HIGH risk فقط — لا تأثير على الأداء للبقية) ──
+    let _halMeta = { risk: _halRisk.risk, trustScore: null }
+    if (_halRisk.risk === RISK.HIGH && _bestContent && _bestContent.length > 50) {
+      try {
+        // L4: التحقق من مخرجات الـ LLM ضد الحقائق المثبّتة
+        const _halValidation = validateOutput(_bestContent, _halGrounding, lastUserMessage)
+        _halMeta = { ..._halMeta, ..._halValidation }
+
+        // L5: إثراء الإجابة فقط إذا كانت هناك حقائق أو مخالفات
+        const _hasGroundingFacts = Object.keys(_halGrounding.facts || {}).length > 0
+        const _hasMismatches = _halValidation.mismatches?.length > 0
+        if (_hasGroundingFacts || _hasMismatches) {
+          _bestContent = enrichResponse(_bestContent, _halValidation, _halGrounding, {
+            showBadge: _hasMismatches || _halValidation.trustScore < 85,
+            addCitations: false, // Citations تُضاف من person handler
+            sportsWarning: false, // تُضاف من person handler
+          })
+        }
+
+        if (_hasMismatches) {
+          console.warn(`[HAL-L4] ⚠️ Mismatch in general response: "${lastUserMessage.slice(0, 60)}"`, _halValidation.mismatches)
+        }
+        if (_halValidation.trustScore < 70) {
+          console.warn(`[HAL-L4] 🔴 Low trust score ${_halValidation.trustScore}% for: "${lastUserMessage.slice(0, 60)}"`)
+        }
+      } catch (_halErr) {
+        console.warn('[HAL-L5] enrichment error (non-fatal):', _halErr.message)
+      }
+    }
+
     const _responsePayload = {
       content: _bestContent,
       fallbackModel: _finalResult.model,
@@ -18482,6 +18539,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
+      halRisk: _halMeta.risk,
+      halTrust: _halMeta.trustScore,
     }
 
     // ── Cache write — only simple, non-live-data, single-turn queries ────────

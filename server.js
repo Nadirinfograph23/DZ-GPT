@@ -9583,7 +9583,7 @@ function parseJdwelHtml(html) {
   return Array.from(groupMap.values())
 }
 
-// Parse jdwel.com matches from r.jina.ai markdown output. Jina renders the
+// Parse jdwel.com matches from markdown output (extracted via Crawl4AI).
 // page server-side and emits a clean markdown view that preserves every
 // match line. This parser is the Vercel-runtime path (curl is unavailable
 // in serverless lambdas, and direct `fetch` is 403'd by jdwel's Cloudflare

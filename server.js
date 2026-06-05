@@ -23735,7 +23735,7 @@ app.get('/api/tools/image-search', async (req, res) => {
     ['القصبة','Casbah Algiers old city Algeria'],
     ['رياض الفتح','Riad El Feth Algiers Algeria'],
     ['تيمقاد','Timgad Roman ruins Algeria UNESCO Batna'],
-    ['جميلة','Djemila Roman ruins Algeria UNESCO Setif'],
+    ['جميلة الرومانية الأثرية','Djemila Roman ruins Algeria UNESCO Setif'],
     ['تيبازة الأثرية','Tipaza ancient ruins Algeria UNESCO'],
     ['قلعة بني حماد','Qalaa of Beni Hammad medieval Algeria UNESCO'],
     ['تاسيلي ناجر','Tassili N\'Ajjer rock art Algeria UNESCO'],
@@ -24584,7 +24584,7 @@ const IMG_AR_EN_MAP = [
   ['القصبة','Casbah Algiers Algeria'],
   ['رياض الفتح','Riad El Feth Algiers Algeria'],
   ['تيمقاد','Timgad Roman ruins Algeria UNESCO'],
-  ['جميلة','Djemila Roman ruins Algeria UNESCO'],
+  ['جميلة الرومانية','Djemila Roman ruins Algeria UNESCO'],['جميل','beautiful'],['جميلة','beautiful'],
   ['تيبازة الأثرية','Tipaza ancient ruins Algeria UNESCO'],
   ['قلعة بني حماد','Qalaa of Beni Hammad Algeria UNESCO'],
   ['تاسيلي ناجر','Tassili N\'Ajjer rock art Algeria UNESCO'],
@@ -24694,7 +24694,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
   if (token) {
     try {
-      const hf = await huggingFaceFlux(englishPrompt, negativePrompt, { timeoutMs: 10000 })
+      const hf = await huggingFaceFlux(englishPrompt, negativePrompt, { timeoutMs: 30000 })
       if (hf) {
         console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
         return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell (HF)', provider: 'huggingface', translated: translatedFlag, englishPrompt })
@@ -24702,16 +24702,52 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     } catch (e) { console.warn('[img-gen:hf]', e.message) }
   }
 
-  // ── Priority 2: Pollinations direct URL (instant, always works) ──
+  // ── Priority 2: HuggingFace fallback models (free with HF_TOKEN) ──
+  const HF_FALLBACK_MODELS = [
+    'stabilityai/stable-diffusion-xl-base-1.0',
+    'stabilityai/stable-diffusion-2-1',
+  ]
+  if (token) {
+    for (const fbModel of HF_FALLBACK_MODELS) {
+      try {
+        const fbRes = await fetch(`https://api-inference.huggingface.co/models/${fbModel}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'image/*' },
+          body: JSON.stringify({ inputs: englishPrompt, parameters: { width: w, height: h, num_inference_steps: 20 } }),
+          signal: AbortSignal.timeout(25000),
+        })
+        if (fbRes.ok) {
+          const ct = fbRes.headers.get('content-type') || 'image/jpeg'
+          if (ct.startsWith('image/')) {
+            const buf = Buffer.from(await fbRes.arrayBuffer())
+            if (buf.length > 1000) {
+              console.log(`[img-gen] ✓ HF fallback: ${fbModel}`)
+              return res.json({ imageBase64: `data:${ct};base64,${buf.toString('base64')}`, model: fbModel.split('/')[1], provider: 'huggingface-fallback', translated: translatedFlag, englishPrompt })
+            }
+          }
+        }
+      } catch (fbErr) { console.warn(`[img-gen:hf-fallback:${fbModel}]`, fbErr.message) }
+    }
+  }
+
+  // ── Priority 3: Pollinations — server-side proxy to detect 402 ──
   const MODELS = ['flux', 'flux-realism', 'flux-3d', 'turbo']
   const chosenModel = reqModel && MODELS.includes(reqModel) ? reqModel : 'flux'
   const encoded = encodeURIComponent(englishPrompt.trim())
   const negEnc  = negativePrompt ? `&negative=${encodeURIComponent(negativePrompt)}` : ''
-  const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&enhance=true&safe=false${negEnc}`
+  const polUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&enhance=true`
+
+  try {
+    const polCheck = await fetch(polUrl, { method: 'HEAD', signal: AbortSignal.timeout(8000) })
+    if (polCheck.status === 402 || polCheck.status === 403) {
+      console.warn('[img-gen] Pollinations returned', polCheck.status, '— all providers exhausted')
+      return res.status(503).json({ error: 'تعذّر توليد الصورة مؤقتاً — جميع المزودين غير متاحين. حاول مجدداً بعد دقائق.', englishPrompt })
+    }
+  } catch (_) { /* HEAD check failed — return URL anyway */ }
 
   console.log('[img-gen] ✓ Pollinations URL', chosenModel)
   return res.json({
-    imageUrl,
+    imageUrl: polUrl,
     model: `FLUX (${chosenModel})`,
     provider: 'pollinations',
     seed,

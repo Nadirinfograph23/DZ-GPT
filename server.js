@@ -24597,6 +24597,17 @@ const IMG_AR_EN_MAP = [
   ['في المستقبل','futuristic, cyberpunk, neon lights, advanced technology'],
   ['مستقبلية','futuristic'],['مستقبلي','futuristic'],['مستقبل','futuristic'],['خيال علمي','sci-fi'],
   ['شروق الشمس','sunrise, golden hour'],['غروب الشمس','sunset, warm light'],
+  // "ال"-prefixed forms of common nouns (Arabic definite article)
+  ['الصحراء','vast sahara desert, sand dunes'],['الجبال','mountains'],
+  ['البحر','ocean sea'],['الشاطئ','sandy beach'],['الغابة','lush forest'],
+  ['السماء','sky'],['الشمس','sun'],['القمر','moon'],['النجوم','stars at night'],
+  ['الشجرة','tree'],['الأشجار','trees'],
+  ['الجبل','mountain'],['الوادي','valley'],['النهر','river'],
+  ['القطة','cat'],['القط','cat'],['الكلب','dog'],['الأسد','lion'],
+  ['الرجل','man'],['المرأة','woman'],['الطفل','child'],['الشاب','young man'],
+  // Common nouns without "ال"
+  ['شجرة','tree'],['أشجار','trees'],['نخلة','palm tree'],['نخيل','palm trees'],
+  ['جبل','mountain'],['وادي','valley'],['نهر','river'],['بحيرة','lake'],
   ['صحراء','vast sahara desert, sand dunes'],['جبال','mountains'],
   ['بحر','ocean sea'],['شاطئ','sandy beach'],['غابة','lush forest'],
   ['طبيعة','nature landscape'],['سماء','sky'],['سحاب','clouds'],['نجوم','stars at night'],
@@ -24684,7 +24695,32 @@ async function translateImgPrompt(rawPrompt) {
   return translated
 }
 
-// POST /api/tools/img-gen — Text-to-Image with Arabic→English translation + Pollinations FLUX
+// GET /api/tools/img-gen/status/:jobId — proxy Stable Horde job status
+app.get('/api/tools/img-gen/status/:jobId', async (req, res) => {
+  const { jobId } = req.params
+  if (!jobId) return res.status(400).json({ error: 'jobId مطلوب' })
+  const BASE = 'https://stablehorde.net/api/v2'
+  const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+  try {
+    const chk = await fetch(`${BASE}/generate/check/${jobId}`, { headers: H, signal: AbortSignal.timeout(8000) })
+    if (!chk.ok) return res.status(502).json({ error: 'Horde unreachable', done: false })
+    const cd = await chk.json()
+    if (cd.faulted || cd.is_possible === false) return res.json({ done: false, faulted: true, error: 'فشل التوليد — حاول مجدداً' })
+    if (!cd.done) return res.json({ done: false, waitTime: cd.wait_time, queuePos: cd.queue_position })
+    // Job done — fetch image
+    const st = await fetch(`${BASE}/generate/status/${jobId}`, { headers: H, signal: AbortSignal.timeout(15000) })
+    if (!st.ok) return res.status(502).json({ error: 'Horde status unreachable', done: false })
+    const sd = await st.json()
+    const img = sd.generations?.[0]?.img
+    if (!img) return res.json({ done: false, error: 'لا توجد صورة في الاستجابة' })
+    // img is already base64 from Horde
+    return res.json({ done: true, imageBase64: img.startsWith('data:') ? img : `data:image/webp;base64,${img}` })
+  } catch (e) {
+    return res.status(502).json({ error: e.message, done: false })
+  }
+})
+
+// POST /api/tools/img-gen — Text-to-Image: translate Arabic→English, try HF, then Stable Horde async
 app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) => {
   const { prompt, negativePrompt, width = 1024, height = 1024, model: reqModel } = req.body
   if (!prompt?.trim()) return res.status(400).json({ error: 'prompt مطلوب' })
@@ -24717,47 +24753,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     } catch (e) { console.warn('[img-gen:hf]', e.message) }
   }
 
-  // ── Priority 2: Stable Horde txt2img (free community GPU — skip if queue > 80 jobs) ──
-  try {
-    const HORDE_BASE = 'https://stablehorde.net/api/v2'
-    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
-    // Quick queue check — skip if backlog too large (saves 55s pointless wait)
-    let hordeQueueOk = true
-    try {
-      const hbRes = await fetch(`${HORDE_BASE}/status/heartbeat`, { signal: AbortSignal.timeout(4000) })
-      if (hbRes.ok) {
-        const hb = await hbRes.json()
-        hordeQueueOk = (hb.queue || 0) <= 80
-        if (!hordeQueueOk) console.log(`[img-gen] Stable Horde queue ${hb.queue} > 80 — skipping`)
-      }
-    } catch (_) { /* heartbeat fail — try anyway */ }
-
-    if (hordeQueueOk) {
-      const hordeBody = JSON.stringify({
-        prompt: englishPrompt,
-        params: { n: 1, steps: 20, width: 512, height: 512, sampler_name: 'k_euler_a', cfg_scale: 7 },
-        nsfw: false, censor_nsfw: true, models: ['Deliberate'],
-        shared: true, r2: false,
-      })
-      const hordeSubmit = await fetch(`${HORDE_BASE}/generate/async`, {
-        method: 'POST', headers: HORDE_H, body: hordeBody,
-        signal: AbortSignal.timeout(10000),
-      })
-      if (hordeSubmit.ok) {
-        const { id: hordeJobId } = await hordeSubmit.json()
-        if (hordeJobId) {
-          console.log('[img-gen] Stable Horde job submitted:', hordeJobId)
-          const hordeImg = await waitForHordeJob(hordeJobId, 65000, 90)
-          if (hordeImg) {
-            console.log('[img-gen] ✓ Stable Horde txt2img done')
-            return res.json({ imageBase64: hordeImg, model: 'Stable Diffusion (Deliberate)', provider: 'stable-horde', translated: translatedFlag, englishPrompt })
-          }
-        }
-      }
-    }
-  } catch (hordeErr) { console.warn('[img-gen:horde]', hordeErr.message) }
-
-  // ── Priority 3: HuggingFace fallback (if HF_TOKEN not blocked) ──
+  // ── Priority 2: HuggingFace fallback (if HF_TOKEN not blocked) ──
   if (token) {
     for (const fbModel of ['stabilityai/stable-diffusion-2-1', 'stabilityai/stable-diffusion-xl-base-1.0']) {
       try {
@@ -24781,22 +24777,31 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     }
   }
 
-  // ── Priority 3: Pollinations free URL (width/height params trigger 402 — omit them) ──
-  // Free tier works with: /prompt/TEXT?model=MODEL  — no width/height/seed/nologo params
-  const MODELS = ['flux', 'flux-realism', 'flux-3d', 'turbo']
-  const chosenModel = reqModel && MODELS.includes(reqModel) ? reqModel : 'flux'
-  const encoded = encodeURIComponent(englishPrompt.trim())
-  const polUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}`
+  // ── Priority 4: Stable Horde async — submit job, return jobId immediately ──
+  // (all sync providers failed — use async so frontend can poll)
+  try {
+    const HORDE_BASE = 'https://stablehorde.net/api/v2'
+    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+    const hordeBody = JSON.stringify({
+      prompt: englishPrompt,
+      params: { n: 1, steps: 20, width: 512, height: 512, sampler_name: 'k_euler_a', cfg_scale: 7 },
+      nsfw: false, censor_nsfw: true, models: ['Deliberate'],
+      shared: true, r2: false,
+    })
+    const hordeSubmit = await fetch(`${HORDE_BASE}/generate/async`, {
+      method: 'POST', headers: HORDE_H, body: hordeBody,
+      signal: AbortSignal.timeout(10000),
+    })
+    if (hordeSubmit.ok) {
+      const { id: hordeJobId, kudos } = await hordeSubmit.json()
+      if (hordeJobId) {
+        console.log(`[img-gen] Stable Horde async job: ${hordeJobId} (kudos: ${kudos})`)
+        return res.json({ jobId: hordeJobId, provider: 'stable-horde-async', status: 'pending', translated: translatedFlag, englishPrompt })
+      }
+    }
+  } catch (hordeErr) { console.warn('[img-gen:horde-async]', hordeErr.message) }
 
-  console.log('[img-gen] ✓ Pollinations free URL', chosenModel)
-  return res.json({
-    imageUrl: polUrl,
-    model: `FLUX (${chosenModel})`,
-    provider: 'pollinations',
-    translated: translatedFlag,
-    englishPrompt,
-    allModels: MODELS,
-  })
+  return res.status(503).json({ error: 'تعذّر توليد الصورة — جميع المزودين غير متاحين. حاول مجدداً بعد دقائق.', englishPrompt })
 })
 
 // ── Stable Horde: poll until job is done (server-side, max 72s — within Vercel 90s maxDuration) ──

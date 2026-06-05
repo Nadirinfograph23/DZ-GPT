@@ -157,6 +157,7 @@ import {
   applyConfidenceLabel,
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
+import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import {
@@ -13360,6 +13361,32 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isAgentMode = !!(req.body.agentActive || currentRepo)
   let lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
 
+  // ── INTENT ROUTER — يعمل مبكراً (قبل كل fast-paths) ──────────────────
+  // القاعدة الذهبية: صنّف أولاً ← تحقق ثانياً ← أجب ثالثاً
+  // يعمل الآن على lastUserMessage قبل تنظيفه — سيُحدَّث لاحقاً إذا تغيّر
+  let _intentClassification = null
+  let _intentBlock = ''
+  try {
+    _intentClassification = classifyIntent(lastUserMessage, messages)
+    _intentBlock = buildIntentBlock(_intentClassification)
+    console.log(`[IntentRouter] 🎯 EARLY: ${_intentClassification.intent} | ${_intentClassification.confidence}% | src:${_intentClassification.source}`)
+  } catch (_ire_early) {
+    console.warn('[IntentRouter:early] failed silently:', _ire_early.message)
+  }
+
+  // ── Intent Clarification EARLY — قبل كل Fast-Paths بما فيها VerifyPolicy ──
+  // إذا كان التصنيف المبكر يطلب توضيحاً وثقته منخفضة → نُعيد مباشرة
+  if (!_isAgentMode && _intentClassification?.needsClarification &&
+      _intentClassification?.clarificationMsg &&
+      _intentClassification?.confidence < 40) {
+    console.log(`[IntentRouter] ⚠ Clarification early fast-path (before VerifyPolicy)`)
+    return res.status(200).json({
+      content: _intentClassification.clarificationMsg,
+      status: 'clarification_required',
+      intent: _intentClassification.intent,
+    })
+  }
+
   // ── Moderation EARLY — must run before static facts / cache ─────────────
   // Content Safety check first so dangerous queries never hit any fast-path
   const _earlyMod = moderateMessage(lastUserMessage)
@@ -14071,7 +14098,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
-  if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
+  // Guard: GREETING → لا توضيح شخصي أبداً (صباح الخير ≠ شخص)
+  if (!_isAgentMode && !isDZToolRequest && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
     const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
     if (_entityAmbig?.needsClarification) {
@@ -14095,7 +14123,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Person / Personality — سلسلة التحقق الكاملة ──────────────────────────
   // الترتيب: Wikidata (أولوية قصوى) → Wikipedia AR → Wikipedia EN
   // المبدأ: لا إجابة بدون مصدر موثوق — لا اختلاق أبداً
-  if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
+  // Guard: GREETING → لا بحث عن شخص أبداً
+  if (!_isAgentMode && !isDZToolRequest && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
       // ── أولاً: Wikidata ──────────────────────────────────────────────────
@@ -14642,7 +14671,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isWebBuildCtx = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
   // Guard: وكيل نشط → لا خرائط أبداً. المستخدم في جلسة برمجة.
   // "موقع مطعم" في وضع الوكيل = موقع ويب لمطعم، لا موقع جغرافي.
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isAgentMode) {
+  // Intent Router Guard: لاعب رياضي (وين يلعب محرز) → لا يُحوَّل للخريطة أبداً
+  const _isIRSportsPlayer = _intentClassification?.intent === 'SPORTS_PLAYER'
+  const _isIRSportsFixtures = _intentClassification?.intent === 'SPORTS_FIXTURES'
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isAgentMode && !_isIRSportsPlayer && !_isIRSportsFixtures) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)
@@ -17336,14 +17368,65 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let _metaClawBlock = ''
   try { _metaClawBlock = metaClawInject('', lastUserMessage) } catch { /* fail silently */ }
 
+  // ── INTENT CLASSIFIER LAYER 1 — تحديث بعد تنظيف الرسالة ──────────────
+  // يُعيد التصنيف إذا تغيّر lastUserMessage (من tags أو darija resolver)
+  // ثم يطبّق fast-path التوضيح للأسئلة الغامضة جداً
+  try {
+    // أعد التصنيف فقط إذا اختلف النص بعد التنظيف
+    const _finalClassification = classifyIntent(lastUserMessage, messages)
+    _intentClassification = _finalClassification
+    _intentBlock = buildIntentBlock(_intentClassification)
+    console.log(
+      `[IntentRouter] 🎯 FINAL: ${_intentClassification.intent} | ${_intentClassification.confidence}% | ${_intentClassification.debugLabel}`
+    )
+    // fast-path التوضيح: فقط للأسئلة الغامضة تماماً (< 40% ثقة)
+    if (
+      _intentClassification.needsClarification &&
+      _intentClassification.clarificationMsg &&
+      _intentClassification.confidence < 40 &&
+      _intentClassification.intent === IR_INTENTS.UNKNOWN
+    ) {
+      console.log(`[IntentRouter] ⚠ Clarification fast-path (LAYER 1)`)
+      return res.json({
+        content: _intentClassification.clarificationMsg,
+        status: 'clarification_required',
+        intent: _intentClassification.intent,
+        confidence: _intentClassification.confidence,
+      })
+    }
+  } catch (_ire) {
+    console.warn('[IntentRouter:layer1] failed silently:', _ire.message)
+  }
+
   // ── Search Decision Tree + Real-Time Internet Search ──────────────────
   // SearXNG Edition: Wikidata → Wikipedia → SearXNG → Crawl4AI → DBpedia
-  // يحل محل Jina AI نهائياً
   let _realtimeContext = ''
   let _decisionTreeContext = ''
   try {
-    const _queryType = classifyQuery(lastUserMessage)
-    const _isRealtime = isRealtimeQuery(lastUserMessage)
+    // ── Intent Router Guards (قبل أي بحث) ────────────────────────────────
+    const _irIntent  = _intentClassification?.intent  || 'UNKNOWN'
+    const _irAction  = _intentClassification?.action  || ''
+    // GREETING → لا بحث بأي شكل
+    const _isGreetingIntent = _irIntent === 'GREETING'
+    // شخصية/حدث → Wikidata/Wikipedia أولاً (لا SearXNG realtime)
+    const _isWikiIntent = ['PUBLIC_FIGURE', 'HISTORICAL_FIGURE', 'HISTORICAL_EVENT',
+                           'SPORTS_PLAYER', 'LOCATION', 'DEFINITION'].includes(_irIntent)
+
+    if (_isGreetingIntent) {
+      console.log(`[IntentRouter] ⏭ GREETING — skipping all search`)
+    } else {
+    // استخدم تصنيف Intent Router إذا توفر، وإلا استخدم classifyQuery
+    const _intentAction = _irAction
+    const _queryType = (
+      _intentAction === 'search-searxng-crawl4ai'    ? 'CURRENT_NEWS' :
+      _intentAction === 'lookup-wikidata-wikipedia-dbpedia' ? 'PUBLIC_FIGURE' :
+      _intentAction === 'lookup-wikipedia-first'     ? 'HISTORICAL_EVENT' :
+      _intentAction === 'lookup-wikipedia-wikidata-dbpedia' ? 'HISTORICAL_EVENT' :
+      _intentAction === 'lookup-wikidata-wikipedia'  ? 'PUBLIC_FIGURE' :
+      classifyQuery(lastUserMessage)
+    )
+    // إذا كان Intent Router يُشير لـ Wiki → لا نستخدم isRealtimeQuery
+    const _isRealtime = _isWikiIntent ? false : isRealtimeQuery(lastUserMessage)
 
     // Decision Tree: شخصيات عامة/تاريخية/أحداث → يستخدم الـ chain الكامل
     if (['HISTORICAL_FIGURE', 'PUBLIC_FIGURE', 'HISTORICAL_EVENT', 'CURRENT_NEWS',
@@ -17374,6 +17457,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     } else if (_isRealtime && _decisionTreeContext) {
       console.log(`[RealtimeSearch] ⏭ Skipped — Decision Tree already provided context`)
     }
+    } // end else (_isGreetingIntent)
   } catch (_rse) {
     console.warn('[Search] failed silently:', _rse.message)
   }
@@ -17381,6 +17465,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
+    // ── LAYER 1: INTENT CLASSIFIER POLICY (القاعدة الذهبية — صنّف أولاً) ──
+    INTENT_CLASSIFIER_POLICY,
+    // ── LAYER 1b: INTENT CLASSIFICATION RESULT (نتيجة التصنيف الفعلي) ─────
+    _intentBlock || '',
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
     PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────

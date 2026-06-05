@@ -1280,6 +1280,14 @@ async function _isPersonWikiResult(result) {
   } catch { return false }
 }
 
+// ─── التحقق البرمجي من صحة مصدر ويكيبيديا قبل عرضه — منع Source Hallucination ─
+async function _validateWikiSource(result, entityName = '') {
+  try {
+    const { validateWikipediaSource } = await import('./lib/wikipedia.js')
+    return validateWikipediaSource(result, entityName)
+  } catch { return { valid: false, reason: 'import_error' } }
+}
+
 // جلب معلومات شخصية من ويكيبيديا — يستخدم OpenSearch مثل خانة البحث بالضبط
 async function fetchPersonFromWikipedia(query) {
   try {
@@ -7236,13 +7244,13 @@ async function searchDDGInstant(query) {
 }
 
 // ── Wikipedia fallback for factual/general queries ────────────────────────────
+// ⚠️ كل نتيجة تمر عبر validateWikipediaSource — يمنع Source Hallucination
 async function searchWikipedia(query) {
   const isArabic = /[\u0600-\u06FF]/.test(query)
   const lang = isArabic ? 'ar' : 'en'
   const headers = { 'User-Agent': 'DZ-GPT/1.0 (https://dz-gpt.vercel.app)' }
   try {
     const enc = encodeURIComponent(query)
-    // Search first to get page title
     const sr = await fetch(
       `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${enc}&format=json&srlimit=3&origin=*`,
       { headers, signal: AbortSignal.timeout(5000) }
@@ -7251,7 +7259,6 @@ async function searchWikipedia(query) {
     const sd = await sr.json()
     const pages = sd?.query?.search || []
     if (!pages.length) return []
-    // Try to get full extract for top result via REST summary API
     const topTitle = pages[0].title
     try {
       const er = await fetch(
@@ -7260,24 +7267,38 @@ async function searchWikipedia(query) {
       )
       if (er.ok) {
         const ed = await er.json()
-        return [{
+        const candidate = {
           source: 'wikipedia',
           title: ed.title,
           snippet: (ed.extract || '').slice(0, 600),
+          extract: (ed.extract || '').slice(0, 600),
           url: ed.content_urls?.desktop?.page || `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`,
           publishedDate: ed.timestamp || '',
           date: '',
-        }]
+        }
+        // ── تحقق برمجي قبل الإرجاع ─────────────────────────────────────
+        const _v = await _validateWikiSource(candidate, query)
+        if (_v.valid) return [candidate]
+        console.log(`[WikiValidation] ❌ Rejected inline result: ${_v.reason} — "${candidate.url}"`)
+        return [] // رفض المصدر — أفضل من مصدر وهمي
       }
     } catch {}
-    // Fallback: use search snippets
-    return pages.slice(0, 2).map(p => ({
-      source: 'wikipedia',
-      title: p.title,
-      snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
-      url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
-      date: '',
-    }))
+    // Fallback: استخدم مقتطفات البحث مع تحقق
+    const fallbackResults = []
+    for (const p of pages.slice(0, 2)) {
+      const candidate = {
+        source: 'wikipedia',
+        title: p.title,
+        snippet: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
+        extract: p.snippet.replace(/<[^>]*>/g, '').slice(0, 400),
+        url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title)}`,
+        date: '',
+      }
+      const _v = await _validateWikiSource(candidate, query)
+      if (_v.valid) { fallbackResults.push(candidate); break }
+      else console.log(`[WikiValidation] ❌ Rejected fallback: ${_v.reason} — "${p.title}"`)
+    }
+    return fallbackResults
   } catch { return [] }
 }
 
@@ -14356,18 +14377,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _sportsBlock = needsSportsVerification(lastUserMessage) ? buildSportsVerificationBlock() : ''
           const _uncertBlock = _confSystem.action === 'uncertain' ? buildUncertaintyWarning(_wikidataResult.confidence, 'wikidata') : ''
 
+          // ── تحقق برمجي من مصدر ويكيبيديا قبل عرض الرابط ──────────────────
+          const _wikiValidation = await _validateWikiSource(_wdPersonWiki, lastUserMessage)
+          const _wikiSourceLink = _wikiValidation.valid
+            ? `[ويكيبيديا ${_langLabel}](${_wdPersonWiki.url})`
+            : null
+          if (!_wikiValidation.valid) {
+            console.log(`[WikiValidation] ❌ Wikidata+Wiki source rejected: ${_wikiValidation.reason} — "${_wdPersonWiki.url}"`)
+          }
+
+          const _sourceLine = _wikiSourceLink
+            ? `📚 **المصادر:** [Wikidata](${_wikidataResult.url}) | ${_wikiSourceLink} | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
+            : `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
+
           const _response = [
             `## 📖 ${_wdPersonWiki.title}`,
             _wdPersonWiki.description ? `*${_wdPersonWiki.description}*` : '',
             ``,
-            `> 🔒 *معلومات محققة من Wikidata + ويكيبيديا — لا إضافات، لا تخمينات.*`,
+            `> 🔒 *معلومات محققة من Wikidata${_wikiSourceLink ? ' + ويكيبيديا' : ''} — لا إضافات، لا تخمينات.*`,
             ``,
             _finalExtract,
             _sportsBlock,
             _uncertBlock,
             ``,
             `---`,
-            `📚 **المصادر:** [Wikidata](${_wikidataResult.url}) | [ويكيبيديا ${_langLabel}](${_wdPersonWiki.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`,
+            _sourceLine,
           ].filter(l => l !== '').join('\n')
 
           return res.status(200).json({
@@ -14472,6 +14506,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         // ── Confidence Score — درجة الثقة بالمعلومة ───────────────────────────────
         const _confScore = _personWiki.lang === 'ar' ? '🟢 85%' : '🟡 75%'
         const _confLabel = _personWiki.lang === 'ar' ? 'ويكيبيديا العربية مباشرة' : `ويكيبيديا ${_langLabel} (مترجم)`
+
+        // ── تحقق برمجي من المصدر قبل عرضه (Wikipedia-only path) ───────────────
+        const _wikiOnlyValidation = await _validateWikiSource(_personWiki, lastUserMessage)
+        if (!_wikiOnlyValidation.valid) {
+          console.log(`[WikiValidation] ❌ Wikipedia-only source rejected: ${_wikiOnlyValidation.reason} — "${_personWiki.url}"`)
+          // المصدر غير صالح → نرفض ونسقط للبحث الحي
+          throw new Error(`WikiSourceRejected:${_wikiOnlyValidation.reason}`)
+        }
+        console.log(`[WikiValidation] ✅ Wikipedia source validated: "${_personWiki.title}" — "${_personWiki.url}"`)
 
         // بناء الإجابة مباشرةً من Wikipedia — لا LLM، لا اختلاق
         const _directResponse = [

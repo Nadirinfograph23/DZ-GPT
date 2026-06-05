@@ -146,8 +146,18 @@ import {
   applyConfidenceSystem,
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD } from './lib/wikidata.js'
+import { extractContent, extractMultiple } from './lib/crawl4ai.js'
+import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
+import {
+  classifyQuery,
+  detectAmbiguity as detectDTAmbiguity,
+  buildAmbiguityResponse as buildDTAmbiguityResponse,
+  searchWithSearXNG, searchAndExtract,
+  buildSearXNGContext, resolveQuery, buildFinalContext,
+  applyConfidenceLabel,
+} from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -9742,23 +9752,13 @@ async function fetchJdwelMatches(dateStr = null) {
     } else {
       diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
     }
-    // Vercel-friendly fallback: r.jina.ai is a free reader-proxy that fetches
-    // the page server-side and returns clean markdown, bypassing Cloudflare's
-    // JA3-fingerprint block. Used when curl is missing OR when curl returns a
-    // Cloudflare challenge page that fails the HTML parser.
+    // Crawl4AI fallback: استخراج محتوى جدول المباريات بدون Jina AI
+    // يستخدم fetch مباشر + proxy مفتوح كخيارات بديلة
     if (!html || groups.length === 0) {
       try {
-        const proxied = `https://r.jina.ai/${url}`
-        const pr = await fetch(proxied, {
-          headers: {
-            'User-Agent': 'DZ-GPT/1.0 (+https://dz-gpt.vercel.app)',
-            'Accept': 'text/plain,*/*',
-          },
-          signal: AbortSignal.timeout(15000),
-        })
-        if (pr.ok) {
-          const md = await pr.text()
-          const mdGroups = parseJdwelMarkdown(md)
+        const extracted = await extractContent(url)
+        if (extracted && extracted.length > 200) {
+          const mdGroups = parseJdwelMarkdown(extracted)
           if (mdGroups.length > 0) {
             const data = {
               groups: mdGroups,
@@ -9766,21 +9766,32 @@ async function fetchJdwelMatches(dateStr = null) {
               fetchedAt: new Date().toISOString(),
               source: 'jdwel.com',
               sourceUrl: url,
-              via: 'r.jina.ai',
+              via: 'crawl4ai',
             }
             JDWEL_CACHE.data = data
             JDWEL_CACHE.ts = Date.now()
             JDWEL_CACHE.date = cacheDate
-            diagLog('jdwel_jina_ok', { url, groups: mdGroups.length, total: data.totalMatches })
-            console.log(`[jdwel] ✓ (jina) Parsed ${data.totalMatches} matches across ${mdGroups.length} leagues`)
+            diagLog('jdwel_crawl4ai_ok', { url, groups: mdGroups.length, total: data.totalMatches })
+            console.log(`[jdwel] ✓ (crawl4ai) Parsed ${data.totalMatches} matches across ${mdGroups.length} leagues`)
             return data
           }
-          diagLog('empty', { module: 'jdwel.jina', url, mdSize: md.length })
+          diagLog('empty', { module: 'jdwel.crawl4ai', url, extractedLen: extracted.length })
         } else {
-          diagLog('source_fail', { module: 'jdwel.jina', status: pr.status, url })
+          // SearXNG fallback: بحث عن مباريات اليوم عبر SearXNG
+          const searxResults = await searchWithSearXNG(`مباريات اليوم ${new Date().toLocaleDateString('ar-DZ')}`, {
+            categories: 'general,news',
+            language: 'ar',
+            maxResults: 5,
+          })
+          if (searxResults.length > 0) {
+            diagLog('jdwel_searxng_fallback', { results: searxResults.length })
+            console.log(`[jdwel] ⚠ Using SearXNG fallback: ${searxResults.length} results`)
+          } else {
+            diagLog('source_fail', { module: 'jdwel.crawl4ai', url })
+          }
         }
       } catch (perr) {
-        diagLog('source_fail', { module: 'jdwel.jina', error: perr.message })
+        diagLog('source_fail', { module: 'jdwel.crawl4ai', error: perr.message })
       }
     }
     if (!html || groups.length === 0) {
@@ -17325,17 +17336,46 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   let _metaClawBlock = ''
   try { _metaClawBlock = metaClawInject('', lastUserMessage) } catch { /* fail silently */ }
 
-  // ── Real-Time Internet Search Injection ────────────────────────────────
-  // يبحث تلقائياً في الإنترنت لأي سؤال لحظي (مباريات، أخبار، أسعار...)
+  // ── Search Decision Tree + Real-Time Internet Search ──────────────────
+  // SearXNG Edition: Wikidata → Wikipedia → SearXNG → Crawl4AI → DBpedia
+  // يحل محل Jina AI نهائياً
   let _realtimeContext = ''
+  let _decisionTreeContext = ''
   try {
-    if (isRealtimeQuery(lastUserMessage)) {
+    const _queryType = classifyQuery(lastUserMessage)
+    const _isRealtime = isRealtimeQuery(lastUserMessage)
+
+    // Decision Tree: شخصيات عامة/تاريخية/أحداث → يستخدم الـ chain الكامل
+    if (['HISTORICAL_FIGURE', 'PUBLIC_FIGURE', 'HISTORICAL_EVENT', 'CURRENT_NEWS',
+         'SPORTS_LIVE', 'SPORTS_GENERAL', 'OFFICIAL_ANNOUNCEMENT'].includes(_queryType)) {
+      console.log(`[DecisionTree] 🌐 Resolving: type=${_queryType} | "${lastUserMessage.slice(0, 50)}"`)
+      try {
+        const _dtResult = await resolveQuery(lastUserMessage)
+        if (_dtResult.ambiguous && _dtResult.ambiguityMessage) {
+          _decisionTreeContext = `\n[AMBIGUITY_DETECTED]\n${_dtResult.ambiguityMessage}\n[/AMBIGUITY_DETECTED]`
+          console.log(`[DecisionTree] ⚠ Ambiguous query — clarification requested`)
+        } else if (_dtResult.context && _dtResult.confidence >= 50) {
+          _decisionTreeContext = `\n[DECISION_TREE_CONTEXT]\n${_dtResult.context}\n[/DECISION_TREE_CONTEXT]`
+          console.log(`[DecisionTree] ✅ Context injected: ${_dtResult.confidence}% confidence | sources: ${_dtResult.sources.join(', ')}`)
+        } else if (_dtResult.noSource) {
+          _decisionTreeContext = `\n[NO_VERIFIED_SOURCE]\nلم يتم العثور على مصدر موثوق لهذا الاستعلام.\n[/NO_VERIFIED_SOURCE]`
+          console.log(`[DecisionTree] ✗ No verified source found`)
+        }
+      } catch (_dte) {
+        console.warn('[DecisionTree] failed silently:', _dte.message)
+      }
+    }
+
+    // Real-Time Search: للأخبار والمباريات والأحداث اللحظية
+    if (_isRealtime && !_decisionTreeContext) {
       console.log(`[RealtimeSearch] 🔍 triggered for: "${lastUserMessage.slice(0, 60)}"`)
       _realtimeContext = await fetchRealtimeContext(lastUserMessage) || ''
       if (_realtimeContext) console.log(`[RealtimeSearch] ✅ context injected (${_realtimeContext.length} chars)`)
+    } else if (_isRealtime && _decisionTreeContext) {
+      console.log(`[RealtimeSearch] ⏭ Skipped — Decision Tree already provided context`)
     }
   } catch (_rse) {
-    console.warn('[RealtimeSearch] failed silently:', _rse.message)
+    console.warn('[Search] failed silently:', _rse.message)
   }
 
   const systemPrompt = [
@@ -17343,6 +17383,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     INTENT_SEPARATION_GUARD,
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
     PUBLIC_FIGURES_VERIFICATION_POLICY,
+    // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────
+    SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY,
     // ── ADVANCED REASONING CORE ───────────────────────────────────────────
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────
@@ -17552,6 +17594,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 
     _metaClawBlock,
     _realtimeContext || '',
+    // ── DECISION TREE CONTEXT (SearXNG → Crawl4AI → Wikidata → Wikipedia → DBpedia) ──
+    _decisionTreeContext || '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [

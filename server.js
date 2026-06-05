@@ -2403,13 +2403,21 @@ async function robustFetch(fn, { retries = 3, delayMs = 1000 } = {}) {
 }
 
 // Trims chat history to keep context relevant: system messages + last N turns.
+// mode controls how aggressively we trim based on task type:
+//   'chat'        → 8  turns  (دردشة عادية)
+//   'agent'       → 20 turns  (وكيل GitHub — يحتاج ذاكرة طويلة)
+//   'code'        → 16 turns  (توليد كود — ملفات كاملة في السياق)
+//   'research'    → 12 turns  (بحث متعدد الخطوات)
+//   'longcontext' → 50 turns  (Gemini 1M — سياق كامل)
 // Removes any null/empty messages defensively.
-function trimRelevantContext(messages, maxTurns = 8) {
+const _TRIM_LIMITS = { chat: 8, agent: 20, code: 16, research: 12, longcontext: 50 }
+function trimRelevantContext(messages, maxTurns = 8, mode = 'chat') {
   if (!Array.isArray(messages)) return []
+  const limit = _TRIM_LIMITS[mode] || maxTurns
   const safe = messages.filter(m => m && typeof m.content === 'string' && m.content.trim().length > 0)
   const systemMsgs = safe.filter(m => m.role === 'system')
   const nonSystem = safe.filter(m => m.role !== 'system')
-  const trimmed = nonSystem.slice(-(maxTurns * 2))
+  const trimmed = nonSystem.slice(-(limit * 2))
   return [...systemMsgs, ...trimmed]
 }
 
@@ -2713,10 +2721,22 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   // L3-fast: حقن قواعد HAL الأساسية في جميع استدعاءات LLM
   // يُطبَّق على 100% من المحادثات — يمنع الهلوسة بالمعرفة الداخلية
   const halMessages = injectHALSystemPrompt(messages)
-  const trimmed = trimRelevantContext(halMessages, 8)
-  // Website/code generation needs more tokens — allow up to 8000; all others capped at 4096
+
+  // Adaptive context trim mode based on task type
+  const _trimMode = (taskHint === 'agent' || taskHint === 'longcontext') ? 'agent'
+    : (taskHint === 'code' || taskHint === 'website' || taskHint === 'html') ? 'code'
+    : (taskHint === 'research' || taskHint === 'reasoning') ? 'research'
+    : 'chat'
+  const trimmed = trimRelevantContext(halMessages, 8, _trimMode)
+
+  // Adaptive token budget: agent/longcontext → 16000, code/website → 8000, default → 4096
   const _isHeavyGen = taskHint === 'website' || taskHint === 'html' || taskHint === 'code'
-  const effectiveTokens = _isHeavyGen ? Math.min(max_tokens, 8000) : Math.min(max_tokens, 4096)
+  const _isAgentHint = taskHint === 'agent' || taskHint === 'longcontext'
+  const effectiveTokens = _isAgentHint
+    ? Math.min(max_tokens, 16000)
+    : _isHeavyGen
+      ? Math.min(max_tokens, 8000)
+      : Math.min(max_tokens, 4096)
 
   // ── Groq Coder FIRST for code/technical tasks (qwen-2.5-coder-32b — FREE) ───
   const _isCodeTask = taskHint === 'code' || taskHint === 'technical' || taskHint === 'website' || taskHint === 'html'
@@ -13195,7 +13215,7 @@ app.post('/api/dz-agent/github/react/stream', async (req, res) => {
     const result = await runReActLoop({
       query: enrichedQuery,
       messages,
-      aiGenerate: safeGenerateAI,
+      aiGenerate: (opts) => safeGenerateAI({ ...opts, taskHint: 'agent' }),
       githubToken,
       onStep: (step) => {
         collectedSteps.push(step)
@@ -14334,7 +14354,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const result = await runReActLoop({
         query: lastUserMessage,
         messages,
-        aiGenerate: safeGenerateAI,
+        aiGenerate: (opts) => safeGenerateAI({ ...opts, taskHint: 'agent' }),
         githubToken: resolvedToken,
         onStep: (s) => steps.push(s),
       })

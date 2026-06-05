@@ -14460,7 +14460,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       // ── أولاً: Wikidata ──────────────────────────────────────────────────
       const _wikidataResult = await searchWikidata(_cleanedPersonQuery, 'ar').catch(() => null)
-      if (_wikidataResult && _wikidataResult.confidence >= 80) {
+      // FIX-①: خفض العتبة من 80% → 65% لأن اللاعبين الشباب يحصلون على 75% فقط
+      if (_wikidataResult && _wikidataResult.confidence >= 65) {
         console.log(`[VerifyPolicy] ✅ Wikidata found: "${_wikidataResult.label}" confidence=${_wikidataResult.confidence}%`)
         const _confSystem = applyConfidenceSystem(_wikidataResult.confidence)
 
@@ -14636,7 +14637,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         const _wikiOnlyValidation = await _validateWikiSource(_personWiki, lastUserMessage)
         if (!_wikiOnlyValidation.valid) {
           console.log(`[WikiValidation] ❌ Wikipedia-only source rejected: ${_wikiOnlyValidation.reason} — "${_personWiki.url}"`)
-          // المصدر غير صالح → نرفض ونسقط للبحث الحي
+          // FIX-②: بدل السقوط الصامت للـ LLM → نجرّب web fallback أولاً
+          // إذا فشل web fallback أيضاً → نُعيد "لم أجد" مباشرةً ❌ NO LLM FALLBACK
           throw new Error(`WikiSourceRejected:${_wikiOnlyValidation.reason}`)
         }
         console.log(`[WikiValidation] ✅ Wikipedia source validated: "${_personWiki.title}" — "${_personWiki.url}"`)
@@ -14745,7 +14747,54 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     } catch (_personErr) {
       console.error('[PersonWiki] Error:', _personErr.message)
-      // في حالة خطأ → نتابع التدفق الطبيعي مع تحذير
+      // FIX-②: WikiSourceRejected لا يسقط للـ LLM — يُعيد "لم أجد" فوراً
+      // السابق: كان يسقط صامتاً → LLM يُجيب من ذاكرته الداخلية (هلوسة)
+      if (_personErr.message?.startsWith('WikiSourceRejected')) {
+        const _rejectedName = _personErr.message.split(':').slice(1).join(':')
+        console.log(`[FIX-②] WikiSourceRejected → hard stop (no LLM fallback) — reason: ${_rejectedName}`)
+        return res.status(200).json({
+          content: [
+            `⚠️ **المصدر المُسترجع لا يتطابق مع الكيان المطلوب.**`,
+            ``,
+            `بحثت في ويكيبيديا لكن المقالة المُعثور عليها لا تتطابق بشكل موثوق مع الاسم المطلوب.`,
+            `لا يمكنني الإجابة من ذاكرتي الداخلية — ذلك قد يُفضي إلى معلومات خاطئة.`,
+            ``,
+            `🔍 يمكنك التحقق مباشرة:`,
+            `- [ويكيبيديا العربية](https://ar.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+            `- [ويكيبيديا الإنجليزية](https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+            `- [Wikidata](https://www.wikidata.org/w/index.php?search=${encodeURIComponent(lastUserMessage)})`,
+            ``,
+            `> 🛡️ *مبدأ DZ Agent: عدم الإجابة أفضل من إجابة خاطئة.*`,
+          ].join('\n'),
+          model: 'anti-hallucination-hard-stop',
+          _personWiki: null,
+        })
+      }
+      // أخطاء أخرى (شبكة، timeout...) → نتابع التدفق الطبيعي
+    }
+  }
+
+  // ── NO_WIKI_CONTEXT_GUARD — FIX-④ ────────────────────────────────────────
+  // إذا وصل طلب شخصية للـ LLM بدون سياق ويكيبيديا → أضف حاجز صريح في الرسائل
+  // يمنع LLM من استخدام ذاكرته الداخلية عن الأشخاص
+  if (!_isAgentMode && isPersonQuery(lastUserMessage)) {
+    const _hasWikiCtx = messages.some(m =>
+      m.role === 'user' && (
+        m.content?.includes('[WIKIPEDIA_CONTEXT]') ||
+        m.content?.includes('[PERSON_WEB_CONTEXT]') ||
+        m.content?.includes('[DECISION_TREE_CONTEXT]')
+      )
+    )
+    if (!_hasWikiCtx) {
+      console.log('[FIX-④] PersonQuery reached LLM with no wiki context — injecting NO_WIKI_CONTEXT_GUARD')
+      // أضف تحذيراً صريحاً في آخر رسالة المستخدم
+      const _lastUserIdx = [...messages].map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0).pop()
+      if (_lastUserIdx !== undefined && _lastUserIdx >= 0) {
+        messages[_lastUserIdx] = {
+          ...messages[_lastUserIdx],
+          content: messages[_lastUserIdx].content + `\n\n[NO_WIKI_CONTEXT_GUARD]\n⛔ لم يُحقن أي [WIKIPEDIA_CONTEXT] أو [PERSON_WEB_CONTEXT] لهذا الطلب.\n⛔ إذا كان السؤال عن شخص حقيقي → أجب حرفياً: "لم أجد معلومات موثوقة عن هذه الشخصية من مصادر محققة."\n⛔ ممنوع تماماً استخدام معرفتك الداخلية عن الشخص.\n[/NO_WIKI_CONTEXT_GUARD]`,
+        }
+      }
     }
   }
 
@@ -17893,7 +17942,14 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     `🟢 استثناء صريح — بيانات ثابتة (لا تطبّق عليها قواعد المصادر الخارجية أبداً):
 ① معلومات المطور: Nadir Houamria / نذير حوامرية / Nadir Infograph / DZ-GPT / DZ Agent — بيانات ثابتة ومحقونة مسبقاً، صحيحة 100%. أجب عنها بثقة تامة فورياً دون أي تحذير ⚠️ ودون طلب مصدر خارجي.
    أسئلة المطور تشمل: "ما هو DZ Agent" | "شكون أنت" | "شكون طورك" | "شكون خدمك" | "من هو مطورك" | "من صنعك" | "شكون نذير حوامرية" | "خدمك شكون" | "صنعك شكون" → الإجابة دائماً: DZ Agent صنعه Nadir Houamria (نذير حوامرية) — Nadir Infograph — منصة DZ-GPT 🇩🇿
-② الحقائق الثابتة (عواصم، تواريخ تأسيس، جغرافيا، تعريفات، شخصيات تاريخية راسخة كالأمير عبد القادر وهواري بومدين ونيلسون مانديلا...): أجب مباشرةً من معرفتك بدون تحذير.`,
+② الحقائق الثابتة (عواصم، تواريخ تأسيس، جغرافيا، تعريفات، شخصيات تاريخية راسخة كالأمير عبد القادر وهواري بومدين ونيلسون مانديلا...): أجب مباشرةً من معرفتك بدون تحذير.
+
+🔴 FIX-③ — استثناءات مُقيّدة صارمة (ليست حقائق ثابتة — تتطلب مصدراً دائماً):
+❌ نادي لاعب أو فريق رياضي حالي — يتغير كل موسم (انتقالات، إعارات، فسخ عقود). مثال: "إبراهيم مازة ينتمي لباير 04 ليفركوزن" قد يكون خاطئاً بعد موسم واحد. لا تُجب عن نادي لاعب من معرفتك الداخلية أبداً.
+❌ منصب مسؤول حالي — الوزراء والمديرون يُعيَّنون ويُقالون باستمرار.
+❌ ترتيب الدوريات والنتائج — تتغير كل أسبوع.
+❌ أسعار الصرف والعملات — تتغير يومياً.
+❌ أي معلومة تحتوي على كلمات: حالياً / الآن / اليوم / الموسم الحالي / هذا العام → تتطلب مصدراً خارجياً دون استثناء.`,
     `🔴 نظام التحقق من الشخصيات العامة — PUBLIC FIGURES VERIFICATION SYSTEM (إلزامي):
 هدف: موسوعة موثوقة — عدم الإجابة أفضل من معلومة خاطئة | IDENTITY FIRST | ACCURACY FIRST
 

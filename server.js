@@ -2933,6 +2933,47 @@ app.get('/api/groq-key-stats', (_req, res) => {
   res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
 })
 
+// ===== SEARCH FIRST POLICY — SSE STREAMING STEPS =====
+// يُبث خطوات خط الأنابيب الخمس في الوقت الفعلي عبر Server-Sent Events
+app.get('/api/dz-agent/search-steps', async (req, res) => {
+  const query = String(req.query.q || '').slice(0, 200).trim()
+  if (!query) return res.status(400).json({ error: 'query required' })
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-store')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  if (res.flushHeaders) res.flushHeaders()
+
+  const write = (obj) => {
+    try { res.write(`data: ${JSON.stringify(obj)}\n\n`) } catch {}
+  }
+
+  try {
+    const { searchFirstPipeline } = await import('./lib/search-first-policy.js')
+    const onStep = (n, name, data) => write({ step: n, name, data, ts: Date.now() })
+
+    const result = await searchFirstPipeline(query, {
+      withWikidata: true,
+      withSearXNG: true,
+      onStep,
+    })
+
+    write({
+      done: true,
+      confidence: result.confidence,
+      source: result.source,
+      elapsed: result.elapsed,
+    })
+  } catch (err) {
+    write({ error: err.message || 'pipeline error' })
+  }
+
+  res.write('data: [DONE]\n\n')
+  res.end()
+})
+
 // ===== SEARCH FIRST POLICY — TRACE ENDPOINT =====
 // اختبار خط أنابيب البحث الكامل بالخطوات الخمس
 app.post('/api/dz-agent/search-trace', async (req, res) => {

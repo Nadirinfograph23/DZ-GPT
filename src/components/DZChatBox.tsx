@@ -3779,6 +3779,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
   const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
+  const [searchStepsMode, setSearchStepsMode] = useState<'person' | 'weather' | 'sports'>('person')
   const [currentPath, setCurrentPath] = useState<string>('')
   // DZ GitHub Agent mode
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
@@ -6360,18 +6361,42 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     setAgentSteps([])
     setAgentTaskType(null)
 
-    // كشف استعلامات الأشخاص لتفعيل لوحة البحث المرئية
-    const _sfpClean = text
+    // ── كشف نوع الاستعلام لتفعيل لوحة البحث المرئية ──────────────────────────
+    const _t = text.replace(/[؟?]$/,'').trim()
+
+    // كشف الطقس
+    const _isWeatherQ =
+      /^(?:طقس|جو\s|حرارة|حالة\s+الجو|الطقس|weather|météo|quel\s+temps)/i.test(_t) ||
+      /(?:طقس|درجة\s+الحرارة|أمطار|رياح|رطوبة)\s+(?:في|ب|at|in|à)\s+[\u0600-\u06FFa-z]/i.test(_t)
+
+    // كشف الرياضة والمباريات
+    const _isSportsQ =
+      /^(?:نتائج|ترتيب|دوري|مباريات|هداف|أهداف|بطولة|فريق\s|منتخب\s|كرة\s+القدم|football|ligue\s+pro|liga|league\s|standing|results\s|score\s)/i.test(_t) ||
+      /(?:نتائج|مباريات|ترتيب|جدول)\s+(?:دوري|لكرة|المسابقة|الدوري|الرابطة)/i.test(_t)
+
+    // كشف الأشخاص
+    const _sfpClean = _t
       .replace(/^(?:من\s+(?:هو|هي|هم)\s+|شكون\s+(?:هو|هي)\s+|(?:حدثني|أخبرني|اخبرني|معلومات|قصة|سيرة)\s+عن\s+|who\s+is\s+|tell\s+me\s+about\s+|qui\s+est\s+)/i, '')
-      .replace(/[؟?]$/, '').trim()
-    const _isPersonQ = (
-      /^(?:من\s+(?:هو|هي|هم)|شكون\s+(?:هو|هي)|(?:حدثني|أخبرني|اخبرني|معلومات|قصة|سيرة)\s+عن|who\s+is|tell\s+me\s+about|qui\s+est)/i.test(text) ||
-      (/^[\u0600-\u06FF][\u0600-\u06FF\s]{4,50}$/.test(text) &&
-       !/^(?:كيف|ما\s|هل\s|اعمل|اكتب|ابن|افعل|جيب|شرح|ترجم|طقس|صور|ارسم)/i.test(text) &&
-       text.trim().split(/\s+/).length >= 2 &&
-       text.trim().split(/\s+/).length <= 4)
+      .trim()
+    const _isPersonQ = !_isWeatherQ && !_isSportsQ && (
+      /^(?:من\s+(?:هو|هي|هم)|شكون\s+(?:هو|هي)|(?:حدثني|أخبرني|اخبرني|معلومات|قصة|سيرة)\s+عن|who\s+is|tell\s+me\s+about|qui\s+est)/i.test(_t) ||
+      (/^[\u0600-\u06FF][\u0600-\u06FF\s]{4,50}$/.test(_t) &&
+       !/^(?:كيف|ما\s|هل\s|اعمل|اكتب|ابن|افعل|جيب|شرح|ترجم|صور|ارسم)/i.test(_t) &&
+       _t.split(/\s+/).length >= 2 && _t.split(/\s+/).length <= 4)
     )
-    setSearchStepsQuery(_isPersonQ ? _sfpClean : null)
+
+    if (_isWeatherQ) {
+      setSearchStepsMode('weather')
+      setSearchStepsQuery(_t)
+    } else if (_isSportsQ) {
+      setSearchStepsMode('sports')
+      setSearchStepsQuery(_t)
+    } else if (_isPersonQ) {
+      setSearchStepsMode('person')
+      setSearchStepsQuery(_sfpClean)
+    } else {
+      setSearchStepsQuery(null)
+    }
 
     try {
       abortRef.current = new AbortController()
@@ -8334,6 +8359,7 @@ ${rows}
                 <>
                   <SearchStepsPanel
                     query={searchStepsQuery}
+                    mode={searchStepsMode}
                     onDone={() => setSearchStepsQuery(null)}
                   />
                   <div className="dz-thinking-step">

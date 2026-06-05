@@ -146,6 +146,7 @@ import {
   applyConfidenceSystem,
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD } from './lib/wikidata.js'
+import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
 import {
@@ -1289,6 +1290,15 @@ async function _validateWikiSource(result, entityName = '') {
 }
 
 // جلب معلومات شخصية من ويكيبيديا — يستخدم OpenSearch مثل خانة البحث بالضبط
+// FIX-C5: wrapper لجلب Wikipedia مباشرة بعنوان دقيق (من Wikidata sitelinks)
+async function fetchWikipediaByExactTitle(title, lang = 'ar') {
+  if (!title) return null
+  try {
+    const { fetchWikipediaByTitle } = await import('./lib/wikipedia.js')
+    return await fetchWikipediaByTitle(title, lang)
+  } catch { return null }
+}
+
 async function fetchPersonFromWikipedia(query) {
   try {
     const { searchPersonWikipedia } = await import('./lib/wikipedia.js')
@@ -14400,8 +14410,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (!_isAgentMode && !isDZToolRequest && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
+      // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
+      const _cleanedPersonQuery = _cleanQuerySFP(lastUserMessage)
+
       // ── أولاً: Wikidata ──────────────────────────────────────────────────
-      const _wikidataResult = await searchWikidata(lastUserMessage, 'ar').catch(() => null)
+      const _wikidataResult = await searchWikidata(_cleanedPersonQuery, 'ar').catch(() => null)
       if (_wikidataResult && _wikidataResult.confidence >= 80) {
         console.log(`[VerifyPolicy] ✅ Wikidata found: "${_wikidataResult.label}" confidence=${_wikidataResult.confidence}%`)
         const _confSystem = applyConfidenceSystem(_wikidataResult.confidence)
@@ -14410,8 +14423,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           return res.status(200).json({ content: buildNoSourceResponse(lastUserMessage), model: 'anti-hallucination' })
         }
 
-        // إذا كانت Wikidata تحتوي على صفحة ويكيبيديا → اجلبها للتفاصيل
-        const _wdPersonWiki = await fetchPersonFromWikipedia(lastUserMessage)
+        // FIX-C5: استخدام Wikidata sitelinks لجلب Wikipedia بعنوان دقيق — يحل "تبون → قرية مغربية"
+        let _wdPersonWiki = null
+        if (_wikidataResult.wikipediaAr) {
+          _wdPersonWiki = await fetchWikipediaByExactTitle(_wikidataResult.wikipediaAr, 'ar')
+          if (_wdPersonWiki) console.log(`[VerifyPolicy] ✅ Wikipedia via sitelink: "${_wikidataResult.wikipediaAr}"`)
+        }
+        if (!_wdPersonWiki?.extract && _wikidataResult.wikipediaEn) {
+          _wdPersonWiki = await fetchWikipediaByExactTitle(_wikidataResult.wikipediaEn, 'en')
+        }
+        // FIX-C2: جلب مباشر بالاسم النظيف — يتجاوز فلتر isPersonArticle الصارم
+        if (!_wdPersonWiki?.extract) {
+          _wdPersonWiki = await fetchWikipediaByExactTitle(_cleanedPersonQuery, 'ar')
+          if (_wdPersonWiki?.extract) console.log(`[VerifyPolicy] ✅ Wikipedia via direct title: "${_cleanedPersonQuery}"`)
+        }
+        if (!_wdPersonWiki?.extract) {
+          _wdPersonWiki = await fetchPersonFromWikipedia(_cleanedPersonQuery)
+        }
         if (_wdPersonWiki?.extract) {
           // نستخدم بيانات Wikipedia للمحتوى التفصيلي + Wikidata للتحقق
           const _langLabel = _wdPersonWiki.lang === 'ar' ? 'العربية' : _wdPersonWiki.lang === 'fr' ? 'الفرنسية' : 'الإنجليزية'
@@ -14481,7 +14509,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
 
       // ── ثانياً: Wikipedia (fallback إذا Wikidata لم يعطِ نتيجة كافية) ──────
-      const _personWiki = await fetchPersonFromWikipedia(lastUserMessage)
+      const _personWiki = await fetchPersonFromWikipedia(_cleanedPersonQuery)
       if (_personWiki?.extract) {
         console.log(`[PersonWiki] ✅ Wikipedia found: "${_personWiki.title}" (${_personWiki.lang}) — ${_personWiki.extract.length} chars`)
 

@@ -134,8 +134,20 @@ import {
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
+import {
+  runVerificationChain,
+  detectAmbiguousEntity,
+  isHistoricalEventQuery,
+  needsSportsVerification,
+  buildNoSourceResponse,
+  buildClarificationResponse,
+  buildUncertaintyWarning,
+  buildSportsVerificationBlock,
+  applyConfidenceSystem,
+} from './lib/verification-policy.js'
+import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD } from './lib/wikidata.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -14049,6 +14061,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
   if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
+    // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
+    const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
+    if (_entityAmbig?.needsClarification) {
+      console.log(`[VerifyPolicy] 🤔 Ambiguous entity: "${lastUserMessage.slice(0, 60)}"`)
+      return res.status(200).json({ content: buildClarificationResponse(_entityAmbig), mode: 'clarification' })
+    }
+    // ── 2. كشف الغموض القديم (smart-clarify) ─────────────────────────────────
     const _personAmbig = detectPersonAmbiguity(lastUserMessage)
     if (_personAmbig?.needsClarification) {
       console.log(`[EntityDisambig] 🤔 Ambiguous person: "${lastUserMessage.slice(0, 60)}"`)
@@ -14062,12 +14081,80 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Person / Personality Wikipedia Lookup — بحث إجباري في ويكيبيديا ────────
-  // كل سؤال عن شخص أو شخصية أو منصب → يُجبر على البحث في ويكيبيديا العربية أولاً
+  // ── Person / Personality — سلسلة التحقق الكاملة ──────────────────────────
+  // الترتيب: Wikidata (أولوية قصوى) → Wikipedia AR → Wikipedia EN
   // المبدأ: لا إجابة بدون مصدر موثوق — لا اختلاق أبداً
   if (!_isAgentMode && !isDZToolRequest && isPersonQuery(lastUserMessage)) {
-    console.log(`[PersonWiki] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
+    console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
+      // ── أولاً: Wikidata ──────────────────────────────────────────────────
+      const _wikidataResult = await searchWikidata(lastUserMessage, 'ar').catch(() => null)
+      if (_wikidataResult && _wikidataResult.confidence >= 80) {
+        console.log(`[VerifyPolicy] ✅ Wikidata found: "${_wikidataResult.label}" confidence=${_wikidataResult.confidence}%`)
+        const _confSystem = applyConfidenceSystem(_wikidataResult.confidence)
+
+        if (_confSystem.action === 'refuse') {
+          return res.status(200).json({ content: buildNoSourceResponse(lastUserMessage), model: 'anti-hallucination' })
+        }
+
+        // إذا كانت Wikidata تحتوي على صفحة ويكيبيديا → اجلبها للتفاصيل
+        const _wdPersonWiki = await fetchPersonFromWikipedia(lastUserMessage)
+        if (_wdPersonWiki?.extract) {
+          // نستخدم بيانات Wikipedia للمحتوى التفصيلي + Wikidata للتحقق
+          const _langLabel = _wdPersonWiki.lang === 'ar' ? 'العربية' : _wdPersonWiki.lang === 'fr' ? 'الفرنسية' : 'الإنجليزية'
+          let _finalExtract = _wdPersonWiki.extract
+          if (_wdPersonWiki.lang !== 'ar') {
+            try {
+              const _tRes = await safeGenerateAI({
+                messages: [{ role: 'user', content: `ترجم النص التالي إلى العربية الفصحى فقط. لا تُضف أي معلومة:\n---\n${_wdPersonWiki.extract}\n---\nالترجمة:` }],
+                query: 'translate', max_tokens: 600, taskHint: 'general',
+              })
+              if (_tRes?.content?.length > 50) _finalExtract = _tRes.content.trim()
+            } catch { /* استخدم النص الأصلي */ }
+          }
+
+          const _sportsBlock = needsSportsVerification(lastUserMessage) ? buildSportsVerificationBlock() : ''
+          const _uncertBlock = _confSystem.action === 'uncertain' ? buildUncertaintyWarning(_wikidataResult.confidence, 'wikidata') : ''
+
+          const _response = [
+            `## 📖 ${_wdPersonWiki.title}`,
+            _wdPersonWiki.description ? `*${_wdPersonWiki.description}*` : '',
+            ``,
+            `> 🔒 *معلومات محققة من Wikidata + ويكيبيديا — لا إضافات، لا تخمينات.*`,
+            ``,
+            _finalExtract,
+            _sportsBlock,
+            _uncertBlock,
+            ``,
+            `---`,
+            `📚 **المصادر:** [Wikidata](${_wikidataResult.url}) | [ويكيبيديا ${_langLabel}](${_wdPersonWiki.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`,
+          ].filter(l => l !== '').join('\n')
+
+          return res.status(200).json({
+            content: _response,
+            model: 'wikidata+wikipedia',
+            _personWiki: { title: _wdPersonWiki.title, url: _wdPersonWiki.url, lang: _wdPersonWiki.lang, wikidata: _wikidataResult.url },
+          })
+        }
+
+        // Wikidata وجد نتيجة لكن لا توجد مقالة Wikipedia تفصيلية
+        if (_confSystem.action === 'direct' || _confSystem.action === 'uncertain') {
+          const _uncertBlock = _confSystem.action === 'uncertain' ? buildUncertaintyWarning(_wikidataResult.confidence, 'wikidata') : ''
+          const _response = [
+            `## 📖 ${_wikidataResult.label}`,
+            _wikidataResult.description ? `*${_wikidataResult.description}*` : '',
+            ``,
+            `> 🔒 *معلومات مستخرجة من Wikidata — مصدر موثوق.*`,
+            _uncertBlock,
+            ``,
+            `---`,
+            `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`,
+          ].filter(l => l !== '').join('\n')
+          return res.status(200).json({ content: _response, model: 'wikidata-direct' })
+        }
+      }
+
+      // ── ثانياً: Wikipedia (fallback إذا Wikidata لم يعطِ نتيجة كافية) ──────
       const _personWiki = await fetchPersonFromWikipedia(lastUserMessage)
       if (_personWiki?.extract) {
         console.log(`[PersonWiki] ✅ Wikipedia found: "${_personWiki.title}" (${_personWiki.lang}) — ${_personWiki.extract.length} chars`)
@@ -17254,6 +17341,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
+    // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
+    PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── ADVANCED REASONING CORE ───────────────────────────────────────────
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────

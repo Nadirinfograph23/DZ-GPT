@@ -7841,7 +7841,14 @@ ${rows}
                             alt={msg.imagePrompt || 'صورة مولّدة'}
                             className={`dz-image-card__img${imgRegenLoading === msg.id ? ' dz-image-card__img--loading' : ''}`}
                             loading="lazy"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement
+                              img.style.display = 'none'
+                              const errDiv = document.createElement('div')
+                              errDiv.style.cssText = 'padding:20px;text-align:center;color:#f87171;background:rgba(239,68,68,0.1);border-radius:12px;font-size:14px;margin:8px 0;'
+                              errDiv.innerHTML = '⚠️ تعذّر تحميل الصورة — اضغط <b>🔄 نسخة جديدة</b> للمحاولة مجدداً'
+                              img.parentNode?.insertBefore(errDiv, img)
+                            }}
                           />
                           {/* Feature 2: Style picker */}
                           <div className="dz-image-style-picker">

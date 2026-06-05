@@ -22,6 +22,7 @@ import { DeveloperCard } from './DeveloperCard'
 import VoicePanel from './VoicePanel'
 import AgentStepsPanel from './AgentStepsPanel'
 import type { AgentStep } from './AgentStepsPanel'
+import SearchStepsPanel from './SearchStepsPanel'
 import GitHubReActPanel from './GitHubReActPanel'
 import type { ReActStep } from './GitHubReActPanel'
 import SmartRepoSuggestion from './SmartRepoSuggestion'
@@ -3777,6 +3778,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [showLog, setShowLog] = useState(false)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
+  const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
   const [currentPath, setCurrentPath] = useState<string>('')
   // DZ GitHub Agent mode
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
@@ -6358,6 +6360,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     setAgentSteps([])
     setAgentTaskType(null)
 
+    // كشف استعلامات الأشخاص لتفعيل لوحة البحث المرئية
+    const _sfpClean = text
+      .replace(/^(?:من\s+(?:هو|هي|هم)\s+|شكون\s+(?:هو|هي)\s+|(?:حدثني|أخبرني|اخبرني|معلومات|قصة|سيرة)\s+عن\s+|who\s+is\s+|tell\s+me\s+about\s+|qui\s+est\s+)/i, '')
+      .replace(/[؟?]$/, '').trim()
+    const _isPersonQ = (
+      /^(?:من\s+(?:هو|هي|هم)|شكون\s+(?:هو|هي)|(?:حدثني|أخبرني|اخبرني|معلومات|قصة|سيرة)\s+عن|who\s+is|tell\s+me\s+about|qui\s+est)/i.test(text) ||
+      (/^[\u0600-\u06FF][\u0600-\u06FF\s]{4,50}$/.test(text) &&
+       !/^(?:كيف|ما\s|هل\s|اعمل|اكتب|ابن|افعل|جيب|شرح|ترجم|طقس|صور|ارسم)/i.test(text) &&
+       text.trim().split(/\s+/).length >= 2 &&
+       text.trim().split(/\s+/).length <= 4)
+    )
+    setSearchStepsQuery(_isPersonQ ? _sfpClean : null)
+
     try {
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
@@ -8315,6 +8330,19 @@ ${rows}
                   steps={agentSteps}
                   taskType={agentTaskType || undefined}
                 />
+              ) : searchStepsQuery ? (
+                <>
+                  <SearchStepsPanel
+                    query={searchStepsQuery}
+                    onDone={() => setSearchStepsQuery(null)}
+                  />
+                  <div className="dz-thinking-step">
+                    <span className="dz-thinking-label">جارٍ بناء الإجابة...</span>
+                    <div className="dz-typing-indicator">
+                      <span /><span /><span />
+                    </div>
+                  </div>
+                </>
               ) : thinkingStep ? (
                 <div className="dz-thinking-step">
                   <span className="dz-thinking-label">{thinkingStep.label}</span>

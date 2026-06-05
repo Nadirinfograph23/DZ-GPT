@@ -2923,6 +2923,58 @@ app.get('/api/groq-key-stats', (_req, res) => {
   res.json({ total: all.length, active: stats.filter(s => s.status === 'active').length, keys: stats })
 })
 
+// ===== SEARCH FIRST POLICY — TRACE ENDPOINT =====
+// اختبار خط أنابيب البحث الكامل بالخطوات الخمس
+app.post('/api/dz-agent/search-trace', async (req, res) => {
+  try {
+    const { query, queries } = req.body
+    const { searchFirstPipeline, formatPipelineTrace, buildSearchFirstResponse } = await import('./lib/search-first-policy.js')
+
+    // دعم استعلام واحد أو قائمة استعلامات
+    const queryList = Array.isArray(queries) && queries.length > 0
+      ? queries
+      : [query || ''].filter(Boolean)
+
+    if (!queryList.length) {
+      return res.status(400).json({ error: 'يجب تقديم query أو queries' })
+    }
+
+    const results = []
+    for (const q of queryList.slice(0, 6)) {
+      console.log(`[SearchTrace] Testing: "${q}"`)
+      const pipelineResult = await searchFirstPipeline(q, { verbose: true, withWikidata: true, withSearXNG: true })
+      const response = buildSearchFirstResponse(pipelineResult, q)
+
+      results.push({
+        query: q,
+        pipeline: pipelineResult.pipeline.map(step => ({
+          step: step.step,
+          name: step.name,
+          data: step.data,
+          elapsed_ms: step.elapsed,
+        })),
+        trace: formatPipelineTrace(pipelineResult.pipeline, q),
+        source: pipelineResult.source,
+        confidence: pipelineResult.confidence,
+        elapsed_ms: pipelineResult.elapsed,
+        content_length: pipelineResult._raw?.contentLength || 0,
+        answer_preview: (response.content || '').slice(0, 400),
+        model: response.model,
+      })
+    }
+
+    return res.json({
+      ok: true,
+      count: results.length,
+      results,
+      policy: 'Search First — Wikidata → Wikipedia → SearXNG',
+    })
+  } catch (err) {
+    console.error('[SearchTrace] Error:', err)
+    return res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
 // ===== SYSTEM HEALTH API (resilience layer) =====
 app.get('/api/system-health', (_req, res) => {
   try {

@@ -158,7 +158,7 @@ import {
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
@@ -17469,6 +17469,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     INTENT_CLASSIFIER_POLICY,
     // ── LAYER 1b: INTENT CLASSIFICATION RESULT (نتيجة التصنيف الفعلي) ─────
     _intentBlock || '',
+    // ── LAYER 2: COGNITIVE BEHAVIOR RULES (قواعد السلوك المعرفي — إلزامية) ─
+    COGNITIVE_BEHAVIOR_RULES,
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──
     PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────

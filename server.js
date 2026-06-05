@@ -23716,7 +23716,7 @@ app.get('/api/tools/image-search', async (req, res) => {
   // Translate Arabic keywords to English — expanded map with Algerian landmarks + Groq fallback
   const AR_EN_MAP = [
     // Algerian cities
-    ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائر','Algeria'],
+    ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائرية','Algerian'],['جزائري','Algerian'],['جزائر','Algeria'],
     ['وهران','Oran Algeria'],['قسنطينة','Constantine Algeria'],['عنابة','Annaba Algeria'],
     ['بجاية','Bejaia Algeria'],['سطيف','Setif Algeria'],['تلمسان','Tlemcen Algeria'],
     ['باتنة','Batna Algeria'],['بسكرة','Biskra Algeria'],['ورقلة','Ouargla Algeria'],
@@ -24570,7 +24570,7 @@ async function huggingFaceFlux(prompt, negativePrompt, { timeoutMs = 40000 } = {
 const IMG_TRANSLATE_CACHE = new Map()
 const IMG_AR_EN_MAP = [
   // Algeria
-  ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائر','Algeria'],
+  ['الجزائر العاصمة','Algiers capital city Algeria'],['الجزائر','Algeria'],['جزائرية','Algerian'],['جزائري','Algerian'],['جزائر','Algeria'],
   ['وهران','Oran Algeria'],['قسنطينة','Constantine Algeria'],['عنابة','Annaba Algeria'],
   ['بجاية','Bejaia Algeria'],['سطيف','Setif Algeria'],['تلمسان','Tlemcen Algeria'],
   ['باتنة','Batna Algeria'],['بسكرة','Biskra Algeria'],['ورقلة','Ouargla Algeria'],
@@ -24595,7 +24595,7 @@ const IMG_AR_EN_MAP = [
   ['ميناء الجزائر','Port of Algiers harbour Algeria'],
   // Nature / scenery
   ['في المستقبل','futuristic, cyberpunk, neon lights, advanced technology'],
-  ['مستقبل','futuristic'],['مستقبلية','futuristic'],['مستقبلي','futuristic'],['خيال علمي','sci-fi'],
+  ['مستقبلية','futuristic'],['مستقبلي','futuristic'],['مستقبل','futuristic'],['خيال علمي','sci-fi'],
   ['شروق الشمس','sunrise, golden hour'],['غروب الشمس','sunset, warm light'],
   ['صحراء','vast sahara desert, sand dunes'],['جبال','mountains'],
   ['بحر','ocean sea'],['شاطئ','sandy beach'],['غابة','lush forest'],

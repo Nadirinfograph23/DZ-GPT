@@ -24584,7 +24584,7 @@ const IMG_AR_EN_MAP = [
   ['القصبة','Casbah Algiers Algeria'],
   ['رياض الفتح','Riad El Feth Algiers Algeria'],
   ['تيمقاد','Timgad Roman ruins Algeria UNESCO'],
-  ['جميلة الرومانية','Djemila Roman ruins Algeria UNESCO'],['جميل','beautiful'],['جميلة','beautiful'],
+  ['جميلة الرومانية','Djemila Roman ruins Algeria UNESCO'],['جميلة','beautiful'],['جميل','beautiful'],
   ['تيبازة الأثرية','Tipaza ancient ruins Algeria UNESCO'],
   ['قلعة بني حماد','Qalaa of Beni Hammad Algeria UNESCO'],
   ['تاسيلي ناجر','Tassili N\'Ajjer rock art Algeria UNESCO'],
@@ -24595,7 +24595,7 @@ const IMG_AR_EN_MAP = [
   ['ميناء الجزائر','Port of Algiers harbour Algeria'],
   // Nature / scenery
   ['في المستقبل','futuristic, cyberpunk, neon lights, advanced technology'],
-  ['مستقبل','futuristic'],['مستقبلي','futuristic'],['خيال علمي','sci-fi'],
+  ['مستقبل','futuristic'],['مستقبلية','futuristic'],['مستقبلي','futuristic'],['خيال علمي','sci-fi'],
   ['شروق الشمس','sunrise, golden hour'],['غروب الشمس','sunset, warm light'],
   ['صحراء','vast sahara desert, sand dunes'],['جبال','mountains'],
   ['بحر','ocean sea'],['شاطئ','sandy beach'],['غابة','lush forest'],
@@ -24605,6 +24605,14 @@ const IMG_AR_EN_MAP = [
   ['مسجد','mosque, Islamic architecture'],['قصبة','Casbah old city'],
   ['منزل','house'],['مدينة','city skyline'],['قرية','village'],
   ['قديم','ancient historic'],['حديث','modern'],['تقليدي','traditional'],
+  // Animals
+  ['قطة','cat'],['قط','cat'],['كلب','dog'],['أسد','lion'],['نمر','tiger'],['فيل','elephant'],
+  ['حصان','horse'],['طائر','bird'],['ذئب','wolf'],['ثعلب','fox'],['أرنب','rabbit'],
+  ['سمك','fish'],['دلفين','dolphin'],['دب','bear'],['قرد','monkey'],
+  // Adjectives
+  ['جميلة','beautiful'],['جميل','beautiful'],['رائع','magnificent, breathtaking'],
+  ['ضخم','huge, massive'],['صغير','tiny, small'],['كبير','large, big'],
+  ['قوي','powerful, strong'],['هادئ','calm, serene'],['مخيف','scary, dark'],
   // People
   ['شاب','young man'],['شابة','young woman'],['رجل','man'],['امرأة','woman'],
   ['طفل','child'],['عائلة','family'],['مجموعة','group of people'],
@@ -24612,13 +24620,15 @@ const IMG_AR_EN_MAP = [
   ['رسم كاريكاتير','cartoon style illustration'],['أنيمي','anime style'],
   ['زيت','oil painting'],['ألوان مائية','watercolor painting'],
   ['رسم','drawing illustration'],['لوحة','painting artwork'],
-  ['ثلاثي الأبعاد','3D render, volumetric lighting'],['واقعي','photorealistic, 8k'],
+  ['ثلاثي الأبعاد','3D render, volumetric lighting'],['واقعية','photorealistic, 8k'],['واقعي','photorealistic, 8k'],
   ['احترافي','professional photography'],['سينمائي','cinematic, movie scene'],
   ['مضيء','bright, well-lit'],['مظلم','dark, moody lighting'],
   // Colors
-  ['أحمر','red'],['أزرق','blue'],['أخضر','green'],['أصفر','yellow'],
-  ['برتقالي','orange'],['بنفسجي','purple'],['ذهبي','golden'],
-  ['أبيض','white'],['أسود','black'],['رمادي','grey'],
+  ['أحمراء','red'],['أحمر','red'],['زرقاء','blue'],['أزرق','blue'],
+  ['خضراء','green'],['أخضر','green'],['صفراء','yellow'],['أصفر','yellow'],
+  ['سوداء','black'],['أسود','black'],['بيضاء','white'],['أبيض','white'],
+  ['رمادية','grey'],['رمادي','grey'],['برتقالية','orange'],['برتقالي','orange'],
+  ['بنفسجية','purple'],['بنفسجي','purple'],['ذهبية','golden'],['ذهبي','golden'],
   // Food & objects
   ['قهوة','arabic coffee cup'],['شاي','tea'],['تمر','dates'],
   ['كسكس','couscous Algerian dish'],['برك','brik Algerian food'],
@@ -24648,7 +24658,7 @@ async function translateImgPrompt(rawPrompt) {
       const { content } = await callGroqWithFallback({
         model: 'llama-3.1-8b-instant',
         messages: [
-          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Keep all visual details. Output ONLY the English prompt, no explanation.' },
+          { role: 'system', content: 'Translate this Arabic/French image description to a concise English image-generation prompt. Keep all visual details. Output ONLY the English prompt, no explanation. IMPORTANT: جميلة means "beautiful" (adjective), NOT the archaeological site Djemila. واقعي/واقعية = photorealistic. أسود/سوداء = black. أبيض/بيضاء = white.' },
           { role: 'user', content: rawPrompt },
         ],
         max_tokens: 150,
@@ -24702,18 +24712,54 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
     } catch (e) { console.warn('[img-gen:hf]', e.message) }
   }
 
-  // ── Priority 2: HuggingFace fallback models (free with HF_TOKEN) ──
-  const HF_FALLBACK_MODELS = [
-    'stabilityai/stable-diffusion-xl-base-1.0',
-    'stabilityai/stable-diffusion-2-1',
-  ]
+  // ── Priority 2: Stable Horde txt2img (free community GPU — skip if queue > 80 jobs) ──
+  try {
+    const HORDE_BASE = 'https://stablehorde.net/api/v2'
+    const HORDE_H = { 'Content-Type': 'application/json', 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
+    // Quick queue check — skip if backlog too large (saves 55s pointless wait)
+    let hordeQueueOk = true
+    try {
+      const hbRes = await fetch(`${HORDE_BASE}/status/heartbeat`, { signal: AbortSignal.timeout(4000) })
+      if (hbRes.ok) {
+        const hb = await hbRes.json()
+        hordeQueueOk = (hb.queue || 0) <= 80
+        if (!hordeQueueOk) console.log(`[img-gen] Stable Horde queue ${hb.queue} > 80 — skipping`)
+      }
+    } catch (_) { /* heartbeat fail — try anyway */ }
+
+    if (hordeQueueOk) {
+      const hordeBody = JSON.stringify({
+        prompt: englishPrompt,
+        params: { n: 1, steps: 20, width: 512, height: 512, sampler_name: 'k_euler_a', cfg_scale: 7 },
+        nsfw: false, censor_nsfw: true, models: ['Deliberate'],
+        shared: true, r2: false,
+      })
+      const hordeSubmit = await fetch(`${HORDE_BASE}/generate/async`, {
+        method: 'POST', headers: HORDE_H, body: hordeBody,
+        signal: AbortSignal.timeout(10000),
+      })
+      if (hordeSubmit.ok) {
+        const { id: hordeJobId } = await hordeSubmit.json()
+        if (hordeJobId) {
+          console.log('[img-gen] Stable Horde job submitted:', hordeJobId)
+          const hordeImg = await waitForHordeJob(hordeJobId, 65000, 90)
+          if (hordeImg) {
+            console.log('[img-gen] ✓ Stable Horde txt2img done')
+            return res.json({ imageBase64: hordeImg, model: 'Stable Diffusion (Deliberate)', provider: 'stable-horde', translated: translatedFlag, englishPrompt })
+          }
+        }
+      }
+    }
+  } catch (hordeErr) { console.warn('[img-gen:horde]', hordeErr.message) }
+
+  // ── Priority 3: HuggingFace fallback (if HF_TOKEN not blocked) ──
   if (token) {
-    for (const fbModel of HF_FALLBACK_MODELS) {
+    for (const fbModel of ['stabilityai/stable-diffusion-2-1', 'stabilityai/stable-diffusion-xl-base-1.0']) {
       try {
         const fbRes = await fetch(`https://api-inference.huggingface.co/models/${fbModel}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, Accept: 'image/*' },
-          body: JSON.stringify({ inputs: englishPrompt, parameters: { width: w, height: h, num_inference_steps: 20 } }),
+          body: JSON.stringify({ inputs: englishPrompt }),
           signal: AbortSignal.timeout(25000),
         })
         if (fbRes.ok) {
@@ -24726,31 +24772,22 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
             }
           }
         }
-      } catch (fbErr) { console.warn(`[img-gen:hf-fallback:${fbModel}]`, fbErr.message) }
+      } catch (fbErr) { console.warn(`[img-gen:hf]`, fbErr.message) }
     }
   }
 
-  // ── Priority 3: Pollinations — server-side proxy to detect 402 ──
+  // ── Priority 3: Pollinations free URL (width/height params trigger 402 — omit them) ──
+  // Free tier works with: /prompt/TEXT?model=MODEL  — no width/height/seed/nologo params
   const MODELS = ['flux', 'flux-realism', 'flux-3d', 'turbo']
   const chosenModel = reqModel && MODELS.includes(reqModel) ? reqModel : 'flux'
   const encoded = encodeURIComponent(englishPrompt.trim())
-  const negEnc  = negativePrompt ? `&negative=${encodeURIComponent(negativePrompt)}` : ''
-  const polUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}&width=${w}&height=${h}&seed=${seed}&nologo=true&enhance=true`
+  const polUrl = `https://image.pollinations.ai/prompt/${encoded}?model=${chosenModel}`
 
-  try {
-    const polCheck = await fetch(polUrl, { method: 'HEAD', signal: AbortSignal.timeout(8000) })
-    if (polCheck.status === 402 || polCheck.status === 403) {
-      console.warn('[img-gen] Pollinations returned', polCheck.status, '— all providers exhausted')
-      return res.status(503).json({ error: 'تعذّر توليد الصورة مؤقتاً — جميع المزودين غير متاحين. حاول مجدداً بعد دقائق.', englishPrompt })
-    }
-  } catch (_) { /* HEAD check failed — return URL anyway */ }
-
-  console.log('[img-gen] ✓ Pollinations URL', chosenModel)
+  console.log('[img-gen] ✓ Pollinations free URL', chosenModel)
   return res.json({
     imageUrl: polUrl,
     model: `FLUX (${chosenModel})`,
     provider: 'pollinations',
-    seed,
     translated: translatedFlag,
     englishPrompt,
     allModels: MODELS,
@@ -24758,7 +24795,7 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
 })
 
 // ── Stable Horde: poll until job is done (server-side, max 72s — within Vercel 90s maxDuration) ──
-async function waitForHordeJob(jobId, maxWaitMs = 72000) {
+async function waitForHordeJob(jobId, maxWaitMs = 72000, maxWaitEstimateSec = 9999) {
   const BASE = 'https://stablehorde.net/api/v2'
   const H = { 'Client-Agent': 'DZ-GPT:1.0:dz-gpt.vercel.app', 'apikey': process.env.STABLE_HORDE_KEY || '0000000000' }
   const start = Date.now(); let polls = 0
@@ -24770,6 +24807,12 @@ async function waitForHordeJob(jobId, maxWaitMs = 72000) {
       const cd = await chk.json()
       console.log(`[horde:p${polls}] done=${cd.done} wait=${cd.wait_time}s q=${cd.queue_position}`)
       if (cd.faulted || cd.is_possible === false) break
+      // Early bail-out: if estimated wait too long on first poll, cancel and give up
+      if (polls === 1 && !cd.done && (cd.wait_time || 0) > maxWaitEstimateSec) {
+        console.warn(`[horde] wait_time=${cd.wait_time}s > ${maxWaitEstimateSec}s limit — cancelling job`)
+        fetch(`${BASE}/generate/status/${jobId}`, { method: 'DELETE', headers: H }).catch(() => {})
+        return null
+      }
       if (cd.done) {
         const st = await fetch(`${BASE}/generate/status/${jobId}`, { headers: H, signal: AbortSignal.timeout(15000) })
         if (!st.ok) break

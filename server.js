@@ -168,6 +168,7 @@ import {
   extractYearFromMessage, WORLD_LEADERS_2026, WORLD_FORMER_LEADERS,
   REAL_DZ_WILAYAS,
   isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS,
+  isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
@@ -13533,7 +13534,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // 6. أحداث رياضية مستقبلية (كأس العالم 2038، دوري 2027...)
-    const _futureYearMatch = _lum.match(/\b(20[3-9]\d|2[1-9]\d{2})\b/)
+    const _futureYearMatch = _lum.match(/\b(20[2-9]\d|2[1-9]\d{2})\b/)
     if (_futureYearMatch && isFutureYear(_futureYearMatch[1]) &&
         /(?:كأس|دوري|بطولة|فاز|ربح|نهائي|نتيجة|نتائج|شكون ربح|من فاز)/i.test(_lum)) {
       const _futureY = _futureYearMatch[1]
@@ -13569,8 +13570,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
 
-    // 6c. "اختر اسماً عشوائياً / أعطني اسماً حتى لو لم تكن متأكداً" → رفض صريح
-    if (/(?:اختر|اعطني?|قُل|قل|أخبرني)\s+(?:اسم|جواب|إجابة|رئيس|وزير)\s+(?:عشوائيا?|حتى\s+لو|ولو\s+(?:ما|لم)|بدون\s+تأكد)|(?:اختر|اعطني?)\s+أي\s+(?:اسم|جواب|إجابة)\s+(?:عشوائيا?|حتى)/i.test(_lum)) {
+    // 6c. bypass بالعربي والدارجة: "خمم / اختر أقرب / جاوب بثقة ولو ما تعرفش"
+    if (/(?:اختر|اعطني?|قُل|قل|أخبرني)\s+(?:اسم|جواب|إجابة|رئيس|وزير)\s+(?:عشوائيا?|حتى\s+لو|ولو\s+(?:ما|لم)|بدون\s+تأكد)|(?:اختر|اعطني?)\s+أي\s+(?:اسم|جواب|إجابة)\s+(?:عشوائيا?|حتى)|(?:خمم|تخمين|اخمن)\b|(?:إذا\s+ما\s+تعرفش?|لو\s+ما\s+عرفتش?|إن\s+لم\s+تعرف|إذا\s+لم\s+تعرف)\s+(?:خمم|اختر|جاوب|قل|أجب|اختار)|(?:جاوب|أجب|قل|رد)\s+(?:بثقة|بحزم|بيقين)\s+(?:ولو|حتى\s+لو|حتى\s+و)\s+(?:ما\s+تعرفش?|لم\s+تعرف|مش\s+متأكد)|اختر\s+(?:ال)?أقرب\s+إجابة/i.test(_lum)) {
       console.log(`[AntiHallucination] Random guess request blocked`)
       return res.status(200).json({
         content: [
@@ -13616,6 +13617,137 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         ].join('\n'),
         model: 'dz-knowledge-static',
         _static: true,
+      })
+    }
+
+    // ── حراس الهلوسة الموسّعة (6f → 6k) ──────────────────────────────────────
+
+    // 6f. سنة مستقبلية غير رياضية ("سكان الجزائر 2100"، "رئيس 2040"...)
+    const _futureYearAny = _lum.match(/\b(20[2-9]\d|2[1-9]\d{2})\b/)
+    if (_futureYearAny && isFutureYear(_futureYearAny[1])) {
+      const _fy = _futureYearAny[1]
+      console.log(`[AntiHallucination] General future year query: ${_fy}`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ حدث مستقبلي — عام ${_fy}`,
+          ``,
+          `**عام ${_fy} لم يأتِ بعد — لا يمكنني معرفة ما سيحدث أو ما سيكون عليه الوضع فيه.**`,
+          ``,
+          `لا أُنشئ توقعات أو أختلق أرقاماً عن المستقبل. أي إجابة محددة ستكون تخميناً لا حقيقة.`,
+          ``,
+          `> 🛡️ هل تريد معلومات عن **الوضع الحالي** لنفس الموضوع؟ اسألني.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 6g. كأس العالم 2026 — البطولة لم تنته بعد (تبدأ 11 يونيو، تنتهي 19 يوليو 2026)
+    if (/(?:كأس\s+(?:ال)?عالم\s+(?:ال)?2026|2026\s+(?:ال)?(?:كأس|world)|world\s+cup\s+2026)/i.test(_lum) &&
+        /(?:ربح|فاز|من\s+ربح|من\s+فاز|الفائز|البطل|نتيجة\s+(?:ال)?نهائي|الفائز\s+بالكأس)/i.test(_lum)) {
+      const _now = new Date()
+      const _wcEnd = new Date('2026-07-20T00:00:00Z')
+      if (_now < _wcEnd) {
+        const _wcStart = new Date('2026-06-11T00:00:00Z')
+        const _wcStatus = _now < _wcStart ? 'لم تبدأ بعد' : 'جارية حالياً — النهائي لم يُلعب'
+        console.log(`[AntiHallucination] WC 2026 result — ${_wcStatus}`)
+        return res.status(200).json({
+          content: [
+            `## ⚽ كأس العالم 2026 — ${_wcStatus}`,
+            ``,
+            `**بطولة كأس العالم 2026 ${_now < _wcStart ? 'تبدأ في **11 يونيو 2026**' : 'جارية — لكن النهائي لم يُلعب بعد'} — لا يمكنني معرفة الفائز النهائي.**`,
+            ``,
+            `🗓️ البطولة: **11 يونيو — 19 يوليو 2026** | المضيفون: الولايات المتحدة، كندا، المكسيك`,
+            ``,
+            `> 🛡️ أي إجابة عن الفائز الآن ستكون تخميناً — لا حقيقة.`,
+          ].join('\n'),
+          model: 'anti-hallucination',
+        })
+      }
+    }
+
+    // 6h. ولاية وهمية — أي ولاية غير موجودة في الـ58 الرسمية
+    const _unknownWilaya = isUnknownWilayaQuery(_lum)
+    if (_unknownWilaya) {
+      console.log(`[AntiHallucination] Unknown wilaya: "${_unknownWilaya}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ ولاية غير موجودة`,
+          ``,
+          `**"ولاية ${_unknownWilaya}" غير موجودة في التقسيم الإداري الرسمي للجزائر.**`,
+          ``,
+          `🗺️ الجزائر تضم **58 ولاية** رسمية (48 تاريخية + 10 أُضيفت عام 2021).`,
+          ``,
+          `> اسألني عن أي ولاية حقيقية وسأزودك بمعلومات دقيقة.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
+    // 6i. ضمائر الدارجة بلا مرجع — "وين راه يلعب" دون اسم سابق في المحادثة
+    if (isDarijaContextPronouns(_lum) && messages.length <= 2) {
+      console.log(`[AntiHallucination] Darija context pronoun without prior context`)
+      return res.status(200).json({
+        content: [
+          `من تقصد بالضبط؟ 🤔`,
+          ``,
+          `سؤالك يحتاج إلى مرجع — **ذكر الاسم أو الشخصية** حتى أتمكن من الإجابة بدقة.`,
+          ``,
+          `**مثال:** "وين راه يلعب **رياض محرز**؟" أو "شحال عمر **إسلام سليماني**؟"`,
+        ].join('\n'),
+        model: 'dz-agent-clarify',
+      })
+    }
+
+    // 6j. "صح ولا لا / أكدلي فقط / جاوب بنعم أو لا" — تأكيد غامض بلا سياق
+    if (/^(?:صح\s+ولا\s+لا|صح\s+أو\s+لا|أكدلي\s+فقط|أكد\s+لي\s+فقط|جاوب\s+بنعم\s+(?:أو|ولا)\s+لا\s+فقط|نعم\s+أو\s+لا\s+فقط)\s*[؟?]?\s*$/i.test(_lum) && messages.length <= 2) {
+      console.log(`[AntiHallucination] Ambiguous confirmation request without context`)
+      return res.status(200).json({
+        content: [
+          `ماذا تريد أن أؤكد أو أنفي؟ 🤔`,
+          ``,
+          `رسالتك لا تحتوي على ادعاء أو معلومة محددة — **ما الشيء الذي تريد التأكد منه؟**`,
+          ``,
+          `**مثال:** "صح ولا لا: الجزائر فيها 58 ولاية؟" أو "أكدلي أن محرز يلعب في القادسية."`,
+        ].join('\n'),
+        model: 'dz-agent-clarify',
+      })
+    }
+
+    // 6k. كيانات علمية/فضائية مستحيلة — جامعة في المريخ / كوكب الجزائر / 500 هدف دولي
+    const _impossibleSciType = (() => {
+      if (/(?:جامعة|مدرسة|معهد|مستشفى|مطار|مدينة|دولة)\s+(?:في|ب|على|فوق)?\s*(?:كوكب)?\s*(?:المريخ|زحل|المشتري|الزهرة|عطارد|أورانوس|نبتون|بلوتو)\b/i.test(_lum)) return 'space_institution'
+      if (/كوكب\s+(?:ال)?جزائر|(?:planet|كوكب)\s+(?:algeria|الجزائر)\s*\d*/i.test(_lum)) return 'fictional_planet'
+      if (/(?:لاعب|مهاجم|هداف)\s+(?:جزائري|الجزائر|المنتخب\s+الجزائري)\s+(?:سجل|يملك|صاحب)\s+[23456789]\d{2,}\s+هدف/i.test(_lum)) return 'impossible_goals'
+      return null
+    })()
+    if (_impossibleSciType) {
+      console.log(`[AntiHallucination] Impossible sci/sport entity: ${_impossibleSciType}`)
+      const _sciReplies = {
+        space_institution: [
+          `## 🚀 مؤسسة غير موجودة`,
+          ``,
+          `**لا توجد جامعات أو مستشفيات أو مدن بشرية في الكواكب المذكورة — كلها غير مأهولة.**`,
+          ``,
+          `> البشرية لم تُنشئ حتى اللحظة أي منشأة دائمة خارج الأرض أو القمر.`,
+        ].join('\n'),
+        fictional_planet: [
+          `## 🪐 كوكب وهمي`,
+          ``,
+          `**"كوكب الجزائر" لا وجود له — لا يوجد جرم سماوي يحمل هذا الاسم رسمياً.**`,
+          ``,
+          `الأجرام السماوية تُسمّى من قِبل **الاتحاد الفلكي الدولي (IAU)** — وليس في سجلاته أي كوكب بهذا الاسم.`,
+        ].join('\n'),
+        impossible_goals: [
+          `## ⚽ رقم وهمي`,
+          ``,
+          `**لا يوجد لاعب جزائري سجّل مئات الأهداف الدولية — هذا الرقم غير واقعي.**`,
+          ``,
+          `أعلى هداف في تاريخ المنتخب الجزائري هو **إسلام سليماني** بـ **44 هدفاً دولياً** (سجله محدَّث حتى 2024).`,
+        ].join('\n'),
+      }
+      return res.status(200).json({
+        content: _sciReplies[_impossibleSciType],
+        model: 'anti-hallucination',
       })
     }
 

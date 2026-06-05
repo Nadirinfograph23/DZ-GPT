@@ -145,7 +145,7 @@ import {
   buildSportsVerificationBlock,
   applyConfidenceSystem,
 } from './lib/verification-policy.js'
-import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD } from './lib/wikidata.js'
+import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
@@ -14458,11 +14458,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
       const _cleanedPersonQuery = _cleanQuerySFP(lastUserMessage)
 
-      // ── أولاً: Wikidata + بحث حي بالتوازي ───────────────────────────────
+      // ── أولاً: Wikidata search + بحث حي بالتوازي ────────────────────────
       const [_wikidataResult, _liveWebResult] = await Promise.all([
         searchWikidata(_cleanedPersonQuery, 'ar').catch(() => null),
         searchPersonOnline(_cleanedPersonQuery).catch(() => null),
       ])
+      // ── جلب حقائق هيكلية بعد معرفة الـ entity ID ──────────────────────
+      // نستخدم fetchWikidataEntityWithFacts لأنها تستخدم ID مباشرة (أموثوق من SPARQL)
+      const _sparqlFacts = _wikidataResult?.id
+        ? await fetchWikidataEntityWithFacts(_wikidataResult.id).catch(() => null)
+        : null
+      if (_sparqlFacts) console.log(`[EntityFacts] ✅ ${_wikidataResult.id}: birthPlace=${_sparqlFacts.birthPlace} team=${_sparqlFacts.currentTeam} birthDate=${_sparqlFacts.birthDate}`)
       // FIX-①: خفض العتبة من 80% → 65% لأن اللاعبين الشباب يحصلون على 75% فقط
       if (_wikidataResult && _wikidataResult.confidence >= 65) {
         console.log(`[VerifyPolicy] ✅ Wikidata found: "${_wikidataResult.label}" confidence=${_wikidataResult.confidence}%`)
@@ -14492,15 +14498,152 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         if (_wdPersonWiki?.extract) {
           // نستخدم بيانات Wikipedia للمحتوى التفصيلي + Wikidata للتحقق
           const _langLabel = _wdPersonWiki.lang === 'ar' ? 'العربية' : _wdPersonWiki.lang === 'fr' ? 'الفرنسية' : 'الإنجليزية'
+
+          // ── بناء الحقائق المرجعية من SPARQL (مصدر الحقيقة) ────────────────
+          // هذه الحقائق هي المرجع الذهبي — أولويتها 100% على أي مصدر آخر
+          const _groundTruth = {}
+          if (_sparqlFacts) {
+            if (_sparqlFacts.birthDate) _groundTruth.birthDate = _sparqlFacts.birthDate.slice(0, 10)
+            if (_sparqlFacts.birthPlace) _groundTruth.birthPlace = _sparqlFacts.birthPlace
+            if (_sparqlFacts.nationality) _groundTruth.nationality = _sparqlFacts.nationality
+            if (_sparqlFacts.currentTeam) _groundTruth.currentTeam = _sparqlFacts.currentTeam
+            if (_sparqlFacts.occupation) _groundTruth.occupation = _sparqlFacts.occupation
+          }
+          const _hasGroundTruth = Object.keys(_groundTruth).length > 0
+          if (_hasGroundTruth) {
+            console.log(`[GroundTruth] ✅ SPARQL facts for "${_cleanedPersonQuery}":`, JSON.stringify(_groundTruth))
+          }
+
+          // ── دالة التحقق من تطابق الحقائق في النص ──────────────────────────
+          const _checkFactMismatch = (text) => {
+            const mismatches = []
+            const t = text.toLowerCase()
+            // التحقق من النادي الحالي
+            if (_groundTruth.currentTeam) {
+              const teamCore = _groundTruth.currentTeam.split(/\s+/).filter(w => w.length > 3)[0]?.toLowerCase()
+              if (teamCore && !t.includes(teamCore)) {
+                // تحقق من الاسم الإنجليزي أيضاً
+                const teamEn = _groundTruth.currentTeam.toLowerCase()
+                if (!t.includes(teamEn.slice(0, 8))) {
+                  mismatches.push({ field: 'النادي الحالي', expected: _groundTruth.currentTeam, note: 'غير موجود في المصدر' })
+                }
+              }
+            }
+            // التحقق من مكان الميلاد — تحقق سلبي: هل النص يذكر مدينة مختلفة؟
+            if (_groundTruth.birthPlace) {
+              const birthCore = _groundTruth.birthPlace.split(',')[0].trim().toLowerCase()
+              // قائمة مدن معروفة قد يختلقها الـ LLM
+              const knownCities = ['وهران', 'oran', 'الجزائر', 'قسنطينة', 'annaba', 'تلمسان', 'paris', 'باريس', 'london', 'لندن']
+              for (const city of knownCities) {
+                if (city !== birthCore && t.includes(city) && !t.includes(birthCore)) {
+                  // مدينة مختلفة مذكورة في النص لكن ليست مكان الميلاد الحقيقي
+                  // تحقق أن السياق يتحدث عن الميلاد
+                  const cityIdx = t.indexOf(city)
+                  const ctx = t.slice(Math.max(0, cityIdx - 30), cityIdx + 30)
+                  if (/ولد|miné|born|نشأ|مواليد|birthplace/i.test(ctx)) {
+                    mismatches.push({ field: 'مكان الميلاد', expected: _groundTruth.birthPlace, found: city, note: 'تعارض مع المصدر' })
+                    break
+                  }
+                }
+              }
+            }
+            return mismatches
+          }
+
+          // ── ترجمة مُقيّدة بالحقائق المرجعية ──────────────────────────────
           let _finalExtract = _wdPersonWiki.extract
+          let _translationMismatches = []
           if (_wdPersonWiki.lang !== 'ar') {
             try {
+              // بناء قسم الحقائق المُثبّتة لإرسالها للـ LLM
+              const _anchorLines = []
+              if (_groundTruth.birthDate) _anchorLines.push(`- تاريخ الميلاد: ${_groundTruth.birthDate}`)
+              if (_groundTruth.birthPlace) _anchorLines.push(`- مكان الميلاد: ${_groundTruth.birthPlace}`)
+              if (_groundTruth.nationality) _anchorLines.push(`- الجنسية: ${_groundTruth.nationality}`)
+              if (_groundTruth.currentTeam) _anchorLines.push(`- النادي/المؤسسة: ${_groundTruth.currentTeam}`)
+              const _anchorBlock = _anchorLines.length > 0
+                ? `\n\n[حقائق WIKIDATA المُثبّتة — لا تُغيّرها أبداً]\n${_anchorLines.join('\n')}\n[/حقائق]`
+                : ''
+
+              const _strictPrompt = [
+                `أنت مترجم حرفي. مهمتك الوحيدة: ترجمة النص أدناه إلى العربية الفصحى.`,
+                ``,
+                `قواعد صارمة:`,
+                `1. لا تُضف أي معلومة من معرفتك الداخلية أبداً.`,
+                `2. لا تُكمّل المعلومات الناقصة.`,
+                `3. إذا لم تجد حقيقةً في النص → لا تكتبها.`,
+                `4. الحقائق المُثبّتة أدناه هي المرجع الوحيد — لا تُعدّلها.`,
+                _anchorBlock,
+                ``,
+                `[نص للترجمة]`,
+                _wdPersonWiki.extract,
+                `[/نص]`,
+                ``,
+                `الترجمة العربية الحرفية:`,
+              ].join('\n')
+
               const _tRes = await safeGenerateAI({
-                messages: [{ role: 'user', content: `ترجم النص التالي إلى العربية الفصحى فقط. لا تُضف أي معلومة:\n---\n${_wdPersonWiki.extract}\n---\nالترجمة:` }],
-                query: 'translate', max_tokens: 600, taskHint: 'general',
+                messages: [{ role: 'user', content: _strictPrompt }],
+                query: 'translate', max_tokens: 700, taskHint: 'general',
               })
-              if (_tRes?.content?.length > 50) _finalExtract = _tRes.content.trim()
+              if (_tRes?.content?.length > 50) {
+                const _translated = _tRes.content.trim()
+                // تحقق ما بعد الترجمة — هل انحرف الـ LLM؟
+                _translationMismatches = _checkFactMismatch(_translated)
+                if (_translationMismatches.length > 0) {
+                  console.warn(`[SourceMismatch] ⚠️ Translation hallucination detected for "${_cleanedPersonQuery}":`, _translationMismatches)
+                  // نعود للنص الأصلي غير المُترجم بدلاً من الترجمة الملوّثة
+                  _finalExtract = _wdPersonWiki.extract
+                } else {
+                  _finalExtract = _translated
+                }
+              }
             } catch { /* استخدم النص الأصلي */ }
+          } else {
+            // النص عربي — تحقق مباشر من التعارض
+            _translationMismatches = _checkFactMismatch(_wdPersonWiki.extract)
+            if (_translationMismatches.length > 0) {
+              console.warn(`[SourceMismatch] ⚠️ Wikipedia text contradicts SPARQL facts for "${_cleanedPersonQuery}":`, _translationMismatches)
+            }
+          }
+
+          // ── بناء بلوك Source Mismatch إن وُجد ──────────────────────────────
+          let _mismatchBlock = ''
+          if (_translationMismatches.length > 0) {
+            const _mismatchLines = _translationMismatches.map(m =>
+              `| ${m.field} | \`${m.expected}\` | ${m.found ? `\`${m.found}\`` : 'مفقود'} | ${m.note} |`
+            )
+            _mismatchBlock = [
+              ``,
+              `> ⚠️ **Source Mismatch Detected**`,
+              `> `,
+              `> | الحقل | مصدر Wikidata | النص | الحالة |`,
+              `> |------|-------------|------|--------|`,
+              ..._mismatchLines.map(l => `> ${l}`),
+              `> `,
+              `> *الحقائق أعلاه مستخرجة من Wikidata SPARQL (مصدر الحقيقة). النص قد يحتوي على معلومات قديمة أو مُعدَّلة.*`,
+            ].join('\n')
+          }
+
+          // ── لوحة الحقائق المُثبّتة (SPARQL) ───────────────────────────────
+          let _factsPanel = ''
+          if (_hasGroundTruth) {
+            const _factLines = []
+            if (_groundTruth.birthDate) _factLines.push(`📅 **تاريخ الميلاد:** ${_groundTruth.birthDate}`)
+            if (_groundTruth.birthPlace) _factLines.push(`📍 **مكان الميلاد:** ${_groundTruth.birthPlace}`)
+            if (_groundTruth.nationality) _factLines.push(`🏳️ **الجنسية:** ${_groundTruth.nationality}`)
+            if (_groundTruth.currentTeam) _factLines.push(`⚽ **النادي/المنصب:** ${_groundTruth.currentTeam}`)
+            if (_factLines.length > 0) {
+              _factsPanel = [
+                ``,
+                `---`,
+                `### 🔬 حقائق Wikidata SPARQL (محققة)`,
+                ``,
+                _factLines.join(' · '),
+                ``,
+                `> 🛡️ *هذه الحقائق مستخرجة من البيانات الهيكلية لـ Wikidata — أولويتها 100% على ويكيبيديا والـ LLM*`,
+              ].join('\n')
+            }
           }
 
           const _sportsBlock = needsSportsVerification(lastUserMessage) ? buildSportsVerificationBlock() : ''
@@ -14519,24 +14662,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ? `📚 **المصادر:** [Wikidata](${_wikidataResult.url}) | ${_wikiSourceLink} | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
             : `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`
 
-          // ── أخبار حية — تُضاف دائماً إن وُجدت نتائج ويب ────────────────────
+          // ── أخبار حية — تُضاف إن وُجدت نتائج ويب ذات صلة ───────────────
           let _liveNewsBlock = ''
           if (_liveWebResult?.hasInfo) {
             const _rawNews = (_liveWebResult.text || '')
               .replace(/\[PERSON_WEB_CONTEXT\]/g, '')
               .replace(/\[\/PERSON_WEB_CONTEXT\]/g, '')
               .trim()
-            if (_rawNews.length > 50) {
+            // فلترة: نبقي فقط الفقرات التي تذكر اسم الشخص
+            const _nameParts = _cleanedPersonQuery.split(/\s+/).filter(w => w.length > 3)
+            const _newsLines = _rawNews.split('\n').filter(line => {
+              if (!line.trim()) return true
+              if (_nameParts.length === 0) return true
+              return _nameParts.some(p => line.toLowerCase().includes(p.toLowerCase()))
+            }).join('\n').trim()
+            if (_newsLines.length > 80) {
               _liveNewsBlock = [
                 ``,
                 `---`,
                 `### 📰 آخر الأخبار`,
                 ``,
-                _rawNews,
+                _newsLines,
                 ``,
                 `> ⚡ *مستخرج من الويب مباشرة — يعكس الوضع الحالي*`,
               ].join('\n')
-              console.log(`[LiveNews] ✅ Injected live web block for "${_cleanedPersonQuery}" (${_rawNews.length} chars)`)
+              console.log(`[LiveNews] ✅ Injected filtered live block for "${_cleanedPersonQuery}" (${_newsLines.length} chars)`)
             }
           }
 
@@ -14547,6 +14697,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             `> 🔒 *معلومات محققة من Wikidata${_wikiSourceLink ? ' + ويكيبيديا' : ''} — لا إضافات، لا تخمينات.*`,
             ``,
             _finalExtract,
+            _mismatchBlock,
+            _factsPanel,
             _sportsBlock,
             _uncertBlock,
             _liveNewsBlock,
@@ -14557,8 +14709,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
           return res.status(200).json({
             content: _response,
-            model: 'wikidata+wikipedia+live',
+            model: 'wikidata+wikipedia+sparql+live',
             _personWiki: { title: _wdPersonWiki.title, url: _wdPersonWiki.url, lang: _wdPersonWiki.lang, wikidata: _wikidataResult.url },
+            _groundTruth: _hasGroundTruth ? _groundTruth : null,
+            _mismatch: _translationMismatches.length > 0 ? _translationMismatches : null,
           })
         }
 

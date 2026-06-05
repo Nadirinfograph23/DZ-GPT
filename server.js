@@ -24638,6 +24638,11 @@ const IMG_AR_EN_MAP = [
   ['صباحاً','morning light'],['مساءً','evening, dusk'],
   ['شتاء','winter, snow'],['صيف','summer'],['ربيع','spring flowers'],
   ['مطر','rain, rainy'],['ثلج','snow'],
+  // Prepositions & connectors (stop Arabic from leaking into prompt)
+  ['في المركز','in the center'],['في الخلفية','in the background'],['في المقدمة','in the foreground'],
+  ['مع','with'],['في','in'],['على','on'],['تحت','under'],['فوق','above'],['بجانب','beside'],
+  ['بدون','without'],['داخل','inside'],['خارج','outside'],['حول','around'],['أمام','in front of'],
+  ['خلف','behind'],['بين','between'],
 ]
 
 async function translateImgPrompt(rawPrompt) {

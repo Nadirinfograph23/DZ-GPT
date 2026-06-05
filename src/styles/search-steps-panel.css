@@ -1,0 +1,176 @@
+/* ══════════════════════════════════════════════════
+   Search First Policy — Pipeline Steps Panel
+   خط أنابيب البحث أولاً — واجهة مرئية
+   ══════════════════════════════════════════════════ */
+
+.sfp-wrap {
+  direction: rtl;
+  background: linear-gradient(135deg, rgba(16,163,127,.07) 0%, rgba(13,146,104,.04) 100%);
+  border: 1px solid rgba(16,163,127,.22);
+  border-radius: 10px;
+  padding: 8px 10px 6px;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-family: 'Tajawal', 'Segoe UI', sans-serif;
+  transition: opacity .4s ease;
+}
+.sfp-wrap--done {
+  border-color: rgba(16,163,127,.4);
+  background: linear-gradient(135deg, rgba(16,163,127,.10) 0%, rgba(13,146,104,.06) 100%);
+}
+
+/* ── Header ── */
+.sfp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+.sfp-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #10a37f;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.sfp-conf {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.sfp-conf--high { background: rgba(16,163,127,.15); color: #0d9268; }
+.sfp-conf--med  { background: rgba(234,179,8,.15);  color: #b45309; }
+.sfp-conf--low  { background: rgba(239,68,68,.12);  color: #dc2626; }
+
+/* ── Steps list ── */
+.sfp-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sfp-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 26px;
+}
+
+/* ── Left side: dot + connector line ── */
+.sfp-row-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 16px;
+}
+
+.sfp-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1.5px solid transparent;
+  transition: all .25s ease;
+}
+.sfp-dot--pending {
+  border-color: rgba(148,163,184,.35);
+  color: rgba(148,163,184,.6);
+  background: transparent;
+}
+.sfp-dot--running {
+  border-color: #10a37f;
+  background: rgba(16,163,127,.12);
+  color: #10a37f;
+  box-shadow: 0 0 0 3px rgba(16,163,127,.15);
+}
+.sfp-dot--done {
+  border-color: #10a37f;
+  background: #10a37f;
+  color: #fff;
+}
+.sfp-dot--error {
+  border-color: #ef4444;
+  background: rgba(239,68,68,.12);
+  color: #ef4444;
+}
+
+.sfp-line {
+  width: 1.5px;
+  flex: 1;
+  min-height: 8px;
+  background: rgba(148,163,184,.2);
+  transition: background .3s ease;
+  margin: 1px 0;
+}
+.sfp-line--lit {
+  background: linear-gradient(180deg, #10a37f 0%, rgba(16,163,127,.35) 100%);
+}
+
+/* ── Right side: label + detail ── */
+.sfp-row-body {
+  flex: 1;
+  padding: 1px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sfp-row-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 11.5px;
+  transition: color .2s;
+}
+.sfp-row--running .sfp-row-label { color: #10a37f; }
+.sfp-row--done    .sfp-row-label { color: #0d9268; }
+.sfp-row--pending .sfp-row-label { color: rgba(100,116,139,.6); }
+.sfp-row--error   .sfp-row-label { color: #ef4444; }
+
+.sfp-row-icon {
+  opacity: .6;
+  display: flex;
+  align-items: center;
+}
+.sfp-row-detail {
+  font-size: 10.5px;
+  color: #64748b;
+  font-weight: 400;
+  line-height: 1.3;
+  word-break: break-word;
+  padding-right: 15px;
+}
+
+/* ── Spin animation ── */
+.sfp-spin {
+  animation: sfp-rotate .8s linear infinite;
+}
+@keyframes sfp-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Dark mode ── */
+@media (prefers-color-scheme: dark) {
+  .sfp-wrap {
+    background: linear-gradient(135deg, rgba(16,163,127,.10) 0%, rgba(13,146,104,.06) 100%);
+    border-color: rgba(16,163,127,.28);
+  }
+  .sfp-row-label  { color: #cbd5e1; }
+  .sfp-row--running .sfp-row-label { color: #34d399; }
+  .sfp-row--done    .sfp-row-label { color: #6ee7b7; }
+  .sfp-row--pending .sfp-row-label { color: rgba(148,163,184,.45); }
+  .sfp-row-detail { color: #94a3b8; }
+  .sfp-title { color: #34d399; }
+  .sfp-conf--high { background: rgba(52,211,153,.12); color: #34d399; }
+}

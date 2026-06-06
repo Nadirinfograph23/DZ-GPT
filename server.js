@@ -13738,7 +13738,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:ستفوز|سيفوز|سيهزم|ستهزم|ستكون\s+نتيجة|ستنتصر|سينتصر|من\s+سيفوز|من\s+ستفوز|شكون\s+(?:غادي\s+)?(?:يربح|يفوز))/i.test(lastUserMessage) ||
     /(?:شبيبة القبائل|JSK|مولودية الجزائر|MCA|اتحاد العاصمة|USMA|شباب بلوزداد|CRB|وفاق سطيف|ESS)/i.test(lastUserMessage) ||
     /(?:كم\s+مرة|كأس\s+أمم|AFCON|CAN[\s؟?]|كأس\s+العالم|مونديال).*(?:الجزائر|المنتخب)/i.test(lastUserMessage) ||
-    /(?:الجزائر|المنتخب\s+الجزائري).*(?:فاز|ربح|بطل|كأس\s+أمم|AFCON)/i.test(lastUserMessage)
+    /(?:الجزائر|المنتخب\s+الجزائري).*(?:فاز|ربح|بطل|كأس\s+أمم|AFCON)/i.test(lastUserMessage) ||
+    // BYPASS: Doctor / medical queries — handled by dedicated doctor search engine
+    /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز صحي|عيادات|دبيب|دكتوره|دكترة|نقلب على طبيب|نحوس على طبيب|أسنان|سنان|ضروس|طب الأسنان|نسائية|ولادة|حمل|عيون|بصريات|جلدية|قلبي|أمراض القلب|عظام|كسور|أعصاب|مسالك|مسالك بولية|médecin|medecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|generaliste|gynécologue|pédiatre|pediatre|psychiatre|chirurgien|pneumologue|neurologue|urologue|oncologue)/i.test(lastUserMessage) ||
+    // BYPASS: YouTube / video search — handled by YouTube Insight engine
+    /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
+    // BYPASS: Map / location queries — handled by DZ Maps intelligence engine
+    isMapQuery(lastUserMessage)
   if (!_isAgentMode && !_clarificationBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&

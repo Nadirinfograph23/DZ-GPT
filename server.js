@@ -789,24 +789,51 @@ async function fetchWeatherWttr(city) {
 async function fetchWeatherOpenWeather(city) {
   const apiKey = process.env.OPENWEATHER_API_KEY
   if (!apiKey) throw new Error('OPENWEATHER_API_KEY not set')
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},Algeria&appid=${apiKey}&units=metric&lang=ar`
-  const r = await fetch(url, { signal: AbortSignal.timeout(7000) })
+  // جرّب أولاً بدون تقييد الدولة، وإذا فشل أضف ,DZ
+  let url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric&lang=ar`
+  let r = await fetch(url, { signal: AbortSignal.timeout(7000) })
+  if (r.status === 404) {
+    url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)},DZ&appid=${apiKey}&units=metric&lang=ar`
+    r = await fetch(url, { signal: AbortSignal.timeout(7000) })
+  }
   if (!r.ok) throw new Error(`OpenWeather HTTP ${r.status}`)
   const d = await r.json()
+
+  // تحويل اتجاه الرياح من درجات إلى نص
+  const windDeg = d.wind?.deg ?? null
+  const windDir = windDeg != null ? degToWindDir(windDeg) : null
+
+  // تحويل الشروق/الغروب من Unix timestamp
+  const toLocalTime = (ts) => ts
+    ? new Date(ts * 1000).toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers' })
+    : null
+
   return {
-    city,
-    temp: Math.round(d.main?.temp ?? 0),
+    city: d.name || city,
+    temp:       Math.round(d.main?.temp       ?? 0),
     feels_like: Math.round(d.main?.feels_like ?? 0),
-    temp_min: Math.round(d.main?.temp_min ?? 0),
-    temp_max: Math.round(d.main?.temp_max ?? 0),
-    condition: d.weather?.[0]?.description || '',
-    icon: d.weather?.[0]?.icon || null,
-    humidity: d.main?.humidity ?? null,
-    wind: Math.round(d.wind?.speed ?? 0),
+    temp_min:   Math.round(d.main?.temp_min   ?? 0),
+    temp_max:   Math.round(d.main?.temp_max   ?? 0),
+    condition:  d.weather?.[0]?.description || '',
+    icon:       d.weather?.[0]?.icon || null,
+    humidity:   d.main?.humidity ?? null,
+    // OpenWeather يرجع m/s — نحوّل إلى كم/س
+    wind:       Math.round((d.wind?.speed ?? 0) * 3.6),
+    wind_gust:  d.wind?.gust  != null ? Math.round(d.wind.gust * 3.6) : null,
+    wind_dir:   windDir,
+    pressure:   d.main?.pressure   ?? null,
+    clouds:     d.clouds?.all      ?? null,
     visibility: d.visibility ? Math.round(d.visibility / 1000) : null,
+    sunrise:    toLocalTime(d.sys?.sunrise),
+    sunset:     toLocalTime(d.sys?.sunset),
     source: 'openweathermap.org',
     fetchedAt: new Date().toISOString(),
   }
+}
+
+function degToWindDir(deg) {
+  const dirs = ['شمال','شمال شرق','شرق','جنوب شرق','جنوب','جنوب غرب','غرب','شمال غرب']
+  return dirs[Math.round(deg / 45) % 8]
 }
 
 // Task 12: Intelligent source switching for weather
@@ -817,11 +844,18 @@ async function fetchCityWeatherResilient(city) {
   const cached = WEATHER_CACHE_V2.get(cacheKey)
   if (cached) return cached
 
-  const sources = [
-    { name: 'open-meteo', fn: () => fetchWeatherOpenMeteo(safeCity) },
-    { name: 'wttr.in',    fn: () => fetchWeatherWttr(safeCity) },
-    { name: 'openweather', fn: () => fetchWeatherOpenWeather(safeCity) },
-  ]
+  // OpenWeather أولاً إذا توفّر المفتاح — أدق وأغنى بيانات
+  const hasOwKey = !!process.env.OPENWEATHER_API_KEY
+  const sources = hasOwKey
+    ? [
+        { name: 'openweather', fn: () => fetchWeatherOpenWeather(safeCity) },
+        { name: 'open-meteo',  fn: () => fetchWeatherOpenMeteo(safeCity) },
+        { name: 'wttr.in',     fn: () => fetchWeatherWttr(safeCity) },
+      ]
+    : [
+        { name: 'open-meteo', fn: () => fetchWeatherOpenMeteo(safeCity) },
+        { name: 'wttr.in',    fn: () => fetchWeatherWttr(safeCity) },
+      ]
 
   for (const src of sources) {
     try {
@@ -18030,6 +18064,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (hasWeatherPriority) {
     if (weatherResult.status === 'fulfilled' && weatherResult.value) {
       const w = weatherResult.value
+      // بناء صفوف الجدول ديناميكياً — الصفوف الاختيارية تظهر فقط إذا كانت القيمة متوفرة
+      const tableRows = [
+        `| العنصر | القيمة |`,
+        `|---|---|`,
+        `| 🌡️ درجة الحرارة | ${w.temp}°C (تشعر بـ ${w.feels_like}°C) |`,
+        `| 🌡️ الحد الأدنى / الأقصى | ${w.temp_min}°C / ${w.temp_max}°C |`,
+        `| 📊 الحالة الجوية | ${w.condition} |`,
+        `| 💧 الرطوبة | ${w.humidity ?? '—'}% |`,
+        w.clouds   != null ? `| ☁️ الغيوم | ${w.clouds}% |` : '',
+        `| 💨 سرعة الرياح | ${w.wind ?? '—'} كم/س${w.wind_dir ? ` (${w.wind_dir})` : ''}${w.wind_gust ? ` — هبّات: ${w.wind_gust} كم/س` : ''} |`,
+        w.pressure != null ? `| 🔵 الضغط الجوي | ${w.pressure} hPa |` : '',
+        w.visibility != null ? `| 👁️ مدى الرؤية | ${w.visibility} كم |` : '',
+        w.sunrise  ? `| 🌅 شروق الشمس | ${w.sunrise} |` : '',
+        w.sunset   ? `| 🌇 غروب الشمس | ${w.sunset} |` : '',
+      ].filter(Boolean).join('\n')
+
       weatherPriorityContext = [
         `context: weather_priority`,
         `city: ${w.city}`,
@@ -18039,15 +18089,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         `condition: ${w.condition}`,
         `humidity: ${w.humidity ?? '—'}%`,
         `wind: ${w.wind ?? '—'} كم/س`,
+        w.wind_dir    ? `wind_dir: ${w.wind_dir}` : '',
+        w.pressure    ? `pressure: ${w.pressure} hPa` : '',
+        w.clouds != null ? `clouds: ${w.clouds}%` : '',
         `visibility: ${w.visibility != null ? w.visibility + ' كم' : 'غير متوفر'}`,
-        `| العنصر | القيمة |`,
-        `|---|---|`,
-        `| 🌡️ درجة الحرارة | ${w.temp}°C (تشعر بـ ${w.feels_like}°C) |`,
-        `| 🌡️ الحد الأدنى / الأقصى | ${w.temp_min}°C / ${w.temp_max}°C |`,
-        `| 📊 الحالة | ${w.condition} |`,
-        `| 💧 الرطوبة | ${w.humidity ?? '—'}% |`,
-        `| 💨 الرياح | ${w.wind ?? '—'} كم/س |`,
-        `| 👁️ الرؤية | ${w.visibility != null ? w.visibility + ' كم' : '—'} |`,
+        w.sunrise     ? `sunrise: ${w.sunrise}` : '',
+        w.sunset      ? `sunset: ${w.sunset}` : '',
+        tableRows,
         `source: ${w.source || 'open-meteo.com'}`,
         w.status === 'stale' ? `⚠️ بيانات مؤقتة — منذ ${w.staleAgeMin} دقيقة` : '',
       ].filter(Boolean).join('\n')

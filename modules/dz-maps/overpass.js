@@ -21,6 +21,11 @@ const OVERPASS_TAGS = {
   airport:     [['aeroway', '"aerodrome"']],
   government:  [['amenity', '~"townhall|government|public_building"']],
   parking:     [['amenity', '"parking"']],
+  youth_center:[['amenity', '~"community_centre|social_centre|youth_centre"']],
+  stadium:     [['leisure', '~"stadium|sports_centre|pitch|track"']],
+  library:     [['amenity', '"library"']],
+  fire_station:[['amenity', '"fire_station"']],
+  mosque_named:[['amenity', '"place_of_worship"'], ['religion', '"muslim"']],
 }
 
 // Fallback generic filter for unknown POI types

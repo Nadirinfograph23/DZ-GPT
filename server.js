@@ -18624,9 +18624,11 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     // Dashboard-triggered weather: greet with the user-selected city
     const _fromDashboard = dashboardContext?.priority === 'weather'
     const _cityFromMessage = detectCityFromQuery(lastUserMessage)
+    // Use Arabic city name from dashboardContext if available, fallback to API-returned name
+    const _cityArName = (dashboardContext?.cityAr) || city
     const _introLine = (_fromDashboard && !_cityFromMessage)
-      ? `📍 حسب منطقتك المختارة فأنت في **${city}** — إليك حالة الطقس الآن:`
-      : `## 🌤️ حالة الطقس في ${city} — اليوم`
+      ? `📍 حسب منطقتك المختارة فأنت في **${_cityArName}** — إليك حالة الطقس الآن:`
+      : `## 🌤️ حالة الطقس في **${_cityArName}** — اليوم`
 
     const formattedWeather = [
       _introLine,

@@ -13744,7 +13744,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // BYPASS: YouTube / video search — handled by YouTube Insight engine
     /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
     // BYPASS: Map / location queries — handled by DZ Maps intelligence engine
-    isMapQuery(lastUserMessage)
+    isMapQuery(lastUserMessage) ||
+    // BYPASS: Developer / owner identity questions — answered by static DEVELOPER_RESPONSE
+    isDeveloperOrOwnerQuestion(lastUserMessage) ||
+    // BYPASS: Capabilities questions — answered by static CAPABILITIES_RESPONSE
+    isCapabilitiesQuestion(lastUserMessage)
   if (!_isAgentMode && !_clarificationBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&

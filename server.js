@@ -194,7 +194,7 @@ import {
   isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS, findAlgerianClub,
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
-import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery } from './lib/sports-lookup.js'
+import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer } from './lib/sports-lookup.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14322,6 +14322,34 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       } catch (_sportErr) {
         console.error(`[SportsLookup] Error:`, _sportErr.message)
         // Continue to AI fallback — don't block the request
+      }
+    }
+
+    // 6e-bis. هل تقصد؟ — Fuzzy matching للأخطاء الإملائية في أسماء اللاعبين
+    if (_detectedPlayer === null && _isShortPlayerQuery) {
+      try {
+        const _fuzzy = fuzzyDetectPlayer(_lum)
+        if (_fuzzy) {
+          console.log(`[FuzzyPlayer] "${_lum}" → "${_fuzzy.arabic}" (${_fuzzy.confidence}%)`)
+          const _sportInfo = await getPlayerCurrentClub(_fuzzy.arabic)
+          const _sportContent = _sportInfo ? buildPlayerClubResponse(_sportInfo) : null
+          const _suggestionHeader = [
+            `> 💡 **هل تقصد: ${_fuzzy.arabic}؟** *(تشابه ${_fuzzy.confidence}%)*`,
+            `> لاحظتُ خطأً إملائياً بسيطاً — إليك المعلومات الصحيحة:`,
+            ``,
+          ].join('\n')
+          const _fullContent = _sportContent
+            ? _suggestionHeader + _sportContent
+            : _suggestionHeader + `## ⚽ ${_fuzzy.arabic}\n\nلم أتمكن من جلب التفاصيل الآن.`
+          return res.status(200).json({
+            content: _fullContent,
+            model: 'fuzzy-player-suggestion',
+            _fuzzy: { query: _lum, matched: _fuzzy.arabic, confidence: _fuzzy.confidence },
+            _sources: _sportInfo?.sources || [],
+          })
+        }
+      } catch (_fuzzyErr) {
+        console.error(`[FuzzyPlayer] Error:`, _fuzzyErr.message)
       }
     }
 

@@ -9976,6 +9976,43 @@ async function fetchJdwelMatches(dateStr = null) {
     } else {
       diagLog('source_fail', { module: 'jdwel.curl', error: curlRes.error })
     }
+    // Jina-reader fallback: r.jina.ai bypasses Cloudflare and returns clean Markdown
+    if (!html || groups.length === 0) {
+      try {
+        const jinaUrl = `https://r.jina.ai/${url}`
+        const jinaResp = await fetch(jinaUrl, {
+          headers: { 'User-Agent': 'DZ-Agent/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
+          signal: AbortSignal.timeout(15000),
+        })
+        if (jinaResp.ok) {
+          const md = await jinaResp.text()
+          if (md && md.length > 200) {
+            const mdGroups = parseJdwelMarkdown(md)
+            if (mdGroups.length > 0) {
+              const data = {
+                groups: mdGroups,
+                totalMatches: mdGroups.reduce((s, g) => s + g.matches.length, 0),
+                fetchedAt: new Date().toISOString(),
+                source: 'jdwel.com',
+                sourceUrl: url,
+                via: 'jina-reader',
+              }
+              JDWEL_CACHE.data = data
+              JDWEL_CACHE.ts = Date.now()
+              JDWEL_CACHE.date = cacheDate
+              diagLog('jdwel_jina_ok', { url, groups: mdGroups.length, total: data.totalMatches })
+              console.log(`[jdwel] ✓ (jina-reader) Parsed ${data.totalMatches} matches across ${mdGroups.length} leagues`)
+              return data
+            }
+            diagLog('empty', { module: 'jdwel.jina', url, mdLen: md.length })
+          }
+        } else {
+          diagLog('source_fail', { module: 'jdwel.jina', status: jinaResp.status })
+        }
+      } catch (jerr) {
+        diagLog('source_fail', { module: 'jdwel.jina', error: jerr.message })
+      }
+    }
     // Crawl4AI fallback: استخراج محتوى جدول المباريات بدون Jina AI
     // يستخدم fetch مباشر + proxy مفتوح كخيارات بديلة
     if (!html || groups.length === 0) {
@@ -10082,27 +10119,58 @@ const JDWEL_LEAGUE_MATCHERS = [
   { key: 'Serie A',          match: ['الدوري الإيطالي', 'serie a'] },
   { key: 'Bundesliga',       match: ['الدوري الألماني', 'bundesliga'] },
 ]
+// Leagues to EXCLUDE from the fallback all-leagues view (local/minor)
+const JDWEL_EXCLUDE_MATCHERS = [
+  'الدوري الجزائري',   // shown in the DZ card separately
+  'algerian',
+]
 async function fetchGlobalLeaguesJdwel(dateStr) {
   try {
     const j = await fetchJdwelMatches(dateStr)
     if (!j?.groups?.length) return null
+
+    // Helper to map a match from jdwel group
+    const mapMatch = m => ({
+      homeTeam:   m.homeTeam,
+      awayTeam:   m.awayTeam,
+      homeScore:  (m.statusType === 'finished' || m.statusType === 'live') ? m.homeScore : null,
+      awayScore:  (m.statusType === 'finished' || m.statusType === 'live') ? m.awayScore : null,
+      statusType: m.statusType === 'live' ? 'inprogress' : (m.statusType === 'finished' ? 'finished' : 'notstarted'),
+      startTime:  m.startTime || '',
+      link:       m.link || 'https://jdwel.com/today/',
+    })
+
+    // PRIMARY: try to match top-5 European leagues
     const grouped = {}
     for (const g of j.groups) {
       const lname = (g?.name || '').toLowerCase()
       const matched = JDWEL_LEAGUE_MATCHERS.find(x => x.match.some(s => lname.includes(s.toLowerCase())))
       if (!matched) continue
-      ;(grouped[matched.key] ??= []).push(...(g.matches || []).map(m => ({
-        homeTeam:  m.homeTeam,
-        awayTeam:  m.awayTeam,
-        homeScore: (m.statusType === 'finished' || m.statusType === 'live') ? m.homeScore : null,
-        awayScore: (m.statusType === 'finished' || m.statusType === 'live') ? m.awayScore : null,
-        statusType: m.statusType === 'live' ? 'inprogress' : (m.statusType === 'finished' ? 'finished' : 'notstarted'),
-        startTime: m.startTime || '',
-        link:      m.link || 'https://jdwel.com/today/',
-      })))
+      ;(grouped[matched.key] ??= []).push(...(g.matches || []).map(mapMatch))
     }
-    const leagues = Object.entries(grouped).map(([name, matches]) => ({ name, matches: matches.slice(0, 8) }))
-    return leagues.length ? { leagues, source: 'jdwel.com' } : null
+    const topLeagues = Object.entries(grouped).map(([name, matches]) => ({ name, matches: matches.slice(0, 8) }))
+
+    // Build all-leagues list (off-season / international break fallback)
+    // Excludes the Algerian league (it has its own card) and already-mapped top leagues
+    const topKeys = new Set(topLeagues.map(l => l.name))
+    const extraLeagues = j.groups
+      .filter(g => {
+        const lname = (g?.name || '').toLowerCase()
+        if (JDWEL_EXCLUDE_MATCHERS.some(ex => lname.includes(ex.toLowerCase()))) return false
+        // Skip if already covered by a top league
+        const matched = JDWEL_LEAGUE_MATCHERS.find(x => x.match.some(s => lname.includes(s.toLowerCase())))
+        return !matched
+      })
+      .map(g => ({ name: g.name, matches: (g.matches || []).map(mapMatch).slice(0, 8) }))
+      .filter(g => g.matches.length > 0)
+
+    // If ≥ 3 top European leagues, return them only
+    if (topLeagues.length >= 3) return { leagues: topLeagues, source: 'jdwel.com' }
+
+    // Otherwise (off-season / break) combine top + extra, up to 8 leagues total
+    const combined = [...topLeagues, ...extraLeagues].slice(0, 8)
+    if (combined.length) return { leagues: combined, source: 'jdwel.com', offSeason: topLeagues.length < 3 }
+    return null
   } catch (err) {
     console.warn('[GlobalLeagues:jdwel] error:', err.message)
     return null

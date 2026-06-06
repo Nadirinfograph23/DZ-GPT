@@ -9411,7 +9411,52 @@ async function fetchAlgerianLeague(opts = {}) {
     }
   } catch (err) { diagLog('source_fail', { module: 'algerian-league.lfp', error: err.message }) }
 
-  // Backup sources disabled — مصدر واحد رسمي فقط: lfp.dz/ar/calendar
+  // Step 2: BACKUP — jdwel.com (Algerian league today's matches via Jina reader)
+  // Activated when lfp.dz is blocked/unavailable (common when lfp.dz times out)
+  if (!sources.find(s => s.matches.length > 0)) {
+    try {
+      const jdwelAlg = await fetchAlgerianLeagueJdwel()
+      if (jdwelAlg?.matches?.length) {
+        sources.push({ source: 'jdwel.com', matches: jdwelAlg.matches, articles: [] })
+        diagLog('fallback', { module: 'algerian-league', from: 'lfp.dz', to: 'jdwel.com' })
+      }
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.jdwel', error: err.message }) }
+  }
+
+  // Step 3: BACKUP — jdwel fixtures page (full season schedule via Jina reader)
+  // Activated when today's jdwel data has no Algerian matches (no match day today)
+  if (!sources.find(s => s.matches.length > 0)) {
+    try {
+      const jinaUrl = 'https://r.jina.ai/https://jdwel.com/2025-2026-algerian-ligue-1-fixtures/'
+      const jinaRes = await fetch(jinaUrl, {
+        headers: { 'User-Agent': 'DZ-Agent/1.0' },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (jinaRes.ok) {
+        const md = await jinaRes.text()
+        // Parse fixture lines: "* TEAM1\n![...] S1 - S2 ![...]\nTEAM2"
+        const fixtureRe = /\*\s+([^\n!*]+?)\n[^\n]*?(\d+)\s*-\s*(\d+)[^\n]*\n\n([^\n!*]+)/g
+        const fixtureMatches = []
+        let fm
+        while ((fm = fixtureRe.exec(md)) !== null) {
+          const home = fm[1].trim()
+          const away = fm[4].trim()
+          if (!home || !away || home.length < 3 || away.length < 3) continue
+          if (!isCleanTeamName(home) || !isCleanTeamName(away)) continue
+          fixtureMatches.push({
+            round: 'Ligue 1', home, away,
+            homeScore: parseInt(fm[2]), awayScore: parseInt(fm[3]),
+            played: true, date: '', time: '',
+            link: 'https://jdwel.com/2025-2026-algerian-ligue-1-fixtures/',
+          })
+        }
+        if (fixtureMatches.length > 0) {
+          sources.push({ source: 'jdwel.com (fixtures)', matches: fixtureMatches.slice(0, 30), articles: [] })
+          diagLog('fallback', { module: 'algerian-league', from: 'lfp.dz|jdwel.today', to: 'jdwel.fixtures' })
+        }
+      }
+    } catch (err) { diagLog('source_fail', { module: 'algerian-league.jdwel-fixtures', error: err.message }) }
+  }
 
   // Merge: take first non-empty `matches` source as primary, accumulate articles
   const primary = sources.find(s => s.matches.length > 0) || sources[0] || null
@@ -9424,7 +9469,7 @@ async function fetchAlgerianLeague(opts = {}) {
     articles: allArticles,
     fetchedAt: new Date().toISOString(),
     source: primary?.source || 'lfp.dz',
-    sourcesAttempted: ['lfp.dz/ar/calendar'],
+    sourcesAttempted: ['lfp.dz/ar/calendar', 'jdwel.com', 'jdwel.com (fixtures)'],
     // إذا لا توجد مباريات — رسالة واضحة بدل البيانات القديمة
     noMatches: dedupedMatches.length === 0,
   }

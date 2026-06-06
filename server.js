@@ -18606,28 +18606,41 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // When real weather data is available, skip AI entirely to avoid latency
   // and prevent the model from adding "شرح:" or unwanted preamble.
   if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:')) {
+    // ── "أريد طقس مدينة أخرى" chip → ask user for city name ────────────────
+    const _isAskAnotherCity = /أريد طقس مدينة أخرى|🏙️ أريد طقس مدينة أخرى|بغيت طقس مدينة أخرى/i.test(lastUserMessage)
+    if (_isAskAnotherCity) {
+      return res.status(200).json({
+        content: `🌤️ بكل سرور! اكتب اسم المدينة التي تريد معرفة طقسها وسأجيبك بجدول كامل فوراً 📍\n\nمثلاً: **وهران**، **قسنطينة**، **عنابة**، **سطيف**، **بجاية**، **تلمسان**، **باتنة**...`,
+        quickSuggestions: ['طقس وهران', 'طقس قسنطينة', 'طقس عنابة', 'طقس سطيف', 'طقس بجاية', 'طقس تلمسان'],
+      })
+    }
+
     const wLines = weatherPriorityContext.split('\n')
     const city = (wLines.find(l => l.startsWith('city:')) || '').replace('city:', '').trim()
     const source = (wLines.find(l => l.startsWith('source:')) || '').replace('source:', '').trim() || 'open-meteo.com'
     const tableRows = wLines.filter(l => l.startsWith('|')).join('\n')
     const staleNote = wLines.find(l => l.startsWith('⚠️')) || ''
-    // Check if this city came from dashboard (user-set location) or auto-detected
-    const _dashboardCity = dashboardContext?.city || ''
-    const _cityFromDashboard = _dashboardCity && city && _dashboardCity.trim().toLowerCase() === city.trim().toLowerCase()
+
+    // Dashboard-triggered weather: greet with the user-selected city
+    const _fromDashboard = dashboardContext?.priority === 'weather'
     const _cityFromMessage = detectCityFromQuery(lastUserMessage)
-    const _cityNote = (_cityFromDashboard && !_cityFromMessage)
-      ? `\n> 📍 على حد علمي أنت في **${city}** (حسب بطاقة الطقس) — إذا أردت مدينة أخرى، قلي واش البلاصة؟`
-      : ''
+    const _introLine = (_fromDashboard && !_cityFromMessage)
+      ? `📍 حسب منطقتك المختارة فأنت في **${city}** — إليك حالة الطقس الآن:`
+      : `## 🌤️ حالة الطقس في ${city} — اليوم`
+
     const formattedWeather = [
-      `## 🌤️ حالة الطقس في ${city} — اليوم`,
+      _introLine,
       '',
       tableRows,
       '',
       staleNote,
       `> 📡 المصدر: **${source}**`,
-      _cityNote,
     ].filter(Boolean).join('\n')
-    return res.status(200).json({ content: formattedWeather })
+
+    return res.status(200).json({
+      content: formattedWeather,
+      quickSuggestions: ['🏙️ أريد طقس مدينة أخرى'],
+    })
   }
 
   // ── LFP + Standings fast-path: return directly — no AI needed ───────────

@@ -190,7 +190,7 @@ import {
   getAlgeriaPresidentByYear, isFutureYear, isPreIndependenceQuery,
   extractYearFromMessage, WORLD_LEADERS_2026, WORLD_FORMER_LEADERS,
   REAL_DZ_WILAYAS,
-  isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS,
+  isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS, findAlgerianClub,
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
@@ -13723,9 +13723,24 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.warn('[IntentRouter:early] failed silently:', _ire_early.message)
   }
 
+  // ── Moderation EARLY — يجب أن يكون قبل clarification حتى لا يمر المحتوى الخطير ──
+  const _earlyMod = moderateMessage(lastUserMessage)
+  if (!_earlyMod.ok) {
+    return res.status(200).json({ content: _earlyMod.replyIfBlocked })
+  }
+
   // ── Intent Clarification EARLY — قبل كل Fast-Paths بما فيها VerifyPolicy ──
   // إذا كان التصنيف المبكر يطلب توضيحاً وثقته منخفضة → نُعيد مباشرة
-  if (!_isAgentMode && _intentClassification?.needsClarification &&
+  // BYPASS: استثناءات لا تحتاج توضيحاً — static facts / future prediction / Algerian clubs
+  // NOTE: لا نستخدم \b مع العربية — \b لا يعمل مع أحرف غير ASCII
+  const _clarificationBypass =
+    isStaticQuery(lastUserMessage) ||
+    /(?:ستفوز|سيفوز|سيهزم|ستهزم|ستكون\s+نتيجة|ستنتصر|سينتصر|من\s+سيفوز|من\s+ستفوز|شكون\s+(?:غادي\s+)?(?:يربح|يفوز))/i.test(lastUserMessage) ||
+    /(?:شبيبة القبائل|JSK|مولودية الجزائر|MCA|اتحاد العاصمة|USMA|شباب بلوزداد|CRB|وفاق سطيف|ESS)/i.test(lastUserMessage) ||
+    /(?:كم\s+مرة|كأس\s+أمم|AFCON|CAN[\s؟?]|كأس\s+العالم|مونديال).*(?:الجزائر|المنتخب)/i.test(lastUserMessage) ||
+    /(?:الجزائر|المنتخب\s+الجزائري).*(?:فاز|ربح|بطل|كأس\s+أمم|AFCON)/i.test(lastUserMessage)
+  if (!_isAgentMode && !_clarificationBypass &&
+      _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
       _intentClassification?.confidence < 40) {
     console.log(`[IntentRouter] ⚠ Clarification early fast-path (before VerifyPolicy)`)
@@ -13734,13 +13749,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       status: 'clarification_required',
       intent: _intentClassification.intent,
     })
-  }
-
-  // ── Moderation EARLY — must run before static facts / cache ─────────────
-  // Content Safety check first so dangerous queries never hit any fast-path
-  const _earlyMod = moderateMessage(lastUserMessage)
-  if (!_earlyMod.ok) {
-    return res.status(200).json({ content: _earlyMod.replyIfBlocked })
   }
 
   // ── Anti-Hallucination Pre-check — أماكن/أحداث وهمية (قبل static facts) ──
@@ -13900,6 +13908,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })
     }
 
+    // 6a2. BUG-2 FIX: تنبؤ بنتيجة مباراة قادمة (بدون سنة)
+    // NOTE: \b لا يعمل مع العربية — نحذفه هنا
+    if (/(?:ستفوز|سيفوز|سيهزم|ستهزم|ستكون\s+نتيجة|ستنتهي|ستنتصر|سيحتل|سينتصر|من\s+سيفوز|من\s+ستفوز|شكون\s+(?:غادي\s+)?(?:يربح|يفوز))/i.test(_lum) &&
+        /(?:مباراة|لقاء|مواجهة|ضد|على\s+\S|match)/i.test(_lum) &&
+        !_futureYearMatch) {
+      console.log(`[AntiHallucination] Near-future match prediction: "${_lum.slice(0, 60)}"`)
+      return res.status(200).json({
+        content: [
+          `## ⚠️ تنبؤ بنتيجة مباراة`,
+          ``,
+          `**لا يمكنني التنبؤ بنتائج المباريات القادمة.**`,
+          ``,
+          `نتائج المباريات تُعرف فقط بعد انتهائها — أي تنبؤ سيكون تخميناً لا معلومة.`,
+          ``,
+          `> 🛡️ يمكنني إخبارك بـ **جدول المباريات المقررة** (التوقيت والفرق) إذا أردت.`,
+        ].join('\n'),
+        model: 'anti-hallucination',
+      })
+    }
+
     // 6b. نتائج/مباريات "غدا أو بكرة" → مستقبلية لا نعلمها
     if (/(?:غدا?|بكر[اة]|الغد)\b.*(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب)|(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب).*(?:غدا?|بكر[اة]|الغد)\b/i.test(_lum)) {
       console.log(`[AntiHallucination] Tomorrow sports result query`)
@@ -13942,6 +13970,36 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         content: _impossibleEntity.response,
         model: 'anti-hallucination',
       })
+    }
+
+    // 6e0. BUG-4 FIX: أندية جزائرية ثابتة — منع هلوسة الأندية الأجنبية
+    // يُعالج: "متى تأسس شبيبة القبائل؟" "معلومات عن مولودية الجزائر"
+    if (/(?:شبيبة القبائل|JSK|مولودية الجزائر|MCA|اتحاد العاصمة|USMA|شباب بلوزداد|CRB|وفاق سطيف|ESS)/i.test(_lum) &&
+        /(?:تأسس|أسس|تأسيس|أسست|سنة|عام|تاريخ|معلومات|من\s+هو|أين|ملعب|ألقاب|بطولات|فاز|ربح|عناوين|founded|history|club\s+info)/i.test(_lum)) {
+      const _club = findAlgerianClub(_lum)
+      if (_club) {
+        console.log(`[DZSports] Algerian club static fact: ${_club.name_ar}`)
+        const _titlesParts = []
+        if (_club.titles_ligue1) _titlesParts.push(`🏆 **الدوري الجزائري:** ${_club.titles_ligue1} لقب`)
+        if (_club.titles_can)   _titlesParts.push(`🌍 **دوري أبطال أفريقيا:** ${_club.titles_can} لقب`)
+        return res.status(200).json({
+          content: [
+            `## ⚽ ${_club.name_ar} (${_club.abbr || _club.name_fr})`,
+            ``,
+            `📅 **سنة التأسيس:** ${_club.founded}`,
+            `📍 **المدينة:** ${_club.city}`,
+            _club.stadium ? `🏟️ **الملعب:** ${_club.stadium}` : '',
+            `🎨 **الألوان:** ${_club.colors || 'غير محدد'}`,
+            ``,
+            ..._titlesParts,
+            _club.notes ? `\n> 📝 ${_club.notes}` : '',
+            ``,
+            `📚 **المصدر:** حقيقة رياضية ثابتة — ثقة 100%`,
+          ].filter(l => l !== '').join('\n'),
+          model: 'dz-knowledge-static',
+          _static: true,
+        })
+      }
     }
 
     // 6e. نادي رياض محرز الحالي — منع هلوسة "مانشستر سيتي"
@@ -14253,7 +14311,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // يعمل حتى بدون أوامر صريحة: تصحيح / تعريف / مصدر مرجعي
   if (_ownerTok) {
     // نفحص هوية المالك فقط إذا كانت الرسالة تحتوي إشارة لتصحيح/تعريف/مصدر
-    const _hasLearningSignal = /الصواب|الصحيح|خطأ|صحّح|تصحيح|ليس.*بل|في الحقيقة|في الواقع|هو\s+|تعني?|يعني?|تعريف|معنى|مرجع|مصدر\s+موثوق|راجع|reference|definition|correction/i.test(lastUserMessage)
+    // BUG-3 FIX: تشديد regex — "هو\s+" كان يلتقط "من هو؟" و"ما هو؟" كإشارة تعلم خاطئة
+    // الآن نشترط صيغة صريحة للتصحيح أو التعريف مع مساواة (=، يعني، هو X)
+    const _hasLearningSignal = /الصواب\s+(?:هو\s+)?[^\s]|الصحيح\s+(?:هو\s+)?[^\s]|(?:خطأ|صحّح|تصحيح)[،,\s]+(?:الصحيح|الصواب)|ليس\s+.{2,40}\s+بل\s+|في الحقيقة\s+[^\s]|في الواقع\s+[^\s]|تعريف[:\s]+[^\s]|معنى[:\s]+[^\s]|مصدر\s+موثوق|reference:|definition:|correction:/i.test(lastUserMessage)
     if (_hasLearningSignal) {
       const _isOwnerSilent = await verifyOwnerToken(_ownerTok)
       if (_isOwnerSilent) {

@@ -18033,6 +18033,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       weatherPriorityContext = [
         `context: weather_priority`,
         `city: ${w.city}`,
+        `temperature: ${w.temp}°C`,
+        `feels_like: ${w.feels_like}°C`,
+        `min_max: ${w.temp_min}°C / ${w.temp_max}°C`,
+        `condition: ${w.condition}`,
+        `humidity: ${w.humidity ?? '—'}%`,
+        `wind: ${w.wind ?? '—'} كم/س`,
+        `visibility: ${w.visibility != null ? w.visibility + ' كم' : 'غير متوفر'}`,
         `| العنصر | القيمة |`,
         `|---|---|`,
         `| 🌡️ درجة الحرارة | ${w.temp}°C (تشعر بـ ${w.feels_like}°C) |`,
@@ -18040,7 +18047,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         `| 📊 الحالة | ${w.condition} |`,
         `| 💧 الرطوبة | ${w.humidity ?? '—'}% |`,
         `| 💨 الرياح | ${w.wind ?? '—'} كم/س |`,
-        `| 👁️ الرؤية | ${w.visibility ?? '—'} كم |`,
+        `| 👁️ الرؤية | ${w.visibility != null ? w.visibility + ' كم' : '—'} |`,
         `source: ${w.source || 'open-meteo.com'}`,
         w.status === 'stale' ? `⚠️ بيانات مؤقتة — منذ ${w.staleAgeMin} دقيقة` : '',
       ].filter(Boolean).join('\n')

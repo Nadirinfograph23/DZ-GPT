@@ -9212,9 +9212,25 @@ async function fetchLFPData() {
     return data
   } catch (err) {
     console.error('[LFP] Scraping error:', err.message)
-    // Task 24: always return something
+    // Task 24: always return something — try jdwel.com before giving up
     const stale = SPORTS_CACHE_V2.getStale('lfp')
-    return stale?.data || LFP_CACHE.data || { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
+    if (stale?.data) return stale.data
+    if (LFP_CACHE.data) return LFP_CACHE.data
+    // jdwel.com fallback when lfp.dz is blocked
+    try {
+      console.log('[LFP] lfp.dz blocked — trying jdwel.com fallback')
+      const jdwelData = await fetchAlgerianLeagueJdwel()
+      if (jdwelData?.matches?.length) {
+        const data = { matches: jdwelData.matches, articles: [], fetchedAt: new Date().toISOString(), source: jdwelData.source || 'jdwel.com' }
+        LFP_CACHE.data = data; LFP_CACHE.ts = Date.now()
+        SPORTS_CACHE_V2.set('lfp', data)
+        console.log(`[LFP] jdwel fallback OK — ${jdwelData.matches.length} matches`)
+        return data
+      }
+    } catch (jdwelErr) {
+      console.warn('[LFP] jdwel fallback failed:', jdwelErr.message)
+    }
+    return { matches: [], articles: [], fetchedAt: null, source: 'lfp.dz' }
   }
 }
 

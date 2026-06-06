@@ -204,7 +204,7 @@ function getArName(enName: string) {
   return WILAYAS.find(w => w.en === enName)?.ar || enName
 }
 
-type DashboardContext = { priority: 'weather'; city: string }
+type DashboardContext = { priority: 'weather'; city: string; cityAr?: string }
 
 type ModalStep = 'ask' | 'loading' | 'denied' | 'error'
 
@@ -790,7 +790,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : weatherData && weatherData.temp !== null ? (
               <div
                 className={`dzd-weather-main-card ${getWeatherBg(weatherData.icon)}`}
-                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity })}
+                onClick={() => onSend(`حالة الطقس في ${getArName(selectedCity)} اليوم`, { priority: 'weather', city: selectedCity, cityAr: getArName(selectedCity) })}
               >
                 <div className="dzd-wmc-header">
                   <div className="dzd-wmc-city">
@@ -870,7 +870,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.news).map((item, i) => (
-                  <div key={i} className="dzd-news-card" onClick={() => onSend(`اخبار: ${item.title}`)}>
+                  <div key={i} className="dzd-news-card" onClick={() => onSend(`لخّص لي هذا الخبر وأعطني أبرز تفاصيله:\n"${item.title}"`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source"><Newspaper size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -962,7 +962,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 {(data?.sports || []).length > 0 && (
                   <div className="dzd-news-list dzd-sports-news-list">
                     {(data?.sports || []).slice(0, 5).map((item, i) => (
-                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`رياضة: ${item.title}`)}>
+                      <div key={i} className="dzd-news-card dzd-news-card--sport" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر الرياضي:\n"${item.title}"`)}>
                         <div className="dzd-news-card-left">
                           <span className="dzd-news-source dzd-news-source--sport"><Trophy size={9} /> {item.feedName}</span>
                           <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
@@ -1250,7 +1250,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
             ) : (
               <div className="dzd-news-list">
                 {(data.tech).map((item, i) => (
-                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`تقنية: ${item.title}`)}>
+                  <div key={i} className="dzd-news-card dzd-news-card--tech" onClick={() => onSend(`أعطني ملخصاً عن هذا الخبر التقني:\n"${item.title}"`)}>
                     <div className="dzd-news-card-left">
                       <span className="dzd-news-source dzd-news-source--tech"><Cpu size={9} /> {item.feedName}</span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>

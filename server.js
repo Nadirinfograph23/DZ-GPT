@@ -2030,45 +2030,86 @@ const TOOL_REDIRECT_MAP = [
 function detectToolRedirect(msg) {
   if (!msg || msg.length < 5) return null
 
-  // ── Hard exclusions — DZ Agent يتعامل مع هذه نيتفاً، لا توجيه أبداً ───
-  // Image GENERATION (not search — search has its own handler)
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 1: فهم النية أولاً قبل أي توجيه
+  // القاعدة: صنّف ← تحقق ← وجّه. لا إجابة مباشرة بدون تصنيف.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── تصنيف 1: أخبار وأحداث آنية/حديثة → SearXNG (معالج مدمج فقط) ──────────
+  // SearXNG لا يتدخل إلا للأخبار والأحداث — أي شيء آخر يذهب لمعالجه الخاص
+  if (/(?:خبر|أخبار|حدث|أحداث|ماذا\s*حدث|ماذا\s*يحدث|أحدث\s*(?:أخبار|معلومات)|جديد\s*(?:في|عن|اليوم)|آخر\s*(?:أخبار|مستجدات)|عاجل|breaking|news\b|actualité)/i.test(msg)) return null
+  // الطقس — معالج مدمج (ليس SearXNG)
+  if (/(?:كيف|ما|كاين|واش)\s*(?:الطقس|الجو)|طقس\s*(?:اليوم|غداً|الليلة|هذا)|weather\s*(?:today|now|in)/i.test(msg)) return null
+
+  // ── تصنيف 2: بحث عن مكان → بطاقة الخريطة الكاملة (معالج مدمج) ─────────────
+  // الاتجاهات والمسارات
+  if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
+  // أسماء أماكن: مساجد، مستشفيات، محاكم، مدارس، جامعات
+  if (/(?:مسجد|جامع|كنيسة|كنيس|كاتدرائية|مزار|ضريح|زاوية)\s+\S+/i.test(msg)) return null
+  if (/(?:مستشفى|مستوصف|عيادة|مركز\s*صحي|سبيطار|سبيطال|إيبيتار)\s+\S+/i.test(msg)) return null
+  if (/(?:محكمة|بلدية|ولاية|دائرة|مديرية|دار\s*بلدية|قصر\s*العدالة)\s+\S+/i.test(msg)) return null
+  if (/(?:جامعة|كلية|معهد|ثانوية|متوسطة|ابتدائية|مدرسة)\s+\S+/i.test(msg)) return null
+  // isMapQuery الشامل — يغطي POI والاستفسارات الجغرافية
+  if (isMapQuery(msg)) return null
+
+  // ── تصنيف 3: شخصية عامة → ويكيبيديا / Wikidata / DBpedia (معالج مدمج) ──────
+  // رئيس / وزير / لاعب / كاتب / ممثل / مؤلف / مخرج / عالم / فنان
+  if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg)) return null
+  if (/(?:رئيس|وزير|ملك|أمير|لاعب|كاتب|ممثل|مؤلف|مخرج|عالم|فنان|شاعر|مغني|رياضي)\s+(?:\S+\s*){1,4}(?:من\s*(?:هو|هي|هم))?/i.test(msg)) return null
+
+  // ── تصنيف 4: كرة قدم / فرق / نتائج / مباريات / بطولات → بيانات رياضية ────────
+  // (لاعب، فريق، نتائج، مباريات اليوم، مباريات سابقة، أرشيف، دوريات، تتويج)
+  if (/(?:نتيجة|نتائج|هداف|أهداف\s*اليوم|مباراة|مباريات(?:\s*اليوم)?|برنامج\s*مباريات|جدول\s*مباريات)/i.test(msg)) return null
+  if (/(?:دوري|بطولة|كأس|دور|تتويج|بطل|لقب)\s*(?:الجزائر|الجزائري|أفريقيا|أوروبا|العالم|مصر|تونس)?/i.test(msg)) return null
+  if (/(?:فريق|أندية|نادي|منتخب)\s+\S+|(?:الفريق|النادي|المنتخب)\s*(?:الجزائري|الوطني)/i.test(msg)) return null
+  if (/(?:ليغ|ليغ\s*بروفيسيونال|LFP|الرابطة\s*المحترفة|كان|AFCON|CAN\b)/i.test(msg)) return null
+
+  // ── تصنيف 5: بحث في يوتيوب "بالفيديو" → محرك YouTube Insight (8 نتائج + تحليل) ─
+  // الكلمة المشغِّلة: بالفيديو / يوتيوب / أغنية / كليب / موسيقى
+  if (/يوتيوب|youtube|بالفيديو|(?:ا?بحث|دور|جيبلي|شوفلي)\s*(?:على|عن|لي)?\s*(?:فيديو|مقطع|يوتيوب|اغنية|أغنية)|(?:ا?بحث|دور)\s*.*فيديو|فيديو\s*(?:شرح|تعليمي|درس)|اغنية|أغنية|موسيقى|كليب\b/i.test(msg)) return null
+
+  // ── تصنيف 6: طبيب / تخصص طبي / عيادة → قائمة أطباء (معالج مدمج) ────────────
+  // أريد طبيب + تخصص + ولاية/مدينة → يظهر الأطباء
+  if (/(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز\s*صحي|نبغي\s*طبيب|نقلب\s*على\s*طبيب|أسنان|ضروس|نسائية|قلبي|عيون|بصريات|جلدية|عظام|أعصاب|مسالك|médecin|docteur|dentiste|cardiologue|ophtalmologue)/i.test(msg)) return null
+
+  // ── تصنيف 7: سعر الصرف / الدولار / اليورو مقابل الدينار → جدول الصرف ─────────
+  if (/(?:سعر|صرف|تحويل|كم\s*(?:يساوي?|هو\s*سعر)|سعر\s*اليوم)\s*(?:الدولار|الدينار|اليورو|دولار|يورو|دينار|EUR|USD|GBP|DZD)|(?:EUR|USD|GBP|DZD|dollar|euro|dinar).*(?:DZD|دينار|صرف|اليوم)|صرف\s*العملات|أسعار\s*الصرف/i.test(msg)) return null
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // استثناءات الأدوات المدمجة الأخرى — لا توجيه لصفحة أداة
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // توليد صور (≠ بحث عن صور)
   if (/ارسم|أرسم|رسم\s*لي|صورة\s*عن|اصنع\s*صورة|أنشئ\s*صورة|generate\s*image|create\s*image|draw\s*me|text[\s-]to[\s-]image/i.test(msg)) return null
-  // Presentations (handled natively by DZ Agent)
+  // عروض تقديمية
   if (/عرض\s*تقديمي|شرائح|بوربوينت|powerpoint|ppt\b|presentation/i.test(msg)) return null
-  // YouTube / video search — DZ Agent handles this via DZ-Tube integration
-  if (/يوتيوب|youtube|بالفيديو|(?:ا?بحث|دور)\s*(?:على|عن)\s*(?:فيديو|مقطع|يوتيوب)|(?:ا?بحث|دور)\s*.*فيديو|فيديو\s*(?:شرح|تعليمي|درس)|اغنية|أغنية/i.test(msg)) return null
-  // Book search — DZ Agent searches directly
-  if (/ابحث\s*(?:على|عن)\s*كتاب|books?\s*search/i.test(msg)) return null
-  // Weather / news — handled natively
-  if (/(?:كيف|ما)\s*(?:الطقس|الجو)|طقس\s*(?:اليوم|غداً)|أخبار\s*(?:اليوم|الجزائر)|weather\s*today|news\s*today/i.test(msg)) return null
-  // Code help — handled natively (ALL code/algorithm/programming requests)
-  if (/(?:اشرح|افهمني|ساعدني\s*في)\s*(?:الكود|البرمجة)|خطأ\s*(?:في|ب)\s*(?:الكود|البرنامج)|debug\b|javascript|python|react\b/i.test(msg)) return null
+  // برمجة وكود — معالج مدمج
+  if (/(?:اشرح|افهمني|ساعدني\s*في)\s*(?:الكود|البرمجة)|خطأ\s*(?:في|ب)\s*(?:الكود|البرنامج)|debug\b/i.test(msg)) return null
   if (/(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|اصنع|برمج|نفذ|شغل|اكتبلي|اكتب\s*لي)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)/i.test(msg)) return null
   if (/(?:كيف\s*أكتب|كيف\s*أبرمج|كيف\s*أنشئ|كيف\s*أعمل)\s*(?:برنامج|كود|سكريبت|دالة)/i.test(msg)) return null
   if (/(?:متتالية|خوارزمية|algorithm|fibonacci|فيبوناتشي|مرتّب|ترتيب|sort|search|بحث\s*ثنائي|binary\s*search|recursion|تعاود)/i.test(msg)) return null
   if (/\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php|ruby|swift|kotlin|sql|bash|shell)\b.*(?:كود|برنامج|احسب|اكتب|دالة|function|script)/i.test(msg)) return null
   if (/(?:كود|برنامج|script|function)\b.*\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php)/i.test(msg)) return null
-  // Maps / directions — handled natively by DZ Maps Intelligence Engine
-  // Covers explicit words AND any isMapQuery — POI + location always routes to OSM
-  if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
-  if (isMapQuery(msg)) return null
-  // Quran tafsir / meaning — handled natively (NOT audio which should redirect)
-  if (/(?:تفسير|معنى|شرح|فسّر)\s*(?:آية|سورة|الآية)|tafsir\b/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
-  // Creative writing IN Darija — DZ Agent handles this natively (NOT a translation request)
+  // كتابة إبداعية بالدارجة
   if (/(?:اكتب|اكتبلي|اكتب\s*لي|انشئ|أنشئ|دير|اعمل|قولي)\s*.+\s*(?:بالدارجة|بالدارجة\s*الجزائرية)/i.test(msg)) return null
   if (/(?:قصيدة|قصة|مقال|نكتة|أغنية|خطبة|رسالة)\s*.+\s*(?:بالدارجة|دارجة)/i.test(msg)) return null
-  // Web reading (URLs) — handled natively
+  // روابط خارجية → قارئ الويب
   if (/https?:\/\//i.test(msg)) return null
-  // GitHub operations (repo management, push, commit) — handled natively via GitHub Agent
+  // GitHub
   if (/github\.com\/|(?:push|commit)\s*(?:to\s*)?github|(?:مستودع|repo)\s*github/i.test(msg)) return null
-  // Quran (text/AI answer) — only redirect for audio/recitation
+  // القرآن (نص / تفسير) — التوجيه فقط للصوت
+  if (/(?:تفسير|معنى|شرح|فسّر)\s*(?:آية|سورة|الآية)|tafsir\b/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
   if (/(?:سورة|آية|قرآن)\s*(?:كريم)?$/i.test(msg.trim()) && !/(?:صوت|تلاوة|استمع|مقرئ|سماع)/i.test(msg)) return null
-  // Excel formulas / single cell questions — answered in chat directly
+  // دوال Excel فقط (لا إنشاء ملف)
   if (/(?:دالة|formula)\s*(?:excel|إكسيل)|vlookup|sumif|hlookup|countif/i.test(msg) && !/(?:افتح|انشئ|أنشئ|جدول)/i.test(msg)) return null
-  // Image search — has its own dedicated handler (not a tool redirect)
+  // بحث عن صور (لا توليد)
   if (/(?:جيبلي|جيب|ابحث)\s*(?:لي\s*)?صورة|بحث.*صور|image\s*search/i.test(msg)) return null
+  // كتب
+  if (/ابحث\s*(?:على|عن)\s*كتاب|books?\s*search/i.test(msg)) return null
 
-  // ── Match against tool map ──────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 2: توجيه لصفحات الأدوات المتخصصة (CV، فاتورة، خطة عمل…)
+  // ══════════════════════════════════════════════════════════════════════════
   for (const tool of TOOL_REDIRECT_MAP) {
     if (tool.patterns.some(p => p.test(msg))) {
       return {
@@ -18219,6 +18260,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         || msgIntent.all.some(i => ['celebrities','incidents','news','politics'].includes(i))
         || !!newsQueryType
 
+      // SearXNG يعمل فقط للأخبار والأحداث الآنية — لا يتدخل في الاستفسارات العامة
+      // (رياضة/اقتصاد/تقنية/سياسة لها معالجاتها الخاصة — SearXNG للأخبار فقط)
+      const _allowSearXNG = msgIntent.isTemporal
+        || ['news','incidents'].includes(msgIntent.primary)
+        || msgIntent.all.some(i => ['incidents','news'].includes(i))
+        || !!newsQueryType
+
       console.log(`[DZ Retrieval] Query: "${cseQuery}" | subject="${newsSubject || ''}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + web fallback (always)
@@ -18277,8 +18325,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               .sort((a, b) => b._score - a._score).slice(0, 8)
             scoredResults = freshScored
             console.log(`[DZ Retrieval] Re-search returned ${freshResults.length} results`)
-          } else {
-            // Stale re-search also failed → inject SearXNG results directly
+          } else if (_allowSearXNG) {
+            // Stale re-search also failed → inject SearXNG results (أخبار/أحداث فقط)
             try {
               const searxQ = normalizeDZQuery(retrievalQuery || lastUserMessage)
               console.log(`[SearXNG Stale] Trying after stale re-search: "${searxQ.slice(0,60)}"`)
@@ -18365,12 +18413,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
         hasNewsResults = true
         console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
-      } else if (mustSearch) {
-        // ── SearXNG Fallback — try when CSE/GN-RSS/DDG all return nothing ──
-        // Normalize Algerian dialect → formal Arabic before sending to SearXNG
+      } else if (_allowSearXNG) {
+        // ── SearXNG Fallback — للأخبار والأحداث الآنية فقط (أخبار/incidents) ──
+        // لا يُفعَّل للرياضة العامة / الاقتصاد / السياسة — لها معالجاتها الخاصة
         try {
           const searxQuery = normalizeDZQuery(retrievalQuery || lastUserMessage)
-          console.log(`[SearXNG Fallback] Trying: "${searxQuery.slice(0,60)}" (normalized from: "${(retrievalQuery||lastUserMessage).slice(0,40)}")`)
+          console.log(`[SearXNG Fallback] Trying (news-only): "${searxQuery.slice(0,60)}"`)
           const searxResults = await searchSearXNG(searxQuery, { timeoutMs: 8000, maxResults: 6 })
           if (searxResults.length > 0) {
             webSearchContext = formatSearXNGContext(searxResults, searxQuery)

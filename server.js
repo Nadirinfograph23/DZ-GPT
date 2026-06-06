@@ -6457,9 +6457,9 @@ function detectQueryIntent(msg) {
     economy:     ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
     politics:    ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
     tech:        ['تقنية','تكنولوجيا','ذكاء','اصطناعي','نموذج','نماذج','برمجة','تطبيق','هاكر','أمن','روبوت','شات','جيبيتي','كلود','جيميني','ميسترال','لاما','برمجة','tech','technology','ai','artificial intelligence','llm','chatgpt','claude','gemini','mistral','llama','openai','software','app','cyber','security','startup','code','programming','model','robot'],
-    news:        ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','news','latest','today','breaking','recent','actualité'],
+    news:        ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','مستجدات','تطورات','تحديث','نبأ','بيان','إعلان','news','latest','today','breaking','recent','actualité','واش صرا','وش صرا','واش صار','شنو صرا','ماذا حدث'],
     celebrities: ['نجم','نجمة','فنان','فنانة','ممثل','ممثلة','مطرب','مطربة','رياضي','شخصية','مشهور','مشهورة','سيلبريتي','celebrity','celebrities','actor','actress','singer','star','famous','influencer','vedette'],
-    incidents:   ['حادثة','حادث','كارثة','انفجار','زلزال','فيضان','حريق','اعتداء','هجوم','اغتيال','وفاة','مات','مقتل','accident','incident','disaster','explosion','earthquake','flood','fire','attack','death','killed','tragedy'],
+    incidents:   ['حادثة','حادث','كارثة','انفجار','تفجير','زلزال','فيضان','حريق','اعتداء','هجوم','اغتيال','وفاة','مات','مقتل','استقال','اعتُقل','إقالة','سقط','غرق','انهيار','ضحايا','قتلى','مصابين','accident','incident','disaster','explosion','earthquake','flood','fire','attack','death','killed','tragedy','assassination','arrested','resignation'],
   }
 
   const detected = []
@@ -6467,9 +6467,22 @@ function detectQueryIntent(msg) {
     if (kws.some(k => lower.includes(k))) detected.push(intent)
   }
 
-  const temporalMarkers = ['اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent','current','this week','cette semaine','maintenant','أخيراً','مؤخراً','recently','هذا الأسبوع','هذا الشهر','هذه السنة','الأسبوع الماضي','الشهر الماضي','الأسبوع','الأخيرة','الأخير','هذه الفترة','جديدة','جديد','جديداً','حديثاً','حديث']
-  const isTemporal = temporalMarkers.some(m => lower.includes(m)) || /\b(20[2-9]\d)\b/.test(msg)
+  // مؤشرات زمنية موسّعة — تشمل الدارجة الجزائرية
+  const temporalMarkers = [
+    'اليوم','الآن','آخر','جديد','2025','2026','حالياً','latest','today','now','recent',
+    'current','this week','cette semaine','maintenant','أخيراً','مؤخراً','recently',
+    'هذا الأسبوع','هذا الشهر','هذه السنة','الأسبوع الماضي','الشهر الماضي',
+    'الأسبوع','الأخيرة','الأخير','هذه الفترة','جديدة','جديد','جديداً','حديثاً','حديث',
+    // دارجة جزائرية
+    'واش صرا','وش صرا','واش صار','واش صاري','واش كاين جديد','واش راه',
+    'دروك','درك','توا','هاذ الأيام','البارح','طرى','طرا','صار','وقع',
+    'شنو صرا','شنو جرا','واش جرا','وش جرا',
+    // فرنسية
+    'actuellement','dernières nouvelles','en ce moment','cette semaine',
+  ]
+  const isTemporal = temporalMarkers.some(m => lower.includes(m.toLowerCase())) || /\b(20[2-9]\d)\b/.test(msg)
     || detected.includes('celebrities') || detected.includes('incidents')
+    || isTimeSensitiveQuery(msg)
 
   return { primary: detected[0] || 'general', all: detected, isTemporal, isArabic }
 }
@@ -18467,12 +18480,25 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
+  // ── كشف النية الزمنية الحساسة (أحداث / حوادث / أخبار عاجلة) ─────────────────
+  const _timeSensitiveIntent = detectTimeSensitiveIntent(lastUserMessage)
+  const _isTimeSensitiveEvent = _timeSensitiveIntent.isTimeSensitive
+  if (_isTimeSensitiveEvent) {
+    console.log(`[Event Intent] ${_timeSensitiveIntent.eventType} conf=${_timeSensitiveIntent.confidence.toFixed(2)} trigger=${_timeSensitiveIntent.trigger}`)
+    // تعزيز الـ intent إذا لم يُكتشف تلقائياً
+    if (!msgIntent.all.includes('incidents') && !msgIntent.all.includes('news')) {
+      msgIntent.all.push('incidents')
+      if (msgIntent.primary === 'general') msgIntent.primary = 'incidents'
+    }
+    msgIntent.isTemporal = true
+  }
+
   const _isProgrammingTutorial = /أفضل ممارسات|best practices|design pattern|أنماط.*تصميم|مبادئ.*تصميم|REST API.*شرح|شرح.*REST|كيف.*تصميم.*API|ما هي.*REST|REST.*ما هي|SOLID|معايير.*كود|clean code|كيف.*أكتب.*كود|كيف.*أنشئ.*API/i.test(lastUserMessage)
   const _isDirectCodeRequest = /(?:اكتب|أكتب|انشئ|أنشئ|اعمل|دير|برمج|نفذ)\s*(?:لي\s*)?(?:كود|برنامج|سكريبت|دالة|خوارزمية|class|function|script|algorithm)|(?:متتالية|خوارزمية|fibonacci|فيبوناتشي|مرتّب|sort|recursion|تعاود)/i.test(lastUserMessage)
   // السؤال الواقعي المباشر (من هو؟ / ما هو؟) بدون مؤشرات أخبار أو زمن → يُجيب مباشرة بدون بحث
   const _isDirectFactual = isDirectFactualQuestion(lastUserMessage) && !msgIntent.isTemporal && msgIntent.primary !== 'news'
   // isTemporal overrides football skip: "متى كأس العالم 2026؟" needs Wikipedia, not SofaScore
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
 
   if (!skipSearch) {
     try {
@@ -18480,19 +18506,32 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       // so CSE and GN-RSS search precisely for that subject rather than the full sentence
       const retrievalQuery = newsSubject || lastUserMessage
       const { cseQuery, rssQuery, enQuery } = buildOptimizedQueries(retrievalQuery, msgIntent)
-      const mustSearch = msgIntent.isTemporal
+      const mustSearch = msgIntent.isTemporal || _isTimeSensitiveEvent
         || ['news','sports','economy','politics','tech','celebrities','incidents'].includes(msgIntent.primary)
         || msgIntent.all.some(i => ['celebrities','incidents','news','politics'].includes(i))
         || !!newsQueryType
 
-      // SearXNG يعمل فقط للأخبار والأحداث الآنية — لا يتدخل في الاستفسارات العامة
-      // (رياضة/اقتصاد/تقنية/سياسة لها معالجاتها الخاصة — SearXNG للأخبار فقط)
-      const _allowSearXNG = msgIntent.isTemporal
+      // SearXNG يعمل بشكل أساسي (موازٍ) للأخبار والأحداث الآنية
+      // يشمل الآن الأحداث الحساسة زمنياً (واش صرا / حادث / انفجار / استقالة...)
+      const _allowSearXNG = msgIntent.isTemporal || _isTimeSensitiveEvent
         || ['news','incidents'].includes(msgIntent.primary)
         || msgIntent.all.some(i => ['incidents','news'].includes(i))
         || !!newsQueryType
 
-      console.log(`[DZ Retrieval] Query: "${cseQuery}" | subject="${newsSubject || ''}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} mustSearch=${mustSearch}`)
+      // للاستعلامات الزمنية الحساسة — نبني استعلام محسّن للبحث (الدارجة → فصحى)
+      const _eventSearchQuery = _isTimeSensitiveEvent
+        ? buildEventSearchQuery(lastUserMessage)
+        : (newsSubject || lastUserMessage)
+      const _primarySearchQuery = _eventSearchQuery || cseQuery
+
+      console.log(`[DZ Retrieval] Query: "${_primarySearchQuery.slice(0,60)}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} timeSensitive=${_isTimeSensitiveEvent} eventType=${_timeSensitiveIntent.eventType}`)
+
+      // ── SearXNG موازٍ للأحداث الحساسة — يُطلق في نفس الوقت مع CSE/GN ────────
+      // الهدف: الحصول على نتائج حية قبل انتهاء CSE (لا انتظار كـ fallback)
+      const _parallelSearXNGPromise = (_allowSearXNG && _isTimeSensitiveEvent)
+        ? searchSearXNG(_primarySearchQuery, { categories: 'news,general', timeoutMs: 7000, maxResults: 6 })
+            .catch(e => { console.warn('[SearXNG Parallel] failed:', e.message); return [] })
+        : Promise.resolve([])
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + web fallback (always)
       // Note: searchWeb now includes Wikipedia API (free, no rate limits) + DDG — always useful
@@ -18506,12 +18545,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const gnResults   = gnRssRes.status === 'fulfilled' ? gnRssRes.value : []
       const legacyData  = legacyRes.status === 'fulfilled' ? legacyRes.value : { results: [] }
 
-      console.log(`[DZ Retrieval] Raw results: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length}`)
+      // انتظار نتائج SearXNG الموازية (إذا كانت تعمل)
+      const _parallelSearXNGResults = await _parallelSearXNGPromise
+      if (_parallelSearXNGResults.length > 0) {
+        console.log(`[SearXNG Parallel] ✓ ${_parallelSearXNGResults.length} results for event query — merging`)
+      }
+
+      console.log(`[DZ Retrieval] Raw results: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} SearXNG=${_parallelSearXNGResults.length}`)
       if (cseResults.length > 0) console.log(`[DZ Retrieval] CSE URLs: ${cseResults.slice(0,3).map(r => r.url).join(' | ')}`)
       if (gnResults.length > 0) console.log(`[DZ Retrieval] GN URLs: ${gnResults.slice(0,3).map(r => r.url || r.link).join(' | ')}`)
 
-      // Merge + score + deduplicate
-      const allSearchResults = [...cseResults, ...gnResults, ...(legacyData.results || [])]
+      // Merge + score + deduplicate (SearXNG parallel results مُدمجة أولاً للأحداث)
+      const allSearchResults = [
+        ..._parallelSearXNGResults,  // نتائج SearXNG الموازية أولاً (للأحداث الحساسة)
+        ...cseResults, ...gnResults, ...(legacyData.results || []),
+      ]
       const seenUrls = new Set()
       const uniqueResults = allSearchResults.filter(r => {
         const key = (r.url || r.link || '').split('?')[0]
@@ -19513,7 +19561,7 @@ const _streamSSEHeaders = (res) => {
 }
 
 // Queries that require LIVE data injection — redirect to full endpoint
-const _LIVE_DATA_RE = /طقس|حرارة|أمطار|ضباب|رياح|الجو اليوم|weather|مباراة|ماتش|أهداف|ترتيب الدوري|كأس أفريقيا|بطولة|صلاة|أذان|فجر|مغرب|عشاء|ظهر|عصر|سعر الصرف|دولار.*دينار|يورو.*دينار|صرف اليوم|آخر الأخبار|أخبار اليوم|أخبار.*الجزائر/i
+const _LIVE_DATA_RE = /طقس|حرارة|أمطار|ضباب|رياح|الجو اليوم|weather|مباراة|ماتش|أهداف|ترتيب الدوري|كأس أفريقيا|بطولة|صلاة|أذان|فجر|مغرب|عشاء|ظهر|عصر|سعر الصرف|دولار.*دينار|يورو.*دينار|صرف اليوم|آخر الأخبار|أخبار اليوم|أخبار.*الجزائر|واش صرا|وش صرا|واش صار|واش صاري|واش كاين جديد|ماذا حدث|آخر مستجدات|عاجل|حادثة|انفجار|زلزال|فيضان|حريق|استقال|اغتيل|اعتُقل|مات.*اليوم|توفي.*اليوم/i
 
 app.post('/api/dz-agent-stream', async (req, res) => {
   const messages = normalizeChatMessages(req.body.messages)
@@ -19593,6 +19641,17 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   const _isPlayerStream = detectPlayerNameInQuery(lastUserMessage) !== null
   if (_isPlayerStream) {
     console.log(`[Stream→Player] player query detected — redirecting to full endpoint: "${lastUserMessage.slice(0, 60)}"`)
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
+  // ── Step 2d: Time-sensitive event queries — redirect to full endpoint ─────
+  // الأحداث الآنية والأخبار العاجلة تحتاج SearXNG — البث من الـ AI يعطي معلومات قديمة
+  const _tsIntent = detectTimeSensitiveIntent(lastUserMessage)
+  if (_tsIntent.isTimeSensitive) {
+    console.log(`[Stream→Event] time-sensitive (${_tsIntent.eventType} conf=${_tsIntent.confidence.toFixed(2)}) — redirecting: "${lastUserMessage.slice(0, 60)}"`)
     _streamSSEHeaders(res)
     res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
     res.write('data: [DONE]\n\n')

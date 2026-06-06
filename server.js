@@ -28,7 +28,7 @@ import {
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
-import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery } from './lib/algeria-gov/ministers.js'
+import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -2064,6 +2064,11 @@ function detectToolRedirect(msg) {
   // رئيس / وزير / لاعب / كاتب / ممثل / مؤلف / مخرج / عالم / فنان
   if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg)) return null
   if (/(?:رئيس|وزير|ملك|أمير|لاعب|كاتب|ممثل|مؤلف|مخرج|عالم|فنان|شاعر|مغني|رياضي)\s+(?:\S+\s*){1,4}(?:من\s*(?:هو|هي|هم))?/i.test(msg)) return null
+  // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
+  // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات
+  if (looksLikeBareArabicName(msg)) return null
+  // استعلامات الرؤساء والمسؤولين الجزائريين
+  if (isMinisterQuery(msg)) return null
 
   // ── تصنيف 4: كرة قدم / فرق / نتائج / مباريات / بطولات → بيانات رياضية ────────
   // (لاعب، فريق، نتائج، مباريات اليوم، مباريات سابقة، أرشيف، دوريات، تتويج)
@@ -18203,15 +18208,47 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Algeria Ministers context ─────────────────────────────────────────────
+  // ── Algeria Ministers / Presidents context ────────────────────────────────
   let ministersContext = ''
+  let govPersonContext = ''
+
+  // ── بحث مباشر في قاعدة البيانات الثابتة (رئيس/وزير بالاسم) ───────────────
+  const _govPerson = findGovPerson(lastUserMessage)
+  if (_govPerson) {
+    const noteStr = _govPerson.note ? `\n> 📝 ${_govPerson.note}` : ''
+    const bornStr = _govPerson.born ? `\n> 🗓️ المولود: ${_govPerson.born}` : ''
+    govPersonContext = [
+      `## 🏛️ شخصية حكومية جزائرية — بيانات موثوقة`,
+      `| الحقل | القيمة |`,
+      `|-------|--------|`,
+      `| الاسم | **${_govPerson.name}** |`,
+      `| المنصب | ${_govPerson.role} |`,
+      `| الوزارة/القطاع | ${_govPerson.ministry || '—'} |`,
+      `| منذ | ${_govPerson.since || '—'} |`,
+      noteStr,
+      bornStr,
+      `> 📡 المصدر: قاعدة بيانات الحكومة الجزائرية (DZ-GPT)`,
+      `> ⚠️ أجب بناءً على هذه البيانات فقط — لا تخترع معلومات إضافية.`,
+    ].filter(Boolean).join('\n')
+    console.log(`[AlgGov] 🎯 Direct gov person found: "${_govPerson.name}" → ${_govPerson.role}`)
+  }
+
   if (_isMinisterQuery) {
     const ministersData = ministersResult?.status === 'fulfilled' ? ministersResult.value : null
     if (ministersData) {
       ministersContext = buildMinistersContext(ministersData)
       console.log(`[AlgGov] 🏛️ Ministers context injected — status: ${ministersData.status} | ${ministersData.ministers?.length ?? 0} entries | source: ${ministersData.source}`)
     } else {
-      console.warn('[AlgGov] ⚠️ Ministers fetch failed or returned null')
+      console.warn('[AlgGov] ⚠️ Ministers fetch failed — using static data')
+      // استخدام البيانات الثابتة مباشرةً كـ fallback
+      const { buildMinistersContext: _bmc } = await import('./lib/algeria-gov/ministers.js')
+      ministersContext = _bmc({
+        ministers: [...ALGERIA_PRESIDENTS],
+        source: 'static (بيانات ثابتة — Replit)',
+        sourceUrl: 'https://www.premier-ministre.gov.dz',
+        fetchedAt: new Date().toISOString(),
+        status: 'static_fallback',
+      })
     }
   }
 
@@ -18937,7 +18974,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1400)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.\n> ⚠️ إذا لم تكن هناك مباريات اليوم، اعرض آخر الأخبار الرياضية المتاحة مع ذكر تاريخها. لا تُعطِ ردوداً سلبية فارغة.` : '',
     // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────
     (isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery || isLFPQuery) ? `⚽ SPORTS RULE: إذا لم تكن هناك نتائج مباريات مباشرة لليوم، اعرض بدلاً من ذلك: (أ) آخر المباريات التي جرت مع نتائجها وتاريخها، أو (ب) المباريات القادمة، أو (ج) آخر الأخبار الرياضية من RSS مع ذكر تاريخها. لا تقل أبداً "لا توجد معلومات" أو تُعطِ رداً فارغاً. دائماً قدّم شيئاً مفيداً. اذكر المصدر والتاريخ دائماً.` : '',
-    ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2000)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
+    govPersonContext  ? `🎯 شخصية حكومية جزائرية (بيانات مباشرة — أولوية قصوى):\n${_trim(govPersonContext, 1000)}\n> أجب بناءً على هذه البيانات أولاً. إذا وجدت معلومات إضافية من Wikidata/Wikipedia فأكمل بها. لا تتناقض مع هذه البيانات.` : '',
+    ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2500)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',

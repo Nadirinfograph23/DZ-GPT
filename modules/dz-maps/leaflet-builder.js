@@ -22,6 +22,11 @@ export const POI_EN_SEARCH = {
   airport:     'airport',
   government:  'city hall government',
   parking:     'parking',
+  youth_center:'youth center maison jeunes',
+  stadium:     'stadium sports centre',
+  library:     'library bibliothèque',
+  fire_station:'fire station protection civile',
+  mosque_named:'mosque masjid',
 }
 
 /**

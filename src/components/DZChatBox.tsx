@@ -3542,7 +3542,7 @@ interface DZChatBoxProps {
   cerebrasKey?: string
 }
 
-type DashboardContext = { priority: 'weather'; city: string }
+type DashboardContext = { priority: 'weather'; city: string; cityAr?: string }
 
 // ===== FIND INPUT CARD =====
 function FindInputCard({ repo, onSearch }: { repo: string; onSearch: (pattern: string) => void }) {

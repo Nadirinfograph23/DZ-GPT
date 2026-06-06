@@ -7932,6 +7932,43 @@ async function buildSportsRouterContext(msg, dateStr) {
   return context
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// § MATCH-VS DETECTOR — كاشف "X ضد Y" / "X vs Y" مع تصنيف زمني ذكي
+// ══════════════════════════════════════════════════════════════════════════════
+// المنطق: اكتشف الفريقين → صنّف الزمن → وجّه للمصادر الصحيحة:
+//   PAST     → SearXNG (بحث حي: نتائج + تحليل المباراة المنتهية)
+//   UPCOMING → 360score + koora (جدول المباريات القادمة)
+//   LIVE     → 360score + koora + SearXNG (معاً للبث المباشر)
+//   UNKNOWN  → 360score/koora + SearXNG (كلا المصدرين)
+function detectMatchVsQuery(msg) {
+  if (!msg || msg.length < 4) return null
+
+  // نمط "فريق1 ضد فريق2" أو "فريق1 vs فريق2"
+  const vsMatch = msg.match(
+    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})\s+(?:ضد|vs\.?)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})/iu
+  )
+  if (!vsMatch) return null
+
+  const team1 = vsMatch[1].trim()
+  const team2 = vsMatch[2].trim()
+
+  // تصنيف زمني — الترتيب مهم: LIVE أولاً ثم PAST ثم UPCOMING
+  const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
+  const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية))/i
+  const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
+
+  let temporal = 'UNKNOWN'
+  if (LIVE_KW.test(msg))         temporal = 'LIVE'
+  else if (PAST_KW.test(msg))    temporal = 'PAST'
+  else if (UPCOMING_KW.test(msg)) temporal = 'UPCOMING'
+
+  // استعلام بحث محسّن لـ SearXNG
+  const searchQuery = `${team1} ضد ${team2} مباراة نتيجة`
+  const fixtureQuery = `${team1} vs ${team2} match`
+
+  return { isMatchVs: true, team1, team2, temporal, searchQuery, fixtureQuery }
+}
+
 // Hardcoded tag regexes — avoids dynamic RegExp (ReDoS risk)
 const RSS_TAG_REGEXES = {
   title:       /<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i,
@@ -17926,6 +17963,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isLFPQuery = detectLFPQuery(lastUserMessage)
   const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
   const isFootballQuery = detectFootballQuery(lastUserMessage)
+  // ── Match-Vs Detection — "X ضد Y" / "X vs Y" smart routing ──────────────
+  const _matchVsData    = detectMatchVsQuery(lastUserMessage)
+  const _isMatchVsQuery = !!_matchVsData?.isMatchVs
+  if (_isMatchVsQuery) {
+    console.log(`[MatchVs] 🆚 ${_matchVsData.team1} ضد ${_matchVsData.team2} | temporal=${_matchVsData.temporal}`)
+  }
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
   const _isHistoricalGovQuery = isHistoricalGovQuery(lastUserMessage)
 
@@ -18049,6 +18092,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     standingsResult,
     globalLeaguesResult,
     ministersResult,
+    matchVsResult,
   ] = await Promise.allSettled([
     hasWeatherPriority ? fetchCityWeatherResilient(weatherCity) : Promise.resolve(null),
     isPrayerQuery ? fetchPrayerTimesAladhan(detectCityFromQuery(lastUserMessage)) : Promise.resolve(null),
@@ -18060,6 +18104,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today), fetchTheSportsDB(today)]) : Promise.resolve(null),
     // نظام التحقق من الوزراء الجزائريين — يُجلب فقط عند الحاجة
     _isMinisterQuery ? fetchAlgeriaMinistersData() : Promise.resolve(null),
+    // ── Match-Vs: جلب جدول 360score+koora للمباريات القادمة/الحية/المجهولة ──
+    (_isMatchVsQuery && _matchVsData?.temporal !== 'PAST')
+      ? buildSportsRouterContext(lastUserMessage, today)
+      : Promise.resolve(null),
   ])
 
   // ── Build context strings from parallel results ────────────────────────────
@@ -18224,6 +18272,76 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       footballContext = buildFootballContext(sfData, rssData || [], today, routerData)
       console.log(`[DZ Agent] Football context: router=${routerData?.source || 'none'}, SofaScore=${!!sfData}, RSS=${rssData?.length ?? 0}`)
     }
+  }
+
+  // ── Match-Vs Context — تحليل "X ضد Y" حسب التصنيف الزمني ────────────────
+  let matchVsContext = ''
+  let matchVsCtxRule = 'لا تخترع نتائج.'
+  if (_isMatchVsQuery) {
+    const _mvd = _matchVsData
+    const _mvRouterRaw = matchVsResult?.status === 'fulfilled' ? matchVsResult.value : null
+
+    // بناء رأس السياق
+    const _temporalLabel = {
+      PAST: `⏪ مباراة سابقة — ${_mvd.team1} ضد ${_mvd.team2}`,
+      UPCOMING: `📅 مباراة قادمة — ${_mvd.team1} ضد ${_mvd.team2}`,
+      LIVE: `🔴 مباراة مباشرة — ${_mvd.team1} ضد ${_mvd.team2}`,
+      UNKNOWN: `🆚 مباراة — ${_mvd.team1} ضد ${_mvd.team2}`,
+    }[_mvd.temporal] || `🆚 ${_mvd.team1} ضد ${_mvd.team2}`
+
+    matchVsContext = `\n## ${_temporalLabel}\n`
+    matchVsContext += `> 🎯 التصنيف الزمني: **${_mvd.temporal}**\n`
+
+    // مصادر 360score + koora (للقادمة والحية والمجهولة)
+    if (_mvRouterRaw && _mvd.temporal !== 'PAST') {
+      const _srcKeys = Object.keys(_mvRouterRaw)
+      if (_srcKeys.length > 0) {
+        matchVsContext += `> 📡 المصادر: **360score.com + kooora.com**\n\n`
+        for (const key of _srcKeys) {
+          const d = _mvRouterRaw[key]
+          if (!d) continue
+          if (Array.isArray(d?.matches || d)) {
+            const matches = d?.matches || d
+            const relevant = matches.filter(m => {
+              const h = (m.homeTeam || m.home || '').toLowerCase()
+              const a = (m.awayTeam || m.away || '').toLowerCase()
+              const t1 = _mvd.team1.toLowerCase()
+              const t2 = _mvd.team2.toLowerCase()
+              return h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
+                     t1.includes(h) || t2.includes(h) || t1.includes(a) || t2.includes(a)
+            })
+            if (relevant.length > 0) {
+              matchVsContext += `**نتائج من ${key.includes('koora') ? 'kooora.com' : '360score.com'}:**\n`
+              for (const m of relevant.slice(0, 3)) {
+                const score = (m.homeScore != null && m.awayScore != null)
+                  ? ` — **${m.homeScore} - ${m.awayScore}**`
+                  : (m.startTime ? ` — 🕐 ${m.startTime}` : '')
+                const status = m.statusType === 'inprogress' ? ' 🔴 مباشر' : m.statusType === 'finished' ? ' ✅' : ' 📅'
+                matchVsContext += `• ${m.homeTeam || m.home} ${score}${status} ${m.awayTeam || m.away}`
+                if (m.competition || m.tournament) matchVsContext += ` — ${m.competition || m.tournament}`
+                matchVsContext += '\n'
+              }
+            }
+          }
+        }
+      }
+      if (_mvd.temporal === 'UPCOMING') {
+        matchVsCtxRule = `هذه مباراة قادمة — اعرض موعدها ومكانها من بيانات 360score+koora. لا تخترع نتيجة.`
+      } else if (_mvd.temporal === 'LIVE') {
+        matchVsCtxRule = `مباراة مباشرة — اعرض النتيجة الحالية. إذا لم تتوفر بيانات حية، قل ذلك صراحةً.`
+      } else {
+        matchVsCtxRule = `التصنيف مجهول — اعرض ما توفر من 360score+koora ومن نتائج البحث الحي (SearXNG).`
+      }
+    }
+
+    // للـ PAST: SearXNG يجلب التحليل (webSearchContext سيُضاف تلقائياً)
+    if (_mvd.temporal === 'PAST') {
+      matchVsContext += `> 🔍 المصدر: **SearXNG (بحث حي)**\n`
+      matchVsContext += `> استعلام البحث: \`${_mvd.searchQuery}\`\n`
+      matchVsCtxRule = `مباراة منتهية — اعرض النتيجة والتحليل من نتائج البحث الحي فقط. لا تخترع أهدافاً أو ملخصاً من ذاكرتك.`
+    }
+
+    console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | ctxLen=${matchVsContext.length}`)
   }
 
   // ── NEW: Standings context injection ─────────────────────────────────────
@@ -18557,7 +18675,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // السؤال الواقعي المباشر (من هو؟ / ما هو؟) بدون مؤشرات أخبار أو زمن → يُجيب مباشرة بدون بحث
   const _isDirectFactual = isDirectFactualQuestion(lastUserMessage) && !msgIntent.isTemporal && msgIntent.primary !== 'news'
   // isTemporal overrides football skip: "متى كأس العالم 2026؟" needs Wikipedia, not SofaScore
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
+  // Match-Vs: PAST/UNKNOWN/LIVE يحتاج SearXNG — لا يُخطَأ بالمعلومات من الذاكرة
+  const _matchVsNeedsSearch = _isMatchVsQuery &&
+    (_matchVsData?.temporal === 'PAST' || _matchVsData?.temporal === 'UNKNOWN' || _matchVsData?.temporal === 'LIVE')
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent && !_matchVsNeedsSearch) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
 
   if (!skipSearch) {
     try {
@@ -19182,6 +19303,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     prayerContext    ? `🕌 مواقيت الصلاة (aladhan.com):\n${_trim(prayerContext, 800)}\n> اعرض في جدول. لا تخمّن.` : '',
     lfpContext       ? `🏆 LFP (lfp.dz):\n${_trim(lfpContext, 1500)}\n> لا تختلق نتائج.` : '',
     footballContext  ? `⚽ كرة القدم:\n${_trim(footballContext, 1500)}\n> لا تخترع نتائج.` : '',
+    matchVsContext   ? `🆚 تحليل المباراة [${_matchVsData?.temporal}]:\n${_trim(matchVsContext, 2000)}\n> ${matchVsCtxRule}` : '',
     standingsContext ? `🏆 ترتيب الدوري:\n${_trim(standingsContext, 1000)}\n> لا تخترع نقاطاً.` : '',
     globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1400)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.\n> ⚠️ إذا لم تكن هناك مباريات اليوم، اعرض آخر الأخبار الرياضية المتاحة مع ذكر تاريخها. لا تُعطِ ردوداً سلبية فارغة.` : '',
     // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────

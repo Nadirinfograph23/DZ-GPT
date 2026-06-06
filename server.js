@@ -29,6 +29,7 @@ import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
 import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
+import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuery } from './lib/algeria-gov/historical-governments.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -2067,8 +2068,9 @@ function detectToolRedirect(msg) {
   // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
   // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات
   if (looksLikeBareArabicName(msg)) return null
-  // استعلامات الرؤساء والمسؤولين الجزائريين
+  // استعلامات الرؤساء والمسؤولين الجزائريين (حالية أو تاريخية)
   if (isMinisterQuery(msg)) return null
+  if (isHistoricalGovQuery(msg)) return null
 
   // ── تصنيف 4: كرة قدم / فرق / نتائج / مباريات / بطولات → بيانات رياضية ────────
   // (لاعب، فريق، نتائج، مباريات اليوم، مباريات سابقة، أرشيف، دوريات، تتويج)
@@ -14006,7 +14008,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // BYPASS: Developer / owner identity questions — answered by static DEVELOPER_RESPONSE
     isDeveloperOrOwnerQuestion(lastUserMessage) ||
     // BYPASS: Capabilities questions — answered by static CAPABILITIES_RESPONSE
-    isCapabilitiesQuestion(lastUserMessage)
+    isCapabilitiesQuestion(lastUserMessage) ||
+    // BYPASS: Algerian historical government / minister queries — served from local DB
+    isHistoricalGovQuery(lastUserMessage) ||
+    // BYPASS: Minister / president queries (current government)
+    isMinisterQuery(lastUserMessage)
   if (!_isAgentMode && !_clarificationBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
@@ -14017,6 +14023,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       status: 'clarification_required',
       intent: _intentClassification.intent,
     })
+  }
+
+  // ── قاعدة الحكومات التاريخية — مسار مبكر مباشر (قبل AI وVerifyPolicy) ─────
+  // إذا كان الاستعلام عن حكومة/وزير تاريخي → أعد البيانات مباشرة من DB المحلي
+  if (!_isAgentMode && isHistoricalGovQuery(lastUserMessage)) {
+    const _histCtxEarly = buildHistoricalGovContext(lastUserMessage)
+    if (_histCtxEarly) {
+      const _p = parseHistoricalGovQuery(lastUserMessage)
+      console.log(`[HistGov] ✅ EARLY direct response — year=${_p?.year} portfolio=${_p?.portfolio} president=${_p?.president}`)
+      return res.status(200).json({
+        content: _histCtxEarly,
+        status: 'ok',
+        source: 'historical-gov-db',
+      })
+    }
   }
 
   // ── Anti-Hallucination Pre-check — أماكن/أحداث وهمية (قبل static facts) ──
@@ -15021,9 +15042,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Guard: YouTube → فيديو/يوتيوب لا يُعالَج كاستعلام شخص
   // Guard: Sports/LFP → نتائج/دوري/مباريات لا تُعالَج كاستعلام شخص
   // Guard: Doctor → طبيب/عيادة يُعالَج حصراً في searchdoc handler لا ويكيبيديا
+  // Guard: Historical Gov → حكومات/وزراء تاريخية تُعالَج من قاعدة بيانات محلية لا Wikidata
   const _isSportsLFPQuery = /(?:نتائج.*(?:دوري|مباريات|مباراة)|(?:دوري|بطولة|كأس).*(?:جزائري|الجزائر|نتائج|ترتيب|جدول)|ترتيب.*دوري|جدول.*مباريات|مباريات.*اليوم|نتائج.*كرة|هداف|الدوري الجزائري|الرابطة المحترفة|lfp|ligue pro|مباريات.*كرة|كرة.*مباريات)/i.test(lastUserMessage)
   const _isDoctorQuery_pre = !isDZToolRequest && detectDoctorIntent(lastUserMessage).isDoctorQuery
-  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  // مبكّر — يُحسب هنا لأن VerifyPolicy يستخدمه قبل حساب _isHistoricalGovQuery الرئيسي
+  const _isHistoricalGovQuery_early = isHistoricalGovQuery(lastUserMessage)
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
     const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
     if (_entityAmbig?.needsClarification) {
@@ -15051,7 +15075,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Guard: YouTube → فيديو/يوتيوب لا يُعالَج كاستعلام شخص
   // Guard: Sports/LFP → نتائج/دوري/مباريات لا تُعالَج كاستعلام شخص
   // Guard: Doctor → طبيب/عيادة يُعالَج حصراً في searchdoc handler لا ويكيبيديا
-  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
@@ -17782,6 +17806,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
   const isFootballQuery = detectFootballQuery(lastUserMessage)
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
+  const _isHistoricalGovQuery = isHistoricalGovQuery(lastUserMessage)
 
   // ── Extract last known entity from conversation history ──────────────────
   // Scans previous messages (last 6) to find the most recently mentioned
@@ -18211,6 +18236,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Algeria Ministers / Presidents context ────────────────────────────────
   let ministersContext = ''
   let govPersonContext = ''
+  let historicalGovContext = ''
+
+  // ── البحث في قاعدة الحكومات التاريخية (بالسنة / الرئيس / الحقيبة) ──────────
+  if (_isHistoricalGovQuery) {
+    historicalGovContext = buildHistoricalGovContext(lastUserMessage)
+    if (historicalGovContext) {
+      const parsed = parseHistoricalGovQuery(lastUserMessage)
+      console.log(`[HistGov] 📚 Historical gov query — year=${parsed?.year} portfolio=${parsed?.portfolio} president=${parsed?.president}`)
+    }
+  }
 
   // ── بحث مباشر في قاعدة البيانات الثابتة (رئيس/وزير بالاسم) ───────────────
   const _govPerson = findGovPerson(lastUserMessage)
@@ -18974,6 +19009,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     globalLeaguesContext ? `🌍 دوريات عالمية:\n${_trim(globalLeaguesContext, 1400)}\n> 🔴 حية ✅ منتهية 📅 قادمة. لا تخترع.\n> ⚠️ إذا لم تكن هناك مباريات اليوم، اعرض آخر الأخبار الرياضية المتاحة مع ذكر تاريخها. لا تُعطِ ردوداً سلبية فارغة.` : '',
     // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────
     (isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery || isLFPQuery) ? `⚽ SPORTS RULE: إذا لم تكن هناك نتائج مباريات مباشرة لليوم، اعرض بدلاً من ذلك: (أ) آخر المباريات التي جرت مع نتائجها وتاريخها، أو (ب) المباريات القادمة، أو (ج) آخر الأخبار الرياضية من RSS مع ذكر تاريخها. لا تقل أبداً "لا توجد معلومات" أو تُعطِ رداً فارغاً. دائماً قدّم شيئاً مفيداً. اذكر المصدر والتاريخ دائماً.` : '',
+    historicalGovContext ? `📚 الحكومات الجزائرية التاريخية (قاعدة بيانات موثوقة 1962→الآن):\n${_trim(historicalGovContext, 3000)}\n> أجب مباشرةً من هذه البيانات. لا تخمّن ولا تخترع وزيراً. إذا كان السؤال عن سنة معينة أو حقيبة معينة، أجب بالجدول المحدد.` : '',
     govPersonContext  ? `🎯 شخصية حكومية جزائرية (بيانات مباشرة — أولوية قصوى):\n${_trim(govPersonContext, 1000)}\n> أجب بناءً على هذه البيانات أولاً. إذا وجدت معلومات إضافية من Wikidata/Wikipedia فأكمل بها. لا تتناقض مع هذه البيانات.` : '',
     ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2500)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
@@ -19323,6 +19359,26 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
         `\n> 📡 المصدر: **OpenWeather API**`
 
     return res.status(200).json({ content: formattedContent })
+  }
+
+  // ── قاعدة الحكومات التاريخية — مباشر بدون AI ──────────────────────────────
+  if (historicalGovContext) {
+    console.log('[HistGov] ✅ Direct response from historical DB (no AI needed)')
+    return res.status(200).json({
+      content: historicalGovContext,
+      status: 'ok',
+      source: 'historical-gov-db',
+    })
+  }
+
+  // ── قاعدة الوزراء/الشخصية الحكومية — مباشر بدون AI ────────────────────────
+  if (govPersonContext) {
+    console.log('[GovPerson] ✅ Direct response from ministers DB (no AI needed)')
+    return res.status(200).json({
+      content: govPersonContext,
+      status: 'ok',
+      source: 'ministers-db',
+    })
   }
 
   // If RSS context available, return it directly even without AI

@@ -191,6 +191,7 @@ import {
   extractYearFromMessage, WORLD_LEADERS_2026, WORLD_FORMER_LEADERS,
   REAL_DZ_WILAYAS,
   isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS, findAlgerianClub,
+  GLOBAL_PLAYERS_DB, findPlayerClub,
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
@@ -14160,29 +14161,45 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // 6e. نادي رياض محرز الحالي — منع هلوسة "مانشستر سيتي"
-    if (/(?:محرز|mahrez)\b/i.test(_lum) &&
-        /(?:نادي|فريق|يلعب|يلعب\s+في|انتقل|club|team|play)/i.test(_lum)) {
-      const _mahrez = DZ_SPORTS_STATIC_FACTS.mahrez
-      console.log(`[DZSports] Mahrez club query — static answer`)
+    // 6e. معالج اللاعبين الشامل — منع الهلوسة عن الأندية الخاطئة (محرز، صلاح، رونالدو...)
+    // يعمل مع الأسئلة ('أين يلعب؟') والتأكيدات ('X يلعب مع Y') على حدٍّ سواء
+    const _playerClubMatch = findPlayerClub(_lum)
+    if (_playerClubMatch &&
+        /(?:نادي|فريق|يلعب|يلعب\s+(?:في|مع|ل)|انتقل|ينتمي|club|team|play|plays?\s+for|joue)/i.test(_lum)) {
+      const _p = _playerClubMatch
+      const _isRetired = _p.currentClub === 'متقاعد'
+      console.log(`[DZSports] Player club query — ${_p.nameAr} → ${_p.currentClub} (static)`)
+      const _pLines = [
+        `## ⚽ ${_p.nameAr} — النادي الحالي (موسم 2025/2026)`,
+        ``,
+        _isRetired
+          ? `🏁 **${_p.nameAr} اعتزل كرة القدم الاحترافية** — لم يعد لاعباً نشطاً.`
+          : `🏟️ **يلعب حالياً في: ${_p.currentClub}** (${_p.currentClub_fr})`,
+        ``,
+        ...(_isRetired ? [] : [
+          _p.league    ? `🏆 **الدوري:** ${_p.league}`       : null,
+          _p.nationality ? `🌍 **الجنسية:** ${_p.nationality}` : null,
+          _p.position  ? `📍 **المركز:** ${_p.position}`     : null,
+          ``,
+          (_p.since && _p.previousClub)
+            ? `🗓️ **انتقل** من **${_p.previousClub}** إلى **${_p.currentClub}** سنة **${_p.since}**`
+            : null,
+        ].filter(Boolean)),
+        _p.note ? `` : null,
+        _p.note ? `> 💡 ${_p.note}` : null,
+        (_p.wrongClubes && _p.wrongClubes.length > 0) ? `` : null,
+        (_p.wrongClubes && _p.wrongClubes.length > 0)
+          ? `> ⚠️ لا يلعب في: ${_p.wrongClubes.join(' / ')}`
+          : null,
+        ``,
+        `⚡ **المصدر:** قاعدة بيانات رياضية محدّثة — موسم 2025/2026`,
+      ].filter(l => l !== null)
       return res.status(200).json({
-        content: [
-          `## ⚽ رياض محرز — النادي الحالي`,
-          ``,
-          `**رياض محرز يلعب حالياً في نادي ${_mahrez.currentClub} السعودي** (${_mahrez.currentClub_fr}).`,
-          ``,
-          `🗓️ انتقل من **مانشستر سيتي** إلى **القادسية** في **صيف 2023**.`,
-          `🏆 الدوري: **${_mahrez.currentClubLeague}**.`,
-          ``,
-          `> ⚠️ محرز لم يعد في مانشستر سيتي منذ 2023.`,
-          ``,
-          `⚡ **المصدر:** حقيقة رياضية ثابتة — ثقة 100%`,
-        ].join('\n'),
+        content: _pLines.join('\n'),
         model: 'dz-knowledge-static',
         _static: true,
       })
     }
-
     // ── حراس الهلوسة الموسّعة (6f → 6k) ──────────────────────────────────────
 
     // 6f. سنة مستقبلية غير رياضية ("سكان الجزائر 2100"، "رئيس 2040"...)

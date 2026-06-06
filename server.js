@@ -14309,8 +14309,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // 6e. معالج اللاعبين الشامل — 365score/Koora أولاً → Wikipedia → TheSportsDB
     // يُفعَّل: 1) الأسئلة الرياضية المباشرة  2) الاسم المجرد (≤4 كلمات)  3) أسئلة بيوغرافية
     const _detectedPlayer = detectPlayerNameInQuery(_lum)
-    const _isShortPlayerQuery = _lum.trim().split(/\s+/).length <= 4
-    const _hasFootballKeyword = /(?:نادي|فريق|يلعب|يلعب\s+(?:في|مع|ل)|انتقل|ينتمي|عقد|راتب|club|team|plays?\s+for|joue|transfer|stats|إحصاء|أهداف|أسيست|موسم)/i.test(_lum)
+    const _isShortPlayerQuery = _lum.trim().split(/\s+/).length <= 6
+    const _hasFootballKeyword = /(?:نادي|فريق|يلعب|يلعب\s+(?:في|مع|ل)|انتقل|ينتمي|عقد|راتب|club|team|plays?\s+for|joue|transfer|stats|إحصاء|أهداف|أسيست|موسم|أين|where|معلومات|بطاقة|من\s+هو|who\s+is|ما\s+هو)/i.test(_lum)
     if (_detectedPlayer !== null && (_hasFootballKeyword || _isShortPlayerQuery)) {
       try {
         const _sportInfo = await getPlayerCurrentClub(_lum)

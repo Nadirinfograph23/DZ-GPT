@@ -142,6 +142,51 @@ const POI_TYPES = {
     ],
     osm: 'amenity~"bus_station|train_station|ferry_terminal"', icon: '🚌', nameAr: 'محطة المسافرين',
   },
+  youth_center: {
+    labels: [
+      'دار الشباب', 'دور الشباب', 'مركز الشباب', 'نادي الشباب', 'بيت الشباب',
+      'دار ثقافة', 'دور ثقافة', 'مركز ثقافي', 'مراكز ثقافية',
+      'dar chebab', 'maison de jeunes', 'centre de jeunes', 'centre jeunesse',
+      'centre culturel', 'maison de la culture',
+      'دار الشباب والرياضة', 'مركز التنشيط الشبابي',
+    ],
+    osm: 'amenity~"community_centre|social_centre|youth_centre"', icon: '🏢', nameAr: 'دار الشباب',
+  },
+  stadium: {
+    labels: [
+      'ملعب', 'ملاعب', 'استاد', 'أستاد', 'ميدان رياضي', 'قاعة رياضية', 'قاعة متعددة الرياضات',
+      'سلة', 'كرة القدم ملعب', 'ملعب البلدية', 'ملعب الولاية',
+      'stade', 'terrain de sport', 'salle de sport', 'complexe sportif', 'gymnase',
+      'terrain de football', 'court de tennis',
+      'المركب الرياضي', 'مركب رياضي', 'ملعب بلدي',
+    ],
+    osm: 'leisure~"stadium|sports_centre|pitch|track"', icon: '🏟️', nameAr: 'ملعب / مركب رياضي',
+  },
+  library: {
+    labels: [
+      'مكتبة', 'مكتبات', 'مكتبة عامة', 'مكتبة بلدية', 'مكتبة ولائية',
+      'bibliothèque', 'bibliothèque publique', 'mediathèque', 'médiathèque',
+      'library', 'public library',
+      'المكتبة', 'دار الكتب',
+    ],
+    osm: 'amenity=library', icon: '📚', nameAr: 'مكتبة',
+  },
+  fire_station: {
+    labels: [
+      'مطافئ', 'إطفاء', 'الحماية المدنية', 'وحدة الحماية المدنية', 'فرقة الإطفاء',
+      'pompiers', 'caserne de pompiers', 'protection civile', 'sapeurs-pompiers',
+      'fire station', 'fire department',
+      'المطافئ', 'الإطفاء',
+    ],
+    osm: 'amenity=fire_station', icon: '🚒', nameAr: 'الحماية المدنية',
+  },
+  mosque_named: {
+    labels: [
+      'مسجد الفرقان', 'مسجد النور', 'مسجد الرحمة', 'مسجد الإخلاص', 'مسجد الهدى',
+      'مسجد الأمير', 'مسجد الشهداء', 'مسجد الفتح', 'مسجد العتيق', 'مسجد الكبير',
+    ],
+    osm: 'amenity=place_of_worship][religion=muslim', icon: '🕌', nameAr: 'مسجد',
+  },
 }
 
 // ── NON-MAP POI MODIFIERS — disqualify POI queries that are informational, not geographic ──

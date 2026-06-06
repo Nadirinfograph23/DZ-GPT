@@ -9197,6 +9197,23 @@ async function fetchLFPData() {
 
     const articles = articlesHtml ? parseLFPArticles(articlesHtml) : []
 
+    // lfp.dz returned 0 matches (blocked/empty) → try jdwel.com before caching
+    if (matches.length === 0) {
+      console.log('[LFP] lfp.dz returned 0 matches — trying jdwel.com fallback')
+      try {
+        const jdwelData = await fetchAlgerianLeagueJdwel()
+        if (jdwelData?.matches?.length) {
+          const data = { matches: jdwelData.matches, articles: articles.slice(0, 10), fetchedAt: new Date().toISOString(), source: jdwelData.source || 'jdwel.com' }
+          LFP_CACHE.data = data; LFP_CACHE.ts = Date.now()
+          SPORTS_CACHE_V2.set('lfp', data)
+          console.log(`[LFP] jdwel fallback OK — ${jdwelData.matches.length} matches`)
+          return data
+        }
+      } catch (jdwelErr) {
+        console.warn('[LFP] jdwel fallback failed:', jdwelErr.message)
+      }
+    }
+
     const data = {
       matches,
       articles: articles.slice(0, 10),
@@ -13872,6 +13889,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز صحي|عيادات|دبيب|دكتوره|دكترة|نقلب على طبيب|نحوس على طبيب|أسنان|سنان|ضروس|طب الأسنان|نسائية|ولادة|حمل|عيون|بصريات|جلدية|قلبي|أمراض القلب|عظام|كسور|أعصاب|مسالك|مسالك بولية|médecin|medecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|generaliste|gynécologue|pédiatre|pediatre|psychiatre|chirurgien|pneumologue|neurologue|urologue|oncologue)/i.test(lastUserMessage) ||
     // BYPASS: YouTube / video search — handled by YouTube Insight engine
     /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
+    // BYPASS: Sports / football / league queries — handled by sports data system
+    /(?:نتائج.*(?:دوري|مباريات|مباراة)|(?:دوري|بطولة|كأس).*(?:جزائري|الجزائر|نتائج|ترتيب|جدول)|ترتيب.*دوري|جدول.*مباريات|مباريات.*اليوم|نتائج.*كرة|هداف|الدوري الجزائري|الرابطة المحترفة|lfp|ligue pro)/i.test(lastUserMessage) ||
     // BYPASS: Map / location queries — handled by DZ Maps intelligence engine
     isMapQuery(lastUserMessage) ||
     // BYPASS: Developer / owner identity questions — answered by static DEVELOPER_RESPONSE
@@ -14845,7 +14864,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
   // Guard: GREETING → لا توضيح شخصي أبداً (صباح الخير ≠ شخص)
-  if (!_isAgentMode && !isDZToolRequest && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  // Guard: YouTube → فيديو/يوتيوب لا يُعالَج كاستعلام شخص
+  // Guard: Sports/LFP → نتائج/دوري/مباريات لا تُعالَج كاستعلام شخص
+  const _isSportsLFPQuery = /(?:نتائج.*(?:دوري|مباريات|مباراة)|(?:دوري|بطولة|كأس).*(?:جزائري|الجزائر|نتائج|ترتيب|جدول)|ترتيب.*دوري|جدول.*مباريات|مباريات.*اليوم|نتائج.*كرة|هداف|الدوري الجزائري|الرابطة المحترفة|lfp|ligue pro|مباريات.*كرة|كرة.*مباريات)/i.test(lastUserMessage)
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
     const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
     if (_entityAmbig?.needsClarification) {
@@ -14870,7 +14892,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // الترتيب: Wikidata (أولوية قصوى) → Wikipedia AR → Wikipedia EN
   // المبدأ: لا إجابة بدون مصدر موثوق — لا اختلاق أبداً
   // Guard: GREETING → لا بحث عن شخص أبداً
-  if (!_isAgentMode && !isDZToolRequest && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  // Guard: YouTube → فيديو/يوتيوب لا يُعالَج كاستعلام شخص
+  // Guard: Sports/LFP → نتائج/دوري/مباريات لا تُعالَج كاستعلام شخص
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
@@ -15374,7 +15398,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── NO_WIKI_CONTEXT_GUARD — FIX-④ ────────────────────────────────────────
   // إذا وصل طلب شخصية للـ LLM بدون سياق ويكيبيديا → أضف حاجز صريح في الرسائل
   // يمنع LLM من استخدام ذاكرته الداخلية عن الأشخاص
-  if (!_isAgentMode && isPersonQuery(lastUserMessage)) {
+  // Guard: YouTube + Sports/LFP queries are never person queries
+  if (!_isAgentMode && !_isYouTubeQuery_pre && !_isSportsLFPQuery && isPersonQuery(lastUserMessage)) {
     const _hasWikiCtx = messages.some(m =>
       m.role === 'user' && (
         m.content?.includes('[WIKIPEDIA_CONTEXT]') ||
@@ -18406,7 +18431,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       `[IntentRouter] 🎯 FINAL: ${_intentClassification.intent} | ${_intentClassification.confidence}% | ${_intentClassification.debugLabel}`
     )
     // fast-path التوضيح: فقط للأسئلة الغامضة تماماً (< 40% ثقة)
+    // Guard: نفس _clarificationBypass — YouTube / Sports / Doctor تجاوز التوضيح
     if (
+      !_clarificationBypass &&
       _intentClassification.needsClarification &&
       _intentClassification.clarificationMsg &&
       _intentClassification.confidence < 40 &&

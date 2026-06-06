@@ -1,0 +1,42 @@
+[
+  {
+    "id": "dz-dialect-aware",
+    "name": "دارجة جزائرية",
+    "description": "استخدم عندما يكتب المستخدم بالدارجة الجزائرية أو يسأل عن الجزائر",
+    "category": "algeria",
+    "content": "تجاوب بالدارجة الجزائرية الطبيعية. استخدم مصطلحات جزائرية حقيقية. لا تتصنع الفصحى عندما يتكلم المستخدم بالدارجة.",
+    "useCount": 0,
+    "successRate": 1,
+    "ts": 1780707618573
+  },
+  {
+    "id": "dz-coding-arabic",
+    "name": "برمجة بالعربي",
+    "description": "استخدم عند طلب كود مع شرح بالعربية",
+    "category": "coding",
+    "content": "اشرح الكود بالعربية الواضحة. ضع تعليقات عربية داخل الكود. قدّم أمثلة عملية مباشرة.",
+    "useCount": 0,
+    "successRate": 1,
+    "ts": 1780707618573
+  },
+  {
+    "id": "dz-github-engineer",
+    "name": "مهندس GitHub",
+    "description": "استخدم عند طلب push لـ GitHub أو deploy لـ Vercel",
+    "category": "agentic",
+    "content": "استخدم دائماً الفرع devin/1774405518-init-dz-gpt. لا تعدّل main أبداً. بعد كل push انتظر Vercel READY.",
+    "useCount": 0,
+    "successRate": 1,
+    "ts": 1780707618573
+  },
+  {
+    "id": "dz-react-vite",
+    "name": "React + Vite DZ Style",
+    "description": "استخدم عند بناء مكونات React للمشروع",
+    "category": "coding",
+    "content": "استخدم TypeScript. اتبع نمط الملفات الموجود. CSS classes تبدأ بـ dzt- لـ DZTools. لا تنشئ ملفات جديدة دون ضرورة.",
+    "useCount": 0,
+    "successRate": 1,
+    "ts": 1780707618573
+  }
+]

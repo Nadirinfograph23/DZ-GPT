@@ -148,6 +148,19 @@ import {
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
+import {
+  getLiveMatches,
+  getFixtures,
+  getStandings,
+  getPlayerIdentity,
+  getPlayerStats,
+  getTransfers,
+  getArabicLocalization,
+  getAlgeriaMatches,
+  isUnavailable,
+  UNAVAILABLE,
+  APIF_LEAGUES,
+} from './lib/sports-data-router.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
 import {
   injectHALSystemPrompt,
@@ -7690,47 +7703,69 @@ function detectFootballQuery(msg) {
   return keywords.some(k => lower.includes(k))
 }
 
-function buildFootballContext(sfData, rssFeeds, dateStr) {
+function buildFootballContext(sfData, rssFeeds, dateStr, routerData = null) {
   const date = dateStr || new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   let ctx = `\n\n--- ⚽ بيانات كرة القدم المباشرة — ${date} ---\n`
 
-  if (sfData?.matches?.length) {
-    const live = sfData.matches.filter(m => m.statusType === 'inprogress')
-    const finished = sfData.matches.filter(m => m.statusType === 'finished')
-    const upcoming = sfData.matches.filter(m => m.statusType === 'notstarted')
+  // ── استخدم بيانات الراوتر متعدد المصادر أولاً إذا توفّرت ──
+  const activeData = (routerData && !isUnavailable(routerData)) ? routerData : sfData
 
-    if (live.length > 0) {
-      ctx += `\n🔴 **مباريات جارية الآن (SofaScore):**\n`
-      for (const m of live.slice(0, 10)) {
-        ctx += `• ${m.homeTeam} **${m.homeScore ?? 0} - ${m.awayScore ?? 0}** ${m.awayTeam}`
-        if (m.competition) ctx += ` | ${m.competition}`
-        if (m.country) ctx += ` (${m.country})`
-        ctx += ` — ${m.link}\n`
-      }
-    }
-
-    if (finished.length > 0) {
-      ctx += `\n✅ **نتائج المباريات (SofaScore):**\n`
-      for (const m of finished.slice(0, 15)) {
-        ctx += `• ${m.homeTeam} **${m.homeScore} - ${m.awayScore}** ${m.awayTeam}`
-        if (m.competition) ctx += ` | ${m.competition}`
-        if (m.country) ctx += ` (${m.country})`
-        ctx += ` — ${m.link}\n`
-      }
-    }
-
-    if (upcoming.length > 0) {
-      ctx += `\n📅 **مباريات قادمة (SofaScore):**\n`
-      for (const m of upcoming.slice(0, 10)) {
-        ctx += `• ${m.homeTeam} vs ${m.awayTeam}`
-        if (m.startTime) ctx += ` — ${m.startTime}`
-        if (m.competition) ctx += ` | ${m.competition}`
-        if (m.country) ctx += ` (${m.country})`
-        ctx += ` — ${m.link}\n`
-      }
-    }
-    ctx += `*(المصدر: SofaScore — ${new Date(sfData.fetchedAt).toLocaleTimeString('ar-DZ')})*\n`
+  if (!activeData?.matches?.length && !sfData?.matches?.length) {
+    ctx += '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n'
+    ctx += '⚠️ **تعذّر التحقق من المعلومات الراهنة. لا تُجِب من الذاكرة.**\n'
+    ctx += '\n---\n'
+    return ctx
   }
+
+  const src = activeData?.source || 'SofaScore'
+  const matches = activeData?.matches || sfData?.matches || []
+  const live     = (activeData?.live     || matches.filter(m => m.statusType === 'inprogress' || m.statusType === 'live')).slice(0, 10)
+  const finished = (activeData?.finished || matches.filter(m => m.statusType === 'finished')).slice(0, 15)
+  const upcoming = (activeData?.upcoming || matches.filter(m => !['inprogress','live','finished'].includes(m.statusType))).slice(0, 10)
+
+  if (live.length > 0) {
+    ctx += `\n🔴 **مباريات جارية الآن (${src}):**\n`
+    for (const m of live) {
+      ctx += `• ${m.homeTeam} **${m.homeScore ?? 0} - ${m.awayScore ?? 0}** ${m.awayTeam}`
+      if (m.minutePlayed) ctx += ` [${m.minutePlayed}']`
+      const comp = m.competition || m.league || ''
+      const country = m.country || ''
+      if (comp) ctx += ` | ${comp}`
+      if (country) ctx += ` (${country})`
+      if (m.link) ctx += ` — ${m.link}`
+      ctx += '\n'
+    }
+  }
+
+  if (finished.length > 0) {
+    ctx += `\n✅ **نتائج المباريات (${src}):**\n`
+    for (const m of finished) {
+      ctx += `• ${m.homeTeam} **${m.homeScore} - ${m.awayScore}** ${m.awayTeam}`
+      const comp = m.competition || m.league || ''
+      const country = m.country || ''
+      if (comp) ctx += ` | ${comp}`
+      if (country) ctx += ` (${country})`
+      if (m.link) ctx += ` — ${m.link}`
+      ctx += '\n'
+    }
+  }
+
+  if (upcoming.length > 0) {
+    ctx += `\n📅 **مباريات قادمة (${src}):**\n`
+    for (const m of upcoming) {
+      ctx += `• ${m.homeTeam} vs ${m.awayTeam}`
+      if (m.startTime) ctx += ` — ${m.startTime}`
+      const comp = m.competition || m.league || ''
+      const country = m.country || ''
+      if (comp) ctx += ` | ${comp}`
+      if (country) ctx += ` (${country})`
+      if (m.link) ctx += ` — ${m.link}`
+      ctx += '\n'
+    }
+  }
+
+  const ts = activeData?.fetchedAt ? new Date(activeData.fetchedAt).toLocaleTimeString('ar-DZ') : ''
+  if (ts) ctx += `*(المصدر: ${src} — ${ts})*\n`
 
   if (rssFeeds?.length) {
     ctx += `\n📰 **أخبار كرة القدم (RSS):**\n`
@@ -7746,8 +7781,34 @@ function buildFootballContext(sfData, rssFeeds, dateStr) {
   }
 
   ctx += '\n---\n'
-  ctx += '> ⚠️ دائماً تحقق من المصدر الرسمي للنتائج الدقيقة.\n'
+  ctx += '> ⚠️ القاعدة الصارمة: هذه البيانات مباشرة من المصدر. إذا لم تتوفر بيانات حية، لا تُجِب من الذاكرة.\n'
   return ctx
+}
+
+// ── مساعد: يحضر بيانات كرة القدم من الراوتر متعدد المصادر ──
+async function buildSportsRouterContext(msg, dateStr) {
+  const lower = msg.toLowerCase()
+  const isAlgeria = /جزائر|خضر|lfp|رابطة|محترفة|وطني|algeria|fennec/i.test(lower)
+  const isStandings = /ترتيب|جدول|صدارة|standings|table/i.test(lower)
+  const isPlayer = /لاعب|هداف|مهاجم|حارس|stats|player/i.test(lower)
+
+  const promises = []
+
+  if (isAlgeria) {
+    promises.push(getAlgeriaMatches(dateStr).then(d => ({ type: 'algeria', data: d })))
+    if (isStandings) promises.push(getStandings(197).then(d => ({ type: 'standings_dz', data: d })))
+  } else {
+    promises.push(getLiveMatches(dateStr).then(d => ({ type: 'live', data: d })))
+  }
+
+  const results = await Promise.allSettled(promises)
+  const context = {}
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value?.data) {
+      context[r.value.type] = r.value.data
+    }
+  }
+  return context
 }
 
 // Hardcoded tag regexes — avoids dynamic RegExp (ReDoS risk)
@@ -12312,6 +12373,132 @@ app.get('/api/dz-agent/football', async (req, res) => {
     lfp: lfpResult.status === 'fulfilled' ? lfpResult.value : null,
     date: dateStr,
     fetchedAt: new Date().toISOString(),
+  })
+})
+
+// ===== SPORTS DATA ROUTER — نظام التوجيه متعدد المصادر =====
+
+// مباريات مباشرة ونتائج اليوم
+// Priority: FotMob → API-Football → SofaScore → football-data.org
+app.get('/api/sports/live', async (req, res) => {
+  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  const data = await getLiveMatches(dateStr)
+  if (isUnavailable(data)) {
+    return res.status(503).json(data)
+  }
+  return res.json(data)
+})
+
+// برنامج المباريات (fixture)
+// Priority: API-Football → FotMob
+app.get('/api/sports/fixtures', async (req, res) => {
+  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  const data = await getFixtures(dateStr)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// ترتيب البطولات
+// Priority: API-Football → FotMob
+// leagueId: 197=الرابطة الجزائرية، 39=PL، 140=LaLiga، 135=SerieA، 78=Bundesliga، 61=Ligue1، 2=UCL
+app.get('/api/sports/standings', async (req, res) => {
+  const leagueId = parseInt(req.query.league || '197', 10)
+  const season   = req.query.season ? parseInt(req.query.season, 10) : null
+  const data = await getStandings(leagueId, season)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json({ ...data, availableLeagues: APIF_LEAGUES })
+})
+
+// هوية اللاعب (اسم عربي، جنسية، تاريخ ميلاد، مركز)
+// Priority: Wikidata → Arabic Wikipedia
+app.get('/api/sports/player/identity', async (req, res) => {
+  const name = req.query.name
+  if (!name) return res.status(400).json({ error: 'name param required' })
+  const data = await getPlayerIdentity(name)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// إحصائيات اللاعب (xG, xA, تقييم، أهداف...)
+// Priority: FotMob → SofaScore → FBref
+app.get('/api/sports/player/stats', async (req, res) => {
+  const name         = req.query.name
+  const fotmobId     = req.query.fotmobId     ? parseInt(req.query.fotmobId)     : null
+  const sofascoreId  = req.query.sofascoreId  ? parseInt(req.query.sofascoreId)  : null
+  if (!name) return res.status(400).json({ error: 'name param required' })
+  const data = await getPlayerStats(name, fotmobId, sofascoreId)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// الانتقالات والقيمة السوقية
+// Priority: Transfermarkt → API-Football
+app.get('/api/sports/player/transfers', async (req, res) => {
+  const name   = req.query.name
+  const apifId = req.query.playerId ? parseInt(req.query.playerId) : null
+  if (!name) return res.status(400).json({ error: 'name param required' })
+  const data = await getTransfers(name, apifId)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// منتخب الجزائر — مباريات
+// Priority: API-Football (team=3) → FotMob
+app.get('/api/sports/algeria', async (req, res) => {
+  const dateStr = req.query.date || null
+  const data = await getAlgeriaMatches(dateStr)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// تعريب الأسماء
+// Priority: Koora → Wikidata Arabic → Wikipedia Arabic
+app.get('/api/sports/localize', async (req, res) => {
+  const name = req.query.name
+  if (!name) return res.status(400).json({ error: 'name param required' })
+  const data = await getArabicLocalization(name)
+  if (isUnavailable(data)) return res.status(503).json(data)
+  return res.json(data)
+})
+
+// تحقق من صحة بيانات رياضية — القاعدة الصارمة
+// إذا لم تتوفر بيانات حية → لا إجابة من ذاكرة النموذج
+app.get('/api/sports/verify', async (req, res) => {
+  const topic = (req.query.topic || '').toLowerCase()
+  const today = new Date().toISOString().slice(0, 10)
+
+  let liveData = null
+  let checked = []
+
+  if (topic.includes('algeria') || topic.includes('جزائر') || topic.includes('خضر') || topic.includes('lfp') || topic.includes('رابطة')) {
+    liveData = await getAlgeriaMatches(null)
+    checked.push('algeria-matches')
+  } else {
+    liveData = await getLiveMatches(today)
+    checked.push('live-matches')
+  }
+
+  if (isUnavailable(liveData)) {
+    return res.status(503).json({
+      verified: false,
+      unavailable: true,
+      message: UNAVAILABLE.message,
+      messageEn: UNAVAILABLE.messageEn,
+      checked,
+      rule: 'STRICT: No LLM memory answer allowed when live sources are down.',
+    })
+  }
+
+  return res.json({
+    verified: true,
+    source: liveData.source,
+    fetchedAt: liveData.fetchedAt,
+    checked,
+    summary: {
+      live:     liveData.live?.length     || 0,
+      finished: liveData.finished?.length || 0,
+      upcoming: liveData.upcoming?.length || 0,
+    },
   })
 })
 
@@ -17408,15 +17595,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // Football context
+  // Football context — multi-source router (FotMob→API-Football→SofaScore)
   let footballContext = ''
-  if (isFootballQuery && !isLFPQuery && footballResult.status === 'fulfilled' && footballResult.value) {
-    const [sfResult2, rssResult2] = footballResult.value
-    const sfData = sfResult2?.status === 'fulfilled' ? sfResult2.value : null
+  if (isFootballQuery && !isLFPQuery) {
+    const [sfResult2, rssResult2] = (footballResult.status === 'fulfilled' ? footballResult.value : [null, null]) || [null, null]
+    const sfData  = sfResult2?.status  === 'fulfilled' ? sfResult2.value  : null
     const rssData = rssResult2?.status === 'fulfilled' ? rssResult2.value : []
-    if (sfData || rssData?.length > 0) {
-      footballContext = buildFootballContext(sfData, rssData || [], today)
-      console.log(`[DZ Agent] Football context built: SofaScore=${!!sfData}, RSS=${rssData?.length ?? 0} feeds`)
+
+    // ── تجربة الراوتر متعدد المصادر أولاً (FotMob → API-Football → SofaScore) ──
+    let routerData = null
+    try {
+      routerData = await getLiveMatches(today)
+      if (isUnavailable(routerData)) routerData = null
+    } catch (_) { routerData = null }
+
+    // ── القاعدة الصارمة: إذا فشلت كل المصادر → لا إجابة من الذاكرة ──
+    if (!routerData && !sfData && !rssData?.length) {
+      footballContext = '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n⚠️ **لا تُجِب من ذاكرة النموذج — تعذّر التحقق من المعلومات الراهنة.**\n'
+      console.warn('[DZ Agent] STRICT RULE: all football sources failed — no LLM memory answer')
+    } else {
+      footballContext = buildFootballContext(sfData, rssData || [], today, routerData)
+      console.log(`[DZ Agent] Football context: router=${routerData?.source || 'none'}, SofaScore=${!!sfData}, RSS=${rssData?.length ?? 0}`)
     }
   }
 

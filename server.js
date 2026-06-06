@@ -194,7 +194,7 @@ import {
   isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS, findAlgerianClub,
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
-import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer } from './lib/sports-lookup.js'
+import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14020,7 +14020,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // BYPASS: Algerian historical government / minister queries — served from local DB
     isHistoricalGovQuery(lastUserMessage) ||
     // BYPASS: Minister / president queries (current government)
-    isMinisterQuery(lastUserMessage)
+    isMinisterQuery(lastUserMessage) ||
+    // BYPASS: اسم لاعب معروف — يذهب للمسار الرياضي مباشرة
+    detectPlayerNameInQuery(lastUserMessage) !== null ||
+    // BYPASS: اسم عربي مجرد قصير (2-4 كلمات) — universal player search يعالجه
+    (lastUserMessage.trim().split(/\s+/).length >= 2 &&
+     lastUserMessage.trim().split(/\s+/).length <= 4 &&
+     /^[\u0600-\u06FF\s]+$/.test(lastUserMessage.trim()) &&
+     !/[؟?]|هل|من|ما |كيف|أين|متى|لماذا|كم|ماذا|أخبار|نتيجة|مباراة/.test(lastUserMessage))
   if (!_isAgentMode && !_clarificationBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
@@ -14350,6 +14357,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
       } catch (_fuzzyErr) {
         console.error(`[FuzzyPlayer] Error:`, _fuzzyErr.message)
+      }
+    }
+
+    // 6e-ter. Universal Player Search — يعمل لأي لاعب دون قاموس يدوي
+    // Wikipedia العربية → اسم إنجليزي → 365score — لا قاموس، لا تشفير يدوي
+    if (_detectedPlayer === null && _isShortPlayerQuery &&
+        /[\u0600-\u06FF]/.test(_lum) &&
+        !/(\?|؟|هل|من|ما|كيف|أين|متى|لماذا|كم|ماذا|أخبار|نتيجة|مباراة|ترتيب)/.test(_lum)) {
+      try {
+        console.log(`[UniversalPlayer] جارٍ البحث: "${_lum}"`)
+        const _universal = await universalPlayerSearch(_lum)
+        if (_universal) {
+          console.log(`[UniversalPlayer] ✅ "${_lum}" → ${_universal.englishName} @ ${_universal.currentClubEn || '?'} (${_universal.sources?.join('+')})`)
+          const _uContent = buildPlayerClubResponse(_universal)
+          if (_uContent) {
+            return res.status(200).json({
+              content: _uContent,
+              model: 'universal-player-search',
+              _sources: _universal.sources,
+              _universal: { arabic: _lum, english: _universal.englishName },
+            })
+          }
+        }
+      } catch (_uErr) {
+        console.error(`[UniversalPlayer] Error:`, _uErr.message)
       }
     }
 

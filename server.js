@@ -14905,6 +14905,49 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: _sourceMsg, model: 'source-attribution' })
   }
 
+  // ── Role-Only Person Query Fast-Path ─────────────────────────────────────
+  // "من هو الرئيس الحالي للجزائر" = role query, no specific person name.
+  // Wikidata/Wikipedia cannot resolve "الرئيس الحالي" as a person entity — they'd fail
+  // and fall to SearXNG returning random news. Instead, return a static structured answer
+  // from Algeria KS data (already loaded via searchAlgeria above if it matches, but this
+  // catches queries where isAlgerianCitizenQuery didn't score high enough).
+  const _ROLE_ONLY_RE = /^(?:من\s+(?:هو|هي)\s+)?(?:ال)?(?:رئيس|وزير|الوزير\s+الأول|رئيس\s+الحكومة|الأمين\s+العام|والي|قائد|نائب|مستشار)\s+(?:ال\w+\s*){0,3}(?:(?:لل?|في\s+|بـ?)\w+\s*){0,2}[؟?]*$/i
+  const _isRoleOnlyQuery = _ROLE_ONLY_RE.test(lastUserMessage.trim())
+  if (_isRoleOnlyQuery && !_isAgentMode) {
+    console.log(`[RoleOnly] 🏛️ Detected role-only query: "${lastUserMessage.slice(0, 80)}"`)
+    // Force searchAlgeria — use broad terms extracted from the query
+    const _roleKsResult = searchAlgeria(lastUserMessage)
+    if (_roleKsResult) {
+      console.log(`[RoleOnly] ✅ Algeria-KS match: category=${_roleKsResult.match.category} score=${_roleKsResult.score}`)
+      return res.status(200).json({
+        content: formatAlgeriaResponse(_roleKsResult),
+        algeriaSource: _roleKsResult.match.link || null,
+        algeriaCategory: _roleKsResult.match.category,
+      })
+    }
+    // No KS match — answer with LLM + built-in Algerian government context
+    // Do NOT let this fall to isPersonQuery → Wikipedia → SearXNG
+    try {
+      const _roleMessages = [...messages]
+      if (!_roleMessages.find(m => m.role === 'system')) {
+        _roleMessages.unshift({
+          role: 'system',
+          content: [
+            'أنت مساعد جزائري متخصص في الشأن الجزائري.',
+            'رؤساء الجزائر: أحمد بن بلة (1962-65) | هواري بومدين (1965-78) | رابح بيطاط (1978-79 مؤقت) | الشاذلي بن جديد (1979-92) | محمد بوضياف (1992 اغتيل) | علي كافي (1992-94) | اليامين زروال (1994-99) | عبد العزيز بوتفليقة (1999-2019، استقال بسبب الحراك) | عبد القادر بن صالح (2019 مؤقت) | عبد المجيد تبون (ديسمبر 2019-الآن، وُلد 1945، ندرومة تلمسان).',
+            'الوزير الأول الحالي: نذير العرباوي (منذ مارس 2023).',
+            'الجزائر جمهورية — ليس لها ملك أو أمير.',
+            'أجب بشكل مباشر وموثوق بالعربية الفصيحة.',
+          ].join('\n'),
+        })
+      }
+      const _roleAI = await safeGenerateAI({ messages: _roleMessages, query: lastUserMessage, max_tokens: 800, taskHint: 'general' })
+      return res.status(200).json({ content: _roleAI.content, model: _roleAI.model || 'role-query-ai', algeriaCategory: 'government' })
+    } catch (_roleErr) {
+      console.error('[RoleOnly] AI fallback error:', _roleErr.message)
+    }
+  }
+
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
   // Guard: GREETING → لا توضيح شخصي أبداً (صباح الخير ≠ شخص)

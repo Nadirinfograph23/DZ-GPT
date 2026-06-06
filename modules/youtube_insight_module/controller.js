@@ -14,9 +14,11 @@ const YT_HEADERS = {
 
 // ── Invidious fallback instances (for metadata only, not search) ──────────
 const INVIDIOUS_INSTANCES = [
-  'https://invidious.protokolla.fi',
   'https://invidious.materialio.us',
+  'https://invidious.protokolla.fi',
   'https://iv.ggtyler.dev',
+  'https://invidious.privacyredirect.com',
+  'https://invidious.lunar.icu',
 ]
 
 // ── Format duration (seconds → human readable) ────────────────────────────
@@ -283,8 +285,60 @@ async function searchYouTube(query, limit = 8) {
   const inv = await searchInvidious(query, limit)
   if (inv.length) return inv
 
+  console.log(`[YouTube:search] Trying Jina reader fallback for "${query}"`)
+  const jinaResults = await searchYouTubeViaJina(query, limit)
+  if (jinaResults.length) return jinaResults
+
   console.error(`[YouTube:search] All methods failed for "${query}"`)
   return []
+}
+
+// ── Jina reader fallback — scrapes YouTube search page via r.jina.ai ──────
+async function searchYouTubeViaJina(query, limit = 8) {
+  try {
+    const encoded = encodeURIComponent(query)
+    const jinaUrl = `https://r.jina.ai/https://www.youtube.com/results?search_query=${encoded}`
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 12000)
+    const r = await fetch(jinaUrl, {
+      signal: ctrl.signal,
+      headers: { 'Accept': 'text/plain,text/markdown,*/*', 'User-Agent': 'DZ-GPT/2.0' },
+    })
+    clearTimeout(t)
+    if (!r.ok) return []
+    const md = await r.text()
+
+    // Extract YouTube video IDs from markdown links: [title](https://www.youtube.com/watch?v=ID)
+    const videoRe = /\[([^\]]+)\]\(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([\w-]{11})[^)]*\)/g
+    const seen = new Set()
+    const results = []
+    let m
+    while ((m = videoRe.exec(md)) !== null && results.length < limit) {
+      const title = m[1].trim()
+      const id = m[2]
+      if (!id || seen.has(id) || title.length < 3) continue
+      seen.add(id)
+      results.push({
+        id,
+        title,
+        url: `https://www.youtube.com/watch?v=${id}`,
+        thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        duration: 0,
+        views: 0,
+        channel: '',
+        description: '',
+      })
+    }
+
+    if (results.length) {
+      console.log(`[YouTube:Jina] OK — ${results.length} results for "${query}"`)
+      return results
+    }
+    return []
+  } catch (err) {
+    console.warn('[YouTube:Jina] Failed:', err.message)
+    return []
+  }
 }
 
 // ── Static fallback suggestions (used when AI is unavailable) ─────────────

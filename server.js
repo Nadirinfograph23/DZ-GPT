@@ -2071,6 +2071,8 @@ function detectToolRedirect(msg) {
   if (/(?:دوري|بطولة|كأس|دور|تتويج|بطل|لقب)\s*(?:الجزائر|الجزائري|أفريقيا|أوروبا|العالم|مصر|تونس)?/i.test(msg)) return null
   if (/(?:فريق|أندية|نادي|منتخب)\s+\S+|(?:الفريق|النادي|المنتخب)\s*(?:الجزائري|الوطني)/i.test(msg)) return null
   if (/(?:ليغ|ليغ\s*بروفيسيونال|LFP|الرابطة\s*المحترفة|كان|AFCON|CAN\b)/i.test(msg)) return null
+  // ── تصنيف 4b: اسم لاعب معروف بدون كلمة مفتاحية → معالج رياضي مدمج ────────
+  if (detectPlayerNameInQuery(msg)) return null
 
   // ── تصنيف 5: بحث في يوتيوب "بالفيديو" → محرك YouTube Insight (8 نتائج + تحليل) ─
   // الكلمة المشغِّلة: بالفيديو / يوتيوب / أغنية / كليب / موسيقى
@@ -12777,28 +12779,39 @@ function detectCurrencyQuery(msg) {
     'الدينار الجزائري', 'دينار جزائري', 'دزد', 'dzd', 'صرف العملة', 'صرف العملات',
     'سعر العملة', 'سعر العملات', 'تحويل العملة', 'تحويل العملات', 'السوق السوداء',
     'دولار مقابل دينار', 'يورو مقابل دينار', 'كم الدولار', 'كم اليورو', 'كم الريال',
+    'مقابل الدينار', 'الصرف اليوم', 'سعر اليوم', 'الدولار اليوم', 'اليورو اليوم',
+    'بكم الدولار', 'بكم اليورو', 'ثمن الدولار', 'ثمن اليورو', 'قيمة الدولار',
+    'قيمة اليورو', 'واش سعر', 'قداش الدولار', 'قداش اليورو', 'أسعار العملات اليوم',
     'exchange rate', 'currency rate', 'dollar rate', 'euro rate', 'dzd rate', 'dinar rate',
     'usd to dzd', 'eur to dzd', 'convert currency', 'currency convert',
     'taux de change', 'euro en dinar', 'dollar en dinar', 'convertir devise',
+    'euro dinar', 'dollar dinar', 'gbp dinar', 'cours du dinar',
   ]
   return kw.some(k => lower.includes(k))
 }
 
 function buildCurrencyContext(data) {
   if (!data) return ''
-  const statusLabel = data.status === 'live' ? '🟢 محدّث' : '🟡 بيانات مؤقتة (stale)'
+  const statusLabel = data.status === 'live' ? '🟢 محدّث' : '🟡 بيانات مؤقتة'
   const updated = data.last_update ? new Date(data.last_update).toLocaleString('ar-DZ') : ''
-  const symbols = { USD: 'دولار أمريكي', EUR: 'يورو', GBP: 'جنيه إسترليني', SAR: 'ريال سعودي', AED: 'درهم إماراتي', TND: 'دينار تونسي', MAD: 'درهم مغربي', EGP: 'جنيه مصري', QAR: 'ريال قطري', KWD: 'دينار كويتي', CAD: 'دولار كندي', CHF: 'فرنك سويسري', CNY: 'يوان صيني', TRY: 'ليرة تركية', JPY: 'ين ياباني' }
+  const symbols = {
+    USD: 'دولار أمريكي 🇺🇸', EUR: 'يورو 🇪🇺', GBP: 'جنيه إسترليني 🇬🇧',
+    SAR: 'ريال سعودي 🇸🇦', AED: 'درهم إماراتي 🇦🇪', TND: 'دينار تونسي 🇹🇳',
+    MAD: 'درهم مغربي 🇲🇦', EGP: 'جنيه مصري 🇪🇬', QAR: 'ريال قطري 🇶🇦',
+    KWD: 'دينار كويتي 🇰🇼', CAD: 'دولار كندي 🇨🇦', CHF: 'فرنك سويسري 🇨🇭',
+    CNY: 'يوان صيني 🇨🇳', TRY: 'ليرة تركية 🇹🇷', JPY: 'ين ياباني 🇯🇵',
+  }
 
-  let ctx = `\n\n--- 💱 أسعار الصرف — ${statusLabel} — ${updated} (المصدر: ${data.provider}) ---\n`
-  ctx += `\n**قيمة 1 دينار جزائري (DZD):**\n`
+  let ctx = `\n\n💱 **جدول أسعار الصرف مقابل الدينار الجزائري** — ${statusLabel} — ${updated}\n`
+  ctx += `📊 المصدر: ${data.provider}\n\n`
+  ctx += `| الرمز | العملة | سعر الشراء (1 وحدة = كم DZD) |\n`
+  ctx += `|-------|--------|-------------------------------|\n`
   for (const [code, rate] of Object.entries(data.rates)) {
     const name = symbols[code] || code
     const dzdPer = rate > 0 ? (1 / rate).toFixed(2) : '?'
-    ctx += `• 1 DZD = **${rate}** ${code} (${name}) | 1 ${code} = **${dzdPer} DZD**\n`
+    ctx += `| **${code}** | ${name} | **${dzdPer} دج** |\n`
   }
-  if (data.status === 'stale') ctx += `\n⚠️ *البيانات المحفوظة — آخر تحديث: ${data.stale_since}*\n`
-  ctx += '\n---\n'
+  if (data.status === 'stale') ctx += `\n⚠️ *بيانات محفوظة — آخر تحديث: ${data.stale_since}*\n`
   return ctx
 }
 
@@ -18925,7 +18938,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     // ── قاعدة: عدم الرد بسلبية فارغة في حالة عدم وجود مباريات ──────────────
     (isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery || isLFPQuery) ? `⚽ SPORTS RULE: إذا لم تكن هناك نتائج مباريات مباشرة لليوم، اعرض بدلاً من ذلك: (أ) آخر المباريات التي جرت مع نتائجها وتاريخها، أو (ب) المباريات القادمة، أو (ج) آخر الأخبار الرياضية من RSS مع ذكر تاريخها. لا تقل أبداً "لا توجد معلومات" أو تُعطِ رداً فارغاً. دائماً قدّم شيئاً مفيداً. اذكر المصدر والتاريخ دائماً.` : '',
     ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2000)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
-    currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 600)}\n> لا تخترع أسعاراً. اعرض جدولاً.` : '',
+    currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
     rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',

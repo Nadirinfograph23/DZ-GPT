@@ -26575,21 +26575,37 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
   } catch (_) {}
   console.log(`[img-gen] prompt: "${prompt.slice(0,50)}" → "${englishPrompt.slice(0,60)}" translated=${translatedFlag}`)
 
-  // ── Priority 1: HuggingFace FLUX.1-schnell (high quality, needs HF_TOKEN) ──
+  // ── Priority 1: Pollinations AI — المزود الأساسي (مجاني، سريع، بدون مفتاح) ──
+  // ملاحظة: Pollinations تستخدم نماذج FLUX عالية الجودة مجاناً — الأسرع والأكثر موثوقية
+  try {
+    const polModel = (reqModel && ['flux','turbo','flux-realism','flux-anime','flux-3d','flux-cablyai'].includes(reqModel)) ? reqModel : 'flux-realism'
+    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt)}`
+      + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=true&safe=false`
+    const polRes = await fetch(polUrl, {
+      headers: { 'Referer': 'https://dz-gpt.vercel.app', 'User-Agent': 'DZ-GPT/2.0' },
+      signal: AbortSignal.timeout(40000),
+    })
+    if (polRes.ok && (polRes.headers.get('content-type') || '').startsWith('image/')) {
+      console.log('[img-gen] ✓ Pollinations ' + polModel)
+      return res.json({ imageUrl: polUrl, model: `Pollinations (${polModel})`, provider: 'pollinations', translated: translatedFlag, englishPrompt })
+    }
+  } catch (polErr) { console.warn('[img-gen:pollinations]', polErr.message) }
+
+  // ── Priority 2: HuggingFace FLUX.1-schnell (احتياط — يحتاج HF_TOKEN) ──
   const token = process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY || ''
   if (token) {
     try {
       const hf = await huggingFaceFlux(englishPrompt, negativePrompt, { timeoutMs: 30000 })
       if (hf) {
-        console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell')
+        console.log('[img-gen] ✓ HuggingFace FLUX.1-schnell (fallback)')
         return res.json({ imageBase64: hf.imageBase64, model: 'FLUX.1-schnell (HF)', provider: 'huggingface', translated: translatedFlag, englishPrompt })
       }
     } catch (e) { console.warn('[img-gen:hf]', e.message) }
   }
 
-  // ── Priority 2: HuggingFace fallback (if HF_TOKEN not blocked) ──
+  // ── Priority 3: HuggingFace Stable Diffusion (احتياط أخير قبل Horde) ──
   if (token) {
-    for (const fbModel of ['stabilityai/stable-diffusion-2-1', 'stabilityai/stable-diffusion-xl-base-1.0']) {
+    for (const fbModel of ['stabilityai/stable-diffusion-xl-base-1.0', 'stabilityai/stable-diffusion-2-1']) {
       try {
         const fbRes = await fetch(`https://api-inference.huggingface.co/models/${fbModel}`, {
           method: 'POST',
@@ -26610,18 +26626,6 @@ app.post('/api/tools/img-gen', express.json({ limit: '5mb' }), async (req, res) 
       } catch (fbErr) { console.warn(`[img-gen:hf]`, fbErr.message) }
     }
   }
-
-  // ── Priority 3: Pollinations AI — free, fast, no key needed ──
-  try {
-    const polModel = (reqModel && ['flux','turbo','flux-realism','flux-anime','flux-3d'].includes(reqModel)) ? reqModel : 'flux'
-    const polUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(englishPrompt)}`
-      + `?model=${polModel}&width=${Math.min(w,1024)}&height=${Math.min(h,1024)}&seed=${seed}&nologo=true&enhance=false`
-    const polRes = await fetch(polUrl, { signal: AbortSignal.timeout(35000) })
-    if (polRes.ok && (polRes.headers.get('content-type') || '').startsWith('image/')) {
-      console.log('[img-gen] ✓ Pollinations ' + polModel)
-      return res.json({ imageUrl: polUrl, model: `FLUX (Pollinations)`, provider: 'pollinations', translated: translatedFlag, englishPrompt })
-    }
-  } catch (polErr) { console.warn('[img-gen:pollinations]', polErr.message) }
 
   // ── Priority 4: Stable Horde async — submit job, return jobId immediately ──
   // (all sync providers failed — use async so frontend can poll)

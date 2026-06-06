@@ -6492,7 +6492,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           const imgRes = await fetch('/api/tools/img-gen', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, model: 'flux', width: 512, height: 512 }),
+            body: JSON.stringify({ prompt, model: 'flux-realism', width: 1024, height: 1024 }),
           })
           const imgData = await imgRes.json() as {
             imageUrl?: string; imageBase64?: string; model?: string

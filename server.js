@@ -184,6 +184,7 @@ import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZCla
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
+import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
   detectPresidentYearQuery, detectPMYearQuery,
   buildPresidentYearResponse, buildPresidentBeforeResponse, buildPMYearResponse,
@@ -14058,6 +14059,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
     // BYPASS: Sports / football / league queries — handled by sports data system
     /(?:نتائج.*(?:دوري|مباريات|مباراة)|(?:دوري|بطولة|كأس).*(?:جزائري|الجزائر|نتائج|ترتيب|جدول)|ترتيب.*دوري|جدول.*مباريات|مباريات.*اليوم|نتائج.*كرة|هداف|الدوري الجزائري|الرابطة المحترفة|lfp|ligue pro)/i.test(lastUserMessage) ||
+    // BYPASS: نمط "X ضد Y" / "X vs Y" — تحليل مباراة مباشر
+    /[\u0600-\u06FF\w]{2,}\s+ضد\s+[\u0600-\u06FF\w]{2,}/i.test(lastUserMessage) ||
+    /[\u0600-\u06FF\w]{2,}\s+vs\.?\s+[\u0600-\u06FF\w]{2,}/i.test(lastUserMessage) ||
     // BYPASS: Map / location queries — handled by DZ Maps intelligence engine
     isMapQuery(lastUserMessage) ||
     // BYPASS: Developer / owner identity questions — answered by static DEVELOPER_RESPONSE

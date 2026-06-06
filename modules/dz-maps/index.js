@@ -422,13 +422,32 @@ function _buildPoiLeafletMap(places, def, locationLabel) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,Arial,sans-serif}
-  #hdr{background:linear-gradient(135deg,${accentColor} 0%,${pinColor} 100%);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:relative;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-  #hdr .ico{font-size:22px;line-height:1}
-  #hdr .ttl{font-size:15px;font-weight:700;letter-spacing:.3px}
-  #hdr .sub{font-size:11px;opacity:.85}
-  #map{height:calc(100vh - 52px);width:100%}
-  .lbl{background:${pinColor};color:#fff;border:2px solid #fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer}
+  html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,Arial,sans-serif;direction:rtl}
+  #hdr{background:linear-gradient(135deg,${accentColor} 0%,${pinColor} 100%);color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;position:relative;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.25);flex-wrap:wrap}
+  #hdr .ico{font-size:20px;line-height:1}
+  #hdr .ttl{font-size:14px;font-weight:700}
+  #hdr .sub{font-size:10px;opacity:.85}
+  #hdr .gps-btn{margin-right:auto;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .2s}
+  #hdr .gps-btn:hover{background:rgba(255,255,255,.35)}
+  #wrap{display:flex;height:calc(100vh - 48px)}
+  #sidebar{width:200px;min-width:160px;overflow-y:auto;background:#1a1a2e;border-left:1px solid #333;flex-shrink:0}
+  #sidebar .s-item{padding:8px 10px;border-bottom:1px solid #2a2a3e;cursor:pointer;transition:background .15s;display:flex;gap:8px;align-items:flex-start}
+  #sidebar .s-item:hover{background:#2a2a4e}
+  #sidebar .s-item.active{background:#${accentColor.replace('#','')}22;border-right:3px solid ${accentColor}}
+  #sidebar .s-num{background:${pinColor};color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+  #sidebar .s-name{color:#e8e8f0;font-size:11px;line-height:1.3}
+  #sidebar .s-addr{color:#888;font-size:9px;margin-top:2px}
+  #map{flex:1;min-width:0}
+  .lbl{background:${pinColor};color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer;transition:transform .15s}
+  .lbl:hover,.lbl.sel{transform:scale(1.25);background:#1a73e8}
+  #nav-bar{display:none;position:absolute;bottom:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:8px 12px;z-index:900;font-size:12px;flex-direction:column;gap:4px}
+  #nav-bar.show{display:flex}
+  #nav-bar .nav-title{font-weight:700;color:#7ee8a2}
+  #nav-bar .nav-links{display:flex;gap:8px;flex-wrap:wrap}
+  #nav-bar .nav-links a{background:#1a73e8;color:#fff;padding:5px 12px;border-radius:16px;text-decoration:none;font-size:11px}
+  #nav-bar .nav-links a.osm{background:${accentColor}}
+  #nav-bar .nav-close{position:absolute;top:6px;left:8px;cursor:pointer;font-size:16px;color:#aaa}
+  #user-marker-info{display:none;background:#1a73e8;color:#fff;padding:3px 8px;border-radius:12px;font-size:10px;margin-right:8px}
 </style>
 </head>
 <body>
@@ -438,8 +457,18 @@ function _buildPoiLeafletMap(places, def, locationLabel) {
     <div class="ttl">${def.nameAr} في ${locationLabel}</div>
     <div class="sub">${valid.length} نتيجة — OpenStreetMap 🌍</div>
   </div>
+  <span id="user-marker-info">📍 موقعك</span>
+  <button class="gps-btn" onclick="locateUser()">📍 موقعي والتوجيه</button>
 </div>
-<div id="map"></div>
+<div id="wrap">
+  <div id="sidebar" id="poi-list"></div>
+  <div id="map"></div>
+</div>
+<div id="nav-bar">
+  <span class="nav-close" onclick="closeNav()">✕</span>
+  <div class="nav-title" id="nav-name"></div>
+  <div class="nav-links" id="nav-links"></div>
+</div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
 <script>
 const MARKERS = ${markersJSON};
@@ -447,14 +476,103 @@ const map = L.map('map',{zoomControl:true}).setView([${center.lat},${center.lon}
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© <a href="https://osm.org/copyright">OpenStreetMap</a>',maxZoom:19
 }).addTo(map);
-const group = L.featureGroup();
-MARKERS.forEach((m,i) => {
-  const icon = L.divIcon({className:'',html:'<div class="lbl">'+(i+1)+'</div>',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-18]});
-  const popup = '<div style="font-family:sans-serif;min-width:170px;direction:rtl"><strong style="font-size:13px">'+(i+1)+'. '+m.name+'</strong>'+(m.addr?'<br><span style="color:#555;font-size:11px">📍 '+m.addr+'</span>':'')+'<br><div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(m.name+' ${locationLabel} Algeria')+'" target="_blank" style="color:#1a73e8;font-size:11px;text-decoration:none">📍 Google Maps ↗</a><a href="https://www.openstreetmap.org/?mlat='+m.lat+'&mlon='+m.lon+'&zoom=17" target="_blank" style="color:${accentColor};font-size:11px;text-decoration:none">🗺️ OSM ↗</a></div></div>';
-  L.marker([m.lat,m.lon],{icon}).bindPopup(popup,{maxWidth:240}).addTo(map);
-  group.addLayer(L.marker([m.lat,m.lon]));
+
+let userMarker = null;
+let userLat = null, userLng = null;
+let selectedIdx = -1;
+const leafletMarkers = [];
+
+// Build sidebar
+const sidebar = document.getElementById('sidebar');
+MARKERS.forEach((m, i) => {
+  const item = document.createElement('div');
+  item.className = 's-item';
+  item.id = 'si-' + i;
+  item.innerHTML = '<div class="s-num">'+(i+1)+'</div><div><div class="s-name">'+m.name+'</div>'+(m.addr?'<div class="s-addr">'+m.addr+'</div>':'')+'</div>';
+  item.addEventListener('click', () => selectPoi(i));
+  sidebar.appendChild(item);
 });
-if(MARKERS.length>1) map.fitBounds(group.getBounds().pad(0.25));
+
+// Build markers
+const group = L.featureGroup();
+MARKERS.forEach((m, i) => {
+  const iconEl = L.divIcon({
+    className:'',
+    html:'<div class="lbl" id="lbl-'+i+'">'+(i+1)+'</div>',
+    iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-18]
+  });
+  const mk = L.marker([m.lat,m.lon],{icon:iconEl});
+  mk.on('click', () => selectPoi(i));
+  mk.addTo(map);
+  group.addLayer(mk);
+  leafletMarkers.push(mk);
+});
+
+if(MARKERS.length > 1) map.fitBounds(group.getBounds().pad(0.2));
+
+function selectPoi(i) {
+  // Deselect previous
+  if(selectedIdx >= 0) {
+    const prev = document.getElementById('si-'+selectedIdx);
+    if(prev) prev.classList.remove('active');
+  }
+  selectedIdx = i;
+  const m = MARKERS[i];
+
+  // Highlight sidebar item
+  const item = document.getElementById('si-'+i);
+  if(item) { item.classList.add('active'); item.scrollIntoView({block:'nearest'}); }
+
+  // Pan map to marker
+  map.setView([m.lat, m.lon], 16);
+
+  // Show navigation bar
+  const navName = document.getElementById('nav-name');
+  const navLinks = document.getElementById('nav-links');
+  navName.textContent = (i+1)+'. '+m.name+(m.addr ? ' — '+m.addr : '');
+
+  let gLink = 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(m.name+' ${locationLabel} Algeria');
+  let osmLink = 'https://www.openstreetmap.org/?mlat='+m.lat+'&mlon='+m.lon+'&zoom=17';
+
+  // If user location known, build directions links
+  if(userLat !== null && userLng !== null) {
+    gLink = 'https://www.google.com/maps/dir/?api=1&origin='+userLat+','+userLng+'&destination='+m.lat+','+m.lon+'&travelmode=driving';
+    osmLink = 'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route='+userLat+','+userLng+';'+m.lat+','+m.lon;
+  }
+
+  navLinks.innerHTML =
+    '<a href="'+gLink+'" target="_blank">🚗 '+(userLat!==null?'توجيه - ':'')+'Google Maps ↗</a>'+
+    '<a href="'+osmLink+'" target="_blank" class="osm">🗺️ OpenStreetMap ↗</a>';
+
+  document.getElementById('nav-bar').classList.add('show');
+}
+
+function closeNav() {
+  document.getElementById('nav-bar').classList.remove('show');
+}
+
+function locateUser() {
+  if(!navigator.geolocation) { alert('المتصفح لا يدعم تحديد الموقع'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+
+    if(userMarker) userMarker.remove();
+    const userIcon = L.divIcon({
+      className:'',
+      html:'<div style="width:16px;height:16px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 3px rgba(26,115,232,.3)"></div>',
+      iconSize:[16,16],iconAnchor:[8,8]
+    });
+    userMarker = L.marker([userLat, userLng], {icon: userIcon, zIndexOffset: 1000}).addTo(map);
+    userMarker.bindPopup('<div style="direction:rtl;font-size:12px">📍 موقعك الحالي</div>');
+
+    document.getElementById('user-marker-info').style.display = 'inline-block';
+    map.setView([userLat, userLng], 14);
+
+    // If a POI is already selected, update nav links
+    if(selectedIdx >= 0) selectPoi(selectedIdx);
+  }, () => { alert('تعذّر تحديد موقعك. تأكد من السماح بالوصول للموقع.'); });
+}
 <\/script>
 </body>
 </html>`

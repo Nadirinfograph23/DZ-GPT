@@ -7859,11 +7859,19 @@ async function buildSportsRouterContext(msg, dateStr) {
 
   const promises = []
 
+  // ── 365score أولاً (أولوية مطلقة) ────────────────────────────────────────
   if (isAlgeria) {
-    promises.push(getAlgeriaMatches(dateStr).then(d => ({ type: 'algeria', data: d })))
-    if (isStandings) promises.push(getStandings(197).then(d => ({ type: 'standings_dz', data: d })))
+    promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'algeria', data: d })))
+    promises.push(getAlgeriaMatches(dateStr).then(d => ({ type: 'algeria_fallback', data: d })))
+    if (isStandings) {
+      promises.push(get365ScoreStandings(197).then(d => ({ type: 'standings_dz', data: d })))
+      promises.push(getStandings(197).then(d => ({ type: 'standings_dz_fallback', data: d })))
+    }
   } else {
-    promises.push(getLiveMatches(dateStr).then(d => ({ type: 'live', data: d })))
+    // 365score أولاً لكل المباريات
+    promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'live', data: d })))
+    promises.push(getKooraMatches(dateStr).then(d => ({ type: 'live_koora', data: d })))
+    promises.push(getLiveMatches(dateStr).then(d => ({ type: 'live_fallback', data: d })))
   }
 
   const results = await Promise.allSettled(promises)
@@ -18271,7 +18279,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (_isMinisterQuery) {
     const ministersData = ministersResult?.status === 'fulfilled' ? ministersResult.value : null
     if (ministersData) {
-      ministersContext = buildMinistersContext(ministersData)
+      ministersContext = buildMinistersContext(ministersData, lastUserMessage)
       console.log(`[AlgGov] 🏛️ Ministers context injected — status: ${ministersData.status} | ${ministersData.ministers?.length ?? 0} entries | source: ${ministersData.source}`)
     } else {
       console.warn('[AlgGov] ⚠️ Ministers fetch failed — using static data')
@@ -18283,7 +18291,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         sourceUrl: 'https://www.premier-ministre.gov.dz',
         fetchedAt: new Date().toISOString(),
         status: 'static_fallback',
-      })
+      }, lastUserMessage)
     }
   }
 

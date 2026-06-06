@@ -19588,6 +19588,17 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
+  // ── Step 2c: Player lookup — redirect to full endpoint for live sports data ──
+  // اللاعبون يحتاجون بيانات حية من 365score — البث من الـ AI يعطي معلومات قديمة خاطئة
+  const _isPlayerStream = detectPlayerNameInQuery(lastUserMessage) !== null
+  if (_isPlayerStream) {
+    console.log(`[Stream→Player] player query detected — redirecting to full endpoint: "${lastUserMessage.slice(0, 60)}"`)
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
   // ── Step 3: Core system prompt (slim — no heavy reasoning block) ─────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')

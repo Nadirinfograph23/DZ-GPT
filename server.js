@@ -2048,8 +2048,10 @@ function detectToolRedirect(msg) {
   if (/(?:متتالية|خوارزمية|algorithm|fibonacci|فيبوناتشي|مرتّب|ترتيب|sort|search|بحث\s*ثنائي|binary\s*search|recursion|تعاود)/i.test(msg)) return null
   if (/\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php|ruby|swift|kotlin|sql|bash|shell)\b.*(?:كود|برنامج|احسب|اكتب|دالة|function|script)/i.test(msg)) return null
   if (/(?:كود|برنامج|script|function)\b.*\b(?:python|javascript|typescript|c\+\+|java|rust|golang|php)/i.test(msg)) return null
-  // Maps / directions — handled natively
+  // Maps / directions — handled natively by DZ Maps Intelligence Engine
+  // Covers explicit words AND any isMapQuery — POI + location always routes to OSM
   if (/(?:طريق|اتجاه|مسار)\s*(?:إلى|ل)\b|خريطة|خرائط|كيف\s*(?:أروح|نروح|نوصل)/i.test(msg)) return null
+  if (isMapQuery(msg)) return null
   // Quran tafsir / meaning — handled natively (NOT audio which should redirect)
   if (/(?:تفسير|معنى|شرح|فسّر)\s*(?:آية|سورة|الآية)|tafsir\b/i.test(msg) && !/(?:صوت|تلاوة|استمع|مقرئ)/i.test(msg)) return null
   // Creative writing IN Darija — DZ Agent handles this natively (NOT a translation request)
@@ -13878,6 +13880,42 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _earlyMod = moderateMessage(lastUserMessage)
   if (!_earlyMod.ok) {
     return res.status(200).json({ content: _earlyMod.replyIfBlocked })
+  }
+
+  // ── DZ Maps EARLY Fast-Path ──────────────────────────────────────────────
+  // يُطلَق قبل كل شيء: _isAgentMode، SearXNG، Algeria-KS، Person Query، Tool Redirect
+  // يضمن أن "مسجد الفرقان في عنابة" دائماً تذهب للخريطة وليس لـ SearXNG
+  // Guard: website-builder & map-website queries excluded (موقع مطعم = موقع ويب)
+  if (isMapQuery(lastUserMessage)
+    && !detectWebsiteBuilderQuery(lastUserMessage)
+    && !detectMapWebsiteQuery(lastUserMessage)) {
+    console.log(`[DZ-Maps EARLY] 🗺️ Map fast-path: "${lastUserMessage.slice(0, 80)}"`)
+    const _earlyUserLoc = req.body.userLocation || null
+    try {
+      const _earlyMapResult = await handleMapQuery(lastUserMessage, _earlyUserLoc)
+      if (_earlyMapResult) {
+        return res.status(200).json({
+          content: _earlyMapResult.content,
+          isMap:   _earlyMapResult.isMap || false,
+          mapHtml: _earlyMapResult.mapHtml || null,
+          mapMeta: _earlyMapResult.mapMeta || null,
+          status:  'map_result',
+        })
+      }
+      // No location resolved → request GPS
+      return res.status(200).json({
+        content: '📍 اضغط على زر الموقع لعرض الخريطة القريبة منك.',
+        isMap: true,
+        mapHtml: '',
+        mapMeta: { type: 'gps-nearby', needsGps: true, poiKey: null, poiIcon: '📍', poiNameAr: 'مرفق' },
+      })
+    } catch (_earlyMapErr) {
+      console.error('[DZ-Maps EARLY] Error:', _earlyMapErr.message)
+      return res.status(200).json({
+        content: '⚠️ تعذّر تحميل الخريطة مؤقتاً. يرجى المحاولة مرة أخرى.',
+        isMap: false,
+      })
+    }
   }
 
   // ── Intent Clarification EARLY — قبل كل Fast-Paths بما فيها VerifyPolicy ──

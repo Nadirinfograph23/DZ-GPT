@@ -1,6 +1,6 @@
 # DZ-GPT — حالة المشروع
 
-> **آخر تحديث:** 15 مايو 2026 — commit `5c94aa3f3d01`
+> **آخر تحديث:** 6 يونيو 2026
 
 ---
 
@@ -9,41 +9,35 @@
 | العنصر | القيمة |
 |--------|--------|
 | **الفرع النشط** | `devin/1774405518-init-dz-gpt` ← كل التحديثات هنا فقط |
-| **آخر commit** | `5c94aa3f3d01` — fix: RTL text alignment + scroll in DZ Tools |
 | **Repo** | `https://github.com/Nadirinfograph23/DZ-GPT` |
 | **Vercel** | https://dz-gpt.vercel.app — Project ID: `prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5` |
 | **Deploy Hook** | مربوط بالفرع — يُطلق تلقائياً عند كل push |
 
-> 🚨 لا تعديل على `main` أبداً. `git push` مقيّد — نستخدم GitHub Contents API فقط.
+> 🚨 لا تعديل على `main` أبداً. `git commit/push` مقيّد — نستخدم `scripts/deploy.py` فقط.
 
 ---
 
 ## 🚀 قاعدة النشر الإلزامية — بعد كل مهمة
 
-```python
-# 1. رفع الملفات لـ GitHub
-python3 -c "
-import urllib.request, json, os, base64
-TOKEN = os.environ['GITHUB_TOKEN']
-REPO, BRANCH = 'Nadirinfograph23/DZ-GPT', 'devin/1774405518-init-dz-gpt'
+### الطريقة المثلى: `scripts/deploy.py` (Git Data API)
 
-def push_file(path, msg):
-    content = open(path, encoding='utf-8').read()
-    url = f'https://api.github.com/repos/{REPO}/contents/{path}?ref={BRANCH}'
-    req = urllib.request.Request(url, headers={'Authorization': f'token {TOKEN}'})
-    try: sha = json.loads(urllib.request.urlopen(req).read()).get('sha')
-    except: sha = None
-    body = {'message': msg, 'content': base64.b64encode(content.encode()).decode(), 'branch': BRANCH}
-    if sha: body['sha'] = sha
-    req2 = urllib.request.Request(f'https://api.github.com/repos/{REPO}/contents/{path}',
-        data=json.dumps(body).encode(),
-        headers={'Authorization': f'token {TOKEN}', 'Content-Type': 'application/json'}, method='PUT')
-    r = json.loads(urllib.request.urlopen(req2).read())
-    print(f'✅ {path} — {r[\"commit\"][\"sha\"][:12]}')
+```bash
+# ملف واحد أو أكثر — server.js افتراضياً
+python3 scripts/deploy.py "وصف التعديل"
 
-push_file('path/to/file', 'وصف التعديل')
-"
-# 2. Vercel يُطلق تلقائياً — راقب حتى state=READY
+# ملفات محددة
+python3 scripts/deploy.py "feat: وصف" server.js src/pages/X.tsx lib/y.js
+```
+
+**الآلية:** blob → tree → commit → ref update → Vercel deploy hook تلقائياً
+- ✅ لا حد لحجم الملف (Git binary protocol — أسرع من base64 Contents API)
+- ✅ لا تعارض في التاريخ (يبني دائماً على HEAD الحالي بالـ remote)
+- ✅ Vercel يُطلَق تلقائياً بعد نجاح GitHub
+- ✅ رسائل واضحة مع SHA لكل خطوة
+
+### Deploy Hook مباشر (لتشغيل Vercel بدون رفع ملفات)
+```bash
+curl "https://api.vercel.com/v1/integrations/deploy/prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5/ul5gBfG4Af"
 ```
 
 ---
@@ -109,8 +103,10 @@ push_file('path/to/file', 'وصف التعديل')
 
 ```
 DZ-GPT/
-├── server.js          ← Express + WebSocket (17000+ سطر)
+├── server.js          ← Express + WebSocket (19000+ سطر)
 ├── api/index.js       ← Vercel serverless entry
+├── scripts/
+│   └── deploy.py      ← سكريبت النشر المثالي (Git Data API)
 ├── src/
 │   ├── pages/         ← DZAgent, DZChat, AIQuran, DZTube, DZStats, DZTools
 │   ├── components/    ← DZChatBox, DZDashboard, VoicePanel
@@ -129,8 +125,8 @@ DZ-GPT/
 
 ## User Preferences
 
-- بعد كل مهمة: رفع لـ GitHub ← انتظار Vercel READY ← إبلاغ المستخدم
+- بعد كل مهمة: `python3 scripts/deploy.py "وصف"` ← Vercel يتحدث تلقائياً ← إبلاغ المستخدم
 - الفرع النشط الوحيد: `devin/1774405518-init-dz-gpt`
-- لا `main`، لا `git push` مباشر
+- لا `main`، لا `git push` مباشر — `scripts/deploy.py` فقط
 - Node 20 | Python 3.11 | Port 5000
 - `npm run dev` ← يشغّل `node server.js`

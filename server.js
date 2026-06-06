@@ -1515,6 +1515,10 @@ function detectDoctorIntent(message) {
   if (!message || typeof message !== 'string') return { isDoctorQuery: false }
   const norm = normalizeQuery(message)
 
+  // ── Map query guard — خريطة تأخذ الأولوية على البحث الطبي ────────────────
+  // "عيادة في البلدية" / "مستشفى في وهران" → خريطة، لا بحث عن طبيب
+  if (isMapQuery(message)) return { isDoctorQuery: false }
+
   // ── Exclusion guard — منع التفعيل الخاطئ في السياق التقني ───────────────
   // مثال: "توليد الصور" ، "هل تستطيع توليد كود"
   const hasTechContext = TECH_CONTEXT_EXCLUSIONS.some(w => norm.includes(w.toLowerCase()))
@@ -15715,7 +15719,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Intent Router Guard: لاعب رياضي (وين يلعب محرز) → لا يُحوَّل للخريطة أبداً
   const _isIRSportsPlayer = _intentClassification?.intent === 'SPORTS_PLAYER'
   const _isIRSportsFixtures = _intentClassification?.intent === 'SPORTS_FIXTURES'
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isAgentMode && !_isIRSportsPlayer && !_isIRSportsFixtures) {
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)
@@ -18121,7 +18125,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // السؤال الواقعي المباشر (من هو؟ / ما هو؟) بدون مؤشرات أخبار أو زمن → يُجيب مباشرة بدون بحث
   const _isDirectFactual = isDirectFactualQuestion(lastUserMessage) && !msgIntent.isTemporal && msgIntent.primary !== 'news'
   // isTemporal overrides football skip: "متى كأس العالم 2026؟" needs Wikipedia, not SofaScore
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
 
   if (!skipSearch) {
     try {

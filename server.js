@@ -191,9 +191,9 @@ import {
   extractYearFromMessage, WORLD_LEADERS_2026, WORLD_FORMER_LEADERS,
   REAL_DZ_WILAYAS,
   isImpossibleDZEntity, DZ_SPORTS_STATIC_FACTS, findAlgerianClub,
-  GLOBAL_PLAYERS_DB, findPlayerClub,
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
+import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery } from './lib/sports-lookup.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14161,45 +14161,30 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // 6e. معالج اللاعبين الشامل — منع الهلوسة عن الأندية الخاطئة (محرز، صلاح، رونالدو...)
+    // 6e. معالج اللاعبين الشامل — جلب بيانات أي لاعب في العالم من Wikipedia + TheSportsDB
     // يعمل مع الأسئلة ('أين يلعب؟') والتأكيدات ('X يلعب مع Y') على حدٍّ سواء
-    const _playerClubMatch = findPlayerClub(_lum)
-    if (_playerClubMatch &&
-        /(?:نادي|فريق|يلعب|يلعب\s+(?:في|مع|ل)|انتقل|ينتمي|club|team|play|plays?\s+for|joue)/i.test(_lum)) {
-      const _p = _playerClubMatch
-      const _isRetired = _p.currentClub === 'متقاعد'
-      console.log(`[DZSports] Player club query — ${_p.nameAr} → ${_p.currentClub} (static)`)
-      const _pLines = [
-        `## ⚽ ${_p.nameAr} — النادي الحالي (موسم 2025/2026)`,
-        ``,
-        _isRetired
-          ? `🏁 **${_p.nameAr} اعتزل كرة القدم الاحترافية** — لم يعد لاعباً نشطاً.`
-          : `🏟️ **يلعب حالياً في: ${_p.currentClub}** (${_p.currentClub_fr})`,
-        ``,
-        ...(_isRetired ? [] : [
-          _p.league    ? `🏆 **الدوري:** ${_p.league}`       : null,
-          _p.nationality ? `🌍 **الجنسية:** ${_p.nationality}` : null,
-          _p.position  ? `📍 **المركز:** ${_p.position}`     : null,
-          ``,
-          (_p.since && _p.previousClub)
-            ? `🗓️ **انتقل** من **${_p.previousClub}** إلى **${_p.currentClub}** سنة **${_p.since}**`
-            : null,
-        ].filter(Boolean)),
-        _p.note ? `` : null,
-        _p.note ? `> 💡 ${_p.note}` : null,
-        (_p.wrongClubes && _p.wrongClubes.length > 0) ? `` : null,
-        (_p.wrongClubes && _p.wrongClubes.length > 0)
-          ? `> ⚠️ لا يلعب في: ${_p.wrongClubes.join(' / ')}`
-          : null,
-        ``,
-        `⚡ **المصدر:** قاعدة بيانات رياضية محدّثة — موسم 2025/2026`,
-      ].filter(l => l !== null)
-      return res.status(200).json({
-        content: _pLines.join('\n'),
-        model: 'dz-knowledge-static',
-        _static: true,
-      })
+    if (/(?:نادي|فريق|يلعب|يلعب\s+(?:في|مع|ل)|انتقل|ينتمي|club|team|plays?\s+for|joue)/i.test(_lum) &&
+        detectPlayerNameInQuery(_lum) !== null) {
+      try {
+        const _sportInfo = await getPlayerCurrentClub(_lum)
+        if (_sportInfo) {
+          console.log(`[SportsLookup] ✅ ${_sportInfo.englishName} → ${_sportInfo.currentClubEn || 'unknown'} (${_sportInfo.sources?.join('+')})`)
+          const _sportContent = buildPlayerClubResponse(_sportInfo)
+          if (_sportContent) {
+            return res.status(200).json({
+              content: _sportContent,
+              model: 'sports-lookup-live',
+              _static: false,
+              _sources: _sportInfo.sources,
+            })
+          }
+        }
+      } catch (_sportErr) {
+        console.error(`[SportsLookup] Error:`, _sportErr.message)
+        // Continue to AI fallback — don't block the request
+      }
     }
+
     // ── حراس الهلوسة الموسّعة (6f → 6k) ──────────────────────────────────────
 
     // 6f. سنة مستقبلية غير رياضية ("سكان الجزائر 2100"، "رئيس 2040"...)

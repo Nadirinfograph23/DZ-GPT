@@ -4525,14 +4525,9 @@ REASONING PRINCIPLE
 افهم أولاً → فكّر → تحقق → أجب.
 
 ━━━━━━━━━━━━━━━━━━
-ReAct LOOP — إلزامي في كل إجابة
+منهجية التفكير
 ━━━━━━━━━━━━━━━━━━
-🔁 ابدأ كل إجابة بـ: **راني نخمم...** 🤔
-ثم نفّذ دورة التفكير:
-1. 🧠 فهم → ماذا يريد المستخدم فعلاً؟
-2. 🔍 بحث → أين المصدر الموثوق؟
-3. ✅ تحقق → هل البيانات صحيحة ومحدّثة؟
-4. 📝 إجابة → أجب بوضوح مع المصدر والتاريخ.
+فهم → بحث → تحقق → إجابة واضحة ومباشرة.
 قاعدة ذهبية: فكّر دائماً قبل الإجابة — حتى للأسئلة السهلة.
 `.trim()
 
@@ -4541,21 +4536,11 @@ ReAct LOOP — إلزامي في كل إجابة
 // ═══════════════════════════════════════════════════════════════════
 // 🔁 ReAct Loop — تُطبَّق برمجياً على كل رد قبل الإرسال
 // ═══════════════════════════════════════════════════════════════════
-const REACT_PREFIX = '🤔 **راني نخمم...**\n\n'
+const REACT_PREFIX = ''
 
-// الردود التي لا تحتاج البادئة (بيانات هيكلية، ترحيب مختصر، أكواد فقط)
-const _REACT_SKIP_RE = /^(```|\{|\[|##\s*🌤️|##\s*⚽|> 📡|🏟️\s*\*\*|📰\s*\*\*|\*\*[\u0600-\u06FF]|## 📰|🗞️)/
-
+// لا تُضاف أي بادئة — الوظيفة تعود بالنص كما هو
 function applyReactLoop(text) {
-  if (!text || typeof text !== 'string') return text
-  const trimmed = text.trim()
-  // تخطى إذا الرد قصير جداً (أقل من 80 حرف — مثل "نعم" / "لا")
-  if (trimmed.length < 80) return text
-  // تخطى إذا الرد بيانات هيكلية أو طقس جاهز
-  if (_REACT_SKIP_RE.test(trimmed)) return text
-  // تخطى إذا الرد يبدأ مسبقاً بالجملة
-  if (trimmed.startsWith('🤔') || /^راني نخمم/i.test(trimmed)) return text
-  return REACT_PREFIX + text
+  return text
 }
 
 const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are DZ Agent V4.0 — an ELITE AI Web Builder operating in ULTRA_MODERN_MODE + 2026_SILICON_VALLEY_AESTHETIC.
@@ -7686,7 +7671,7 @@ const RSS_FEEDS = {
     { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
     { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
     // ── Google News الجزائر — عربي (بعد المصادر المحلية) ──
@@ -8796,7 +8781,7 @@ const DZ_PRIORITY_NEWS_FEEDS = [
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar',                                           priority: 4 },
   { name: 'الوطن',          url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com&hl=ar&gl=DZ&ceid=DZ:ar',                                              priority: 5 },
   { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',      priority: 6 },
-  { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar',                                             priority: 7 },
+  { name: 'TSA عربي',       url: 'https://www.tsa-algerie.com/feed/',                                                                                             priority: 7 },
   // 📡 Google News DZ — مكمّل بعد المصادر المحلية
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
   { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar',     priority: 9 },
@@ -8893,7 +8878,7 @@ function buildDZNewsCachedContext(cachedNews) {
           ctx += ageH < 1 ? ' *(منذ دقائق)*' : ageH < 24 ? ` *(منذ ${Math.floor(ageH)}س)*` : ''
         } catch {}
       }
-      ctx += '\n'
+      ctx += '\n\n'
     }
   }
   ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
@@ -8908,7 +8893,7 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
   { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-  { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
   { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
   { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   // ── Google News الجزائر (بعد المصادر المحلية) ──
@@ -20236,7 +20221,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       }
     }
 
-    // 🔁 ReAct Loop — أضف "راني نخمم أصبر شوية" برمجياً قبل كل رد
     _bestContent = applyReactLoop(_bestContent)
 
     const _responsePayload = {

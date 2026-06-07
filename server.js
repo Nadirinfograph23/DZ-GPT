@@ -19592,6 +19592,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
       halRisk: _halMeta.risk,
       halTrust: _halMeta.trustScore,
+      ...(_isMatchVsQuery && _matchVsData ? { matchVsData: { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal } } : {}),
     }
 
     // ── Cache write — only simple, non-live-data, single-turn queries ────────

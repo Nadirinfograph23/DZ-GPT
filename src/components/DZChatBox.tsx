@@ -352,6 +352,7 @@ type RichType =
   | 'tool-redirect'
   | 'find-input'
   | 'smart-repo-suggestion'
+  | 'match-card'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -627,6 +628,7 @@ interface DZMessage {
   }
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
+  matchVsMeta?: { team1: string; team2: string; temporal: string }
 }
 
 interface ActionLogEntry {
@@ -6092,6 +6094,110 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     { label: 'افتراضي',   model: 'flux',         emoji: '🎨' },
   ] as const
 
+  // ── Match card: map team name → country flag emoji ──────────────────────
+  const getTeamFlag = (name: string): string => {
+    const n = name.toLowerCase().trim()
+    const FLAGS: Record<string, string> = {
+      'الجزائر': '🇩🇿', 'algeria': '🇩🇿', 'algérie': '🇩🇿', 'dz': '🇩🇿',
+      'المغرب': '🇲🇦', 'morocco': '🇲🇦', 'maroc': '🇲🇦',
+      'تونس': '🇹🇳', 'tunisia': '🇹🇳', 'tunisie': '🇹🇳',
+      'مصر': '🇪🇬', 'egypt': '🇪🇬', 'égypte': '🇪🇬',
+      'ليبيا': '🇱🇾', 'libya': '🇱🇾',
+      'موريتانيا': '🇲🇷', 'mauritania': '🇲🇷', 'mauritanie': '🇲🇷',
+      'السنغال': '🇸🇳', 'senegal': '🇸🇳', 'sénégal': '🇸🇳',
+      'نيجيريا': '🇳🇬', 'nigeria': '🇳🇬',
+      'الكاميرون': '🇨🇲', 'cameroon': '🇨🇲', 'cameroun': '🇨🇲',
+      'غانا': '🇬🇭', 'ghana': '🇬🇭',
+      'كوت ديفوار': '🇨🇮', 'ivory coast': '🇨🇮', "côte d'ivoire": '🇨🇮',
+      'مالي': '🇲🇱', 'mali': '🇲🇱',
+      'بوركينا فاسو': '🇧🇫', 'burkina faso': '🇧🇫',
+      'النيجر': '🇳🇪', 'niger': '🇳🇪',
+      'إثيوبيا': '🇪🇹', 'ethiopia': '🇪🇹',
+      'كينيا': '🇰🇪', 'kenya': '🇰🇪',
+      'أفريقيا الجنوبية': '🇿🇦', 'south africa': '🇿🇦',
+      'الكونغو': '🇨🇩', 'congo': '🇨🇩',
+      'أنغولا': '🇦🇴', 'angola': '🇦🇴',
+      'غينيا': '🇬🇳', 'guinea': '🇬🇳',
+      'الرأس الأخضر': '🇨🇻', 'cape verde': '🇨🇻', 'cabo verde': '🇨🇻',
+      'زامبيا': '🇿🇲', 'zambia': '🇿🇲',
+      'زيمبابوي': '🇿🇼', 'zimbabwe': '🇿🇼',
+      'رواندا': '🇷🇼', 'rwanda': '🇷🇼',
+      'أوغندا': '🇺🇬', 'uganda': '🇺🇬',
+      'السودان': '🇸🇩', 'sudan': '🇸🇩',
+      'الصومال': '🇸🇴', 'somalia': '🇸🇴',
+      'فرنسا': '🇫🇷', 'france': '🇫🇷',
+      'إسبانيا': '🇪🇸', 'spain': '🇪🇸', 'españa': '🇪🇸',
+      'ألمانيا': '🇩🇪', 'germany': '🇩🇪', 'allemagne': '🇩🇪',
+      'إيطاليا': '🇮🇹', 'italy': '🇮🇹', 'italie': '🇮🇹',
+      'البرتغال': '🇵🇹', 'portugal': '🇵🇹',
+      'إنجلترا': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'england': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+      'بريطانيا': '🇬🇧', 'united kingdom': '🇬🇧', 'britain': '🇬🇧', 'uk': '🇬🇧',
+      'اسكتلندا': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+      'ويلز': '🏴󠁧󠁢󠁷󠁬󠁳󠁿', 'wales': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+      'بلجيكا': '🇧🇪', 'belgium': '🇧🇪', 'belgique': '🇧🇪',
+      'هولندا': '🇳🇱', 'netherlands': '🇳🇱', 'holland': '🇳🇱',
+      'بولندا': '🇵🇱', 'poland': '🇵🇱',
+      'كرواتيا': '🇭🇷', 'croatia': '🇭🇷',
+      'سويسرا': '🇨🇭', 'switzerland': '🇨🇭', 'suisse': '🇨🇭',
+      'أوكرانيا': '🇺🇦', 'ukraine': '🇺🇦',
+      'الدنمارك': '🇩🇰', 'denmark': '🇩🇰',
+      'السويد': '🇸🇪', 'sweden': '🇸🇪',
+      'النرويج': '🇳🇴', 'norway': '🇳🇴',
+      'اليونان': '🇬🇷', 'greece': '🇬🇷', 'grèce': '🇬🇷',
+      'تركيا': '🇹🇷', 'turkey': '🇹🇷', 'türkiye': '🇹🇷',
+      'رومانيا': '🇷🇴', 'romania': '🇷🇴',
+      'المجر': '🇭🇺', 'hungary': '🇭🇺',
+      'النمسا': '🇦🇹', 'austria': '🇦🇹',
+      'صربيا': '🇷🇸', 'serbia': '🇷🇸',
+      'روسيا': '🇷🇺', 'russia': '🇷🇺',
+      'أيرلندا': '🇮🇪', 'ireland': '🇮🇪',
+      'فنلندا': '🇫🇮', 'finland': '🇫🇮',
+      'ألبانيا': '🇦🇱', 'albania': '🇦🇱',
+      'البرازيل': '🇧🇷', 'brazil': '🇧🇷', 'brésil': '🇧🇷',
+      'الأرجنتين': '🇦🇷', 'argentina': '🇦🇷',
+      'أوروغواي': '🇺🇾', 'uruguay': '🇺🇾',
+      'بوليفيا': '🇧🇴', 'bolivia': '🇧🇴',
+      'تشيلي': '🇨🇱', 'chile': '🇨🇱',
+      'كولومبيا': '🇨🇴', 'colombia': '🇨🇴',
+      'بيرو': '🇵🇪', 'peru': '🇵🇪',
+      'المكسيك': '🇲🇽', 'mexico': '🇲🇽',
+      'الولايات المتحدة': '🇺🇸', 'usa': '🇺🇸', 'united states': '🇺🇸', 'us': '🇺🇸',
+      'كندا': '🇨🇦', 'canada': '🇨🇦',
+      'باراغواي': '🇵🇾', 'paraguay': '🇵🇾',
+      'فنزويلا': '🇻🇪', 'venezuela': '🇻🇪',
+      'الإكوادور': '🇪🇨', 'ecuador': '🇪🇨',
+      'كوستاريكا': '🇨🇷', 'costa rica': '🇨🇷',
+      'السعودية': '🇸🇦', 'saudi': '🇸🇦', 'saudi arabia': '🇸🇦',
+      'الإمارات': '🇦🇪', 'uae': '🇦🇪', 'emirates': '🇦🇪',
+      'قطر': '🇶🇦', 'qatar': '🇶🇦',
+      'الكويت': '🇰🇼', 'kuwait': '🇰🇼',
+      'البحرين': '🇧🇭', 'bahrain': '🇧🇭',
+      'عُمان': '🇴🇲', 'oman': '🇴🇲',
+      'العراق': '🇮🇶', 'iraq': '🇮🇶',
+      'سوريا': '🇸🇾', 'syria': '🇸🇾',
+      'لبنان': '🇱🇧', 'lebanon': '🇱🇧',
+      'الأردن': '🇯🇴', 'jordan': '🇯🇴',
+      'فلسطين': '🇵🇸', 'palestine': '🇵🇸',
+      'إيران': '🇮🇷', 'iran': '🇮🇷',
+      'اليابان': '🇯🇵', 'japan': '🇯🇵',
+      'كوريا الجنوبية': '🇰🇷', 'south korea': '🇰🇷', 'كوريا': '🇰🇷', 'korea': '🇰🇷',
+      'الصين': '🇨🇳', 'china': '🇨🇳',
+      'أستراليا': '🇦🇺', 'australia': '🇦🇺',
+      'نيوزيلندا': '🇳🇿', 'new zealand': '🇳🇿',
+      'الهند': '🇮🇳', 'india': '🇮🇳',
+      'إندونيسيا': '🇮🇩', 'indonesia': '🇮🇩',
+      'تايلاند': '🇹🇭', 'thailand': '🇹🇭',
+      'فيتنام': '🇻🇳', 'vietnam': '🇻🇳',
+      'باكستان': '🇵🇰', 'pakistan': '🇵🇰',
+      'كازاخستان': '🇰🇿', 'kazakhstan': '🇰🇿',
+    }
+    if (FLAGS[n]) return FLAGS[n]
+    for (const [k, v] of Object.entries(FLAGS)) {
+      if (n.includes(k) || k.includes(n)) return v
+    }
+    return '🏳'
+  }
+
   const regenerateImageWithStyle = useCallback(async (
     msgId: string, prompt: string, model: string
   ) => {
@@ -6398,6 +6504,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       setSearchStepsQuery(null)
     }
 
+    // ── Client-side match-vs detection (X ضد Y) ──────────────────────────────
+    const _vsMatchClient = text.match(
+      /([\u0600-\u06FFa-zA-Z][\u0600-\u06FFa-zA-Z\s]{0,20}?)\s+(?:ضد|vs\.?)\s+([\u0600-\u06FFa-zA-Z][\u0600-\u06FFa-zA-Z\s]{0,20})/iu
+    )
+    const _clientMatchVs = _vsMatchClient ? {
+      team1: _vsMatchClient[1].trim(),
+      team2: _vsMatchClient[2].trim().replace(/[؟?!،,].*$/, '').trim(),
+      temporal: /(?:لعبت|انتهت|نتيجة|نتائج|فاز|ربح|هزم|أمس|البارح|في\s+\d{4}|الماضي)/i.test(text) ? 'PAST' :
+                /(?:الآن|مباشر|مباشرة|جارية|الشوط|درك)/i.test(text) ? 'LIVE' :
+                /(?:ستلعب|القادمة|غداً|بعد\s+غد|موعد|الأسبوع\s+القادم)/i.test(text) ? 'UPCOMING' : 'UNKNOWN',
+    } : null
+
     try {
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
@@ -6455,7 +6573,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         const loadingId = generateId()
         setMessages(prev => [...prev, {
           id: loadingId, role: 'assistant' as const,
-          content: `🎨 جاري توليد صورة: **${shortTopic}**\n_ترجمة البرومبت وإرساله لـ FLUX AI..._`,
+          content: `🎨 جاري توليد صورة: **${shortTopic}**\n_ترجمة البرومبت وإرساله لـ Pollinations AI..._`,
           richType: 'text' as const, isStreaming: true,
         }])
 
@@ -6467,7 +6585,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
             imageUrl,
             imagePrompt: prompt,
             imageModel,
-            imageStyle: 'flux',
+            imageStyle: 'pollinations',
             quickSuggestions: [
               `🔄 نسخة جديدة من "${shortTopic}"`,
               '🎌 أسلوب أنيمي',
@@ -6508,7 +6626,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
 
           // ── Case 1b: Pollinations / direct URL ──
           if (imgData.imageUrl) {
-            showImgResult(imgData.imageUrl, imgData.model || 'FLUX AI')
+            showImgResult(imgData.imageUrl, imgData.model || 'Pollinations AI')
             return
           }
 
@@ -7247,6 +7365,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           responseTime: Math.round(Date.now() - _fetchT0),
           executionCode: codeExtract?.code,
           executionLang: codeExtract?.lang,
+          matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string } | undefined) || _clientMatchVs || undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -7992,6 +8111,79 @@ ${rows}
                             <div className="dz-video-card__actions">
                               <a href={msg.videoUrl} download={`dz-video-${Date.now()}.mp4`} target="_blank" rel="noopener noreferrer" className="dz-image-card__btn">⬇ تحميل</a>
                             </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Match Card with country flags ─────────────────── */}
+                      {msg.matchVsMeta && (
+                        <div style={{
+                          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+                          border: '1px solid rgba(99,102,241,0.3)',
+                          borderRadius: '16px',
+                          padding: '20px 16px',
+                          margin: '10px 0',
+                          textAlign: 'center',
+                          direction: 'ltr',
+                          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                        }}>
+                          {/* Temporal badge */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '10px',
+                            right: '10px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '3px 10px',
+                            borderRadius: '20px',
+                            background: msg.matchVsMeta.temporal === 'LIVE' ? 'rgba(239,68,68,0.85)' :
+                                        msg.matchVsMeta.temporal === 'PAST' ? 'rgba(107,114,128,0.85)' :
+                                        msg.matchVsMeta.temporal === 'UPCOMING' ? 'rgba(16,185,129,0.85)' :
+                                        'rgba(99,102,241,0.85)',
+                            color: '#fff',
+                            letterSpacing: '0.5px',
+                          }}>
+                            {msg.matchVsMeta.temporal === 'LIVE' ? '🔴 مباشر' :
+                             msg.matchVsMeta.temporal === 'PAST' ? '⏪ انتهت' :
+                             msg.matchVsMeta.temporal === 'UPCOMING' ? '📅 قادمة' : '🆚 مباراة'}
+                          </div>
+                          {/* Teams row */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '8px' }}>
+                            {/* Team 1 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '90px' }}>
+                              <span style={{ fontSize: '52px', lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}>
+                                {getTeamFlag(msg.matchVsMeta.team1)}
+                              </span>
+                              <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: '13px', direction: 'rtl', textAlign: 'center', maxWidth: '90px', lineHeight: '1.2' }}>
+                                {msg.matchVsMeta.team1}
+                              </span>
+                            </div>
+                            {/* VS divider */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                              <span style={{
+                                fontSize: '22px',
+                                fontWeight: 900,
+                                color: '#818cf8',
+                                letterSpacing: '2px',
+                                textShadow: '0 0 12px rgba(99,102,241,0.7)',
+                              }}>VS</span>
+                              <span style={{ width: '40px', height: '2px', background: 'linear-gradient(90deg, transparent, #6366f1, transparent)', borderRadius: '2px' }} />
+                            </div>
+                            {/* Team 2 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '90px' }}>
+                              <span style={{ fontSize: '52px', lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}>
+                                {getTeamFlag(msg.matchVsMeta.team2)}
+                              </span>
+                              <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: '13px', direction: 'rtl', textAlign: 'center', maxWidth: '90px', lineHeight: '1.2' }}>
+                                {msg.matchVsMeta.team2}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Footer */}
+                          <div style={{ marginTop: '12px', color: '#94a3b8', fontSize: '11px', direction: 'rtl' }}>
+                            ⚽ كأس العالم 2026 · تحليل DZ Agent
                           </div>
                         </div>
                       )}

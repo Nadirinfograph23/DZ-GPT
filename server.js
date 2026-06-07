@@ -4544,7 +4544,7 @@ ReAct LOOP — إلزامي في كل إجابة
 const REACT_PREFIX = '🤔 **راني نخمم...**\n\n'
 
 // الردود التي لا تحتاج البادئة (بيانات هيكلية، ترحيب مختصر، أكواد فقط)
-const _REACT_SKIP_RE = /^(```|\{|\[|##\s*🌤️|##\s*⚽|> 📡|🏟️\s*\*\*)/
+const _REACT_SKIP_RE = /^(```|\{|\[|##\s*🌤️|##\s*⚽|> 📡|🏟️\s*\*\*|📰\s*\*\*|\*\*[\u0600-\u06FF]|## 📰|🗞️)/
 
 function applyReactLoop(text) {
   if (!text || typeof text !== 'string') return text
@@ -8867,11 +8867,11 @@ function buildDZNewsCachedContext(cachedNews) {
   ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `
 
-  // اعرض أحدث 6 مقالات كحد أقصى من كل مصدر (4 على الأقل مضمونة)
+  // اعرض أحدث 10 مقالات كحد أقصى من كل مصدر
   const bySource = {}
   for (const item of cachedNews.items) {
     if (!bySource[item._source]) bySource[item._source] = []
-    if (bySource[item._source].length < 6) bySource[item._source].push(item)
+    if (bySource[item._source].length < 10) bySource[item._source].push(item)
   }
 
   // الترتيب: حسب الأولوية
@@ -8887,7 +8887,6 @@ function buildDZNewsCachedContext(cachedNews) {
     ctx += `\n**${src}:**\n`
     for (const item of items) {
       ctx += `• ${item.title || item.headline || '(بدون عنوان)'}`
-      if (item.link) ctx += ` — [اقرأ المزيد](${item.link})`
       if (item.pubDate) {
         try {
           const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
@@ -19844,7 +19843,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 
     // ── NEWS MODULE (news / sports_news queries only) ─────────────────────
     _isNews ? [
-      `📰 NEWS FORMAT (إلزامي): رتّب الأخبار حسب المصدر — لكل مصدر: **اسم المصدر:** ثم 4 أخبار على الأقل. كل خبر ينتهي بـ [اقرأ المزيد](الرابط). الترتيب: الجرائد الجزائرية أولاً ثم العربية. في نهاية الإجابة أضف: 💡 قد يهمك أيضاً: 📰 أخبار رياضية / 💰 أخبار اقتصادية / 🌍 أخبار دولية / 🏛️ أخبار سياسية`,
+      `📰 NEWS FORMAT (إلزامي):\n• ابدأ إجابتك مباشرةً بأول مصدر — بدون أي مقدمة أو "راني نخمم"\n• رتّب حسب المصدر: **اسم المصدر:** ثم قائمة الأخبار (5 على الأقل لكل مصدر)\n• لكل خبر: نقطة مع عنوان الخبر فقط — بدون روابط ولا URLs\n• الترتيب: الجرائد الجزائرية أولاً (النهار، البلاد، الشروق، وكالة APS) ثم الهداف ثم Google News\n• في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 أخبار رياضية / 💰 أخبار اقتصادية / 🌍 أخبار دولية / 🏛️ أخبار سياسية\n• ⚠️ ممنوع: روابط داخل الأخبار — عناوين فقط`,
       `مصادر موثوقة: aps.dz · echoroukonline.com · ennaharonline.com · elkhabar.com · reuters.com · aljazeera.net · djazairess.com · elbilad.net`,
       `قاعدة المصادر: استخدم كل النتائج المتاحة من Google News + RSS + Google CSE معاً — لا تقتصر على مصدر واحد.`,
     ].join('\n') : '',
@@ -19945,7 +19944,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     govPersonContext  ? `🎯 شخصية حكومية جزائرية (بيانات مباشرة — أولوية قصوى):\n${_trim(govPersonContext, 1000)}\n> أجب بناءً على هذه البيانات أولاً. إذا وجدت معلومات إضافية من Wikidata/Wikipedia فأكمل بها. لا تتناقض مع هذه البيانات.` : '',
     ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2500)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
-    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3500)}\n> ⚠️ قواعد عرض الأخبار (إلزامية):\n> 1. رتّب حسب المصدر: **اسم الصحيفة/المصدر:** ثم 4 أخبار على الأقل لكل مصدر.\n> 2. كل خبر يجب أن ينتهي بـ [اقرأ المزيد](الرابط).\n> 3. أضف في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 أخبار رياضية / 💰 أخبار اقتصادية / 🌍 أخبار دولية\n> 4. لا تخترع أي معلومة.${_economyIntent?.isEconomy ? '\n> 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
+    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 7000)}\n> ⚠️ قواعد عرض الأخبار (إلزامية):\n> 1. ابدأ مباشرةً بأول مصدر — بدون مقدمة ولا "راني نخمم"\n> 2. رتّب حسب المصدر: **اسم الصحيفة:** ثم 5 أخبار على الأقل لكل مصدر\n> 3. عناوين الأخبار فقط — بدون روابط ولا URLs ولا markdown links\n> 4. في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 رياضية / 💰 اقتصادية / 🌍 دولية\n> 5. لا تخترع أي معلومة${_economyIntent?.isEconomy ? '\n> 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',

@@ -3757,12 +3757,13 @@ app.post('/api/chat', async (req, res) => {
   try {
     const trimmed = trimRelevantContext(messages, 8)
     const lastQuery = [...trimmed].reverse().find(m => m.role === 'user')?.content || ''
-    const { content, error } = await callGroqWithFallback({ model: actualModel, messages: trimmed })
-    if (validateAIContent(content, lastQuery)) {
+    const { content: _rawContent, error } = await callGroqWithFallback({ model: actualModel, messages: trimmed })
+    const content = applyReactLoop(_rawContent)
+    if (validateAIContent(_rawContent, lastQuery)) {
       chatMonitor.record(true, Date.now() - _chatT0)
       return res.status(200).json({ content })
     }
-    if (content) logInvalidResponse(`chat:${actualModel}`, lastQuery, content)
+    if (_rawContent) logInvalidResponse(`chat:${actualModel}`, lastQuery, _rawContent)
 
     // Try a second Groq model before failing
     const secondaryModel = actualModel === 'llama-3.3-70b-versatile'
@@ -3771,7 +3772,7 @@ app.post('/api/chat', async (req, res) => {
     const retry = await callGroqWithFallback({ model: secondaryModel, messages: trimmed })
     if (validateAIContent(retry.content, lastQuery)) {
       chatMonitor.record(true, Date.now() - _chatT0)
-      return res.status(200).json({ content: retry.content, fallbackModel: secondaryModel })
+      return res.status(200).json({ content: applyReactLoop(retry.content), fallbackModel: secondaryModel })
     }
     if (retry.content) logInvalidResponse(`chat:${secondaryModel}`, lastQuery, retry.content)
 
@@ -4536,6 +4537,27 @@ ReAct LOOP — إلزامي في كل إجابة
 `.trim()
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔁 ReAct Loop — تُطبَّق برمجياً على كل رد قبل الإرسال
+// ═══════════════════════════════════════════════════════════════════
+const REACT_PREFIX = '🤔 **راني نخمم أصبر شوية...**\n\n'
+
+// الردود التي لا تحتاج البادئة (بيانات هيكلية، ترحيب مختصر، أكواد فقط)
+const _REACT_SKIP_RE = /^(```|\{|\[|##\s*🌤️|##\s*⚽|> 📡|🏟️\s*\*\*)/
+
+function applyReactLoop(text) {
+  if (!text || typeof text !== 'string') return text
+  const trimmed = text.trim()
+  // تخطى إذا الرد قصير جداً (أقل من 80 حرف — مثل "نعم" / "لا")
+  if (trimmed.length < 80) return text
+  // تخطى إذا الرد بيانات هيكلية أو طقس جاهز
+  if (_REACT_SKIP_RE.test(trimmed)) return text
+  // تخطى إذا الرد يبدأ مسبقاً بالجملة
+  if (trimmed.startsWith('🤔') || /^راني نخمم/i.test(trimmed)) return text
+  return REACT_PREFIX + text
+}
+
 const WEBSITE_BUILDER_SYSTEM_PROMPT = `You are DZ Agent V4.0 — an ELITE AI Web Builder operating in ULTRA_MODERN_MODE + 2026_SILICON_VALLEY_AESTHETIC.
 
 Your mission: Generate visually STUNNING, highly modern, production-ready, animated, responsive websites that look like they were designed by a top-tier Silicon Valley AI startup design team in 2026.
@@ -19900,6 +19922,9 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
         console.warn('[HAL-L5] enrichment error (non-fatal):', _halErr.message)
       }
     }
+
+    // 🔁 ReAct Loop — أضف "راني نخمم أصبر شوية" برمجياً قبل كل رد
+    _bestContent = applyReactLoop(_bestContent)
 
     const _responsePayload = {
       content: _bestContent,

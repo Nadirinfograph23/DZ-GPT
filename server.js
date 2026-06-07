@@ -7643,14 +7643,18 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 const RSS_FEEDS = {
   national: [
-    // ── Algerian newspapers ──
+    // ── Algerian newspapers — محلية جزائرية ──
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-    { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-    { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
-    { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
+    { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
+    { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
+    { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
+    { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
+    { name: 'الحياة',        url: 'https://www.elhayat-dz.com/feed/' },
+    { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
+    { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'Liberté Algérie', url: 'https://www.liberte-algerie.com/feed' },
-    { name: 'الشعب', url: 'https://www.al-fadjr.com/feed/' },
-    { name: 'الوطن', url: 'https://www.elwatan.com/feed/' },
+    { name: 'الشعب',          url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
     // ── Pan-Arab sources (stable) ──
     { name: 'الجزيرة عربي', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
     { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
@@ -8098,7 +8102,12 @@ function detectNewsQuery(msg) {
     'news','latest','today','breaking','recent','actualité','nouvelles','aujourd','حوادث',
     'الجزائر','سياسة','اقتصاد','صحة','تعليم','برلمان','حكومة','وزير',
     'صحف','صحيفة','عناوين','جرائد','جريدة','الشروق','النهار','الخبر','الوطن','الشعب','البلاد',
+    'الحياة','APS','وكالة','الجزائر360',
     'newspaper','headlines','press','presse','journal','journaux',
+    // ── دارجة جزائرية ──
+    'جيبلي اخبار','واش صار','شنو صار','شنو جرى','شنو في','عندك خبر','اخباراليوم',
+    'واش فيه جديد','جيبلي الجديد','شنو جديد','اخبار اليوم','خبرني','واش كاين',
+    'الجديد في الجزائر','كيما صار','وقتاش','علاش','شوفلي اخبار','قرالي الجرنان',
   ]
   const isSports = sportsKw.some(k => lower.includes(k))
   const isNews = newsKw.some(k => lower.includes(k))
@@ -8160,7 +8169,11 @@ function extractNewsSubject(msg) {
 
 function isNewspaperHeadlineQuery(msg) {
   const lower = msg.toLowerCase()
-  const newspaperKw = ['صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse']
+  const newspaperKw = [
+    'صحف','صحيفة','عناوين','جرائد','جريدة','الصحف','الجرائد','newspaper','headlines','press','presse',
+    // ── دارجة جزائرية ──
+    'جريدة اليوم','جرنان','الجرنان','عناوين اليوم','شنو كتب','شكون قال',
+  ]
   return newspaperKw.some(k => lower.includes(k))
 }
 
@@ -8433,9 +8446,9 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14
 
   if (allItems.length === 0) return ''
 
-  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} (مرتبة من الأحدث) ---\n`
+  let ctx = `\n\n--- ${label}${subject ? ` — ${subject}` : ''} — ${date} (مرتبة من الأحدث) ---\n\n`
   let count = 0
-  for (const item of allItems.slice(0, 20)) {
+  for (const item of allItems.slice(0, 15)) {
     const rawDate = item.pubDate || item.date || item.publishedDate || ''
     let dateLabel = ''
     if (rawDate) {
@@ -8446,8 +8459,17 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14
         else dateLabel = ` (${new Date(rawDate).toLocaleDateString('ar-DZ')})`
       } catch {}
     }
-    ctx += `• **[${item._feedName}]** ${item.title}${dateLabel}`
-    if (item.link) ctx += ` — ${item.link}`
+    // عنوان + مصدر + تاريخ
+    ctx += `### 📰 ${item.title}${dateLabel}\n`
+    ctx += `**المصدر:** ${item._feedName}\n`
+    // وصف الخبر — 4 أسطر كحد أقصى (حوالي 320 حرف)
+    const rawDesc = (item.description || item.snippet || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').trim()
+    if (rawDesc && rawDesc.length > 20) {
+      const descLines = rawDesc.slice(0, 400)
+      ctx += `${descLines}\n`
+    }
+    // رابط "عرض المزيد"
+    if (item.link) ctx += `[▶ عرض المزيد](${item.link})\n`
     ctx += '\n'
     count++
   }
@@ -8469,10 +8491,14 @@ const DASHBOARD_CACHE = { data: null, ts: 0 }
 const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
 
 const NEWS_FEEDS_DASHBOARD = [
-  // ── Verified working Algerian sources ──
+  // ── Verified working Algerian sources — مصادر جزائرية موثوقة ──
   { name: 'الشروق', url: 'https://www.echoroukonline.com/feed' },
   { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
   { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
+  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
+  { name: 'الجزائر360', url: 'https://www.algerie360.com/feed/' },
+  { name: 'الحياة', url: 'https://www.elhayat-dz.com/feed/' },
+  { name: 'وكالة APS', url: 'https://www.aps.dz/ar/rss' },
   { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
   { name: 'Liberté', url: 'https://www.liberte-algerie.com/feed' },
   // ── Pan-Arab verified sources ──
@@ -14006,11 +14032,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────
   // Skip redirect when request comes from a specialized tool (e.g. web-builder calling itself)
   const _rawLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
-  const _skipToolRedirect = req.body.source === 'web-builder' || req.body.skipToolRedirect === true
+  // Website builder queries: skip redirect — generate inline HTML with preview + download
+  const _isWebsiteRequest = detectWebsiteBuilderQuery(_rawLastMsg) || detectMapWebsiteQuery(_rawLastMsg)
+  const _skipToolRedirect = req.body.source === 'web-builder' || req.body.skipToolRedirect === true || _isWebsiteRequest
   const _toolRedirect = !_skipToolRedirect ? detectToolRedirect(_rawLastMsg) : null
   if (_toolRedirect) {
     console.log(`[ToolRedirect] → ${_toolRedirect.toolUrl} for: "${_rawLastMsg.slice(0, 50)}"`)
     return res.status(200).json({ _toolRedirect })
+  }
+
+  // ── Match-Vs Early Clarification ─────────────────────────────────────────
+  // Must run EARLY (before news/realtime handlers) so "الجزائر ضد بوليفيا"
+  // doesn't get swallowed by the news handler which matches on "الجزائر"
+  {
+    const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
+    if (_earlyMatchVs?.isMatchVs) {
+      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي)/i.test(_rawLastMsg)
+      const _priorHasClarify = messages.slice(-5, -1).some(m =>
+        m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
+      )
+      if (!_hasExplicitSportsCtx && !_priorHasClarify) {
+        const { team1, team2 } = _earlyMatchVs
+        const isDzD = /(?:واش|كيفاش|راه|تاع|بصح|شنو|هذا|هاذا|وهران|قسنطينة|جزائري)/i.test(_rawLastMsg)
+        const clarifyMsg = isDzD
+          ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة أو الموعد\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
+          : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات الحية\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
+        console.log(`[MatchVs:EarlyClarify] ${team1} vs ${team2} — no sports ctx → clarification`)
+        return res.status(200).json({
+          content: clarifyMsg,
+          _matchVsClarify: true,
+          matchVsData: { team1, team2 },
+        })
+      }
+    }
   }
 
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
@@ -14116,7 +14170,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
      lastUserMessage.trim().split(/\s+/).length <= 4 &&
      /^[\u0600-\u06FF\s]+$/.test(lastUserMessage.trim()) &&
      !/[؟?]|هل|من|ما |كيف|أين|متى|لماذا|كم|ماذا|أخبار|نتيجة|مباراة/.test(lastUserMessage))
-  if (!_isAgentMode && !_clarificationBypass &&
+  // Also bypass clarification for website/map builder — these are always actionable
+  const _isWebBuildBypass = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
+  if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
       _intentClassification?.confidence < 40) {
@@ -17969,6 +18025,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (_isMatchVsQuery) {
     console.log(`[MatchVs] 🆚 ${_matchVsData.team1} ضد ${_matchVsData.team2} | temporal=${_matchVsData.temporal}`)
   }
+
+  // ── Match-Vs Clarification — هل تبحث عن مباراة؟ ──────────────────────────
+  // When "X ضد Y" detected without explicit sports keywords → ask clarification
+  if (_isMatchVsQuery) {
+    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح)/i.test(lastUserMessage)
+    const _priorMsgHasClarify = messages.slice(-5, -1).some(m =>
+      m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على|نتيجة مباراة|موعد مباراة/i.test(m.content || '')
+    )
+    if (!_hasExplicitSportsCtx && !_priorMsgHasClarify && !detectFootballQuery(lastUserMessage)) {
+      const { team1, team2 } = _matchVsData
+      const isDzDialect = /(?:واش|كيفاش|راه|تاع|بصح|ماشي|هذا|هاذا|هادا|وهران|قسنطينة|جزائري|هنا|شنو|علاش)/i.test(lastUserMessage)
+      const clarifyMsg = isDzDialect
+        ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة والتفاصيل\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
+        : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
+      console.log(`[MatchVs:Clarify] ${team1} vs ${team2} — no sports context → returning clarification`)
+      return res.status(200).json({
+        content: clarifyMsg,
+        _matchVsClarify: true,
+        matchVsData: { team1, team2 },
+      })
+    }
+  }
+
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
   const _isHistoricalGovQuery = isHistoricalGovQuery(lastUserMessage)
 

@@ -429,8 +429,9 @@ function _buildPoiLeafletMap(places, def, locationLabel) {
   #hdr .sub{font-size:10px;opacity:.85}
   #hdr .gps-btn{margin-right:auto;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .2s}
   #hdr .gps-btn:hover{background:rgba(255,255,255,.35)}
-  #wrap{display:flex;height:calc(100vh - 48px)}
-  #sidebar{width:200px;min-width:160px;overflow-y:auto;background:#1a1a2e;border-left:1px solid #333;flex-shrink:0}
+  #wrap{display:flex;height:calc(100vh - 48px);position:relative}
+  #sidebar{width:220px;min-width:180px;overflow-y:auto;background:#1a1a2e;border-left:1px solid #333;flex-shrink:0;transition:width .25s,opacity .25s;z-index:10}
+  #sidebar.collapsed{width:0;min-width:0;opacity:0;pointer-events:none;overflow:hidden}
   #sidebar .s-item{padding:8px 10px;border-bottom:1px solid #2a2a3e;cursor:pointer;transition:background .15s;display:flex;gap:8px;align-items:flex-start}
   #sidebar .s-item:hover{background:#2a2a4e}
   #sidebar .s-item.active{background:#${accentColor.replace('#','')}22;border-right:3px solid ${accentColor}}
@@ -438,6 +439,7 @@ function _buildPoiLeafletMap(places, def, locationLabel) {
   #sidebar .s-name{color:#e8e8f0;font-size:11px;line-height:1.3}
   #sidebar .s-addr{color:#888;font-size:9px;margin-top:2px}
   #map{flex:1;min-width:0}
+  #sidebar-toggle{position:absolute;top:8px;right:4px;z-index:500;background:${pinColor};color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:right .25s}
   .lbl{background:${pinColor};color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.4);cursor:pointer;transition:transform .15s}
   .lbl:hover,.lbl.sel{transform:scale(1.25);background:#1a73e8}
   #nav-bar{display:none;position:absolute;bottom:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:8px 12px;z-index:900;font-size:12px;flex-direction:column;gap:4px}
@@ -461,7 +463,8 @@ function _buildPoiLeafletMap(places, def, locationLabel) {
   <button class="gps-btn" onclick="locateUser()">📍 موقعي والتوجيه</button>
 </div>
 <div id="wrap">
-  <div id="sidebar" id="poi-list"></div>
+  <button id="sidebar-toggle" onclick="toggleSidebar()" title="إظهار/إخفاء القائمة">☰</button>
+  <div id="sidebar"></div>
   <div id="map"></div>
 </div>
 <div id="nav-bar">
@@ -481,6 +484,19 @@ let userMarker = null;
 let userLat = null, userLng = null;
 let selectedIdx = -1;
 const leafletMarkers = [];
+
+// Sidebar toggle
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  const collapsed = sb.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '☰' : '✕';
+  setTimeout(() => { if(map) map.invalidateSize(); }, 300);
+}
+// Default: collapsed on small iframe
+if (window.innerWidth < 640) {
+  document.getElementById('sidebar').classList.add('collapsed');
+}
 
 // Build sidebar
 const sidebar = document.getElementById('sidebar');

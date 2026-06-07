@@ -8275,12 +8275,13 @@ function detectEconomyIntent(msg) {
   ]
   const isWikiData = wikiDataKw.some(k => lower.includes(k))
 
-  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data
+  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data (إلا إذا كانت هناك كلمة أخبار)
   const isDZEconomy = /(?:اقتصاد|اقتصادي|اقتصادية).{0,20}(?:الجزائر|جزائر|dz|algeria)/i.test(msg)
     || /(?:الجزائر|algeria).{0,20}(?:اقتصاد|اقتصادي|اقتصادية|economy)/i.test(msg)
 
+  // "أخبار" دائماً تعني live_news — حتى لو كانت مع "اقتصاد الجزائر"
   if (isLiveNews) return { mode: 'live_news', isEconomy: true }
-  if (isWikiData || isDZEconomy) return { mode: 'wiki_data', isEconomy: true }
+  if (isWikiData || (isDZEconomy && !isLiveNews)) return { mode: 'wiki_data', isEconomy: true }
   return { mode: 'live_news', isEconomy: true } // الافتراضي: بحث حي
 }
 
@@ -8415,8 +8416,7 @@ function buildEconomyNewsContext(news) {
     }
     ctx += `**${++count}.** ${title}${dateLabel}`
     if (item._src) ctx += ` — **${item._src}**`
-    if (item.link) ctx += ` [↗](${item.link})`
-    ctx += `\n`
+    ctx += `\n\n`
   }
   ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
   return ctx
@@ -19127,8 +19127,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         if (dzCached && dzCached.items?.length > 0) {
           const dzCtx = buildDZNewsCachedContext(dzCached)
           if (dzCtx) {
-            rssContext = dzCtx
-            console.log(`[DZ-News] ✅ Served ${dzCached.items.length} articles from cache (age=${Math.floor((Date.now()-dzCached.ts)/60000)}min)`)
+            // لا تمسح سياق الاقتصاد إذا كان محدداً بالفعل
+            if (!rssContext) {
+              rssContext = dzCtx
+              console.log(`[DZ-News] ✅ Served ${dzCached.items.length} articles from cache (age=${Math.floor((Date.now()-dzCached.ts)/60000)}min)`)
+            } else {
+              // أضف الأخبار العامة بعد الاقتصادية
+              rssContext = rssContext + '\n\n' + dzCtx
+              console.log(`[DZ-News] ✅ Appended ${dzCached.items.length} general articles after economy context`)
+            }
           }
           // تحديث في الخلفية إذا الكاش قارب على الانتهاء (>3.5 دقيقة)
           if (Date.now() - dzCached.ts > DZ_NEWS_CACHE_TTL * 0.7) {
@@ -28487,7 +28494,7 @@ if (isMain) {
 
   // ── 🇩🇿 Auto-Refresh أخبار الجزائر ذات الأولوية كل 5 دقائق ─────────────────
   scheduleOnce(async () => {
-    console.log('[AutoRefresh] 🇩🇿 Refreshing DZ priority news (النهار/البلاد/الشروق/الحياة/الوطن/APS/الهداف)...')
+    console.log('[AutoRefresh] 🇩🇿 Refreshing DZ priority news (النهار/البلاد/الشروق/الحياة/الوطن/APS)...')
     try {
       const result = await fetchDZPriorityNews({ force: true })
       console.log(`[AutoRefresh] ✅ DZ News: ${result.items.length} articles from: ${result.sources.join(', ')}`)
@@ -28497,6 +28504,19 @@ if (isMain) {
       console.warn('[AutoRefresh] DZ news refresh failed:', err.message)
     }
   }, 5 * 60 * 1000, { label: 'dz-news-refresh' })
+
+  // ── Auto-Refresh الأخبار الاقتصادية كل 8 دقائق ───────────────────────────
+  scheduleOnce(async () => {
+    console.log('[AutoRefresh] 💰 Refreshing DZ economy news...')
+    try {
+      const result = await fetchDZEconomyNews({ force: true })
+      console.log(`[AutoRefresh] ✅ Economy news: ${result?.items?.length || 0} articles`)
+    } catch (err) {
+      console.warn('[AutoRefresh] Economy news refresh failed:', err.message)
+    }
+  }, 8 * 60 * 1000, { label: 'dz-economy-refresh' })
+  // Pre-warm economy cache on first request (startup)
+  fetchDZEconomyNews({ force: false }).catch(() => {})
 
   // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
   scheduleOnce(() => {

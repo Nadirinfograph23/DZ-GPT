@@ -227,7 +227,7 @@ app.use(helmet({
         ? ["'self'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com']
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://unpkg.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://cdn.jsdelivr.net'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org', 'https://aifreeforever.com', 'https://*.aifreeforever.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://openweathermap.org', 'https://avatars.githubusercontent.com', 'https://i.ytimg.com', 'https://*.ytimg.com', 'https://*.githubusercontent.com', 'https://image.pollinations.ai', 'https://*.pollinations.ai', 'https://*.hf.space', 'https://*.huggingface.co', 'https://api.qrserver.com', 'https://covers.openlibrary.org', 'https://aifreeforever.com', 'https://*.aifreeforever.com', 'https://image-generation.perchance.org', 'https://*.perchance.org', 'https://raphael.app', 'https://*.raphael.app'],
       connectSrc: isProd
         ? ["'self'", 'wss:', 'ws:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info']
         : ["'self'", 'ws:', 'wss:', 'https://api.quran.com', 'https://*.googlevideo.com', 'https://manifest.googlevideo.com', 'https://*.youtube.com', 'https://api.openweathermap.org', 'https://*.api.radio-browser.info', 'https://de1.api.radio-browser.info', 'https://nl1.api.radio-browser.info', 'https://at1.api.radio-browser.info'],
@@ -27718,6 +27718,60 @@ app.get('/api/chatimg/img/:id', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=3600')
     res.send(item.buf)
   } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
+// ── DZ Media Providers — Multi-provider image generation ─────────────────────
+// Priority: 1. Perchance AI → 2. Raphael AI → 3. FreeForAI
+// No API keys required — automatic fallback — TTL cache — multi-language
+
+// GET /api/dz-media/providers — list providers + cache stats
+app.get('/api/dz-media/providers', async (_req, res) => {
+  try {
+    const { getProviders, getCacheStats } = await import('./lib/dz-image-providers/index.js')
+    res.json({ ok: true, providers: getProviders(), cache: getCacheStats() })
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+
+// POST /api/dz-media/providers/generate — generate image with fallback chain
+app.post('/api/dz-media/providers/generate', express.json({ limit: '2mb' }), async (req, res) => {
+  const { prompt, width = 768, height = 768, provider = 'auto', negativePrompt } = req.body
+  if (!prompt?.trim()) return res.status(400).json({ ok: false, error: 'prompt مطلوب' })
+
+  try {
+    const { generateImage } = await import('./lib/dz-image-providers/index.js')
+    const result = await generateImage(String(prompt).slice(0, 1000), {
+      width:             Math.min(Math.max(Number(width)  || 768, 256), 1024),
+      height:            Math.min(Math.max(Number(height) || 768, 256), 1024),
+      preferredProvider: String(provider || 'auto'),
+      negativePrompt:    negativePrompt ? String(negativePrompt).slice(0, 300) : undefined,
+      useCache:          true,
+    })
+
+    if (result.blocked) return res.status(451).json({ ok: false, error: result.error, blocked: true })
+    if (!result.ok)     return res.status(502).json({ ok: false, error: result.error, errors: result.errors })
+
+    let url = result.url
+    if (!url && result.imageBase64) {
+      const mime = result.mime || 'image/jpeg'
+      url = `data:${mime};base64,${result.imageBase64}`
+    }
+
+    console.log(`[dz-media:providers] ✅ ${result.provider} | cached=${result.cached} | ${result.generationTime}ms`)
+    return res.json({
+      ok:             true,
+      url,
+      provider:       result.provider,
+      model:          result.model,
+      generationTime: result.generationTime,
+      cached:         result.cached || false,
+      translated:     result.translated || false,
+      englishPrompt:  result.englishPrompt,
+      originalPrompt: result.originalPrompt,
+    })
+  } catch (e) {
+    console.error('[dz-media:providers]', e.message)
+    return res.status(500).json({ ok: false, error: e.message })
+  }
 })
 
 // ===== EXPORT APP (for Vercel serverless) =====

@@ -23,15 +23,20 @@ const IMG_PRESETS: AspectPreset[] = [
 ]
 
 const DEFAULT_MODELS: ModelDef[] = [
-  { id: 'auto',         label: '⚡ DZ Image (FLUX)',      badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 10,  desc: 'FLUX.1 — توليد سريع ~10 ثانية مجاني دائماً' },
-  { id: 'turbo',        label: '🚀 Turbo',                 badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 5,   desc: 'SDXL Turbo — أسرع نموذج ~5 ثانية' },
-  { id: 'flux-realism', label: '📷 FLUX Realism',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'صور واقعية فوتوريالستيك — مجاني تماماً' },
-  { id: 'flux-anime',   label: '🌸 FLUX Anime',            badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'رسوم أنيمي واحترافية — مجاني تماماً' },
-  { id: 'flux-3d',      label: '🧊 FLUX 3D',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'تصيير ثلاثي الأبعاد — مجاني تماماً' },
-  { id: 'flux-cablyai', label: '🎭 FLUX CablyAI',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'فوتوريالستيك احترافي بجودة استوديو' },
-  { id: 'playground',   label: '🎮 Playground v2',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',     waitSecs: 15,  desc: 'نموذج جمالي فائق الجودة — مجاني' },
-  { id: 'horde',        label: '🌐 Stable Horde (HD)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA HD',  waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة عالية جداً ~60-120 ث' },
+  { id: 'auto',         label: '⚡ DZ Image (FLUX)',      badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 10,  desc: 'FLUX.1 — توليد سريع ~10 ثانية مجاني دائماً' },
+  { id: 'turbo',        label: '🚀 Turbo',                 badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 5,   desc: 'SDXL Turbo — أسرع نموذج ~5 ثانية' },
+  { id: 'flux-realism', label: '📷 FLUX Realism',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 15,  desc: 'صور واقعية فوتوريالستيك — مجاني تماماً' },
+  { id: 'flux-anime',   label: '🌸 FLUX Anime',            badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 15,  desc: 'رسوم أنيمي واحترافية — مجاني تماماً' },
+  { id: 'flux-3d',      label: '🧊 FLUX 3D',               badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 15,  desc: 'تصيير ثلاثي الأبعاد — مجاني تماماً' },
+  { id: 'flux-cablyai', label: '🎭 FLUX CablyAI',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 15,  desc: 'فوتوريالستيك احترافي بجودة استوديو' },
+  { id: 'playground',   label: '🎮 Playground v2',          badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA',       waitSecs: 15,  desc: 'نموذج جمالي فائق الجودة — مجاني' },
+  { id: 'horde',        label: '🌐 Stable Horde (HD)',     badge: 'مجاني', tier: 'fast',   group: 'DZ MEDIA HD',    waitSecs: 90,  desc: 'شبكة GPU مجتمعية — جودة عالية جداً ~60-120 ث' },
+  { id: 'perchance',    label: '🎲 Perchance AI',           badge: 'جديد',  tier: 'fast',   group: 'مزودون خارجيون', waitSecs: 20,  desc: 'Perchance AI Generator — مجاني بدون مفتاح' },
+  { id: 'raphael',      label: '🖌️ Raphael AI',            badge: 'جديد',  tier: 'fast',   group: 'مزودون خارجيون', waitSecs: 25,  desc: 'Raphael AI — FLUX مجاني عالي الجودة' },
+  { id: 'freeforai',    label: '🆓 FreeForAI',              badge: 'جديد',  tier: 'fast',   group: 'مزودون خارجيون', waitSecs: 30,  desc: 'FreeForAI — متعدد النماذج مجاناً' },
 ]
+
+const EXTERNAL_PROVIDERS = new Set(['perchance', 'raphael', 'freeforai'])
 
 const TIER_COLOR: Record<string, string> = {
   premium: 'linear-gradient(135deg,#f59e0b,#d97706)',
@@ -109,34 +114,50 @@ export default function DZMediaStudio() {
     const waitSec = mDef.waitSecs ?? 12
     setProgress(`🎨 جاري التوليد بـ ${mDef.label} (~${waitSec} ثانية)...`)
 
-    const timeoutMs = model === 'horde' ? 175_000 : 65_000
+    const isExternal = EXTERNAL_PROVIDERS.has(model)
+    const endpoint   = isExternal ? '/api/dz-media/providers/generate' : '/api/chatimg/generate'
+    const body       = isExternal
+      ? JSON.stringify({ prompt, width, height, provider: model })
+      : JSON.stringify({ prompt, model, width, height })
+
+    const timeoutMs = model === 'horde' ? 175_000 : isExternal ? 80_000 : 65_000
     const ac = new AbortController()
     const timeoutId = setTimeout(() => ac.abort(), timeoutMs)
 
     try {
-      const res  = await fetch('/api/chatimg/generate', {
+      const res = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model, width, height }),
-        signal: ac.signal,
+        body, signal: ac.signal,
       })
       clearTimeout(timeoutId)
       if (!res.ok) {
         const text = await res.text().catch(() => '')
+        if (res.status === 451) {
+          throw new Error('المحتوى محظور — الرجاء تعديل الوصف')
+        }
         throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`)
       }
       const data = await res.json() as {
-        ok: boolean; url?: string; promptUsed?: string; originalPrompt?: string
+        ok: boolean; url?: string; promptUsed?: string; englishPrompt?: string; originalPrompt?: string
         model?: string; provider?: string; error?: string; translated?: boolean
         retryable?: boolean; remainingCredits?: number | null
+        generationTime?: number; cached?: boolean
       }
       if (data.ok && data.url) {
         setImgLoading(true)
+        const displayProvider = isExternal
+          ? (data.provider || mDef.label)
+          : maskedProvider(data.provider || '')
+        const displayModel = isExternal
+          ? (data.model || mDef.label)
+          : maskedModel(data.model || model)
+        const usedPrompt = data.promptUsed || data.englishPrompt || prompt
         setResult({
           type: 'image', url: data.url,
-          prompt: data.promptUsed || prompt,
-          model:    maskedModel(data.model || model),
-          provider: maskedProvider(data.provider || ''),
-          translatedPrompt: data.translated ? data.promptUsed : undefined,
+          prompt: usedPrompt,
+          model:    displayModel,
+          provider: displayProvider,
+          translatedPrompt: data.translated ? usedPrompt : undefined,
         })
       } else {
         setError(data.error || 'فشل التوليد — حاول مجدداً أو جرّب نموذجاً آخر')

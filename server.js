@@ -14170,9 +14170,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
      lastUserMessage.trim().split(/\s+/).length <= 4 &&
      /^[\u0600-\u06FF\s]+$/.test(lastUserMessage.trim()) &&
      !/[؟?]|هل|من|ما |كيف|أين|متى|لماذا|كم|ماذا|أخبار|نتيجة|مباراة/.test(lastUserMessage))
-  // Also bypass clarification for website/map builder — these are always actionable
+  // Also bypass clarification for website/map builder and currency — these are always actionable
   const _isWebBuildBypass = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
-  if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass &&
+  const _isCurrencyBypass = detectCurrencyQuery(lastUserMessage)
+  if (!_isAgentMode && !_clarificationBypass && !_isWebBuildBypass && !_isCurrencyBypass &&
       _intentClassification?.needsClarification &&
       _intentClassification?.clarificationMsg &&
       _intentClassification?.confidence < 40) {
@@ -19098,9 +19099,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       `[IntentRouter] 🎯 FINAL: ${_intentClassification.intent} | ${_intentClassification.confidence}% | ${_intentClassification.debugLabel}`
     )
     // fast-path التوضيح: فقط للأسئلة الغامضة تماماً (< 40% ثقة)
-    // Guard: نفس _clarificationBypass — YouTube / Sports / Doctor تجاوز التوضيح
+    // Guard: نفس _clarificationBypass — YouTube / Sports / Doctor / Currency / WebBuilder تجاوز التوضيح
+    const _layer1CurrencyBypass = detectCurrencyQuery(lastUserMessage)
+    const _layer1WebBypass = detectWebsiteBuilderQuery(lastUserMessage) || detectMapWebsiteQuery(lastUserMessage)
     if (
       !_clarificationBypass &&
+      !_layer1CurrencyBypass &&
+      !_layer1WebBypass &&
       _intentClassification.needsClarification &&
       _intentClassification.clarificationMsg &&
       _intentClassification.confidence < 40 &&
@@ -19500,23 +19505,42 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   if (isCurrencyQuery && currencyContext && currencyContext.length > 50 && !_isAgentMode) {
     console.log(`[Currency Fast-Path] Returning exchange rates directly without AI`)
     const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    const formattedCurrency = [
-      `## 💱 أسعار الصرف — ${today}`,
-      '',
-      `| العملة | 1 دج = | 1 وحدة = دج |`,
-      `|--------|---------|------------|`,
-      ...currencyContext.split('\n')
-        .filter(l => l.startsWith('•'))
-        .map(l => {
-          const m = l.match(/1 DZD = \*\*(.+?)\*\* (.+?) \((.+?)\) \| 1 .+? = \*\*(.+?) DZD\*\*/)
-          if (m) return `| ${m[3]} (${m[2]}) | ${m[1]} | ${m[4]} |`
-          return null
-        })
-        .filter(Boolean),
-      '',
-      `> 📡 المصدر: ${currencyContext.match(/المصدر: (.+?)\)/)?.[1] || 'fawazahmed0/currency-api'}`,
-    ].filter(Boolean).join('\n')
-    return res.status(200).json({ content: formattedCurrency })
+
+    // Extract USD and EUR from the markdown table produced by buildCurrencyContext
+    // Table row format: | **USD** | دولار أمريكي 🇺🇸 | **134.50 دج** |
+    const _extractRate = (code) => {
+      const m = currencyContext.match(new RegExp(`\\|\\s*\\*\\*${code}\\*\\*\\s*\\|[^|]*\\|\\s*\\*\\*([\\d.,]+)\\s*دج\\*\\*`))
+      return m ? m[1] : null
+    }
+    const usdRate = _extractRate('USD')
+    const eurRate = _extractRate('EUR')
+    const gbpRate = _extractRate('GBP')
+    const sarRate = _extractRate('SAR')
+    const aedRate = _extractRate('AED')
+
+    // Build prominent summary + full table
+    const summaryLines = ['## 💱 أسعار الصرف مقابل الدينار الجزائري', `📅 ${today}`, '']
+    if (usdRate) summaryLines.push(`> 🇺🇸 **1 دولار أمريكي = ${usdRate} دينار جزائري**`)
+    if (eurRate) summaryLines.push(`> 🇪🇺 **1 يورو = ${eurRate} دينار جزائري**`)
+    if (gbpRate) summaryLines.push(`> 🇬🇧 **1 جنيه إسترليني = ${gbpRate} دينار جزائري**`)
+    if (sarRate) summaryLines.push(`> 🇸🇦 **1 ريال سعودي = ${sarRate} دينار جزائري**`)
+    if (aedRate) summaryLines.push(`> 🇦🇪 **1 درهم إماراتي = ${aedRate} دينار جزائري**`)
+    summaryLines.push('')
+    summaryLines.push('---')
+    summaryLines.push('')
+    summaryLines.push('### 📊 جدول كامل لأسعار الصرف')
+    summaryLines.push('')
+    // Append the full markdown table from buildCurrencyContext (skip the header lines, keep table)
+    const tableLines = currencyContext.split('\n').filter(l =>
+      l.startsWith('|') || (l.startsWith('>') && l.includes('⚠️'))
+    )
+    summaryLines.push(...tableLines)
+    summaryLines.push('')
+    const srcMatch = currencyContext.match(/المصدر:\s*(.+)/)
+    if (srcMatch) summaryLines.push(`> 📡 ${srcMatch[0].trim()}`)
+    summaryLines.push(`> ℹ️ الأسعار تقريبية — يُنصح بمراجعة الصراف لأسعار السوق الموازية`)
+
+    return res.status(200).json({ content: summaryLines.join('\n') })
   }
 
   // ── Autonomous Reasoning Layer ────────────────────────────────────────────

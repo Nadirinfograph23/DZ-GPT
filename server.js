@@ -14491,9 +14491,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ _toolRedirect })
   }
 
-  // ── Match-Vs Early Clarification ─────────────────────────────────────────
-  // Must run EARLY (before news/realtime handlers) so "الجزائر ضد بوليفيا"
-  // doesn't get swallowed by the news handler which matches on "الجزائر"
+  // ── Match-Vs Early Handler ────────────────────────────────────────────────
+  // يُعالَج هنا قبل أي fast-path آخر (أخبار/ويكيبيديا/...)
+  // استراتيجية: sports ctx موجود → وكيل رياضي فوراً | لا ctx → طلب توضيح
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
     if (_earlyMatchVs?.isMatchVs) {
@@ -14501,7 +14501,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _priorHasClarify = messages.slice(-5, -1).some(m =>
         m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
       )
-      if (!_hasExplicitSportsCtx && !_priorHasClarify) {
+
+      // ── حالة 1: سياق رياضي واضح أو المستخدم أكّد بعد clarification → وكيل رياضي
+      if (_hasExplicitSportsCtx || _priorHasClarify) {
+        console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent`)
+        try {
+          const _sportRes = await runSportsAgent(_rawLastMsg, messages)
+          // runSportsAgent يُعيد { context, found, matches, ... } — لا content
+          const _sportContent = _sportRes.context || _sportRes.content || ''
+          return res.status(200).json({
+            content: _sportContent,
+            model: 'sports-agent',
+            found: _sportRes.found,
+            matches: _sportRes.matches,
+            sources: _sportRes.sources,
+            matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
+            _sportsAgent: true,
+          })
+        } catch (_sae) {
+          console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
+          // fallback → يكمل المعالجة العادية
+        }
+      } else {
+        // ── حالة 2: لا سياق → طلب توضيح
         const { team1, team2 } = _earlyMatchVs
         const isDzD = /(?:واش|كيفاش|راه|تاع|بصح|شنو|هذا|هاذا|وهران|قسنطينة|جزائري)/i.test(_rawLastMsg)
         const clarifyMsg = isDzD
@@ -15712,7 +15734,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const _isDoctorQuery_pre = !isDZToolRequest && detectDoctorIntent(lastUserMessage).isDoctorQuery
   // مبكّر — يُحسب هنا لأن VerifyPolicy يستخدمه قبل حساب _isHistoricalGovQuery الرئيسي
   const _isHistoricalGovQuery_early = isHistoricalGovQuery(lastUserMessage)
-  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && !detectMatchVsQuery(lastUserMessage) && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     // ── 1. كشف الغموض — Entity Ambiguity (سياسة التحقق الجديدة) ────────────
     const _entityAmbig = detectAmbiguousEntity(lastUserMessage)
     if (_entityAmbig?.needsClarification) {
@@ -15740,7 +15762,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Guard: YouTube → فيديو/يوتيوب لا يُعالَج كاستعلام شخص
   // Guard: Sports/LFP → نتائج/دوري/مباريات لا تُعالَج كاستعلام شخص
   // Guard: Doctor → طبيب/عيادة يُعالَج حصراً في searchdoc handler لا ويكيبيديا
-  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
+  // Guard: MatchVs → "X ضد Y" يُعالَج حصراً في الوكيل الرياضي
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !_isHistoricalGovQuery_early && !detectMatchVsQuery(lastUserMessage) && _intentClassification?.intent !== 'GREETING' && isPersonQuery(lastUserMessage)) {
     console.log(`[VerifyPolicy] 🔍 Detected person query: "${lastUserMessage.slice(0, 80)}"`)
     try {
       // FIX-C4: تنظيف الاستعلام قبل Wikidata — يحل "من هو X؟" → "X"
@@ -16245,7 +16268,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // إذا وصل طلب شخصية للـ LLM بدون سياق ويكيبيديا → أضف حاجز صريح في الرسائل
   // يمنع LLM من استخدام ذاكرته الداخلية عن الأشخاص
   // Guard: YouTube + Sports/LFP + Doctor queries are never person queries
-  if (!_isAgentMode && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && isPersonQuery(lastUserMessage)) {
+  if (!_isAgentMode && !_isYouTubeQuery_pre && !_isSportsLFPQuery && !_isDoctorQuery_pre && !detectMatchVsQuery(lastUserMessage) && isPersonQuery(lastUserMessage)) {
     const _hasWikiCtx = messages.some(m =>
       m.role === 'user' && (
         m.content?.includes('[WIKIPEDIA_CONTEXT]') ||

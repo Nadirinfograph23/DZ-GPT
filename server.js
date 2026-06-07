@@ -1001,12 +1001,15 @@ async function preloadEssentialData() {
   // Preload news feeds in background so first request is instant
   setImmediate(async () => {
     try {
+      // 🇩🇿 أولاً: أخبار الجزائر ذات الأولوية (النهار/البلاد/الشروق/الحياة/الوطن/APS/الهداف)
+      await fetchDZPriorityNews({ force: true })
+      // ثم: Google News DZ + أخبار رياضية
       await Promise.allSettled([
-        fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
         fetchGNRSSArticles(GN_RSS_FEEDS.ar),
         fetchMultipleFeeds(SPORTS_FEEDS_DASHBOARD),
+        fetchMultipleFeeds(NEWS_FEEDS_DASHBOARD),
       ])
-      console.log('[Preload] News & sports feeds cached in background')
+      console.log('[Preload] ✅ DZ Priority news + Google News + Sports cached in background')
     } catch (err) {
       console.warn('[Preload] Background news preload error:', err.message)
     }
@@ -7654,34 +7657,28 @@ const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 const RSS_FEEDS = {
   national: [
-    // ── Algerian newspapers — محلية جزائرية ──
-    { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+    // ── 🇩🇿 أولوية قصوى — جرائد جزائرية بالعربية (بالترتيب) ──
     { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
-    { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
-    { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
-    { name: 'الحياة',        url: 'https://www.elhayat-dz.com/feed/' },
-    { name: 'الوطن الجزائري', url: 'https://www.elwatan.com/feed/' },
-    { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-    { name: 'أخبار اليوم الجزائر', url: 'https://news.google.com/rss/search?q=اخبار+الجزائر+اليوم&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'آخر خبر الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر+عاجل&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
-    { name: 'Liberté Algérie', url: 'https://www.liberte-algerie.com/feed' },
-    { name: 'الشعب',          url: 'https://www.al-fadjr.com/feed/' },
+    { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+    { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed' },
     { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
-    // ── Pan-Arab sources (stable) ──
+    { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
+    { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml' },
+    { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
+    { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
+    // ── Google News الجزائر — عربي (بعد المصادر المحلية) ──
+    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google عاجل الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // ── Pan-Arab sources ──
     { name: 'الجزيرة عربي', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
     { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
     { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
     { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss.xml' },
-    { name: 'العربية', url: 'https://www.alarabiya.net/ar/rss.xml' },
     { name: 'RT عربي', url: 'https://arabic.rt.com/rss/' },
-    { name: 'أخبار الأمم المتحدة', url: 'https://news.un.org/feed/subscribe/ar/news/all/rss.xml' },
-    // ── Google News Algeria (always fresh, bypasses blocks) ──
-    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
+    { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
   ],
   sports: [
     // ── Algerian & regional sports ──
@@ -8526,26 +8523,138 @@ app.get('/api/dz-agent/rss/:type', async (req, res) => {
 const DASHBOARD_CACHE = { data: null, ts: 0 }
 const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
 
+// ── 🇩🇿 أولوية الأخبار الجزائرية — الترتيب الرسمي المعتمد ────────────────────
+// النهار → البلاد → الشروق → الحياة → الوطن → APS → الهداف → Google News DZ
+const DZ_PRIORITY_NEWS_FEEDS = [
+  { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/',        priority: 1 },
+  { name: 'البلاد',         url: 'https://www.elbilad.net/feed',               priority: 2 },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed',        priority: 3 },
+  { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed',            priority: 4 },
+  { name: 'الوطن',          url: 'https://www.elwatan.com/feed/',              priority: 5 },
+  { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss',                 priority: 6 },
+  { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml',        priority: 7 },
+  // Google News DZ — مكمّل بعد المصادر المحلية
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
+  { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar', priority: 9 },
+  { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar', priority: 10 },
+]
+
+// كاش مستقل للأخبار الجزائرية ذات الأولوية (5 دقائق TTL)
+const DZ_NEWS_CACHE = new Map() // key → { items: [], ts: number, source: string }
+const DZ_NEWS_CACHE_TTL = 5 * 60 * 1000 // 5 دقائق
+
+// جلب وتخزين أخبار الأولوية بشكل موحّد
+async function fetchDZPriorityNews({ force = false } = {}) {
+  const CACHE_KEY = 'dz_priority_all'
+  const cached = DZ_NEWS_CACHE.get(CACHE_KEY)
+  if (!force && cached && Date.now() - cached.ts < DZ_NEWS_CACHE_TTL) {
+    return cached
+  }
+
+  const settled = await Promise.allSettled(
+    DZ_PRIORITY_NEWS_FEEDS.map(feed => fetchRSSFeed(feed))
+  )
+
+  // رتب النتائج بحسب الأولوية ثم أحدث تاريخ
+  const allItems = []
+  const sourcesSeen = new Set()
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || !r.value?.items?.length) return
+    const feed = DZ_PRIORITY_NEWS_FEEDS[i]
+    sourcesSeen.add(feed.name)
+    r.value.items.forEach(item => {
+      allItems.push({ ...item, _source: feed.name, _priority: feed.priority })
+    })
+  })
+
+  // فرز: أولاً بالأولوية ثم بأحدث تاريخ
+  allItems.sort((a, b) => {
+    if (a._priority !== b._priority) return a._priority - b._priority
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+    return tb - ta
+  })
+
+  const result = { items: allItems.slice(0, 80), sources: [...sourcesSeen], ts: Date.now() }
+  DZ_NEWS_CACHE.set(CACHE_KEY, result)
+  console.log(`[DZ-News] Cached ${result.items.length} articles from: ${[...sourcesSeen].join(', ')}`)
+  return result
+}
+
+// بناء سياق الأخبار الجزائرية للـ AI من الكاش
+function buildDZNewsCachedContext(cachedNews) {
+  if (!cachedNews?.items?.length) return ''
+  const now = Date.now()
+  const ageMin = Math.floor((now - cachedNews.ts) / 60000)
+  const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  let ctx = `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`
+  ctx += `📰 **أخبار الجزائر** — ${dateStr}`
+  ctx += ageMin < 1 ? ' (حديثة للتو)' : ` (منذ ${ageMin} دقيقة)`
+  ctx += `
+**المصادر بالأولوية:** ${cachedNews.sources.join(' ← ')}
+`
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`
+
+  // اعرض أحدث 5 مقالات من كل مصدر ذي أولوية
+  const bySource = {}
+  for (const item of cachedNews.items) {
+    if (!bySource[item._source]) bySource[item._source] = []
+    if (bySource[item._source].length < 5) bySource[item._source].push(item)
+  }
+
+  // الترتيب: حسب الأولوية
+  const orderedSources = [...cachedNews.sources].sort((a, b) => {
+    const pa = DZ_PRIORITY_NEWS_FEEDS.find(f => f.name === a)?.priority ?? 99
+    const pb = DZ_PRIORITY_NEWS_FEEDS.find(f => f.name === b)?.priority ?? 99
+    return pa - pb
+  })
+
+  for (const src of orderedSources) {
+    const items = bySource[src]
+    if (!items?.length) continue
+    ctx += `\n**${src}:**\n`
+    for (const item of items) {
+      ctx += `• ${item.title || item.headline || '(بدون عنوان)'}`
+      if (item.link) ctx += ` — [رابط](${item.link})`
+      if (item.pubDate) {
+        try {
+          const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
+          ctx += ageH < 1 ? ' *(منذ دقائق)*' : ageH < 24 ? ` *(منذ ${Math.floor(ageH)}س)*` : ''
+        } catch {}
+      }
+      ctx += '\n'
+    }
+  }
+  ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  return ctx
+}
+
 const NEWS_FEEDS_DASHBOARD = [
-  // ── Verified working Algerian sources — مصادر جزائرية موثوقة ──
-  { name: 'الشروق', url: 'https://www.echoroukonline.com/feed' },
-  { name: 'النهار', url: 'https://www.ennaharonline.com/feed/' },
-  { name: 'الخبر', url: 'https://www.elkhabar.com/ar/feed/' },
-  { name: 'البلاد', url: 'https://www.elbilad.net/feed' },
-  { name: 'الجزائر360', url: 'https://www.algerie360.com/feed/' },
-  { name: 'الحياة', url: 'https://www.elhayat-dz.com/feed/' },
-  { name: 'وكالة APS', url: 'https://www.aps.dz/ar/rss' },
-  { name: 'TSA Algérie', url: 'https://www.tsa-algerie.com/feed/' },
-  { name: 'Liberté', url: 'https://www.liberte-algerie.com/feed' },
+  // 🇩🇿 أولوية — جرائد جزائرية بالترتيب
+  { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
+  { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+  { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed' },
+  { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
+  { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
+  { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml' },
+  { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
+  { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
+  // ── Google News الجزائر (بعد المصادر المحلية) ──
+  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google عاجل الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
   // ── Pan-Arab verified sources ──
   { name: 'الجزيرة', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
   { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
   { name: 'فرانس 24', url: 'https://www.france24.com/ar/rss' },
   { name: 'سكاي نيوز', url: 'https://www.skynewsarabia.com/rss.xml' },
-  // ── Google News Algeria ──
-  { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
 ]
 // NOTE: Removed 'سبورت 360' (sport360) feed — was contaminating the Algerian
 // League card with unrelated content. Algerian league data is now strictly
@@ -8636,10 +8745,15 @@ const GN_RSS_TTL = 10 * 60 * 1000 // 10 minutes (Hybrid Mode default)
 // ── Multilingual feed registry ──────────────────────────────────────────────
 const GN_RSS_FEEDS = {
   ar: [
-    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // 🇩🇿 Google News — الجزائر (بالعربية، أولوية قصوى)
+    { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google عاجل الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google اقتصاد الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google رياضة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google النهار الجزائر', url: 'https://news.google.com/rss/search?q=site%3Aennaharonline.com&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google البلاد الجزائر', url: 'https://news.google.com/rss/search?q=site%3Aelbilad.net&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google الشروق الجزائر', url: 'https://news.google.com/rss/search?q=site%3Aechoroukonline.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   fr: [
     { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
@@ -18710,6 +18824,34 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
 
+    // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────
+    if (newsQueryType === 'news' || newsQueryType === 'both') {
+      try {
+        // triggerBackground = true: نجلب من الكاش مباشرة، ونجدد في الخلفية إذا قارب على الانتهاء
+        const dzCached = DZ_NEWS_CACHE.get('dz_priority_all')
+        if (dzCached && dzCached.items?.length > 0) {
+          const dzCtx = buildDZNewsCachedContext(dzCached)
+          if (dzCtx) {
+            rssContext = dzCtx
+            console.log(`[DZ-News] ✅ Served ${dzCached.items.length} articles from cache (age=${Math.floor((Date.now()-dzCached.ts)/60000)}min)`)
+          }
+          // تحديث في الخلفية إذا الكاش قارب على الانتهاء (>3.5 دقيقة)
+          if (Date.now() - dzCached.ts > DZ_NEWS_CACHE_TTL * 0.7) {
+            fetchDZPriorityNews({ force: true }).catch(() => {})
+            console.log('[DZ-News] 🔄 Background refresh triggered')
+          }
+        } else {
+          // الكاش فارغ — جلب فوري (أول مرة بعد بدء السيرفر)
+          console.log('[DZ-News] Cache cold — fetching DZ priority news now...')
+          fetchDZPriorityNews({ force: true }).then(r => {
+            if (r?.items?.length && !rssContext) rssContext = buildDZNewsCachedContext(r)
+          }).catch(() => {})
+        }
+      } catch (err) {
+        console.warn('[DZ-News] Priority news cache error:', err.message)
+      }
+    }
+
     // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
     if (newsSubject) {
       try {
@@ -28018,6 +28160,19 @@ if (isMain) {
     console.log('[AutoRefresh] Refreshing standings...')
     STANDINGS_CACHE.ts = 0
   }, 25 * 60 * 1000, { label: 'standings-refresh' })
+
+  // ── 🇩🇿 Auto-Refresh أخبار الجزائر ذات الأولوية كل 5 دقائق ─────────────────
+  scheduleOnce(async () => {
+    console.log('[AutoRefresh] 🇩🇿 Refreshing DZ priority news (النهار/البلاد/الشروق/الحياة/الوطن/APS/الهداف)...')
+    try {
+      const result = await fetchDZPriorityNews({ force: true })
+      console.log(`[AutoRefresh] ✅ DZ News: ${result.items.length} articles from: ${result.sources.join(', ')}`)
+      // تحديث Google News DZ في الخلفية أيضاً
+      fetchGNRSSArticles(GN_RSS_FEEDS.ar).catch(() => {})
+    } catch (err) {
+      console.warn('[AutoRefresh] DZ news refresh failed:', err.message)
+    }
+  }, 5 * 60 * 1000, { label: 'dz-news-refresh' })
 
   // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
   scheduleOnce(() => {

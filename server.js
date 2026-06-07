@@ -7661,10 +7661,10 @@ const RSS_FEEDS = {
     { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
     { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-    { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed' },
+    { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
-    { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-    { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml' },
+    { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
     // ── Google News الجزائر — عربي (بعد المصادر المحلية) ──
@@ -8526,16 +8526,18 @@ const DASHBOARD_TTL = 10 * 60 * 1000 // 10 min
 // ── 🇩🇿 أولوية الأخبار الجزائرية — الترتيب الرسمي المعتمد ────────────────────
 // النهار → البلاد → الشروق → الحياة → الوطن → APS → الهداف → Google News DZ
 const DZ_PRIORITY_NEWS_FEEDS = [
-  { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/',        priority: 1 },
-  { name: 'البلاد',         url: 'https://www.elbilad.net/feed',               priority: 2 },
-  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed',        priority: 3 },
-  { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed',            priority: 4 },
-  { name: 'الوطن',          url: 'https://www.elwatan.com/feed/',              priority: 5 },
-  { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss',                 priority: 6 },
-  { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml',        priority: 7 },
-  // Google News DZ — مكمّل بعد المصادر المحلية
+  // ✅ RSS مباشر يعمل
+  { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/',                                                                                           priority: 1 },
+  { name: 'البلاد',         url: 'https://www.elbilad.net/feed',                                                                                                 priority: 2 },
+  { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed',                                                                                          priority: 3 },
+  // 🔄 Google News site: (RSS يعمل عبر Google لأن المصادر المباشرة تحجب البوتات)
+  { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar',                                           priority: 4 },
+  { name: 'الوطن',          url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com&hl=ar&gl=DZ&ceid=DZ:ar',                                              priority: 5 },
+  { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',      priority: 6 },
+  { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar',                                             priority: 7 },
+  // 📡 Google News DZ — مكمّل بعد المصادر المحلية
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
-  { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar', priority: 9 },
+  { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar',     priority: 9 },
   { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar', priority: 10 },
 ]
 
@@ -8639,10 +8641,10 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
   { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
   { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
-  { name: 'الحياة',         url: 'https://www.elhayat-dz.com/feed' },
+  { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
   { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-  { name: 'الهداف',         url: 'https://www.elheddaf.com/ar/rss.xml' },
+  { name: 'الهداف',         url: 'https://news.google.com/rss/search?q=site%3Aelheddaf.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
   { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   // ── Google News الجزائر (بعد المصادر المحلية) ──

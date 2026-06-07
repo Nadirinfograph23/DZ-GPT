@@ -4519,6 +4519,17 @@ REASONING PRINCIPLE
 لا تجب كـ chatbot بسيط.
 أجب كـ: محقق معلومات + مهندس استنتاج + وكيل ذاتي ذكي.
 افهم أولاً → فكّر → تحقق → أجب.
+
+━━━━━━━━━━━━━━━━━━
+ReAct LOOP — إلزامي في كل إجابة
+━━━━━━━━━━━━━━━━━━
+🔁 ابدأ كل إجابة بـ: **راني نخمم أصبر** 🤔
+ثم نفّذ دورة التفكير:
+1. 🧠 فهم → ماذا يريد المستخدم فعلاً؟
+2. 🔍 بحث → أين المصدر الموثوق؟
+3. ✅ تحقق → هل البيانات صحيحة ومحدّثة؟
+4. 📝 إجابة → أجب بوضوح مع المصدر والتاريخ.
+قاعدة ذهبية: لا تتخطى "راني نخمم أصبر" — حتى للأسئلة السهلة.
 `.trim()
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -7650,7 +7661,10 @@ const RSS_FEEDS = {
     { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
     { name: 'الحياة',        url: 'https://www.elhayat-dz.com/feed/' },
+    { name: 'الوطن الجزائري', url: 'https://www.elwatan.com/feed/' },
     { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
+    { name: 'أخبار اليوم الجزائر', url: 'https://news.google.com/rss/search?q=اخبار+الجزائر+اليوم&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'آخر خبر الجزائر', url: 'https://news.google.com/rss/search?q=الجزائر+عاجل&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'Liberté Algérie', url: 'https://www.liberte-algerie.com/feed' },
     { name: 'الشعب',          url: 'https://www.al-fadjr.com/feed/' },
@@ -7903,27 +7917,49 @@ function buildFootballContext(sfData, rssFeeds, dateStr, routerData = null) {
 }
 
 // ── مساعد: يحضر بيانات كرة القدم من الراوتر متعدد المصادر ──
-async function buildSportsRouterContext(msg, dateStr) {
+async function buildSportsRouterContext(msg, dateStr, temporal = 'UNKNOWN') {
   const lower = msg.toLowerCase()
   const isAlgeria = /جزائر|خضر|lfp|رابطة|محترفة|وطني|algeria|fennec/i.test(lower)
   const isStandings = /ترتيب|جدول|صدارة|standings|table/i.test(lower)
-  const isPlayer = /لاعب|هداف|مهاجم|حارس|stats|player/i.test(lower)
 
   const promises = []
 
-  // ── 365score أولاً (أولوية مطلقة) ────────────────────────────────────────
-  if (isAlgeria) {
-    promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'algeria', data: d })))
-    promises.push(getAlgeriaMatches(dateStr).then(d => ({ type: 'algeria_fallback', data: d })))
-    if (isStandings) {
-      promises.push(get365ScoreStandings(197).then(d => ({ type: 'standings_dz', data: d })))
-      promises.push(getStandings(197).then(d => ({ type: 'standings_dz_fallback', data: d })))
+  // ── PAST: نجلب بيانات تاريخية من fotmob + koora + 360score بتواريخ ماضية ──
+  if (temporal === 'PAST') {
+    const today = new Date()
+    // نجرب آخر 30 يوم لإيجاد المباراة
+    const pastDates = []
+    for (let i = 1; i <= 30; i++) {
+      const d = new Date(today); d.setDate(d.getDate() - i)
+      pastDates.push(d.toISOString().slice(0, 10))
+    }
+    // جلب fotmob لأقرب 7 أيام ماضية (الأسرع)
+    for (const pd of pastDates.slice(0, 7)) {
+      promises.push(getLiveMatches(pd).then(d => ({ type: `past_fotmob_${pd}`, data: d })))
+    }
+    // 365score لنفس التواريخ
+    for (const pd of pastDates.slice(0, 3)) {
+      promises.push(get365ScoreMatches(pd).then(d => ({ type: `past_365_${pd}`, data: d })))
+    }
+    if (isAlgeria) {
+      for (const pd of pastDates.slice(0, 5)) {
+        promises.push(getAlgeriaMatches(pd).then(d => ({ type: `past_dz_${pd}`, data: d })))
+      }
     }
   } else {
-    // 365score أولاً لكل المباريات
-    promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'live', data: d })))
-    promises.push(getKooraMatches(dateStr).then(d => ({ type: 'live_koora', data: d })))
-    promises.push(getLiveMatches(dateStr).then(d => ({ type: 'live_fallback', data: d })))
+    // ── LIVE/UPCOMING/UNKNOWN: 365score أولاً (أولوية مطلقة) ──────────────────
+    if (isAlgeria) {
+      promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'algeria', data: d })))
+      promises.push(getAlgeriaMatches(dateStr).then(d => ({ type: 'algeria_fallback', data: d })))
+      if (isStandings) {
+        promises.push(get365ScoreStandings(197).then(d => ({ type: 'standings_dz', data: d })))
+        promises.push(getStandings(197).then(d => ({ type: 'standings_dz_fallback', data: d })))
+      }
+    } else {
+      promises.push(get365ScoreMatches(dateStr).then(d => ({ type: 'live', data: d })))
+      promises.push(getKooraMatches(dateStr).then(d => ({ type: 'live_koora', data: d })))
+      promises.push(getLiveMatches(dateStr).then(d => ({ type: 'live_fallback', data: d })))
+    }
   }
 
   const results = await Promise.allSettled(promises)
@@ -7958,7 +7994,7 @@ function detectMatchVsQuery(msg) {
 
   // تصنيف زمني — الترتيب مهم: LIVE أولاً ثم PAST ثم UPCOMING
   const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
-  const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية))/i
+  const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
   const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
 
   let temporal = 'UNKNOWN'
@@ -18184,9 +18220,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     (isGlobalLeaguesQuery || isGeneralMatchesQuery) ? Promise.allSettled([fetchJdwelMatches(), fetchSofaScoreFootball(today), fetchTheSportsDB(today)]) : Promise.resolve(null),
     // نظام التحقق من الوزراء الجزائريين — يُجلب فقط عند الحاجة
     _isMinisterQuery ? fetchAlgeriaMinistersData() : Promise.resolve(null),
-    // ── Match-Vs: جلب جدول 360score+koora للمباريات القادمة/الحية/المجهولة ──
-    (_isMatchVsQuery && _matchVsData?.temporal !== 'PAST')
-      ? buildSportsRouterContext(lastUserMessage, today)
+    // ── Match-Vs: جلب بيانات من 360score+koora+fotmob (حية + ماضية + قادمة) ──
+    _isMatchVsQuery
+      ? buildSportsRouterContext(lastUserMessage, today, _matchVsData?.temporal || 'UNKNOWN')
       : Promise.resolve(null),
   ])
 
@@ -18414,11 +18450,46 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // للـ PAST: SearXNG يجلب التحليل (webSearchContext سيُضاف تلقائياً)
+    // للـ PAST: نجمع من fotmob/360score/koora + SearXNG
     if (_mvd.temporal === 'PAST') {
-      matchVsContext += `> 🔍 المصدر: **SearXNG (بحث حي)**\n`
+      matchVsContext += `> 🔍 المصادر: **FotMob + 360score + kooora (أرشيف) + SearXNG (بحث حي)**\n`
       matchVsContext += `> استعلام البحث: \`${_mvd.searchQuery}\`\n`
-      matchVsCtxRule = `مباراة منتهية — اعرض النتيجة والتحليل من نتائج البحث الحي فقط. لا تخترع أهدافاً أو ملخصاً من ذاكرتك.`
+      // استخرج بيانات الأرشيف من sports router (بتواريخ ماضية)
+      if (_mvRouterRaw) {
+        const _pastKeys = Object.keys(_mvRouterRaw).filter(k => k.startsWith('past_'))
+        let _archiveMatches = []
+        for (const k of _pastKeys) {
+          const d = _mvRouterRaw[k]
+          const matches = d?.matches || d
+          if (Array.isArray(matches)) {
+            const t1 = _mvd.team1.toLowerCase()
+            const t2 = _mvd.team2.toLowerCase()
+            const rel = matches.filter(m => {
+              const h = (m.homeTeam || m.home || '').toLowerCase()
+              const a = (m.awayTeam || m.away || '').toLowerCase()
+              return (h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
+                      t1.includes(h.split(' ')[0]) || t2.includes(h.split(' ')[0]) ||
+                      t1.includes(a.split(' ')[0]) || t2.includes(a.split(' ')[0]))
+            })
+            for (const m of rel) {
+              const dateLabel = k.replace(/^past_(fotmob|365|dz)_/, '')
+              _archiveMatches.push({ ...m, _matchDate: dateLabel })
+            }
+          }
+        }
+        if (_archiveMatches.length > 0) {
+          matchVsContext += `\n**📚 نتائج أرشيفية (FotMob + 360score + kooora):**\n`
+          for (const m of _archiveMatches.slice(0, 5)) {
+            const score = (m.homeScore != null && m.awayScore != null)
+              ? `**${m.homeScore} - ${m.awayScore}**`
+              : '(النتيجة غير متوفرة في الأرشيف)'
+            const venue = m.venue ? ` 🏟️ ${m.venue}` : ''
+            const league = m.league || m.competition || m.tournament || ''
+            matchVsContext += `• 📅 ${m._matchDate}: ${m.homeTeam || m.home} ${score} ${m.awayTeam || m.away}${venue}${league ? ` — ${league}` : ''}\n`
+          }
+        }
+      }
+      matchVsCtxRule = `مباراة منتهية — اعرض النتيجة من بيانات الأرشيف أعلاه أو من نتائج البحث الحي. اذكر التاريخ والملعب إذا توفرا. لا تخترع أهدافاً أو ملخصاً من ذاكرتك.`
     }
 
     console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | ctxLen=${matchVsContext.length}`)

@@ -6525,7 +6525,7 @@ function detectQueryIntent(msg) {
 
   const INTENTS = {
     sports:      ['كرة','مباراة','مباريات','نتيجة','نتائج','هدف','أهداف','فريق','دوري','بطولة','كأس','منتخب','رياضة','football','soccer','sport','match','score','goal','team','league','cup','fifa','ligue'],
-    economy:     ['اقتصاد','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse'],
+    economy:     ['اقتصاد','اقتصادي','اقتصادية','سعر','بورصة','عملة','تضخم','دولار','يورو','ميزانية','استثمار','ناتج محلي','محروقات','نفط','غاز','صادرات','واردات','احتياطي','economy','price','stock','currency','inflation','dollar','budget','invest','finance','bourse','gdp','pib','hydrocarbons','exports','imports','growth','croissance'],
     politics:    ['سياسة','حكومة','وزير','برلمان','رئيس','انتخاب','دبلوماسية','أمم','نزاع','politics','government','minister','parliament','president','election','diplomatic','conflict','war'],
     tech:        ['تقنية','تكنولوجيا','ذكاء','اصطناعي','نموذج','نماذج','برمجة','تطبيق','هاكر','أمن','روبوت','شات','جيبيتي','كلود','جيميني','ميسترال','لاما','برمجة','tech','technology','ai','artificial intelligence','llm','chatgpt','claude','gemini','mistral','llama','openai','software','app','cyber','security','startup','code','programming','model','robot'],
     news:        ['أخبار','خبر','اليوم','الآن','آخر','جديد','عاجل','حدث','مستجدات','تطورات','تحديث','نبأ','بيان','إعلان','news','latest','today','breaking','recent','actualité','واش صرا','وش صرا','واش صار','شنو صرا','ماذا حدث'],
@@ -6588,7 +6588,7 @@ function buildOptimizedQueries(query, intent) {
 
   const suffixMap = {
     sports:      isArabic ? `كرة القدم نتائج ${year}` : `football results ${year}`,
-    economy:     isArabic ? `اقتصاد ${year}` : `economy ${year}`,
+    economy:     isArabic ? `الاقتصاد الجزائري أخبار ${year}` : `Algeria economy latest ${year}`,
     politics:    isArabic ? `سياسة ${year}` : `politics ${year}`,
     tech:        isArabic ? `تكنولوجيا ${year}` : `technology ${year}`,
     news:        isArabic ? `أخبار ${year}` : `news ${year}`,
@@ -8155,7 +8155,8 @@ function detectNewsQuery(msg) {
   const newsKw = [
     'أخبار','خبر','اليوم','الآن','آخر','جديد','تقرير','حدث','أحداث','عاجل','بيان',
     'news','latest','today','breaking','recent','actualité','nouvelles','aujourd','حوادث',
-    'الجزائر','سياسة','اقتصاد','صحة','تعليم','برلمان','حكومة','وزير',
+    'الجزائر','سياسة','اقتصاد','اقتصادي','اقتصادية','صحة','تعليم','برلمان','حكومة','وزير',
+    'أخبار اقتصادية','الأخبار الاقتصادية','ناتج محلي','تضخم','استثمار','ميزانية','محروقات',
     'صحف','صحيفة','عناوين','جرائد','جريدة','الشروق','النهار','الخبر','الوطن','الشعب','البلاد',
     'الحياة','APS','وكالة','الجزائر360',
     'newspaper','headlines','press','presse','journal','journaux',
@@ -8220,6 +8221,220 @@ function extractNewsSubject(msg) {
   if (genericTerms.some(g => s.toLowerCase() === g.toLowerCase())) return null
 
   return s
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🇩🇿 ECONOMY INTELLIGENCE MODULE
+// ════════════════════════════════════════════════════════════════════════════
+
+// اكتشف نوع الاستعلام الاقتصادي:
+// - live_news  → "آخر الأخبار الاقتصادية" → بحث حي + RSS من الأحدث إلى الأقدم
+// - wiki_data  → "اقتصاد الجزائر"         → Wikipedia + Wikidata بيانات هيكلية
+// - null       → ليس استعلاماً اقتصادياً
+function detectEconomyIntent(msg) {
+  if (!msg) return { mode: null, isEconomy: false }
+  const lower = msg.toLowerCase()
+
+  const economyKw = [
+    'اقتصاد','اقتصادي','اقتصادية','ميزانية','ناتج محلي','gdp','pib','تضخم','نمو اقتصادي',
+    'استثمار','بورصة','عملة','سعر الصرف','احتياطي الصرف','الصادرات','الواردات',
+    'البترول','النفط','الغاز','المحروقات','ديون','عجز','فائض','تجارة',
+    'بنك','دينار','دولار اقتصاد','سعر الدولار','مؤشر','اقتصادية الجزائر',
+    'economy','economic','finance','investment','budget','inflation','gdp','exports','imports',
+    'oil revenue','gas','hydrocarbons','trade balance','fiscal','monetary','growth rate',
+    'économie','croissance','inflation','investissement','budget','réserves',
+  ]
+  if (!economyKw.some(k => lower.includes(k))) return { mode: null, isEconomy: false }
+
+  // أخبار اقتصادية حية → كلمات تدل على الحداثة والأخبار
+  const liveNewsKw = [
+    'آخر','أحدث','جديد','اليوم','الآن','عاجل','أخبار','هذا الأسبوع','هذا الشهر',
+    'مستجدات','تطورات','تحديث','ارتفع','انخفض','أعلن','قرار','إجراء','تقرير','إحصاء',
+    'latest','today','breaking','recent','update','news','announced','report','rise','fall',
+    'dernières','aujourd','récent','hausse','baisse','annonce',
+  ]
+  const isLiveNews = liveNewsKw.some(k => lower.includes(k))
+
+  // بيانات/معلومات هيكلية → كلمات تدل على المعلومات والأرقام
+  const wikiDataKw = [
+    'معلومات','بيانات','أرقام','إحصائيات','ما هو','ما هي','ما هو اقتصاد','شرح','تعريف',
+    'قطاعات','هيكل الاقتصاد','مساهمة','نسبة','تاريخ الاقتصاد',
+    'information','data','statistics','what is','overview','structure','sectors',
+    'informations','données','statistiques','aperçu',
+  ]
+  const isWikiData = wikiDataKw.some(k => lower.includes(k))
+
+  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data
+  const isDZEconomy = /(?:اقتصاد|اقتصادي|اقتصادية).{0,20}(?:الجزائر|جزائر|dz|algeria)/i.test(msg)
+    || /(?:الجزائر|algeria).{0,20}(?:اقتصاد|اقتصادي|اقتصادية|economy)/i.test(msg)
+
+  if (isLiveNews) return { mode: 'live_news', isEconomy: true }
+  if (isWikiData || isDZEconomy) return { mode: 'wiki_data', isEconomy: true }
+  return { mode: 'live_news', isEconomy: true } // الافتراضي: بحث حي
+}
+
+// تغذية RSS اقتصادية جزائرية مخصصة
+const DZ_ECONOMY_RSS_FEEDS = [
+  { name: 'Google اقتصاد الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google ميزانية الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google استثمار الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%A7%D8%B3%D8%AA%D8%AB%D9%85%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google تضخم الجزائر',      url: 'https://news.google.com/rss/search?q=%D8%AA%D8%B6%D8%AE%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google سعر الصرف الجزائر', url: 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D8%B1+%D8%A7%D9%84%D8%B5%D8%B1%D9%81+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google محروقات الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D8%AD%D8%B1%D9%88%D9%82%D8%A7%D8%AA+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // المصادر المحلية الجزائرية
+  { name: 'النهار اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aennaharonline.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'البلاد اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aelbilad.net+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
+
+// كاش الأخبار الاقتصادية (4 دقائق)
+const DZ_ECONOMY_NEWS_CACHE = new Map()
+const DZ_ECONOMY_NEWS_TTL = 4 * 60 * 1000
+
+async function fetchDZEconomyNews({ force = false } = {}) {
+  const KEY = 'dz_economy_news'
+  const cached = DZ_ECONOMY_NEWS_CACHE.get(KEY)
+  if (!force && cached && Date.now() - cached.ts < DZ_ECONOMY_NEWS_TTL) return cached
+
+  const settled = await Promise.allSettled(DZ_ECONOMY_RSS_FEEDS.map(f => fetchRSSFeed(f)))
+  const allItems = []
+  const sources = new Set()
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || !r.value?.items?.length) return
+    sources.add(DZ_ECONOMY_RSS_FEEDS[i].name)
+    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_RSS_FEEDS[i].name }))
+  })
+
+  // الأحدث أولاً دائماً
+  allItems.sort((a, b) => {
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+    return tb - ta
+  })
+
+  // إزالة التكرارات (نفس العنوان)
+  const seen = new Set()
+  const unique = allItems.filter(item => {
+    const fp = (item.title || '').slice(0, 50).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
+    if (seen.has(fp)) return false
+    seen.add(fp)
+    return true
+  })
+
+  const result = { items: unique.slice(0, 60), sources: [...sources], ts: Date.now() }
+  DZ_ECONOMY_NEWS_CACHE.set(KEY, result)
+  console.log(`[DZ-Economy] Cached ${result.items.length} articles from: ${[...sources].join(', ')}`)
+  return result
+}
+
+// جلب بيانات Wikipedia/Wikidata لاقتصاد الجزائر
+async function fetchAlgeriaEconomyWiki() {
+  const CACHE_KEY = 'algeria_economy_wiki'
+  const cached = DZ_ECONOMY_NEWS_CACHE.get(CACHE_KEY)
+  if (cached && Date.now() - cached.ts < 30 * 60 * 1000) return cached // 30 دقيقة كاش
+
+  try {
+    // Wikipedia Arabic — مقال اقتصاد الجزائر
+    const [wikiAr, wikiEn] = await Promise.allSettled([
+      fetch('https://ar.wikipedia.org/api/rest_v1/page/summary/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF_%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1', { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } }).then(r => r.ok ? r.json() : null),
+      fetch('https://en.wikipedia.org/api/rest_v1/page/summary/Economy_of_Algeria', { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } }).then(r => r.ok ? r.json() : null),
+    ])
+
+    // Wikidata — كيان الجزائر Q262
+    const wikidataRes = await fetch(
+      'https://www.wikidata.org/wiki/Special:EntityData/Q262.json',
+      { signal: AbortSignal.timeout(10000), headers: { 'Accept': 'application/json' } }
+    ).then(r => r.ok ? r.json() : null).catch(() => null)
+
+    const arExtract = wikiAr.status === 'fulfilled' ? wikiAr.value?.extract || '' : ''
+    const enExtract = wikiEn.status === 'fulfilled' ? wikiEn.value?.extract || '' : ''
+
+    // استخرج بيانات اقتصادية من Wikidata (GDP P2131, population P1082, HDI P1081)
+    let wikidataFacts = {}
+    if (wikidataRes?.entities?.Q262?.claims) {
+      const claims = wikidataRes.entities.Q262.claims
+      // GDP nominal (P2131)
+      const gdp = claims?.P2131?.[0]?.mainsnak?.datavalue?.value?.amount
+      if (gdp) wikidataFacts.gdp = `${parseFloat(gdp).toLocaleString('ar')} دولار`
+      // Population (P1082)
+      const pop = claims?.P1082?.[0]?.mainsnak?.datavalue?.value?.amount
+      if (pop) wikidataFacts.population = `${Math.abs(parseFloat(pop)).toLocaleString('ar')} نسمة`
+      // HDI (P1081)
+      const hdi = claims?.P1081?.[0]?.mainsnak?.datavalue?.value?.amount
+      if (hdi) wikidataFacts.hdi = parseFloat(hdi).toFixed(3)
+    }
+
+    const result = { arExtract, enExtract, wikidataFacts, ts: Date.now(), source: 'wikipedia+wikidata' }
+    DZ_ECONOMY_NEWS_CACHE.set(CACHE_KEY, result)
+    console.log(`[DZ-Economy] Wikipedia/Wikidata fetched: ${arExtract.length} chars AR, ${Object.keys(wikidataFacts).length} Wikidata facts`)
+    return result
+  } catch (err) {
+    console.warn('[DZ-Economy] Wiki fetch failed:', err.message)
+    return null
+  }
+}
+
+// بناء سياق الأخبار الاقتصادية للـ AI — الأحدث أولاً دائماً
+function buildEconomyNewsContext(news) {
+  if (!news?.items?.length) return ''
+  const now = Date.now()
+  const ageMin = Math.floor((now - news.ts) / 60000)
+  const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `📈 **آخر الأخبار الاقتصادية الجزائرية** — ${dateStr}`
+  ctx += ageMin < 1 ? ' *(حديثة للتو)*' : ` *(منذ ${ageMin} دق)*`
+  ctx += `\n**المصادر:** ${news.sources.join(' · ')}\n`
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `> ⚠️ **قاعدة إلزامية**: استخدم هذه الأخبار الحديثة فقط — لا تعتمد على بيانات التدريب القديمة.\n`
+  ctx += `> **الترتيب: الأحدث أولاً**\n\n`
+
+  let count = 0
+  for (const item of news.items.slice(0, 20)) {
+    const title = item.title || ''
+    if (!title) continue
+    let dateLabel = ''
+    if (item.pubDate) {
+      try {
+        const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
+        if (ageH < 1) dateLabel = ' *(منذ دقائق)*'
+        else if (ageH < 24) dateLabel = ` *(منذ ${Math.floor(ageH)}س)*`
+        else if (ageH < 72) dateLabel = ` *(${Math.floor(ageH/24)} يوم)*`
+        else dateLabel = ` *(${new Date(item.pubDate).toLocaleDateString('ar-DZ')})*`
+      } catch {}
+    }
+    ctx += `**${++count}.** ${title}${dateLabel}`
+    if (item._src) ctx += ` — **${item._src}**`
+    if (item.link) ctx += ` [↗](${item.link})`
+    ctx += `\n`
+  }
+  ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  return ctx
+}
+
+// بناء سياق بيانات Wikipedia/Wikidata للـ AI
+function buildEconomyWikiContext(wiki) {
+  if (!wiki) return ''
+  const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `📊 **بيانات اقتصاد الجزائر — Wikipedia + Wikidata** (${dateStr})\n`
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `> ⚠️ **قاعدة**: اعتمد على هذه البيانات الموثقة من Wikipedia/Wikidata — لا على بيانات التدريب.\n\n`
+
+  if (wiki.wikidataFacts && Object.keys(wiki.wikidataFacts).length > 0) {
+    ctx += `**📌 حقائق Wikidata (Q262 — الجزائر):**\n`
+    if (wiki.wikidataFacts.gdp) ctx += `• الناتج المحلي الإجمالي: ${wiki.wikidataFacts.gdp}\n`
+    if (wiki.wikidataFacts.population) ctx += `• عدد السكان: ${wiki.wikidataFacts.population}\n`
+    if (wiki.wikidataFacts.hdi) ctx += `• مؤشر التنمية البشرية: ${wiki.wikidataFacts.hdi}\n`
+    ctx += `• المصدر: [Wikidata Q262](https://www.wikidata.org/wiki/Q262)\n\n`
+  }
+
+  if (wiki.arExtract) {
+    ctx += `**📖 ملخص ويكيبيديا العربية:**\n${wiki.arExtract.slice(0, 1200)}\n`
+    ctx += `• المصدر: [ويكيبيديا — اقتصاد الجزائر](https://ar.wikipedia.org/wiki/اقتصاد_الجزائر)\n\n`
+  }
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  return ctx
 }
 
 function isNewspaperHeadlineQuery(msg) {
@@ -18843,6 +19058,50 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const newsSubject = extractNewsSubject(lastUserMessage)
   if (newsSubject) console.log(`[DZ Agent] News subject extracted: "${newsSubject}"`)
 
+  // ── 🇩🇿 Economy Intelligence — كشف الاستعلامات الاقتصادية ─────────────────
+  const _economyIntent = detectEconomyIntent(lastUserMessage)
+  let _economyContext = ''
+
+  if (_economyIntent.isEconomy) {
+    console.log(`[DZ-Economy] Intent detected: mode=${_economyIntent.mode}`)
+    if (_economyIntent.mode === 'live_news') {
+      // أخبار اقتصادية حية — الأحدث أولاً
+      try {
+        const dzEconCached = DZ_ECONOMY_NEWS_CACHE.get('dz_economy_news')
+        let econNews
+        if (dzEconCached && Date.now() - dzEconCached.ts < DZ_ECONOMY_NEWS_TTL) {
+          econNews = dzEconCached
+          console.log(`[DZ-Economy] ✅ Served ${econNews.items.length} economy articles from cache`)
+          // تجديد خلفي إذا قارب الكاش على الانتهاء
+          if (Date.now() - dzEconCached.ts > DZ_ECONOMY_NEWS_TTL * 0.7) {
+            fetchDZEconomyNews({ force: true }).catch(() => {})
+          }
+        } else {
+          econNews = await fetchDZEconomyNews({ force: true })
+        }
+        if (econNews?.items?.length) {
+          _economyContext = buildEconomyNewsContext(econNews)
+          console.log(`[DZ-Economy] 📈 Live news context built: ${_economyContext.length} chars`)
+        }
+      } catch (err) {
+        console.warn('[DZ-Economy] live news fetch failed:', err.message)
+      }
+    } else if (_economyIntent.mode === 'wiki_data') {
+      // بيانات هيكلية — Wikipedia + Wikidata
+      try {
+        const wikiData = await fetchAlgeriaEconomyWiki()
+        if (wikiData) {
+          _economyContext = buildEconomyWikiContext(wikiData)
+          console.log(`[DZ-Economy] 📊 Wiki context built: ${_economyContext.length} chars`)
+        }
+      } catch (err) {
+        console.warn('[DZ-Economy] wiki fetch failed:', err.message)
+      }
+    }
+    // أضف السياق لـ rssContext إذا لم يكن فارغاً
+    if (_economyContext) rssContext = _economyContext
+  }
+
   // Allow RSS for football NEWS queries (e.g. "أخبار المنتخب") — not just match-score queries
   const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
   if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
@@ -19424,6 +19683,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.warn('[Search] failed silently:', _rse.message)
   }
 
+  // ── Economy System Prompt Layer ───────────────────────────────────────────
+  let _economySystemLayer = ''
+  if (_economyIntent?.isEconomy && _economyContext) {
+    const _econMode = _economyIntent.mode === 'live_news' ? 'أخبار اقتصادية حية' : 'بيانات هيكلية Wikipedia+Wikidata'
+    _economySystemLayer = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 قواعد الاقتصاد الإلزامية — يُحظر تجاوزها:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. استخدم فقط البيانات المُحقنة أدناه (${_econMode}).
+2. ❌ يُحظر تماماً الاعتماد على بيانات التدريب (مثل "230 مليار دولار") — قد تكون قديمة.
+3. 📊 رتّب النتائج دائماً من الأحدث إلى الأقدم.
+4. 🇩🇿 الإجابة دائماً بالعربية حتى لو السؤال بلغة أخرى.
+5. اذكر دائماً تاريخ/مصدر كل رقم أو إحصاء.
+6. إذا لم تجد بيانات محددة في السياق → قل "لا أملك بيانات حديثة موثقة" بدل اختراع أرقام.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  } else if (_economyIntent?.isEconomy && !_economyContext) {
+    _economySystemLayer = `
+⚠️ تنبيه اقتصادي: أُبلغ المستخدم أن البيانات الاقتصادية الحديثة غير متاحة الآن، وأن المعلومات قد تكون غير محدثة. اقترح عليه مصادر موثوقة (ONS الجزائر، البنك الدولي، Statista).`
+  }
+
+  // ── Force Arabic for economy + news queries ────────────────────────────────
+  const _forceArabicLayer = (_economyIntent?.isEconomy || newsQueryType === 'news')
+    ? `\n⚠️ قاعدة اللغة للاقتصاد والأخبار: أجب دائماً بالعربية — حتى لو السؤال بالفرنسية أو الإنجليزية.`
+    : ''
+
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
@@ -19633,7 +19917,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     govPersonContext  ? `🎯 شخصية حكومية جزائرية (بيانات مباشرة — أولوية قصوى):\n${_trim(govPersonContext, 1000)}\n> أجب بناءً على هذه البيانات أولاً. إذا وجدت معلومات إضافية من Wikidata/Wikipedia فأكمل بها. لا تتناقض مع هذه البيانات.` : '',
     ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2500)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
-    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3000)}\n> لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}` : '',
+    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار — مرتبة من الأحدث إلى الأقدم):\n${_trim(rssContext, 3500)}\n> ⚠️ رتّب إجابتك دائماً من الأحدث إلى الأقدم. لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}${_economyIntent?.isEconomy ? ' 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
@@ -19663,6 +19947,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     })(),
 
     _metaClawBlock,
+    _economySystemLayer || '',
+    _forceArabicLayer || '',
     _realtimeContext || '',
     // ── DECISION TREE CONTEXT (SearXNG → Crawl4AI → Wikidata → Wikipedia → DBpedia) ──
     _decisionTreeContext || '',

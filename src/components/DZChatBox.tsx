@@ -3778,6 +3778,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [authError, setAuthError] = useState<string | null>(null)
   const [actionLog, setActionLog] = useState<ActionLogEntry[]>([])
   const [showLog, setShowLog] = useState(false)
+  const [articlePopupUrl, setArticlePopupUrl] = useState<string | null>(null)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
   const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
@@ -7739,6 +7740,18 @@ ${rows}
                             },
                             pre({ children }) { return <>{children}</> },
                             a({ href, children, ...props }) {
+                              const label = typeof children === 'string' ? children : (Array.isArray(children) ? children.join('') : '')
+                              const isReadMore = /اقرأ المزيد/i.test(label)
+                              if (isReadMore && href) {
+                                return (
+                                  <button
+                                    className="dz-read-more-btn"
+                                    onClick={() => setArticlePopupUrl(href)}
+                                  >
+                                    📰 اقرأ المزيد
+                                  </button>
+                                )
+                              }
                               return (
                                 <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
                                   {children}
@@ -8825,6 +8838,29 @@ ${rows}
       )}
 
       <DZToast toasts={toasts} onDismiss={dismissToast} />
+
+      {/* ===== ARTICLE POPUP MODAL ===== */}
+      {articlePopupUrl && createPortal(
+        <div className="dz-article-popup-overlay" onClick={() => setArticlePopupUrl(null)}>
+          <div className="dz-article-popup-container" onClick={e => e.stopPropagation()}>
+            <div className="dz-article-popup-header">
+              <span className="dz-article-popup-title">📰 قراءة المقال</span>
+              <button className="dz-article-popup-close" onClick={() => setArticlePopupUrl(null)}>✕</button>
+            </div>
+            <div className="dz-article-popup-fallback">
+              <p>يتعذر عرض بعض المواقع داخل الإطار — <a href={articlePopupUrl} target="_blank" rel="noopener noreferrer">افتح في تبويب جديد ↗</a></p>
+            </div>
+            <iframe
+              src={articlePopupUrl}
+              className="dz-article-popup-iframe"
+              title="article-preview"
+              sandbox="allow-scripts allow-same-origin allow-popups"
+              loading="lazy"
+            />
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

@@ -4527,13 +4527,13 @@ REASONING PRINCIPLE
 ━━━━━━━━━━━━━━━━━━
 ReAct LOOP — إلزامي في كل إجابة
 ━━━━━━━━━━━━━━━━━━
-🔁 ابدأ كل إجابة بـ: **راني نخمم أصبر** 🤔
+🔁 ابدأ كل إجابة بـ: **راني نخمم...** 🤔
 ثم نفّذ دورة التفكير:
 1. 🧠 فهم → ماذا يريد المستخدم فعلاً؟
 2. 🔍 بحث → أين المصدر الموثوق؟
 3. ✅ تحقق → هل البيانات صحيحة ومحدّثة؟
 4. 📝 إجابة → أجب بوضوح مع المصدر والتاريخ.
-قاعدة ذهبية: لا تتخطى "راني نخمم أصبر" — حتى للأسئلة السهلة.
+قاعدة ذهبية: فكّر دائماً قبل الإجابة — حتى للأسئلة السهلة.
 `.trim()
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -4541,7 +4541,7 @@ ReAct LOOP — إلزامي في كل إجابة
 // ═══════════════════════════════════════════════════════════════════
 // 🔁 ReAct Loop — تُطبَّق برمجياً على كل رد قبل الإرسال
 // ═══════════════════════════════════════════════════════════════════
-const REACT_PREFIX = '🤔 **راني نخمم أصبر شوية...**\n\n'
+const REACT_PREFIX = '🤔 **راني نخمم...**\n\n'
 
 // الردود التي لا تحتاج البادئة (بيانات هيكلية، ترحيب مختصر، أكواد فقط)
 const _REACT_SKIP_RE = /^(```|\{|\[|##\s*🌤️|##\s*⚽|> 📡|🏟️\s*\*\*)/
@@ -7999,6 +7999,17 @@ async function buildSportsRouterContext(msg, dateStr, temporal = 'UNKNOWN') {
 //   UPCOMING → 360score + koora (جدول المباريات القادمة)
 //   LIVE     → 360score + koora + SearXNG (معاً للبث المباشر)
 //   UNKNOWN  → 360score/koora + SearXNG (كلا المصدرين)
+// قائمة المنتخبات الوطنية للكشف التلقائي دون "ضد"
+const NATIONAL_TEAMS = [
+  'الجزائر','المغرب','تونس','مصر','ليبيا','موريتانيا','السنغال','نيجيريا','الكاميرون',
+  'غانا','كوت ديفوار','ساحل العاج','مالي','بوركينا','جنوب أفريقيا','إثيوبيا',
+  'فرنسا','إسبانيا','ألمانيا','إيطاليا','إنجلترا','البرتغال','هولندا','بلجيكا',
+  'تركيا','كرواتيا','السويد','الدنمارك','سويسرا','بولندا','النمسا','اليونان',
+  'البرازيل','الأرجنتين','أوروغواي','كولومبيا','تشيلي','بيرو','المكسيك','كندا',
+  'قطر','السعودية','الإمارات','العراق','سوريا','الأردن','إيران','أستراليا',
+  'اليابان','كوريا','الصين','بوليفيا','الولايات المتحدة','أمريكا'
+]
+
 function detectMatchVsQuery(msg) {
   if (!msg || msg.length < 4) return null
 
@@ -8006,26 +8017,40 @@ function detectMatchVsQuery(msg) {
   const vsMatch = msg.match(
     /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})\s+(?:ضد|vs\.?)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})/iu
   )
-  if (!vsMatch) return null
+  if (vsMatch) {
+    const team1 = vsMatch[1].trim()
+    const team2 = vsMatch[2].trim()
 
-  const team1 = vsMatch[1].trim()
-  const team2 = vsMatch[2].trim()
+    // تصنيف زمني
+    const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
+    const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
+    const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
 
-  // تصنيف زمني — الترتيب مهم: LIVE أولاً ثم PAST ثم UPCOMING
-  const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
-  const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
-  const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
+    let temporal = 'UNKNOWN'
+    if (LIVE_KW.test(msg))          temporal = 'LIVE'
+    else if (PAST_KW.test(msg))     temporal = 'PAST'
+    else if (UPCOMING_KW.test(msg)) temporal = 'UPCOMING'
 
-  let temporal = 'UNKNOWN'
-  if (LIVE_KW.test(msg))         temporal = 'LIVE'
-  else if (PAST_KW.test(msg))    temporal = 'PAST'
-  else if (UPCOMING_KW.test(msg)) temporal = 'UPCOMING'
+    const searchQuery  = `${team1} ضد ${team2} مباراة نتيجة`
+    const fixtureQuery = `${team1} vs ${team2} match`
+    return { isMatchVs: true, team1, team2, temporal, searchQuery, fixtureQuery }
+  }
 
-  // استعلام بحث محسّن لـ SearXNG
-  const searchQuery = `${team1} ضد ${team2} مباراة نتيجة`
-  const fixtureQuery = `${team1} vs ${team2} match`
+  // نمط "منتخب1 منتخب2" (اسمان وطنيان بجوار بعض بدون "ضد")
+  for (let i = 0; i < NATIONAL_TEAMS.length; i++) {
+    for (let j = 0; j < NATIONAL_TEAMS.length; j++) {
+      if (i === j) continue
+      const t1 = NATIONAL_TEAMS[i], t2 = NATIONAL_TEAMS[j]
+      const pairRe = new RegExp(`${t1}\\s+${t2}`, 'i')
+      if (pairRe.test(msg)) {
+        const searchQuery  = `${t1} ضد ${t2} مباراة نتيجة`
+        const fixtureQuery = `${t1} vs ${t2} match`
+        return { isMatchVs: true, team1: t1, team2: t2, temporal: 'UNKNOWN', searchQuery, fixtureQuery }
+      }
+    }
+  }
 
-  return { isMatchVs: true, team1, team2, temporal, searchQuery, fixtureQuery }
+  return null
 }
 
 // Hardcoded tag regexes — avoids dynamic RegExp (ReDoS risk)
@@ -8646,8 +8671,8 @@ function analyzeQuery(msg) {
   // ── 6. Contextual Follow-up Suggestions ──────────────────────────────
   const suggestionsMap = {
     news:        subject
-      ? [`آخر أخبار ${subject} هذا الأسبوع`, `تاريخ ${subject}`, `${subject} في الجزائر`]
-      : ['أبرز أخبار الجزائر اليوم', 'آخر أخبار العالم', 'الأخبار الرياضية'],
+      ? [`آخر أخبار ${subject} هذا الأسبوع`, `📰 أخبار رياضية`, `💰 أخبار اقتصادية`]
+      : ['📰 أخبار رياضية', '💰 أخبار اقتصادية', '🌍 أخبار دولية', '🏛️ أخبار سياسية'],
     sports:      subject
       ? [`إحصائيات ${subject} هذا الموسم`, `مباريات ${subject} القادمة`, `آخر أخبار ${subject}`]
       : ['نتائج مباريات اليوم', 'ترتيب الدوري الجزائري', 'نتائج دوري الأبطال'],
@@ -8666,7 +8691,7 @@ function analyzeQuery(msg) {
     location:    ['أقرب مستشفى', 'مواصلات عامة', 'خريطة الجزائر العاصمة'],
     comparison:  ['مزايا وعيوب كل خيار', 'تجارب المستخدمين', 'الأنسب للسياق الجزائري'],
     admin:       ['الوثائق المطلوبة كاملاً', 'المواعيد والأوقات الرسمية', 'خدمات الكترونية متاحة'],
-    general:     ['أخبار الجزائر اليوم', 'مباريات اليوم', 'سعر الدولار اليوم'],
+    general:     ['📰 أخبار رياضية', '💰 أخبار اقتصادية', '🌍 أخبار دولية'],
   }
   const suggestions = suggestionsMap[questionType] || suggestionsMap.general
 
@@ -8776,6 +8801,9 @@ const DZ_PRIORITY_NEWS_FEEDS = [
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
   { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar',     priority: 9 },
   { name: 'Google سياسة الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B3%D9%8A%D8%A7%D8%B3%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar', priority: 10 },
+  // ── مصادر رياضية جزائرية متخصصة ──────────────────────────────────────────
+  { name: 'سبورت DZ رياضة', url: 'https://news.google.com/rss/search?q=site%3Asport-dz.com&hl=ar&gl=DZ&ceid=DZ:ar', priority: 11 },
+  { name: 'كووورة جزائر ⚽', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar', priority: 12 },
 ]
 
 // كاش مستقل للأخبار الجزائرية ذات الأولوية (5 دقائق TTL)
@@ -8839,11 +8867,11 @@ function buildDZNewsCachedContext(cachedNews) {
   ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `
 
-  // اعرض أحدث 5 مقالات من كل مصدر ذي أولوية
+  // اعرض أحدث 6 مقالات كحد أقصى من كل مصدر (4 على الأقل مضمونة)
   const bySource = {}
   for (const item of cachedNews.items) {
     if (!bySource[item._source]) bySource[item._source] = []
-    if (bySource[item._source].length < 5) bySource[item._source].push(item)
+    if (bySource[item._source].length < 6) bySource[item._source].push(item)
   }
 
   // الترتيب: حسب الأولوية
@@ -8859,7 +8887,7 @@ function buildDZNewsCachedContext(cachedNews) {
     ctx += `\n**${src}:**\n`
     for (const item of items) {
       ctx += `• ${item.title || item.headline || '(بدون عنوان)'}`
-      if (item.link) ctx += ` — [رابط](${item.link})`
+      if (item.link) ctx += ` — [اقرأ المزيد](${item.link})`
       if (item.pubDate) {
         try {
           const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
@@ -14436,7 +14464,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
     if (_earlyMatchVs?.isMatchVs) {
-      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي)/i.test(_rawLastMsg)
+      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(_rawLastMsg)
       const _priorHasClarify = messages.slice(-5, -1).some(m =>
         m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
       )
@@ -18419,7 +18447,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Match-Vs Clarification — هل تبحث عن مباراة؟ ──────────────────────────
   // When "X ضد Y" detected without explicit sports keywords → ask clarification
   if (_isMatchVsQuery) {
-    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح)/i.test(lastUserMessage)
+    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(lastUserMessage)
     const _priorMsgHasClarify = messages.slice(-5, -1).some(m =>
       m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على|نتيجة مباراة|موعد مباراة/i.test(m.content || '')
     )
@@ -19816,7 +19844,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
 
     // ── NEWS MODULE (news / sports_news queries only) ─────────────────────
     _isNews ? [
-      `📰 NEWS: رتّب الإجابة زمنياً: 🟢 اليوم · 🟡 الأسبوع · 🟠 الشهر. أدرج التاريخ لكل خبر. المصدر يكون رابطاً قابلاً للضغط بعنوانه فقط — لا تكتب URL خاماً أبداً. قدّم كمية وفيرة من الأخبار (10-15 خبراً على الأقل). أعطِ الأولوية للأحدث دائماً.`,
+      `📰 NEWS FORMAT (إلزامي): رتّب الأخبار حسب المصدر — لكل مصدر: **اسم المصدر:** ثم 4 أخبار على الأقل. كل خبر ينتهي بـ [اقرأ المزيد](الرابط). الترتيب: الجرائد الجزائرية أولاً ثم العربية. في نهاية الإجابة أضف: 💡 قد يهمك أيضاً: 📰 أخبار رياضية / 💰 أخبار اقتصادية / 🌍 أخبار دولية / 🏛️ أخبار سياسية`,
       `مصادر موثوقة: aps.dz · echoroukonline.com · ennaharonline.com · elkhabar.com · reuters.com · aljazeera.net · djazairess.com · elbilad.net`,
       `قاعدة المصادر: استخدم كل النتائج المتاحة من Google News + RSS + Google CSE معاً — لا تقتصر على مصدر واحد.`,
     ].join('\n') : '',
@@ -19917,7 +19945,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     govPersonContext  ? `🎯 شخصية حكومية جزائرية (بيانات مباشرة — أولوية قصوى):\n${_trim(govPersonContext, 1000)}\n> أجب بناءً على هذه البيانات أولاً. إذا وجدت معلومات إضافية من Wikidata/Wikipedia فأكمل بها. لا تتناقض مع هذه البيانات.` : '',
     ministersContext ? `🏛️ الحكومة الجزائرية (بيانات رسمية — استخدمها فقط للإجابة عن الوزراء والمناصب):\n${_trim(ministersContext, 2500)}\n> NO SOURCE = NO ANSWER: لا تتجاوز هذه البيانات ولا تخترع وزيراً غير موجود فيها.` : '',
     currencyContext  ? `💱 أسعار الصرف:\n${_trim(currencyContext, 1500)}\n> انسخ الجدول أعلاه كما هو. لا تخترع أرقاماً.` : '',
-    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار — مرتبة من الأحدث إلى الأقدم):\n${_trim(rssContext, 3500)}\n> ⚠️ رتّب إجابتك دائماً من الأحدث إلى الأقدم. لخّص مع [عنوان](رابط). لا تخترع.${isNewspaperHeadlineQuery(lastUserMessage) ? ' رتّب حسب الصحيفة.' : ''}${_economyIntent?.isEconomy ? ' 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
+    rssContext       ? `📰 RSS FEEDS (أحدث الأخبار):\n${_trim(rssContext, 3500)}\n> ⚠️ قواعد عرض الأخبار (إلزامية):\n> 1. رتّب حسب المصدر: **اسم الصحيفة/المصدر:** ثم 4 أخبار على الأقل لكل مصدر.\n> 2. كل خبر يجب أن ينتهي بـ [اقرأ المزيد](الرابط).\n> 3. أضف في نهاية الإجابة: 💡 قد يهمك أيضاً: 📰 أخبار رياضية / 💰 أخبار اقتصادية / 🌍 أخبار دولية\n> 4. لا تخترع أي معلومة.${_economyIntent?.isEconomy ? '\n> 💡 اقتصاد: لا تستخدم أرقام بيانات التدريب — هذه الأخبار أحدث وأدق.' : ''}` : '',
     webSearchContext ? `🔍 نتائج البحث الحي:\n${_trim(webSearchContext, 3000)}\n> هذا مصدرك الوحيد للمعلومات الآنية. لا تخترع. [اسم](رابط) فقط.` : '',
     weatherPriorityContext ? `🌤️ بيانات الطقس (جدول جاهز للعرض — لا تعيد صياغته):\n${_trim(weatherPriorityContext, 600)}\n> ابدأ إجابتك بهذا الجدول مباشرةً. لا تضف أي عناوين قبله. اذكر المصدر في آخر سطر فقط.` : '',
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',

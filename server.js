@@ -196,6 +196,7 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock } from './lib/sports-agent.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -13192,6 +13193,54 @@ app.get('/api/sports/localize', async (req, res) => {
   return res.json(data)
 })
 
+// ══════════════════════════════════════════════════════════════════════════════
+// § SPORTS AGENT — وكيل رياضي متعدد المصادر مستقل
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /api/sports-agent/query
+// Body: { query, history? }
+// يُعيد: { found, type, context, matches?, sources, fetchedAt }
+// ──────────────────────────────────────────────────────────────────────────────
+app.post('/api/sports-agent/query', express.json({ limit: '1mb' }), async (req, res) => {
+  const { query, history = [] } = req.body || {}
+  if (!query || typeof query !== 'string') {
+    return res.status(400).json({ error: 'query (string) required in body' })
+  }
+  try {
+    const result = await runSportsAgent(query.trim(), history)
+    return res.json(result)
+  } catch (err) {
+    console.error('[/api/sports-agent/query] error:', err.message)
+    return res.status(500).json({
+      found: false,
+      type: 'ERROR',
+      error: err.message,
+      context: '⚠️ حدث خطأ في الوكيل الرياضي. حاول مرة أخرى.',
+      sources: [],
+      fetchedAt: new Date().toISOString(),
+    })
+  }
+})
+
+// GET /api/sports-agent/match — بحث سريع عن مباراة بين فريقين
+// Query: ?team1=الجزائر&team2=بوليفيا&temporal=UPCOMING
+app.get('/api/sports-agent/match', async (req, res) => {
+  const { team1, team2, temporal = 'UNKNOWN' } = req.query
+  if (!team1 || !team2) {
+    return res.status(400).json({ error: 'team1 and team2 params required' })
+  }
+  try {
+    const matches = await searchMatchAcrossDates(team1, team2, {
+      temporal,
+      maxPastDays: 60,
+      maxFutureDays: 90,
+    })
+    return res.json({ found: matches.length > 0, count: matches.length, matches, fetchedAt: new Date().toISOString() })
+  } catch (err) {
+    console.error('[/api/sports-agent/match] error:', err.message)
+    return res.status(500).json({ found: false, matches: [], error: err.message })
+  }
+})
+
 // تحقق من صحة بيانات رياضية — القاعدة الصارمة
 // إذا لم تتوفر بيانات حية → لا إجابة من ذاكرة النموذج
 app.get('/api/sports/verify', async (req, res) => {
@@ -18755,109 +18804,135 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Match-Vs Context — تحليل "X ضد Y" حسب التصنيف الزمني ────────────────
+  // ── Match-Vs Context — وكيل رياضي متعدد المصادر (محسَّن) ─────────────────
   let matchVsContext = ''
   let matchVsCtxRule = 'لا تخترع نتائج.'
   if (_isMatchVsQuery) {
     const _mvd = _matchVsData
     const _mvRouterRaw = matchVsResult?.status === 'fulfilled' ? matchVsResult.value : null
 
-    // بناء رأس السياق
-    const _temporalLabel = {
-      PAST: `⏪ مباراة سابقة — ${_mvd.team1} ضد ${_mvd.team2}`,
-      UPCOMING: `📅 مباراة قادمة — ${_mvd.team1} ضد ${_mvd.team2}`,
-      LIVE: `🔴 مباراة مباشرة — ${_mvd.team1} ضد ${_mvd.team2}`,
-      UNKNOWN: `🆚 مباراة — ${_mvd.team1} ضد ${_mvd.team2}`,
-    }[_mvd.temporal] || `🆚 ${_mvd.team1} ضد ${_mvd.team2}`
+    // ── [جديد] استدعاء الوكيل الرياضي المتعدد المصادر ───────────────────────
+    // يبحث في 365score + FotMob + SofaScore عبر نطاق 60 يوم ماضي + 90 قادم
+    let _sportsAgentResult = null
+    try {
+      _sportsAgentResult = await runSportsAgent(lastUserMessage, messages)
+      if (_sportsAgentResult?.found) {
+        console.log(`[SportsAgent] ✅ Found ${_sportsAgentResult.matches?.length || 0} matches | sources=${_sportsAgentResult.sources?.join('+')}`)
+      } else {
+        console.log(`[SportsAgent] ℹ️ No live matches found for ${_mvd.team1} vs ${_mvd.team2}`)
+      }
+    } catch (_sae) {
+      console.warn('[SportsAgent] failed silently:', _sae.message)
+    }
 
-    matchVsContext = `\n## ${_temporalLabel}\n`
-    matchVsContext += `> 🎯 التصنيف الزمني: **${_mvd.temporal}**\n`
+    // إذا وجد الوكيل بيانات حقيقية → استخدمها مباشرة
+    if (_sportsAgentResult?.context) {
+      matchVsContext = '\n' + _sportsAgentResult.context
+      if (_sportsAgentResult.found && _sportsAgentResult.matches?.length) {
+        const firstMatch = _sportsAgentResult.matches[0]
+        if (firstMatch.statusType === 'upcoming') {
+          matchVsCtxRule = `مباراة قادمة — اعرض موعدها ومكانها وبطولتها من البيانات أعلاه. لا تخترع نتيجة.`
+        } else if (firstMatch.statusType === 'live') {
+          matchVsCtxRule = `مباراة مباشرة — اعرض النتيجة الحالية من البيانات الحية أعلاه. لا تضيف شيئاً من ذاكرتك.`
+        } else {
+          matchVsCtxRule = `مباراة منتهية — اعرض النتيجة والتاريخ والملعب من البيانات أعلاه. لا تخترع أهدافاً.`
+        }
+      } else {
+        matchVsCtxRule = `لم تُوجد بيانات حية لهذه المباراة — أخبر المستخدم بذلك صراحةً وأحله للروابط المرجعية. لا تُجب من ذاكرة النموذج.`
+      }
+    } else {
+      // ── fallback: المعالج القديم إذا فشل الوكيل الجديد ──────────────────
+      const _temporalLabel = {
+        PAST: `⏪ مباراة سابقة — ${_mvd.team1} ضد ${_mvd.team2}`,
+        UPCOMING: `📅 مباراة قادمة — ${_mvd.team1} ضد ${_mvd.team2}`,
+        LIVE: `🔴 مباراة مباشرة — ${_mvd.team1} ضد ${_mvd.team2}`,
+        UNKNOWN: `🆚 مباراة — ${_mvd.team1} ضد ${_mvd.team2}`,
+      }[_mvd.temporal] || `🆚 ${_mvd.team1} ضد ${_mvd.team2}`
 
-    // مصادر 360score + koora (للقادمة والحية والمجهولة)
-    if (_mvRouterRaw && _mvd.temporal !== 'PAST') {
-      const _srcKeys = Object.keys(_mvRouterRaw)
-      if (_srcKeys.length > 0) {
-        matchVsContext += `> 📡 المصادر: **360score.com + kooora.com**\n\n`
-        for (const key of _srcKeys) {
-          const d = _mvRouterRaw[key]
-          if (!d) continue
-          if (Array.isArray(d?.matches || d)) {
-            const matches = d?.matches || d
-            const relevant = matches.filter(m => {
-              const h = (m.homeTeam || m.home || '').toLowerCase()
-              const a = (m.awayTeam || m.away || '').toLowerCase()
-              const t1 = _mvd.team1.toLowerCase()
-              const t2 = _mvd.team2.toLowerCase()
-              return h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
-                     t1.includes(h) || t2.includes(h) || t1.includes(a) || t2.includes(a)
-            })
-            if (relevant.length > 0) {
-              matchVsContext += `**نتائج من ${key.includes('koora') ? 'kooora.com' : '360score.com'}:**\n`
-              for (const m of relevant.slice(0, 3)) {
-                const score = (m.homeScore != null && m.awayScore != null)
-                  ? ` — **${m.homeScore} - ${m.awayScore}**`
-                  : (m.startTime ? ` — 🕐 ${m.startTime}` : '')
-                const status = m.statusType === 'inprogress' ? ' 🔴 مباشر' : m.statusType === 'finished' ? ' ✅' : ' 📅'
-                matchVsContext += `• ${m.homeTeam || m.home} ${score}${status} ${m.awayTeam || m.away}`
-                if (m.competition || m.tournament) matchVsContext += ` — ${m.competition || m.tournament}`
-                matchVsContext += '\n'
+      matchVsContext = `\n## ${_temporalLabel}\n`
+      matchVsContext += `> 🎯 التصنيف الزمني: **${_mvd.temporal}**\n`
+
+      if (_mvRouterRaw && _mvd.temporal !== 'PAST') {
+        const _srcKeys = Object.keys(_mvRouterRaw)
+        if (_srcKeys.length > 0) {
+          matchVsContext += `> 📡 المصادر: **365score.com + kooora.com**\n\n`
+          for (const key of _srcKeys) {
+            const d = _mvRouterRaw[key]
+            if (!d) continue
+            if (Array.isArray(d?.matches || d)) {
+              const matches = d?.matches || d
+              const relevant = matches.filter(m => {
+                const h = (m.homeTeam || m.home || '').toLowerCase()
+                const a = (m.awayTeam || m.away || '').toLowerCase()
+                const t1 = _mvd.team1.toLowerCase()
+                const t2 = _mvd.team2.toLowerCase()
+                return h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
+                       t1.includes(h) || t2.includes(h) || t1.includes(a) || t2.includes(a)
+              })
+              if (relevant.length > 0) {
+                matchVsContext += `**نتائج من ${key.includes('koora') ? 'kooora.com' : '365score.com'}:**\n`
+                for (const m of relevant.slice(0, 3)) {
+                  const score = (m.homeScore != null && m.awayScore != null)
+                    ? ` — **${m.homeScore} - ${m.awayScore}**`
+                    : (m.startTime ? ` — 🕐 ${m.startTime}` : '')
+                  const status = m.statusType === 'inprogress' ? ' 🔴 مباشر' : m.statusType === 'finished' ? ' ✅' : ' 📅'
+                  matchVsContext += `• ${m.homeTeam || m.home} ${score}${status} ${m.awayTeam || m.away}`
+                  if (m.competition || m.tournament) matchVsContext += ` — ${m.competition || m.tournament}`
+                  matchVsContext += '\n'
+                }
               }
             }
           }
         }
+        if (_mvd.temporal === 'UPCOMING') {
+          matchVsCtxRule = `هذه مباراة قادمة — اعرض موعدها ومكانها. لا تخترع نتيجة.`
+        } else if (_mvd.temporal === 'LIVE') {
+          matchVsCtxRule = `مباراة مباشرة — اعرض النتيجة الحالية. إذا لم تتوفر بيانات حية، قل ذلك صراحةً.`
+        } else {
+          matchVsCtxRule = `التصنيف مجهول — اعرض ما توفر من المصادر الحية. لا تخترع.`
+        }
       }
-      if (_mvd.temporal === 'UPCOMING') {
-        matchVsCtxRule = `هذه مباراة قادمة — اعرض موعدها ومكانها من بيانات 360score+koora. لا تخترع نتيجة.`
-      } else if (_mvd.temporal === 'LIVE') {
-        matchVsCtxRule = `مباراة مباشرة — اعرض النتيجة الحالية. إذا لم تتوفر بيانات حية، قل ذلك صراحةً.`
-      } else {
-        matchVsCtxRule = `التصنيف مجهول — اعرض ما توفر من 360score+koora ومن نتائج البحث الحي (SearXNG).`
-      }
-    }
 
-    // للـ PAST: نجمع من fotmob/360score/koora + SearXNG
-    if (_mvd.temporal === 'PAST') {
-      matchVsContext += `> 🔍 المصادر: **FotMob + 360score + kooora (أرشيف) + SearXNG (بحث حي)**\n`
-      matchVsContext += `> استعلام البحث: \`${_mvd.searchQuery}\`\n`
-      // استخرج بيانات الأرشيف من sports router (بتواريخ ماضية)
-      if (_mvRouterRaw) {
-        const _pastKeys = Object.keys(_mvRouterRaw).filter(k => k.startsWith('past_'))
-        let _archiveMatches = []
-        for (const k of _pastKeys) {
-          const d = _mvRouterRaw[k]
-          const matches = d?.matches || d
-          if (Array.isArray(matches)) {
-            const t1 = _mvd.team1.toLowerCase()
-            const t2 = _mvd.team2.toLowerCase()
-            const rel = matches.filter(m => {
-              const h = (m.homeTeam || m.home || '').toLowerCase()
-              const a = (m.awayTeam || m.away || '').toLowerCase()
-              return (h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
-                      t1.includes(h.split(' ')[0]) || t2.includes(h.split(' ')[0]) ||
-                      t1.includes(a.split(' ')[0]) || t2.includes(a.split(' ')[0]))
-            })
-            for (const m of rel) {
-              const dateLabel = k.replace(/^past_(fotmob|365|dz)_/, '')
-              _archiveMatches.push({ ...m, _matchDate: dateLabel })
+      if (_mvd.temporal === 'PAST') {
+        matchVsContext += `> 🔍 المصادر: **FotMob + 365score + kooora (أرشيف)**\n`
+        if (_mvRouterRaw) {
+          const _pastKeys = Object.keys(_mvRouterRaw).filter(k => k.startsWith('past_'))
+          const _archiveMatches = []
+          for (const k of _pastKeys) {
+            const d = _mvRouterRaw[k]
+            const matches = d?.matches || d
+            if (Array.isArray(matches)) {
+              const t1 = _mvd.team1.toLowerCase()
+              const t2 = _mvd.team2.toLowerCase()
+              const rel = matches.filter(m => {
+                const h = (m.homeTeam || m.home || '').toLowerCase()
+                const a = (m.awayTeam || m.away || '').toLowerCase()
+                return (h.includes(t1) || h.includes(t2) || a.includes(t1) || a.includes(t2) ||
+                        t1.includes(h.split(' ')[0]) || t2.includes(h.split(' ')[0]) ||
+                        t1.includes(a.split(' ')[0]) || t2.includes(a.split(' ')[0]))
+              })
+              for (const m of rel) {
+                _archiveMatches.push({ ...m, _matchDate: k.replace(/^past_(fotmob|365|dz)_/, '') })
+              }
+            }
+          }
+          if (_archiveMatches.length > 0) {
+            matchVsContext += `\n**📚 نتائج أرشيفية:**\n`
+            for (const m of _archiveMatches.slice(0, 5)) {
+              const score = (m.homeScore != null && m.awayScore != null)
+                ? `**${m.homeScore} - ${m.awayScore}**`
+                : '(النتيجة غير متوفرة)'
+              const venue = m.venue ? ` 🏟️ ${m.venue}` : ''
+              const league = m.league || m.competition || ''
+              matchVsContext += `• 📅 ${m._matchDate}: ${m.homeTeam || m.home} ${score} ${m.awayTeam || m.away}${venue}${league ? ` — ${league}` : ''}\n`
             }
           }
         }
-        if (_archiveMatches.length > 0) {
-          matchVsContext += `\n**📚 نتائج أرشيفية (FotMob + 360score + kooora):**\n`
-          for (const m of _archiveMatches.slice(0, 5)) {
-            const score = (m.homeScore != null && m.awayScore != null)
-              ? `**${m.homeScore} - ${m.awayScore}**`
-              : '(النتيجة غير متوفرة في الأرشيف)'
-            const venue = m.venue ? ` 🏟️ ${m.venue}` : ''
-            const league = m.league || m.competition || m.tournament || ''
-            matchVsContext += `• 📅 ${m._matchDate}: ${m.homeTeam || m.home} ${score} ${m.awayTeam || m.away}${venue}${league ? ` — ${league}` : ''}\n`
-          }
-        }
+        matchVsCtxRule = `مباراة منتهية — اعرض النتيجة من الأرشيف. اذكر التاريخ والملعب إذا توفرا. لا تخترع أهدافاً.`
       }
-      matchVsCtxRule = `مباراة منتهية — اعرض النتيجة من بيانات الأرشيف أعلاه أو من نتائج البحث الحي. اذكر التاريخ والملعب إذا توفرا. لا تخترع أهدافاً أو ملخصاً من ذاكرتك.`
     }
 
-    console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | ctxLen=${matchVsContext.length}`)
+    console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | agent=${!!_sportsAgentResult?.found} | ctxLen=${matchVsContext.length}`)
   }
 
   // ── NEW: Standings context injection ─────────────────────────────────────

@@ -19131,6 +19131,83 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ══ ⚡ SPORTS DIRECT BYPASS — أي دوري أو بطولة بدون تدخل LLM ═══════════
+  // الوكيل الرياضي هو المصدر الوحيد — LLM لا يُضيف شيئاً من ذاكرته أبداً
+  // يُطلَق عند: ترتيب دوري / نتائج مباريات / دوريات عالمية / كرة قدم عامة
+  if (
+    (isLFPQuery || isStandingsQuery || isGlobalLeaguesQuery || isGeneralMatchesQuery || isFootballQuery) &&
+    !_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre
+  ) {
+    const _isSportsNewsOnly = /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest/i.test(lastUserMessage)
+    const _sdParts = []
+
+    // ① ترتيب الدوري الجزائري
+    if (isStandingsQuery && standingsContext && !standingsContext.includes('تعذّر جلب جدول الترتيب')) {
+      _sdParts.push(standingsContext.trim())
+    }
+
+    // ② مباريات الدوري الجزائري المحترف LFP
+    if (isLFPQuery && lfpContext && !lfpContext.includes('تعذّر جلب البيانات حالياً')) {
+      if (!_sdParts.some(p => p === standingsContext?.trim())) {
+        _sdParts.push(lfpContext.trim())
+      } else {
+        _sdParts.push(lfpContext.trim())
+      }
+    }
+
+    // ③ الدوريات العالمية (أي دوري — أبطال أوروبا، الإنجليزي، الإسباني، ...)
+    if (
+      (isGlobalLeaguesQuery || isGeneralMatchesQuery) &&
+      globalLeaguesContext &&
+      !globalLeaguesContext.includes('تعذّر جلب بيانات المباريات')
+    ) {
+      _sdParts.push(globalLeaguesContext.trim())
+    }
+
+    // ④ كرة القدم العامة (مباريات اليوم / مباشر / منتهية)
+    if (
+      isFootballQuery && !isLFPQuery && !_isSportsNewsOnly &&
+      footballContext && !footballContext.includes('غير متاحة حالياً')
+    ) {
+      _sdParts.push(footballContext.trim())
+    }
+
+    if (_sdParts.length > 0) {
+      const _sdContent = _sdParts.join('\n\n---\n\n')
+      console.log(`[SportsBypass] ⚡ LLM bypassed — sports direct return (LFP=${isLFPQuery}, Std=${isStandingsQuery}, Global=${isGlobalLeaguesQuery}, Football=${isFootballQuery}) — ${_sdContent.length} chars`)
+      return res.status(200).json({
+        content: _sdContent,
+        model: 'sports-direct',
+        _sportsAgent: true,
+        _bypassLLM: true,
+      })
+    }
+
+    // إذا فشلت كل المصادر الحية → رد نظيف "لا بيانات" بدون LLM
+    if (_sdParts.length === 0 && !_isSportsNewsOnly) {
+      const _noSportsData = [
+        `## ⚽ الوكيل الرياضي — لا بيانات حية متاحة`,
+        ``,
+        `> ⚠️ تعذّر جلب بيانات المباريات الحية حالياً من المصادر المعتمدة.`,
+        ``,
+        `**تابع مباشرةً من المصادر الرسمية:**`,
+        `• [jdwel.com/today](https://jdwel.com/today/) — كل مباريات اليوم`,
+        `• [365score.com](https://www.365scores.com/ar) — نتائج حية`,
+        `• [FotMob](https://www.fotmob.com) — مباريات عالمية`,
+        `• [lfp.dz/ar/calendar](https://lfp.dz/ar/calendar) — الدوري الجزائري`,
+        `• [UEFA.com](https://www.uefa.com) — أبطال أوروبا`,
+        `• [FIFA.com](https://www.fifa.com) — المسابقات الدولية`,
+      ].join('\n')
+      console.log(`[SportsBypass] ⚠️ All sports sources failed — returning clean no-data response (LLM bypassed)`)
+      return res.status(200).json({
+        content: _noSportsData,
+        model: 'sports-direct-no-data',
+        _sportsAgent: true,
+        _bypassLLM: true,
+      })
+    }
+  }
+
   // ── Algeria Ministers / Presidents context ────────────────────────────────
   let ministersContext = ''
   let govPersonContext = ''

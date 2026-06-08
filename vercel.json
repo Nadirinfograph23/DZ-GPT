@@ -1,6 +1,6 @@
 {
-  "installCommand": "npm install --ignore-scripts && npm rebuild sharp --update-binary 2>/dev/null || true",
-  "buildCommand": "npm run build && npx esbuild server.js --bundle --platform=node --target=node20 --format=esm --outfile=api/server-bundle.js --packages=external --external:fsevents --external:bufferutil --external:utf-8-validate --log-level=warning",
+  "installCommand": "npm install -g pnpm && pnpm install --ignore-scripts",
+  "buildCommand": "pnpm run build && npx esbuild server.js --bundle --platform=node --target=node20 --format=esm --outfile=api/server-bundle.js --packages=external --external:fsevents --external:bufferutil --external:utf-8-validate --log-level=warning",
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {

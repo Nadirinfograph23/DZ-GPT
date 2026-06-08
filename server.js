@@ -9020,7 +9020,7 @@ const NEWS_FEEDS_DASHBOARD = [
   // ── Pan-Arab verified sources ──
   { name: 'الجزيرة', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
   { name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
-  { name: 'فرانس 24', url: 'https://www.france24.com/ar/rss' },
+  { name: 'المساء',   url: 'https://www.elmassa.com/feed/' },
   { name: 'سكاي نيوز', url: 'https://www.skynewsarabia.com/rss.xml' },
 ]
 // NOTE: Removed 'سبورت 360' (sport360) feed — was contaminating the Algerian
@@ -9123,14 +9123,14 @@ const GN_RSS_FEEDS = {
     { name: 'Google الشروق الجزائر', url: 'https://news.google.com/rss/search?q=site%3Aechoroukonline.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   fr: [
-    { name: 'Google Algérie', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie&hl=fr&gl=DZ&ceid=DZ:fr' },
-    { name: 'Google Algérie actualités', url: 'https://news.google.com/rss/search?q=Alg%C3%A9rie+actualit%C3%A9s&hl=fr&gl=DZ&ceid=DZ:fr' },
+    { name: 'Google أمن الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%A3%D9%85%D9%86+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google ثقافة الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%AB%D9%82%D8%A7%D9%81%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
   en: [
-    { name: 'Google Algeria News', url: 'https://news.google.com/rss/search?q=Algeria&hl=en&gl=DZ&ceid=DZ:en' },
-    { name: 'Google World News', url: 'https://news.google.com/rss/search?q=world+news&hl=en&gl=US&ceid=US:en' },
-    { name: 'Google Economy', url: 'https://news.google.com/rss/search?q=economy&hl=en&gl=US&ceid=US:en' },
-    { name: 'Google Technology AI', url: 'https://news.google.com/rss/search?q=technology+AI&hl=en&gl=US&ceid=US:en' },
+    { name: 'Google تعليم الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%AA%D8%B9%D9%84%D9%8A%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google صحة الجزائر',     url: 'https://news.google.com/rss/search?q=%D8%B5%D8%AD%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google تكنولوجيا الجزائر', url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    { name: 'Google طاقة الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%B7%D8%A7%D9%82%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
   ],
 }
 

@@ -2380,17 +2380,6 @@ function YouTubePanel({
 }
 
 // ===== TYPING EFFECT =====
-function DZLoadingLoop() {
-  return (
-    <div className="dz-loading-loop">
-      <div className="dz-loop-ring" />
-      <div className="dz-loop-dot dz-loop-dot--1" />
-      <div className="dz-loop-dot dz-loop-dot--2" />
-      <div className="dz-loop-dot dz-loop-dot--3" />
-    </div>
-  )
-}
-
 
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
   const [displayed, setDisplayed] = useState('')
@@ -8611,17 +8600,17 @@ ${rows}
                     onDone={() => setSearchStepsQuery(null)}
                   />
                   <div className="dz-thinking-step">
-                    <DZLoadingLoop />
+                    <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
                   </div>
                 </>
               ) : thinkingStep ? (
                 <div className="dz-thinking-step">
-                  <DZLoadingLoop />
+                  <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
                   <span className="dz-thinking-label">{thinkingStep.label}</span>
                 </div>
               ) : (
                 <div className="dz-thinking-step">
-                  <DZLoadingLoop />
+                  <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
                 </div>
               )}
             </div>

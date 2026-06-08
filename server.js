@@ -7752,6 +7752,20 @@ app.post('/api/dz-agent-search', async (req, res) => {
 const RSS_CACHE = new Map()
 const RSS_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
+// ── مصادر دولية مخصصة — الجزيرة / BBC / رويترز / فرانس24 / سكاي ──────────────
+const INTERNATIONAL_RSS_FEEDS = [
+  { name: 'الجزيرة عربي',      url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  { name: 'BBC عربي',           url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
+  { name: 'فرانس 24 عربي',     url: 'https://www.france24.com/ar/rss' },
+  { name: 'سكاي نيوز عربية',    url: 'https://www.skynewsarabia.com/rss.xml' },
+  { name: 'RT عربي',            url: 'https://arabic.rt.com/rss/' },
+  // Google News — أحداث دولية / عالمية (مرتبة بالأحدث)
+  { name: 'Google أحداث دولية', url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%AF%D9%88%D9%84%D9%8A%D8%A9+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google أخبار العالم',  url: 'https://news.google.com/rss/search?q=%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1+%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85+%D8%A7%D9%84%D9%8A%D9%88%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google أبرز الأحداث',  url: 'https://news.google.com/rss/search?q=%D8%A3%D8%A8%D8%B1%D8%B2+%D8%A7%D9%84%D8%A3%D8%AD%D8%AF%D8%A7%D8%AB+%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85%D9%8A%D8%A9&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google World News EN',  url: 'https://news.google.com/rss/search?q=world+news+today&hl=en&gl=US&ceid=US:en&sort=date' },
+]
+
 const RSS_FEEDS = {
   national: [
     // ── 🇩🇿 أولوية قصوى — جرائد جزائرية بالعربية (بالترتيب) ──
@@ -8550,6 +8564,13 @@ function isNewspaperHeadlineQuery(msg) {
     'جريدة اليوم','جرنان','الجرنان','عناوين اليوم','شنو كتب','شكون قال',
   ]
   return newspaperKw.some(k => lower.includes(k))
+}
+
+// ── International / World News Query Detection ────────────────────────────────
+// يكتشف استعلامات الأخبار الدولية/العالمية التي تحتاج مصادر غير جزائرية
+function isInternationalNewsQuery(msg) {
+  if (!msg) return false
+  return /دولي[ةً]?|عالمي[ةً]?|أبرز الأحداث|أحداث العالم|أحداث\s+دولي|أخبار\s+دولي|أخبار\s+عالمي|الأخبار\s+الدولية|العالمية\s+اليوم|ما\s+يجري\s+في\s+العالم|أخبار\s+العالم|ما\s+(?:أبرز|أهم)\s+الأحداث|أهم\s+الأحداث|أبرز\s+(?:الأحداث|الأخبار)|world\s+news|international\s+news|global\s+news|top\s+news\s+today/i.test(msg)
 }
 
 // ── Web Reader Mode — URL detection & content extraction ─────────────────────
@@ -19494,10 +19515,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
     const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
+    const _isIntlNewsQ = isInternationalNewsQuery(lastUserMessage)
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
+    else if (_isIntlNewsQ) feedsToFetch = [...INTERNATIONAL_RSS_FEEDS, ...RSS_FEEDS.national.slice(-5)]
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
     else if (_isTechAIQuery) feedsToFetch = [...RSS_FEEDS.national]
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
+
+    // ── إذا كان استعلاماً دولياً: أضف بحثاً GN-RSS مستهدفاً للأحداث الدولية ──
+    if (_isIntlNewsQ && !newsSubject) {
+      try {
+        const intlQuery = encodeURIComponent('أبرز الأحداث الدولية اليوم عاجل')
+        const intlRssUrl = `https://news.google.com/rss/search?q=${intlQuery}&hl=ar&gl=DZ&ceid=DZ:ar&sort=date`
+        const intlArticles = await searchGoogleNewsRSS(intlRssUrl)
+        if (intlArticles.length > 0) {
+          const dateLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let intlCtx = `\n\n--- 🌍 أبرز الأحداث الدولية — ${dateLabel} ---\n`
+          for (const art of intlArticles.slice(0, 20)) {
+            const title = art.title || ''
+            const url = art.link || art.url || ''
+            const src = art.source || ''
+            const rawDate = art.pubDate || art.date || ''
+            const ds = rawDate ? ` (${new Date(rawDate).toLocaleDateString('ar-DZ',{day:'numeric',month:'short'})})` : ''
+            intlCtx += `• ${title}${ds}`
+            if (url) intlCtx += ` — [${src||'المصدر'}](${url})`
+            intlCtx += '\n'
+          }
+          intlCtx += '\n---\n'
+          rssContext = intlCtx + (rssContext ? '\n' + rssContext : '')
+          console.log(`[DZ-Intl] International news GN-RSS: ${intlArticles.length} articles`)
+        }
+      } catch (err) {
+        console.warn('[DZ-Intl] International GN-RSS failed:', err.message)
+      }
+    }
 
     // For tech/AI queries, augment with AI-specific Google News RSS
     if (_isTechAIQuery) {
@@ -19611,9 +19662,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       console.log(`[DZ Retrieval] Query: "${_primarySearchQuery.slice(0,60)}" | intent=${msgIntent.primary} temporal=${msgIntent.isTemporal} timeSensitive=${_isTimeSensitiveEvent} eventType=${_timeSensitiveIntent.eventType}`)
 
-      // ── SearXNG موازٍ للأحداث الحساسة — يُطلق في نفس الوقت مع CSE/GN ────────
-      // الهدف: الحصول على نتائج حية قبل انتهاء CSE (لا انتظار كـ fallback)
-      const _parallelSearXNGPromise = (_allowSearXNG && _isTimeSensitiveEvent)
+      // ── SearXNG موازٍ للأحداث الحساسة والأخبار الدولية ───────────────────────
+      // يُطلق في نفس الوقت مع CSE/GN لجلب نتائج حية
+      const _needsParallelSearXNG = (_allowSearXNG && _isTimeSensitiveEvent)
+        || (_isIntlNewsQ !== undefined ? _isIntlNewsQ : isInternationalNewsQuery(lastUserMessage))
+      const _parallelSearXNGPromise = _needsParallelSearXNG
         ? searchSearXNG(_primarySearchQuery, { categories: 'news,general', timeoutMs: 7000, maxResults: 6 })
             .catch(e => { console.warn('[SearXNG Parallel] failed:', e.message); return [] })
         : Promise.resolve([])

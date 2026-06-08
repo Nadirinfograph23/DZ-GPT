@@ -14497,7 +14497,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
     if (_earlyMatchVs?.isMatchVs) {
-      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(_rawLastMsg)
+      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|كأس\s*العالم|مونديال|world\s*cup|fifa|2026|مجموعة|بوليفيا|البرازيل|الأرجنتين|النمسا|الأردن|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(_rawLastMsg)
       const _priorHasClarify = messages.slice(-5, -1).some(m =>
         m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
       )
@@ -18505,7 +18505,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Match-Vs Clarification — هل تبحث عن مباراة؟ ──────────────────────────
   // When "X ضد Y" detected without explicit sports keywords → ask clarification
   if (_isMatchVsQuery) {
-    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|بوليفيا|البرازيل|الأرجنتين|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(lastUserMessage)
+    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|كأس\s*العالم|مونديال|world\s*cup|fifa|2026|مجموعة|بوليفيا|البرازيل|الأرجنتين|النمسا|الأردن|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(lastUserMessage)
     const _priorMsgHasClarify = messages.slice(-5, -1).some(m =>
       m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على|نتيجة مباراة|موعد مباراة/i.test(m.content || '')
     )
@@ -18522,6 +18522,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         matchVsData: { team1, team2 },
       })
     }
+  }
+
+  // ══ WC2026 مجموعات — Early Direct Bypass (قبل الـ LLM وقبل الـ parallel fetch) ══
+  // يُكتشف: "مجموعة الجزائر/الأرجنتين كأس العالم" / "من مع الجزائر" / "مباريات الجزائر في كأس العالم"
+  const _isWC2026GroupQuery = (
+    /(?:مجموعة\s*(?:الجزائر|الأرجنتين|النمسا|الأردن|المنتخب\s+الجزائري|H\b|الـ\s*H))/i.test(lastUserMessage) ||
+    (
+      /(?:كأس\s*العالم|world\s*cup|مونديال|fifa|2026)/i.test(lastUserMessage) &&
+      /(?:مجموعة|منافسين?|منافسو|من\s*مع|مع\s*من|منتخبات|من\s*في|نفس\s*المجموعة|جدول|مباريات\s*الجزائر|برنامج\s*الجزائر)/i.test(lastUserMessage)
+    ) ||
+    /(?:من\s*مع\s*الجزائر|منافسو\s*الجزائر|مجموعة\s+H|group\s+H|مباريات\s+الجزائر\s+في\s+(?:كأس|مونديال))/i.test(lastUserMessage)
+  ) && !_isMatchVsQuery
+
+  if (_isWC2026GroupQuery) {
+    const { buildWorldCup2026AlgeriaContext } = await import('./lib/dz-sports-knowledge.js')
+    const _wc2026Ctx = buildWorldCup2026AlgeriaContext()
+    console.log(`[WC2026:GroupBypass] ⚡ Direct WC2026 group context — LLM bypassed`)
+    return res.status(200).json({
+      content: _wc2026Ctx,
+      model: 'wc2026-direct',
+      _bypassLLM: true,
+      _sportsAgent: true,
+    })
   }
 
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)

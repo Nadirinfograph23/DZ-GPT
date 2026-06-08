@@ -18600,7 +18600,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isPrayerQuery = prayerKeywords.some(k => lowerMsg.includes(k))
   const isLFPQuery = detectLFPQuery(lastUserMessage)
   const isCurrencyQuery = detectCurrencyQuery(lastUserMessage)
-  const isFootballQuery = detectFootballQuery(lastUserMessage)
+  const isFootballQuery = !isCurrencyQuery && detectFootballQuery(lastUserMessage)
   // ── Match-Vs Detection — "X ضد Y" / "X vs Y" smart routing ──────────────
   const _matchVsData    = detectMatchVsQuery(lastUserMessage)
   const _isMatchVsQuery = !!_matchVsData?.isMatchVs
@@ -18742,7 +18742,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'الكونفرانس ليغ', 'conference league', 'copa del rey', 'كأس الملك',
     'كأس فرنسا', 'كأس إنجلترا', 'كأس ألمانيا', 'fa cup', 'league cup',
     'الدوري التركي', 'الدوري البلجيكي', 'الدوري الروسي', 'الدوري الأرجنتيني',
-    'superliga', 'super league', 'world cup', 'كأس العالم', 'يورو', 'euro 2024',
+    'superliga', 'super league', 'world cup', 'كأس العالم', 'يورو 2024', 'بطولة يورو', 'يورو كأس', 'euro 2024', 'euro 2025', 'euro 2026',
     'كأس أمم أفريقيا', 'افريقيا',
     // ── مباريات اليوم / الليلة (عاملة للاستفسار العام) ──
     'مباريات اليوم', 'مباريات الليلة', 'مباريات الليلية', 'برنامج المباريات',
@@ -18750,7 +18750,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'مباراة الليلة', 'مباراة اليوم', 'الدوريات الكبرى',
     'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
   ]
-  const isGlobalLeaguesQuery = globalLeaguesKeywords.some(k => lowerMsg.includes(k))
+  const isGlobalLeaguesQuery = !isCurrencyQuery && globalLeaguesKeywords.some(k => lowerMsg.includes(k))
 
   // ── الدارجة الجزائرية — Algerian dialect football queries ──────────────────
   const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش)|الخضر\s*(?:ضد|مع|على\s*من|رايحة|تلعب)|آخر\s*ماتش\s*(?:للجزائر|الخضر)|رزنامة\s*المنتخب|برنامج\s*المنتخب|مع\s*من\s*رايحة\s*تلعب\s*الجزائر)/i.test(lastUserMessage)

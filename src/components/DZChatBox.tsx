@@ -2380,15 +2380,16 @@ function YouTubePanel({
 }
 
 // ===== TYPING EFFECT =====
-const THINKING_TIPS = [
-  'نبحث على المعلومات... 🔍',
-  'نحضّر الجواب... ✍️',
-  'نحلل السؤال... 💡',
-  'نشاور الذاكرة... 🧩',
-  'نشغّل الوكلاء... 🤖',
-  'قريباً يجي الجواب... ⚡',
-  'نتحقق من البيانات... 📊',
-]
+function DZLoadingLoop() {
+  return (
+    <div className="dz-loading-loop">
+      <div className="dz-loop-ring" />
+      <div className="dz-loop-dot dz-loop-dot--1" />
+      <div className="dz-loop-dot dz-loop-dot--2" />
+      <div className="dz-loop-dot dz-loop-dot--3" />
+    </div>
+  )
+}
 
 
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
@@ -3755,7 +3756,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [ttsState, setTtsState] = useState<{ id: string; status: 'loading' | 'playing' } | null>(null)
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null)
-  const [thinkingTipIdx, setThinkingTipIdx] = useState(0)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentTaskType, setAgentTaskType] = useState<string | null>(null)
   const [liveReActSteps, setLiveReActSteps] = useState<ReActStep[]>([])
@@ -3949,12 +3949,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     localStorage.removeItem('dz-agent-gh-token')
   }, [])
 
-  // Rotate thinking tips while loading
-  useEffect(() => {
-    if (!isLoading) { setThinkingTipIdx(0); return }
-    const iv = setInterval(() => setThinkingTipIdx(i => (i + 1) % THINKING_TIPS.length), 2500)
-    return () => clearInterval(iv)
-  }, [isLoading])
 
   // Check server GitHub connection on mount
   useEffect(() => {
@@ -8617,25 +8611,17 @@ ${rows}
                     onDone={() => setSearchStepsQuery(null)}
                   />
                   <div className="dz-thinking-step">
-                    <span className="dz-thinking-label">جارٍ بناء الإجابة...</span>
-                    <div className="dz-typing-indicator">
-                      <span /><span /><span />
-                    </div>
+                    <DZLoadingLoop />
                   </div>
                 </>
               ) : thinkingStep ? (
                 <div className="dz-thinking-step">
+                  <DZLoadingLoop />
                   <span className="dz-thinking-label">{thinkingStep.label}</span>
-                  <div className="dz-typing-indicator">
-                    <span /><span /><span />
-                  </div>
                 </div>
               ) : (
                 <div className="dz-thinking-step">
-                  <span key={thinkingTipIdx} className="dz-thinking-label">{THINKING_TIPS[thinkingTipIdx]}</span>
-                  <div className="dz-typing-indicator">
-                    <span /><span /><span />
-                  </div>
+                  <DZLoadingLoop />
                 </div>
               )}
             </div>

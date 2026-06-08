@@ -14507,14 +14507,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent`)
         try {
           const _sportRes = await runSportsAgent(_rawLastMsg, messages)
-          // runSportsAgent يُعيد { context, found, matches, ... } — لا content
-          const _sportContent = _sportRes.context || _sportRes.content || ''
+          // ⚡ استخدم userResponse (نظيف بدون قواعد LLM) إن توفّر، وإلا context
+          const _sportContent = _sportRes.userResponse || _sportRes.context || _sportRes.content || ''
           return res.status(200).json({
             content: _sportContent,
             model: 'sports-agent',
             found: _sportRes.found,
+            type: _sportRes.type,
             matches: _sportRes.matches,
             sources: _sportRes.sources,
+            wc2026: _sportRes.wc2026,
             matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
             _sportsAgent: true,
           })
@@ -18956,6 +18958,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     console.log(`[MatchVs] Context built: temporal=${_mvd.temporal} | agent=${!!_sportsAgentResult?.found} | ctxLen=${matchVsContext.length}`)
+
+    // ══ ⚡ DIRECT BYPASS — المباريات لا تمر على LLM أبداً ══════════════════
+    // عندما يكون الوكيل الرياضي قد أجاب (found=true أو found=false)
+    // → نُعيد الرد مباشرةً بدون LLM لمنع تدخل النموذج من ذاكرة التدريب
+    if (_sportsAgentResult) {
+      const _directResponse = _sportsAgentResult.userResponse || _sportsAgentResult.context || ''
+      if (_directResponse) {
+        console.log(`[MatchVs:DirectBypass] ⚡ Returning sports agent response directly (found=${_sportsAgentResult.found}, type=${_sportsAgentResult.type}) — LLM bypassed`)
+        return res.status(200).json({
+          content: _directResponse,
+          model: 'sports-agent',
+          found: _sportsAgentResult.found,
+          type: _sportsAgentResult.type,
+          matches: _sportsAgentResult.matches,
+          sources: _sportsAgentResult.sources,
+          wc2026: _sportsAgentResult.wc2026,
+          matchVsData: { team1: _mvd.team1, team2: _mvd.team2, temporal: _mvd.temporal },
+          _sportsAgent: true,
+          _bypassLLM: true,
+        })
+      }
+    }
   }
 
   // ── NEW: Standings context injection ─────────────────────────────────────

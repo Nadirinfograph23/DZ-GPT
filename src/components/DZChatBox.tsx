@@ -363,6 +363,59 @@ interface ThinkingStep {
   label: string
 }
 
+// ── Smart Loading Phases — مراحل التحميل الذكية حسب نوع السؤال ────────────
+const _DZ_PHASES: Record<string, string[]> = {
+  news:     ['🔍 جاري البحث في المصادر الجزائرية...', '📰 تحليل المقالات والعناوين...', '📡 التحقق من أحدث المستجدات...', '✍️ صياغة ملخص الأخبار...'],
+  currency: ['💱 جاري جلب أسعار الصرف...', '🏦 مقارنة الأسواق الرسمية والموازية...', '📊 تنسيق البيانات المالية...', '✅ إعداد الجدول...'],
+  sports:   ['⚽ البحث عن المباريات...', '📡 الاتصال بالمصادر الرياضية...', '🏟️ مراجعة البيانات المباشرة...', '📋 إعداد النتائج...'],
+  weather:  ['🌤️ جاري جلب بيانات الطقس...', '🌡️ تحليل درجات الحرارة...', '💨 رياح وتساقط الأمطار...', '📍 تحديد المدينة المطلوبة...'],
+  prayer:   ['🕌 جاري حساب مواقيت الصلاة...', '📍 تحديد المنطقة الجغرافية...', '🌙 مراجعة التقويم الهجري...'],
+  code:     ['💻 تحليل المشكلة...', '🔍 البحث عن الحل الأمثل...', '🛠️ بناء الحل...', '✅ مراجعة النتيجة...'],
+  history:  ['📚 البحث في مصادر تاريخ الجزائر...', '🏛️ تحليل الأحداث والوثائق...', '✍️ صياغة الإجابة...'],
+  quran:    ['📖 جاري البحث في القرآن الكريم...', '🌙 تحليل الآيات والتفسير...', '✍️ إعداد الإجابة...'],
+  github:   ['🔗 الاتصال بـ GitHub...', '📂 قراءة المستودع...', '🤖 تحليل الكود...', '✍️ إعداد الخطة...'],
+  general:  ['🧠 جاري التفكير...', '🔍 البحث عن المعلومات...', '💡 معالجة البيانات...', '✍️ صياغة الإجابة...'],
+}
+function _detectPhaseCategory(msg: string): keyof typeof _DZ_PHASES {
+  const t = msg.toLowerCase()
+  if (/أخبار|خبر|مستجدات|عاجل|اليوم.*الجزائر|الجزائر.*اليوم/.test(t)) return 'news'
+  if (/سعر|صرف|دولار|يورو|دينار|عملة|ثمن.*دولار|قداش.*دولار|صرف.*اليوم/.test(t)) return 'currency'
+  if (/مباراة|مباريات|كرة|دوري|فريق|ماتش|نتيجة.*مبار|ترتيب.*دوري/.test(t)) return 'sports'
+  if (/طقس|حرارة|أمطار|جو.*اليوم|تساقط|رياح/.test(t)) return 'weather'
+  if (/صلاة|مواقيت|فجر|ظهر|عصر|مغرب|عشاء|أذان/.test(t)) return 'prayer'
+  if (/كود|برمجة|خطأ|bug|error|python|javascript|typescript|html|sql|function|class/.test(t)) return 'code'
+  if (/تاريخ|استعمار|ثورة|مجاهد|تحرير/.test(t)) return 'history'
+  if (/قرآن|آية|سورة|تلاوة|ذكر|حديث|شريعة/.test(t)) return 'quran'
+  if (/github|مستودع|repo|كود.*push|pull request|commit/.test(t)) return 'github'
+  return 'general'
+}
+function SmartLoadingPhases({ msg, step }: { msg: string; step: ThinkingStep | null }) {
+  const category = React.useMemo(() => _detectPhaseCategory(msg), [msg])
+  const phases = (_DZ_PHASES[category] || _DZ_PHASES.general) as string[]
+  const [idx, setIdx] = React.useState(0)
+  const [visible, setVisible] = React.useState(true)
+  React.useEffect(() => {
+    if (step) return
+    const t = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => { setIdx(i => (i + 1) % phases.length); setVisible(true) }, 280)
+    }, 2200)
+    return () => clearInterval(t)
+  }, [phases.length, step])
+  const label = step?.label ?? phases[idx]
+  return (
+    <div className="dz-thinking-step">
+      <div className="dz-loading-loop">
+        <div className="dz-loop-ring" />
+        <div className="dz-loop-dot dz-loop-dot--1" />
+        <div className="dz-loop-dot dz-loop-dot--2" />
+        <div className="dz-loop-dot dz-loop-dot--3" />
+      </div>
+      <span className="dz-phase-label" style={{ opacity: visible ? 1 : 0 }}>{label}</span>
+    </div>
+  )
+}
+
 interface BranchItem {
   name: string
   protected: boolean
@@ -8606,19 +8659,16 @@ ${rows}
                     mode={searchStepsMode}
                     onDone={() => setSearchStepsQuery(null)}
                   />
-                  <div className="dz-thinking-step">
-                    <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
-                  </div>
+                  <SmartLoadingPhases
+                    msg={[...messages].reverse().find(m => m.role === 'user')?.content || ''}
+                    step={null}
+                  />
                 </>
-              ) : thinkingStep ? (
-                <div className="dz-thinking-step">
-                  <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
-                  <span className="dz-thinking-label">{thinkingStep.label}</span>
-                </div>
               ) : (
-                <div className="dz-thinking-step">
-                  <div className="dz-loading-loop"><div className="dz-loop-ring" /><div className="dz-loop-dot dz-loop-dot--1" /><div className="dz-loop-dot dz-loop-dot--2" /><div className="dz-loop-dot dz-loop-dot--3" /></div>
-                </div>
+                <SmartLoadingPhases
+                  msg={[...messages].reverse().find(m => m.role === 'user')?.content || ''}
+                  step={thinkingStep}
+                />
               )}
             </div>
           </div>

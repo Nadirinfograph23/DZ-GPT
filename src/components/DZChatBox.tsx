@@ -7108,14 +7108,22 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         }, 2, 1000)
       }
 
-      // Auto-retry up to 3 times when response content is empty
-      // Run thinking trace in parallel with main response fetch
+      // Run thinking trace and main fetch truly in parallel on first attempt
+      // On retries: skip trace wait and fetch directly
       let data: Record<string, unknown> = {}
       let attempts = 0
       const _fetchT0 = Date.now()
       while (attempts < 3) {
-        if (attempts === 0) await thinkingTracePromise.catch(() => {})
-        data = await fetchAgentResponse()
+        if (attempts === 0) {
+          // Parallel: main response + thinking trace simultaneously
+          const [fetchResult] = await Promise.all([
+            fetchAgentResponse(),
+            thinkingTracePromise.catch(() => {}),
+          ])
+          data = fetchResult
+        } else {
+          data = await fetchAgentResponse()
+        }
         console.log('[DZChatBox] API response (attempt', attempts + 1, '):', data)
         if (data.action || data.pendingAction || data.richType || (typeof data.content === 'string' && data.content.trim() !== '')) {
           break

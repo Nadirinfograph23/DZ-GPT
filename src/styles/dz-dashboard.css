@@ -9,6 +9,48 @@
   0%   { background-position: -400px 0; }
   100% { background-position:  400px 0; }
 }
+
+/* ── React Loop (shared loader) ── */
+.dzd-loop-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0;
+}
+.dzd-loop {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.dzd-loop-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid rgba(129, 140, 248, 0.12);
+  border-top-color: #818cf8;
+  border-right-color: rgba(129, 140, 248, 0.4);
+  animation: dzd-spin 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.dzd-loop-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #818cf8;
+  top: 50%;
+  left: 50%;
+  animation: dzd-loop-orbit 1.8s linear infinite;
+  box-shadow: 0 0 5px rgba(129, 140, 248, 0.8);
+}
+.dzd-loop-dot--1 { animation-delay: 0s;     opacity: 1; }
+.dzd-loop-dot--2 { animation-delay: -0.6s;  opacity: 0.6; }
+.dzd-loop-dot--3 { animation-delay: -1.2s;  opacity: 0.3; }
+@keyframes dzd-loop-orbit {
+  from { transform: translate(-50%, -50%) rotate(0deg)   translateX(11px) scale(1); }
+  50%  { transform: translate(-50%, -50%) rotate(180deg) translateX(11px) scale(1.2); }
+  to   { transform: translate(-50%, -50%) rotate(360deg) translateX(11px) scale(1); }
+}
 @keyframes dzdFadeIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dzdScaleIn {
   from { opacity: 0; transform: scale(.94); }

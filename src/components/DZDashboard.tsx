@@ -901,8 +901,13 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
-                <div className="dzd-news-loading-hint">
-                  <span className="dzd-spin-icon">⏳</span> جاري تحميل أبرز عناوين الصحف...
+                <div className="dzd-loop-wrap">
+                  <div className="dzd-loop">
+                    <div className="dzd-loop-ring" />
+                    <div className="dzd-loop-dot dzd-loop-dot--1" />
+                    <div className="dzd-loop-dot dzd-loop-dot--2" />
+                    <div className="dzd-loop-dot dzd-loop-dot--3" />
+                  </div>
                 </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
@@ -1294,6 +1299,14 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
           <div className="dzd-news-panel">
             {loading ? (
               <div className="dzd-news-list">
+                <div className="dzd-loop-wrap">
+                  <div className="dzd-loop">
+                    <div className="dzd-loop-ring" />
+                    <div className="dzd-loop-dot dzd-loop-dot--1" />
+                    <div className="dzd-loop-dot dzd-loop-dot--2" />
+                    <div className="dzd-loop-dot dzd-loop-dot--3" />
+                  </div>
+                </div>
                 {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
             ) : (!data?.tech || data.tech.length === 0) ? (

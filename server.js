@@ -14492,51 +14492,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Match-Vs Early Handler ────────────────────────────────────────────────
-  // يُعالَج هنا قبل أي fast-path آخر (أخبار/ويكيبيديا/...)
-  // استراتيجية: sports ctx موجود → وكيل رياضي فوراً | لا ctx → طلب توضيح
+  // يُعالَج هنا قبل أي fast-path آخر — دائماً يُوجَّه للوكيل الرياضي مباشرةً
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
     if (_earlyMatchVs?.isMatchVs) {
-      const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|كأس\s*العالم|مونديال|world\s*cup|fifa|2026|مجموعة|بوليفيا|البرازيل|الأرجنتين|النمسا|الأردن|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(_rawLastMsg)
-      const _priorHasClarify = messages.slice(-5, -1).some(m =>
-        m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على ماتش|نتيجة مباراة|موعد مباراة|_matchVsClarify/i.test(m.content || '')
-      )
-
-      // ── حالة 1: سياق رياضي واضح أو المستخدم أكّد بعد clarification → وكيل رياضي
-      if (_hasExplicitSportsCtx || _priorHasClarify) {
-        console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent`)
-        try {
-          const _sportRes = await runSportsAgent(_rawLastMsg, messages)
-          // ⚡ استخدم userResponse (نظيف بدون قواعد LLM) إن توفّر، وإلا context
-          const _sportContent = _sportRes.userResponse || _sportRes.context || _sportRes.content || ''
-          return res.status(200).json({
-            content: _sportContent,
-            model: 'sports-agent',
-            found: _sportRes.found,
-            type: _sportRes.type,
-            matches: _sportRes.matches,
-            sources: _sportRes.sources,
-            wc2026: _sportRes.wc2026,
-            matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
-            _sportsAgent: true,
-          })
-        } catch (_sae) {
-          console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
-          // fallback → يكمل المعالجة العادية
-        }
-      } else {
-        // ── حالة 2: لا سياق → طلب توضيح
-        const { team1, team2 } = _earlyMatchVs
-        const isDzD = /(?:واش|كيفاش|راه|تاع|بصح|شنو|هذا|هاذا|وهران|قسنطينة|جزائري)/i.test(_rawLastMsg)
-        const clarifyMsg = isDzD
-          ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة أو الموعد\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
-          : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات الحية\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
-        console.log(`[MatchVs:EarlyClarify] ${team1} vs ${team2} — no sports ctx → clarification`)
+      console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent (direct, no clarification)`)
+      try {
+        const _sportRes = await runSportsAgent(_rawLastMsg, messages)
+        const _sportContent = _sportRes.userResponse || _sportRes.context || _sportRes.content || ''
         return res.status(200).json({
-          content: clarifyMsg,
-          _matchVsClarify: true,
-          matchVsData: { team1, team2 },
+          content: _sportContent,
+          model: 'sports-agent',
+          found: _sportRes.found,
+          type: _sportRes.type,
+          matches: _sportRes.matches,
+          sources: _sportRes.sources,
+          wc2026: _sportRes.wc2026,
+          matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
+          _sportsAgent: true,
         })
+      } catch (_sae) {
+        console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
+        // fallback → يكمل المعالجة العادية
       }
     }
   }
@@ -18488,25 +18465,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[MatchVs] 🆚 ${_matchVsData.team1} ضد ${_matchVsData.team2} | temporal=${_matchVsData.temporal}`)
   }
 
-  // ── Match-Vs Clarification — هل تبحث عن مباراة؟ ──────────────────────────
-  // When "X ضد Y" detected without explicit sports keywords → ask clarification
+  // ── Match-Vs Direct Route — دائماً للوكيل الرياضي بدون طلب توضيح ──────────
+  // "X ضد Y" يُوجَّه فوراً للوكيل الرياضي بغض النظر عن السياق
   if (_isMatchVsQuery) {
-    const _hasExplicitSportsCtx = /(?:مباراة|ماتش|ماتشات|نتيجة|نتائج|كرة|كووورة|كورة|ملعب|الدوري|البطولة|مباشر|live\s*match|score|lfp|can\b|انتهت|فاز|ربح|هزم|ستلعب|يلعب|الليلة|أمس|البارح|رياضة|رياضي|كأس\s*العالم|مونديال|world\s*cup|fifa|2026|مجموعة|بوليفيا|البرازيل|الأرجنتين|النمسا|الأردن|فرنسا|إسبانيا|ألمانيا|إيطاليا|إنجلترا|البرتغال|هولندا|بلجيكا|تركيا|كرواتيا|السويد|الدنمارك|سويسرا|أوروغواي|كولومبيا|تشيلي|المكسيك|كندا|قطر|أستراليا|اليابان|كوريا|السنغال|نيجيريا|الكاميرون|غانا|ساحل العاج|مالي|بوركينا|كوت ديفوار|ليبيا|موريتانيا)/i.test(lastUserMessage)
-    const _priorMsgHasClarify = messages.slice(-5, -1).some(m =>
-      m.role === 'assistant' && /هل تبحث عن مباراة|واش تبحث على|نتيجة مباراة|موعد مباراة/i.test(m.content || '')
-    )
-    if (!_hasExplicitSportsCtx && !_priorMsgHasClarify && !detectFootballQuery(lastUserMessage)) {
-      const { team1, team2 } = _matchVsData
-      const isDzDialect = /(?:واش|كيفاش|راه|تاع|بصح|ماشي|هذا|هاذا|هادا|وهران|قسنطينة|جزائري|هنا|شنو|علاش)/i.test(lastUserMessage)
-      const clarifyMsg = isDzDialect
-        ? `🆚 **${team1} ضد ${team2}** — واش تبحث على؟\n\n⚽ **ماتش كرة قدم** — اكتب **"نعم مباراة"** وراني نجيبلك النتيجة والتفاصيل\n💡 **شيء آخر** — وضّح شنو تريد بالضبط`
-        : `🆚 **${team1} ضد ${team2}** — هل تبحث عن:\n\n⚽ **نتيجة مباراة** أو **موعد مباراة** بين **${team1}** و**${team2}**؟\n→ أجب بـ **"نعم مباراة"** لأحضر لك البيانات\n\n📚 أم تريد معلومة أخرى؟ → وضّح سؤالك`
-      console.log(`[MatchVs:Clarify] ${team1} vs ${team2} — no sports context → returning clarification`)
+    console.log(`[MatchVs:DirectRoute] ⚽ ${_matchVsData.team1} ضد ${_matchVsData.team2} → runSportsAgent`)
+    try {
+      const _sportRes2 = await runSportsAgent(lastUserMessage, messages)
+      const _sportContent2 = _sportRes2.userResponse || _sportRes2.context || _sportRes2.content || ''
       return res.status(200).json({
-        content: clarifyMsg,
-        _matchVsClarify: true,
-        matchVsData: { team1, team2 },
+        content: _sportContent2,
+        model: 'sports-agent',
+        found: _sportRes2.found,
+        type: _sportRes2.type,
+        matches: _sportRes2.matches,
+        sources: _sportRes2.sources,
+        wc2026: _sportRes2.wc2026,
+        matchVsData: { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal },
+        _sportsAgent: true,
       })
+    } catch (_sae2) {
+      console.error('[MatchVs:DirectRoute] sports agent error:', _sae2.message)
+      // fallback → يكمل المعالجة العادية
     }
   }
 

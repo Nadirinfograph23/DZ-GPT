@@ -542,6 +542,7 @@ interface DZMessage {
   suggestedRepos?: SuggestedRepo[]
   hasMoreNews?: boolean
   newsQuery?: string
+  newsItems?: { title: string; url: string; date?: string; source?: string; snippet?: string }[]
   executionLang?: string
   executionCode?: string
   webReaderIntent?: 'build' | 'reader' | 'update' | 'extract'
@@ -7366,6 +7367,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           showDevCard: !!data.showDevCard,
           hasMoreNews: !!data.hasMoreNews,
           newsQuery: data.newsQuery as string | undefined,
+          newsItems: Array.isArray(data.newsItems) ? data.newsItems as { title: string; url: string; date?: string; source?: string; snippet?: string }[] : undefined,
           webReaderIntent: data.webReaderIntent as 'build' | 'reader' | 'update' | 'extract' | undefined,
           quickSuggestions: autoSuggestions,
           thinkingTrace: thinkingTraceRoles ?? undefined,
@@ -8442,6 +8444,56 @@ ${rows}
                           }}
                         />
                       )}
+                      {msg.newsItems && msg.newsItems.length > 0 && (
+                        <div className="dzc-news-cards-grid">
+                          <div className="dzc-ncg-header">
+                            <span className="dzc-ncg-icon">📰</span>
+                            <span className="dzc-ncg-title">نتائج البحث</span>
+                            <span className="dzc-ncg-count">{msg.newsItems.length} مصدر</span>
+                          </div>
+                          <div className="dzc-ncg-list">
+                            {msg.newsItems.map((item, i) => {
+                              const dateStr = item.date
+                                ? (() => { try { return new Date(item.date!).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'short' }) } catch { return '' } })()
+                                : ''
+                              const domain = item.url
+                                ? (() => { try { return new URL(item.url).hostname.replace('www.', '') } catch { return '' } })()
+                                : ''
+                              return (
+                                <a
+                                  key={i}
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="dzc-news-card"
+                                >
+                                  <div className="dzc-nc-title">{item.title}</div>
+                                  <div className="dzc-nc-meta">
+                                    {domain && <span className="dzc-nc-domain">🌐 {domain}</span>}
+                                    {dateStr && <span className="dzc-nc-date">{dateStr}</span>}
+                                  </div>
+                                </a>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
+                        <div className="dzc-quick-suggestions">
+                          <span className="dzc-qs-label">💡 اقتراحات:</span>
+                          <div className="dzc-qs-chips">
+                            {msg.quickSuggestions.map((s, i) => (
+                              <button
+                                key={i}
+                                className="dzc-qs-chip"
+                                onClick={() => sendMessage(s)}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )
                 ) : (
@@ -8465,22 +8517,6 @@ ${rows}
                       {ab.label}
                     </button>
                   ))}
-                </div>
-              )}
-              {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
-                <div className="dzc-quick-suggestions">
-                  <span className="dzc-qs-label">💡 اقتراحات:</span>
-                  <div className="dzc-qs-chips">
-                    {msg.quickSuggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        className="dzc-qs-chip"
-                        onClick={() => sendMessage(s)}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
               {msg.role === 'assistant' && !msg.pendingAction && (

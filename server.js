@@ -19558,6 +19558,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
   let webSearchContext = ''
   let hasNewsResults = false
+  let _chatNewsItems = []
   const isSimpleGreeting = /^(مرحبا|سلام|هلا|hi|hello|hey|bonjour|salut|كيف حالك|كيف الحال)[\s!؟?]*$/i.test(lastUserMessage.trim())
   const msgIntent = detectQueryIntent(lastUserMessage)
   const isFootballNewsQuery = _isFootballNewsQuery
@@ -19769,6 +19770,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         const lines = sections.length > 0 ? sections.join('\n\n') : temporallySorted.map((r, i) => formatResult(r, i+1)).join('\n\n')
         webSearchContext = `${sourceTag} | مرتبة زمنياً من الأحدث للأقدم\n\n${lines}`
         hasNewsResults = true
+        _chatNewsItems = temporallySorted.slice(0, 10).map(r => ({
+          title: (r.title || '').replace(/\s*[-–—]\s*[^-–—]+$/, '').trim() || r.title || '',
+          url: r.url || r.link || '',
+          date: r.date || r.pubDate || r.publishedDate || '',
+          source: r.source || '',
+          snippet: r.snippet || r.description || '',
+        })).filter(r => r.title && r.url)
         console.log(`[DZ Retrieval] Chat: CSE=${cseResults.length} GN=${gnResults.length} legacy=${(legacyData.results||[]).length} scored=${scoredResults.length} today=${buckets.today.length} week=${buckets.week.length} month=${buckets.month.length} older=${buckets.older.length}`)
       } else if (_allowSearXNG) {
         // ── SearXNG Fallback — للأخبار والأحداث الآنية فقط (أخبار/incidents) ──
@@ -20557,6 +20565,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       reasoning: _reasoningStrategy !== 'passthrough' ? _reasoningStrategy : undefined,
       hasMoreNews: hasNewsResults,
       newsQuery: hasNewsResults ? lastUserMessage : undefined,
+      newsItems: _chatNewsItems.length > 0 ? _chatNewsItems : undefined,
       webReaderIntent: isWebReaderQuery ? _webReaderIntent : undefined,
       halRisk: _halMeta.risk,
       halTrust: _halMeta.trustScore,

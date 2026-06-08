@@ -6974,6 +6974,98 @@
   .dzc-qs-chip { font-size: 11px; padding: 5px 10px; }
 }
 
+/* ===== NEWS CARDS GRID — inline in chat messages ===== */
+.dzc-news-cards-grid {
+  margin-top: 14px;
+  border: 1px solid rgba(16,163,127,0.18);
+  border-radius: 12px;
+  overflow: hidden;
+  direction: rtl;
+}
+
+.dzc-ncg-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: rgba(16,163,127,0.07);
+  border-bottom: 1px solid rgba(16,163,127,0.12);
+}
+
+.dzc-ncg-icon { font-size: 14px; }
+
+.dzc-ncg-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #10a37f;
+  flex: 1;
+}
+
+.dzc-ncg-count {
+  font-size: 11px;
+  color: #555;
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.dzc-ncg-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dzc-news-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-decoration: none;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.dzc-news-card:last-child { border-bottom: none; }
+
+.dzc-news-card:hover {
+  background: rgba(16,163,127,0.07);
+}
+
+.dzc-nc-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ddd;
+  line-height: 1.45;
+  direction: rtl;
+  text-align: right;
+}
+
+.dzc-news-card:hover .dzc-nc-title { color: #10a37f; }
+
+.dzc-nc-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dzc-nc-domain {
+  font-size: 11px;
+  color: #555;
+  direction: ltr;
+}
+
+.dzc-nc-date {
+  font-size: 11px;
+  color: #444;
+}
+
+@media (max-width: 520px) {
+  .dzc-ncg-header { padding: 7px 12px; }
+  .dzc-news-card { padding: 9px 12px; }
+  .dzc-nc-title { font-size: 12px; }
+}
+
 /* ===== FIND INPUT CARD ===== */
 .dzc-find-card {
   margin-top: 10px;

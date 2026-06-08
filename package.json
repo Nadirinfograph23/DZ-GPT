@@ -14,7 +14,7 @@
     "@distube/ytdl-core": "^4.16.12",
     "@imgly/background-removal": "^1.7.0",
     "@tanstack/react-table": "^8.21.3",
-    "@tanstack/react-virtual": "^3.13.24",
+    "@tanstack/react-virtual": "^3.14.2",
     "@types/papaparse": "^5.5.2",
     "@types/react-router-dom": "^5.3.3",
     "cheerio": "^1.2.0",
@@ -23,9 +23,9 @@
     "compression": "^1.8.1",
     "cors": "^2.8.6",
     "express": "^4.22.2",
-    "express-rate-limit": "^8.5.1",
+    "express-rate-limit": "^8.5.2",
     "fast-xml-parser": "^5.8.0",
-    "helmet": "^8.1.0",
+    "helmet": "^8.2.0",
     "hls.js": "^1.6.16",
     "jszip": "^3.10.1",
     "lucide-react": "^0.364.0",
@@ -35,14 +35,14 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.15.0",
+    "react-router-dom": "^7.17.0",
     "recharts": "^2.15.4",
     "remark-gfm": "^4.0.1",
     "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^7.0.0",
-    "ws": "^8.20.1",
+    "ws": "^8.21.0",
     "xlsx": "^0.18.5",
     "youtube-sr": "^4.3.12"
   },
@@ -62,5 +62,6 @@
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.59.3",
     "vite": "^6.4.2"
-  }
+  },
+  "packageManager": "pnpm@9.7.0"
 }

@@ -14805,7 +14805,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             : `في تلك الحقبة كانت الجزائر إما تحت الحكم العثماني أو كيانات تقليدية سابقة للدولة الحديثة.`,
           ``,
           `🗓️ **استقلال الجزائر:** 5 يوليو 1962 | **أول رئيس:** أحمد بن بلة (سبتمبر 1962)`,
-          `📚 **المصدر:** حقيقة تاريخية ثابتة — ثقة 100%`,
         ].join('\n'),
         model: 'anti-hallucination',
       })
@@ -14917,7 +14916,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ..._titlesParts,
             _club.notes ? `\n> 📝 ${_club.notes}` : '',
             ``,
-            `📚 **المصدر:** حقيقة رياضية ثابتة — ثقة 100%`,
           ].filter(l => l !== '').join('\n'),
           model: 'dz-knowledge-static',
           _static: true,
@@ -15934,7 +15932,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               `> |------|-------------|------|--------|`,
               ..._mismatchLines.map(l => `> ${l}`),
               `> `,
-              `> *الحقائق أعلاه مستخرجة من Wikidata SPARQL (مصدر الحقيقة). النص قد يحتوي على معلومات قديمة أو مُعدَّلة.*`,
+              ``,
             ].join('\n')
           }
 
@@ -16036,11 +16034,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             `## 📖 ${_wikidataResult.label}`,
             _wikidataResult.description ? `*${_wikidataResult.description}*` : '',
             ``,
-            `> 🔒 *معلومات مستخرجة من Wikidata — مصدر موثوق.*`,
             _uncertBlock,
-            ``,
-            `---`,
-            `📚 **المصدر:** [Wikidata](${_wikidataResult.url}) | 🎯 **الثقة:** ${_confSystem.label} ${_wikidataResult.confidence}%`,
           ].filter(l => l !== '').join('\n')
           return res.status(200).json({ content: _response, model: 'wikidata-direct' })
         }
@@ -16140,14 +16134,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           `## 📖 ${_personWiki.title}`,
           _personWiki.description ? `*${_personWiki.description}*` : '',
           ``,
-          `> 🔒 *المعلومات التالية مستخرجة حرفياً من ويكيبيديا فقط — لا إضافات، لا تخمينات، لا اختلاق.*`,
-          ``,
           _finalExtract,
           _unverifiableBlock,
           _sportsFreshness,
-          ``,
-          `---`,
-          `📚 **المصدر:** [ويكيبيديا ${_langLabel}](${_personWiki.url}) | 🎯 **الثقة:** ${_confScore} (${_confLabel})`,
         ].filter(l => l !== '').join('\n')
 
         return res.status(200).json({
@@ -16207,9 +16196,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
                 .replace(/\[\/PERSON_WEB_CONTEXT\]/g, '')
                 .trim(),
               ``,
-              `---`,
-              `⚠️ *هذه المعلومات مستخرجة حرفياً من نتائج البحث المباشر — لم يُضف إليها شيء*`,
-              `🔍 *المصادر: Google News · DuckDuckGo · RSS جزائرية*`,
             ].join('\n')
 
             return res.status(200).json({

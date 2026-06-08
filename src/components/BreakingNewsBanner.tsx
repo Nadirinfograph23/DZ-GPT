@@ -8,10 +8,13 @@ interface BreakingItem {
   pubDate?: string
 }
 
+type BannerType = 'breaking' | 'national'
+
 export default function BreakingNewsBanner() {
-  const [items, setItems]       = useState<BreakingItem[]>([])
-  const [visible, setVisible]   = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [items, setItems]           = useState<BreakingItem[]>([])
+  const [bannerType, setBannerType] = useState<BannerType>('breaking')
+  const [visible, setVisible]       = useState(false)
+  const [dismissed, setDismissed]   = useState(false)
   const [tickerIdx, setTickerIdx] = useState(0)
   const esRef   = useRef<EventSource | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,6 +55,10 @@ export default function BreakingNewsBanner() {
         try {
           const data = JSON.parse(e.data)
           if (data.type === 'breaking_news' && Array.isArray(data.items) && data.items.length > 0) {
+            setBannerType('breaking')
+            showBanner(data.items)
+          } else if (data.type === 'national_team_news' && Array.isArray(data.items) && data.items.length > 0) {
+            setBannerType('national')
             showBanner(data.items)
           }
         } catch {}
@@ -86,13 +93,17 @@ export default function BreakingNewsBanner() {
         left:       0,
         right:      0,
         zIndex:     99999,
-        background: 'linear-gradient(90deg, #b91c1c 0%, #dc2626 40%, #7f1d1d 100%)',
+        background: bannerType === 'national'
+          ? 'linear-gradient(90deg, #14532d 0%, #16a34a 40%, #15803d 100%)'
+          : 'linear-gradient(90deg, #b91c1c 0%, #dc2626 40%, #7f1d1d 100%)',
         color:      '#fff',
         display:    'flex',
         alignItems: 'center',
         gap:        12,
         padding:    '10px 16px',
-        boxShadow:  '0 3px 16px rgba(180,0,0,.5)',
+        boxShadow:  bannerType === 'national'
+          ? '0 3px 16px rgba(22,163,74,.5)'
+          : '0 3px 16px rgba(180,0,0,.5)',
         fontFamily: 'inherit',
         animation:  'bzSlideDown .35s ease',
       }}
@@ -114,8 +125,12 @@ export default function BreakingNewsBanner() {
         <span className="bz-dot" style={{ color:'#fca5a5', display:'flex' }}>
           <Radio size={16} />
         </span>
-        <span style={{ background:'#fca5a5', color:'#7f1d1d', fontSize:11, fontWeight:800, padding:'2px 7px', borderRadius:4, letterSpacing:1, flexShrink:0 }}>
-          عاجل
+        <span style={{
+          background: bannerType === 'national' ? '#bbf7d0' : '#fca5a5',
+          color:      bannerType === 'national' ? '#14532d' : '#7f1d1d',
+          fontSize:11, fontWeight:800, padding:'2px 7px', borderRadius:4, letterSpacing:1, flexShrink:0
+        }}>
+          {bannerType === 'national' ? '🇩🇿 المنتخب' : 'عاجل'}
         </span>
       </div>
 

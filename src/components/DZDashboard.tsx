@@ -440,11 +440,29 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const [dollarData, setDollarData] = useState<{ usd: number; eur: number; gbp: number; trend: string; updatedAt: string; source: string } | null>(null)
   const [dollarLoading, setDollarLoading] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar' | 'national'>('prayer')
+  const [nationalTeamNews, setNationalTeamNews] = useState<NewsItem[]>([])
+  const [nationalLoading, setNationalLoading]   = useState(false)
+  const [nationalBadge, setNationalBadge]       = useState(false)
 
   const saveCity = useCallback((city: string) => {
     try { localStorage.setItem(STORAGE_KEY, city) } catch {}
     setSelectedCity(city)
+  }, [])
+
+  const loadNationalTeamNews = useCallback(async (opts: { force?: boolean } = {}) => {
+    setNationalLoading(true)
+    try {
+      const url = opts.force ? '/api/national-team/news?bypassCache=1' : '/api/national-team/news'
+      const r = await fetch(url)
+      if (!r.ok) throw new Error(`National team API error: ${r.status}`)
+      const d = await r.json()
+      setNationalTeamNews(d.items || [])
+    } catch (err) {
+      console.error('[DZDashboard] loadNationalTeamNews failed:', err)
+    } finally {
+      setNationalLoading(false)
+    }
   }, [])
 
   const loadDashboard = async (opts: { force?: boolean } = {}) => {
@@ -637,6 +655,32 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     loadStandings()
     loadGlobalLeagues()
     loadDollar()
+    loadNationalTeamNews()
+  }, [])
+
+  // SSE: listen for national_team_news events from the server
+  useEffect(() => {
+    let es: EventSource | null = null
+    function connect() {
+      es = new EventSource('/api/breaking-news/stream')
+      es.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data)
+          if (d.type === 'national_team_news' && Array.isArray(d.items) && d.items.length > 0) {
+            setNationalTeamNews(prev => {
+              const existing = new Set(prev.map(x => x.title))
+              const fresh = d.items.filter((x: NewsItem) => !existing.has(x.title))
+              if (fresh.length === 0) return prev
+              return [...fresh, ...prev].slice(0, 15)
+            })
+            setNationalBadge(true)
+          }
+        } catch {}
+      }
+      es.onerror = () => { es?.close(); setTimeout(connect, 30_000) }
+    }
+    connect()
+    return () => { es?.close() }
   }, [])
 
   const tabs: { key: typeof activeSection; label: string; icon: React.ReactNode; isNav?: boolean }[] = [
@@ -645,6 +689,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     { key: 'weather'  as const, label: 'الطقس',          icon: <Cloud       size={12} /> },
     { key: 'news'     as const, label: 'الأخبار',        icon: <Newspaper   size={12} /> },
     { key: 'dollar'   as const, label: 'سوق الصرف',     icon: <DollarSign  size={12} /> },
+    { key: 'national' as const, label: 'المنتخب 🇩🇿',     icon: <Radio       size={12} /> },
     { key: 'sports'   as const, label: 'الدوري',         icon: <Trophy      size={12} /> },
     { key: 'standings'as const, label: 'الترتيب',        icon: <BarChart2   size={12} /> },
     { key: 'global'   as const, label: 'عالمي',          icon: <Globe       size={12} /> },
@@ -721,10 +766,16 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                   navigate('/aiquran')
                   return
                 }
+                if (tab.key === 'national') setNationalBadge(false)
                 setActiveSection(tab.key)
               }}
             >
-              <span className="dzd-tab-icon">{tab.icon}</span>
+              <span className="dzd-tab-icon" style={{ position: 'relative' }}>
+                {tab.icon}
+                {tab.key === 'national' && nationalBadge && (
+                  <span style={{ position:'absolute', top:-3, right:-3, width:7, height:7, background:'#22c55e', borderRadius:'50%', border:'1px solid var(--dzd-bg)' }} />
+                )}
+              </span>
               <span className="dzd-tab-label">{tab.label}</span>
             </button>
           ))}
@@ -1266,6 +1317,59 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                     </div>
                     {item.link && (
                       <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link dzd-news-link--tech" onClick={e => e.stopPropagation()}>
+                        <ExternalLink size={11} />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== NATIONAL TEAM — المنتخب الجزائري ===== */}
+        {activeSection === 'national' && (
+          <div className="dzd-news-panel">
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 4px 8px', direction:'rtl' }}>
+              <span style={{ fontSize:11, color:'#22c55e', fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+                🇩🇿 أحدث أخبار المنتخب الجزائري
+              </span>
+              <button
+                className="dzd-retry-btn"
+                style={{ fontSize:'10px', padding:'3px 8px', display:'inline-flex', alignItems:'center', gap:'4px' }}
+                onClick={() => loadNationalTeamNews({ force: true })}
+                disabled={nationalLoading}
+                title="تحديث أخبار المنتخب"
+              >
+                <RefreshCw size={11} className={nationalLoading ? 'dzd-spin' : ''} />
+                {nationalLoading ? 'جاري…' : 'تحديث'}
+              </button>
+            </div>
+            {nationalLoading ? (
+              <div className="dzd-news-list">
+                {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
+              </div>
+            ) : nationalTeamNews.length === 0 ? (
+              <div className="dzd-empty-state">
+                <span className="dzd-empty-icon">🇩🇿</span>
+                <p>لا توجد أخبار حالياً</p>
+                <button className="dzd-retry-btn" onClick={() => loadNationalTeamNews({ force: true })}>
+                  <RefreshCw size={12} /> إعادة المحاولة
+                </button>
+              </div>
+            ) : (
+              <div className="dzd-news-list">
+                {nationalTeamNews.map((item, i) => (
+                  <div key={i} className="dzd-news-card dzd-news-card--national" onClick={() => onSend(`أعطني ملخصاً وآخر التطورات حول هذا الخبر:\n"${item.title}"`)}>
+                    <div className="dzd-news-card-left">
+                      <span className="dzd-news-source dzd-news-source--national"><Radio size={9} /> {item.feedName}</span>
+                      <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
+                    </div>
+                    <div className="dzd-news-card-body">
+                      <p className="dzd-news-title">{item.title}</p>
+                    </div>
+                    {item.link && (
+                      <a href={item.link} target="_blank" rel="noopener noreferrer" className="dzd-news-link" onClick={e => e.stopPropagation()}>
                         <ExternalLink size={11} />
                       </a>
                     )}

@@ -3366,6 +3366,95 @@ function broadcastBreakingNews(items) {
   console.log(`[BreakingNews] 📡 Pushed ${items.length} item(s) to ${_breakingSseClients.size} SSE client(s)`)
 }
 
+function broadcastNationalTeamNews(items) {
+  const payload = `data: ${JSON.stringify({ type: 'national_team_news', items })}\n\n`
+  for (const res of _breakingSseClients) {
+    try { res.write(payload) }
+    catch { _breakingSseClients.delete(res) }
+  }
+  try { broadcastChat({ type: 'national_team_news', items }) } catch {}
+  console.log(`[NationalTeam] 🇩🇿 Pushed ${items.length} item(s) to ${_breakingSseClients.size} SSE client(s)`)
+}
+
+// ===== NATIONAL TEAM NEWS CACHE & ENDPOINT =====
+const NATIONAL_TEAM_CACHE = { items: [], seenTitles: new Set(), ts: 0 }
+const NATIONAL_TEAM_TTL   = 5 * 60 * 1000 // 5 min
+const NATIONAL_TEAM_RSS   = 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar'
+
+function parseNationalTeamRss(xml) {
+  const items = []
+  const itemRegex = /<item>([\s\S]*?)<\/item>/gi
+  let m
+  while ((m = itemRegex.exec(xml)) !== null) {
+    const block = m[1]
+    const title   = (block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1] || block.match(/<title>(.*?)<\/title>/i)?.[1] || '').trim()
+    const link    = (block.match(/<link>(.*?)<\/link>/i)?.[1] || '').trim()
+    const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/i)?.[1] || '').trim()
+    const source  = (block.match(/<source[^>]*>(.*?)<\/source>/i)?.[1] || 'أخبار المنتخب').trim()
+    if (title && title.length > 5) {
+      items.push({ title, link, pubDate, source, feedName: source })
+    }
+  }
+  return items.slice(0, 15)
+}
+
+async function fetchNationalTeamNews({ bypassCache = false } = {}) {
+  if (!bypassCache && NATIONAL_TEAM_CACHE.ts && Date.now() - NATIONAL_TEAM_CACHE.ts < NATIONAL_TEAM_TTL) {
+    return NATIONAL_TEAM_CACHE.items
+  }
+  try {
+    const r = await fetch(NATIONAL_TEAM_RSS, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!r.ok) throw new Error(`RSS HTTP ${r.status}`)
+    const xml  = await r.text()
+    const items = parseNationalTeamRss(xml)
+
+    // Detect NEW items (not seen before) for SSE push
+    const newItems = items.filter(it => !NATIONAL_TEAM_CACHE.seenTitles.has(it.title))
+    if (newItems.length > 0) {
+      newItems.forEach(it => NATIONAL_TEAM_CACHE.seenTitles.add(it.title))
+      // Only push via SSE after the first cold load (seenTitles was empty = cold start)
+      if (NATIONAL_TEAM_CACHE.ts > 0) {
+        broadcastNationalTeamNews(newItems.slice(0, 5))
+      } else {
+        // First load: seed seenTitles but don't broadcast
+        items.forEach(it => NATIONAL_TEAM_CACHE.seenTitles.add(it.title))
+      }
+    }
+
+    NATIONAL_TEAM_CACHE.items = items
+    NATIONAL_TEAM_CACHE.ts    = Date.now()
+    console.log(`[NationalTeam] Fetched ${items.length} articles, ${newItems.length} new`)
+    return items
+  } catch (err) {
+    console.error('[NationalTeam] RSS fetch failed:', err.message)
+    return NATIONAL_TEAM_CACHE.items
+  }
+}
+
+app.get('/api/national-team/news', async (req, res) => {
+  try {
+    const bypassCache = req.query.bypassCache === '1'
+    const items = await fetchNationalTeamNews({ bypassCache })
+    res.set('Cache-Control', 'no-store').json({ items, fetchedAt: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ error: err.message, items: [] })
+  }
+})
+
+// Poll national team news every 5 minutes to push new items via SSE
+setInterval(async () => {
+  try { await fetchNationalTeamNews({ bypassCache: true }) }
+  catch {}
+}, NATIONAL_TEAM_TTL)
+// Initial warm-up after 10 seconds
+setTimeout(async () => {
+  try { await fetchNationalTeamNews() }
+  catch {}
+}, 10_000)
+
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
   const { message, githubToken } = req.body || {}

@@ -7669,9 +7669,12 @@ const RSS_FEEDS = {
     { name: 'النهار',         url: 'https://www.ennaharonline.com/feed/' },
     { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
+    { name: 'الحياة العربية', url: 'https://news.google.com/rss/search?q=site%3Aelhayatalarabiya.dz&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
     { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // ── Google News: المنتخب الجزائري — 7 مصادر جزائرية موثوقة ──
+    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
     { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
@@ -7697,6 +7700,8 @@ const RSS_FEEDS = {
     { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
     { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
     { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
+    // ── Google News: المنتخب الجزائري — 7 مصادر موثوقة (أولوية قصوى) ──
+    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
     // ── Google News Sports Algeria ──
     { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google كرة قدم جزائر', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },

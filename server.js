@@ -20352,6 +20352,18 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       .replace(/(?:^|\n)\*\*STEP\s*\d+[^*]*\*\*[^\n]*/gi, '')
       .replace(/(?:^|\n)###\s*STEP\s*\d+[^\n]*/gi, '')
       .replace(/(?:^|\n)(?:النية|التصنيف|ما يريده المستخدم حقاً?)[^\n]*\n?/gi, '')
+      // ── Strip "راني نخمم أصبر شوية" and all variants ─────────────────────
+      .replace(/🤔\s*\*\*راني نخمم[^*]*\*\*/gi, '')
+      .replace(/راني نخمم[،,\s]*أصبر[^\n]*/gi, '')
+      .replace(/راني نخمم[^\n]{0,40}/gi, '')
+      // ── Strip internal developer/system notes leaking into responses ──────
+      .replace(/(?:^|\n)(?:هذا النص مستخرج حرفيا[^\n]*)/gi, '')
+      .replace(/(?:^|\n)(?:بدون هلوسة[^\n]*)/gi, '')
+      .replace(/(?:^|\n)(?:ملاحظة للنموذج[^\n]*)/gi, '')
+      .replace(/(?:^|\n)(?:ملاحظة للمطور[^\n]*)/gi, '')
+      .replace(/(?:^|\n)(?:هذا رد داخلي[^\n]*)/gi, '')
+      .replace(/(?:^|\n)(?:تعليمات النظام[^\n]*)/gi, '')
+      .replace(/\[?(?:هذا النص مستخرج|بدون هلوسة|no hallucin)[^\]]*\]?/gi, '')
       .replace(/^\s*\n/, '').trim()
 
     // ── Strip foreign-language words injected by AI (Vietnamese, Thai, CJK…) ──

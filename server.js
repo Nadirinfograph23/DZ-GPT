@@ -7778,7 +7778,7 @@ const RSS_FEEDS = {
     { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
     // ── Google News: المنتخب الجزائري — 7 مصادر جزائرية موثوقة ──
     { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
+    { name: 'الفجر',           url: 'https://www.al-fadjr.com/ar/feed/' },
     { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
     // ── Google News الجزائر — عربي (بعد المصادر المحلية) ──
@@ -7792,7 +7792,7 @@ const RSS_FEEDS = {
     { name: 'فرانس 24 عربي', url: 'https://www.france24.com/ar/rss' },
     { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss.xml' },
     { name: 'RT عربي', url: 'https://arabic.rt.com/rss/' },
-    { name: 'TSA Algérie',   url: 'https://www.tsa-algerie.com/feed/' },
+    { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   ],
   sports: [
     // ── Algerian & regional sports ──
@@ -8897,7 +8897,7 @@ const DZ_PRIORITY_NEWS_FEEDS = [
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar',                                           priority: 4 },
   { name: 'الوطن',          url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com&hl=ar&gl=DZ&ceid=DZ:ar',                                              priority: 5 },
   { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',      priority: 6 },
-  { name: 'TSA عربي',       url: 'https://www.tsa-algerie.com/feed/',                                                                                             priority: 7 },
+  { name: 'الخبر',           url: 'https://www.elkhabar.com/ar/feed/',                                                                                            priority: 7 },
   // 📡 Google News DZ — مكمّل بعد المصادر المحلية
   { name: 'Google أخبار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A3%D8%AE%D8%A8%D8%A7%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 8 },
   { name: 'Google عاجل الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%B9%D8%A7%D8%AC%D9%84&hl=ar&gl=DZ&ceid=DZ:ar',     priority: 9 },
@@ -9009,7 +9009,7 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
   { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
-  { name: 'TSA عربي',        url: 'https://www.tsa-algerie.com/feed/' },
+  { name: 'الفجر',           url: 'https://www.al-fadjr.com/ar/feed/' },
   { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },
   { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   // ── Google News الجزائر (بعد المصادر المحلية) ──

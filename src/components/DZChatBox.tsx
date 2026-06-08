@@ -3966,10 +3966,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     }
   }, [messages, chatId, onTitleChange])
 
-  // Auto-scroll — only when there are messages or loading, not on empty state
+  // Auto-scroll — only when messages update (streaming content), NOT when loading ends
+  const _prevMsgLenRef = useRef(0)
   useEffect(() => {
-    if (messages.length === 0 && !isLoading) return
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const newLen = messages.length
+    const grew = newLen > _prevMsgLenRef.current
+    _prevMsgLenRef.current = newLen
+    if (newLen === 0) return
+    // Scroll only while actively loading/streaming OR when a new message is appended
+    if (isLoading || grew) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages, isLoading])
 
   // Auto-resize textarea

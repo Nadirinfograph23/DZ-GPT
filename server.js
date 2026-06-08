@@ -14518,6 +14518,33 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── Sports Archive Early Handler ──────────────────────────────────────────
+  // يُعالَج هنا: أين يلعب / إلى أين انتقل / متى فازت X بكأس العالم/أفريقيا
+  {
+    const _sportsClass = classifySportsQuery(_rawLastMsg)
+    const _sportsEarlyTypes = ['PLAYER_CURRENT_CLUB', 'PLAYER_TRANSFER_SPECIFIC', 'HISTORICAL_TROPHY']
+    if (_sportsEarlyTypes.includes(_sportsClass.type)) {
+      console.log(`[SportsArchive:EarlyRoute] 🏆 type=${_sportsClass.type} → runSportsAgent`)
+      try {
+        const _archiveRes = await runSportsAgent(_rawLastMsg, messages)
+        const _archiveContent = _archiveRes.userResponse || _archiveRes.context || ''
+        if (_archiveContent) {
+          return res.status(200).json({
+            content: _archiveContent,
+            model: 'sports-agent-archive',
+            found: _archiveRes.found,
+            type: _archiveRes.type,
+            sources: _archiveRes.sources,
+            _sportsAgent: true,
+          })
+        }
+      } catch (_archErr) {
+        console.error('[SportsArchive:EarlyRoute] error:', _archErr.message)
+        // fallback → يكمل المعالجة العادية
+      }
+    }
+  }
+
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''
   const githubToken = sanitizeString(req.body.githubToken || process.env.GITHUB_TOKEN || '', 300)
@@ -14555,7 +14582,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Guard: website-builder & map-website queries excluded (موقع مطعم = موقع ويب)
   if (isMapQuery(lastUserMessage)
     && !detectWebsiteBuilderQuery(lastUserMessage)
-    && !detectMapWebsiteQuery(lastUserMessage)) {
+    && !detectMapWebsiteQuery(lastUserMessage)
+    && !isSportsAgentQuery(lastUserMessage)) {
     console.log(`[DZ-Maps EARLY] 🗺️ Map fast-path: "${lastUserMessage.slice(0, 80)}"`)
     const _earlyUserLoc = req.body.userLocation || null
     try {
@@ -16547,7 +16575,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Intent Router Guard: لاعب رياضي (وين يلعب محرز) → لا يُحوَّل للخريطة أبداً
   const _isIRSportsPlayer = _intentClassification?.intent === 'SPORTS_PLAYER'
   const _isIRSportsFixtures = _intentClassification?.intent === 'SPORTS_FIXTURES'
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures) {
+  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures && !isSportsAgentQuery(lastUserMessage)) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)

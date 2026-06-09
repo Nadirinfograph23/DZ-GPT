@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
 import { useNavigate } from 'react-router-dom'
@@ -390,11 +390,11 @@ function _detectPhaseCategory(msg: string): keyof typeof _DZ_PHASES {
   return 'general'
 }
 function SmartLoadingPhases({ msg, step }: { msg: string; step: ThinkingStep | null }) {
-  const category = React.useMemo(() => _detectPhaseCategory(msg), [msg])
+  const category = useMemo(() => _detectPhaseCategory(msg), [msg])
   const phases = (_DZ_PHASES[category] || _DZ_PHASES.general) as string[]
-  const [idx, setIdx] = React.useState(0)
-  const [visible, setVisible] = React.useState(true)
-  React.useEffect(() => {
+  const [idx, setIdx] = useState(0)
+  const [visible, setVisible] = useState(true)
+  useEffect(() => {
     if (step) return
     const t = setInterval(() => {
       setVisible(false)
@@ -3824,7 +3824,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
   const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
-  const [searchStepsMode, setSearchStepsMode] = useState<'person' | 'weather' | 'sports'>('person')
+  const [searchStepsMode, setSearchStepsMode] = useState<'person' | 'weather' | 'sports' | 'news'>('person')
   const [currentPath, setCurrentPath] = useState<string>('')
   // DZ GitHub Agent mode
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
@@ -6535,6 +6535,12 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
        _t.split(/\s+/).length >= 2 && _t.split(/\s+/).length <= 4)
     )
 
+    // كشف الأخبار
+    const _isNewsQ = !_isWeatherQ && !_isSportsQ && !_isPersonQ && (
+      /أخبار|خبر|مستجدات|عاجل|آخر\s+الأحداث|أحدث\s+الأخبار/.test(_t) ||
+      /اليوم.*الجزائر|الجزائر.*اليوم|الجزائر.*اليوم/.test(_t)
+    )
+
     if (_isWeatherQ) {
       setSearchStepsMode('weather')
       setSearchStepsQuery(_t)
@@ -6544,6 +6550,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     } else if (_isPersonQ) {
       setSearchStepsMode('person')
       setSearchStepsQuery(_sfpClean)
+    } else if (_isNewsQ) {
+      setSearchStepsMode('news')
+      setSearchStepsQuery(_t)
     } else {
       setSearchStepsQuery(null)
     }

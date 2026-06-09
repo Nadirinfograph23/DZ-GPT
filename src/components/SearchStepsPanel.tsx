@@ -3,11 +3,12 @@ import {
   Search, Database, FileText, BookOpen, CheckCircle2,
   Loader2, XCircle, Sparkles, Cloud, Thermometer, Wind,
   BarChart2, Trophy, Activity, CalendarDays, TableProperties,
+  Newspaper, Globe, AlignLeft, PenLine,
 } from 'lucide-react'
 import '../styles/search-steps-panel.css'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export type SearchPanelMode = 'person' | 'weather' | 'sports'
+export type SearchPanelMode = 'person' | 'weather' | 'sports' | 'news'
 
 export interface SearchPipelineStep {
   step: number
@@ -54,6 +55,14 @@ const SPORTS_STEPS: StepTemplate[] = [
   { label: 'تنسيق الإجابة النهائية',   icon: <Activity size={11} />,      delayMs: 2300 },
 ]
 
+const NEWS_STEPS: StepTemplate[] = [
+  { label: 'تحليل موضوع الأخبار',        icon: <Search size={11} />,     delayMs: 0    },
+  { label: 'البحث في المصادر الجزائرية', icon: <Globe size={11} />,      delayMs: 700  },
+  { label: 'جلب آخر المقالات والعناوين', icon: <Newspaper size={11} />,  delayMs: 1500 },
+  { label: 'تحليل المحتوى والتحقق',      icon: <AlignLeft size={11} />,  delayMs: 2200 },
+  { label: 'صياغة ملخص الأخبار',         icon: <PenLine size={11} />,    delayMs: 3000 },
+]
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fromTemplate(tpl: StepTemplate[]): SearchPipelineStep[] {
   return tpl.map((t, i) => ({ step: i + 1, label: t.label, status: 'pending' }))
@@ -78,6 +87,7 @@ function fmtPersonDetail(
 function titleFor(mode: SearchPanelMode): string {
   if (mode === 'weather') return 'بحث مناخي'
   if (mode === 'sports')  return 'بحث رياضي'
+  if (mode === 'news')    return 'بحث إخباري'
   return 'بحث أولاً'
 }
 
@@ -86,6 +96,7 @@ export default function SearchStepsPanel({ query, mode = 'person', onDone }: Pro
   const [steps, setSteps] = useState<SearchPipelineStep[]>(() => {
     if (mode === 'weather') return fromTemplate(WEATHER_STEPS)
     if (mode === 'sports')  return fromTemplate(SPORTS_STEPS)
+    if (mode === 'news')    return fromTemplate(NEWS_STEPS)
     return Object.keys(PERSON_META).map(k => ({
       step: +k, label: PERSON_META[+k].label, status: 'pending',
     }))
@@ -96,11 +107,11 @@ export default function SearchStepsPanel({ query, mode = 'person', onDone }: Pro
   const esRef     = useRef<EventSource | null>(null)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  // ── Timed simulation (weather / sports) ────────────────────────────────────
+  // ── Timed simulation (weather / sports / news) ─────────────────────────────
   useEffect(() => {
     if (mode === 'person') return
 
-    const tpl = mode === 'weather' ? WEATHER_STEPS : SPORTS_STEPS
+    const tpl = mode === 'weather' ? WEATHER_STEPS : mode === 'news' ? NEWS_STEPS : SPORTS_STEPS
     timersRef.current = []
 
     tpl.forEach((t, i) => {
@@ -181,6 +192,7 @@ export default function SearchStepsPanel({ query, mode = 'person', onDone }: Pro
   function iconFor(step: number): React.ReactNode {
     if (mode === 'weather') return WEATHER_STEPS[step - 1]?.icon
     if (mode === 'sports')  return SPORTS_STEPS[step - 1]?.icon
+    if (mode === 'news')    return NEWS_STEPS[step - 1]?.icon
     return PERSON_META[step]?.icon
   }
 
@@ -194,6 +206,7 @@ export default function SearchStepsPanel({ query, mode = 'person', onDone }: Pro
         <span className="sfp-title">
           {mode === 'weather' ? <Cloud size={10} />
            : mode === 'sports' ? <Trophy size={10} />
+           : mode === 'news'   ? <Newspaper size={10} />
            : <Sparkles size={10} />}
           {titleFor(mode)}
         </span>

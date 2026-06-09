@@ -185,6 +185,18 @@
 .sfp-wrap--sports .sfp-line--lit     { background: linear-gradient(180deg, #f97316 0%, rgba(249,115,22,.35) 100%); }
 .sfp-wrap--sports.sfp-wrap--done     { border-color: rgba(249,115,22,.4); background: linear-gradient(135deg, rgba(249,115,22,.10) 0%, rgba(234,88,12,.06) 100%); }
 
+.sfp-wrap--news {
+  background: linear-gradient(135deg, rgba(245,158,11,.07) 0%, rgba(217,119,6,.04) 100%);
+  border-color: rgba(245,158,11,.22);
+}
+.sfp-wrap--news .sfp-title             { color: #d97706; }
+.sfp-wrap--news .sfp-dot--running      { border-color: #d97706; background: rgba(245,158,11,.12); color: #d97706; box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+.sfp-wrap--news .sfp-dot--done         { border-color: #d97706; background: #d97706; }
+.sfp-wrap--news .sfp-row--running .sfp-row-label  { color: #d97706; }
+.sfp-wrap--news .sfp-row--done    .sfp-row-label  { color: #92400e; }
+.sfp-wrap--news .sfp-line--lit         { background: linear-gradient(180deg, #d97706 0%, rgba(245,158,11,.35) 100%); }
+.sfp-wrap--news.sfp-wrap--done         { border-color: rgba(245,158,11,.4); background: linear-gradient(135deg, rgba(245,158,11,.10) 0%, rgba(217,119,6,.06) 100%); }
+
 /* ── Dark mode ── */
 @media (prefers-color-scheme: dark) {
   .sfp-wrap {

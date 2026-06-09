@@ -7774,7 +7774,7 @@ const RSS_FEEDS = {
     { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
     { name: 'الحياة العربية', url: 'https://news.google.com/rss/search?q=site%3Aelhayatalarabiya.dz&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
-    { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
+    { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
     // ── Google News: المنتخب الجزائري — 7 مصادر جزائرية موثوقة ──
     { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
@@ -8895,7 +8895,7 @@ const DZ_PRIORITY_NEWS_FEEDS = [
   { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed',                                                                                          priority: 3 },
   // 🔄 Google News site: (RSS يعمل عبر Google لأن المصادر المباشرة تحجب البوتات)
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar',                                           priority: 4 },
-  { name: 'الوطن',          url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com&hl=ar&gl=DZ&ceid=DZ:ar',                                              priority: 5 },
+  { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar',                                          priority: 5 },
   { name: 'وكالة APS',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',      priority: 6 },
   { name: 'الخبر',           url: 'https://www.elkhabar.com/ar/feed/',                                                                                            priority: 7 },
   // 📡 Google News DZ — مكمّل بعد المصادر المحلية
@@ -8950,6 +8950,14 @@ async function fetchDZPriorityNews({ force = false } = {}) {
 }
 
 // بناء سياق الأخبار الجزائرية للـ AI من الكاش
+// يتحقق أن العنوان عربي (يحتوي على أحرف عربية أكثر من اللاتينية)
+function _isArabicTitle(title) {
+  if (!title) return false
+  const arabicChars = (title.match(/[\u0600-\u06FF]/g) || []).length
+  const latinChars  = (title.match(/[a-zA-Z]/g) || []).length
+  return arabicChars >= 3 && arabicChars >= latinChars
+}
+
 function buildDZNewsCachedContext(cachedNews) {
   if (!cachedNews?.items?.length) return ''
   const now = Date.now()
@@ -8985,8 +8993,11 @@ function buildDZNewsCachedContext(cachedNews) {
   for (const src of orderedSources) {
     const items = bySource[src]
     if (!items?.length) continue
+    // فلتر: عناوين عربية فقط — يتجاهل العناوين الفرنسية/اللاتينية
+    const arabicItems = items.filter(item => _isArabicTitle(item.title || item.headline || ''))
+    if (!arabicItems.length) continue
     ctx += `\n**${src}:**\n`
-    for (const item of items) {
+    for (const item of arabicItems) {
       ctx += `• ${item.title || item.headline || '(بدون عنوان)'}`
       if (item.pubDate) {
         try {
@@ -9007,7 +9018,7 @@ const NEWS_FEEDS_DASHBOARD = [
   { name: 'البلاد',         url: 'https://www.elbilad.net/feed' },
   { name: 'الشروق أونلاين', url: 'https://www.echoroukonline.com/feed' },
   { name: 'الحياة',         url: 'https://news.google.com/rss/search?q=site%3Aelhayat-dz.com&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'الوطن',          url: 'https://www.elwatan.com/feed/' },
+  { name: 'الجمهورية',     url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com&hl=ar&gl=DZ&ceid=DZ:ar' },
   { name: 'وكالة APS',     url: 'https://www.aps.dz/ar/rss' },
   { name: 'الفجر',           url: 'https://www.al-fadjr.com/ar/feed/' },
   { name: 'الخبر',          url: 'https://www.elkhabar.com/ar/feed/' },

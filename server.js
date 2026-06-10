@@ -8344,13 +8344,12 @@ function extractNewsSubject(msg) {
 
 
 // ════════════════════════════════════════════════════════════════════════════
-// 🇩🇿 ECONOMY INTELLIGENCE MODULE
+// 🇩🇿 ECONOMY INTELLIGENCE MODULE v2
 // ════════════════════════════════════════════════════════════════════════════
-
-// اكتشف نوع الاستعلام الاقتصادي:
-// - live_news  → "آخر الأخبار الاقتصادية" → بحث حي + RSS من الأحدث إلى الأقدم
-// - wiki_data  → "اقتصاد الجزائر"         → Wikipedia + Wikidata بيانات هيكلية
-// - null       → ليس استعلاماً اقتصادياً
+// ثلاثة أوضاع:
+// - live_news  → "أخبار الاقتصاد الجزائري" → RSS مباشر من الصحف الجزائرية (آني + يومي)
+// - events     → "أحداث اقتصادية"           → ملتقيات، مؤتمرات، معارض، ندوات
+// - wiki_data  → "اقتصاد الجزائر"           → Wikipedia + Wikidata (تعريف + أرقام هيكلية)
 function detectEconomyIntent(msg) {
   if (!msg) return { mode: null, isEconomy: false }
   const lower = msg.toLowerCase()
@@ -8359,58 +8358,89 @@ function detectEconomyIntent(msg) {
     'اقتصاد','اقتصادي','اقتصادية','ميزانية','ناتج محلي','gdp','pib','تضخم','نمو اقتصادي',
     'استثمار','بورصة','عملة','سعر الصرف','احتياطي الصرف','الصادرات','الواردات',
     'البترول','النفط','الغاز','المحروقات','ديون','عجز','فائض','تجارة',
-    'بنك','دينار','دولار اقتصاد','سعر الدولار','مؤشر','اقتصادية الجزائر',
+    'بنك','دينار','دولار','سعر الدولار','مؤشر','اقتصادية الجزائر','أسعار','تجارة خارجية',
+    'ضريبة','جمارك','صادرات','واردات','ميزان تجاري','احتياطي','تنمية','فلاحة','صناعة',
     'economy','economic','finance','investment','budget','inflation','gdp','exports','imports',
     'oil revenue','gas','hydrocarbons','trade balance','fiscal','monetary','growth rate',
-    'économie','croissance','inflation','investissement','budget','réserves',
+    'économie','croissance','inflation','investissement','budget','réserves','finances',
   ]
   if (!economyKw.some(k => lower.includes(k))) return { mode: null, isEconomy: false }
+
+  // أحداث اقتصادية → ملتقيات، مؤتمرات، معارض، ندوات
+  const eventsKw = [
+    'ملتقى','مؤتمر','منتدى','معرض','صالون','ندوة','لقاء','قمة اقتصادية','فعاليات','تظاهرة',
+    'forum','conférence','salon','exposition','sommet','événement','colloque',
+    'forum économique','salon international','meeting','summit',
+  ]
+  const isEvents = eventsKw.some(k => lower.includes(k))
+
+  // بيانات/معلومات هيكلية → تعريف اقتصاد الجزائر من Wikipedia
+  const wikiDataKw = [
+    'معلومات','بيانات','أرقام','إحصائيات','ما هو','ما هي','ما هو اقتصاد','شرح','تعريف',
+    'قطاعات','هيكل الاقتصاد','مساهمة','نسبة','تاريخ الاقتصاد','نبذة','نظرة عامة',
+    'information','data','statistics','what is','overview','structure','sectors','define',
+    'informations','données','statistiques','aperçu','définition','présentation',
+  ]
+  const isWikiData = wikiDataKw.some(k => lower.includes(k))
 
   // أخبار اقتصادية حية → كلمات تدل على الحداثة والأخبار
   const liveNewsKw = [
     'آخر','أحدث','جديد','اليوم','الآن','عاجل','أخبار','هذا الأسبوع','هذا الشهر',
     'مستجدات','تطورات','تحديث','ارتفع','انخفض','أعلن','قرار','إجراء','تقرير','إحصاء',
     'latest','today','breaking','recent','update','news','announced','report','rise','fall',
-    'dernières','aujourd','récent','hausse','baisse','annonce',
+    'dernières','aujourd','récent','hausse','baisse','annonce','actualité',
   ]
   const isLiveNews = liveNewsKw.some(k => lower.includes(k))
 
-  // بيانات/معلومات هيكلية → كلمات تدل على المعلومات والأرقام
-  const wikiDataKw = [
-    'معلومات','بيانات','أرقام','إحصائيات','ما هو','ما هي','ما هو اقتصاد','شرح','تعريف',
-    'قطاعات','هيكل الاقتصاد','مساهمة','نسبة','تاريخ الاقتصاد',
-    'information','data','statistics','what is','overview','structure','sectors',
-    'informations','données','statistiques','aperçu',
-  ]
-  const isWikiData = wikiDataKw.some(k => lower.includes(k))
-
-  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data (إلا إذا كانت هناك كلمة أخبار)
+  // اقتصاد + الجزائر بدون كلمات أخبار → wiki_data
   const isDZEconomy = /(?:اقتصاد|اقتصادي|اقتصادية).{0,20}(?:الجزائر|جزائر|dz|algeria)/i.test(msg)
     || /(?:الجزائر|algeria).{0,20}(?:اقتصاد|اقتصادي|اقتصادية|economy)/i.test(msg)
 
-  // "أخبار" دائماً تعني live_news — حتى لو كانت مع "اقتصاد الجزائر"
+  // الأولويات: events < live_news < wiki_data < live_news (default)
+  if (isEvents && !isLiveNews) return { mode: 'events', isEconomy: true }
   if (isLiveNews) return { mode: 'live_news', isEconomy: true }
-  if (isWikiData || (isDZEconomy && !isLiveNews)) return { mode: 'wiki_data', isEconomy: true }
-  return { mode: 'live_news', isEconomy: true } // الافتراضي: بحث حي
+  if (isWikiData || (isDZEconomy && !isLiveNews && !isEvents)) return { mode: 'wiki_data', isEconomy: true }
+  return { mode: 'live_news', isEconomy: true } // الافتراضي: أخبار حية
 }
 
-// تغذية RSS اقتصادية جزائرية مخصصة
+// ── تغذية RSS اقتصادية جزائرية مخصصة ─────────────────────────────────────
+// الأولوية: RSS مباشر من أقسام الاقتصاد في الصحف الجزائرية أولاً
+// ثم Google News site: للمصادر التي تحجب الزواحف
 const DZ_ECONOMY_RSS_FEEDS = [
-  { name: 'Google اقتصاد الجزائر',    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google ميزانية الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google استثمار الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%A7%D8%B3%D8%AA%D8%AB%D9%85%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google تضخم الجزائر',      url: 'https://news.google.com/rss/search?q=%D8%AA%D8%B6%D8%AE%D9%85+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google سعر الصرف الجزائر', url: 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D8%B1+%D8%A7%D9%84%D8%B5%D8%B1%D9%81+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google محروقات الجزائر',   url: 'https://news.google.com/rss/search?q=%D9%85%D8%AD%D8%B1%D9%88%D9%82%D8%A7%D8%AA+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
-  // المصادر المحلية الجزائرية
-  { name: 'النهار اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aennaharonline.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'البلاد اقتصاد',            url: 'https://news.google.com/rss/search?q=site%3Aelbilad.net+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ✅ RSS مباشر من أقسام الاقتصاد (أعلى جودة + أحدث)
+  { name: 'النهار اقتصاد',          url: 'https://www.ennaharonline.com/category/economy/feed/',                                                                                    priority: 1 },
+  { name: 'البلاد اقتصاد',          url: 'https://www.elbilad.net/ar/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed/',                                                        priority: 2 },
+  { name: 'الشروق اقتصاد',          url: 'https://www.echoroukonline.com/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed',                                                     priority: 3 },
+  { name: 'الخبر اقتصاد',           url: 'https://www.elkhabar.com/ar/category/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF/feed/',                                                      priority: 4 },
+  // 🔄 Google News site: — للمصادر التي لا تدعم RSS مباشر على قسم الاقتصاد
+  { name: 'وكالة APS اقتصاد',       url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',                      priority: 5 },
+  { name: 'TSA اقتصاد',             url: 'https://news.google.com/rss/search?q=site%3Atsa-algerie.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',            priority: 6 },
+  { name: 'الوطن اقتصاد',           url: 'https://news.google.com/rss/search?q=site%3Aelwatan.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 7 },
+  { name: 'المساء اقتصاد',          url: 'https://news.google.com/rss/search?q=site%3Aelmassa.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',                priority: 8 },
+  { name: 'الجمهورية اقتصاد',       url: 'https://news.google.com/rss/search?q=site%3Aaldjumhouria.com+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar',            priority: 9 },
+  // 📡 Google News DZ اقتصاد — مواضيع اقتصادية متنوعة
+  { name: 'Google اقتصاد الجزائر',  url: 'https://news.google.com/rss/search?q=%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 10 },
+  { name: 'Google استثمار الجزائر', url: 'https://news.google.com/rss/search?q=%D8%A7%D8%B3%D8%AA%D8%AB%D9%85%D8%A7%D8%B1+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',  priority: 11 },
+  { name: 'Google محروقات الجزائر', url: 'https://news.google.com/rss/search?q=%D9%85%D8%AD%D8%B1%D9%88%D9%82%D8%A7%D8%AA+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',  priority: 12 },
+  { name: 'Google سعر الصرف الجزائر', url: 'https://news.google.com/rss/search?q=%D8%B3%D8%B9%D8%B1+%D8%A7%D9%84%D8%B5%D8%B1%D9%81+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar', priority: 13 },
+  { name: 'Google ميزانية الجزائر', url: 'https://news.google.com/rss/search?q=%D9%85%D9%8A%D8%B2%D8%A7%D9%86%D9%8A%D8%A9+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar',   priority: 14 },
 ]
 
-// كاش الأخبار الاقتصادية (4 دقائق)
-const DZ_ECONOMY_NEWS_CACHE = new Map()
-const DZ_ECONOMY_NEWS_TTL = 4 * 60 * 1000
+// ── تغذية RSS خاصة بالأحداث الاقتصادية (ملتقيات، مؤتمرات، معارض) ───────────
+const DZ_ECONOMY_EVENTS_FEEDS = [
+  { name: 'Google ملتقى اقتصادي',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%84%D8%AA%D9%82%D9%89+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google مؤتمر اقتصادي',   url: 'https://news.google.com/rss/search?q=%D9%85%D8%A4%D8%AA%D9%85%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google صالون الجزائر',   url: 'https://news.google.com/rss/search?q=%D8%B5%D8%A7%D9%84%D9%88%D9%86+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'Google منتدى الأعمال',   url: 'https://news.google.com/rss/search?q=%D9%85%D9%86%D8%AA%D8%AF%D9%89+%D8%A7%D9%84%D8%A3%D8%B9%D9%85%D8%A7%D9%84+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  { name: 'APS أحداث اقتصادية',     url: 'https://news.google.com/rss/search?q=site%3Aaps.dz+%D9%85%D9%84%D8%AA%D9%82%D9%89+%D9%85%D8%A4%D8%AA%D9%85%D8%B1+%D9%85%D8%B9%D8%B1%D8%B6&hl=ar&gl=DZ&ceid=DZ:ar' },
+]
 
+// كاش الأخبار الاقتصادية (5 دقائق) + الأحداث (15 دقيقة)
+const DZ_ECONOMY_NEWS_CACHE = new Map()
+const DZ_ECONOMY_NEWS_TTL   = 5 * 60 * 1000
+const DZ_ECONOMY_EVENTS_TTL = 15 * 60 * 1000
+
+// ── جلب أخبار الاقتصاد الجزائري الآنية من مصادر متعددة ───────────────────
 async function fetchDZEconomyNews({ force = false } = {}) {
   const KEY = 'dz_economy_news'
   const cached = DZ_ECONOMY_NEWS_CACHE.get(KEY)
@@ -8422,28 +8452,64 @@ async function fetchDZEconomyNews({ force = false } = {}) {
   settled.forEach((r, i) => {
     if (r.status !== 'fulfilled' || !r.value?.items?.length) return
     sources.add(DZ_ECONOMY_RSS_FEEDS[i].name)
-    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_RSS_FEEDS[i].name }))
+    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_RSS_FEEDS[i].name, _priority: DZ_ECONOMY_RSS_FEEDS[i].priority || 99 }))
   })
 
-  // الأحدث أولاً دائماً
+  // الأحدث أولاً مع مراعاة الأولوية المصدر
+  allItems.sort((a, b) => {
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+    if (Math.abs(tb - ta) > 3600000) return tb - ta // فرق ساعة → الأحدث أولاً
+    return (a._priority || 99) - (b._priority || 99) // في نفس الساعة → الأولوية بالمصدر
+  })
+
+  // إزالة التكرارات (نفس العنوان)
+  const seen = new Set()
+  const unique = allItems.filter(item => {
+    const fp = (item.title || '').slice(0, 60).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
+    if (seen.has(fp)) return false
+    seen.add(fp)
+    return true
+  })
+
+  const result = { items: unique.slice(0, 80), sources: [...sources], ts: Date.now() }
+  DZ_ECONOMY_NEWS_CACHE.set(KEY, result)
+  console.log(`[DZ-Economy] Cached ${result.items.length} articles from: ${[...sources].join(', ')}`)
+  return result
+}
+
+// ── جلب الأحداث الاقتصادية (ملتقيات، مؤتمرات، معارض، ندوات) ─────────────
+async function fetchDZEconomyEvents({ force = false } = {}) {
+  const KEY = 'dz_economy_events'
+  const cached = DZ_ECONOMY_NEWS_CACHE.get(KEY)
+  if (!force && cached && Date.now() - cached.ts < DZ_ECONOMY_EVENTS_TTL) return cached
+
+  const settled = await Promise.allSettled(DZ_ECONOMY_EVENTS_FEEDS.map(f => fetchRSSFeed(f)))
+  const allItems = []
+  const sources = new Set()
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || !r.value?.items?.length) return
+    sources.add(DZ_ECONOMY_EVENTS_FEEDS[i].name)
+    r.value.items.forEach(item => allItems.push({ ...item, _src: DZ_ECONOMY_EVENTS_FEEDS[i].name }))
+  })
+
   allItems.sort((a, b) => {
     const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
     const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
     return tb - ta
   })
 
-  // إزالة التكرارات (نفس العنوان)
   const seen = new Set()
   const unique = allItems.filter(item => {
-    const fp = (item.title || '').slice(0, 50).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
+    const fp = (item.title || '').slice(0, 60).toLowerCase().replace(/[^\u0600-\u06FFa-z0-9]/g, '')
     if (seen.has(fp)) return false
     seen.add(fp)
     return true
   })
 
-  const result = { items: unique.slice(0, 60), sources: [...sources], ts: Date.now() }
+  const result = { items: unique.slice(0, 30), sources: [...sources], ts: Date.now() }
   DZ_ECONOMY_NEWS_CACHE.set(KEY, result)
-  console.log(`[DZ-Economy] Cached ${result.items.length} articles from: ${[...sources].join(', ')}`)
+  console.log(`[DZ-Economy-Events] Cached ${result.items.length} events from: ${[...sources].join(', ')}`)
   return result
 }
 
@@ -8494,38 +8560,104 @@ async function fetchAlgeriaEconomyWiki() {
   }
 }
 
-// بناء سياق الأخبار الاقتصادية للـ AI — الأحدث أولاً دائماً
+// ── بناء سياق الأخبار الاقتصادية للـ AI ────────────────────────────────────
+// يميّز بين: 🔴 عاجل (< 3س) | 📰 اليوم (< 24س) | 📅 هذا الأسبوع (< 7 أيام)
 function buildEconomyNewsContext(news) {
   if (!news?.items?.length) return ''
   const now = Date.now()
   const ageMin = Math.floor((now - news.ts) / 60000)
   const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `📈 **آخر الأخبار الاقتصادية الجزائرية** — ${dateStr}`
-  ctx += ageMin < 1 ? ' *(حديثة للتو)*' : ` *(منذ ${ageMin} دق)*`
-  ctx += `\n**المصادر:** ${news.sources.join(' · ')}\n`
-  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-  ctx += `> ⚠️ **قاعدة إلزامية**: استخدم هذه الأخبار الحديثة فقط — لا تعتمد على بيانات التدريب القديمة.\n`
-  ctx += `> **الترتيب: الأحدث أولاً**\n\n`
+  // تصنيف الأخبار حسب عمرها
+  const breaking = []  // < 3 ساعات → عاجل
+  const today    = []  // 3س → 24س → اليوم
+  const recent   = []  // 24س → 7 أيام → هذا الأسبوع
 
-  let count = 0
-  for (const item of news.items.slice(0, 20)) {
-    const title = item.title || ''
-    if (!title) continue
+  for (const item of news.items.slice(0, 60)) {
+    if (!item.title) continue
+    const pubMs = item.pubDate ? new Date(item.pubDate).getTime() : 0
+    const ageH  = pubMs ? (now - pubMs) / 3600000 : 999
+    if (ageH < 3)        breaking.push({ ...item, _ageH: ageH })
+    else if (ageH < 24)  today.push({ ...item, _ageH: ageH })
+    else if (ageH < 168) recent.push({ ...item, _ageH: ageH })
+  }
+
+  const _fmtAge = (ageH) => {
+    if (ageH < 1)   return '(منذ دقائق)'
+    if (ageH < 24)  return `(منذ ${Math.floor(ageH)}س)`
+    return `(${Math.floor(ageH/24)} يوم)`
+  }
+
+  const _renderItems = (items, max = 10) => {
+    let out = ''
+    let c = 0
+    for (const item of items.slice(0, max)) {
+      out += `**${++c}.** ${item.title} ${_fmtAge(item._ageH)}`
+      if (item._src) out += ` — *${item._src}*`
+      out += `\n`
+    }
+    return out
+  }
+
+  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `📈 **أخبار الاقتصاد الجزائري** — ${dateStr}`
+  ctx += ageMin < 1 ? ' *(حديثة للتو)*' : ` *(منذ ${ageMin} دق)*`
+  ctx += `\n**المصادر:** ${news.sources.slice(0,8).join(' · ')}\n`
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `> ⚠️ **قاعدة إلزامية**: استخدم هذه الأخبار فقط — لا تعتمد على بيانات التدريب القديمة.\n`
+  ctx += `> الترتيب: الأحدث أولاً ← رتّب إجابتك كذلك.\n\n`
+
+  if (breaking.length > 0) {
+    ctx += `## 🔴 عاجل — أخبار آنية (آخر 3 ساعات)\n`
+    ctx += _renderItems(breaking, 8)
+    ctx += `\n`
+  }
+  if (today.length > 0) {
+    ctx += `## 📰 أخبار اليوم (3 → 24 ساعة)\n`
+    ctx += _renderItems(today, 10)
+    ctx += `\n`
+  }
+  if (recent.length > 0) {
+    ctx += `## 📅 هذا الأسبوع (أقل من 7 أيام)\n`
+    ctx += _renderItems(recent, 8)
+    ctx += `\n`
+  }
+  if (breaking.length === 0 && today.length === 0 && recent.length === 0) {
+    ctx += `> ⚠️ لم تُصنَّف أخبار — عرض آخر ${Math.min(news.items.length, 15)} خبر:\n`
+    ctx += _renderItems(news.items.map(i => ({ ...i, _ageH: 999 })), 15)
+  }
+
+  ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `> 💡 تعليمات للـ AI: ابدأ بالعاجل ثم اليوم ثم الأسبوع. اذكر المصدر والوقت لكل خبر. لا تخترع أرقاماً.\n`
+  return ctx
+}
+
+// ── بناء سياق الأحداث الاقتصادية للـ AI ────────────────────────────────────
+function buildEconomyEventsContext(events) {
+  if (!events?.items?.length) return ''
+  const now = Date.now()
+  const dateStr = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  let ctx = `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `📅 **الأحداث الاقتصادية الجزائرية** (ملتقيات · مؤتمرات · معارض · ندوات)\n`
+  ctx += `${dateStr} | المصادر: ${events.sources.join(' · ')}\n`
+  ctx += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  ctx += `> استخدم هذه البيانات لعرض الأحداث الاقتصادية. اذكر المصدر والتاريخ لكل حدث.\n\n`
+
+  let c = 0
+  for (const item of events.items.slice(0, 15)) {
+    if (!item.title) continue
     let dateLabel = ''
     if (item.pubDate) {
       try {
         const ageH = (now - new Date(item.pubDate).getTime()) / 3600000
-        if (ageH < 1) dateLabel = ' *(منذ دقائق)*'
-        else if (ageH < 24) dateLabel = ` *(منذ ${Math.floor(ageH)}س)*`
-        else if (ageH < 72) dateLabel = ` *(${Math.floor(ageH/24)} يوم)*`
-        else dateLabel = ` *(${new Date(item.pubDate).toLocaleDateString('ar-DZ')})*`
+        if (ageH < 24)  dateLabel = ` (منذ ${Math.floor(ageH)} ساعة)`
+        else dateLabel = ` (${new Date(item.pubDate).toLocaleDateString('ar-DZ')})`
       } catch {}
     }
-    ctx += `**${++count}.** ${title}${dateLabel}`
-    if (item._src) ctx += ` — **${item._src}**`
-    ctx += `\n\n`
+    ctx += `**${++c}.** ${item.title}${dateLabel}`
+    if (item._src) ctx += ` — *${item._src}*`
+    ctx += `\n`
   }
   ctx += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
   return ctx
@@ -19418,14 +19550,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (_economyIntent.isEconomy) {
     console.log(`[DZ-Economy] Intent detected: mode=${_economyIntent.mode}`)
     if (_economyIntent.mode === 'live_news') {
-      // أخبار اقتصادية حية — الأحدث أولاً
+      // أخبار اقتصادية حية — مصادر متعددة — مصنّفة عاجل/اليوم/الأسبوع
       try {
         const dzEconCached = DZ_ECONOMY_NEWS_CACHE.get('dz_economy_news')
         let econNews
         if (dzEconCached && Date.now() - dzEconCached.ts < DZ_ECONOMY_NEWS_TTL) {
           econNews = dzEconCached
-          console.log(`[DZ-Economy] ✅ Served ${econNews.items.length} economy articles from cache`)
-          // تجديد خلفي إذا قارب الكاش على الانتهاء
+          console.log(`[DZ-Economy] ✅ Served ${econNews.items.length} economy articles from cache (${econNews.sources?.length || 0} sources)`)
           if (Date.now() - dzEconCached.ts > DZ_ECONOMY_NEWS_TTL * 0.7) {
             fetchDZEconomyNews({ force: true }).catch(() => {})
           }
@@ -19434,13 +19565,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
         if (econNews?.items?.length) {
           _economyContext = buildEconomyNewsContext(econNews)
-          console.log(`[DZ-Economy] 📈 Live news context built: ${_economyContext.length} chars`)
+          console.log(`[DZ-Economy] 📈 Live news context built: ${_economyContext.length} chars from ${econNews.sources?.length || 0} sources`)
         }
       } catch (err) {
         console.warn('[DZ-Economy] live news fetch failed:', err.message)
       }
+    } else if (_economyIntent.mode === 'events') {
+      // أحداث اقتصادية — ملتقيات، مؤتمرات، معارض، ندوات
+      try {
+        const dzEventsCached = DZ_ECONOMY_NEWS_CACHE.get('dz_economy_events')
+        let econEvents
+        if (dzEventsCached && Date.now() - dzEventsCached.ts < DZ_ECONOMY_EVENTS_TTL) {
+          econEvents = dzEventsCached
+          console.log(`[DZ-Economy] ✅ Served ${econEvents.items.length} economy events from cache`)
+        } else {
+          econEvents = await fetchDZEconomyEvents({ force: true })
+        }
+        if (econEvents?.items?.length) {
+          _economyContext = buildEconomyEventsContext(econEvents)
+          console.log(`[DZ-Economy] 📅 Events context built: ${_economyContext.length} chars`)
+        }
+      } catch (err) {
+        console.warn('[DZ-Economy] events fetch failed:', err.message)
+      }
     } else if (_economyIntent.mode === 'wiki_data') {
-      // بيانات هيكلية — Wikipedia + Wikidata
+      // بيانات هيكلية — Wikipedia + Wikidata (تعريف اقتصاد الجزائر)
       try {
         const wikiData = await fetchAlgeriaEconomyWiki()
         if (wikiData) {
@@ -20086,21 +20235,27 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ── Economy System Prompt Layer ───────────────────────────────────────────
   let _economySystemLayer = ''
   if (_economyIntent?.isEconomy && _economyContext) {
-    const _econMode = _economyIntent.mode === 'live_news' ? 'أخبار اقتصادية حية' : 'بيانات هيكلية Wikipedia+Wikidata'
+    const _econModeLabel = {
+      live_news: 'أخبار اقتصادية حية (مصنّفة: عاجل / اليوم / الأسبوع)',
+      events:    'أحداث اقتصادية (ملتقيات · مؤتمرات · معارض)',
+      wiki_data: 'بيانات هيكلية Wikipedia + Wikidata',
+    }[_economyIntent.mode] || 'بيانات اقتصادية'
     _economySystemLayer = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔴 قواعد الاقتصاد الإلزامية — يُحظر تجاوزها:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. استخدم فقط البيانات المُحقنة أدناه (${_econMode}).
-2. ❌ يُحظر تماماً الاعتماد على بيانات التدريب (مثل "230 مليار دولار") — قد تكون قديمة.
-3. 📊 رتّب النتائج دائماً من الأحدث إلى الأقدم.
-4. 🇩🇿 الإجابة دائماً بالعربية حتى لو السؤال بلغة أخرى.
-5. اذكر دائماً تاريخ/مصدر كل رقم أو إحصاء.
-6. إذا لم تجد بيانات محددة في السياق → قل "لا أملك بيانات حديثة موثقة" بدل اختراع أرقام.
+نوع البيانات المُحقنة: ${_econModeLabel}
+1. استخدم فقط البيانات المُحقنة أدناه — لا مصدر آخر.
+2. ❌ يُحظر الاعتماد على بيانات التدريب للأرقام الاقتصادية — قد تكون قديمة بسنوات.
+3. 📊 رتّب الأخبار دائماً: 🔴 عاجل أولاً ← 📰 اليوم ← 📅 الأسبوع.
+4. 🇩🇿 الإجابة بالعربية دائماً حتى لو السؤال بالفرنسية أو الإنجليزية.
+5. اذكر المصدر + الوقت (منذ X ساعة / يوم) لكل خبر أو رقم.
+6. إذا لم تجد بيانات محددة → قل "لا أملك بيانات حديثة موثقة" — لا تخترع أرقاماً.
+7. للأخبار: عنوان الخبر + المصدر + الوقت فقط — بدون تحليل إضافي ما لم يُطلب.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
   } else if (_economyIntent?.isEconomy && !_economyContext) {
     _economySystemLayer = `
-⚠️ تنبيه اقتصادي: أُبلغ المستخدم أن البيانات الاقتصادية الحديثة غير متاحة الآن، وأن المعلومات قد تكون غير محدثة. اقترح عليه مصادر موثوقة (ONS الجزائر، البنك الدولي، Statista).`
+⚠️ تنبيه اقتصادي: البيانات الاقتصادية الحديثة غير متاحة الآن. أبلغ المستخدم بذلك واقترح مصادر موثوقة: ONS الجزائر (ons.dz)، البنك الدولي، صندوق النقد الدولي، وكالة APS (aps.dz).`
   }
 
   // ── Force Arabic for economy + news queries ────────────────────────────────
@@ -28909,8 +29064,21 @@ if (isMain) {
       console.warn('[AutoRefresh] Economy news refresh failed:', err.message)
     }
   }, 8 * 60 * 1000, { label: 'dz-economy-refresh' })
-  // Pre-warm economy cache on first request (startup)
+
+  // ── Auto-Refresh الأحداث الاقتصادية كل 20 دقيقة ──────────────────────────
+  scheduleOnce(async () => {
+    console.log('[AutoRefresh] 📅 Refreshing DZ economy events (ملتقيات/مؤتمرات/معارض)...')
+    try {
+      const result = await fetchDZEconomyEvents({ force: true })
+      console.log(`[AutoRefresh] ✅ Economy events: ${result?.items?.length || 0} events`)
+    } catch (err) {
+      console.warn('[AutoRefresh] Economy events refresh failed:', err.message)
+    }
+  }, 20 * 60 * 1000, { label: 'dz-economy-events-refresh' })
+
+  // Pre-warm economy caches on startup
   fetchDZEconomyNews({ force: false }).catch(() => {})
+  fetchDZEconomyEvents({ force: false }).catch(() => {})
 
   // ── Periodic resilience housekeeping (every 10 min) ───────────────────────
   scheduleOnce(() => {

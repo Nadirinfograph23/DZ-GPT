@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -153,6 +153,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'tts',          icon: '🔊', name: 'تحويل نص إلى صوت',              desc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية وإنجليزية — تحميل MP3', badge: 'NEW' },
   { id: 'screenshot',   icon: '📸', name: 'تصوير المواقع',                  desc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile', badge: 'NEW' },
   { id: 'fileupload',   icon: '☁️', name: 'رفع ومشاركة الملفات',            desc: 'ارفع أي ملف (صورة · فيديو · PDF · ملف) واحصل على رابط مشاركة آمن — GoFile.io', badge: 'NEW' },
+  { id: 'convert',      icon: '🔄', name: 'محوِّل الصيغ',                   desc: 'حوِّل فيديو · صوت · صور بين جميع الصيغ — مباشرة في المتصفح بـ FFmpeg.wasm', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -4942,8 +4943,285 @@ function FileUploadTool() {
   )
 }
 
+// ─── File Converter Tool (FFmpeg.wasm via CDN — VERT.sh approach) ─────────────
+const CONV_IMAGE_EXTS = ['jpg','png','webp','bmp','gif']
+const CONV_AUDIO_EXTS = ['mp3','wav','ogg','aac','flac','m4a','opus']
+const CONV_VIDEO_EXTS = ['mp4','webm','avi','mov','mkv','gif']
+const CONV_FMT_LABELS: Record<string,string> = {
+  mp4:'MP4',webm:'WebM',avi:'AVI',mov:'MOV',mkv:'MKV',gif:'GIF',
+  mp3:'MP3',wav:'WAV',ogg:'OGG',aac:'AAC',flac:'FLAC',m4a:'M4A',opus:'OPUS',
+  jpg:'JPG',png:'PNG',webp:'WebP',bmp:'BMP',
+}
+function convGetExt(name: string) { return name.split('.').pop()?.toLowerCase() || '' }
+function convGetType(ext: string): 'image'|'audio'|'video'|'other' {
+  if (CONV_IMAGE_EXTS.includes(ext)) return 'image'
+  if (CONV_AUDIO_EXTS.includes(ext)) return 'audio'
+  if (CONV_VIDEO_EXTS.includes(ext)) return 'video'
+  return 'other'
+}
+function convGetOutputFmts(inputExt: string): string[] {
+  const t = convGetType(inputExt)
+  if (t === 'image') return CONV_IMAGE_EXTS.filter(e => e !== inputExt)
+  if (t === 'audio') return CONV_AUDIO_EXTS.filter(e => e !== inputExt)
+  if (t === 'video') return CONV_VIDEO_EXTS.filter(e => e !== inputExt)
+  return []
+}
+
+function FileConverterTool() {
+  const [file, setFile]             = useState<File | null>(null)
+  const [outputExt, setOutputExt]   = useState('')
+  const [converting, setConverting] = useState(false)
+  const [progress, setProgress]     = useState(0)
+  const [downloadUrl, setDownloadUrl] = useState('')
+  const [outputName, setOutputName] = useState('')
+  const [error, setError]           = useState('')
+  const [dragging, setDragging]     = useState(false)
+  const [ffStatus, setFfStatus]     = useState<'idle'|'loading'|'ready'|'error'>('idle')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const ffRef        = useRef<any>(null)
+
+  const inputExt    = file ? convGetExt(file.name) : ''
+  const inputType   = convGetType(inputExt)
+  const outputFmts  = convGetOutputFmts(inputExt)
+
+  const ensureFFmpeg = async () => {
+    if (ffRef.current) return ffRef.current
+    setFfStatus('loading')
+    if (!(window as any).createFFmpeg) {
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement('script')
+        s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js'
+        s.onload  = () => resolve()
+        s.onerror = () => reject(new Error('فشل تحميل FFmpeg من الشبكة'))
+        document.head.appendChild(s)
+      })
+    }
+    const ff = (window as any).createFFmpeg({
+      log: false,
+      corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js',
+    })
+    await ff.load()
+    ffRef.current = ff
+    setFfStatus('ready')
+    return ff
+  }
+
+  const convertImageViaCanvas = (src: File, ext: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(src)
+      img.onload = () => {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth; c.height = img.naturalHeight
+        const ctx = c.getContext('2d')!
+        if (ext === 'jpg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height) }
+        ctx.drawImage(img, 0, 0)
+        URL.revokeObjectURL(url)
+        const mimes: Record<string,string> = { jpg:'image/jpeg', png:'image/png', webp:'image/webp', bmp:'image/bmp', gif:'image/gif' }
+        c.toBlob(blob => {
+          if (!blob) { reject(new Error('فشل التحويل')); return }
+          resolve(URL.createObjectURL(blob))
+        }, mimes[ext] || 'image/png', 0.92)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('تعذّر تحميل الصورة')) }
+      img.src = url
+    })
+
+  const handleConvert = async () => {
+    if (!file || !outputExt) return
+    setConverting(true); setProgress(0); setError(''); setDownloadUrl('')
+    const base = file.name.includes('.') ? file.name.slice(0, file.name.lastIndexOf('.')) : file.name
+    const outName = `${base}.${outputExt}`
+    setOutputName(outName)
+    try {
+      if (inputType === 'image') {
+        setProgress(40)
+        const url = await convertImageViaCanvas(file, outputExt)
+        setProgress(100); setDownloadUrl(url)
+      } else {
+        const ff = await ensureFFmpeg()
+        ff.setProgress(({ ratio }: { ratio: number }) => setProgress(Math.max(5, Math.round(ratio * 100))))
+        const inName = `in.${inputExt}`
+        const outNameFf = `out.${outputExt}`
+        const buf = await file.arrayBuffer()
+        ff.FS('writeFile', inName, new Uint8Array(buf))
+        const args: string[] = ['-i', inName]
+        if (outputExt === 'mp3')  args.push('-q:a', '2')
+        else if (outputExt === 'aac')  args.push('-b:a', '192k')
+        else if (outputExt === 'opus') args.push('-b:a', '128k')
+        else if (outputExt === 'gif')  args.push('-vf', 'fps=12,scale=480:-1:flags=lanczos', '-loop', '0')
+        else if (outputExt === 'webm') args.push('-c:v', 'libvpx', '-crf', '10', '-b:v', '1M', '-c:a', 'libvorbis')
+        else if (outputExt === 'mp4')  args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-c:a', 'aac', '-b:a', '128k')
+        args.push(outNameFf)
+        await ff.run(...args)
+        const data = ff.FS('readFile', outNameFf)
+        setDownloadUrl(URL.createObjectURL(new Blob([data.buffer])))
+        try { ff.FS('unlink', inName); ff.FS('unlink', outNameFf) } catch {}
+        setProgress(100)
+      }
+    } catch (e: any) {
+      setError(e.message || 'خطأ في التحويل — تأكد من صحة الملف وحجمه')
+    } finally { setConverting(false) }
+  }
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files?.length) return
+    setFile(files[0]); setOutputExt(''); setDownloadUrl(''); setError(''); setProgress(0)
+    const ext = convGetExt(files[0].name)
+    const type = convGetType(ext)
+    if ((type === 'audio' || type === 'video') && ffStatus === 'idle') {
+      ensureFFmpeg().catch(() => setFfStatus('error'))
+    }
+  }
+
+  const fmtSize = (b: number) => b < 1e6 ? `${(b/1024).toFixed(1)} KB` : `${(b/1e6).toFixed(1)} MB`
+  const typeIcon: Record<string,string> = { image:'🖼️', audio:'🎵', video:'🎬', other:'📁' }
+  const typeLabel: Record<string,string> = { image:'صورة', audio:'صوت', video:'فيديو', other:'ملف' }
+
+  const S = {
+    wrap:  { fontFamily:"'Cairo','Tajawal',sans-serif", direction:'rtl' as const, color:'#c8d8b8' },
+    title: { fontSize:22, fontWeight:800, color:'#c8ff00', marginBottom:6, display:'flex', alignItems:'center', gap:10 },
+    sub:   { fontSize:13, color:'#6a9a50', marginBottom:20 },
+    drop:  (on: boolean) => ({
+      border:`2px dashed ${on ? '#c8ff00' : '#2a5020'}`, borderRadius:18, padding:'36px 24px',
+      textAlign:'center' as const, background: on ? 'rgba(200,255,0,0.06)' : '#0d1f08',
+      cursor:'pointer', transition:'all .2s', marginBottom:16, transform: on ? 'scale(1.01)' : 'scale(1)',
+    }),
+    card:  { background:'#0d2010', borderRadius:14, padding:'14px 18px', marginBottom:16, display:'flex', alignItems:'center', gap:12, border:'1px solid #1a4015' },
+    badge: { background:'#0f2a0a', borderRadius:8, padding:'4px 10px', fontSize:12, fontWeight:700, color:'#a0d080', border:'1px solid #1a5010' },
+    grid:  { display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(76px,1fr))', gap:8, marginBottom:16 },
+    fmt:   (on: boolean) => ({
+      background: on ? '#c8ff00' : '#0d1f08', color: on ? '#0a0e04' : '#8ab870',
+      border:`1.5px solid ${on ? '#c8ff00' : '#1a4015'}`, borderRadius:10, padding:'9px 4px',
+      fontWeight:800, fontSize:13, cursor:'pointer', fontFamily:"'Cairo',sans-serif",
+      textAlign:'center' as const, transition:'all .15s',
+    }),
+    convBtn: (dis: boolean) => ({
+      background: dis ? '#1a3010' : '#c8ff00', border:'none', borderRadius:12, padding:'13px 32px',
+      color: dis ? '#3a5a28' : '#0a0e04', fontWeight:900, fontSize:16, cursor: dis ? 'not-allowed' : 'pointer',
+      display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+      fontFamily:"'Cairo',sans-serif", transition:'all .2s', width:'100%',
+    }),
+    bar:   { height:10, background:'#0d2010', borderRadius:8, overflow:'hidden', margin:'12px 0' },
+    fill:  (p: number) => ({ height:'100%', width:`${p}%`, background:'linear-gradient(90deg,#6aff00,#c8ff00)', borderRadius:8, transition:'width .3s' }),
+    dlBtn: { background:'linear-gradient(135deg,#c8ff00,#a0d000)', border:'none', borderRadius:12, padding:'13px 32px', color:'#0a0e04', fontWeight:900, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:"'Cairo',sans-serif", width:'100%', textDecoration:'none' },
+    err:   { background:'#2a0808', border:'1px solid #5a1010', borderRadius:10, padding:'10px 14px', color:'#ff8080', fontSize:13, marginTop:10 },
+    hint:  (c?: string) => ({ fontSize:12, color: c || '#4a7a30', marginTop:4 }),
+    reset: { background:'none', border:'1px solid #1a4015', borderRadius:8, color:'#6a9a50', cursor:'pointer', padding:'8px 16px', marginTop:10, width:'100%', fontFamily:"'Cairo',sans-serif", fontSize:13 },
+  }
+
+  return (
+    <div style={S.wrap}>
+      <div style={S.title}>🔄 محوِّل الصيغ</div>
+      <div style={S.sub}>حوِّل الفيديو والصوت والصور بين جميع الصيغ — مباشرة في المتصفح بدون رفع لأي سيرفر (VERT.sh / FFmpeg.wasm)</div>
+
+      {/* منطقة السحب والإفلات */}
+      <div
+        style={S.drop(dragging)}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <div style={{ fontSize:48, marginBottom:8 }}>{file ? typeIcon[inputType] : '📂'}</div>
+        <div style={{ fontSize:15, fontWeight:700, color:'#a0d080', marginBottom:4 }}>
+          {file ? file.name : 'اسحب ملفك هنا أو اضغط لاختياره'}
+        </div>
+        <div style={{ fontSize:12, color:'#4a7a30' }}>
+          {file ? fmtSize(file.size) : 'فيديو · صوت · صور — جميع الصيغ مدعومة'}
+        </div>
+        <input ref={fileInputRef} type="file" style={{ display:'none' }}
+          accept="video/*,audio/*,image/*,.mkv,.avi,.flac,.ogg,.opus,.m4a"
+          onChange={e => handleFiles(e.target.files)} />
+      </div>
+
+      {/* بطاقة الملف المختار */}
+      {file && (
+        <div style={S.card}>
+          <span style={{ fontSize:32 }}>{typeIcon[inputType]}</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:'#c8d8b8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{file.name}</div>
+            <div style={{ fontSize:12, color:'#4a7a30', marginTop:2 }}>{fmtSize(file.size)} · {inputExt.toUpperCase()}</div>
+          </div>
+          <span style={S.badge}>{typeIcon[inputType]} {typeLabel[inputType]}</span>
+          <button onClick={e => { e.stopPropagation(); setFile(null); setOutputExt(''); setDownloadUrl(''); setError('') }}
+            style={{ background:'none', border:'none', color:'#5a8a40', cursor:'pointer', fontSize:18, padding:4 }}>✕</button>
+        </div>
+      )}
+
+      {/* اختيار صيغة الإخراج */}
+      {file && outputFmts.length > 0 && (
+        <>
+          <div style={{ fontSize:13, fontWeight:700, color:'#8ab870', marginBottom:10 }}>اختر الصيغة المطلوبة:</div>
+          <div style={S.grid}>
+            {outputFmts.map(ext => (
+              <button key={ext} style={S.fmt(outputExt === ext)} onClick={() => setOutputExt(ext)}>
+                {CONV_FMT_LABELS[ext] || ext.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {file && !outputFmts.length && (
+        <div style={S.err}>⚠️ هذا النوع من الملفات غير مدعوم — يُرجى اختيار ملف فيديو أو صوت أو صورة.</div>
+      )}
+
+      {/* حالة محرك FFmpeg */}
+      {ffStatus === 'loading' && <div style={S.hint()}>⏳ جاري تحميل محرك FFmpeg.wasm... قد يأخذ بضع ثوانٍ</div>}
+      {ffStatus === 'ready'   && <div style={S.hint('#6aff00')}>✅ محرك FFmpeg جاهز للتحويل</div>}
+      {ffStatus === 'error'   && <div style={S.hint('#ff8080')}>⚠️ تعذّر تحميل FFmpeg — تحويل الصور فقط متاح</div>}
+
+      {/* زر التحويل */}
+      {file && outputExt && !downloadUrl && (
+        <>
+          <button style={S.convBtn(converting || !outputExt)} disabled={converting || !outputExt} onClick={handleConvert}>
+            {converting
+              ? `⏳ جاري التحويل... ${progress}%`
+              : `🔄 تحويل إلى ${(CONV_FMT_LABELS[outputExt] || outputExt).toUpperCase()}`}
+          </button>
+          {converting && <div style={S.bar}><div style={S.fill(progress)} /></div>}
+        </>
+      )}
+
+      {/* زر التحميل بعد النجاح */}
+      {downloadUrl && (
+        <div style={{ marginTop:12 }}>
+          <a href={downloadUrl} download={outputName} style={S.dlBtn as React.CSSProperties}>
+            ⬇️ تحميل الملف المحوَّل — {outputName}
+          </a>
+          <div style={{ ...S.hint('#6aff00'), textAlign:'center' as const, marginTop:6 }}>✅ تم التحويل بنجاح!</div>
+          <button style={S.reset} onClick={() => { setFile(null); setOutputExt(''); setDownloadUrl(''); setError(''); setProgress(0) }}>
+            + تحويل ملف آخر
+          </button>
+        </div>
+      )}
+
+      {/* خطأ */}
+      {error && <div style={S.err}>❌ {error}</div>}
+
+      {/* الصيغ المدعومة */}
+      <div style={{ marginTop:24, borderTop:'1px solid #1a3010', paddingTop:16 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#4a7a30', marginBottom:8 }}>الصيغ المدعومة:</div>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          {([
+            ['🖼️ صور',  'JPG · PNG · WebP · BMP · GIF'],
+            ['🎵 صوت',  'MP3 · WAV · OGG · AAC · FLAC · M4A'],
+            ['🎬 فيديو','MP4 · WebM · AVI · MOV · MKV · GIF'],
+          ] as [string,string][]).map(([lbl, fmts]) => (
+            <div key={lbl} style={{ background:'#0a1a06', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#6a9a50' }}>
+              <div style={{ fontWeight:700, marginBottom:2 }}>{lbl}</div>
+              <div>{fmts}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
-const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload']
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert']
 
 function getToolFromSearch(search: string): ToolId | null {
   try {
@@ -5025,6 +5303,7 @@ export default function DZTools() {
         {active === 'tts'          && <TTSTool />}
         {active === 'screenshot'   && <ScreenshotTool />}
         {active === 'fileupload'   && <FileUploadTool />}
+        {active === 'convert'      && <FileConverterTool />}
       </div>
     </div>
   )

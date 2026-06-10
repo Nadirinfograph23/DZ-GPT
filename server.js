@@ -14892,6 +14892,76 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── National Team News Early Handler 🇩🇿 ──────────────────────────────────
+  // يُعالَج هنا: كل سؤال عن أخبار المنتخب الجزائري / الخضر / محاربو الصحراء
+  // يستخدم الكاش المُفلتَر (رياضة فقط) بدل البحث العام الذي يُرجع أخباراً مختلطة
+  {
+    const _isNationalTeamNewsQuery = /(?:أخبار|خبر|آخر\s*أخبار|جديد|جديدة|آخر\s*مستجدات|تحديثات?|عاجل|آخر\s*الأخبار)\s*(?:(?:عن|حول|للـ?|عن\s*الـ?|ل)\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر|الكرة\s*الجزائرية|المنتخب\s*الوطني\s*لكرة\s*القدم)/i.test(_rawLastMsg)
+      || /(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)\s*(?:اليوم|الآن|الأسبوع|الشهر|الأخير|الأخيرة|هذا\s*الأسبوع|هذا\s*الشهر|جديد|جديدة|أخبار)/i.test(_rawLastMsg)
+      || /^(?:أخبار\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)(?:\s*اليوم|\s*الأخيرة|\s*\?|؟)?$/i.test(_rawLastMsg.trim())
+    if (_isNationalTeamNewsQuery) {
+      console.log(`[NationalTeam:EarlyRoute] 🇩🇿 detected national team news query: "${_rawLastMsg.slice(0,60)}"`)
+      try {
+        // استخدم الكاش المُفلتَر (رياضة فقط) — إذا الكاش فارغ جلبه الآن
+        let _ntItems = NATIONAL_TEAM_CACHE.items || []
+        if (!_ntItems.length) {
+          _ntItems = await fetchNationalTeamNews()
+        }
+        if (_ntItems.length > 0) {
+          const _today = new Date().toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
+          const _newsBlock = _ntItems.slice(0, 12).map((it, i) => {
+            const _date = it.pubDate ? new Date(it.pubDate).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''
+            return `${i+1}. **${it.title}**\n   المصدر: ${it.feedName || it.source || 'أخبار المنتخب'} | ${_date}${it.link ? `\n   [الرابط](${it.link})` : ''}`
+          }).join('\n\n')
+          const _ntSystemPrompt = `أنت محلل رياضي جزائري متخصص في المنتخب الوطني الجزائري (الخضر / محاربو الصحراء).
+اليوم: ${_today}
+مهمتك: قدّم ملخصاً منظماً وواضحاً لآخر أخبار المنتخب الجزائري فقط.
+القواعد:
+- ركّز على الأخبار الرياضية فقط (مباريات، نتائج، لاعبون، تدريبات، تصريحات رياضية)
+- لا تذكر أي موضوع خارج إطار كرة القدم والمنتخب
+- رتّب الأخبار من الأهم إلى الأقل
+- استخدم العربية الجزائرية بشكل بسيط وواضح
+- أضف ملاحظات تحليلية مختصرة حيث مناسب`
+          // محاولة ملخص AI — إذا فشل نرجع قائمة مباشرة
+          let _ntFinalContent = null
+          try {
+            const { content: _ntAI, error: _ntAIErr } = await callGroqWithFallback({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: _ntSystemPrompt },
+                { role: 'user', content: `هذه أحدث الأخبار المتوفرة من مصادر رياضية موثوقة عن المنتخب الجزائري:\n\n${_newsBlock}\n\nالطلب: ${_rawLastMsg}` },
+              ],
+              max_tokens: 1500,
+              temperature: 0.3,
+            })
+            if (_ntAI && !_ntAIErr) _ntFinalContent = _ntAI
+          } catch (_aiErr3) {
+            console.warn('[NationalTeam:EarlyRoute] Groq failed, using direct list:', _aiErr3.message)
+          }
+
+          // إذا فشل AI — أُعرض قائمة الأخبار مباشرة (دائماً يعمل)
+          if (!_ntFinalContent) {
+            _ntFinalContent = `## 🇩🇿 آخر أخبار المنتخب الجزائري\n📅 ${_today}\n\n${_ntItems.slice(0, 10).map((it, i) => {
+              const _d = it.pubDate ? new Date(it.pubDate).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''
+              return `**${i+1}. ${it.title}**\n🔗 ${it.feedName || it.source || 'أخبار المنتخب'} — ${_d}${it.link ? `\n[اقرأ المزيد](${it.link})` : ''}`
+            }).join('\n\n---\n\n')}\n\n> *المصادر: أخبار رياضية مُفلتَرة من ${[...new Set(_ntItems.map(x => x.feedName||x.source).filter(Boolean))].slice(0,4).join('، ')}*`
+          }
+
+          console.log(`[NationalTeam:EarlyRoute] ✅ response built from ${_ntItems.length} cached sports-only items`)
+          return res.status(200).json({
+            content: _ntFinalContent,
+            model: 'national-team-news',
+            _nationalTeam: true,
+            sources: _ntItems.slice(0, 5).map(it => ({ name: it.feedName || it.source, url: it.link })),
+          })
+        }
+      } catch (_ntErr2) {
+        console.error('[NationalTeam:EarlyRoute] error:', _ntErr2.message)
+        // fallback → يكمل المعالجة العادية
+      }
+    }
+  }
+
   // ── Sports Archive Early Handler ──────────────────────────────────────────
   // يُعالَج هنا: أين يلعب / إلى أين انتقل / متى فازت X بكأس العالم/أفريقيا
   {

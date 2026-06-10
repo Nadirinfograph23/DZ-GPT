@@ -2094,6 +2094,25 @@ const TOOL_REDIRECT_MAP = [
       /(?:عايز|عاوز|عاوزة)\s*(?:ارفع|أرفع|أشارك)\s*(?:ملف|صورة|فيديو)/i,
     ],
   },
+  // ── File Converter (FFmpeg.wasm — VERT.sh approach) ────────────────────────
+  {
+    id: 'convert',
+    toolName: 'محوِّل الصيغ',
+    toolUrl: '/tools?tool=convert',
+    toolIcon: '🔄',
+    toolDesc: 'حوِّل الفيديو والصوت والصور بين جميع الصيغ — مباشرة في المتصفح',
+    smartMessage: 'لديّ **محوِّل الصيغ** المدعوم بـ FFmpeg.wasm — حوِّل فيديو 🎬، صوت 🎵، أو صور 🖼️ إلى أي صيغة تريدها مباشرةً في متصفحك دون رفع لأي سيرفر ودون حساب.\n\n**الصيغ المدعومة:**\n• 🎬 فيديو: MP4 · WebM · AVI · MOV · MKV · GIF\n• 🎵 صوت: MP3 · WAV · OGG · AAC · FLAC · M4A\n• 🖼️ صور: JPG · PNG · WebP · BMP · GIF',
+    patterns: [
+      /(?:تحويل|حوِّل|حوّل|convert|convertir)\s*(?:ملف|صوت|فيديو|صورة|صور|مقطع|audio|video|image|file|صيغة|format)?/i,
+      /(?:أريد|بغيت|نبغي|نحب|نريد|حابب|حاب)\s*(?:تحويل|أحوِّل|نحوِّل)\s*(?:ملف|صوت|فيديو|صورة)?/i,
+      /(?:كيف|وين|فين)\s*(?:أحوِّل|نحوِّل|أغيّر)\s*(?:صيغة|نوع|ملف|صوت|فيديو|صورة)/i,
+      /(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)\s*(?:إلى|ل|الى|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i,
+      /(?:بدّل|بدل|غيّر|غير)\s*(?:صيغة|نوع|امتداد|format)\s*(?:الملف|الصوت|الفيديو|الصورة)/i,
+      /(?:فيديو|صوت|صورة|ملف)\s*(?:من|إلى|الى|ل|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i,
+      /vert\.?sh|محوّل\s*(?:ملفات|صيغ|فيديو|صوت)|file\s*converter|converter\b/i,
+      /(?:تحويل|convert)\s*(?:صيغة|format|نوع)\s*(?:الملف|الفيديو|الصوت)/i,
+    ],
+  },
 ]
 
 // Detect if the user message should redirect to a specific tool page
@@ -2139,6 +2158,16 @@ function detectToolRedirect(msg) {
   if (/(?:رابط|link)\s*(?:تحميل|مشاركة|للتحميل)|gofile/i.test(msg)) {
     const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
     if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
+  }
+  // ── كشف مبكر: تحويل صيغ الملفات (FFmpeg / VERT.sh approach) ─────────────────
+  if (
+    /(?:تحويل|حوِّل|حوّل|convert)\s*(?:ملف|صوت|فيديو|صورة|مقطع|audio|video|image|file|صيغة|format)?/i.test(msg) ||
+    /(?:أريد|بغيت|نبغي|نحب|نريد)\s+(?:تحويل|أحوِّل|نحوِّل)\s*(?:ملف|صوت|فيديو|صورة)?/i.test(msg) ||
+    /(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)\s*(?:إلى|ل|الى|to)\s*(?:mp4|mp3|wav|avi|mkv|webm|flac|ogg|aac|m4a|mov|png|jpg|jpeg|webp|gif|bmp)/i.test(msg) ||
+    /vert\.?sh|محوّل\s*(?:ملفات|صيغ)|file\s*converter/i.test(msg)
+  ) {
+    const _cv = TOOL_REDIRECT_MAP.find(t => t.id === 'convert')
+    if (_cv) return { toolName: _cv.toolName, toolUrl: _cv.toolUrl, toolIcon: _cv.toolIcon, toolDesc: _cv.toolDesc, smartMessage: _cv.smartMessage, message: _cv.smartMessage, id: _cv.id }
   }
   // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
   // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات

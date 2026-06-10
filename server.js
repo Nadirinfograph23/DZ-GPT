@@ -197,6 +197,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock } from './lib/sports-agent.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14887,6 +14888,99 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         })
       } catch (_sae) {
         console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
+        // fallback → يكمل المعالجة العادية
+      }
+    }
+  }
+
+  // ── National Team MATCHES Early Handler 🇩🇿⚽ ─────────────────────────────
+  // يُعالَج هنا: المباراة القادمة، جدول المباريات، متى يلعب المنتخب
+  // يُرجع مباريات موثّقة مع عدّ تنازلي للمباراة القادمة — بدون بحث خارجي
+  {
+    const _isNTMatchQuery =
+      /(?:مباراة|مباريات|متى\s*(?:تلعب|يلعب|ستلعب)|موعد|جدول|برنامج)\s*(?:(?:ل|ال)?\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)/i.test(_rawLastMsg)
+      || /(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)\s*(?:متى|مباراة|مباريات|يلعب|تلعب|ستلعب|الجدول|البرنامج|موعد\s*(?:المباراة)?|القادم[ةه]?)/i.test(_rawLastMsg)
+      || /(?:مباراة\s+الجزائر\s*القادمة|المباراة\s+القادمة\s+للجزائر|المباراة\s+القادمة\s+للمنتخب|متى\s+ستلعب\s+الجزائر|برنامج\s+المنتخب|جدول\s+مباريات\s+الجزائر|مباريات\s+الجزائر\s+في\s+كأس\s+العالم)/i.test(_rawLastMsg)
+
+    if (_isNTMatchQuery) {
+      console.log(`[NationalTeam:MatchRoute] ⚽ Detected upcoming match query: "${_rawLastMsg.slice(0,60)}"`)
+      try {
+        const _today2 = new Date()
+        const _todayStr = _today2.toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
+
+        // ─── 1) مباريات كأس العالم القادمة ─────────────────────────────────────
+        const _wcFixtures = WORLD_CUP_2026.algeriaGroup.fixtures
+          .filter(f => !f.homeScore && !f.awayScore && f.statusType === 'upcoming')
+          .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+        // ─── 2) أحدث النتائج من قاعدة البيانات المحلية ──────────────────────
+        const _recentResults = ALGERIA_MATCHES_HISTORY
+          .filter(m => m.statusType === 'finished')
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 4)
+
+        // ─── 3) بناء قسم "المباراة القادمة" مع عدّ تنازلي ───────────────────
+        let _upcomingSection = ''
+        if (_wcFixtures.length > 0) {
+          const _next = _wcFixtures[0]
+          const _matchDate = new Date(`${_next.date}T${_next.startTime || '21:00'}:00`)
+          const _diffMs = _matchDate - _today2
+          const _diffDays = Math.floor(_diffMs / 86400000)
+          const _diffHrs  = Math.floor((_diffMs % 86400000) / 3600000)
+          const _countdown = _diffMs > 0
+            ? (_diffDays > 0 ? `⏳ بعد **${_diffDays} يوم${_diffDays > 1 ? '' : ''}** و**${_diffHrs} ساعة**` : `🔴 **اليوم!**`)
+            : '✅ انتهت'
+
+          _upcomingSection = `## ⚽ المباراة القادمة للمنتخب الجزائري 🇩🇿\n\n`
+            + `| | |\n|---|---|\n`
+            + `| 🆚 المنافس | **${_next.awayTeam}** |\n`
+            + `| 📅 التاريخ | **${new Date(_next.date).toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}** |\n`
+            + `| ⏰ الموعد | **${_next.startTime || '21:00'} (توقيت الجزائر)** |\n`
+            + `| 🏟️ المدينة | **${_next.city}${_next.country ? ' — ' + _next.country : ''}** |\n`
+            + `| 🏆 البطولة | **${_next.competition}** |\n`
+            + `| ⏳ العدّ التنازلي | ${_countdown} |\n\n`
+
+          if (_wcFixtures.length > 1) {
+            _upcomingSection += `### 📅 كامل جدول مباريات الجزائر في كأس العالم 2026\n\n`
+            for (const fix of _wcFixtures) {
+              const _d = new Date(fix.date).toLocaleDateString('ar-DZ', { month:'short', day:'numeric' })
+              _upcomingSection += `- **${fix.round}** — ${_d} ⏰ ${fix.startTime || '21:00'} | 🇩🇿 الجزائر vs **${fix.awayTeam}** | 📍 ${fix.city}\n`
+            }
+            _upcomingSection += `\n> 🏆 **المجموعة J**: الأرجنتين 🇦🇷 · الجزائر 🇩🇿 · النمسا 🇦🇹 · الأردن 🇯🇴\n`
+          }
+        } else {
+          _upcomingSection = `## ⚽ جدول مباريات المنتخب الجزائري 🇩🇿\n\n📅 **اليوم:** ${_todayStr}\n\n`
+            + `🏆 **كأس العالم 2026** — المجموعة J:\n`
+            + WORLD_CUP_2026.algeriaGroup.fixtures.map(f => {
+                const _score = f.homeScore !== null ? `${f.homeScore}–${f.awayScore}` : 'vs'
+                return `- 🇩🇿 الجزائر **${_score}** ${f.awayTeam} — ${f.date} 📍 ${f.city}`
+              }).join('\n')
+        }
+
+        // ─── 4) قسم "آخر النتائج" ────────────────────────────────────────────
+        let _resultsSection = ''
+        if (_recentResults.length > 0) {
+          _resultsSection = `\n\n---\n\n### 📊 آخر نتائج المنتخب\n\n`
+          for (const m of _recentResults) {
+            const _score = m.homeScore !== null ? `**${m.homeScore}–${m.awayScore}**` : 'vs'
+            const _winner = m.winner === 'الجزائر' ? ' ✅' : (m.winner ? ' ❌' : ' 🤝')
+            const _d = new Date(m.date).toLocaleDateString('ar-DZ', { month:'short', day:'numeric', year:'numeric' })
+            _resultsSection += `- 🇩🇿 ${m.homeTeam} ${_score} ${m.awayTeam}${_winner} — ${_d} *(${m.competition})*\n`
+          }
+        }
+
+        const _finalMatchContent = _upcomingSection + _resultsSection
+          + `\n\n---\n> 📡 *البيانات من قاعدة المعرفة الرياضية الجزائرية — آخر تحديث: ${_todayStr}*`
+
+        console.log(`[NationalTeam:MatchRoute] ✅ returning WC2026 fixtures + ${_recentResults.length} recent results`)
+        return res.status(200).json({
+          content: _finalMatchContent,
+          model: 'national-team-fixtures',
+          _nationalTeam: true,
+          wc2026: { group: 'J', nextMatch: _wcFixtures[0] || null },
+        })
+      } catch (_nmErr) {
+        console.error('[NationalTeam:MatchRoute] error:', _nmErr.message)
         // fallback → يكمل المعالجة العادية
       }
     }

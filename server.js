@@ -2072,6 +2072,28 @@ const TOOL_REDIRECT_MAP = [
       /(?:doctor|hôpital|clinique)\s*(?:near|algér|proche)/i,
     ],
   },
+  // ── File Upload / Share ──────────────────────────────────────────────────
+  {
+    id: 'fileupload',
+    toolName: 'رفع ومشاركة الملفات',
+    toolUrl: '/tools?tool=fileupload',
+    toolIcon: '☁️',
+    toolDesc: 'ارفع أي ملف واحصل على رابط مشاركة آمن — صور · فيديو · PDF · أي نوع',
+    smartMessage: 'لديّ **أداة رفع الملفات** عبر GoFile.io — ارفع صورة، فيديو، PDF، أو أي ملف واحصل فوراً على **رابط مشاركة آمن** يمكنك إرساله لأي شخص، بدون تسجيل ودون حد للحجم.',
+    patterns: [
+      // رفع ملف / صورة / فيديو
+      /(?:ارفع|رفع|حمّل|upload|partage|شارك)\s*(?:ملف|صورة|فيديو|pdf|مستند|وثيقة|file|image|video|document)/i,
+      /(?:أريد|بغيت|نبغي|نحب|نريد|حابب|حاب)\s*(?:ارفع|أرفع|رفع|تحميل|upload)\s*(?:ملف|صورة|فيديو|pdf|file|image|video)?/i,
+      /(?:رابط|link|lien)\s*(?:تحميل|مشاركة|للتحميل|لتحميل|partage|download)/i,
+      /(?:كيف|وين|أين|فين)\s*(?:أرفع|نرفع|ارفع|ترفع)\s*(?:ملف|صورة|فيديو|file|image|video)/i,
+      /(?:share|مشاركة|إرسال)\s*(?:ملف|صورة|فيديو|pdf|link|رابط)/i,
+      /gofile|go\s*file/i,
+      // دارجة جزائرية
+      /(?:بغيت|نبغي|حابب|حاب|نحب)\s*(?:نرفع|نشارك|نحمل)\s*(?:صورة|فيديو|ملف|باش|كي|كيما)/i,
+      /(?:وين|فين|كيفاش)\s*(?:نرفع|نشارك|نحمل)\s*(?:صورة|فيديو|ملف)/i,
+      /(?:عايز|عاوز|عاوزة)\s*(?:ارفع|أرفع|أشارك)\s*(?:ملف|صورة|فيديو)/i,
+    ],
+  },
 ]
 
 // Detect if the user message should redirect to a specific tool page
@@ -2104,6 +2126,20 @@ function detectToolRedirect(msg) {
   // رئيس / وزير / لاعب / كاتب / ممثل / مؤلف / مخرج / عالم / فنان
   if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg)) return null
   if (/(?:رئيس|وزير|ملك|أمير|لاعب|كاتب|ممثل|مؤلف|مخرج|عالم|فنان|شاعر|مغني|رياضي)\s+(?:\S+\s*){1,4}(?:من\s*(?:هو|هي|هم))?/i.test(msg)) return null
+  // ── كشف مبكر: رفع ملف/صورة/فيديو → قبل أي فلتر اسم عربي ──────────────────
+  // يجب أن يكون قبل looksLikeBareArabicName لأن "بغيت نرفع صورة" يُصنَّف خطأ كاسم
+  if (/(?:ارفع|رفع|نرفع|حمّل|upload|partage|شارك|نشارك|أشارك)\s*(?:ملف|صورة|صور|فيديو|pdf|مستند|وثيقة|file|image|video|document|photo)/i.test(msg)) {
+    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
+    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
+  }
+  if (/(?:بغيت|نبغي|حابب|حاب|نحب|عايز|أريد|نريد)\s+(?:نرفع|ارفع|أرفع|نشارك|أشارك)\s*(?:صورة|فيديو|ملف)?/i.test(msg)) {
+    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
+    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
+  }
+  if (/(?:رابط|link)\s*(?:تحميل|مشاركة|للتحميل)|gofile/i.test(msg)) {
+    const _fu = TOOL_REDIRECT_MAP.find(t => t.id === 'fileupload')
+    if (_fu) return { toolName: _fu.toolName, toolUrl: _fu.toolUrl, toolIcon: _fu.toolIcon, toolDesc: _fu.toolDesc, smartMessage: _fu.smartMessage, message: _fu.smartMessage, id: _fu.id }
+  }
   // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
   // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات
   if (looksLikeBareArabicName(msg)) return null

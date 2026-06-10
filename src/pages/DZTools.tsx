@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -152,6 +152,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'dataanalysis', icon: '📈', name: 'محلل البيانات',                 desc: 'ارفع ملف Excel أو CSV — تحليل ذكي + رسوم بيانية + ملخص AI', badge: 'NEW' },
   { id: 'tts',          icon: '🔊', name: 'تحويل نص إلى صوت',              desc: 'حوّل أي نص إلى صوت طبيعي بأصوات عربية وفرنسية وإنجليزية — تحميل MP3', badge: 'NEW' },
   { id: 'screenshot',   icon: '📸', name: 'تصوير المواقع',                  desc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile', badge: 'NEW' },
+  { id: 'fileupload',   icon: '☁️', name: 'رفع ومشاركة الملفات',            desc: 'ارفع أي ملف (صورة · فيديو · PDF · ملف) واحصل على رابط مشاركة آمن — GoFile.io', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -4701,8 +4702,248 @@ function ScreenshotTool() {
   )
 }
 
+// ─── File Upload Tool (GoFile.io) ─────────────────────────────────────────────
+interface UploadedFile {
+  id: string
+  name: string
+  size: number
+  type: string
+  downloadPage: string
+  uploadedAt: Date
+}
+
+function FileUploadTool() {
+  const [dragging, setDragging]   = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress]   = useState(0)
+  const [error, setError]         = useState('')
+  const [history, setHistory]     = useState<UploadedFile[]>([])
+  const [copied, setCopied]       = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+  }
+
+  const uploadFile = async (file: File) => {
+    setUploading(true)
+    setProgress(0)
+    setError('')
+    try {
+      // 1. Get best GoFile server
+      const serverRes = await fetch('https://api.gofile.io/servers')
+      const serverData = await serverRes.json()
+      if (serverData.status !== 'ok') throw new Error('فشل في الحصول على سيرفر GoFile')
+      const server = serverData.data.servers[0]?.name
+      if (!server) throw new Error('لا يوجد سيرفر متاح')
+
+      // 2. Upload with progress
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const result = await new Promise<UploadedFile>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 90))
+        }
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText)
+            if (data.status !== 'ok') { reject(new Error(data.message || 'فشل الرفع')); return }
+            setProgress(100)
+            resolve({
+              id: data.data.fileId || data.data.id,
+              name: file.name,
+              size: file.size,
+              type: file.type || 'application/octet-stream',
+              downloadPage: data.data.downloadPage,
+              uploadedAt: new Date(),
+            })
+          } catch { reject(new Error('رد غير صالح من السيرفر')) }
+        }
+        xhr.onerror = () => reject(new Error('خطأ في الشبكة — تأكد من اتصالك'))
+        xhr.open('POST', `https://${server}.gofile.io/contents/uploadfile`)
+        xhr.send(formData)
+      })
+
+      setHistory(prev => [result, ...prev].slice(0, 10))
+    } catch (err: any) {
+      setError(err.message || 'خطأ غير معروف')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    uploadFile(files[0])
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false)
+    handleFiles(e.dataTransfer.files)
+  }
+
+  const copyLink = async (link: string) => {
+    try { await navigator.clipboard.writeText(link) } catch { const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta) }
+    setCopied(link); setTimeout(() => setCopied(null), 2500)
+  }
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return '🖼️'
+    if (type.startsWith('video/')) return '🎬'
+    if (type.startsWith('audio/')) return '🎵'
+    if (type.includes('pdf')) return '📄'
+    if (type.includes('zip') || type.includes('rar') || type.includes('7z')) return '🗜️'
+    if (type.includes('word') || type.includes('document')) return '📝'
+    if (type.includes('sheet') || type.includes('excel')) return '📊'
+    return '📁'
+  }
+
+  const S = {
+    wrap:      { fontFamily: "'Cairo','Tajawal',sans-serif", direction: 'rtl' as const, color: '#c8d8b8' },
+    title:     { fontSize: 22, fontWeight: 800, color: '#c8ff00', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 10 },
+    sub:       { fontSize: 13, color: '#6a9a50', marginBottom: 20 },
+    dropzone:  (active: boolean) => ({
+      border: `2px dashed ${active ? '#c8ff00' : '#2a5020'}`,
+      borderRadius: 18, padding: '40px 24px', textAlign: 'center' as const,
+      background: active ? 'rgba(200,255,0,0.06)' : '#0d1f08',
+      cursor: 'pointer', transition: 'all .2s', marginBottom: 16,
+      transform: active ? 'scale(1.01)' : 'scale(1)',
+    }),
+    dropIcon:  { fontSize: 52, marginBottom: 10 },
+    dropText:  { fontSize: 15, fontWeight: 700, color: '#a0d080', marginBottom: 4 },
+    dropSub:   { fontSize: 12, color: '#4a7a30' },
+    btn:       { background: '#c8ff00', border: 'none', borderRadius: 10, padding: '10px 24px', color: '#0a0e04', fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, fontFamily: "'Cairo',sans-serif" },
+    progress:  { background: '#1a2a10', borderRadius: 8, height: 10, overflow: 'hidden', marginBottom: 8 },
+    bar:       (p: number) => ({ width: `${p}%`, height: '100%', background: 'linear-gradient(90deg,#4a9a20,#c8ff00)', borderRadius: 8, transition: 'width .4s ease', boxShadow: '0 0 8px rgba(200,255,0,.4)' }),
+    errBox:    { background: 'rgba(255,68,68,.08)', border: '1px solid rgba(255,68,68,.3)', borderRadius: 12, padding: '12px 16px', color: '#ff8888', fontSize: 13, marginBottom: 14, display: 'flex', gap: 8, alignItems: 'flex-start' },
+    card:      { background: '#0d1f08', border: '1.5px solid #2a5020', borderRadius: 16, padding: '16px 18px', marginBottom: 10 },
+    cardHead:  { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 },
+    cardIcon:  { fontSize: 30, flexShrink: 0 },
+    cardName:  { fontSize: 14, fontWeight: 700, color: '#a0d080', wordBreak: 'break-all' as const },
+    cardMeta:  { fontSize: 11, color: '#4a7a30', marginTop: 2 },
+    linkBox:   { background: '#060f04', border: '1px solid #1e3515', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
+    linkText:  { flex: 1, fontSize: 12, color: '#7acc50', direction: 'ltr' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+    copyBtn:   (isCopied: boolean) => ({ background: isCopied ? '#4a9a20' : '#1a3010', border: '1px solid #2a5020', borderRadius: 8, padding: '6px 12px', color: isCopied ? '#c8ff00' : '#7aaa50', fontSize: 12, cursor: 'pointer', flexShrink: 0, fontWeight: 700, transition: 'all .2s', whiteSpace: 'nowrap' as const }),
+    openBtn:   { background: 'none', border: '1px solid #2a5020', borderRadius: 8, padding: '6px 12px', color: '#5aaa30', fontSize: 12, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 },
+    histTitle: { fontSize: 12, fontWeight: 700, color: '#5a8a40', marginBottom: 10 },
+    infoBox:   { marginTop: 14, padding: '12px 16px', background: 'rgba(200,255,0,.04)', border: '1px solid rgba(200,255,0,.12)', borderRadius: 10, fontSize: 12, color: '#5a8a40', display: 'flex', gap: 10, alignItems: 'flex-start' },
+  }
+
+  return (
+    <div style={S.wrap}>
+      <div style={S.title}>☁️ رفع ومشاركة الملفات</div>
+      <div style={S.sub}>ارفع أي ملف واحصل على رابط مشاركة آمن — يدعم الصور · الفيديوهات · PDF · أي نوع · حتى 25 GB</div>
+
+      {/* ── Drop Zone ──────────────────────────────────────────────────── */}
+      <div
+        style={S.dropzone(dragging || uploading)}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && fileInputRef.current?.click()}
+      >
+        <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
+        <div style={S.dropIcon}>{uploading ? '⬆️' : dragging ? '📂' : '☁️'}</div>
+        {uploading ? (
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#c8ff00', marginBottom: 14 }}>جاري الرفع... {progress}%</div>
+            <div style={S.progress}><div style={S.bar(progress)} /></div>
+            <div style={{ fontSize: 11, color: '#4a7a30', marginTop: 6 }}>
+              {progress < 30 ? 'جاري الاتصال بـ GoFile.io...' : progress < 90 ? 'جاري نقل الملف...' : 'جاري المعالجة...'}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={S.dropText}>{dragging ? 'أفلت الملف هنا' : 'اسحب الملف هنا أو اضغط للاختيار'}</div>
+            <div style={S.dropSub}>يدعم جميع أنواع الملفات · صور · فيديو · PDF · ZIP · وغيرها</div>
+            <button style={S.btn} onClick={e => { e.stopPropagation(); fileInputRef.current?.click() }}>
+              <Upload size={15} /> اختر ملف
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ── Error ────────────────────────────────────────────────────────── */}
+      {error && (
+        <div style={S.errBox}>
+          <span style={{ fontSize: 18 }}>⚠️</span>
+          <div><strong>فشل الرفع:</strong> {error}<div style={{ fontSize: 11, color: '#aa5555', marginTop: 4 }}>تحقق من اتصالك وحاول مرة أخرى.</div></div>
+        </div>
+      )}
+
+      {/* ── Uploaded Files History ────────────────────────────────────────── */}
+      {history.length > 0 && (
+        <div>
+          <div style={S.histTitle}>📂 الملفات المرفوعة ({history.length})</div>
+          {history.map((f) => (
+            <div key={f.id} style={S.card}>
+              <div style={S.cardHead}>
+                <span style={S.cardIcon}>{getFileIcon(f.type)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={S.cardName}>{f.name}</div>
+                  <div style={S.cardMeta}>{formatSize(f.size)} · {f.uploadedAt.toLocaleTimeString('ar-DZ')}</div>
+                </div>
+                <span style={{ background: '#1a3a10', color: '#6acc40', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>✅ مرفوع</span>
+              </div>
+
+              {/* Share link */}
+              <div style={S.linkBox}>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>🔗</span>
+                <span style={S.linkText}>{f.downloadPage}</span>
+                <button style={S.copyBtn(copied === f.downloadPage)} onClick={() => copyLink(f.downloadPage)}>
+                  {copied === f.downloadPage ? '✓ تم النسخ' : 'نسخ الرابط'}
+                </button>
+                <a href={f.downloadPage} target="_blank" rel="noopener noreferrer" style={S.openBtn}>
+                  فتح ↗
+                </a>
+              </div>
+
+              {/* Action row */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                <button
+                  style={{ flex: 1, minWidth: 130, background: '#0a1a07', border: '1px solid #2a4020', borderRadius: 10, padding: '9px 14px', color: '#c8ff00', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                  onClick={() => copyLink(f.downloadPage)}
+                >
+                  {copied === f.downloadPage ? <Check size={13} /> : <Copy size={13} />}
+                  {copied === f.downloadPage ? 'تم النسخ!' : 'نسخ رابط التحميل'}
+                </button>
+                <a
+                  href={f.downloadPage} target="_blank" rel="noopener noreferrer"
+                  style={{ flex: 1, minWidth: 130, background: '#c8ff00', border: 'none', borderRadius: 10, padding: '9px 14px', color: '#0a0e04', fontSize: 12, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, textDecoration: 'none' }}
+                >
+                  <Download size={13} /> فتح صفحة التحميل
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Info box ─────────────────────────────────────────────────────── */}
+      <div style={S.infoBox}>
+        <span style={{ fontSize: 16 }}>💡</span>
+        <div>
+          <strong style={{ color: '#c8ff00' }}>GoFile.io</strong> — خدمة رفع ملفات مجانية بدون تسجيل.
+          الروابط تبقى متاحة لمدة <strong style={{ color: '#c8ff00' }}>10 أيام</strong> بعد آخر تحميل.
+          لا يُشارَك الرابط تلقائياً — أنت من يختار من يراه.
+          <div style={{ marginTop: 6, color: '#3a6a20' }}>⚠️ لا ترفع ملفات شخصية حساسة على خوادم خارجية.</div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
-const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot']
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload']
 
 function getToolFromSearch(search: string): ToolId | null {
   try {
@@ -4783,6 +5024,7 @@ export default function DZTools() {
         {active === 'dataanalysis' && <DataAnalysisTool />}
         {active === 'tts'          && <TTSTool />}
         {active === 'screenshot'   && <ScreenshotTool />}
+        {active === 'fileupload'   && <FileUploadTool />}
       </div>
     </div>
   )

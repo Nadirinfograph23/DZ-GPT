@@ -19115,6 +19115,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── كشف مبكر: هل الاستعلام عن أخبار كروية (وليس نتائج مباشرة)؟ ──────────
+  // يُعرَّف هنا قبل بناء سياق كرة القدم لتجنب تطبيق القاعدة الصارمة على استعلامات الأخبار
+  const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+
   // Football context — multi-source router (FotMob→API-Football→SofaScore)
   let footballContext = ''
   if (isFootballQuery && !isLFPQuery) {
@@ -19130,9 +19134,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     } catch (_) { routerData = null }
 
     // ── القاعدة الصارمة: إذا فشلت كل المصادر → لا إجابة من الذاكرة ──
+    // استثناء: استعلامات الأخبار الكروية (أخبار المنتخب/الفريق) تستخدم RSS بدل البيانات المباشرة
     if (!routerData && !sfData && !rssData?.length) {
-      footballContext = '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n⚠️ **لا تُجِب من ذاكرة النموذج — تعذّر التحقق من المعلومات الراهنة.**\n'
-      console.warn('[DZ Agent] STRICT RULE: all football sources failed — no LLM memory answer')
+      if (_isFootballNewsQuery) {
+        // لا تطبّق القاعدة الصارمة — ترك سياق كرة القدم فارغاً ليعتمد النموذج على RSS الأخبار
+        footballContext = ''
+        console.log('[DZ Agent] Football news query — strict live-data rule skipped, RSS news path will handle it')
+      } else {
+        footballContext = '\n⚠️ **بيانات كرة القدم المباشرة غير متاحة حالياً.**\n⚠️ **لا تُجِب من ذاكرة النموذج — تعذّر التحقق من المعلومات الراهنة.**\n'
+        console.warn('[DZ Agent] STRICT RULE: all football sources failed — no LLM memory answer')
+      }
     } else {
       footballContext = buildFootballContext(sfData, rssData || [], today, routerData)
       console.log(`[DZ Agent] Football context: router=${routerData?.source || 'none'}, SofaScore=${!!sfData}, RSS=${rssData?.length ?? 0}`)
@@ -19641,7 +19652,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // Allow RSS for football NEWS queries (e.g. "أخبار المنتخب") — not just match-score queries
-  const _isFootballNewsQuery = isFootballQuery && /أخبار|خبر|آخر أخبار|جديد|عاجل|news|latest|المنتخب.*أخبار|أخبار.*المنتخب/i.test(lastUserMessage)
+  // _isFootballNewsQuery is already defined earlier (before football context building)
   if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
 

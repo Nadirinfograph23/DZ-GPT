@@ -14975,9 +14975,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Static Fast-Path — إجابة فورية <1ms للمعرفة الثابتة ────────────────
-  // Guard: skip static facts for live-data queries (exchange rates, football standings, etc.)
+  // Guard: skip static facts for live-data queries (exchange rates, football standings, economy news, etc.)
   // to prevent دينار → دين conflict and ensure live data paths fire correctly
-  const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف/i.test(lastUserMessage)
+  const _hasLiveDataKw = /سعر الصرف|سعر الدولار|سعر اليورو|سعر الجنيه|سعر الريال|دولار.*دينار|يورو.*دينار|صرف.*اليوم|كم.*دولار|كم.*يورو|كم.*الدولار|كم.*اليورو|نتائج.*مبار|مباريات.*اليوم|مباريات.*كرة|ترتيب.*دوري|جدول.*دوري|نتائج.*دوري|أسعار.*صرف|أخبار.*اقتصاد|اقتصاد.*أخبار|أخبار الاقتصاد|مستجدات.*اقتصاد|آخر.*اقتصاد|اقتصاد.*اليوم/i.test(lastUserMessage)
   if (!currentRepo && !req.body.githubToken && !_hasLiveDataKw) {
     const _staticAnswer = lookupStaticFact(lastUserMessage)
     if (_staticAnswer) {

@@ -4943,28 +4943,122 @@ function FileUploadTool() {
   )
 }
 
-// ─── File Converter Tool (FFmpeg.wasm via CDN — VERT.sh approach) ─────────────
+// ─── File Converter Tool (FFmpeg.wasm + Document Conversion) ──────────────────
 const CONV_IMAGE_EXTS = ['jpg','png','webp','bmp','gif']
 const CONV_AUDIO_EXTS = ['mp3','wav','ogg','aac','flac','m4a','opus']
 const CONV_VIDEO_EXTS = ['mp4','webm','avi','mov','mkv','gif']
+const CONV_DOC_EXTS   = ['txt','pdf','docx','doc','rtf']
 const CONV_FMT_LABELS: Record<string,string> = {
   mp4:'MP4',webm:'WebM',avi:'AVI',mov:'MOV',mkv:'MKV',gif:'GIF',
   mp3:'MP3',wav:'WAV',ogg:'OGG',aac:'AAC',flac:'FLAC',m4a:'M4A',opus:'OPUS',
   jpg:'JPG',png:'PNG',webp:'WebP',bmp:'BMP',
+  txt:'TXT',pdf:'PDF',docx:'DOCX',doc:'DOC',rtf:'RTF',
+}
+const CONV_DOC_OUTPUTS: Record<string,string[]> = {
+  txt:  ['pdf','docx','rtf'],
+  pdf:  ['txt'],
+  docx: ['txt','pdf'],
+  doc:  ['txt','pdf'],
+  rtf:  ['txt','pdf'],
 }
 function convGetExt(name: string) { return name.split('.').pop()?.toLowerCase() || '' }
-function convGetType(ext: string): 'image'|'audio'|'video'|'other' {
+function convGetType(ext: string): 'image'|'audio'|'video'|'document'|'other' {
   if (CONV_IMAGE_EXTS.includes(ext)) return 'image'
   if (CONV_AUDIO_EXTS.includes(ext)) return 'audio'
   if (CONV_VIDEO_EXTS.includes(ext)) return 'video'
+  if (CONV_DOC_EXTS.includes(ext))  return 'document'
   return 'other'
 }
 function convGetOutputFmts(inputExt: string): string[] {
   const t = convGetType(inputExt)
-  if (t === 'image') return CONV_IMAGE_EXTS.filter(e => e !== inputExt)
-  if (t === 'audio') return CONV_AUDIO_EXTS.filter(e => e !== inputExt)
-  if (t === 'video') return CONV_VIDEO_EXTS.filter(e => e !== inputExt)
+  if (t === 'image')    return CONV_IMAGE_EXTS.filter(e => e !== inputExt)
+  if (t === 'audio')    return CONV_AUDIO_EXTS.filter(e => e !== inputExt)
+  if (t === 'video')    return CONV_VIDEO_EXTS.filter(e => e !== inputExt)
+  if (t === 'document') return (CONV_DOC_OUTPUTS[inputExt] || [])
   return []
+}
+
+// ── تحميل مكتبات الوثائق من CDN ──────────────────────────────────────────────
+async function loadMammoth(): Promise<any> {
+  if ((window as any).mammoth) return (window as any).mammoth
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js'
+    s.onload = () => resolve((window as any).mammoth)
+    s.onerror = () => reject(new Error('فشل تحميل مكتبة mammoth'))
+    document.head.appendChild(s)
+  })
+}
+async function loadPdfjsLib(): Promise<any> {
+  if ((window as any).pdfjsLib) return (window as any).pdfjsLib
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'
+    s.onload = () => {
+      const lib = (window as any).pdfjsLib
+      lib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
+      resolve(lib)
+    }
+    s.onerror = () => reject(new Error('فشل تحميل مكتبة pdfjs'))
+    document.head.appendChild(s)
+  })
+}
+
+// ── تحويل TXT → DOCX (هيكل XML مضغوط) ──────────────────────────────────────
+async function txtToDocx(text: string): Promise<Blob> {
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+  const escaped = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  const paragraphs = escaped.split(/\r?\n/).map(line =>
+    `<w:p><w:r><w:t xml:space="preserve">${line || ' '}</w:t></w:r></w:p>`
+  ).join('')
+  const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>${paragraphs}<w:sectPr/></w:body>
+</w:document>`
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`
+  const wordRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`
+  zip.file('_rels/.rels', rels)
+  zip.file('word/document.xml', docXml)
+  zip.file('word/_rels/document.xml.rels', wordRels)
+  zip.file('[Content_Types].xml', contentTypes)
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+}
+
+// ── تحويل نص → PDF عبر طباعة المتصفح ─────────────────────────────────────────
+function textToPdfViaprint(text: string, filename: string): void {
+  const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head>
+    <meta charset="UTF-8"><title>${filename}</title>
+    <style>body{font-family:'Cairo','Tajawal',Arial,sans-serif;font-size:13pt;line-height:1.8;padding:40px;white-space:pre-wrap;direction:rtl}</style>
+    </head><body>${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</body></html>`
+  const w = window.open('','_blank')
+  if (!w) { alert('يرجى السماح بالنوافذ المنبثقة لتصدير PDF'); return }
+  w.document.write(html)
+  w.document.close()
+  w.onload = () => { w.focus(); w.print() }
+}
+
+// ── تحويل نص → RTF ────────────────────────────────────────────────────────────
+function txtToRtf(text: string): Blob {
+  const rtf = `{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\n\\f0\\fs24\\sl360\\slmult1 ${
+    text.split(/\r?\n/).map(l =>
+      l.replace(/\\/g,'\\\\').replace(/\{/g,'\\{').replace(/\}/g,'\\}') + '\\par\n'
+    ).join('')
+  }}`
+  return new Blob([rtf], { type: 'application/rtf' })
 }
 
 function FileConverterTool() {
@@ -5038,6 +5132,66 @@ function FileConverterTool() {
         setProgress(40)
         const url = await convertImageViaCanvas(file, outputExt)
         setProgress(100); setDownloadUrl(url)
+
+      } else if (inputType === 'document') {
+        setProgress(15)
+        // ── استخراج النص الخام من الملف المصدر ────────────────────────────
+        let rawText = ''
+
+        if (inputExt === 'txt' || inputExt === 'rtf') {
+          rawText = await new Promise<string>((res, rej) => {
+            const fr = new FileReader()
+            fr.onload = () => {
+              let t = fr.result as string
+              if (inputExt === 'rtf') {
+                // إزالة رموز RTF الأساسية
+                t = t.replace(/\{\\[^{}]+\}|\\[a-z]+\d*\s?|[{}]/g, ' ').replace(/\s+/g,' ').trim()
+              }
+              res(t)
+            }
+            fr.onerror = rej
+            fr.readAsText(file, 'utf-8')
+          })
+        } else if (inputExt === 'pdf') {
+          setProgress(25)
+          const pdfjs = await loadPdfjsLib()
+          const buf   = await file.arrayBuffer()
+          const pdf   = await pdfjs.getDocument({ data: buf }).promise
+          const pages: string[] = []
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page    = await pdf.getPage(i)
+            const content = await page.getTextContent()
+            pages.push(content.items.map((it: any) => it.str).join(' '))
+            setProgress(25 + Math.round((i / pdf.numPages) * 50))
+          }
+          rawText = pages.join('\n\n')
+        } else if (inputExt === 'docx' || inputExt === 'doc') {
+          setProgress(25)
+          const mammoth = await loadMammoth()
+          const buf     = await file.arrayBuffer()
+          const result  = await mammoth.extractRawText({ arrayBuffer: buf })
+          rawText = result.value
+          setProgress(70)
+        }
+
+        setProgress(80)
+
+        // ── توليد الملف بالصيغة المطلوبة ──────────────────────────────────
+        if (outputExt === 'txt') {
+          const blob = new Blob([rawText], { type: 'text/plain;charset=utf-8' })
+          setDownloadUrl(URL.createObjectURL(blob))
+        } else if (outputExt === 'rtf') {
+          setDownloadUrl(URL.createObjectURL(txtToRtf(rawText)))
+        } else if (outputExt === 'docx') {
+          const blob = await txtToDocx(rawText)
+          setDownloadUrl(URL.createObjectURL(blob))
+        } else if (outputExt === 'pdf') {
+          // PDF عبر طباعة المتصفح — نفتح نافذة ويطبع المستخدم إلى PDF
+          textToPdfViaprint(rawText, outName)
+          setDownloadUrl('__print__')
+        }
+        setProgress(100)
+
       } else {
         const ff = await ensureFFmpeg()
         ff.setProgress(({ ratio }: { ratio: number }) => setProgress(Math.max(5, Math.round(ratio * 100))))
@@ -5075,8 +5229,8 @@ function FileConverterTool() {
   }
 
   const fmtSize = (b: number) => b < 1e6 ? `${(b/1024).toFixed(1)} KB` : `${(b/1e6).toFixed(1)} MB`
-  const typeIcon: Record<string,string> = { image:'🖼️', audio:'🎵', video:'🎬', other:'📁' }
-  const typeLabel: Record<string,string> = { image:'صورة', audio:'صوت', video:'فيديو', other:'ملف' }
+  const typeIcon: Record<string,string> = { image:'🖼️', audio:'🎵', video:'🎬', document:'📄', other:'📁' }
+  const typeLabel: Record<string,string> = { image:'صورة', audio:'صوت', video:'فيديو', document:'مستند', other:'ملف' }
 
   const S = {
     wrap:  { fontFamily:"'Cairo','Tajawal',sans-serif", direction:'rtl' as const, color:'#c8d8b8' },
@@ -5113,7 +5267,7 @@ function FileConverterTool() {
   return (
     <div style={S.wrap}>
       <div style={S.title}>🔄 محوِّل الصيغ</div>
-      <div style={S.sub}>حوِّل الفيديو والصوت والصور بين جميع الصيغ — مباشرة في المتصفح بدون رفع لأي سيرفر (VERT.sh / FFmpeg.wasm)</div>
+      <div style={S.sub}>حوِّل الفيديو والصوت والصور والمستندات — مباشرة في المتصفح بدون رفع لأي سيرفر</div>
 
       {/* منطقة السحب والإفلات */}
       <div
@@ -5128,10 +5282,10 @@ function FileConverterTool() {
           {file ? file.name : 'اسحب ملفك هنا أو اضغط لاختياره'}
         </div>
         <div style={{ fontSize:12, color:'#4a7a30' }}>
-          {file ? fmtSize(file.size) : 'فيديو · صوت · صور — جميع الصيغ مدعومة'}
+          {file ? fmtSize(file.size) : 'فيديو · صوت · صور · مستندات (PDF، DOCX، TXT…)'}
         </div>
         <input ref={fileInputRef} type="file" style={{ display:'none' }}
-          accept="video/*,audio/*,image/*,.mkv,.avi,.flac,.ogg,.opus,.m4a"
+          accept="video/*,audio/*,image/*,.mkv,.avi,.flac,.ogg,.opus,.m4a,.txt,.pdf,.docx,.doc,.rtf"
           onChange={e => handleFiles(e.target.files)} />
       </div>
 
@@ -5164,7 +5318,7 @@ function FileConverterTool() {
       )}
 
       {file && !outputFmts.length && (
-        <div style={S.err}>⚠️ هذا النوع من الملفات غير مدعوم — يُرجى اختيار ملف فيديو أو صوت أو صورة.</div>
+        <div style={S.err}>⚠️ هذا النوع من الملفات غير مدعوم — يُرجى اختيار ملف فيديو أو صوت أو صورة أو مستند (PDF/DOCX/TXT/RTF).</div>
       )}
 
       {/* حالة محرك FFmpeg */}
@@ -5185,12 +5339,22 @@ function FileConverterTool() {
       )}
 
       {/* زر التحميل بعد النجاح */}
-      {downloadUrl && (
+      {downloadUrl && downloadUrl !== '__print__' && (
         <div style={{ marginTop:12 }}>
           <a href={downloadUrl} download={outputName} style={S.dlBtn as React.CSSProperties}>
             ⬇️ تحميل الملف المحوَّل — {outputName}
           </a>
           <div style={{ ...S.hint('#6aff00'), textAlign:'center' as const, marginTop:6 }}>✅ تم التحويل بنجاح!</div>
+          <button style={S.reset} onClick={() => { setFile(null); setOutputExt(''); setDownloadUrl(''); setError(''); setProgress(0) }}>
+            + تحويل ملف آخر
+          </button>
+        </div>
+      )}
+      {downloadUrl === '__print__' && (
+        <div style={{ marginTop:12 }}>
+          <div style={{ background:'#0d2010', border:'1px solid #2a5020', borderRadius:12, padding:'14px 18px', color:'#c8d8b8', fontSize:13 }}>
+            📄 <strong>تصدير إلى PDF:</strong> تم فتح نافذة الطباعة — اختر <strong>"حفظ كـ PDF"</strong> من قائمة الطابعات.
+          </div>
           <button style={S.reset} onClick={() => { setFile(null); setOutputExt(''); setDownloadUrl(''); setError(''); setProgress(0) }}>
             + تحويل ملف آخر
           </button>
@@ -5205,9 +5369,10 @@ function FileConverterTool() {
         <div style={{ fontSize:12, fontWeight:700, color:'#4a7a30', marginBottom:8 }}>الصيغ المدعومة:</div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
           {([
-            ['🖼️ صور',  'JPG · PNG · WebP · BMP · GIF'],
-            ['🎵 صوت',  'MP3 · WAV · OGG · AAC · FLAC · M4A'],
-            ['🎬 فيديو','MP4 · WebM · AVI · MOV · MKV · GIF'],
+            ['🖼️ صور',     'JPG · PNG · WebP · BMP · GIF'],
+            ['🎵 صوت',     'MP3 · WAV · OGG · AAC · FLAC · M4A'],
+            ['🎬 فيديو',   'MP4 · WebM · AVI · MOV · MKV · GIF'],
+            ['📄 مستندات', 'PDF · DOCX · DOC · TXT · RTF'],
           ] as [string,string][]).map(([lbl, fmts]) => (
             <div key={lbl} style={{ background:'#0a1a06', borderRadius:8, padding:'8px 12px', fontSize:11, color:'#6a9a50' }}>
               <div style={{ fontWeight:700, marginBottom:2 }}>{lbl}</div>

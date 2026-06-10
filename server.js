@@ -3444,23 +3444,42 @@ function broadcastNationalTeamNews(items) {
 // ===== NATIONAL TEAM NEWS CACHE & ENDPOINT =====
 const NATIONAL_TEAM_CACHE = { items: [], seenTitles: new Set(), ts: 0 }
 const NATIONAL_TEAM_TTL   = 5 * 60 * 1000 // 5 min
-const NATIONAL_TEAM_RSS   = 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar'
 
-function parseNationalTeamRss(xml) {
+// ── مصادر RSS متخصصة بأخبار المنتخب الجزائري (رياضة فقط — بلا سياسة) ──
+const NATIONAL_TEAM_RSS_FEEDS = [
+  { name: 'الهداف',               url: 'https://www.elheddaf.com/feed' },
+  { name: 'APS رياضة',            url: 'https://www.aps.dz/ar/sport/feed' },
+  { name: 'Sport DZ',             url: 'https://www.sport-dz.com/feed/' },
+  { name: 'Google الخضر',         url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'Google الفريق الوطني',  url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D9%81%D8%B1%D9%8A%D9%82+%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%22+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+  { name: 'سبورت 360',             url: 'https://arabic.sport360.com/feed/' },
+]
+
+// كلمات تدل على سياسة/اقتصاد — يُستبعد كل خبر يحتويها
+const _NT_NON_SPORTS = ['سياسة','حكومة','وزير','برلمان','رئيس الجمهورية','اقتصاد','مالية','استثمار','بنك','دينار','أسعار','ميزانية','جريمة','أمن','إرهاب','حزب','انتخاب']
+function _ntIsSports(title = '', desc = '') {
+  const text = `${title} ${desc}`.toLowerCase()
+  return !_NT_NON_SPORTS.some(k => text.includes(k))
+}
+
+function parseNationalTeamRss(xml, feedName = 'أخبار المنتخب') {
   const items = []
-  const itemRegex = /<item>([\s\S]*?)<\/item>/gi
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
   let m
   while ((m = itemRegex.exec(xml)) !== null) {
     const block = m[1]
     const title   = (block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1] || block.match(/<title>(.*?)<\/title>/i)?.[1] || '').trim()
     const link    = (block.match(/<link>(.*?)<\/link>/i)?.[1] || '').trim()
     const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/i)?.[1] || '').trim()
-    const source  = (block.match(/<source[^>]*>(.*?)<\/source>/i)?.[1] || 'أخبار المنتخب').trim()
-    if (title && title.length > 5) {
-      items.push({ title, link, pubDate, source, feedName: source })
+    const desc    = (block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i)?.[1] || block.match(/<description>(.*?)<\/description>/i)?.[1] || '').replace(/<[^>]+>/g,'').trim().slice(0, 200)
+    const source  = (block.match(/<source[^>]*>(.*?)<\/source>/i)?.[1] || feedName).trim()
+    if (title && title.length > 5 && _ntIsSports(title, desc)) {
+      items.push({ title, link, pubDate, source, feedName: source, description: desc })
     }
   }
-  return items.slice(0, 15)
+  return items.slice(0, 12)
 }
 
 async function fetchNationalTeamNews({ bypassCache = false } = {}) {
@@ -3468,13 +3487,39 @@ async function fetchNationalTeamNews({ bypassCache = false } = {}) {
     return NATIONAL_TEAM_CACHE.items
   }
   try {
-    const r = await fetch(NATIONAL_TEAM_RSS, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
-      signal: AbortSignal.timeout(12000),
+    // جلب من جميع المصادر بالتوازي
+    const results = await Promise.allSettled(
+      NATIONAL_TEAM_RSS_FEEDS.map(feed =>
+        fetch(feed.url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
+          signal: AbortSignal.timeout(10000),
+        })
+        .then(r => r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(xml => parseNationalTeamRss(xml, feed.name))
+        .catch(() => [])
+      )
+    )
+
+    // دمج النتائج وإزالة المكررات
+    const allItems = []
+    const seenTitles = new Set()
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        for (const it of r.value) {
+          const norm = it.title.toLowerCase().replace(/\s+/g,' ').trim()
+          if (!seenTitles.has(norm)) { seenTitles.add(norm); allItems.push(it) }
+        }
+      }
+    }
+
+    // ترتيب حسب التاريخ (الأحدث أولاً)
+    allItems.sort((a, b) => {
+      const da = a.pubDate ? new Date(a.pubDate).getTime() : 0
+      const db = b.pubDate ? new Date(b.pubDate).getTime() : 0
+      return db - da
     })
-    if (!r.ok) throw new Error(`RSS HTTP ${r.status}`)
-    const xml  = await r.text()
-    const items = parseNationalTeamRss(xml)
+
+    const items = allItems.slice(0, 20)
 
     // Detect NEW items (not seen before) for SSE push
     const newItems = items.filter(it => !NATIONAL_TEAM_CACHE.seenTitles.has(it.title))
@@ -7860,19 +7905,25 @@ const RSS_FEEDS = {
     { name: 'الجزائر360',    url: 'https://www.algerie360.com/feed/' },
   ],
   sports: [
-    // ── Algerian & regional sports ──
-    { name: 'Sport DZ', url: 'https://www.sport-dz.com/feed/' },
-    { name: 'سبورت 360 عربي', url: 'https://arabic.sport360.com/feed/' },
-    { name: 'FilGoal', url: 'https://www.filgoal.com/feed/' },
-    // ── International sports (stable) ──
-    { name: 'BBC Sport', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
-    { name: 'BBC Sport Football', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
-    { name: 'ESPN Soccer', url: 'https://www.espn.com/espn/rss/soccer/news' },
-    // ── Google News: المنتخب الجزائري — 7 مصادر موثوقة (أولوية قصوى) ──
-    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar' },
-    // ── Google News Sports Algeria ──
-    { name: 'Google رياضة جزائر', url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // ── مصادر جزائرية رياضية متخصصة (أولوية قصوى) ──
+    { name: 'الهداف',               url: 'https://www.elheddaf.com/feed' },
+    { name: 'APS رياضة',            url: 'https://www.aps.dz/ar/sport/feed' },
+    { name: 'Sport DZ',             url: 'https://www.sport-dz.com/feed/' },
+    { name: 'سبورت 360 عربي',       url: 'https://arabic.sport360.com/feed/' },
+    { name: 'FilGoal',              url: 'https://www.filgoal.com/feed/' },
+    { name: 'كووورة',               url: 'https://www.kooora.com/?feed=rss' },
+    // ── Google News: الخضر / محاربو الصحراء / المنتخب الجزائري ──
+    { name: 'Google الخضر',         url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D8%AE%D8%B6%D8%B1%22+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+    { name: 'Google محاربو الصحراء', url: 'https://news.google.com/rss/search?q=%22%D9%85%D8%AD%D8%A7%D8%B1%D8%A8%D9%88+%D8%A7%D9%84%D8%B5%D8%AD%D8%B1%D8%A7%D8%A1%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+    { name: 'Google المنتخب الجزائري', url: 'https://news.google.com/rss/search?q=%28site%3Aennaharonline.com+OR+site%3Aechoroukonline.com+OR+site%3Aelkhabar.com+OR+site%3Aelbilad.net+OR+site%3Aelhayatalarabiya.dz+OR+site%3Aaps.dz+OR+site%3Aelheddaf.com%29+%22%D8%A7%D9%84%D9%85%D9%86%D8%AA%D8%AE%D8%A8+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1%D9%8A%22&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+    { name: 'Google الفريق الوطني',  url: 'https://news.google.com/rss/search?q=%22%D8%A7%D9%84%D9%81%D8%B1%D9%8A%D9%82+%D8%A7%D9%84%D9%88%D8%B7%D9%86%D9%8A%22+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1+%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85&hl=ar&gl=DZ&ceid=DZ:ar&sort=date' },
+    // ── Google News رياضة عامة ──
+    { name: 'Google رياضة جزائر',   url: 'https://news.google.com/rss/search?q=%D8%B1%D9%8A%D8%A7%D8%B6%D8%A9+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
     { name: 'Google كرة قدم جزائر', url: 'https://news.google.com/rss/search?q=%D9%83%D8%B1%D8%A9+%D9%82%D8%AF%D9%85+%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+    // ── International sports ──
+    { name: 'BBC Sport Football',   url: 'https://feeds.bbci.co.uk/sport/football/rss.xml' },
+    { name: 'ESPN Soccer',          url: 'https://www.espn.com/espn/rss/soccer/news' },
+    { name: 'CAF Football',         url: 'https://www.cafonline.com/rss-feed/' },
   ],
   tech: [
     { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },

@@ -28,6 +28,7 @@ import {
 import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
+import { correctQuery, buildCorrectionNote } from './lib/dz-query-corrector.js'
 import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
 import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuery } from './lib/algeria-gov/historical-governments.js'
 
@@ -14856,7 +14857,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Tool Redirect — كشف الطلبات التي لها أدوات متخصصة ─────────────────
   // Skip redirect when request comes from a specialized tool (e.g. web-builder calling itself)
-  const _rawLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+  const _rawLastMsgOrig = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+
+  // ── تصحيح النية والإملاء — Query Intent Corrector ──────────────────────
+  const _qCorrection   = correctQuery(_rawLastMsgOrig)
+  const _rawLastMsg    = _qCorrection.wasChanged ? _qCorrection.corrected : _rawLastMsgOrig
+  const _correctionNote = buildCorrectionNote(_qCorrection)
+  if (_qCorrection.wasChanged) {
+    console.log(`[QueryCorrector] ✏️  "${_rawLastMsgOrig}" → "${_rawLastMsg}"`)
+  }
+
   // Website builder queries: skip redirect — generate inline HTML with preview + download
   const _isWebsiteRequest = detectWebsiteBuilderQuery(_rawLastMsg) || detectMapWebsiteQuery(_rawLastMsg)
   const _skipToolRedirect = req.body.source === 'web-builder' || req.body.skipToolRedirect === true || _isWebsiteRequest
@@ -14876,7 +14886,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         const _sportRes = await runSportsAgent(_rawLastMsg, messages)
         const _sportContent = _sportRes.userResponse || _sportRes.context || _sportRes.content || ''
         return res.status(200).json({
-          content: _sportContent,
+          content: _correctionNote + _sportContent,
           model: 'sports-agent',
           found: _sportRes.found,
           type: _sportRes.type,
@@ -14885,6 +14895,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           wc2026: _sportRes.wc2026,
           matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
           _sportsAgent: true,
+          _queryCorrected: _qCorrection.wasChanged,
         })
       } catch (_sae) {
         console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
@@ -15068,12 +15079,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         const _archiveContent = _archiveRes.userResponse || _archiveRes.context || ''
         if (_archiveContent) {
           return res.status(200).json({
-            content: _archiveContent,
+            content: _correctionNote + _archiveContent,
             model: 'sports-agent-archive',
             found: _archiveRes.found,
             type: _archiveRes.type,
             sources: _archiveRes.sources,
             _sportsAgent: true,
+            _queryCorrected: _qCorrection.wasChanged,
           })
         }
       } catch (_archErr) {

@@ -1343,24 +1343,64 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
         {/* ===== NATIONAL TEAM — المنتخب الجزائري ===== */}
         {activeSection === 'national' && (
           <div className="dzd-news-panel">
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 4px 8px', direction:'rtl' }}>
-              <span style={{ fontSize:11, color:'#22c55e', fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
-                🇩🇿 أحدث أخبار المنتخب الجزائري
-              </span>
-              <button
-                className="dzd-retry-btn"
-                style={{ fontSize:'10px', padding:'3px 8px', display:'inline-flex', alignItems:'center', gap:'4px' }}
-                onClick={() => loadNationalTeamNews({ force: true })}
-                disabled={nationalLoading}
-                title="تحديث أخبار المنتخب"
-              >
-                <RefreshCw size={11} className={nationalLoading ? 'dzd-spin' : ''} />
-                {nationalLoading ? 'جاري…' : 'تحديث'}
-              </button>
+
+            {/* ── رأس البطاقة ──────────────────────────────────────── */}
+            <div style={{ direction:'rtl', marginBottom:10 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                  <span style={{ fontSize:15, fontWeight:800, color:'#22c55e', display:'flex', alignItems:'center', gap:6 }}>
+                    🇩🇿 المنتخب الجزائري
+                  </span>
+                  <span style={{ fontSize:10, color:'#6b8f71', letterSpacing:'0.04em' }}>
+                    الخضر · محاربو الصحراء · الفريق الوطني
+                  </span>
+                </div>
+                <button
+                  className="dzd-retry-btn"
+                  style={{ fontSize:'10px', padding:'3px 10px', display:'inline-flex', alignItems:'center', gap:'4px' }}
+                  onClick={() => loadNationalTeamNews({ force: true })}
+                  disabled={nationalLoading}
+                  title="تحديث أخبار المنتخب"
+                >
+                  <RefreshCw size={11} className={nationalLoading ? 'dzd-spin' : ''} />
+                  {nationalLoading ? 'جاري…' : 'تحديث'}
+                </button>
+              </div>
+
+              {/* ── أزرار البرومبتات السريعة ─────────────────────── */}
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:4 }}>
+                {[
+                  { label:'⚽ أخبار الخضر',           prompt:'أعطني آخر أخبار الخضر المنتخب الجزائري اليوم' },
+                  { label:'🏜️ محاربو الصحراء',        prompt:'آخر أخبار محاربو الصحراء المنتخب الجزائري' },
+                  { label:'🌍 الفريق الوطني',          prompt:'أخبار الفريق الوطني الجزائري اليوم' },
+                  { label:'📅 المباراة القادمة',        prompt:'ما هي المباراة القادمة للمنتخب الجزائري؟ الموعد والمنافس' },
+                  { label:'📊 تصفيات كأس العالم',       prompt:'ما هو وضع المنتخب الجزائري في تصفيات كأس العالم؟ النتائج والترتيب' },
+                  { label:'🏆 آخر نتائج المنتخب',       prompt:'آخر نتائج مباريات المنتخب الجزائري هذا الشهر' },
+                  { label:'👥 قائمة المنتخب',           prompt:'قائمة المنتخب الجزائري الأخيرة — من تم استدعاؤه؟' },
+                  { label:'⭐ أبرز لاعبي الخضر',        prompt:'من هم أبرز لاعبي المنتخب الجزائري حالياً؟' },
+                ].map(({ label, prompt }) => (
+                  <button
+                    key={label}
+                    onClick={() => onSend(prompt)}
+                    style={{
+                      background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.22)',
+                      borderRadius:20, padding:'5px 12px', fontSize:11, fontWeight:600,
+                      color:'#4ade80', cursor:'pointer', fontFamily:'inherit', direction:'rtl',
+                      transition:'all .18s', whiteSpace:'nowrap',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.18)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.5)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background='rgba(34,197,94,0.08)'; (e.currentTarget as HTMLButtonElement).style.borderColor='rgba(34,197,94,0.22)' }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* ── قائمة الأخبار ─────────────────────────────────── */}
             {nationalLoading ? (
               <div className="dzd-news-list">
-                {[...Array(5)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
+                {[...Array(6)].map((_, i) => <div key={i} className="dzd-skeleton dzd-skeleton--news" />)}
               </div>
             ) : nationalTeamNews.length === 0 ? (
               <div className="dzd-empty-state">
@@ -1369,13 +1409,24 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 <button className="dzd-retry-btn" onClick={() => loadNationalTeamNews({ force: true })}>
                   <RefreshCw size={12} /> إعادة المحاولة
                 </button>
+                <div style={{ marginTop:10, display:'flex', flexWrap:'wrap', gap:5, justifyContent:'center' }}>
+                  {['أخبار الخضر اليوم','المباراة القادمة للمنتخب','قائمة المنتخب الجزائري'].map(q => (
+                    <button key={q} className="dzd-retry-btn" style={{ fontSize:'10px' }} onClick={() => onSend(q)}>{q}</button>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="dzd-news-list">
                 {nationalTeamNews.map((item, i) => (
-                  <div key={i} className="dzd-news-card dzd-news-card--national" onClick={() => onSend(`أعطني ملخصاً وآخر التطورات حول هذا الخبر:\n"${item.title}"`)}>
+                  <div
+                    key={i}
+                    className="dzd-news-card dzd-news-card--national"
+                    onClick={() => onSend(`أعطني ملخصاً وتحليلاً لهذا الخبر الرياضي:\n"${item.title}"\nالمصدر: ${item.feedName || 'أخبار المنتخب'}`)}
+                  >
                     <div className="dzd-news-card-left">
-                      <span className="dzd-news-source dzd-news-source--national"><Radio size={9} /> {item.feedName}</span>
+                      <span className="dzd-news-source dzd-news-source--national">
+                        <Radio size={9} /> {item.feedName || 'المنتخب 🇩🇿'}
+                      </span>
                       <span className="dzd-news-time">{formatPubDate(item.pubDate)}</span>
                     </div>
                     <div className="dzd-news-card-body">
@@ -1388,6 +1439,15 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                     )}
                   </div>
                 ))}
+                <div style={{ textAlign:'center', paddingTop:8 }}>
+                  <button
+                    className="dzd-retry-btn"
+                    style={{ fontSize:'10px', display:'inline-flex', alignItems:'center', gap:4 }}
+                    onClick={() => onSend('أعطني ملخصاً شاملاً لآخر أخبار المنتخب الجزائري اليوم من جميع المصادر')}
+                  >
+                    📋 ملخص شامل لأخبار المنتخب
+                  </button>
+                </div>
               </div>
             )}
           </div>

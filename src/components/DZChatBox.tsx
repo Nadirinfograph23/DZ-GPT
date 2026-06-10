@@ -8351,7 +8351,7 @@ ${rows}
                           </div>
                           <button
                             className="dz-tool-redirect-card__btn"
-                            onClick={() => navigate(msg.toolRedirect!.toolUrl)}
+                            onClick={(e) => { e.stopPropagation(); window.location.href = msg.toolRedirect!.toolUrl }}
                           >
                             فتح الأداة ←
                           </button>

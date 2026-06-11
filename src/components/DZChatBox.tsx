@@ -682,7 +682,7 @@ interface DZMessage {
   }
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
-  matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null }
+  matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null }
 }
 
 interface ActionLogEntry {
@@ -7427,7 +7427,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           responseTime: Math.round(Date.now() - _fetchT0),
           executionCode: codeExtract?.code,
           executionLang: codeExtract?.lang,
-          matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null } | undefined) || _clientMatchVs || undefined,
+          matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null } | undefined) || _clientMatchVs || undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -7537,6 +7537,8 @@ ${rows}
             messages: withoutLast.map(m => ({ role: m.role, content: m.content })),
             githubToken: githubToken || undefined,
             cerebrasKey: cerebrasKey || undefined,
+            isRetry: true,
+            retrySeed: Math.floor(Math.random() * 999999),
           }),
           signal,
         })
@@ -8246,13 +8248,32 @@ ${rows}
                                 </span>
                               </div>
 
-                              {/* VS divider */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '60px' }}>
-                                <span style={{
-                                  fontSize: '26px', fontWeight: 900, color: accentColor,
-                                  letterSpacing: '3px', textShadow: `0 0 20px ${accentColor}`,
-                                }}>VS</span>
-                                <span style={{ width: '50px', height: '2px', background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`, borderRadius: '2px', display: 'block' }} />
+                              {/* VS / Score divider */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '70px' }}>
+                                {(mv.homeScore !== null && mv.homeScore !== undefined && mv.awayScore !== null && mv.awayScore !== undefined) ? (
+                                  <>
+                                    <span style={{
+                                      fontSize: '32px', fontWeight: 900, color: '#fff',
+                                      letterSpacing: '2px', textShadow: `0 0 24px ${accentColor}, 0 2px 8px rgba(0,0,0,0.8)`,
+                                      background: `linear-gradient(135deg, ${accentColor}33, ${accentColor}55)`,
+                                      border: `1px solid ${accentColor}66`,
+                                      borderRadius: '12px',
+                                      padding: '4px 12px',
+                                      lineHeight: 1.2,
+                                    }}>{mv.homeScore} — {mv.awayScore}</span>
+                                    <span style={{ fontSize: '10px', color: accentColor, fontWeight: 700, letterSpacing: '1px', marginTop: '2px' }}>
+                                      {isPast ? '⏪ النهائية' : isLive ? '🔴 مباشر' : ''}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span style={{
+                                      fontSize: '26px', fontWeight: 900, color: accentColor,
+                                      letterSpacing: '3px', textShadow: `0 0 20px ${accentColor}`,
+                                    }}>VS</span>
+                                    <span style={{ width: '50px', height: '2px', background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`, borderRadius: '2px', display: 'block' }} />
+                                  </>
+                                )}
                               </div>
 
                               {/* Team 2 */}

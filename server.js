@@ -14811,6 +14811,8 @@ setInterval(pruneDiskSessions, 6 * 60 * 60 * 1000) // every 6h
 
 // ===== DZ AGENT API ROUTE =====
 app.post('/api/dz-agent-chat', async (req, res) => {
+  const _isRetry   = req.body.isRetry === true
+  const _retrySeed = _isRetry ? (req.body.retrySeed || Math.floor(Math.random() * 999999)) : null
   const _agentSessionId = sanitizeString(req.body.sessionId || '', 64) || null
   let messages = normalizeChatMessages(req.body.messages)
 
@@ -14879,9 +14881,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Match-Vs Early Handler ────────────────────────────────────────────────
   // يُعالَج هنا قبل أي fast-path آخر — دائماً يُوجَّه للوكيل الرياضي مباشرةً
+  // عند إعادة المحاولة (_isRetry) نتجاوز هذا البايباس لإعطاء إجابة مختلفة عبر LLM
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
-    if (_earlyMatchVs?.isMatchVs) {
+    if (_earlyMatchVs?.isMatchVs && !_isRetry) {
       console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent (direct, no clarification)`)
       try {
         const _sportRes = await runSportsAgent(_rawLastMsg, messages)
@@ -14896,7 +14899,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           wc2026: _sportRes.wc2026,
           matchVsData: (() => {
             const _fm = _sportRes.matches?.[0] || _sportRes.wcFixtures?.[0] || null
-            return { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal, date: _fm?.date||null, time: _fm?.startTime||null, competition: _fm?.competition||null, venue: _fm?.venue||null, city: _fm?.city||null, round: _fm?.round||null, kooraLink: _fm?.kooraLink||null }
+            return { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal, date: _fm?.date||null, time: _fm?.startTime||null, competition: _fm?.competition||null, venue: _fm?.venue||null, city: _fm?.city||null, round: _fm?.round||null, kooraLink: _fm?.kooraLink||null, homeScore: _fm?.homeScore??null, awayScore: _fm?.awayScore??null }
           })(),
           _sportsAgent: true,
           _queryCorrected: _qCorrection.wasChanged,
@@ -19049,7 +19052,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── Match-Vs Direct Route — دائماً للوكيل الرياضي بدون طلب توضيح ──────────
   // "X ضد Y" يُوجَّه فوراً للوكيل الرياضي بغض النظر عن السياق
-  if (_isMatchVsQuery) {
+  // عند إعادة المحاولة: نتجاوز هذا المسار لإعطاء إجابة مختلفة عبر LLM
+  if (_isMatchVsQuery && !_isRetry) {
     console.log(`[MatchVs:DirectRoute] ⚽ ${_matchVsData.team1} ضد ${_matchVsData.team2} → runSportsAgent`)
     try {
       const _sportRes2 = await runSportsAgent(lastUserMessage, messages)
@@ -19064,7 +19068,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         wc2026: _sportRes2.wc2026,
         matchVsData: (() => {
           const _fm2 = _sportRes2.matches?.[0] || _sportRes2.wcFixtures?.[0] || null
-          return { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal, date: _fm2?.date||null, time: _fm2?.startTime||null, competition: _fm2?.competition||null, venue: _fm2?.venue||null, city: _fm2?.city||null, round: _fm2?.round||null, kooraLink: _fm2?.kooraLink||null }
+          return { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal, date: _fm2?.date||null, time: _fm2?.startTime||null, competition: _fm2?.competition||null, venue: _fm2?.venue||null, city: _fm2?.city||null, round: _fm2?.round||null, kooraLink: _fm2?.kooraLink||null, homeScore: _fm2?.homeScore??null, awayScore: _fm2?.awayScore??null }
         })(),
         _sportsAgent: true,
       })
@@ -19085,7 +19089,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:من\s*مع\s*الجزائر|منافسو\s*الجزائر|مجموعة\s+H|group\s+H|مباريات\s+الجزائر\s+في\s+(?:كأس|مونديال))/i.test(lastUserMessage)
   ) && !_isMatchVsQuery
 
-  if (_isWC2026GroupQuery) {
+  if (_isWC2026GroupQuery && !_isRetry) {
     const { buildWorldCup2026AlgeriaContext } = await import('./lib/dz-sports-knowledge.js')
     const _wc2026Ctx = buildWorldCup2026AlgeriaContext()
     console.log(`[WC2026:GroupBypass] ⚡ Direct WC2026 group context — LLM bypassed`)
@@ -19193,6 +19197,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
   ]
   const isGlobalLeaguesQuery = !isCurrencyQuery && globalLeaguesKeywords.some(k => lowerMsg.includes(k))
+
+  // ── WC2026 today matches — كأس العالم + اليوم ──────────────────────────────
+  // يُكتشف: "مباريات اليوم كأس العالم" / "ماتشات اليوم مونديال" / "مباريات كأس العالم الليلة"
+  const _isWCTodayQuery = isGlobalLeaguesQuery &&
+    /(?:كأس\s*العالم|world\s*cup|مونديال|fifa\s*2026)/i.test(lastUserMessage) &&
+    /(?:اليوم|الليلة|الآن|live|مباشر)/i.test(lastUserMessage)
 
   // ── الدارجة الجزائرية — Algerian dialect football queries ──────────────────
   const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش)|الخضر\s*(?:ضد|مع|على\s*من|رايحة|تلعب)|آخر\s*ماتش\s*(?:للجزائر|الخضر)|رزنامة\s*المنتخب|برنامج\s*المنتخب|مع\s*من\s*رايحة\s*تلعب\s*الجزائر)/i.test(lastUserMessage)
@@ -19571,6 +19581,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               city: _firstMatch?.city || null,
               round: _firstMatch?.round || null,
               kooraLink: _firstMatch?.kooraLink || null,
+              homeScore: _firstMatch?.homeScore ?? null,
+              awayScore: _firstMatch?.awayScore ?? null,
             }
           })(),
           _sportsAgent: true,
@@ -19617,10 +19629,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     if (jdwelData?.groups?.length > 0) {
-      console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches across ${jdwelData.groups.length} leagues from jdwel.com`)
+      // ── WC today filter: only World Cup groups when query is WC-specific ──
+      const _wcGroupRe = /world.?cup|كأس.?العالم|مونديال|fifa/i
+      const _filteredGroups = _isWCTodayQuery
+        ? jdwelData.groups.filter(g => _wcGroupRe.test(g.name))
+        : jdwelData.groups
+      const _groupsToShow = _filteredGroups.length > 0 ? _filteredGroups : jdwelData.groups
+      const _ctxHeader = _isWCTodayQuery ? '🏆 مباريات كأس العالم 2026' : '🌍 الدوريات العالمية'
+      console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches (WCfilter=${_isWCTodayQuery}, groups=${_groupsToShow.length}) from jdwel.com`)
       const fetchTime = jdwelData.fetchedAt ? new Date(jdwelData.fetchedAt).toLocaleString('ar-DZ') : ''
-      globalLeaguesContext = `\n\n--- 🌍 الدوريات العالمية — ${today} (المصدر: jdwel.com — ${fetchTime}) ---\n`
-      for (const g of jdwelData.groups.slice(0, 10)) {
+      globalLeaguesContext = `\n\n--- ${_ctxHeader} — ${today} (المصدر: jdwel.com — ${fetchTime}) ---\n`
+      for (const g of _groupsToShow.slice(0, 12)) {
         globalLeaguesContext += `\n**🏟️ ${g.name}:**\n`
         for (const m of g.matches.slice(0, 6)) {
           globalLeaguesContext += `• ${m.homeTeam} ${formatJdwelMatch(m)} ${m.awayTeam}`
@@ -20831,6 +20850,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     _realtimeContext || '',
     // ── DECISION TREE CONTEXT (SearXNG → Crawl4AI → Wikidata → Wikipedia → DBpedia) ──
     _decisionTreeContext || '',
+    // ── RETRY HINT — يُطبَّق فقط عند إعادة المحاولة ──────────────────────────
+    _isRetry ? `\n🔄 RETRY MODE (seed=${_retrySeed}): المستخدم طلب إجابة مختلفة. قدّم نهجاً بديلاً أو معلومات تكميلية أو زاوية مغايرة عن إجابتك السابقة. لا تكرر نفس الإجابة. كن أكثر تفصيلاً أو ابدأ من منظور مختلف.` : '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -20989,8 +21010,9 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   const aiResult = await safeGenerateAI({
     messages: _halMessages,
     query: lastUserMessage,
-    max_tokens: _chatTokens,
+    max_tokens: _isRetry ? Math.min(_chatTokens + 500, 4000) : _chatTokens,
     taskHint: _taskHint,
+    temperature: _isRetry ? 0.85 : undefined,
   })
 
   // Self-Reflection disabled — was triggering a full second AI call on complex queries

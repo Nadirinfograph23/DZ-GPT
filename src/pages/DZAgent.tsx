@@ -310,6 +310,16 @@ export default function DZAgent() {
       </div>
     </div>
 
+      {/* ===== FLOATING BUG REPORT FAB — ثابت على كل الشاشات ===== */}
+      <button
+        className="dza-float-bug-fab"
+        onClick={() => setBugReportOpen(true)}
+        title="الإبلاغ عن مشكلة"
+        aria-label="الإبلاغ عن مشكلة"
+      >
+        🐛
+      </button>
+
       {bugReportOpen && (
         <BugReportModal theme={theme} onClose={() => setBugReportOpen(false)} />
       )}

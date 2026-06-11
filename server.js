@@ -241,7 +241,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -15043,7 +15043,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       /(?:كأس\s+العالم|المونديال|مونديال)\s+(?:مباريات\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
       /(?:اليوم|الليلة)\s+(?:في|من)\s+(?:كأس\s+العالم|المونديال|مونديال)/i.test(_rawLastMsg) ||
       /من\s+(?:يلعب|سيلعب|ستلعب)\s+(?:اليوم|الليلة)\s+(?:في\s+)?(?:كأس\s+العالم|المونديال)/i.test(_rawLastMsg) ||
-      /(?:ماتشات|مباريات|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg)
+      /(?:ماتشات|مباريات|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
+      // أنماط إضافية — أسئلة عامة عن مباريات اليوم في كأس العالم
+      /(?:ما\s+هي|ايش|وش|شو)\s+(?:مباريات|ماتشات).*(?:كأس\s+العالم|مونديال)/i.test(_rawLastMsg) ||
+      /(?:كأس\s+العالم|مونديال|FIFA\s+2026).*(?:النهار|هاذ|اليوم)/i.test(_rawLastMsg) ||
+      /(?:هاذ\s+النهار|هذا\s+اليوم)\s+.*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
+      /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة).*(?:مونديال|كأس\s+العالم)/i.test(_rawLastMsg) ||
+      /(?:شكون|مين)\s+(?:يلعب|يواجه|لعب).*(?:مونديال|كأس\s+العالم)/i.test(_rawLastMsg) ||
+      /(?:أخبار|نتائج|ملخص)\s+(?:كأس\s+العالم|مونديال).*(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg)
     )
     if (_isWCTodayEarly) {
       console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)
@@ -19362,6 +19369,44 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     })
   }
 
+  // ── WC2026 General Query — حقن بيانات شاملة لأي سؤال عن كأس العالم ──────────
+  // يُكتشف: "أخبرني عن كأس العالم" / "ما هي فرق كأس العالم" / "جدول كأس العالم"
+  // يُجيب ببيانات محلية دقيقة ← يمنع LLM من اختراع معلومات خاطئة
+  const _isWC2026GeneralQuery = !_isRetry && !_isWC2026GroupQuery && (
+    /(?:كأس\s*العالم|مونديال|world\s*cup|FIFA\s*2026)/i.test(lastUserMessage) &&
+    /(?:جدول|برنامج|مباريات|منتخبات|فرق|مجموعات|دور|ملاعب|ملعب|نتائج|ترتيب|أهداف|هداف|منافس|موعد|تاريخ|متى|أين|وين|كم|حكم|تشكيلة|لاعبين|نتيجة|ماتش|مقابلة|الأهداف|الفائز|البطولة)/i.test(lastUserMessage)
+  )
+  if (_isWC2026GeneralQuery) {
+    try {
+      const _wc2026Date = new Date().toISOString().split('T')[0]
+      const _wcTodayRes = await Promise.race([
+        runWC2026TodayAgent(_wc2026Date),
+        new Promise(r => setTimeout(() => r(null), 10000)),
+      ])
+      if (_wcTodayRes?.userResponse) {
+        console.log(`[WC2026:GeneralBypass] ⚡ General WC query → today fixtures injected`)
+        return res.status(200).json({
+          content: _wcTodayRes.userResponse,
+          model: 'sports-agent-wc2026-today',
+          _sportsAgent: true,
+          wc2026: true,
+          found: _wcTodayRes.found,
+          sources: _wcTodayRes.sources,
+        })
+      }
+    } catch (_wcGenErr) {
+      console.warn('[WC2026:General] error:', _wcGenErr?.message)
+    }
+    // Fallback: inject full fixture context
+    const _fullCtx = buildWC2026FullContext()
+    return res.status(200).json({
+      content: _fullCtx,
+      model: 'wc2026-full-context',
+      _sportsAgent: true,
+      wc2026: true,
+    })
+  }
+
   const _isMinisterQuery = isMinisterQuery(lastUserMessage)
   const _isHistoricalGovQuery = isHistoricalGovQuery(lastUserMessage)
 
@@ -19461,9 +19506,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // ── WC2026 today matches — كأس العالم + اليوم ──────────────────────────────
   // يُكتشف: "مباريات اليوم كأس العالم" / "ماتشات اليوم مونديال" / "مباريات كأس العالم الليلة"
-  const _isWCTodayQuery = isGlobalLeaguesQuery &&
-    /(?:كأس\s*العالم|world\s*cup|مونديال|fifa\s*2026)/i.test(lastUserMessage) &&
-    /(?:اليوم|الليلة|الآن|live|مباشر)/i.test(lastUserMessage)
+  const _isWCTodayQuery = (
+    detectWC2026TodayQuery(lastUserMessage) ||
+    (isGlobalLeaguesQuery &&
+      /(?:كأس\s*العالم|world\s*cup|مونديال|fifa\s*2026)/i.test(lastUserMessage) &&
+      /(?:اليوم|الليلة|الآن|live|مباشر)/i.test(lastUserMessage)) ||
+    /(?:مباريات|ماتشات|نتائج|برنامج)\s+(?:كأس\s+العالم|مونديال|FIFA).*(?:اليوم|الليلة)/i.test(lastUserMessage) ||
+    /(?:كأس\s+العالم|مونديال).*(?:مباريات|نتائج).*(?:اليوم|الليلة)/i.test(lastUserMessage) ||
+    /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة).*(?:مونديال|كأس\s+العالم)/i.test(lastUserMessage)
+  )
 
   // ── الدارجة الجزائرية — Algerian dialect football queries ──────────────────
   const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش)|الخضر\s*(?:ضد|مع|على\s*من|رايحة|تلعب)|آخر\s*ماتش\s*(?:للجزائر|الخضر)|رزنامة\s*المنتخب|برنامج\s*المنتخب|مع\s*من\s*رايحة\s*تلعب\s*الجزائر)/i.test(lastUserMessage)

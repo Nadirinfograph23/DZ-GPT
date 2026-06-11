@@ -2,6 +2,7 @@ import { StrictMode, Component, ReactNode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
+import './App.css'
 import './styles/mini-player.css'
 
 // ── Lazy-loaded pages — reduces initial bundle by ~60% ────────────────────────

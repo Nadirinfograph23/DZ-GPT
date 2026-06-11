@@ -1,4 +1,46 @@
 // build: 2026-05-05T03:24:25Z
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║           🗺️  SERVER MAP — فهرس الأقسام الرئيسية                      ║
+// ║  الخريطة الكاملة مع الأوصاف: SERVER_MAP.md                             ║
+// ║  للوصول السريع: grep -n "ZONE-XX" server.js                            ║
+// ╠══════════════════════════════════════════════════════════════════════════╣
+// ║  ZONE-01  Bootstrap & Imports             ~1        الاستيراد والتهيئة  ║
+// ║  ZONE-02  Lib/Module Mounts               ~76       تحميل المكتبات      ║
+// ║  ZONE-03  Express Middleware              ~202      الـ middleware        ║
+// ║  ZONE-04  Utility Functions               ~380      دوال مساعدة مشتركة  ║
+// ║  ZONE-05  Modular Route Mounts            ~1042     تحميل الـ routers    ║
+// ║  ZONE-06  Ratings / Status / Health       ~1066     التقييمات والحالة   ║
+// ║  ZONE-07  Thinking Trace SSE              ~1182     محرك التفكير المرئي ║
+// ║  ZONE-08  System & Admin APIs             ~3140     مراقبة النظام        ║
+// ║  ZONE-09  Owner Commands & Breaking News  ~3572     أوامر المالك والأخبار║
+// ║  ZONE-10  Website Builder / DZ Chat       ~4739     بناء المواقع         ║
+// ║  ZONE-11  Education Search                ~7180     البحث التعليمي       ║
+// ║  ZONE-12  Clone Engine + Lessons          ~7475     استنساخ المواقع      ║
+// ║  ZONE-13  DZ Agent Search                 ~7795     محرك البحث الذكي     ║
+// ║  ZONE-14  RSS + Breaking News Stream      ~8465     RSS والأخبار العاجلة ║
+// ║  ZONE-15  Dashboard + Sync                ~9129     لوحة التحكم          ║
+// ║  ZONE-16  Maps + Prayer + Weather         ~9893     خرائط وصلاة وطقس    ║
+// ║  ZONE-17  LFP + News + Sports Data        ~10481    بيانات رياضية        ║
+// ║  ZONE-18  GitHub Operations               ~11435    عمليات GitHub         ║
+// ║  ZONE-19  Sports Agent API                ~13573    API الوكيل الرياضي   ║
+// ║  ZONE-20  Currency + DZ Dollar            ~13772    الصرف والدولار        ║
+// ║  ZONE-21  Telegram + Sync + Deploy        ~14200    تيليغرام ونشر        ║
+// ║  ZONE-22★ MAIN /api/dz-agent-chat         ~14813    ★ المعالج الرئيسي   ║
+// ║  ZONE-23  Streaming SSE Endpoint          ~21445    البث الفوري          ║
+// ║  ZONE-24  Analytics                       ~21620    الإحصائيات           ║
+// ║  ZONE-25  GitHub OAuth + Repos            ~21700    مصادقة GitHub         ║
+// ║  ZONE-26  GitHub Code Agent               ~22557    وكيل الكود           ║
+// ║  ZONE-27  AI Free Media                   ~25069    توليد الصور المجاني  ║
+// ║  ZONE-28  DZ Tube / YouTube               ~25135    يوتيوب وبث الصوت     ║
+// ║  ZONE-29  Chat Room                       ~27111    غرف المحادثة         ║
+// ║  ZONE-30  Image Tools                     ~27697    أدوات الصور          ║
+// ║  ZONE-31  Video + TTS                     ~28865    فيديو وتحويل الصوت   ║
+// ║  ZONE-32  ChatImg + DZ Media              ~29385    محادثة الصور         ║
+// ║  ZONE-33  Radio Stations                  ~29680    محطات الراديو        ║
+// ║  ZONE-34  Books + Whiteboard + Bug Report ~29760    كتب ولوح وإبلاغ      ║
+// ║  ZONE-35  DZ Agent V4 Media               ~30107    وكيل V4 للوسائط     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import express from 'express'
 import { fileURLToPath } from 'url'
 import path from 'path'

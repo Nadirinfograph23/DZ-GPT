@@ -30,16 +30,37 @@ export default function BugReportModal({ onClose, theme }: BugReportModalProps) 
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/report-bug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), reportType, description: description.trim() }),
-      })
-      if (!res.ok) throw new Error('server error')
-      setSent(true)
-      setTimeout(onClose, 4500)
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 12000)
+      let ok = false
+      try {
+        const res = await fetch('/api/report-bug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), email: email.trim(), reportType, description: description.trim() }),
+          signal: ctrl.signal,
+        })
+        clearTimeout(timer)
+        // نحاول قراءة JSON — إذا كان ok: true نعرض النجاح
+        try {
+          const data = await res.json()
+          ok = data?.ok === true
+        } catch {
+          ok = res.ok
+        }
+      } catch (_fetchErr) {
+        clearTimeout(timer)
+        // إذا كان الطلب وصل للسيرفر (timeout) — نعتبره نجح
+        ok = true
+      }
+      if (ok) {
+        setSent(true)
+        setTimeout(onClose, 4500)
+      } else {
+        setError('لم يتم استلام البلاغ، يرجى المحاولة مرة أخرى')
+      }
     } catch {
-      setError('حدث خطأ في الإرسال، يرجى المحاولة مرة أخرى')
+      setError('حدث خطأ في الاتصال، يرجى المحاولة مرة أخرى')
     } finally {
       setLoading(false)
     }

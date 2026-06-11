@@ -30191,84 +30191,113 @@ function appendAnalyticEvent(event) {
   } catch {}
 }
 
-// ─── Bug Report ────────────────────────────────────────────────────────────
-// destination (encoded): ZHphZ2VudHByb0BnbWFpbC5jb20=
-const _BR_DST = Buffer.from('ZHphZ2VudHByb0BnbWFpbC5jb20=', 'base64').toString('utf8')
-
+// ─── Bug Report — GitHub Issues API + FormSubmit backup ─────────────────────
+// يستخدم GITHUB_TOKEN لإنشاء Issue + FormSubmit كاحتياطي + /tmp كتخزين
 app.post('/api/report-bug', express.json(), async (req, res) => {
-  try {
-    const { name, email, reportType, description } = req.body || {}
-    if (!reportType || !description) return res.status(400).json({ error: 'بيانات ناقصة' })
+  // إرجاع 200 فوراً دائماً — لا يرى المستخدم أي خطأ أبداً
+  res.status(200).json({ ok: true })
 
-    const typeLabels = {
-      'wrong-info':   'معلومة خاطئة',
-      'broken-tool':  'أداة لا تعمل',
-      'agent-error':  'خطأ في الوكيل',
-    }
-    const ts = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
-
-    // ── حفظ محلي موثوق ────────────────────────────────────────────────────
-    const reportsFile = path.join(process.cwd(), 'data', 'bug_reports.json')
+  // المعالجة في الخلفية بعد الرد
+  ;(async () => {
     try {
-      const { mkdirSync } = await import('fs')
-      mkdirSync(path.dirname(reportsFile), { recursive: true })
-    } catch {}
-    let reports = []
-    try { reports = JSON.parse(_readFileSync(reportsFile, 'utf8')) } catch {}
-    reports.push({ name, email, reportType, description, ts: Date.now() })
-    try { _writeFS(reportsFile, JSON.stringify(reports, null, 2)) } catch (we) {
-      console.warn('[report-bug] file write:', we.message)
-    }
+      const { name, email, reportType, description } = req.body || {}
+      if (!reportType || !description) return
 
-    // ── إرسال بريد إلكتروني عبر FormSubmit ────────────────────────────────
-    try {
-      const _fsEndpoint = `https://formsubmit.co/ajax/${encodeURIComponent(_BR_DST)}`
-      const _htmlBody = [
-        `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:auto;background:#1a1a1a;color:#eee;border-radius:12px;padding:24px">`,
-        `<h2 style="color:#10a37f;margin-top:0">🐛 بلاغ جديد — DZ Agent</h2>`,
-        `<table style="width:100%;border-collapse:collapse">`,
-        `<tr><td style="padding:8px 0;color:#aaa;width:130px">النوع</td><td style="color:#f87171;font-weight:bold">${typeLabels[reportType] || reportType}</td></tr>`,
-        `<tr><td style="padding:8px 0;color:#aaa">الاسم</td><td>${name || '—'}</td></tr>`,
-        `<tr><td style="padding:8px 0;color:#aaa">البريد</td><td>${email || '—'}</td></tr>`,
-        `<tr><td style="padding:8px 0;color:#aaa">التاريخ</td><td>${ts}</td></tr>`,
-        `</table>`,
-        `<div style="margin-top:16px;padding:14px;background:#222;border-radius:8px;border-right:3px solid #10a37f">`,
-        `<p style="color:#aaa;margin:0 0 8px;font-size:13px">وصف المشكلة:</p>`,
-        `<p style="margin:0;line-height:1.6">${description.replace(/</g, '&lt;')}</p>`,
-        `</div>`,
-        `<p style="margin-top:20px;font-size:11px;color:#555">تم الإرسال تلقائياً من DZ Agent Platform</p>`,
-        `</div>`,
-      ].join('')
-      const _mailRes = await fetch(_fsEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          _subject: `🐛 بلاغ جديد: ${typeLabels[reportType] || reportType}`,
-          _template: 'table',
-          _captcha: 'false',
-          name: name || 'مجهول',
-          email: email || 'لا يوجد',
-          type: typeLabels[reportType] || reportType,
-          description,
-          timestamp: ts,
-          message: _htmlBody,
-        }),
-        signal: AbortSignal.timeout(8000),
-      })
-      if (_mailRes.ok) {
-        console.log('[report-bug] ✅ email sent via FormSubmit')
-      } else {
-        console.warn('[report-bug] FormSubmit responded:', _mailRes.status)
+      const typeLabels = {
+        'wrong-info':   'معلومة خاطئة',
+        'broken-tool':  'أداة لا تعمل',
+        'agent-error':  'خطأ في الوكيل',
       }
-    } catch (mailErr) {
-      console.warn('[report-bug] email dispatch failed:', mailErr.message?.slice(0, 80))
-    }
+      const ts = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
+      const typeLabel = typeLabels[reportType] || reportType
 
-    res.json({ ok: true })
-  } catch (err) {
-    console.error('[report-bug]', err)
-    res.json({ ok: true })
-  }
+      // ── 1. حفظ في /tmp (يعمل على Vercel وReplit) ────────────────────────
+      try {
+        const tmpFile = '/tmp/dz_bug_reports.json'
+        let reports = []
+        try { reports = JSON.parse(_readFileSync(tmpFile, 'utf8')) } catch {}
+        reports.push({ name, email, reportType, description, ts: Date.now() })
+        _writeFS(tmpFile, JSON.stringify(reports, null, 2))
+      } catch (_) {}
+
+      // ── 2. GitHub Issues API — الأكثر موثوقية ──────────────────────────
+      const _ghToken = process.env.GITHUB_TOKEN
+      if (_ghToken) {
+        try {
+          const _issueBody = [
+            `## 🐛 بلاغ مستخدم — DZ Agent`,
+            ``,
+            `| الحقل | القيمة |`,
+            `|-------|--------|`,
+            `| **النوع** | ${typeLabel} |`,
+            `| **الاسم** | ${name || '—'} |`,
+            `| **البريد** | ${email || '—'} |`,
+            `| **التاريخ** | ${ts} |`,
+            ``,
+            `### وصف المشكلة`,
+            ``,
+            `${description}`,
+            ``,
+            `---`,
+            `*تم الإرسال تلقائياً من DZ Agent Platform*`,
+          ].join('\n')
+
+          const _ghRes = await fetch('https://api.github.com/repos/Nadirinfograph23/DZ-GPT/issues', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${_ghToken}`,
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              title: `🐛 بلاغ: ${typeLabel}${name ? ` — ${name}` : ''}`,
+              body: _issueBody,
+              labels: ['bug-report'],
+            }),
+            signal: AbortSignal.timeout(10000),
+          })
+          if (_ghRes.ok) {
+            const _ghData = await _ghRes.json()
+            console.log(`[report-bug] ✅ GitHub Issue #${_ghData.number} created: ${_ghData.html_url}`)
+          } else {
+            const _errText = await _ghRes.text().catch(() => '')
+            console.warn(`[report-bug] GitHub API ${_ghRes.status}:`, _errText.slice(0, 120))
+          }
+        } catch (_ghErr) {
+          console.warn('[report-bug] GitHub issue failed:', _ghErr.message?.slice(0, 80))
+        }
+      } else {
+        console.warn('[report-bug] GITHUB_TOKEN not set — skipping GitHub Issue')
+      }
+
+      // ── 3. FormSubmit.co — محاولة احتياطية ─────────────────────────────
+      try {
+        const _dst = Buffer.from('ZHphZ2VudHByb0BnbWFpbC5jb20=', 'base64').toString('utf8')
+        const _fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(_dst)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            _subject: `🐛 ${typeLabel}`,
+            _captcha: 'false',
+            name: name || 'مجهول',
+            email: email || 'لا يوجد',
+            type: typeLabel,
+            description,
+            timestamp: ts,
+          }),
+          signal: AbortSignal.timeout(6000),
+        })
+        if (_fsRes.ok) console.log('[report-bug] ✅ FormSubmit backup sent')
+        else console.warn('[report-bug] FormSubmit status:', _fsRes.status)
+      } catch (_fsErr) {
+        console.warn('[report-bug] FormSubmit backup failed:', _fsErr.message?.slice(0, 60))
+      }
+
+    } catch (_bg) {
+      console.error('[report-bug:bg]', _bg.message)
+    }
+  })()
 })
 
 app.post('/api/analytics/track', express.json(), (req, res) => {

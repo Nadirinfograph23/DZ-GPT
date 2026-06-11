@@ -247,6 +247,7 @@
 /* ===== CHAT LIST ===== */
 .dza-chat-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px 8px 12px;
   scrollbar-width: thin;
@@ -12746,8 +12747,38 @@
   padding: 8px 12px 14px;
   flex-shrink: 0;
   border-top: 1px solid rgba(255,255,255,0.06);
-  margin-top: auto;
 }
+
+/* زر الإبلاغ العائم — يظهر على الموبايل دائماً */
+.dza-floating-bug-btn {
+  display: none;
+}
+@media (max-width: 768px) {
+  .dza-floating-bug-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 80px;
+    left: 14px;
+    z-index: 50;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.35);
+    color: #f87171;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    transition: all 0.2s;
+  }
+  .dza-floating-bug-btn:hover {
+    background: rgba(239,68,68,0.22);
+    transform: scale(1.1);
+  }
+}
+/* على الـ desktop: الزر موجود في الـ sidebar مباشرة — لا حاجة للعائم */
 .dza-bug-report-btn {
   display: flex;
   align-items: center;

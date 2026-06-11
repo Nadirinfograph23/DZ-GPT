@@ -290,6 +290,16 @@ export default function DZAgent() {
           <div className="dz-agent-badge">AI</div>
         </header>
 
+        {/* ===== زر الإبلاغ العائم — موبايل فقط ===== */}
+        <button
+          className="dza-floating-bug-btn"
+          onClick={() => setBugReportOpen(true)}
+          title="الإبلاغ عن مشكلة"
+          aria-label="الإبلاغ عن مشكلة"
+        >
+          🐛
+        </button>
+
         <div className="dz-agent-body">
           <DZChatBox
             key={activeChatId || 'no-chat'}

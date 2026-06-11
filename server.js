@@ -19172,7 +19172,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[MatchVs:DirectRoute] ⚽ ${_matchVsData.team1} ضد ${_matchVsData.team2} → runSportsAgent`)
     try {
       const _sportRes2 = await runSportsAgent(lastUserMessage, messages)
-      const _sportContent2 = _sportRes2.userResponse || _sportRes2.context || _sportRes2.content || ''
+      let _sportContent2 = _sportRes2.userResponse || _sportRes2.context || _sportRes2.content || ''
+
+      // ── HARD GATE: إذا أعاد الوكيل محتوى فارغاً → رد صريح بدون LLM ──
+      if (!_sportContent2) {
+        const _t1 = _matchVsData.team1, _t2 = _matchVsData.team2
+        const _f1 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }[_t1] || '🏴'
+        const _f2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }[_t2] || '🏴'
+        _sportContent2 = [
+          `## ⚽ ${_f1} ${_t1} ضد ${_f2} ${_t2}`,
+          ``,
+          `> 🔍 لم أجد بيانات **حية وموثّقة** لهذه المباراة في قواعد بيانات **365score** و**FotMob** و**SofaScore**.`,
+          ``,
+          `**للتحقق يدوياً:**`,
+          `• [365score](https://www.365scores.com/ar/football/search?q=${encodeURIComponent(_t1)}) — نتائج مباشرة`,
+          `• [FotMob](https://www.fotmob.com/search?term=${encodeURIComponent(_t1)}) — مباريات حية`,
+          `• [Koora كووورة](https://www.kooora.com/) — الملعب العربي`,
+          ``,
+          `💡 جرّب إضافة **التاريخ** أو **اسم البطولة** للحصول على نتيجة أدق.`,
+        ].join('\n')
+        console.log(`[MatchVs:DirectRoute:HardGate] ⚠️ Empty agent response — returning hardcoded no-data (LLM blocked)`)
+      }
+
       return res.status(200).json({
         content: _sportContent2,
         model: 'sports-agent',
@@ -19195,8 +19216,29 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         _sportsAgent: true,
       })
     } catch (_sae2) {
-      console.error('[MatchVs:DirectRoute] sports agent error:', _sae2.message)
-      // fallback → يكمل المعالجة العادية
+      // ── HARD GATE على مستوى الـ catch: حتى عند خطأ فني → لا LLM ──────────
+      console.error('[MatchVs:DirectRoute] sports agent error (LLM blocked):', _sae2.message)
+      const _t1c = _matchVsData.team1, _t2c = _matchVsData.team2
+      const _MINI_FLAGS = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المغرب':'🇲🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿' }
+      return res.status(200).json({
+        content: [
+          `## ⚽ ${_MINI_FLAGS[_t1c]||'🏴'} ${_t1c} ضد ${_MINI_FLAGS[_t2c]||'🏴'} ${_t2c}`,
+          ``,
+          `> ⚠️ واجهت مشكلة تقنية مؤقتة في جلب بيانات هذه المباراة من المصادر الحية.`,
+          `> لا أستطيع الإجابة من ذاكرة النموذج — المعلومات الرياضية يجب أن تكون **موثّقة وحية فقط**.`,
+          ``,
+          `**تحقق مباشرة من:**`,
+          `• [365score](https://www.365scores.com/ar/football/search?q=${encodeURIComponent(_t1c)})`,
+          `• [FotMob](https://www.fotmob.com/search?term=${encodeURIComponent(_t1c)})`,
+          `• [Koora كووورة](https://www.kooora.com/)`,
+          ``,
+          `🔄 يمكنك **إعادة المحاولة** — قد تكون المشكلة مؤقتة.`,
+        ].join('\n'),
+        model: 'sports-agent-fallback',
+        found: false,
+        _sportsAgent: true,
+        _hardGate: true,
+      })
     }
   }
 

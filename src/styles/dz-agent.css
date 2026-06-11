@@ -12747,6 +12747,35 @@
   padding: 8px 12px 14px;
   flex-shrink: 0;
   border-top: 1px solid rgba(255,255,255,0.06);
+  background: #171717;
+  /* ضمان الظهور دائماً في أسفل الـ sidebar */
+  margin-top: auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Desktop: نجعل الـ footer ثابتاً بنهاية الـ sidebar */
+@media (min-width: 769px) {
+  .dza-sidebar {
+    overflow-x: hidden;
+    overflow-y: hidden;
+  }
+  .dza-sidebar-footer {
+    flex-shrink: 0 !important;
+    position: relative;
+    bottom: 0;
+    width: 100%;
+    background: #171717;
+  }
+}
+
+/* Mobile: نفس التأكيد */
+@media (max-width: 768px) {
+  .dza-sidebar-footer {
+    flex-shrink: 0 !important;
+    background: #171717;
+    padding-bottom: 20px;
+  }
 }
 
 /* زر الإبلاغ في الـ header — يظهر على الموبايل فقط */

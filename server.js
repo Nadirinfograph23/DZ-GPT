@@ -14864,6 +14864,56 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(400).json({ error: 'Invalid request: messages array required.' })
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 🛡️ ULTRA-EARLY SPORTS GUARDIAN — أول خط دفاع — قبل correctQuery وقبل أي شيء
+  // يضمن أن لا LLM يجيب على أسئلة "فريق ضد فريق" أبداً
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _ultraRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+    const _ultraMatchVs = detectMatchVsQuery(_ultraRaw)
+    if (_ultraMatchVs?.isMatchVs) {
+      console.log(`[MatchVs:UltraEarly] 🛡️ "${_ultraMatchVs.team1} ضد ${_ultraMatchVs.team2}" — حارس رياضي أولي تفعّل`)
+      try {
+        const _sRes = await runSportsAgent(_ultraRaw, messages)
+        const _sCont = _sRes.userResponse || _sRes.context || _sRes.content || ''
+        return res.status(200).json({
+          content: _sCont,
+          model: 'sports-agent',
+          found: _sRes.found,
+          type: _sRes.type,
+          matches: _sRes.matches,
+          sources: _sRes.sources,
+          wc2026: _sRes.wc2026,
+          matchVsData: (() => {
+            const _m = _sRes.matches?.[0] || _sRes.wcFixtures?.[0] || null
+            return { team1: _ultraMatchVs.team1, team2: _ultraMatchVs.team2, temporal: _ultraMatchVs.temporal, date: _m?.date||null, time: _m?.startTime||null, competition: _m?.competition||null, venue: _m?.venue||null, city: _m?.city||null, round: _m?.round||null, kooraLink: _m?.kooraLink||null, homeScore: _m?.homeScore??null, awayScore: _m?.awayScore??null }
+          })(),
+          _sportsAgent: true,
+        })
+      } catch (_e) {
+        console.error('[MatchVs:UltraEarly] خطأ في الوكيل الرياضي:', _e.message?.slice(0, 100))
+        return res.status(200).json({
+          content: [
+            `## ⚽ ${_ultraMatchVs.team1} ضد ${_ultraMatchVs.team2}`,
+            ``,
+            `> ⚠️ **تعذّر الاتصال بالوكيل الرياضي مؤقتاً** — تحقق من المصادر الرسمية مباشرةً:`,
+            ``,
+            `| المصدر | الرابط |`,
+            `|--------|--------|`,
+            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+            `| ⚽ **FotMob** | [مباريات كأس العالم](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
+            `| 🏆 **FIFA.com** | [الموقع الرسمي](https://www.fifa.com/worldcup) |`,
+            `| 🇩🇿 **Kooora** | [مباريات الجزائر](https://www.kooora.com/) |`,
+          ].join('\n'),
+          model: 'sports-agent-guardian',
+          _sportsAgent: true,
+          _guardianBlocked: true,
+        })
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
+
   // ── Disk session restore — استعادة المحادثة من disk إن لم يُرسل السياق ──
   if (_agentSessionId && messages.length <= 1) {
     const _saved = loadDiskSession(_agentSessionId)

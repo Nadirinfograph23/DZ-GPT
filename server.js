@@ -184,7 +184,7 @@ import {
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
@@ -20741,6 +20741,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
+    // ── LAYER 0-A: DEVELOPER LOCK (حماية هوية المطور + هرمية التعليمات) ──
+    DEVELOPER_LOCK_LAYER,
+    // ── LAYER 0-B: ADVANCED INJECTION GUARD (درع حقن البرومبت المتقدم) ──
+    ADVANCED_INJECTION_GUARD,
     // ── LAYER 0.5: 7-STAGE MANDATORY PIPELINE (إلزامي على كل النماذج) ────
     SEVEN_STAGE_MANDATORY_PIPELINE,
     // ── LAYER 1: INTENT CLASSIFIER POLICY (القاعدة الذهبية — صنّف أولاً) ──
@@ -20753,6 +20757,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     PUBLIC_FIGURES_VERIFICATION_POLICY,
     // ── LAYER 18: SEARCH & KNOWLEDGE ARCHITECTURE (SearXNG Edition) ───────
     SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY,
+    // ── LAYER C: SERVICES GUIDE (دليل الخدمات + برومبتات لكل خدمة) ────────
+    SERVICES_GUIDE_LAYER,
     // ── ADVANCED REASONING CORE ───────────────────────────────────────────
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────

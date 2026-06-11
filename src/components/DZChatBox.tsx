@@ -7443,7 +7443,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           executionCode: codeExtract?.code,
           executionLang: codeExtract?.lang,
           matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null } | undefined) || _clientMatchVs || undefined,
-          wcGroupData: data.wcGroupData as Message['wcGroupData'] | undefined,
+          wcGroupData: data.wcGroupData as DZMessage['wcGroupData'] | undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project

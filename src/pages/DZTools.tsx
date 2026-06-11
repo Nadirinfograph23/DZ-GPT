@@ -5036,7 +5036,7 @@ async function txtToDocx(text: string): Promise<Blob> {
   zip.file('word/document.xml', docXml)
   zip.file('word/_rels/document.xml.rels', wordRels)
   zip.file('[Content_Types].xml', contentTypes)
-  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }) as Promise<Blob>
 }
 
 // ── تحويل نص → PDF عبر طباعة المتصفح ─────────────────────────────────────────

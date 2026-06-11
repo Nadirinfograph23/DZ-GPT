@@ -241,7 +241,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -19270,6 +19270,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // "X ضد Y" يُوجَّه فوراً للوكيل الرياضي بغض النظر عن السياق
   // عند إعادة المحاولة: نتجاوز هذا المسار لإعطاء إجابة مختلفة عبر LLM
   if (_isMatchVsQuery && !_isRetry) {
+    // ══ WC2026 INTERCEPT — فحص فوري قبل أي API خارجي أو LLM ══════════════
+    // إذا كان الفريقان مشاركَين في كأس العالم 2026 → نُجيب مباشرةً من البيانات المحلية
+    // هذا يمنع تماماً أي هلوسة من الـ LLM أو APIs قديمة
+    const _wc2026MatchVsData = detectAndBuildWC2026MatchVs(lastUserMessage)
+    if (!_wc2026MatchVsData) {
+      // فحص إضافي باستخدام team1/team2 المستخرجَين من _matchVsData
+      const _wc2026Direct = buildWC2026MatchVsResponse(_matchVsData.team1, _matchVsData.team2)
+      if (_wc2026Direct) {
+        console.log(`[MatchVs:WC2026⚡] ${_matchVsData.team1} ضد ${_matchVsData.team2} → WC2026 local data (LLM/APIs BYPASSED)`)
+        return res.status(200).json({
+          content: _wc2026Direct,
+          model: 'wc2026-matchvs',
+          _sportsAgent: true,
+          wc2026: true,
+          _bypassLLM: true,
+          found: true,
+          sources: ['DZ-Sports-Knowledge-WC2026'],
+        })
+      }
+    } else {
+      console.log(`[MatchVs:WC2026⚡] ${_wc2026MatchVsData.team1} ضد ${_wc2026MatchVsData.team2} → WC2026 local data (LLM/APIs BYPASSED)`)
+      return res.status(200).json({
+        content: _wc2026MatchVsData.response,
+        model: 'wc2026-matchvs',
+        _sportsAgent: true,
+        wc2026: true,
+        _bypassLLM: true,
+        found: true,
+        sources: ['DZ-Sports-Knowledge-WC2026'],
+      })
+    }
+    // ══════════════════════════════════════════════════════════════════════
+    // الفريق/ان ليس/ا في WC2026 → APIs خارجية (مسار عادي)
     console.log(`[MatchVs:DirectRoute] ⚽ ${_matchVsData.team1} ضد ${_matchVsData.team2} → runSportsAgent`)
     try {
       const _sportRes2 = await runSportsAgent(lastUserMessage, messages)

@@ -12749,36 +12749,36 @@
   border-top: 1px solid rgba(255,255,255,0.06);
 }
 
-/* زر الإبلاغ العائم — يظهر على الموبايل دائماً */
-.dza-floating-bug-btn {
+/* زر الإبلاغ في الـ header — يظهر على الموبايل فقط */
+.dza-header-bug-btn {
   display: none;
 }
 @media (max-width: 768px) {
-  .dza-floating-bug-btn {
+  .dza-header-bug-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    position: fixed;
-    bottom: 80px;
-    left: 14px;
-    z-index: 50;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: rgba(239,68,68,0.12);
-    border: 1px solid rgba(239,68,68,0.35);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(239,68,68,0.10);
+    border: 1px solid rgba(239,68,68,0.28);
     color: #f87171;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
     transition: all 0.2s;
+    flex-shrink: 0;
   }
-  .dza-floating-bug-btn:hover {
-    background: rgba(239,68,68,0.22);
-    transform: scale(1.1);
+  .dza-header-bug-btn:hover {
+    background: rgba(239,68,68,0.20);
+    border-color: rgba(239,68,68,0.45);
+    transform: scale(1.08);
+  }
+  .dza-header-bug-btn:active {
+    transform: scale(0.96);
   }
 }
-/* على الـ desktop: الزر موجود في الـ sidebar مباشرة — لا حاجة للعائم */
+/* على الـ desktop: الزر موجود في الـ sidebar مباشرة — لا حاجة للهيدر */
 .dza-bug-report-btn {
   display: flex;
   align-items: center;

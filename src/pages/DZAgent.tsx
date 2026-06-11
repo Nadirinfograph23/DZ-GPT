@@ -168,6 +168,20 @@ export default function DZAgent() {
           </button>
         </div>
 
+        <button
+          className="dza-report-issue-btn"
+          onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
+          title="الإبلاغ عن مشكلة"
+        >
+          <AlertTriangle size={15} className="dza-report-issue-icon" />
+          <span>الإبلاغ عن مشكلة</span>
+        </button>
+
+        <button className="dza-new-chat-btn" onClick={createNewChat}>
+          <Plus size={16} />
+          <span>{labels.newChat}</span>
+        </button>
+
         <div className="dza-lang-selector dza-lang-selector--row">
           {LANGUAGES.map(lang => (
             <button
@@ -199,20 +213,6 @@ export default function DZAgent() {
             ))}
           </div>
         </div>
-
-        <button
-          className="dza-report-issue-btn"
-          onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
-          title="الإبلاغ عن مشكلة"
-        >
-          <AlertTriangle size={15} className="dza-report-issue-icon" />
-          <span>الإبلاغ عن مشكلة</span>
-        </button>
-
-        <button className="dza-new-chat-btn" onClick={createNewChat}>
-          <Plus size={16} />
-          <span>{labels.newChat}</span>
-        </button>
 
         <div className="dza-chat-list">
           {chats.length === 0 ? (

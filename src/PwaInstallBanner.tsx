@@ -159,8 +159,13 @@ export default function PwaInstallBanner() {
     if (isInstalled()) return
     if (wasDismissedRecently()) return
 
+    const mobile = isIos() || isAndroid()
+
     if (window.__pwaPrompt) {
       setDeferredPrompt(window.__pwaPrompt)
+      if (!mobile) {
+        setTimeout(() => setVisible(true), 2500)
+      }
     }
 
     const handler = (e: Event) => {
@@ -168,6 +173,7 @@ export default function PwaInstallBanner() {
       const prompt = e as BeforeInstallPromptEvent
       window.__pwaPrompt = prompt
       setDeferredPrompt(prompt)
+      setVisible(true)
     }
     window.addEventListener('beforeinstallprompt', handler)
 
@@ -178,12 +184,15 @@ export default function PwaInstallBanner() {
     }
     window.addEventListener('appinstalled', onInstalled)
 
-    const timer = setTimeout(() => setVisible(true), 2500)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    if (mobile) {
+      timer = setTimeout(() => setVisible(true), 2500)
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
       window.removeEventListener('appinstalled', onInstalled)
-      clearTimeout(timer)
+      if (timer) clearTimeout(timer)
     }
   }, [])
 

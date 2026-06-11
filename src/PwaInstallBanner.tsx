@@ -130,6 +130,24 @@ function AndroidGuide({ onClose }: { onClose: () => void }) {
 }
 
 // ===== MAIN BANNER =====
+const PWA_DISMISSED_KEY = 'dz_pwa_dismissed_until'
+const PWA_DISMISS_DAYS = 30
+
+function wasDismissedRecently(): boolean {
+  try {
+    const val = localStorage.getItem(PWA_DISMISSED_KEY)
+    if (!val) return false
+    return Date.now() < parseInt(val, 10)
+  } catch { return false }
+}
+
+function markDismissed() {
+  try {
+    const until = Date.now() + PWA_DISMISS_DAYS * 24 * 60 * 60 * 1000
+    localStorage.setItem(PWA_DISMISSED_KEY, String(until))
+  } catch {}
+}
+
 export default function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [visible, setVisible] = useState(false)
@@ -139,6 +157,7 @@ export default function PwaInstallBanner() {
 
   useEffect(() => {
     if (isInstalled()) return
+    if (wasDismissedRecently()) return
 
     if (window.__pwaPrompt) {
       setDeferredPrompt(window.__pwaPrompt)
@@ -155,10 +174,11 @@ export default function PwaInstallBanner() {
     const onInstalled = () => {
       setInstalled(true)
       setShowGuide(false)
+      markDismissed()
     }
     window.addEventListener('appinstalled', onInstalled)
 
-    const timer = setTimeout(() => setVisible(true), 1000)
+    const timer = setTimeout(() => setVisible(true), 2500)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
@@ -190,7 +210,7 @@ export default function PwaInstallBanner() {
   }
 
   const handleGuideBtn = () => setShowGuide(true)
-  const handleDismiss = () => setVisible(false)
+  const handleDismiss = () => { markDismissed(); setVisible(false) }
 
   return (
     <>

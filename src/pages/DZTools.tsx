@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert' | 'flights'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -154,6 +154,7 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'screenshot',   icon: '📸', name: 'تصوير المواقع',                  desc: 'التقط صورة كاملة لأي موقع — تنزيل PNG أو PDF — Desktop / Mobile', badge: 'NEW' },
   { id: 'fileupload',   icon: '☁️', name: 'رفع ومشاركة الملفات',            desc: 'ارفع أي ملف (صورة · فيديو · PDF · ملف) واحصل على رابط مشاركة آمن — GoFile.io', badge: 'NEW' },
   { id: 'convert',      icon: '🔄', name: 'محوِّل الصيغ',                   desc: 'حوِّل فيديو · صوت · صور بين جميع الصيغ — مباشرة في المتصفح بـ FFmpeg.wasm', badge: 'NEW' },
+  { id: 'flights',      icon: '✈️', name: 'رحلات الخطوط الجزائرية',         desc: 'ابحث عن رحلات Air Algérie الداخلية والدولية بالمواعيد وأيام التشغيل', badge: 'NEW' },
 ]
 
 // ─── CV Tool ──────────────────────────────────────────────────────────────────
@@ -5385,8 +5386,308 @@ function FileConverterTool() {
   )
 }
 
+// ─── Flight Search Tool (Air Algérie) ─────────────────────────────────────────
+const DOMESTIC_AIRPORTS_LIST = [
+  { code:'ALG', name:'الجزائر العاصمة — هواري بومدين' },
+  { code:'ORN', name:'وهران — أحمد بن بلة' },
+  { code:'CZL', name:'قسنطينة — محمد بوضياف' },
+  { code:'AAE', name:'عنابة — رابح بيطاط' },
+  { code:'TMR', name:'تمنراست — أقنار' },
+  { code:'GHA', name:'غرداية — نومرات' },
+  { code:'OGX', name:'ورقلة — عين البيضاء' },
+  { code:'BJA', name:'بجاية — سعيد محمدي' },
+  { code:'QSF', name:'سطيف — العين أرناط' },
+  { code:'TLM', name:'تلمسان — زناتة' },
+  { code:'BLJ', name:'باتنة — مصطفى بن بولعيد' },
+  { code:'BSK', name:'بسكرة — محمد خيضر' },
+  { code:'TID', name:'تيارت — بوشقيف' },
+  { code:'ELU', name:'الوادي — قمار' },
+  { code:'ADB', name:'أدرار' },
+  { code:'CBH', name:'بشار — بودغن بن علي لطفي' },
+  { code:'DJG', name:'جانت — تيسكة' },
+  { code:'INZ', name:'عين صالح' },
+  { code:'VVZ', name:'إيليزي — تاخمالت' },
+  { code:'HME', name:'حاسي مسعود — وادي إيراو' },
+  { code:'IAM', name:'عين أميناس — زرزايتين' },
+  { code:'GJL', name:'جيجل — فرحات عباس' },
+  { code:'TEE', name:'تبسة' },
+  { code:'EBH', name:'البيض' },
+  { code:'MZW', name:'المشرية' },
+  { code:'TFR', name:'تيندوف' },
+  { code:'BMW', name:'بوردج باجي مختار' },
+]
+
+const INTL_AIRPORTS_LIST = [
+  { code:'CDG', name:'باريس شارل ديغول 🇫🇷' },
+  { code:'ORY', name:'باريس أورلي 🇫🇷' },
+  { code:'LYS', name:'ليون 🇫🇷' },
+  { code:'MRS', name:'مرسيليا 🇫🇷' },
+  { code:'NCE', name:'نيس 🇫🇷' },
+  { code:'BOD', name:'بوردو 🇫🇷' },
+  { code:'TLS', name:'تولوز 🇫🇷' },
+  { code:'NTE', name:'نانت 🇫🇷' },
+  { code:'SXB', name:'ستراسبورغ 🇫🇷' },
+  { code:'BRU', name:'بروكسل 🇧🇪' },
+  { code:'AMS', name:'أمستردام 🇳🇱' },
+  { code:'LHR', name:'لندن هيثرو 🇬🇧' },
+  { code:'LGW', name:'لندن غاتويك 🇬🇧' },
+  { code:'BCN', name:'برشلونة 🇪🇸' },
+  { code:'MAD', name:'مدريد 🇪🇸' },
+  { code:'FCO', name:'روما فيوميتشينو 🇮🇹' },
+  { code:'MXP', name:'ميلانو مالبنسا 🇮🇹' },
+  { code:'FRA', name:'فرانكفورت 🇩🇪' },
+  { code:'GVA', name:'جنيف 🇨🇭' },
+  { code:'ZRH', name:'زيوريخ 🇨🇭' },
+  { code:'VIE', name:'فيينا 🇦🇹' },
+  { code:'IST', name:'إسطنبول 🇹🇷' },
+  { code:'SVO', name:'موسكو 🇷🇺' },
+  { code:'TUN', name:'تونس قرطاج 🇹🇳' },
+  { code:'CMN', name:'الدار البيضاء 🇲🇦' },
+  { code:'CAI', name:'القاهرة 🇪🇬' },
+  { code:'TIP', name:'طرابلس 🇱🇾' },
+  { code:'DKR', name:'داكار 🇸🇳' },
+  { code:'NKC', name:'نواكشوط 🇲🇷' },
+  { code:'BKO', name:'باماكو 🇲🇱' },
+  { code:'NIM', name:'نيامي 🇳🇪' },
+  { code:'NDJ', name:'نجامينا 🇹🇩' },
+  { code:'COO', name:'كوتونو 🇧🇯' },
+  { code:'ABJ', name:'أبيدجان 🇨🇮' },
+  { code:'LOS', name:'لاغوس 🇳🇬' },
+  { code:'ADD', name:'أديس أبابا 🇪🇹' },
+  { code:'NBO', name:'نيروبي 🇰🇪' },
+  { code:'JNB', name:'جوهانسبرغ 🇿🇦' },
+  { code:'JED', name:'جدة 🇸🇦' },
+  { code:'RUH', name:'الرياض 🇸🇦' },
+  { code:'DXB', name:'دبي 🇦🇪' },
+  { code:'AUH', name:'أبوظبي 🇦🇪' },
+  { code:'DOH', name:'الدوحة 🇶🇦' },
+  { code:'BEY', name:'بيروت 🇱🇧' },
+  { code:'AMM', name:'عمّان 🇯🇴' },
+  { code:'KWI', name:'الكويت 🇰🇼' },
+  { code:'MCT', name:'مسقط 🇴🇲' },
+  { code:'YUL', name:'مونتريال 🇨🇦' },
+  { code:'JFK', name:'نيويورك JFK 🇺🇸' },
+]
+
+type FlightType = 'domestic' | 'international'
+
+interface Flight {
+  from: string; to: string; fn: string
+  dep: string; arr: string; duration: string
+  daysLabel: string; status: string; class: string; note?: string
+}
+
+function FlightSearchTool() {
+  const [flightType, setFlightType] = useState<FlightType>('domestic')
+  const [fromCode, setFromCode]     = useState('')
+  const [toCode, setToCode]         = useState('')
+  const [date, setDate]             = useState(() => new Date().toISOString().split('T')[0])
+  const [loading, setLoading]       = useState(false)
+  const [results, setResults]       = useState<Flight[] | null>(null)
+  const [error, setError]           = useState('')
+  const [searched, setSearched]     = useState(false)
+  const [fromName, setFromName]     = useState('')
+  const [toName, setToName]         = useState('')
+
+  const airports = flightType === 'domestic' ? DOMESTIC_AIRPORTS_LIST : INTL_AIRPORTS_LIST
+
+  // compute available "to" airports (same list minus "from")
+  const toAirports = airports.filter(a => a.code !== fromCode)
+
+  const handleSearch = async () => {
+    if (!fromCode) { setError('اختر مطار المغادرة'); return }
+    setLoading(true); setError(''); setResults(null); setSearched(false)
+    try {
+      const res = await fetch('/api/flights/air-algerie/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromCode, to: toCode, type: flightType, date }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'خطأ في البحث')
+      setResults(data.flights)
+      setFromName(data.from?.name || fromCode)
+      setToName(data.to?.name || toCode || 'جميع الوجهات')
+      setSearched(true)
+    } catch (e: any) {
+      setError(e.message || 'خطأ في الاتصال')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetType = (t: FlightType) => {
+    setFlightType(t)
+    setFromCode('')
+    setToCode('')
+    setResults(null)
+    setSearched(false)
+    setError('')
+  }
+
+  const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
+
+  return (
+    <div className="dzt-fl-wrap">
+      {/* ── Air Algérie Logo Header ── */}
+      <div className="dzt-fl-brand">
+        <div className="dzt-fl-logo">
+          <svg viewBox="0 0 60 60" className="dzt-fl-logo-svg" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="30" cy="30" r="30" fill="#006233"/>
+            <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fontSize="28" fill="white">✈</text>
+          </svg>
+          <div>
+            <div className="dzt-fl-logo-name">Air Algérie</div>
+            <div className="dzt-fl-logo-sub">الخطوط الجوية الجزائرية</div>
+          </div>
+        </div>
+        <a href="https://www.airalgerie.dz" target="_blank" rel="noopener noreferrer" className="dzt-fl-book-btn">
+          ✈ احجز الآن
+        </a>
+      </div>
+
+      {/* ── Type Tabs ── */}
+      <div className="dzt-fl-type-tabs">
+        <button
+          className={`dzt-fl-type-tab${flightType === 'domestic' ? ' active' : ''}`}
+          onClick={() => resetType('domestic')}
+        >🇩🇿 رحلات داخلية</button>
+        <button
+          className={`dzt-fl-type-tab${flightType === 'international' ? ' active' : ''}`}
+          onClick={() => resetType('international')}
+        >🌍 رحلات دولية</button>
+      </div>
+
+      {/* ── Search Form ── */}
+      <div className="dzt-fl-form">
+        <div className="dzt-fl-form-row">
+          <div className="dzt-fl-field">
+            <label className="dzt-fl-label">✈ من (مطار المغادرة)</label>
+            <select
+              className="dzt-fl-select"
+              value={fromCode}
+              onChange={e => { setFromCode(e.target.value); setToCode(''); setResults(null); setSearched(false) }}
+            >
+              <option value="">اختر المطار...</option>
+              {airports.map(a => <option key={a.code} value={a.code}>{a.name} ({a.code})</option>)}
+            </select>
+          </div>
+
+          <div className="dzt-fl-swap">
+            <button
+              className="dzt-fl-swap-btn"
+              title="تبديل المطارين"
+              onClick={() => { const t = fromCode; setFromCode(toCode); setToCode(t); setResults(null); setSearched(false) }}
+            >⇄</button>
+          </div>
+
+          <div className="dzt-fl-field">
+            <label className="dzt-fl-label">🛬 إلى (وجهة الوصول)</label>
+            <select
+              className="dzt-fl-select"
+              value={toCode}
+              onChange={e => { setToCode(e.target.value); setResults(null); setSearched(false) }}
+            >
+              <option value="">جميع الوجهات</option>
+              {toAirports.map(a => <option key={a.code} value={a.code}>{a.name} ({a.code})</option>)}
+            </select>
+          </div>
+
+          <div className="dzt-fl-field dzt-fl-field--date">
+            <label className="dzt-fl-label">📅 تاريخ السفر</label>
+            <input
+              type="date"
+              className="dzt-fl-input-date"
+              value={date}
+              min={new Date().toISOString().split('T')[0]}
+              onChange={e => { setDate(e.target.value); setResults(null); setSearched(false) }}
+            />
+          </div>
+        </div>
+
+        <button className="dzt-fl-search-btn" onClick={handleSearch} disabled={loading || !fromCode}>
+          {loading ? <span className="dzt-fl-spinner">⏳</span> : '🔍 ابحث عن الرحلات'}
+        </button>
+
+        {error && <div className="dzt-fl-error">⚠️ {error}</div>}
+      </div>
+
+      {/* ── Results ── */}
+      {searched && results !== null && (
+        <div className="dzt-fl-results">
+          <div className="dzt-fl-results-header">
+            <div className="dzt-fl-results-title">
+              <span className="dzt-fl-results-route">{fromName} → {toName}</span>
+              <span className="dzt-fl-results-date">{dateLabel}</span>
+            </div>
+            <div className="dzt-fl-results-count">
+              {results.length > 0
+                ? <><strong>{results.length}</strong> رحلة متاحة</>
+                : 'لا توجد رحلات في هذا اليوم'}
+            </div>
+          </div>
+
+          {results.length === 0 ? (
+            <div className="dzt-fl-empty">
+              <div className="dzt-fl-empty-icon">✈️</div>
+              <div className="dzt-fl-empty-msg">لا توجد رحلات في يوم {dateLabel}</div>
+              <div className="dzt-fl-empty-hint">جرّب تاريخاً آخر أو اختر "جميع الوجهات" لعرض كل الرحلات</div>
+              <a href="https://www.airalgerie.dz" target="_blank" rel="noopener noreferrer" className="dzt-fl-book-btn dzt-fl-book-btn--sm">
+                🌐 تحقق على الموقع الرسمي
+              </a>
+            </div>
+          ) : (
+            <div className="dzt-fl-cards">
+              {results.map((f, i) => (
+                <div key={i} className="dzt-fl-card">
+                  <div className="dzt-fl-card-top">
+                    <div className="dzt-fl-card-fn">
+                      <span className="dzt-fl-fn-badge">{f.fn}</span>
+                      {f.note && <span className="dzt-fl-seasonal">{f.note}</span>}
+                    </div>
+                    <div className="dzt-fl-card-status">{f.status}</div>
+                  </div>
+
+                  <div className="dzt-fl-card-times">
+                    <div className="dzt-fl-time-col">
+                      <div className="dzt-fl-time">{f.dep}</div>
+                      <div className="dzt-fl-airport-code">{f.from}</div>
+                    </div>
+                    <div className="dzt-fl-duration-col">
+                      <div className="dzt-fl-duration-line">
+                        <div className="dzt-fl-duration-bar">
+                          <div className="dzt-fl-duration-plane">✈</div>
+                        </div>
+                      </div>
+                      <div className="dzt-fl-duration-label">{f.duration}</div>
+                    </div>
+                    <div className="dzt-fl-time-col dzt-fl-time-col--arr">
+                      <div className="dzt-fl-time">{f.arr}</div>
+                      <div className="dzt-fl-airport-code">{f.to}</div>
+                    </div>
+                  </div>
+
+                  <div className="dzt-fl-card-bottom">
+                    <span className="dzt-fl-days">🗓 {f.daysLabel}</span>
+                    <span className="dzt-fl-class">💺 {f.class}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="dzt-fl-disclaimer">
+            <span>📋 المعلومات مبنية على جداول Air Algérie 2024/2025</span>
+            <a href="https://www.airalgerie.dz" target="_blank" rel="noopener noreferrer">تحقق من الموقع الرسمي ←</a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
-const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert']
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert','flights']
 
 function getToolFromSearch(search: string): ToolId | null {
   try {
@@ -5469,6 +5770,7 @@ export default function DZTools() {
         {active === 'screenshot'   && <ScreenshotTool />}
         {active === 'fileupload'   && <FileUploadTool />}
         {active === 'convert'      && <FileConverterTool />}
+        {active === 'flights'      && <FlightSearchTool />}
       </div>
     </div>
   )

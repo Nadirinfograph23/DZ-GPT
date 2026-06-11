@@ -255,6 +255,7 @@ import { createHealthRouter } from './routes/health.js'
 import { createOwnerRouter } from './routes/owner.js'
 import { createGitHubRouter } from './routes/github.js'
 import { router as voiceRouter } from './routes/voice.js'
+import { createFlightsRouter } from './routes/flights.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -1087,6 +1088,7 @@ function _saveRatingsToDisk() {
 // Inline routes remain for backward compatibility during migration.
 // ═══════════════════════════════════════════════════════════════
 app.use('/api', voiceRouter)
+app.use('/api/flights/air-algerie', createFlightsRouter())
 app.use('/api', createQuranRouter())
 app.use('/api', createAdminRouter({ getGroqKeys, callGroqWithFallback, PORT }))
 app.use('/api', createExcelRouter({ safeGenerateAI, aiLimiter }))

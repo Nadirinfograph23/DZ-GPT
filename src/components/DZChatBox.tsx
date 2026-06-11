@@ -682,7 +682,7 @@ interface DZMessage {
   }
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
-  matchVsMeta?: { team1: string; team2: string; temporal: string }
+  matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null }
 }
 
 interface ActionLogEntry {
@@ -7427,7 +7427,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           responseTime: Math.round(Date.now() - _fetchT0),
           executionCode: codeExtract?.code,
           executionLang: codeExtract?.lang,
-          matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string } | undefined) || _clientMatchVs || undefined,
+          matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null } | undefined) || _clientMatchVs || undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -8190,77 +8190,121 @@ ${rows}
                       )}
 
                       {/* ── Match Card with country flags ─────────────────── */}
-                      {msg.matchVsMeta && (
-                        <div style={{
-                          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-                          border: '1px solid rgba(99,102,241,0.3)',
-                          borderRadius: '16px',
-                          padding: '20px 16px',
-                          margin: '10px 0',
-                          textAlign: 'center',
-                          direction: 'ltr',
-                          boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-                          position: 'relative',
-                          overflow: 'hidden',
-                        }}>
-                          {/* Temporal badge */}
+                      {msg.matchVsMeta && (() => {
+                        const mv = msg.matchVsMeta!
+                        const isWC = (mv.competition || '').includes('كأس العالم')
+                        const isLive = mv.temporal === 'LIVE'
+                        const isPast = mv.temporal === 'PAST'
+                        const isUpcoming = mv.temporal === 'UPCOMING' || (!isLive && !isPast)
+                        const accentColor = isLive ? '#ef4444' : isWC ? '#f59e0b' : '#6366f1'
+                        const accentGlow = isLive ? 'rgba(239,68,68,0.35)' : isWC ? 'rgba(245,158,11,0.25)' : 'rgba(99,102,241,0.25)'
+                        const badgeBg = isLive ? 'rgba(239,68,68,0.9)' : isPast ? 'rgba(107,114,128,0.9)' : isWC ? 'rgba(245,158,11,0.9)' : 'rgba(16,185,129,0.9)'
+                        return (
                           <div style={{
-                            position: 'absolute',
-                            top: '10px',
-                            right: '10px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            padding: '3px 10px',
+                            background: 'linear-gradient(160deg, #0a0f1e 0%, #0f1f35 50%, #0a0f1e 100%)',
+                            border: `1px solid ${accentColor}55`,
                             borderRadius: '20px',
-                            background: msg.matchVsMeta.temporal === 'LIVE' ? 'rgba(239,68,68,0.85)' :
-                                        msg.matchVsMeta.temporal === 'PAST' ? 'rgba(107,114,128,0.85)' :
-                                        msg.matchVsMeta.temporal === 'UPCOMING' ? 'rgba(16,185,129,0.85)' :
-                                        'rgba(99,102,241,0.85)',
-                            color: '#fff',
-                            letterSpacing: '0.5px',
+                            padding: '0',
+                            margin: '12px 0',
+                            textAlign: 'center',
+                            direction: 'ltr',
+                            boxShadow: `0 0 0 1px ${accentColor}22, 0 8px 32px rgba(0,0,0,0.6), 0 0 60px ${accentGlow}`,
+                            position: 'relative',
+                            overflow: 'hidden',
                           }}>
-                            {msg.matchVsMeta.temporal === 'LIVE' ? '🔴 مباشر' :
-                             msg.matchVsMeta.temporal === 'PAST' ? '⏪ انتهت' :
-                             msg.matchVsMeta.temporal === 'UPCOMING' ? '📅 قادمة' : '🆚 مباراة'}
-                          </div>
-                          {/* Teams row */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '8px' }}>
-                            {/* Team 1 */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '90px' }}>
-                              <span style={{ fontSize: '52px', lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}>
-                                {getTeamFlag(msg.matchVsMeta.team1)}
+                            {/* Top banner */}
+                            <div style={{
+                              background: `linear-gradient(90deg, ${accentColor}22, ${accentColor}44, ${accentColor}22)`,
+                              borderBottom: `1px solid ${accentColor}33`,
+                              padding: '8px 16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              direction: 'rtl',
+                            }}>
+                              <span style={{ fontSize: '11px', color: '#cbd5e1', fontWeight: 600 }}>
+                                {mv.competition || '⚽ مباراة دولية'}
                               </span>
-                              <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: '13px', direction: 'rtl', textAlign: 'center', maxWidth: '90px', lineHeight: '1.2' }}>
-                                {msg.matchVsMeta.team1}
-                              </span>
-                            </div>
-                            {/* VS divider */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <span style={{
-                                fontSize: '22px',
-                                fontWeight: 900,
-                                color: '#818cf8',
-                                letterSpacing: '2px',
-                                textShadow: '0 0 12px rgba(99,102,241,0.7)',
-                              }}>VS</span>
-                              <span style={{ width: '40px', height: '2px', background: 'linear-gradient(90deg, transparent, #6366f1, transparent)', borderRadius: '2px' }} />
-                            </div>
-                            {/* Team 2 */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '90px' }}>
-                              <span style={{ fontSize: '52px', lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }}>
-                                {getTeamFlag(msg.matchVsMeta.team2)}
-                              </span>
-                              <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: '13px', direction: 'rtl', textAlign: 'center', maxWidth: '90px', lineHeight: '1.2' }}>
-                                {msg.matchVsMeta.team2}
+                                fontSize: '11px', fontWeight: 800, padding: '2px 10px',
+                                borderRadius: '20px', background: badgeBg, color: '#fff',
+                                letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '4px',
+                              }}>
+                                {isLive ? '🔴 مباشر' : isPast ? '⏪ انتهت' : '📅 قادمة'}
                               </span>
                             </div>
+
+                            {/* Teams row */}
+                            <div style={{ padding: '20px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                              {/* Team 1 */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1 }}>
+                                <span style={{ fontSize: '72px', lineHeight: 1, filter: `drop-shadow(0 4px 12px ${accentColor}44)` }}>
+                                  {getTeamFlag(mv.team1)}
+                                </span>
+                                <span style={{ color: '#f1f5f9', fontWeight: 800, fontSize: '14px', direction: 'rtl', textAlign: 'center', lineHeight: '1.2', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                                  {mv.team1}
+                                </span>
+                              </div>
+
+                              {/* VS divider */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '60px' }}>
+                                <span style={{
+                                  fontSize: '26px', fontWeight: 900, color: accentColor,
+                                  letterSpacing: '3px', textShadow: `0 0 20px ${accentColor}`,
+                                }}>VS</span>
+                                <span style={{ width: '50px', height: '2px', background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`, borderRadius: '2px', display: 'block' }} />
+                              </div>
+
+                              {/* Team 2 */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flex: 1 }}>
+                                <span style={{ fontSize: '72px', lineHeight: 1, filter: `drop-shadow(0 4px 12px ${accentColor}44)` }}>
+                                  {getTeamFlag(mv.team2)}
+                                </span>
+                                <span style={{ color: '#f1f5f9', fontWeight: 800, fontSize: '14px', direction: 'rtl', textAlign: 'center', lineHeight: '1.2', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                                  {mv.team2}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Date / Time row */}
+                            {(mv.date || mv.time || mv.city) && (
+                              <div style={{ padding: '8px 16px', display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', direction: 'rtl' }}>
+                                {mv.date && (
+                                  <span style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    📅 {mv.date}
+                                  </span>
+                                )}
+                                {mv.time && (
+                                  <span style={{ fontSize: '12px', color: accentColor, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    ⏰ {mv.time}
+                                  </span>
+                                )}
+                                {mv.city && (
+                                  <span style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🏟️ {mv.city}
+                                  </span>
+                                )}
+                                {mv.round && (
+                                  <span style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🎯 {mv.round}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Footer */}
+                            <div style={{ padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', direction: 'rtl' }}>
+                              {mv.kooraLink ? (
+                                <a href={mv.kooraLink} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: accentColor, textDecoration: 'none', fontWeight: 600 }}>
+                                  🔗 تفاصيل على Kooora
+                                </a>
+                              ) : (
+                                <span style={{ fontSize: '11px', color: '#475569' }}>⚽ DZ Agent · {isWC ? 'كأس العالم 2026' : 'تحليل رياضي'}</span>
+                              )}
+                            </div>
                           </div>
-                          {/* Footer */}
-                          <div style={{ marginTop: '12px', color: '#94a3b8', fontSize: '11px', direction: 'rtl' }}>
-                            ⚽ كأس العالم 2026 · تحليل DZ Agent
-                          </div>
-                        </div>
-                      )}
+                        )
+                      })()}
 
                       {msg.richType === 'qr' && msg.qrData && (
                         <div className="dz-qr-card">

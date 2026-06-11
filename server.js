@@ -14894,7 +14894,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           matches: _sportRes.matches,
           sources: _sportRes.sources,
           wc2026: _sportRes.wc2026,
-          matchVsData: { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal },
+          matchVsData: (() => {
+            const _fm = _sportRes.matches?.[0] || _sportRes.wcFixtures?.[0] || null
+            return { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal, date: _fm?.date||null, time: _fm?.startTime||null, competition: _fm?.competition||null, venue: _fm?.venue||null, city: _fm?.city||null, round: _fm?.round||null, kooraLink: _fm?.kooraLink||null }
+          })(),
           _sportsAgent: true,
           _queryCorrected: _qCorrection.wasChanged,
         })
@@ -19059,7 +19062,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         matches: _sportRes2.matches,
         sources: _sportRes2.sources,
         wc2026: _sportRes2.wc2026,
-        matchVsData: { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal },
+        matchVsData: (() => {
+          const _fm2 = _sportRes2.matches?.[0] || _sportRes2.wcFixtures?.[0] || null
+          return { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal, date: _fm2?.date||null, time: _fm2?.startTime||null, competition: _fm2?.competition||null, venue: _fm2?.venue||null, city: _fm2?.city||null, round: _fm2?.round||null, kooraLink: _fm2?.kooraLink||null }
+        })(),
         _sportsAgent: true,
       })
     } catch (_sae2) {
@@ -19552,7 +19558,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           matches: _sportsAgentResult.matches,
           sources: _sportsAgentResult.sources,
           wc2026: _sportsAgentResult.wc2026,
-          matchVsData: { team1: _mvd.team1, team2: _mvd.team2, temporal: _mvd.temporal },
+          matchVsData: (() => {
+            const _firstMatch = _sportsAgentResult.matches?.[0] || _sportsAgentResult.wcFixtures?.[0] || null
+            return {
+              team1: _mvd.team1,
+              team2: _mvd.team2,
+              temporal: _mvd.temporal,
+              date: _firstMatch?.date || null,
+              time: _firstMatch?.startTime || null,
+              competition: _firstMatch?.competition || null,
+              venue: _firstMatch?.venue || null,
+              city: _firstMatch?.city || null,
+              round: _firstMatch?.round || null,
+              kooraLink: _firstMatch?.kooraLink || null,
+            }
+          })(),
           _sportsAgent: true,
           _bypassLLM: true,
         })

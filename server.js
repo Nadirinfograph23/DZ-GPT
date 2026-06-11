@@ -199,7 +199,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -19081,23 +19081,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══ WC2026 مجموعات — Early Direct Bypass (قبل الـ LLM وقبل الـ parallel fetch) ══
   // يُكتشف: "مجموعة الجزائر/الأرجنتين كأس العالم" / "من مع الجزائر" / "مباريات الجزائر في كأس العالم"
   const _isWC2026GroupQuery = (
-    /(?:مجموعة\s*(?:الجزائر|الأرجنتين|النمسا|الأردن|المنتخب\s+الجزائري|H\b|الـ\s*H))/i.test(lastUserMessage) ||
+    /(?:مجموعة\s*(?:الجزائر|الأرجنتين|النمسا|الأردن|المنتخب\s+الجزائري|[A-La-l]\b|الـ\s*[A-La-l]))/i.test(lastUserMessage) ||
     (
       /(?:كأس\s*العالم|world\s*cup|مونديال|fifa|2026)/i.test(lastUserMessage) &&
-      /(?:مجموعة|منافسين?|منافسو|من\s*مع|مع\s*من|منتخبات|من\s*في|نفس\s*المجموعة|جدول|مباريات\s*الجزائر|برنامج\s*الجزائر)/i.test(lastUserMessage)
+      /(?:مجموعة|منافسين?|منافسو|من\s*مع|مع\s*من|منتخبات|من\s*في|نفس\s*المجموعة|جدول|مباريات|برنامج)/i.test(lastUserMessage)
     ) ||
-    /(?:من\s*مع\s*الجزائر|منافسو\s*الجزائر|مجموعة\s+H|group\s+H|مباريات\s+الجزائر\s+في\s+(?:كأس|مونديال))/i.test(lastUserMessage)
+    /(?:من\s*مع\s*الجزائر|منافسو\s*الجزائر|مجموعة\s+[A-La-l]|group\s+[A-La-l]|مباريات\s+الجزائر\s+في\s+(?:كأس|مونديال))/i.test(lastUserMessage)
   ) && !_isMatchVsQuery
 
   if (_isWC2026GroupQuery && !_isRetry) {
     const { buildWorldCup2026AlgeriaContext } = await import('./lib/dz-sports-knowledge.js')
     const _wc2026Ctx = buildWorldCup2026AlgeriaContext()
-    console.log(`[WC2026:GroupBypass] ⚡ Direct WC2026 group context — LLM bypassed`)
+    const _wc2026GroupLetter = extractWC2026GroupFromQuery(lastUserMessage) || 'J'
+    const _wcGroupTableData = buildWC2026GroupTableData(_wc2026GroupLetter)
+    console.log(`[WC2026:GroupBypass] ⚡ Direct WC2026 group context (group=${_wc2026GroupLetter}) — LLM bypassed`)
     return res.status(200).json({
       content: _wc2026Ctx,
       model: 'wc2026-direct',
       _bypassLLM: true,
       _sportsAgent: true,
+      wcGroupData: _wcGroupTableData,
     })
   }
 

@@ -683,6 +683,21 @@ interface DZMessage {
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
   matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null }
+  wcGroupData?: {
+    groupLetter: string
+    groupLabel: string
+    groupLabelEn: string
+    teams: Array<{ name: string; flag: string; fifa_rank: number | null }>
+    fixtures: Array<{
+      date: string; homeTeam: string; awayTeam: string
+      homeTeamEn?: string; awayTeamEn?: string
+      homeScore: number | null; awayScore: number | null
+      statusType: string; round: string; city?: string; venue?: string
+      startTime?: string; kooraLink?: string
+    }> | null
+    competition: string
+    source: string
+  }
 }
 
 interface ActionLogEntry {
@@ -7428,6 +7443,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           executionCode: codeExtract?.code,
           executionLang: codeExtract?.lang,
           matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null } | undefined) || _clientMatchVs || undefined,
+          wcGroupData: data.wcGroupData as Message['wcGroupData'] | undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -8322,6 +8338,135 @@ ${rows}
                               ) : (
                                 <span style={{ fontSize: '11px', color: '#475569' }}>⚽ DZ Agent · {isWC ? 'كأس العالم 2026' : 'تحليل رياضي'}</span>
                               )}
+                            </div>
+                          </div>
+                        )
+                      })()}
+
+                      {/* ── WC 2026 Group Table ─────────────────────────────── */}
+                      {msg.wcGroupData && (() => {
+                        const gd = msg.wcGroupData!
+                        const today = new Date().toISOString().slice(0, 10)
+                        const isAlgeria = gd.groupLetter === 'J'
+                        return (
+                          <div style={{
+                            margin: '10px 0',
+                            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                            border: '1px solid rgba(245,158,11,0.35)',
+                            borderRadius: '14px',
+                            overflow: 'hidden',
+                            fontFamily: "'Segoe UI', system-ui, sans-serif",
+                            direction: 'rtl',
+                          }}>
+                            {/* Header */}
+                            <div style={{
+                              background: 'linear-gradient(90deg, #92400e 0%, #b45309 40%, #d97706 100%)',
+                              padding: '10px 14px',
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                            }}>
+                              <span style={{ fontSize: '22px' }}>🏆</span>
+                              <div>
+                                <div style={{ color: '#fef3c7', fontWeight: 700, fontSize: '14px', lineHeight: 1.2 }}>
+                                  كأس العالم FIFA 2026
+                                </div>
+                                <div style={{ color: '#fcd34d', fontWeight: 800, fontSize: '16px' }}>
+                                  {gd.groupLabel} — {gd.groupLabelEn}
+                                </div>
+                              </div>
+                              {isAlgeria && (
+                                <div style={{ marginRight: 'auto', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '4px 10px', fontSize: '12px', color: '#6ee7b7', fontWeight: 600 }}>
+                                  🇩🇿 الجزائر مشاركة ✅
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Teams grid */}
+                            <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px' }}>
+                              {gd.teams.map((team, ti) => {
+                                const isAlg = team.name === 'الجزائر'
+                                return (
+                                  <div key={ti} style={{
+                                    background: isAlg
+                                      ? 'linear-gradient(135deg, rgba(6,78,59,0.7) 0%, rgba(6,95,70,0.4) 100%)'
+                                      : 'rgba(255,255,255,0.05)',
+                                    border: isAlg ? '1px solid rgba(16,185,129,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: '10px',
+                                    padding: '10px 6px',
+                                    textAlign: 'center',
+                                  }}>
+                                    <div style={{ fontSize: '36px', lineHeight: 1, marginBottom: '6px' }}>{team.flag}</div>
+                                    <div style={{
+                                      color: isAlg ? '#6ee7b7' : '#e2e8f0',
+                                      fontWeight: isAlg ? 700 : 500,
+                                      fontSize: '12px', lineHeight: 1.3,
+                                    }}>{team.name}</div>
+                                    {team.fifa_rank && (
+                                      <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '3px' }}>
+                                        FIFA #{team.fifa_rank}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* Fixtures */}
+                            {gd.fixtures && gd.fixtures.length > 0 && (
+                              <div style={{ padding: '0 12px 12px' }}>
+                                <div style={{ color: '#94a3b8', fontSize: '11px', fontWeight: 600, marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                                  📅 مباريات المجموعة
+                                </div>
+                                {gd.fixtures.map((fix, fi) => {
+                                  const isLive = fix.statusType === 'live'
+                                  const isDone = fix.statusType === 'finished' || (fix.homeScore !== null && fix.awayScore !== null)
+                                  const isPast = fix.date < today && !isLive
+                                  const hasAlg = fix.homeTeam === 'الجزائر' || fix.awayTeam === 'الجزائر'
+                                  const score = isDone
+                                    ? `${fix.homeScore} - ${fix.awayScore}`
+                                    : fix.startTime || '—'
+                                  const statusBadge = isLive
+                                    ? { text: '🔴 مباشر', color: '#ef4444' }
+                                    : isDone
+                                    ? { text: '✅ انتهت', color: '#10b981' }
+                                    : { text: '🕐 قادمة', color: '#6366f1' }
+
+                                  return (
+                                    <div key={fi} style={{
+                                      display: 'flex', alignItems: 'center', gap: '8px',
+                                      padding: '7px 10px', marginBottom: '4px',
+                                      background: hasAlg
+                                        ? 'rgba(6,78,59,0.3)'
+                                        : 'rgba(255,255,255,0.03)',
+                                      border: hasAlg
+                                        ? '1px solid rgba(16,185,129,0.3)'
+                                        : '1px solid rgba(255,255,255,0.06)',
+                                      borderRadius: '8px',
+                                    }}>
+                                      <span style={{ color: '#64748b', fontSize: '10px', minWidth: '60px', textAlign: 'center' }}>
+                                        {fix.date?.slice(5) || ''}
+                                      </span>
+                                      <span style={{ flex: 1, color: '#e2e8f0', fontSize: '12px', textAlign: 'center', fontWeight: hasAlg ? 700 : 400 }}>
+                                        {fix.homeTeam} <span style={{ color: isDone ? '#f59e0b' : '#475569', fontWeight: 800, margin: '0 4px' }}>{score}</span> {fix.awayTeam}
+                                      </span>
+                                      <span style={{ color: statusBadge.color, fontSize: '10px', minWidth: '52px', textAlign: 'left' }}>
+                                        {statusBadge.text}
+                                      </span>
+                                      {fix.city && (
+                                        <span style={{ color: '#475569', fontSize: '10px' }}>📍{fix.city}</span>
+                                      )}
+                                      {fix.kooraLink && (
+                                        <a href={fix.kooraLink} target="_blank" rel="noopener noreferrer" style={{ color: '#f59e0b', fontSize: '10px', textDecoration: 'none' }}>🔗</a>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {/* Footer */}
+                            <div style={{ padding: '6px 14px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ color: '#475569', fontSize: '10px' }}>📡 {gd.source}</span>
+                              <span style={{ color: '#475569', fontSize: '10px' }}>🌍 USA · Canada · Mexico — جوان/جويلية 2026</span>
                             </div>
                           </div>
                         )

@@ -14901,6 +14901,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             const _fm = _sportRes.matches?.[0] || _sportRes.wcFixtures?.[0] || null
             return { team1: _earlyMatchVs.team1, team2: _earlyMatchVs.team2, temporal: _earlyMatchVs.temporal, date: _fm?.date||null, time: _fm?.startTime||null, competition: _fm?.competition||null, venue: _fm?.venue||null, city: _fm?.city||null, round: _fm?.round||null, kooraLink: _fm?.kooraLink||null, homeScore: _fm?.homeScore??null, awayScore: _fm?.awayScore??null }
           })(),
+          wcGroupData: (() => {
+          if (_sportRes.type === 'WORLD_CUP_2026') {
+            const _grpLetterEarly = _findWC2026TeamGroup(_earlyMatchVs.team1) || _findWC2026TeamGroup(_earlyMatchVs.team2) || 'J'
+            return buildWC2026GroupTableData(_grpLetterEarly)
+          }
+          return undefined
+        })(),
           _sportsAgent: true,
           _queryCorrected: _qCorrection.wasChanged,
         })
@@ -19070,6 +19077,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _fm2 = _sportRes2.matches?.[0] || _sportRes2.wcFixtures?.[0] || null
           return { team1: _matchVsData.team1, team2: _matchVsData.team2, temporal: _matchVsData.temporal, date: _fm2?.date||null, time: _fm2?.startTime||null, competition: _fm2?.competition||null, venue: _fm2?.venue||null, city: _fm2?.city||null, round: _fm2?.round||null, kooraLink: _fm2?.kooraLink||null, homeScore: _fm2?.homeScore??null, awayScore: _fm2?.awayScore??null }
         })(),
+        wcGroupData: (() => {
+          if (_sportRes2.type === 'WORLD_CUP_2026') {
+            const _grpLetterMv2 = _findWC2026TeamGroup(_matchVsData.team1) || _findWC2026TeamGroup(_matchVsData.team2) || 'J'
+            return buildWC2026GroupTableData(_grpLetterMv2)
+          }
+          return undefined
+        })(),
         _sportsAgent: true,
       })
     } catch (_sae2) {
@@ -19588,6 +19602,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               awayScore: _firstMatch?.awayScore ?? null,
             }
           })(),
+          wcGroupData: (() => {
+          if (_sportsAgentResult.type === 'WORLD_CUP_2026') {
+            const _grpLetterLlm = _findWC2026TeamGroup(_mvd.team1) || _findWC2026TeamGroup(_mvd.team2) || 'J'
+            return buildWC2026GroupTableData(_grpLetterLlm)
+          }
+          return undefined
+        })(),
           _sportsAgent: true,
           _bypassLLM: true,
         })

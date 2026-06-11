@@ -15046,12 +15046,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ? (_diffDays > 0 ? `⏳ بعد **${_diffDays} يوم${_diffDays > 1 ? '' : ''}** و**${_diffHrs} ساعة**` : `🔴 **اليوم!**`)
             : '✅ انتهت'
 
+          // الفريق المنافس = الفريق الآخر (ليس الجزائر)
+          const _nextOpponent = _next.homeTeam === 'الجزائر' ? _next.awayTeam : _next.homeTeam
+          const _nextOppFlag = { 'الأرجنتين':'🇦🇷','النمسا':'🇦🇹','الأردن':'🇯🇴','المغرب':'🇲🇦','البرازيل':'🇧🇷','فرنسا':'🇫🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','البرتغال':'🇵🇹','هولندا':'🇳🇱' }[_nextOpponent] || '🏴'
+          const _isAlgeriaHome = _next.homeTeam === 'الجزائر'
+          const _matchupStr = _isAlgeriaHome
+            ? `🇩🇿 **الجزائر** ضد ${_nextOppFlag} **${_nextOpponent}**`
+            : `${_nextOppFlag} **${_nextOpponent}** ضد 🇩🇿 **الجزائر**`
+
           _upcomingSection = `## ⚽ المباراة القادمة للمنتخب الجزائري 🇩🇿\n\n`
             + `| | |\n|---|---|\n`
-            + `| 🆚 المنافس | **${_next.awayTeam}** |\n`
+            + `| 🆚 المباراة | **${_matchupStr}** |\n`
             + `| 📅 التاريخ | **${new Date(_next.date).toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}** |\n`
             + `| ⏰ الموعد | **${_next.startTime || '21:00'} (توقيت الجزائر)** |\n`
-            + `| 🏟️ المدينة | **${_next.city}${_next.country ? ' — ' + _next.country : ''}** |\n`
+            + `| 🏟️ الملعب | **${_next.venue || '—'}** |\n`
+            + `| 📍 المدينة | **${_next.city}${_next.country ? ' — ' + _next.country : ''}** |\n`
             + `| 🏆 البطولة | **${_next.competition}** |\n`
             + `| ⏳ العدّ التنازلي | ${_countdown} |\n\n`
 
@@ -15059,7 +15068,13 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             _upcomingSection += `### 📅 كامل جدول مباريات الجزائر في كأس العالم 2026\n\n`
             for (const fix of _wcFixtures) {
               const _d = new Date(fix.date).toLocaleDateString('ar-DZ', { month:'short', day:'numeric' })
-              _upcomingSection += `- **${fix.round}** — ${_d} ⏰ ${fix.startTime || '21:00'} | 🇩🇿 الجزائر vs **${fix.awayTeam}** | 📍 ${fix.city}\n`
+              const _opp = fix.homeTeam === 'الجزائر' ? fix.awayTeam : fix.homeTeam
+              const _oppFlag = { 'الأرجنتين':'🇦🇷','النمسا':'🇦🇹','الأردن':'🇯🇴' }[_opp] || '🏴'
+              const _isHome = fix.homeTeam === 'الجزائر'
+              const _vs = _isHome
+                ? `🇩🇿 الجزائر ضد ${_oppFlag} **${_opp}**`
+                : `${_oppFlag} **${_opp}** ضد 🇩🇿 الجزائر`
+              _upcomingSection += `- **${fix.round}** — ${_d} ⏰ ${fix.startTime || '21:00'} | ${_vs} | 🏟️ ${fix.venue || fix.city}\n`
             }
             _upcomingSection += `\n> 🏆 **المجموعة J**: الأرجنتين 🇦🇷 · الجزائر 🇩🇿 · النمسا 🇦🇹 · الأردن 🇯🇴\n`
           }
@@ -15091,6 +15106,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         return res.status(200).json({
           content: _finalMatchContent,
           model: 'national-team-fixtures',
+          _sportsAgent: true,
           _nationalTeam: true,
           wc2026: { group: 'J', nextMatch: _wcFixtures[0] || null },
         })

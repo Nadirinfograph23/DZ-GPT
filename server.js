@@ -198,8 +198,8 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
-import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup } from './lib/dz-sports-knowledge.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent } from './lib/sports-agent.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14912,8 +14912,64 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           _queryCorrected: _qCorrection.wasChanged,
         })
       } catch (_sae) {
-        console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message)
-        // fallback → يكمل المعالجة العادية
+        console.error('[MatchVs:EarlyRoute] sports agent error:', _sae.message, _sae.stack?.slice(0, 200))
+        // ⛔ لا نُسقط للـ LLM — نُرجع رداً واضحاً من الوكيل الرياضي مع روابط
+        const _f1e = _earlyMatchVs?.team1 || ''
+        const _f2e = _earlyMatchVs?.team2 || ''
+        return res.status(200).json({
+          content: [
+            `## ⚽ ${_f1e} ضد ${_f2e}`,
+            ``,
+            `> ⚠️ تعذّر الاتصال بالوكيل الرياضي مؤقتاً. تحقق من المصادر التالية مباشرةً:`,
+            ``,
+            `| المصدر | الرابط |`,
+            `|--------|--------|`,
+            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+            `| ⚽ **FotMob** | [مباريات كأس العالم](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
+            `| 🏆 **FIFA.com** | [الموقع الرسمي](https://www.fifa.com/worldcup) |`,
+            `| 🇩🇿 **Kooora** | [مباريات الجزائر](https://www.kooora.com/) |`,
+          ].join('\n'),
+          model: 'sports-agent-error',
+          _sportsAgent: true,
+          _error: 'sports_agent_timeout',
+        })
+      }
+    }
+  }
+
+  // ── WC2026 Today Matches Early Handler ─────────────────────────────────────
+  // يُعالَج مباشرةً: "مباريات كأس العالم اليوم" / "من يلعب اليوم في المونديال"
+  // يُجيب من FotMob (حي) ← قاعدة البيانات المحلية — بدون LLM
+  {
+    const _isWCTodayEarly = !_isRetry && (
+      detectWC2026TodayQuery(_rawLastMsg) ||
+      /(?:مباريات|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s+العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
+      /(?:كأس\s+العالم|المونديال|مونديال)\s+(?:مباريات\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
+      /(?:اليوم|الليلة)\s+(?:في|من)\s+(?:كأس\s+العالم|المونديال|مونديال)/i.test(_rawLastMsg) ||
+      /من\s+(?:يلعب|سيلعب|ستلعب)\s+(?:اليوم|الليلة)\s+(?:في\s+)?(?:كأس\s+العالم|المونديال)/i.test(_rawLastMsg) ||
+      /(?:ماتشات|مباريات|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg)
+    )
+    if (_isWCTodayEarly) {
+      console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)
+      try {
+        const _todayDate = new Date().toISOString().split('T')[0]
+        const _wcTodayRes = await Promise.race([
+          runWC2026TodayAgent(_todayDate),
+          new Promise(r => setTimeout(() => r(null), 15000)),
+        ])
+        if (_wcTodayRes?.userResponse) {
+          return res.status(200).json({
+            content: _wcTodayRes.userResponse,
+            model: 'sports-agent-wc2026-today',
+            _sportsAgent: true,
+            wc2026: true,
+            found: _wcTodayRes.found,
+            sources: _wcTodayRes.sources,
+            matchCount: _wcTodayRes.matchCount,
+          })
+        }
+      } catch (_wcTodayErr) {
+        console.error('[WC2026:TodayEarly] error:', _wcTodayErr.message)
       }
     }
   }

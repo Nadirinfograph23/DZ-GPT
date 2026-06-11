@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, AlertTriangle } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import DZNotifications from '../components/DZNotifications'
 import BugReportModal from '../components/BugReportModal'
@@ -200,6 +200,15 @@ export default function DZAgent() {
           </div>
         </div>
 
+        <button
+          className="dza-report-issue-btn"
+          onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
+          title="الإبلاغ عن مشكلة"
+        >
+          <AlertTriangle size={15} className="dza-report-issue-icon" />
+          <span>الإبلاغ عن مشكلة</span>
+        </button>
+
         <button className="dza-new-chat-btn" onClick={createNewChat}>
           <Plus size={16} />
           <span>{labels.newChat}</span>
@@ -229,17 +238,6 @@ export default function DZAgent() {
           )}
         </div>
 
-        {/* ===== SIDEBAR FOOTER — Bug Report ===== */}
-        <div className="dza-sidebar-footer">
-          <button
-            className="dza-bug-report-btn"
-            onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
-            title="الإبلاغ عن مشكلة"
-          >
-            <span className="dza-bug-report-btn-icon">🐛</span>
-            الإبلاغ عن مشكلة
-          </button>
-        </div>
 
       </div>
 

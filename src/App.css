@@ -1437,9 +1437,8 @@ body:has(.dms-root) {
   font-size: 11px;
   color: #888;
   direction: rtl;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .pwa-install-btn {

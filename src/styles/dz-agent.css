@@ -12807,6 +12807,38 @@
     transform: scale(0.96);
   }
 }
+/* ===== REPORT ISSUE BUTTON — قبل زر المحادثة الجديدة ===== */
+.dza-report-issue-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  padding: 9px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 10px;
+  color: #fbbf24;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.2s;
+  direction: rtl;
+  flex-shrink: 0;
+}
+.dza-report-issue-btn:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fcd34d;
+  transform: translateX(-1px);
+}
+.dza-report-issue-btn:active {
+  transform: scale(0.98);
+}
+.dza-report-issue-icon {
+  flex-shrink: 0;
+}
+
 /* على الـ desktop: الزر موجود في الـ sidebar مباشرة — لا حاجة للهيدر */
 .dza-bug-report-btn {
   display: flex;

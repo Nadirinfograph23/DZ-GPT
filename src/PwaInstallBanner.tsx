@@ -220,14 +220,14 @@ export default function PwaInstallBanner() {
         </div>
 
         <div className="pwa-banner-text">
-          <span className="pwa-banner-title">تثبيت DZ GPT</span>
+          <span className="pwa-banner-title">ثبّت تطبيق DZ GPT</span>
           <span className="pwa-banner-sub">
             {hasPrompt
-              ? 'أضف التطبيق إلى شاشتك الرئيسية'
+              ? 'أضفه إلى شاشتك الرئيسية للوصول السريع'
               : ios
-                ? '🍎 Safari فقط ← مشاركة ← أضف للشاشة'
+                ? 'افتح في Safari ← اضغط مشاركة ← أضف للشاشة'
                 : android
-                  ? 'افتح قائمة المتصفح ← أضف للشاشة'
+                  ? 'قائمة المتصفح ← أضف إلى الشاشة الرئيسية'
                   : 'أضف التطبيق إلى شاشتك الرئيسية'}
           </span>
         </div>
@@ -239,14 +239,14 @@ export default function PwaInstallBanner() {
             disabled={installing}
           >
             <Download size={15} />
-            <span>{installing ? '...' : 'تثبيت'}</span>
+            <span>{installing ? 'جاري...' : 'تثبيت'}</span>
           </button>
         ) : (
           <button
             className={`pwa-install-btn${ios ? ' pwa-install-btn--ios' : ' pwa-install-btn--guide'}`}
             onClick={handleGuideBtn}
           >
-            <span>كيف؟</span>
+            <span>طريقة التثبيت</span>
           </button>
         )}
 

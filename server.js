@@ -226,7 +226,7 @@ import {
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
-import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER } from './lib/prompts.js'
+import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
 import {
@@ -8270,9 +8270,9 @@ const NATIONAL_TEAMS = [
 function detectMatchVsQuery(msg) {
   if (!msg || msg.length < 4) return null
 
-  // نمط "فريق1 ضد فريق2" أو "فريق1 vs فريق2"
+  // نمط "فريق1 ضد فريق2" أو "فريق1 vs فريق2" أو "فريق1 × فريق2"
   const vsMatch = msg.match(
-    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})\s+(?:ضد|vs\.?)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?]{1,22})/iu
+    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:ضد|vs\.?|×|x)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
   )
   if (vsMatch) {
     const team1 = vsMatch[1].trim()
@@ -21017,6 +21017,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     INTENT_CLASSIFIER_POLICY,
     // ── LAYER 1b: INTENT CLASSIFICATION RESULT (نتيجة التصنيف الفعلي) ─────
     _intentBlock || '',
+    // ── LAYER 1c: SPORTS AGENT ORCHESTRATOR (إلزامي للاستعلامات الرياضية) ──
+    (_isSports || isGeneralMatchesQuery || isDZDialectFootballQuery || _isMatchVsQuery || isGlobalLeaguesQuery || isLFPQuery || isStandingsQuery || isFootballQuery)
+      ? SPORTS_AGENT_ORCHESTRATOR_POLICY
+      : '',
     // ── LAYER 2: COGNITIVE BEHAVIOR RULES (قواعد السلوك المعرفي — إلزامية) ─
     COGNITIVE_BEHAVIOR_RULES,
     // ── LAYER 17: PUBLIC FIGURES & HISTORICAL EVENTS VERIFICATION POLICY ──

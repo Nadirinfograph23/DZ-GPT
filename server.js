@@ -15123,6 +15123,86 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── WC2026 Tomorrow Matches Handler 📅 ─────────────────────────────────────
+  // يُعالَج: "مباريات الغد كأس العالم" / "غدا مونديال" / "مباريات بكرة الفيفا"
+  {
+    const _isWCTomorrowEarly = (
+      /(?:مباريات?|ماتشات|برنامج|جدول|رزنامة)\s+(?:الغد|غدا?|بكر[اة])\s*(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)?/i.test(_rawLastMsg) ||
+      /(?:الغد|غدا?|بكر[اة])\s+(?:مباريات?|ماتشات|برنامج)?\s*(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)/i.test(_rawLastMsg) ||
+      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026)\s+(?:الغد|غدا?|بكر[اة])/i.test(_rawLastMsg) ||
+      (/(?:مباريات?|ماتشات)\s+(?:الغد|غدا?|بكر[اة])/i.test(_rawLastMsg) && /(?:كأس|مونديال|FIFA|عالم)/i.test(_rawLastMsg))
+    )
+    if (_isWCTomorrowEarly) {
+      console.log(`[WC2026:TomorrowEarly] 📅 WC tomorrow query: "${_rawLastMsg.slice(0, 60)}"`)
+      try {
+        const _tomorrowDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        const _tomorrowLabel = new Date(_tomorrowDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
+        const _wcTomRes = await Promise.race([
+          runWC2026TodayAgent(_tomorrowDate),
+          new Promise(r => setTimeout(() => r(null), 15000)),
+        ])
+        if (_wcTomRes?.userResponse) {
+          const _patched = _wcTomRes.userResponse.replace(/اليوم/g, `الغد (${_tomorrowLabel})`)
+          return res.status(200).json({
+            content: _patched,
+            model: 'sports-agent-wc2026-tomorrow',
+            _sportsAgent: true,
+            wc2026: true,
+            found: _wcTomRes.found,
+            sources: _wcTomRes.sources,
+            matchCount: _wcTomRes.matchCount,
+          })
+        }
+        // ── Fallback: بيانات محلية ──────────────────────────────────────────
+        const { buildWC2026TodayFixtures: _buildTomLocal } = await import('./lib/dz-sports-knowledge.js')
+        const _tomMatches = _buildTomLocal(_tomorrowDate)
+        const _WC_FLAGS_TOM = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','إيطاليا':'🇮🇹','بلجيكا':'🇧🇪','كرواتيا':'🇭🇷','أوروغواي':'🇺🇾','الدنمارك':'🇩🇰','السويد':'🇸🇪','أستراليا':'🇦🇺','تركيا':'🇹🇷','نيجيريا':'🇳🇬','السنغال':'🇸🇳','كولومبيا':'🇨🇴','الإكوادور':'🇪🇨','بولندا':'🇵🇱','سويسرا':'🇨🇭','اسكتلندا':'🏴󠁧󠁢󠁳󠁣󠁴󠁿' }
+        if (_tomMatches?.length) {
+          const _tl = [
+            `## ⚽ مباريات كأس العالم 2026 — ${_tomorrowLabel}`,
+            ``,
+            `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026 — توقيت الجزائر (GMT+1)_`,
+            ``,
+          ]
+          for (const _m of _tomMatches) {
+            const _f1 = _WC_FLAGS_TOM[_m.homeTeam] || '🏴'
+            const _f2 = _WC_FLAGS_TOM[_m.awayTeam] || '🏴'
+            const [_mh, _mm] = _m.startTime?.split(':') || ['??','??']
+            const _dztH = String((parseInt(_mh, 10) + 1) % 24).padStart(2, '0')
+            _tl.push(`### ${_f1} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_f2}`)
+            _tl.push(`🕒 **${_dztH}:${_mm}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city} | المجموعة **${_m.group}** | ${_m.round}`)
+            _tl.push(``)
+          }
+          _tl.push(`🔴 **المتابعة الحية:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`)
+          return res.status(200).json({
+            content: _tl.join('\n'),
+            model: 'wc2026-tomorrow-local',
+            _sportsAgent: true,
+            wc2026: true,
+            found: true,
+            sources: ['WC2026_FULL_FIXTURES'],
+            matchCount: _tomMatches.length,
+          })
+        }
+        return res.status(200).json({
+          content: [
+            `## ⚽ كأس العالم 2026 — لا مباريات غداً`,
+            ``,
+            `📅 لا توجد مباريات مجدولة في **${_tomorrowLabel}** وفق الجدول الرسمي لـ FIFA 2026.`,
+            ``,
+            `🗓️ [الجدول الكامل للمباريات](https://www.fifa.com/worldcup/matches)`,
+          ].join('\n'),
+          model: 'wc2026-tomorrow-no-matches',
+          _sportsAgent: true,
+          wc2026: true,
+          found: false,
+        })
+      } catch (_wcTomErr) {
+        console.error('[WC2026:TomorrowEarly] error:', _wcTomErr.message)
+      }
+    }
+  }
+
   // ── WC2026 Standings Early Handler 🏆📊 ────────────────────────────────────
   // يُعالَج مباشرةً: "ترتيب المجموعة J" / "كم نقطة الجزائر" / "مجموعة الجزائر"
   // يجلب بيانات حية من SofaScore ← FotMob ← قاعدة البيانات المحلية
@@ -15675,7 +15755,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // 6b. نتائج/مباريات "غدا أو بكرة" → مستقبلية لا نعلمها
-    if (/(?:غدا?|بكر[اة]|الغد)\b.*(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب)|(?:نتائج|مبار[اة]ة?|يلعب|ستلعب|تلعب).*(?:غدا?|بكر[اة]|الغد)\b/i.test(_lum)) {
+    // ⚠️ استثناء: استعلامات كأس العالم تُعالَج في WC2026 Tomorrow Handler أعلاه
+    if (
+      /(?:غدا?|بكر[اة]|الغد)\b.*(?:نتائج|مبار[اة]ة?|مباريات?|يلعب|ستلعب|تلعب)|(?:نتائج|مبار[اة]ة?|مباريات?|يلعب|ستلعب|تلعب).*(?:غدا?|بكر[اة]|الغد)\b/i.test(_lum) &&
+      !/(?:كأس\s*العالم|مونديال|FIFA|فيفا\s*2026|WC\s*2026)/i.test(_lum)
+    ) {
       console.log(`[AntiHallucination] Tomorrow sports result query`)
       return res.status(200).json({
         content: [

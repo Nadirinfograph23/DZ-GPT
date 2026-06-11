@@ -198,8 +198,8 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
-import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery } from './lib/dz-sports-knowledge.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent } from './lib/sports-agent.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -14970,6 +14970,40 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
       } catch (_wcTodayErr) {
         console.error('[WC2026:TodayEarly] error:', _wcTodayErr.message)
+      }
+    }
+  }
+
+  // ── WC2026 Standings Early Handler 🏆📊 ────────────────────────────────────
+  // يُعالَج مباشرةً: "ترتيب المجموعة J" / "كم نقطة الجزائر" / "مجموعة الجزائر"
+  // يجلب بيانات حية من SofaScore ← FotMob ← قاعدة البيانات المحلية
+  {
+    const _isWCStandingsEarly = !_isRetry && (
+      detectWC2026StandingsQuery(_rawLastMsg) ||
+      /(?:ترتيب|جدول|صدارة)\s+(?:المجموعة|مجموعة)\s+[A-La-l]/i.test(_rawLastMsg) ||
+      /(?:كم\s+نقطة|نقاط\s+الجزائر|نقط\s+الجزائر)/i.test(_rawLastMsg) ||
+      /مجموعة\s+(?:الجزائر|الخضر)/i.test(_rawLastMsg)
+    )
+    if (_isWCStandingsEarly) {
+      console.log(`[WC2026:Standings] 📊 Standings query: "${_rawLastMsg.slice(0, 60)}"`)
+      try {
+        const _standingsRes = await Promise.race([
+          runWC2026StandingsAgent(_rawLastMsg),
+          new Promise(r => setTimeout(() => r(null), 18000)),
+        ])
+        if (_standingsRes?.userResponse) {
+          return res.status(200).json({
+            content: _standingsRes.userResponse,
+            model: 'sports-agent-wc2026-standings',
+            _sportsAgent: true,
+            wc2026: true,
+            groupLetter: _standingsRes.groupLetter,
+            liveSource: _standingsRes.liveSource,
+            found: true,
+          })
+        }
+      } catch (_standingsErr) {
+        console.error('[WC2026:Standings] error:', _standingsErr.message)
       }
     }
   }

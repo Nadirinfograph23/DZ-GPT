@@ -7072,68 +7072,76 @@
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 14px 12px;
+  gap: 5px;
+  padding: 8px 14px 12px;
 }
 
+/* ── بطاقة أيقونة فقط (Icon-Only Mode) ────────────────────────────────── */
 .dzc-news-card {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
+  justify-content: center;
+  padding: 5px 10px;
   border: 1px solid rgba(16,163,127,0.22);
   border-radius: 20px;
   background: rgba(16,163,127,0.06);
   text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   cursor: pointer;
-  max-width: 240px;
-  overflow: hidden;
+  position: relative;
+}
+
+.dzc-news-card--icon {
+  padding: 5px 8px;
+  min-width: 32px;
 }
 
 .dzc-news-card:hover {
-  background: rgba(16,163,127,0.14);
-  border-color: rgba(16,163,127,0.45);
+  background: rgba(16,163,127,0.16);
+  border-color: rgba(16,163,127,0.5);
+  transform: translateY(-1px);
 }
 
-.dzc-nc-title {
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #ccc;
+/* الأيقونة الوحيدة داخل البطاقة */
+.dzc-nc-icon-only {
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Tooltip عند hover */
+.dzc-news-card[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #e2e8f0;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
   white-space: nowrap;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px solid rgba(16,163,127,0.3);
   direction: rtl;
 }
 
-.dzc-news-card:hover .dzc-nc-title { color: #10a37f; }
-
-.dzc-nc-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.dzc-nc-domain {
-  font-size: 10px;
-  color: #10a37f;
-  direction: ltr;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.dzc-nc-date {
-  font-size: 10px;
-  color: #555;
-  white-space: nowrap;
-}
+/* عناصر مخفية (للتوافق مع الكود القديم) */
+.dzc-nc-title { display: none; }
+.dzc-nc-meta  { display: none; }
+.dzc-nc-domain { display: none; }
+.dzc-nc-date   { display: none; }
 
 @media (max-width: 520px) {
   .dzc-ncg-header { padding: 7px 12px; }
-  .dzc-ncg-list { padding: 8px 10px 10px; gap: 5px; }
-  .dzc-news-card { padding: 4px 9px; max-width: 180px; }
-  .dzc-nc-title { font-size: 11px; }
+  .dzc-ncg-list { padding: 6px 10px 10px; gap: 4px; }
+  .dzc-news-card--icon { padding: 4px 7px; min-width: 28px; }
+  .dzc-nc-icon-only { font-size: 14px; }
 }
 
 /* ===== FIND INPUT CARD ===== */

@@ -8706,40 +8706,55 @@ ${rows}
                           }}
                         />
                       )}
-                      {msg.newsItems && msg.newsItems.length > 0 && (
-                        <div className="dzc-news-cards-grid">
-                          <div className="dzc-ncg-header">
-                            <span className="dzc-ncg-icon">📰</span>
-                            <span className="dzc-ncg-title">نتائج البحث</span>
-                            <span className="dzc-ncg-count">{msg.newsItems.length} مصدر</span>
+                      {msg.newsItems && msg.newsItems.length > 0 && (() => {
+                        const _srcIcon = (domain: string, src?: string): string => {
+                          const d = (domain || '').toLowerCase()
+                          const s = (src || '').toLowerCase()
+                          if (/fotmob|kooora|جدول|jdwel|livescore|flashscore|soccerway|goal\.com|yalla|بطل|filgoal/.test(d + s)) return '⚽'
+                          if (/sofascore|365score|whoscored|fbref|statso|opta|stats|إحصاء/.test(d + s)) return '📊'
+                          if (/fifa\.com|اتحاد/.test(d + s)) return '🏆'
+                          if (/youtube|youtu\.be|يوتيوب/.test(d + s)) return '🎬'
+                          if (/wikipedia|ويكيبيديا/.test(d + s)) return '📚'
+                          if (/twitter|x\.com|تويتر/.test(d + s)) return '🐦'
+                          if (/aps\.dz|وكالة|algerie|الجزائر|ennahar|elbilad|echorouk|elkhabar|elwatan|liberte|tsa|الشروق|النهار|البلاد|الخبر|الوطن|الجمهورية/.test(d + s)) return '📰'
+                          if (/bbc|cnn|france24|aljazeera|alarabiya|rt\.com|رويترز|أسوشيتد/.test(d + s)) return '📡'
+                          if (/google|bing|duckduck|searx|search/.test(d + s)) return '🔍'
+                          return '🌐'
+                        }
+                        const _isSports = (msg as any)._sportsAgent || (msg as any).wc2026
+                        const _headerIcon = _isSports ? '⚽' : '📰'
+                        const _headerTitle = _isSports ? 'المصادر' : 'نتائج البحث'
+                        return (
+                          <div className="dzc-news-cards-grid">
+                            <div className="dzc-ncg-header">
+                              <span className="dzc-ncg-icon">{_headerIcon}</span>
+                              <span className="dzc-ncg-title">{_headerTitle}</span>
+                              <span className="dzc-ncg-count">{msg.newsItems!.length}</span>
+                            </div>
+                            <div className="dzc-ncg-list">
+                              {msg.newsItems!.map((item, i) => {
+                                const domain = item.url
+                                  ? (() => { try { return new URL(item.url).hostname.replace('www.', '') } catch { return '' } })()
+                                  : ''
+                                const icon = _srcIcon(domain, item.source)
+                                return (
+                                  <a
+                                    key={i}
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="dzc-news-card dzc-news-card--icon"
+                                    title={item.title || domain}
+                                    aria-label={item.title || domain}
+                                  >
+                                    <span className="dzc-nc-icon-only">{icon}</span>
+                                  </a>
+                                )
+                              })}
+                            </div>
                           </div>
-                          <div className="dzc-ncg-list">
-                            {msg.newsItems.map((item, i) => {
-                              const dateStr = item.date
-                                ? (() => { try { return new Date(item.date!).toLocaleDateString('ar-DZ', { day: 'numeric', month: 'short' }) } catch { return '' } })()
-                                : ''
-                              const domain = item.url
-                                ? (() => { try { return new URL(item.url).hostname.replace('www.', '') } catch { return '' } })()
-                                : ''
-                              return (
-                                <a
-                                  key={i}
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="dzc-news-card"
-                                >
-                                  <div className="dzc-nc-title">{item.title}</div>
-                                  <div className="dzc-nc-meta">
-                                    {domain && <span className="dzc-nc-domain">🌐 {domain}</span>}
-                                    {dateStr && <span className="dzc-nc-date">{dateStr}</span>}
-                                  </div>
-                                </a>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                       {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
                         <div className="dzc-quick-suggestions">
                           <span className="dzc-qs-label">💡 اقتراحات:</span>

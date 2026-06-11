@@ -240,7 +240,7 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
-import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent } from './lib/sports-agent.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES } from './lib/sports-agent.js'
 import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'

@@ -7070,33 +7070,40 @@
 
 .dzc-ncg-list {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px 12px;
 }
 
 .dzc-news-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1px solid rgba(16,163,127,0.22);
+  border-radius: 20px;
+  background: rgba(16,163,127,0.06);
   text-decoration: none;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
 }
 
-.dzc-news-card:last-child { border-bottom: none; }
-
 .dzc-news-card:hover {
-  background: rgba(16,163,127,0.07);
+  background: rgba(16,163,127,0.14);
+  border-color: rgba(16,163,127,0.45);
 }
 
 .dzc-nc-title {
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: #ddd;
-  line-height: 1.45;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   direction: rtl;
-  text-align: right;
 }
 
 .dzc-news-card:hover .dzc-nc-title { color: #10a37f; }
@@ -7104,25 +7111,29 @@
 .dzc-nc-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .dzc-nc-domain {
-  font-size: 11px;
-  color: #555;
+  font-size: 10px;
+  color: #10a37f;
   direction: ltr;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 .dzc-nc-date {
-  font-size: 11px;
-  color: #444;
+  font-size: 10px;
+  color: #555;
+  white-space: nowrap;
 }
 
 @media (max-width: 520px) {
   .dzc-ncg-header { padding: 7px 12px; }
-  .dzc-news-card { padding: 9px 12px; }
-  .dzc-nc-title { font-size: 12px; }
+  .dzc-ncg-list { padding: 8px 10px 10px; gap: 5px; }
+  .dzc-news-card { padding: 4px 9px; max-width: 180px; }
+  .dzc-nc-title { font-size: 11px; }
 }
 
 /* ===== FIND INPUT CARD ===== */

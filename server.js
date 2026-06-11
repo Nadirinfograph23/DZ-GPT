@@ -159,6 +159,7 @@ import {
   getTransfers,
   getArabicLocalization,
   getAlgeriaMatches,
+  getAlgeriaTeamMatches,
   isUnavailable,
   UNAVAILABLE,
   APIF_LEAGUES,
@@ -29330,6 +29331,14 @@ if (isMain) {
       .then(d => console.log(`[AutoRefresh] Currency: ${d?.provider} (${Object.keys(d?.rates || {}).length} pairs)`))
       .catch(err => console.warn('[AutoRefresh] Currency failed:', err.message))
   }, AUTO_REFRESH_INTERVAL + 60000, { label: 'currency-refresh' })
+
+  // ── 🇩🇿 Pre-warm Kooora Algeria cache عند بدء السيرفر (فوري) ─────────────
+  scheduleOnce(async () => {
+    console.log('[AutoRefresh] 🇩🇿 Pre-warming Kooora Algeria team cache...')
+    await getAlgeriaTeamMatches()
+      .then(d => console.log(`[AutoRefresh] ✅ Kooora Algeria: ${d?.matches?.length || 0} matches cached`))
+      .catch(err => console.warn('[AutoRefresh] Kooora Algeria pre-warm failed:', err.message))
+  }, 5000, { label: 'kooora-algeria-prewarm' })
 
   scheduleOnce(async () => {
     console.log('[AutoRefresh] Refreshing LFP matches...')

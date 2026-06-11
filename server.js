@@ -14884,7 +14884,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // عند إعادة المحاولة (_isRetry) نتجاوز هذا البايباس لإعطاء إجابة مختلفة عبر LLM
   {
     const _earlyMatchVs = detectMatchVsQuery(_rawLastMsg)
-    if (_earlyMatchVs?.isMatchVs && !_isRetry) {
+    // MatchVs: يعمل دائماً حتى عند retry — البيانات الرياضية لا تتغير
+    if (_earlyMatchVs?.isMatchVs) {
       console.log(`[MatchVs:EarlyRoute] ⚽ "${_earlyMatchVs.team1} vs ${_earlyMatchVs.team2}" → runSportsAgent (direct, no clarification)`)
       try {
         const _sportRes = await runSportsAgent(_rawLastMsg, messages)
@@ -14941,7 +14942,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // يُعالَج مباشرةً: "مباريات كأس العالم اليوم" / "من يلعب اليوم في المونديال"
   // يُجيب من FotMob (حي) ← قاعدة البيانات المحلية — بدون LLM
   {
-    const _isWCTodayEarly = !_isRetry && (
+    // WC today handler: يعمل حتى عند _isRetry (البيانات الرياضية لا تتغير)
+    const _isWCTodayEarly = (
       detectWC2026TodayQuery(_rawLastMsg) ||
       /(?:مباريات|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s+العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
       /(?:كأس\s+العالم|المونديال|مونديال)\s+(?:مباريات\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||

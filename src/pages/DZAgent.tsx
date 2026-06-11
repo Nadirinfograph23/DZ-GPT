@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
 import DZNotifications from '../components/DZNotifications'
+import BugReportModal from '../components/BugReportModal'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -87,6 +88,7 @@ export default function DZAgent() {
   })
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [bugReportOpen, setBugReportOpen] = useState(false)
 
   useEffect(() => {
     try { localStorage.setItem('dz-agent-chats', JSON.stringify(chats)) } catch {}
@@ -227,6 +229,18 @@ export default function DZAgent() {
           )}
         </div>
 
+        {/* ===== SIDEBAR FOOTER — Bug Report ===== */}
+        <div className="dza-sidebar-footer">
+          <button
+            className="dza-bug-report-btn"
+            onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
+            title="الإبلاغ عن مشكلة"
+          >
+            <span className="dza-bug-report-btn-icon">🐛</span>
+            الإبلاغ عن مشكلة
+          </button>
+        </div>
+
       </div>
 
       {sidebarOpen && <div className="dza-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -288,6 +302,9 @@ export default function DZAgent() {
       </div>
     </div>
 
+      {bugReportOpen && (
+        <BugReportModal theme={theme} onClose={() => setBugReportOpen(false)} />
+      )}
     </>
   )
 }

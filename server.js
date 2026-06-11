@@ -29830,6 +29830,68 @@ function appendAnalyticEvent(event) {
   } catch {}
 }
 
+// ─── Bug Report ────────────────────────────────────────────────────────────
+app.post('/api/report-bug', express.json(), async (req, res) => {
+  try {
+    const { name, email, reportType, description } = req.body || {}
+    if (!reportType || !description) return res.status(400).json({ error: 'بيانات ناقصة' })
+
+    const typeLabels = {
+      'wrong-info':   'معلومة خاطئة',
+      'broken-tool':  'أداة لا تعمل',
+      'agent-error':  'خطأ في الوكيل',
+    }
+    const ts = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
+
+    // Save to local file as backup
+    const reportsFile = path.join(process.cwd(), 'data', 'bug_reports.json')
+    let reports = []
+    try { reports = JSON.parse(fs.readFileSync(reportsFile, 'utf8')) } catch {}
+    reports.push({ name, email, reportType, description, ts: Date.now() })
+    try { fs.writeFileSync(reportsFile, JSON.stringify(reports, null, 2)) } catch {}
+
+    // Send email via nodemailer if SMTP configured
+    try {
+      const nodemailer = await import('nodemailer')
+      const smtpUser = process.env.SMTP_USER
+      const smtpPass = process.env.SMTP_PASS
+      if (smtpUser && smtpPass) {
+        const transporter = nodemailer.default.createTransport({
+          service: 'gmail',
+          auth: { user: smtpUser, pass: smtpPass },
+        })
+        await transporter.sendMail({
+          from: `"DZ Agent Bug Report" <${smtpUser}>`,
+          to: 'dzagentpro@gmail.com',
+          subject: `🐛 بلاغ جديد: ${typeLabels[reportType] || reportType}`,
+          html: `
+            <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:auto;background:#1a1a1a;color:#eee;border-radius:12px;padding:24px">
+              <h2 style="color:#10a37f;margin-top:0">🐛 بلاغ جديد — DZ Agent</h2>
+              <table style="width:100%;border-collapse:collapse">
+                <tr><td style="padding:8px 0;color:#aaa;width:130px">النوع</td><td style="color:#f87171;font-weight:bold">${typeLabels[reportType] || reportType}</td></tr>
+                <tr><td style="padding:8px 0;color:#aaa">الاسم</td><td>${name || '—'}</td></tr>
+                <tr><td style="padding:8px 0;color:#aaa">البريد</td><td>${email || '—'}</td></tr>
+                <tr><td style="padding:8px 0;color:#aaa">التاريخ</td><td>${ts}</td></tr>
+              </table>
+              <div style="margin-top:16px;padding:14px;background:#222;border-radius:8px;border-right:3px solid #10a37f">
+                <p style="color:#aaa;margin:0 0 8px;font-size:13px">وصف المشكلة:</p>
+                <p style="margin:0;line-height:1.6">${description}</p>
+              </div>
+              <p style="margin-top:20px;font-size:11px;color:#555">تم الإرسال تلقائياً من DZ Agent Platform</p>
+            </div>`,
+        })
+      }
+    } catch (mailErr) {
+      console.warn('[report-bug] email send failed (check SMTP_USER/SMTP_PASS):', mailErr.message)
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[report-bug]', err)
+    res.status(500).json({ error: 'خطأ داخلي' })
+  }
+})
+
 app.post('/api/analytics/track', express.json(), (req, res) => {
   const { event, page, data: evData } = req.body || {}
   if (!event) return res.status(400).json({ error: 'event required' })

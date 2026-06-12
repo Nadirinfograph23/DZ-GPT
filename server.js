@@ -15048,6 +15048,59 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ _toolRedirect })
   }
 
+  // ── WC2026 Anti-Hallucination Guard (EARLY) — قبل MatchVs ───────────────
+  // يمنع LLM من اختراع نتائج WC 2026 حتى عند استعلامات "نتيجة المكسيك" بدون خصم
+  {
+    const _wcAHNow  = Date.now()
+    const _isWCAH   = _wcAHNow >= 1781136000000 && _wcAHNow <= 1784591999000
+    const _isWCRQ   = _isWCAH && (
+      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
+      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg)
+    )
+    if (_isWCRQ && !req.body._wcResultHandled) {
+      console.log(`[WC2026:AntiHallu:Early] 🛡️ WC result query → live agent: "${_rawLastMsg.slice(0, 60)}"`)
+      try {
+        const _ahDate2 = new Date(Date.now() + 3600000).toISOString().split('T')[0]
+        const _ahRes2  = await Promise.race([
+          runWC2026TodayAgent(_ahDate2),
+          new Promise(r => setTimeout(() => r(null), 12000)),
+        ])
+        if (_ahRes2?.userResponse) {
+          return res.status(200).json({
+            content: _ahRes2.userResponse,
+            model: 'wc2026-anti-hallucination-early',
+            _sportsAgent: true,
+            wc2026: true,
+            found: _ahRes2.found,
+            sources: _ahRes2.sources,
+            matches: _ahRes2.matches || [],
+          })
+        }
+      } catch (_ahErr2) {
+        console.error('[WC2026:AntiHallu:Early] error:', _ahErr2.message)
+      }
+      return res.status(200).json({
+        content: [
+          `## 🛡️ نتائج كأس العالم 2026`,
+          ``,
+          `> ⚠️ **لم نتمكن من الاتصال بمصادر النتائج الحية حالياً.**`,
+          `> **لا نعرض أي نتيجة دون مصدر موثوق** — أي نتيجة من الذكاء الاصطناعي دون استعلام API هي تخمين وليست حقيقة.`,
+          ``,
+          `**تحقق مباشرة من:**`,
+          `| المصدر | الرابط |`,
+          `|--------|--------|`,
+          `| 📡 **FotMob** | [نتائج WC 2026](https://www.fotmob.com/ar/leagues/77/matches/world-cup) |`,
+          `| 🏆 **FIFA** | [fifa.com/worldcup](https://www.fifa.com/worldcup/matches) |`,
+          `| ⚽ **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+        ].join('\n'),
+        model: 'wc2026-no-hallucination-early',
+        _sportsAgent: true,
+        wc2026: true,
+        found: false,
+      })
+    }
+  }
+
   // ── Match-Vs Early Handler ────────────────────────────────────────────────
   // يُعالَج هنا قبل أي fast-path آخر — دائماً يُوجَّه للوكيل الرياضي مباشرةً
   // عند إعادة المحاولة (_isRetry) نتجاوز هذا البايباس لإعطاء إجابة مختلفة عبر LLM
@@ -15107,6 +15160,62 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── WC2026 Anti-Hallucination Guard — نتائج مباريات سابقة ────────────────
+  // يُشغَّل بعد MatchVs Early Handler — يمنع LLM من اختراع نتائج WC 2026
+  // بعد الاستيثاق: إذا الاستعلام عن نتيجة مباراة WC ولم يُعالَج بعد → وكيل اليوم
+  {
+    const _wcAntiHalluNow  = Date.now()
+    const _isWCSeasonAH    = _wcAntiHalluNow >= 1781136000000 && _wcAntiHalluNow <= 1784591999000
+    const _isWCResultQuery = _isWCSeasonAH && (
+      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
+      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg)
+    )
+    if (_isWCResultQuery && !req.body._wcResultHandled) {
+      console.log(`[WC2026:AntiHallu] 🛡️ WC result query intercepted — routing to live agent: "${_rawLastMsg.slice(0, 60)}"`)
+      try {
+        const _ahDate = new Date(Date.now() + 3600000).toISOString().split('T')[0]
+        const _ahRes  = await Promise.race([
+          runWC2026TodayAgent(_ahDate),
+          new Promise(r => setTimeout(() => r(null), 12000)),
+        ])
+        if (_ahRes?.userResponse) {
+          return res.status(200).json({
+            content: _ahRes.userResponse,
+            model: 'wc2026-anti-hallucination',
+            _sportsAgent: true,
+            wc2026: true,
+            found: _ahRes.found,
+            sources: _ahRes.sources,
+            matches: _ahRes.matches || [],
+          })
+        }
+      } catch (_ahErr) {
+        console.error('[WC2026:AntiHallu] error:', _ahErr.message)
+      }
+      // إذا فشل الوكيل → نُعيد رداً صريحاً بعدم توفر النتيجة (لا LLM)
+      return res.status(200).json({
+        content: [
+          `## 🛡️ نتائج كأس العالم 2026`,
+          ``,
+          `> ⚠️ **لم نتمكن من الاتصال بمصادر النتائج الحية حالياً.**`,
+          `> **لا نعرض أي نتيجة دون مصدر موثوق** — أي نتيجة تصدر من الذكاء الاصطناعي دون استعلام API هي تخمين وليست حقيقة.`,
+          ``,
+          `**تحقق مباشرة من:**`,
+          `| المصدر | الرابط |`,
+          `|--------|--------|`,
+          `| 📡 **FotMob** | [نتائج WC 2026](https://www.fotmob.com/ar/leagues/77/matches/world-cup) |`,
+          `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/worldcup/matches) |`,
+          `| ⚽ **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+          `| 📺 **Kooora** | [kooora.com](https://www.kooora.com/) |`,
+        ].join('\n'),
+        model: 'wc2026-no-hallucination',
+        _sportsAgent: true,
+        wc2026: true,
+        found: false,
+      })
+    }
+  }
+
   // ── WC2026 Today Matches Early Handler ─────────────────────────────────────
   // يُعالَج مباشرةً: "مباريات كأس العالم اليوم" / "من يلعب اليوم في المونديال"
   // يُجيب من FotMob (حي) ← قاعدة البيانات المحلية — بدون LLM
@@ -15114,7 +15223,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // WC today handler: يعمل حتى عند _isRetry (البيانات الرياضية لا تتغير)
     // ── كشف موسم كأس العالم 2026 (11 يونيو – 19 يوليو 2026) ──────────────────────
     const _wcSeasonNow = Date.now()
-    const _isWCSeason  = _wcSeasonNow >= 1749600000000 && _wcSeasonNow <= 1753055999000
+    const _isWCSeason  = _wcSeasonNow >= 1781136000000 && _wcSeasonNow <= 1784591999000
     const _isWCTodayEarly = (
       detectWC2026TodayQuery(_rawLastMsg) ||
       /(?:مباريات?|مباراة|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
@@ -15137,7 +15246,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       // ── موسم كأس العالم: "مباراة اليوم" أو "ماتش اليوم" = WC تلقائياً ──────
       (_isWCSeason && /(?:مباراة|مباريات|ماتش|مقابلة)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
       (_isWCSeason && /(?:اليوم|الليلة|النهار)\s+(?:فيه|كاين|واش|في)?\s*(?:مباراة|ماتش|كورة)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:من\s+يلعب|شكون\s+يلعب|من\s+ضد\s+من)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg))
+      (_isWCSeason && /(?:من\s+يلعب|شكون\s+يلعب|من\s+ضد\s+من)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
+      // ── نتائج اليوم / الأمس (مباريات انتهت) ─────────────────────────────────
+      (_isWCSeason && /(?:نتيجة|نتائج)\s+(?:مباريات?|لقاء|ماتشات?)?\s*(?:اليوم|الليلة|النهار|الأمس|امس)/i.test(_rawLastMsg)) ||
+      (_isWCSeason && /(?:نتائج|ملخص|ماذا\s+(?:انتهت|كانت))\s+(?:اليوم|الليلة)/i.test(_rawLastMsg)) ||
+      (_isWCSeason && /(?:كيف\s+انتهت|كيف\s+كانت|ايش\s+صار|وش\s+صار)\s+مباريات?\s+(?:اليوم|الليلة)/i.test(_rawLastMsg))
     )
     if (_isWCTodayEarly) {
       console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)

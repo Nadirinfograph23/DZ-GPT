@@ -7833,6 +7833,23 @@ ${rows}
                                   </button>
                                 )
                               }
+                              const childArr = Array.isArray(children) ? children : [children]
+                              const firstChild = childArr[0]
+                              const isFaviconImg = firstChild && typeof firstChild === 'object' && (firstChild as React.ReactElement)?.type === 'img'
+                                && ((firstChild as React.ReactElement)?.props?.src || '').includes('google.com/s2/favicons')
+                              if (isFaviconImg) {
+                                const imgEl = firstChild as React.ReactElement
+                                const src = imgEl.props?.src || ''
+                                let domain = ''
+                                try { domain = new URL(src).searchParams.get('domain') || '' } catch (_) {}
+                                const label = imgEl.props?.alt || domain
+                                return (
+                                  <a href={href} target="_blank" rel="noopener noreferrer" className="dz-src-chip">
+                                    <img src={src} alt={label} className="dz-src-favicon" />
+                                    <span className="dz-src-name">{label}</span>
+                                  </a>
+                                )
+                              }
                               return (
                                 <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
                                   {children}

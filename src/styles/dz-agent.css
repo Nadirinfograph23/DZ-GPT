@@ -13102,3 +13102,63 @@
     display: none;
   }
 }
+
+/* ===== أيقونات المصادر — مثل ChatGPT ===== */
+.dz-src-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 0;
+}
+.dz-src-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.07);
+  text-decoration: none !important;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  cursor: pointer;
+}
+.dz-src-chip:hover {
+  background: rgba(16, 163, 127, 0.1);
+  border-color: rgba(16, 163, 127, 0.35);
+  transform: translateY(-1px);
+}
+.dz-src-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+.dz-src-name {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.01em;
+  direction: ltr;
+}
+.dz-src-chip:hover .dz-src-name {
+  color: #10a37f;
+}
+@media (prefers-color-scheme: light) {
+  .dz-src-chip {
+    border-color: rgba(100, 116, 139, 0.2);
+    background: rgba(100, 116, 139, 0.06);
+  }
+  .dz-src-name { color: #475569; }
+  .dz-src-chip:hover { background: rgba(16,163,127,0.08); border-color: rgba(16,163,127,0.3); }
+  .dz-src-chip:hover .dz-src-name { color: #0d8c6b; }
+}
+@media (max-width: 520px) {
+  .dz-src-chip { padding: 2px 7px 2px 4px; }
+  .dz-src-name { font-size: 10.5px; }
+  .dz-src-favicon { width: 12px; height: 12px; }
+}

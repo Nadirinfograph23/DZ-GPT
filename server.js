@@ -15166,7 +15166,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _lm_lines = [
             `## ⚽ مباريات كأس العالم 2026 — ${new Date(_todayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
             ``,
-            `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026 — قد لا تعكس التغييرات اللحظية_`,
+            `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
             ``,
           ]
           for (const _m of _localMatches) {
@@ -15178,7 +15178,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             _lm_lines.push(`🕒 **${_dztH}:${_mm}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city} | المجموعة **${_m.group}** | ${_m.round}`)
             _lm_lines.push(``)
           }
-          _lm_lines.push(`🔴 **المتابعة الحية:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`)
+          _lm_lines.push(`[![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![Kooora](https://www.google.com/s2/favicons?sz=32&domain=kooora.com)](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9/%D9%83%D8%A7%D9%94%D8%B3-%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA/70excpe1synn9kadnbppahdn7) [![beIN Sports](https://www.google.com/s2/favicons?sz=32&domain=beinsports.com)](https://www.beinsports.com/ar-mena/%D9%86%D8%AA%D8%A7%D8%A6%D8%AC-%D9%85%D8%A8%D8%A7%D8%B4%D8%B1%D8%A9-page_scores) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`)
           return res.status(200).json({
             content: _lm_lines.join('\n'),
             model: 'wc2026-today-local',
@@ -15214,7 +15214,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             const _sf_lines = [
               `## ⚽ مباريات كأس العالم 2026 — ${new Date(_sf_date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
               ``,
-              `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026_`,
+              `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
               ``,
             ]
             const _WC_FL = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷' }
@@ -15226,7 +15226,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               _sf_lines.push(`🕒 **${_sdh}:${_smm}** (توقيت الجزائر) | 🏟️ ${_sm.venue}, ${_sm.city} | المجموعة **${_sm.group}**`)
               _sf_lines.push(``)
             }
-            _sf_lines.push(`🔴 **متابعة مباشرة:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`)
+            _sf_lines.push(`[![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![Kooora](https://www.google.com/s2/favicons?sz=32&domain=kooora.com)](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9/%D9%83%D8%A7%D9%94%D8%B3-%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA/70excpe1synn9kadnbppahdn7) [![beIN Sports](https://www.google.com/s2/favicons?sz=32&domain=beinsports.com)](https://www.beinsports.com/ar-mena/%D9%86%D8%AA%D8%A7%D8%A6%D8%AC-%D9%85%D8%A8%D8%A7%D8%B4%D8%B1%D8%A9-page_scores) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`)
             return res.status(200).json({ content: _sf_lines.join('\n'), model: 'wc2026-today-safe-fallback', _sportsAgent: true, wc2026: true, found: true })
           }
         } catch (_) {}
@@ -15290,7 +15290,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _tl = [
             `## ⚽ مباريات كأس العالم 2026 — ${_tomorrowLabel}`,
             ``,
-            `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026 — توقيت الجزائر (GMT+1)_`,
+            `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`,
             ``,
           ]
           for (const _m of _tomMatches) {
@@ -15334,7 +15334,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           const _safeTomMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _safeTomDate)
           if (_safeTomMatches.length) {
             const _WCF2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','المغرب':'🇲🇦','تونس':'🇹🇳','قطر':'🇶🇦' }
-            const _tl2 = [`## ⚽ مباريات كأس العالم 2026 — الغد`, ``, `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026_`, ``]
+            const _tl2 = [`## ⚽ مباريات كأس العالم 2026 — الغد`, ``, `> [![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`, ``]
             for (const _m of _safeTomMatches) {
               const [_h,_mn] = _m.startTime?.split(':') || ['??','??']
               _tl2.push(`### ${_WCF2[_m.homeTeam]||'🏴'} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_WCF2[_m.awayTeam]||'🏴'}`)

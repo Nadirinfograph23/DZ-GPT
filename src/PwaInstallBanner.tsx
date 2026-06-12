@@ -31,6 +31,10 @@ function isAndroid(): boolean {
   return /android/i.test(navigator.userAgent)
 }
 
+function isMobile(): boolean {
+  return isIos() || isAndroid()
+}
+
 // ===== iOS GUIDE MODAL =====
 function IosGuide({ onClose }: { onClose: () => void }) {
   return (
@@ -130,22 +134,15 @@ function AndroidGuide({ onClose }: { onClose: () => void }) {
 }
 
 // ===== MAIN BANNER =====
-const PWA_DISMISSED_KEY = 'dz_pwa_dismissed_until'
-const PWA_DISMISS_DAYS = 30
+// لا يُحفظ الإغلاق في localStorage — يظهر في كل تحديث حتى يتم التثبيت
+const PWA_INSTALLED_KEY = 'dz_pwa_installed'
 
-function wasDismissedRecently(): boolean {
-  try {
-    const val = localStorage.getItem(PWA_DISMISSED_KEY)
-    if (!val) return false
-    return Date.now() < parseInt(val, 10)
-  } catch { return false }
+function wasInstalled(): boolean {
+  try { return localStorage.getItem(PWA_INSTALLED_KEY) === '1' } catch { return false }
 }
 
-function markDismissed() {
-  try {
-    const until = Date.now() + PWA_DISMISS_DAYS * 24 * 60 * 60 * 1000
-    localStorage.setItem(PWA_DISMISSED_KEY, String(until))
-  } catch {}
+function markInstalled() {
+  try { localStorage.setItem(PWA_INSTALLED_KEY, '1') } catch {}
 }
 
 export default function PwaInstallBanner() {
@@ -156,16 +153,14 @@ export default function PwaInstallBanner() {
   const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
-    if (isInstalled()) return
-    if (wasDismissedRecently()) return
+    // لا تظهر إذا مُثِّت فعلاً
+    if (isInstalled() || wasInstalled()) return
 
-    const mobile = isIos() || isAndroid()
+    // على الهاتف فقط
+    if (!isMobile()) return
 
     if (window.__pwaPrompt) {
       setDeferredPrompt(window.__pwaPrompt)
-      if (!mobile) {
-        setTimeout(() => setVisible(true), 2500)
-      }
     }
 
     const handler = (e: Event) => {
@@ -173,26 +168,24 @@ export default function PwaInstallBanner() {
       const prompt = e as BeforeInstallPromptEvent
       window.__pwaPrompt = prompt
       setDeferredPrompt(prompt)
-      setVisible(true)
     }
     window.addEventListener('beforeinstallprompt', handler)
 
     const onInstalled = () => {
+      markInstalled()
       setInstalled(true)
       setShowGuide(false)
-      markDismissed()
+      setVisible(false)
     }
     window.addEventListener('appinstalled', onInstalled)
 
-    let timer: ReturnType<typeof setTimeout> | null = null
-    if (mobile) {
-      timer = setTimeout(() => setVisible(true), 2500)
-    }
+    // يظهر دائماً بعد ثانيتين على الهاتف
+    const timer = setTimeout(() => setVisible(true), 2000)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
       window.removeEventListener('appinstalled', onInstalled)
-      if (timer) clearTimeout(timer)
+      clearTimeout(timer)
     }
   }, [])
 
@@ -209,7 +202,9 @@ export default function PwaInstallBanner() {
       await deferredPrompt.prompt()
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === 'accepted') {
+        markInstalled()
         setInstalled(true)
+        setVisible(false)
       }
     } finally {
       setInstalling(false)
@@ -219,7 +214,9 @@ export default function PwaInstallBanner() {
   }
 
   const handleGuideBtn = () => setShowGuide(true)
-  const handleDismiss = () => { markDismissed(); setVisible(false) }
+
+  // الإغلاق مؤقت فقط (لهذه الجلسة) — يعود عند التحديث
+  const handleDismiss = () => setVisible(false)
 
   return (
     <>

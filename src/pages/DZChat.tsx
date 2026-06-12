@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   Home, LogOut, Users, Bell, Trash2, Send, X, MessageCircle,
   Bot, Shield, ChevronRight, Loader2, AlertCircle,
@@ -41,6 +43,7 @@ interface ChatMessage {
   isDeleted?: boolean
   triggeredBy?: string
   localDeleted?: boolean
+  isMarkdown?: boolean
   isBreaking?: boolean
   isBroadcast?: boolean
   reactions?: Record<string, string[]>
@@ -1351,7 +1354,23 @@ export default function DZChat() {
                       </button>
                     )}
                   </div>
-                  <div className="dzc-msg-text">{linkifyText(msg.text)}</div>
+                  {(msg.isBot && (msg.isMarkdown || msg.botType === 'agent'))
+                    ? (
+                      <div className="dzc-msg-markdown">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ href, children }) => (
+                              <a href={href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>{children}</a>
+                            ),
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    )
+                    : <div className="dzc-msg-text">{linkifyText(msg.text)}</div>
+                  }
                   {msg.isBot && msg.showDevCard && <DeveloperCard />}
                   {msg.isBot && msg.redirectUrl && (
                     <a

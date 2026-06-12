@@ -24938,7 +24938,34 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 4. عند السؤال عن منشئك أو مطوّرك: أجب بجملة واحدة — "طوّرني نذير حوامرية (Nadir Infograph) 🇩🇿."
 5. لا تتجاوز 6 جمل.`
 
-    // ── Call full AI router (Groq → Gemini → Mistral → NVIDIA → Cohere → ...) ──
+    // ── @dzagent: call full DZ Agent chat (WC2026 + sports + news + all tools) ──
+    if (isAgent) {
+      try {
+        const _agentRes = await fetch(`http://localhost:${process.env.PORT || 5000}/api/dz-agent-chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: question }], source: 'dzchat' }),
+          signal: AbortSignal.timeout(28000),
+        })
+        const _agentData = await _agentRes.json().catch(() => ({}))
+        const _agentText = _agentData?.content || 'عذراً، حدث خطأ في المعالجة.'
+        const botMsg = pushChatMsg({
+          id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+          text: _agentText,
+          timestamp: Date.now(), isBot: true, botType: 'agent',
+          triggeredBy: authorSession.name,
+          showDevCard: isDeveloperOrOwnerQuestion(question),
+          isMarkdown: true,
+        })
+        broadcastChat({ type: 'message', msg: botMsg })
+        return botMsg
+      } catch (_agentErr) {
+        console.error('[ChatAI/@dzagent]', _agentErr.message)
+        return null
+      }
+    }
+
+    // ── @dzgpt: general AI router ────────────────────────────────────────────
     const result = await safeGenerateAI({
       messages: [
         { role: 'system', content: systemPrompt },
@@ -24950,13 +24977,13 @@ async function handleAiChatTrigger(rawText, isAgent, authorSession) {
 
     const botMsg = pushChatMsg({
       id: chatId(),
-      from: isAgent ? 'DZ Agent' : 'DZ GPT',
+      from: 'DZ GPT',
       fromId: 'bot',
       gender: 'bot',
       text: result.content ? stripForeignLang(result.content.replace(/(?<!\]\()(?<!['"=])(https?:\/\/(?:www\.)?([a-zA-Z0-9\-]+(?:\.[a-zA-Z]{2,})+)(?:\/[^\s)\]"'<>]*)?)/g, (u, _, d) => `[${d.replace(/^www\./,'').split('.')[0].replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}](${u})`)) : 'عذراً، حدث خطأ في المعالجة.',
       timestamp: Date.now(),
       isBot: true,
-      botType: isAgent ? 'agent' : 'gpt',
+      botType: 'gpt',
       triggeredBy: authorSession.name,
       showDevCard: isDeveloperOrOwnerQuestion(question),
     })

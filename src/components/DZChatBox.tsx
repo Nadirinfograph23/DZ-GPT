@@ -679,6 +679,8 @@ interface DZMessage {
     toolDesc: string
     message: string
     smartMessage?: string
+    id?: string
+    stations?: Array<{ name: string; icon: string }>
   }
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
@@ -8553,19 +8555,53 @@ ${rows}
                       )}
 
                       {msg.richType === 'tool-redirect' && msg.toolRedirect && (
-                        <div className="dz-tool-redirect-card">
-                          <div className="dz-tool-redirect-card__icon">{msg.toolRedirect.toolIcon}</div>
-                          <div className="dz-tool-redirect-card__body">
-                            <div className="dz-tool-redirect-card__name">{msg.toolRedirect.toolName}</div>
-                            <div className="dz-tool-redirect-card__desc">{msg.toolRedirect.toolDesc}</div>
+                        msg.toolRedirect.id === 'radio' ? (
+                          /* ── بطاقة الراديو المخصصة ── */
+                          <div className="dz-radio-card">
+                            <div className="dz-radio-card__waves">
+                              <span /><span /><span /><span /><span />
+                            </div>
+                            <div className="dz-radio-card__top">
+                              <span className="dz-radio-card__emoji">📻</span>
+                              <div className="dz-radio-card__titles">
+                                <div className="dz-radio-card__name">DZ Radio</div>
+                                <div className="dz-radio-card__sub">بث مباشر · 200+ محطة جزائرية</div>
+                              </div>
+                              <span className="dz-radio-card__live-dot"><span />مباشر</span>
+                            </div>
+                            {msg.toolRedirect.stations && msg.toolRedirect.stations.length > 0 && (
+                              <div className="dz-radio-card__stations">
+                                {msg.toolRedirect.stations.map((s, i) => (
+                                  <span key={i} className="dz-radio-card__station-chip">
+                                    {s.icon} {s.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              className="dz-radio-card__btn"
+                              onClick={(e) => { e.stopPropagation(); window.location.href = msg.toolRedirect!.toolUrl }}
+                            >
+                              <span className="dz-radio-card__btn-icon">▶</span>
+                              استمع الآن
+                            </button>
                           </div>
-                          <button
-                            className="dz-tool-redirect-card__btn"
-                            onClick={(e) => { e.stopPropagation(); window.location.href = msg.toolRedirect!.toolUrl }}
-                          >
-                            فتح الأداة ←
-                          </button>
-                        </div>
+                        ) : (
+                          /* ── البطاقة العامة للأدوات الأخرى ── */
+                          <div className="dz-tool-redirect-card">
+                            <div className="dz-tool-redirect-card__icon">{msg.toolRedirect.toolIcon}</div>
+                            <div className="dz-tool-redirect-card__body">
+                              <div className="dz-tool-redirect-card__name">{msg.toolRedirect.toolName}</div>
+                              <div className="dz-tool-redirect-card__desc">{msg.toolRedirect.toolDesc}</div>
+                            </div>
+                            <button
+                              className="dz-tool-redirect-card__btn"
+                              onClick={(e) => { e.stopPropagation(); window.location.href = msg.toolRedirect!.toolUrl }}
+                            >
+                              فتح الأداة ←
+                            </button>
+                          </div>
+                        )
                       )}
 
                       {msg.richType === 'github-profile' && msg.githubProfile && (

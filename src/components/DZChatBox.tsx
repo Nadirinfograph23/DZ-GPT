@@ -8707,47 +8707,52 @@ ${rows}
                         />
                       )}
                       {msg.newsItems && msg.newsItems.length > 0 && (() => {
-                        const _srcIcon = (domain: string, src?: string): string => {
-                          const d = (domain || '').toLowerCase()
-                          const s = (src || '').toLowerCase()
-                          if (/fotmob|kooora|جدول|jdwel|livescore|flashscore|soccerway|goal\.com|yalla|بطل|filgoal/.test(d + s)) return '⚽'
-                          if (/sofascore|365score|whoscored|fbref|statso|opta|stats|إحصاء/.test(d + s)) return '📊'
-                          if (/fifa\.com|اتحاد/.test(d + s)) return '🏆'
-                          if (/youtube|youtu\.be|يوتيوب/.test(d + s)) return '🎬'
-                          if (/wikipedia|ويكيبيديا/.test(d + s)) return '📚'
-                          if (/twitter|x\.com|تويتر/.test(d + s)) return '🐦'
-                          if (/aps\.dz|وكالة|algerie|الجزائر|ennahar|elbilad|echorouk|elkhabar|elwatan|liberte|tsa|الشروق|النهار|البلاد|الخبر|الوطن|الجمهورية/.test(d + s)) return '📰'
-                          if (/bbc|cnn|france24|aljazeera|alarabiya|rt\.com|رويترز|أسوشيتد/.test(d + s)) return '📡'
-                          if (/google|bing|duckduck|searx|search/.test(d + s)) return '🔍'
-                          return '🌐'
+                        const _getDomain = (url: string): string => {
+                          try { return new URL(url).hostname.replace('www.', '') } catch { return '' }
+                        }
+                        const _getLabel = (item: { url: string; source?: string; title?: string }): string => {
+                          if (item.source) return item.source
+                          const d = _getDomain(item.url)
+                          if (!d) return item.title?.slice(0, 25) || 'مصدر'
+                          return d.split('.')[0]
+                        }
+                        const _getFaviconUrl = (url: string, domain: string): string => {
+                          if (!url && !domain) return ''
+                          const d = domain || _getDomain(url)
+                          return `https://www.google.com/s2/favicons?domain=${d}&sz=16`
                         }
                         const _isSports = (msg as any)._sportsAgent || (msg as any).wc2026
-                        const _headerIcon = _isSports ? '⚽' : '📰'
-                        const _headerTitle = _isSports ? 'المصادر' : 'نتائج البحث'
+                        const _headerLabel = _isSports ? 'المصادر' : 'نتائج البحث'
                         return (
-                          <div className="dzc-news-cards-grid">
-                            <div className="dzc-ncg-header">
-                              <span className="dzc-ncg-icon">{_headerIcon}</span>
-                              <span className="dzc-ncg-title">{_headerTitle}</span>
-                              <span className="dzc-ncg-count">{msg.newsItems!.length}</span>
-                            </div>
-                            <div className="dzc-ncg-list">
+                          <div className="dzc-sources-bar">
+                            <span className="dzc-sources-label">{_headerLabel}</span>
+                            <div className="dzc-sources-list">
                               {msg.newsItems!.map((item, i) => {
-                                const domain = item.url
-                                  ? (() => { try { return new URL(item.url).hostname.replace('www.', '') } catch { return '' } })()
-                                  : ''
-                                const icon = _srcIcon(domain, item.source)
+                                const domain = _getDomain(item.url)
+                                const label  = _getLabel(item)
+                                const faviconUrl = _getFaviconUrl(item.url, domain)
                                 return (
                                   <a
                                     key={i}
-                                    href={item.url}
+                                    href={item.url || '#'}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="dzc-news-card dzc-news-card--icon"
-                                    title={item.title || domain}
-                                    aria-label={item.title || domain}
+                                    className="dzc-source-chip"
+                                    title={item.title || label}
+                                    aria-label={item.title || label}
                                   >
-                                    <span className="dzc-nc-icon-only">{icon}</span>
+                                    {faviconUrl && (
+                                      <img
+                                        src={faviconUrl}
+                                        alt=""
+                                        className="dzc-source-favicon"
+                                        width={14}
+                                        height={14}
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    <span className="dzc-source-name">{label}</span>
                                   </a>
                                 )
                               })}

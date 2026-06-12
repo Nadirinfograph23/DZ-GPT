@@ -7034,115 +7034,121 @@
 }
 
 /* ===== NEWS CARDS GRID — inline in chat messages ===== */
-.dzc-news-cards-grid {
-  margin-top: 14px;
-  border: 1px solid rgba(16,163,127,0.18);
-  border-radius: 12px;
-  overflow: hidden;
-  direction: rtl;
-}
+/* ══════════════════════════════════════════════════════════════════════════
+   شريط المصادر — تصميم ChatGPT الأفقي
+   ══════════════════════════════════════════════════════════════════════════ */
 
-.dzc-ncg-header {
+/* الحاوية الرئيسية */
+.dzc-sources-bar {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
-  background: rgba(16,163,127,0.07);
-  border-bottom: 1px solid rgba(16,163,127,0.12);
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-top: 14px;
+  direction: ltr;
+  overflow: hidden;
 }
 
-.dzc-ncg-icon { font-size: 14px; }
-
-.dzc-ncg-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #10a37f;
-  flex: 1;
-}
-
-.dzc-ncg-count {
+/* التسمية "المصادر" */
+.dzc-sources-label {
   font-size: 11px;
-  color: #555;
-  background: rgba(255,255,255,0.05);
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-weight: 600;
+  color: #8e9aaf;
+  white-space: nowrap;
+  flex-shrink: 0;
+  direction: rtl;
+  letter-spacing: 0.02em;
 }
 
-.dzc-ncg-list {
+/* قائمة المصادر — أفقية قابلة للتمرير */
+.dzc-sources-list {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 8px 14px 12px;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.dzc-sources-list::-webkit-scrollbar { display: none; }
 
-/* ── بطاقة أيقونة فقط (Icon-Only Mode) ────────────────────────────────── */
-.dzc-news-card {
+/* كل شريحة مصدر — favicon + اسم الموقع */
+.dzc-source-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 5px 10px;
-  border: 1px solid rgba(16,163,127,0.22);
+  gap: 5px;
+  padding: 4px 10px 4px 8px;
   border-radius: 20px;
-  background: rgba(16,163,127,0.06);
+  border: 1px solid rgba(148,163,184,0.22);
+  background: rgba(148,163,184,0.07);
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   cursor: pointer;
-  position: relative;
+  max-width: 160px;
+  overflow: hidden;
 }
 
-.dzc-news-card--icon {
-  padding: 5px 8px;
-  min-width: 32px;
-}
-
-.dzc-news-card:hover {
-  background: rgba(16,163,127,0.16);
-  border-color: rgba(16,163,127,0.5);
+.dzc-source-chip:hover {
+  background: rgba(16,163,127,0.1);
+  border-color: rgba(16,163,127,0.38);
   transform: translateY(-1px);
 }
 
-/* الأيقونة الوحيدة داخل البطاقة */
-.dzc-nc-icon-only {
-  font-size: 16px;
-  line-height: 1;
-  user-select: none;
+/* أيقونة الموقع (favicon) */
+.dzc-source-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  object-fit: contain;
+  display: block;
 }
 
-/* Tooltip عند hover */
-.dzc-news-card[title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1e293b;
-  color: #e2e8f0;
-  font-size: 10px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-  max-width: 200px;
+/* اسم الموقع */
+.dzc-source-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
-  z-index: 100;
-  border: 1px solid rgba(16,163,127,0.3);
-  direction: rtl;
+  white-space: nowrap;
+  max-width: 100px;
+  letter-spacing: 0.01em;
+  direction: ltr;
 }
 
-/* عناصر مخفية (للتوافق مع الكود القديم) */
-.dzc-nc-title { display: none; }
-.dzc-nc-meta  { display: none; }
+.dzc-source-chip:hover .dzc-source-name {
+  color: #10a37f;
+}
+
+/* دعم الوضع الفاتح */
+@media (prefers-color-scheme: light) {
+  .dzc-sources-label  { color: #64748b; }
+  .dzc-source-chip    { border-color: rgba(100,116,139,0.2); background: rgba(100,116,139,0.06); }
+  .dzc-source-name    { color: #475569; }
+  .dzc-source-chip:hover { background: rgba(16,163,127,0.08); border-color: rgba(16,163,127,0.3); }
+  .dzc-source-chip:hover .dzc-source-name { color: #0d8c6b; }
+}
+
+/* موبايل */
+@media (max-width: 520px) {
+  .dzc-sources-bar  { gap: 6px; margin-top: 10px; }
+  .dzc-source-chip  { padding: 3px 8px 3px 6px; max-width: 120px; }
+  .dzc-source-name  { font-size: 11px; max-width: 75px; }
+  .dzc-source-favicon { width: 12px; height: 12px; }
+}
+
+/* توافق عكسي — الكلاسات القديمة تُخفى */
+.dzc-news-cards-grid { display: none; }
+.dzc-nc-title  { display: none; }
+.dzc-nc-meta   { display: none; }
 .dzc-nc-domain { display: none; }
 .dzc-nc-date   { display: none; }
-
-@media (max-width: 520px) {
-  .dzc-ncg-header { padding: 7px 12px; }
-  .dzc-ncg-list { padding: 6px 10px 10px; gap: 4px; }
-  .dzc-news-card--icon { padding: 4px 7px; min-width: 28px; }
-  .dzc-nc-icon-only { font-size: 14px; }
-}
 
 /* ===== FIND INPUT CARD ===== */
 .dzc-find-card {

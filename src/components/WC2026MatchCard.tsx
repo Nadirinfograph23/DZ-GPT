@@ -15,12 +15,14 @@ interface MatchFix {
   competition?: string
   round?: string
   kooraLink?: string
+  source?: string
+  _sources?: string[]
   goals?: Array<{ player: string; minute?: number; team: string; assist?: string }>
   yellowCards?: Array<{ player: string; minute?: number; team: string }>
   redCards?: Array<{ player: string; minute?: number; team: string }>
 }
 
-function addDZHour(utcTime?: string): string {
+function dzHour(utcTime?: string): string {
   if (!utcTime) return ''
   try {
     const [h, m] = utcTime.split(':').map(Number)
@@ -28,217 +30,331 @@ function addDZHour(utcTime?: string): string {
   } catch { return utcTime }
 }
 
-function formatDateFull(dateStr?: string): string {
+function fmtDate(dateStr?: string): string {
   if (!dateStr) return ''
   try {
     return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Algiers',
+      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers',
     })
   } catch { return dateStr }
 }
 
 const FLAG_CODES: Record<string, string> = {
   'الجزائر': 'dz', 'الأرجنتين': 'ar', 'النمسا': 'at', 'الأردن': 'jo',
-  'المكسيك': 'mx', 'جنوب أفريقيا': 'za', 'كوريا الجنوبية': 'kr', 'جمهورية التشيك': 'cz',
-  'كندا': 'ca', 'البوسنة والهرسك': 'ba', 'قطر': 'qa', 'سويسرا': 'ch',
+  'المكسيك': 'mx', 'جنوب أفريقيا': 'za', 'كوريا الجنوبية': 'kr',
+  'التشيك': 'cz', 'جمهورية التشيك': 'cz', 'كندا': 'ca',
+  'البوسنة والهرسك': 'ba', 'قطر': 'qa', 'سويسرا': 'ch',
   'البرازيل': 'br', 'المغرب': 'ma', 'هايتي': 'ht', 'اسكتلندا': 'gb-sct',
-  'الولايات المتحدة': 'us', 'باراغواي': 'py', 'أستراليا': 'au', 'تركيا': 'tr',
-  'ألمانيا': 'de', 'كوراساو': 'cw', 'ساحل العاج': 'ci', 'الإكوادور': 'ec',
-  'هولندا': 'nl', 'اليابان': 'jp', 'السويد': 'se', 'تونس': 'tn',
-  'بلجيكا': 'be', 'مصر': 'eg', 'إيران': 'ir', 'نيوزيلندا': 'nz',
-  'إسبانيا': 'es', 'الرأس الأخضر': 'cv', 'السعودية': 'sa', 'أوروغواي': 'uy',
-  'فرنسا': 'fr', 'السنغال': 'sn', 'العراق': 'iq', 'النرويج': 'no',
-  'البرتغال': 'pt', 'الكونغو الديمقراطية': 'cd', 'أوزبكستان': 'uz', 'كولومبيا': 'co',
+  'الولايات المتحدة': 'us', 'أمريكا': 'us', 'باراغواي': 'py',
+  'أستراليا': 'au', 'تركيا': 'tr', 'ألمانيا': 'de', 'كوراساو': 'cw',
+  'ساحل العاج': 'ci', 'الإكوادور': 'ec', 'هولندا': 'nl', 'اليابان': 'jp',
+  'السويد': 'se', 'تونس': 'tn', 'بلجيكا': 'be', 'مصر': 'eg',
+  'إيران': 'ir', 'نيوزيلندا': 'nz', 'إسبانيا': 'es', 'الرأس الأخضر': 'cv',
+  'السعودية': 'sa', 'أوروغواي': 'uy', 'فرنسا': 'fr', 'السنغال': 'sn',
+  'العراق': 'iq', 'النرويج': 'no', 'البرتغال': 'pt', 'كولومبيا': 'co',
   'إنجلترا': 'gb-eng', 'كرواتيا': 'hr', 'غانا': 'gh', 'بنما': 'pa',
+  'الكونغو الديمقراطية': 'cd', 'أوزبكستان': 'uz', 'بيرو': 'pe',
+  'تشيلي': 'cl', 'فنزويلا': 've', 'كوستاريكا': 'cr', 'هندوراس': 'hn',
+  'جامايكا': 'jm', 'الدنمارك': 'dk', 'فنلندا': 'fi', 'اليونان': 'gr',
+  'رومانيا': 'ro', 'أوكرانيا': 'ua', 'المجر': 'hu', 'سلوفاكيا': 'sk',
+  'سلوفينيا': 'si', 'ألبانيا': 'al', 'جورجيا': 'ge', 'بولندا': 'pl',
+  'صربيا': 'rs', 'النمسا': 'at', 'الجبل الأسود': 'me',
+  'نيجيريا': 'ng', 'الكاميرون': 'cm', 'مالي': 'ml', 'بوركينا فاسو': 'bf',
+  'غينيا': 'gn', 'موزمبيق': 'mz', 'زامبيا': 'zm', 'أنغولا': 'ao',
+  'تنزانيا': 'tz', 'أوغندا': 'ug', 'ليبيا': 'ly', 'تشاد': 'td',
 }
 
 function getFlag(team: string) {
   const code = FLAG_CODES[team]
   if (!code) return null
-  if (code.includes('-')) {
-    return `https://flagcdn.com/w80/${code}.png`
-  }
-  return `https://flagcdn.com/w80/${code}.png`
+  return `https://flagcdn.com/w160/${code}.png`
 }
 
+const STATUS_CONFIG = {
+  live:           { bg: 'linear-gradient(135deg,#dc2626,#ef4444)', label: '🔴 مباشر', glow: 'rgba(239,68,68,0.6)' },
+  finished:       { bg: 'linear-gradient(135deg,#059669,#10b981)', label: '✅ انتهت', glow: '' },
+  'result-pending': { bg: 'linear-gradient(135deg,#d97706,#f59e0b)', label: '⏳ قريباً', glow: '' },
+  upcoming:       { bg: 'linear-gradient(135deg,#4f46e5,#6366f1)', label: '📅 مقررة', glow: '' },
+}
 
-function StatusBadge({ status }: { status?: string }) {
-  if (status === 'live') return (
-    <span style={{ background: '#ef4444', color: '#fff', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>
-      🔴 مباشر
-    </span>
-  )
-  if (status === 'finished') return (
-    <span style={{ background: '#10b981', color: '#fff', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-      ✅ انتهت
-    </span>
-  )
-  if (status === 'result-pending') return (
-    <span style={{ background: '#f59e0b', color: '#fff', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-      ⏳ انتظار النتيجة
-    </span>
-  )
+function StatusPill({ status }: { status?: string }) {
+  const cfg = STATUS_CONFIG[(status as keyof typeof STATUS_CONFIG) ?? 'upcoming'] ?? STATUS_CONFIG.upcoming
   return (
-    <span style={{ background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, border: '1px solid rgba(99,102,241,0.4)' }}>
-      📅 مقررة
+    <span style={{
+      background: cfg.bg,
+      color: '#fff',
+      padding: '3px 12px',
+      borderRadius: 20,
+      fontSize: 11,
+      fontWeight: 800,
+      letterSpacing: 0.5,
+      boxShadow: cfg.glow ? `0 0 12px ${cfg.glow}` : 'none',
+      animation: status === 'live' ? 'dzPulse 2s infinite' : 'none',
+    }}>
+      {cfg.label}
     </span>
+  )
+}
+
+function TeamBlock({ name, isHome, flag }: { name: string; isHome: boolean; flag: string | null }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+      minWidth: 0,
+    }}>
+      {flag ? (
+        <div style={{
+          width: 104,
+          height: 78,
+          borderRadius: 10,
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          border: '2px solid rgba(255,255,255,0.12)',
+          flexShrink: 0,
+        }}>
+          <img
+            src={flag}
+            alt={name}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
+      ) : (
+        <div style={{
+          width: 104, height: 78, borderRadius: 10,
+          background: 'rgba(255,255,255,0.06)',
+          border: '2px dashed rgba(255,255,255,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 36,
+        }}>🏴</div>
+      )}
+      <span style={{
+        color: '#f8fafc',
+        fontWeight: 800,
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 1.3,
+        wordBreak: 'break-word',
+        maxWidth: 110,
+      }}>{name}</span>
+    </div>
+  )
+}
+
+function ScoreOrTime({ match }: { match: MatchFix }) {
+  const hasScore = match.homeScore !== null && match.homeScore !== undefined
+    && match.awayScore !== null && match.awayScore !== undefined
+  const isLive = match.statusType === 'live'
+
+  if (hasScore) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 100 }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: isLive ? 'rgba(239,68,68,0.12)' : 'rgba(15,23,42,0.7)',
+          border: isLive ? '2px solid rgba(239,68,68,0.5)' : '2px solid rgba(255,255,255,0.12)',
+          borderRadius: 14,
+          padding: '10px 18px',
+          boxShadow: isLive ? '0 0 24px rgba(239,68,68,0.2)' : '0 4px 20px rgba(0,0,0,0.4)',
+        }}>
+          <span style={{ color: '#f8fafc', fontSize: 40, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const }}>
+            {match.homeScore}
+          </span>
+          <span style={{ color: '#475569', fontSize: 24, fontWeight: 300, padding: '0 2px' }}>—</span>
+          <span style={{ color: '#f8fafc', fontSize: 40, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const }}>
+            {match.awayScore}
+          </span>
+        </div>
+        {match.group && (
+          <span style={{ color: '#64748b', fontSize: 11, fontWeight: 600 }}>المجموعة {match.group}</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 100 }}>
+      <div style={{
+        background: 'rgba(99,102,241,0.1)',
+        border: '2px solid rgba(99,102,241,0.35)',
+        borderRadius: 14,
+        padding: '10px 14px',
+        textAlign: 'center',
+      }}>
+        {match.startTime ? (
+          <>
+            <div style={{ color: '#a5b4fc', fontSize: 30, fontWeight: 900, lineHeight: 1 }}>
+              {dzHour(match.startTime)}
+            </div>
+            <div style={{ color: '#475569', fontSize: 10, fontWeight: 500, marginTop: 3 }}>توقيت الجزائر</div>
+          </>
+        ) : (
+          <div style={{ color: '#64748b', fontSize: 18, fontWeight: 700 }}>vs</div>
+        )}
+      </div>
+      {match.group && (
+        <span style={{ color: '#64748b', fontSize: 11, fontWeight: 600 }}>المجموعة {match.group}</span>
+      )}
+    </div>
+  )
+}
+
+function GoalsList({ goals, yellowCards, redCards }: Pick<MatchFix, 'goals' | 'yellowCards' | 'redCards'>) {
+  const hasGoals = goals && goals.length > 0
+  const hasCards = (yellowCards && yellowCards.length > 0) || (redCards && redCards.length > 0)
+  if (!hasGoals && !hasCards) return null
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
+      {(goals || []).map((g, i) => (
+        <span key={i} style={{
+          background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
+          borderRadius: 8, padding: '2px 9px', fontSize: 11, color: '#6ee7b7',
+        }}>
+          ⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}{g.assist ? ` ↗️ ${g.assist}` : ''}
+        </span>
+      ))}
+      {(yellowCards || []).map((c, i) => (
+        <span key={`y${i}`} style={{
+          background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)',
+          borderRadius: 8, padding: '2px 9px', fontSize: 11, color: '#fde047',
+        }}>
+          🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+        </span>
+      ))}
+      {(redCards || []).map((c, i) => (
+        <span key={`r${i}`} style={{
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+          borderRadius: 8, padding: '2px 9px', fontSize: 11, color: '#fca5a5',
+        }}>
+          🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+        </span>
+      ))}
+    </div>
   )
 }
 
 function MatchCard({ match }: { match: MatchFix }) {
   const f1 = getFlag(match.homeTeam)
   const f2 = getFlag(match.awayTeam)
-  const hasScore = match.homeScore !== null && match.homeScore !== undefined && match.awayScore !== null && match.awayScore !== undefined
   const isLive = match.statusType === 'live'
+  const src = match.source || (match._sources && match._sources[0]) || ''
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      border: '1px solid rgba(99,102,241,0.25)',
-      borderRadius: 16,
-      padding: '16px 20px',
-      margin: '8px 0',
-      backdropFilter: 'blur(12px)',
+      background: 'linear-gradient(160deg, #0c1220 0%, #111827 50%, #0c1a2e 100%)',
+      border: isLive ? '1.5px solid rgba(239,68,68,0.45)' : '1.5px solid rgba(255,255,255,0.08)',
+      borderRadius: 20,
+      padding: '18px 20px 14px',
+      margin: '10px 0',
       boxShadow: isLive
-        ? '0 0 0 2px rgba(239,68,68,0.5), 0 8px 32px rgba(0,0,0,0.4)'
-        : '0 8px 32px rgba(0,0,0,0.35)',
+        ? '0 0 0 1px rgba(239,68,68,0.2), 0 12px 40px rgba(0,0,0,0.55)'
+        : '0 12px 40px rgba(0,0,0,0.45)',
       direction: 'rtl',
-      fontFamily: 'inherit',
       position: 'relative',
       overflow: 'hidden',
     }}>
       {isLive && (
         <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: 'linear-gradient(90deg, transparent, #ef4444, transparent)',
-          animation: 'wc-live-pulse 2s infinite',
+          position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+          background: 'linear-gradient(90deg, transparent 0%, #ef4444 40%, #f97316 60%, transparent 100%)',
+          animation: 'dzLiveLine 2.5s ease-in-out infinite',
         }} />
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <StatusBadge status={match.statusType} />
-        {match.round && (
-          <span style={{ color: '#94a3b8', fontSize: 11 }}>{match.round}</span>
+      <div style={{
+        position: 'absolute', inset: 0, opacity: 0.03,
+        backgroundImage: 'url("https://upload.wikimedia.org/wikipedia/en/thumb/4/45/FIFA_World_Cup_2026_logo.svg/200px-FIFA_World_Cup_2026_logo.svg.png")',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center',
+        backgroundSize: '60%',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16,
+      }}>
+        <StatusPill status={match.statusType} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          {match.round && (
+            <span style={{ color: '#475569', fontSize: 11, fontWeight: 600 }}>{match.round}</span>
+          )}
+        </div>
+        {src && (
+          <span style={{
+            color: '#10b981', fontSize: 10, fontWeight: 700,
+            background: 'rgba(16,185,129,0.08)',
+            border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: 20, padding: '1px 8px',
+          }}>
+            📡 {src}
+          </span>
         )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-          {f1 ? (
-            <img src={f1} alt={match.homeTeam} width={56} height={42} style={{ borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.4)', objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: 56, height: 42, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🏴</div>
-          )}
-          <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 13, textAlign: 'center', lineHeight: 1.3 }}>{match.homeTeam}</span>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 80 }}>
-          {hasScore ? (
-            <div style={{
-              background: 'rgba(15,23,42,0.8)',
-              border: '1px solid rgba(99,102,241,0.4)',
-              borderRadius: 10,
-              padding: '6px 14px',
-              display: 'flex',
-              gap: 10,
-              alignItems: 'center',
-            }}>
-              <span style={{ color: '#f8fafc', fontSize: 22, fontWeight: 800 }}>{match.homeScore}</span>
-              <span style={{ color: '#475569', fontSize: 16, fontWeight: 400 }}>–</span>
-              <span style={{ color: '#f8fafc', fontSize: 22, fontWeight: 800 }}>{match.awayScore}</span>
-            </div>
-          ) : (
-            <div style={{
-              background: 'rgba(99,102,241,0.12)',
-              border: '1px solid rgba(99,102,241,0.3)',
-              borderRadius: 10,
-              padding: '6px 10px',
-              color: '#a5b4fc',
-              fontSize: 14,
-              fontWeight: 700,
-              textAlign: 'center',
-              lineHeight: 1.4,
-            }}>
-              {match.startTime ? (
-                <>
-                  <div>{addDZHour(match.startTime)}</div>
-                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>توقيت الجزائر</div>
-                </>
-              ) : 'vs'}
-            </div>
-          )}
-          {match.group && (
-            <span style={{ color: '#64748b', fontSize: 11 }}>المجموعة {match.group}</span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-          {f2 ? (
-            <img src={f2} alt={match.awayTeam} width={56} height={42} style={{ borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.4)', objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: 56, height: 42, borderRadius: 6, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🏴</div>
-          )}
-          <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 13, textAlign: 'center', lineHeight: 1.3 }}>{match.awayTeam}</span>
-        </div>
+        <TeamBlock name={match.homeTeam} isHome={true} flag={f1} />
+        <ScoreOrTime match={match} />
+        <TeamBlock name={match.awayTeam} isHome={false} flag={f2} />
       </div>
 
-      {(match.date || match.venue) && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <GoalsList goals={match.goals} yellowCards={match.yellowCards} redCards={match.redCards} />
+
+      {(match.date || match.venue || match.city) && (
+        <div style={{
+          marginTop: 14, paddingTop: 12,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center',
+        }}>
           {match.date && (
-            <span style={{ color: '#94a3b8', fontSize: 11 }}>📅 {formatDateFull(match.date)}</span>
+            <span style={{ color: '#64748b', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#4f46e5' }}>📅</span> {fmtDate(match.date)}
+            </span>
           )}
-          {match.venue && (
-            <span style={{ color: '#94a3b8', fontSize: 11 }}>🏟️ {match.venue}{match.city ? `, ${match.city}` : ''}</span>
+          {(match.venue || match.city) && (
+            <span style={{ color: '#64748b', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#0891b2' }}>🏟️</span>
+              {match.venue}{match.city ? `, ${match.city}` : ''}
+              {match.country && match.country !== match.city ? ` — ${match.country}` : ''}
+            </span>
           )}
         </div>
       )}
 
-      {match.goals && match.goals.length > 0 && (
-        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
-          {match.goals.map((g, i) => (
-            <span key={i} style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#6ee7b7' }}>
-              ⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}{g.assist ? ` (${g.assist})` : ''}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {((match.yellowCards && match.yellowCards.length > 0) || (match.redCards && match.redCards.length > 0)) && (
-        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
-          {(match.yellowCards || []).map((c, i) => (
-            <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#fde047' }}>
-              🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}
-            </span>
-          ))}
-          {(match.redCards || []).map((c, i) => (
-            <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#fca5a5' }}>
-              🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
         {match.kooraLink && (
-          <a href={match.kooraLink} target="_blank" rel="noopener noreferrer"
-            style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
-            <img src="https://www.google.com/s2/favicons?domain=kooora.com&sz=12" alt="" width={12} height={12} />
-            كووورة
+          <a href={match.kooraLink} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+            ⚽ كووورة
           </a>
         )}
-        <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer"
-          style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
-          <img src="https://www.google.com/s2/favicons?domain=fotmob.com&sz=12" alt="" width={12} height={12} />
-          FotMob
+        <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer" style={linkStyle}>
+          📱 FotMob
         </a>
-        <a href="https://www.fifa.com/worldcup" target="_blank" rel="noopener noreferrer"
-          style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
-          <img src="https://www.google.com/s2/favicons?domain=fifa.com&sz=12" alt="" width={12} height={12} />
-          FIFA
+        <a href="https://www.fifa.com/worldcup" target="_blank" rel="noopener noreferrer" style={linkStyle}>
+          🏆 FIFA
         </a>
       </div>
     </div>
   )
+}
+
+const linkStyle: React.CSSProperties = {
+  color: '#818cf8',
+  fontSize: 11,
+  textDecoration: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  background: 'rgba(99,102,241,0.08)',
+  padding: '3px 12px',
+  borderRadius: 20,
+  border: '1px solid rgba(99,102,241,0.18)',
+  fontWeight: 600,
 }
 
 interface WC2026MatchCardProps {
@@ -249,7 +365,7 @@ interface WC2026MatchCardProps {
 }
 
 export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 30000 }: WC2026MatchCardProps) {
-  const [tick, setTick] = useState(0)
+  const [, setTick] = useState(0)
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -261,40 +377,57 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
 
   if (!matches || matches.length === 0) return null
 
-  const grouped: Record<string, MatchFix[]> = {}
+  const byDate: Record<string, MatchFix[]> = {}
   for (const m of matches) {
-    const g = m.group || 'other'
-    if (!grouped[g]) grouped[g] = []
-    grouped[g].push(m)
+    const key = m.date || 'unknown'
+    if (!byDate[key]) byDate[key] = []
+    byDate[key].push(m)
   }
+  const multiDay = Object.keys(byDate).filter(k => k !== 'unknown').length > 1
 
   return (
-    <div style={{ direction: 'rtl' }}>
+    <div style={{ direction: 'rtl', fontFamily: 'inherit' }}>
       <style>{`
-        @keyframes wc-live-pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 1; }
+        @keyframes dzPulse {
+          0%,100% { box-shadow: 0 0 12px rgba(239,68,68,0.6); }
+          50% { box-shadow: 0 0 24px rgba(239,68,68,0.9); }
+        }
+        @keyframes dzLiveLine {
+          0% { opacity:0.5; transform:scaleX(0.4) translateX(-60%); }
+          50% { opacity:1; transform:scaleX(1) translateX(0%); }
+          100% { opacity:0.5; transform:scaleX(0.4) translateX(60%); }
         }
       `}</style>
+
       {title && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: 12, padding: '8px 12px',
-          background: 'linear-gradient(90deg, rgba(99,102,241,0.15), transparent)',
-          borderRight: '3px solid #818cf8', borderRadius: '0 8px 8px 0',
+          display: 'flex', alignItems: 'center', gap: 10,
+          marginBottom: 10, padding: '10px 16px',
+          background: 'linear-gradient(90deg, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0.04) 100%)',
+          borderRight: '3px solid #6366f1',
+          borderRadius: '0 12px 12px 0',
         }}>
-          <span style={{ fontSize: 18 }}>🏆</span>
-          <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 15 }}>{title}</span>
+          <span style={{ fontSize: 20 }}>🏆</span>
+          <span style={{ color: '#e2e8f0', fontWeight: 800, fontSize: 15 }}>{title}</span>
           {autoRefresh && matches.some(m => m.statusType === 'live') && (
-            <span style={{ marginRight: 'auto', color: '#ef4444', fontSize: 11, animation: 'wc-live-pulse 2s infinite' }}>● تحديث تلقائي</span>
+            <span style={{ marginRight: 'auto', color: '#ef4444', fontSize: 11, fontWeight: 700, animation: 'dzPulse 2s infinite' }}>
+              ● تحديث تلقائي
+            </span>
           )}
         </div>
       )}
-      {Object.keys(grouped).length > 1
-        ? Object.entries(grouped).sort().map(([grp, list]) => (
-            <div key={grp}>
-              {grp !== 'other' && (
-                <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6, marginTop: 10 }}>المجموعة {grp}</div>
+
+      {multiDay
+        ? Object.entries(byDate).sort().map(([date, list]) => (
+            <div key={date}>
+              {date !== 'unknown' && (
+                <div style={{
+                  color: '#6366f1', fontSize: 12, fontWeight: 700,
+                  margin: '14px 0 6px', paddingRight: 4,
+                  borderRight: '2px solid #4f46e5', paddingTop: 2, paddingBottom: 2,
+                }}>
+                  📅 {fmtDate(date)}
+                </div>
               )}
               {list.map((m, i) => <MatchCard key={i} match={m} />)}
             </div>

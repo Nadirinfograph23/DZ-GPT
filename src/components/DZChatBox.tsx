@@ -7814,9 +7814,10 @@ ${rows}
                         <WC2026MatchCard
                           matches={(msg as any).matches}
                           title="⚽ كأس العالم FIFA 2026"
+                          autoRefresh={(msg as any).matches.some((m: any) => m.statusType === 'live')}
                         />
                       )}
-                      {msg.content && (
+                      {msg.content && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{

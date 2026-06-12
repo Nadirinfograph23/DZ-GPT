@@ -13744,16 +13744,14 @@ app.get('/api/wc2026/today', async (req, res) => {
       }
     } catch (_e) { /* نكمل بالبيانات المحلية */ }
 
-    // 2) احتياطياً: البيانات المحلية الكاملة
+    // 2) احتياطياً: البيانات المحلية الكاملة (تصحيح: static import بدل dynamic)
     if (liveMatches.length === 0) {
-      const { buildWC2026TodayFixtures } = await import('./lib/dz-sports-knowledge.js')
-      liveMatches = buildWC2026TodayFixtures(dateStr)
+      liveMatches = WC2026_FULL_FIXTURES.filter(m => m.date === dateStr)
     }
 
     // 3) إذا لا توجد مباريات اليوم → اجلب مباريات الغد ثم بعد غد (أقرب يوم)
     let nextDate = null
     if (liveMatches.length === 0) {
-      const { WC2026_FULL_FIXTURES } = await import('./lib/dz-sports-knowledge.js')
       const today = new Date(dateStr + 'T00:00:00Z')
       const futureDates = [...new Set(
         WC2026_FULL_FIXTURES
@@ -13762,8 +13760,7 @@ app.get('/api/wc2026/today', async (req, res) => {
       )].sort()
       if (futureDates.length > 0) {
         nextDate = futureDates[0]
-        const { buildWC2026TodayFixtures: bf } = await import('./lib/dz-sports-knowledge.js')
-        liveMatches = bf(nextDate)
+        liveMatches = WC2026_FULL_FIXTURES.filter(m => m.date === nextDate)
       }
     }
 
@@ -15116,18 +15113,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // WC today handler: يعمل حتى عند _isRetry (البيانات الرياضية لا تتغير)
     const _isWCTodayEarly = (
       detectWC2026TodayQuery(_rawLastMsg) ||
-      /(?:مباريات|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s+العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
-      /(?:كأس\s+العالم|المونديال|مونديال)\s+(?:مباريات\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
-      /(?:اليوم|الليلة)\s+(?:في|من)\s+(?:كأس\s+العالم|المونديال|مونديال)/i.test(_rawLastMsg) ||
-      /من\s+(?:يلعب|سيلعب|ستلعب)\s+(?:اليوم|الليلة)\s+(?:في\s+)?(?:كأس\s+العالم|المونديال)/i.test(_rawLastMsg) ||
-      /(?:ماتشات|مباريات|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
+      /(?:مباريات?|مباراة|ماتشات|نتائج|برنامج|رزنامة)\s+(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا)\s+(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
+      /(?:كأس\s*العالم|المونديال|مونديال)\s+(?:مباريات?\s+)?(?:اليوم|الليلة)/i.test(_rawLastMsg) ||
+      /(?:اليوم|الليلة)\s+(?:في|من)\s+(?:كأس\s*العالم|المونديال|مونديال)/i.test(_rawLastMsg) ||
+      /من\s+(?:يلعب|سيلعب|ستلعب)\s+(?:اليوم|الليلة)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال)/i.test(_rawLastMsg) ||
+      /(?:ماتشات|مباريات?|مباراة|نتائج)\s+(?:اليوم|الليلة).*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
+      // مباراة اليوم (مفرد) + كأس العالم — النمط الرئيسي المُصلَح
+      /مباراة\s+(?:اليوم|الليلة|الآن).*(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg) ||
+      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*مباراة\s+(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg) ||
       // أنماط إضافية — أسئلة عامة عن مباريات اليوم في كأس العالم
-      /(?:ما\s+هي|ايش|وش|شو)\s+(?:مباريات|ماتشات).*(?:كأس\s+العالم|مونديال)/i.test(_rawLastMsg) ||
-      /(?:كأس\s+العالم|مونديال|FIFA\s+2026).*(?:النهار|هاذ|اليوم)/i.test(_rawLastMsg) ||
+      /(?:ما\s+هي|ايش|وش|شو)\s+(?:مباريات?|مباراة|ماتشات).*(?:كأس\s*العالم|مونديال)/i.test(_rawLastMsg) ||
+      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*(?:النهار|هاذ|اليوم)/i.test(_rawLastMsg) ||
       /(?:هاذ\s+النهار|هذا\s+اليوم)\s+.*(?:كأس|مونديال|FIFA)/i.test(_rawLastMsg) ||
-      /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة).*(?:مونديال|كأس\s+العالم)/i.test(_rawLastMsg) ||
-      /(?:شكون|مين)\s+(?:يلعب|يواجه|لعب).*(?:مونديال|كأس\s+العالم)/i.test(_rawLastMsg) ||
-      /(?:أخبار|نتائج|ملخص)\s+(?:كأس\s+العالم|مونديال).*(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg)
+      /(?:واش|كاين|فيه)\s+.*(?:ماتش|مقابلة|مباراة).*(?:مونديال|كأس\s*العالم)/i.test(_rawLastMsg) ||
+      /(?:شكون|مين)\s+(?:يلعب|يواجه|لعب).*(?:مونديال|كأس\s*العالم)/i.test(_rawLastMsg) ||
+      /(?:أخبار|نتائج|ملخص)\s+(?:كأس\s*العالم|مونديال).*(?:اليوم|الليلة|الآن)/i.test(_rawLastMsg) ||
+      // نمط شامل: أي ذكر لـ (مباراة|ماتش) + (اليوم|الليلة) + (كأس|مونديال)
+      /(?:مباراة|مباريات|ماتش)\s+.{0,30}(?:كأس\s*العالم|مونديال|FIFA\s*2026)/i.test(_rawLastMsg) && /(?:اليوم|الليلة|الآن|النهار)/i.test(_rawLastMsg)
     )
     if (_isWCTodayEarly) {
       console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)
@@ -15150,9 +15152,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
         // ── Fallback: بيانات محلية عندما تفشل APIs الخارجية ──────────────────
         // يمنع السقوط إلى LLM وما ينتج عنه من ردود "لم أفهم" أو اختراع بيانات
+        // تصحيح: استخدام WC2026_FULL_FIXTURES المستوردة statically (تعمل في Vercel bundle)
         console.log('[WC2026:TodayEarly] APIs empty → using local WC2026_FULL_FIXTURES fallback')
-        const { buildWC2026TodayFixtures: _buildTodayLocal } = await import('./lib/dz-sports-knowledge.js')
-        const _localMatches = _buildTodayLocal(_todayDate)
+        const _localMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _todayDate)
         if (_localMatches?.length) {
           const _lm_lines = [
             `## ⚽ مباريات كأس العالم 2026 — ${new Date(_todayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
@@ -15196,6 +15198,48 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         })
       } catch (_wcTodayErr) {
         console.error('[WC2026:TodayEarly] error:', _wcTodayErr.message)
+        // ❌ إصلاح حرج: catch يجب أن يُعيد رداً آمناً — لا يسمح بالسقوط إلى LLM
+        // قبل الإصلاح: كان يسقط إلى General Interceptor الذي يخلط مباريات WC بغيرها
+        try {
+          const _safeMatches = WC2026_FULL_FIXTURES.filter(m => m.date === new Date().toISOString().split('T')[0])
+          if (_safeMatches.length) {
+            const _sf_date = new Date().toISOString().split('T')[0]
+            const _sf_lines = [
+              `## ⚽ مباريات كأس العالم 2026 — ${new Date(_sf_date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
+              ``,
+              `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026_`,
+              ``,
+            ]
+            const _WC_FL = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷' }
+            for (const _sm of _safeMatches) {
+              const _f1 = _WC_FL[_sm.homeTeam] || '🏴', _f2 = _WC_FL[_sm.awayTeam] || '🏴'
+              const [_sh, _smm] = _sm.startTime?.split(':') || ['??','??']
+              const _sdh = String((parseInt(_sh, 10) + 1) % 24).padStart(2, '0')
+              _sf_lines.push(`### ${_f1} **${_sm.homeTeam}** 🆚 **${_sm.awayTeam}** ${_f2}`)
+              _sf_lines.push(`🕒 **${_sdh}:${_smm}** (توقيت الجزائر) | 🏟️ ${_sm.venue}, ${_sm.city} | المجموعة **${_sm.group}**`)
+              _sf_lines.push(``)
+            }
+            _sf_lines.push(`🔴 **متابعة مباشرة:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`)
+            return res.status(200).json({ content: _sf_lines.join('\n'), model: 'wc2026-today-safe-fallback', _sportsAgent: true, wc2026: true, found: true })
+          }
+        } catch (_) {}
+        return res.status(200).json({
+          content: [
+            `## ⚽ كأس العالم 2026 — خطأ مؤقت`,
+            ``,
+            `> ⚠️ تعذّر الاتصال بوكيل المباريات مؤقتاً. تابع مباشرةً:`,
+            ``,
+            `| المصدر | الرابط |`,
+            `|--------|--------|`,
+            `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/worldcup) |`,
+            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+            `| ⚽ **FotMob** | [مباريات WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
+          ].join('\n'),
+          model: 'wc2026-today-error-safe',
+          _sportsAgent: true,
+          wc2026: true,
+          found: false,
+        })
       }
     }
   }
@@ -15232,8 +15276,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           })
         }
         // ── Fallback: بيانات محلية ──────────────────────────────────────────
-        const { buildWC2026TodayFixtures: _buildTomLocal } = await import('./lib/dz-sports-knowledge.js')
-        const _tomMatches = _buildTomLocal(_tomorrowDate)
+        // تصحيح: WC2026_FULL_FIXTURES المستوردة statically بدل dynamic import
+        const _tomMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _tomorrowDate)
         const _WC_FLAGS_TOM = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','إيطاليا':'🇮🇹','بلجيكا':'🇧🇪','كرواتيا':'🇭🇷','أوروغواي':'🇺🇾','الدنمارك':'🇩🇰','السويد':'🇸🇪','أستراليا':'🇦🇺','تركيا':'🇹🇷','نيجيريا':'🇳🇬','السنغال':'🇸🇳','كولومبيا':'🇨🇴','الإكوادور':'🇪🇨','بولندا':'🇵🇱','سويسرا':'🇨🇭','اسكتلندا':'🏴󠁧󠁢󠁳󠁣󠁴󠁿' }
         if (_tomMatches?.length) {
           const _tl = [
@@ -15277,6 +15321,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         })
       } catch (_wcTomErr) {
         console.error('[WC2026:TomorrowEarly] error:', _wcTomErr.message)
+        // إصلاح: catch يُعيد رداً آمناً — لا يسقط إلى LLM
+        try {
+          const _safeTomDate = new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0]
+          const _safeTomMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _safeTomDate)
+          if (_safeTomMatches.length) {
+            const _WCF2 = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','المغرب':'🇲🇦','تونس':'🇹🇳','قطر':'🇶🇦' }
+            const _tl2 = [`## ⚽ مباريات كأس العالم 2026 — الغد`, ``, `> 📡 _بيانات من الجدول الرسمي لـ FIFA 2026_`, ``]
+            for (const _m of _safeTomMatches) {
+              const [_h,_mn] = _m.startTime?.split(':') || ['??','??']
+              _tl2.push(`### ${_WCF2[_m.homeTeam]||'🏴'} **${_m.homeTeam}** 🆚 **${_m.awayTeam}** ${_WCF2[_m.awayTeam]||'🏴'}`)
+              _tl2.push(`🕒 **${String((parseInt(_h,10)+1)%24).padStart(2,'0')}:${_mn}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city}`)
+              _tl2.push(``)
+            }
+            return res.status(200).json({ content: _tl2.join('\n'), model: 'wc2026-tomorrow-safe-fallback', _sportsAgent: true, wc2026: true, found: true })
+          }
+        } catch (_) {}
+        return res.status(200).json({
+          content: [`## ⚽ كأس العالم 2026 — خطأ مؤقت`, ``, `> تعذّر الاتصال. تابع: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup)`].join('\n'),
+          model: 'wc2026-tomorrow-error-safe', _sportsAgent: true, wc2026: true, found: false,
+        })
       }
     }
   }

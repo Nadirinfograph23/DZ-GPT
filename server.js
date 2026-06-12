@@ -15060,7 +15060,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_isWCRQ && !req.body._wcResultHandled) {
       console.log(`[WC2026:AntiHallu:Early] 🛡️ WC result query → live agent: "${_rawLastMsg.slice(0, 60)}"`)
       try {
-        const _ahDate2 = new Date(Date.now() + 3600000).toISOString().split('T')[0]
+        const _isYestQ2 = /البارحة|بالأمس|(?:نتائج|مباريات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
+        const _ahDate2 = _isYestQ2
+          ? new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
+          : new Date(Date.now() + 3600000).toISOString().split('T')[0]
         const _ahRes2  = await Promise.race([
           runWC2026TodayAgent(_ahDate2),
           new Promise(r => setTimeout(() => r(null), 12000)),
@@ -15173,7 +15176,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_isWCResultQuery && !req.body._wcResultHandled) {
       console.log(`[WC2026:AntiHallu] 🛡️ WC result query intercepted — routing to live agent: "${_rawLastMsg.slice(0, 60)}"`)
       try {
-        const _ahDate = new Date(Date.now() + 3600000).toISOString().split('T')[0]
+        const _isYestQ = /البارحة|بالأمس|(?:نتائج|مباريات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
+        const _ahDate = _isYestQ
+          ? new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
+          : new Date(Date.now() + 3600000).toISOString().split('T')[0]
         const _ahRes  = await Promise.race([
           runWC2026TodayAgent(_ahDate),
           new Promise(r => setTimeout(() => r(null), 12000)),
@@ -15247,17 +15253,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       (_isWCSeason && /(?:مباراة|مباريات|ماتش|مقابلة)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
       (_isWCSeason && /(?:اليوم|الليلة|النهار)\s+(?:فيه|كاين|واش|في)?\s*(?:مباراة|ماتش|كورة)/i.test(_rawLastMsg)) ||
       (_isWCSeason && /(?:من\s+يلعب|شكون\s+يلعب|من\s+ضد\s+من)\s+(?:اليوم|الليلة|النهار)/i.test(_rawLastMsg)) ||
-      // ── نتائج اليوم / الأمس (مباريات انتهت) ─────────────────────────────────
-      (_isWCSeason && /(?:نتيجة|نتائج)\s+(?:مباريات?|لقاء|ماتشات?)?\s*(?:اليوم|الليلة|النهار|الأمس|امس)/i.test(_rawLastMsg)) ||
+      // ── نتائج اليوم / الأمس / البارحة (مباريات انتهت) ───────────────────────
+      (_isWCSeason && /(?:نتيجة|نتائج)\s+(?:مباريات?|لقاء|ماتشات?)?\s*(?:اليوم|الليلة|النهار|الأمس|امس|البارحة)/i.test(_rawLastMsg)) ||
       (_isWCSeason && /(?:نتائج|ملخص|ماذا\s+(?:انتهت|كانت))\s+(?:اليوم|الليلة)/i.test(_rawLastMsg)) ||
-      (_isWCSeason && /(?:كيف\s+انتهت|كيف\s+كانت|ايش\s+صار|وش\s+صار)\s+مباريات?\s+(?:اليوم|الليلة)/i.test(_rawLastMsg))
+      (_isWCSeason && /(?:كيف\s+انتهت|كيف\s+كانت|ايش\s+صار|وش\s+صار)\s+مباريات?\s+(?:اليوم|الليلة|البارحة|الأمس)/i.test(_rawLastMsg)) ||
+      // ── "البارحة" وحدها (دارجة جزائرية ليوم الأمس) ───────────────────────
+      (_isWCSeason && /(?:مباريات?|ماتشات?|نتائج|نتيجة|ملخص|لقاءات?)\s+(?:البارحة|بالأمس)/i.test(_rawLastMsg)) ||
+      (_isWCSeason && /(?:البارحة|بالأمس)\s+(?:في\s+)?(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg)) ||
+      (_isWCSeason && /(?:البارحة|بالأمس)\s+(?:كاينة?|فيه?|كانت?)\s+(?:مباراة|ماتش)/i.test(_rawLastMsg))
     )
     if (_isWCTodayEarly) {
-      console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)
+      // ── كشف: هل السؤال عن الأمس أم اليوم؟ ──────────────────────────────
+      const _isYesterdayQ = /البارحة|بالأمس|(?:نتائج|نتيجة|مباريات?|ماتشات?)\s+(?:الأمس|امس\b)/i.test(_rawLastMsg)
+      const _dzOffset = 3600000 // UTC+1 الجزائر
+      const _queryDate = _isYesterdayQ
+        ? new Date(Date.now() + _dzOffset - 86400000).toISOString().split('T')[0] // أمس
+        : new Date(Date.now() + _dzOffset).toISOString().split('T')[0]            // اليوم
+      console.log(`[WC2026:TodayEarly] 🌐 WC ${_isYesterdayQ ? '📅 YESTERDAY' : '📅 TODAY'} query: "${_rawLastMsg.slice(0, 60)}" → date: ${_queryDate}`)
       try {
-        const _todayDate = new Date(Date.now() + 3600000).toISOString().split('T')[0] // UTC+1 الجزائر
         const _wcTodayRes = await Promise.race([
-          runWC2026TodayAgent(_todayDate),
+          runWC2026TodayAgent(_queryDate),
           new Promise(r => setTimeout(() => r(null), 15000)),
         ])
         if (_wcTodayRes?.userResponse) {

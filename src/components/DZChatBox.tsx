@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import WC2026MatchCard from './WC2026MatchCard'
 import { DZMDTable } from './tables/DZSmartTable'
 import DZDashboard from './DZDashboard'
 import DoctorResultsPanel, { type DoctorResult, type DirLink } from './DoctorResultsPanel'
@@ -7802,6 +7803,12 @@ ${rows}
                         <div style={{ marginBottom: 6 }}>
                           <WebReaderIntentBadge intent={msg.webReaderIntent} />
                         </div>
+                      )}
+                      {(msg as any).wc2026?.nextMatch && (
+                        <WC2026MatchCard
+                          matches={[(msg as any).wc2026.nextMatch]}
+                          title={`⚽ المباراة القادمة — المجموعة ${(msg as any).wc2026.group || 'J'}`}
+                        />
                       )}
                       {msg.content && (
                         <ReactMarkdown

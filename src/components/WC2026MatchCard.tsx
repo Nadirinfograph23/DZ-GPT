@@ -15,6 +15,26 @@ interface MatchFix {
   competition?: string
   round?: string
   kooraLink?: string
+  goals?: Array<{ player: string; minute?: number; team: string; assist?: string }>
+  yellowCards?: Array<{ player: string; minute?: number; team: string }>
+  redCards?: Array<{ player: string; minute?: number; team: string }>
+}
+
+function addDZHour(utcTime?: string): string {
+  if (!utcTime) return ''
+  try {
+    const [h, m] = utcTime.split(':').map(Number)
+    return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  } catch { return utcTime }
+}
+
+function formatDateFull(dateStr?: string): string {
+  if (!dateStr) return ''
+  try {
+    return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Algiers',
+    })
+  } catch { return dateStr }
 }
 
 const FLAG_CODES: Record<string, string> = {
@@ -41,14 +61,6 @@ function getFlag(team: string) {
   return `https://flagcdn.com/w80/${code}.png`
 }
 
-function formatDate(dateStr?: string) {
-  if (!dateStr) return ''
-  try {
-    return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
-      weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers',
-    })
-  } catch { return dateStr }
-}
 
 function StatusBadge({ status }: { status?: string }) {
   if (status === 'live') return (
@@ -140,12 +152,19 @@ function MatchCard({ match }: { match: MatchFix }) {
               background: 'rgba(99,102,241,0.12)',
               border: '1px solid rgba(99,102,241,0.3)',
               borderRadius: 10,
-              padding: '6px 14px',
+              padding: '6px 10px',
               color: '#a5b4fc',
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 700,
+              textAlign: 'center',
+              lineHeight: 1.4,
             }}>
-              {match.startTime || 'vs'}
+              {match.startTime ? (
+                <>
+                  <div>{addDZHour(match.startTime)}</div>
+                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 400 }}>توقيت الجزائر</div>
+                </>
+              ) : 'vs'}
             </div>
           )}
           {match.group && (
@@ -166,7 +185,7 @@ function MatchCard({ match }: { match: MatchFix }) {
       {(match.date || match.venue) && (
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
           {match.date && (
-            <span style={{ color: '#94a3b8', fontSize: 11 }}>📅 {formatDate(match.date)}</span>
+            <span style={{ color: '#94a3b8', fontSize: 11 }}>📅 {formatDateFull(match.date)}</span>
           )}
           {match.venue && (
             <span style={{ color: '#94a3b8', fontSize: 11 }}>🏟️ {match.venue}{match.city ? `, ${match.city}` : ''}</span>
@@ -174,14 +193,50 @@ function MatchCard({ match }: { match: MatchFix }) {
         </div>
       )}
 
-      {match.kooraLink && (
-        <div style={{ marginTop: 8, textAlign: 'center' }}>
-          <a href={match.kooraLink} target="_blank" rel="noopener noreferrer"
-            style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none' }}>
-            🔗 تفاصيل المباراة
-          </a>
+      {match.goals && match.goals.length > 0 && (
+        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+          {match.goals.map((g, i) => (
+            <span key={i} style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#6ee7b7' }}>
+              ⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}{g.assist ? ` (${g.assist})` : ''}
+            </span>
+          ))}
         </div>
       )}
+
+      {((match.yellowCards && match.yellowCards.length > 0) || (match.redCards && match.redCards.length > 0)) && (
+        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+          {(match.yellowCards || []).map((c, i) => (
+            <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#fde047' }}>
+              🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+            </span>
+          ))}
+          {(match.redCards || []).map((c, i) => (
+            <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, color: '#fca5a5' }}>
+              🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+        {match.kooraLink && (
+          <a href={match.kooraLink} target="_blank" rel="noopener noreferrer"
+            style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
+            <img src="https://www.google.com/s2/favicons?domain=kooora.com&sz=12" alt="" width={12} height={12} />
+            كووورة
+          </a>
+        )}
+        <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer"
+          style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
+          <img src="https://www.google.com/s2/favicons?domain=fotmob.com&sz=12" alt="" width={12} height={12} />
+          FotMob
+        </a>
+        <a href="https://www.fifa.com/worldcup" target="_blank" rel="noopener noreferrer"
+          style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
+          <img src="https://www.google.com/s2/favicons?domain=fifa.com&sz=12" alt="" width={12} height={12} />
+          FIFA
+        </a>
+      </div>
     </div>
   )
 }

@@ -246,6 +246,8 @@ import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDele
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
 import { streamAIResponse } from './lib/ai-sdk-stream.js'
+import { routeToAgent, classifyIntent as classifyAgentIntent, buildAmbiguousResponse } from './middleware/agentRouter.js'
+import { validateResponse, addResponseMetadata, buildBlockedResponse } from './middleware/responseGuard.js'
 
 // ── Modular route modules — Phase 1 refactoring ───────────────
 import { createQuranRouter } from './routes/quran.js'
@@ -15595,6 +15597,73 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🏆 AGENT ROUTER SAFETY NET — شبكة الأمان النهائية لكل الاستعلامات الرياضية
+  // يُطلَق بعد جميع المعالجات السريعة — يمسك أي استعلام رياضي لم يُعالَج بعد
+  // القاعدة: لا يصل أي سؤال رياضي إلى LLM بدون المرور عبر الوكيل المتخصص
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    try {
+      const _arIntent = classifyAgentIntent(_rawLastMsg)
+      if (_arIntent.intent === 'WORLD_CUP' || _arIntent.intent === 'AMBIGUOUS_TODAY') {
+        console.log(`[AgentRouter:SafetyNet] 🏆 intent=${_arIntent.intent} wcSubType=${_arIntent.wcSubType} — "${_rawLastMsg.slice(0,70)}"`)
+        const _arResult = await routeToAgent(_rawLastMsg, messages)
+        if (_arResult.handled && _arResult.response) {
+          const _arResp = _arResult.response
+          const _arValidation = validateResponse(_arResp, _arIntent.intent)
+          if (!_arValidation.valid) {
+            console.warn(`[AgentRouter:SafetyNet] ⚠️ Validation failed: ${_arValidation.reason}`)
+            const _blocked = buildBlockedResponse(_arIntent.intent, _arValidation.reason)
+            return res.status(200).json({
+              content: _blocked.userResponse,
+              model: 'wc-guard-blocked',
+              _sportsAgent: true,
+              _guardBlocked: true,
+              wc2026: _arIntent.intent === 'WORLD_CUP',
+              found: false,
+              _meta: { agent: 'guard', source: 'blocked', intent: _arIntent.intent },
+            })
+          }
+          const _enriched = addResponseMetadata(_arResp, _arIntent.intent, _rawLastMsg)
+          return res.status(200).json({
+            content: _correctionNote + (_arResp.userResponse || _arResp.context || ''),
+            model: _arIntent.intent === 'WORLD_CUP' ? 'world-cup-agent' : 'agent-router',
+            _sportsAgent: true,
+            wc2026: _arIntent.intent === 'WORLD_CUP',
+            found: _arResp.found,
+            matches: _arResp.matches,
+            sources: _arResp.sources,
+            matchCount: _arResp.matchCount,
+            needsClarification: _arResp.needsClarification || false,
+            _meta: _enriched._meta,
+            _agentRouter: true,
+          })
+        }
+      }
+      // SPORTS_GENERAL — شبكة أمان إضافية للرياضة العامة
+      if (_arIntent.intent === 'SPORTS_GENERAL' && _arIntent.confidence === 'high') {
+        console.log(`[AgentRouter:SafetyNet] ⚽ SPORTS_GENERAL (high confidence) — "${_rawLastMsg.slice(0,70)}"`)
+        const _arResult2 = await routeToAgent(_rawLastMsg, messages)
+        if (_arResult2.handled && _arResult2.response?.found) {
+          const _arResp2 = _arResult2.response
+          return res.status(200).json({
+            content: _correctionNote + (_arResp2.userResponse || _arResp2.context || ''),
+            model: 'sports-agent-router',
+            _sportsAgent: true,
+            found: _arResp2.found,
+            type: _arResp2.type,
+            sources: _arResp2.sources,
+            _meta: { agent: _arResp2.agent, source: _arResp2.source, intent: 'SPORTS_GENERAL' },
+            _agentRouter: true,
+          })
+        }
+      }
+    } catch (_arErr) {
+      console.error('[AgentRouter:SafetyNet] error (non-fatal, continuing):', _arErr.message)
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
 
   const rawCurrentRepo = sanitizeString(req.body.currentRepo || '', 160)
   const currentRepo = isValidGithubRepo(rawCurrentRepo) ? rawCurrentRepo : ''

@@ -16632,6 +16632,56 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ══ WC2026 جدول عام — Early Guard (قبل Wikipedia/Person handler) ══════════════
+  // يمنع توجيه "مواعيد مباريات كأس العالم" لـ Wikipedia ويُعيد الجدول مباشرةً
+  {
+    const _isWC2026SchedGuard = (
+      /(?:مواعيد|جدول|برنامج|رزنامة)\s*(?:مباريات\s+)?(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا|world\s*cup)/i.test(lastUserMessage) ||
+      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup)\s*(?:مواعيد|جدول|برنامج|كامل|كل\s*المباريات|جميع)/i.test(lastUserMessage) ||
+      /(?:متى|موعد)\s+(?:انطلاق|بداية|يبدأ|ينطلق|تبدأ)\s+(?:كأس\s*العالم|المونديال)/i.test(lastUserMessage) ||
+      /(?:مواعيد|توقيت|وقت)\s+(?:المباريات|الماتشات)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال|FIFA)/i.test(lastUserMessage) ||
+      (/(?:كأس\s*العالم|مونديال|FIFA\s*2026)/i.test(lastUserMessage) && /(?:مواعيد|الجدول|جدول|التوقيت)/i.test(lastUserMessage))
+    )
+    if (_isWC2026SchedGuard && !_isRetry) {
+      console.log(`[WC2026:SchedGuard] 📅 جدول عام (اعتراض قبل Wikipedia): "${lastUserMessage.slice(0, 60)}"`)
+      try {
+        const _sToday = new Date().toISOString().split('T')[0]
+        const _sUpcoming = WC2026_FULL_FIXTURES.filter(f => f.date >= _sToday).slice(0, 24)
+        const _sFlags = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','البوسنة والهرسك':'🇧🇦','بلجيكا':'🇧🇪','إيطاليا':'🇮🇹','سويسرا':'🇨🇭','أوروغواي':'🇺🇾','كولومبيا':'🇨🇴','الشيلي':'🇨🇱','السنغال':'🇸🇳','نيجيريا':'🇳🇬','الكاميرون':'🇨🇲','غانا':'🇬🇭','جمهورية التشيك':'🇨🇿','النمسا':'🇦🇹','المجر':'🇭🇺','الأردن':'🇯🇴','بوليفيا':'🇧🇴','باراغواي':'🇵🇾','الإكوادور':'🇪🇨','البيرو':'🇵🇪','رومانيا':'🇷🇴','بولندا':'🇵🇱','كرواتيا':'🇭🇷','الدنمارك':'🇩🇰' }
+        const _sByDate = {}
+        for (const _sf of _sUpcoming) {
+          if (!_sByDate[_sf.date]) _sByDate[_sf.date] = []
+          _sByDate[_sf.date].push(_sf)
+        }
+        const _sLines = [
+          `## 🏆 كأس العالم FIFA 2026 — جدول المباريات القادمة`,
+          ``,
+          `> 🌍 **48 منتخباً** | 🏟️ الولايات المتحدة، المكسيك وكندا`,
+          `> 📅 انطلق: **11 يونيو 2026** | النهائي: **19 يوليو 2026**`,
+          `> 🇩🇿 الجزائر في **المجموعة J** مع النمسا، الأردن وكندا`,
+          ``,
+        ]
+        for (const [_sd, _sms] of Object.entries(_sByDate)) {
+          const _sdLabel = new Date(_sd + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
+          _sLines.push(`### 📅 ${_sdLabel}`, ``)
+          for (const _sm of _sms) {
+            const _sf1 = _sFlags[_sm.homeTeam] || '🏴', _sf2 = _sFlags[_sm.awayTeam] || '🏴'
+            const [_sh, _smin] = _sm.startTime?.split(':') || ['??', '??']
+            const _sdzH = String((parseInt(_sh, 10) + 1) % 24).padStart(2, '0')
+            const _isDZ = _sm.homeTeam === 'الجزائر' || _sm.awayTeam === 'الجزائر'
+            _sLines.push(`${_isDZ ? '🟢 ' : ''}**${_sf1} ${_sm.homeTeam}** 🆚 **${_sm.awayTeam} ${_sf2}**`)
+            _sLines.push(`🕒 ${_sdzH}:${_smin} (توقيت الجزائر) | 🏟️ ${_sm.venue || ''}, ${_sm.city || ''} | المجموعة **${_sm.group}** | ${_sm.round || ''}`, ``)
+          }
+        }
+        if (!_sUpcoming.length) _sLines.push(`> ℹ️ انتهت مباريات دور المجموعات. تابع الأدوار الإقصائية.`)
+        _sLines.push(`---`, `🔴 **متابعة حية:** [FIFA](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [كووورة](https://www.kooora.com/)`)
+        return res.status(200).json({ content: _sLines.join('\n'), model: 'wc2026-schedule-local', _sportsAgent: true, wc2026: true, found: true, sources: ['WC2026_FULL_FIXTURES'], matchCount: _sUpcoming.length })
+      } catch (_sgErr) {
+        console.error('[WC2026:SchedGuard] error:', _sgErr.message)
+      }
+    }
+  }
+
   // ── Entity Disambiguation — توضيح الأسماء الغامضة / المتعددة ──────────────────
   // يعمل قبل البحث في ويكيبيديا لمنع اختيار الشخص الخاطئ
   // Guard: GREETING → لا توضيح شخصي أبداً (صباح الخير ≠ شخص)

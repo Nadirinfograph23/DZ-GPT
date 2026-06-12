@@ -7,9 +7,16 @@
     "api/index.js": {
       "maxDuration": 300,
       "includeFiles": "bin/**"
+    },
+    "api/report-bug.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
+    {
+      "source": "/api/report-bug",
+      "destination": "/api/report-bug"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/index"

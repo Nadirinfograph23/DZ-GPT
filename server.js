@@ -13733,7 +13733,8 @@ app.get('/api/wc2026/today', async (req, res) => {
   if (new Date() >= WC2026_END_DATE) {
     return res.json({ active: false, matches: [], message: 'انتهت بطولة كأس العالم 2026' })
   }
-  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  const _dzNow = new Date(Date.now() + 3600000) // UTC+1 للجزائر
+  const dateStr = req.query.date || _dzNow.toISOString().split('T')[0]
   try {
     // 1) محاولة جلب بيانات حية من sports-agent
     let liveMatches = []
@@ -15141,7 +15142,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_isWCTodayEarly) {
       console.log(`[WC2026:TodayEarly] 🌐 WC today query: "${_rawLastMsg.slice(0, 60)}"`)
       try {
-        const _todayDate = new Date().toISOString().split('T')[0]
+        const _todayDate = new Date(Date.now() + 3600000).toISOString().split('T')[0] // UTC+1 الجزائر
         const _wcTodayRes = await Promise.race([
           runWC2026TodayAgent(_todayDate),
           new Promise(r => setTimeout(() => r(null), 15000)),
@@ -15155,6 +15156,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             found: _wcTodayRes.found,
             sources: _wcTodayRes.sources,
             matchCount: _wcTodayRes.matchCount,
+            matches: _wcTodayRes.matches || [],
           })
         }
         // ── Fallback: بيانات محلية عندما تفشل APIs الخارجية ──────────────────
@@ -15187,6 +15189,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             found: true,
             sources: ['WC2026_FULL_FIXTURES'],
             matchCount: _localMatches.length,
+            matches: _localMatches,
           })
         }
         // لا مباريات هذا اليوم محلياً
@@ -15208,9 +15211,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         // ❌ إصلاح حرج: catch يجب أن يُعيد رداً آمناً — لا يسمح بالسقوط إلى LLM
         // قبل الإصلاح: كان يسقط إلى General Interceptor الذي يخلط مباريات WC بغيرها
         try {
-          const _safeMatches = WC2026_FULL_FIXTURES.filter(m => m.date === new Date().toISOString().split('T')[0])
+          const _safeMatches = WC2026_FULL_FIXTURES.filter(m => m.date === new Date(Date.now() + 3600000).toISOString().split('T')[0])
           if (_safeMatches.length) {
-            const _sf_date = new Date().toISOString().split('T')[0]
+            const _sf_date = new Date(Date.now() + 3600000).toISOString().split('T')[0]
             const _sf_lines = [
               `## ⚽ مباريات كأس العالم 2026 — ${new Date(_sf_date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,
               ``,
@@ -15227,7 +15230,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               _sf_lines.push(``)
             }
             _sf_lines.push(`[![jdwel](https://www.google.com/s2/favicons?sz=32&domain=jdwel.com)](https://jdwel.com/2026-world-cup-fixtures/) [![FotMob](https://www.google.com/s2/favicons?sz=32&domain=fotmob.com)](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup) [![Kooora](https://www.google.com/s2/favicons?sz=32&domain=kooora.com)](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9/%D9%83%D8%A7%D9%94%D8%B3-%D8%A7%D9%84%D8%B9%D8%A7%D9%84%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA/70excpe1synn9kadnbppahdn7) [![beIN Sports](https://www.google.com/s2/favicons?sz=32&domain=beinsports.com)](https://www.beinsports.com/ar-mena/%D9%86%D8%AA%D8%A7%D8%A6%D8%AC-%D9%85%D8%A8%D8%A7%D8%B4%D8%B1%D8%A9-page_scores) [![FIFA](https://www.google.com/s2/favicons?sz=32&domain=fifa.com)](https://www.fifa.com/worldcup)`)
-            return res.status(200).json({ content: _sf_lines.join('\n'), model: 'wc2026-today-safe-fallback', _sportsAgent: true, wc2026: true, found: true })
+            return res.status(200).json({ content: _sf_lines.join('\n'), model: 'wc2026-today-safe-fallback', _sportsAgent: true, wc2026: true, found: true, matches: _safeMatches })
           }
         } catch (_) {}
         return res.status(200).json({

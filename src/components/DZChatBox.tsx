@@ -7810,6 +7810,12 @@ ${rows}
                           title={`⚽ المباراة القادمة — المجموعة ${(msg as any).wc2026.group || 'J'}`}
                         />
                       )}
+                      {(msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0 && !(msg as any).wc2026?.nextMatch && (
+                        <WC2026MatchCard
+                          matches={(msg as any).matches}
+                          title="⚽ كأس العالم FIFA 2026"
+                        />
+                      )}
                       {msg.content && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}

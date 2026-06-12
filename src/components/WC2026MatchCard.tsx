@@ -40,6 +40,7 @@ function fmtDate(dateStr?: string): string {
 }
 
 const FLAG_CODES: Record<string, string> = {
+  // ── عربي ──────────────────────────────────────────────────────────────────
   'الجزائر': 'dz', 'الأرجنتين': 'ar', 'النمسا': 'at', 'الأردن': 'jo',
   'المكسيك': 'mx', 'جنوب أفريقيا': 'za', 'كوريا الجنوبية': 'kr',
   'التشيك': 'cz', 'جمهورية التشيك': 'cz', 'كندا': 'ca',
@@ -58,10 +59,37 @@ const FLAG_CODES: Record<string, string> = {
   'جامايكا': 'jm', 'الدنمارك': 'dk', 'فنلندا': 'fi', 'اليونان': 'gr',
   'رومانيا': 'ro', 'أوكرانيا': 'ua', 'المجر': 'hu', 'سلوفاكيا': 'sk',
   'سلوفينيا': 'si', 'ألبانيا': 'al', 'جورجيا': 'ge', 'بولندا': 'pl',
-  'صربيا': 'rs', 'النمسا': 'at', 'الجبل الأسود': 'me',
+  'صربيا': 'rs', 'الجبل الأسود': 'me', 'مقدونيا الشمالية': 'mk',
   'نيجيريا': 'ng', 'الكاميرون': 'cm', 'مالي': 'ml', 'بوركينا فاسو': 'bf',
   'غينيا': 'gn', 'موزمبيق': 'mz', 'زامبيا': 'zm', 'أنغولا': 'ao',
   'تنزانيا': 'tz', 'أوغندا': 'ug', 'ليبيا': 'ly', 'تشاد': 'td',
+  'إيطاليا': 'it', 'البحرين': 'bh', 'الإمارات': 'ae', 'الكويت': 'kw',
+  // ── English (من FotMob JSON API) ─────────────────────────────────────────
+  'Algeria': 'dz', 'Argentina': 'ar', 'Austria': 'at', 'Jordan': 'jo',
+  'Mexico': 'mx', 'South Africa': 'za', 'South Korea': 'kr',
+  'Czech Republic': 'cz', 'Czechia': 'cz', 'Czech': 'cz', 'Canada': 'ca',
+  'Bosnia and Herzegovina': 'ba', 'Bosnia': 'ba', 'Qatar': 'qa',
+  'Switzerland': 'ch', 'Brazil': 'br', 'Morocco': 'ma', 'Haiti': 'ht',
+  'Scotland': 'gb-sct', 'USA': 'us', 'United States': 'us', 'US': 'us',
+  'Paraguay': 'py', 'Australia': 'au', 'Turkey': 'tr', 'Türkiye': 'tr',
+  'Germany': 'de', 'Curacao': 'cw', 'Curaçao': 'cw',
+  "Ivory Coast": 'ci', "Côte d'Ivoire": 'ci', 'Ecuador': 'ec',
+  'Netherlands': 'nl', 'Japan': 'jp', 'Sweden': 'se', 'Tunisia': 'tn',
+  'Belgium': 'be', 'Egypt': 'eg', 'Iran': 'ir', 'New Zealand': 'nz',
+  'Spain': 'es', 'Cape Verde': 'cv', 'Saudi Arabia': 'sa', 'Uruguay': 'uy',
+  'France': 'fr', 'Senegal': 'sn', 'Iraq': 'iq', 'Norway': 'no',
+  'Portugal': 'pt', 'DR Congo': 'cd', 'Congo DR': 'cd',
+  'Uzbekistan': 'uz', 'Colombia': 'co', 'England': 'gb-eng',
+  'Croatia': 'hr', 'Ghana': 'gh', 'Panama': 'pa', 'Greece': 'gr',
+  'Italy': 'it', 'Hungary': 'hu', 'Bahrain': 'bh', 'Serbia': 'rs',
+  'Ukraine': 'ua', 'Denmark': 'dk', 'Romania': 'ro', 'Poland': 'pl',
+  'Nigeria': 'ng', 'Cameroon': 'cm', 'Mali': 'ml', 'Angola': 'ao',
+  'Venezuela': 've', 'Peru': 'pe', 'Costa Rica': 'cr', 'Honduras': 'hn',
+  'Jamaica': 'jm', 'Chile': 'cl', 'Albania': 'al', 'Georgia': 'ge',
+  'Slovakia': 'sk', 'Slovenia': 'si', 'Montenegro': 'me',
+  'North Macedonia': 'mk', 'Burkina Faso': 'bf', 'Guinea': 'gn',
+  'Mozambique': 'mz', 'Zambia': 'zm', 'Finland': 'fi',
+  'UAE': 'ae', 'United Arab Emirates': 'ae', 'Kuwait': 'kw',
 }
 
 function getFlag(team: string) {

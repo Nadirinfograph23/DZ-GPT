@@ -44,6 +44,7 @@ interface ChatMessage {
   triggeredBy?: string
   localDeleted?: boolean
   isMarkdown?: boolean
+  isLiveScore?: boolean
   isBreaking?: boolean
   isBroadcast?: boolean
   reactions?: Record<string, string[]>
@@ -400,6 +401,13 @@ export default function DZChat() {
     } else if (data.type === 'readReceipt') {
       const { msgId, readBy } = data as { msgId: string; readBy: string[] }
       if (msgId) setMessages(prev => prev.map(m => m.id === msgId ? { ...m, readBy } : m))
+    } else if (data.type === 'liveScoreUpdate') {
+      const { msgId, text } = data as { msgId: string; text: string }
+      if (msgId && text) {
+        setMessages(prev => prev.map(m =>
+          m.id === msgId ? { ...m, text, timestamp: Date.now() } : m
+        ))
+      }
     }
   }, [addMessages])
 
@@ -1317,6 +1325,7 @@ export default function DZChat() {
                     )}
                     {msg.isDM && <span className="dzc-msg-dm-label">رسالة خاصة</span>}
                     {msg.isBot && <span className="dzc-msg-bot-label dzc-msg-bot-label--agent">DZ Agent</span>}
+                    {msg.isLiveScore && <span className="dzc-live-badge">🔴 مباشر</span>}
                     {msg.triggeredBy && <span className="dzc-msg-triggered">↩ {msg.triggeredBy}</span>}
                     <span className="dzc-msg-time">{formatTime(msg.timestamp)}</span>
                     {/* Bot message actions: copy + delete */}

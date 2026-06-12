@@ -28316,6 +28316,100 @@ function setupChatWebSocket(httpServer) {
   console.log('[WS:Chat] Chat WebSocket server ready on /ws/chat')
 }
 
+// ── Live Score Auto-Refresh — broadcasts in-progress match scores every 3 min ─
+let _liveScoreMsgId = null
+let _liveScoreLastHash = ''
+
+async function _refreshLiveScores() {
+  try {
+    if (chatSessions.size === 0) return // nobody online, skip
+    const today = new Date().toISOString().slice(0, 10)
+    const [sfRes, wcRes] = await Promise.allSettled([
+      fetchSofaScoreFootball(today).catch(() => null),
+      runWC2026TodayAgent(today).catch(() => null),
+    ])
+
+    const liveMatches = []
+
+    // Collect SofaScore live (inprogress)
+    if (sfRes.status === 'fulfilled' && sfRes.value?.matches?.length > 0) {
+      liveMatches.push(...sfRes.value.matches.filter(m => m.statusType === 'inprogress'))
+    }
+
+    // Collect WC2026 live
+    if (wcRes.status === 'fulfilled' && wcRes.value?.matches?.length > 0) {
+      liveMatches.push(...wcRes.value.matches.filter(m =>
+        ['inprogress', 'live', 'LIVE'].includes(m.statusType || m.status || '')))
+    }
+
+    // Deduplicate by home+away
+    const seen = new Set()
+    const unique = liveMatches.filter(m => {
+      const key = `${(m.homeTeam || m.home || '').slice(0, 20)}vs${(m.awayTeam || m.away || '').slice(0, 20)}`
+      if (seen.has(key)) return false
+      seen.add(key); return true
+    })
+
+    if (unique.length === 0) {
+      _liveScoreMsgId = null
+      _liveScoreLastHash = ''
+      return
+    }
+
+    // Build score markdown block
+    const timeStr = new Date().toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })
+    const lines = unique.map(m => {
+      const home = m.homeTeam || m.home || '?'
+      const away = m.awayTeam || m.away || '?'
+      const hs = m.homeScore ?? '?'
+      const as_ = m.awayScore ?? '?'
+      const min = m.minute ? ` ⏱️ ${m.minute}'` : ''
+      const comp = m.competition ? ` _(${m.competition})_` : ''
+      return `• 🔴 **${home}** ${hs} – ${as_} **${away}**${min}${comp}`
+    })
+    const newText = [
+      `🔴 **نتائج مباشرة** _(تحديث تلقائي كل 3 دقائق)_`,
+      '',
+      ...lines,
+      '',
+      `_⏰ آخر تحديث: ${timeStr}_`,
+    ].join('\n')
+
+    // Skip if nothing changed
+    const hash = lines.join('|')
+    if (hash === _liveScoreLastHash) return
+    _liveScoreLastHash = hash
+
+    if (_liveScoreMsgId) {
+      // Update existing message in-place
+      const msgIdx = chatMessages.findIndex(m => m.id === _liveScoreMsgId)
+      if (msgIdx !== -1) {
+        chatMessages[msgIdx].text = newText
+        chatMessages[msgIdx].timestamp = Date.now()
+        broadcastChat({ type: 'liveScoreUpdate', msgId: _liveScoreMsgId, text: newText })
+        return
+      }
+      _liveScoreMsgId = null // stale, re-create below
+    }
+
+    // Create new live score message
+    const msg = pushChatMsg({
+      id: chatId(), from: 'DZ Agent', fromId: 'bot', gender: 'bot',
+      text: newText, timestamp: Date.now(),
+      isBot: true, botType: 'agent', isMarkdown: true, isLiveScore: true,
+    })
+    _liveScoreMsgId = msg.id
+    broadcastChat({ type: 'message', msg })
+    console.log(`[LiveScore] 🔴 Broadcast: ${unique.length} live match(es)`)
+  } catch (err) {
+    console.error('[LiveScore] refresh error:', err.message)
+  }
+}
+
+setInterval(_refreshLiveScores, 3 * 60 * 1000)
+// Also run once shortly after startup to catch any ongoing matches
+setTimeout(_refreshLiveScores, 30 * 1000)
+
 // ===== MOUNT MULTI-AGENT LAYERS (must run on Vercel serverless too) =====
 // These attach routes to `app` and must execute at import time, BEFORE the
 // `app` is exported, so that Vercel's serverless wrapper sees them.

@@ -1,5 +1,5 @@
 // Vercel Serverless Function — /api/report-bug
-// البريد المشفر: dzagentpro@gmail.com (base64)
+// البريد المستهدف مشفر: dzagentpro@gmail.com (base64)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -21,13 +21,89 @@ export default async function handler(req, res) {
     'broken-tool': 'أداة لا تعمل',
     'agent-error': 'خطأ في الوكيل',
   }
-  const typeLabel = typeLabels[reportType] || reportType
-  const ts = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
+  const typeLabel  = typeLabels[reportType] || reportType
+  const ts         = new Date().toLocaleString('ar-DZ', { timeZone: 'Africa/Algiers' })
+  // البريد المشفر: fbmenadir@gmail.com
+  const _adminMail = Buffer.from('ZmJtZW5hZGlyQGdtYWlsLmNvbQ==', 'base64').toString('utf8')
 
   let success = false
-  let method = 'none'
+  let method  = 'none'
 
-  // ── 1. GitHub Issues API (primary — GITHUB_TOKEN already set) ─────────────
+  // ── 1. Resend API (primary — أسرع وأوثق) ──────────────────────────────────
+  const _resendKey = process.env.RESEND_API_KEY
+  if (_resendKey) {
+    try {
+      const _html = `
+        <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#e5e5e5;border-radius:12px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#00c853,#1b5e20);padding:24px 28px">
+            <h2 style="margin:0;color:#fff;font-size:20px">🐛 بلاغ جديد — DZ GPT</h2>
+            <p style="margin:6px 0 0;color:#c8e6c9;font-size:13px">${ts}</p>
+          </div>
+          <div style="padding:24px 28px">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px">
+              <tr><td style="padding:10px 14px;background:#1a1a1a;border-radius:8px 8px 0 0;color:#aaa;font-size:12px;text-transform:uppercase;letter-spacing:1px">نوع المشكلة</td></tr>
+              <tr><td style="padding:12px 14px;background:#111;border-radius:0 0 8px 8px;font-size:16px;font-weight:bold;color:#00c853">${typeLabel}</td></tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:20px">
+              <tr>
+                <td width="50%" style="padding-left:6px">
+                  <div style="background:#1a1a1a;border-radius:8px;padding:12px 14px">
+                    <div style="color:#aaa;font-size:11px;margin-bottom:4px">الاسم</div>
+                    <div style="color:#e5e5e5">${name || '—'}</div>
+                  </div>
+                </td>
+                <td width="50%" style="padding-right:6px">
+                  <div style="background:#1a1a1a;border-radius:8px;padding:12px 14px">
+                    <div style="color:#aaa;font-size:11px;margin-bottom:4px">البريد الإلكتروني</div>
+                    <div style="color:#e5e5e5">${email || '—'}</div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+            <div style="background:#1a1a1a;border-radius:8px;padding:16px 14px;margin-bottom:20px">
+              <div style="color:#aaa;font-size:11px;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">وصف المشكلة</div>
+              <div style="color:#e5e5e5;line-height:1.7;white-space:pre-wrap">${description.trim()}</div>
+            </div>
+          </div>
+          <div style="padding:16px 28px;background:#111;border-top:1px solid #222;text-align:center;color:#555;font-size:11px">
+            DZ GPT Platform — تم الإرسال تلقائياً
+          </div>
+        </div>`
+
+      const _rsRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${_resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'DZ GPT Bugs <onboarding@resend.dev>',
+          to:   [_adminMail],
+          subject: `🐛 بلاغ DZ GPT: ${typeLabel}${name ? ` — ${name}` : ''}`,
+          html: _html,
+          reply_to: email || undefined,
+        }),
+        signal: AbortSignal.timeout(10000),
+      })
+
+      const _rsData = await _rsRes.json().catch(() => ({}))
+      console.log('[report-bug] Resend response:', _rsRes.status, JSON.stringify(_rsData).slice(0, 120))
+
+      if (_rsRes.ok && _rsData.id) {
+        console.log('[report-bug] ✅ Resend email sent — id:', _rsData.id)
+        method  = 'resend'
+        success = true
+      } else {
+        console.warn('[report-bug] Resend failed:', _rsData?.message || _rsRes.status)
+      }
+    } catch (_e) {
+      console.warn('[report-bug] Resend error:', _e.message?.slice(0, 80))
+    }
+  } else {
+    console.warn('[report-bug] RESEND_API_KEY not set')
+  }
+
+  // ── 2. GitHub Issues API (backup — يُسجّل البلاغ دائماً) ──────────────────
   const _ghToken = process.env.GITHUB_TOKEN
   if (_ghToken) {
     try {
@@ -64,57 +140,17 @@ export default async function handler(req, res) {
       })
 
       if (_ghRes.ok) {
-        const _ghData = await _ghRes.json()
-        console.log(`[report-bug] ✅ GitHub Issue #${_ghData.number} — ${_ghData.html_url}`)
-        method = 'github'
-        success = true
+        const _d = await _ghRes.json()
+        console.log(`[report-bug] ✅ GitHub Issue #${_d.number}`)
+        if (!success) { method = 'github'; success = true }
       } else {
-        const _errText = await _ghRes.text().catch(() => '')
-        console.warn(`[report-bug] GitHub ${_ghRes.status}:`, _errText.slice(0, 120))
+        console.warn('[report-bug] GitHub:', _ghRes.status)
       }
     } catch (_e) {
-      console.warn('[report-bug] GitHub failed:', _e.message?.slice(0, 80))
+      console.warn('[report-bug] GitHub error:', _e.message?.slice(0, 60))
     }
-  } else {
-    console.warn('[report-bug] GITHUB_TOKEN not set')
   }
 
-  // ── 2. FormSubmit.co — email (secondary — no credentials needed) ──────────
-  // البريد المشفر: dzagentpro@gmail.com
-  const _dst = Buffer.from('ZHphZ2VudHByb0BnbWFpbC5jb20=', 'base64').toString('utf8')
-  try {
-    const _fsRes = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(_dst)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        _subject: `🐛 بلاغ DZ GPT: ${typeLabel}`,
-        _captcha: 'false',
-        _template: 'box',
-        name: name || 'مجهول',
-        email: email || 'غير محدد',
-        type: typeLabel,
-        description: description.trim(),
-        timestamp: ts,
-      }),
-      signal: AbortSignal.timeout(8000),
-    })
-
-    if (_fsRes.ok) {
-      const _fsData = await _fsRes.json().catch(() => ({}))
-      if (_fsData.success === 'true' || _fsData.success === true) {
-        console.log('[report-bug] ✅ FormSubmit email sent')
-        if (!success) { method = 'email'; success = true }
-      } else {
-        console.warn('[report-bug] FormSubmit response:', JSON.stringify(_fsData).slice(0, 100))
-        if (!success) { method = 'email-pending'; success = true }
-      }
-    } else {
-      console.warn('[report-bug] FormSubmit status:', _fsRes.status)
-    }
-  } catch (_e) {
-    console.warn('[report-bug] FormSubmit failed:', _e.message?.slice(0, 60))
-  }
-
-  console.log(`[report-bug] result: success=${success} method=${method}`)
+  console.log(`[report-bug] done — success=${success} method=${method}`)
   return res.status(200).json({ ok: true, method })
 }

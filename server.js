@@ -19507,6 +19507,81 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ══ WC2026 جدول كامل — المواعيد العامة (قبل اكتشاف المجموعات وقبل LLM) ══
+  // يُكتشف: "مواعيد مباريات كأس العالم" / "جدول المونديال" / "برنامج كأس العالم"
+  // السبب: القيد الصارم في system prompt يمنع LLM من الإجابة → handler محلي مباشر
+  {
+    const _isWC2026ScheduleQuery = (
+      /(?:مواعيد|جدول|برنامج|رزنامة)\s*(?:مباريات\s+)?(?:كأس\s*العالم|المونديال|مونديال|FIFA|فيفا|world\s*cup)/i.test(lastUserMessage) ||
+      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup)\s*(?:مواعيد|جدول|برنامج|الكامل|كامل|كل\s*المباريات|جميع)/i.test(lastUserMessage) ||
+      /(?:متى|موعد)\s+(?:انطلاق|بداية|يبدأ|ينطلق|تبدأ)\s+(?:كأس\s*العالم|المونديال|مونديال)/i.test(lastUserMessage) ||
+      /(?:كأس\s*العالم|مونديال|FIFA\s*2026).*(?:متى|مواعيد|الجدول|التوقيت|الوقت)/i.test(lastUserMessage) ||
+      /(?:مواعيد|توقيت|وقت)\s+(?:المباريات|الماتشات)\s+(?:في\s+)?(?:كأس\s*العالم|المونديال|FIFA)/i.test(lastUserMessage)
+    )
+
+    if (_isWC2026ScheduleQuery && !_isRetry) {
+      console.log(`[WC2026:ScheduleEarly] 📅 جدول عام: "${lastUserMessage.slice(0, 60)}"`)
+      try {
+        const _today = new Date().toISOString().split('T')[0]
+        const _upcoming = WC2026_FULL_FIXTURES.filter(f => f.date >= _today).slice(0, 24)
+        const _FLAGS = { 'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦','الولايات المتحدة':'🇺🇸','كندا':'🇨🇦','فرنسا':'🇫🇷','البرازيل':'🇧🇷','إسبانيا':'🇪🇸','ألمانيا':'🇩🇪','البرتغال':'🇵🇹','إنجلترا':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','المغرب':'🇲🇦','تونس':'🇹🇳','مصر':'🇪🇬','السعودية':'🇸🇦','قطر':'🇶🇦','هولندا':'🇳🇱','اليابان':'🇯🇵','كوريا الجنوبية':'🇰🇷','البوسنة والهرسك':'🇧🇦','بلجيكا':'🇧🇪','إيطاليا':'🇮🇹','سويسرا':'🇨🇭','أوروغواي':'🇺🇾','كولومبيا':'🇨🇴','الشيلي':'🇨🇱','السنغال':'🇸🇳','نيجيريا':'🇳🇬','الكاميرون':'🇨🇲','غانا':'🇬🇭','جمهورية التشيك':'🇨🇿','النمسا':'🇦🇹','المجر':'🇭🇺','الأردن':'🇯🇴','بوليفيا':'🇧🇴','باراغواي':'🇵🇾','الإكوادور':'🇪🇨','البيرو':'🇵🇪' }
+
+        // تجميع المباريات حسب اليوم
+        const _byDate = {}
+        for (const _f of _upcoming) {
+          if (!_byDate[_f.date]) _byDate[_f.date] = []
+          _byDate[_f.date].push(_f)
+        }
+
+        const _lines = [
+          `## 🏆 كأس العالم FIFA 2026 — جدول المباريات القادمة`,
+          ``,
+          `> 🌍 **48 منتخباً** في 12 مجموعة | 🏟️ الولايات المتحدة، المكسيك وكندا`,
+          `> 📅 انطلق: **11 يونيو 2026** | النهائي: **19 يوليو 2026**`,
+          `> 🇩🇿 الجزائر في **المجموعة J** مع النمسا، الأردن وكندا`,
+          ``,
+        ]
+
+        for (const [_date, _matches] of Object.entries(_byDate)) {
+          const _d = new Date(_date + 'T12:00:00Z')
+          const _label = _d.toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })
+          _lines.push(`### 📅 ${_label}`)
+          _lines.push(``)
+          for (const _m of _matches) {
+            const _f1 = _FLAGS[_m.homeTeam] || '🏴'
+            const _f2 = _FLAGS[_m.awayTeam] || '🏴'
+            const [_h, _min] = _m.startTime?.split(':') || ['??', '??']
+            const _dzH = String((parseInt(_h, 10) + 1) % 24).padStart(2, '0')
+            const _isDZ = _m.homeTeam === 'الجزائر' || _m.awayTeam === 'الجزائر'
+            _lines.push(`${_isDZ ? '🟢 ' : ''}**${_f1} ${_m.homeTeam}** 🆚 **${_m.awayTeam} ${_f2}**`)
+            _lines.push(`🕒 ${_dzH}:${_min} (توقيت الجزائر) | 🏟️ ${_m.venue || ''}, ${_m.city || ''} | المجموعة **${_m.group}** | ${_m.round || ''}`)
+            _lines.push(``)
+          }
+        }
+
+        if (_upcoming.length === 0) {
+          _lines.push(`> ℹ️ انتهت مباريات دور المجموعات. تابع الأدوار الإقصائية على الروابط أدناه.`)
+        }
+
+        _lines.push(`---`)
+        _lines.push(`🔴 **متابعة حية:** [FIFA الرسمي](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [كووورة](https://www.kooora.com/)`)
+
+        return res.status(200).json({
+          content: _lines.join('\n'),
+          model: 'wc2026-schedule-local',
+          _sportsAgent: true,
+          wc2026: true,
+          found: true,
+          sources: ['WC2026_FULL_FIXTURES'],
+          matchCount: _upcoming.length,
+        })
+      } catch (_schedErr) {
+        console.error('[WC2026:ScheduleEarly] error:', _schedErr.message)
+        // fallback → يكمل التدفق الطبيعي
+      }
+    }
+  }
+
   // ══ WC2026 مجموعات — Early Direct Bypass (قبل الـ LLM وقبل الـ parallel fetch) ══
   // يُكتشف: "مجموعة الجزائر/الأرجنتين كأس العالم" / "من مع الجزائر" / "مباريات الجزائر في كأس العالم"
   const _isWC2026GroupQuery = (

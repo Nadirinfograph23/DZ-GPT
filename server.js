@@ -15238,6 +15238,99 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ══ WC2026 GENERAL INTERCEPTOR — حاجز عام لكأس العالم 2026 (LLM BLOCKER) ════
+  // يُطلَق لأي استعلام يحتوي كلمات WC2026 وكلمات بيانات حية لم تُعالج بالمعالجات السابقة
+  // الهدف: منع LLM من الإجابة بذاكرة التدريب عن نتائج/هدافين/تشكيلات/إحصائيات
+  {
+    const _isWC2026General = !_isRetry && (
+      /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup\s*2026|WC\s*2026)/i.test(_rawLastMsg)
+    ) && (
+      // استعلامات بيانات حية — لا يجب أن يجيب LLM عنها أبداً
+      /(?:هداف|هدافين|ترتيب\s*الهداف|أكثر\s*لاعب\s*(?:تسجيل|سجل|هدف)|من\s*(?:يتصدر|تصدر)\s*(?:ترتيب|الهداف))/i.test(_rawLastMsg) ||
+      /(?:تشكيل|تشكيلة|تشكيلات|الأساسي|التشكيلة\s*الأساسية|التشكيل\s*المتوقع)/i.test(_rawLastMsg) ||
+      /(?:حكم|حكام|من\s*(?:هو|كان)\s*(?:حكم|الحكم)|طاقم\s*تحكيم)/i.test(_rawLastMsg) ||
+      /(?:بطاقة\s*(?:صفراء|حمراء)|إنذار|إيقاف|عقوبة\s*تحكيمية|VAR|فيديو|قرار\s*تحكيم)/i.test(_rawLastMsg) ||
+      /(?:من\s*(?:فاز|ربح|سجل|صنع)|نتيجة\s*(?:مباراة|المباراة)|أهداف\s*مباراة)/i.test(_rawLastMsg) ||
+      /(?:إحصاء|إحصائيات|تحليل|أداء|أفضل\s*(?:لاعب|منتخب|دفاع|هجوم)|منتخب\s*(?:قوي|أقوى|ضعيف))/i.test(_rawLastMsg) ||
+      /(?:أبرز\s*(?:مفاجأة|مفاجآت)|مفاجأة\s*البطولة|أحسن\s*(?:لاعب|فريق|مباراة))/i.test(_rawLastMsg) ||
+      /(?:ركلة\s*جزاء|ركلات|ضربة\s*جزاء|بنالتي|penalty)/i.test(_rawLastMsg) ||
+      /(?:تمريرة\s*حاسمة|صناعة\s*أهداف|تمريرات\s*مفتاحية|أفضل\s*صانع)/i.test(_rawLastMsg) ||
+      /(?:مباريات?\s*(?:اليوم|الآن|الليلة|هذا\s*المساء)|نتائج\s*(?:اليوم|آخر))/i.test(_rawLastMsg) ||
+      /(?:وكيل\s*رياضي|sports?\s*agent|agent\s*riaadhi)/i.test(_rawLastMsg)
+    )
+
+    if (_isWC2026General) {
+      console.log(`[WC2026:General⛔LLM] 🔒 Intercepting WC2026 live-data query → runSportsAgent (LLM BLOCKED): "${_rawLastMsg.slice(0, 80)}"`)
+      try {
+        const _wc2026GenRes = await Promise.race([
+          runSportsAgent(_rawLastMsg, messages),
+          new Promise(r => setTimeout(() => r(null), 20000)),
+        ])
+
+        if (_wc2026GenRes?.userResponse || _wc2026GenRes?.context) {
+          const _wc2026GenContent = _wc2026GenRes.userResponse || _wc2026GenRes.context
+          console.log(`[WC2026:General⛔LLM] ✅ Sports agent responded (found=${_wc2026GenRes.found}, type=${_wc2026GenRes.type})`)
+          return res.status(200).json({
+            content: _wc2026GenContent,
+            model: 'wc2026-sports-agent',
+            _sportsAgent: true,
+            _bypassLLM: true,
+            wc2026: true,
+            found: _wc2026GenRes.found,
+            type: _wc2026GenRes.type,
+            sources: _wc2026GenRes.sources,
+          })
+        }
+
+        // الوكيل لم يجد بيانات حية → رد نظيف بدون LLM
+        const _wc2026NoData = [
+          `## ⚽ كأس العالم FIFA 2026 — بيانات مطلوبة غير متوفرة`,
+          ``,
+          `> ⚠️ **لا أملك بيانات حية موثّقة** للإجابة على هذا السؤال بدقة.`,
+          `> 🛡️ **مبدأ DZ Agent:** لا أجيب من ذاكرة التدريب على أسئلة رياضية زمنية — المعلومات قد تكون قديمة أو مختلقة.`,
+          ``,
+          `**تابع مباشرةً من المصادر الرسمية الحية:**`,
+          ``,
+          `| المصدر | الرابط |`,
+          `|--------|--------|`,
+          `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) |`,
+          `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+          `| ⚽ **FotMob** | [مباريات WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
+          `| 📊 **SofaScore** | [إحصائيات](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) |`,
+          `| 🇩🇿 **Kooora** | [متابعة عربية](https://www.kooora.com/) |`,
+          ``,
+          `💡 **يمكنني الإجابة بدقة على:** مواعيد مباريات الجزائر · جدول المجموعة J · موعد مباراة بعينها (مثل: "الجزائر ضد النمسا")`,
+        ].join('\n')
+
+        console.log(`[WC2026:General⛔LLM] ℹ️ No live data — returning clean no-data response (LLM permanently blocked)`)
+        return res.status(200).json({
+          content: _wc2026NoData,
+          model: 'wc2026-no-live-data',
+          _sportsAgent: true,
+          _bypassLLM: true,
+          wc2026: true,
+          found: false,
+        })
+      } catch (_wc2026GenErr) {
+        console.error('[WC2026:General⛔LLM] agent error:', _wc2026GenErr.message)
+        return res.status(200).json({
+          content: [
+            `## ⚽ كأس العالم 2026 — خطأ مؤقت في الوكيل الرياضي`,
+            ``,
+            `> ⚠️ واجه الوكيل الرياضي مشكلة تقنية مؤقتة. لا أجيب من ذاكرة النموذج.`,
+            ``,
+            `🔄 **أعد المحاولة** أو تابع مباشرةً: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
+          ].join('\n'),
+          model: 'wc2026-agent-error',
+          _sportsAgent: true,
+          _bypassLLM: true,
+          wc2026: true,
+          found: false,
+        })
+      }
+    }
+  }
+
   // ── National Team MATCHES Early Handler 🇩🇿⚽ ─────────────────────────────
   // يُعالَج هنا: المباراة القادمة، جدول المباريات، متى يلعب المنتخب
   // يُرجع مباريات موثّقة مع عدّ تنازلي للمباراة القادمة — بدون بحث خارجي

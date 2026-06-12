@@ -13703,6 +13703,64 @@ app.get('/api/sports/verify', async (req, res) => {
   })
 })
 
+// ══════════════════════════════════════════════════════════════════════════════
+// § WC2026 SCOREBOARD — بطاقة كأس العالم 2026 اليومية (تُحذف تلقائياً بعد 19 يوليو 2026)
+// GET /api/wc2026/today?date=YYYY-MM-DD
+// ══════════════════════════════════════════════════════════════════════════════
+const WC2026_END_DATE = new Date('2026-07-20T00:00:00Z')
+
+app.get('/api/wc2026/today', async (req, res) => {
+  // إذا انتهت البطولة لا نُرجع بيانات
+  if (new Date() >= WC2026_END_DATE) {
+    return res.json({ active: false, matches: [], message: 'انتهت بطولة كأس العالم 2026' })
+  }
+  const dateStr = req.query.date || new Date().toISOString().split('T')[0]
+  try {
+    // 1) محاولة جلب بيانات حية من sports-agent
+    let liveMatches = []
+    try {
+      const liveRes = await runWC2026TodayAgent(dateStr)
+      if (liveRes && Array.isArray(liveRes.matches) && liveRes.matches.length > 0) {
+        liveMatches = liveRes.matches
+      }
+    } catch (_e) { /* نكمل بالبيانات المحلية */ }
+
+    // 2) احتياطياً: البيانات المحلية الكاملة
+    if (liveMatches.length === 0) {
+      const { buildWC2026TodayFixtures } = await import('./lib/dz-sports-knowledge.js')
+      liveMatches = buildWC2026TodayFixtures(dateStr)
+    }
+
+    // 3) إذا لا توجد مباريات اليوم → اجلب مباريات الغد ثم بعد غد (أقرب يوم)
+    let nextDate = null
+    if (liveMatches.length === 0) {
+      const { WC2026_FULL_FIXTURES } = await import('./lib/dz-sports-knowledge.js')
+      const today = new Date(dateStr + 'T00:00:00Z')
+      const futureDates = [...new Set(
+        WC2026_FULL_FIXTURES
+          .filter(f => new Date(f.date + 'T00:00:00Z') > today)
+          .map(f => f.date)
+      )].sort()
+      if (futureDates.length > 0) {
+        nextDate = futureDates[0]
+        const { buildWC2026TodayFixtures: bf } = await import('./lib/dz-sports-knowledge.js')
+        liveMatches = bf(nextDate)
+      }
+    }
+
+    return res.json({
+      active: true,
+      date: nextDate || dateStr,
+      isNextDay: !!nextDate,
+      matches: liveMatches,
+      fetchedAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('[/api/wc2026/today] error:', err.message)
+    return res.status(500).json({ active: true, matches: [], error: err.message })
+  }
+})
+
 // ===== CURRENCY EXCHANGE MODULE (DZD Base) =====
 const CURRENCY_CACHE = { data: null, ts: 0, status: 'empty' }
 const CURRENCY_TTL = 20 * 60 * 1000 // 20 minutes

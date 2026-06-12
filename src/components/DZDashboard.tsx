@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import '../styles/dz-dashboard.css'
 import { withRetry } from '../utils/dzMemory'
+import WC2026MatchCard from './WC2026MatchCard'
 
 interface NewsItem {
   title: string
@@ -440,7 +441,15 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const [dollarData, setDollarData] = useState<{ usd: number; eur: number; gbp: number; trend: string; updatedAt: string; source: string } | null>(null)
   const [dollarLoading, setDollarLoading] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar' | 'national'>('prayer')
+  const [activeSection, setActiveSection] = useState<'prayer' | 'weather' | 'news' | 'sports' | 'standings' | 'global' | 'tech' | 'currency' | 'quran' | 'dollar' | 'national' | 'wc2026'>('prayer')
+
+  // WC2026 scoreboard — يُخفى تلقائياً بعد 19 يوليو 2026
+  const WC2026_END = new Date('2026-07-20T00:00:00Z')
+  const wc2026Active = new Date() < WC2026_END
+  const [wc2026Matches, setWc2026Matches] = useState<any[]>([])
+  const [wc2026Loading, setWc2026Loading] = useState(false)
+  const [wc2026Date, setWc2026Date] = useState<string>('')
+  const [wc2026IsNext, setWc2026IsNext] = useState(false)
   const [nationalTeamNews, setNationalTeamNews] = useState<NewsItem[]>([])
   const [nationalLoading, setNationalLoading]   = useState(false)
   const [nationalBadge, setNationalBadge]       = useState(false)
@@ -521,6 +530,23 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
       setPrayerLoading(false)
     }
   }, [])
+
+  const loadWC2026 = useCallback(async () => {
+    if (!wc2026Active) return
+    setWc2026Loading(true)
+    try {
+      const r = await fetch('/api/wc2026/today')
+      if (r.ok) {
+        const d = await r.json()
+        if (d.active) {
+          setWc2026Matches(d.matches || [])
+          setWc2026Date(d.date || '')
+          setWc2026IsNext(!!d.isNextDay)
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setWc2026Loading(false) }
+  }, [wc2026Active])
 
   const loadDollar = useCallback(async () => {
     setDollarLoading(true)
@@ -656,6 +682,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     loadGlobalLeagues()
     loadDollar()
     loadNationalTeamNews()
+    loadWC2026()
   }, [])
 
   // SSE: listen for national_team_news events from the server
@@ -687,6 +714,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     { key: 'quran'    as const, label: 'القرآن',         icon: <BookOpen    size={12} />, isNav: true },
     { key: 'prayer'   as const, label: 'الصلاة',         icon: <Moon        size={12} /> },
     { key: 'weather'  as const, label: 'الطقس',          icon: <Cloud       size={12} /> },
+    ...(wc2026Active ? [{ key: 'wc2026' as const, label: '🏆 كأس العالم', icon: <Trophy size={12} /> }] : []),
     { key: 'news'     as const, label: 'الأخبار',        icon: <Newspaper   size={12} /> },
     { key: 'dollar'   as const, label: 'سوق الصرف',     icon: <DollarSign  size={12} /> },
     { key: 'national' as const, label: 'المنتخب 🇩🇿',     icon: <Radio       size={12} /> },
@@ -1450,6 +1478,83 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== WC2026 SCOREBOARD ===== */}
+        {activeSection === 'wc2026' && wc2026Active && (
+          <div style={{ padding: '8px 4px', direction: 'rtl' }}>
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12, padding: '10px 14px',
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.12) 100%)',
+              borderRadius: 14, border: '1px solid rgba(99,102,241,0.25)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 22 }}>🏆</span>
+                <div>
+                  <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13 }}>كأس العالم FIFA 2026</div>
+                  {wc2026Date && (
+                    <div style={{ color: '#64748b', fontSize: 10, marginTop: 2 }}>
+                      {wc2026IsNext ? '📅 مباريات القادمة' : '📅 مباريات اليوم'} — {new Date(wc2026Date + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers' })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={loadWC2026}
+                disabled={wc2026Loading}
+                style={{
+                  background: 'transparent', border: '1px solid rgba(99,102,241,0.3)',
+                  borderRadius: 8, padding: '4px 8px', color: '#a5b4fc',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
+                }}
+              >
+                <RefreshCw size={11} className={wc2026Loading ? 'dzd-spin' : ''} />
+                تحديث
+              </button>
+            </div>
+
+            {/* Matches */}
+            {wc2026Loading ? (
+              <div className="dzd-skeleton-grid">
+                {[...Array(3)].map((_, i) => <div key={i} className="dzd-skeleton" style={{ height: 120, borderRadius: 16, marginBottom: 8 }} />)}
+              </div>
+            ) : wc2026Matches.length > 0 ? (
+              <WC2026MatchCard
+                matches={wc2026Matches}
+                autoRefresh={true}
+                refreshInterval={60000}
+              />
+            ) : (
+              <div className="dzd-empty-state">
+                <span className="dzd-empty-icon">⚽</span>
+                <p>لا توجد مباريات متاحة حالياً</p>
+                <button className="dzd-retry-btn" onClick={loadWC2026}>
+                  <RefreshCw size={12} /> إعادة المحاولة
+                </button>
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
+                  {['مباريات اليوم في كأس العالم 2026', 'جدول مباريات كأس العالم', 'المنتخب الجزائري كأس العالم'].map(q => (
+                    <button key={q} className="dzd-retry-btn" style={{ fontSize: 10 }} onClick={() => onSend(q)}>{q}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer links */}
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {[
+                { label: '🌐 FIFA الرسمي', url: 'https://www.fifa.com/worldcup' },
+                { label: '📊 FotMob', url: 'https://www.fotmob.com/tournaments/77/overview/world-cup' },
+                { label: '📱 kooora', url: 'https://www.kooora.com/?wc2026' },
+              ].map(l => (
+                <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer"
+                  style={{ color: '#818cf8', fontSize: 11, textDecoration: 'none', padding: '3px 10px', borderRadius: 8, background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                  {l.label}
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

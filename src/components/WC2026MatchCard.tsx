@@ -382,65 +382,116 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
     else scoreColor = '#e2e8f0'
   }
 
-  // ── COMPACT: true single-line row (grid — no overflow) ────────────────────
+  // ── COMPACT: تصميم جديد — علم متوسط | اسم | [نتيجة/موعد] | اسم | علم متوسط ──
   if (compact) {
-    const scoreText = hasScore
-      ? `${match.homeScore}–${match.awayScore}`
-      : (match.startTime ? dzHour(match.startTime) : 'TBD')
-    const statusDot = isLive ? '#ef4444' : isFinished ? '#10b981' : '#6366f1'
-    // score always light-green in compact mode
-    const compactScoreColor = isLive ? '#f87171' : '#86efac'
+    const isResultPending = match.statusType === 'result-pending'
+
+    // محتوى الوسط + لونه
+    let middleText: string
+    let middleColor: string
+    let middleGlow = false
+
+    if (hasScore) {
+      middleText = `${match.homeScore} – ${match.awayScore}`
+      middleColor = '#4ade80'   // أخضر فاتح للنتيجة
+      middleGlow = true
+    } else if (isLive) {
+      middleText = '🔴'
+      middleColor = '#f87171'
+    } else if (isResultPending || (isFinished && !hasScore)) {
+      // انتهت لكن النتيجة غير متوفرة من المصادر الحية
+      middleText = '⏳'
+      middleColor = '#94a3b8'
+    } else if (match.startTime) {
+      middleText = dzHour(match.startTime)
+      middleColor = '#f1f5f9'   // أبيض للموعد
+    } else {
+      middleText = 'vs'
+      middleColor = '#818cf8'
+    }
+
+    const rowBg = hasAlg
+      ? 'rgba(16,185,129,0.08)'
+      : isLive
+      ? 'rgba(239,68,68,0.06)'
+      : 'rgba(255,255,255,0.03)'
+    const rowBorder = hasAlg
+      ? '1px solid rgba(34,197,94,0.2)'
+      : isLive
+      ? '1px solid rgba(239,68,68,0.2)'
+      : '1px solid rgba(255,255,255,0.06)'
+
     return (
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '6px 20px minmax(0,1fr) 52px minmax(0,1fr) 20px',
-        alignItems: 'center', gap: 4,
-        padding: '5px 8px', borderRadius: 8,
-        background: hasAlg ? 'rgba(16,185,129,0.07)' : 'rgba(255,255,255,0.02)',
-        border: hasAlg ? '1px solid rgba(34,197,94,0.15)' : '1px solid rgba(255,255,255,0.04)',
-        overflow: 'hidden',
-      }}>
-        {/* Status dot */}
+      <div style={{ marginBottom: 3 }}>
+        {/* التاريخ فوق الإطار */}
+        {match.date && (
+          <div style={{
+            fontSize: 9, color: '#475569', fontWeight: 600,
+            textAlign: 'center', marginBottom: 2, letterSpacing: 0.4,
+            direction: 'rtl',
+          }}>
+            {fmtDateShort(match.date)}
+            {match.group ? <span style={{ marginRight: 6, color: '#374151' }}>· المج. {match.group}</span> : null}
+          </div>
+        )}
+
+        {/* الصف الرئيسي: علم | اسم | [وسط] | اسم | علم */}
         <div style={{
-          width: 5, height: 5, borderRadius: '50%', background: statusDot, justifySelf: 'center',
-          boxShadow: isLive ? '0 0 6px rgba(239,68,68,0.9)' : 'none',
-          animation: isLive ? 'wcPulse 1.5s infinite' : 'none',
-        }} />
-        {/* Home flag */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <MiniFlag name={match.homeTeam} size={20} />
-        </div>
-        {/* Home name — right-aligned, truncate */}
-        <span style={{
-          color: algHome ? '#86efac' : '#cbd5e1',
-          fontWeight: algHome ? 700 : 500,
-          fontSize: 10.5,
-          textAlign: 'right',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          display: 'grid',
+          gridTemplateColumns: '32px minmax(0,1fr) 56px minmax(0,1fr) 32px',
+          alignItems: 'center',
+          gap: 5,
+          padding: '8px 9px',
+          borderRadius: 10,
+          background: rowBg,
+          border: rowBorder,
+          overflow: 'hidden',
           direction: 'rtl',
-        }}>{match.homeTeam}</span>
-        {/* Score / Time pill — fixed width */}
-        <div style={{
-          fontWeight: 800, fontSize: 11.5, color: compactScoreColor,
-          background: 'rgba(5,5,18,0.85)',
-          border: `1px solid ${compactScoreColor}40`,
-          borderRadius: 6, padding: '2px 0',
-          textAlign: 'center', letterSpacing: 0.5,
-          fontVariantNumeric: 'tabular-nums',
-          overflow: 'hidden', whiteSpace: 'nowrap',
-        }}>{scoreText}</div>
-        {/* Away name — left-aligned, truncate */}
-        <span style={{
-          color: algAway ? '#86efac' : '#cbd5e1',
-          fontWeight: algAway ? 700 : 500,
-          fontSize: 10.5,
-          textAlign: 'left',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          direction: 'rtl',
-        }}>{match.awayTeam}</span>
-        {/* Away flag */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <MiniFlag name={match.awayTeam} size={20} />
+        }}>
+          {/* علم الفريق المضيف */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <MiniFlag name={match.homeTeam} size={30} />
+          </div>
+          {/* اسم الفريق المضيف */}
+          <span style={{
+            color: algHome ? '#86efac' : '#e2e8f0',
+            fontWeight: algHome ? 700 : 500,
+            fontSize: 10.5,
+            textAlign: 'right',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            direction: 'rtl',
+          }}>{match.homeTeam}</span>
+
+          {/* النتيجة أو الموعد في المنتصف */}
+          <div style={{
+            textAlign: 'center',
+            fontWeight: 800,
+            fontSize: hasScore ? 13.5 : 11.5,
+            color: middleColor,
+            letterSpacing: hasScore ? 0.5 : 0,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            fontVariantNumeric: 'tabular-nums',
+            textShadow: middleGlow ? `0 0 10px ${middleColor}88` : 'none',
+            background: 'rgba(5,5,18,0.7)',
+            borderRadius: 6,
+            padding: '3px 2px',
+            border: `1px solid ${middleColor}30`,
+          }}>{middleText}</div>
+
+          {/* اسم الفريق الضيف */}
+          <span style={{
+            color: algAway ? '#86efac' : '#e2e8f0',
+            fontWeight: algAway ? 700 : 500,
+            fontSize: 10.5,
+            textAlign: 'left',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            direction: 'rtl',
+          }}>{match.awayTeam}</span>
+          {/* علم الفريق الضيف */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <MiniFlag name={match.awayTeam} size={30} />
+          </div>
         </div>
       </div>
     )

@@ -24,6 +24,7 @@ import {
   isWorldCup2026Query,
   buildWC2026RichMatchCard,
   WORLD_CUP_2026,
+  sanitizeMatchesByTime,
 } from '../lib/dz-sports-knowledge.js'
 
 import {
@@ -170,8 +171,11 @@ async function fetchJdwelWC2026Fixtures(dateStr) {
 }
 
 // ── بناء رد اليوم من البيانات المحلية ────────────────────────────────────
+// ✅ يُطبّق sanitizeMatchesByTime — لا نتائج وهمية أبداً
 function buildTodayResponseFromLocal(dateStr) {
-  const matches = buildWC2026TodayFixtures(dateStr)
+  // buildWC2026TodayFixtures يُطبّق sanitizeMatchesByTime داخلياً
+  // نُعيد تطبيقه احتياطاً لضمان عدم ظهور أي نتيجة مخترعة
+  const matches = sanitizeMatchesByTime(buildWC2026TodayFixtures(dateStr))
   if (!matches?.length) return null
 
   const dateLabel = (() => {
@@ -185,21 +189,50 @@ function buildTodayResponseFromLocal(dateStr) {
   const lines = [
     `## ⚽ مباريات كأس العالم 2026 — ${dateLabel}`,
     ``,
-    `> 📡 _الجدول الرسمي FIFA 2026 — يُحدَّث فور الإعلان الرسمي_`,
+    `> 📡 _الجدول الرسمي FIFA 2026_`,
     ``,
   ]
+
+  let hasPending = false
 
   for (const m of matches) {
     const f1 = WC_FLAGS[m.homeTeam] || '🏴'
     const f2 = WC_FLAGS[m.awayTeam] || '🏴'
-    const [hh, mm] = (m.startTime || '00:00').split(':')
+    const [hh, mm_] = (m.startTime || '00:00').split(':')
     const dzH = String((parseInt(hh, 10) + 1) % 24).padStart(2, '0')
-    const scoreStr = (m.homeScore !== null && m.awayScore !== null)
-      ? `**${m.homeScore} – ${m.awayScore}**`
-      : `🆚`
-    lines.push(`### ${f1} **${m.homeTeam}** ${scoreStr} **${m.awayTeam}** ${f2}`)
-    lines.push(`🕒 **${dzH}:${mm}** (توقيت الجزائر) | 🏟️ ${m.venue}, ${m.city}`)
-    lines.push(`🏷️ المجموعة **${m.group}** — ${m.round}`)
+
+    // ── RULE: لا نتيجة إلا من مصدر رسمي ──────────────────────────────────
+    // finished + homeScore موثوقة → نعرضها
+    // result-pending أو upcoming → 🚫 لا نتيجة — نعرض ⏳ أو الموعد
+    let middlePart, statusLine
+    if (m.statusType === 'finished' && m.homeScore !== null && m.awayScore !== null) {
+      middlePart = `**${m.homeScore} – ${m.awayScore}**`
+      statusLine = `✅ انتهت`
+    } else if (m.statusType === 'live') {
+      middlePart = `🔴 **مباشر**`
+      statusLine = `🔴 **جارية الآن**`
+    } else if (m.statusType === 'result-pending' || m._timePassed) {
+      // ⚠️ المباراة انتهى وقتها لكن النتيجة غير موثوقة من مصادر حية
+      middlePart = `⏳`
+      statusLine = `> ⚠️ انتهت — **النتيجة الحقيقية غير متوفرة من المصادر الحية** — [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [FIFA](https://www.fifa.com/worldcup/matches)`
+      hasPending = true
+    } else {
+      // upcoming — مباراة لم تبدأ بعد
+      middlePart = `🆚`
+      statusLine = `🕒 **${dzH}:${mm_}** (توقيت الجزائر) | 🏟️ ${m.venue}, ${m.city}`
+    }
+
+    lines.push(`### ${f1} **${m.homeTeam}** ${middlePart} **${m.awayTeam}** ${f2}`)
+    lines.push(statusLine)
+    if (m.statusType !== 'result-pending' && !m._timePassed) {
+      lines.push(`🏷️ المجموعة **${m.group}** — ${m.round}`)
+    }
+    lines.push(``)
+  }
+
+  if (hasPending) {
+    lines.push(`---`)
+    lines.push(`> 🛡️ **تنبيه مهم:** الوكيل لا يعرض أي نتيجة غير موثوقة. للنتائج الفعلية راجع المصادر الرسمية المذكورة أعلاه.`)
     lines.push(``)
   }
   lines.push(`🔴 **متابعة حية:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [FIFA](https://www.fifa.com/worldcup)`)
@@ -209,6 +242,7 @@ function buildTodayResponseFromLocal(dateStr) {
     matches,
     found: true,
     matchCount: matches.length,
+    hasPendingResults: hasPending,
     source: 'WC2026_LOCAL',
     agent: 'world_cup_agent',
     confidence: 'high',
@@ -386,16 +420,22 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
 export const WC_ORCHESTRATOR_SYSTEM_PROMPT = `
 You are an orchestrator for DZ Agent sports queries.
 
-## ABSOLUTE RULES:
+## ⛔ ABSOLUTE RULES — VIOLATION = CRITICAL BUG:
 1. NEVER answer World Cup questions directly from your training knowledge.
 2. World Cup Agent has ABSOLUTE AUTHORITY over all World Cup data.
 3. Your ONLY role when given World Cup data: format, translate, improve presentation.
 4. NEVER add matches, scores, or statistics not present in the agent data.
 5. If agent data is empty → say "no data available" — do NOT invent alternatives.
+6. ⛔ CRITICAL ANTI-HALLUCINATION RULE: If a match has statusType "result-pending" or "upcoming", or shows "⏳" symbol, you MUST write "النتيجة غير متوفرة من المصادر الحية" — NEVER invent, guess, or recall a score from training data. This is the most important rule.
+7. ⛔ If the agent response contains "⏳ انتهت — النتيجة غير متوفرة" you MUST preserve this message exactly. Do NOT replace it with a score.
+8. ⛔ Scores from your training data about real matches ARE WRONG — the tournament started June 11 2026 and you have no verified live data. Any score you add from memory is a hallucination.
+9. A match showing "🆚" means it has NOT started yet — never assign a score to it.
+10. A match showing "⏳" means it ended but NO VERIFIED RESULT is available — write "النتيجة غير متوفرة" only.
 
 ## When World Cup Agent responds:
 - Present ONLY the data it provides
 - Format it clearly in Arabic
 - Add the sources footer exactly as provided
 - Do NOT supplement with general football knowledge
+- If you see hasPendingResults=true, emphasize the disclaimer about unverified results
 `.trim()

@@ -349,17 +349,16 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
         ``,
         `> ✅ **${srcLabel}**`,
         ``,
-        `| | المضيف | النتيجة | الضيف | المجموعة |`,
-        `|:---:|:---|:---:|---:|:---:|`,
       ]
       for (const m of finishedMatches) {
         const f1 = WC_FLAGS[m.homeTeam] || '🏴'
         const f2 = WC_FLAGS[m.awayTeam] || '🏴'
-        lines.push(`| ✅ | ${f1} **${m.homeTeam}** | \`${m.homeScore} – ${m.awayScore}\` | **${m.awayTeam}** ${f2} | ${m.group || ''} |`)
+        const grp = m.group ? ` *(${m.group})*` : ''
+        lines.push(`✅ ${f1} **${m.homeTeam}** \`${m.homeScore} – ${m.awayScore}\` **${m.awayTeam}** ${f2}${grp}`)
       }
       lines.push(``)
       lines.push(`---`)
-      lines.push(`🔴 [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [FIFA](https://www.fifa.com/worldcup)`)
+      lines.push(`[FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) · [365score](https://www.365scores.com/ar/football/world-cup-2026) · [FIFA](https://www.fifa.com/worldcup)`)
       return {
         userResponse: lines.join('\n'),
         matches: finishedMatches,

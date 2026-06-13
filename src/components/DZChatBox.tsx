@@ -686,6 +686,15 @@ interface DZMessage {
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
   matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null }
+  wc2026?: {
+    group?: string
+    nextMatch?: Record<string, unknown>
+    fixtures?: Array<Record<string, unknown>>
+    [key: string]: unknown
+  }
+  _sportsAgent?: boolean
+  _nationalTeam?: boolean
+  matches?: Array<Record<string, unknown>>
   wcGroupData?: {
     groupLetter: string
     groupLabel: string
@@ -7447,6 +7456,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           executionLang: codeExtract?.lang,
           matchVsMeta: (data.matchVsData as { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null } | undefined) || _clientMatchVs || undefined,
           wcGroupData: data.wcGroupData as DZMessage['wcGroupData'] | undefined,
+          wc2026: data.wc2026 as DZMessage['wc2026'] | undefined,
+          _sportsAgent: !!(data._sportsAgent),
+          _nationalTeam: !!(data._nationalTeam),
+          matches: Array.isArray(data.matches) ? data.matches as Array<Record<string, unknown>> : undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project

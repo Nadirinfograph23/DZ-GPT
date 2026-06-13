@@ -48,20 +48,20 @@ function fmtDateShort(dateStr?: string): string {
   } catch { return dateStr }
 }
 
-function getCountdown(dateStr?: string, timeStr?: string): string {
-  if (!dateStr) return ''
+function getCountdownParts(dateStr?: string, timeStr?: string): { days: number; hrs: number; mins: number; secs: number } | null {
+  if (!dateStr) return null
   try {
     const [h, m] = (timeStr || '21:00').split(':').map(Number)
     const target = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00Z`)
     const diff = target.getTime() - Date.now()
-    if (diff <= 0) return ''
-    const days = Math.floor(diff / 86400000)
-    const hrs  = Math.floor((diff % 86400000) / 3600000)
-    const mins = Math.floor((diff % 3600000) / 60000)
-    if (days > 0) return `بعد ${days} يوم و${hrs} ساعة`
-    if (hrs > 0)  return `بعد ${hrs} ساعة و${mins} دقيقة`
-    return `بعد ${mins} دقيقة`
-  } catch { return '' }
+    if (diff <= 0) return null
+    return {
+      days: Math.floor(diff / 86400000),
+      hrs:  Math.floor((diff % 86400000) / 3600000),
+      mins: Math.floor((diff % 3600000) / 60000),
+      secs: Math.floor((diff % 60000) / 1000),
+    }
+  } catch { return null }
 }
 
 const FLAG_CODES: Record<string, string> = {
@@ -121,276 +121,317 @@ function getFlagUrl(team: string) {
   return `https://flagcdn.com/w160/${code}.png`
 }
 
-function isAlgeria(name: string) {
-  return name === 'الجزائر' || name === 'Algeria'
+function isAlgeria(t: string) {
+  return /جزائر|Algeria/i.test(t)
 }
 
-const STATUS_CFG = {
-  live:             { gradient: 'linear-gradient(135deg,#dc2626 0%,#ef4444 100%)', label: '🔴 مباشر الآن', pulse: true },
-  finished:         { gradient: 'linear-gradient(135deg,#065f46 0%,#059669 100%)', label: '✅ انتهت', pulse: false },
-  'result-pending': { gradient: 'linear-gradient(135deg,#92400e 0%,#d97706 100%)', label: '⏳ قيد التحديث', pulse: false },
-  upcoming:         { gradient: 'linear-gradient(135deg,#312e81 0%,#4f46e5 100%)', label: '📅 مقبلة', pulse: false },
-}
-
-function TeamFlag({ name, large = false }: { name: string; large?: boolean }) {
-  const url = getFlagUrl(name)
-  const dz  = isAlgeria(name)
-  const w   = large ? 80 : 68
-  const h   = large ? 56 : 48
-
+function CountdownTimer({ dateStr, timeStr }: { dateStr?: string; timeStr?: string }) {
+  const [parts, setParts] = useState(() => getCountdownParts(dateStr, timeStr))
+  useEffect(() => {
+    if (!parts) return
+    const id = setInterval(() => setParts(getCountdownParts(dateStr, timeStr)), 1000)
+    return () => clearInterval(id)
+  }, [dateStr, timeStr])
+  if (!parts) return null
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', margin: '14px 0 4px' }}>
+      {[
+        { v: parts.days, l: 'يوم' },
+        { v: parts.hrs,  l: 'ساعة' },
+        { v: parts.mins, l: 'دقيقة' },
+        { v: parts.secs, l: 'ثانية' },
+      ].map(({ v, l }) => (
+        <div key={l} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          background: 'rgba(6,6,20,0.7)',
+          border: '1px solid rgba(99,102,241,0.25)',
+          borderRadius: 10,
+          padding: '8px 12px',
+          minWidth: 52,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        }}>
+          <span style={{ fontSize: 22, fontWeight: 900, color: '#a5b4fc', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+            {String(v).padStart(2, '0')}
+          </span>
+          <span style={{ fontSize: 9, color: '#475569', fontWeight: 700, marginTop: 3, letterSpacing: 0.5 }}>{l}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TeamBlock({ name, isMain = false }: { name: string; isMain?: boolean }) {
+  const url = getFlagUrl(name)
+  const dz = isAlgeria(name)
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+      flex: 1, minWidth: 0,
+    }}>
       <div style={{
-        width: w,
-        height: h,
-        borderRadius: 8,
+        width: 100, height: 70,
+        borderRadius: 10,
         overflow: 'hidden',
-        boxShadow: dz
-          ? '0 0 0 3px #22c55e, 0 6px 28px rgba(34,197,94,0.35)'
-          : '0 4px 24px rgba(0,0,0,0.6)',
-        border: dz ? '2.5px solid rgba(34,197,94,0.7)' : '2px solid rgba(255,255,255,0.12)',
-        flexShrink: 0,
         position: 'relative',
+        boxShadow: dz
+          ? '0 0 0 2.5px #22c55e, 0 8px 32px rgba(34,197,94,0.4), 0 2px 12px rgba(0,0,0,0.6)'
+          : '0 6px 28px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(255,255,255,0.1)',
+        flexShrink: 0,
       }}>
         {url ? (
           <img
-            src={url}
-            alt={name}
+            src={url} alt={name}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            loading="lazy"
+            loading="eager"
           />
         ) : (
           <div style={{
             width: '100%', height: '100%',
             background: 'rgba(255,255,255,0.05)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 40,
+            fontSize: 36,
           }}>🏴</div>
         )}
         {dz && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             height: 3,
-            background: 'linear-gradient(90deg, #16a34a, #22c55e, #16a34a)',
+            background: 'linear-gradient(90deg, #16a34a, #22c55e, #4ade80, #22c55e, #16a34a)',
           }} />
         )}
       </div>
       <span style={{
         color: dz ? '#86efac' : '#e2e8f0',
         fontWeight: dz ? 900 : 700,
-        fontSize: 12,
+        fontSize: isMain ? 14 : 13,
         textAlign: 'center',
         lineHeight: 1.3,
-        maxWidth: 100,
-        letterSpacing: dz ? 0.3 : 0,
+        maxWidth: 110,
+        letterSpacing: dz ? 0.4 : 0,
+        textShadow: dz ? '0 0 12px rgba(34,197,94,0.5)' : 'none',
       }}>{name}</span>
     </div>
   )
 }
 
 function ScoreBox({ match }: { match: MatchFix }) {
-  const hasScore = match.homeScore !== null && match.homeScore !== undefined
-    && match.awayScore !== null && match.awayScore !== undefined
-  const isLive = match.statusType === 'live'
-  const countdown = (!hasScore && match.statusType === 'upcoming')
-    ? getCountdown(match.date, match.startTime)
-    : ''
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 110 }}>
-      {hasScore ? (
-        <div style={{
-          background: isLive ? 'rgba(239,68,68,0.15)' : 'rgba(15,23,42,0.8)',
-          border: isLive ? '2px solid rgba(239,68,68,0.6)' : '2px solid rgba(255,255,255,0.1)',
-          borderRadius: 16,
-          padding: '12px 20px',
-          display: 'flex', alignItems: 'center', gap: 8,
-          boxShadow: isLive ? '0 0 32px rgba(239,68,68,0.25)' : '0 6px 24px rgba(0,0,0,0.5)',
-        }}>
-          <span style={{ color: '#f8fafc', fontSize: 44, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const }}>
-            {match.homeScore}
-          </span>
-          <span style={{ color: '#374151', fontSize: 28, fontWeight: 300 }}>—</span>
-          <span style={{ color: '#f8fafc', fontSize: 44, fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums' as const }}>
-            {match.awayScore}
-          </span>
-        </div>
-      ) : (
-        <div style={{
-          background: 'linear-gradient(160deg, rgba(79,70,229,0.15) 0%, rgba(99,102,241,0.08) 100%)',
-          border: '2px solid rgba(99,102,241,0.4)',
-          borderRadius: 16,
-          padding: '12px 16px',
-          textAlign: 'center',
-          boxShadow: '0 4px 20px rgba(99,102,241,0.15)',
-        }}>
-          {match.startTime ? (
-            <>
-              <div style={{ color: '#a5b4fc', fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
-                {dzHour(match.startTime)}
-              </div>
-              <div style={{ color: '#6366f1', fontSize: 10, fontWeight: 700, marginTop: 4, letterSpacing: 0.8 }}>
-                توقيت الجزائر
-              </div>
-            </>
-          ) : (
-            <div style={{ color: '#64748b', fontSize: 20, fontWeight: 700 }}>VS</div>
-          )}
-        </div>
-      )}
-
-      {countdown && (
-        <div style={{
-          background: 'rgba(34,197,94,0.08)',
-          border: '1px solid rgba(34,197,94,0.25)',
-          borderRadius: 20,
-          padding: '3px 12px',
-          color: '#86efac',
-          fontSize: 11,
-          fontWeight: 700,
-          whiteSpace: 'nowrap',
-        }}>
-          ⏳ {countdown}
-        </div>
-      )}
-
-      {match.round && (
-        <span style={{ color: '#475569', fontSize: 11, fontWeight: 600, textAlign: 'center' }}>
-          {match.round}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function EventsRow({ goals, yellowCards, redCards }: Pick<MatchFix, 'goals' | 'yellowCards' | 'redCards'>) {
-  const has = (goals?.length || 0) + (yellowCards?.length || 0) + (redCards?.length || 0) > 0
-  if (!has) return null
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-      {(goals || []).map((g, i) => (
-        <span key={i} style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.22)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#6ee7b7' }}>
-          ⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}{g.assist ? ` ↗ ${g.assist}` : ''}
-        </span>
-      ))}
-      {(yellowCards || []).map((c, i) => (
-        <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fde047' }}>
-          🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}
-        </span>
-      ))}
-      {(redCards || []).map((c, i) => (
-        <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fca5a5' }}>
-          🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function MatchCard({ match, accent = false }: { match: MatchFix; accent?: boolean }) {
   const isLive     = match.statusType === 'live'
   const isFinished = match.statusType === 'finished'
-  const statusCfg  = STATUS_CFG[(match.statusType as keyof typeof STATUS_CFG) ?? 'upcoming'] ?? STATUS_CFG.upcoming
-  const src        = match.source || (match._sources && match._sources[0]) || ''
-  const algHome    = isAlgeria(match.homeTeam)
-  const algAway    = isAlgeria(match.awayTeam)
-  const hasAlgeria = algHome || algAway
+  const hasScore   = isFinished || isLive
+  const showScore  = hasScore && match.homeScore !== null && match.homeScore !== undefined
+
+  if (showScore) {
+    const algHome = isAlgeria(match.homeTeam)
+    const dzScore = algHome ? match.homeScore : match.awayScore
+    const opScore = algHome ? match.awayScore : match.homeScore
+    const won  = dzScore! > opScore!
+    const lost = dzScore! < opScore!
+
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        minWidth: 90, flexShrink: 0,
+      }}>
+        <div style={{
+          background: 'rgba(5,5,18,0.9)',
+          border: `2px solid ${won ? 'rgba(34,197,94,0.5)' : lost ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)'}`,
+          borderRadius: 14,
+          padding: '8px 20px',
+          textAlign: 'center',
+          boxShadow: won ? '0 0 20px rgba(34,197,94,0.2)' : lost ? '0 0 20px rgba(239,68,68,0.2)' : 'none',
+        }}>
+          <div style={{
+            fontSize: 30,
+            fontWeight: 900,
+            color: won ? '#4ade80' : lost ? '#f87171' : '#fbbf24',
+            lineHeight: 1,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {match.homeScore} – {match.awayScore}
+          </div>
+          <div style={{ color: '#475569', fontSize: 9, fontWeight: 700, marginTop: 4, letterSpacing: 1 }}>
+            {isLive ? '🔴 LIVE' : 'FT'}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{
-      background: 'linear-gradient(160deg, #0a0f1e 0%, #0d1526 60%, #0a1020 100%)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      minWidth: 80, flexShrink: 0,
+    }}>
+      <div style={{
+        background: 'rgba(5,5,18,0.8)',
+        border: '1.5px solid rgba(99,102,241,0.3)',
+        borderRadius: 14,
+        padding: '8px 18px',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color: '#818cf8', lineHeight: 1 }}>VS</div>
+        {match.startTime && (
+          <div style={{ color: '#6366f1', fontSize: 11, fontWeight: 800, marginTop: 4, letterSpacing: 0.5 }}>
+            ⏰ {dzHour(match.startTime)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const STATUS_CFG = {
+  live:             { gradient: 'linear-gradient(135deg,#7f1d1d 0%,#dc2626 100%)', label: '🔴 مباشر', pulse: true },
+  finished:         { gradient: 'linear-gradient(135deg,#065f46 0%,#059669 100%)', label: '✅ انتهت', pulse: false },
+  'result-pending': { gradient: 'linear-gradient(135deg,#92400e 0%,#d97706 100%)', label: '⏳ جاري التحديث', pulse: false },
+  upcoming:         { gradient: 'linear-gradient(135deg,#1e1b4b 0%,#4338ca 100%)', label: '📅 مقبلة', pulse: false },
+}
+
+function MatchCard({ match }: { match: MatchFix }) {
+  const isLive     = match.statusType === 'live'
+  const isFinished = match.statusType === 'finished'
+  const statusCfg  = STATUS_CFG[(match.statusType as keyof typeof STATUS_CFG) ?? 'upcoming'] ?? STATUS_CFG.upcoming
+  const algHome    = isAlgeria(match.homeTeam)
+  const algAway    = isAlgeria(match.awayTeam)
+  const hasAlgeria = algHome || algAway
+  const src        = match.source || (match._sources && match._sources[0]) || ''
+  const isUpcoming = match.statusType === 'upcoming' || !match.statusType
+
+  return (
+    <div style={{
+      background: hasAlgeria
+        ? 'linear-gradient(160deg, #03080f 0%, #040d18 40%, #060f1e 70%, #03080f 100%)'
+        : 'linear-gradient(160deg, #070c18 0%, #0a1022 60%, #07091a 100%)',
       border: isLive
-        ? '1.5px solid rgba(239,68,68,0.5)'
+        ? '1.5px solid rgba(239,68,68,0.55)'
         : hasAlgeria
-          ? '1.5px solid rgba(34,197,94,0.2)'
-          : '1.5px solid rgba(255,255,255,0.07)',
+          ? '1.5px solid rgba(34,197,94,0.28)'
+          : '1.5px solid rgba(99,102,241,0.2)',
       borderRadius: 20,
-      padding: '0 0 16px',
-      margin: '10px 0',
+      margin: '8px 0',
       overflow: 'hidden',
-      boxShadow: isLive
-        ? '0 0 0 1px rgba(239,68,68,0.15), 0 16px 48px rgba(0,0,0,0.6)'
-        : '0 12px 40px rgba(0,0,0,0.55)',
+      boxShadow: hasAlgeria
+        ? '0 0 0 1px rgba(34,197,94,0.06), 0 20px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.03)'
+        : '0 16px 50px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.03)',
       direction: 'rtl',
       position: 'relative',
     }}>
+      {hasAlgeria && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'radial-gradient(ellipse at 50% 0%, rgba(34,197,94,0.06) 0%, transparent 65%)',
+          pointerEvents: 'none',
+        }} />
+      )}
 
       <div style={{
         background: isLive
-          ? 'linear-gradient(90deg, rgba(220,38,38,0.3) 0%, rgba(239,68,68,0.15) 50%, rgba(220,38,38,0.05) 100%)'
+          ? 'linear-gradient(90deg, rgba(220,38,38,0.25) 0%, rgba(239,68,68,0.1) 60%, transparent 100%)'
           : hasAlgeria
-            ? 'linear-gradient(90deg, rgba(5,150,105,0.2) 0%, rgba(16,185,129,0.08) 50%, transparent 100%)'
-            : 'linear-gradient(90deg, rgba(79,70,229,0.18) 0%, rgba(99,102,241,0.06) 100%)',
-        padding: '10px 18px',
+            ? 'linear-gradient(90deg, rgba(5,150,105,0.18) 0%, rgba(16,185,129,0.06) 60%, transparent 100%)'
+            : 'linear-gradient(90deg, rgba(67,56,202,0.18) 0%, rgba(99,102,241,0.06) 60%, transparent 100%)',
+        padding: '10px 16px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
       }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: statusCfg.gradient,
-          color: '#fff',
-          padding: '3px 12px',
-          borderRadius: 20,
-          fontSize: 10,
-          fontWeight: 800,
-          letterSpacing: 0.5,
-          boxShadow: isLive ? '0 0 14px rgba(239,68,68,0.5)' : 'none',
-          animation: isLive ? 'wcPulse 2s infinite' : 'none',
-        }}>
-          {statusCfg.label}
-        </span>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: statusCfg.gradient,
+            color: '#fff',
+            padding: '3px 12px',
+            borderRadius: 20,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: 0.4,
+            boxShadow: isLive ? '0 0 16px rgba(239,68,68,0.6)' : 'none',
+            animation: isLive ? 'wcPulse 2s infinite' : 'none',
+          }}>
+            {statusCfg.label}
+          </span>
+          {match.round && (
+            <span style={{
+              color: '#64748b', fontSize: 10, fontWeight: 700,
+              background: 'rgba(255,255,255,0.04)',
+              padding: '2px 10px', borderRadius: 20,
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}>{match.round}</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {match.competition && (
-            <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 600, maxWidth: 180, textAlign: 'left' }}>
+            <span style={{ color: '#475569', fontSize: 10, fontWeight: 600 }}>
               {match.competition}
             </span>
           )}
           {src && (
             <span style={{
-              color: '#10b981', fontSize: 10, fontWeight: 700,
+              color: '#10b981', fontSize: 9, fontWeight: 700,
               background: 'rgba(16,185,129,0.08)',
-              border: '1px solid rgba(16,185,129,0.18)',
-              borderRadius: 20, padding: '2px 9px',
-            }}>
-              📡 {src}
-            </span>
+              border: '1px solid rgba(16,185,129,0.15)',
+              borderRadius: 20, padding: '2px 8px',
+            }}>📡 {src}</span>
           )}
         </div>
       </div>
 
-      <div style={{ padding: '18px 18px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <TeamFlag name={match.homeTeam} large />
+      <div style={{ padding: '22px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <TeamBlock name={match.homeTeam} isMain />
         <ScoreBox match={match} />
-        <TeamFlag name={match.awayTeam} large />
+        <TeamBlock name={match.awayTeam} isMain />
       </div>
 
-      <EventsRow goals={match.goals} yellowCards={match.yellowCards} redCards={match.redCards} />
+      {isUpcoming && (
+        <CountdownTimer dateStr={match.date} timeStr={match.startTime} />
+      )}
+
+      {(match.goals || match.yellowCards || match.redCards) && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '6px 16px 0', justifyContent: 'center' }}>
+          {(match.goals || []).map((g, i) => (
+            <span key={`g${i}`} style={{ background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fde68a' }}>
+              ⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}
+            </span>
+          ))}
+          {(match.yellowCards || []).map((c, i) => (
+            <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fef08a' }}>
+              🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+            </span>
+          ))}
+          {(match.redCards || []).map((c, i) => (
+            <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fca5a5' }}>
+              🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}
+            </span>
+          ))}
+        </div>
+      )}
 
       {(match.date || match.venue || match.city) && (
         <div style={{
           marginTop: 14, padding: '10px 18px 0',
           borderTop: '1px solid rgba(255,255,255,0.05)',
-          display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center',
+          display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center',
         }}>
           {match.date && (
-            <span style={{ color: '#94a3b8', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ color: '#6366f1' }}>📅</span> {fmtDate(match.date)}
+            <span style={{ color: '#64748b', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ color: '#6366f1' }}>📅</span>
+              <span style={{ color: '#94a3b8', fontWeight: 600 }}>{fmtDate(match.date)}</span>
             </span>
           )}
           {(match.venue || match.city) && (
-            <span style={{ color: '#94a3b8', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ color: '#64748b', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ color: '#0ea5e9' }}>🏟️</span>
-              {match.venue}{match.city ? `, ${match.city}` : ''}
-              {match.country && match.country !== match.city ? ` — ${match.country}` : ''}
+              <span style={{ color: '#94a3b8' }}>
+                {match.venue}{match.city ? `, ${match.city}` : ''}
+                {match.country && match.country !== match.city ? ` — ${match.country}` : ''}
+              </span>
             </span>
           )}
         </div>
       )}
 
-      <div style={{ padding: '12px 18px 0', display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div style={{ padding: '12px 18px 4px', display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
         {match.kooraLink && (
           <a href={match.kooraLink} target="_blank" rel="noopener noreferrer" style={linkStyle}>
             ⚽ كووورة
@@ -425,7 +466,7 @@ const linkStyle: React.CSSProperties = {
 }
 
 function ScheduleRow({ match, idx }: { match: MatchFix; idx: number }) {
-  const dz  = isAlgeria(match.homeTeam) || isAlgeria(match.awayTeam)
+  const dz = isAlgeria(match.homeTeam) || isAlgeria(match.awayTeam)
   const opp = isAlgeria(match.homeTeam) ? match.awayTeam : match.homeTeam
   const oppFlagUrl = getFlagUrl(opp)
   const isHome = isAlgeria(match.homeTeam)
@@ -441,55 +482,58 @@ function ScheduleRow({ match, idx }: { match: MatchFix; idx: number }) {
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
       padding: '10px 14px',
-      background: dz ? 'rgba(16,185,129,0.05)' : 'rgba(255,255,255,0.02)',
+      background: dz ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.02)',
       borderRadius: 12,
-      border: dz ? '1px solid rgba(34,197,94,0.15)' : '1px solid rgba(255,255,255,0.04)',
+      border: dz ? '1px solid rgba(34,197,94,0.18)' : '1px solid rgba(255,255,255,0.05)',
       direction: 'rtl',
+      transition: 'background 0.15s',
     }}>
       <div style={{
-        width: 24, height: 24, borderRadius: '50%',
-        background: 'rgba(99,102,241,0.15)',
-        border: '1px solid rgba(99,102,241,0.3)',
+        width: 26, height: 26, borderRadius: '50%',
+        background: 'rgba(99,102,241,0.12)',
+        border: '1px solid rgba(99,102,241,0.28)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#818cf8', fontSize: 11, fontWeight: 800, flexShrink: 0,
       }}>
         {idx + 1}
       </div>
 
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <img src="https://flagcdn.com/w40/dz.png" alt="الجزائر" style={{ width: 30, height: 20, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(34,197,94,0.3)' }} />
         {oppFlagUrl ? (
-          <img src={oppFlagUrl} alt={opp} style={{ width: 36, height: 26, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid rgba(255,255,255,0.1)' }} />
+          <img src={oppFlagUrl} alt={opp} style={{ width: 30, height: 20, objectFit: 'cover', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }} />
         ) : (
-          <span style={{ fontSize: 20 }}>🏴</span>
+          <span style={{ fontSize: 18 }}>🏴</span>
         )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {isHome ? `🇩🇿 الجزائر vs ${opp}` : `${opp} vs 🇩🇿 الجزائر`}
+        <div style={{ color: dz ? '#d1fae5' : '#e2e8f0', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {isHome ? `🇩🇿 الجزائر ضد ${opp}` : `${opp} ضد 🇩🇿 الجزائر`}
         </div>
-        <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>
-          {match.round && <span style={{ marginLeft: 6 }}>{match.round}</span>}
+        <div style={{ color: '#475569', fontSize: 10, marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {match.round && <span style={{ color: '#6366f1' }}>{match.round}</span>}
           <span>{fmtDateShort(match.date)}</span>
-          {match.venue && <span style={{ marginRight: 6 }}> · 🏟️ {match.venue}</span>}
+          {match.venue && <span>🏟️ {match.venue}</span>}
         </div>
       </div>
 
       <div style={{
         flexShrink: 0,
-        background: hasScore ? 'rgba(15,23,42,0.8)' : 'rgba(99,102,241,0.1)',
-        border: `1.5px solid ${resultColor}33`,
+        background: 'rgba(6,6,20,0.8)',
+        border: `1.5px solid ${resultColor}44`,
         borderRadius: 10,
         padding: '5px 12px',
         textAlign: 'center',
         minWidth: 56,
+        boxShadow: `0 0 10px ${resultColor}18`,
       }}>
-        <div style={{ color: resultColor, fontWeight: 900, fontSize: 15, lineHeight: 1 }}>
+        <div style={{ color: resultColor, fontWeight: 900, fontSize: 14, lineHeight: 1 }}>
           {scoreStr}
         </div>
-        {!hasScore && <div style={{ color: '#475569', fontSize: 9, marginTop: 2, fontWeight: 600 }}>الجزائر</div>}
+        {!hasScore && <div style={{ color: '#334155', fontSize: 9, marginTop: 2, fontWeight: 700 }}>توقيت الجزائر</div>}
       </div>
     </div>
   )
@@ -527,73 +571,89 @@ export default function WC2026MatchCard({
   const scheduleMatches = allFixtures || (showSchedule ? matches : null)
 
   return (
-    <div style={{ direction: 'rtl', fontFamily: 'inherit' }}>
+    <div style={{ direction: 'rtl', fontFamily: 'inherit', maxWidth: 520 }}>
       <style>{`
         @keyframes wcPulse {
-          0%,100% { box-shadow: 0 0 10px rgba(239,68,68,0.5); }
-          50% { box-shadow: 0 0 22px rgba(239,68,68,0.85); }
+          0%,100% { box-shadow: 0 0 8px rgba(239,68,68,0.45); }
+          50% { box-shadow: 0 0 20px rgba(239,68,68,0.85); }
         }
-        @keyframes wcLiveLine {
-          0% { transform: scaleX(0.3) translateX(-70%); opacity:0.4; }
-          50% { transform: scaleX(1) translateX(0); opacity:1; }
-          100% { transform: scaleX(0.3) translateX(70%); opacity:0.4; }
+        @keyframes wcGlow {
+          0%,100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
       `}</style>
 
       {title && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          marginBottom: 10, padding: '10px 16px',
-          background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.04) 70%, transparent 100%)',
+          display: 'flex', alignItems: 'center', gap: 12,
+          marginBottom: 10, padding: '12px 18px',
+          background: 'linear-gradient(90deg, rgba(16,185,129,0.18) 0%, rgba(16,185,129,0.05) 60%, transparent 100%)',
           borderRight: '3px solid #10b981',
           borderRadius: '0 14px 14px 0',
+          position: 'relative', overflow: 'hidden',
         }}>
-          <span style={{ fontSize: 22 }}>🏆</span>
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'radial-gradient(ellipse at 0% 50%, rgba(16,185,129,0.1) 0%, transparent 60%)',
+            pointerEvents: 'none',
+          }} />
+          <span style={{ fontSize: 24, filter: 'drop-shadow(0 0 8px rgba(16,185,129,0.6))' }}>🏆</span>
           <div>
-            <div style={{ color: '#d1fae5', fontWeight: 900, fontSize: 15 }}>{title}</div>
-            <div style={{ color: '#6ee7b7', fontSize: 10, fontWeight: 600, marginTop: 1 }}>
-              FIFA World Cup 2026 · المجموعة J
+            <div style={{ color: '#d1fae5', fontWeight: 900, fontSize: 15, lineHeight: 1.2 }}>{title}</div>
+            <div style={{ color: '#6ee7b7', fontSize: 10, fontWeight: 700, marginTop: 3, letterSpacing: 0.5 }}>
+              FIFA World Cup 2026 · USA · CAN · MEX · المجموعة J
             </div>
           </div>
           {autoRefresh && matches.some(m => m.statusType === 'live') && (
-            <span style={{ marginRight: 'auto', color: '#ef4444', fontSize: 11, fontWeight: 700, animation: 'wcPulse 2s infinite' }}>
-              ● تحديث تلقائي
+            <span style={{
+              marginRight: 'auto', color: '#ef4444', fontSize: 11, fontWeight: 800,
+              animation: 'wcGlow 1.5s infinite',
+            }}>
+              ● تحديث مباشر
             </span>
           )}
         </div>
       )}
 
-      {matches.map((m, i) => <MatchCard key={i} match={m} accent={isAlgeria(m.homeTeam) || isAlgeria(m.awayTeam)} />)}
+      {matches.map((m, i) => <MatchCard key={i} match={m} />)}
 
       {scheduleMatches && scheduleMatches.length > 1 && (
         <div style={{
-          marginTop: 6,
-          background: 'linear-gradient(160deg, #080d1a 0%, #0b1220 100%)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: 16,
+          marginTop: 8,
+          background: 'linear-gradient(160deg, #060b17 0%, #090e1e 100%)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 18,
           overflow: 'hidden',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
         }}>
           <div style={{
-            padding: '12px 16px 8px',
+            padding: '12px 16px 10px',
             borderBottom: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex', alignItems: 'center', gap: 8,
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'linear-gradient(90deg, rgba(99,102,241,0.12) 0%, transparent 80%)',
           }}>
-            <span style={{ fontSize: 16 }}>📅</span>
-            <span style={{ color: '#94a3b8', fontWeight: 800, fontSize: 13 }}>
+            <span style={{ fontSize: 18 }}>📅</span>
+            <span style={{ color: '#c7d2fe', fontWeight: 900, fontSize: 13 }}>
               جدول مباريات 🇩🇿 الجزائر — كأس العالم 2026
             </span>
+            <span style={{
+              marginRight: 'auto',
+              background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)',
+              color: '#818cf8', borderRadius: 20, padding: '2px 10px', fontSize: 10, fontWeight: 700,
+            }}>المجموعة J</span>
           </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px 12px' }}>
             {scheduleMatches.map((m, i) => <ScheduleRow key={i} match={m} idx={i} />)}
           </div>
 
           <div style={{
-            padding: '8px 16px 10px',
+            padding: '8px 16px 12px',
             borderTop: '1px solid rgba(255,255,255,0.04)',
-            display: 'flex', gap: 8, justifyContent: 'center',
+            display: 'flex', gap: 6, justifyContent: 'center',
           }}>
             <a href="https://www.kooora.com/?wc2026" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>⚽ كووورة</a>
-            <a href="https://jdwel.com/2026-world-cup-fixtures/" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>🗓️ جدول كامل</a>
+            <a href="https://jdwel.com/2026-world-cup-fixtures/" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>🗓️ الجدول الكامل</a>
             <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>📱 FotMob</a>
           </div>
         </div>

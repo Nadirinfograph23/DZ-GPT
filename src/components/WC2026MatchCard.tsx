@@ -581,9 +581,10 @@ interface WC2026MatchCardProps {
   refreshInterval?: number
   showSchedule?: boolean
   allFixtures?: MatchFix[]
+  compact?: boolean
 }
 
-export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 30000, showSchedule = false, allFixtures }: WC2026MatchCardProps) {
+export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 30000, showSchedule = false, allFixtures, compact = false }: WC2026MatchCardProps) {
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -595,10 +596,11 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
   if (!matches || matches.length === 0) return null
 
   const scheduleMatches = allFixtures || (showSchedule ? matches : null)
-  const isMulti = matches.length > 1
+  // compact=true forces ScoreCenter layout even for single match (for narrow sidebars)
+  const isMulti = matches.length > 1 || compact
 
   return (
-    <div style={{ direction: 'rtl', fontFamily: 'inherit', maxWidth: 540 }}>
+    <div style={{ direction: 'rtl', fontFamily: 'inherit', maxWidth: compact ? '100%' : 540 }}>
       <style>{`
         @keyframes wcPulse { 0%,100% { box-shadow:0 0 8px rgba(239,68,68,0.45); } 50% { box-shadow:0 0 20px rgba(239,68,68,0.85); } }
         @keyframes wcGlow  { 0%,100% { opacity:.6; } 50% { opacity:1; } }

@@ -1526,6 +1526,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                 matches={wc2026Matches}
                 autoRefresh={true}
                 refreshInterval={60000}
+                compact={true}
               />
             ) : (
               <div className="dzd-empty-state">

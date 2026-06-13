@@ -652,6 +652,7 @@ interface DZMessage {
   imageModel?: string
   imageStyle?: string
   imageGrid?: string[]
+  imageGridFull?: Array<{ url: string; fullUrl?: string; title: string; source?: string; sourceUrl?: string; creator?: string }>
   videoUrl?: string
   videoPrompt?: string
   videoModel?: string
@@ -3855,6 +3856,27 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [articlePopupUrl, setArticlePopupUrl] = useState<string | null>(null)
   const [currentRepo, setCurrentRepo] = useState<string>('')
   const [imgRegenLoading, setImgRegenLoading] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<{
+    images: Array<{ url: string; fullUrl?: string; title: string; source?: string; sourceUrl?: string; creator?: string }>
+    idx: number
+    prompt?: string
+  } | null>(null)
+
+  // ── Lightbox keyboard navigation ──────────────────────────────────────────
+  React.useEffect(() => {
+    if (!lightbox) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setLightbox(null); return }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        setLightbox(prev => prev ? { ...prev, idx: (prev.idx + 1) % prev.images.length } : null)
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        setLightbox(prev => prev ? { ...prev, idx: (prev.idx - 1 + prev.images.length) % prev.images.length } : null)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [lightbox])
   const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
   const [searchStepsMode, setSearchStepsMode] = useState<'person' | 'weather' | 'sports' | 'news'>('person')
   const [currentPath, setCurrentPath] = useState<string>('')
@@ -6622,15 +6644,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         }])
         try {
           const imgFetchRes = await fetch(`/api/tools/image-search?q=${encodeURIComponent(subject)}`, { signal })
-          const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string }> }
+          const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }> }
           setMessages(prev => prev.filter(m => m.id !== loadingId))
           const results = imgFetchData.results || []
           if (results.length > 0) {
-            const gridUrls = results.slice(0, 9).map(r => r.thumbnail || r.url).filter(Boolean)
+            const fullImgs = results.slice(0, 9).map(r => ({
+              url: r.thumbnail || r.url,
+              fullUrl: r.url,
+              title: r.title || subject,
+              source: r.source,
+              sourceUrl: r.sourceUrl,
+              creator: r.creator,
+            })).filter(r => r.url)
             addAssistantMessage({
-              content: `🔍 **${results.length} صورة لـ "${subject}"** — اضغط لفتح الصورة بالحجم الكامل`,
+              content: `🔍 **${results.length} صورة لـ "${subject}"** — اضغط للمعاينة`,
               richType: 'imageGrid' as const,
-              imageGrid: gridUrls,
+              imageGrid: fullImgs.map(i => i.url),
+              imageGridFull: fullImgs,
               imagePrompt: subject,
               imageModel: 'بحث الويب',
               imageStyle: 'web',
@@ -7427,6 +7457,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
             queryName: (data.queryName as string) || undefined,
           },
         })
+      } else if ((data._imageSearch || data.mode === 'image-search') && Array.isArray(data.images) && (data.images as unknown[]).length > 0) {
+        const fullImgs = (data.images as Array<{ url: string; fullUrl?: string; title: string; source?: string; sourceUrl?: string; creator?: string }>).slice(0, 12)
+        addAssistantMessage({
+          content: (data.content as string) || `🔍 **${fullImgs.length} صورة** — اضغط للمعاينة`,
+          richType: 'imageGrid',
+          imageGrid: fullImgs.map(i => i.url),
+          imageGridFull: fullImgs,
+          imagePrompt: text,
+          imageModel: 'بحث الصور',
+          imageStyle: 'web',
+          quickSuggestions: [`صور أخرى لـ ${text.slice(0, 30)}`, `ارسم ${text.slice(0, 30)} بالذكاء الاصطناعي`],
+        })
       } else if (data.isWebsite && typeof data.htmlCode === 'string' && data.htmlCode.length > 100) {
         trackFeatureUsage('website-builder')
         addAssistantMessage({
@@ -8201,28 +8243,36 @@ ${rows}
                       {msg.richType === 'imageGrid' && msg.imageGrid && msg.imageGrid.length > 0 && (
                         <div className="dz-image-grid">
                           {msg.imageGrid.map((url, idx) => (
-                            <a
+                            <button
                               key={idx}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              type="button"
                               className="dz-image-grid__item"
-                              title={`${msg.imagePrompt} — صورة ${idx + 1}`}
+                              title={msg.imageGridFull?.[idx]?.title || `${msg.imagePrompt} — صورة ${idx + 1}`}
+                              onClick={() => setLightbox({
+                                images: msg.imageGridFull || msg.imageGrid!.map(u => ({ url: u, title: msg.imagePrompt || 'صورة', fullUrl: u })),
+                                idx,
+                                prompt: msg.imagePrompt,
+                              })}
                             >
                               <img
                                 src={url}
-                                alt={`${msg.imagePrompt || 'صورة'} ${idx + 1}`}
+                                alt={msg.imageGridFull?.[idx]?.title || `${msg.imagePrompt || 'صورة'} ${idx + 1}`}
                                 className="dz-image-grid__img"
                                 loading="lazy"
                                 onError={(e) => { (e.target as HTMLImageElement).closest('.dz-image-grid__item')?.remove() }}
                               />
                               <div className="dz-image-grid__overlay">
-                                <span>🔍 فتح</span>
+                                <span>🔍 معاينة</span>
                               </div>
-                            </a>
+                            </button>
                           ))}
                           <div className="dz-image-grid__footer">
-                            <span>🌐 بحث الويب · {msg.imageGrid.length} صورة</span>
+                            <span>
+                              {msg.imageGridFull
+                                ? [...new Set(msg.imageGridFull.map(i => i.source).filter(Boolean))].join(' · ') || '🌐 بحث الويب'
+                                : '🌐 بحث الويب'
+                              } · {msg.imageGrid.length} صورة
+                            </span>
                             <button
                               className="dz-image-grid__gen-btn"
                               onClick={() => sendMessage(`ارسم ${msg.imagePrompt}`)}
@@ -9315,6 +9365,106 @@ ${rows}
         </div>,
         document.body
       )}
+
+      {/* ── Image Lightbox ─────────────────────────────────────────────────── */}
+      {lightbox && (() => {
+        const img = lightbox.images[lightbox.idx]
+        const total = lightbox.images.length
+        const hasPrev = total > 1
+        const hasNext = total > 1
+        const downloadUrl = img.fullUrl || img.url
+        const SOURCE_ICON: Record<string, string> = { Pinterest: '📌', 'Wikimedia Commons': '🌐', Openverse: '🔓' }
+
+        return ReactDOM.createPortal(
+          <div
+            className="dz-lightbox__backdrop"
+            onClick={e => { if (e.target === e.currentTarget) setLightbox(null) }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="معاينة الصورة"
+          >
+            <div className="dz-lightbox__box">
+              {/* Header */}
+              <div className="dz-lightbox__header">
+                <span className="dz-lightbox__counter">{lightbox.idx + 1} / {total}</span>
+                <span className="dz-lightbox__title" title={img.title}>{img.title}</span>
+                <button className="dz-lightbox__close" onClick={() => setLightbox(null)} aria-label="إغلاق">✕</button>
+              </div>
+
+              {/* Image area */}
+              <div className="dz-lightbox__img-wrap">
+                {hasPrev && (
+                  <button
+                    className="dz-lightbox__nav dz-lightbox__nav--prev"
+                    onClick={() => setLightbox(prev => prev ? { ...prev, idx: (prev.idx - 1 + total) % total } : null)}
+                    aria-label="السابق"
+                  >‹</button>
+                )}
+                <img
+                  key={img.url}
+                  src={img.fullUrl || img.url}
+                  alt={img.title}
+                  className="dz-lightbox__img"
+                  onError={e => { (e.target as HTMLImageElement).src = img.url }}
+                />
+                {hasNext && (
+                  <button
+                    className="dz-lightbox__nav dz-lightbox__nav--next"
+                    onClick={() => setLightbox(prev => prev ? { ...prev, idx: (prev.idx + 1) % total } : null)}
+                    aria-label="التالي"
+                  >›</button>
+                )}
+              </div>
+
+              {/* Footer: source info + download */}
+              <div className="dz-lightbox__footer">
+                <div className="dz-lightbox__meta">
+                  {img.source && (
+                    <span className="dz-lightbox__source">
+                      {SOURCE_ICON[img.source] || '📁'} {img.source}
+                    </span>
+                  )}
+                  {img.creator && <span className="dz-lightbox__creator">📷 {img.creator.slice(0, 50)}</span>}
+                </div>
+                <div className="dz-lightbox__actions">
+                  {img.sourceUrl && (
+                    <a
+                      href={img.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dz-lightbox__btn dz-lightbox__btn--source"
+                    >🔗 المصدر</a>
+                  )}
+                  <a
+                    href={downloadUrl}
+                    download={`${(img.title || lightbox.prompt || 'image').slice(0, 40).replace(/[^a-zA-Z0-9\u0600-\u06FF ]/g, '_')}.jpg`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="dz-lightbox__btn dz-lightbox__btn--download"
+                  >⬇️ تحميل</a>
+                </div>
+              </div>
+
+              {/* Thumbnail strip */}
+              {total > 1 && (
+                <div className="dz-lightbox__strip">
+                  {lightbox.images.map((im, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={`dz-lightbox__thumb${i === lightbox.idx ? ' dz-lightbox__thumb--active' : ''}`}
+                      onClick={() => setLightbox(prev => prev ? { ...prev, idx: i } : null)}
+                    >
+                      <img src={im.url} alt={im.title} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )
+      })()}
     </div>
   )
 }

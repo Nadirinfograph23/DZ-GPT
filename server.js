@@ -242,7 +242,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse, isWC2026AllGroupsQuery, buildWC2026AllGroupsStandings } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -15847,9 +15847,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   {
     const _isWCStandingsEarly = !_isRetry && (
       detectWC2026StandingsQuery(_rawLastMsg) ||
+      isWC2026AllGroupsQuery(_rawLastMsg) ||
       /(?:ترتيب|جدول|صدارة)\s+(?:المجموعة|مجموعة)\s+[A-La-l]/i.test(_rawLastMsg) ||
       /(?:كم\s+نقطة|نقاط\s+الجزائر|نقط\s+الجزائر)/i.test(_rawLastMsg) ||
-      /مجموعة\s+(?:الجزائر|الخضر)/i.test(_rawLastMsg)
+      /مجموعة\s+(?:الجزائر|الخضر)/i.test(_rawLastMsg) ||
+      /ترتيب\s+(?:الفرق|المنتخبات).*(?:كأس|مونديال|2026)/i.test(_rawLastMsg) ||
+      /(?:كأس|مونديال|2026).*ترتيب\s+(?:الفرق|المنتخبات)/i.test(_rawLastMsg)
     )
     if (_isWCStandingsEarly) {
       console.log(`[WC2026:Standings] 📊 Standings query: "${_rawLastMsg.slice(0, 60)}"`)

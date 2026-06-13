@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface MatchFix {
   group?: string
@@ -33,7 +33,7 @@ function dzHour(utcTime?: string): string {
     // م (PM) = مساء، ص (AM) = صباح
     if (match[3] === '\u0645' && h < 12) h += 12  // م → PM
     else if (match[3] === '\u0635' && h === 12) h = 0  // ص → AM
-    return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    return `${String(h % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   } catch { return utcTime }
 }
 
@@ -398,7 +398,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
     let middleGlow = false
 
     if (hasScore) {
-      middleText = `${match.awayScore} – ${match.homeScore}`
+      middleText = `${match.homeScore} – ${match.awayScore}`
       middleColor = '#4ade80'   // أخضر فاتح للنتيجة
       middleGlow = true
     } else if (isLive) {
@@ -529,7 +529,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
         {hasScore ? (
           <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: 'clamp(4px,1.5vw,6px) clamp(6px,2.2vw,10px)', textAlign: 'center', boxShadow: `0 0 14px ${scoreColor}33` }}>
-            <span style={{ fontSize: 'clamp(14px,4.2vw,18px)', fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, direction: 'ltr', display: 'inline-block' }}>{match.awayScore} – {match.homeScore}</span>
+            <span style={{ fontSize: 'clamp(14px,4.2vw,18px)', fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, direction: 'ltr', display: 'inline-block' }}>{match.homeScore} – {match.awayScore}</span>
             <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>{isLive ? '🔴 LIVE' : 'FT'}</div>
           </div>
         ) : isResultPendingNorm ? (
@@ -587,12 +587,15 @@ function ScoreCenter({ matches, title, compact = false, autoRefresh = false, has
           <span style={{ color: '#d1fae5', fontWeight: 800, fontSize: compact ? 11 : 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {compact ? 'كأس العالم 2026' : (title || 'كأس العالم FIFA 2026')}
           </span>
-          {/* Live polling indicator — single line, compact */}
+          {/* Live polling indicator */}
           {autoRefresh && hasAnyLive && (
-            <span style={{ flexShrink: 0, color: '#ef4444', fontSize: 9, fontWeight: 800, animation: 'wcGlow 1.5s infinite', whiteSpace: 'nowrap' }}>● LIVE</span>
+            <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: '#ef4444', fontSize: 9, fontWeight: 800, animation: 'wcGlow 1.5s infinite', whiteSpace: 'nowrap', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 20, padding: '1px 7px' }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'wcPulse 1.2s infinite' }} />
+              يتحدث كل 30ث
+            </span>
           )}
-          {autoRefresh && isPolling && !hasAnyLive && (
-            <span style={{ flexShrink: 0, color: '#6ee7b7', fontSize: 9, fontWeight: 600, whiteSpace: 'nowrap' }}>↻</span>
+          {autoRefresh && isPolling && (
+            <span style={{ flexShrink: 0, color: '#6ee7b7', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', animation: 'wcGlow 0.8s infinite' }}>↻</span>
           )}
           {autoRefresh && !hasAnyLive && lastUpdate && !compact && (
             <span style={{ color: '#475569', fontSize: 9, whiteSpace: 'nowrap' }}>
@@ -734,7 +737,7 @@ interface WC2026MatchCardProps {
   compact?: boolean
 }
 
-export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 60000, showSchedule = false, allFixtures, compact = false }: WC2026MatchCardProps) {
+export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 30000, showSchedule = false, allFixtures, compact = false }: WC2026MatchCardProps) {
   // Real live polling — fetch fresh scores from API every interval
   const [polledMatches, setPolledMatches] = useState<MatchFix[]>(matches)
   const [isPolling, setIsPolling] = useState(false)
@@ -743,27 +746,39 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
   // Sync polledMatches when parent `matches` prop changes (new message)
   useEffect(() => { setPolledMatches(matches) }, [matches])
 
+  const allDoneRef = React.useRef(false)
+
   useEffect(() => {
     if (!autoRefresh) return
+    allDoneRef.current = false
     const dateStr = matches[0]?.date || new Date(Date.now() + 3600000).toISOString().split('T')[0]
 
     const fetchLive = async () => {
+      // Stop polling if all matches already finished
+      if (allDoneRef.current) return
       try {
         setIsPolling(true)
         const res = await fetch(`/api/wc2026/today?date=${dateStr}`)
         if (!res.ok) return
         const data = await res.json()
         if (data.active && Array.isArray(data.matches) && data.matches.length > 0) {
-          // Merge: keep original match list order, update statusType + scores
-          setPolledMatches(prev => prev.map(orig => {
-            const fresh = data.matches.find((f: MatchFix) =>
-              f.homeTeam === orig.homeTeam && f.awayTeam === orig.awayTeam
+          setPolledMatches(prev => {
+            const updated = prev.map(orig => {
+              const fresh = data.matches.find((f: MatchFix) =>
+                f.homeTeam === orig.homeTeam && f.awayTeam === orig.awayTeam
+              )
+              return fresh ? { ...orig, ...fresh } : orig
+            })
+            // Stop polling when every match is done
+            const allFinished = updated.every(m =>
+              m.statusType === 'finished' || m.statusType === 'result-pending'
             )
-            return fresh ? { ...orig, ...fresh } : orig
-          }))
+            if (allFinished) allDoneRef.current = true
+            return updated
+          })
           setLastUpdate(new Date())
         }
-      } catch (_) { /* keep previous data */ }
+      } catch (_) { /* keep previous data on network error */ }
       finally { setIsPolling(false) }
     }
 
@@ -805,11 +820,14 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
             </div>
           </div>
           {autoRefresh && hasAnyLive && (
-            <span style={{ marginRight: 'auto', color: '#ef4444', fontSize: 11, fontWeight: 800, animation: 'wcGlow 1.5s infinite' }}>● تحديث مباشر</span>
+            <span style={{ marginRight: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, color: '#ef4444', fontSize: 10, fontWeight: 800, animation: 'wcGlow 1.5s infinite' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'wcPulse 1.2s infinite' }} />
+              مباشر — يتحدث كل 30ث
+            </span>
           )}
           {autoRefresh && !hasAnyLive && lastUpdate && (
             <span style={{ marginRight: 'auto', color: '#6ee7b7', fontSize: 9, fontWeight: 600 }}>
-              آخر تحديث {lastUpdate.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })}
+              ↻ آخر تحديث {lastUpdate.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
         </div>

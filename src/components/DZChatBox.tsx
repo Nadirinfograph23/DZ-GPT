@@ -7857,7 +7857,7 @@ ${rows}
                           <WC2026MatchCard
                             matches={_deduped}
                             title="⚽ كأس العالم FIFA 2026"
-                            autoRefresh={_deduped.some((m: any) => m.statusType === 'live')}
+                            autoRefresh={_deduped.some((m: any) => m.statusType === 'live' || m.statusType === 'upcoming')}
                             allFixtures={_deduped}
                           />
                         )

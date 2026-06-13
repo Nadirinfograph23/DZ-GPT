@@ -135,15 +135,15 @@ const STATUS_CFG = {
 function TeamFlag({ name, large = false }: { name: string; large?: boolean }) {
   const url = getFlagUrl(name)
   const dz  = isAlgeria(name)
-  const w   = large ? 140 : 120
-  const h   = large ? 98  : 82
+  const w   = large ? 80 : 68
+  const h   = large ? 56 : 48
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, flex: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
       <div style={{
         width: w,
         height: h,
-        borderRadius: 12,
+        borderRadius: 8,
         overflow: 'hidden',
         boxShadow: dz
           ? '0 0 0 3px #22c55e, 0 6px 28px rgba(34,197,94,0.35)'
@@ -178,10 +178,10 @@ function TeamFlag({ name, large = false }: { name: string; large?: boolean }) {
       <span style={{
         color: dz ? '#86efac' : '#e2e8f0',
         fontWeight: dz ? 900 : 700,
-        fontSize: 14,
+        fontSize: 12,
         textAlign: 'center',
         lineHeight: 1.3,
-        maxWidth: 130,
+        maxWidth: 100,
         letterSpacing: dz ? 0.3 : 0,
       }}>{name}</span>
     </div>

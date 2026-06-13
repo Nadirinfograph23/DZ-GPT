@@ -15130,13 +15130,160 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ _toolRedirect })
   }
 
+  // ── WC2026 Smart Routing Guard — الحارس الذكي (قبل كل شيء) ──────────────
+  // يعالج: الجزائر لم تلعب بعد | ميسي مع الجزائر | هل فازت | نتائج متعددة الأيام
+  {
+    const _wcSRNow = Date.now()
+    const _isWCSR  = _wcSRNow >= 1781136000000 && _wcSRNow <= 1784591999000
+    if (_isWCSR) {
+      const _qSR = _rawLastMsg
+
+      // ── 1. الجزائر لم تلعب بعد (قبل 2026-06-17 02:00 توقيت الجزائر) ──────
+      const _algFirstMatchMs = new Date('2026-06-17T01:00:00Z').getTime()
+      const _algHasNotPlayed = _wcSRNow < _algFirstMatchMs
+      const _isAlgQuery  = /(?:الجزائر|الخضر|منتخب\s*(?:الجزائري|وطني))/i.test(_qSR)
+      const _isResultReq = /(?:نتيجة|نتائج|سجل|هدف|أهداف|انتهت|انتهى|فاز|فازت|ربح|ربحت|خسر|خسرت|ملخص|تشكيلة?|تشكيل|حارس|من\s+لعب|من\s+سجل|بطاقة|إحصائي|ترتيب|نقاط|آخر\s+مباراة|أخيرة?\s+مباراة)/i.test(_qSR)
+      const _isWC26Ctx   = /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(_qSR)
+      // خلال موسم WC2026: أي سؤال نتيجة يخص الجزائر = WC2026 (لا منافسة أخرى كبرى)
+      if (_algHasNotPlayed && _isAlgQuery && _isResultReq) {
+        console.log(`[WC2026:AlgNotPlayed] 🇩🇿 Algeria hasn't played yet — intercepting: "${_qSR.slice(0,60)}"`)
+        return res.status(200).json({
+          content: [
+            `## 🇩🇿 الجزائر في كأس العالم FIFA 2026`,
+            ``,
+            `> ℹ️ **الجزائر لم تلعب بعد** في كأس العالم 2026.`,
+            `> البطولة انطلقت يوم **11 يونيو**، لكن الجزائر تبدأ مشوارها في **الجولة الأولى يوم 17 يونيو**.`,
+            ``,
+            `### ⏳ أول مباراة للجزائر`,
+            `| 📅 التاريخ | ⏰ التوقيت | 🏟️ الملعب | 📍 المدينة |`,
+            `|-----------|----------|----------|----------|`,
+            `| **الأربعاء، 17 يونيو 2026** | **02:00 (بتوقيت الجزائر)** | MetLife Stadium | East Rutherford، نيوجيرسي |`,
+            ``,
+            `### 🏆 برنامج مباريات الجزائر — المجموعة J`,
+            `| الجولة | التاريخ | المنافس | الملعب |`,
+            `|-------|---------|--------|--------|`,
+            `| الجولة 1 | 17 يونيو — 02:00 | 🇦🇷 **الأرجنتين** | MetLife Stadium |`,
+            `| الجولة 2 | 21 يونيو — 03:00 | 🇦🇹 **النمسا** | Arrowhead Stadium |`,
+            `| الجولة 3 | 25 يونيو — 04:00 | 🇯🇴 **الأردن** | AT&T Stadium |`,
+            ``,
+            `> 🛡️ لا نتائج ولا إحصائيات للجزائر حتى الآن — ستُحدَّث تلقائياً بعد مباراة 17 يونيو.`,
+            ``,
+            `🔗 [متابعة مباشرة على FotMob](https://www.fotmob.com/ar/leagues/77/fixtures/world-cup)`,
+          ].join('\n'),
+          model: 'wc2026-algeria-not-played-yet',
+          _sportsAgent: true, wc2026: true, found: true,
+        })
+      }
+
+      // ── 2. ميسي مع الجزائر — استحالة منطقية ───────────────────────────────
+      if (/(?:ميسي|messi|lionel\s+messi)/i.test(_qSR) && _isAlgQuery &&
+          /(?:لعب|يلعب|شارك|يشارك|لبس|يلبس|مع|في\s+صفوف|ينتمي|من\s+منتخب|يمثل)/i.test(_qSR)) {
+        console.log(`[WC2026:LogicCheck] ⚽ Messi+Algeria logic impossibility intercepted`)
+        return res.status(200).json({
+          content: [
+            `## 🛡️ تحقق منطقي — ليونيل ميسي والجزائر`,
+            ``,
+            `> ❌ **هذا السؤال يفترض معلومة خاطئة.**`,
+            ``,
+            `**ليونيل ميسي** 🇦🇷 يمثل **الأرجنتين** وليس الجزائر:`,
+            `- **جنسيته:** أرجنتيني، مواليد روساريو (الأرجنتين)`,
+            `- **منتخبه:** 🇦🇷 الأرجنتين — بطل العالم 2022 معها`,
+            `- **في WC2026:** مع الأرجنتين في **المجموعة J** — **يواجه الجزائر يوم 17 يونيو**`,
+            ``,
+            `> 🇩🇿 **الجزائر والأرجنتين** في نفس المجموعة J — يتواجهان في الجولة الأولى **17/6/2026، 02:00 (توقيت الجزائر)**.`,
+          ].join('\n'),
+          model: 'wc2026-logic-check', _sportsAgent: true, wc2026: true, found: true,
+        })
+      }
+
+      // ── 3. هل فازت X بكأس العالم 2026 — حالة البطولة ───────────────────────
+      if (/(?:هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+(?:أحرز|نال|حقق)\s+(?:لقب|الكأس|البطولة)|من\s+بطل\s+(?:كأس\s+العالم|المونديال)|من\s+(?:فاز|ربح|أحرز)\s+(?:بكأس|بالكأس|البطولة|اللقب)|هل\s+انتهت?\s+(?:البطولة|كأس\s+العالم))/i.test(_qSR) &&
+          /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(_qSR)) {
+        console.log(`[WC2026:TournamentStatus] 🏆 Tournament winner/status query intercepted: "${_qSR.slice(0,60)}"`)
+        const _wcFinalMs  = new Date('2026-07-19T23:00:00Z').getTime()
+        const _isOngoing  = _wcSRNow <= _wcFinalMs
+        const _teamName   = (/الجزائر|الخضر/.test(_qSR) ? '🇩🇿 الجزائر' :
+                             /الأرجنتين|ارجنتين/.test(_qSR) ? '🇦🇷 الأرجنتين' :
+                             /البرازيل/.test(_qSR) ? '🇧🇷 البرازيل' :
+                             /فرنسا/.test(_qSR) ? '🇫🇷 فرنسا' :
+                             /المغرب/.test(_qSR) ? '🇲🇦 المغرب' : null)
+        const _dzNowLabel = new Date(_wcSRNow + 3600000).toLocaleDateString('ar-DZ', { weekday:'long', day:'numeric', month:'long', year:'numeric', timeZone:'Africa/Algiers' })
+        const _lines = [
+          `## 🏆 حالة بطولة كأس العالم FIFA 2026`,
+          ``,
+          _isOngoing
+            ? `> ⏳ **البطولة لا تزال جارية** — اليوم ${_dzNowLabel}`
+            : `> ✅ **البطولة انتهت** — تحقق من المصادر الرسمية للنتيجة النهائية.`,
+          ``,
+          `| | التفصيل |`,
+          `|---|---------|`,
+          `| 📅 بدأت | 11 يونيو 2026 |`,
+          `| 🏁 النهائي | 19 يوليو 2026 — SoFi Stadium, Los Angeles |`,
+          `| 📊 المرحلة الحالية | دور المجموعات (الجولة 1) |`,
+          ``,
+        ]
+        if (_teamName) {
+          if (_teamName.includes('الجزائر') && _algHasNotPlayed) {
+            _lines.push(`> 🇩🇿 **الجزائر لم تلعب بعد** — أول مبارياتها **17 يونيو 2026 ضد الأرجنتين**.`)
+          } else {
+            _lines.push(`> **${_teamName}** — البطولة لا تزال جارية، لا يوجد بطل حتى الآن.`)
+          }
+          _lines.push(``)
+        }
+        _lines.push(`> 🛡️ **لا يمكن الإجابة عمن فاز بالكأس — البطولة لم تنته بعد.**`)
+        _lines.push(``)
+        _lines.push(`🔗 [FIFA الرسمي](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup)`)
+        return res.status(200).json({
+          content: _lines.join('\n'),
+          model: 'wc2026-tournament-status', _sportsAgent: true, wc2026: true, found: true,
+        })
+      }
+
+      // ── 4. آخر نتائج / جميع نتائج الجولة الأولى — متعدد الأيام ────────────
+      if (/(?:آخر|أحدث)\s+(?:نتائج|نتيجة)\s+(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026)/i.test(_qSR) ||
+          /(?:جميع|كل)?\s*(?:نتائج|مباريات?)\s+(?:الجولة\s+(?:الأولى|1|الأول)|المرحلة\s+الأولى|الراوند\s+الأول)/i.test(_qSR) ||
+          /(?:نتائج|مباريات?)\s+(?:كأس\s*العالم|مونديال)\s+(?:حتى\s+الآن|إلى\s+الآن|حتى\s+اليوم|منذ\s+البداية)/i.test(_qSR) ||
+          /(?:كل|جميع)\s+(?:نتائج|مباريات?)\s+(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026)/i.test(_qSR)) {
+        console.log(`[WC2026:MultiDayResults] 📊 Multi-day results query: "${_qSR.slice(0,60)}"`)
+        try {
+          const _dzOff2 = 3600000
+          const _md_today   = new Date(Date.now() + _dzOff2).toISOString().split('T')[0]
+          const _md_yest    = new Date(Date.now() + _dzOff2 - 86400000).toISOString().split('T')[0]
+          const _md_d2ago   = new Date(Date.now() + _dzOff2 - 172800000).toISOString().split('T')[0]
+          const [_md0, _md1, _md2] = await Promise.all([
+            Promise.race([runWC2026TodayAgent(_md_today),  new Promise(r => setTimeout(() => r(null), 12000))]),
+            Promise.race([runWC2026TodayAgent(_md_yest),   new Promise(r => setTimeout(() => r(null), 12000))]),
+            Promise.race([runWC2026TodayAgent(_md_d2ago),  new Promise(r => setTimeout(() => r(null), 12000))]),
+          ])
+          const _mdSections = [_md0, _md1, _md2].filter(d => d?.userResponse).map(d => d.userResponse)
+          if (_mdSections.length > 0) {
+            const _mdAllMatches = [
+              ...(_md0?.matches || []), ...(_md1?.matches || []), ...(_md2?.matches || [])
+            ].filter(m => m.statusType === 'finished')
+            const _mdHeader = [
+              `## 🏆 آخر نتائج كأس العالم FIFA 2026`,
+              ``,
+              `> 📊 **النتائج المجمّعة (${_md_d2ago} → ${_md_today})** — بيانات مباشرة من FotMob`,
+              ``,
+            ].join('\n')
+            return res.status(200).json({
+              content: _mdHeader + _mdSections.join('\n\n---\n\n'),
+              model: 'wc2026-multi-day-results', _sportsAgent: true, wc2026: true,
+              found: true, matches: _mdAllMatches,
+            })
+          }
+        } catch (_mdErr) { console.error('[WC2026:MultiDayResults] error:', _mdErr.message) }
+      }
+    }
+  }
+
   // ── WC2026 Anti-Hallucination Guard (EARLY) — قبل MatchVs ───────────────
   // يمنع LLM من اختراع نتائج WC 2026 حتى عند استعلامات "نتيجة المكسيك" بدون خصم
   {
     const _wcAHNow  = Date.now()
     const _isWCAH   = _wcAHNow >= 1781136000000 && _wcAHNow <= 1784591999000
     const _isWCRQ   = _isWCAH && (
-      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
+      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من|هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+انتهت?|هل\s+تأهل)\s+(?:مباراة|لقاء|مباريات?)?.{0,35}/i.test(_rawLastMsg) &&
       /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
       !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
     )
@@ -15253,7 +15400,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _wcAntiHalluNow  = Date.now()
     const _isWCSeasonAH    = _wcAntiHalluNow >= 1781136000000 && _wcAntiHalluNow <= 1784591999000
     const _isWCResultQuery = _isWCSeasonAH && (
-      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
+      /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من|هل\s+فاز|هل\s+فازت|هل\s+ربح|هل\s+ربحت|هل\s+انتهت?|هل\s+تأهل)\s+(?:مباراة|لقاء|مباريات?)?.{0,35}/i.test(_rawLastMsg) &&
       /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
       !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
     )

@@ -25,7 +25,11 @@ interface MatchFix {
 function dzHour(utcTime?: string): string {
   if (!utcTime) return ''
   try {
-    const [h, m] = utcTime.split(':').map(Number)
+    const match = utcTime.match(/^(\d{1,2}):(\d{2})/)
+    if (!match) return utcTime
+    const h = parseInt(match[1], 10)
+    const m = parseInt(match[2], 10)
+    if (isNaN(h) || isNaN(m)) return utcTime
     return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   } catch { return utcTime }
 }
@@ -392,7 +396,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
     let middleGlow = false
 
     if (hasScore) {
-      middleText = `${match.homeScore} – ${match.awayScore}`
+      middleText = `${match.awayScore} – ${match.homeScore}`
       middleColor = '#4ade80'   // أخضر فاتح للنتيجة
       middleGlow = true
     } else if (isLive) {
@@ -472,6 +476,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
             overflow: 'hidden',
             whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
+            direction: 'ltr',
             textShadow: middleGlow ? `0 0 10px ${middleColor}88` : 'none',
             background: 'rgba(5,5,18,0.7)',
             borderRadius: 6,
@@ -516,7 +521,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
         {hasScore ? (
           <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: '5px 12px', textAlign: 'center', boxShadow: `0 0 12px ${scoreColor}22` }}>
-            <span style={{ fontSize: 18, fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1 }}>{match.homeScore} – {match.awayScore}</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, direction: 'ltr', display: 'inline-block' }}>{match.awayScore} – {match.homeScore}</span>
             <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>{isLive ? '🔴 LIVE' : 'FT'}</div>
           </div>
         ) : (
@@ -644,7 +649,7 @@ function ScheduleRow({ match, idx }: { match: MatchFix; idx: number }) {
   const opp     = isAlgeria(match.homeTeam) ? match.awayTeam : match.homeTeam
   const isHome  = isAlgeria(match.homeTeam)
   const hasScore= match.homeScore !== null && match.homeScore !== undefined && match.awayScore !== null && match.awayScore !== undefined
-  const scoreStr= hasScore ? `${match.homeScore} – ${match.awayScore}` : dzHour(match.startTime)
+  const scoreStr= hasScore ? `${match.awayScore} – ${match.homeScore}` : dzHour(match.startTime)
   const won     = hasScore && ((isHome && match.homeScore! > match.awayScore!) || (!isHome && match.awayScore! > match.homeScore!))
   const lost    = hasScore && ((isHome && match.homeScore! < match.awayScore!) || (!isHome && match.awayScore! < match.homeScore!))
   const draw    = hasScore && match.homeScore === match.awayScore

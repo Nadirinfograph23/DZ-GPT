@@ -25,11 +25,14 @@ interface MatchFix {
 function dzHour(utcTime?: string): string {
   if (!utcTime) return ''
   try {
-    const match = utcTime.match(/^(\d{1,2}):(\d{2})/)
+    const match = utcTime.match(/^(\d{1,2}):(\d{2})\s*([\u0635\u0645])?/)
     if (!match) return utcTime
-    const h = parseInt(match[1], 10)
+    let h = parseInt(match[1], 10)
     const m = parseInt(match[2], 10)
     if (isNaN(h) || isNaN(m)) return utcTime
+    // م (PM) = مساء، ص (AM) = صباح
+    if (match[3] === '\u0645' && h < 12) h += 12  // م → PM
+    else if (match[3] === '\u0635' && h === 12) h = 0  // ص → AM
     return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   } catch { return utcTime }
 }

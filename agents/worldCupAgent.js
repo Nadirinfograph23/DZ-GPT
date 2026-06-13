@@ -102,7 +102,11 @@ async function fetchFotMobWC2026(dateStr) {
       awayScore: m.away?.score ?? null,
       statusType: m.status?.finished ? 'finished' : m.status?.started ? 'live' : 'upcoming',
       startTime: m.status?.utcTime
-        ? new Date(m.status.utcTime).toLocaleTimeString('ar-DZ', { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Algiers' })
+        ? (() => {
+            const d = new Date(m.status.utcTime)
+            const h = d.getUTCHours(), mn = d.getUTCMinutes()
+            return `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`
+          })()
         : '',
       competition: 'كأس العالم FIFA 2026',
       league: 'World Cup 2026',
@@ -206,7 +210,7 @@ function buildTodayResponseFromLocal(dateStr) {
     // result-pending أو upcoming → 🚫 لا نتيجة — نعرض ⏳ أو الموعد
     let middlePart, statusLine
     if (m.statusType === 'finished' && m.homeScore !== null && m.awayScore !== null) {
-      middlePart = `**${m.homeScore} – ${m.awayScore}**`
+      middlePart = `**${m.awayScore} – ${m.homeScore}**`
       statusLine = `✅ انتهت`
     } else if (m.statusType === 'live') {
       middlePart = `🔴 **مباشر**`

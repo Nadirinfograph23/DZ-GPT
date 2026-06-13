@@ -7840,15 +7840,51 @@ ${rows}
                           />
                         )
                       })()}
-                      {(msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0 && !(msg as any).wc2026?.nextMatch && (
-                        <WC2026MatchCard
-                          matches={(msg as any).matches}
-                          title="⚽ كأس العالم FIFA 2026"
-                          autoRefresh={(msg as any).matches.some((m: any) => m.statusType === 'live')}
-                          allFixtures={(msg as any).matches}
-                        />
-                      )}
-                      {msg.content && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && (
+                      {(msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0 && !(msg as any).wc2026?.nextMatch && (() => {
+                        // Deduplicate with team name normalization (e.g. "أمريكا" = "الولايات المتحدة")
+                        const _aliases: Record<string,string> = { 'أمريكا':'الولايات المتحدة','الولايات المتحده':'الولايات المتحدة','USA':'الولايات المتحدة','US':'الولايات المتحدة','كوريا':'كوريا الجنوبية' }
+                        const _norm = (t: string) => _aliases[t] || t.trim()
+                        const _seen = new Set<string>()
+                        const _deduped = ((msg as any).matches as any[]).filter((m: any) => {
+                          const h = _norm(m.homeTeam); const a = _norm(m.awayTeam); const d = m.date || ''
+                          const k1 = `${h}|${a}|${d}`; const k2 = `${a}|${h}|${d}`
+                          if (_seen.has(k1) || _seen.has(k2)) return false
+                          _seen.add(k1); return true
+                        })
+                        return (
+                          <WC2026MatchCard
+                            matches={_deduped}
+                            title="⚽ كأس العالم FIFA 2026"
+                            autoRefresh={_deduped.some((m: any) => m.statusType === 'live')}
+                            allFixtures={_deduped}
+                          />
+                        )
+                      })()}
+                      {/* Algeria vs X in WC context — use full fixture data */}
+                      {(msg as any)._sportsAgent && (msg as any).wc2026 && !(msg as any).wc2026?.nextMatch && !(Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && msg.matchVsMeta && (() => {
+                        const mv = msg.matchVsMeta!
+                        const _isAlgVs = /جزائر|Algeria/i.test(mv.team1 + mv.team2)
+                        if (!_isAlgVs) return null
+                        // Hardcoded WC2026 Algeria fixtures for client-side lookup
+                        const _algFix: any[] = [
+                          { homeTeam: 'الأرجنتين', awayTeam: 'الجزائر', date: '2026-06-17', startTime: '01:00', venue: 'MetLife Stadium', city: 'East Rutherford', country: 'الولايات المتحدة', statusType: 'upcoming', competition: 'كأس العالم 2026 — المجموعة J', round: 'الجولة 1' },
+                          { homeTeam: 'الجزائر', awayTeam: 'النمسا', date: '2026-06-21', startTime: '02:00', venue: 'Arrowhead Stadium', city: 'كانساس سيتي', country: 'الولايات المتحدة', statusType: 'upcoming', competition: 'كأس العالم 2026 — المجموعة J', round: 'الجولة 2' },
+                          { homeTeam: 'الأردن', awayTeam: 'الجزائر', date: '2026-06-25', startTime: '03:00', venue: 'AT&T Stadium', city: 'دالاس', country: 'الولايات المتحدة', statusType: 'upcoming', competition: 'كأس العالم 2026 — المجموعة J', round: 'الجولة 3' },
+                        ]
+                        const t1 = mv.team1.replace(/^ال/, ''); const t2 = mv.team2.replace(/^ال/, '')
+                        const _found = _algFix.find(f =>
+                          (f.homeTeam.includes(t1) || f.homeTeam.includes(t2) || f.awayTeam.includes(t1) || f.awayTeam.includes(t2)) ||
+                          (f.homeTeam === mv.team1 || f.homeTeam === mv.team2 || f.awayTeam === mv.team1 || f.awayTeam === mv.team2)
+                        ) || _algFix[0]
+                        return (
+                          <WC2026MatchCard
+                            matches={[_found]}
+                            title="⚽ المباراة القادمة — المجموعة J"
+                            allFixtures={_algFix}
+                          />
+                        )
+                      })()}
+                      {msg.content && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && !((msg as any)._sportsAgent && (msg as any).wc2026 && msg.matchVsMeta && /جزائر|Algeria/i.test((msg.matchVsMeta.team1 || '') + (msg.matchVsMeta.team2 || ''))) && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{

@@ -734,6 +734,61 @@
 }
 .v5-md-table-scroll table { width: max-content; min-width: 100%; }
 
+/* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */
+table.dzt-simple-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  margin: 0;
+  table-layout: auto;
+}
+table.dzt-simple-table thead tr {
+  background: rgba(200,255,0,0.07);
+}
+table.dzt-simple-table th {
+  padding: 5px 10px;
+  border: 1px solid rgba(200,255,0,0.18);
+  color: #c8ff00;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+table.dzt-simple-table td {
+  padding: 5px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #c8d8e8;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+table.dzt-simple-table tbody tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+table.dzt-simple-table tbody tr:hover td {
+  background: rgba(200,255,0,0.04);
+}
+/* fallback table (no header) */
+table.dzt-fallback-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  margin: 0;
+}
+table.dzt-fallback-table th, table.dzt-fallback-table td {
+  padding: 5px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #c8d8e8;
+}
+/* Mobile overrides */
+@media (max-width: 480px) {
+  table.dzt-simple-table th,
+  table.dzt-simple-table td,
+  table.dzt-fallback-table th,
+  table.dzt-fallback-table td {
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+}
+
 /* ── Mobile/Responsive overrides ─────────────────────── */
 @media (max-width: 480px) {
   .v5-md { font-size: 13px; }

@@ -320,8 +320,14 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
 
 export function DZMDTable({ children }: DZMDTableProps) {
   const { headers, rows } = useMemo(() => extractTableData(children), [children])
+
+  // جداول صغيرة (≤ 20 صف) → HTML table بسيط بدون virtual scroll
+  // virtual scroll يستخدم position:absolute → صفوف تتداخل على الهاتف
   if (!headers.length || !rows.length) {
     return <table className="dzt-fallback-table">{children}</table>
+  }
+  if (rows.length <= 20) {
+    return <table className="dzt-simple-table">{children}</table>
   }
   return <DZSmartTable headers={headers} rows={rows} />
 }

@@ -198,24 +198,25 @@ function TeamBlock({ name }: { name: string }) {
   const url = getFlagUrl(name)
   const dz = isAlgeria(name)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, maxWidth: '40%' }}>
       <div style={{
-        width: 100, height: 70, borderRadius: 10, overflow: 'hidden', position: 'relative', flexShrink: 0,
+        width: 'min(80px, 22vw)', height: 'min(56px, 15.4vw)', borderRadius: 8, overflow: 'hidden', position: 'relative', flexShrink: 0,
         boxShadow: dz
-          ? '0 0 0 2.5px #22c55e, 0 8px 32px rgba(34,197,94,0.4), 0 2px 12px rgba(0,0,0,0.6)'
-          : '0 6px 28px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(255,255,255,0.1)',
+          ? '0 0 0 2px #22c55e, 0 6px 24px rgba(34,197,94,0.4)'
+          : '0 4px 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)',
       }}>
         {url ? (
           <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="eager" />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>🏴</div>
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🏴</div>
         )}
-        {dz && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #16a34a, #22c55e, #4ade80, #22c55e, #16a34a)' }} />}
+        {dz && <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg,#16a34a,#22c55e,#4ade80,#22c55e,#16a34a)' }} />}
       </div>
       <span style={{
-        color: dz ? '#86efac' : '#e2e8f0', fontWeight: dz ? 900 : 700, fontSize: 14,
-        textAlign: 'center', lineHeight: 1.3, maxWidth: 110,
-        textShadow: dz ? '0 0 12px rgba(34,197,94,0.5)' : 'none',
+        color: dz ? '#86efac' : '#e2e8f0', fontWeight: dz ? 800 : 700, fontSize: 'clamp(10px, 3vw, 13px)',
+        textAlign: 'center', lineHeight: 1.3, maxWidth: '100%',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        textShadow: dz ? '0 0 10px rgba(34,197,94,0.5)' : 'none',
       }}>{name}</span>
     </div>
   )
@@ -284,16 +285,17 @@ function MatchCard({ match }: { match: MatchFix }) {
 
   return (
     <div style={{
+      width: '100%', boxSizing: 'border-box',
       background: hasAlgeria
         ? 'linear-gradient(160deg,#03080f 0%,#040d18 40%,#060f1e 70%,#03080f 100%)'
         : 'linear-gradient(160deg,#070c18 0%,#0a1022 60%,#07091a 100%)',
       border: isLive ? '1.5px solid rgba(239,68,68,0.55)'
         : hasAlgeria ? '1.5px solid rgba(34,197,94,0.28)'
         : '1.5px solid rgba(99,102,241,0.2)',
-      borderRadius: 20, margin: '8px 0', overflow: 'hidden',
+      borderRadius: 16, margin: '6px 0', overflow: 'hidden',
       boxShadow: hasAlgeria
-        ? '0 0 0 1px rgba(34,197,94,0.06),0 20px 60px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.03)'
-        : '0 16px 50px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.03)',
+        ? '0 0 0 1px rgba(34,197,94,0.06),0 12px 40px rgba(0,0,0,0.7)'
+        : '0 10px 36px rgba(0,0,0,0.65)',
       direction: 'rtl', position: 'relative',
     }}>
       {hasAlgeria && (
@@ -492,7 +494,7 @@ function ScoreCenter({ matches, title, compact = false }: { matches: MatchFix[];
   const hasAlgeria = deduped.some(m => isAlgeria(m.homeTeam) || isAlgeria(m.awayTeam))
 
   return (
-    <div style={{
+    <div className="wc-score-center" style={{
       background: 'linear-gradient(160deg,#060b17 0%,#090e1e 100%)',
       border: hasAlgeria ? '1.5px solid rgba(34,197,94,0.2)' : '1.5px solid rgba(99,102,241,0.2)',
       borderRadius: compact ? 14 : 20, overflow: 'hidden', margin: compact ? '4px 0' : '8px 0',
@@ -650,10 +652,12 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
   const isMulti = matches.length > 1 || compact
 
   return (
-    <div style={{ direction: 'rtl', fontFamily: 'inherit', maxWidth: compact ? '100%' : 540 }}>
+    <div style={{ direction: 'rtl', fontFamily: 'inherit', width: '100%', maxWidth: compact ? '100%' : 520, boxSizing: 'border-box', overflow: 'hidden' }}>
       <style>{`
         @keyframes wcPulse { 0%,100% { box-shadow:0 0 8px rgba(239,68,68,0.45); } 50% { box-shadow:0 0 20px rgba(239,68,68,0.85); } }
         @keyframes wcGlow  { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+        .wc-score-center { width:100%; box-sizing:border-box; overflow:hidden; }
+        .wc-row-grid { width:100%; box-sizing:border-box; overflow:hidden; }
       `}</style>
 
       {/* Title bar — only for single-match mode */}

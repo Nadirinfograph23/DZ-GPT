@@ -13765,6 +13765,22 @@ app.get('/api/wc2026/today', async (req, res) => {
       }
     }
 
+    // ── تصحيح حالات المباريات بناءً على الوقت الحالي ──────────────────────────
+    // startTime في البيانات = UTC (WC2026MatchCard تُضيف ساعة لتوقيت الجزائر)
+    const _nowUTC = Date.now()
+    liveMatches = liveMatches.map(m => {
+      if (!m.startTime || !m.date) return m
+      try {
+        const [_h, _min] = m.startTime.split(':').map(Number)
+        const _matchUTC  = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime()
+        const _matchEnd  = _matchUTC + 7200000   // +2 ساعة نهاية المباراة
+        const _liveEnd   = _matchUTC + 7800000   // +2:10 لإطالة (وقت إضافي)
+        if (_nowUTC > _liveEnd)  return { ...m, statusType: 'finished' }
+        if (_nowUTC > _matchUTC) return { ...m, statusType: 'live' }
+        return m
+      } catch(_) { return m }
+    })
+
     return res.json({
       active: true,
       date: nextDate || dateStr,
@@ -15293,7 +15309,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         // يمنع السقوط إلى LLM وما ينتج عنه من ردود "لم أفهم" أو اختراع بيانات
         // تصحيح: استخدام WC2026_FULL_FIXTURES المستوردة statically (تعمل في Vercel bundle)
         console.log('[WC2026:TodayEarly] APIs empty → using local WC2026_FULL_FIXTURES fallback')
-        const _localMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _todayDate)
+        const _nowUTC2 = Date.now()
+        const _fixStatus = (m) => {
+          if (!m.startTime || !m.date) return m
+          try {
+            const [_h,_min] = m.startTime.split(':').map(Number)
+            const _ms = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime()
+            if (_nowUTC2 > _ms + 7800000) return {...m, statusType:'finished'}
+            if (_nowUTC2 > _ms) return {...m, statusType:'live'}
+            return m
+          } catch(_) { return m }
+        }
+        const _localMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _todayDate).map(_fixStatus)
         if (_localMatches?.length) {
           const _lm_lines = [
             `## ⚽ مباريات كأس العالم 2026 — ${new Date(_todayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Africa/Algiers' })}`,

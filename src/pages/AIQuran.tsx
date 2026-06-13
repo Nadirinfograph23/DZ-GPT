@@ -1286,7 +1286,7 @@ ${devInfoSection}`
                   ))}
                   {aiLoading && aiMessages.length > 0 && aiMessages[aiMessages.length - 1]?.content === '' && (
                     <div className="aq-ai-msg aq-ai-msg--assistant">
-                      <Loader2 size={14} className="aq-spin" /> جاري التفكير...
+                      <Loader2 size={14} className="aq-spin" /> 🧠.. راني نخمم أصبر شوية
                     </div>
                   )}
                   <div ref={messagesEndRef} />

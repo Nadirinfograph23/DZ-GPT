@@ -382,11 +382,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
 
   let scoreColor = '#818cf8'
   if (hasScore) {
-    const dzScore = algHome ? match.homeScore : match.awayScore
-    const opScore = algHome ? match.awayScore : match.homeScore
-    if (dzScore !== null && opScore !== null && dzScore !== undefined && opScore !== undefined)
-      scoreColor = dzScore > opScore ? '#22c55e' : dzScore < opScore ? '#f87171' : '#fbbf24'
-    else scoreColor = '#e2e8f0'
+    scoreColor = '#4ade80'  // أخضر فاتح لجميع النتائج المؤكدة
   }
 
   // ── COMPACT: تصميم جديد — علم متوسط | اسم | [نتيجة/موعد] | اسم | علم متوسط ──
@@ -442,12 +438,12 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
           </div>
         )}
 
-        {/* الصف الرئيسي: علم | اسم | [وسط] | اسم | علم */}
+        {/* الصف الرئيسي: [علم+اسم] | [نتيجة/موعد] | [علم+اسم] */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '32px minmax(0,1fr) 56px minmax(0,1fr) 32px',
+          gridTemplateColumns: 'minmax(0,1fr) 64px minmax(0,1fr)',
           alignItems: 'center',
-          gap: 5,
+          gap: 6,
           padding: '8px 9px',
           borderRadius: 10,
           background: rowBg,
@@ -455,88 +451,100 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
           overflow: 'hidden',
           direction: 'rtl',
         }}>
-          {/* علم الفريق المضيف */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <MiniFlag name={match.homeTeam} size={30} />
+          {/* فريق المضيف: علم فوق + اسم تحته */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
+            <MiniFlag name={match.homeTeam} size={32} />
+            <span style={{
+              color: algHome ? '#86efac' : '#e2e8f0',
+              fontWeight: algHome ? 700 : 500,
+              fontSize: 9.5,
+              textAlign: 'center',
+              maxWidth: '100%',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              lineHeight: 1.2,
+            }}>{match.homeTeam}</span>
           </div>
-          {/* اسم الفريق المضيف */}
-          <span style={{
-            color: algHome ? '#86efac' : '#e2e8f0',
-            fontWeight: algHome ? 700 : 500,
-            fontSize: 10.5,
-            textAlign: 'right',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            direction: 'rtl',
-          }}>{match.homeTeam}</span>
 
           {/* النتيجة أو الموعد في المنتصف */}
           <div style={{
             textAlign: 'center',
             fontWeight: 800,
-            fontSize: hasScore ? 13.5 : 11.5,
+            fontSize: hasScore ? 14 : 11.5,
             color: middleColor,
             letterSpacing: hasScore ? 0.5 : 0,
             overflow: 'hidden',
             whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
             direction: 'ltr',
-            textShadow: middleGlow ? `0 0 10px ${middleColor}88` : 'none',
-            background: 'rgba(5,5,18,0.7)',
-            borderRadius: 6,
-            padding: '3px 2px',
-            border: `1px solid ${middleColor}30`,
+            textShadow: middleGlow ? `0 0 12px ${middleColor}99` : 'none',
+            background: 'rgba(5,5,18,0.75)',
+            borderRadius: 8,
+            padding: '5px 4px',
+            border: `1px solid ${middleColor}35`,
+            boxShadow: middleGlow ? `0 0 14px ${middleColor}33` : 'none',
           }}>{middleText}</div>
 
-          {/* اسم الفريق الضيف */}
-          <span style={{
-            color: algAway ? '#86efac' : '#e2e8f0',
-            fontWeight: algAway ? 700 : 500,
-            fontSize: 10.5,
-            textAlign: 'left',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            direction: 'rtl',
-          }}>{match.awayTeam}</span>
-          {/* علم الفريق الضيف */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <MiniFlag name={match.awayTeam} size={30} />
+          {/* فريق الضيف: علم فوق + اسم تحته */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
+            <MiniFlag name={match.awayTeam} size={32} />
+            <span style={{
+              color: algAway ? '#86efac' : '#e2e8f0',
+              fontWeight: algAway ? 700 : 500,
+              fontSize: 9.5,
+              textAlign: 'center',
+              maxWidth: '100%',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              lineHeight: 1.2,
+            }}>{match.awayTeam}</span>
           </div>
         </div>
       </div>
     )
   }
 
-  // ── NORMAL: grid layout ────────────────────────────────────────────────────
+  // ── NORMAL: 3-column grid — علم+اسم | نتيجة/موعد | علم+اسم ──────────────
+  const isResultPendingNorm = match.statusType === 'result-pending' || (match as any)._timePassed
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
-      padding: '12px 16px',
+      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 80px minmax(0,1fr)', alignItems: 'center', gap: 8,
+      padding: '12px 10px',
       background: hasAlg
         ? 'linear-gradient(90deg,rgba(16,185,129,0.08) 0%,rgba(16,185,129,0.03) 50%,rgba(16,185,129,0.08) 100%)'
         : 'rgba(255,255,255,0.02)',
       borderRadius: 12,
       border: hasAlg ? '1px solid rgba(34,197,94,0.18)' : '1px solid rgba(255,255,255,0.05)',
-      direction: 'rtl',
+      direction: 'rtl', overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-        <span style={{ color: algHome ? '#86efac' : '#e2e8f0', fontWeight: algHome ? 800 : 600, fontSize: 13, textAlign: 'right' }}>{match.homeTeam}</span>
+      {/* فريق المضيف: علم فوق + اسم تحته */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
         <MiniFlag name={match.homeTeam} size={38} />
+        <span style={{ color: algHome ? '#86efac' : '#e2e8f0', fontWeight: algHome ? 800 : 600, fontSize: 'clamp(9px,2.5vw,12px)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>{match.homeTeam}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
+
+      {/* النتيجة / الموعد في المنتصف */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
         {hasScore ? (
-          <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: '5px 12px', textAlign: 'center', boxShadow: `0 0 12px ${scoreColor}22` }}>
+          <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: '6px 10px', textAlign: 'center', boxShadow: `0 0 14px ${scoreColor}33` }}>
             <span style={{ fontSize: 18, fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, direction: 'ltr', display: 'inline-block' }}>{match.awayScore} – {match.homeScore}</span>
             <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>{isLive ? '🔴 LIVE' : 'FT'}</div>
           </div>
+        ) : isResultPendingNorm ? (
+          <div style={{ background: 'rgba(146,64,14,0.15)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 10, padding: '6px 8px', textAlign: 'center' }}>
+            <div style={{ fontSize: 16 }}>⏳</div>
+            <div style={{ fontSize: 8, color: '#d97706', fontWeight: 700, marginTop: 2 }}>نتيجة غير متوفرة</div>
+          </div>
         ) : (
-          <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 10, padding: '5px 12px', textAlign: 'center' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#6366f1' }}>{match.startTime ? dzHour(match.startTime) : 'TBD'}</div>
+          <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 10, padding: '6px 8px', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#6366f1' }}>{match.startTime ? dzHour(match.startTime) : 'vs'}</div>
             {match.date && <div style={{ fontSize: 8, color: '#475569', fontWeight: 600, marginTop: 1 }}>{fmtDateShort(match.date)}</div>}
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
+
+      {/* فريق الضيف: علم فوق + اسم تحته */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
         <MiniFlag name={match.awayTeam} size={38} />
-        <span style={{ color: algAway ? '#86efac' : '#e2e8f0', fontWeight: algAway ? 800 : 600, fontSize: 13, textAlign: 'left' }}>{match.awayTeam}</span>
+        <span style={{ color: algAway ? '#86efac' : '#e2e8f0', fontWeight: algAway ? 800 : 600, fontSize: 'clamp(9px,2.5vw,12px)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>{match.awayTeam}</span>
       </div>
     </div>
   )
@@ -545,9 +553,10 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
 // ─── Score Center (multi-match dashboard) ────────────────────────────────────
 function ScoreCenter({ matches, title, compact = false, autoRefresh = false, hasAnyLive = false, isPolling = false, lastUpdate = null }: { matches: MatchFix[]; title?: string; compact?: boolean; autoRefresh?: boolean; hasAnyLive?: boolean; isPolling?: boolean; lastUpdate?: Date | null }) {
   const deduped  = deduplicateMatches(matches)
-  const live     = deduped.filter(m => m.statusType === 'live')
-  const finished = deduped.filter(m => m.statusType === 'finished')
-  const upcoming = deduped.filter(m => m.statusType === 'upcoming' || !m.statusType)
+  const live          = deduped.filter(m => m.statusType === 'live')
+  const finished      = deduped.filter(m => m.statusType === 'finished')
+  const resultPending = deduped.filter(m => m.statusType === 'result-pending' || (m as any)._timePassed)
+  const upcoming      = deduped.filter(m => m.statusType === 'upcoming' && !(m as any)._timePassed)
 
   const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers' })
   const hasAlgeria = deduped.some(m => isAlgeria(m.homeTeam) || isAlgeria(m.awayTeam))
@@ -591,6 +600,7 @@ function ScoreCenter({ matches, title, compact = false, autoRefresh = false, has
         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', flexShrink: 0 }}>
           {live.length > 0 && <span style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: compact ? 9 : 10, fontWeight: 800, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px', animation: 'wcPulse 2s infinite' }}>🔴 {live.length}</span>}
           {finished.length > 0 && <span style={{ background: 'rgba(5,150,105,0.15)', border: '1px solid rgba(16,185,129,0.25)', color: '#6ee7b7', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>✅ {finished.length}</span>}
+          {resultPending.length > 0 && <span style={{ background: 'rgba(146,64,14,0.15)', border: '1px solid rgba(217,119,6,0.3)', color: '#fcd34d', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>⏳ {resultPending.length}</span>}
           {upcoming.length > 0 && <span style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>📅 {upcoming.length}</span>}
         </div>
       </div>
@@ -623,11 +633,24 @@ function ScoreCenter({ matches, title, compact = false, autoRefresh = false, has
           </>
         )}
 
+        {/* Result Pending section — انتهت بدون نتيجة موثوقة */}
+        {resultPending.length > 0 && (
+          <>
+            {!compact && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: (live.length + finished.length) > 0 ? '10px 4px 4px' : '6px 4px 4px' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d97706' }} />
+                <span style={{ color: '#fcd34d', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>⏳ انتهت — نتيجة غير متوفرة</span>
+              </div>
+            )}
+            {resultPending.map((m, i) => <ScoreCenterRow key={`rp${i}`} match={m} compact={compact} />)}
+          </>
+        )}
+
         {/* Upcoming section */}
         {upcoming.length > 0 && (
           <>
             {!compact && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: (live.length + finished.length) > 0 ? '10px 4px 4px' : '6px 4px 4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: (live.length + finished.length + resultPending.length) > 0 ? '10px 4px 4px' : '6px 4px 4px' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} />
                 <span style={{ color: '#a5b4fc', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>مباريات قادمة</span>
               </div>

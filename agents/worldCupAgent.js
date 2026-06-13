@@ -317,12 +317,21 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
           `> 📡 _بيانات مباشرة من FotMob — كأس العالم فقط_`,
           ``,
         ]
-        for (const m of fotmobData.matches) {
+        // ⛔ ANTI-HALLUCINATION: طبّق sanitizeMatchesByTime قبل عرض أي نتيجة
+        const sanitizedFotmob = sanitizeMatchesByTime(fotmobData.matches)
+        for (const m of sanitizedFotmob) {
           const f1 = WC_FLAGS[m.homeTeam] || '🏴'
           const f2 = WC_FLAGS[m.awayTeam] || '🏴'
-          const scoreStr = (m.homeScore !== null && m.awayScore !== null)
-            ? `**${m.homeScore} – ${m.awayScore}**`
-            : m.statusType === 'live' ? `🔴 **مباشر**` : `🆚`
+          let scoreStr
+          if (m.statusType === 'result-pending' || m._timePassed) {
+            scoreStr = `⏳ **نتيجة غير متوفرة**`
+          } else if (m.homeScore !== null && m.awayScore !== null) {
+            scoreStr = `**${m.homeScore} – ${m.awayScore}**`
+          } else if (m.statusType === 'live') {
+            scoreStr = `🔴 **مباشر**`
+          } else {
+            scoreStr = `🆚`
+          }
           lines.push(`### ${f1} **${m.homeTeam}** ${scoreStr} **${m.awayTeam}** ${f2}`)
           if (m.startTime) lines.push(`🕒 **${m.startTime}** (توقيت الجزائر)`)
           lines.push(``)

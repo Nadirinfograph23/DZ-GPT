@@ -242,7 +242,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -15871,6 +15871,78 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         }
       } catch (_standingsErr) {
         console.error('[WC2026:Standings] error:', _standingsErr.message)
+      }
+    }
+  }
+
+  // ══ WC2026 ALGERIA SQUAD INTERCEPTOR — تشكيلة المنتخب الجزائري ═════════════
+  // يُطلَق عند السؤال عن قائمة / تشكيلة / لاعبي الجزائر في كأس العالم 2026
+  {
+    const _isSquadQuery = (
+      /(?:الجزائر|الخضر|منتخب\s*(?:الجزائري|الوطني|الجزائر))/i.test(_rawLastMsg) &&
+      /(?:تشكيل(?:ة)?|قائمة|لاعب(?:ين|ون)?|استدعاء|تشكيلات|الـ\s*26|26\s*لاعب|القائمة\s*الرسمية|أسماء\s*(?:اللاعبين|اللاعبون)|من\s*(?:في|هم)\s*(?:قائمة|تشكيلة)?|مشاركين?|مجموعة\s*اللاعبين?)/i.test(_rawLastMsg)
+    ) && (
+      /(?:كأس\s*العالم|مونديال|2026|FIFA|WC)/i.test(_rawLastMsg) ||
+      // في موسم كأس العالم — أي سؤال تشكيلة للجزائر = WC2026 بالضرورة
+      (Date.now() >= 1781136000000 && Date.now() <= 1784591999000)
+    )
+
+    // كذلك: "لاعبو الجزائر" وحدها في موسم كأس العالم
+    const _isSquadGeneral = !_isSquadQuery && (
+      /(?:لاعب(?:ين|ون|و)\s*(?:الجزائر|الخضر|المنتخب)|من\s*يلعب(?:ون)?\s*(?:مع|في)?\s*(?:الجزائر|الخضر)|أبرز\s*لاعبي?\s*الجزائر|أفضل\s*لاعبي?\s*المنتخب\s*الجزائري)/i.test(_rawLastMsg) &&
+      Date.now() >= 1781136000000 && Date.now() <= 1784591999000
+    )
+
+    if (_isSquadQuery || _isSquadGeneral) {
+      console.log(`[WC2026:AlgeriaSquad] 📋 Algeria squad query intercepted: "${_rawLastMsg.slice(0,70)}"`)
+      const squadResponse = buildAlgeriaWC2026SquadResponse('full')
+      return res.status(200).json({
+        content: squadResponse,
+        model: 'wc2026-algeria-squad-kb',
+        _sportsAgent: true,
+        _bypassLLM: true,
+        wc2026: true,
+        found: true,
+        type: 'algeria-squad',
+      })
+    }
+  }
+
+  // ── سؤال عن لاعب بعينه في تشكيلة الجزائر ───────────────────────────────────
+  {
+    const _isPlayerInSquad = Date.now() >= 1781136000000 && Date.now() <= 1784591999000 &&
+      /(?:هل\s+(?:يلعب|يشارك|موجود|في\s*قائمة)|هل\s+(?:استُدعي|استدعى|ضمن\s*(?:القائمة|التشكيلة)))/i.test(_rawLastMsg)
+
+    if (_isPlayerInSquad) {
+      const _squadPlayers = WC2026_ALGERIA_SQUAD.players
+      const _matchedPlayer = _squadPlayers.find(p =>
+        _rawLastMsg.includes(p.name) ||
+        (p.nameEn && _rawLastMsg.toLowerCase().includes(p.nameEn.toLowerCase().split(' ')[1] || p.nameEn.toLowerCase()))
+      )
+      if (_matchedPlayer) {
+        const _playerResp = [
+          `## ✅ ${_matchedPlayer.name} في تشكيلة الجزائر — كأس العالم 2026`,
+          ``,
+          `| | |`,
+          `|--|--|`,
+          `| **الاسم** | ${_matchedPlayer.name} (${_matchedPlayer.nameEn}) |`,
+          `| **القميص** | ${_matchedPlayer.num}# |`,
+          `| **المركز** | ${_matchedPlayer.pos} |`,
+          `| **النادي** | ${_matchedPlayer.club} |`,
+          `| **المباريات الدولية** | ${_matchedPlayer.caps} مباراة |`,
+          `| **الأهداف الدولية** | ${_matchedPlayer.goals} أهداف |`,
+          ``,
+          `> ✅ نعم، **${_matchedPlayer.name}** مُستدعى رسمياً ضمن قائمة المنتخب الجزائري لكأس العالم 2026.`,
+        ].join('\n')
+        return res.status(200).json({
+          content: _playerResp,
+          model: 'wc2026-algeria-squad-kb',
+          _sportsAgent: true,
+          _bypassLLM: true,
+          wc2026: true,
+          found: true,
+          type: 'algeria-player-check',
+        })
       }
     }
   }

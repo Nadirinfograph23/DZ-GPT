@@ -1576,6 +1576,48 @@
 }
 .dzt-fallback-table tr:hover td { background: rgba(16,163,127,0.03); }
 
+/* ── Simple table (≤20 rows) — same style as fallback ── */
+.dzt-simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0;
+  font-size: 13px;
+}
+.dzt-simple-table th,
+.dzt-simple-table td {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 7px 12px;
+  color: #d4d4d4;
+  white-space: nowrap;
+}
+.dzt-simple-table th {
+  background: #141414;
+  color: #aaa;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dzt-simple-table tr:hover td { background: rgba(16,163,127,0.03); }
+
+/* ── Markdown table scroll wrapper ── */
+.v5-md-table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+.v5-md-table-scroll::-webkit-scrollbar { height: 6px; }
+.v5-md-table-scroll::-webkit-scrollbar-track { background: transparent; }
+.v5-md-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+.v5-md-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.5); }
+
 @media (max-width: 600px) {
   .dzt-wrapper { margin: 6px 0; border-radius: 8px; }
   .dzt-toolbar { flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; }

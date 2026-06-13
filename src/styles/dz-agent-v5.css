@@ -724,3 +724,27 @@
 .v5-md table { border-collapse: collapse; width: 100%; }
 .v5-md th, .v5-md td { border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; }
 .v5-md th { background: rgba(255,255,255,0.05); }
+
+/* ── Markdown table scroll wrapper ───────────────────── */
+.v5-md-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  margin: 6px 0;
+}
+.v5-md-table-scroll table { width: max-content; min-width: 100%; }
+
+/* ── Mobile/Responsive overrides ─────────────────────── */
+@media (max-width: 480px) {
+  .v5-md { font-size: 13px; }
+  .v5-md h1 { font-size: 18px; }
+  .v5-md h2 { font-size: 15px; }
+  .v5-md h3 { font-size: 13px; }
+  .v5-md th, .v5-md td { padding: 4px 6px; font-size: 11px; white-space: nowrap; }
+  .v5-md-table-scroll { margin: 4px 0; }
+  .wc-score-center { margin: 2px 0 !important; }
+}
+@media (max-width: 360px) {
+  .v5-md { font-size: 12px; }
+  .v5-md th, .v5-md td { padding: 3px 5px; font-size: 10px; }
+}

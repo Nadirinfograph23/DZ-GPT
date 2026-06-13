@@ -7940,7 +7940,11 @@ ${rows}
                               )
                             },
                             table({ children }) {
-                              return <DZMDTable>{children}</DZMDTable>
+                              return (
+                                <div className="v5-md-table-scroll">
+                                  <DZMDTable>{children}</DZMDTable>
+                                </div>
+                              )
                             },
                             thead({ children }) { return <thead>{children}</thead> },
                             tbody({ children }) { return <tbody>{children}</tbody> },

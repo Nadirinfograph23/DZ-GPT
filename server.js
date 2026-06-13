@@ -258,6 +258,7 @@ import { createOwnerRouter } from './routes/owner.js'
 import { createGitHubRouter } from './routes/github.js'
 import { router as voiceRouter } from './routes/voice.js'
 import { createFlightsRouter } from './routes/flights.js'
+import { getCapabilityResponse, matchCapabilityQuery } from './lib/dz-agent-identity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isProd = process.env.NODE_ENV === 'production'
@@ -15128,6 +15129,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (_toolRedirect) {
     console.log(`[ToolRedirect] → ${_toolRedirect.toolUrl} for: "${_rawLastMsg.slice(0, 50)}"`)
     return res.status(200).json({ _toolRedirect })
+  }
+
+  // ── Capability KB — هل يسأل عن خدمة بعينها؟ (توليد صور، GitHub، CV...) ──
+  {
+    const _capResp = getCapabilityResponse(_rawLastMsg)
+    if (_capResp) {
+      console.log(`[CapabilityKB] ✅ "${_rawLastMsg.slice(0,50)}" → خدمة مكتشفة`)
+      return res.status(200).json({ content: _capResp, model: 'capability-kb', status: 'capability_guide' })
+    }
   }
 
   // ── WC2026 Smart Routing Guard — الحارس الذكي (قبل كل شيء) ──────────────

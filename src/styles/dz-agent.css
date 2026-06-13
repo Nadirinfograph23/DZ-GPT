@@ -1627,29 +1627,46 @@
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
   margin: 6px 0;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(16,163,127,0.4) rgba(255,255,255,0.05);
+  scrollbar-width: auto;
+  scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
   position: relative;
 }
-.v5-md-table-scroll::-webkit-scrollbar { height: 5px; }
-.v5-md-table-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 3px; }
-.v5-md-table-scroll::-webkit-scrollbar-thumb {
-  background: rgba(16,163,127,0.45);
-  border-radius: 3px;
+/* Force table to overflow so scroll is always triggered */
+.v5-md-table-scroll > table,
+.v5-md-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
 }
-.v5-md-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.7); }
+/* Prevent cell content from wrapping — keeps table wide and scrollable */
+.v5-md-table-scroll th,
+.v5-md-table-scroll td {
+  white-space: nowrap;
+}
+.v5-md-table-scroll::-webkit-scrollbar { height: 8px; }
+.v5-md-table-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  margin: 0 4px;
+}
+.v5-md-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(16,163,127,0.55);
+  border-radius: 4px;
+  border: 1px solid rgba(16,163,127,0.2);
+}
+.v5-md-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.8); }
 @media (max-width: 768px) {
   .v5-md-table-scroll {
-    /* Ensure scroll bar is always visible on mobile to hint scrollability */
-    scrollbar-width: thin;
-    padding-bottom: 2px;
+    scrollbar-width: auto;
+    padding-bottom: 6px;
   }
+  .v5-md-table-scroll::-webkit-scrollbar { height: 10px; }
 }
 
 @media (max-width: 600px) {

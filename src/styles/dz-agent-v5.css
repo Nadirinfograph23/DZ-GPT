@@ -729,10 +729,16 @@
 .v5-md-table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
   max-width: 100%;
   margin: 6px 0;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
 }
 .v5-md-table-scroll table { width: max-content; min-width: 100%; }
+.v5-md-table-scroll th,
+.v5-md-table-scroll td { white-space: nowrap; }
 
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */
 table.dzt-simple-table {

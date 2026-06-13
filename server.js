@@ -15881,20 +15881,39 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══ WC2026 ALGERIA SQUAD INTERCEPTOR — تشكيلة المنتخب الجزائري ═════════════
   // يُطلَق عند السؤال عن قائمة / تشكيلة / لاعبي الجزائر في كأس العالم 2026
   {
-    const _isSquadQuery = (
-      /(?:الجزائر|الخضر|منتخب\s*(?:الجزائري|الوطني|الجزائر))/i.test(_rawLastMsg) &&
-      /(?:تشكيل(?:ة)?|قائمة|لاعب(?:ين|ون)?|استدعاء|تشكيلات|الـ\s*26|26\s*لاعب|القائمة\s*الرسمية|أسماء\s*(?:اللاعبين|اللاعبون)|من\s*(?:في|هم)\s*(?:قائمة|تشكيلة)?|مشاركين?|مجموعة\s*اللاعبين?)/i.test(_rawLastMsg)
-    ) && (
-      /(?:كأس\s*العالم|مونديال|2026|FIFA|WC)/i.test(_rawLastMsg) ||
-      // في موسم كأس العالم — أي سؤال تشكيلة للجزائر = WC2026 بالضرورة
-      (Date.now() >= 1781136000000 && Date.now() <= 1784591999000)
+    const _inWCSeason = Date.now() >= 1781136000000 && Date.now() <= 1784591999000
+    const _hasAlgeriaKw = /(?:الجزائر|الخضر|الفنيق\s*الجزائري|منتخب\s*(?:الجزائري|الوطني|الجزائر)|المنتخب\s*الجزائري|الفريق\s*الجزائري)/i.test(_rawLastMsg)
+    const _hasSquadKw   = /(?:تشكيل(?:ة|ات)?|قائمة|لاعب(?:ين|ون|و|ي)?|استدعاء|الـ\s*26|26\s*لاعب|القائمة\s*الرسمية|أسماء\s*(?:اللاعبين|اللاعبون|المنتخب)|من\s*(?:في|هم|يمثل|يشارك)\s*(?:قائمة|تشكيلة|المنتخب)?|مشاركين?|مجموعة\s*اللاعبين?|الطاقم\s*الكروي|أفضل\s*لاعبي?|أبرز\s*لاعبي?|المستدعون|المُستدعَون|مَن\s*(?:استدعى|سيلعب|سيشارك))/i.test(_rawLastMsg)
+    const _hasWCKw      = /(?:كأس\s*العالم|مونديال|2026|FIFA|WC)/i.test(_rawLastMsg)
+
+    const _isSquadQuery   = _hasAlgeriaKw && _hasSquadKw && (_hasWCKw || _inWCSeason)
+    const _isSquadGeneral = !_isSquadQuery && _inWCSeason && _hasAlgeriaKw && (
+      /(?:لاعب(?:ين|ون|و)\s*(?:الجزائر|الخضر|المنتخب)|من\s*يلعب(?:ون)?\s*(?:مع|في)?\s*(?:الجزائر|الخضر)|أبرز\s*لاعبي?\s*الجزائر|أفضل\s*لاعبي?\s*المنتخب)/i.test(_rawLastMsg)
     )
 
-    // كذلك: "لاعبو الجزائر" وحدها في موسم كأس العالم
-    const _isSquadGeneral = !_isSquadQuery && (
-      /(?:لاعب(?:ين|ون|و)\s*(?:الجزائر|الخضر|المنتخب)|من\s*يلعب(?:ون)?\s*(?:مع|في)?\s*(?:الجزائر|الخضر)|أبرز\s*لاعبي?\s*الجزائر|أفضل\s*لاعبي?\s*المنتخب\s*الجزائري)/i.test(_rawLastMsg) &&
-      Date.now() >= 1781136000000 && Date.now() <= 1784591999000
-    )
+    // معالجة خاصة: سؤال عن محرز أو بنناصر (غير مستدعَيَين)
+    const _isMahrezQuery = _inWCSeason && /(?:محرز|mahrez|بنناصر|bennacer)/i.test(_rawLastMsg) &&
+      /(?:هل|في|ضمن|مستدعى|استدعى|قائمة|تشكيل|يلعب|يشارك|مونديال|كأس\s*العالم|2026)/i.test(_rawLastMsg)
+    if (_isMahrezQuery) {
+      const _missingPlayer = /محرز|mahrez/i.test(_rawLastMsg) ? 'رياض محرز' : 'إسماعيل بنناصر'
+      const _missingResp = [
+        `## ❌ ${_missingPlayer} — غير مُستدعى لكأس العالم 2026`,
+        ``,
+        `> **${_missingPlayer}** **ليس ضمن القائمة الرسمية** للمنتخب الجزائري في كأس العالم FIFA 2026.`,
+        ``,
+        `المدرب **فلاديمير بيتكوفيتش** لم يضمّه في قائمته الرسمية البالغة 26 لاعباً.`,
+        ``,
+        `📋 **أبرز المستدعَين بديلاً:** يوسف عطال، حسام عوار، سعيد بن رحمة، رامي بن سبعيني، رميز زروقي`,
+        ``,
+        `> للاطلاع على القائمة الكاملة: اسأل *"تشكيلة الجزائر في كأس العالم 2026"*`,
+      ].join('\n')
+      console.log(`[WC2026:AlgeriaSquad] ⚠️ ${_missingPlayer} not-in-squad query: "${_rawLastMsg.slice(0,60)}"`)
+      return res.status(200).json({
+        content: _missingResp,
+        model: 'wc2026-algeria-squad-kb',
+        _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'algeria-player-absent',
+      })
+    }
 
     if (_isSquadQuery || _isSquadGeneral) {
       console.log(`[WC2026:AlgeriaSquad] 📋 Algeria squad query intercepted: "${_rawLastMsg.slice(0,70)}"`)

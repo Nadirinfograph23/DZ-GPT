@@ -7,6 +7,7 @@
   color: #e5e5e5;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   overflow: hidden;
+  overflow-x: clip;
   position: relative;
 }
 
@@ -354,6 +355,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: clip;
   min-width: 0;
 }
 
@@ -383,12 +385,13 @@
   .dza-layout {
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: clip;
   }
   .dza-main {
     width: 100%;
     max-width: 100vw;
     min-width: 0;
+    overflow-x: clip;
   }
   .dz-agent-body {
     width: 100%;
@@ -1578,7 +1581,8 @@
 
 /* ── Simple table (≤20 rows) — same style as fallback ── */
 .dzt-simple-table {
-  width: 100%;
+  min-width: max-content;
+  width: max-content;
   border-collapse: collapse;
   margin: 4px 0;
   font-size: 13px;
@@ -1598,25 +1602,54 @@
 }
 .dzt-simple-table tr:hover td { background: rgba(16,163,127,0.03); }
 
+/* fallback table — same scroll behavior */
+.dzt-fallback-table {
+  min-width: max-content;
+  width: max-content;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dzt-fallback-table th,
+.dzt-fallback-table td {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 7px 12px;
+  color: #d4d4d4;
+  white-space: nowrap;
+}
+.dzt-fallback-table th {
+  background: #141414;
+  color: #aaa;
+  font-weight: 700;
+}
+
 /* ── Markdown table scroll wrapper ── */
 .v5-md-table-scroll {
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
   margin: 6px 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
+  scrollbar-color: rgba(16,163,127,0.4) rgba(255,255,255,0.05);
+  position: relative;
 }
-.v5-md-table-scroll::-webkit-scrollbar { height: 6px; }
-.v5-md-table-scroll::-webkit-scrollbar-track { background: transparent; }
+.v5-md-table-scroll::-webkit-scrollbar { height: 5px; }
+.v5-md-table-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 3px; }
 .v5-md-table-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
+  background: rgba(16,163,127,0.45);
+  border-radius: 3px;
 }
-.v5-md-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.5); }
+.v5-md-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.7); }
+@media (max-width: 768px) {
+  .v5-md-table-scroll {
+    /* Ensure scroll bar is always visible on mobile to hint scrollability */
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+}
 
 @media (max-width: 600px) {
   .dzt-wrapper { margin: 6px 0; border-radius: 8px; }

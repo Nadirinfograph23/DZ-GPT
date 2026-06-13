@@ -217,9 +217,12 @@ function buildTodayResponseFromLocal(dateStr) {
   })()
 
   const lines = [
-    `## ⚽ مباريات كأس العالم 2026 — ${dateLabel}`,
+    `## 🏆 كأس العالم FIFA 2026`,
+    `### 📅 ${dateLabel}`,
     ``,
-    `> 📡 _الجدول الرسمي FIFA 2026_`,
+    `> 📡 _بيانات رسمية FIFA 2026 — جدول محدَّث_`,
+    ``,
+    `---`,
     ``,
   ]
 
@@ -231,41 +234,44 @@ function buildTodayResponseFromLocal(dateStr) {
     const [hh, mm_] = (m.startTime || '00:00').split(':')
     const dzH = String((parseInt(hh, 10) + 1) % 24).padStart(2, '0')
 
-    // ── RULE: لا نتيجة إلا من مصدر رسمي ──────────────────────────────────
-    // finished + homeScore موثوقة → نعرضها
-    // result-pending أو upcoming → 🚫 لا نتيجة — نعرض ⏳ أو الموعد
-    let middlePart, statusLine
+    let scoreDisplay, statusBadge, extraLine = ''
+
     if (m.statusType === 'finished' && m.homeScore !== null && m.awayScore !== null) {
-      middlePart = `**${m.homeScore} – ${m.awayScore}**`
-      statusLine = `✅ انتهت`
+      scoreDisplay = `**\`${m.homeScore} — ${m.awayScore}\`**`
+      statusBadge  = `✅ انتهت`
     } else if (m.statusType === 'live') {
-      middlePart = `🔴 **مباشر**`
-      statusLine = `🔴 **جارية الآن**`
+      scoreDisplay = `🔴 **\`مباشر\`**`
+      statusBadge  = `🔴 جارية الآن`
     } else if (m.statusType === 'result-pending' || m._timePassed) {
-      // ⚠️ المباراة انتهى وقتها لكن النتيجة غير موثوقة من مصادر حية
-      middlePart = `⏳`
-      statusLine = `> ⚠️ انتهت — **النتيجة الحقيقية غير متوفرة من المصادر الحية** — [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [FIFA](https://www.fifa.com/worldcup/matches)`
-      hasPending = true
+      scoreDisplay = `\`⏳\``
+      statusBadge  = `⚠️ نتيجة غير متوفرة`
+      extraLine    = `> ⚠️ [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [FIFA](https://www.fifa.com/worldcup/matches)`
+      hasPending   = true
     } else {
-      // upcoming — مباراة لم تبدأ بعد
-      middlePart = `🆚`
-      statusLine = `🕒 **${dzH}:${mm_}** (توقيت الجزائر) | 🏟️ ${m.venue}, ${m.city}`
+      scoreDisplay = `\`🆚\``
+      statusBadge  = `📅 قادمة`
     }
 
-    lines.push(`### ${f1} **${m.homeTeam}** ${middlePart} **${m.awayTeam}** ${f2}`)
-    lines.push(statusLine)
-    if (m.statusType !== 'result-pending' && !m._timePassed) {
-      lines.push(`🏷️ المجموعة **${m.group}** — ${m.round}`)
-    }
+    const venue  = m.venue ? `🏟️ ${m.venue}${m.city ? `, ${m.city}` : ''}` : '—'
+    const timing = m.statusType === 'upcoming' ? `⏰ **${dzH}:${mm_}** DZ` : statusBadge
+
+    lines.push(`### ${f1} **${m.homeTeam}** ${scoreDisplay} **${m.awayTeam}** ${f2}`)
     lines.push(``)
+    lines.push(`| الحالة | المجموعة | الملعب | الوقت |`)
+    lines.push(`|:---:|:---:|:---:|:---:|`)
+    lines.push(`| ${statusBadge} | 🏷️ **${m.group || '—'}** | ${venue} | ${timing} |`)
+    lines.push(``)
+    if (extraLine) { lines.push(extraLine); lines.push(``) }
   }
 
   if (hasPending) {
     lines.push(`---`)
-    lines.push(`> 🛡️ **تنبيه مهم:** الوكيل لا يعرض أي نتيجة غير موثوقة. للنتائج الفعلية راجع المصادر الرسمية المذكورة أعلاه.`)
+    lines.push(`> 🛡️ **تنبيه:** الوكيل لا يعرض أي نتيجة غير موثوقة. للنتائج الفعلية راجع المصادر أعلاه.`)
     lines.push(``)
   }
-  lines.push(`🔴 **متابعة حية:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [FIFA](https://www.fifa.com/worldcup)`)
+
+  lines.push(`---`)
+  lines.push(`🔴 **متابعة مباشرة:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) · [365score](https://www.365scores.com/ar/football/world-cup-2026) · [FIFA](https://www.fifa.com/worldcup)`)
 
   return {
     userResponse: lines.join('\n'),
@@ -349,16 +355,19 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
         ``,
         `> ✅ **${srcLabel}**`,
         ``,
+        `---`,
+        ``,
       ]
       for (const m of finishedMatches) {
         const f1 = WC_FLAGS[m.homeTeam] || '🏴'
         const f2 = WC_FLAGS[m.awayTeam] || '🏴'
-        const grp = m.group ? ` *(${m.group})*` : ''
-        lines.push(`✅ ${f1} **${m.homeTeam}** \`${m.homeScore} – ${m.awayScore}\` **${m.awayTeam}** ${f2}${grp}`)
+        const grp = m.group ? `🏷️ **${m.group}**` : ''
+        lines.push(`### ${f1} **${m.homeTeam}** **\`${m.homeScore} — ${m.awayScore}\`** **${m.awayTeam}** ${f2}`)
+        if (grp) lines.push(`> ${grp} · ✅ انتهت`)
+        lines.push(``)
       }
-      lines.push(``)
       lines.push(`---`)
-      lines.push(`[FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) · [365score](https://www.365scores.com/ar/football/world-cup-2026) · [FIFA](https://www.fifa.com/worldcup)`)
+      lines.push(`📊 **المصادر:** [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) · [365score](https://www.365scores.com/ar/football/world-cup-2026) · [FIFA](https://www.fifa.com/worldcup)`)
       return {
         userResponse: lines.join('\n'),
         matches: finishedMatches,
@@ -422,32 +431,41 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
           } catch { return dateStr }
         })()
         const lines = [
-          `## ⚽ مباريات كأس العالم 2026 — ${dateLabel}`,
+          `## 🏆 كأس العالم FIFA 2026`,
+          `### 📅 ${dateLabel}`,
           ``,
           `> 📡 _بيانات مباشرة من FotMob — كأس العالم فقط_`,
           ``,
+          `---`,
+          ``,
         ]
-        // ⛔ ANTI-HALLUCINATION: طبّق sanitizeMatchesByTime قبل عرض أي نتيجة
-        // ✅ VERIFIED SCORES: النتائج الموثّقة محلياً تُلغي بيانات API الخاطئة
         const sanitizedFotmob = sanitizeMatchesByTime(applyVerifiedScores(fotmobData.matches))
         for (const m of sanitizedFotmob) {
           const f1 = WC_FLAGS[m.homeTeam] || '🏴'
           const f2 = WC_FLAGS[m.awayTeam] || '🏴'
-          let scoreStr
+          let scoreDisplay, statusBadge
           if (m.statusType === 'result-pending' || m._timePassed) {
-            scoreStr = `⏳ **نتيجة غير متوفرة**`
+            scoreDisplay = `\`⏳\``; statusBadge = `⚠️ نتيجة غير متوفرة`
           } else if (m.homeScore !== null && m.awayScore !== null) {
-            scoreStr = `**${m.homeScore} – ${m.awayScore}**`
+            scoreDisplay = `**\`${m.homeScore} — ${m.awayScore}\`**`
+            statusBadge  = m.statusType === 'live' ? `🔴 مباشر` : `✅ انتهت`
           } else if (m.statusType === 'live') {
-            scoreStr = `🔴 **مباشر**`
+            scoreDisplay = `🔴 **\`مباشر\`**`; statusBadge = `🔴 جارية الآن`
           } else {
-            scoreStr = `🆚`
+            scoreDisplay = `\`🆚\``; statusBadge = `📅 قادمة`
           }
-          lines.push(`### ${f1} **${m.homeTeam}** ${scoreStr} **${m.awayTeam}** ${f2}`)
-          if (m.startTime) lines.push(`🕒 **${m.startTime}** (توقيت الجزائر)`)
+          const [hh, mn] = (m.startTime || '00:00').split(':')
+          const dzH = m.startTime ? `${String((parseInt(hh)+1)%24).padStart(2,'0')}:${mn}` : ''
+          const timing = m.statusType === 'upcoming' && dzH ? `⏰ **${dzH}** DZ` : statusBadge
+          lines.push(`### ${f1} **${m.homeTeam}** ${scoreDisplay} **${m.awayTeam}** ${f2}`)
+          lines.push(``)
+          lines.push(`| الحالة | الوقت |`)
+          lines.push(`|:---:|:---:|`)
+          lines.push(`| ${statusBadge} | ${timing} |`)
           lines.push(``)
         }
-        lines.push(`🔴 [المتابعة الحية على FotMob](https://www.fotmob.com/leagues/77/matches/world-cup)`)
+        lines.push(`---`)
+        lines.push(`🔴 **متابعة مباشرة:** [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) · [FIFA](https://www.fifa.com/worldcup)`)
         return {
           userResponse: lines.join('\n'),
           matches: fotmobData.matches,

@@ -433,24 +433,33 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
         </div>
       )}
 
-      {/* ── الصف الرئيسي: [علم + اسم] | [نتيجة/موعد] | [اسم + علم] ── */}
+      {/* ── الصف الرئيسي: [نتيجة+علم+اسم] | [فاصل] | [اسم+علم+نتيجة] ── */}
+      {/* كل رقم ملصق باسم فريقه مباشرةً — لا التباس في أي اتجاه قراءة  */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
+        display: 'flex',
         alignItems: 'center',
-        gap: compact ? 5 : 6,
+        gap: compact ? 4 : 6,
         padding: compact ? '7px 8px' : '9px 10px',
         borderRadius: compact ? 9 : 12,
         background: rowBg,
         border: rowBorder,
         overflow: 'hidden',
         boxSizing: 'border-box',
+        direction: 'ltr',
       }}>
 
-        {/* فريق المضيف: علم + اسم على نفس السطر — محاذاة يمين */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end', minWidth: 0, overflow: 'hidden' }}>
+        {/* فريق المضيف (يسار في LTR) — علم + اسم + نتيجته */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden', justifyContent: 'flex-end' }}>
+          {hasScore && (
+            <span style={{
+              fontSize: compact ? 15 : 17, fontWeight: 900,
+              color: scoreColor, fontVariantNumeric: 'tabular-nums',
+              textShadow: scoreGlow ? `0 0 10px ${scoreColor}80` : 'none',
+              lineHeight: 1, flexShrink: 0,
+            }}>{match.homeScore}</span>
+          )}
           <span style={{
-            color: algHome ? '#86efac' : '#e2e8f0',
+            color: algHome ? '#86efac' : '#cbd5e1',
             fontWeight: algHome ? 800 : 600,
             fontSize: compact ? 10.5 : 12,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -460,48 +469,50 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
           <MiniFlag name={match.homeTeam} size={flagSize} />
         </div>
 
-        {/* النتيجة / الموعد — في المنتصف */}
+        {/* الفاصل الوسط — حالة المباراة أو الموعد */}
         <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
           background: scoreBg,
           border: `1.5px solid ${scoreBorder}`,
-          borderRadius: 9,
-          padding: compact ? '5px 8px' : '6px 11px',
-          minWidth: compact ? 54 : 62,
-          boxShadow: scoreGlow ? `0 0 14px ${scoreColor}30` : 'none',
+          borderRadius: 8,
+          padding: compact ? '4px 7px' : '5px 10px',
           flexShrink: 0,
+          boxShadow: scoreGlow ? `0 0 12px ${scoreColor}28` : 'none',
         }}>
           <span style={{
-            fontSize: compact ? 13 : 15,
-            fontWeight: 900,
-            color: scoreColor,
-            fontVariantNumeric: 'tabular-nums',
-            letterSpacing: hasScore ? 1 : 0,
-            direction: 'ltr',
-            whiteSpace: 'nowrap',
-            lineHeight: 1,
-            textShadow: scoreGlow ? `0 0 10px ${scoreColor}80` : 'none',
-          }}>{scoreText}</span>
+            fontSize: compact ? 11 : 13, fontWeight: 800,
+            color: scoreColor, whiteSpace: 'nowrap', lineHeight: 1,
+          }}>
+            {hasScore ? (isLive ? '🔴' : '–') : scoreText}
+          </span>
           {scoreLabel && (
             <span style={{
-              fontSize: 7.5, fontWeight: 700, marginTop: 3, letterSpacing: 0.5,
+              fontSize: 7, fontWeight: 700, marginTop: 2, letterSpacing: 0.5,
               color: isLive ? '#f87171' : scoreGlow ? '#6ee7b7' : '#475569',
               whiteSpace: 'nowrap',
             }}>{scoreLabel}</span>
           )}
         </div>
 
-        {/* فريق الضيف: علم + اسم على نفس السطر — محاذاة يسار */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
+        {/* فريق الضيف (يمين في LTR) — نتيجته + علم + اسم */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflow: 'hidden', justifyContent: 'flex-start' }}>
           <MiniFlag name={match.awayTeam} size={flagSize} />
           <span style={{
-            color: algAway ? '#86efac' : '#e2e8f0',
+            color: algAway ? '#86efac' : '#cbd5e1',
             fontWeight: algAway ? 800 : 600,
             fontSize: compact ? 10.5 : 12,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             lineHeight: 1.2, flexShrink: 1, minWidth: 0,
             direction: 'rtl',
           }}>{match.awayTeam}</span>
+          {hasScore && (
+            <span style={{
+              fontSize: compact ? 15 : 17, fontWeight: 900,
+              color: scoreColor, fontVariantNumeric: 'tabular-nums',
+              textShadow: scoreGlow ? `0 0 10px ${scoreColor}80` : 'none',
+              lineHeight: 1, flexShrink: 0,
+            }}>{match.awayScore}</span>
+          )}
         </div>
 
       </div>

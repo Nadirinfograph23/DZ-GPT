@@ -36,6 +36,26 @@ import {
 const withTimeout = (promise, ms) =>
   Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))])
 
+// ── تصحيح بيانات API بالنتائج الموثّقة محلياً ─────────────────────────────
+// الأولوية: البيانات المحلية الموثّقة (verified:true) تُلغي أي بيانات API خاطئة
+function applyVerifiedScores(matches = []) {
+  const verified = WC2026_FULL_FIXTURES.filter(f => f.verified && f.statusType === 'finished')
+  return matches.map(m => {
+    const fix = verified.find(f =>
+      (f.homeTeam === m.homeTeam || f.awayTeam === m.homeTeam) &&
+      (f.homeTeam === m.awayTeam || f.awayTeam === m.awayTeam)
+    )
+    if (!fix) return m
+    // نتأكد من اتجاه الفريق المضيف (الترتيب قد يختلف بين API والبيانات المحلية)
+    if (fix.homeTeam === m.homeTeam) {
+      return { ...m, homeScore: fix.homeScore, awayScore: fix.awayScore, statusType: 'finished', winner: fix.winner, _verified: true }
+    } else {
+      // الفريق المضيف في البيانات المحلية هو الفريق الضيف في API → نعكس
+      return { ...m, homeScore: fix.awayScore, awayScore: fix.homeScore, statusType: 'finished', winner: fix.winner, _verified: true }
+    }
+  })
+}
+
 // ── أعلام الدول ─────────────────────────────────────────────────────────────
 const WC_FLAGS = {
   'الجزائر':'🇩🇿','الأرجنتين':'🇦🇷','المكسيك':'🇲🇽','جنوب أفريقيا':'🇿🇦',
@@ -210,7 +230,7 @@ function buildTodayResponseFromLocal(dateStr) {
     // result-pending أو upcoming → 🚫 لا نتيجة — نعرض ⏳ أو الموعد
     let middlePart, statusLine
     if (m.statusType === 'finished' && m.homeScore !== null && m.awayScore !== null) {
-      middlePart = `**${m.awayScore} – ${m.homeScore}**`
+      middlePart = `**${m.homeScore} – ${m.awayScore}**`
       statusLine = `✅ انتهت`
     } else if (m.statusType === 'live') {
       middlePart = `🔴 **مباشر**`
@@ -318,7 +338,8 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
           ``,
         ]
         // ⛔ ANTI-HALLUCINATION: طبّق sanitizeMatchesByTime قبل عرض أي نتيجة
-        const sanitizedFotmob = sanitizeMatchesByTime(fotmobData.matches)
+        // ✅ VERIFIED SCORES: النتائج الموثّقة محلياً تُلغي بيانات API الخاطئة
+        const sanitizedFotmob = sanitizeMatchesByTime(applyVerifiedScores(fotmobData.matches))
         for (const m of sanitizedFotmob) {
           const f1 = WC_FLAGS[m.homeTeam] || '🏴'
           const f2 = WC_FLAGS[m.awayTeam] || '🏴'
@@ -326,7 +347,7 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
           if (m.statusType === 'result-pending' || m._timePassed) {
             scoreStr = `⏳ **نتيجة غير متوفرة**`
           } else if (m.homeScore !== null && m.awayScore !== null) {
-            scoreStr = `**${m.awayScore} – ${m.homeScore}**`
+            scoreStr = `**${m.homeScore} – ${m.awayScore}**`
           } else if (m.statusType === 'live') {
             scoreStr = `🔴 **مباشر**`
           } else {

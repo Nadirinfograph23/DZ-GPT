@@ -15666,6 +15666,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             found: _wcTomRes.found,
             sources: _wcTomRes.sources,
             matchCount: _wcTomRes.matchCount,
+            matches: _wcTomRes.matches || [],
           })
         }
         // ── Fallback: بيانات محلية ──────────────────────────────────────────
@@ -15697,6 +15698,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             found: true,
             sources: ['WC2026_FULL_FIXTURES'],
             matchCount: _tomMatches.length,
+            matches: _tomMatches,
           })
         }
         return res.status(200).json({
@@ -15727,7 +15729,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
               _tl2.push(`🕒 **${String((parseInt(_h,10)+1)%24).padStart(2,'0')}:${_mn}** (توقيت الجزائر) | 🏟️ ${_m.venue}, ${_m.city}`)
               _tl2.push(``)
             }
-            return res.status(200).json({ content: _tl2.join('\n'), model: 'wc2026-tomorrow-safe-fallback', _sportsAgent: true, wc2026: true, found: true })
+            return res.status(200).json({ content: _tl2.join('\n'), model: 'wc2026-tomorrow-safe-fallback', _sportsAgent: true, wc2026: true, found: true, matches: _safeTomMatches })
           }
         } catch (_) {}
         return res.status(200).json({

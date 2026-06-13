@@ -91,6 +91,12 @@ export function classifyWCQuery(query = '') {
 
   if (/(?:مباراة|متى)\s+(?:الجزائر|جزائر)|(?:الجزائر|جزائر)\s+(?:مباراة|ضد|vs)/i.test(q)) return 'ALGERIA_MATCH'
 
+  // ── نتائج (RESULTS) — يجب أن يسبق FIXTURES لتفادي التعارض مع "نتائج مباريات" ──
+  // يُطابق: "نتائج مباريات كأس العالم" / "نتائج كأس العالم" / "نتائج المونديال"
+  if (/(?:نتيجة|نتائج)\s+(?:مباريات?|ماتشات?|اللقاءات?)\s+(?:ال)?(?:كأس\s*(?:ال)?عالم|مونديال|FIFA|فيفا)/i.test(q) ||
+      /(?:نتيجة|نتائج)\s+(?:ال)?(?:كأس\s*(?:ال)?عالم|مونديال|FIFA|فيفا)/i.test(q) ||
+      /(?:ما|ماهي|ايش|إيش|وش)\s+(?:نتيجة|نتائج)\s+(?:ال)?(?:كأس\s*(?:ال)?عالم|مونديال)/i.test(q)) return 'RESULTS'
+
   if (/مباريات|برنامج|جدول|رزنامة|fixture|schedule/i.test(q)) return 'FIXTURES'
 
   return 'GENERAL'
@@ -296,6 +302,91 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
         }
       }
     } catch {}
+  }
+
+  // ── RESULTS — نتائج المباريات المنتهية (متعدد الأيام) ────────────────────
+  if (wcType === 'RESULTS') {
+    // 1. بيانات موثّقة محلياً (فورية — بدون شبكة) — الأسرع والأضمن
+    const verifiedLocal = WC2026_FULL_FIXTURES.filter(f => f.verified && f.statusType === 'finished')
+
+    // 2. جلب آخر 3 أيام من المصادر الحية (بالتوازي)
+    const _dzOff = 3600000
+    const _dToday = new Date(Date.now() + _dzOff).toISOString().slice(0, 10)
+    const _dYest  = new Date(Date.now() + _dzOff - 86400000).toISOString().slice(0, 10)
+    const _dD2ago = new Date(Date.now() + _dzOff - 172800000).toISOString().slice(0, 10)
+
+    let liveFinished = []
+    try {
+      const [_r0, _r1, _r2] = await Promise.all([
+        withTimeout(runWC2026TodayAgent(_dToday), 10000),
+        withTimeout(runWC2026TodayAgent(_dYest),  10000),
+        withTimeout(runWC2026TodayAgent(_dD2ago), 10000),
+      ])
+      liveFinished = [
+        ...(_r0?.matches || []),
+        ...(_r1?.matches || []),
+        ...(_r2?.matches || []),
+      ].filter(m => m.statusType === 'finished')
+      // إزالة المكررات (نفس المباراة في عدة مصادر)
+      const seen = new Set()
+      liveFinished = liveFinished.filter(m => {
+        const k = [m.homeTeam, m.awayTeam].sort().join('__')
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+    } catch {}
+
+    // 3. الأفضلية للبيانات الحية، ثم المحلية الموثّقة
+    const finishedMatches = liveFinished.length > 0 ? liveFinished : verifiedLocal
+    const srcLabel = liveFinished.length > 0
+      ? 'بيانات مباشرة من FotMob/jdwel'
+      : verifiedLocal.length > 0 ? 'بيانات موثّقة (365scores ✅)' : null
+
+    if (finishedMatches.length > 0) {
+      const lines = [
+        `## 🏆 نتائج كأس العالم FIFA 2026`,
+        ``,
+        `> ✅ **${srcLabel}**`,
+        ``,
+        `| | المضيف | النتيجة | الضيف | المجموعة |`,
+        `|:---:|:---|:---:|---:|:---:|`,
+      ]
+      for (const m of finishedMatches) {
+        const f1 = WC_FLAGS[m.homeTeam] || '🏴'
+        const f2 = WC_FLAGS[m.awayTeam] || '🏴'
+        lines.push(`| ✅ | ${f1} **${m.homeTeam}** | \`${m.homeScore} – ${m.awayScore}\` | **${m.awayTeam}** ${f2} | ${m.group || ''} |`)
+      }
+      lines.push(``)
+      lines.push(`---`)
+      lines.push(`🔴 [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026) | [FIFA](https://www.fifa.com/worldcup)`)
+      return {
+        userResponse: lines.join('\n'),
+        matches: finishedMatches,
+        found: true,
+        matchCount: finishedMatches.length,
+        agent: 'world_cup_agent',
+        source: liveFinished.length > 0 ? 'FotMob/jdwel' : 'WC2026_LOCAL_VERIFIED',
+        confidence: 'high',
+        wcType: 'RESULTS',
+      }
+    }
+
+    // لا نتائج بعد — البطولة لم تشهد مباريات منتهية
+    return {
+      userResponse: [
+        `## 🏆 نتائج كأس العالم FIFA 2026`,
+        ``,
+        `> ℹ️ **لا نتائج متاحة بعد** — البطولة انطلقت للتو، انتظر أول المباريات!`,
+        ``,
+        `🔗 [FotMob](https://www.fotmob.com/ar/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
+      ].join('\n'),
+      found: false, matches: [],
+      agent: 'world_cup_agent',
+      source: 'WC2026_LOCAL',
+      confidence: 'high',
+      wcType: 'RESULTS',
+    }
   }
 
   // ── TODAY / TOMORROW ─────────────────────────────────────────────────────

@@ -68,6 +68,20 @@ const normalizeQuranSearch = (value: string) =>
     .trim()
     .toLowerCase()
 
+// ── فلتر إزالة الحروف غير العربية من ردود الذكاء الاصطناعي ────────────────
+function stripNonArabic(text: string): string {
+  return text
+    // إزالة الأحرف السيريلية (روسي، أوكراني، الخ) — مثل "начинает"
+    .replace(/[\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]+/g, '')
+    // إزالة كلمات لاتينية بأكثر من حرفين (مع الحفاظ على الأرقام والرموز والـmarkdown)
+    .replace(/\b[A-Za-z]{3,}\b/g, '')
+    // تنظيف مسافات متعددة
+    .replace(/[ \t]{2,}/g, ' ')
+    // تنظيف سطور فارغة متعددة
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const verseIncludesQuery = (text: string, query: string) => {
   const normalizedQuery = normalizeQuranSearch(query)
   if (!normalizedQuery) return false
@@ -562,6 +576,14 @@ export default function AIQuran() {
 
 الدقة أهم من السرعة. الموثوقية أهم من كثرة الكلام. تصرف كمحقق قرآني صارم يعتمد على الأدلة فقط.
 
+━━━━━━━━━━━━━━━━━━
+قاعدة اللغة — إلزامية مطلقة
+━━━━━━━━━━━━━━━━━━
+🚫 يُمنع منعاً باتاً استخدام أي حرف أو كلمة خارج اللغة العربية.
+🚫 ممنوع: الروسية — الإنجليزية — الفرنسية — أي أبجدية غير عربية — أي رمز غير عربي.
+✅ مسموح فقط: اللغة العربية الفصحى — أرقام عربية/هندية — علامات الترقيم القياسية — رموز القرآن ﴿ ﴾.
+إذا استُفسر عن مصطلح أجنبي: اذكره بالعربية واشرحه بالعربية فقط.
+
 ${context ? `السياق الحالي: ${context}` : ''}
 ${wordCtx ? wordCtx : ''}
 ${tafsirCtx ? tafsirCtx : ''}
@@ -604,7 +626,7 @@ ${devInfoSection}`
                   full += d.token
                   setAiMessages(prev => {
                     const next = [...prev]
-                    next[streamingMsgIndex] = { role: 'assistant', content: full, streaming: true }
+                    next[streamingMsgIndex] = { role: 'assistant', content: stripNonArabic(full), streaming: true }
                     return next
                   })
                 }
@@ -619,10 +641,10 @@ ${devInfoSection}`
             }
           }
         }
-        // Mark streaming done
+        // Mark streaming done — apply Arabic-only filter
         setAiMessages(prev => {
           const next = [...prev]
-          if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: full || 'حدث خطأ، حاول مجدداً.' }
+          if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: stripNonArabic(full) || 'حدث خطأ، حاول مجدداً.' }
           return next
         })
       } catch {
@@ -634,7 +656,7 @@ ${devInfoSection}`
             body: JSON.stringify({ messages: messages.slice(-6), lang: 'ar' }),
           })
           const fd = await fb.json()
-          const fallbackText = fd.content || fd.text || 'تعذر الاتصال، حاول لاحقاً.'
+          const fallbackText = stripNonArabic(fd.content || fd.text || 'تعذر الاتصال، حاول لاحقاً.')
           setAiMessages(prev => {
             const next = [...prev]
             if (next[streamingMsgIndex]) next[streamingMsgIndex] = { role: 'assistant', content: fallbackText }
@@ -1286,7 +1308,7 @@ ${devInfoSection}`
                   ))}
                   {aiLoading && aiMessages.length > 0 && aiMessages[aiMessages.length - 1]?.content === '' && (
                     <div className="aq-ai-msg aq-ai-msg--assistant">
-                      <Loader2 size={14} className="aq-spin" /> 🧠.. راني نخمم أصبر شوية
+                      <Loader2 size={14} className="aq-spin" /> 🧠 جاري التفكير...
                     </div>
                   )}
                   <div ref={messagesEndRef} />

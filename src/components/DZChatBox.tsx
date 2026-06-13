@@ -7837,6 +7837,8 @@ ${rows}
                             matches={[_mainMatch]}
                             title={`⚽ المباراة القادمة — المجموعة ${(msg as any).wc2026.group || 'J'}`}
                             allFixtures={_allFix}
+                            autoRefresh={true}
+                            refreshInterval={60000}
                           />
                         )
                       })()}

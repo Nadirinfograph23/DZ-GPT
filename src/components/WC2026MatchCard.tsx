@@ -484,7 +484,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
 }
 
 // ─── Score Center (multi-match dashboard) ────────────────────────────────────
-function ScoreCenter({ matches, title, compact = false }: { matches: MatchFix[]; title?: string; compact?: boolean }) {
+function ScoreCenter({ matches, title, compact = false, autoRefresh = false, hasAnyLive = false, isPolling = false, lastUpdate = null }: { matches: MatchFix[]; title?: string; compact?: boolean; autoRefresh?: boolean; hasAnyLive?: boolean; isPolling?: boolean; lastUpdate?: Date | null }) {
   const deduped  = deduplicateMatches(matches)
   const live     = deduped.filter(m => m.statusType === 'live')
   const finished = deduped.filter(m => m.statusType === 'finished')
@@ -510,14 +510,26 @@ function ScoreCenter({ matches, title, compact = false }: { matches: MatchFix[];
         borderBottom: '1px solid rgba(255,255,255,0.06)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10 }}>
-          <span style={{ fontSize: compact ? 15 : 22 }}>🏆</span>
-          <span style={{ color: '#d1fae5', fontWeight: 800, fontSize: compact ? 11 : 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ fontSize: compact ? 15 : 22, flexShrink: 0 }}>🏆</span>
+          <span style={{ color: '#d1fae5', fontWeight: 800, fontSize: compact ? 11 : 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {compact ? 'كأس العالم 2026' : (title || 'كأس العالم FIFA 2026')}
           </span>
-          {compact && <span style={{ color: '#475569', fontSize: 10 }}>— {today}</span>}
+          {/* Live polling indicator — single line, compact */}
+          {autoRefresh && hasAnyLive && (
+            <span style={{ flexShrink: 0, color: '#ef4444', fontSize: 9, fontWeight: 800, animation: 'wcGlow 1.5s infinite', whiteSpace: 'nowrap' }}>● LIVE</span>
+          )}
+          {autoRefresh && isPolling && !hasAnyLive && (
+            <span style={{ flexShrink: 0, color: '#6ee7b7', fontSize: 9, fontWeight: 600, whiteSpace: 'nowrap' }}>↻</span>
+          )}
+          {autoRefresh && !hasAnyLive && lastUpdate && !compact && (
+            <span style={{ color: '#475569', fontSize: 9, whiteSpace: 'nowrap' }}>
+              {lastUpdate.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          {compact && <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>— {today}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', flexShrink: 0 }}>
           {live.length > 0 && <span style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: compact ? 9 : 10, fontWeight: 800, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px', animation: 'wcPulse 2s infinite' }}>🔴 {live.length}</span>}
           {finished.length > 0 && <span style={{ background: 'rgba(5,150,105,0.15)', border: '1px solid rgba(16,185,129,0.25)', color: '#6ee7b7', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>✅ {finished.length}</span>}
           {upcoming.length > 0 && <span style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>📅 {upcoming.length}</span>}
@@ -636,20 +648,51 @@ interface WC2026MatchCardProps {
   compact?: boolean
 }
 
-export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 30000, showSchedule = false, allFixtures, compact = false }: WC2026MatchCardProps) {
-  const [, setTick] = useState(0)
+export default function WC2026MatchCard({ matches, title, autoRefresh = false, refreshInterval = 60000, showSchedule = false, allFixtures, compact = false }: WC2026MatchCardProps) {
+  // Real live polling — fetch fresh scores from API every interval
+  const [polledMatches, setPolledMatches] = useState<MatchFix[]>(matches)
+  const [isPolling, setIsPolling] = useState(false)
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+
+  // Sync polledMatches when parent `matches` prop changes (new message)
+  useEffect(() => { setPolledMatches(matches) }, [matches])
 
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(() => setTick(t => t + 1), refreshInterval)
+    const dateStr = matches[0]?.date || new Date(Date.now() + 3600000).toISOString().split('T')[0]
+
+    const fetchLive = async () => {
+      try {
+        setIsPolling(true)
+        const res = await fetch(`/api/wc2026/today?date=${dateStr}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.active && Array.isArray(data.matches) && data.matches.length > 0) {
+          // Merge: keep original match list order, update statusType + scores
+          setPolledMatches(prev => prev.map(orig => {
+            const fresh = data.matches.find((f: MatchFix) =>
+              f.homeTeam === orig.homeTeam && f.awayTeam === orig.awayTeam
+            )
+            return fresh ? { ...orig, ...fresh } : orig
+          }))
+          setLastUpdate(new Date())
+        }
+      } catch (_) { /* keep previous data */ }
+      finally { setIsPolling(false) }
+    }
+
+    fetchLive() // immediate first fetch
+    const id = setInterval(fetchLive, refreshInterval)
     return () => clearInterval(id)
-  }, [autoRefresh, refreshInterval])
+  }, [autoRefresh, refreshInterval, matches])
 
-  if (!matches || matches.length === 0) return null
+  if (!polledMatches || polledMatches.length === 0) return null
 
-  const scheduleMatches = allFixtures || (showSchedule ? matches : null)
+  const activeMatches = polledMatches
+  const hasAnyLive = activeMatches.some(m => m.statusType === 'live')
+  const scheduleMatches = allFixtures || (showSchedule ? activeMatches : null)
   // compact=true forces ScoreCenter layout even for single match (for narrow sidebars)
-  const isMulti = matches.length > 1 || compact
+  const isMulti = activeMatches.length > 1 || compact
 
   return (
     <div style={{ direction: 'rtl', fontFamily: 'inherit', width: '100%', maxWidth: compact ? '100%' : 520, boxSizing: 'border-box', overflow: 'hidden' }}>
@@ -675,16 +718,21 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
               FIFA World Cup 2026 · USA · CAN · MEX · المجموعة J
             </div>
           </div>
-          {autoRefresh && matches.some(m => m.statusType === 'live') && (
+          {autoRefresh && hasAnyLive && (
             <span style={{ marginRight: 'auto', color: '#ef4444', fontSize: 11, fontWeight: 800, animation: 'wcGlow 1.5s infinite' }}>● تحديث مباشر</span>
+          )}
+          {autoRefresh && !hasAnyLive && lastUpdate && (
+            <span style={{ marginRight: 'auto', color: '#6ee7b7', fontSize: 9, fontWeight: 600 }}>
+              آخر تحديث {lastUpdate.toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit' })}
+            </span>
           )}
         </div>
       )}
 
       {/* Multi-match → Score Center, Single → Full Card */}
       {isMulti
-        ? <ScoreCenter matches={matches} title={title} compact={compact} />
-        : <MatchCard match={matches[0]} />
+        ? <ScoreCenter matches={activeMatches} title={title} compact={compact} autoRefresh={autoRefresh} hasAnyLive={hasAnyLive} isPolling={isPolling} lastUpdate={lastUpdate} />
+        : <MatchCard match={activeMatches[0]} />
       }
 
       {/* Algeria schedule below single-match card */}

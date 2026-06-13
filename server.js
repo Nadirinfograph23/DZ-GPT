@@ -205,6 +205,7 @@ import {
   isUnavailable,
   UNAVAILABLE,
   APIF_LEAGUES,
+  fetchESPNMatchDetails,
 } from './lib/sports-data-router.js'
 import { verifyWithDBpedia, buildDBpediaContext } from './lib/dbpedia.js'
 import {
@@ -15346,10 +15347,32 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ? `${_smFix.homeScore} – ${_smFix.awayScore}`
             : `📅 ${_smFix.startTime ? String(parseInt(_smFix.startTime.split(':')[0])+1).padStart(2,'0')+':'+_smFix.startTime.split(':')[1] : '—'} (توقيت الجزائر)`
           const _smWinner = _smFix.winner ? `🏆 الفائز: **${_smFix.winner}**` : _smFin ? '🤝 **تعادل**' : ''
+
+          // ── جلب تفاصيل ESPN (أهداف + بطاقات + إحصائيات) ──────────────────────
+          let _smEnriched = { ..._smFix }
+          if (_smFin && _smFix.espnEventId) {
+            try {
+              const _espnDet = await fetchESPNMatchDetails(_smFix.espnEventId)
+              if (_espnDet) {
+                _smEnriched.goals       = _espnDet.goals       || []
+                _smEnriched.yellowCards = _espnDet.yellowCards || []
+                _smEnriched.redCards    = _espnDet.redCards    || []
+                _smEnriched.stats       = _espnDet.stats       || null
+                console.log(`[WC2026:SpecificLookup] ESPN details: goals=${_espnDet.goals.length} yellows=${_espnDet.yellowCards.length} reds=${_espnDet.redCards.length}`)
+              }
+            } catch (_espnErr) {
+              console.warn('[WC2026:SpecificLookup] ESPN details fetch failed:', _espnErr.message)
+            }
+          }
+
+          const _smGoalText = (_smEnriched.goals || []).length
+            ? '\n⚽ **الأهداف:** ' + (_smEnriched.goals || []).map(g => `${g.player} ${g.minute || ''}`).join(' | ')
+            : ''
           const _smContent = [
             `## ${_smFin ? '✅' : '📅'} ${_smFix.homeTeam} ضد ${_smFix.awayTeam}`,
             `**النتيجة:** ${_smScore}`,
             _smWinner,
+            _smGoalText,
             `**المجموعة ${_smFix.group || '—'}** | ${_smFix.round || ''} | ${_smFix.date}`,
             `🏟️ ${_smFix.venue}, ${_smFix.city}`,
           ].filter(Boolean).join('\n')
@@ -15360,7 +15383,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             _sportsAgent: true,
             wc2026: true,
             found: true,
-            matches: [_smFix],
+            matches: [_smEnriched],
             sources: [_smFix.source || 'WC2026_FULL_FIXTURES'],
           })
         }

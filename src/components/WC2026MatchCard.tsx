@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react'
 
+interface MatchStats {
+  possession?: string | null
+  shots?: string | null
+  shotsOnTarget?: string | null
+  corners?: string | null
+  saves?: string | null
+  fouls?: string | null
+  yellowCards?: string | null
+  redCards?: string | null
+}
+
 interface MatchFix {
   group?: string
   homeTeam: string
@@ -17,9 +28,10 @@ interface MatchFix {
   kooraLink?: string
   source?: string
   _sources?: string[]
-  goals?: Array<{ player: string; minute?: number; team: string; assist?: string }>
-  yellowCards?: Array<{ player: string; minute?: number; team: string }>
-  redCards?: Array<{ player: string; minute?: number; team: string }>
+  goals?: Array<{ player: string; minute?: string | number; team: string; assist?: string; isOwnGoal?: boolean }>
+  yellowCards?: Array<{ player: string; minute?: string | number; team: string }>
+  redCards?: Array<{ player: string; minute?: string | number; team: string }>
+  stats?: { home: MatchStats; away: MatchStats }
 }
 
 function dzHour(utcTime?: string): string {
@@ -347,14 +359,70 @@ function MatchCard({ match }: { match: MatchFix }) {
 
       {isUpcoming && <CountdownTimer dateStr={match.date} timeStr={match.startTime} />}
 
-      {/* Events */}
+      {/* Events — Goals + Cards */}
       {(match.goals?.length || match.yellowCards?.length || match.redCards?.length) ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '6px 16px 0', justifyContent: 'center' }}>
-          {(match.goals || []).map((g, i) => <span key={`g${i}`} style={{ background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fde68a' }}>⚽ {g.player}{g.minute ? ` ${g.minute}'` : ''}</span>)}
-          {(match.yellowCards || []).map((c, i) => <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fef08a' }}>🟨 {c.player}{c.minute ? ` ${c.minute}'` : ''}</span>)}
-          {(match.redCards || []).map((c, i) => <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#fca5a5' }}>🟥 {c.player}{c.minute ? ` ${c.minute}'` : ''}</span>)}
+        <div style={{ padding: '10px 16px 0' }}>
+          {match.goals && match.goals.length > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 5, letterSpacing: 0.4, textAlign: 'center' }}>⚽ الأهداف</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center' }}>
+                {(match.goals || []).map((g, i) => (
+                  <span key={`g${i}`} style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 8, padding: '3px 11px', fontSize: 11, color: '#86efac', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {g.isOwnGoal ? '🔵' : '⚽'}
+                    <span style={{ fontWeight: 700 }}>{g.player}</span>
+                    {g.minute && <span style={{ color: '#4ade80', fontSize: 10, fontWeight: 800 }}>{g.minute}</span>}
+                    {g.isOwnGoal && <span style={{ color: '#f87171', fontSize: 9 }}>(og)</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(match.yellowCards?.length || match.redCards?.length) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center', paddingBottom: 2 }}>
+              {(match.yellowCards || []).map((c, i) => <span key={`y${i}`} style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 10, color: '#fef08a' }}>🟨 {c.player}{c.minute ? ` ${c.minute}` : ''}</span>)}
+              {(match.redCards || []).map((c, i) => <span key={`r${i}`} style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '2px 10px', fontSize: 10, color: '#fca5a5' }}>🟥 {c.player}{c.minute ? ` ${c.minute}` : ''}</span>)}
+            </div>
+          ) : null}
         </div>
       ) : null}
+
+      {/* Match Stats Bar */}
+      {match.stats && match.statusType === 'finished' && (() => {
+        const hs = match.stats.home
+        const as_ = match.stats.away
+        const rows: Array<{ label: string; hv: string | null | undefined; av: string | null | undefined; pct?: boolean }> = [
+          { label: 'الاستحواذ', hv: hs.possession, av: as_.possession, pct: true },
+          { label: 'التسديدات', hv: hs.shots, av: as_.shots },
+          { label: 'الأركان', hv: hs.corners, av: as_.corners },
+          { label: 'التصدي', hv: hs.saves, av: as_.saves },
+        ].filter(r => r.hv || r.av)
+        if (!rows.length) return null
+        return (
+          <div style={{ padding: '10px 18px 6px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 8 }}>
+            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textAlign: 'center', marginBottom: 8, letterSpacing: 0.4 }}>📊 إحصائيات المباراة</div>
+            {rows.map((row, ri) => {
+              const hNum = parseFloat(row.hv || '0') || 0
+              const aNum = parseFloat(row.av || '0') || 0
+              const total = hNum + aNum
+              const hPct = total > 0 ? Math.round(hNum / total * 100) : 50
+              const aPct = 100 - hPct
+              return (
+                <div key={ri} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, direction: 'ltr' }}>
+                  <span style={{ minWidth: 32, textAlign: 'right', fontSize: 11, color: '#a5b4fc', fontWeight: 800 }}>{row.hv}{row.pct ? '%' : ''}</span>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', display: 'flex' }}>
+                      <div style={{ width: `${hPct}%`, background: 'linear-gradient(90deg,#6366f1,#818cf8)', borderRadius: '4px 0 0 4px', transition: 'width 0.6s ease' }} />
+                      <div style={{ width: `${aPct}%`, background: 'linear-gradient(90deg,#f97316,#fb923c)', borderRadius: '0 4px 4px 0', transition: 'width 0.6s ease' }} />
+                    </div>
+                    <div style={{ textAlign: 'center', fontSize: 9, color: '#475569', fontWeight: 700, marginTop: 2, letterSpacing: 0.3 }}>{row.label}</div>
+                  </div>
+                  <span style={{ minWidth: 32, textAlign: 'left', fontSize: 11, color: '#fb923c', fontWeight: 800 }}>{row.av}{row.pct ? '%' : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Date / Venue */}
       {(match.date || match.venue || match.city) && (

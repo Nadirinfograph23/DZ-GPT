@@ -67,7 +67,7 @@ import {
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
-import { buildDarijaPromptBlock } from './lib/darija-prompt.js'
+import { buildDarijaPromptBlock, getDarijaColoringBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
 import { correctQuery, buildCorrectionNote } from './lib/dz-query-corrector.js'
@@ -17079,6 +17079,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     return lines.join('\n')
   })()
+
+  // ── Dialect Coloring Block — لمسة دارجة جزائرية لجميع المستخدمين ─────────
+  // يُحقن في system prompt لكل الأنماط (MSA، دارجة، فرنسية)
+  // يُشجّع AI على توظيف 1-2 كلمات دارجة مع تعريفها: "بزاف (أي: كثيراً)"
+  // يُعطَّل تلقائياً لطلبات الكود/المواقع/الأدوات التقنية البحتة
+  const _dialectColoringBlock = (() => {
+    try {
+      if (dzStyle === 'french') return ''                       // الفرنسية — لا داعي
+      if (_isWebsiteRequest)    return ''                       // بناء مواقع — سياق تقني
+      if (isDZToolRequest)      return ''                       // أداة متخصصة — لا تدخّل
+      return getDarijaColoringBlock(lastUserMessage, 4)
+    } catch { return '' }
+  })()
+
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
@@ -22124,6 +22138,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     educationalContext ? `📚 سياق تعليمي:\n${_trim(educationalContext, 1500)}\n> لخّص وفسّر. إذا لم يرجع eddirasa نتيجة، استعمل المعرفة العامة.` : '',
     clientBehaviorContext ? `🧠 سياق المستخدم: ${clientBehaviorContext}` : '',
     dzLanguageContext ? `🗣️ ${dzLanguageContext}` : '',
+    _dialectColoringBlock || '',
     // ── موقع المستخدم الجغرافي (GPS) ─────────────────────────────────────
     userWilaya ? [
       `📍 LOCATION CONTEXT — موقع المستخدم المُحدَّد بـ GPS:`,

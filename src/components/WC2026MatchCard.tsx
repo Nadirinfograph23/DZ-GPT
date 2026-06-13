@@ -380,43 +380,66 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
     else scoreColor = '#e2e8f0'
   }
 
-  // ── COMPACT: true single-line row ──────────────────────────────────────────
+  // ── COMPACT: true single-line row (grid — no overflow) ────────────────────
   if (compact) {
     const scoreText = hasScore
       ? `${match.homeScore}–${match.awayScore}`
       : (match.startTime ? dzHour(match.startTime) : 'TBD')
     const statusDot = isLive ? '#ef4444' : isFinished ? '#10b981' : '#6366f1'
+    // score always light-green in compact mode
+    const compactScoreColor = isLive ? '#f87171' : '#86efac'
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 8px', borderRadius: 8, direction: 'rtl',
+        display: 'grid',
+        gridTemplateColumns: '6px 20px minmax(0,1fr) 52px minmax(0,1fr) 20px',
+        alignItems: 'center', gap: 4,
+        padding: '5px 8px', borderRadius: 8,
         background: hasAlg ? 'rgba(16,185,129,0.07)' : 'rgba(255,255,255,0.02)',
         border: hasAlg ? '1px solid rgba(34,197,94,0.15)' : '1px solid rgba(255,255,255,0.04)',
+        overflow: 'hidden',
       }}>
         {/* Status dot */}
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: statusDot, flexShrink: 0,
-          boxShadow: isLive ? '0 0 6px rgba(239,68,68,0.8)' : 'none' }} />
-        {/* Home flag + name */}
-        <MiniFlag name={match.homeTeam} size={22} />
+        <div style={{
+          width: 5, height: 5, borderRadius: '50%', background: statusDot, justifySelf: 'center',
+          boxShadow: isLive ? '0 0 6px rgba(239,68,68,0.9)' : 'none',
+          animation: isLive ? 'wcPulse 1.5s infinite' : 'none',
+        }} />
+        {/* Home flag */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <MiniFlag name={match.homeTeam} size={20} />
+        </div>
+        {/* Home name — right-aligned, truncate */}
         <span style={{
-          color: algHome ? '#86efac' : '#cbd5e1', fontWeight: algHome ? 800 : 500,
-          fontSize: 11, flex: 1, textAlign: 'right', overflow: 'hidden',
-          textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+          color: algHome ? '#86efac' : '#cbd5e1',
+          fontWeight: algHome ? 700 : 500,
+          fontSize: 10.5,
+          textAlign: 'right',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          direction: 'rtl',
         }}>{match.homeTeam}</span>
-        {/* Score / Time pill */}
+        {/* Score / Time pill — fixed width */}
+        <div style={{
+          fontWeight: 800, fontSize: 11.5, color: compactScoreColor,
+          background: 'rgba(5,5,18,0.85)',
+          border: `1px solid ${compactScoreColor}40`,
+          borderRadius: 6, padding: '2px 0',
+          textAlign: 'center', letterSpacing: 0.5,
+          fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', whiteSpace: 'nowrap',
+        }}>{scoreText}</div>
+        {/* Away name — left-aligned, truncate */}
         <span style={{
-          flexShrink: 0, fontWeight: 900, fontSize: 12, color: scoreColor,
-          background: 'rgba(5,5,18,0.8)', border: `1px solid ${scoreColor}33`,
-          borderRadius: 6, padding: '2px 7px', fontVariantNumeric: 'tabular-nums',
-          minWidth: 44, textAlign: 'center', letterSpacing: 0.5,
-        }}>{scoreText}</span>
-        {/* Away name + flag */}
-        <span style={{
-          color: algAway ? '#86efac' : '#cbd5e1', fontWeight: algAway ? 800 : 500,
-          fontSize: 11, flex: 1, textAlign: 'left', overflow: 'hidden',
-          textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+          color: algAway ? '#86efac' : '#cbd5e1',
+          fontWeight: algAway ? 700 : 500,
+          fontSize: 10.5,
+          textAlign: 'left',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          direction: 'rtl',
         }}>{match.awayTeam}</span>
-        <MiniFlag name={match.awayTeam} size={22} />
+        {/* Away flag */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <MiniFlag name={match.awayTeam} size={20} />
+        </div>
       </div>
     )
   }

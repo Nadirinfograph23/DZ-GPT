@@ -289,14 +289,19 @@ function extractFileNames(text: string): string[] {
 
 
 // ===== CLIENT-SIDE SUGGESTIONS (Feature I) =====
-function generateClientSuggestions(content: string, query: string): string[] {
+function generateClientSuggestions(content: string, query: string, ctx?: { isWC2026?: boolean; isSports?: boolean }): string[] {
   const t = (content + ' ' + query).toLowerCase()
+  // WC2026 / منتخب جزائر — يأتي أولاً لأنه الأكثر تخصصاً
+  if (ctx?.isWC2026 || /كأس\s*العالم|مونديال|wc\s*2026|المجموعة\s*[jج]|الأرجنتين.*جزائر|النمسا.*جزائر|الأردن.*جزائر|متى\s*ستلعب|المباراة\s*القادمة|جدول\s*مباريات\s*الجزائر|نتيجة\s*الجزائر/i.test(t))
+    return ['مباريات كأس العالم اليوم', 'نتائج كأس العالم 2026', 'ترتيب مجموعة الجزائر في كأس العالم', 'متى تلعب الجزائر القادمة؟']
+  if (ctx?.isSports || /منتخب\s*الجزائري|الخضر|محارب.*صحراء|نتائج\s*الجزائر|مباريات\s*الجزائر/i.test(t))
+    return ['مباريات كأس العالم اليوم', 'جدول مباريات الجزائر', 'نتائج كأس العالم 2026', 'من في مجموعة الجزائر؟']
   if (t.includes('كود') || t.includes('python') || t.includes('javascript') || t.includes('برمجة') || t.includes('دالة') || t.includes('function') || t.includes('class') || t.includes('react'))
     return ['اشرح الكود بالتفصيل', 'حسّن هذا الكود وأضف تعليقات', 'اكتب اختبارات لهذا الكود']
   if (t.includes('أخبار') || t.includes('خبر') || t.includes('اليوم') || t.includes('عاجل'))
     return ['عرض المزيد من الأخبار', 'أخبار الاقتصاد الجزائري', 'ما أبرز الأحداث الدولية اليوم؟']
   if (t.includes('رياضة') || t.includes('مباراة') || t.includes('كرة') || t.includes('دوري') || t.includes('هدف'))
-    return ['نتائج مباريات اليوم', 'أخبار المنتخب الجزائري', 'جدول ترتيب الدوري']
+    return ['نتائج مباريات اليوم', 'مباريات كأس العالم اليوم', 'جدول ترتيب الدوري']
   if (t.includes('طقس') || t.includes('جو') || t.includes('حرارة') || t.includes('weather'))
     return ['طقس وهران ومدن أخرى', 'توقعات الأسبوع القادم', 'هل سيكون الجو مناسباً للسفر؟']
   if (t.includes('عملة') || t.includes('دولار') || t.includes('يورو') || t.includes('دينار') || t.includes('صرف'))
@@ -7438,7 +7443,11 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         const serverSuggestions = Array.isArray(data.quickSuggestions) && (data.quickSuggestions as string[]).length > 0
           ? (data.quickSuggestions as string[])
           : undefined
-        const autoSuggestions = serverSuggestions || generateClientSuggestions(responseContent, text)
+        const _sugCtx = {
+          isWC2026: !!(data.wc2026) || /كأس\s*العالم|مونديال|wc\s*2026|المجموعة\s*[jج]|متى\s*ستلعب|جدول\s*مباريات\s*الجزائر|نتيجة\s*الجزائر/i.test(text),
+          isSports: !!(data._sportsAgent) || /منتخب\s*الجزائري|الخضر|المنتخب\s*الوطني|مباريات\s*الجزائر/i.test(text),
+        }
+        const autoSuggestions = serverSuggestions || generateClientSuggestions(responseContent, text, _sugCtx)
         const codeExtract = extractCodeBlock(responseContent)
         addAssistantMessage({
           content: responseContent,

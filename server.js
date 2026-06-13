@@ -15055,7 +15055,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _isWCAH   = _wcAHNow >= 1781136000000 && _wcAHNow <= 1784591999000
     const _isWCRQ   = _isWCAH && (
       /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
-      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg)
+      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
+      !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
     )
     if (_isWCRQ && !req.body._wcResultHandled) {
       console.log(`[WC2026:AntiHallu:Early] 🛡️ WC result query → live agent: "${_rawLastMsg.slice(0, 60)}"`)
@@ -15171,7 +15172,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _isWCSeasonAH    = _wcAntiHalluNow >= 1781136000000 && _wcAntiHalluNow <= 1784591999000
     const _isWCResultQuery = _isWCSeasonAH && (
       /(?:نتيجة|نتائج|انتهت|انتهى|ملخص|كيف انتهت?|من\s+ربح|من\s+فاز|فاز\s+من|ربح\s+من)\s+(?:مباراة|لقاء|مباريات?)?.{0,25}/i.test(_rawLastMsg) &&
-      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg)
+      /(?:المكسيك|مكسيك|جنوب\s*أفريقيا|الأرجنتين|ارجنتين|البرازيل|براسيل|فرنسا|ألمانيا|إسبانيا|اسبانيا|البرتغال|برتغال|إنجلترا|انجلترا|الجزائر|المغرب|مصر|تونس|السعودية|قطر|الولايات المتحدة|أمريكا|كندا|اليابان|كوريا|كأس العالم|مونديال|WC\s*2026)/i.test(_rawLastMsg) &&
+      !/آخر\s+(?:نتيجة|نتائج|مباراة)/i.test(_rawLastMsg)
     )
     if (_isWCResultQuery && !req.body._wcResultHandled) {
       console.log(`[WC2026:AntiHallu] 🛡️ WC result query intercepted — routing to live agent: "${_rawLastMsg.slice(0, 60)}"`)
@@ -15619,6 +15621,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       /(?:مباراة|مباريات|متى\s*(?:تلعب|يلعب|ستلعب)|موعد|جدول|برنامج)\s*(?:(?:ل|ال)?\s*)?(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الفريق\s*الوطني|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)/i.test(_rawLastMsg)
       || /(?:المنتخب\s*الجزائري|المنتخب\s*الوطني|الفريق\s*الجزائري|الخضر|محاربو\s*الصحراء|منتخب\s*الجزائر)\s*(?:متى|مباراة|مباريات|يلعب|تلعب|ستلعب|الجدول|البرنامج|موعد\s*(?:المباراة)?|القادم[ةه]?)/i.test(_rawLastMsg)
       || /(?:مباراة\s+الجزائر\s*القادمة|المباراة\s+القادمة\s+للجزائر|المباراة\s+القادمة\s+للمنتخب|متى\s+ستلعب\s+الجزائر|برنامج\s+المنتخب|جدول\s+مباريات\s+الجزائر|مباريات\s+الجزائر\s+في\s+كأس\s+العالم)/i.test(_rawLastMsg)
+      || /(?:آخر|أحدث|آخر\s+)\s*(?:نتيجة|نتائج|مباراة|مباريات)\s*(?:(?:ل|لل)?\s*(?:الجزائر|المنتخب\s*الجزائري|المنتخب\s*الوطني|الخضر))/i.test(_rawLastMsg)
+      || /(?:الجزائر|المنتخب\s*الجزائري|الخضر)\s*(?:آخر\s+(?:نتيجة|مباراة)|النتيجة\s+الأخيرة|المباراة\s+الأخيرة)/i.test(_rawLastMsg)
+      || /(?:متى\s+(?:تلعب|ستلعب|يلعب)|مباريات?|موعد)\s*(?:الجزائر|الخضر)/i.test(_rawLastMsg)
 
     if (_isNTMatchQuery) {
       console.log(`[NationalTeam:MatchRoute] ⚽ Detected upcoming match query: "${_rawLastMsg.slice(0,60)}"`)
@@ -15657,15 +15662,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
             ? `🇩🇿 **الجزائر** ضد ${_nextOppFlag} **${_nextOpponent}**`
             : `${_nextOppFlag} **${_nextOpponent}** ضد 🇩🇿 **الجزائر**`
 
-          _upcomingSection = `## ⚽ المباراة القادمة للمنتخب الجزائري 🇩🇿\n\n`
-            + `| | |\n|---|---|\n`
-            + `| 🆚 المباراة | **${_matchupStr}** |\n`
-            + `| 📅 التاريخ | **${new Date(_next.date).toLocaleDateString('ar-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}** |\n`
-            + `| ⏰ الموعد | **${_next.startTime || '21:00'} (توقيت الجزائر)** |\n`
-            + `| 🏟️ الملعب | **${_next.venue || '—'}** |\n`
-            + `| 📍 المدينة | **${_next.city}${_next.country ? ' — ' + _next.country : ''}** |\n`
-            + `| 🏆 البطولة | **${_next.competition}** |\n`
-            + `| ⏳ العدّ التنازلي | ${_countdown} |\n\n`
+          _upcomingSection = `## 🇩🇿 المنتخب الجزائري — كأس العالم FIFA 2026\n\n`
+            + `> 🏆 **المجموعة J** · الأرجنتين 🇦🇷 · **الجزائر 🇩🇿** · النمسا 🇦🇹 · الأردن 🇯🇴\n\n`
+            + `---\n\n`
+            + `### ⚔️ المباراة القادمة\n\n`
+            + `**${_matchupStr}**\n\n`
+            + `| 📅 التاريخ | ⏰ الموعد | 🏟️ الملعب | 📍 المدينة |\n`
+            + `|:---:|:---:|:---:|:---:|\n`
+            + `| **${new Date(_next.date).toLocaleDateString('ar-DZ', { weekday:'long', day:'numeric', month:'long', timeZone:'Africa/Algiers' })}** | **${_next.startTime || '21:00'} (توقيت الجزائر)** | ${_next.venue || '—'} | ${_next.city}${_next.country ? ', ' + _next.country : ''} |\n\n`
+            + `${_countdown ? '> ⏳ ' + _countdown + '\n\n' : ''}`
 
           if (_wcFixtures.length > 1) {
             _upcomingSection += `### 📅 كامل جدول مباريات الجزائر في كأس العالم 2026\n\n`
@@ -15711,7 +15716,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           model: 'national-team-fixtures',
           _sportsAgent: true,
           _nationalTeam: true,
-          wc2026: { group: 'J', nextMatch: _wcFixtures[0] || null },
+          wc2026: { group: 'J', nextMatch: _wcFixtures[0] || null, fixtures: _wcFixtures },
         })
       } catch (_nmErr) {
         console.error('[NationalTeam:MatchRoute] error:', _nmErr.message)

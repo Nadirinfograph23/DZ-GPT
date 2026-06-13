@@ -7804,17 +7804,26 @@ ${rows}
                           <WebReaderIntentBadge intent={msg.webReaderIntent} />
                         </div>
                       )}
-                      {(msg as any).wc2026?.nextMatch && (
-                        <WC2026MatchCard
-                          matches={[(msg as any).wc2026.nextMatch]}
-                          title={`⚽ المباراة القادمة — المجموعة ${(msg as any).wc2026.group || 'J'}`}
-                        />
-                      )}
+                      {(msg as any).wc2026?.nextMatch && (() => {
+                        const _allFix: any[] = Array.isArray((msg as any).wc2026?.fixtures) && (msg as any).wc2026.fixtures.length > 0
+                          ? (msg as any).wc2026.fixtures
+                          : [(msg as any).wc2026.nextMatch]
+                        const _nextOnly = _allFix.filter((f: any) => f.statusType === 'upcoming' || f.statusType === 'live')
+                        const _mainMatch = _nextOnly[0] || _allFix[0]
+                        return (
+                          <WC2026MatchCard
+                            matches={[_mainMatch]}
+                            title={`⚽ المباراة القادمة — المجموعة ${(msg as any).wc2026.group || 'J'}`}
+                            allFixtures={_allFix}
+                          />
+                        )
+                      })()}
                       {(msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0 && !(msg as any).wc2026?.nextMatch && (
                         <WC2026MatchCard
                           matches={(msg as any).matches}
                           title="⚽ كأس العالم FIFA 2026"
                           autoRefresh={(msg as any).matches.some((m: any) => m.statusType === 'live')}
+                          allFixtures={(msg as any).matches}
                         />
                       )}
                       {msg.content && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && (

@@ -2208,7 +2208,7 @@ function detectToolRedirect(msg) {
 
   // ── تصنيف 3: شخصية عامة → ويكيبيديا / Wikidata / DBpedia (معالج مدمج) ──────
   // رئيس / وزير / لاعب / كاتب / ممثل / مؤلف / مخرج / عالم / فنان
-  if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg)) return null
+  if (/(?:من\s*هو|من\s*هي|ما\s*هو|ما\s*هي|تعريف|سيرة|مسيرة|نبذة|حياة|تاريخ)\s+\S+/i.test(msg) && !/سيرة\s*ذاتية/i.test(msg)) return null
   if (/(?:رئيس|وزير|ملك|أمير|لاعب|كاتب|ممثل|مؤلف|مخرج|عالم|فنان|شاعر|مغني|رياضي)\s+(?:\S+\s*){1,4}(?:من\s*(?:هو|هي|هم))?/i.test(msg)) return null
   // ── كشف مبكر: رفع ملف/صورة/فيديو → قبل أي فلتر اسم عربي ──────────────────
   // يجب أن يكون قبل looksLikeBareArabicName لأن "بغيت نرفع صورة" يُصنَّف خطأ كاسم
@@ -2236,6 +2236,11 @@ function detectToolRedirect(msg) {
   }
   // ── اسم مجرد (2-4 كلمات عربية) → بحث شخصية عامة (Wikidata/Wikipedia) ────────
   // يُعاد null لضمان وصول الاستعلام لمسار isPersonQuery بدون توجيه للأدوات
+  // ── استثناء CV/سيرة ذاتية قبل looksLikeBareArabicName ──────────────────────
+  if (/سيرة\s*ذاتية/i.test(msg)) {
+    const _cvTool = TOOL_REDIRECT_MAP.find(t => t.id === 'cv')
+    if (_cvTool) return { toolName: _cvTool.toolName, toolUrl: _cvTool.toolUrl, toolIcon: _cvTool.toolIcon, toolDesc: _cvTool.toolDesc, smartMessage: _cvTool.smartMessage, message: _cvTool.smartMessage, id: _cvTool.id }
+  }
   if (looksLikeBareArabicName(msg)) return null
   // استعلامات الرؤساء والمسؤولين الجزائريين (حالية أو تاريخية)
   if (isMinisterQuery(msg)) return null

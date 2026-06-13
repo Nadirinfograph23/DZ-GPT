@@ -250,7 +250,7 @@ function ScoreBox({ match }: { match: MatchFix }) {
           boxShadow: won ? '0 0 20px rgba(34,197,94,0.2)' : lost ? '0 0 20px rgba(239,68,68,0.2)' : 'none',
         }}>
           <div style={{ fontSize: 'clamp(22px,7vw,30px)', fontWeight: 900, color: won ? '#4ade80' : lost ? '#f87171' : '#fbbf24', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-            {match.homeScore} – {match.awayScore}
+            {match.awayScore} – {match.homeScore}
           </div>
           <div style={{ color: '#475569', fontSize: 9, fontWeight: 700, marginTop: 4, letterSpacing: 1 }}>
             {isLive ? '🔴 LIVE' : 'FT'}
@@ -387,7 +387,7 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
   // ── لون ونص وسط المباراة ──────────────────────────────────────────────────
   let scoreText: string, scoreColor: string, scoreBg: string, scoreBorder: string, scoreGlow = false, scoreLabel = ''
   if (hasScore) {
-    scoreText   = `${match.homeScore} – ${match.awayScore}`
+    scoreText   = `${match.awayScore} – ${match.homeScore}`
     scoreColor  = '#4ade80'
     scoreBg     = 'rgba(5,150,105,0.15)'
     scoreBorder = 'rgba(74,222,128,0.35)'

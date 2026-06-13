@@ -326,7 +326,7 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
           if (m.statusType === 'result-pending' || m._timePassed) {
             scoreStr = `⏳ **نتيجة غير متوفرة**`
           } else if (m.homeScore !== null && m.awayScore !== null) {
-            scoreStr = `**${m.homeScore} – ${m.awayScore}**`
+            scoreStr = `**${m.awayScore} – ${m.homeScore}**`
           } else if (m.statusType === 'live') {
             scoreStr = `🔴 **مباشر**`
           } else {

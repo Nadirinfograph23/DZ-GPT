@@ -15290,6 +15290,84 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
+  // ── WC2026 Specific Match Lookup — يبحث عن مباراة بعينها في الجدول ──────
+  // يُعطي الأولوية للمباريات المحددة (فريقان) على الاستعلامات العامة (اليوم/الأمس)
+  {
+    const _smNow  = Date.now()
+    const _smSeas = _smNow >= 1781136000000 && _smNow <= 1784591999000
+    if (_smSeas) {
+      // خريطة الأسماء البديلة للفرق (دارجة + إملاء + إنجليزي)
+      const _SM_ALIASES = {
+        'امريكا':'الولايات المتحدة','اميركا':'الولايات المتحدة','أمريكا':'الولايات المتحدة',
+        'امريكة':'الولايات المتحدة','usa':'الولايات المتحدة','united states':'الولايات المتحدة',
+        'كورة الجنوبية':'كوريا الجنوبية','كوريا':'كوريا الجنوبية','korea':'كوريا الجنوبية',
+        'south korea':'كوريا الجنوبية','كورة':'كوريا الجنوبية',
+        'تشيك':'جمهورية التشيك','تشيكيا':'جمهورية التشيك','czechia':'جمهورية التشيك',
+        'czech republic':'جمهورية التشيك','التشيك':'جمهورية التشيك',
+        'البوسنة':'البوسنة والهرسك','بوسنة':'البوسنة والهرسك','هرسك':'البوسنة والهرسك',
+        'بوسنه':'البوسنة والهرسك','bosnia':'البوسنة والهرسك',
+        'جنوب افريقيا':'جنوب أفريقيا','افريقيا الجنوبية':'جنوب أفريقيا',
+        'south africa':'جنوب أفريقيا','جنوب أفريقية':'جنوب أفريقيا',
+        'باراقواي':'باراغواي','باراجواي':'باراغواي','paraguay':'باراغواي',
+        'اسكتلنده':'اسكتلندا','scotland':'اسكتلندا',
+        'هايتى':'هايتي','haiti':'هايتي',
+        'سويسرة':'سويسرا','switzerland':'سويسرا',
+        'المكسيك':'المكسيك','مكسيك':'المكسيك','mexico':'المكسيك',
+        'البرازيل':'البرازيل','brasil':'البرازيل','brazil':'البرازيل',
+        'المغرب':'المغرب','morocco':'المغرب',
+        'قطر':'قطر','qatar':'قطر',
+        'كندا':'كندا','canada':'كندا',
+        'الولايات المتحدة':'الولايات المتحدة',
+        'الأرجنتين':'الأرجنتين','ارجنتين':'الأرجنتين','argentina':'الأرجنتين',
+        'النمسا':'النمسا','austria':'النمسا',
+        'الأردن':'الأردن','jordan':'الأردن',
+      }
+      // دالة: هل يذكر الاستعلام هذا الفريق؟
+      function _smMatch(q, teamName) {
+        const ql = q.toLowerCase()
+        if (q.includes(teamName)) return true
+        const noAl = teamName.replace(/^ال/, '')
+        if (noAl !== teamName && q.includes(noAl)) return true
+        for (const [alias, canonical] of Object.entries(_SM_ALIASES)) {
+          if (canonical === teamName && (q.includes(alias) || ql.includes(alias.toLowerCase()))) return true
+        }
+        return false
+      }
+      // استعلام عن فريقين محددين + نتيجة/مباراة
+      const _smIsResult = /(?:نتيجة|نتائج|انتهت?|انتهى|ربح|فاز|خسر|تعادل|ملخص|كيف\s+انتهت?|من\s+ربح|من\s+فاز|مباراة|لقاء|ماتش)/i.test(_rawLastMsg)
+      const _smNotGeneral = !/(?:اليوم|الليلة|النهار|الغد|غداً)\s+(?:في\s+)?(?:كأس\s*العالم|مونديال|FIFA)/i.test(_rawLastMsg)
+      if (_smIsResult && _smNotGeneral) {
+        const _smFix = WC2026_FULL_FIXTURES.find(m =>
+          _smMatch(_rawLastMsg, m.homeTeam) && _smMatch(_rawLastMsg, m.awayTeam)
+        )
+        if (_smFix) {
+          const _smFin = _smFix.statusType === 'finished'
+          const _smScore = _smFin
+            ? `${_smFix.homeScore} – ${_smFix.awayScore}`
+            : `📅 ${_smFix.startTime ? String(parseInt(_smFix.startTime.split(':')[0])+1).padStart(2,'0')+':'+_smFix.startTime.split(':')[1] : '—'} (توقيت الجزائر)`
+          const _smWinner = _smFix.winner ? `🏆 الفائز: **${_smFix.winner}**` : _smFin ? '🤝 **تعادل**' : ''
+          const _smContent = [
+            `## ${_smFin ? '✅' : '📅'} ${_smFix.homeTeam} ضد ${_smFix.awayTeam}`,
+            `**النتيجة:** ${_smScore}`,
+            _smWinner,
+            `**المجموعة ${_smFix.group || '—'}** | ${_smFix.round || ''} | ${_smFix.date}`,
+            `🏟️ ${_smFix.venue}, ${_smFix.city}`,
+          ].filter(Boolean).join('\n')
+          console.log(`[WC2026:SpecificLookup] 🎯 ${_smFix.homeTeam} vs ${_smFix.awayTeam} | ${_smFix.statusType} | ${_smFix.homeScore}-${_smFix.awayScore}`)
+          return res.status(200).json({
+            content: _smContent,
+            model: 'wc2026-specific-match',
+            _sportsAgent: true,
+            wc2026: true,
+            found: true,
+            matches: [_smFix],
+            sources: [_smFix.source || 'WC2026_FULL_FIXTURES'],
+          })
+        }
+      }
+    }
+  }
+
   // ── WC2026 Anti-Hallucination Guard (EARLY) — قبل MatchVs ───────────────
   // يمنع LLM من اختراع نتائج WC 2026 حتى عند استعلامات "نتيجة المكسيك" بدون خصم
   {

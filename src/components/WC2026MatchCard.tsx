@@ -429,19 +429,21 @@ function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?:
         {/* علم المضيف */}
         <MiniFlag name={match.homeTeam} size={flagSize} />
 
-        {/* ── النتيجة في الوسط بين العلمين ── */}
+        {/* ── النتيجة في الوسط بين العلمين — أفقية على سطر واحد ── */}
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           background: scoreBg, border: `1.5px solid ${scoreBorder}`, borderRadius: 8,
           padding: compact ? '4px 8px' : '5px 12px', flexShrink: 0,
-          minWidth: compact ? 42 : 50,
+          minWidth: compact ? 52 : 62,
           boxShadow: scoreGlow ? `0 0 12px ${scoreColor}28` : 'none',
         }}>
           {hasScore ? (
             <>
-              <span style={{ fontSize: compact ? 13 : 15, fontWeight: 900, color: scoreColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{match.homeScore}</span>
-              <span style={{ fontSize: compact ? 8 : 9, color: '#475569', fontWeight: 700, lineHeight: 1 }}>–</span>
-              <span style={{ fontSize: compact ? 13 : 15, fontWeight: 900, color: scoreColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{match.awayScore}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 3 : 4 }}>
+                <span style={{ fontSize: compact ? 14 : 16, fontWeight: 900, color: scoreColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{match.homeScore}</span>
+                <span style={{ fontSize: compact ? 10 : 12, color: '#64748b', fontWeight: 700, lineHeight: 1 }}>–</span>
+                <span style={{ fontSize: compact ? 14 : 16, fontWeight: 900, color: scoreColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{match.awayScore}</span>
+              </div>
               {scoreLabel && <span style={{ fontSize: 7, fontWeight: 700, marginTop: 2, color: isLive ? '#f87171' : '#6ee7b7', letterSpacing: 0.5, whiteSpace: 'nowrap' }}>{scoreLabel}</span>}
             </>
           ) : isResultPending ? (

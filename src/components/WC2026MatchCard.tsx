@@ -374,181 +374,136 @@ function MatchCard({ match }: { match: MatchFix }) {
   )
 }
 
-// ─── Score Center Row ─────────────────────────────────────────────────────────
+// ─── Score Center Row — تصميم موحد نظيف لكل الأوضاع ─────────────────────────
 function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?: boolean }) {
-  const isLive     = match.statusType === 'live'
-  const isFinished = match.statusType === 'finished'
-  const hasScore   = (isLive || isFinished) && match.homeScore !== null && match.homeScore !== undefined
-  const algHome    = isAlgeria(match.homeTeam)
-  const algAway    = isAlgeria(match.awayTeam)
-  const hasAlg     = algHome || algAway
+  const isLive          = match.statusType === 'live'
+  const isFinished      = match.statusType === 'finished'
+  const isResultPending = match.statusType === 'result-pending' || (match as any)._timePassed
+  const hasScore        = (isLive || isFinished) && match.homeScore !== null && match.homeScore !== undefined
+  const algHome         = isAlgeria(match.homeTeam)
+  const algAway         = isAlgeria(match.awayTeam)
+  const hasAlg          = algHome || algAway
 
-  let scoreColor = '#818cf8'
+  // ── لون ونص وسط المباراة ──────────────────────────────────────────────────
+  let scoreText: string, scoreColor: string, scoreBg: string, scoreBorder: string, scoreGlow = false, scoreLabel = ''
   if (hasScore) {
-    scoreColor = '#4ade80'  // أخضر فاتح لجميع النتائج المؤكدة
+    scoreText   = `${match.homeScore} – ${match.awayScore}`
+    scoreColor  = '#4ade80'
+    scoreBg     = 'rgba(5,150,105,0.15)'
+    scoreBorder = 'rgba(74,222,128,0.35)'
+    scoreGlow   = true
+    scoreLabel  = isLive ? '🔴 LIVE' : 'FT'
+  } else if (isLive) {
+    scoreText   = '🔴 Live'
+    scoreColor  = '#f87171'
+    scoreBg     = 'rgba(239,68,68,0.12)'
+    scoreBorder = 'rgba(239,68,68,0.35)'
+    scoreLabel  = ''
+  } else if (isResultPending) {
+    scoreText   = '⏳'
+    scoreColor  = '#fbbf24'
+    scoreBg     = 'rgba(146,64,14,0.15)'
+    scoreBorder = 'rgba(217,119,6,0.3)'
+    scoreLabel  = 'N/A'
+  } else if (match.startTime) {
+    scoreText   = dzHour(match.startTime)
+    scoreColor  = '#a5b4fc'
+    scoreBg     = 'rgba(99,102,241,0.1)'
+    scoreBorder = 'rgba(99,102,241,0.28)'
+    scoreLabel  = match.date ? fmtDateShort(match.date) : ''
+  } else {
+    scoreText   = 'vs'
+    scoreColor  = '#818cf8'
+    scoreBg     = 'rgba(99,102,241,0.08)'
+    scoreBorder = 'rgba(99,102,241,0.2)'
   }
 
-  // ── COMPACT: تصميم جديد — علم متوسط | اسم | [نتيجة/موعد] | اسم | علم متوسط ──
-  if (compact) {
-    const isResultPending = match.statusType === 'result-pending'
+  // ── خلفية وإطار الصف ──────────────────────────────────────────────────────
+  const rowBg     = hasAlg  ? 'rgba(16,185,129,0.07)' : isLive ? 'rgba(239,68,68,0.05)' : 'rgba(255,255,255,0.025)'
+  const rowBorder = hasAlg  ? '1px solid rgba(34,197,94,0.18)' : isLive ? '1px solid rgba(239,68,68,0.18)' : '1px solid rgba(255,255,255,0.055)'
+  const flagSize  = compact ? 26 : 30
 
-    // محتوى الوسط + لونه
-    let middleText: string
-    let middleColor: string
-    let middleGlow = false
-
-    if (hasScore) {
-      middleText = `${match.homeScore} – ${match.awayScore}`
-      middleColor = '#4ade80'   // أخضر فاتح للنتيجة
-      middleGlow = true
-    } else if (isLive) {
-      middleText = '🔴'
-      middleColor = '#f87171'
-    } else if (isResultPending || (isFinished && !hasScore)) {
-      // انتهت لكن النتيجة غير متوفرة من المصادر الحية
-      middleText = '⏳'
-      middleColor = '#94a3b8'
-    } else if (match.startTime) {
-      middleText = dzHour(match.startTime)
-      middleColor = '#f1f5f9'   // أبيض للموعد
-    } else {
-      middleText = 'vs'
-      middleColor = '#818cf8'
-    }
-
-    const rowBg = hasAlg
-      ? 'rgba(16,185,129,0.08)'
-      : isLive
-      ? 'rgba(239,68,68,0.06)'
-      : 'rgba(255,255,255,0.03)'
-    const rowBorder = hasAlg
-      ? '1px solid rgba(34,197,94,0.2)'
-      : isLive
-      ? '1px solid rgba(239,68,68,0.2)'
-      : '1px solid rgba(255,255,255,0.06)'
-
-    return (
-      <div style={{ marginBottom: 3 }}>
-        {/* التاريخ فوق الإطار */}
-        {match.date && (
-          <div style={{
-            fontSize: 9, color: '#475569', fontWeight: 600,
-            textAlign: 'center', marginBottom: 2, letterSpacing: 0.4,
-            direction: 'rtl',
-          }}>
-            {fmtDateShort(match.date)}
-            {match.group ? <span style={{ marginRight: 6, color: '#374151' }}>· المج. {match.group}</span> : null}
-          </div>
-        )}
-
-        {/* الصف الرئيسي: [علم+اسم] | [نتيجة/موعد] | [علم+اسم] */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0,1fr) 64px minmax(0,1fr)',
-          alignItems: 'center',
-          gap: 6,
-          padding: '8px 9px',
-          borderRadius: 10,
-          background: rowBg,
-          border: rowBorder,
-          overflow: 'hidden',
-          direction: 'rtl',
-        }}>
-          {/* فريق المضيف: علم فوق + اسم تحته */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
-            <MiniFlag name={match.homeTeam} size={32} />
-            <span style={{
-              color: algHome ? '#86efac' : '#e2e8f0',
-              fontWeight: algHome ? 700 : 500,
-              fontSize: 9.5,
-              textAlign: 'center',
-              maxWidth: '100%',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}>{match.homeTeam}</span>
-          </div>
-
-          {/* النتيجة أو الموعد في المنتصف */}
-          <div style={{
-            textAlign: 'center',
-            fontWeight: 800,
-            fontSize: hasScore ? 14 : 11.5,
-            color: middleColor,
-            letterSpacing: hasScore ? 0.5 : 0,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            fontVariantNumeric: 'tabular-nums',
-            direction: 'ltr',
-            textShadow: middleGlow ? `0 0 12px ${middleColor}99` : 'none',
-            background: 'rgba(5,5,18,0.75)',
-            borderRadius: 8,
-            padding: '5px 4px',
-            border: `1px solid ${middleColor}35`,
-            boxShadow: middleGlow ? `0 0 14px ${middleColor}33` : 'none',
-          }}>{middleText}</div>
-
-          {/* فريق الضيف: علم فوق + اسم تحته */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
-            <MiniFlag name={match.awayTeam} size={32} />
-            <span style={{
-              color: algAway ? '#86efac' : '#e2e8f0',
-              fontWeight: algAway ? 700 : 500,
-              fontSize: 9.5,
-              textAlign: 'center',
-              maxWidth: '100%',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              lineHeight: 1.2,
-            }}>{match.awayTeam}</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── NORMAL: 3-column grid — علم+اسم | نتيجة/موعد | علم+اسم ──────────────
-  const isResultPendingNorm = match.statusType === 'result-pending' || (match as any)._timePassed
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: 'minmax(0,1fr) clamp(60px,17vw,76px) minmax(0,1fr)', alignItems: 'center',
-      gap: 'clamp(4px,1.5vw,8px)',
-      padding: 'clamp(8px,2.5vw,12px) clamp(6px,2vw,10px)',
-      background: hasAlg
-        ? 'linear-gradient(90deg,rgba(16,185,129,0.08) 0%,rgba(16,185,129,0.03) 50%,rgba(16,185,129,0.08) 100%)'
-        : 'rgba(255,255,255,0.02)',
-      borderRadius: 12,
-      border: hasAlg ? '1px solid rgba(34,197,94,0.18)' : '1px solid rgba(255,255,255,0.05)',
-      direction: 'rtl', overflow: 'hidden',
-    }}>
-      {/* فريق المضيف: علم فوق + اسم تحته */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
-        <MiniFlag name={match.homeTeam} size={30} />
-        <span style={{ color: algHome ? '#86efac' : '#e2e8f0', fontWeight: algHome ? 800 : 600, fontSize: 'clamp(10px,3vw,13px)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>{match.homeTeam}</span>
-      </div>
+    <div style={{ direction: 'rtl' }}>
+      {/* تاريخ + مجموعة فوق الصف — فقط في compact أو عند وجود تاريخ */}
+      {(compact && match.date) && (
+        <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, textAlign: 'center', marginBottom: 2, letterSpacing: 0.3 }}>
+          {fmtDateShort(match.date)}
+          {match.group && <span style={{ marginRight: 5, color: '#374151' }}>· المج. {match.group}</span>}
+        </div>
+      )}
 
-      {/* النتيجة / الموعد في المنتصف */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
-        {hasScore ? (
-          <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: 'clamp(4px,1.5vw,6px) clamp(6px,2.2vw,10px)', textAlign: 'center', boxShadow: `0 0 14px ${scoreColor}33` }}>
-            <span style={{ fontSize: 'clamp(14px,4.2vw,18px)', fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, direction: 'ltr', display: 'inline-block' }}>{match.homeScore} – {match.awayScore}</span>
-            <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>{isLive ? '🔴 LIVE' : 'FT'}</div>
-          </div>
-        ) : isResultPendingNorm ? (
-          <div style={{ background: 'rgba(146,64,14,0.15)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 10, padding: 'clamp(4px,1.5vw,6px) clamp(5px,1.8vw,8px)', textAlign: 'center' }}>
-            <div style={{ fontSize: 14 }}>⏳</div>
-            <div style={{ fontSize: 8, color: '#d97706', fontWeight: 700, marginTop: 2 }}>غير متوفرة</div>
-          </div>
-        ) : (
-          <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 10, padding: 'clamp(4px,1.5vw,6px) clamp(5px,1.8vw,8px)', textAlign: 'center' }}>
-            <div style={{ fontSize: 'clamp(11px,3.2vw,13px)', fontWeight: 800, color: '#6366f1', whiteSpace: 'nowrap' }}>{match.startTime ? dzHour(match.startTime) : 'vs'}</div>
-            {match.date && <div style={{ fontSize: 8, color: '#475569', fontWeight: 600, marginTop: 1 }}>{fmtDateShort(match.date)}</div>}
-          </div>
-        )}
-      </div>
+      {/* ── الصف الرئيسي: [علم + اسم] | [نتيجة/موعد] | [اسم + علم] ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        gap: compact ? 5 : 6,
+        padding: compact ? '7px 8px' : '9px 10px',
+        borderRadius: compact ? 9 : 12,
+        background: rowBg,
+        border: rowBorder,
+        overflow: 'hidden',
+        boxSizing: 'border-box',
+      }}>
 
-      {/* فريق الضيف: علم فوق + اسم تحته */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
-        <MiniFlag name={match.awayTeam} size={30} />
-        <span style={{ color: algAway ? '#86efac' : '#e2e8f0', fontWeight: algAway ? 800 : 600, fontSize: 'clamp(10px,3vw,13px)', textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>{match.awayTeam}</span>
+        {/* فريق المضيف: علم + اسم على نفس السطر — محاذاة يمين */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end', minWidth: 0, overflow: 'hidden' }}>
+          <span style={{
+            color: algHome ? '#86efac' : '#e2e8f0',
+            fontWeight: algHome ? 800 : 600,
+            fontSize: compact ? 10.5 : 12,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            lineHeight: 1.2, flexShrink: 1, minWidth: 0,
+            direction: 'rtl',
+          }}>{match.homeTeam}</span>
+          <MiniFlag name={match.homeTeam} size={flagSize} />
+        </div>
+
+        {/* النتيجة / الموعد — في المنتصف */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: scoreBg,
+          border: `1.5px solid ${scoreBorder}`,
+          borderRadius: 9,
+          padding: compact ? '5px 8px' : '6px 11px',
+          minWidth: compact ? 54 : 62,
+          boxShadow: scoreGlow ? `0 0 14px ${scoreColor}30` : 'none',
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontSize: compact ? 13 : 15,
+            fontWeight: 900,
+            color: scoreColor,
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: hasScore ? 1 : 0,
+            direction: 'ltr',
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+            textShadow: scoreGlow ? `0 0 10px ${scoreColor}80` : 'none',
+          }}>{scoreText}</span>
+          {scoreLabel && (
+            <span style={{
+              fontSize: 7.5, fontWeight: 700, marginTop: 3, letterSpacing: 0.5,
+              color: isLive ? '#f87171' : scoreGlow ? '#6ee7b7' : '#475569',
+              whiteSpace: 'nowrap',
+            }}>{scoreLabel}</span>
+          )}
+        </div>
+
+        {/* فريق الضيف: علم + اسم على نفس السطر — محاذاة يسار */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-start', minWidth: 0, overflow: 'hidden' }}>
+          <MiniFlag name={match.awayTeam} size={flagSize} />
+          <span style={{
+            color: algAway ? '#86efac' : '#e2e8f0',
+            fontWeight: algAway ? 800 : 600,
+            fontSize: compact ? 10.5 : 12,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            lineHeight: 1.2, flexShrink: 1, minWidth: 0,
+            direction: 'rtl',
+          }}>{match.awayTeam}</span>
+        </div>
+
       </div>
     </div>
   )

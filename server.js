@@ -13767,6 +13767,7 @@ app.get('/api/wc2026/today', async (req, res) => {
 
     // ── تصحيح حالات المباريات بناءً على الوقت الحالي ──────────────────────────
     // startTime في البيانات = UTC (WC2026MatchCard تُضيف ساعة لتوقيت الجزائر)
+    // ⛔ لا نُحوّل إلى 'finished' إذا لم تكن هناك نتيجة — نستخدم 'result-pending'
     const _nowUTC = Date.now()
     liveMatches = liveMatches.map(m => {
       if (!m.startTime || !m.date) return m
@@ -13775,7 +13776,13 @@ app.get('/api/wc2026/today', async (req, res) => {
         const _matchUTC  = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime()
         const _matchEnd  = _matchUTC + 7200000   // +2 ساعة نهاية المباراة
         const _liveEnd   = _matchUTC + 7800000   // +2:10 لإطالة (وقت إضافي)
-        if (_nowUTC > _liveEnd)  return { ...m, statusType: 'finished' }
+        if (_nowUTC > _liveEnd) {
+          // إذا كانت النتيجة موثوقة (من مصدر حي) → finished
+          // إذا لم تكن هناك نتيجة (من بيانات محلية) → result-pending لمنع الهلوسة
+          const hasVerifiedScore = m.homeScore !== null && m.homeScore !== undefined
+            && m.awayScore !== null && m.awayScore !== undefined
+          return { ...m, statusType: hasVerifiedScore ? 'finished' : 'result-pending' }
+        }
         if (_nowUTC > _matchUTC) return { ...m, statusType: 'live' }
         return m
       } catch(_) { return m }
@@ -13790,6 +13797,60 @@ app.get('/api/wc2026/today', async (req, res) => {
     })
   } catch (err) {
     console.error('[/api/wc2026/today] error:', err.message)
+    return res.status(500).json({ active: true, matches: [], error: err.message })
+  }
+})
+
+// GET /api/wc2026/yesterday — نتائج مباريات البارحة
+// ══════════════════════════════════════════════════════════════════════════════
+app.get('/api/wc2026/yesterday', async (req, res) => {
+  if (new Date() >= WC2026_END_DATE) {
+    return res.json({ active: false, matches: [], message: 'انتهت بطولة كأس العالم 2026' })
+  }
+  // البارحة = اليوم - 24 ساعة (توقيت الجزائر UTC+1)
+  const _yesterday = new Date(Date.now() + 3600000 - 86400000).toISOString().split('T')[0]
+  try {
+    let yesterdayMatches = []
+
+    // 1) محاولة جلب بيانات حية (قد تحتوي نتائج)
+    try {
+      const liveRes = await runWC2026TodayAgent(_yesterday)
+      if (liveRes && Array.isArray(liveRes.matches) && liveRes.matches.length > 0) {
+        yesterdayMatches = liveRes.matches
+      }
+    } catch (_e) { /* نكمل بالبيانات المحلية */ }
+
+    // 2) احتياطياً: بيانات محلية
+    if (yesterdayMatches.length === 0) {
+      yesterdayMatches = WC2026_FULL_FIXTURES.filter(m => m.date === _yesterday)
+    }
+
+    // 3) المباريات انتهت جميعها — نُصحّح الحالات
+    const _nowUTC = Date.now()
+    yesterdayMatches = yesterdayMatches.map(m => {
+      if (!m.startTime || !m.date) return m
+      try {
+        const [_h, _min] = m.startTime.split(':').map(Number)
+        const _matchEnd = new Date(`${m.date}T${String(_h).padStart(2,'0')}:${String(_min).padStart(2,'0')}:00Z`).getTime() + 7800000
+        if (_nowUTC > _matchEnd) {
+          const hasVerifiedScore = m.homeScore !== null && m.homeScore !== undefined
+            && m.awayScore !== null && m.awayScore !== undefined
+          return { ...m, statusType: hasVerifiedScore ? 'finished' : 'result-pending' }
+        }
+        return m
+      } catch (_) { return m }
+    })
+
+    console.log(`[/api/wc2026/yesterday] ${yesterdayMatches.length} matches on ${_yesterday}`)
+    return res.json({
+      active: true,
+      date: _yesterday,
+      isYesterday: true,
+      matches: yesterdayMatches,
+      fetchedAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('[/api/wc2026/yesterday] error:', err.message)
     return res.status(500).json({ active: true, matches: [], error: err.message })
   }
 })

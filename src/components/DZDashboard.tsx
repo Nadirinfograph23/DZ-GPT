@@ -450,6 +450,11 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
   const [wc2026Loading, setWc2026Loading] = useState(false)
   const [wc2026Date, setWc2026Date] = useState<string>('')
   const [wc2026IsNext, setWc2026IsNext] = useState(false)
+  // نتائج البارحة
+  const [wc2026Yesterday, setWc2026Yesterday] = useState<any[]>([])
+  const [wc2026YesterdayDate, setWc2026YesterdayDate] = useState<string>('')
+  const [wc2026YesterdayLoading, setWc2026YesterdayLoading] = useState(false)
+  const [wc2026YesterdayOpen, setWc2026YesterdayOpen] = useState(false)
   const [nationalTeamNews, setNationalTeamNews] = useState<NewsItem[]>([])
   const [nationalLoading, setNationalLoading]   = useState(false)
   const [nationalBadge, setNationalBadge]       = useState(false)
@@ -546,6 +551,22 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
       }
     } catch { /* ignore */ }
     finally { setWc2026Loading(false) }
+  }, [wc2026Active])
+
+  const loadWC2026Yesterday = useCallback(async () => {
+    if (!wc2026Active) return
+    setWc2026YesterdayLoading(true)
+    try {
+      const r = await fetch('/api/wc2026/yesterday')
+      if (r.ok) {
+        const d = await r.json()
+        if (d.active) {
+          setWc2026Yesterday(d.matches || [])
+          setWc2026YesterdayDate(d.date || '')
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setWc2026YesterdayLoading(false) }
   }, [wc2026Active])
 
   const loadDollar = useCallback(async () => {
@@ -683,6 +704,7 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
     loadDollar()
     loadNationalTeamNews()
     loadWC2026()
+    loadWC2026Yesterday()
   }, [])
 
   // SSE: listen for national_team_news events from the server
@@ -1540,6 +1562,68 @@ export default function DZDashboard({ onSend, onDoctorGpsReady }: {
                     <button key={q} className="dzd-retry-btn" style={{ fontSize: 10 }} onClick={() => onSend(q)}>{q}</button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* ── نتائج البارحة — accordion ────────────────────────── */}
+            {wc2026Yesterday.length > 0 && (
+              <div style={{ marginTop: 10, direction: 'rtl' }}>
+                {/* زر فتح/إغلاق */}
+                <button
+                  onClick={() => {
+                    setWc2026YesterdayOpen(o => !o)
+                    if (!wc2026YesterdayOpen && wc2026Yesterday.length === 0) loadWC2026Yesterday()
+                  }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: wc2026YesterdayOpen ? '10px 10px 0 0' : 10,
+                    padding: '7px 12px', cursor: 'pointer', color: '#94a3b8',
+                    fontSize: 11, fontWeight: 600, transition: 'all 0.15s',
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13 }}>📅</span>
+                    نتائج البارحة
+                    {wc2026YesterdayDate && (
+                      <span style={{ color: '#475569', fontSize: 9.5, marginRight: 4 }}>
+                        — {new Date(wc2026YesterdayDate + 'T12:00:00Z').toLocaleDateString('ar-DZ', {
+                          weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Algiers',
+                        })}
+                      </span>
+                    )}
+                    <span style={{
+                      background: 'rgba(99,102,241,0.18)', border: '1px solid rgba(99,102,241,0.3)',
+                      color: '#a5b4fc', borderRadius: 20, padding: '0 6px', fontSize: 9, fontWeight: 700,
+                    }}>
+                      {wc2026Yesterday.length}
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 12, transition: 'transform 0.2s', transform: wc2026YesterdayOpen ? 'rotate(180deg)' : 'none' }}>
+                    ▾
+                  </span>
+                </button>
+
+                {/* محتوى الأكورديون */}
+                {wc2026YesterdayOpen && (
+                  <div style={{
+                    background: 'rgba(5,5,18,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+                    borderTop: 'none', borderRadius: '0 0 10px 10px',
+                    padding: '7px 8px 8px',
+                  }}>
+                    {wc2026YesterdayLoading ? (
+                      <div style={{ textAlign: 'center', color: '#475569', fontSize: 10, padding: '8px 0' }}>
+                        ⏳ جاري التحميل...
+                      </div>
+                    ) : (
+                      <WC2026MatchCard
+                        matches={wc2026Yesterday}
+                        autoRefresh={false}
+                        compact={true}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

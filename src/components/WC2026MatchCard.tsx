@@ -362,26 +362,66 @@ function MatchCard({ match }: { match: MatchFix }) {
   )
 }
 
-// ─── Score Center Row (compact multi-match) ───────────────────────────────────
-function ScoreCenterRow({ match }: { match: MatchFix }) {
+// ─── Score Center Row ─────────────────────────────────────────────────────────
+function ScoreCenterRow({ match, compact = false }: { match: MatchFix; compact?: boolean }) {
   const isLive     = match.statusType === 'live'
   const isFinished = match.statusType === 'finished'
   const hasScore   = (isLive || isFinished) && match.homeScore !== null && match.homeScore !== undefined
-  const algHome = isAlgeria(match.homeTeam)
-  const algAway = isAlgeria(match.awayTeam)
-  const hasAlg = algHome || algAway
+  const algHome    = isAlgeria(match.homeTeam)
+  const algAway    = isAlgeria(match.awayTeam)
+  const hasAlg     = algHome || algAway
 
   let scoreColor = '#818cf8'
   if (hasScore) {
     const dzScore = algHome ? match.homeScore : match.awayScore
     const opScore = algHome ? match.awayScore : match.homeScore
-    if (dzScore !== null && opScore !== null && dzScore !== undefined && opScore !== undefined) {
+    if (dzScore !== null && opScore !== null && dzScore !== undefined && opScore !== undefined)
       scoreColor = dzScore > opScore ? '#22c55e' : dzScore < opScore ? '#f87171' : '#fbbf24'
-    } else {
-      scoreColor = '#e2e8f0'
-    }
+    else scoreColor = '#e2e8f0'
   }
 
+  // ── COMPACT: true single-line row ──────────────────────────────────────────
+  if (compact) {
+    const scoreText = hasScore
+      ? `${match.homeScore}–${match.awayScore}`
+      : (match.startTime ? dzHour(match.startTime) : 'TBD')
+    const statusDot = isLive ? '#ef4444' : isFinished ? '#10b981' : '#6366f1'
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '5px 8px', borderRadius: 8, direction: 'rtl',
+        background: hasAlg ? 'rgba(16,185,129,0.07)' : 'rgba(255,255,255,0.02)',
+        border: hasAlg ? '1px solid rgba(34,197,94,0.15)' : '1px solid rgba(255,255,255,0.04)',
+      }}>
+        {/* Status dot */}
+        <div style={{ width: 5, height: 5, borderRadius: '50%', background: statusDot, flexShrink: 0,
+          boxShadow: isLive ? '0 0 6px rgba(239,68,68,0.8)' : 'none' }} />
+        {/* Home flag + name */}
+        <MiniFlag name={match.homeTeam} size={22} />
+        <span style={{
+          color: algHome ? '#86efac' : '#cbd5e1', fontWeight: algHome ? 800 : 500,
+          fontSize: 11, flex: 1, textAlign: 'right', overflow: 'hidden',
+          textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+        }}>{match.homeTeam}</span>
+        {/* Score / Time pill */}
+        <span style={{
+          flexShrink: 0, fontWeight: 900, fontSize: 12, color: scoreColor,
+          background: 'rgba(5,5,18,0.8)', border: `1px solid ${scoreColor}33`,
+          borderRadius: 6, padding: '2px 7px', fontVariantNumeric: 'tabular-nums',
+          minWidth: 44, textAlign: 'center', letterSpacing: 0.5,
+        }}>{scoreText}</span>
+        {/* Away name + flag */}
+        <span style={{
+          color: algAway ? '#86efac' : '#cbd5e1', fontWeight: algAway ? 800 : 500,
+          fontSize: 11, flex: 1, textAlign: 'left', overflow: 'hidden',
+          textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+        }}>{match.awayTeam}</span>
+        <MiniFlag name={match.awayTeam} size={22} />
+      </div>
+    )
+  }
+
+  // ── NORMAL: grid layout ────────────────────────────────────────────────────
   return (
     <div style={{
       display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
@@ -392,54 +432,34 @@ function ScoreCenterRow({ match }: { match: MatchFix }) {
       borderRadius: 12,
       border: hasAlg ? '1px solid rgba(34,197,94,0.18)' : '1px solid rgba(255,255,255,0.05)',
       direction: 'rtl',
-      transition: 'background 0.15s',
     }}>
-      {/* Home team */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-        <span style={{ color: isAlgeria(match.homeTeam) ? '#86efac' : '#e2e8f0', fontWeight: isAlgeria(match.homeTeam) ? 800 : 600, fontSize: 13, textAlign: 'right' }}>
-          {match.homeTeam}
-        </span>
+        <span style={{ color: algHome ? '#86efac' : '#e2e8f0', fontWeight: algHome ? 800 : 600, fontSize: 13, textAlign: 'right' }}>{match.homeTeam}</span>
         <MiniFlag name={match.homeTeam} size={38} />
       </div>
-
-      {/* Score / Time */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 70 }}>
         {hasScore ? (
-          <div style={{
-            background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`,
-            borderRadius: 10, padding: '5px 12px', textAlign: 'center',
-            boxShadow: `0 0 12px ${scoreColor}22`,
-          }}>
-            <span style={{ fontSize: 18, fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1 }}>
-              {match.homeScore} – {match.awayScore}
-            </span>
-            <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>
-              {isLive ? '🔴 LIVE' : 'FT'}
-            </div>
+          <div style={{ background: 'rgba(5,5,18,0.9)', border: `1.5px solid ${scoreColor}44`, borderRadius: 10, padding: '5px 12px', textAlign: 'center', boxShadow: `0 0 12px ${scoreColor}22` }}>
+            <span style={{ fontSize: 18, fontWeight: 900, color: scoreColor, fontVariantNumeric: 'tabular-nums', letterSpacing: 1 }}>{match.homeScore} – {match.awayScore}</span>
+            <div style={{ fontSize: 8, color: isLive ? '#ef4444' : '#475569', fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>{isLive ? '🔴 LIVE' : 'FT'}</div>
           </div>
         ) : (
           <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 10, padding: '5px 12px', textAlign: 'center' }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#6366f1' }}>
-              {match.startTime ? dzHour(match.startTime) : 'TBD'}
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#6366f1' }}>{match.startTime ? dzHour(match.startTime) : 'TBD'}</div>
             {match.date && <div style={{ fontSize: 8, color: '#475569', fontWeight: 600, marginTop: 1 }}>{fmtDateShort(match.date)}</div>}
           </div>
         )}
       </div>
-
-      {/* Away team */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
         <MiniFlag name={match.awayTeam} size={38} />
-        <span style={{ color: isAlgeria(match.awayTeam) ? '#86efac' : '#e2e8f0', fontWeight: isAlgeria(match.awayTeam) ? 800 : 600, fontSize: 13, textAlign: 'left' }}>
-          {match.awayTeam}
-        </span>
+        <span style={{ color: algAway ? '#86efac' : '#e2e8f0', fontWeight: algAway ? 800 : 600, fontSize: 13, textAlign: 'left' }}>{match.awayTeam}</span>
       </div>
     </div>
   )
 }
 
 // ─── Score Center (multi-match dashboard) ────────────────────────────────────
-function ScoreCenter({ matches, title }: { matches: MatchFix[]; title?: string }) {
+function ScoreCenter({ matches, title, compact = false }: { matches: MatchFix[]; title?: string; compact?: boolean }) {
   const deduped  = deduplicateMatches(matches)
   const live     = deduped.filter(m => m.statusType === 'live')
   const finished = deduped.filter(m => m.statusType === 'finished')
@@ -452,73 +472,80 @@ function ScoreCenter({ matches, title }: { matches: MatchFix[]; title?: string }
     <div style={{
       background: 'linear-gradient(160deg,#060b17 0%,#090e1e 100%)',
       border: hasAlgeria ? '1.5px solid rgba(34,197,94,0.2)' : '1.5px solid rgba(99,102,241,0.2)',
-      borderRadius: 20, overflow: 'hidden', margin: '8px 0',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.03)',
+      borderRadius: compact ? 14 : 20, overflow: 'hidden', margin: compact ? '4px 0' : '8px 0',
+      boxShadow: compact ? '0 4px 16px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.03)',
       direction: 'rtl',
     }}>
-      {/* Header */}
+      {/* Header — compact: single slim bar */}
       <div style={{
-        padding: '14px 18px',
+        padding: compact ? '7px 10px' : '14px 18px',
         background: hasAlgeria
           ? 'linear-gradient(90deg,rgba(5,150,105,0.2) 0%,rgba(16,185,129,0.06) 60%,transparent)'
           : 'linear-gradient(90deg,rgba(67,56,202,0.2) 0%,rgba(99,102,241,0.06) 60%,transparent)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22, filter: 'drop-shadow(0 0 8px rgba(16,185,129,0.5))' }}>🏆</span>
-          <div>
-            <div style={{ color: '#d1fae5', fontWeight: 900, fontSize: 14 }}>{title || 'كأس العالم FIFA 2026'}</div>
-            <div style={{ color: '#6ee7b7', fontSize: 10, fontWeight: 600, marginTop: 2 }}>{today}</div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10 }}>
+          <span style={{ fontSize: compact ? 15 : 22 }}>🏆</span>
+          <span style={{ color: '#d1fae5', fontWeight: 800, fontSize: compact ? 11 : 14 }}>
+            {compact ? 'كأس العالم 2026' : (title || 'كأس العالم FIFA 2026')}
+          </span>
+          {compact && <span style={{ color: '#475569', fontSize: 10 }}>— {today}</span>}
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {live.length > 0 && <span style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: 10, fontWeight: 800, borderRadius: 20, padding: '2px 10px', animation: 'wcPulse 2s infinite' }}>🔴 {live.length} مباشر</span>}
-          {finished.length > 0 && <span style={{ background: 'rgba(5,150,105,0.15)', border: '1px solid rgba(16,185,129,0.25)', color: '#6ee7b7', fontSize: 10, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>✅ {finished.length} انتهت</span>}
-          {upcoming.length > 0 && <span style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: 10, fontWeight: 700, borderRadius: 20, padding: '2px 10px' }}>📅 {upcoming.length} قادمة</span>}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap' }}>
+          {live.length > 0 && <span style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: compact ? 9 : 10, fontWeight: 800, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px', animation: 'wcPulse 2s infinite' }}>🔴 {live.length}</span>}
+          {finished.length > 0 && <span style={{ background: 'rgba(5,150,105,0.15)', border: '1px solid rgba(16,185,129,0.25)', color: '#6ee7b7', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>✅ {finished.length}</span>}
+          {upcoming.length > 0 && <span style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', fontSize: compact ? 9 : 10, fontWeight: 700, borderRadius: 20, padding: compact ? '1px 7px' : '2px 10px' }}>📅 {upcoming.length}</span>}
         </div>
       </div>
 
-      <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Rows */}
+      <div style={{ padding: compact ? '5px 7px 7px' : '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: compact ? 3 : 4 }}>
         {/* Live section */}
         {live.length > 0 && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px 4px' }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.8)', animation: 'wcPulse 1.5s infinite' }} />
-              <span style={{ color: '#fca5a5', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>مباشر الآن</span>
-            </div>
-            {live.map((m, i) => <ScoreCenterRow key={`l${i}`} match={m} />)}
+            {!compact && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px 4px' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,0.8)', animation: 'wcPulse 1.5s infinite' }} />
+                <span style={{ color: '#fca5a5', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>مباشر الآن</span>
+              </div>
+            )}
+            {live.map((m, i) => <ScoreCenterRow key={`l${i}`} match={m} compact={compact} />)}
           </>
         )}
 
         {/* Finished section */}
         {finished.length > 0 && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: live.length ? '10px 4px 4px' : '6px 4px 4px' }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
-              <span style={{ color: '#6ee7b7', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>نتائج انتهت</span>
-            </div>
-            {finished.map((m, i) => <ScoreCenterRow key={`f${i}`} match={m} />)}
+            {!compact && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: live.length ? '10px 4px 4px' : '6px 4px 4px' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+                <span style={{ color: '#6ee7b7', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>نتائج انتهت</span>
+              </div>
+            )}
+            {finished.map((m, i) => <ScoreCenterRow key={`f${i}`} match={m} compact={compact} />)}
           </>
         )}
 
         {/* Upcoming section */}
         {upcoming.length > 0 && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: (live.length + finished.length) > 0 ? '10px 4px 4px' : '6px 4px 4px' }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} />
-              <span style={{ color: '#a5b4fc', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>مباريات قادمة</span>
-            </div>
-            {upcoming.map((m, i) => <ScoreCenterRow key={`u${i}`} match={m} />)}
+            {!compact && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: (live.length + finished.length) > 0 ? '10px 4px 4px' : '6px 4px 4px' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} />
+                <span style={{ color: '#a5b4fc', fontSize: 11, fontWeight: 800, letterSpacing: 0.5 }}>مباريات قادمة</span>
+              </div>
+            )}
+            {upcoming.map((m, i) => <ScoreCenterRow key={`u${i}`} match={m} compact={compact} />)}
           </>
         )}
       </div>
 
       {/* Footer links */}
-      <div style={{ padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 6, justifyContent: 'center' }}>
-        <a href="https://jdwel.com/2026-world-cup-fixtures/" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>🗓️ jdwel</a>
-        <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>📱 FotMob</a>
-        <a href="https://www.fifa.com/worldcup" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 10 }}>🏆 FIFA</a>
+      <div style={{ padding: compact ? '5px 10px 7px' : '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 5, justifyContent: 'center' }}>
+        <a href="https://jdwel.com/2026-world-cup-fixtures/" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 9, padding: '2px 8px' }}>🗓️ jdwel</a>
+        <a href="https://www.fotmob.com/ar/leagues/77/fixtures/world-cup" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 9, padding: '2px 8px' }}>📱 FotMob</a>
+        <a href="https://www.fifa.com/worldcup" target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: 9, padding: '2px 8px' }}>🏆 FIFA</a>
       </div>
     </div>
   )
@@ -629,7 +656,7 @@ export default function WC2026MatchCard({ matches, title, autoRefresh = false, r
 
       {/* Multi-match → Score Center, Single → Full Card */}
       {isMulti
-        ? <ScoreCenter matches={matches} title={title} />
+        ? <ScoreCenter matches={matches} title={title} compact={compact} />
         : <MatchCard match={matches[0]} />
       }
 

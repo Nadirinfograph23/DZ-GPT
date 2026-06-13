@@ -737,7 +737,8 @@
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */
 table.dzt-simple-table {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   font-size: 13px;
   margin: 0;
   table-layout: auto;
@@ -769,7 +770,8 @@ table.dzt-simple-table tbody tr:hover td {
 /* fallback table (no header) */
 table.dzt-fallback-table {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   font-size: 13px;
   margin: 0;
 }

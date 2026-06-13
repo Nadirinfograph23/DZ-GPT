@@ -28,6 +28,16 @@ import {
 } from '../lib/dz-sports-knowledge.js'
 
 import {
+  buildWC2026FullContext,
+  buildWC2026QuickAnswer,
+  buildTeamProfile,
+  WC2026_KEY_FACTS,
+  WC2026_GROUPS_INFO,
+  WC2026_TEAM_PROFILES,
+  WC2026_FAQ,
+} from '../lib/wc2026-knowledge.js'
+
+import {
   runWC2026TodayAgent,
   runWC2026StandingsAgent,
 } from '../lib/sports-agent.js'
@@ -533,27 +543,71 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
     }
   }
 
-  // ── GENERAL WC query not specifically handled ────────────────────────────
+  // ── GENERAL WC query — إجابة شاملة من قاعدة المعرفة المحلية ─────────────
+  // أولاً: هل يسأل عن فريق محدد؟
+  const teamKeys = Object.keys(WC2026_TEAM_PROFILES)
+  const matchedTeam = teamKeys.find(k => query.includes(k))
+  if (matchedTeam) {
+    const profile = buildTeamProfile(matchedTeam)
+    if (profile) {
+      // أضف جدول المجموعة المرتبطة إذا أمكن
+      const teamData = WC2026_TEAM_PROFILES[matchedTeam]
+      const groupKey = teamData?.group
+      const groupInfo = groupKey ? WC2026_GROUPS_INFO[groupKey] : null
+      const groupBlock = groupInfo
+        ? [``, `**${groupInfo.description}:**`, `> ${groupInfo.teams.join(' · ')}`].join('\n')
+        : ''
+      return {
+        userResponse: [
+          `## 🏆 كأس العالم FIFA 2026`,
+          ``,
+          profile,
+          groupBlock,
+          ``,
+          `---`,
+          `📡 **المصادر:** [FIFA](https://www.fifa.com/worldcup) · [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) · [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
+        ].join('\n'),
+        found: true,
+        agent: 'world_cup_agent',
+        source: 'WC2026_KNOWLEDGE',
+        confidence: 'high',
+        wcType: 'GENERAL',
+      }
+    }
+  }
+
+  // ثانياً: هل يسأل عن ملاعب أو مجموعات؟
+  const quickAns = buildWC2026QuickAnswer(query)
+  if (quickAns) {
+    return {
+      userResponse: [
+        `## 🏆 كأس العالم FIFA 2026`,
+        ``,
+        quickAns,
+        ``,
+        `---`,
+        `📡 **المصادر:** [FIFA](https://www.fifa.com/worldcup) · [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup)`,
+      ].join('\n'),
+      found: true,
+      agent: 'world_cup_agent',
+      source: 'WC2026_KNOWLEDGE',
+      confidence: 'high',
+      wcType: 'GENERAL',
+    }
+  }
+
+  // ثالثاً: رد شامل عن البطولة
+  const fullCtx = buildWC2026FullContext()
   return {
-    userResponse: [
-      `## 🏆 كأس العالم FIFA 2026`,
+    userResponse: fullCtx + [
       ``,
-      `> 🔒 هذا الرد من وكيل كأس العالم المتخصص — البيانات من المصادر الرسمية فقط.`,
-      ``,
-      `**المصادر الموثوقة:**`,
-      `| المصدر | الرابط |`,
-      `|--------|--------|`,
-      `| 🏆 FIFA الرسمي | [fifa.com/worldcup](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) |`,
-      `| 📡 365score | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
-      `| ⚽ FotMob | [مباريات WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
-      `| 📊 SofaScore | [إحصائيات](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) |`,
-      `| 🇩🇿 Kooora | [متابعة عربية](https://www.kooora.com/) |`,
-      `| 📋 jdwel.com | [الجدول الكامل](https://jdwel.com/2026-world-cup-fixtures/) |`,
+      `---`,
+      `📡 **مصادر البيانات:** [FIFA الرسمي](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) · [365score](https://www.365scores.com/ar/football/world-cup-2026) · [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) · [SofaScore](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) · [jdwel.com](https://jdwel.com/2026-world-cup-fixtures/)`,
     ].join('\n'),
-    found: false,
+    found: true,
     agent: 'world_cup_agent',
-    source: 'static',
-    confidence: 'medium',
+    source: 'WC2026_KNOWLEDGE',
+    confidence: 'high',
     wcType: 'GENERAL',
   }
 }

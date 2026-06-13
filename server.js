@@ -242,7 +242,7 @@ import {
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
 import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES } from './lib/sports-agent.js'
-import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse, isWC2026AllGroupsQuery, buildWC2026AllGroupsStandings } from './lib/dz-sports-knowledge.js'
+import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse, isWC2026AllGroupsQuery, buildWC2026AllGroupsStandings, WC2026_ALL_SQUADS, WC2026_SQUAD_ALIASES, isWC2026SquadQuery, detectWC2026SquadTeam, buildWC2026SquadResponse } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
 import { mountMemoryRouter } from './lib/mem/mem-router.js'
@@ -15908,6 +15908,28 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         found: true,
         type: 'algeria-squad',
       })
+    }
+  }
+
+  // ── تشكيلات جميع الفرق المشاركة في كأس العالم 2026 ─────────────────────────
+  {
+    const _isAnySquadQ = isWC2026SquadQuery(_rawLastMsg)
+    if (_isAnySquadQ) {
+      const _teamName = detectWC2026SquadTeam(_rawLastMsg)
+      console.log(`[WC2026:Squad] 📋 Squad query detected — team: ${_teamName || 'unknown'}, msg: "${_rawLastMsg.slice(0,70)}"`)
+      if (_teamName && WC2026_ALL_SQUADS[_teamName]) {
+        const _squadResp = buildWC2026SquadResponse(_teamName)
+        return res.status(200).json({
+          content: _squadResp,
+          model: 'wc2026-squad-kb',
+          _sportsAgent: true,
+          _bypassLLM: true,
+          wc2026: true,
+          found: true,
+          type: 'team-squad',
+          team: _teamName,
+        })
+      }
     }
   }
 

@@ -1769,6 +1769,30 @@
   }
   .v5-md-table-scroll::-webkit-scrollbar { height: 10px; }
 }
+/* ── Swipe hint badge — appears on overflowing tables, fades out after 1.6s ── */
+.dz-table-swipe-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16,163,127,0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  animation: dz-hint-fade 1.6s ease forwards;
+}
+@keyframes dz-hint-fade {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-2px); }
+}
 
 @media (max-width: 600px) {
   .dzt-wrapper { margin: 6px 0; border-radius: 8px; }

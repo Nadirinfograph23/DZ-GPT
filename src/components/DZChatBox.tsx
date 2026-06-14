@@ -2474,6 +2474,7 @@ function YouTubePanel({
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [showHint, setShowHint] = useState(false)
 
   useEffect(() => {
     const el = ref.current
@@ -2483,9 +2484,16 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const initRTLScroll = () => {
       if (el.scrollWidth > el.clientWidth) {
         el.scrollLeft = el.scrollWidth - el.clientWidth
+        // Show swipe hint for overflowing tables, auto-hide after 1.6s
+        setShowHint(true)
+        setTimeout(() => setShowHint(false), 1600)
       }
     }
     requestAnimationFrame(initRTLScroll)
+
+    // Hide hint as soon as user starts scrolling
+    const onScroll = () => setShowHint(false)
+    el.addEventListener('scroll', onScroll, { passive: true })
 
     let startX = 0, startY = 0, isH: boolean | null = null
 
@@ -2503,8 +2511,8 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       // Prevent default only when the table can scroll in the swipe direction
       const atLeft  = el.scrollLeft <= 0
       const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
-      const goingRight = e.touches[0].clientX > startX  // finger right → scroll left
-      const goingLeft  = e.touches[0].clientX < startX  // finger left  → scroll right
+      const goingRight = e.touches[0].clientX > startX
+      const goingLeft  = e.touches[0].clientX < startX
       if ((atLeft && goingRight) || (atRight && goingLeft)) return
       e.preventDefault()
     }
@@ -2512,6 +2520,7 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     el.addEventListener('touchstart', onStart, { passive: true })
     el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
+      el.removeEventListener('scroll',     onScroll)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
     }
@@ -2520,6 +2529,11 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="v5-md-table-scroll" ref={ref}>
       {children}
+      {showHint && (
+        <div className="dz-table-swipe-hint" aria-hidden="true">
+          ← اسحب
+        </div>
+      )}
     </div>
   )
 }

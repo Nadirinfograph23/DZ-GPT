@@ -14,16 +14,22 @@ import { DeveloperCard } from '../components/DeveloperCard'
 
 // RTL-aware table scroll wrapper: JS scrolls to rightmost position on mount
 // so the first Arabic column (rightmost in RTL) is immediately visible.
+// Shows a "← اسحب" hint for 1.6s on overflowing tables, hides on first scroll.
 function DZCTableScroll({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [showHint, setShowHint] = useState(false)
   useEffect(() => {
     const el = ref.current
     if (!el) return
     requestAnimationFrame(() => {
       if (el.scrollWidth > el.clientWidth) {
         el.scrollLeft = el.scrollWidth - el.clientWidth
+        setShowHint(true)
+        setTimeout(() => setShowHint(false), 1600)
       }
     })
+    const onScroll = () => setShowHint(false)
+    el.addEventListener('scroll', onScroll, { passive: true })
     let startX = 0, startY = 0, isH: boolean | null = null
     const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
     const onMove = (e: TouchEvent) => {
@@ -40,11 +46,19 @@ function DZCTableScroll({ children }: { children: ReactNode }) {
     el.addEventListener('touchstart', onStart, { passive: true })
     el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
+      el.removeEventListener('scroll',     onScroll)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
     }
   }, [])
-  return <div className="dzc-table-scroll" ref={ref}>{children}</div>
+  return (
+    <div className="dzc-table-scroll" ref={ref}>
+      {children}
+      {showHint && (
+        <div className="dz-table-swipe-hint" aria-hidden="true">← اسحب</div>
+      )}
+    </div>
+  )
 }
 
 interface ChatUser {

@@ -60,26 +60,62 @@ function DZCTableScroll({ children }: { children: ReactNode }) {
     })
     ro.observe(el)
 
-    let startX = 0, startY = 0, isH: boolean | null = null
-    const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
-    const onMove = (e: TouchEvent) => {
-      const dx = Math.abs(e.touches[0].clientX - startX)
-      const dy = Math.abs(e.touches[0].clientY - startY)
-      if (isH === null && (dx > 4 || dy > 4)) isH = dx > dy
-      if (!isH) return
-      // stopPropagation removed: CSS touch-action:pan-x handles routing at touchstart.
-      // stopPropagation on touchmove is too late on Android Chrome.
-      const atL = el.scrollLeft <= 0
-      const atR = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
-      if ((atL && e.touches[0].clientX > startX) || (atR && e.touches[0].clientX < startX)) return
-      e.preventDefault()
+    // ── Find nearest vertically-scrollable ancestor (chat messages container) ──
+    let scrollParent: HTMLElement | null = null
+    {
+      let p = el.parentElement
+      while (p && p !== document.body) {
+        const { overflowY } = window.getComputedStyle(p)
+        if (/auto|scroll/.test(overflowY) && p.scrollHeight > p.clientHeight) {
+          scrollParent = p; break
+        }
+        p = p.parentElement
+      }
     }
-    el.addEventListener('touchstart', onStart, { passive: true })
-    el.addEventListener('touchmove',  onMove,  { passive: false })
+
+    // ── Pointer Events: horizontal → table scroll; vertical → parent scroll ──
+    // touch-action:none in CSS gives full control; no e.preventDefault() needed.
+    let startX = 0, startY = 0, lastX = 0, lastY = 0
+    let direction: 'h' | 'v' | null = null
+    let activeId: number | null = null
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return
+      startX = lastX = e.clientX
+      startY = lastY = e.clientY
+      direction = null
+      activeId = e.pointerId
+      try { el.setPointerCapture(e.pointerId) } catch (_) { /* ignore */ }
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerId !== activeId) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+      if (direction === null) {
+        const adx = Math.abs(e.clientX - startX)
+        const ady = Math.abs(e.clientY - startY)
+        if (adx > 5 || ady > 5) direction = adx >= ady ? 'h' : 'v'
+      }
+      if (direction === 'h') { el.scrollLeft -= dx; sync() }
+      else if (direction === 'v' && scrollParent) { scrollParent.scrollTop -= dy }
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+
+    const onPointerUp = () => { activeId = null; direction = null }
+
+    el.addEventListener('pointerdown',   onPointerDown)
+    el.addEventListener('pointermove',   onPointerMove)
+    el.addEventListener('pointerup',     onPointerUp)
+    el.addEventListener('pointercancel', onPointerUp)
+
     return () => {
-      el.removeEventListener('scroll', sync)
-      el.removeEventListener('touchstart', onStart)
-      el.removeEventListener('touchmove',  onMove)
+      el.removeEventListener('scroll',      sync)
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('pointermove', onPointerMove)
+      el.removeEventListener('pointerup',   onPointerUp)
+      el.removeEventListener('pointercancel', onPointerUp)
       ro.disconnect()
     }
   }, [])

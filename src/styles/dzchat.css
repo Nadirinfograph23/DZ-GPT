@@ -874,10 +874,11 @@
 /* ── Table horizontal scroll wrapper (DZChat) ── */
 .dzc-table-scroll {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  /* pan-x only — same Android Chrome gesture fix as .dzt-simple-scroll */
-  touch-action: pan-x;
+  /* touch-action:none — same Pointer Events strategy as .dzt-simple-scroll.
+     JS (DZCTableScroll) routes horizontal→scrollLeft, vertical→parent.scrollTop. */
+  touch-action: none;
   overscroll-behavior-x: contain;
   /* LTR container — JS (DZCTableScroll component) sets scrollLeft to max on mount */
   direction: ltr;

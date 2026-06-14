@@ -328,8 +328,16 @@ function _tableKey(el: HTMLDivElement): string {
   return (el.textContent ?? '').slice(0, 120).trim()
 }
 
-// ── Scroll wrapper: forces LTR scroll origin, shows RTL start (right side),
-//    intercepts horizontal touch to prevent parent chat container from stealing them
+// ── Scroll wrapper: forces LTR scroll origin, shows RTL start (right side).
+//
+// SCROLL STRATEGY — Pointer Events API (replaces touch handlers):
+//   Problem: touch-action:pan-x + e.preventDefault() in touchmove cancel each
+//   other — the browser's native pan-x is overridden but no manual scrollLeft
+//   update is performed, so the table never moves.
+//   Solution: touch-action:none (CSS) + full manual routing via Pointer Events:
+//     • Horizontal swipe → el.scrollLeft updated manually
+//     • Vertical swipe   → scrollable parent container scrolled manually
+//   setPointerCapture keeps all events on our element throughout the gesture.
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -337,24 +345,19 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const el = ref.current
     if (!el) return
 
-    // Update edge-fade hints based on scroll position
+    // ── Edge-fade hints ──
     const updateHints = () => {
-      const canScrollLeft  = el.scrollLeft > 1
-      const canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
-      el.dataset.scrollLeft  = canScrollLeft  ? 'true' : 'false'
-      el.dataset.scrollRight = canScrollRight ? 'true' : 'false'
+      el.dataset.scrollLeft  = el.scrollLeft > 1 ? 'true' : 'false'
+      el.dataset.scrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1 ? 'true' : 'false'
     }
 
-    // On mount: restore saved position or default to rightmost (RTL first-column visible).
-    // Saved position prevents reset when streaming re-mounts this component.
+    // ── Restore scroll position (or default to rightmost = RTL first column) ──
     requestAnimationFrame(() => {
       const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
-      if (saved !== undefined && saved > 0) {
-        el.scrollLeft = saved
-      } else {
-        el.scrollLeft = el.scrollWidth - el.clientWidth
-      }
+      el.scrollLeft = (saved !== undefined && saved > 0)
+        ? saved
+        : el.scrollWidth - el.clientWidth
       updateHints()
     })
 
@@ -364,50 +367,66 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     }
     el.addEventListener('scroll', onScroll, { passive: true })
 
-    // ── Touch handling: prevent parent chat from stealing horizontal swipes ──
-    let startX = 0
-    let startY = 0
-    let isHorizontal: boolean | null = null
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX = e.touches[0].clientX
-      startY = e.touches[0].clientY
-      isHorizontal = null
+    // ── Find nearest vertically-scrollable ancestor (chat messages container) ──
+    let scrollParent: HTMLElement | null = null
+    let p = el.parentElement
+    while (p && p !== document.body) {
+      const { overflowY } = window.getComputedStyle(p)
+      if (/auto|scroll/.test(overflowY) && p.scrollHeight > p.clientHeight) {
+        scrollParent = p; break
+      }
+      p = p.parentElement
     }
 
-    const onTouchMove = (e: TouchEvent) => {
-      const dx = Math.abs(e.touches[0].clientX - startX)
-      const dy = Math.abs(e.touches[0].clientY - startY)
+    // ── Pointer Events: full manual gesture routing ──
+    let startX = 0, startY = 0, lastX = 0, lastY = 0
+    let direction: 'h' | 'v' | null = null
+    let activeId: number | null = null
 
-      if (isHorizontal === null && (dx > 4 || dy > 4)) {
-        isHorizontal = dx > dy
-      }
-
-      if (isHorizontal) {
-        // NOTE: stopPropagation() is intentionally removed.
-        // CSS touch-action:pan-x handles gesture ownership at touchstart time
-        // (before any touchmove fires). stopPropagation() on touchmove is too
-        // late — Android Chrome has already routed the gesture to the parent
-        // if dy > dx at touchstart. Removing it lets the CSS declaration be
-        // the single source of truth for gesture routing.
-        //
-        // preventDefault() is kept as a fallback for older browsers that don't
-        // honour touch-action:pan-x fully.
-        const atLeft  = el.scrollLeft <= 0
-        const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
-        const swipingLeft  = e.touches[0].clientX < startX
-        const swipingRight = e.touches[0].clientX > startX
-        if ((atLeft && swipingRight) || (atRight && swipingLeft)) return
-        e.preventDefault()
-      }
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === 'mouse') return        // mouse: use native CSS scroll
+      startX = lastX = e.clientX
+      startY = lastY = e.clientY
+      direction = null
+      activeId = e.pointerId
+      try { el.setPointerCapture(e.pointerId) } catch (_) { /* ignore */ }
     }
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true })
-    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerId !== activeId) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+
+      if (direction === null) {
+        const adx = Math.abs(e.clientX - startX)
+        const ady = Math.abs(e.clientY - startY)
+        if (adx > 5 || ady > 5) direction = adx >= ady ? 'h' : 'v'
+      }
+
+      if (direction === 'h') {
+        el.scrollLeft -= dx
+        updateHints()
+      } else if (direction === 'v' && scrollParent) {
+        scrollParent.scrollTop -= dy
+      }
+
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+
+    const onPointerUp = () => { activeId = null; direction = null }
+
+    el.addEventListener('pointerdown',   onPointerDown)
+    el.addEventListener('pointermove',   onPointerMove)
+    el.addEventListener('pointerup',     onPointerUp)
+    el.addEventListener('pointercancel', onPointerUp)
+
     return () => {
-      el.removeEventListener('scroll',     onScroll)
-      el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('scroll',      onScroll)
+      el.removeEventListener('pointerdown', onPointerDown)
+      el.removeEventListener('pointermove', onPointerMove)
+      el.removeEventListener('pointerup',   onPointerUp)
+      el.removeEventListener('pointercancel', onPointerUp)
     }
   }, [])
 

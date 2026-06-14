@@ -1470,9 +1470,10 @@
   /* Force LTR scroll origin — prevents RTL snap-back */
   direction: ltr !important;
   unicode-bidi: isolate;
-  /* pan-x only: same Android Chrome fix as .dzt-simple-scroll */
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
+  /* pan-x pan-y: large tables need BOTH axes (rows + columns).
+     No JS touch handler here — native CSS scroll handles both axes. */
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
   scroll-snap-type: none;
   position: relative;
   -webkit-transform: translateZ(0);
@@ -1614,7 +1615,7 @@
 /* ── Scroll wrapper for simple/fallback tables (mobile horizontal scroll) ── */
 .dzt-simple-scroll {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
   /* Force LTR scroll origin — prevents RTL snap-back and scroll position inversion.
      The parent .dz-message-text has direction:rtl which cascades down; we break
      that cascade here so scrollLeft=0 always means "left edge" (predictable). */
@@ -1624,16 +1625,15 @@
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   /*
-   * CRITICAL FIX — Android Chrome gesture routing:
-   * pan-x (NOT pan-x pan-y) tells Android Chrome at touchstart time that
-   * this element ONLY handles horizontal panning. Vertical touch gestures
-   * automatically fall through to the parent scroll container (.dz-messages).
-   * With pan-x pan-y Chrome's disambiguator races between this element and
-   * the parent; if dy > dx by even 1px it locks the gesture to the parent
-   * and the table never scrolls — no amount of JS preventDefault() can
-   * reverse that decision because it is made before touchmove fires.
+   * touch-action:none — Pointer Events API takes full control (see TableScrollWrapper).
+   * Previous approach (touch-action:pan-x + e.preventDefault in touchmove) was broken:
+   * preventDefault cancels the browser's native pan-x but no manual scrollLeft update
+   * was made, so the table never moved. Now JS handles all axes manually:
+   *   horizontal → el.scrollLeft  (table scrolls)
+   *   vertical   → scrollParent.scrollTop  (chat container scrolls)
+   * Mouse wheel still works via native CSS overflow-x:auto (unaffected by touch-action).
    */
-  touch-action: pan-x;
+  touch-action: none;
   scroll-snap-type: none;
   position: relative;
   width: 100%;

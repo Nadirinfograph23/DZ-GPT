@@ -49984,7 +49984,7 @@ function createFlightsRouter() {
     { code: "YUL", name: "\u0645\u0648\u0646\u062A\u0631\u064A\u0627\u0644", country: "\u0643\u0646\u062F\u0627 \u{1F1E8}\u{1F1E6}", region: "\u0627\u0644\u0623\u0645\u0631\u064A\u0643\u062A\u0627\u0646" },
     { code: "JFK", name: "\u0646\u064A\u0648\u064A\u0648\u0631\u0643 JFK", country: "\u0627\u0644\u0648\u0644\u0627\u064A\u0627\u062A \u0627\u0644\u0645\u062A\u062D\u062F\u0629 \u{1F1FA}\u{1F1F8}", region: "\u0627\u0644\u0623\u0645\u0631\u064A\u0643\u062A\u0627\u0646" }
   ];
-  const DAYS_AR = ["\u0623\u062D\u062F", "\u0627\u062B\u0646", "\u062B\u0644\u0627", "\u0623\u0631\u0628", "\u062E\u0645\u064A", "\u062C\u0645\u0639", "\u0633\u0628\u062A"];
+  const DAYS_AR = ["\u0627\u0644\u0623\u062D\u062F", "\u0627\u0644\u0627\u062B\u0646\u064A\u0646", "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062E\u0645\u064A\u0633", "\u0627\u0644\u062C\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062A"];
   const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
   const MON_WED_FRI = [1, 3, 5];
   const MON_WED_FRI_SUN = [0, 1, 3, 5];
@@ -49993,10 +49993,10 @@ function createFlightsRouter() {
   const MON_WED_FRI_SAT_SUN = [0, 1, 3, 5, 6];
   function daysLabel(days) {
     if (days.length === 7) return "\u064A\u0648\u0645\u064A\u0627\u064B";
-    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI_SUN)) return "\u0627\u062B\u0646 \xB7 \u0623\u0631\u0628 \xB7 \u062C\u0645\u0639 \xB7 \u0623\u062D\u062F";
-    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI)) return "\u0627\u062B\u0646 \xB7 \u0623\u0631\u0628 \xB7 \u062C\u0645\u0639";
-    if (JSON.stringify(days) === JSON.stringify(MON_THU)) return "\u0627\u062B\u0646 \xB7 \u062E\u0645\u064A";
-    if (JSON.stringify(days) === JSON.stringify(MON_THU_SAT)) return "\u0627\u062B\u0646 \xB7 \u062E\u0645\u064A \xB7 \u0633\u0628\u062A";
+    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI_SUN)) return "\u0627\u0644\u0627\u062B\u0646\u064A\u0646 \xB7 \u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621 \xB7 \u0627\u0644\u062C\u0645\u0639\u0629 \xB7 \u0627\u0644\u0623\u062D\u062F";
+    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI)) return "\u0627\u0644\u0627\u062B\u0646\u064A\u0646 \xB7 \u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621 \xB7 \u0627\u0644\u062C\u0645\u0639\u0629";
+    if (JSON.stringify(days) === JSON.stringify(MON_THU)) return "\u0627\u0644\u0627\u062B\u0646\u064A\u0646 \xB7 \u0627\u0644\u062E\u0645\u064A\u0633";
+    if (JSON.stringify(days) === JSON.stringify(MON_THU_SAT)) return "\u0627\u0644\u0627\u062B\u0646\u064A\u0646 \xB7 \u0627\u0644\u062E\u0645\u064A\u0633 \xB7 \u0627\u0644\u0633\u0628\u062A";
     return days.map((d) => DAYS_AR[d]).join(" \xB7 ");
   }
   function addMinutes(time, mins) {

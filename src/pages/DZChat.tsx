@@ -1372,6 +1372,16 @@ export default function DZChat() {
                             a: ({ href, children }) => (
                               <a href={href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>{children}</a>
                             ),
+                            table: ({ children }) => (
+                              <div className="dzc-table-scroll">
+                                <table>{children}</table>
+                              </div>
+                            ),
+                            thead: ({ children }) => <thead>{children}</thead>,
+                            tbody: ({ children }) => <tbody>{children}</tbody>,
+                            tr:    ({ children }) => <tr>{children}</tr>,
+                            th:    ({ children }) => <th dir="auto">{children}</th>,
+                            td:    ({ children }) => <td dir="auto">{children}</td>,
                           }}
                         >
                           {msg.text}

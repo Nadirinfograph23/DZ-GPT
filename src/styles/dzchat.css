@@ -871,20 +871,76 @@
   padding: 10px 12px; overflow-x: auto; margin: 6px 0;
 }
 .dzc-msg-markdown pre code { background: none; padding: 0; }
+/* ── Table horizontal scroll wrapper (DZChat) ── */
+.dzc-table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  /* LTR scroll origin → prevents RTL snap-back on iOS */
+  direction: ltr;
+  position: relative;
+  isolation: isolate;
+  max-width: 100%;
+  width: 100%;
+  margin: 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200,255,0,0.4) rgba(255,255,255,0.06);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+.dzc-table-scroll::-webkit-scrollbar { height: 5px; }
+.dzc-table-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+}
+.dzc-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(200,255,0,0.35);
+  border-radius: 3px;
+}
+.dzc-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(200,255,0,0.6);
+}
+/* Gradient fade to show there's more content */
+.dzc-table-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 24px; height: calc(100% - 5px);
+  background: linear-gradient(to left, rgba(10,10,20,0.65) 0%, transparent 100%);
+  pointer-events: none;
+}
+/* RTL table content inside LTR scroll container */
+.dzc-msg-markdown .dzc-table-scroll table,
+.dzc-table-scroll table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 13px;
+  margin: 0;
+  direction: rtl;
+}
 .dzc-msg-markdown table {
   border-collapse: collapse; width: 100%;
   font-size: 13px; margin: 6px 0;
 }
-.dzc-msg-markdown th {
+.dzc-msg-markdown th,
+.dzc-table-scroll th {
   background: rgba(200,255,0,0.1); color: #c8ff00;
   padding: 5px 10px; text-align: right; font-weight: 700;
   border: 1px solid rgba(200,255,0,0.2);
+  white-space: nowrap;
 }
-.dzc-msg-markdown td {
+.dzc-msg-markdown td,
+.dzc-table-scroll td {
   padding: 4px 10px; border: 1px solid rgba(255,255,255,0.08);
   color: #c8d8e8;
+  white-space: nowrap;
 }
-.dzc-msg-markdown tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+.dzc-msg-markdown tr:nth-child(even) td,
+.dzc-table-scroll tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
 .dzc-msg-markdown blockquote {
   border-right: 3px solid rgba(200,255,0,0.4);
   margin: 4px 0; padding: 4px 10px;

@@ -1456,6 +1456,17 @@
   overflow-y: auto;
   max-height: 520px;
   -webkit-overflow-scrolling: touch;
+  /* Fix RTL snap-back: LTR scroll origin even though wrapper is RTL */
+  direction: ltr;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
+/* Restore RTL for table content inside the LTR scroll container */
+.dzt-scroll-container .dzt-table {
+  direction: rtl;
 }
 .dzt-scroll-container--virtual { overflow-y: auto; max-height: 480px; }
 .dzt-scroll-container::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -1687,6 +1698,11 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
+    direction: ltr;
+    touch-action: pan-x pan-y;
+    overscroll-behavior-x: contain;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
   .dzt-table { min-width: max-content; width: auto; }
   .dzt-pagination { flex-wrap: wrap; gap: 4px; padding: 6px; }

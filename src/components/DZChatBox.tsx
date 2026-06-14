@@ -2465,6 +2465,46 @@ function YouTubePanel({
   return null
 }
 
+// ===== TABLE SCROLL WRAPPER — fixes iOS RTL horizontal scroll snap-back =====
+// Uses a non-passive touchmove listener to stop the parent from stealing the
+// touch event when the user is scrolling the table horizontally.
+
+function TableScrollWrapper({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let startX = 0, startY = 0, isH = false
+
+    const onStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+      isH = false
+    }
+    const onMove = (e: TouchEvent) => {
+      const dx = Math.abs(e.touches[0].clientX - startX)
+      const dy = Math.abs(e.touches[0].clientY - startY)
+      if (!isH && dy > dx * 1.2) return     // mainly vertical → let parent scroll
+      isH = true
+      e.stopPropagation()                   // stop parent from stealing the touch
+    }
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove',  onMove,  { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove',  onMove)
+    }
+  }, [])
+
+  return (
+    <div className="v5-md-table-scroll" ref={ref}>
+      {children}
+    </div>
+  )
+}
+
 // ===== TYPING EFFECT =====
 
 function TypingEffect({ text, onDone }: { text: string; onDone: () => void }) {
@@ -7983,9 +8023,9 @@ ${rows}
                             },
                             table({ children }) {
                               return (
-                                <div className="v5-md-table-scroll">
+                                <TableScrollWrapper>
                                   <DZMDTable>{children}</DZMDTable>
-                                </div>
+                                </TableScrollWrapper>
                               )
                             },
                             thead({ children }) { return <thead>{children}</thead> },

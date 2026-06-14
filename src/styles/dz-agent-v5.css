@@ -728,18 +728,40 @@
 /* ── Markdown table scroll wrapper ───────────────────── */
 .v5-md-table-scroll {
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
+  /* pan-x only: lets browser know this element owns horizontal scroll
+     → stops parent from stealing the touch event for vertical scroll */
+  touch-action: pan-x;
   overscroll-behavior-x: contain;
-  overscroll-behavior-y: none;
+  /* REMOVED overscroll-behavior-y: none → it caused iOS snap-back */
   max-width: 100%;
-  margin: 6px 0;
+  width: 100%;
+  margin: 8px 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
-  /* Fix RTL snap-back: force scroll origin to left (LTR) on the container */
+  scrollbar-color: rgba(16,163,127,0.55) rgba(255,255,255,0.07);
+  /* LTR scroll origin → fixes RTL snap-back completely */
   direction: ltr;
+  /* GPU layer + new stacking context for smooth iOS scroll */
+  position: relative;
+  isolation: isolate;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
 }
-/* Restore RTL text direction inside cells */
+.v5-md-table-scroll::-webkit-scrollbar { height: 5px; }
+.v5-md-table-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+  border-radius: 3px;
+}
+.v5-md-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(16,163,127,0.45);
+  border-radius: 3px;
+}
+.v5-md-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(16,163,127,0.75);
+}
+/* RTL table content inside LTR scroll container */
 .v5-md-table-scroll table {
   width: max-content;
   min-width: 100%;
@@ -749,6 +771,17 @@
 .v5-md-table-scroll td {
   white-space: nowrap;
   text-align: right;
+}
+/* Gradient fade hints at right edge to show more content */
+.v5-md-table-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 28px; height: calc(100% - 5px);
+  background: linear-gradient(to left, rgba(18,18,28,0.7) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: 0 6px 6px 0;
+  transition: opacity 0.2s;
 }
 
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */

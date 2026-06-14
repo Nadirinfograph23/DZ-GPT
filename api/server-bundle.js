@@ -43542,8 +43542,10 @@ var STATIC_DICT = {
   "\u0627\u0644\u0628\u0631\u062A\u063A\u0627\u0644": "Portugal"
 };
 var SEARCH_PREFIXES_RE = /^(ابحث\s*(عن|على)\s*(صور?|فوتو)?|جيبلي\s*(صور?|فوتو)?|أجلب\s*(صور?|فوتو)?|هاتلي\s*(صور?|فوتو)?|أرني\s*(صور?|فوتو)?|ارني\s*(صور?|فوتو)?|بحث\s*(عن)?\s*(صور?)?|أريد\s*(صور?|فوتو)\s*ل?|اريد\s*(صور?|فوتو)\s*ل?|دور\s*(على)?\s*(صور?)?|find\s*(a\s*)?(photo|picture|image|photos|pictures|images)\s*(of)?|search\s*(for)?\s*(a\s*)?(photo|picture|image|photos|pictures)?|get\s*(me\s*)?(a\s*)?(photo|picture|image|photos|pictures)\s*(of)?|show\s*(me\s*)?(a\s*)?(photo|picture|image|photos|pictures)\s*(of)?|bring\s*(me\s*)?(a?\s*)?(photo|picture)?|fetch\s*(image|photo|picture)|trouve\s*(une?\s*)?(photo|image)?|cherche\s*(une?\s*)?(photo|image)?|montre\s*(moi\s*)?(une?\s*)?(photo|image)?|صور\s*حقيقية|صورة\s*حقيقية|صور\s*واقعية|حوس\s*على\s*(صور?)?)\s*/i;
+var SEARCH_SUFFIXES_RE = /\s*(بالصور|بصور|بالصورة|مع\s*الصور|مع\s*صور|وصور|وبالصور)\s*$/i;
 function extractAndTranslateStatic(rawQuery) {
-  const subject = rawQuery.replace(SEARCH_PREFIXES_RE, "").trim();
+  const afterPrefix = rawQuery.replace(SEARCH_PREFIXES_RE, "").trim();
+  const subject     = afterPrefix.replace(SEARCH_SUFFIXES_RE, "").trim();
   if (!subject || subject === rawQuery.trim()) return null;
   let translated = subject;
   let matched = false;
@@ -43973,7 +43975,15 @@ function isImageSearchQuery(query) {
     "montre une image",
     "donne moi une photo",
     "montre moi des images",
-    "apporte moi une photo"
+    "apporte moi une photo",
+    // ── نمط "X بالصور" — الأكثر شيوعاً في العربية الجزائرية ──────────────
+    "بالصور", "بصور", "بالصورة",
+    "مع صور", "مع الصور",
+    "صور عن", "صور من", "صور لـ", "صور ل",
+    "نشوف صور", "أشوف صور", "اشوف صور", "نشوفوا صور",
+    "عرض صور", "اعرض صور", "وصور", "ومع صور",
+    "صور كأس", "صور الجزائر", "صور فريق",
+    "بغيت نشوف صور", "نبغي نشوف صور", "حابب نشوف صور"
   ];
   return SEARCH_SIGNALS.some((s) => t.includes(s));
 }

@@ -3981,11 +3981,23 @@ function _ttsGender(name: string): 'male' | 'female' | 'unknown' {
   return 'unknown'
 }
 
+const EDGE_VOICES = [
+  { id: 'srv:ar-dz-m', voiceId: 'ar-DZ-IsmaelNeural',  label: '🇩🇿 إسماعيل — جزائري ذكر', lang: 'ar' },
+  { id: 'srv:ar-dz-f', voiceId: 'ar-DZ-AminaNeural',   label: '🇩🇿 أمينة — جزائرية أنثى', lang: 'ar' },
+  { id: 'srv:ar-eg-m', voiceId: 'ar-EG-ShakirNeural',  label: '🇪🇬 شاكر — مصري ذكر',      lang: 'ar' },
+  { id: 'srv:ar-sa-f', voiceId: 'ar-SA-ZariyahNeural', label: '🇸🇦 زارية — فصحى أنثى',    lang: 'ar' },
+  { id: 'srv:fr-f',    voiceId: 'fr-FR-DeniseNeural',  label: '🇫🇷 دنيس — فرنسية أنثى',   lang: 'fr' },
+  { id: 'srv:fr-m',    voiceId: 'fr-FR-RemyMultilingualNeural', label: '🇫🇷 ريمي — فرنسي ذكر', lang: 'fr' },
+  { id: 'srv:en-f',    voiceId: 'en-US-JennyNeural',   label: '🇺🇸 جيني — أمريكية أنثى',  lang: 'en' },
+  { id: 'srv:en-m',    voiceId: 'en-US-GuyNeural',     label: '🇺🇸 غاي — أمريكي ذكر',     lang: 'en' },
+  { id: 'srv:en-gb-f', voiceId: 'en-GB-SoniaNeural',   label: '🇬🇧 سونيا — بريطانية أنثى', lang: 'en' },
+  { id: 'srv:en-gb-m', voiceId: 'en-GB-RyanNeural',    label: '🇬🇧 ريان — بريطاني ذكر',   lang: 'en' },
+]
+
 function TTSTool() {
   const [text, setText]           = useState('')
-  // voiceId: 'srv:ar' | 'srv:fr' | 'srv:en' | 'sys:<voice.name>'
-  const [voiceId, setVoiceId]     = useState('srv:ar')
-  const [rate, setRate]           = useState(1.0)
+  const [voiceId, setVoiceId]     = useState('srv:ar-dz-m')
+  const [rate, setRate]           = useState('+0%')
   const [loading, setLoading]     = useState(false)
   const [audioUrl, setAudioUrl]   = useState<string | null>(null)
   const [error, setError]         = useState('')
@@ -3997,6 +4009,7 @@ function TTSTool() {
   const charCount = text.length
   const maxChars  = 3000
   const isSysVoice = voiceId.startsWith('sys:')
+  const selectedEdge = EDGE_VOICES.find(v => v.id === voiceId)
 
   // Load browser voices
   useEffect(() => {
@@ -4017,26 +4030,12 @@ function TTSTool() {
 
   const selectedSysVoice = sysVoices.find(v => v.name === voiceId.slice(4))
 
-  // Map voiceId → actual voice ID sent to server
-  const _SRV_VOICE_ID_MAP: Record<string, string> = {
-    'srv:ar':       'ar-EG-ShakirNeural',
-    'srv:ar-fus':   'ar-SA-ZariyahNeural',
-    'srv:fr-f':     'fr-FR-DeniseNeural',
-    'srv:fr-m':     'fr-FR-HenriNeural',
-    'srv:en-f':     'en-US-JennyNeural',
-    'srv:en-m':     'en-US-GuyNeural',
-    'srv:en-gb-f':  'en-GB-SoniaNeural',
-    'srv:en-gb-m':  'en-GB-RyanNeural',
-  }
-  const srvVoiceId = _SRV_VOICE_ID_MAP[voiceId] ?? 'ar-EG-ShakirNeural'
-
-  // Play via Web Speech API
+  // Play via Web Speech API (browser voices)
   const playSys = () => {
     if (!text.trim() || !window.speechSynthesis) return
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text.trim())
     if (selectedSysVoice) utt.voice = selectedSysVoice
-    utt.rate = rate
     uttRef.current = utt
     utt.onstart  = () => setPlaying(true)
     utt.onend    = () => setPlaying(false)
@@ -4047,7 +4046,7 @@ function TTSTool() {
 
   const stopSys = () => { window.speechSynthesis?.cancel(); setPlaying(false) }
 
-  // Generate via server (Google TTS)
+  // Generate via Edge TTS (Microsoft Neural — free, no API key)
   const generateSrv = async () => {
     if (!text.trim() || loading) return
     setLoading(true); setError('')
@@ -4055,10 +4054,12 @@ function TTSTool() {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = '' }
     if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null) }
     try {
-      const res = await fetch('/api/tts', {
+      const edgeVoiceId = selectedEdge?.voiceId ?? 'ar-DZ-IsmaelNeural'
+      const edgeLang    = selectedEdge?.lang ?? 'ar'
+      const res = await fetch('/api/tts/edge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.trim(), voice: srvVoiceId }),
+        body: JSON.stringify({ text: text.trim(), voice: edgeVoiceId, lang: edgeLang, rate }),
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
@@ -4090,11 +4091,11 @@ function TTSTool() {
   }
 
   const rateOptions = [
-    { value: 0.5,  label: 'بطيء جداً' },
-    { value: 0.75, label: 'بطيء' },
-    { value: 1.0,  label: 'عادي' },
-    { value: 1.25, label: 'سريع' },
-    { value: 1.5,  label: 'سريع جداً' },
+    { value: '-20%', label: 'بطيء جداً' },
+    { value: '-10%', label: 'بطيء' },
+    { value: '+0%',  label: 'عادي' },
+    { value: '+15%', label: 'سريع' },
+    { value: '+30%', label: 'سريع جداً' },
   ]
 
   // Grouped system voices
@@ -4126,22 +4127,26 @@ function TTSTool() {
           <label className="dzt-label">الصوت</label>
           <select className="dzt-select" value={voiceId} onChange={e => { setVoiceId(e.target.value); setAudioUrl(null); stopSys() }}>
 
-            {/* Server voices — Kokoro (EN/FR) + Google TTS (AR) */}
-            <optgroup label="🇩🇿 عربية — Google TTS + تحميل MP3">
-              <option value="srv:ar">🇩🇿 عربية جزائرية</option>
-              <option value="srv:ar-fus">🇸🇦 عربية فصحى</option>
+            {/* Edge TTS — Microsoft Neural voices */}
+            <optgroup label="🇩🇿 عربية جزائرية — Microsoft Neural">
+              {EDGE_VOICES.filter(v => v.lang === 'ar' && v.voiceId.includes('DZ')).map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
             </optgroup>
-            <optgroup label="🐸 Kokoro AI — فرنسية + تحميل MP3">
-              <option value="srv:fr-f">🇫🇷 👩 فرنسية أنثى — ff_siwis</option>
-              <option value="srv:fr-m">🇫🇷 👨 فرنسية ذكر — fm_gaston</option>
+            <optgroup label="🌍 عربية — أصوات إقليمية أخرى">
+              {EDGE_VOICES.filter(v => v.lang === 'ar' && !v.voiceId.includes('DZ')).map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
             </optgroup>
-            <optgroup label="🐸 Kokoro AI — إنجليزية أمريكية + تحميل MP3">
-              <option value="srv:en-f">🇺🇸 👩 أنثى أمريكية — af_heart</option>
-              <option value="srv:en-m">🇺🇸 👨 ذكر أمريكي — am_adam</option>
+            <optgroup label="🇫🇷 فرنسية — Microsoft Neural">
+              {EDGE_VOICES.filter(v => v.lang === 'fr').map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
             </optgroup>
-            <optgroup label="🐸 Kokoro AI — إنجليزية بريطانية + تحميل MP3">
-              <option value="srv:en-gb-f">🇬🇧 👩 أنثى بريطانية — bf_emma</option>
-              <option value="srv:en-gb-m">🇬🇧 👨 ذكر بريطاني — bm_george</option>
+            <optgroup label="🇺🇸🇬🇧 إنجليزية — Microsoft Neural">
+              {EDGE_VOICES.filter(v => v.lang === 'en').map(v => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
             </optgroup>
 
             {/* Browser voices — real male/female */}
@@ -4172,17 +4177,15 @@ function TTSTool() {
         {/* Mode hint */}
         <div style={{ fontSize: 12, color: '#8aad90', marginTop: -6, direction: 'rtl' }}>
           {isSysVoice
-            ? `🎙️ صوت المتصفح — ${_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 ذكر حقيقي' : _ttsGender(selectedSysVoice?.name ?? '') === 'female' ? '👩 أنثى حقيقية' : 'صوت المتصفح'}`
-            : voiceId.startsWith('srv:ar')
-              ? '🇩🇿 Google TTS — عربية · يدعم التحميل MP3'
-              : '🐸 Kokoro AI (hexgrad/Kokoro-82M) — جودة عالية · يدعم التحميل MP3'
+            ? `🎙️ صوت المتصفح — ${_ttsGender(selectedSysVoice?.name ?? '') === 'male' ? '👨 ذكر' : _ttsGender(selectedSysVoice?.name ?? '') === 'female' ? '👩 أنثى' : 'صوت المتصفح'}`
+            : `🗣️ Microsoft Edge Neural TTS — ${selectedEdge?.label ?? ''} · يدعم التحميل MP3`
           }
         </div>
 
         {/* Rate */}
         <div className="dzt-field">
           <label className="dzt-label">السرعة</label>
-          <select className="dzt-select" value={rate} onChange={e => setRate(Number(e.target.value))}>
+          <select className="dzt-select" value={rate} onChange={e => setRate(e.target.value)}>
             {rateOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </div>

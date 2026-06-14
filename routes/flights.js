@@ -98,7 +98,7 @@ export function createFlightsRouter() {
   ]
 
   // ── Days helpers ───────────────────────────────────────────────────────────
-  const DAYS_AR = ['أحد','اثن','ثلا','أرب','خمي','جمع','سبت']
+  const DAYS_AR = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']
   const ALL_DAYS = [0,1,2,3,4,5,6]
   const MON_WED_FRI = [1,3,5]
   const MON_WED_FRI_SUN = [0,1,3,5]
@@ -108,10 +108,10 @@ export function createFlightsRouter() {
 
   function daysLabel(days) {
     if (days.length === 7) return 'يومياً'
-    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI_SUN)) return 'اثن · أرب · جمع · أحد'
-    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI)) return 'اثن · أرب · جمع'
-    if (JSON.stringify(days) === JSON.stringify(MON_THU)) return 'اثن · خمي'
-    if (JSON.stringify(days) === JSON.stringify(MON_THU_SAT)) return 'اثن · خمي · سبت'
+    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI_SUN)) return 'الاثنين · الأربعاء · الجمعة · الأحد'
+    if (JSON.stringify(days) === JSON.stringify(MON_WED_FRI)) return 'الاثنين · الأربعاء · الجمعة'
+    if (JSON.stringify(days) === JSON.stringify(MON_THU)) return 'الاثنين · الخميس'
+    if (JSON.stringify(days) === JSON.stringify(MON_THU_SAT)) return 'الاثنين · الخميس · السبت'
     return days.map(d => DAYS_AR[d]).join(' · ')
   }
 

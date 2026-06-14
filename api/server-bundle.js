@@ -77898,44 +77898,6 @@ app.get("/api/dz-tube/related", async (req, res) => {
   }
   return res.json({ results: [], source: "none" });
 });
-app.post("/api/tts", async (req, res) => {
-  const { text, lang = "ar" } = req.body || {};
-  if (!text || typeof text !== "string") return res.status(400).json({ error: "text required" });
-  const clean = text.replace(/[#*`_~\[\]>]/g, "").replace(/https?:\/\/\S+/g, "").trim().slice(0, 500);
-  if (!clean) return res.status(400).json({ error: "empty text" });
-  const HF = process.env.HF_TOKEN;
-  if (!HF) return res.status(503).json({ error: "HF_TOKEN not set" });
-  const modelMap = {
-    ar: "facebook/mms-tts-ara",
-    fr: "facebook/mms-tts-fra",
-    en: "facebook/mms-tts-eng"
-  };
-  const model = modelMap[lang] || modelMap.ar;
-  try {
-    const hfRes = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${HF}`,
-        "Content-Type": "application/json",
-        "Accept": "audio/wav"
-      },
-      body: JSON.stringify({ inputs: clean })
-    });
-    if (!hfRes.ok) {
-      const err = await hfRes.text();
-      if (hfRes.status === 503) return res.status(503).json({ error: "model_loading", retry: true });
-      throw new Error(`HF API ${hfRes.status}: ${err.slice(0, 200)}`);
-    }
-    const buf = Buffer.from(await hfRes.arrayBuffer());
-    res.setHeader("Content-Type", "audio/wav");
-    res.setHeader("Content-Length", buf.length);
-    res.setHeader("Cache-Control", "no-store");
-    return res.send(buf);
-  } catch (err) {
-    console.error("[TTS] HF API error:", err.message);
-    return res.status(500).json({ error: err.message });
-  }
-});
 app.get("/api/dz-tube/audio-url", async (req, res) => {
   const url = String(req.query.url || "");
   if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: "\u0631\u0627\u0628\u0637 YouTube \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" });
@@ -82235,45 +82197,10 @@ if (isMain) {
       const regSample = regionalVars.slice(0, 8).map((r) => `${r.word}: \u0648\u0633\u0637="${r.region_center}" | \u063A\u0631\u0628="${r.region_west}" | \u0634\u0631\u0642="${r.region_east}"`).join("\n");
       const verbSample = verbConj.slice(0, 3).map((v) => `${v.verb}: \u0623\u0646\u0627=${v.conjugations?.["\u0623\u0646\u0627"] || ""}, \u0623\u0646\u062A=${v.conjugations?.["\u0623\u0646\u062A(\u0645)"] || ""}, \u0647\u0648=${v.conjugations?.["\u0647\u0648"] || ""}`).join(" | ");
       const fsSample = fewShots.filter((f) => f.ctx === "greeting" || f.ctx === "expression").slice(0, 3).map((f) => `Q: "${f.user}" \u2192 A: "${f.agent}"`).join("\n");
-      const systemPrompt = `\u0623\u0646\u062A \u0645\u062A\u0631\u062C\u0645 \u0645\u062A\u062E\u0635\u0635 \u0641\u064A \u0627\u0644\u062F\u0627\u0631\u062C\u0629 \u0627\u0644\u062C\u0632\u0627\u0626\u0631\u064A\u0629 (Darja alg\xE9rienne) \u0648\u062E\u0628\u064A\u0631 \u0628\u062C\u0645\u064A\u0639 \u0627\u0644\u0644\u0647\u062C\u0627\u062A \u0627\u0644\u062C\u0632\u0627\u0626\u0631\u064A\u0629 \u0627\u0644\u0625\u0642\u0644\u064A\u0645\u064A\u0629.
-
-== \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629 ==
-\u0627\u0644\u0645\u0641\u0631\u062F\u0627\u062A \u0627\u0644\u0623\u0633\u0627\u0633\u064A\u0629: ${vocabSample}
-
-\u0627\u0644\u062A\u0639\u0627\u0628\u064A\u0631 \u0627\u0644\u0627\u0635\u0637\u0644\u0627\u062D\u064A\u0629:
-${exprSample}
-
-\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0635\u0631\u0641:
-${gramSample}
-
-\u0627\u0644\u0623\u0641\u0639\u0627\u0644 \u0627\u0644\u0645\u0635\u0631\u0651\u0641\u0629: ${verbSample}
-
-\u0627\u0644\u0641\u0631\u0648\u0642 \u0627\u0644\u0625\u0642\u0644\u064A\u0645\u064A\u0629:
-${regSample}
-
-== \u062A\u0639\u0644\u064A\u0645\u0627\u062A \u0635\u0627\u0631\u0645\u0629 ==
-1. \u062A\u0631\u062C\u0645 \u0645\u0646 ${dirInfo.from} \u0625\u0644\u0649 ${dirInfo.to} \u2014 ${dirInfo.hint}
-2. \u0631\u0627\u0639\u0650 \u0644\u0647\u062C\u0629 \u0645\u0646\u0637\u0642\u0629: ${regionLabel}
-3. \u0627\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0643\u062A\u0627\u0628\u0629 \u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u0644\u0644\u062F\u0627\u0631\u062C\u0629 (\u0645\u0639 \u0643\u0644\u0645\u0627\u062A \u0641\u0631\u0646\u0633\u064A\u0629 \u0645\u062F\u0631\u062C\u0629 \u0625\u0630\u0627 \u0643\u0627\u0646\u062A \u0634\u0627\u0626\u0639\u0629)
-4. \u0623\u0639\u0637\u0650 \u0641\u0642\u0637 \u0627\u0644\u062A\u0631\u062C\u0645\u0629 \u0627\u0644\u062D\u0642\u064A\u0642\u064A\u0629 \u2014 \u0644\u0627 \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u0639\u0646 \u0627\u0644\u0637\u0642\u0633 \u0623\u0648 \u0627\u0644\u0631\u064A\u0627\u0636\u0629 \u0623\u0648 \u0623\u064A \u0645\u0648\u0636\u0648\u0639 \u0622\u062E\u0631
-5. \u0644\u0627 \u062A\u064F\u0636\u0641 \u062A\u0639\u0644\u064A\u0642\u0627\u062A \u062E\u0627\u0631\u062C \u0627\u0644\u0628\u0646\u064A\u0629 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629
-
-== \u062A\u0646\u0633\u064A\u0642 \u0627\u0644\u0625\u062C\u0627\u0628\u0629 (JSON \u0641\u0642\u0637 \u0628\u0644\u0627 markdown) ==
-{
-  "translation": "\u0627\u0644\u062A\u0631\u062C\u0645\u0629 \u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629 \u0647\u0646\u0627",
-  "transliteration": "\u0643\u062A\u0627\u0628\u0629 \u0644\u0627\u062A\u064A\u0646\u064A\u0629 \u0625\u0646 \u0623\u0641\u0627\u062F\u062A",
-  "explanation": "\u0634\u0631\u062D \u0645\u062E\u062A\u0635\u0631 \u0644\u0644\u062A\u0639\u0627\u0628\u064A\u0631 \u0627\u0644\u0635\u0639\u0628\u0629 \u0623\u0648 \u0627\u0644\u0641\u0631\u0648\u0642 \u0627\u0644\u0625\u0642\u0644\u064A\u0645\u064A\u0629",
-  "grammar_tip": "\u0645\u0644\u0627\u062D\u0638\u0629 \u0646\u062D\u0648\u064A\u0629 \u0645\u0641\u064A\u062F\u0629 \u0625\u0646 \u0648\u062C\u062F\u062A",
-  "examples": [
-    {"original": "\u0645\u062B\u0627\u0644 \u0623\u0635\u0644\u064A", "translated": "\u062A\u0631\u062C\u0645\u062A\u0647", "region": "\u0627\u0644\u0645\u0646\u0637\u0642\u0629"},
-    {"original": "\u0645\u062B\u0627\u0644 2", "translated": "\u062A\u0631\u062C\u0645\u062A\u0647", "region": "\u0627\u0644\u0645\u0646\u0637\u0642\u0629"},
-    {"original": "\u0645\u062B\u0627\u0644 3", "translated": "\u062A\u0631\u062C\u0645\u062A\u0647", "region": "\u0627\u0644\u0645\u0646\u0637\u0642\u0629"}
-  ],
-  "regional_alt": "\u0628\u062F\u064A\u0644 \u0644\u0647\u062C\u0648\u064A \u0641\u064A \u0645\u0646\u0637\u0642\u0629 \u0623\u062E\u0631\u0649 \u0625\u0646 \u0648\u062C\u062F"
-}`;
+      const systemPrompt = `\u0623\u0646\u062A \u0623\u062F\u0627\u0629 \u062A\u0631\u062C\u0645\u0629 \u0622\u0644\u064A\u0629 \u0645\u062A\u062E\u0635\u0635\u0629 \u0641\u064A \u0627\u0644\u062F\u0627\u0631\u062C\u0629 \u0627\u0644\u062C\u0632\u0627\u0626\u0631\u064A\u0629. \u0645\u0647\u0645\u062A\u0643 \u0627\u0644\u0648\u062D\u064A\u062F\u0629 \u0647\u064A \u0627\u0644\u062A\u0631\u062C\u0645\u0629.\n\u0642\u0627\u0639\u062F\u0629 \u0635\u0627\u0631\u0645\u0629: \u0623\u062C\u0628 \u0628\u0640 JSON \u0641\u0642\u0637 \u0628\u062F\u0648\u0646 \u0623\u064A \u0646\u0635 \u062E\u0627\u0631\u062C\u0647. \u0644\u0627 \u062A\u064F\u0639\u0631\u0651\u0641 \u0646\u0641\u0633\u0643 \u0648\u0644\u0627 \u062A\u0630\u0643\u0631 \u0623\u064A \u0645\u0648\u0636\u0648\u0639 \u0622\u062E\u0631.\n\n== \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629 ==\n\u0627\u0644\u0645\u0641\u0631\u062F\u0627\u062A: ${vocabSample}\n\n\u0627\u0644\u062A\u0639\u0627\u0628\u064A\u0631:\n${exprSample}\n\n\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0635\u0631\u0641:\n${gramSample}\n\n\u0627\u0644\u0641\u0631\u0648\u0642 \u0627\u0644\u0625\u0642\u0644\u064A\u0645\u064A\u0629:\n${regSample}\n\n== \u0645\u0647\u0645\u062A\u0643 ==\n\u062A\u0631\u062C\u0645 \u0645\u0646 ${dirInfo.from} \u0625\u0644\u0649 ${dirInfo.to}.\n\u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641\u0629: ${regionLabel}\n${dirInfo.hint}\n\n\u0623\u062C\u0628 \u0628\u0647\u0630\u0627 JSON \u0641\u0642\u0637 (\u0628\u0644\u0627 \`\`\`json \u0648\u0628\u0644\u0627 \u0623\u064A \u0646\u0635 \u0642\u0628\u0644\u0647 \u0623\u0648 \u0628\u0639\u062F\u0647):\n{"translation":"\u0627\u0644\u062A\u0631\u062C\u0645\u0629 \u0647\u0646\u0627","transliteration":"\u0643\u062A\u0627\u0628\u0629 \u0644\u0627\u062A\u064A\u0646\u064A\u0629 \u0627\u062E\u062A\u064A\u0627\u0631\u064A\u0629","explanation":"\u0634\u0631\u062D \u0645\u062E\u062A\u0635\u0631","grammar_tip":"\u0645\u0644\u0627\u062D\u0638\u0629 \u0646\u062D\u0648\u064A\u0629","examples":[{"original":"\u0645\u062B\u0627\u0644","translated":"\u062A\u0631\u062C\u0645\u062A\u0647","region":"\u0627\u0644\u0645\u0646\u0637\u0642\u0629"}],"regional_alt":"\u0628\u062F\u064A\u0644 \u0625\u0642\u0644\u064A\u0645\u064A"}`;
       const _aiMessages = [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `\u062A\u0631\u062C\u0645 \u0647\u0630\u0627 \u0627\u0644\u0646\u0635: "${inputText}"` }
+        { role: "user", content: `\u0645\u0647\u0645\u0629 \u0627\u0644\u062A\u0631\u062C\u0645\u0629: "${inputText}" \u2014 \u0623\u062C\u0628 \u0628\u0640 JSON \u0641\u0642\u0637` }
       ];
       let raw = null;
       try {

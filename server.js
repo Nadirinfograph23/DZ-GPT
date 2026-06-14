@@ -26856,54 +26856,6 @@ app.get('/api/dz-tube/related', async (req, res) => {
   return res.json({ results: [], source: 'none' })
 })
 
-// ── TTS Endpoint — Arabic/French/English male voice via HF MMS ───────────────
-app.post('/api/tts', async (req, res) => {
-  const { text, lang = 'ar' } = req.body || {}
-  if (!text || typeof text !== 'string') return res.status(400).json({ error: 'text required' })
-
-  const clean = text.replace(/[#*`_~\[\]>]/g, '').replace(/https?:\/\/\S+/g, '').trim().slice(0, 500)
-  if (!clean) return res.status(400).json({ error: 'empty text' })
-
-  const HF = process.env.HF_TOKEN
-  if (!HF) return res.status(503).json({ error: 'HF_TOKEN not set' })
-
-  // Model selection based on language
-  const modelMap = {
-    ar: 'facebook/mms-tts-ara',
-    fr: 'facebook/mms-tts-fra',
-    en: 'facebook/mms-tts-eng',
-  }
-  const model = modelMap[lang] || modelMap.ar
-
-  try {
-    const hfRes = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${HF}`,
-        'Content-Type': 'application/json',
-        'Accept': 'audio/wav',
-      },
-      body: JSON.stringify({ inputs: clean }),
-    })
-
-    if (!hfRes.ok) {
-      const err = await hfRes.text()
-      // Model loading (503) — return a clear signal to client to retry
-      if (hfRes.status === 503) return res.status(503).json({ error: 'model_loading', retry: true })
-      throw new Error(`HF API ${hfRes.status}: ${err.slice(0, 200)}`)
-    }
-
-    const buf = Buffer.from(await hfRes.arrayBuffer())
-    res.setHeader('Content-Type', 'audio/wav')
-    res.setHeader('Content-Length', buf.length)
-    res.setHeader('Cache-Control', 'no-store')
-    return res.send(buf)
-  } catch (err) {
-    console.error('[TTS] HF API error:', err.message)
-    return res.status(500).json({ error: err.message })
-  }
-})
-
 // Get direct audio stream URL (for background playback via HTML5 audio)
 app.get('/api/dz-tube/audio-url', async (req, res) => {
   const url = String(req.query.url || '')
@@ -31452,47 +31404,33 @@ app.post('/api/tools/darija-translate', express.json({ limit: '64kb' }), async (
     const fsSample    = fewShots.filter(f => f.ctx === 'greeting' || f.ctx === 'expression').slice(0, 3).map(f => `Q: "${f.user}" → A: "${f.agent}"`).join('\n')
 
     // ── Build rich system prompt ──────────────────────────────────
-    const systemPrompt = `أنت مترجم متخصص في الدارجة الجزائرية (Darja algérienne) وخبير بجميع اللهجات الجزائرية الإقليمية.
+    const systemPrompt = `أنت أداة ترجمة آلية متخصصة في الدارجة الجزائرية. مهمتك الوحيدة هي الترجمة.
+قاعدة صارمة: أجب بـ JSON فقط بدون أي نص خارجه. لا تُعرّف نفسك ولا تذكر أي موضوع آخر.
 
 == قاعدة البيانات المحلية ==
-المفردات الأساسية: ${vocabSample}
+المفردات: ${vocabSample}
 
-التعابير الاصطلاحية:
+التعابير:
 ${exprSample}
 
 قواعد الصرف:
 ${gramSample}
 
-الأفعال المصرّفة: ${verbSample}
-
 الفروق الإقليمية:
 ${regSample}
 
-== تعليمات صارمة ==
-1. ترجم من ${dirInfo.from} إلى ${dirInfo.to} — ${dirInfo.hint}
-2. راعِ لهجة منطقة: ${regionLabel}
-3. استخدم الكتابة العربية للدارجة (مع كلمات فرنسية مدرجة إذا كانت شائعة)
-4. أعطِ فقط الترجمة الحقيقية — لا معلومات عن الطقس أو الرياضة أو أي موضوع آخر
-5. لا تُضف تعليقات خارج البنية المطلوبة
+== مهمتك ==
+ترجم من ${dirInfo.from} إلى ${dirInfo.to}.
+المنطقة المستهدفة: ${regionLabel}
+${dirInfo.hint}
 
-== تنسيق الإجابة (JSON فقط بلا markdown) ==
-{
-  "translation": "الترجمة الرئيسية هنا",
-  "transliteration": "كتابة لاتينية إن أفادت",
-  "explanation": "شرح مختصر للتعابير الصعبة أو الفروق الإقليمية",
-  "grammar_tip": "ملاحظة نحوية مفيدة إن وجدت",
-  "examples": [
-    {"original": "مثال أصلي", "translated": "ترجمته", "region": "المنطقة"},
-    {"original": "مثال 2", "translated": "ترجمته", "region": "المنطقة"},
-    {"original": "مثال 3", "translated": "ترجمته", "region": "المنطقة"}
-  ],
-  "regional_alt": "بديل لهجوي في منطقة أخرى إن وجد"
-}`
+أجب بهذا JSON فقط (بلا ```json وبلا أي نص قبله أو بعده):
+{"translation":"الترجمة هنا","transliteration":"كتابة لاتينية اختيارية","explanation":"شرح مختصر","grammar_tip":"ملاحظة نحوية","examples":[{"original":"مثال","translated":"ترجمته","region":"المنطقة"}],"regional_alt":"بديل إقليمي"}`
 
     // ── Call AI directly: Groq → OpenRouter → Mistral (no safeGenerateAI to avoid HAL injection) ──
     const _aiMessages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `ترجم هذا النص: "${inputText}"` }
+      { role: 'user', content: `مهمة الترجمة: "${inputText}" — أجب بـ JSON فقط` }
     ]
     let raw = null
 

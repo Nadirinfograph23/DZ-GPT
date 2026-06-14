@@ -1719,8 +1719,10 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
   position: relative;
-  /* Fix RTL snap-back: scroll origin starts from left */
+  /* LTR container — JS initialises scrollLeft to max so RTL first-column shows */
   direction: ltr;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 /* Force table to overflow so scroll is always triggered — restore RTL inside */
 .v5-md-table-scroll > table,
@@ -1735,6 +1737,18 @@
 .v5-md-table-scroll td {
   white-space: nowrap;
   text-align: right;
+}
+/* LEFT-side gradient: hints that more content is to the left (user started at right) */
+.v5-md-table-scroll::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 32px; height: calc(100% - 8px);
+  background: linear-gradient(to right, rgba(18,18,28,0.75) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: 8px 0 0 8px;
+  z-index: 1;
+  transition: opacity 0.2s;
 }
 .v5-md-table-scroll::-webkit-scrollbar { height: 8px; }
 .v5-md-table-scroll::-webkit-scrollbar-track {

@@ -2465,9 +2465,12 @@ function YouTubePanel({
   return null
 }
 
-// ===== TABLE SCROLL WRAPPER — fixes iOS RTL horizontal scroll snap-back =====
-// Uses a non-passive touchmove listener to stop the parent from stealing the
-// touch event when the user is scrolling the table horizontally.
+// ===== TABLE SCROLL WRAPPER — RTL-aware horizontal scroll for Arabic tables =====
+// 1. On mount: scrolls to the rightmost position so the FIRST Arabic column is
+//    visible (RTL tables have first col on the right; LTR containers start at left).
+// 2. Touch handler: non-passive touchmove prevents the parent chat from stealing
+//    horizontal swipe events; only calls preventDefault when the element can
+//    actually scroll in that direction (avoids blocking vertical page scroll).
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -2475,23 +2478,39 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    let startX = 0, startY = 0, isH = false
+
+    // Init: jump to rightmost edge so RTL first-column is immediately visible
+    const initRTLScroll = () => {
+      if (el.scrollWidth > el.clientWidth) {
+        el.scrollLeft = el.scrollWidth - el.clientWidth
+      }
+    }
+    requestAnimationFrame(initRTLScroll)
+
+    let startX = 0, startY = 0, isH: boolean | null = null
 
     const onStart = (e: TouchEvent) => {
       startX = e.touches[0].clientX
       startY = e.touches[0].clientY
-      isH = false
+      isH = null
     }
     const onMove = (e: TouchEvent) => {
       const dx = Math.abs(e.touches[0].clientX - startX)
       const dy = Math.abs(e.touches[0].clientY - startY)
-      if (!isH && dy > dx * 1.2) return     // mainly vertical → let parent scroll
-      isH = true
-      e.stopPropagation()                   // stop parent from stealing the touch
+      if (isH === null && (dx > 4 || dy > 4)) isH = dx > dy
+      if (!isH) return                         // vertical swipe → let parent scroll
+      e.stopPropagation()                      // stop parent stealing the touch
+      // Prevent default only when the table can scroll in the swipe direction
+      const atLeft  = el.scrollLeft <= 0
+      const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+      const goingRight = e.touches[0].clientX > startX  // finger right → scroll left
+      const goingLeft  = e.touches[0].clientX < startX  // finger left  → scroll right
+      if ((atLeft && goingRight) || (atRight && goingLeft)) return
+      e.preventDefault()
     }
 
     el.addEventListener('touchstart', onStart, { passive: true })
-    el.addEventListener('touchmove',  onMove,  { passive: true })
+    el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)

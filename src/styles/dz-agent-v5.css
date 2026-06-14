@@ -730,11 +730,8 @@
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  /* pan-x only: lets browser know this element owns horizontal scroll
-     → stops parent from stealing the touch event for vertical scroll */
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
-  /* REMOVED overscroll-behavior-y: none → it caused iOS snap-back */
   max-width: 100%;
   width: 100%;
   margin: 8px 0;
@@ -772,16 +769,17 @@
   white-space: nowrap;
   text-align: right;
 }
-/* Gradient fade hints at right edge to show more content */
-.v5-md-table-scroll::after {
+/* LEFT gradient hints more content is to the left (JS starts scroll at right) */
+.v5-md-table-scroll::before {
   content: '';
   position: absolute;
-  top: 0; right: 0;
+  top: 0; left: 0;
   width: 28px; height: calc(100% - 5px);
-  background: linear-gradient(to left, rgba(18,18,28,0.7) 0%, transparent 100%);
+  background: linear-gradient(to right, rgba(18,18,28,0.7) 0%, transparent 100%);
   pointer-events: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 6px 0 0 6px;
   transition: opacity 0.2s;
+  z-index: 1;
 }
 
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */

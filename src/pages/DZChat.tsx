@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,41 @@ import {
 } from 'lucide-react'
 import '../styles/dzchat.css'
 import { DeveloperCard } from '../components/DeveloperCard'
+
+// RTL-aware table scroll wrapper: JS scrolls to rightmost position on mount
+// so the first Arabic column (rightmost in RTL) is immediately visible.
+function DZCTableScroll({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    requestAnimationFrame(() => {
+      if (el.scrollWidth > el.clientWidth) {
+        el.scrollLeft = el.scrollWidth - el.clientWidth
+      }
+    })
+    let startX = 0, startY = 0, isH: boolean | null = null
+    const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
+    const onMove = (e: TouchEvent) => {
+      const dx = Math.abs(e.touches[0].clientX - startX)
+      const dy = Math.abs(e.touches[0].clientY - startY)
+      if (isH === null && (dx > 4 || dy > 4)) isH = dx > dy
+      if (!isH) return
+      e.stopPropagation()
+      const atLeft  = el.scrollLeft <= 0
+      const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+      if ((atLeft && e.touches[0].clientX > startX) || (atRight && e.touches[0].clientX < startX)) return
+      e.preventDefault()
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove',  onMove,  { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove',  onMove)
+    }
+  }, [])
+  return <div className="dzc-table-scroll" ref={ref}>{children}</div>
+}
 
 interface ChatUser {
   id: string
@@ -1373,9 +1408,9 @@ export default function DZChat() {
                               <a href={href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>{children}</a>
                             ),
                             table: ({ children }) => (
-                              <div className="dzc-table-scroll">
+                              <DZCTableScroll>
                                 <table>{children}</table>
-                              </div>
+                              </DZCTableScroll>
                             ),
                             thead: ({ children }) => <thead>{children}</thead>,
                             tbody: ({ children }) => <tbody>{children}</tbody>,

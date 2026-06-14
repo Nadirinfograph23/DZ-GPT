@@ -876,9 +876,9 @@
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
-  /* LTR scroll origin → prevents RTL snap-back on iOS */
+  /* LTR container — JS (DZCTableScroll component) sets scrollLeft to max on mount */
   direction: ltr;
   position: relative;
   isolation: isolate;
@@ -903,14 +903,15 @@
 .dzc-table-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(200,255,0,0.6);
 }
-/* Gradient fade to show there's more content */
-.dzc-table-scroll::after {
+/* LEFT gradient: hints more content is to the left (user starts at right/first col) */
+.dzc-table-scroll::before {
   content: '';
   position: absolute;
-  top: 0; right: 0;
+  top: 0; left: 0;
   width: 24px; height: calc(100% - 5px);
-  background: linear-gradient(to left, rgba(10,10,20,0.65) 0%, transparent 100%);
+  background: linear-gradient(to right, rgba(10,10,20,0.65) 0%, transparent 100%);
   pointer-events: none;
+  z-index: 1;
 }
 /* RTL table content inside LTR scroll container */
 .dzc-msg-markdown .dzc-table-scroll table,

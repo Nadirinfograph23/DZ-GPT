@@ -876,7 +876,8 @@
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
+  /* pan-x only — same Android Chrome gesture fix as .dzt-simple-scroll */
+  touch-action: pan-x;
   overscroll-behavior-x: contain;
   /* LTR container — JS (DZCTableScroll component) sets scrollLeft to max on mount */
   direction: ltr;

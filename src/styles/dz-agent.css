@@ -1269,6 +1269,14 @@
   direction: rtl;
   text-align: right;
   unicode-bidi: plaintext;
+  /* Constrain width so table wrappers inside are bounded to the chat bubble.
+     Without this, RTL quirks on Android Chrome can let .dz-message-text
+     grow wider than its parent, making the table appear to overflow the chat. */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .dz-message--user .dz-message-text {
@@ -1462,7 +1470,8 @@
   /* Force LTR scroll origin — prevents RTL snap-back */
   direction: ltr !important;
   unicode-bidi: isolate;
-  touch-action: pan-x pan-y;
+  /* pan-x only: same Android Chrome fix as .dzt-simple-scroll */
+  touch-action: pan-x;
   overscroll-behavior-x: contain;
   scroll-snap-type: none;
   position: relative;
@@ -1614,9 +1623,17 @@
   /* Stop scroll chaining to parent chat container */
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-  /* Allow horizontal pan; vertical handled by parent */
-  touch-action: pan-x pan-y;
-  /* No snap — free scroll in both directions */
+  /*
+   * CRITICAL FIX — Android Chrome gesture routing:
+   * pan-x (NOT pan-x pan-y) tells Android Chrome at touchstart time that
+   * this element ONLY handles horizontal panning. Vertical touch gestures
+   * automatically fall through to the parent scroll container (.dz-messages).
+   * With pan-x pan-y Chrome's disambiguator races between this element and
+   * the parent; if dy > dx by even 1px it locks the gesture to the parent
+   * and the table never scrolls — no amount of JS preventDefault() can
+   * reverse that decision because it is made before touchmove fires.
+   */
+  touch-action: pan-x;
   scroll-snap-type: none;
   position: relative;
   width: 100%;
@@ -1625,6 +1642,9 @@
   margin: 6px 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: scroll-position;
 }
 /* Cancel the .dz-message-text td/th { direction:rtl } override inside our wrapper.
    The table itself carries dir="rtl" so cells inherit RTL from the table, not from

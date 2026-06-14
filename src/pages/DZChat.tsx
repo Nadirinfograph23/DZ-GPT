@@ -67,7 +67,8 @@ function DZCTableScroll({ children }: { children: ReactNode }) {
       const dy = Math.abs(e.touches[0].clientY - startY)
       if (isH === null && (dx > 4 || dy > 4)) isH = dx > dy
       if (!isH) return
-      e.stopPropagation()
+      // stopPropagation removed: CSS touch-action:pan-x handles routing at touchstart.
+      // stopPropagation on touchmove is too late on Android Chrome.
       const atL = el.scrollLeft <= 0
       const atR = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
       if ((atL && e.touches[0].clientX > startX) || (atR && e.touches[0].clientX < startX)) return

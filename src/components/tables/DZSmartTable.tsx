@@ -384,13 +384,19 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       }
 
       if (isHorizontal) {
-        // Stop parent from intercepting horizontal swipes
-        e.stopPropagation()
-        // Prevent default scroll only when we can scroll in that direction
+        // NOTE: stopPropagation() is intentionally removed.
+        // CSS touch-action:pan-x handles gesture ownership at touchstart time
+        // (before any touchmove fires). stopPropagation() on touchmove is too
+        // late — Android Chrome has already routed the gesture to the parent
+        // if dy > dx at touchstart. Removing it lets the CSS declaration be
+        // the single source of truth for gesture routing.
+        //
+        // preventDefault() is kept as a fallback for older browsers that don't
+        // honour touch-action:pan-x fully.
         const atLeft  = el.scrollLeft <= 0
         const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
-        const swipingLeft  = e.touches[0].clientX < startX  // finger moves left  → scroll right (LTR)
-        const swipingRight = e.touches[0].clientX > startX  // finger moves right → scroll left  (LTR)
+        const swipingLeft  = e.touches[0].clientX < startX
+        const swipingRight = e.touches[0].clientX > startX
         if ((atLeft && swipingRight) || (atRight && swipingLeft)) return
         e.preventDefault()
       }

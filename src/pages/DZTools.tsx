@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'imgproc' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert' | 'flights'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert' | 'flights'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -137,7 +137,6 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'jobs',    icon: '💼', name: 'بحث وظيفي',              desc: 'ابحث عن وظيفة في الجزائر واحصل على مساعدة في رسالة التقدم' },
   { id: 'health',  icon: '🏥', name: 'وكيل الصحة',             desc: 'تحليل الأعراض • البحث عن طبيب • نصائح صحية للجزائر' },
   { id: 'image',   icon: '🖼️', name: 'Visual AI — صور',        desc: 'بحث عن صور • بحث عكسي • تحليل AI • OCR من الصور' },
-  { id: 'imgproc', icon: '🎨', name: 'Image Studio — توليد',   desc: 'نص → صورة • صورة → صورة • توليد فيديو — SD WebUI & ComfyUI', badge: 'NEW' },
   { id: 'ocr',          icon: '📷', name: 'قارئ الوثائق OCR',           desc: 'ارفع صورة واستخرج النص تلقائياً بـ Tesseract' },
   { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan',     desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',               desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
@@ -2008,179 +2007,6 @@ function ImageTool() {
 
 // ─── Image Processing Tool ────────────────────────────────────────────────────
 
-const IMG_SIZE_OPTIONS = [
-  { label: '512×512', w: 512, h: 512 },
-  { label: '768×512', w: 768, h: 512 },
-  { label: '512×768', w: 512, h: 768 },
-  { label: '1024×1024', w: 1024, h: 1024 },
-]
-
-type ImgResult = { type: 'image'; src: string; model: string; note?: string }
-
-
-
-function ImageProcessingTool() {
-  const [prompt, setPrompt]     = useState('')
-  const [negPrompt, setNegPrompt] = useState('')
-  const [sizeIdx, setSizeIdx]   = useState(0)
-  const [imgModel, setImgModel] = useState<'flux' | 'flux-realism' | 'flux-3d' | 'turbo'>('flux')
-  const [result, setResult]     = useState<ImgResult | null>(null)
-  const [loading, setLoading]   = useState(false)
-  const [imgLoading, setImgLoading] = useState(false)
-  const [error, setError]       = useState<{ msg: string; hint?: string } | null>(null)
-
-  const generate = async () => {
-    if (!prompt.trim()) return
-    setLoading(true); setError(null); setResult(null); setImgLoading(false)
-    try {
-      const size = IMG_SIZE_OPTIONS[sizeIdx]
-      const r = await fetch('/api/tools/img-gen', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, negativePrompt: negPrompt, width: size.w, height: size.h, model: imgModel }),
-      })
-      const d = await r.json()
-      if (!r.ok) throw { msg: d.error || 'فشل التوليد', hint: d.hint }
-      const src = d.imageBase64 || (d.imageUrl ? d.imageUrl : null)
-      if (!src) throw { msg: 'لم تُرجَع أي صورة' }
-      if (d.imageUrl) setImgLoading(true)
-      setResult({ type: 'image', src, model: d.model || d.provider || 'AI', note: d.note })
-    } catch (e: unknown) {
-      const err = e as { msg?: string; hint?: string }
-      setError({ msg: err.msg || String(e), hint: err.hint })
-    } finally { setLoading(false) }
-  }
-
-  const download = () => {
-    if (!result) return
-    const a = document.createElement('a'); a.href = result.src; a.download = 'dz-gen.png'; a.click()
-  }
-
-  const PROMPTS = [
-    'مدينة الجزائر ليلاً مع أضواء ذهبية، فوتوغرافي احترافي',
-    'شاب جزائري في الصحراء، غروب الشمس، أسلوب سينمائي',
-    'قهوة عربية مع تمر، تصوير منتجات احترافي',
-  ]
-
-  return (
-    <div>
-      <div className="dzt-tool-desc">
-        <span className="dzt-tool-desc-icon">🎨</span>
-        <div>
-          <div className="dzt-tool-desc-title">Image Generation Studio — استوديو توليد الصور</div>
-          <div className="dzt-tool-desc-text">ولّد أي صورة من وصف نصي بالعربية أو الإنجليزية — مدعوم بـ Pollinations FLUX</div>
-        </div>
-      </div>
-
-      {/* Prompt */}
-      <div className="dzt-imggen-prompt-wrap">
-        <textarea
-          className="dzt-imggen-textarea"
-          placeholder="صف الصورة التي تريدها... (عربي، فرنسي، أو إنجليزي)"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          rows={3}
-        />
-        {/* Quick prompt suggestions */}
-        <div className="dzt-imggen-suggestions">
-          {PROMPTS.map((s, i) => (
-            <button key={i} className="dzt-imggen-suggestion" onClick={() => setPrompt(s)}>
-              {s.slice(0, 40)}{s.length > 40 ? '…' : ''}
-            </button>
-          ))}
-        </div>
-        <textarea
-          className="dzt-imggen-textarea dzt-imggen-neg"
-          placeholder="برومبت سلبي (اختياري): ما تريد استبعاده — ugly, blurry, low quality..."
-          value={negPrompt}
-          onChange={e => setNegPrompt(e.target.value)}
-          rows={2}
-        />
-      </div>
-
-      {/* Settings */}
-      <div className="dzt-imggen-settings">
-        <div className="dzt-imggen-setting-group">
-          <label>نموذج الصورة</label>
-          <div className="dzt-imgproc-btn-group">
-            {([
-              { id: 'flux',         label: 'FLUX',    desc: 'دقيق' },
-              { id: 'flux-realism', label: 'Realism', desc: 'واقعي' },
-              { id: 'flux-3d',      label: '3D',      desc: 'ثلاثي' },
-              { id: 'turbo',        label: 'Turbo',   desc: 'سريع' },
-            ] as const).map(m => (
-              <button key={m.id}
-                className={`dzt-imgproc-opt${imgModel === m.id ? ' active' : ''}`}
-                title={m.desc}
-                onClick={() => setImgModel(m.id)}>
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="dzt-imggen-setting-group">
-          <label>الأبعاد</label>
-          <div className="dzt-imgproc-btn-group">
-            {IMG_SIZE_OPTIONS.map((s, i) => (
-              <button key={i} className={`dzt-imgproc-opt${sizeIdx === i ? ' active' : ''}`}
-                onClick={() => setSizeIdx(i)}>{s.label}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Generate button */}
-      <button
-        className="dzt-btn dzt-imggen-btn"
-        onClick={generate}
-        disabled={loading || !prompt.trim()}
-      >
-        {loading ? <><span className="dzt-spinner" /> جاري التوليد...</> : '✨ ولّد الصورة'}
-      </button>
-
-      {/* Error */}
-      {error && (
-        <div className="dzt-imgproc-error" style={{ borderRadius: 12, padding: 16 }}>
-          <div>⚠️ {error.msg}</div>
-          {error.hint && <div style={{ fontSize: 13, marginTop: 6, opacity: 0.8 }}>{error.hint}</div>}
-        </div>
-      )}
-
-      {/* Result */}
-      {result && !loading && (
-        <div className="dzt-imggen-result">
-          <div className="dzt-imgproc-result-header">
-            <span className="dzt-imgproc-result-label">
-              {imgLoading ? '⏳ الصورة تُحمَّل...' : '✅ النتيجة جاهزة'}
-              <span className="dzt-imgproc-model-tag">{result.model}</span>
-            </span>
-            {!imgLoading && <button className="dzt-btn" onClick={download} style={{ padding: '8px 16px', fontSize: 13 }}>⬇️ تحميل</button>}
-          </div>
-          {result.note && <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 8, padding: '0 4px' }}>ملاحظة: {result.note}</div>}
-          {imgLoading && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '32px 0', opacity: 0.7 }}>
-              <span className="dzt-spinner" style={{ width: 36, height: 36 }} />
-              <span style={{ fontSize: 13 }}>جاري تحميل الصورة من Pollinations AI...</span>
-              <span style={{ fontSize: 11, opacity: 0.6 }}>قد يستغرق 10–20 ثانية</span>
-            </div>
-          )}
-          <img
-            src={result.src}
-            alt="generated"
-            className="dzt-imggen-result-img"
-            style={{ display: imgLoading ? 'none' : 'block' }}
-            onLoad={() => setImgLoading(false)}
-            onError={e => {
-              setImgLoading(false)
-              setError({ msg: 'تعذّر تحميل الصورة — حاول مرة أخرى', hint: 'تأكد من الاتصال بالإنترنت أو جرّب نموذجاً آخر' });
-              (e.target as HTMLImageElement).style.display = 'none'
-            }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
 
 
 // ─── Invoice Tool ─────────────────────────────────────────────────────────────
@@ -5687,7 +5513,7 @@ function FlightSearchTool() {
 }
 
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
-const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','imgproc','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert','flights']
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert','flights']
 
 function getToolFromSearch(search: string): ToolId | null {
   try {
@@ -5753,7 +5579,6 @@ export default function DZTools() {
         {active === 'jobs'    && <JobSearchTool />}
         {active === 'health'  && <HealthTool />}
         {active === 'image'   && <ImageTool />}
-        {active === 'imgproc' && <ImageProcessingTool />}
         {active === 'ocr'          && <OCRTool />}
         {active === 'bizplan'      && <BizPlanTool />}
         {active === 'invoice'      && <InvoiceTool />}

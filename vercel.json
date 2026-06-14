@@ -6,7 +6,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "bin/**"
+      "includeFiles": "bin/**,data/**,dialect/**,lib/**,modules/**"
     },
     "api/report-bug.js": {
       "maxDuration": 30

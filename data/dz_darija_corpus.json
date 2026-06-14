@@ -29,7 +29,9 @@
     "verb_conjugations_count": 30,
     "franco_arabic_count": 50,
     "regional_variants_count": 45,
-    "updated": "2026-06-03"
+    "updated": "2026-06-14",
+    "entries": 502,
+    "french_entries": 84
   },
   "grammar_rules": [
     {
@@ -940,164 +942,195 @@
       "dz": "راني",
       "ar": "أنا الآن / في حالة",
       "cat": "state",
-      "note": "يُستخدم قبل الفعل: راني نقرا = أنا أدرس"
+      "note": "يُستخدم قبل الفعل: راني نقرا = أنا أدرس",
+      "fr": "je suis / je me trouve"
     },
     {
       "dz": "راك",
       "ar": "أنت الآن",
       "cat": "state",
-      "note": "مذكر: راك نعسان؟ = أنت نعسان؟"
+      "note": "مذكر: راك نعسان؟ = أنت نعسان؟",
+      "fr": "tu es / tu te trouves"
     },
     {
       "dz": "راكي",
       "ar": "أنتِ الآن",
       "cat": "state",
-      "note": "مؤنث"
+      "note": "مؤنث",
+      "fr": ""
     },
     {
       "dz": "راه",
       "ar": "هو الآن",
       "cat": "state",
-      "note": "راه يجي = هو آتٍ"
+      "note": "راه يجي = هو آتٍ",
+      "fr": "il est / il se trouve"
     },
     {
       "dz": "راها",
       "ar": "هي الآن",
-      "cat": "state"
+      "cat": "state",
+      "fr": "elle est"
     },
     {
       "dz": "رانا",
       "ar": "نحن الآن",
-      "cat": "state"
+      "cat": "state",
+      "fr": "nous sommes"
     },
     {
       "dz": "راكم",
       "ar": "أنتم الآن",
-      "cat": "state"
+      "cat": "state",
+      "fr": "vous êtes"
     },
     {
       "dz": "راهم",
       "ar": "هم الآن",
-      "cat": "state"
+      "cat": "state",
+      "fr": "ils sont"
     },
     {
       "dz": "كاين",
       "ar": "موجود / هناك",
       "cat": "state",
-      "note": "كاين واحد هنا = هناك شخص هنا"
+      "note": "كاين واحد هنا = هناك شخص هنا",
+      "fr": "il y a / c'est là"
     },
     {
       "dz": "كاينة",
       "ar": "موجودة",
-      "cat": "state"
+      "cat": "state",
+      "fr": "il y a (fém.) / c'est là"
     },
     {
       "dz": "ماكانش",
       "ar": "لا يوجد / لم يكن",
-      "cat": "state"
+      "cat": "state",
+      "fr": ""
     },
     {
       "dz": "كانت",
       "ar": "كانت / كان",
-      "cat": "state"
+      "cat": "state",
+      "fr": ""
     },
     {
       "dz": "غادي",
       "ar": "سيفعل / ذاهب",
       "cat": "state",
-      "note": "غادي نروح = سأذهب"
+      "note": "غادي نروح = سأذهب",
+      "fr": ""
     },
     {
       "dz": "قاعد",
       "ar": "جالس / في حالة (مستمرة)",
       "cat": "state",
-      "note": "قاعد يخدم = مازال يعمل"
+      "note": "قاعد يخدم = مازال يعمل",
+      "fr": ""
     },
     {
       "dz": "مازال",
       "ar": "لا يزال / بعد",
-      "cat": "state"
+      "cat": "state",
+      "fr": ""
     },
     {
       "dz": "مانيش",
       "ar": "لستُ",
       "cat": "negation",
-      "note": "مانيش مريض = لست مريضاً"
+      "note": "مانيش مريض = لست مريضاً",
+      "fr": ""
     },
     {
       "dz": "ما عرفتش",
       "ar": "لم أعرف",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما فهمتش",
       "ar": "لم أفهم",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": "je n'ai pas compris"
     },
     {
       "dz": "ما جيتش",
       "ar": "لم أجئ",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما قدرتش",
       "ar": "لم أستطع",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما عنديش",
       "ar": "ليس عندي",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما بغيتش",
       "ar": "لم أرد",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما لقيتش",
       "ar": "لم أجد",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما كليتش",
       "ar": "لم آكل",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما شريتش",
       "ar": "لم أشترِ",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما رحتش",
       "ar": "لم أذهب",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما نعرفش",
       "ar": "لا أعرف",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما نقدرش",
       "ar": "لا أستطيع",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما زالش",
       "ar": "لم ينتهِ بعد",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ما حبستش",
       "ar": "لم أتوقف",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "واش",
       "ar": "ماذا / هل",
-      "cat": "question"
+      "cat": "question",
+      "fr": "quoi / est-ce que"
     },
     {
       "dz": "علاه",
@@ -1105,7 +1138,8 @@
       "cat": "question",
       "variants": [
         "علاش"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "وين",
@@ -1113,7 +1147,8 @@
       "cat": "question",
       "variants": [
         "فين"
-      ]
+      ],
+      "fr": "où"
     },
     {
       "dz": "كيفاش",
@@ -1121,12 +1156,14 @@
       "cat": "question",
       "variants": [
         "كيفاه"
-      ]
+      ],
+      "fr": "comment"
     },
     {
       "dz": "شكون",
       "ar": "من",
-      "cat": "question"
+      "cat": "question",
+      "fr": "qui"
     },
     {
       "dz": "قداش",
@@ -1135,32 +1172,38 @@
       "variants": [
         "كداش",
         "شحال"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "وقتاش",
       "ar": "متى",
-      "cat": "question"
+      "cat": "question",
+      "fr": ""
     },
     {
       "dz": "فوقاش",
       "ar": "حتى متى",
-      "cat": "question"
+      "cat": "question",
+      "fr": "quand"
     },
     {
       "dz": "حقاش",
       "ar": "حتى متى / لماذا أصلاً",
-      "cat": "question"
+      "cat": "question",
+      "fr": ""
     },
     {
       "dz": "شنو",
       "ar": "ما / ماذا",
-      "cat": "question"
+      "cat": "question",
+      "fr": ""
     },
     {
       "dz": "شعيّاه",
       "ar": "ما هذا؟ (دهشة)",
-      "cat": "question"
+      "cat": "question",
+      "fr": ""
     },
     {
       "dz": "زعما",
@@ -1168,22 +1211,26 @@
       "cat": "discourse",
       "variants": [
         "زعمة"
-      ]
+      ],
+      "fr": "c'est-à-dire / genre"
     },
     {
       "dz": "ماعلينا",
       "ar": "لا يهم / بغض النظر",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "دير بالك",
       "ar": "انتبه / احترس",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "قاع",
       "ar": "كل / جميع",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": "tout / tous"
     },
     {
       "dz": "برك",
@@ -1192,124 +1239,148 @@
       "variants": [
         "بركات",
         "يزي"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "يزي",
       "ar": "يكفي / كفى",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "بالله",
       "ar": "أقسم بالله / فعلاً؟",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "والله",
       "ar": "والله / صحيح",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "الحمد لله",
       "ar": "الحمد لله",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "إن شاء الله",
       "ar": "إن شاء الله",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "وا",
       "ar": "يا / آه",
       "cat": "discourse",
-      "note": "وا خويا = يا أخي"
+      "note": "وا خويا = يا أخي",
+      "fr": ""
     },
     {
       "dz": "صحيت",
       "ar": "أجل / فعلاً / استيقظتُ",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "صح",
       "ar": "صحيح / أجل",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "ها هو",
       "ar": "ها هو ذا / فوجدناه",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "هيه",
       "ar": "نعم / أجل",
-      "cat": "affirmation"
+      "cat": "affirmation",
+      "fr": ""
     },
     {
       "dz": "آه",
       "ar": "نعم / أجل",
-      "cat": "affirmation"
+      "cat": "affirmation",
+      "fr": ""
     },
     {
       "dz": "واه",
       "ar": "نعم / طبعاً",
-      "cat": "affirmation"
+      "cat": "affirmation",
+      "fr": ""
     },
     {
       "dz": "ايه",
       "ar": "نعم",
-      "cat": "affirmation"
+      "cat": "affirmation",
+      "fr": ""
     },
     {
       "dz": "أيوه",
       "ar": "نعم / حسناً",
-      "cat": "affirmation"
+      "cat": "affirmation",
+      "fr": ""
     },
     {
       "dz": "لأ",
       "ar": "لا",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "ماشي",
       "ar": "لا / ليس / لا يهم",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": "non / ce n'est pas"
     },
     {
       "dz": "ماشي مشكلة",
       "ar": "لا مشكلة",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "مش",
       "ar": "ليس / لا",
-      "cat": "negation"
+      "cat": "negation",
+      "fr": ""
     },
     {
       "dz": "نروح",
       "ar": "أذهب",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نجي",
       "ar": "أجيء",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نخدم",
       "ar": "أعمل",
       "cat": "verb",
-      "note": "يخدم = يعمل — الأكثر استخداماً"
+      "note": "يخدم = يعمل — الأكثر استخداماً",
+      "fr": ""
     },
     {
       "dz": "نقرا",
       "ar": "أدرس / أقرأ",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "ندير",
       "ar": "أفعل / أعمل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نبغي",
@@ -1317,768 +1388,921 @@
       "cat": "verb",
       "variants": [
         "نحب"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "نعرف",
       "ar": "أعرف",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نفهم",
       "ar": "أفهم",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نشري",
       "ar": "أشتري",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نلقى",
       "ar": "أجد",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نكل",
       "ar": "آكل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نشرب",
       "ar": "أشرب",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نرقد",
       "ar": "أنام",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نهدر",
       "ar": "أتكلم / أتحدث",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نحوّس",
       "ar": "أبحث / أفتش",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نحوّل",
       "ar": "أحوّل / أرسل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نمشي",
       "ar": "أمشي / أذهب",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نبدا",
       "ar": "أبدأ",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نكمّل",
       "ar": "أكمل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نوقف",
       "ar": "أتوقف",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نحاول",
       "ar": "أحاول",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نفكّر",
       "ar": "أفكّر",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نسمع",
       "ar": "أسمع / أستمع",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نشوف",
       "ar": "أرى / أنظر",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نشرح",
       "ar": "أشرح",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يخدم",
       "ar": "يعمل / يشتغل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يروح",
       "ar": "يذهب",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يجي",
       "ar": "يأتي",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يقرا",
       "ar": "يدرس / يقرأ",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يدير",
       "ar": "يفعل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يبغي",
       "ar": "يريد",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يعرف",
       "ar": "يعرف",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يفهم",
       "ar": "يفهم",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يشري",
       "ar": "يشتري",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يلقى",
       "ar": "يجد",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يكل",
       "ar": "يأكل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يهدر",
       "ar": "يتكلم",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "يحوّس",
       "ar": "يبحث",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "فرحان",
       "ar": "سعيد / فرحان",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "فرحانة",
       "ar": "سعيدة",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "ضايق",
       "ar": "حزين / ضيق / متضايق",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "ضايقة",
       "ar": "حزينة",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "خايف",
       "ar": "خائف",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "مبسوط",
       "ar": "مسرور / سعيد",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "مقرف",
       "ar": "مزعج / مقرف / منفّر",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "مروّع",
       "ar": "جيد جداً / مذهل (ايجابي سياقي)",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "واعر",
       "ar": "صعب / شديد / مذهل (سياقي)",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "ملول",
       "ar": "ممل / ملول",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "مخنوق",
       "ar": "مختنق / متضايق جداً",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "مبرطل",
       "ar": "مرتشي / مُستغَل (من برطيلة)",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "مهرول",
       "ar": "يسرع / يركض",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "فالتيح",
       "ar": "فرحان ومبسوط / لا قيد عليه",
-      "cat": "emotion"
+      "cat": "emotion",
+      "fr": ""
     },
     {
       "dz": "خطرة",
       "ar": "فكرة / حاجة",
       "cat": "noun",
-      "note": "واش هذه الخطرة = ما هذه الحاجة"
+      "note": "واش هذه الخطرة = ما هذه الحاجة",
+      "fr": ""
     },
     {
       "dz": "هدرة",
       "ar": "كلام / حديث",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "حوسة",
       "ar": "فوضى / بحث",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "عفسة",
       "ar": "مشكلة صغيرة / إزعاج",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "تقرّيبة",
       "ar": "تقريبياً / حدوداً",
-      "cat": "discourse"
+      "cat": "discourse",
+      "fr": ""
     },
     {
       "dz": "الشغل",
       "ar": "العمل",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "الخدمة",
       "ar": "العمل",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "المرتب",
       "ar": "الراتب",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "الفلوس",
       "ar": "المال / النقود",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "الكارت",
       "ar": "البطاقة",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "الحساب",
       "ar": "الحساب البنكي",
-      "cat": "noun"
+      "cat": "noun",
+      "fr": ""
     },
     {
       "dz": "الماكلة",
       "ar": "الطعام / الأكل",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الكسكسي",
       "ar": "الكسكس",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الشورية",
       "ar": "الشوربة / الحساء",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الخبزة",
       "ar": "الخبز",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "المرق",
       "ar": "المرق / الصلصة",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الفريك",
       "ar": "الفريك (حبوب جزائرية)",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "المقروط",
       "ar": "مقروط (حلوى)",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الزلابية",
       "ar": "الزلابية (حلوى)",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "القهوة",
       "ar": "القهوة",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الشاي",
       "ar": "الشاي",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "البنة",
       "ar": "المذاق الجيد",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "بنين",
       "ar": "لذيذ",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الشكشوكة",
       "ar": "بيض مقلي بالطماطم",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "المشوي",
       "ar": "الكباب / اللحم المشوي",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الشاورما",
       "ar": "الشاورما",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "البريك",
       "ar": "بريك (عجينة محشوة)",
-      "cat": "food"
+      "cat": "food",
+      "fr": ""
     },
     {
       "dz": "الدار",
       "ar": "البيت / المنزل",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "البيت",
       "ar": "المنزل",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "الحومة",
       "ar": "الحي / المنطقة",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "الحارة",
       "ar": "الزقاق / الشارع الضيق",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "السوق",
       "ar": "السوق",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "البلاصة",
       "ar": "المكان / الموضع",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "تما",
       "ar": "هناك",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "هنا",
       "ar": "هنا",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "برا",
       "ar": "خارج / خارج البلاد",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "الجهة",
       "ar": "الاتجاه / المنطقة",
-      "cat": "place"
+      "cat": "place",
+      "fr": ""
     },
     {
       "dz": "دابا",
       "ar": "الآن / حالاً",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "توا",
       "ar": "الآن",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "درك",
       "ar": "الآن / في الحال",
-      "cat": "time"
+      "cat": "time",
+      "fr": "maintenant"
     },
     {
       "dz": "من بعد",
       "ar": "بعد ذلك / لاحقاً",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "من قبل",
       "ar": "من قبل / سابقاً",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "قبالة",
       "ar": "قريباً / بعد قليل",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "وقتاش",
       "ar": "متى",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "نهار",
       "ar": "يوم",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "بكري",
       "ar": "مبكراً / منذ زمن",
-      "cat": "time"
+      "cat": "time",
+      "fr": "tôt / autrefois"
     },
     {
       "dz": "القداح",
       "ar": "منذ زمن / من مدة",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "الليلة",
       "ar": "الليلة / الليل",
-      "cat": "time"
+      "cat": "time",
+      "fr": ""
     },
     {
       "dz": "غدوة",
       "ar": "غداً",
-      "cat": "time"
+      "cat": "time",
+      "fr": "demain"
     },
     {
       "dz": "وحدي",
       "ar": "بمفردي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "وحدو",
       "ar": "بمفرده",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "مع بعضنا",
       "ar": "معاً / مع بعضنا",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "خويا",
       "ar": "أخي / يا أخي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "ختي",
       "ar": "أختي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "صاحبي",
       "ar": "صديقي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "والدي",
       "ar": "أبي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "والدتي",
       "ar": "أمي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "يما",
       "ar": "يا أمي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "بابا",
       "ar": "أبي / يا أبي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "عمي",
       "ar": "عمي / يا عمي",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "درارية",
       "ar": "أطفال / شباب",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "ولاد",
       "ar": "أولاد / شباب",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "بنادم",
       "ar": "إنسان / شخص",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "الناس",
       "ar": "الناس",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "الولف",
       "ar": "الصديق الحميم",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "الجار",
       "ar": "الجار",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "لكمبيوتر",
       "ar": "الحاسوب",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "لتيليفون",
       "ar": "الهاتف",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "لأبليكاسيون",
       "ar": "التطبيق",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "لإنترنت",
       "ar": "الإنترنت",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الأبديت",
       "ar": "التحديث",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الباڨ",
       "ar": "الخطأ في الكود",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الريزو",
       "ar": "الشبكة / الاتصال",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الـ Wi-Fi",
       "ar": "الواي فاي",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الشارجي",
       "ar": "الشاحن",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الكمرة",
       "ar": "الكاميرا",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الصورة",
       "ar": "الصورة",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الفيديو",
       "ar": "الفيديو",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "السرفيس",
       "ar": "خدمة الصيانة",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الهاك",
       "ar": "اختراق / hack",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "الكود",
       "ar": "الكود البرمجي",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "البروجي",
       "ar": "البرنامج/المشروع",
-      "cat": "tech"
+      "cat": "tech",
+      "fr": ""
     },
     {
       "dz": "لاباس",
       "ar": "بخير / لا بأس",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": "ça va / pas de problème"
     },
     {
       "dz": "صباح الخير",
       "ar": "صباح الخير",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "صباح النور",
       "ar": "صباح النور (رد)",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "مساء الخير",
       "ar": "مساء الخير",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "كيداير؟",
       "ar": "كيف حالك؟",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": "comment ça va?"
     },
     {
       "dz": "لاباس عليك؟",
       "ar": "هل أنت بخير؟",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "وين راك؟",
       "ar": "أين أنت؟ / كيف أنت؟",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "بالسلامة",
       "ar": "مع السلامة",
-      "cat": "farewell"
+      "cat": "farewell",
+      "fr": "au revoir"
     },
     {
       "dz": "يسلمك",
       "ar": "مع السلامة / حفظك الله",
-      "cat": "farewell"
+      "cat": "farewell",
+      "fr": ""
     },
     {
       "dz": "يسلم",
       "ar": "شكراً / يسلم",
-      "cat": "farewell"
+      "cat": "farewell",
+      "fr": ""
     },
     {
       "dz": "سلام",
       "ar": "وداعاً",
-      "cat": "farewell"
+      "cat": "farewell",
+      "fr": ""
     },
     {
       "dz": "صحة",
       "ar": "بالهناء والشفاء",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "بالصحة",
       "ar": "بالصحة",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": ""
     },
     {
       "dz": "يعيشك",
       "ar": "يعيشك / شكراً",
-      "cat": "greeting"
+      "cat": "greeting",
+      "fr": "merci / longue vie"
     },
     {
       "dz": "مليح",
       "ar": "جيد / حسن",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": "bien / beau"
     },
     {
       "dz": "زين",
       "ar": "جيد",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "بهية",
       "ar": "جميلة / ممتازة",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "واعرة",
       "ar": "ممتازة / صعبة",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "خايب",
       "ar": "سيئ / رديء",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": "mauvais / nul"
     },
     {
       "dz": "مش مليح",
       "ar": "ليس جيداً",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "خطيرة",
       "ar": "ممتازة / رائعة (إيجابي)",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "صح والله",
       "ar": "رائع / مذهل فعلاً",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "بزاف",
       "ar": "كثيراً / جداً",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": "beaucoup / très"
     },
     {
       "dz": "ياسر",
       "ar": "كثيراً",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": "beaucoup / vraiment"
     },
     {
       "dz": "شوية",
@@ -2086,393 +2310,471 @@
       "cat": "quantity",
       "variants": [
         "شوي"
-      ]
+      ],
+      "fr": "un peu / un moment"
     },
     {
       "dz": "برشا",
       "ar": "كثيراً",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": "beaucoup"
     },
     {
       "dz": "والو",
       "ar": "لا شيء / ولا شيء",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": "rien"
     },
     {
       "dz": "كامل",
       "ar": "كل / جميع / خلاص",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": ""
     },
     {
       "dz": "قليل",
       "ar": "قليل",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": ""
     },
     {
       "dz": "نص",
       "ar": "نصف",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": ""
     },
     {
       "dz": "زيادة",
       "ar": "أكثر / إضافة",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": ""
     },
     {
       "dz": "ناقص",
       "ar": "أقل / ناقص",
-      "cat": "quantity"
+      "cat": "quantity",
+      "fr": ""
     },
     {
       "dz": "بالك",
       "ar": "انتبه / تذكر",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "لازم",
       "ar": "يجب / ضروري",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "يلزم",
       "ar": "يجب",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "خاصك",
       "ar": "يجب عليك",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "يقدر",
       "ar": "يستطيع / يمكن",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "نقدر",
       "ar": "أستطيع",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "ما خصكش",
       "ar": "لا يجب عليك",
-      "cat": "modal"
+      "cat": "modal",
+      "fr": ""
     },
     {
       "dz": "باش",
       "ar": "لأن / لكي / حتى",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "حتى باش",
       "ar": "حتى أن",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "ولكن",
       "ar": "لكن",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "بصح",
       "ar": "لكن / صحيح",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": "mais / c'est vrai"
     },
     {
       "dz": "وإلا",
       "ar": "أو / وإلا",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "إذا",
       "ar": "إذا / لو",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "كيما",
       "ar": "مثل / كما",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "على خاطر",
       "ar": "لأن / بسبب",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "على حساب",
       "ar": "بسبب / نتيجة لـ",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "غير",
       "ar": "فقط / إلا",
-      "cat": "connector"
+      "cat": "connector",
+      "fr": ""
     },
     {
       "dz": "وسخ",
       "ar": "قذر / سيئ",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "حاسب",
       "ar": "انتبه / احذر",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "تقلب",
       "ar": "تبحث / تجوّل",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "تحوّس",
       "ar": "تبحث / تتفحص",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "طح",
       "ar": "سقط / وقع",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "ضرب",
       "ar": "ضرب / اتصل (تيليفون)",
       "cat": "slang",
-      "note": "ضربلي = اتصل بي"
+      "note": "ضربلي = اتصل بي",
+      "fr": ""
     },
     {
       "dz": "دور",
       "ar": "ابحث عن",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "زعيم",
       "ar": "رئيس / كبير / يا زعيم (ودي)",
-      "cat": "slang"
+      "cat": "slang",
+      "fr": ""
     },
     {
       "dz": "عندو",
       "ar": "عنده",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندي",
       "ar": "عندي",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندك",
       "ar": "عندك",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندها",
       "ar": "عندها",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندنا",
       "ar": "عندنا",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندكم",
       "ar": "عندكم",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عندهم",
       "ar": "عندهم",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعي",
       "ar": "خاصتي / لي",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعك",
       "ar": "خاصتك / لك",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعو",
       "ar": "خاصته",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعها",
       "ar": "خاصتها",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعنا",
       "ar": "خاصتنا",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعكم",
       "ar": "خاصتكم",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "تاعهم",
       "ar": "خاصتهم",
-      "cat": "possession"
+      "cat": "possession",
+      "fr": ""
     },
     {
       "dz": "عياق",
       "ar": "تعب / إرهاق",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "مريض",
       "ar": "مريض",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "الدكتور",
       "ar": "الطبيب",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "الدوا",
       "ar": "الدواء",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "السبيطار",
       "ar": "المستشفى",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "الصيدلية",
       "ar": "الصيدلية",
-      "cat": "health"
+      "cat": "health",
+      "fr": ""
     },
     {
       "dz": "صحيت",
       "ar": "استيقظت / نعم أجل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "رقد",
       "ar": "نام",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "كل",
       "ar": "أكل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "مشى",
       "ar": "ذهب / مشى",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "جا",
       "ar": "جاء",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "دار",
       "ar": "فعل / عمل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": "maison"
     },
     {
       "dz": "شرى",
       "ar": "اشترى",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "باع",
       "ar": "باع",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "ربح",
       "ar": "ربح",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "خسر",
       "ar": "خسر",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "حكى",
       "ar": "تحدث / حكى",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "نسى",
       "ar": "نسي",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "قرا",
       "ar": "قرأ / درس",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "عمل",
       "ar": "عمل / فعل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "قلب",
       "ar": "بحث / قلّب",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "وقف",
       "ar": "وقف / توقف",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "ردفه",
       "ar": "ردّ عليه / تبعه",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "بدا",
       "ar": "بدأ",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "كمّل",
       "ar": "أكمل / واصل",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "رجع",
       "ar": "عاد",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "حكم",
       "ar": "حكم / قرّر",
-      "cat": "verb"
+      "cat": "verb",
+      "fr": ""
     },
     {
       "dz": "الجامعة",
       "ar": "الجامعة",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "المدرسة",
       "ar": "المدرسة",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الثانوية",
       "ar": "الثانوية",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الابتدائية",
       "ar": "الابتدائية",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الباكالوريا",
@@ -2480,228 +2782,273 @@
       "cat": "education",
       "variants": [
         "الباك"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "الباك",
       "ar": "الباكالوريا",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الكلية",
       "ar": "الكلية / الجامعة",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الليسانس",
       "ar": "الليسانس / البكالوريوس",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الماستر",
       "ar": "الماجستير",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الدكتوراه",
       "ar": "الدكتوراه",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الأستاذ",
       "ar": "الأستاذ / المعلم",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "التلميذ",
       "ar": "التلميذ / الطالب",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "المحاضرة",
       "ar": "المحاضرة / الدرس",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الامتحان",
       "ar": "الامتحان",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "النتيجة",
       "ar": "النتيجة",
-      "cat": "education"
+      "cat": "education",
+      "fr": ""
     },
     {
       "dz": "الديناري",
       "ar": "الدينار الجزائري",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "الدينار",
       "ar": "الدينار",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "المليون",
       "ar": "مليون دينار — في الدارجة مليون = 1000 دينار",
       "cat": "money",
-      "note": "⚠️ مهم: في الجزائر 'مليون' يعني ألف دينار"
+      "note": "⚠️ مهم: في الجزائر 'مليون' يعني ألف دينار",
+      "fr": ""
     },
     {
       "dz": "الشنتيم",
       "ar": "السنتيم",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "يدفع",
       "ar": "يدفع",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "يعطي",
       "ar": "يعطي",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "يسلف",
       "ar": "يقرض",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "الفاتورة",
       "ar": "الفاتورة",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "الصراف",
       "ar": "ماكينة السحب / الصراف",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "البريد",
       "ar": "مكتب البريد / CCP",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "الـ CCP",
       "ar": "حساب بريدي جاري",
-      "cat": "money"
+      "cat": "money",
+      "fr": ""
     },
     {
       "dz": "رانا نروحوا",
       "ar": "سنذهب / نحن ذاهبون",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "يلا نروحوا",
       "ar": "هيا نذهب",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "دير بالك",
       "ar": "انتبه لنفسك",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "ما علينا",
       "ar": "لا يهم / بغض النظر",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "على خيرك",
       "ar": "وداعاً / سلامة",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "ساعدني",
       "ar": "ساعدني",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "شرحلي",
       "ar": "اشرح لي",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "قولي",
       "ar": "قل لي",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "عطيني",
       "ar": "أعطني",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "جيبلي",
       "ar": "أحضر لي",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "ديرلي",
       "ar": "افعل لي",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "حكيلي",
       "ar": "أخبرني",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "كيداير؟ لاباس؟",
       "ar": "كيف حالك؟ هل أنت بخير؟",
-      "cat": "phrase"
+      "cat": "phrase",
+      "fr": ""
     },
     {
       "dz": "الصح",
       "ar": "الصحيح / الحقيقة",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "الغلط",
       "ar": "الخطأ",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "غلط",
       "ar": "خطأ",
-      "cat": "evaluation"
+      "cat": "evaluation",
+      "fr": ""
     },
     {
       "dz": "النيّة",
       "ar": "النية / الصدق",
-      "cat": "social"
+      "cat": "social",
+      "fr": ""
     },
     {
       "dz": "شتا",
       "ar": "الشتاء / البرد",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "الصيف",
       "ar": "الصيف",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "الربيع",
       "ar": "الربيع",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "برد",
       "ar": "برد / بارد",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "سخونة",
       "ar": "حرارة / حار",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "الشمس",
       "ar": "الشمس",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "المطر",
@@ -2709,17 +3056,200 @@
       "cat": "weather",
       "variants": [
         "الشتا"
-      ]
+      ],
+      "fr": ""
     },
     {
       "dz": "الريح",
       "ar": "الريح",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
     },
     {
       "dz": "الضباب",
       "ar": "الضباب",
-      "cat": "weather"
+      "cat": "weather",
+      "fr": ""
+    },
+    {
+      "dz": "بالسيف",
+      "ar": "بالإجبار / على كره",
+      "fr": "de force / obligatoirement"
+    },
+    {
+      "dz": "يخمم",
+      "ar": "يفكر / يتأمل",
+      "fr": "penser / réfléchir"
+    },
+    {
+      "dz": "يسقسي",
+      "ar": "يسأل / يستفسر",
+      "fr": "demander / questionner"
+    },
+    {
+      "dz": "تبارك الله",
+      "ar": "ما شاء الله",
+      "fr": "masha'allah"
+    },
+    {
+      "dz": "راني مشغول",
+      "ar": "أنا مشغول",
+      "fr": "je suis occupé"
+    },
+    {
+      "dz": "ولفت",
+      "ar": "اعتدت / ألفت",
+      "fr": "s'habituer"
+    },
+    {
+      "dz": "نجمع",
+      "ar": "نجتمع / نلتقي",
+      "fr": "se réunir"
+    },
+    {
+      "dz": "دوك",
+      "ar": "الآن / حالاً",
+      "fr": "maintenant"
+    },
+    {
+      "dz": "يحوس",
+      "ar": "يبحث / يتجول",
+      "fr": "chercher / se promener"
+    },
+    {
+      "dz": "كرهبة",
+      "ar": "سيارة",
+      "fr": "voiture"
+    },
+    {
+      "dz": "سبيطار",
+      "ar": "مستشفى",
+      "fr": "hôpital"
+    },
+    {
+      "dz": "صيدلية",
+      "ar": "صيدلية",
+      "fr": "pharmacie"
+    },
+    {
+      "dz": "بلاك",
+      "ar": "ربما / عندك حق",
+      "fr": "peut-être / tu as raison"
+    },
+    {
+      "dz": "تصبح على خير",
+      "ar": "تصبح على خير",
+      "fr": "bonne nuit"
+    },
+    {
+      "dz": "تغدا مليح",
+      "ar": "استيقظ بخير / صباح الخير",
+      "fr": "bonjour"
+    },
+    {
+      "dz": "واش تبغي",
+      "ar": "ماذا تريد",
+      "fr": "qu'est-ce que tu veux"
+    },
+    {
+      "dz": "ما عندكش حشمة",
+      "ar": "لا تستحيي / وقح",
+      "fr": "sans gêne / effronté"
+    },
+    {
+      "dz": "نروح نجيب",
+      "ar": "سأذهب وأحضر",
+      "fr": "je vais aller chercher"
+    },
+    {
+      "dz": "كاش حاجة",
+      "ar": "أي شيء / هل هناك شيء",
+      "fr": "quelque chose"
+    },
+    {
+      "dz": "فالو",
+      "ar": "لا شيء / لا يوجد",
+      "fr": "rien / il n'y a rien"
+    },
+    {
+      "dz": "جاب",
+      "ar": "أحضر / جلب",
+      "fr": "apporter"
+    },
+    {
+      "dz": "راح",
+      "ar": "ذهب / سيذهب",
+      "fr": "aller / partir"
+    },
+    {
+      "dz": "قعد",
+      "ar": "جلس / بقي",
+      "fr": "rester / s'asseoir"
+    },
+    {
+      "dz": "قام",
+      "ar": "قام / نهض",
+      "fr": "se lever"
+    },
+    {
+      "dz": "عاود",
+      "ar": "أعد / كرر",
+      "fr": "répéter / recommencer"
+    },
+    {
+      "dz": "دار بالك",
+      "ar": "انتبه / احترس",
+      "fr": "faire attention"
+    },
+    {
+      "dz": "حاشا",
+      "ar": "حاشا / معاذ الله",
+      "fr": "à Dieu ne plaise"
+    },
+    {
+      "dz": "مزية",
+      "ar": "ميزة / فائدة",
+      "fr": "avantage / qualité"
+    },
+    {
+      "dz": "تعب",
+      "ar": "تعب / أجر",
+      "fr": "fatigue / salaire"
+    },
+    {
+      "dz": "شحال هادي",
+      "ar": "منذ متى / كم مضى",
+      "fr": "depuis combien de temps"
+    },
+    {
+      "dz": "على حسابك",
+      "ar": "على مسؤوليتك",
+      "fr": "à tes risques et périls"
+    },
+    {
+      "dz": "كاملين",
+      "ar": "جميعاً / كلهم",
+      "fr": "tous / tout le monde"
+    },
+    {
+      "dz": "بصح والو",
+      "ar": "لكن لا شيء",
+      "fr": "mais rien"
+    },
+    {
+      "dz": "شكون نتا",
+      "ar": "من أنت",
+      "fr": "qui es-tu"
+    },
+    {
+      "dz": "فين راحت",
+      "ar": "أين ذهبت",
+      "fr": "où est-elle allée"
+    },
+    {
+      "dz": "واش صرا",
+      "ar": "ماذا حدث",
+      "fr": "qu'est-ce qui s'est passé"
     }
   ],
   "expressions": [
@@ -3242,6 +3772,76 @@
       "dz": "سهل إن شاء الله",
       "ar": "سيكون سهلاً إن شاء الله",
       "ctx": "reassurance"
+    },
+    {
+      "dz": "على قبالتك",
+      "ar": "أمامك مباشرة",
+      "ctx": "direction"
+    },
+    {
+      "dz": "من ورا",
+      "ar": "من الخلف",
+      "ctx": "direction"
+    },
+    {
+      "dz": "حتى دروك",
+      "ar": "حتى الآن / إلى الآن",
+      "ctx": "time"
+    },
+    {
+      "dz": "من غير ما",
+      "ar": "بدون أن / دون",
+      "ctx": "grammar"
+    },
+    {
+      "dz": "على خاطر",
+      "ar": "بسبب / من أجل",
+      "ctx": "reason"
+    },
+    {
+      "dz": "راه كاين",
+      "ar": "إنه موجود",
+      "ctx": "existence"
+    },
+    {
+      "dz": "ما زالش",
+      "ar": "لم يأتِ بعد / لم ينتهِ بعد",
+      "ctx": "time"
+    },
+    {
+      "dz": "بينا بينك",
+      "ar": "بيني وبينك / سرّنا",
+      "ctx": "confidential"
+    },
+    {
+      "dz": "يدير في الدماغ",
+      "ar": "يخطط / يفكر بجدية",
+      "ctx": "thinking"
+    },
+    {
+      "dz": "راح عليه",
+      "ar": "ضاع / فاته / لم يدرك",
+      "ctx": "loss"
+    },
+    {
+      "dz": "جاب العقل",
+      "ar": "استعاد وعيه / أفاق",
+      "ctx": "awareness"
+    },
+    {
+      "dz": "ما يفوتكش",
+      "ar": "لا تفوّته / لا تتركه",
+      "ctx": "advice"
+    },
+    {
+      "dz": "كي ما قلتلك",
+      "ar": "كما قلت لك",
+      "ctx": "reference"
+    },
+    {
+      "dz": "هادا هو",
+      "ar": "هذا هو / هكذا",
+      "ctx": "confirmation"
     }
   ],
   "few_shot": [
@@ -4044,6 +4644,168 @@
       "user": "عندك اقتراحات؟",
       "agent": "عندي أكثر من اقتراح، حسب واش تحتاج.",
       "ctx": "task"
+    },
+    {
+      "user": "Comment tu vas?",
+      "agent": "واش راك؟",
+      "dir": "fr2dz",
+      "ctx": "greeting"
+    },
+    {
+      "user": "Je veux manger quelque chose",
+      "agent": "بغيت ناكل حاجة",
+      "dir": "fr2dz",
+      "ctx": "food"
+    },
+    {
+      "user": "C'est combien?",
+      "agent": "بشحال هذا؟",
+      "dir": "fr2dz",
+      "ctx": "shopping"
+    },
+    {
+      "user": "Au revoir, à demain",
+      "agent": "بالسلامة، نشوفك غدوة",
+      "dir": "fr2dz",
+      "ctx": "farewell"
+    },
+    {
+      "user": "Je ne comprends pas ce que tu dis",
+      "agent": "ما فهمتش شنو قلت",
+      "dir": "fr2dz",
+      "ctx": "communication"
+    },
+    {
+      "user": "بغيت ناكل",
+      "agent": "Je veux manger",
+      "dir": "dz2fr",
+      "ctx": "food"
+    },
+    {
+      "user": "بالسلامة نشوفك غدوة",
+      "agent": "Au revoir, à demain",
+      "dir": "dz2fr",
+      "ctx": "farewell"
+    },
+    {
+      "user": "بشحال هذا؟",
+      "agent": "C'est combien?",
+      "dir": "dz2fr",
+      "ctx": "shopping"
+    },
+    {
+      "user": "ما فهمتش",
+      "agent": "Je n'ai pas compris",
+      "dir": "dz2fr",
+      "ctx": "communication"
     }
-  ]
+  ],
+  "french_darija": {
+    "bonjour": "سلام / صباح الخير",
+    "bonsoir": "مسا الخير",
+    "au revoir": "بالسلامة",
+    "merci": "يعيشك",
+    "merci beaucoup": "شكراً بزاف",
+    "s'il vous plaît": "عافاك",
+    "s'il te plaît": "عافاك",
+    "comment tu vas": "واش راك",
+    "comment allez-vous": "واش راكم",
+    "je vais bien": "راني مليح",
+    "je suis fatigué": "راني عيان",
+    "je veux": "بغيت",
+    "je veux manger": "بغيت ناكل",
+    "je veux dormir": "بغيت نرقد",
+    "je veux boire": "بغيت نشرب",
+    "j'ai faim": "راني جوعان",
+    "j'ai soif": "راني عطشان",
+    "où est": "وين كاين",
+    "où habitez-vous": "وين تسكن",
+    "où habites-tu": "وين تسكن",
+    "c'est combien": "بشحال",
+    "c'est quoi": "شنو هذا",
+    "qu'est-ce que c'est": "شنو هذا",
+    "je ne comprends pas": "ما فهمتش",
+    "je ne sais pas": "ما عارفش",
+    "parle plus lentement": "هدّر بلا شوية",
+    "répétez s'il vous plaît": "عاود عافاك",
+    "oui": "واه / أيه",
+    "non": "لا",
+    "peut-être": "يمكن",
+    "d'accord": "طيب / حسنا",
+    "je m'appelle": "اسمي",
+    "comment tu t'appelles": "شنو اسمك",
+    "quel âge as-tu": "شحال عندك",
+    "j'habite": "ساكن في",
+    "je travaille": "خادم / نخدم",
+    "je suis étudiant": "راني طالب",
+    "allons-y": "يلا نروحو",
+    "viens": "أجي",
+    "attends": "استنى",
+    "c'est bien": "هذا مليح",
+    "c'est pas bien": "هذا خايب",
+    "c'est beau": "هذا زوين",
+    "j'aime": "نحب",
+    "je n'aime pas": "ما نحبش",
+    "c'est délicieux": "هذا بنين بزاف",
+    "ça va": "مليح",
+    "ça va pas": "ما شيش مليح",
+    "pas de problème": "ماشي مشكل",
+    "excuse-moi": "سمحلي / عذرني",
+    "pardon": "سمحلي",
+    "je suis désolé": "نعتذر / آسف",
+    "aujourd'hui": "اليوم",
+    "demain": "غدوة",
+    "hier": "امبارح",
+    "matin": "الصباح",
+    "soir": "المسا",
+    "nuit": "الليل",
+    "maison": "الدار",
+    "voiture": "الكرهبة",
+    "argent": "الفلوس",
+    "travail": "الخدمة",
+    "école": "المدرسة",
+    "université": "الجامعة",
+    "ami": "صاحبي",
+    "famille": "العيلة",
+    "mère": "يمّا",
+    "père": "بابا",
+    "enfant": "دراري / ولد",
+    "frère": "خويا",
+    "sœur": "خوتي",
+    "docteur": "الدكتور",
+    "hôpital": "السبيطار",
+    "pharmacie": "الصيدلية",
+    "marché": "السوق",
+    "restaurant": "المطعم",
+    "café": "القهوة",
+    "eau": "الماء",
+    "pain": "الخبز",
+    "viande": "اللحم",
+    "je vais au marché": "راح نروح للسوق",
+    "je rentre à la maison": "راني راجع للدار",
+    "bonne nuit": "ليلة مباركة / تصبح على خير",
+    "bonne chance": "حظ سعيد / يسهّل عليك",
+    "il n'y a rien": "والو / فالو",
+    "c'est mauvais": "خايب",
+    "beaucoup": "بزاف",
+    "un peu": "شوية",
+    "maintenant": "درك",
+    "pars": "روح",
+    "c'est fini": "خلاص",
+    "je suis bien": "راني مليح",
+    "où es-tu": "وين راك",
+    "pourquoi": "علاش",
+    "comment": "كيفاش",
+    "quand": "فوقاش",
+    "qui": "شكون",
+    "quoi": "واش",
+    "où": "وين",
+    "combien": "بشحال",
+    "tout": "قاع",
+    "rien": "والو",
+    "toujours": "دايما",
+    "jamais": "عمرو ما",
+    "encore": "تاني",
+    "aussi": "تاني / كذلك"
+  }
 }

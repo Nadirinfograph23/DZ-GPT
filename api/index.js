@@ -1,5 +1,5 @@
-// deploy-trigger: 20260602-0015
-// Vercel serverless entry point — uses esbuild bundle
+// deploy-trigger: 20260614-0245
+// Vercel serverless entry point — uses pre-built server-bundle.js
 let app
 
 try {

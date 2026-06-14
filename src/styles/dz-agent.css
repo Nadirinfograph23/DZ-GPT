@@ -1456,10 +1456,13 @@
   overflow-y: auto;
   max-height: 520px;
   -webkit-overflow-scrolling: touch;
-  /* Fix RTL snap-back: LTR scroll origin even though wrapper is RTL */
-  direction: ltr;
+  /* Force LTR scroll origin — prevents RTL snap-back */
+  direction: ltr !important;
+  unicode-bidi: isolate;
   touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
+  scroll-snap-type: none;
+  position: relative;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   will-change: scroll-position;
@@ -1467,6 +1470,12 @@
 /* Restore RTL for table content inside the LTR scroll container */
 .dzt-scroll-container .dzt-table {
   direction: rtl;
+}
+/* Cancel parent .dz-message-text td/th { direction:rtl } override */
+.dzt-scroll-container td,
+.dzt-scroll-container th {
+  direction: inherit !important;
+  text-align: inherit !important;
 }
 .dzt-scroll-container--virtual { overflow-y: auto; max-height: 480px; }
 .dzt-scroll-container::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -1594,9 +1603,19 @@
 .dzt-simple-scroll {
   overflow-x: auto;
   overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
+  /* Force LTR scroll origin — prevents RTL snap-back and scroll position inversion.
+     The parent .dz-message-text has direction:rtl which cascades down; we break
+     that cascade here so scrollLeft=0 always means "left edge" (predictable). */
+  direction: ltr !important;
+  unicode-bidi: isolate;
+  /* Stop scroll chaining to parent chat container */
   overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Allow horizontal pan; vertical handled by parent */
+  touch-action: pan-x pan-y;
+  /* No snap — free scroll in both directions */
+  scroll-snap-type: none;
+  position: relative;
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
@@ -1604,7 +1623,40 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
 }
-.dzt-simple-scroll::-webkit-scrollbar { height: 6px; }
+/* Cancel the .dz-message-text td/th { direction:rtl } override inside our wrapper.
+   The table itself carries dir="rtl" so cells inherit RTL from the table, not from
+   the parent message-text rule. */
+.dzt-simple-scroll td,
+.dzt-simple-scroll th {
+  direction: inherit !important;
+  text-align: inherit !important;
+}
+/* Scroll-hint gradient: fade edges to signal scrollable content */
+.dzt-simple-scroll::before,
+.dzt-simple-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.dzt-simple-scroll::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(18,18,18,0.55), transparent);
+}
+.dzt-simple-scroll::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(18,18,18,0.55), transparent);
+}
+/* Show fades when table is scrollable (JS adds these classes via data attr) */
+.dzt-simple-scroll[data-scroll-left="true"]::before  { opacity: 1; }
+.dzt-simple-scroll[data-scroll-right="true"]::after  { opacity: 1; }
+
+.dzt-simple-scroll::-webkit-scrollbar { height: 7px; }
 .dzt-simple-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 4px; }
 .dzt-simple-scroll::-webkit-scrollbar-thumb { background: rgba(16,163,127,0.55); border-radius: 4px; }
 .dzt-simple-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.8); }

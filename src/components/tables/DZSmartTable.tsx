@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -318,6 +318,79 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
   return { headers, rows }
 }
 
+// ── Scroll wrapper: forces LTR scroll origin, shows RTL start (right side),
+//    intercepts horizontal touch to prevent parent chat container from stealing them
+function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    // Update edge-fade hints based on scroll position
+    const updateHints = () => {
+      const canScrollLeft  = el.scrollLeft > 1
+      const canScrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+      el.dataset.scrollLeft  = canScrollLeft  ? 'true' : 'false'
+      el.dataset.scrollRight = canScrollRight ? 'true' : 'false'
+    }
+
+    // On mount: scroll to rightmost so RTL table shows first column (right side)
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth - el.clientWidth
+      updateHints()
+    })
+
+    el.addEventListener('scroll', updateHints, { passive: true })
+
+    // ── Touch handling: prevent parent chat from stealing horizontal swipes ──
+    let startX = 0
+    let startY = 0
+    let isHorizontal: boolean | null = null
+
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+      isHorizontal = null
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      const dx = Math.abs(e.touches[0].clientX - startX)
+      const dy = Math.abs(e.touches[0].clientY - startY)
+
+      if (isHorizontal === null && (dx > 4 || dy > 4)) {
+        isHorizontal = dx > dy
+      }
+
+      if (isHorizontal) {
+        // Stop parent from intercepting horizontal swipes
+        e.stopPropagation()
+        // Prevent default scroll only when we can scroll in that direction
+        const atLeft  = el.scrollLeft <= 0
+        const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+        const swipingLeft  = e.touches[0].clientX < startX  // finger moves left  → scroll right (LTR)
+        const swipingRight = e.touches[0].clientX > startX  // finger moves right → scroll left  (LTR)
+        if ((atLeft && swipingRight) || (atRight && swipingLeft)) return
+        e.preventDefault()
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    return () => {
+      el.removeEventListener('scroll',     updateHints)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+    }
+  }, [])
+
+  return (
+    <div ref={ref} className={`dzt-simple-scroll ${className}`} dir="ltr">
+      {children}
+    </div>
+  )
+}
+
 export function DZMDTable({ children }: DZMDTableProps) {
   const { headers, rows } = useMemo(() => extractTableData(children), [children])
 
@@ -325,16 +398,16 @@ export function DZMDTable({ children }: DZMDTableProps) {
   // virtual scroll يستخدم position:absolute → صفوف تتداخل على الهاتف
   if (!headers.length || !rows.length) {
     return (
-      <div className="dzt-simple-scroll" dir="ltr">
+      <TableScrollWrapper className="dzt-wrap--fallback">
         <table className="dzt-fallback-table" dir="rtl">{children}</table>
-      </div>
+      </TableScrollWrapper>
     )
   }
   if (rows.length <= 20) {
     return (
-      <div className="dzt-simple-scroll" dir="ltr">
+      <TableScrollWrapper className="dzt-wrap--simple">
         <table className="dzt-simple-table" dir="rtl">{children}</table>
-      </div>
+      </TableScrollWrapper>
     )
   }
   return <DZSmartTable headers={headers} rows={rows} />

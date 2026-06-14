@@ -1623,17 +1623,15 @@
   unicode-bidi: isolate;
   /* Stop scroll chaining to parent chat container */
   overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
   /*
-   * touch-action:none — Pointer Events API takes full control (see TableScrollWrapper).
-   * Previous approach (touch-action:pan-x + e.preventDefault in touchmove) was broken:
-   * preventDefault cancels the browser's native pan-x but no manual scrollLeft update
-   * was made, so the table never moved. Now JS handles all axes manually:
-   *   horizontal → el.scrollLeft  (table scrolls)
-   *   vertical   → scrollParent.scrollTop  (chat container scrolls)
-   * Mouse wheel still works via native CSS overflow-x:auto (unaffected by touch-action).
+   * touch-action:pan-x — let the browser handle horizontal swiping and
+   * scrollbar-thumb drags natively. The previous touch-action:none + manual
+   * Pointer Events approach caused the "spring-back" bug: setPointerCapture
+   * cannot intercept native scrollbar-thumb drags, so the browser applied the
+   * scroll momentarily then reverted it. Native pan-x is immune to this.
+   * Vertical swipes on the table area bubble to the parent chat container.
    */
-  touch-action: none;
+  touch-action: pan-x;
   scroll-snap-type: none;
   position: relative;
   width: 100%;
@@ -1642,9 +1640,6 @@
   margin: 6px 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  will-change: scroll-position;
 }
 /* Cancel the .dz-message-text td/th { direction:rtl } override inside our wrapper.
    The table itself carries dir="rtl" so cells inherit RTL from the table, not from

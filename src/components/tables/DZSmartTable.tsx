@@ -318,26 +318,39 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
   return { headers, rows }
 }
 
-// ── Module-level map: persists table scroll positions across React re-mounts.
-//    Key = trimmed text content of first 120 chars (stable identity per table).
-//    Prevents scroll-to-rightmost resetting the user's position when streaming
-//    causes the parent ReactMarkdown to unmount/remount this component.
+// Module-level map: persists table scroll positions across React re-mounts.
+// Key = trimmed <thead> text (stable — headers never change as rows stream in).
+// Allows restoring the user's exact scroll position even after a remount.
 const _tableScrollPositions = new Map<string, number>()
 
+// Key based on <thead> text only — stable, not affected by streaming row additions.
+// Falls back to first 80 chars of full content if no thead is present.
 function _tableKey(el: HTMLDivElement): string {
-  return (el.textContent ?? '').slice(0, 120).trim()
+  const thead = el.querySelector('thead')
+  if (thead) return (thead.textContent ?? '').slice(0, 80).trim()
+  return (el.textContent ?? '').slice(0, 80).trim()
 }
 
-// ── Scroll wrapper: forces LTR scroll origin, shows RTL start (right side).
+// Scroll wrapper: forces LTR scroll origin so scrollLeft=0 is always the left
+// edge, then positions the view at the rightmost side so the first RTL column
+// is immediately visible.
 //
-// SCROLL STRATEGY — Pointer Events API (replaces touch handlers):
-//   Problem: touch-action:pan-x + e.preventDefault() in touchmove cancel each
-//   other — the browser's native pan-x is overridden but no manual scrollLeft
-//   update is performed, so the table never moves.
-//   Solution: touch-action:none (CSS) + full manual routing via Pointer Events:
-//     • Horizontal swipe → el.scrollLeft updated manually
-//     • Vertical swipe   → scrollable parent container scrolled manually
-//   setPointerCapture keeps all events on our element throughout the gesture.
+// SCROLL STRATEGY — Native browser scroll (touch-action: pan-x):
+//   The previous approach used touch-action:none + manual Pointer Events.
+//   That caused the "spring-back" bug: setPointerCapture does NOT intercept
+//   native scrollbar-thumb drag gestures. The browser applies the scroll
+//   momentarily, then the manual JS handler has no control over the thumb,
+//   so the position reverts.
+//
+//   Fix: touch-action:pan-x lets the browser handle all horizontal swipes
+//   and scrollbar-thumb drags natively — no JS scroll manipulation needed.
+//   overscroll-behavior-x:contain prevents the parent from stealing the swipe.
+//
+//   Additional bug fixes:
+//   * Key now uses <thead> text only — stable across streaming updates.
+//   * saved !== undefined (not saved > 0) — correctly restores scrollLeft=0
+//     when the user has scrolled all the way to the left (valid position).
+//   * Double rAF — ensures layout is complete before measuring scrollWidth.
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -345,21 +358,21 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const el = ref.current
     if (!el) return
 
-    // ── Edge-fade hints ──
+    // Edge-fade hints via data-attributes — no React state = no re-renders
     const updateHints = () => {
       el.dataset.scrollLeft  = el.scrollLeft > 1 ? 'true' : 'false'
       el.dataset.scrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1 ? 'true' : 'false'
     }
 
-    // ── Restore scroll position (or default to rightmost = RTL first column) ──
-    requestAnimationFrame(() => {
+    // Restore user's saved position, or default to rightmost (first RTL column).
+    // Double rAF: first frame commits DOM layout, second ensures scrollWidth is final.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
-      el.scrollLeft = (saved !== undefined && saved > 0)
-        ? saved
-        : el.scrollWidth - el.clientWidth
+      // Allow saved=0: user explicitly scrolled to the leftmost column.
+      el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
       updateHints()
-    })
+    }))
 
     const onScroll = () => {
       _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
@@ -367,66 +380,8 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     }
     el.addEventListener('scroll', onScroll, { passive: true })
 
-    // ── Find nearest vertically-scrollable ancestor (chat messages container) ──
-    let scrollParent: HTMLElement | null = null
-    let p = el.parentElement
-    while (p && p !== document.body) {
-      const { overflowY } = window.getComputedStyle(p)
-      if (/auto|scroll/.test(overflowY) && p.scrollHeight > p.clientHeight) {
-        scrollParent = p; break
-      }
-      p = p.parentElement
-    }
-
-    // ── Pointer Events: full manual gesture routing ──
-    let startX = 0, startY = 0, lastX = 0, lastY = 0
-    let direction: 'h' | 'v' | null = null
-    let activeId: number | null = null
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse') return        // mouse: use native CSS scroll
-      startX = lastX = e.clientX
-      startY = lastY = e.clientY
-      direction = null
-      activeId = e.pointerId
-      try { el.setPointerCapture(e.pointerId) } catch (_) { /* ignore */ }
-    }
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (e.pointerId !== activeId) return
-      const dx = e.clientX - lastX
-      const dy = e.clientY - lastY
-
-      if (direction === null) {
-        const adx = Math.abs(e.clientX - startX)
-        const ady = Math.abs(e.clientY - startY)
-        if (adx > 5 || ady > 5) direction = adx >= ady ? 'h' : 'v'
-      }
-
-      if (direction === 'h') {
-        el.scrollLeft -= dx
-        updateHints()
-      } else if (direction === 'v' && scrollParent) {
-        scrollParent.scrollTop -= dy
-      }
-
-      lastX = e.clientX
-      lastY = e.clientY
-    }
-
-    const onPointerUp = () => { activeId = null; direction = null }
-
-    el.addEventListener('pointerdown',   onPointerDown)
-    el.addEventListener('pointermove',   onPointerMove)
-    el.addEventListener('pointerup',     onPointerUp)
-    el.addEventListener('pointercancel', onPointerUp)
-
     return () => {
-      el.removeEventListener('scroll',      onScroll)
-      el.removeEventListener('pointerdown', onPointerDown)
-      el.removeEventListener('pointermove', onPointerMove)
-      el.removeEventListener('pointerup',   onPointerUp)
-      el.removeEventListener('pointercancel', onPointerUp)
+      el.removeEventListener('scroll', onScroll)
     }
   }, [])
 
@@ -440,8 +395,6 @@ function TableScrollWrapper({ className, children }: { className: string; childr
 export function DZMDTable({ children }: DZMDTableProps) {
   const { headers, rows } = useMemo(() => extractTableData(children), [children])
 
-  // جداول صغيرة (≤ 20 صف) → HTML table بسيط بدون virtual scroll
-  // virtual scroll يستخدم position:absolute → صفوف تتداخل على الهاتف
   if (!headers.length || !rows.length) {
     return (
       <TableScrollWrapper className="dzt-wrap--fallback">

@@ -2416,6 +2416,132 @@
 }
 .dzt-dj-ex-use:hover { color:#c8ff00; border-color:#c8ff00; }
 
+/* ─── DarijaTool — new UI elements ───────────────────────────────────────── */
+
+/* charcount */
+.dzt-dj-charcount { font-size:11px; color:#444; font-weight:500; }
+.dzt-dj-charcount.warn { color:#f59e0b; }
+
+/* clear button */
+.dzt-dj-clear {
+  align-self:flex-end; padding:3px 10px;
+  background:transparent; border:1px solid #222; border-radius:6px;
+  color:#555; font-size:11px; cursor:pointer; font-family:'Cairo',sans-serif;
+  transition:all .12s;
+}
+.dzt-dj-clear:hover { color:#f87171; border-color:#f87171; }
+
+/* swap spin */
+.dzt-dj-spin {
+  display:inline-block;
+  animation: dzt-spin 1s linear infinite;
+}
+@keyframes dzt-spin { to { transform: rotate(360deg); } }
+
+/* loading animation */
+.dzt-dj-loading-anim {
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  padding:14px 0; color:#555; font-size:13px; font-family:'Cairo',sans-serif;
+}
+.dzt-dj-dots { display:flex; gap:5px; }
+.dzt-dj-dots span {
+  width:6px; height:6px; border-radius:50%;
+  background:#c8ff00; opacity:.3;
+  animation: dzt-dot 1.2s ease-in-out infinite;
+}
+.dzt-dj-dots span:nth-child(2) { animation-delay:.2s; }
+.dzt-dj-dots span:nth-child(3) { animation-delay:.4s; }
+@keyframes dzt-dot { 0%,100%{opacity:.2;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+
+/* output states */
+.dzt-dj-result-main {
+  font-size:18px; font-weight:800; color:#c8ff00; line-height:1.7;
+  direction:rtl; text-align:right; font-family:'Cairo',sans-serif;
+}
+.dzt-dj-placeholder { color:#2a2a2a; font-size:13px; font-weight:400; }
+.dzt-dj-error { color:#f87171; font-size:13px; font-weight:500; }
+.dzt-dj-translit {
+  font-size:11px; color:#555; padding:4px 8px;
+  background:rgba(255,255,255,.02); border-radius:6px;
+  font-style:italic; direction:ltr;
+}
+
+/* translate button */
+.dzt-dj-translate-btn {
+  position:relative; display:flex; align-items:center;
+  justify-content:center; gap:10px;
+}
+.dzt-dj-btn-hint {
+  font-size:10px; color:#444; font-weight:400;
+  padding:2px 6px; background:rgba(255,255,255,.04);
+  border:1px solid #222; border-radius:4px;
+}
+
+/* Rich results container */
+.dzt-dj-rich {
+  display:flex; flex-direction:column; gap:12px; direction:rtl;
+}
+
+/* Cards */
+.dzt-dj-card {
+  background:#0d0d0d; border:1px solid #1a1a1a;
+  border-radius:14px; overflow:hidden; padding:14px 16px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.dzt-dj-card-title {
+  font-size:12px; font-weight:800; color:#555;
+  text-transform:uppercase; letter-spacing:.8px;
+}
+.dzt-dj-card p { margin:0; font-size:13.5px; color:#aaa; line-height:1.7; }
+
+.dzt-dj-card-explain { border-color:#1e2a1e; }
+.dzt-dj-card-explain .dzt-dj-card-title { color:#4ade80; }
+
+.dzt-dj-card-grammar { border-color:#1e1e2a; }
+.dzt-dj-card-grammar .dzt-dj-card-title { color:#818cf8; }
+
+.dzt-dj-card-region { border-color:#2a1e1e; }
+.dzt-dj-card-region .dzt-dj-card-title { color:#fb923c; }
+
+.dzt-dj-card-examples .dzt-dj-card-title { color:#60a5fa; }
+
+/* Examples list */
+.dzt-dj-ex-list { display:flex; flex-direction:column; gap:0; }
+.dzt-dj-ex-num {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:20px; height:20px; border-radius:50%;
+  background:rgba(96,165,250,.1); color:#60a5fa; font-size:11px; font-weight:800;
+  margin-left:8px; flex-shrink:0;
+}
+.dzt-dj-ex-reg { font-size:10px; color:#666; margin-right:6px; }
+
+/* DB hits */
+.dzt-dj-card-db { border-color:#2a2a1e; }
+.dzt-dj-card-db .dzt-dj-card-title { color:#facc15; }
+.dzt-dj-db-grid { display:flex; flex-direction:column; gap:6px; }
+.dzt-dj-db-item {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:6px 8px; background:rgba(255,255,255,.02); border-radius:8px;
+  font-size:12.5px;
+}
+.dzt-dj-db-dz { color:#c8ff00; font-weight:700; }
+.dzt-dj-db-sep { color:#333; }
+.dzt-dj-db-ar { color:#aaa; }
+.dzt-dj-db-fr { color:#888; font-style:italic; }
+.dzt-dj-db-type {
+  margin-right:auto; padding:2px 7px;
+  border-radius:5px; font-size:10px; font-weight:700;
+}
+.dzt-dj-db-type-word { background:rgba(200,255,0,.08); color:#c8ff00; }
+.dzt-dj-db-type-slang { background:rgba(251,146,60,.08); color:#fb923c; }
+.dzt-dj-db-type-expr { background:rgba(129,140,248,.08); color:#818cf8; }
+
+/* Source badge */
+.dzt-dj-source {
+  font-size:11px; color:#333; text-align:center;
+  padding:6px; border-top:1px solid #111; margin-top:4px;
+}
+
 /* ════════════════════════════════════════════════════════
    ZAKAT CALCULATOR TOOL
    ════════════════════════════════════════════════════════ */

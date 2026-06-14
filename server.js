@@ -31335,6 +31335,273 @@ app.post('/api/tools/presentation', express.json(), async (req, res) => {
   }
 })
 
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/tools/darija-translate — مترجم الدارجة الجزائرية المتخصص
+// يعتمد على قاعدة بيانات محلية + AI مع سياق غني من الكوربوس
+// ═══════════════════════════════════════════════════════════════════
+app.post('/api/tools/darija-translate', express.json({ limit: '64kb' }), async (req, res) => {
+  try {
+    const { text, direction = 'ar2dz', region = 'center' } = req.body || {}
+    if (!text || !text.trim()) return res.status(400).json({ error: 'text required' })
+
+    const inputText = text.trim().slice(0, 500)
+
+    // ── Load local databases ──────────────────────────────────────
+    let dialect = {}, corpus = {}
+    try { dialect = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'dz_dialect.json'), 'utf8')) } catch {}
+    try { corpus  = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'dz_darija_corpus.json'), 'utf8')) } catch {}
+
+    const slangMap       = dialect.slang_map        || {}
+    const responseMap    = dialect.response_map      || {}
+    const words          = dialect.words             || []
+    const vocabulary     = corpus.vocabulary         || []
+    const expressions    = corpus.expressions        || []
+    const grammarRules   = corpus.grammar_rules      || []
+    const regionalVars   = corpus.regional_variants  || []
+    const verbConj       = corpus.verb_conjugations  || []
+    const fewShots       = corpus.few_shot           || []
+
+    // ── Local DB lookup — direction-aware ────────────────────────
+    const localHits = []
+    const normInput = inputText.replace(/[\u0610-\u061A\u064B-\u065F\u0670]/g, '')
+                               .replace(/[أإآٱ]/g, 'ا')
+                               .replace(/ة/g, 'ه').toLowerCase().trim()
+
+    // Helper: does haystack contain needle (or near match)?
+    const includes = (hay, needle) => {
+      const h = hay.replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').toLowerCase()
+      const n = needle.replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').toLowerCase()
+      return h.includes(n) || n.includes(h)
+    }
+
+    if (direction === 'dz2ar' || direction === 'dz2fr') {
+      // Input is Darija — lookup in slang_map (DZ→AR)
+      for (const [dz, ar] of Object.entries(slangMap)) {
+        if (includes(normInput, dz)) {
+          localHits.push({ dz, ar, type: 'slang' })
+          if (localHits.length >= 5) break
+        }
+      }
+      // words dict — match on word field (DZ)
+      for (const w of words) {
+        if (includes(normInput, w.word || '')) {
+          localHits.push({ dz: w.word, ar: w.meaning_ar, fr: w.meaning_fr, type: 'word' })
+          if (localHits.length >= 8) break
+        }
+      }
+      // vocabulary — match on dz field
+      for (const v of vocabulary) {
+        if (includes(normInput, v.dz || '')) {
+          localHits.push({ dz: v.dz, ar: v.ar, type: 'vocab' })
+          if (localHits.length >= 10) break
+        }
+      }
+    } else {
+      // Input is AR or FR — lookup in response_map (AR→DZ) and vocabulary AR side
+      for (const [ar, dz] of Object.entries(responseMap)) {
+        if (includes(normInput, ar)) {
+          localHits.push({ dz, ar, type: 'slang' })
+          if (localHits.length >= 5) break
+        }
+      }
+      // words dict — match on meaning_ar
+      for (const w of words) {
+        if (includes(normInput, w.meaning_ar || '')) {
+          localHits.push({ dz: w.word, ar: w.meaning_ar, fr: w.meaning_fr, type: 'word' })
+          if (localHits.length >= 8) break
+        }
+      }
+      // vocabulary — match on ar field
+      for (const v of vocabulary) {
+        if (includes(normInput, v.ar || '')) {
+          localHits.push({ dz: v.dz, ar: v.ar, type: 'vocab' })
+          if (localHits.length >= 10) break
+        }
+      }
+    }
+
+    // expressions — search both sides always
+    for (const e of expressions) {
+      if (includes(normInput, e.dz || '') || includes(normInput, e.ar || '')) {
+        if (!localHits.find(h => h.dz === e.dz)) {
+          localHits.push({ dz: e.dz, ar: e.ar, type: 'expr', ctx: e.ctx })
+          if (localHits.length >= 12) break
+        }
+      }
+    }
+
+    // ── Build regional context ────────────────────────────────────
+    const regionLabels = { center: 'الجزائر العاصمة والوسط', west: 'وهران والغرب (تلمسان، سعيدة)', east: 'قسنطينة والشرق (عنابة، سطيف)', south: 'الجنوب (ورقلة، تمنراست، غرداية)' }
+    const regionLabel = regionLabels[region] || regionLabels.center
+
+    // ── Direction labels ──────────────────────────────────────────
+    const dirMap = {
+      ar2dz: { from: 'العربية الفصحى', to: 'الدارجة الجزائرية', hint: 'حوّل إلى دارجة جزائرية طبيعية ومحكية' },
+      dz2ar: { from: 'الدارجة الجزائرية', to: 'العربية الفصحى', hint: 'اشرح المعنى بالعربية الفصحى' },
+      fr2dz: { from: 'الفرنسية', to: 'الدارجة الجزائرية', hint: 'حوّل إلى دارجة جزائرية مع كلمات فرنسية مدرجة شائعة' },
+      dz2fr: { from: 'الدارجة الجزائرية', to: 'الفرنسية', hint: 'ترجم إلى فرنسية طبيعية مع شرح التعابير' },
+    }
+    const dirInfo = dirMap[direction] || dirMap.ar2dz
+
+    // ── Sample relevant vocab from DB ─────────────────────────────
+    const vocabSample = vocabulary.slice(0, 60).map(v => `${v.dz} = ${v.ar}`).join(' | ')
+    const exprSample  = expressions.slice(0, 20).map(e => `"${e.dz}" → ${e.ar}`).join('\n')
+    const gramSample  = grammarRules.slice(0, 4).map(g => `• ${g.rule}: ${g.examples ? g.examples[0] : ''}`).join('\n')
+    const regSample   = regionalVars.slice(0, 8).map(r => `${r.word}: وسط="${r.region_center}" | غرب="${r.region_west}" | شرق="${r.region_east}"`).join('\n')
+    const verbSample  = verbConj.slice(0, 3).map(v => `${v.verb}: أنا=${v.conjugations?.['أنا'] || ''}, أنت=${v.conjugations?.['أنت(م)'] || ''}, هو=${v.conjugations?.['هو'] || ''}`).join(' | ')
+    const fsSample    = fewShots.filter(f => f.ctx === 'greeting' || f.ctx === 'expression').slice(0, 3).map(f => `Q: "${f.user}" → A: "${f.agent}"`).join('\n')
+
+    // ── Build rich system prompt ──────────────────────────────────
+    const systemPrompt = `أنت مترجم متخصص في الدارجة الجزائرية (Darja algérienne) وخبير بجميع اللهجات الجزائرية الإقليمية.
+
+== قاعدة البيانات المحلية ==
+المفردات الأساسية: ${vocabSample}
+
+التعابير الاصطلاحية:
+${exprSample}
+
+قواعد الصرف:
+${gramSample}
+
+الأفعال المصرّفة: ${verbSample}
+
+الفروق الإقليمية:
+${regSample}
+
+== تعليمات صارمة ==
+1. ترجم من ${dirInfo.from} إلى ${dirInfo.to} — ${dirInfo.hint}
+2. راعِ لهجة منطقة: ${regionLabel}
+3. استخدم الكتابة العربية للدارجة (مع كلمات فرنسية مدرجة إذا كانت شائعة)
+4. أعطِ فقط الترجمة الحقيقية — لا معلومات عن الطقس أو الرياضة أو أي موضوع آخر
+5. لا تُضف تعليقات خارج البنية المطلوبة
+
+== تنسيق الإجابة (JSON فقط بلا markdown) ==
+{
+  "translation": "الترجمة الرئيسية هنا",
+  "transliteration": "كتابة لاتينية إن أفادت",
+  "explanation": "شرح مختصر للتعابير الصعبة أو الفروق الإقليمية",
+  "grammar_tip": "ملاحظة نحوية مفيدة إن وجدت",
+  "examples": [
+    {"original": "مثال أصلي", "translated": "ترجمته", "region": "المنطقة"},
+    {"original": "مثال 2", "translated": "ترجمته", "region": "المنطقة"},
+    {"original": "مثال 3", "translated": "ترجمته", "region": "المنطقة"}
+  ],
+  "regional_alt": "بديل لهجوي في منطقة أخرى إن وجد"
+}`
+
+    // ── Call AI directly: Groq → OpenRouter → Mistral (no safeGenerateAI to avoid HAL injection) ──
+    const _aiMessages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `ترجم هذا النص: "${inputText}"` }
+    ]
+    let raw = null
+
+    // 1️⃣ Groq (llama-3.3-70b — best multilingual)
+    try {
+      const { content: _gc, error: _ge } = await callGroqWithFallback({
+        model: 'llama-3.3-70b-versatile',
+        messages: _aiMessages,
+        max_tokens: 800,
+        temperature: 0.35,
+      })
+      if (_gc && _gc.trim().length > 10) {
+        raw = _gc
+        console.log('[darija-translate] ✓ Groq ok')
+      } else if (_ge) {
+        console.warn('[darija-translate] Groq error:', _ge)
+      }
+    } catch (e) { console.warn('[darija-translate] Groq exception:', e.message) }
+
+    // 2️⃣ OpenRouter fallback (free models)
+    if (!raw) {
+      const orKey = process.env.OPENROUTER_API_KEY
+      if (orKey) {
+        for (const orModel of ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free', 'mistralai/mistral-7b-instruct:free']) {
+          try {
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${orKey}`, 'HTTP-Referer': 'https://dz-gpt.vercel.app', 'X-Title': 'DZ-GPT Darija' },
+              body: JSON.stringify({ model: orModel, messages: _aiMessages, max_tokens: 800, temperature: 0.35 }),
+              signal: AbortSignal.timeout(12000),
+            })
+            const orData = await orRes.json()
+            const orContent = orData.choices?.[0]?.message?.content
+            if (orRes.ok && orContent && orContent.trim().length > 10) {
+              raw = orContent
+              console.log(`[darija-translate] ✓ OpenRouter/${orModel} ok`)
+              break
+            }
+          } catch (e) { console.warn(`[darija-translate] OpenRouter/${orModel} error:`, e.message) }
+        }
+      }
+    }
+
+    // 3️⃣ Mistral fallback
+    if (!raw) {
+      const mKey = process.env.MISTRAL_API_KEY
+      if (mKey) {
+        try {
+          const mRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${mKey}` },
+            body: JSON.stringify({ model: 'mistral-small-latest', messages: _aiMessages, max_tokens: 800, temperature: 0.35 }),
+            signal: AbortSignal.timeout(12000),
+          })
+          const mData = await mRes.json()
+          const mContent = mData.choices?.[0]?.message?.content
+          if (mRes.ok && mContent && mContent.trim().length > 10) {
+            raw = mContent
+            console.log('[darija-translate] ✓ Mistral ok')
+          }
+        } catch (e) { console.warn('[darija-translate] Mistral error:', e.message) }
+      }
+    }
+
+    if (!raw) {
+      // 4️⃣ Fallback: local DB only
+      if (localHits.length > 0) {
+        // Sort: longest DZ match first (more specific)
+        const sorted = [...localHits].sort((a,b) => (b.dz?.length||0) - (a.dz?.length||0))
+        const h = sorted[0]
+        return res.json({
+          translation: direction.startsWith('dz') ? (h.ar || h.dz) : (h.dz || h.ar),
+          explanation: h.type === 'expr' ? `تعبير اصطلاحي (${h.ctx || ''})` : 'ترجمة من قاعدة البيانات المحلية للدارجة',
+          examples: [],
+          local_hits: sorted.slice(0,5),
+          source: 'local',
+        })
+      }
+      return res.status(503).json({ error: 'AI غير متاح حالياً. تأكد من ضبط AI_API_KEY أو OPENROUTER_API_KEY.' })
+    }
+
+    // ── Parse AI response ─────────────────────────────────────────
+    let parsed = {}
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+    } catch {
+      // If JSON parse fails, extract translation from raw text
+      const lines = raw.split('\n').filter(l => l.trim())
+      parsed = { translation: lines[0] || raw.slice(0, 200) }
+    }
+
+    res.json({
+      translation:     parsed.translation     || raw.slice(0, 300),
+      transliteration: parsed.transliteration || '',
+      explanation:     parsed.explanation     || '',
+      grammar_tip:     parsed.grammar_tip     || '',
+      examples:        Array.isArray(parsed.examples) ? parsed.examples.slice(0, 3) : [],
+      regional_alt:    parsed.regional_alt    || '',
+      local_hits:      localHits.slice(0, 5),
+      source: 'ai',
+    })
+
+  } catch (err) {
+    console.error('[darija-translate]', err.message)
+    res.status(500).json({ error: 'خطأ داخلي', message: err.message })
+  }
+})
+
 // ===== WEB BUILDER PROJECT SAVE/LOAD =====
 const WB_PROJECTS_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'wb-projects.json')
 

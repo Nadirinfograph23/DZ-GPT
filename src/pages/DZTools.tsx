@@ -3063,70 +3063,74 @@ const DARIJA_REGIONS = [
   { id: 'east',   label: '🏔️ قسنطينة / عنابة (الشرق)' },
   { id: 'south',  label: '🏜️ الجنوب (تمنراست / ورقلة)' },
 ]
+interface DarijaResult {
+  translation: string
+  transliteration?: string
+  explanation?: string
+  grammar_tip?: string
+  examples?: {original:string; translated:string; region?:string}[]
+  regional_alt?: string
+  local_hits?: {dz:string; ar:string; fr?:string; type:string; ctx?:string}[]
+  source?: string
+}
+
 function DarijaTool() {
   const [dir,      setDir]      = useState('ar2dz')
   const [region,   setRegion]   = useState('center')
   const [input,    setInput]    = useState('')
-  const [output,   setOutput]   = useState('')
+  const [result,   setResult]   = useState<DarijaResult|null>(null)
   const [loading,  setLoading]  = useState(false)
   const [copied,   setCopied]   = useState(false)
-  const [examples, setExamples] = useState<{original:string;darija:string;note:string}[]>([])
+  const [error,    setError]    = useState('')
+  const [charCount,setCharCount]= useState(0)
 
   const QUICK: Record<string, string[]> = {
-    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا تعبان'],
-    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','أنا مريض'],
+    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا متعب جداً'],
+    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','راني مريض'],
     fr2dz: ['Comment tu vas?','Je veux manger','Où habites-tu?','Merci beaucoup','Au revoir','C\'est combien?','Je suis fatigué','Allons-y'],
-    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','أنا مريض','هيا بينا'],
+    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','راني مريض','هيا بينا'],
   }
-
-  const regionLabels: Record<string,string> = { center:'الجزائر العاصمة', west:'وهران والغرب', east:'قسنطينة والشرق', south:'الجنوب الجزائري' }
 
   const translate = async () => {
     if (!input.trim()) return
-    setLoading(true); setOutput(''); setExamples([])
-    const d = DARIJA_DIRS.find(x=>x.id===dir)!
-    const reg = regionLabels[region]
-    const prompt = `أنت خبير في اللهجة الجزائرية الدارجة ومتمكن من جميع اللهجات الجزائرية الإقليمية.
-
-المهمة: ترجم النص التالي من ${d.from} إلى ${d.to} — مع مراعاة لهجة منطقة: ${reg}
-
-النص: "${input}"
-
-أعطني:
-1. **الترجمة الرئيسية** (كبيرة وواضحة):
-[ضع الترجمة هنا فقط]
-
-2. **شرح مختصر** (إذا كانت هناك تعابير خاصة):
-[شرح التعابير الصعبة]
-
-3. **أمثلة مماثلة** (3 أمثلة بنفس الأسلوب اللهجوي):
-- مثال 1: [أصل] | [ترجمة]
-- مثال 2: [أصل] | [ترجمة]  
-- مثال 3: [أصل] | [ترجمة]
-
-ملاحظة: استخدم الكتابة العربية للدارجة، ويمكن إضافة كلمات فرنسية مدرجة إذا كانت شائعة في المنطقة.`
-
+    setLoading(true); setResult(null); setError('')
     try {
-      const res  = await fetch('/api/dz-agent-chat', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ messages:[{role:'user',content:prompt}] })
+      const res = await fetch('/api/tools/darija-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: input.trim(), direction: dir, region })
       })
-      const data = await res.json()
-      const text = data.content || ''
-      // Extract main translation
-      const mainMatch = text.match(/\*\*الترجمة الرئيسية\*\*[^\n]*\n+([\s\S]*?)(?=\n\n|\*\*شرح|$)/i)
-      setOutput(mainMatch ? mainMatch[1].trim() : text.split('\n').find((l:string)=>l.trim()&&!l.startsWith('#')&&!l.startsWith('*')) || text)
-      // Extract examples
-      const exMatches = [...text.matchAll(/مثال \d+:\s*([^|]+)\|([^\n]+)/g)]
-      setExamples(exMatches.slice(0,3).map(m=>({ original:m[1].trim(), darija:m[2].trim(), note:'' })))
-    } catch { setOutput('⚠️ خطأ في الاتصال، حاول مرة أخرى.') }
+      if (!res.ok) {
+        const e = await res.json().catch(()=>({error:'خطأ في الاتصال'}))
+        throw new Error(e.error || `HTTP ${res.status}`)
+      }
+      const data: DarijaResult = await res.json()
+      setResult(data)
+    } catch(e: any) {
+      setError(e.message || '⚠️ خطأ في الاتصال، حاول مرة أخرى.')
+    }
     setLoading(false)
   }
 
   const swap = () => {
     const pairs: Record<string,string> = { ar2dz:'dz2ar', dz2ar:'ar2dz', fr2dz:'dz2fr', dz2fr:'fr2dz' }
-    setDir(pairs[dir]||dir); setInput(output); setOutput(''); setExamples([])
+    const newDir = pairs[dir] || dir
+    const prevTranslation = result?.translation || ''
+    setDir(newDir)
+    setInput(prevTranslation)
+    setResult(null)
+    setError('')
+    setCharCount(prevTranslation.length)
   }
+
+  const handleInput = (v: string) => {
+    setInput(v)
+    setCharCount(v.length)
+    if (result) setResult(null)
+    if (error) setError('')
+  }
+
+  const currentDir = DARIJA_DIRS.find(d=>d.id===dir)
 
   return (
     <div className="dzt-dj-wrap">
@@ -3134,25 +3138,26 @@ function DarijaTool() {
         <div className="dzt-tool-desc-icon">🗣️</div>
         <div>
           <div className="dzt-tool-desc-title">مترجم الدارجة الجزائرية</div>
-          <div className="dzt-tool-desc-text">ترجمة ذكية بين العربية الفصحى والفرنسية والدارجة الجزائرية — مع مراعاة اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
+          <div className="dzt-tool-desc-text">ترجمة ذكية مدعومة بقاعدة بيانات محلية + AI متخصص · يراعي اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
         </div>
       </div>
 
-      {/* Direction */}
+      {/* Direction selector */}
       <div className="dzt-dj-block">
-        <label className="dzt-label">اتجاه الترجمة</label>
+        <label className="dzt-label">🔀 اتجاه الترجمة</label>
         <div className="dzt-dj-dirs">
           {DARIJA_DIRS.map(d=>(
-            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`} onClick={()=>{setDir(d.id);setOutput('');setExamples([])}}>
+            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`}
+              onClick={()=>{setDir(d.id);setResult(null);setError('')}}>
               {d.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Region */}
+      {/* Region selector */}
       <div className="dzt-dj-block">
-        <label className="dzt-label">المنطقة / اللهجة</label>
+        <label className="dzt-label">📍 المنطقة / اللهجة</label>
         <div className="dzt-dj-regions">
           {DARIJA_REGIONS.map(r=>(
             <button key={r.id} className={`dzt-dj-region${region===r.id?' active':''}`} onClick={()=>setRegion(r.id)}>
@@ -3162,60 +3167,161 @@ function DarijaTool() {
         </div>
       </div>
 
-      {/* Quick examples */}
+      {/* Quick chips */}
       <div className="dzt-dj-block">
-        <label className="dzt-label">أمثلة سريعة</label>
+        <label className="dzt-label">⚡ أمثلة سريعة</label>
         <div className="dzt-dj-quick">
           {(QUICK[dir]||[]).map(q=>(
-            <button key={q} className="dzt-dj-quick-btn" onClick={()=>{setInput(q);setOutput('');setExamples([])}}>
+            <button key={q} className="dzt-dj-quick-btn"
+              onClick={()=>{handleInput(q)}}>
               {q}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Input / Output */}
+      {/* Input / Output panels */}
       <div className="dzt-dj-panels">
+        {/* Input panel */}
         <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.from}</div>
-          <textarea className="dzt-dj-textarea" placeholder="اكتب النص هنا..." value={input}
-            onChange={e=>setInput(e.target.value)} rows={4}
-            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()} />
+          <div className="dzt-dj-panel-label">
+            <span>{currentDir?.from}</span>
+            <span className={`dzt-dj-charcount${charCount>450?' warn':''}`}>{charCount}/500</span>
+          </div>
+          <textarea
+            className="dzt-dj-textarea"
+            placeholder={dir.startsWith('fr') ? 'Écrivez votre texte ici...' : 'اكتب النص هنا...'}
+            value={input}
+            onChange={e=>handleInput(e.target.value)}
+            maxLength={500}
+            rows={4}
+            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()}
+          />
+          {input.trim() && (
+            <button className="dzt-dj-clear" onClick={()=>{handleInput('');setResult(null)}}>✕ مسح</button>
+          )}
         </div>
 
-        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه">⇄</button>
+        {/* Swap button */}
+        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه وعكس الترجمة">
+          {loading ? <span className="dzt-dj-spin">◌</span> : '⇄'}
+        </button>
 
+        {/* Output panel */}
         <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">{DARIJA_DIRS.find(d2=>d2.id===dir)?.to}
-            {output && <button className={`dzt-dj-copy${copied?' done':''}`}
-              onClick={()=>{navigator.clipboard.writeText(output);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
-              {copied?'✅':'📋'}
-            </button>}
+          <div className="dzt-dj-panel-label">
+            <span>{currentDir?.to}</span>
+            {result?.translation && (
+              <button className={`dzt-dj-copy${copied?' done':''}`}
+                onClick={()=>{navigator.clipboard.writeText(result.translation);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
+                {copied ? '✅ تم' : '📋 نسخ'}
+              </button>
+            )}
           </div>
           <div className={`dzt-dj-output${loading?' loading':''}`}>
-            {loading ? <span className="dzt-dj-loading-txt">⏳ AI يترجم...</span>
-                     : output || <span style={{color:'#333'}}>ستظهر الترجمة هنا...</span>}
+            {loading ? (
+              <div className="dzt-dj-loading-anim">
+                <div className="dzt-dj-dots"><span/><span/><span/></div>
+                <p>AI يترجم مع مراعاة اللهجة...</p>
+              </div>
+            ) : error ? (
+              <span className="dzt-dj-error">{error}</span>
+            ) : result ? (
+              <div className="dzt-dj-result-main">{result.translation}</div>
+            ) : (
+              <span className="dzt-dj-placeholder">ستظهر الترجمة هنا...</span>
+            )}
           </div>
+          {result?.transliteration && (
+            <div className="dzt-dj-translit">🔤 {result.transliteration}</div>
+          )}
         </div>
       </div>
 
-      <button className="dzt-btn" onClick={translate} disabled={loading||!input.trim()}
-        style={{fontSize:14,padding:'12px 24px'}}>
-        {loading?'⏳ جاري الترجمة...':'🗣️ ترجم الآن'}
+      {/* Translate button */}
+      <button className="dzt-btn dzt-dj-translate-btn" onClick={translate} disabled={loading||!input.trim()}>
+        {loading ? '⏳ جاري الترجمة...' : '🗣️ ترجم الآن'}
+        {!loading && <span className="dzt-dj-btn-hint">Ctrl+Enter</span>}
       </button>
 
-      {/* Examples */}
-      {examples.length>0 && (
-        <div className="dzt-dj-examples">
-          <div className="dzt-dj-ex-title">📚 أمثلة مماثلة</div>
-          {examples.map((ex,i)=>(
-            <div key={i} className="dzt-dj-ex-row">
-              <span className="dzt-dj-ex-orig">{ex.original}</span>
-              <span className="dzt-dj-ex-arrow">→</span>
-              <span className="dzt-dj-ex-trans">{ex.darija}</span>
-              <button className="dzt-dj-ex-use" onClick={()=>{setInput(ex.original);setOutput('');setExamples([])}}>جرب</button>
+      {/* Rich results */}
+      {result && (
+        <div className="dzt-dj-rich">
+
+          {/* Explanation */}
+          {result.explanation && (
+            <div className="dzt-dj-card dzt-dj-card-explain">
+              <div className="dzt-dj-card-title">💡 شرح وملاحظات</div>
+              <p>{result.explanation}</p>
             </div>
-          ))}
+          )}
+
+          {/* Grammar tip */}
+          {result.grammar_tip && (
+            <div className="dzt-dj-card dzt-dj-card-grammar">
+              <div className="dzt-dj-card-title">📐 ملاحظة نحوية</div>
+              <p>{result.grammar_tip}</p>
+            </div>
+          )}
+
+          {/* Regional alt */}
+          {result.regional_alt && (
+            <div className="dzt-dj-card dzt-dj-card-region">
+              <div className="dzt-dj-card-title">🗺️ بديل إقليمي</div>
+              <p>{result.regional_alt}</p>
+            </div>
+          )}
+
+          {/* Examples */}
+          {result.examples && result.examples.length > 0 && (
+            <div className="dzt-dj-card dzt-dj-card-examples">
+              <div className="dzt-dj-card-title">📚 أمثلة مماثلة</div>
+              <div className="dzt-dj-ex-list">
+                {result.examples.map((ex,i)=>(
+                  <div key={i} className="dzt-dj-ex-row">
+                    <div className="dzt-dj-ex-orig">
+                      <span className="dzt-dj-ex-num">{i+1}</span>
+                      {ex.original}
+                    </div>
+                    <span className="dzt-dj-ex-arrow">→</span>
+                    <div className="dzt-dj-ex-trans">
+                      {ex.translated}
+                      {ex.region && <span className="dzt-dj-ex-reg">({ex.region})</span>}
+                    </div>
+                    <button className="dzt-dj-ex-use"
+                      onClick={()=>{handleInput(ex.original);setResult(null)}}>
+                      جرّب
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Local DB hits */}
+          {result.local_hits && result.local_hits.length > 0 && (
+            <div className="dzt-dj-card dzt-dj-card-db">
+              <div className="dzt-dj-card-title">🗂️ من قاعدة البيانات المحلية</div>
+              <div className="dzt-dj-db-grid">
+                {result.local_hits.map((h,i)=>(
+                  <div key={i} className="dzt-dj-db-item">
+                    <span className="dzt-dj-db-dz">{h.dz}</span>
+                    <span className="dzt-dj-db-sep">←</span>
+                    <span className="dzt-dj-db-ar">{h.ar}</span>
+                    {h.fr && <span className="dzt-dj-db-fr">/ {h.fr}</span>}
+                    <span className={`dzt-dj-db-type dzt-dj-db-type-${h.type}`}>
+                      {h.type==='expr'?'تعبير':h.type==='word'?'كلمة':'دارجة'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Source badge */}
+          <div className="dzt-dj-source">
+            {result.source==='local' ? '🗂️ مصدر: قاعدة البيانات المحلية' : '🤖 مصدر: AI + قاعدة البيانات'}
+          </div>
         </div>
       )}
     </div>

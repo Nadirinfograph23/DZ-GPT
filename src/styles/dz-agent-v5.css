@@ -731,14 +731,25 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
   max-width: 100%;
   margin: 6px 0;
-  scrollbar-width: auto;
+  scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
+  /* Fix RTL snap-back: force scroll origin to left (LTR) on the container */
+  direction: ltr;
 }
-.v5-md-table-scroll table { width: max-content; min-width: 100%; }
+/* Restore RTL text direction inside cells */
+.v5-md-table-scroll table {
+  width: max-content;
+  min-width: 100%;
+  direction: rtl;
+}
 .v5-md-table-scroll th,
-.v5-md-table-scroll td { white-space: nowrap; }
+.v5-md-table-scroll td {
+  white-space: nowrap;
+  text-align: right;
+}
 
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */
 table.dzt-simple-table {

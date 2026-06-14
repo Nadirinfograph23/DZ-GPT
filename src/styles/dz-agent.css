@@ -1629,25 +1629,30 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
   width: 100%;
   max-width: 100%;
   border-radius: 8px;
   margin: 6px 0;
-  scrollbar-width: auto;
+  scrollbar-width: thin;
   scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
   position: relative;
+  /* Fix RTL snap-back: scroll origin starts from left */
+  direction: ltr;
 }
-/* Force table to overflow so scroll is always triggered */
+/* Force table to overflow so scroll is always triggered — restore RTL inside */
 .v5-md-table-scroll > table,
 .v5-md-table-scroll table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
+  direction: rtl;
 }
 /* Prevent cell content from wrapping — keeps table wide and scrollable */
 .v5-md-table-scroll th,
 .v5-md-table-scroll td {
   white-space: nowrap;
+  text-align: right;
 }
 .v5-md-table-scroll::-webkit-scrollbar { height: 8px; }
 .v5-md-table-scroll::-webkit-scrollbar-track {

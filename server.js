@@ -15153,10 +15153,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       const _algFirstMatchMs = new Date('2026-06-17T01:00:00Z').getTime()
       const _algHasNotPlayed = _wcSRNow < _algFirstMatchMs
       const _isAlgQuery  = /(?:الجزائر|الخضر|منتخب\s*(?:الجزائري|وطني))/i.test(_qSR)
-      const _isResultReq = /(?:نتيجة|نتائج|سجل|هدف|أهداف|انتهت|انتهى|فاز|فازت|ربح|ربحت|خسر|خسرت|ملخص|تشكيلة?|تشكيل|حارس|من\s+لعب|من\s+سجل|بطاقة|إحصائي|ترتيب|نقاط|آخر\s+مباراة|أخيرة?\s+مباراة)/i.test(_qSR)
+      const _isResultReq = /(?:نتيجة|نتائج|سجل|هدف|أهداف|انتهت|انتهى|فاز|فازت|ربح|ربحت|خسر|خسرت|ملخص|حارس|من\s+لعب|من\s+سجل|بطاقة|إحصائي|ترتيب|نقاط|آخر\s+مباراة|أخيرة?\s+مباراة)/i.test(_qSR)
       const _isWC26Ctx   = /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(_qSR)
       // خلال موسم WC2026: أي سؤال نتيجة يخص الجزائر = WC2026 (لا منافسة أخرى كبرى)
-      if (_algHasNotPlayed && _isAlgQuery && _isResultReq) {
+      if (_algHasNotPlayed && _isAlgQuery && _isResultReq && !isWC2026SquadQuery(_qSR)) {
         console.log(`[WC2026:AlgNotPlayed] 🇩🇿 Algeria hasn't played yet — intercepting: "${_qSR.slice(0,60)}"`)
         return res.status(200).json({
           content: [

@@ -3863,7 +3863,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   } | null>(null)
 
   // ── Lightbox keyboard navigation ──────────────────────────────────────────
-  React.useEffect(() => {
+  useEffect(() => {
     if (!lightbox) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setLightbox(null); return }
@@ -9375,7 +9375,7 @@ ${rows}
         const downloadUrl = img.fullUrl || img.url
         const SOURCE_ICON: Record<string, string> = { Pinterest: '📌', 'Wikimedia Commons': '🌐', Openverse: '🔓' }
 
-        return ReactDOM.createPortal(
+        return createPortal(
           <div
             className="dz-lightbox__backdrop"
             onClick={e => { if (e.target === e.currentTarget) setLightbox(null) }}

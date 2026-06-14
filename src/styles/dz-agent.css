@@ -1590,6 +1590,25 @@
 }
 .dzt-fallback-table tr:hover td { background: rgba(16,163,127,0.03); }
 
+/* ── Scroll wrapper for simple/fallback tables (mobile horizontal scroll) ── */
+.dzt-simple-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16,163,127,0.6) rgba(255,255,255,0.08);
+}
+.dzt-simple-scroll::-webkit-scrollbar { height: 6px; }
+.dzt-simple-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 4px; }
+.dzt-simple-scroll::-webkit-scrollbar-thumb { background: rgba(16,163,127,0.55); border-radius: 4px; }
+.dzt-simple-scroll::-webkit-scrollbar-thumb:hover { background: rgba(16,163,127,0.8); }
+
 /* ── Simple table (≤20 rows) — same style as fallback ── */
 .dzt-simple-table {
   min-width: max-content;

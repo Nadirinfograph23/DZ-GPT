@@ -31424,7 +31424,7 @@ ${regSample}
 المنطقة المستهدفة: ${regionLabel}
 ${dirInfo.hint}
 
-أجب بهذا JSON فقط (بلا ```json وبلا أي نص قبله أو بعده):
+أجب بهذا JSON فقط (بلا \`\`\`json وبلا أي نص قبله أو بعده):
 {"translation":"الترجمة هنا","transliteration":"كتابة لاتينية اختيارية","explanation":"شرح مختصر","grammar_tip":"ملاحظة نحوية","examples":[{"original":"مثال","translated":"ترجمته","region":"المنطقة"}],"regional_alt":"بديل إقليمي"}`
 
     // ── Call AI directly: Groq → OpenRouter → Mistral (no safeGenerateAI to avoid HAL injection) ──

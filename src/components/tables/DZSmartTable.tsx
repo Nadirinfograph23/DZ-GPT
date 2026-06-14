@@ -324,10 +324,18 @@ export function DZMDTable({ children }: DZMDTableProps) {
   // جداول صغيرة (≤ 20 صف) → HTML table بسيط بدون virtual scroll
   // virtual scroll يستخدم position:absolute → صفوف تتداخل على الهاتف
   if (!headers.length || !rows.length) {
-    return <table className="dzt-fallback-table">{children}</table>
+    return (
+      <div className="dzt-simple-scroll" dir="ltr">
+        <table className="dzt-fallback-table" dir="rtl">{children}</table>
+      </div>
+    )
   }
   if (rows.length <= 20) {
-    return <table className="dzt-simple-table">{children}</table>
+    return (
+      <div className="dzt-simple-scroll" dir="ltr">
+        <table className="dzt-simple-table" dir="rtl">{children}</table>
+      </div>
+    )
   }
   return <DZSmartTable headers={headers} rows={rows} />
 }

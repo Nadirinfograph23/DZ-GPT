@@ -30638,23 +30638,25 @@ app.post('/api/tts/edge', async (req, res) => {
       OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
     )
 
-    res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader('Cache-Control', 'no-store')
-    res.setHeader('X-TTS-Voice', selectedVoice)
-
     const { audioStream } = tts.toStream(clean, { rate, pitch })
 
-    audioStream.on('error', (err) => {
-      logger.warn('[TTS/edge] stream error:', err.message)
-      if (!res.headersSent) res.status(500).json({ error: err.message })
-      else res.end()
+    // Collect audio into buffer first (more reliable in serverless / Vercel)
+    const _chunks = []
+    await new Promise((resolve, reject) => {
+      audioStream.on('data', chunk => _chunks.push(chunk))
+      audioStream.on('end', resolve)
+      audioStream.on('error', reject)
     })
+    const _audioBuf = Buffer.concat(_chunks)
+    if (_audioBuf.length === 0) {
+      return res.status(500).json({ error: 'Edge TTS returned empty audio' })
+    }
 
-    audioStream.pipe(res)
-
-    req.on('close', () => {
-      try { audioStream.destroy() } catch {}
-    })
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.setHeader('Content-Length', _audioBuf.length)
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-TTS-Voice', selectedVoice)
+    res.end(_audioBuf)
   } catch (err) {
     logger.error('[TTS/edge] error:', err.message)
     if (!res.headersSent) res.status(500).json({ error: 'Edge TTS failed: ' + err.message })
@@ -31290,6 +31292,21 @@ app.post('/api/tools/presentation', express.json(), async (req, res) => {
 })
 
 // ═══════════════════════════════════════════════════════════════════
+
+// Helper: validate AI response is proper darija translation JSON
+function _isDarijaValidJson(raw) {
+  if (!raw || raw.length < 5) return null
+  // Reject obvious DZ-Agent responses (not translation JSON)
+  if (/DZ Agent|🌤️|🌥️|طقس.*ولاية|ولاية جزائرية|يوفر الطقس/u.test(raw)) return null
+  try {
+    const m = raw.match(/\{[\s\S]*\}/)
+    if (!m) return null
+    const p = JSON.parse(m[0])
+    if (p && typeof p.translation === 'string' && p.translation.trim().length > 0) return p
+  } catch {}
+  return null
+}
+
 // POST /api/tools/darija-translate — مترجم الدارجة الجزائرية المتخصص
 // يعتمد على قاعدة بيانات محلية + AI مع سياق غني من الكوربوس
 // ═══════════════════════════════════════════════════════════════════
@@ -31444,9 +31461,12 @@ ${dirInfo.hint}
         max_tokens: 800,
         temperature: 0.35,
       })
-      if (_gc && _gc.trim().length > 10) {
-        raw = _gc
-        console.log('[darija-translate] ✓ Groq ok')
+      const _gcParsed = _isDarijaValidJson(_gc)
+      if (_gcParsed) {
+        return res.json({ ..._gcParsed, local_hits: localHits.slice(0,5), source: 'ai' })
+      } else if (_gc && _gc.trim().length > 10) {
+        raw = _gc  // keep for final parse attempt
+        console.log('[darija-translate] ✓ Groq ok (raw — will validate)')
       } else if (_ge) {
         console.warn('[darija-translate] Groq error:', _ge)
       }
@@ -31466,9 +31486,12 @@ ${dirInfo.hint}
             })
             const orData = await orRes.json()
             const orContent = orData.choices?.[0]?.message?.content
-            if (orRes.ok && orContent && orContent.trim().length > 10) {
+            const _orParsed = _isDarijaValidJson(orContent)
+            if (_orParsed) {
+              return res.json({ ..._orParsed, local_hits: localHits.slice(0,5), source: 'ai' })
+            } else if (orRes.ok && orContent && orContent.trim().length > 10) {
               raw = orContent
-              console.log(`[darija-translate] ✓ OpenRouter/${orModel} ok`)
+              console.log(`[darija-translate] ✓ OpenRouter/${orModel} ok (raw)`)
               break
             }
           } catch (e) { console.warn(`[darija-translate] OpenRouter/${orModel} error:`, e.message) }
@@ -31489,9 +31512,12 @@ ${dirInfo.hint}
           })
           const mData = await mRes.json()
           const mContent = mData.choices?.[0]?.message?.content
-          if (mRes.ok && mContent && mContent.trim().length > 10) {
+          const _mParsed = _isDarijaValidJson(mContent)
+          if (_mParsed) {
+            return res.json({ ..._mParsed, local_hits: localHits.slice(0,5), source: 'ai' })
+          } else if (mRes.ok && mContent && mContent.trim().length > 10) {
             raw = mContent
-            console.log('[darija-translate] ✓ Mistral ok')
+            console.log('[darija-translate] ✓ Mistral ok (raw)')
           }
         } catch (e) { console.warn('[darija-translate] Mistral error:', e.message) }
       }
@@ -31516,17 +31542,28 @@ ${dirInfo.hint}
 
     // ── Parse AI response ─────────────────────────────────────────
     let parsed = {}
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/)
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
-    } catch {
-      // If JSON parse fails, extract translation from raw text
-      const lines = raw.split('\n').filter(l => l.trim())
-      parsed = { translation: lines[0] || raw.slice(0, 200) }
+    const _finalParsed = _isDarijaValidJson(raw)
+    if (_finalParsed) {
+      parsed = _finalParsed
+    } else {
+      // AI returned non-JSON — fall back to local DB if available
+      if (localHits.length > 0) {
+        const sorted = [...localHits].sort((a,b) => (b.dz?.length||0) - (a.dz?.length||0))
+        const h = sorted[0]
+        console.warn('[darija-translate] AI returned non-JSON, using local DB fallback')
+        return res.json({
+          translation: direction.startsWith('dz') ? (h.ar || h.dz) : (h.dz || h.ar),
+          explanation: 'ترجمة من قاعدة البيانات المحلية للدارجة',
+          examples: [],
+          local_hits: sorted.slice(0,5),
+          source: 'local',
+        })
+      }
+      return res.status(503).json({ error: 'AI غير متاح حالياً — رد غير صالح.' })
     }
 
     res.json({
-      translation:     parsed.translation     || raw.slice(0, 300),
+      translation:     parsed.translation     || '',
       transliteration: parsed.transliteration || '',
       explanation:     parsed.explanation     || '',
       grammar_tip:     parsed.grammar_tip     || '',

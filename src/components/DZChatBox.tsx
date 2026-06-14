@@ -2473,67 +2473,70 @@ function YouTubePanel({
 //    actually scroll in that direction (avoids blocking vertical page scroll).
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [showHint, setShowHint] = useState(false)
+  const ref     = useRef<HTMLDivElement>(null)
+  const [canL,  setCanL]  = useState(false)
+  const [canR,  setCanR]  = useState(false)
+  const [over,  setOver]  = useState(false)
+
+  const sync = () => {
+    const el = ref.current
+    if (!el) return
+    const l = el.scrollLeft
+    const max = el.scrollWidth - el.clientWidth
+    setCanL(l > 2)
+    setCanR(l < max - 2)
+    setOver(max > 4)
+  }
+
+  const nudge = (dir: 'l' | 'r') => {
+    const el = ref.current
+    if (el) el.scrollBy({ left: dir === 'l' ? -140 : 140, behavior: 'smooth' })
+  }
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
-
-    // Init: jump to rightmost edge so RTL first-column is immediately visible
-    const initRTLScroll = () => {
+    requestAnimationFrame(() => {
       if (el.scrollWidth > el.clientWidth) {
         el.scrollLeft = el.scrollWidth - el.clientWidth
-        // Show swipe hint for overflowing tables, auto-hide after 1.6s
-        setShowHint(true)
-        setTimeout(() => setShowHint(false), 1600)
       }
-    }
-    requestAnimationFrame(initRTLScroll)
-
-    // Hide hint as soon as user starts scrolling
-    const onScroll = () => setShowHint(false)
-    el.addEventListener('scroll', onScroll, { passive: true })
-
+      sync()
+    })
+    el.addEventListener('scroll', sync, { passive: true })
     let startX = 0, startY = 0, isH: boolean | null = null
-
-    const onStart = (e: TouchEvent) => {
-      startX = e.touches[0].clientX
-      startY = e.touches[0].clientY
-      isH = null
-    }
-    const onMove = (e: TouchEvent) => {
+    const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
+    const onMove  = (e: TouchEvent) => {
       const dx = Math.abs(e.touches[0].clientX - startX)
       const dy = Math.abs(e.touches[0].clientY - startY)
       if (isH === null && (dx > 4 || dy > 4)) isH = dx > dy
-      if (!isH) return                         // vertical swipe → let parent scroll
-      e.stopPropagation()                      // stop parent stealing the touch
-      // Prevent default only when the table can scroll in the swipe direction
-      const atLeft  = el.scrollLeft <= 0
-      const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
-      const goingRight = e.touches[0].clientX > startX
-      const goingLeft  = e.touches[0].clientX < startX
-      if ((atLeft && goingRight) || (atRight && goingLeft)) return
+      if (!isH) return
+      e.stopPropagation()
+      const atL = el.scrollLeft <= 0
+      const atR = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+      if ((atL && e.touches[0].clientX > startX) || (atR && e.touches[0].clientX < startX)) return
       e.preventDefault()
     }
-
     el.addEventListener('touchstart', onStart, { passive: true })
     el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
-      el.removeEventListener('scroll',     onScroll)
+      el.removeEventListener('scroll',     sync)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
     }
   }, [])
 
   return (
-    <div className="v5-md-table-scroll" ref={ref}>
-      {children}
-      {showHint && (
-        <div className="dz-table-swipe-hint" aria-hidden="true">
-          ← اسحب
+    <div className="dz-table-outer">
+      {over && (
+        <div className="dz-tnav-bar">
+          <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="يسار">‹</button>
+          <span className="dz-tnav-label">تمرير الجدول</span>
+          <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="يمين">›</button>
         </div>
       )}
+      <div className="v5-md-table-scroll" ref={ref}>
+        {children}
+      </div>
     </div>
   )
 }

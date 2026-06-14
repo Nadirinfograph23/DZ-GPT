@@ -903,30 +903,17 @@
 .dzc-table-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(200,255,0,0.6);
 }
-/* ── Swipe hint badge (shared with dz-agent tables) ── */
-.dz-table-swipe-hint {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(180,220,0,0.92);
-  color: #0a0a14;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 20px;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  animation: dz-hint-fade 1.6s ease forwards;
+/* ── DZChat table nav buttons (yellow-green theme) ── */
+.dz-tnav--dzc {
+  border-color: rgba(200,255,0,0.45);
+  background: rgba(200,255,0,0.1);
+  color: #c8ff00;
 }
-@keyframes dz-hint-fade {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  70%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-2px); }
-}
+.dz-tnav--dzc:not(:disabled):hover  { background: rgba(200,255,0,0.25); border-color: rgba(200,255,0,0.7); }
+.dz-tnav--dzc:not(:disabled):active { background: rgba(200,255,0,0.4); }
+.dz-tnav-bar--dzc .dz-tnav-label    { color: rgba(200,255,0,0.3); }
+/* hide old hint */
+.dz-table-swipe-hint { display: none; }
 /* LEFT gradient: hints more content is to the left (user starts at right/first col) */
 .dzc-table-scroll::before {
   content: '';

@@ -1769,30 +1769,57 @@
   }
   .v5-md-table-scroll::-webkit-scrollbar { height: 10px; }
 }
-/* ── Swipe hint badge — appears on overflowing tables, fades out after 1.6s ── */
-.dz-table-swipe-hint {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(16,163,127,0.92);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 20px;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  animation: dz-hint-fade 1.6s ease forwards;
+/* ── Table nav outer wrapper ── */
+.dz-table-outer {
+  width: 100%;
+  margin: 6px 0;
 }
-@keyframes dz-hint-fade {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  70%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-2px); }
+/* ── Nav bar: ‹ label › row above the table ── */
+.dz-tnav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 2px 3px;
+  direction: ltr;
 }
+.dz-tnav-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: .04em;
+  flex: 1;
+  text-align: center;
+  user-select: none;
+}
+/* ── Nav buttons ── */
+.dz-tnav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(16,163,127,0.5);
+  background: rgba(16,163,127,0.15);
+  color: rgba(16,163,127,1);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background .15s, opacity .15s, border-color .15s;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.dz-tnav:not(:disabled):hover  { background: rgba(16,163,127,0.35); border-color: rgba(16,163,127,0.8); }
+.dz-tnav:not(:disabled):active { background: rgba(16,163,127,0.55); }
+.dz-tnav:disabled {
+  opacity: 0.22;
+  cursor: default;
+  border-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.25);
+}
+/* Remove old swipe hint */
+.dz-table-swipe-hint { display: none; }
 
 @media (max-width: 600px) {
   .dzt-wrapper { margin: 6px 0; border-radius: 8px; }

@@ -318,6 +318,16 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
   return { headers, rows }
 }
 
+// ── Module-level map: persists table scroll positions across React re-mounts.
+//    Key = trimmed text content of first 120 chars (stable identity per table).
+//    Prevents scroll-to-rightmost resetting the user's position when streaming
+//    causes the parent ReactMarkdown to unmount/remount this component.
+const _tableScrollPositions = new Map<string, number>()
+
+function _tableKey(el: HTMLDivElement): string {
+  return (el.textContent ?? '').slice(0, 120).trim()
+}
+
 // ── Scroll wrapper: forces LTR scroll origin, shows RTL start (right side),
 //    intercepts horizontal touch to prevent parent chat container from stealing them
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
@@ -335,13 +345,24 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       el.dataset.scrollRight = canScrollRight ? 'true' : 'false'
     }
 
-    // On mount: scroll to rightmost so RTL table shows first column (right side)
+    // On mount: restore saved position or default to rightmost (RTL first-column visible).
+    // Saved position prevents reset when streaming re-mounts this component.
     requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth - el.clientWidth
+      const key = _tableKey(el)
+      const saved = _tableScrollPositions.get(key)
+      if (saved !== undefined && saved > 0) {
+        el.scrollLeft = saved
+      } else {
+        el.scrollLeft = el.scrollWidth - el.clientWidth
+      }
       updateHints()
     })
 
-    el.addEventListener('scroll', updateHints, { passive: true })
+    const onScroll = () => {
+      _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
+      updateHints()
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
 
     // ── Touch handling: prevent parent chat from stealing horizontal swipes ──
     let startX = 0
@@ -378,7 +399,7 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchmove',  onTouchMove,  { passive: false })
     return () => {
-      el.removeEventListener('scroll',     updateHints)
+      el.removeEventListener('scroll',     onScroll)
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove',  onTouchMove)
     }

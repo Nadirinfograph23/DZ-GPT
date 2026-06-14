@@ -3989,6 +3989,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   } | null>(null)
   const [dismissedNavSuggestions, setDismissedNavSuggestions] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const lastSendRef = useRef<number>(0)  // debounce: prevent duplicate sends
@@ -4164,15 +4165,32 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     }
   }, [messages, chatId, onTitleChange])
 
-  // Auto-scroll — only when messages update (streaming content), NOT when loading ends
+  // Auto-scroll — only scroll when user is already near the bottom.
+  // This prevents the chat from jumping back down when the user scrolls up
+  // to read a table or earlier content while streaming is still in progress.
   const _prevMsgLenRef = useRef(0)
   useEffect(() => {
     const newLen = messages.length
     const grew = newLen > _prevMsgLenRef.current
     _prevMsgLenRef.current = newLen
     if (newLen === 0) return
-    // Scroll only while actively loading/streaming OR when a new message is appended
-    if (isLoading || grew) {
+
+    const container = messagesContainerRef.current
+    if (!container) {
+      // Fallback: always scroll if we can't check position
+      if (isLoading || grew) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      return
+    }
+
+    // Only auto-scroll if user is within 200px of the bottom
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+    const nearBottom = distanceFromBottom < 200
+
+    if (grew) {
+      // New message always scrolls to bottom
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    } else if (isLoading && nearBottom) {
+      // During streaming, only scroll if already near bottom
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading])
@@ -7924,7 +7942,7 @@ ${rows}
         </div>
       ) : (
       /* Messages */
-      <div className="dz-messages" data-render-key={renderKey}>
+      <div className="dz-messages" data-render-key={renderKey} ref={messagesContainerRef}>
         {messages.map((msg) => (
           <div key={msg.id} className={`dz-message dz-message--${msg.role}`}>
             <div className="dz-message-avatar">
@@ -8073,11 +8091,7 @@ ${rows}
                               )
                             },
                             table({ children }) {
-                              return (
-                                <TableScrollWrapper>
-                                  <DZMDTable>{children}</DZMDTable>
-                                </TableScrollWrapper>
-                              )
+                              return <DZMDTable>{children}</DZMDTable>
                             },
                             thead({ children }) { return <thead>{children}</thead> },
                             tbody({ children }) { return <tbody>{children}</tbody> },

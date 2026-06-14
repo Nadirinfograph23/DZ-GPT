@@ -650,12 +650,15 @@
 .dz-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
+  /* Prevent vertical scroll from chaining to the browser/parent on mobile */
+  overscroll-behavior-y: contain;
 }
 
 .dz-messages::-webkit-scrollbar { width: 5px; }
@@ -1828,6 +1831,19 @@
   .dzt-search-wrap { flex: 1; min-width: 0; }
   .dzt-search { width: 100%; min-width: 0; }
   .dzt-th, .dzt-td { padding: 7px 8px; font-size: 12px; white-space: nowrap; }
+  /* Mobile: simple & fallback table scroll wrappers — bigger touch scrollbar */
+  .dzt-simple-scroll {
+    padding-bottom: 10px;
+    scrollbar-width: auto;
+  }
+  .dzt-simple-scroll::-webkit-scrollbar { height: 10px; }
+  .dzt-simple-table th,
+  .dzt-simple-table td,
+  .dzt-fallback-table th,
+  .dzt-fallback-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
   .dzt-scroll-container {
     max-height: 360px;
     overflow-x: auto;

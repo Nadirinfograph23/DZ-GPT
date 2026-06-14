@@ -2496,13 +2496,27 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    requestAnimationFrame(() => {
+
+    const initScroll = () => {
       if (el.scrollWidth > el.clientWidth) {
         el.scrollLeft = el.scrollWidth - el.clientWidth
       }
       sync()
-    })
+    }
+
+    requestAnimationFrame(() => { requestAnimationFrame(initScroll) })
+
     el.addEventListener('scroll', sync, { passive: true })
+
+    const ro = new ResizeObserver(() => {
+      const max = el.scrollWidth - el.clientWidth
+      if (max > 4 && el.scrollLeft === 0) {
+        el.scrollLeft = max
+      }
+      sync()
+    })
+    ro.observe(el)
+
     let startX = 0, startY = 0, isH: boolean | null = null
     const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
     const onMove  = (e: TouchEvent) => {
@@ -2522,6 +2536,7 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       el.removeEventListener('scroll',     sync)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
+      ro.disconnect()
     }
   }, [])
 

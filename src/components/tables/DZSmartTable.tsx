@@ -23,12 +23,32 @@ interface DZSmartTableProps {
 
 const PAGE_SIZE = 20
 
+// Module-level map: persists table scroll positions across React re-mounts.
+const _tableScrollPositions = new Map<string, number>()
+
 export default function DZSmartTable({ headers, rows, title, compact }: DZSmartTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: PAGE_SIZE })
   const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null)
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const _scrollKey = useRef<string>('')
+
+  // RTL scroll: start at rightmost position so first RTL column is visible
+  useEffect(() => {
+    const el = tableContainerRef.current
+    if (!el) return
+    const key = (el.querySelector('thead')?.textContent ?? '').slice(0, 80).trim()
+    _scrollKey.current = key
+    const saved = _tableScrollPositions.get(key)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!el) return
+      el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
+    }))
+    const onScroll = () => { _tableScrollPositions.set(_scrollKey.current, el.scrollLeft) }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   const { columns: engineColumns, rows: engineRows, renderMode } = useTableEngine({ headers, rows })
 
@@ -317,11 +337,6 @@ function extractTableData(children: React.ReactNode): { headers: string[]; rows:
 
   return { headers, rows }
 }
-
-// Module-level map: persists table scroll positions across React re-mounts.
-// Key = trimmed <thead> text (stable — headers never change as rows stream in).
-// Allows restoring the user's exact scroll position even after a remount.
-const _tableScrollPositions = new Map<string, number>()
 
 // Key based on <thead> text only — stable, not affected by streaming row additions.
 // Falls back to first 80 chars of full content if no thead is present.

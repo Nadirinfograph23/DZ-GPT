@@ -43890,6 +43890,57 @@ async function searchPinterest(query, limit = 8) {
     return [];
   }
 }
+async function searchDuckDuckGo(query, limit = 8) {
+  try {
+    const initRes = await fetch(
+      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9"
+        },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!initRes.ok) return [];
+    const html = await initRes.text();
+    const vqdMatch = html.match(/vqd=(['"]?)([^'"&\s]+)\1/) || html.match(/vqd%3D([^%&"'\s]+)/);
+    const vqd = vqdMatch?.[2] || vqdMatch?.[1];
+    if (!vqd) return [];
+    const params = new URLSearchParams({ l: "us-en", o: "json", q: query, vqd, f: ",,,,,", p: "1" });
+    const imgRes = await fetch(`https://duckduckgo.com/i.js?${params}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
+        "Accept": "application/json, */*",
+        "Accept-Language": "en-US,en;q=0.9"
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!imgRes.ok) return [];
+    const data = await imgRes.json();
+    const results = (data.results || [])
+      .filter(r => r.image && !r.image.includes(".svg"))
+      .slice(0, limit)
+      .map(r => ({
+        url: r.thumbnail || r.image,
+        fullUrl: r.image,
+        title: (r.title || query).replace(/<[^>]+>/g, "").slice(0, 120),
+        source: "DuckDuckGo",
+        sourceUrl: r.url || r.image,
+        width: r.width || 0,
+        height: r.height || 0,
+        license: "Web",
+        creator: r.source || ""
+      }));
+    console.log(`[ImageSearch:DuckDuckGo] "${query.slice(0, 60)}" \u2192 ${results.length} results`);
+    return results;
+  } catch (e) {
+    console.warn("[ImageSearch:DuckDuckGo]", e.message?.slice(0, 80));
+    return [];
+  }
+}
 async function searchImages({ query, aiGenerate, limit = 6 }) {
   const cacheKey = query.toLowerCase().trim().slice(0, 200);
   if (CACHE3.has(cacheKey)) {
@@ -43937,16 +43988,18 @@ async function searchImages({ query, aiGenerate, limit = 6 }) {
     } catch {
     }
   }
-  const [wikiRes, openRes, pinterestRes] = await Promise.allSettled([
+  const [ddgRes, wikiRes, openRes, pinterestRes] = await Promise.allSettled([
+    searchDuckDuckGo(searchQuery, limit),
     searchWikimedia(searchQuery, limit),
     searchOpenverse(searchQuery, Math.ceil(limit / 2)),
     searchPinterest(searchQuery, limit)
   ]);
+  const ddg = ddgRes.status === "fulfilled" ? ddgRes.value : [];
   const wiki = wikiRes.status === "fulfilled" ? wikiRes.value : [];
   const openverse = openRes.status === "fulfilled" ? openRes.value : [];
   const pinterest = pinterestRes.status === "fulfilled" ? pinterestRes.value : [];
   let merged = [];
-  const sources = [pinterest, wiki, openverse];
+  const sources = [ddg, pinterest, wiki, openverse];
   let i = 0;
   while (merged.length < limit) {
     let added = false;
@@ -43967,15 +44020,17 @@ async function searchImages({ query, aiGenerate, limit = 6 }) {
   }
   if (merged.length === 0 && translated) {
     console.log(`[ImageSearch] Retry with original: "${query.slice(0, 60)}"`);
-    const [wikiO, openO, pinO] = await Promise.allSettled([
+    const [ddgO, wikiO, openO, pinO] = await Promise.allSettled([
+      searchDuckDuckGo(query, limit),
       searchWikimedia(query, limit),
       searchOpenverse(query, Math.ceil(limit / 2)),
       searchPinterest(query, limit)
     ]);
+    const dO = ddgO.status === "fulfilled" ? ddgO.value : [];
     const wO = wikiO.status === "fulfilled" ? wikiO.value : [];
     const oO = openO.status === "fulfilled" ? openO.value : [];
     const pO = pinO.status === "fulfilled" ? pinO.value : [];
-    merged = [...pO, ...wO, ...oO].slice(0, limit);
+    merged = [...dO, ...pO, ...wO, ...oO].slice(0, limit);
     if (merged.length > 0) translated = false;
   }
   const result = {
@@ -44188,6 +44243,7 @@ function formatImageSearchResponse({ images, query, originalQuery, translated })
     ""
   ];
   const SOURCE_ICON = {
+    "DuckDuckGo": "\u{1F986}",
     "Pinterest": "\u{1F4CC}",
     "Wikimedia Commons": "\u{1F310}",
     "Openverse": "\u{1F513}"

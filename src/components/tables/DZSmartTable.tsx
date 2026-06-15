@@ -31,8 +31,26 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: PAGE_SIZE })
   const [exporting, setExporting] = useState<'csv' | 'xlsx' | null>(null)
+  const [_canL, _setCanL] = useState(false)
+  const [_canR, _setCanR] = useState(false)
+  const [_over, _setOver] = useState(false)
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const _scrollKey = useRef<string>('')
+
+  const _syncNav = useCallback(() => {
+    const el = tableContainerRef.current
+    if (!el) return
+    const l   = el.scrollLeft
+    const max = el.scrollWidth - el.clientWidth
+    _setCanL(l > 2)
+    _setCanR(l < max - 2)
+    _setOver(max > 4)
+  }, [])
+
+  const _nudge = useCallback((dir: 'l' | 'r') => {
+    const el = tableContainerRef.current
+    if (el) el.scrollBy({ left: dir === 'l' ? -140 : 140, behavior: 'smooth' })
+  }, [])
 
   // RTL scroll: start at rightmost position so first RTL column is visible
   useEffect(() => {
@@ -44,11 +62,20 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!el) return
       el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
+      _syncNav()
     }))
-    const onScroll = () => { _tableScrollPositions.set(_scrollKey.current, el.scrollLeft) }
+    const onScroll = () => {
+      _tableScrollPositions.set(_scrollKey.current, el.scrollLeft)
+      _syncNav()
+    }
     el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [])
+    const ro = new ResizeObserver(_syncNav)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [_syncNav])
 
   const { columns: engineColumns, rows: engineRows, renderMode } = useTableEngine({ headers, rows })
 
@@ -164,13 +191,21 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
         </div>
       </div>
 
+      {_over && (
+        <div className="dz-tnav-bar">
+          <button className="dz-tnav" disabled={!_canL} onClick={() => _nudge('l')} aria-label="يسار">‹</button>
+          <span className="dz-tnav-label">تمرير الجدول</span>
+          <button className="dz-tnav" disabled={!_canR} onClick={() => _nudge('r')} aria-label="يمين">›</button>
+        </div>
+      )}
+
       <div
         className={`dzt-scroll-container${showVirtual ? ' dzt-scroll-container--virtual' : ''}`}
         ref={tableContainerRef}
         role="region"
         aria-label={title ?? 'جدول البيانات'}
       >
-        <table className="dzt-table" aria-label={title ?? 'جدول البيانات'}>
+        <table className="dzt-table" dir="rtl" aria-label={title ?? 'جدول البيانات'}>
           <thead className="dzt-thead">
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id}>

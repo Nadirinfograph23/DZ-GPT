@@ -1518,8 +1518,8 @@
   user-select: none;
 }
 .dzt-th:last-child { border-right: none; }
-.dzt-th--left { text-align: left; }
-.dzt-th--right { text-align: right; }
+.dzt-th--left { text-align: start; }
+.dzt-th--right { text-align: end; }
 .dzt-th--center { text-align: center; }
 .dzt-th--sortable { cursor: pointer; transition: background 0.15s, color 0.15s; }
 .dzt-th--sortable:hover { background: #181818; color: #10a37f; }
@@ -1542,8 +1542,8 @@
   word-break: break-word;
 }
 .dzt-td:last-child { border-right: none; }
-.dzt-td--left { text-align: left; }
-.dzt-td--right { text-align: right; }
+.dzt-td--left { text-align: start; }
+.dzt-td--right { text-align: end; }
 .dzt-td--center { text-align: center; }
 
 .dzt-link {

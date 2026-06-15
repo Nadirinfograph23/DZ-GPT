@@ -23020,6 +23020,68 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     return res.end()
   }
 
+  // ── Step 2e: Intent-Based Redirect — أي سؤال يحتاج retrieval يذهب للـ full endpoint ──
+  // المشكلة: الـ stream endpoint يستدعي LLM مباشرة بدون Decision Tree/SearXNG/Wikipedia.
+  // الـ full endpoint يُشغّل resolveQuery() (Wikidata → Wikipedia → SearXNG → Crawl4AI).
+  // القاعدة: اكتشف نية المستخدم — إذا كانت تحتاج مصادر خارجية → حوّل للـ full endpoint.
+  // استثناء: GREETING / CODING / MATH / CASUAL_CHAT → ابقَ في البث (لا retrieval مطلوب).
+  {
+    const _STREAM_RETRIEVAL_INTENTS = new Set([
+      'PUBLIC_FIGURE',       // شخصية عامة — Wikipedia/Wikidata
+      'HISTORICAL_FIGURE',   // شخصية تاريخية — Wikipedia
+      'HISTORICAL_EVENT',    // حدث تاريخي — Wikipedia
+      'CURRENT_NEWS',        // أخبار حالية — SearXNG
+      'SPORTS_LIVE',         // رياضة مباشرة — sports agents
+      'SPORTS_GENERAL',      // رياضة عامة — sports agents
+      'SPORTS_PLAYER',       // لاعب — 365score/sports data
+      'SPORTS_FIXTURES',     // مباريات — sports calendar
+      'OFFICIAL_ANNOUNCEMENT', // إعلان رسمي — SearXNG
+      'DEFINITION',          // تعريف/موسوعي — Wikipedia
+      'LOCATION',            // مكان/جغرافيا — Wikipedia/Maps
+    ])
+    try {
+      const _sIntent = classifyIntent(lastUserMessage, messages)
+      const _sIntentName = _sIntent?.intent || 'UNKNOWN'
+      const _sIntentConf = _sIntent?.confidence ?? 0
+
+      // سجّل قرار التوجيه في كل حالة لمراقبة الـ routing
+      if (_STREAM_RETRIEVAL_INTENTS.has(_sIntentName) && _sIntentConf >= 30) {
+        console.log(`[Stream→IntentRedirect] 🔄 ROUTE=full | intent=${_sIntentName} conf=${_sIntentConf}% | retrieval REQUIRED | "${lastUserMessage.slice(0, 70)}"`)
+        _streamSSEHeaders(res)
+        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      }
+
+      // فحص إضافي: isRealtimeQuery — استعلامات الحياة الآنية التي فاتت التصنيف
+      if (isRealtimeQuery(lastUserMessage)) {
+        console.log(`[Stream→RealtimeRedirect] 🔄 ROUTE=full | isRealtime=true intent=${_sIntentName} | "${lastUserMessage.slice(0, 70)}"`)
+        _streamSSEHeaders(res)
+        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      }
+
+      // سؤال "من هو / ما هو / ما هي" يحتاج Wikipedia حتى لو لم يُصنَّف
+      if (/^(?:من\s+(?:هو|هي|هم)|ما\s+(?:هو|هي|هم)|ماذا\s+(?:تعرف|تعني)|عرّف|اشرح\s+لي|أخبرني\s+عن)\s+/i.test(lastUserMessage) && _sIntentConf < 40) {
+        console.log(`[Stream→WhoWhatRedirect] 🔄 ROUTE=full | "من هو/ما هو" pattern | intent=${_sIntentName} conf=${_sIntentConf}% | "${lastUserMessage.slice(0, 70)}"`)
+        _streamSSEHeaders(res)
+        res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      }
+
+      console.log(`[Stream:Routing] ✅ ROUTE=stream | intent=${_sIntentName} conf=${_sIntentConf}% | LLM direct (no retrieval needed) | "${lastUserMessage.slice(0, 60)}"`)
+    } catch (_sieErr) {
+      // فشل التصنيف → نحوّل للـ full endpoint احتياطياً
+      console.warn(`[Stream:IntentCheck] ⚠ classification failed → fallback to full endpoint: ${_sieErr.message}`)
+      _streamSSEHeaders(res)
+      res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    }
+  }
+
   // ── Step 3: Core system prompt (slim — no heavy reasoning block) ─────────
   const _yearNow  = getCurrentYear()
   const _today    = getCurrentDateString('ar-DZ')

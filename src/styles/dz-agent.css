@@ -1686,6 +1686,7 @@
   border-collapse: collapse;
   margin: 4px 0;
   font-size: 13px;
+  direction: rtl;
 }
 .dzt-simple-table th,
 .dzt-simple-table td {
@@ -1708,6 +1709,7 @@
   width: max-content;
   border-collapse: collapse;
   font-size: 13px;
+  direction: rtl;
 }
 .dzt-fallback-table th,
 .dzt-fallback-table td {

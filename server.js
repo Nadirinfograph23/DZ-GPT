@@ -15109,8 +15109,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _ueRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
                     .find(m => m?.role === 'user')?.content?.trim() || ''
     // كشف نية تشكيلة كأس العالم 2026 — فصحى + دارجة جزائرية
-    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب)/i
-    const _dz_ctx_re   = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو)/i
+    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب|\bsquad\b|\broster\b|\bline.?up\b|\bformation\b|\bplayers?\s+list\b|\bstarting\s+(?:eleven|xi|lineup)\b|\bnational\s+team\s+squad\b|\bworld\s*cup\s+squad\b|\bwho\s+(?:is\s+)?in\s+(?:the\s+)?(?:squad|team)\b)/i
+    const _dz_ctx_re   = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو|\bworld\s*cup\b|\bwc\s*2026\b|\balgeria\b|\balgerian\b|\bargentina\b|\bfrance\b|\bmorocco\b|\btunisia\b)/i
     const _ueIsSquad = _dz_squad_re.test(_ueRaw) && _dz_ctx_re.test(_ueRaw)
     if (_ueIsSquad) {
       // تحديد الفريق من الاستفسار
@@ -15119,7 +15119,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       // الجزائر: فصحى + دارجة
       const _ueIsAlgeria = !_ueTeam && (
-        /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كرو\s*الجزائر|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا)/i.test(_ueRaw)
+        /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كرو\s*الجزائر|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا|\balgeria\b|\balgerian\b|\bdes fennecs\b|\bfennecs\b)/i.test(_ueRaw)
       )
       if (_ueIsAlgeria || _ueTeam === 'الجزائر') {
         const _ueAlgResp = buildAlgeriaWC2026SquadResponse('full')
@@ -15167,6 +15167,80 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         model: 'wc2026-squad-sources-only',
         _sportsAgent: true, _bypassLLM: true, wc2026: true, found: false, type: 'squad-sources',
       })
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🔒 RETRIEVAL-FIRST GUARD — Dynamic Sports Queries (English + Arabic)
+  // يضمن توجيه كل الاستعلامات الرياضية الديناميكية للوكيل أولاً (حتى عند retry)
+  // يُطلَق بعد squad interceptor — يمسك: squad/roster/lineup/injuries/
+  //   results/fixtures/transfers/coach-decisions باللغتين
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _rfRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
+                    .find(m => m?.role === 'user')?.content?.trim() || ''
+
+    // كاشف إنجليزي — استعلامات رياضية ديناميكية مع سياق بطولة/منتخب
+    const _RF_DYN_EN  = /\b(?:squad|roster|line.?up|formation|starting\s+(?:eleven|xi|lineup)|player[s']?\s+list|national\s+team\s+(?:squad|players?)|who\s+(?:plays?|played|scored|is\s+playing)|injur(?:ies|ed\s+players?)|transfer(?:s|\s+news)?|fixture[s]?|schedule[s]?|match\s+result[s]?|today[''']?s?\s+(?:match(?:es)?|game[s]?)|latest\s+(?:squad|result[s]?|score[s]?|lineup)|coach\s+(?:decision[s]?|pick[s]?)|top\s+scorer[s]?|goal\s+scorer[s]?)\b/i
+    const _RF_CTX_EN  = /\b(?:world\s*cup|wc\s*2026|wc2026|fifa|algeria|algerian|morocco|france|argentina|brazil|spain|national\s+team|cup\s+2026)\b/i
+
+    // كاشف عربي — حالات لم تُكتشف في interceptors أعلاه
+    const _RF_DYN_AR  = /(?:إصاب(?:ة|ات)\s*(?:اللاعبين|الفريق|المنتخب)|انتقال(?:ات)?\s*(?:اللاعبين|الصيف|الشتاء)|قرار(?:ات)?\s*المدرب|مستدع(?:ون|ين)\s+(?:جدد)?|من\s+(?:سجل|أحرز)\s+(?:هدف|الأهداف)|أفضل\s+لاعب\s+(?:اليوم|الجولة|المباراة))/i
+
+    const _rfIsEn = _RF_DYN_EN.test(_rfRaw) && _RF_CTX_EN.test(_rfRaw)
+    const _rfIsAr = _RF_DYN_AR.test(_rfRaw)
+
+    if (_rfIsEn || _rfIsAr) {
+      const _rfLang = _rfIsEn ? 'EN' : 'AR'
+      console.log(`[RetrievalFirst:Guard] 🛡️ DYNAMIC_SPORTS[${_rfLang}] → runSportsAgent | retry=${_isRetry} | q="${_rfRaw.slice(0,70)}"`)
+      console.log(`[RetrievalFirst:Log] query="${_rfRaw.slice(0,80)}" intent=SPORTS_DYNAMIC agent=sports-agent retrievalExecuted=true retry=${_isRetry}`)
+      try {
+        const _rfRes = await Promise.race([
+          runSportsAgent(_rfRaw, messages),
+          new Promise(r => setTimeout(() => r(null), 15000)),
+        ])
+        if (_rfRes?.userResponse || _rfRes?.context) {
+          const _rfContent = _rfRes.userResponse || _rfRes.context
+          console.log(`[RetrievalFirst:Guard] ✅ found=${_rfRes.found} type=${_rfRes.type} sources=${_rfRes.sources?.length ?? 0} len=${_rfContent.length}`)
+          return res.status(200).json({
+            content: _rfContent,
+            model: 'sports-agent-retrieval-first',
+            _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true,
+            found: _rfRes.found, type: _rfRes.type, sources: _rfRes.sources, wc2026: _rfRes.wc2026,
+            _log: { query: _rfRaw.slice(0,80), intent: 'SPORTS_DYNAMIC', agent: 'sports-agent', retrievalExecuted: true, sourcesReturned: _rfRes.sources?.length ?? 0, contextLen: _rfContent.length },
+          })
+        }
+        // الوكيل لم يجد بيانات — رد نظيف بدون LLM
+        console.log(`[RetrievalFirst:Guard] ℹ️ no live data → clean no-data (LLM blocked)`)
+        return res.status(200).json({
+          content: [
+            `## ⚽ بيانات رياضية مطلوبة`,
+            ``,
+            `> ⚠️ **لم أتمكن من التحقق من أحدث المعلومات من المصادر.**`,
+            `> 🛡️ DZ Agent لا يُجيب من ذاكرة النموذج القديمة على الأسئلة الرياضية الديناميكية.`,
+            ``,
+            `**تابع مباشرةً من المصادر الرسمية الحية:**`,
+            ``,
+            `| المصدر | الرابط |`,
+            `|--------|--------|`,
+            `| 🏆 **FIFA الرسمي** | [fifa.com/worldcup](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026) |`,
+            `| 📡 **365score** | [نتائج مباشرة](https://www.365scores.com/ar/football/world-cup-2026) |`,
+            `| ⚽ **FotMob** | [WC2026](https://www.fotmob.com/leagues/77/matches/world-cup) |`,
+            `| 🇩🇿 **Kooora** | [الجزائر](https://www.kooora.com/) |`,
+          ].join('\n'),
+          model: 'sports-no-data-retrieval-first',
+          _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true, found: false,
+          _log: { query: _rfRaw.slice(0,80), intent: 'SPORTS_DYNAMIC', agent: 'sports-agent', retrievalExecuted: true, sourcesReturned: 0, contextLen: 0 },
+        })
+      } catch (_rfErr) {
+        console.error('[RetrievalFirst:Guard] agent error (LLM still blocked):', _rfErr.message?.slice(0,100))
+        return res.status(200).json({
+          content: `## ⚽ خطأ مؤقت في الوكيل الرياضي\n\n> ⚠️ لا أستطيع الإجابة من ذاكرة النموذج القديمة.\n\n🔄 **أعد المحاولة** أو تابع: [FIFA](https://www.fifa.com/worldcup) | [FotMob](https://www.fotmob.com/leagues/77/matches/world-cup) | [365score](https://www.365scores.com/ar/football/world-cup-2026)`,
+          model: 'sports-agent-error-retrieval-first',
+          _sportsAgent: true, _bypassLLM: true, _retrievalFirst: true, found: false,
+        })
+      }
     }
   }
   // ══════════════════════════════════════════════════════════════════════
@@ -16197,7 +16271,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // يُطلَق لأي استعلام يحتوي كلمات WC2026 وكلمات بيانات حية لم تُعالج بالمعالجات السابقة
   // الهدف: منع LLM من الإجابة بذاكرة التدريب عن نتائج/هدافين/تشكيلات/إحصائيات
   {
-    const _isWC2026General = !_isRetry && (
+    const _isWC2026General = (
       /(?:كأس\s*العالم|المونديال|مونديال|FIFA\s*2026|world\s*cup\s*2026|WC\s*2026)/i.test(_rawLastMsg)
     ) && (
       // استعلامات بيانات حية — لا يجب أن يجيب LLM عنها أبداً

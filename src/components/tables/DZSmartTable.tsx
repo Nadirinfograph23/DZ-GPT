@@ -64,6 +64,9 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
       el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
       _syncNav()
     }))
+    // Fallback syncs: table content may stream in after initial mount
+    const _t1 = setTimeout(_syncNav, 350)
+    const _t2 = setTimeout(_syncNav, 1200)
     const onScroll = () => {
       _tableScrollPositions.set(_scrollKey.current, el.scrollLeft)
       _syncNav()
@@ -71,9 +74,14 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
     el.addEventListener('scroll', onScroll, { passive: true })
     const ro = new ResizeObserver(_syncNav)
     ro.observe(el)
+    // Observe inner table element for streaming row additions
+    const innerTable = el.querySelector('table')
+    if (innerTable) ro.observe(innerTable)
     return () => {
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
+      clearTimeout(_t1)
+      clearTimeout(_t2)
     }
   }, [_syncNav])
 
@@ -433,6 +441,10 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       sync()
     }))
 
+    // Fallback syncs: content may stream in after initial mount
+    const _t1 = setTimeout(sync, 350)
+    const _t2 = setTimeout(sync, 1200)
+
     const onScroll = () => {
       _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
       sync()
@@ -441,10 +453,15 @@ function TableScrollWrapper({ className, children }: { className: string; childr
 
     const ro = new ResizeObserver(sync)
     ro.observe(el)
+    // Also observe the inner table so streaming rows trigger re-sync
+    const innerTable = el.querySelector('table')
+    if (innerTable) ro.observe(innerTable)
 
     return () => {
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
+      clearTimeout(_t1)
+      clearTimeout(_t2)
     }
   }, [sync])
 

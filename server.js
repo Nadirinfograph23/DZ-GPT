@@ -15998,13 +15998,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── تشكيلات جميع الفرق المشاركة في كأس العالم 2026 ─────────────────────────
+  // ══ WC2026 SQUAD PIPELINE — تشكيلات كأس العالم 2026 ════════════════════════
+  // Pipeline: Intent Detection → Agent Router → Source Retrieval → LLM (تنسيق فقط) → Final Answer
+  // ⛔ LLM لا يجيب مباشرة من ذاكرة التدريب — يستخدم المصادر الحية فقط
   {
     const _isAnySquadQ = isWC2026SquadQuery(_rawLastMsg)
     if (_isAnySquadQ) {
       const _teamName = detectWC2026SquadTeam(_rawLastMsg)
-      console.log(`[WC2026:Squad] 📋 Squad query detected — team: ${_teamName || 'unknown'}, msg: "${_rawLastMsg.slice(0,70)}"`)
+      console.log(`[WC2026:Squad] 🔍 INTENT: تشكيلة كأس العالم | Detected team: "${_teamName || 'غير محدد'}" | Query: "${_rawLastMsg.slice(0,60)}"`)
+
+      // ── STEP 1: Agent Router → Static Knowledge Base (أسرع مسار) ──────────
       if (_teamName && WC2026_ALL_SQUADS[_teamName]) {
+        console.log(`[WC2026:Squad] ✅ SOURCE: Static KB | Team: ${_teamName} | ${WC2026_ALL_SQUADS[_teamName].players?.length} players`)
         const _squadResp = buildWC2026SquadResponse(_teamName)
         return res.status(200).json({
           content: _squadResp,
@@ -16017,6 +16022,65 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           team: _teamName,
         })
       }
+
+      // ── STEP 2: Source Retrieval → Live Web Fetch (الفريق خارج قاعدة البيانات) ──
+      if (_teamName) {
+        console.log(`[WC2026:Squad] 🌐 SOURCE: Live retrieval for "${_teamName}" (not in static KB) — LLM BLOCKED until data fetched`)
+        try {
+          const _liveQuery = `تشكيلة ${_teamName} كأس العالم 2026 قائمة اللاعبين FIFA squad`
+          const _liveResult = await Promise.race([
+            runSportsAgent(_liveQuery, messages),
+            new Promise(r => setTimeout(() => r(null), 15000)),
+          ])
+          if (_liveResult?.userResponse || _liveResult?.context) {
+            const _liveContent = _liveResult.userResponse || _liveResult.context
+            console.log(`[WC2026:Squad] ✅ RETRIEVE: Live data fetched for "${_teamName}" — LLM role: FORMAT ONLY`)
+            return res.status(200).json({
+              content: _liveContent,
+              model: 'wc2026-squad-live-retrieved',
+              _sportsAgent: true,
+              _bypassLLM: true,
+              wc2026: true,
+              found: true,
+              type: 'team-squad-live',
+              team: _teamName,
+            })
+          }
+        } catch (_liveErr) {
+          console.warn(`[WC2026:Squad] ⚠️ Live retrieval failed for "${_teamName}": ${_liveErr.message}`)
+        }
+      }
+
+      // ── STEP 3: Source Not Available → Official Links ⛔ LLM PERMANENTLY BLOCKED ──
+      const _teamDisplay = _teamName ? `— ${_teamName}` : ''
+      const _squadSources = [
+        `## 📋 تشكيلة كأس العالم FIFA 2026 ${_teamDisplay}`,
+        ``,
+        `> 🔒 **مبدأ DZ Agent:** لا أجيب من ذاكرة التدريب على تشكيلات كأس العالم — المعلومات قد تكون قديمة أو غير دقيقة.`,
+        `> لم أتمكن من استرجاع بيانات حية موثّقة. تابع من المصادر الرسمية:`,
+        ``,
+        `| المصدر | الرابط المباشر |`,
+        `|--------|----------------|`,
+        `| 🏆 **FIFA الرسمي** | [قوائم WC2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |`,
+        `| ⚽ **كووورة** | [قوائم المنتخبات](https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D9%82%D8%AF%D9%85/%D8%A7%D9%84%D9%82%D9%88%D8%A7%D8%A6%D9%85) |`,
+        `| 📊 **SofaScore** | [WC2026 Squads](https://www.sofascore.com/tournament/football/world/fifa-world-cup-2026/1407) |`,
+        `| 📡 **Transfermarkt** | [تشكيلات كأس العالم](https://www.transfermarkt.com/weltmeisterschaft-2026/teilnehmer/pokalwettbewerb/WM26) |`,
+        ``,
+        `💡 **الفرق المتوفرة مباشرةً:** الجزائر · فرنسا · الأرجنتين · البرازيل · إسبانيا · إنجلترا · ألمانيا · البرتغال · المغرب · مصر · تونس · السنغال · السعودية · كندا · أمريكا · المكسيك · اليابان · هولندا · بلجيكا · كرواتيا · وأكثر من 30 فريقاً آخر`,
+        ``,
+        `> جرّب: **"تشكيلة الجزائر في كأس العالم 2026"** أو **"قائمة لاعبي فرنسا"**`,
+      ].join('\n')
+
+      console.log(`[WC2026:Squad] ⛔ LLM BLOCKED — returning official source links (team: ${_teamName || 'unknown'})`)
+      return res.status(200).json({
+        content: _squadSources,
+        model: 'wc2026-squad-sources',
+        _sportsAgent: true,
+        _bypassLLM: true,
+        wc2026: true,
+        found: false,
+        type: 'squad-source-links',
+      })
     }
   }
 

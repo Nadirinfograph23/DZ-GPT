@@ -191,13 +191,11 @@ export default function DZSmartTable({ headers, rows, title, compact }: DZSmartT
         </div>
       </div>
 
-      {_over && (
-        <div className="dz-tnav-bar">
-          <button className="dz-tnav" disabled={!_canL} onClick={() => _nudge('l')} aria-label="يسار">‹</button>
-          <span className="dz-tnav-label">تمرير الجدول</span>
-          <button className="dz-tnav" disabled={!_canR} onClick={() => _nudge('r')} aria-label="يمين">›</button>
-        </div>
-      )}
+      <div className={`dz-tnav-bar${_over ? '' : ' dz-tnav-bar--hidden'}`}>
+        <button className="dz-tnav" disabled={!_canL} onClick={() => _nudge('l')} aria-label="تمرير يمين">›</button>
+        <span className="dz-tnav-label">تمرير الجدول</span>
+        <button className="dz-tnav" disabled={!_canR} onClick={() => _nudge('r')} aria-label="تمرير يسار">‹</button>
+      </div>
 
       <div
         className={`dzt-scroll-container${showVirtual ? ' dzt-scroll-container--virtual' : ''}`}
@@ -452,13 +450,11 @@ function TableScrollWrapper({ className, children }: { className: string; childr
 
   return (
     <div className="dz-table-outer">
-      {over && (
-        <div className="dz-tnav-bar">
-          <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="يسار">‹</button>
-          <span className="dz-tnav-label">تمرير الجدول</span>
-          <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="يمين">›</button>
-        </div>
-      )}
+      <div className={`dz-tnav-bar${over ? '' : ' dz-tnav-bar--hidden'}`}>
+        <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="تمرير يمين">›</button>
+        <span className="dz-tnav-label">تمرير الجدول</span>
+        <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="تمرير يسار">‹</button>
+      </div>
       <div ref={ref} className={`dzt-simple-scroll ${className}`} dir="ltr">
         {children}
       </div>

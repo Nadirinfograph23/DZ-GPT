@@ -1518,8 +1518,8 @@
   user-select: none;
 }
 .dzt-th:last-child { border-right: none; }
-.dzt-th--left { text-align: start; }
-.dzt-th--right { text-align: end; }
+.dzt-th--left { text-align: right; }
+.dzt-th--right { text-align: right; }
 .dzt-th--center { text-align: center; }
 .dzt-th--sortable { cursor: pointer; transition: background 0.15s, color 0.15s; }
 .dzt-th--sortable:hover { background: #181818; color: #10a37f; }
@@ -1542,8 +1542,8 @@
   word-break: break-word;
 }
 .dzt-td:last-child { border-right: none; }
-.dzt-td--left { text-align: start; }
-.dzt-td--right { text-align: end; }
+.dzt-td--left { text-align: right; }
+.dzt-td--right { text-align: right; }
 .dzt-td--center { text-align: center; }
 
 .dzt-link {
@@ -1792,14 +1792,20 @@
   width: 100%;
   margin: 6px 0;
 }
-/* ── Nav bar: ‹ label › row above the table ── */
+/* ── Nav bar: › label ‹ row above the table (RTL: right btn = scroll right, left btn = scroll left) ── */
 .dz-tnav-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
   padding: 3px 2px 3px;
-  direction: ltr;
+  direction: rtl;
+}
+/* hidden state — keeps layout space so table doesn't jump */
+.dz-tnav-bar--hidden {
+  visibility: hidden;
+  pointer-events: none;
+  height: 34px;
 }
 .dz-tnav-label {
   font-size: 10px;

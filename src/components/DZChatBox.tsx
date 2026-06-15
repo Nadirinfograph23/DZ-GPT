@@ -2542,13 +2542,11 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="dz-table-outer">
-      {over && (
-        <div className="dz-tnav-bar">
-          <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="يسار">‹</button>
-          <span className="dz-tnav-label">تمرير الجدول</span>
-          <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="يمين">›</button>
-        </div>
-      )}
+      <div className={`dz-tnav-bar${over ? '' : ' dz-tnav-bar--hidden'}`}>
+        <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="تمرير يمين">›</button>
+        <span className="dz-tnav-label">تمرير الجدول</span>
+        <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="تمرير يسار">‹</button>
+      </div>
       <div className="v5-md-table-scroll" ref={ref}>
         {children}
       </div>

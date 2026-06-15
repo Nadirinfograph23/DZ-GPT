@@ -1,0 +1,29 @@
+User-agent: *
+Disallow: /api/
+Disallow: /ws/
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Omgili
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+Crawl-delay: 10
+
+# DZ-GPT — جميع الحقوق محفوظة
+# لا يُسمح بنسخ أو استخراج المحتوى والبيانات تجارياً.

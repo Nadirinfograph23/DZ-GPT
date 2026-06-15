@@ -1,3 +1,22 @@
+/* ===== ANTI-COPY: disable text selection on structural chrome (not message content) ===== */
+.dza-sidebar,
+.dza-header,
+.dza-input-row,
+.dza-model-bar,
+.dza-nav-tabs,
+.dz-tnav-bar,
+.dzt-toolbar,
+.dzt-toolbar-left,
+.dzt-toolbar-right,
+.dza-sidebar-footer,
+.dza-chat-item,
+.dza-new-chat-btn,
+.dza-logo,
+.dza-topbar {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ===== DZ AGENT LAYOUT (sidebar + main) ===== */
 .dza-layout {
   display: flex;

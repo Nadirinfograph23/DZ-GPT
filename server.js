@@ -423,6 +423,91 @@ app.use('/api/dz-agent/clone-v2', cloneLimiter)
 app.use('/api/dz-agent/doctor-search', searchLimiter)
 app.use('/api/claude-proxy', aiLimiter)
 
+// ===== ANTI-SCRAPING & BOT PROTECTION =====
+
+// 1) Global hard cap — all /api/ routes (catches bulk scrapers that bypass specific limiters)
+const _globalApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => !req.path.startsWith('/api/'),
+  message: { error: 'تجاوزت الحد المسموح به. يرجى الانتظار دقيقة.' },
+  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown',
+})
+app.use(_globalApiLimiter)
+
+// 2) Known scraper/bot User-Agent blocking — applies ONLY to /api/ routes
+const _BLOCKED_UA_RE = /(?:scrapy|python-requests|python-urllib|python-httpx|go-http-client|axios\/\d|java\/|okhttp|curl\/|wget\/|libwww|httpie|mechanize|beautifulsoup|phantomjs|headless|selenium|puppeteer|playwright|jsdom|got\/\d|node-fetch|superagent|postman|insomnia|grpc-go|RestSharp|java-http|apacheHttpClient|Java Apache|bot\/\d|crawler\/|spider\/|scraper\/|harvest|nutch|zgrab|masscan|nmap|nikto|sqlmap|ahrefsbot|semrushbot|mj12bot|dotbot|blexbot|petalbot)/i
+
+app.use('/api/', (req, res, next) => {
+  const ua = req.headers['user-agent'] || ''
+  if (!ua || _BLOCKED_UA_RE.test(ua)) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
+    console.warn(`[AntiBot] 🚫 Blocked UA="${ua.slice(0,80)}" IP=${ip} PATH=${req.path}`)
+    return res.status(403).json({ error: 'Access denied.' })
+  }
+  next()
+})
+
+// 3) Honeypot — any bot that probes common scraping paths gets permanently flagged
+const _HONEYPOT_PATHS = ['/api/v1/export', '/api/data/dump', '/api/admin/users', '/api/config', '/api/env', '/api/debug', '/api/backup', '/api/sitemap.xml']
+const _flaggedIPs = new Set()
+
+for (const _hp of _HONEYPOT_PATHS) {
+  app.all(_hp, (req, res) => {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
+    _flaggedIPs.add(ip)
+    console.warn(`[Honeypot] 🍯 Trapped: IP=${ip} PATH=${req.path} UA="${(req.headers['user-agent'] || '').slice(0,60)}"`)
+    res.status(404).json({ error: 'Not found.' })
+  })
+}
+
+// Block flagged IPs from API
+app.use('/api/', (req, res, next) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip
+  if (_flaggedIPs.has(ip)) {
+    console.warn(`[AntiBot] 🔒 Flagged IP blocked: ${ip} → ${req.path}`)
+    return res.status(403).json({ error: 'Access denied.' })
+  }
+  next()
+})
+
+// 4) robots.txt — politely ask all bots to stay away from /api/
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send([
+    'User-agent: *',
+    'Disallow: /api/',
+    'Disallow: /ws/',
+    'Disallow: /api/dz-agent-chat',
+    'Disallow: /api/dz-agent-v4/',
+    'Disallow: /api/dz-agent-v5/',
+    'Disallow: /api/dz-agent/github/',
+    'Disallow: /api/dz-agent/clone',
+    'Disallow: /api/health',
+    '',
+    'User-agent: GPTBot',
+    'Disallow: /',
+    '',
+    'User-agent: CCBot',
+    'Disallow: /',
+    '',
+    'User-agent: anthropic-ai',
+    'Disallow: /',
+    '',
+    'User-agent: Google-Extended',
+    'Disallow: /',
+    '',
+    'User-agent: Omgili',
+    'Disallow: /',
+    '',
+    'Crawl-delay: 10',
+    '',
+    `# DZ-GPT — حقوق النشر محفوظة © ${new Date().getFullYear()}`,
+    '# لا يُسمح بنسخ أو استخراج المحتوى والبيانات.',
+  ].join('\n'))
+})
+
 // ===== INPUT SANITIZER =====
 function sanitizeString(str, maxLen = 10000) {
   if (typeof str !== 'string') return ''

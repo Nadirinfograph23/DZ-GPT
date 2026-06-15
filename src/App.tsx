@@ -293,6 +293,32 @@ function App() {
   const filteredChats = chats.filter(c => c.modelId === selectedModel)
   const isPdfModel = selectedModel === 'deepseek-pdf' || selectedModel === 'ocr-dz'
 
+  // ── Anti-scraping: console warning + right-click guard on structural UI ──
+  useEffect(() => {
+    // Console deterrent for devtools users
+    const _warn = () => {
+      console.log('%c⛔ DZ-GPT — محمي', 'color:#c8ff00;font-size:22px;font-weight:bold;background:#111;padding:8px 18px;border-radius:6px')
+      console.log('%cجميع الحقوق محفوظة © DZ-GPT\nيُمنع استخراج الكود أو نسخ الواجهة أو استخدام API دون إذن كتابي.', 'color:#ff6b6b;font-size:13px')
+      console.log('%cAll rights reserved — No scraping, cloning or unauthorized API use permitted.', 'color:#aaa;font-size:12px')
+    }
+    _warn()
+    // Repeat warning if devtools stays open (detects re-focus after inspect)
+    window.addEventListener('focus', _warn, { once: true })
+
+    // Right-click: block on sidebar & nav — NOT on message content or inputs
+    const _onCtxMenu = (e: MouseEvent) => {
+      const t = e.target as HTMLElement
+      const isContent = t.closest('.dz-message-text, .dza-chat-messages, input, textarea, [contenteditable]')
+      if (!isContent) e.preventDefault()
+    }
+    document.addEventListener('contextmenu', _onCtxMenu)
+
+    return () => {
+      document.removeEventListener('contextmenu', _onCtxMenu)
+      window.removeEventListener('focus', _warn)
+    }
+  }, [])
+
   // Persist to localStorage
   useEffect(() => {
     try { localStorage.setItem('dz-gpt-chats', JSON.stringify(chats)) } catch {}

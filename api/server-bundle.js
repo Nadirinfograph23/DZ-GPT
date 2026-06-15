@@ -82305,11 +82305,11 @@ if (isMain) {
       const inputText = text.trim().slice(0, 500);
       let dialect = {}, corpus = {};
       try {
-        dialect = JSON.parse(fs9.readFileSync(path10.join(path10.dirname(fileURLToPath12(import.meta.url)), "data", "dz_dialect.json"), "utf8"));
+        dialect = JSON.parse(fs9.readFileSync(path10.join(process.cwd(), "data", "dz_dialect.json"), "utf8"));
       } catch {
       }
       try {
-        corpus = JSON.parse(fs9.readFileSync(path10.join(path10.dirname(fileURLToPath12(import.meta.url)), "data", "dz_darija_corpus.json"), "utf8"));
+        corpus = JSON.parse(fs9.readFileSync(path10.join(process.cwd(), "data", "dz_darija_corpus.json"), "utf8"));
       } catch {
       }
       const slangMap = dialect.slang_map || {};

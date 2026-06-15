@@ -433,7 +433,6 @@ const _globalApiLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => !req.path.startsWith('/api/'),
   message: { error: 'تجاوزت الحد المسموح به. يرجى الانتظار دقيقة.' },
-  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown',
 })
 app.use(_globalApiLimiter)
 
@@ -1727,10 +1726,6 @@ function detectDoctorIntent(message) {
   if (!message || typeof message !== 'string') return { isDoctorQuery: false }
   const norm = normalizeQuery(message)
 
-  // ── Map query guard — خريطة تأخذ الأولوية على البحث الطبي ────────────────
-  // "عيادة في البلدية" / "مستشفى في وهران" → خريطة، لا بحث عن طبيب
-  if (isMapQuery(message)) return { isDoctorQuery: false }
-
   // ── Exclusion guard — منع التفعيل الخاطئ في السياق التقني ───────────────
   // مثال: "توليد الصور" ، "هل تستطيع توليد كود"
   const hasTechContext = TECH_CONTEXT_EXCLUSIONS.some(w => norm.includes(w.toLowerCase()))
@@ -1738,6 +1733,8 @@ function detectDoctorIntent(message) {
 
   const isDoctorQuery = DOCTOR_TRIGGER_PATTERNS.some(p => norm.includes(p.toLowerCase()))
   if (!isDoctorQuery) return { isDoctorQuery: false }
+  // Doctor trigger words take full priority — no map guard applied here.
+  // The map handler at line ~18823 guards against doctor queries via _doctorGuard.
 
   let speciality = null
   for (const sp of SPECIALITIES) {
@@ -18821,7 +18818,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Intent Router Guard: لاعب رياضي (وين يلعب محرز) → لا يُحوَّل للخريطة أبداً
   const _isIRSportsPlayer = _intentClassification?.intent === 'SPORTS_PLAYER'
   const _isIRSportsFixtures = _intentClassification?.intent === 'SPORTS_FIXTURES'
-  if (isMapQuery(lastUserMessage) && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures && !isSportsAgentQuery(lastUserMessage)) {
+  if (isMapQuery(lastUserMessage) && !_doctorGuard.isDoctorQuery && !_isNewsQuery && !_isWebFileCtx && !_isWebBuildCtx && !_isIRSportsPlayer && !_isIRSportsFixtures && !isSportsAgentQuery(lastUserMessage)) {
     console.log(`[DZ-Maps] Map query detected: "${lastUserMessage.slice(0, 80)}"`)
     try {
       const mapResult = await handleMapQuery(lastUserMessage, userLocation)
@@ -20172,7 +20169,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
     // ══════════════════════════════════════════════════════════════════════
     // PROMPT 3 — تخصص موجود لكن لا ولاية: اسأل عن الولاية فقط
+    // استثناء: إذا كان GPS متاحاً → نحدد الولاية تلقائياً بـ findNearestWilaya
     // ══════════════════════════════════════════════════════════════════════
+    if (!doctorIntent.city) {
+      if (userLocation) {
+        const _nearWilaya = findNearestWilaya(userLocation.lat, userLocation.lng)
+        if (_nearWilaya) {
+          const _matchedDCCity = DOCTOR_CITIES.find(c => c.ar === _nearWilaya.ar)
+          doctorIntent.city = _matchedDCCity || { ar: _nearWilaya.ar, fr: _nearWilaya.en }
+          console.log(`[DoctorSearch] GPS auto-city: ${doctorIntent.city.ar} (${doctorIntent.city.fr}) from lat=${userLocation.lat.toFixed(3)},lng=${userLocation.lng.toFixed(3)}`)
+        }
+      }
+    }
     if (!doctorIntent.city) {
       return res.status(200).json({
         content: [

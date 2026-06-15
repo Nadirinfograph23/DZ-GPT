@@ -128,7 +128,7 @@ function generatePDF(
   setTimeout(() => { win.focus(); win.print() }, 800)
 }
 
-type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'darija' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert' | 'flights'
+type ToolId = 'cv' | 'planner' | 'docs' | 'jobs' | 'health' | 'ocr' | 'bizplan' | 'image' | 'hashtag' | 'invoice' | 'tax' | 'pension' | 'qrcode' | 'bizcard' | 'zakat' | 'excel' | 'dataanalysis' | 'tts' | 'screenshot' | 'fileupload' | 'convert' | 'flights'
 
 const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: string }[] = [
   { id: 'cv',      icon: '📄', name: 'مولّد السيرة الذاتية',   desc: 'أنشئ سيرة ذاتية احترافية بالعربية أو الفرنسية في ثوانٍ' },
@@ -141,7 +141,6 @@ const TOOLS: { id: ToolId; icon: string; name: string; desc: string; badge?: str
   { id: 'bizplan',      icon: '📊', name: 'خطة العمل Business Plan',     desc: 'خطة عمل كاملة لمشروعك في الجزائر مع أرقام حقيقية' },
   { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',               desc: 'فواتير جزائرية احترافية — TVA • HT • TTC — تحميل PDF' },
   { id: 'tax',          icon: '🧮', name: 'مُحاسب الضرائب',               desc: 'IRG (ضريبة الدخل) • IBS (ضريبة الشركات) — شرائح 2024' },
-  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة الجزائرية',      desc: 'عربي/فرنسي ↔ دارجة جزائرية — شرق · غرب · وسط · جنوب', badge: 'NEW' },
   { id: 'zakat',        icon: '☪️', name: 'حاسبة الزكاة الشاملة',         desc: 'زكاة المال · الذهب · الفضة · التجارة · الزروع — بالدينار الجزائري', badge: 'NEW' },
   { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغ',               desc: 'هاشتاغات ذكية للجزائر — إنستغرام • تيك توك • X • لينكدإن', badge: 'NEW' },
   { id: 'excel',        icon: '📊', name: 'محرر Excel الذكي',             desc: 'جدول بيانات كامل + 30 دالة + مساعد AI للدوال — استيراد/تصدير XLSX', badge: 'NEW' },
@@ -3050,285 +3049,6 @@ body{background:#f0f0f0;display:flex;align-items:center;justify-content:center;m
 }
 
 
-// ─── Darija Translator Tool ───────────────────────────────────────────────────
-const DARIJA_DIRS = [
-  { id: 'ar2dz', label: 'عربي فصيح  →  دارجة', from: 'العربية الفصحى', to: 'الدارجة الجزائرية' },
-  { id: 'dz2ar', label: 'دارجة  →  عربي فصيح', from: 'الدارجة الجزائرية', to: 'العربية الفصحى' },
-  { id: 'fr2dz', label: 'Français  →  دارجة',   from: 'الفرنسية', to: 'الدارجة الجزائرية' },
-  { id: 'dz2fr', label: 'دارجة  →  Français',   from: 'الدارجة الجزائرية', to: 'الفرنسية' },
-]
-const DARIJA_REGIONS = [
-  { id: 'center', label: '🏙️ الجزائر العاصمة / الوسط' },
-  { id: 'west',   label: '🌅 وهران / تلمسان (الغرب)' },
-  { id: 'east',   label: '🏔️ قسنطينة / عنابة (الشرق)' },
-  { id: 'south',  label: '🏜️ الجنوب (تمنراست / ورقلة)' },
-]
-interface DarijaResult {
-  translation: string
-  transliteration?: string
-  explanation?: string
-  grammar_tip?: string
-  examples?: {original:string; translated:string; region?:string}[]
-  regional_alt?: string
-  local_hits?: {dz:string; ar:string; fr?:string; type:string; ctx?:string}[]
-  source?: string
-}
-
-function DarijaTool() {
-  const [dir,      setDir]      = useState('ar2dz')
-  const [region,   setRegion]   = useState('center')
-  const [input,    setInput]    = useState('')
-  const [result,   setResult]   = useState<DarijaResult|null>(null)
-  const [loading,  setLoading]  = useState(false)
-  const [copied,   setCopied]   = useState(false)
-  const [error,    setError]    = useState('')
-  const [charCount,setCharCount]= useState(0)
-
-  const QUICK: Record<string, string[]> = {
-    ar2dz: ['كيف حالك؟','أريد أن آكل','هل أنت مشغول؟','أين تسكن؟','شكراً جزيلاً','إلى اللقاء','ما هو سعر هذا؟','أنا متعب جداً'],
-    dz2ar: ['واش راك؟','بغيت ناكل','علاش ما جيتش؟','وين تسكن؟','يعيشك باباك','نروح وراك','بشحال هذا؟','راني مريض'],
-    fr2dz: ['Comment tu vas?','Je veux manger','Où habites-tu?','Merci beaucoup','Au revoir','C\'est combien?','Je suis fatigué','Allons-y'],
-    dz2fr: ['واش راك؟','بغيت ناكل','وين تسكن؟','يعيشك','نروح وراك','بشحال؟','راني مريض','هيا بينا'],
-  }
-
-  const translate = async () => {
-    if (!input.trim()) return
-    setLoading(true); setResult(null); setError('')
-    try {
-      const res = await fetch('/api/tools/darija-translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input.trim(), direction: dir, region })
-      })
-      if (!res.ok) {
-        const e = await res.json().catch(()=>({error:'خطأ في الاتصال'}))
-        throw new Error(e.error || `HTTP ${res.status}`)
-      }
-      const data: DarijaResult = await res.json()
-      setResult(data)
-    } catch(e: any) {
-      setError(e.message || '⚠️ خطأ في الاتصال، حاول مرة أخرى.')
-    }
-    setLoading(false)
-  }
-
-  const swap = () => {
-    const pairs: Record<string,string> = { ar2dz:'dz2ar', dz2ar:'ar2dz', fr2dz:'dz2fr', dz2fr:'fr2dz' }
-    const newDir = pairs[dir] || dir
-    const prevTranslation = result?.translation || ''
-    setDir(newDir)
-    setInput(prevTranslation)
-    setResult(null)
-    setError('')
-    setCharCount(prevTranslation.length)
-  }
-
-  const handleInput = (v: string) => {
-    setInput(v)
-    setCharCount(v.length)
-    if (result) setResult(null)
-    if (error) setError('')
-  }
-
-  const currentDir = DARIJA_DIRS.find(d=>d.id===dir)
-
-  return (
-    <div className="dzt-dj-wrap">
-      <div className="dzt-tool-desc">
-        <div className="dzt-tool-desc-icon">🗣️</div>
-        <div>
-          <div className="dzt-tool-desc-title">مترجم الدارجة الجزائرية</div>
-          <div className="dzt-tool-desc-text">ترجمة ذكية مدعومة بقاعدة بيانات محلية + AI متخصص · يراعي اللهجات الإقليمية: الجزائر العاصمة · وهران · قسنطينة · الجنوب</div>
-        </div>
-      </div>
-
-      {/* Direction selector */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">🔀 اتجاه الترجمة</label>
-        <div className="dzt-dj-dirs">
-          {DARIJA_DIRS.map(d=>(
-            <button key={d.id} className={`dzt-dj-dir-btn${dir===d.id?' active':''}`}
-              onClick={()=>{setDir(d.id);setResult(null);setError('')}}>
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Region selector */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">📍 المنطقة / اللهجة</label>
-        <div className="dzt-dj-regions">
-          {DARIJA_REGIONS.map(r=>(
-            <button key={r.id} className={`dzt-dj-region${region===r.id?' active':''}`} onClick={()=>setRegion(r.id)}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick chips */}
-      <div className="dzt-dj-block">
-        <label className="dzt-label">⚡ أمثلة سريعة</label>
-        <div className="dzt-dj-quick">
-          {(QUICK[dir]||[]).map(q=>(
-            <button key={q} className="dzt-dj-quick-btn"
-              onClick={()=>{handleInput(q)}}>
-              {q}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Input / Output panels */}
-      <div className="dzt-dj-panels">
-        {/* Input panel */}
-        <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">
-            <span>{currentDir?.from}</span>
-            <span className={`dzt-dj-charcount${charCount>450?' warn':''}`}>{charCount}/500</span>
-          </div>
-          <textarea
-            className="dzt-dj-textarea"
-            placeholder={dir.startsWith('fr') ? 'Écrivez votre texte ici...' : 'اكتب النص هنا...'}
-            value={input}
-            onChange={e=>handleInput(e.target.value)}
-            maxLength={500}
-            rows={4}
-            onKeyDown={e=>e.key==='Enter'&&e.ctrlKey&&translate()}
-          />
-          {input.trim() && (
-            <button className="dzt-dj-clear" onClick={()=>{handleInput('');setResult(null)}}>✕ مسح</button>
-          )}
-        </div>
-
-        {/* Swap button */}
-        <button className="dzt-dj-swap" onClick={swap} title="تبديل الاتجاه وعكس الترجمة">
-          {loading ? <span className="dzt-dj-spin">◌</span> : '⇄'}
-        </button>
-
-        {/* Output panel */}
-        <div className="dzt-dj-panel">
-          <div className="dzt-dj-panel-label">
-            <span>{currentDir?.to}</span>
-            {result?.translation && (
-              <button className={`dzt-dj-copy${copied?' done':''}`}
-                onClick={()=>{navigator.clipboard.writeText(result.translation);setCopied(true);setTimeout(()=>setCopied(false),2000)}}>
-                {copied ? '✅ تم' : '📋 نسخ'}
-              </button>
-            )}
-          </div>
-          <div className={`dzt-dj-output${loading?' loading':''}`}>
-            {loading ? (
-              <div className="dzt-dj-loading-anim">
-                <div className="dzt-dj-dots"><span/><span/><span/></div>
-                <p>AI يترجم مع مراعاة اللهجة...</p>
-              </div>
-            ) : error ? (
-              <span className="dzt-dj-error">{error}</span>
-            ) : result ? (
-              <div className="dzt-dj-result-main">{result.translation}</div>
-            ) : (
-              <span className="dzt-dj-placeholder">ستظهر الترجمة هنا...</span>
-            )}
-          </div>
-          {result?.transliteration && (
-            <div className="dzt-dj-translit">🔤 {result.transliteration}</div>
-          )}
-        </div>
-      </div>
-
-      {/* Translate button */}
-      <button className="dzt-btn dzt-dj-translate-btn" onClick={translate} disabled={loading||!input.trim()}>
-        {loading ? '⏳ جاري الترجمة...' : '🗣️ ترجم الآن'}
-        {!loading && <span className="dzt-dj-btn-hint">Ctrl+Enter</span>}
-      </button>
-
-      {/* Rich results */}
-      {result && (
-        <div className="dzt-dj-rich">
-
-          {/* Explanation */}
-          {result.explanation && (
-            <div className="dzt-dj-card dzt-dj-card-explain">
-              <div className="dzt-dj-card-title">💡 شرح وملاحظات</div>
-              <p>{result.explanation}</p>
-            </div>
-          )}
-
-          {/* Grammar tip */}
-          {result.grammar_tip && (
-            <div className="dzt-dj-card dzt-dj-card-grammar">
-              <div className="dzt-dj-card-title">📐 ملاحظة نحوية</div>
-              <p>{result.grammar_tip}</p>
-            </div>
-          )}
-
-          {/* Regional alt */}
-          {result.regional_alt && (
-            <div className="dzt-dj-card dzt-dj-card-region">
-              <div className="dzt-dj-card-title">🗺️ بديل إقليمي</div>
-              <p>{result.regional_alt}</p>
-            </div>
-          )}
-
-          {/* Examples */}
-          {result.examples && result.examples.length > 0 && (
-            <div className="dzt-dj-card dzt-dj-card-examples">
-              <div className="dzt-dj-card-title">📚 أمثلة مماثلة</div>
-              <div className="dzt-dj-ex-list">
-                {result.examples.map((ex,i)=>(
-                  <div key={i} className="dzt-dj-ex-row">
-                    <div className="dzt-dj-ex-orig">
-                      <span className="dzt-dj-ex-num">{i+1}</span>
-                      {ex.original}
-                    </div>
-                    <span className="dzt-dj-ex-arrow">→</span>
-                    <div className="dzt-dj-ex-trans">
-                      {ex.translated}
-                      {ex.region && <span className="dzt-dj-ex-reg">({ex.region})</span>}
-                    </div>
-                    <button className="dzt-dj-ex-use"
-                      onClick={()=>{handleInput(ex.original);setResult(null)}}>
-                      جرّب
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Local DB hits */}
-          {result.local_hits && result.local_hits.length > 0 && (
-            <div className="dzt-dj-card dzt-dj-card-db">
-              <div className="dzt-dj-card-title">🗂️ من قاعدة البيانات المحلية</div>
-              <div className="dzt-dj-db-grid">
-                {result.local_hits.map((h,i)=>(
-                  <div key={i} className="dzt-dj-db-item">
-                    <span className="dzt-dj-db-dz">{h.dz}</span>
-                    <span className="dzt-dj-db-sep">←</span>
-                    <span className="dzt-dj-db-ar">{h.ar}</span>
-                    {h.fr && <span className="dzt-dj-db-fr">/ {h.fr}</span>}
-                    <span className={`dzt-dj-db-type dzt-dj-db-type-${h.type}`}>
-                      {h.type==='expr'?'تعبير':h.type==='word'?'كلمة':'دارجة'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Source badge */}
-          <div className="dzt-dj-source">
-            {result.source==='local' ? '🗂️ مصدر: قاعدة البيانات المحلية' : '🤖 مصدر: AI + قاعدة البيانات'}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
 // ─── Zakat Calculator Tool ────────────────────────────────────────────────────
 type ZakatTab = 'mal' | 'gold' | 'silver' | 'trade' | 'crops'
 const ZAKAT_TABS: {id:ZakatTab;icon:string;label:string}[] = [
@@ -5622,7 +5342,7 @@ function FlightSearchTool() {
 }
 
 // ─── Main DZTools Page ────────────────────────────────────────────────────────
-const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','hashtag','invoice','tax','pension','qrcode','bizcard','darija','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert','flights']
+const VALID_TOOL_IDS: ToolId[] = ['cv','planner','docs','jobs','health','ocr','bizplan','image','hashtag','invoice','tax','pension','qrcode','bizcard','zakat','excel','dataanalysis','tts','screenshot','fileupload','convert','flights']
 
 function getToolFromSearch(search: string): ToolId | null {
   try {
@@ -5692,7 +5412,6 @@ export default function DZTools() {
         {active === 'bizplan'      && <BizPlanTool />}
         {active === 'invoice'      && <InvoiceTool />}
         {active === 'tax'          && <TaxTool />}
-        {active === 'darija'       && <DarijaTool />}
         {active === 'zakat'        && <ZakatTool />}
         {active === 'hashtag'      && <HashtagTool />}
         {active === 'excel'        && <SpreadsheetTool />}

@@ -367,42 +367,66 @@ function _tableKey(el: HTMLDivElement): string {
 //     when the user has scrolled all the way to the left (valid position).
 //   * Double rAF — ensures layout is complete before measuring scrollWidth.
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref    = useRef<HTMLDivElement>(null)
+  const [canL, setCanL] = useState(false)
+  const [canR, setCanR] = useState(false)
+  const [over, setOver] = useState(false)
+
+  const sync = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    const l   = el.scrollLeft
+    const max = el.scrollWidth - el.clientWidth
+    setCanL(l > 2)
+    setCanR(l < max - 2)
+    setOver(max > 4)
+    el.dataset.scrollLeft  = l > 1 ? 'true' : 'false'
+    el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
+  }, [])
+
+  const nudge = useCallback((dir: 'l' | 'r') => {
+    const el = ref.current
+    if (el) el.scrollBy({ left: dir === 'l' ? -140 : 140, behavior: 'smooth' })
+  }, [])
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
 
-    // Edge-fade hints via data-attributes — no React state = no re-renders
-    const updateHints = () => {
-      el.dataset.scrollLeft  = el.scrollLeft > 1 ? 'true' : 'false'
-      el.dataset.scrollRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1 ? 'true' : 'false'
-    }
-
-    // Restore user's saved position, or default to rightmost (first RTL column).
-    // Double rAF: first frame commits DOM layout, second ensures scrollWidth is final.
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
-      // Allow saved=0: user explicitly scrolled to the leftmost column.
       el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
-      updateHints()
+      sync()
     }))
 
     const onScroll = () => {
       _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
-      updateHints()
+      sync()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
 
+    const ro = new ResizeObserver(sync)
+    ro.observe(el)
+
     return () => {
       el.removeEventListener('scroll', onScroll)
+      ro.disconnect()
     }
-  }, [])
+  }, [sync])
 
   return (
-    <div ref={ref} className={`dzt-simple-scroll ${className}`} dir="ltr">
-      {children}
+    <div className="dz-table-outer">
+      {over && (
+        <div className="dz-tnav-bar">
+          <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="يسار">‹</button>
+          <span className="dz-tnav-label">تمرير الجدول</span>
+          <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="يمين">›</button>
+        </div>
+      )}
+      <div ref={ref} className={`dzt-simple-scroll ${className}`} dir="ltr">
+        {children}
+      </div>
     </div>
   )
 }

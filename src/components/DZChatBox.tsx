@@ -7219,6 +7219,14 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           })()
         : Promise.resolve()
 
+      // Safety timeout: never let thinkingTrace block the main response forever.
+      // If the AI API hangs (rate-limit / slow provider), we resolve after 10s
+      // so the doctor-results / rich-UI panels always appear on time.
+      const _thinkingWithTimeout = Promise.race([
+        thinkingTracePromise,
+        new Promise<void>(resolve => setTimeout(resolve, 10000)),
+      ])
+
       // ── Streaming fast-path (Vercel AI SDK) ──────────────────────────────
       // يُجرّب endpoint البث أولاً — المستخدم يرى أول كلمة خلال ~300ms.
       // إذا أعاد Server "redirect:full" (بيانات حية) → يُكمل بالـ endpoint الكامل.
@@ -7284,7 +7292,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       })()
 
       if (_streamResult) {
-        await thinkingTracePromise.catch(() => {})
+        await _thinkingWithTimeout.catch(() => {})
         if (thinkingTraceRoles) {
           setMessages(prev => {
             const lastAsst = [...prev].reverse().find(m => m.role === 'assistant')
@@ -7340,7 +7348,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           // Parallel: main response + thinking trace simultaneously
           const [fetchResult] = await Promise.all([
             fetchAgentResponse(),
-            thinkingTracePromise.catch(() => {}),
+            _thinkingWithTimeout.catch(() => {}),
           ])
           data = fetchResult
         } else {

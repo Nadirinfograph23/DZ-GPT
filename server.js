@@ -23299,6 +23299,8 @@ app.post('/api/dz-agent-stream', async (req, res) => {
 
   // ── Step 1a: WC2026 Squad DIRECT answer — لا redirect لا LLM ───────────────
   {
+    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب|\bsquad\b|\broster\b|\bline.?up\b|\bformation\b|\bplayers?\s+list\b|\bstarting\s+(?:eleven|xi|lineup)\b|\bnational\s+team\s+squad\b|\bworld\s*cup\s+squad\b|\bwho\s+(?:is\s+)?in\s+(?:the\s+)?(?:squad|team)\b)/i
+    const _dz_ctx_re = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو|\bworld\s*cup\b|\bwc\s*2026\b|\balgeria\b|\balgerian\b|\bargentina\b|\bfrance\b|\bmorocco\b|\btunisia\b)/i
     const _ssIsSquad = _dz_squad_re.test(lastUserMessage) && _dz_ctx_re.test(lastUserMessage)
     if (_ssIsSquad) {
       const _ssTeam = detectWC2026SquadTeam(lastUserMessage)

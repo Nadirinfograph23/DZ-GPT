@@ -15108,19 +15108,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   {
     const _ueRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
                     .find(m => m?.role === 'user')?.content?.trim() || ''
-    // كشف نية تشكيلة كأس العالم 2026 — شرط: (كأس العالم|مونديال|2026) + (تشكيل|قائمة|لاعبين)
-    const _ueIsSquad = (
-      /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026)/i.test(_ueRaw) &&
-      /(?:تشكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق)?|استدعاء|المستدعون|26\s*لاعب|من\s+(?:في|هم)\s*القائمة|الـ\s*26)/i.test(_ueRaw)
-    )
+    // كشف نية تشكيلة كأس العالم 2026 — فصحى + دارجة جزائرية
+    const _dz_squad_re = /(?:تشكيل(?:ة|ات)?|شكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية|بيتكو|المدرب)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق|الخضر|الجزائر)?|استدعاء|المستدعون|26\s*لاعب|الـ\s*26|منو\s*(?:يلعب|فيهم|في\s*القائمة|دعا|جاب)|واش\s*(?:راهم|يلعبو|عندنا|جابو)|كروسة|الكرو|كرو\s*الجزائر|لاعبي\s*(?:الخضر|الجزائر|المنتخب)|دعاهم\s*(?:بيتكو|المدرب)|كاش\s*(?:تشكيل|قائمة)|من\s+(?:في|هم)\s*القائمة|من\s+يلعب|من\s+سيلعب)/i
+    const _dz_ctx_re   = /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026|الخضر|الجزائر|الجزائري|المنتخب\s*الجزائري|الخضرة|بيتكوفيتش|بيتكو)/i
+    const _ueIsSquad = _dz_squad_re.test(_ueRaw) && _dz_ctx_re.test(_ueRaw)
     if (_ueIsSquad) {
       // تحديد الفريق من الاستفسار
       const _ueTeam = detectWC2026SquadTeam(_ueRaw)
       console.log(`[WC2026:UltraEarlySquad] ⛔ LLM BLOCKED | Detected: "${_ueTeam || 'غير محدد'}" | Query: "${_ueRaw.slice(0,70)}"`)
 
-      // الجزائر: رد مفصّل من WC2026_ALGERIA_SQUAD
+      // الجزائر: فصحى + دارجة
       const _ueIsAlgeria = !_ueTeam && (
-        /(?:الجزائر|الجزائري|الخضر|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني))/i.test(_ueRaw)
+        /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كرو\s*الجزائر|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا)/i.test(_ueRaw)
       )
       if (_ueIsAlgeria || _ueTeam === 'الجزائر') {
         const _ueAlgResp = buildAlgeriaWC2026SquadResponse('full')
@@ -23133,13 +23132,10 @@ app.post('/api/dz-agent-stream', async (req, res) => {
 
   // ── Step 1a: WC2026 Squad DIRECT answer — لا redirect لا LLM ───────────────
   {
-    const _ssIsSquad = (
-      /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(lastUserMessage) &&
-      /(?:تشكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية)?|لاعب(?:ون|ين|و|ي)?|استدعاء|المستدعون|26\s*لاعب)/i.test(lastUserMessage)
-    )
+    const _ssIsSquad = _dz_squad_re.test(lastUserMessage) && _dz_ctx_re.test(lastUserMessage)
     if (_ssIsSquad) {
       const _ssTeam = detectWC2026SquadTeam(lastUserMessage)
-      const _ssIsAlg = !_ssTeam && /(?:الجزائر|الجزائري|الخضر|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الوطني))/i.test(lastUserMessage)
+      const _ssIsAlg = !_ssTeam && /(?:الجزائر|الجزائري|الخضر|الخضرة|الخضار|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني)|كروسة|الكرو|بيتكوفيتش|بيتكو|خضرنا|منتخبنا)/i.test(lastUserMessage)
       let _ssContent = null
       if (_ssIsAlg || _ssTeam === 'الجزائر') {
         _ssContent = buildAlgeriaWC2026SquadResponse('full')

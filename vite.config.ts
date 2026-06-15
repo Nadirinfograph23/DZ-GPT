@@ -18,6 +18,9 @@ export default defineConfig({
       "Permissions-Policy": "microphone=(self), geolocation=(self), camera=(self), speaker-selection=(self), autoplay=(self), fullscreen=(self)",
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
       "Cross-Origin-Embedder-Policy": "unsafe-none",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
     },
   },
   optimizeDeps: {

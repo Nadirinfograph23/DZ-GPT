@@ -53963,7 +53963,9 @@ var _PERSON_QUERY_EXCLUDE = [
   /^(?:ال)?(?:رئيس|وزير|مدير|والي|قائد|أمين|سفير|وكيل|نائب|مستشار)\s+(?:ال\w+\s*){0,4}(?:لل?\w*|في\s*\w*|بالجزائر|الجزائري)?$/i,
   // ── GUARD: طبيب — استعلامات الأطباء لا تُعالَج أبداً كشخصيات ────────────────
   // "أريد طبيب" / "دكتور أسنان" / "نبغي طبيب" → searchdoc handler حصراً
-  /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز\s*صحي|نبغي\s*طبيب|أريد\s*طبيب|نريد\s*طبيب|نحوس\s*على\s*طبيب|نقلب\s*على\s*طبيب|أبحث\s*عن\s*طبيب|médecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|gynécologue|pédiatre|psychiatre|neurologue|urologue|chirurgien|pneumologue|oncologue)/i
+  /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز\s*صحي|نبغي\s*طبيب|أريد\s*طبيب|نريد\s*طبيب|نحوس\s*على\s*طبيب|نقلب\s*على\s*طبيب|أبحث\s*عن\s*طبيب|médecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|gynécologue|pédiatre|psychiatre|neurologue|urologue|chirurgien|pneumologue|oncologue)/i,
+  /(?:طقس|الطقس|أحوال\s*الجو|درجة\s*الحرارة|المطر|تساقط|عاصفة|رياح|weather|forecast|météo)/i,
+  /(?:سعر\s*(?:الدولار|اليورو|الدينار|الريال|الجنيه|اليوان|الفرنك|الدرهم)|صرف\s*العملة|أسعار\s*(?:الصرف|العملات)|تحويل\s*العملة|كم\s*(?:الدولار|اليورو|يساوي)|البنك\s*المركزي|الصرف\s*الموازي)/i
 ];
 function isPersonQuery(message) {
   if (typeof message !== "string" || message.length < 5) return false;
@@ -67176,10 +67178,16 @@ app.post("/api/dz-agent-chat", async (req, res) => {
     return res.status(200).json({ _toolRedirect });
   }
   {
-    const _capResp = getCapabilityResponse(_rawLastMsg);
-    if (_capResp) {
-      console.log(`[CapabilityKB] \u2705 "${_rawLastMsg.slice(0, 50)}" \u2192 \u062E\u062F\u0645\u0629 \u0645\u0643\u062A\u0634\u0641\u0629`);
-      return res.status(200).json({ content: _capResp, model: "capability-kb", status: "capability_guide" });
+    const _capBypassWeather = /(?:طقس|جو\s+|weather[\s_]|météo[\s_])/i.test(_rawLastMsg) &&
+      /(?:وهران|الجزائر|قسنطينة|عنابة|سطيف|بجاية|تلمسان|باتنة|جيجل|بشار|أدرار|مستغانم|تيزي|بليدة|تبسة|عين|oran|alger|constantine|annaba|setif|bejaia|tlemcen|batna|اليوم|الآن|غداً|غدا|الأسبوع|now|today|tomorrow|forecast)/i.test(_rawLastMsg);
+    const _capBypassCurrency = detectCurrencyQuery(_rawLastMsg);
+    const _capBypassYouTube = /(?:فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|ابحث.*(?:فيديو|يوتيوب)|شرح.*بالفيديو|درس.*بالفيديو|فيديو.*يشرح|أفضل.*فيديو|best.*video|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب)/i.test(_rawLastMsg);
+    if (!_capBypassWeather && !_capBypassCurrency && !_capBypassYouTube) {
+      const _capResp = getCapabilityResponse(_rawLastMsg);
+      if (_capResp) {
+        console.log(`[CapabilityKB] \u2705 "${_rawLastMsg.slice(0, 50)}" \u2192 \u062E\u062F\u0645\u0629 \u0645\u0643\u062A\u0634\u0641\u0629`);
+        return res.status(200).json({ content: _capResp, model: "capability-kb", status: "capability_guide" });
+      }
     }
   }
   {

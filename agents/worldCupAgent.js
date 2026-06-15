@@ -98,7 +98,9 @@ export function classifyWCQuery(query = '') {
 
   if (/هداف|أفضل\s+هداف|ترتيب\s+الهداف|من\s+(?:تصدر|يتصدر)/i.test(q)) return 'SCORERS'
 
+  // ── LINEUP — تشكيلة / قائمة / لاعبو المنتخب ────────────────────────────
   if (/تشكيل|تشكيلة|التشكيل\s+الأساسي|الأساسي/i.test(q)) return 'LINEUP'
+  if (/قائمة\s*(ال)?(?:لاعب|منتخب|خضر|جزائر)|لاعب[وي]\s*(ال)?(?:منتخب|جزائر|خضر)|اللاعبون|عناصر\s*(ال)?منتخب|مجموعة\s*(ال)?لاعب|squad|roster|players/i.test(q)) return 'LINEUP'
 
   if (/(?:مباراة|متى)\s+(?:الجزائر|جزائر)|(?:الجزائر|جزائر)\s+(?:مباراة|ضد|vs)/i.test(q)) return 'ALGERIA_MATCH'
 
@@ -305,57 +307,59 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
   const dateStr = wcType === 'TOMORROW' ? tomorrow : today
 
-  // ── LINEUP — تشكيلة الجزائر عبر LLM مع قائمة اللاعب أولاً ثم النادي ────
+  // ── LINEUP — Agent Retrieval أولاً (إلزامي) ثم LLM للتعليق فقط ────────
+  // المنطق: البيانات الثابتة تُسترجع فوراً — لا يُعتمد على LLM لمعرفة القائمة
   if (wcType === 'LINEUP') {
+    // ① Agent Retrieval — استرجاع فوري من قاعدة المعرفة المحلية
     const squadCtx = buildAlgeriaLineupContext()
+    if (!squadCtx) {
+      return {
+        userResponse: '⚽ قائمة المنتخب الجزائري غير متوفرة حالياً.',
+        found: false,
+        agent: 'world_cup_agent',
+        source: 'WC2026_KNOWLEDGE',
+        wcType: 'LINEUP',
+      }
+    }
 
-    // محاولة LLM لإجابة طبيعية مع streaming
+    // ② LLM اختياري — فقط لإضافة تعليق تحليلي قصير يُلصق بعد القائمة
+    // القاعدة: LLM لا يُولِّد القائمة — يضيف تحليلاً فقط (timeout قصير 6ث)
+    let llmComment = ''
     try {
       const { callAIRouter } = await import('../lib/ai-router/index.js')
       const llmMsgs = [
         {
           role: 'system',
-          content: `أنت DZ Agent — مساعد جزائري متخصص في كرة القدم ومونديال 2026.
-أجب باللغة العربية فقط، بأسلوب حماسي ومنظّم.
-
-البيانات الرسمية لتشكيلة المنتخب الجزائري:
-${squadCtx}
-
-قواعد العرض الصارمة:
-• اعرض **اسم اللاعب أولاً** ثم (النادي) — لا تعكس الترتيب
-• استخدم الجداول الـ Markdown للتنسيق
-• لا تختلق لاعبين خارج القائمة المذكورة
-• أضف تعليقاً تحليلياً قصيراً عن نقاط قوة الفريق`,
+          content: `أنت محلل رياضي جزائري متخصص في كأس العالم 2026.
+القائمة الرسمية أدناه مُعطاة لك — لا تُعيد طباعتها ولا تُعدِّلها.
+مهمتك الوحيدة: أضف **تعليقاً تحليلياً موجزاً** (3–5 أسطر) عن نقاط قوة وضعف هذه القائمة، ولاعبين بارزين يستحقون المتابعة. ابدأ مباشرة بـ "---" ثم "### 💬 تحليل القائمة".`,
         },
-        { role: 'user', content: query },
+        {
+          role: 'user',
+          content: `السؤال: ${query}\n\nالقائمة الرسمية (لا تُعيد طباعتها):\n${squadCtx.slice(0, 800)}`,
+        },
       ]
       const llmRes = await withTimeout(
-        callAIRouter(llmMsgs, { max_tokens: 1600, taskHint: 'sports' }),
-        14000
+        callAIRouter(llmMsgs, { max_tokens: 400, taskHint: 'sports' }),
+        6000
       )
-      if (llmRes?.content) {
-        return {
-          userResponse: llmRes.content,
-          found: true,
-          agent: 'world_cup_agent',
-          source: 'WC2026_LLM_LINEUP',
-          confidence: 'high',
-          wcType: 'LINEUP',
-          _usedLLM: true,
-        }
+      if (llmRes?.content &&
+          !/لا أملك|لا أعرف|لا أستطيع|don't have|no information|غير متاح/i.test(llmRes.content)) {
+        llmComment = '\n\n' + llmRes.content
       }
     } catch (e) {
-      console.warn('[WCAgent:LINEUP] LLM failed, using static:', e.message?.slice(0, 80))
+      console.warn('[WCAgent:LINEUP] LLM commentary skipped:', e.message?.slice(0, 60))
     }
 
-    // Fallback ثابت إذا فشل LLM
+    // ③ الإجابة النهائية: القائمة الكاملة + التعليق التحليلي (إن وُجد)
     return {
-      userResponse: squadCtx || '⚽ قائمة المنتخب الجزائري غير متوفرة حالياً.',
+      userResponse: squadCtx + llmComment,
       found: true,
       agent: 'world_cup_agent',
       source: 'WC2026_KNOWLEDGE',
       confidence: 'high',
       wcType: 'LINEUP',
+      _usedLLM: llmComment.length > 0,
     }
   }
 

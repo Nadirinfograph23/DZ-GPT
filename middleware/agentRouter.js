@@ -102,7 +102,7 @@ export function classifyIntent(query = '') {
     else if (/الغد|غدا?|بكر[اة]/i.test(q)) wcSubType = 'TOMORROW'
     else if (/ترتيب|نقاط|صدارة|مجموعة\s+[a-lA-L]/i.test(q)) wcSubType = 'STANDINGS'
     else if (/هداف|ترتيب\s+الهداف/i.test(q)) wcSubType = 'SCORERS'
-    else if (/تشكيل|تشكيلة/i.test(q)) wcSubType = 'LINEUP'
+    else if (/تشكيل|تشكيلة|قائمة\s*(ال)?(?:لاعب|منتخب|خضر|جزائر)|لاعب[وي]\s*(ال)?(?:منتخب|جزائر)|اللاعبون|عناصر\s*(ال)?منتخب|squad|roster/i.test(q)) wcSubType = 'LINEUP'
     else if (/مباريات|برنامج|جدول|رزنامة|fixture/i.test(q)) wcSubType = 'FIXTURES'
 
     return { intent: 'WORLD_CUP', confidence: 'high', keywords: foundKeywords, wcSubType }

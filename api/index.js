@@ -1,12 +1,12 @@
-// deploy-trigger: 20260614-0245
-// Vercel serverless entry point — uses pre-built server-bundle.js
+// deploy-trigger: 20260615-squad-fix
+// Vercel serverless entry point — imports server.js directly (fix: server-bundle.js was stale)
 let app
 
 try {
-  const { app: importedApp } = await import('./server-bundle.js')
+  const { app: importedApp } = await import('../server.js')
   app = importedApp
 } catch (err) {
-  console.error('[Vercel] server-bundle import FAILED:', err?.message)
+  console.error('[Vercel] server.js import FAILED:', err?.message)
   console.error(err?.stack)
   app = (_req, res) => {
     res.status(500).json({

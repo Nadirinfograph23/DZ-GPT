@@ -15100,6 +15100,77 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
   // ══════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ══ WC2026 SQUAD ULTRA-EARLY INTERCEPTOR — أولوية قصوى ══════════════════
+  // يُطلَق قبل كل handler آخر — يمنع أي LLM من تجاوز قاعدة بيانات التشكيلات
+  // الترتيب: ultra-early guardian → هذا الـ block → كل شيء آخر
+  {
+    const _ueRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
+                    .find(m => m?.role === 'user')?.content?.trim() || ''
+    // كشف نية تشكيلة كأس العالم 2026 — شرط: (كأس العالم|مونديال|2026) + (تشكيل|قائمة|لاعبين)
+    const _ueIsSquad = (
+      /(?:كأس\s*العالم|مونديال|المونديال|FIFA|WC\s*2026|2026)/i.test(_ueRaw) &&
+      /(?:تشكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية)?|لاعب(?:ون|ين|و|ي)?\s*(?:المنتخب|الفريق)?|استدعاء|المستدعون|26\s*لاعب|من\s+(?:في|هم)\s*القائمة|الـ\s*26)/i.test(_ueRaw)
+    )
+    if (_ueIsSquad) {
+      // تحديد الفريق من الاستفسار
+      const _ueTeam = detectWC2026SquadTeam(_ueRaw)
+      console.log(`[WC2026:UltraEarlySquad] ⛔ LLM BLOCKED | Detected: "${_ueTeam || 'غير محدد'}" | Query: "${_ueRaw.slice(0,70)}"`)
+
+      // الجزائر: رد مفصّل من WC2026_ALGERIA_SQUAD
+      const _ueIsAlgeria = !_ueTeam && (
+        /(?:الجزائر|الجزائري|الخضر|الفنيق\s*الجزائري|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الجزائري|الوطني))/i.test(_ueRaw)
+      )
+      if (_ueIsAlgeria || _ueTeam === 'الجزائر') {
+        const _ueAlgResp = buildAlgeriaWC2026SquadResponse('full')
+        return res.status(200).json({
+          content: _ueAlgResp,
+          model: 'wc2026-squad-ultra-early-kb',
+          _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'algeria-squad',
+        })
+      }
+
+      // فريق آخر موجود في WC2026_ALL_SQUADS
+      if (_ueTeam && WC2026_ALL_SQUADS[_ueTeam]) {
+        const _ueResp = buildWC2026SquadResponse(_ueTeam)
+        return res.status(200).json({
+          content: _ueResp,
+          model: 'wc2026-squad-ultra-early-kb',
+          _sportsAgent: true, _bypassLLM: true, wc2026: true, found: true, type: 'team-squad', team: _ueTeam,
+        })
+      }
+
+      // فريق غير موجود في قاعدة البيانات — مصادر FIFA مباشرة
+      const _ueSources = _ueTeam
+        ? `## 🔍 تشكيلة ${_ueTeam} — كأس العالم FIFA 2026
+
+> ⚠️ لا تتوفر بيانات محلية لهذا الفريق.
+
+🔗 **المصادر الرسمية:**
+| المصدر | الرابط |
+|--------|--------|
+| 🏆 **FIFA الرسمي** | [قوائم كأس العالم 2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |
+| ⚽ **كووورة** | [تشكيلات كأس العالم](https://www.kooora.com) |
+| 📊 **SofaScore** | [صفحة الفريق](https://www.sofascore.com) |`
+        : `## ⚽ تشكيلات كأس العالم FIFA 2026
+
+🔗 **المصادر الرسمية:**
+| المصدر | الرابط |
+|--------|--------|
+| 🏆 **FIFA الرسمي** | [قوائم كأس العالم 2026](https://www.fifa.com/fifaplus/ar/tournaments/mens/worldcup/canadamexicousa2026/teams) |
+| ⚽ **كووورة** | [تشكيلات كأس العالم](https://www.kooora.com) |
+| 📊 **SofaScore** | [صفحة الفريق](https://www.sofascore.com) |
+
+> الفرق المتاحة: ${Object.keys(WC2026_ALL_SQUADS).join(' · ')}`
+      return res.status(200).json({
+        content: _ueSources,
+        model: 'wc2026-squad-sources-only',
+        _sportsAgent: true, _bypassLLM: true, wc2026: true, found: false, type: 'squad-sources',
+      })
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
 
   // ── Disk session restore — استعادة المحادثة من disk إن لم يُرسل السياق ──
   if (_agentSessionId && messages.length <= 1) {
@@ -23058,6 +23129,31 @@ app.post('/api/dz-agent-stream', async (req, res) => {
     res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)
     res.write('data: [DONE]\n\n')
     return res.end()
+  }
+
+  // ── Step 1a: WC2026 Squad DIRECT answer — لا redirect لا LLM ───────────────
+  {
+    const _ssIsSquad = (
+      /(?:كأس\s*العالم|مونديال|FIFA|WC\s*2026|2026)/i.test(lastUserMessage) &&
+      /(?:تشكيل(?:ة|ات)?|قائمة\s*(?:اللاعبين|الرسمية)?|لاعب(?:ون|ين|و|ي)?|استدعاء|المستدعون|26\s*لاعب)/i.test(lastUserMessage)
+    )
+    if (_ssIsSquad) {
+      const _ssTeam = detectWC2026SquadTeam(lastUserMessage)
+      const _ssIsAlg = !_ssTeam && /(?:الجزائر|الجزائري|الخضر|المنتخب\s*الجزائري|منتخب\s*(?:الجزائر|الوطني))/i.test(lastUserMessage)
+      let _ssContent = null
+      if (_ssIsAlg || _ssTeam === 'الجزائر') {
+        _ssContent = buildAlgeriaWC2026SquadResponse('full')
+      } else if (_ssTeam && WC2026_ALL_SQUADS[_ssTeam]) {
+        _ssContent = buildWC2026SquadResponse(_ssTeam)
+      }
+      if (_ssContent) {
+        console.log(`[Stream:SquadDirect] ✅ Direct squad response for "${_ssTeam || 'الجزائر'}" — LLM BYPASSED`)
+        _streamSSEHeaders(res)
+        res.write(`data: ${JSON.stringify({ token: _ssContent })}\n\n`)
+        res.write('data: [DONE]\n\n')
+        return res.end()
+      }
+    }
   }
 
   // ── Step 1b: Static Fast-Path — إجابة فورية <1ms بدون LLM ──────────────

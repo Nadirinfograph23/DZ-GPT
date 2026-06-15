@@ -1,8 +1,11 @@
-// DZ GPT — Service Worker v2.0
-// يدعم: PWA install، offline caching، push notifications، permissions hint
-const SHELL_CACHE = 'dz-gpt-shell-v7'
-const AUDIO_CACHE = 'dz-tube-audio-v1'
-const ALL_CACHES  = [SHELL_CACHE, AUDIO_CACHE]
+// DZ GPT — Service Worker v3.0
+// يدعم: PWA install، offline caching، push notifications، auto-update versioning
+const SHELL_CACHE   = 'dz-gpt-shell-v8'
+const AUDIO_CACHE   = 'dz-tube-audio-v1'
+const ALL_CACHES    = [SHELL_CACHE, AUDIO_CACHE]
+const VERSION_CHECK_INTERVAL = 5 * 60 * 1000  // 5 دقائق
+
+let _lastCommit = null
 
 // ── Install: pre-cache shell ───────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -17,7 +20,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// ── Activate: clean old caches ────────────────────────────────────────────
+// ── Activate: clean old caches + notify clients ────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
@@ -27,8 +30,37 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({ type: 'window' }))
       .then(cs => cs.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
+      .then(() => {
+        // بدء فحص الإصدار بعد التفعيل
+        checkVersionPeriodically()
+      })
   )
 })
+
+// ── Version Check ─────────────────────────────────────────────────────────
+async function checkVersion() {
+  try {
+    const res = await fetch('/api/version', {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    const commit = data.commit || data.version
+
+    if (_lastCommit && commit && _lastCommit !== commit) {
+      console.log(`[SW] 🆕 New version detected: ${_lastCommit} → ${commit}`)
+      const clients = await self.clients.matchAll({ type: 'window' })
+      clients.forEach(c => c.postMessage({ type: 'NEW_VERSION', version: commit, prev: _lastCommit }))
+    }
+    if (commit) _lastCommit = commit
+  } catch {}
+}
+
+function checkVersionPeriodically() {
+  checkVersion()
+  setInterval(checkVersion, VERSION_CHECK_INTERVAL)
+}
 
 // ── Fetch: network-first حسب نوع الطلب ────────────────────────────────────
 self.addEventListener('fetch', (event) => {
@@ -112,7 +144,8 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// ── رسالة من الصفحة ────────────────────────────────────────────────────────
+// ── رسائل من الصفحة ────────────────────────────────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
+  if (event.data?.type === 'CHECK_VERSION') checkVersion()
 })

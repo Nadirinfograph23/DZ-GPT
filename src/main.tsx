@@ -48,6 +48,7 @@ function PageLoader() {
     </div>
   )
 }
+import { startVersionChecker } from './utils/versionChecker.ts'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import { RadioPlayerProvider } from './context/RadioPlayerContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
@@ -176,6 +177,9 @@ class PageErrorBoundary extends Component<PageBoundaryProps, PageBoundaryState> 
 function pb(name: string, element: ReactNode) {
   return <PageErrorBoundary name={name}>{element}</PageErrorBoundary>
 }
+
+// بدء فحص الإصدار الجديد كل 8 دقائق + استقبال إشارات Service Worker
+startVersionChecker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

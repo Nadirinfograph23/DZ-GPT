@@ -31,6 +31,7 @@ import {
   buildWC2026FullContext,
   buildWC2026QuickAnswer,
   buildTeamProfile,
+  buildAlgeriaLineupContext,
   WC2026_KEY_FACTS,
   WC2026_GROUPS_INFO,
   WC2026_TEAM_PROFILES,
@@ -303,6 +304,60 @@ export async function runWorldCupAgent(query, messages = [], options = {}) {
   const today = new Date().toISOString().slice(0, 10)
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
   const dateStr = wcType === 'TOMORROW' ? tomorrow : today
+
+  // ── LINEUP — تشكيلة الجزائر عبر LLM مع قائمة اللاعب أولاً ثم النادي ────
+  if (wcType === 'LINEUP') {
+    const squadCtx = buildAlgeriaLineupContext()
+
+    // محاولة LLM لإجابة طبيعية مع streaming
+    try {
+      const { callAIRouter } = await import('../lib/ai-router/index.js')
+      const llmMsgs = [
+        {
+          role: 'system',
+          content: `أنت DZ Agent — مساعد جزائري متخصص في كرة القدم ومونديال 2026.
+أجب باللغة العربية فقط، بأسلوب حماسي ومنظّم.
+
+البيانات الرسمية لتشكيلة المنتخب الجزائري:
+${squadCtx}
+
+قواعد العرض الصارمة:
+• اعرض **اسم اللاعب أولاً** ثم (النادي) — لا تعكس الترتيب
+• استخدم الجداول الـ Markdown للتنسيق
+• لا تختلق لاعبين خارج القائمة المذكورة
+• أضف تعليقاً تحليلياً قصيراً عن نقاط قوة الفريق`,
+        },
+        { role: 'user', content: query },
+      ]
+      const llmRes = await withTimeout(
+        callAIRouter(llmMsgs, { max_tokens: 1600, taskHint: 'sports' }),
+        14000
+      )
+      if (llmRes?.content) {
+        return {
+          userResponse: llmRes.content,
+          found: true,
+          agent: 'world_cup_agent',
+          source: 'WC2026_LLM_LINEUP',
+          confidence: 'high',
+          wcType: 'LINEUP',
+          _usedLLM: true,
+        }
+      }
+    } catch (e) {
+      console.warn('[WCAgent:LINEUP] LLM failed, using static:', e.message?.slice(0, 80))
+    }
+
+    // Fallback ثابت إذا فشل LLM
+    return {
+      userResponse: squadCtx || '⚽ قائمة المنتخب الجزائري غير متوفرة حالياً.',
+      found: true,
+      agent: 'world_cup_agent',
+      source: 'WC2026_KNOWLEDGE',
+      confidence: 'high',
+      wcType: 'LINEUP',
+    }
+  }
 
   // ── STANDINGS ───────────────────────────────────────────────────────────
   if (wcType === 'STANDINGS') {

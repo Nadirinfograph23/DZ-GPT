@@ -1111,6 +1111,28 @@ app.use('/api', createHealthRouter({
 }))
 app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
 app.use('/api', createGitHubRouter({ githubLimiter }))
+
+// ── /api/version — معلومات الإصدار الحالي والـ deploy ──────────────────────
+const _SERVER_START = Date.now()
+app.get('/api/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  const commit  = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'dev-local'
+  const branch  = process.env.VERCEL_GIT_BRANCH || 'local'
+  const message = process.env.VERCEL_GIT_COMMIT_MESSAGE || ''
+  res.json({
+    version: `1.0.0-${commit}`,
+    commit,
+    branch,
+    message: message.slice(0, 120),
+    deployedAt: process.env.VERCEL_GIT_COMMIT_DATE || new Date().toISOString(),
+    serverTime: new Date().toISOString(),
+    uptime: Math.floor((Date.now() - _SERVER_START) / 1000),
+    env: process.env.NODE_ENV || 'development',
+    status: 'ok',
+  })
+})
 // ═══════════════════════════════════════════════════════════════
 
 app.post('/api/dz-agent/ratings', (req, res) => {

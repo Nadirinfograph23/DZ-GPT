@@ -7779,6 +7779,7 @@
   gap: 8px;
   margin-top: 12px;
   direction: rtl;
+  opacity: 0;
 }
 
 .dzc-action-cmd-btn {

@@ -21115,8 +21115,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     'جدول المباريات', 'ماتشات اليوم', 'كل المباريات اليوم',
     'مباراة الليلة', 'مباراة اليوم', 'الدوريات الكبرى',
     'المباريات اليوم', 'مباريات على مباشر', 'مباريات مباشرة اليوم',
+    'أهم مباريات اليوم', 'أهم مباريات', 'من الدوريات',
+    'جدول المقابلات', 'مباريات من الدوريات',
   ]
   const isGlobalLeaguesQuery = !isCurrencyQuery && globalLeaguesKeywords.some(k => lowerMsg.includes(k))
+  // استفسار "أهم مباريات اليوم من الدوريات" — يجلب LFP + دوريات عالمية معاً
+  const isTodayAllLeaguesQuery = isGlobalLeaguesQuery && /(?:اليوم|الليلة)/i.test(lastUserMessage)
 
   // ── WC2026 today matches — كأس العالم + اليوم ──────────────────────────────
   // يُكتشف: "مباريات اليوم كأس العالم" / "ماتشات اليوم مونديال" / "مباريات كأس العالم الليلة"
@@ -21160,7 +21164,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   ] = await Promise.allSettled([
     hasWeatherPriority ? fetchCityWeatherResilient(weatherCity) : Promise.resolve(null),
     isPrayerQuery ? fetchPrayerTimesAladhan(detectCityFromQuery(lastUserMessage)) : Promise.resolve(null),
-    (isLFPQuery || isStandingsQuery) ? fetchLFPData() : Promise.resolve(null),
+    (isLFPQuery || isStandingsQuery || isTodayAllLeaguesQuery) ? fetchLFPData() : Promise.resolve(null),
     isCurrencyQuery ? fetchCurrencyData() : Promise.resolve(null),
     (isFootballQuery && !isLFPQuery && !isStandingsQuery) ? Promise.allSettled([fetchSofaScoreFootball(today), fetchMultipleFeeds(INTL_FOOTBALL_FEEDS)]) : Promise.resolve(null),
     isStandingsQuery ? fetchAlgerianStandings() : Promise.resolve(null),
@@ -21696,13 +21700,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _sdParts.push(standingsContext.trim())
     }
 
-    // ② مباريات الدوري الجزائري المحترف LFP
-    if (isLFPQuery && lfpContext && !lfpContext.includes('تعذّر جلب البيانات حالياً')) {
-      if (!_sdParts.some(p => p === standingsContext?.trim())) {
-        _sdParts.push(lfpContext.trim())
-      } else {
-        _sdParts.push(lfpContext.trim())
-      }
+    // ② مباريات الدوري الجزائري المحترف LFP (يُضاف أيضاً لاستفسارات كل الدوريات)
+    if ((isLFPQuery || isTodayAllLeaguesQuery) && lfpContext && !lfpContext.includes('تعذّر جلب البيانات حالياً')) {
+      _sdParts.push(lfpContext.trim())
     }
 
     // ③ الدوريات العالمية (أي دوري — أبطال أوروبا، الإنجليزي، الإسباني، ...)

@@ -737,6 +737,158 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+// ===== SOURCE ICONS — ChatGPT-style favicon bar =====
+
+/** دومينات معروفة → روابطها الكاملة */
+const _KNOWN_SOURCE_URLS: Record<string, string> = {
+  'open-meteo':          'https://open-meteo.com',
+  'open-meteo.com':      'https://open-meteo.com',
+  'openweathermap':      'https://openweathermap.org',
+  'openweathermap.org':  'https://openweathermap.org',
+  'wikipedia':           'https://ar.wikipedia.org',
+  'wikipedia.org':       'https://ar.wikipedia.org',
+  'wikimedia':           'https://wikimedia.org',
+  'kooora':              'https://www.kooora.com',
+  'kooora.com':          'https://www.kooora.com',
+  'fotmob':              'https://www.fotmob.com',
+  'fotmob.com':          'https://www.fotmob.com',
+  '365scores':           'https://www.365scores.com',
+  '365scores.com':       'https://www.365scores.com',
+  'fifa':                'https://www.fifa.com',
+  'fifa.com':            'https://www.fifa.com',
+  'openstreetmap':       'https://www.openstreetmap.org',
+  'openstreetmap.org':   'https://www.openstreetmap.org',
+  'nominatim':           'https://nominatim.openstreetmap.org',
+  'nominatim.openstreetmap.org': 'https://nominatim.openstreetmap.org',
+  'sifamed':             'https://www.sifamed.dz',
+  'sifamed.dz':          'https://www.sifamed.dz',
+  'currency-api':        'https://github.com/fawazahmed0/currency-api',
+  'fawazahmed0':         'https://open.er-api.com',
+  'exchangerate.host':   'https://exchangerate.host',
+  'open.er-api.com':     'https://open.er-api.com',
+  'espn':                'https://www.espn.com',
+  'espn.com':            'https://www.espn.com',
+  'goal':                'https://www.goal.com/ar',
+  'goal.com':            'https://www.goal.com',
+  'transfermarkt':       'https://www.transfermarkt.com',
+  'transfermarkt.com':   'https://www.transfermarkt.com',
+  'livescore':           'https://www.livescore.com',
+  'livescore.com':       'https://www.livescore.com',
+  'aps':                 'https://www.aps.dz',
+  'aps.dz':              'https://www.aps.dz',
+  'ennaharonline':       'https://www.ennaharonline.com',
+  'echouroukonline':     'https://www.echouroukonline.com',
+  'elkhabar':            'https://www.elkhabar.com',
+  'el-bilad':            'https://www.el-bilad.com',
+  'elwatan':             'https://www.elwatan.com',
+  'liberte-algerie':     'https://www.liberte-algerie.com',
+  'quran':               'https://quran.com',
+  'quran.com':           'https://quran.com',
+  'openlibrary':         'https://openlibrary.org',
+  'openlibrary.org':     'https://openlibrary.org',
+  'google':              'https://www.google.com',
+  'youtube':             'https://www.youtube.com',
+  'youtube.com':         'https://www.youtube.com',
+}
+
+type _SourceIcon = { domain: string; url: string; label: string; faviconUrl: string }
+
+function _srcDomain(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
+}
+
+function _srcFaviconUrl(domain: string): string {
+  const clean = domain.replace(/^www\./, '')
+  const resolved = _KNOWN_SOURCE_URLS[clean]
+  const base = resolved ? _srcDomain(resolved) || clean : (clean.includes('.') ? clean : clean + '.com')
+  return `https://www.google.com/s2/favicons?domain=${base}&sz=32`
+}
+
+/** يستخرج كل مصادر الرسالة ويُعيدها كقائمة أيقونات (بدون تكرار) */
+function extractAllSourceIcons(msg: DZMessage): _SourceIcon[] {
+  const seen = new Set<string>()
+  const out: _SourceIcon[] = []
+
+  function add(domain: string, url?: string, label?: string) {
+    const key = domain.toLowerCase().replace(/^www\./, '').trim()
+    if (!key || key.length < 3 || seen.has(key)) return
+    seen.add(key)
+    const resolved = url || _KNOWN_SOURCE_URLS[key] || `https://${key}`
+    out.push({ domain: key, url: resolved, label: label || key.split('.')[0], faviconUrl: _srcFaviconUrl(key) })
+  }
+
+  // ① من newsItems — أخبار / بحث ويب / ويكيبيديا
+  if (msg.newsItems?.length) {
+    for (const item of msg.newsItems) {
+      const d = _srcDomain(item.url)
+      if (d) add(d, item.url, item.source || d.split('.')[0])
+    }
+  }
+
+  // ② أنواع ردود معروفة
+  const content = msg.content || ''
+
+  // طقس
+  if (/طقس|درجة.*حرارة|الجو|🌤|🌡|⛅|weather/i.test(content)) {
+    add('open-meteo.com',      'https://open-meteo.com',      'Open-Meteo')
+    add('openweathermap.org',  'https://openweathermap.org',  'OpenWeather')
+  }
+  // خرائط / أماكن / GPS
+  if (/خريطة|📍|📌|openstreetmap|nominatim|إحداثيات|lat.*lon/i.test(content)) {
+    add('openstreetmap.org', 'https://www.openstreetmap.org', 'OpenStreetMap')
+  }
+  // أسعار صرف
+  if (/صرف|دولار|يورو|دينار|💰|💵|currency|exchange|dzd/i.test(content) && !/رياضة|مباراة|ملعب/i.test(content)) {
+    add('open.er-api.com', 'https://open.er-api.com', 'ExchangeRate')
+  }
+  // أطباء
+  if (msg.richType === 'doctor-results' || /sifamed|pages.jaunes|دليل.*الأطباء/i.test(content)) {
+    add('sifamed.dz', 'https://www.sifamed.dz', 'SifaMed')
+  }
+  // رياضة / كرة قدم
+  if ((msg as any)._sportsAgent || (msg as any).wc2026) {
+    add('kooora.com', 'https://www.kooora.com', 'كووورة')
+    if ((msg as any).wc2026) add('fifa.com', 'https://www.fifa.com', 'FIFA')
+    if (/espn/i.test(content))  add('espn.com', 'https://www.espn.com', 'ESPN')
+    if (/fotmob/i.test(content)) add('fotmob.com', 'https://www.fotmob.com', 'FotMob')
+    if (/365scores/i.test(content)) add('365scores.com', 'https://www.365scores.com', '365Scores')
+  }
+  // ويكيبيديا
+  if (/wikipedia|ويكيبيديا/i.test(content)) {
+    add('wikipedia.org', 'https://ar.wikipedia.org', 'Wikipedia')
+  }
+  // قرآن
+  if (/quran\.com|القرآن.*الكريم.*API/i.test(content)) {
+    add('quran.com', 'https://quran.com', 'Quran.com')
+  }
+  // كتب
+  if (msg.books?.length || /openlibrary/i.test(content)) {
+    add('openlibrary.org', 'https://openlibrary.org', 'Open Library')
+  }
+
+  // ③ تحليل نص الماركداون — أنماط "المصدر: ..."
+  const srcRx = [
+    /[مM]صدر[:\s*]+([^\n\|\u060C،,\u200f]{3,60})/g,
+    /[Ss]ource[:\s*]+([^\n\|\u060C،,]{3,60})/g,
+    /📡\s*\*{0,2}([a-zA-Z0-9][a-zA-Z0-9\-.]{3,40}\.[a-z]{2,6})/g,
+  ]
+  for (const rx of srcRx) {
+    let m: RegExpExecArray | null
+    while ((m = rx.exec(content)) !== null) {
+      const raw = m[1].replace(/[*_`\[\]()]/g, '').split(/[\s|،,\u200f]/)[0].trim()
+      if (!raw || raw.length < 3 || raw.length > 60) continue
+      if (/\.\w{2,6}$/.test(raw)) {
+        add(raw, _KNOWN_SOURCE_URLS[raw.toLowerCase()] || `https://${raw}`, raw.split('.')[0])
+      } else {
+        const key = raw.toLowerCase()
+        if (_KNOWN_SOURCE_URLS[key]) add(key, _KNOWN_SOURCE_URLS[key], raw)
+      }
+    }
+  }
+
+  return out.slice(0, 12)
+}
+
 // ===== SMART STUDY CARD (Auto-index from eddirasa.com) =====
 
 interface EddirasaIndexItem {
@@ -9007,56 +9159,44 @@ ${rows}
                           }}
                         />
                       )}
-                      {msg.newsItems && msg.newsItems.length > 0 && (() => {
-                        const _getDomain = (url: string): string => {
-                          try { return new URL(url).hostname.replace('www.', '') } catch { return '' }
-                        }
-                        const _getLabel = (item: { url: string; source?: string; title?: string }): string => {
-                          if (item.source) return item.source
-                          const d = _getDomain(item.url)
-                          if (!d) return item.title?.slice(0, 25) || 'مصدر'
-                          return d.split('.')[0]
-                        }
-                        const _getFaviconUrl = (url: string, domain: string): string => {
-                          if (!url && !domain) return ''
-                          const d = domain || _getDomain(url)
-                          return `https://www.google.com/s2/favicons?domain=${d}&sz=16`
-                        }
-                        const _isSports = (msg as any)._sportsAgent || (msg as any).wc2026
-                        const _headerLabel = _isSports ? 'المصادر' : 'نتائج البحث'
+                      {/* ── شريط المصادر — أيقونات فقط (ChatGPT style) ── */}
+                      {(() => {
+                        const _icons = extractAllSourceIcons(msg)
+                        if (!_icons.length) return null
                         return (
                           <div className="dzc-sources-bar">
-                            <span className="dzc-sources-label">{_headerLabel}</span>
+                            <span className="dzc-sources-label">المصادر</span>
                             <div className="dzc-sources-list">
-                              {msg.newsItems!.map((item, i) => {
-                                const domain = _getDomain(item.url)
-                                const label  = _getLabel(item)
-                                const faviconUrl = _getFaviconUrl(item.url, domain)
-                                return (
-                                  <a
-                                    key={i}
-                                    href={item.url || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="dzc-source-chip"
-                                    title={item.title || label}
-                                    aria-label={item.title || label}
-                                  >
-                                    {faviconUrl && (
-                                      <img
-                                        src={faviconUrl}
-                                        alt=""
-                                        className="dzc-source-favicon"
-                                        width={14}
-                                        height={14}
-                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    <span className="dzc-source-name">{label}</span>
-                                  </a>
-                                )
-                              })}
+                              {_icons.map((src, i) => (
+                                <a
+                                  key={i}
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="dzc-source-chip"
+                                  title={src.label}
+                                  aria-label={src.label}
+                                >
+                                  <img
+                                    src={src.faviconUrl}
+                                    alt={src.label}
+                                    className="dzc-source-favicon"
+                                    width={18}
+                                    height={18}
+                                    onError={(e) => {
+                                      const el = e.target as HTMLImageElement
+                                      el.style.display = 'none'
+                                      if (!el.parentElement?.querySelector('.dzc-source-emoji')) {
+                                        const s = document.createElement('span')
+                                        s.className = 'dzc-source-emoji'
+                                        s.textContent = '🌐'
+                                        el.parentElement?.appendChild(s)
+                                      }
+                                    }}
+                                    loading="lazy"
+                                  />
+                                </a>
+                              ))}
                             </div>
                           </div>
                         )

@@ -711,3 +711,49 @@
   color: #818cf8; font-size: 0.72rem; cursor: pointer;
   text-decoration: underline; margin-right: 8px;
 }
+
+/* ══════════════════════════════════════════════
+   Query Mode Toggle — Research / Auto / Execution
+   ══════════════════════════════════════════════ */
+.amb-query-mode-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 18px;
+  padding: 2px 3px;
+  flex-shrink: 0;
+}
+
+.amb-qmode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 14px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s;
+  white-space: nowrap;
+}
+.amb-qmode-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.06); }
+
+.amb-qmode-btn--active { color: #fff !important; }
+
+.amb-qmode-btn--research.amb-qmode-btn--active {
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+  box-shadow: 0 0 8px rgba(13,148,136,0.35);
+}
+.amb-qmode-btn--auto.amb-qmode-btn--active {
+  background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+  box-shadow: 0 0 8px rgba(99,102,241,0.35);
+}
+.amb-qmode-btn--execution.amb-qmode-btn--active {
+  background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+  box-shadow: 0 0 8px rgba(217,119,6,0.35);
+}

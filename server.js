@@ -176,6 +176,7 @@ import {
   resetProviderScore,
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
+import { detectAgentMode, buildResearchBlockedResponse } from './lib/dz-agent-mode.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import {
@@ -15559,6 +15560,63 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[ToolRedirect] → ${_toolRedirect.toolUrl} for: "${_rawLastMsg.slice(0, 50)}"`)
     return res.status(200).json({ _toolRedirect })
   }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🔍⚡ RESEARCH vs EXECUTION MODE — Intent Gate
+  // يحدد هل الطلب معلوماتي (Research) أم تنفيذي (Execution)
+  // ويطبق Confirmation Gate قبل أي عملية حساسة
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _clientMode  = String(req.body.agentQueryMode || 'auto')
+    const _confirmed   = req.body.confirmed === true
+    const _modeResult  = detectAgentMode(_rawLastMsg, messages, _clientMode, _confirmed)
+
+    // ── تحديث الوضع في الـ response headers للـ client ──────────────────────
+    res.setHeader('X-DZ-Agent-Mode',   _modeResult.mode)
+    res.setHeader('X-DZ-Intent-Type',  _modeResult.intentType)
+
+    // ── حالة 1: وضع البحث + طلب تنفيذي → حجب التنفيذ + رد بحثي ────────────
+    if (_modeResult.shouldBlockExecution) {
+      const _blockedResp = buildResearchBlockedResponse(_rawLastMsg, _modeResult.actionSummary)
+      console.log(`[AgentMode] 🔍 RESEARCH_BLOCKED | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
+      return res.status(200).json({
+        content: _blockedResp,
+        model: 'research-mode-guard',
+        _researchModeBlocked: true,
+        intentType: _modeResult.intentType,
+      })
+    }
+
+    // ── حالة 2: طلب تنفيذي غير مؤكد → إرسال Confirmation Gate للواجهة ──────
+    if (_modeResult.needsConfirmation) {
+      console.log(`[AgentMode] ⚡ CONFIRM_GATE | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
+      return res.status(200).json({
+        content: '',
+        _needsConfirmation: true,
+        confirmationData: _modeResult.actionSummary,
+        intentType: _modeResult.intentType,
+        originalQuery: _rawLastMsg.slice(0, 200),
+      })
+    }
+
+    // ── حالة 3: وضع البحث + سؤال بحثي → حقن تعليمات البحث في الـ context ──
+    if (_clientMode === 'research' && _modeResult.isResearchQuery && _modeResult.researchModeInstruction) {
+      if (messages.length > 0) {
+        const _sysMsg = { role: 'system', content: _modeResult.researchModeInstruction }
+        if (messages[0]?.role === 'system') {
+          messages[0] = { ...messages[0], content: messages[0].content + '\n\n' + _modeResult.researchModeInstruction }
+        } else {
+          messages.unshift(_sysMsg)
+        }
+      }
+    }
+
+    // ── حالة 4: طلب تنفيذي مؤكد أو وضع التنفيذ صريح → متابعة طبيعية ────────
+    if (_confirmed || _clientMode === 'execution') {
+      console.log(`[AgentMode] ✅ EXECUTION_CONFIRMED | intent=${_modeResult.intentType} | query="${_rawLastMsg.slice(0,60)}"`)
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
 
   // ── Capability KB — هل يسأل عن خدمة بعينها؟ (توليد صور، GitHub، CV...) ──
   // BYPASS: طلبات حقيقية تذهب للمعالجات المتخصصة ولا تُعترض بـ capability guide

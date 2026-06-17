@@ -359,6 +359,7 @@ type RichType =
   | 'find-input'
   | 'smart-repo-suggestion'
   | 'match-card'
+  | 'confirm-gate'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -641,6 +642,11 @@ interface DZMessage {
   } | null
   navigateSuggestion?: { path: string; title: string; description: string }
   ghAgentAutoExecute?: boolean
+  confirmGateData?: {
+    actionLabel: string; actionIcon: string; intentType: string;
+    whatWillHappen: string; whyNote: string; changedResources: string[];
+    originalQuery: string;
+  }
   ghAgentRawText?: string
   smartRepoSuggestions?: Array<{ url: string; name: string; owner: string; category: string; descAr: string; install: { type: string; pkg: string }; starterFiles: Record<string, string>; score?: number }>
   taskPlan?: TaskPlan
@@ -4130,8 +4136,10 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [webReaderUrl, setWebReaderUrl] = useState('')
 
   // ===== HYBRID AGENT MODE =====
+  const [pendingConfirmQuery, setPendingConfirmQuery] = useState<string | null>(null)
+
   const [agentMode, setAgentMode] = useState<AgentModeState>(() => ({
-    active: false, githubToken: '', selectedRepo: '', autoConfirm: false,
+    active: false, githubToken: '', selectedRepo: '', autoConfirm: false, queryMode: 'auto',
   }))
   // Pending confirmation dialog for destructive actions
   const [pendingAgentCmd, setPendingAgentCmd] = useState<{
@@ -7473,6 +7481,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
               githubToken: githubToken || undefined,
               currentRepo: currentRepo || undefined,
               agentActive: agentMode.active || undefined,
+              agentQueryMode: agentMode.queryMode || 'auto',
               dashboardContext,
               youtubeContext: activeYouTubeVideoRef.current || undefined,
               youtubeCandidates: youtubeCandidatesRef.current.length > 0 ? youtubeCandidatesRef.current : undefined,
@@ -7518,7 +7527,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       }
 
       // Ensure content is never blank (skip for structured rich responses)
-      if (!data.richType && (!data.content || (typeof data.content === 'string' && data.content.trim() === ''))) {
+      if (!data.richType && !data._needsConfirmation && (!data.content || (typeof data.content === 'string' && data.content.trim() === ''))) {
         data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
       }
 
@@ -7529,6 +7538,23 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           content: tr.smartMessage || tr.message,
           richType: 'tool-redirect',
           toolRedirect: tr,
+        })
+        return
+      }
+
+      // ── Confirmation Gate — يطلب تأكيداً قبل العمليات التنفيذية الحساسة ──
+      if (data._needsConfirmation && data.confirmationData) {
+        const cd = data.confirmationData as {
+          actionLabel: string; actionIcon: string; intentType: string;
+          whatWillHappen: string; whyNote: string; changedResources: string[];
+          originalQuery: string;
+        }
+        const origQuery = (data.originalQuery as string) || ''
+        setPendingConfirmQuery(origQuery)
+        addAssistantMessage({
+          content: '',
+          richType: 'confirm-gate',
+          confirmGateData: cd,
         })
         return
       }
@@ -8969,6 +8995,79 @@ ${rows}
                           color={msg.presentationColor || '#7c6eff'}
                           slides={msg.slides}
                         />
+                      )}
+
+                      {msg.richType === 'confirm-gate' && msg.confirmGateData && (
+                        <div className="dz-confirm-gate">
+                          <div className="dz-confirm-gate__header">
+                            <span className="dz-confirm-gate__icon">{msg.confirmGateData.actionIcon}</span>
+                            <div className="dz-confirm-gate__titles">
+                              <div className="dz-confirm-gate__label">{msg.confirmGateData.actionLabel}</div>
+                              <div className="dz-confirm-gate__badge">⚡ عملية تنفيذية</div>
+                            </div>
+                          </div>
+                          <p className="dz-confirm-gate__what">{msg.confirmGateData.whatWillHappen}</p>
+                          {msg.confirmGateData.changedResources?.length > 0 && (
+                            <ul className="dz-confirm-gate__resources">
+                              {msg.confirmGateData.changedResources.map((r, i) => (
+                                <li key={i}><span className="dz-confirm-gate__dot" />  {r}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {msg.confirmGateData.whyNote && (
+                            <p className="dz-confirm-gate__note">💡 {msg.confirmGateData.whyNote}</p>
+                          )}
+                          <div className="dz-confirm-gate__actions">
+                            <button
+                              className="dz-confirm-gate__btn dz-confirm-gate__btn--confirm"
+                              onClick={async () => {
+                                if (!pendingConfirmQuery) return
+                                const confirmedQuery = pendingConfirmQuery
+                                setPendingConfirmQuery(null)
+                                try {
+                                  setIsLoading(true)
+                                  const ctrl = new AbortController()
+                                  const outMsg = [...messages.filter(m => m.role !== 'assistant' || m.id !== msg.id)
+                                    .map(m => ({ role: m.role, content: m.content }))]
+                                  const resp = await fetch('/api/dz-agent-chat', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Pragma': 'no-cache' },
+                                    cache: 'no-store',
+                                    body: JSON.stringify({
+                                      messages: outMsg,
+                                      githubToken: githubToken || undefined,
+                                      currentRepo: currentRepo || undefined,
+                                      agentActive: agentMode.active || undefined,
+                                      agentQueryMode: 'execution',
+                                      confirmed: true,
+                                      dashboardContext,
+                                    }),
+                                    signal: ctrl.signal,
+                                  })
+                                  const d = await resp.json()
+                                  if (d.content) {
+                                    addAssistantMessage({ content: d.content, richType: d.richType || 'text', model: d.model })
+                                  }
+                                } catch (e) {
+                                  addAssistantMessage({ content: '⚠️ فشل التأكيد، يرجى المحاولة مجدداً.', richType: 'text' })
+                                } finally {
+                                  setIsLoading(false)
+                                }
+                              }}
+                            >
+                              ✅ تأكيد التنفيذ
+                            </button>
+                            <button
+                              className="dz-confirm-gate__btn dz-confirm-gate__btn--cancel"
+                              onClick={() => {
+                                setPendingConfirmQuery(null)
+                                addAssistantMessage({ content: '🔍 تم إلغاء التنفيذ. يمكنك إعادة الصياغة أو التبديل إلى وضع التنفيذ.', richType: 'text' })
+                              }}
+                            >
+                              ❌ إلغاء
+                            </button>
+                          </div>
+                        </div>
                       )}
 
                       {msg.richType === 'tool-redirect' && msg.toolRedirect && (

@@ -10441,6 +10441,29 @@ function _dedupAlgerianMatches(arr) {
   return out
 }
 
+// Global deduplication for match groups — prevents the same match pair
+// from appearing in multiple league groups (e.g. WC group stage showing
+// البرتغال twice when jdwel assigns it to both "كأس العالم" and "المجموعة F").
+function _dedupMatchGroups(groups) {
+  const seen = new Set()
+  const result = []
+  for (const g of groups || []) {
+    const dedupedMatches = []
+    for (const m of g.matches || []) {
+      const h = (m.homeTeam || '').trim().toLowerCase()
+      const a = (m.awayTeam || '').trim().toLowerCase()
+      if (!h && !a) continue
+      const key = `${h}|${a}`
+      const keyRev = `${a}|${h}`
+      if (seen.has(key) || seen.has(keyRev)) continue
+      seen.add(key)
+      dedupedMatches.push(m)
+    }
+    if (dedupedMatches.length > 0) result.push({ ...g, matches: dedupedMatches })
+  }
+  return result
+}
+
 // jdwel.com backup for the Algerian league.
 // jdwel.com renders Arabic match cards under the heading
 //   "الدوري الجزائري الدرجة الأولى"
@@ -10962,6 +10985,111 @@ const GLOBAL_LEAGUES_TTL = 5 * 60 * 1000 // 5 min freshness window
 const JDWEL_CACHE = { data: null, ts: 0, date: null }
 const JDWEL_CACHE_TTL = 5 * 60 * 1000
 
+// ── كووورة — مباريات اليوم ────────────────────────────────────────────────────
+const KOOORA_TODAY_CACHE = { data: null, ts: 0, date: null }
+const KOOORA_TODAY_TTL = 5 * 60 * 1000
+const KOOORA_TODAY_URL = 'https://www.kooora.com/%D9%83%D8%B1%D8%A9-%D8%A7%D9%84%D9%82%D8%AF%D9%85/%D9%85%D8%A8%D8%A7%D8%B1%D9%8A%D8%A7%D8%AA-%D8%A7%D9%84%D9%8A%D9%88%D9%85'
+
+function parseKooraMarkdown(text) {
+  if (!text || typeof text !== 'string') return []
+  const groups = []
+  let currentGroup = null
+  for (const line of text.split('\n')) {
+    const t = line.trim()
+    if (!t) continue
+    // Competition header: links to /مسابقة/ URL, contains one flag/badge image
+    if (t.includes('kooora.com') && t.includes('%D9%85%D8%B3%D8%A7%D8%A8%D9%82%D8%A9')) {
+      const cm = t.match(/\[!\[[^\]]*\]\([^)]*\)\s*([^\]]+)\]\(https?:\/\/www\.kooora\.com/)
+      if (cm) {
+        const name = cm[1].trim().replace(/\s+/g, ' ')
+        if (name && name.length > 1 && !name.includes('![')) {
+          currentGroup = { name, matches: [], source: 'kooora.com' }
+          groups.push(currentGroup)
+        }
+      }
+      continue
+    }
+    // Match line: links to /مباراة/ or /-v-/ URL with two badge images inside
+    if (currentGroup && t.includes('kooora.com') &&
+        (t.includes('%D9%85%D8%A8%D8%A7%D8%B1%D8%A7%D8%A9') || t.includes('-v-'))) {
+      const badges = [...t.matchAll(/!\[Image \d+: ([^\]]+?) badge\]\([^)]+\)/g)]
+      if (badges.length < 2) continue
+      const homeTeam = badges[0][1].trim()
+      const awayTeam = badges[1][1].trim()
+      const urlM = t.match(/\]\((https?:\/\/www\.kooora\.com\/[^)]+)\)\s*$/)
+      const matchUrl = urlM ? urlM[1] : 'https://www.kooora.com/'
+      // Strip images from line to get scores/time/status
+      const plain = t
+        .replace(/!\[Image \d+[^\]]*\]\([^)]+\)/g, ' ')
+        .replace(/\[[^\]]*\]\([^)]+\)/g, ' ')
+        .replace(/\[|\]/g, ' ')
+        .trim()
+      const timeM   = plain.match(/\b(\d{1,2}:\d{2})\b/)
+      const statusM = plain.match(/\b(انتهت|استراحة)\b/)
+      const liveM   = plain.match(/\b(\d{1,3})'\b/)
+      let homeScore = null, awayScore = null, startTime = '', statusType = 'scheduled'
+      if (statusM || liveM) {
+        const scores = plain.match(/\b(\d+)\b/g) || []
+        if (scores.length >= 2) {
+          homeScore = parseInt(scores[scores.length - 2])
+          awayScore = parseInt(scores[scores.length - 1])
+        }
+        statusType = statusM ? 'finished' : 'live'
+        if (liveM) startTime = liveM[1] + '\''
+      } else if (timeM) {
+        startTime = timeM[1]
+      }
+      currentGroup.matches.push({
+        homeTeam, awayTeam, homeScore, awayScore,
+        score: (homeScore !== null && awayScore !== null) ? `${homeScore} - ${awayScore}` : null,
+        startTime, statusType,
+        competition: currentGroup.name,
+        link: matchUrl,
+        source: 'kooora.com',
+      })
+    }
+  }
+  const result = groups.filter(g => g.matches.length > 0)
+  return _dedupMatchGroups(result)
+}
+
+async function fetchKooraToday(dateStr = null) {
+  const cacheDate = dateStr || new Date().toISOString().slice(0, 10)
+  if (KOOORA_TODAY_CACHE.data && KOOORA_TODAY_CACHE.date === cacheDate &&
+      Date.now() - KOOORA_TODAY_CACHE.ts < KOOORA_TODAY_TTL) {
+    return KOOORA_TODAY_CACHE.data
+  }
+  try {
+    const jinaUrl = `https://r.jina.ai/${KOOORA_TODAY_URL}`
+    const resp = await fetch(jinaUrl, {
+      headers: { 'User-Agent': 'DZ-Agent/1.0', 'Accept': 'text/plain,text/markdown,*/*' },
+      signal: AbortSignal.timeout(18000),
+    })
+    if (!resp.ok) { diagLog('source_fail', { module: 'kooora.today', status: resp.status }); return null }
+    const md = await resp.text()
+    if (!md || md.length < 300) { diagLog('empty', { module: 'kooora.today' }); return null }
+    const groups = parseKooraMarkdown(md)
+    if (!groups.length) { diagLog('empty', { module: 'kooora.today.parse' }); return null }
+    const totalMatches = groups.reduce((s, g) => s + g.matches.length, 0)
+    const data = {
+      groups,
+      totalMatches,
+      fetchedAt: new Date().toISOString(),
+      source: 'kooora.com',
+      sourceUrl: KOOORA_TODAY_URL,
+      via: 'jina-reader',
+    }
+    KOOORA_TODAY_CACHE.data = data
+    KOOORA_TODAY_CACHE.ts = Date.now()
+    KOOORA_TODAY_CACHE.date = cacheDate
+    console.log(`[kooora] ✓ (jina-reader) Parsed ${totalMatches} matches across ${groups.length} competitions`)
+    return data
+  } catch (err) {
+    diagLog('source_fail', { module: 'kooora.today', error: err.message })
+    return null
+  }
+}
+
 function _decodeJdwelText(s) {
   return (s || '')
     .replace(/&nbsp;/g, ' ')
@@ -11050,7 +11178,7 @@ function parseJdwelHtml(html) {
     if (!groupMap.has(comp.compId)) groupMap.set(comp.compId, { name: comp.name, compId: comp.compId, matches: [] })
     groupMap.get(comp.compId).matches.push(item)
   }
-  return Array.from(groupMap.values())
+  return _dedupMatchGroups(Array.from(groupMap.values()))
 }
 
 // Parse jdwel.com matches from markdown output (extracted via Crawl4AI).
@@ -11111,7 +11239,7 @@ function parseJdwelMarkdown(text) {
       }
     }
   }
-  return groups.filter(g => g.matches.length > 0)
+  return _dedupMatchGroups(groups.filter(g => g.matches.length > 0))
 }
 
 // jdwel.com is fronted by Cloudflare and rejects Node's `fetch` based on its
@@ -11302,6 +11430,19 @@ async function fetchJdwelMatches(dateStr = null) {
       }
     }
     if (!html || groups.length === 0) {
+      // ── Kooora fallback: jdwel totally failed — try kooora.com via Jina ──
+      try {
+        const koooraData = await fetchKooraToday(cacheDate)
+        if (koooraData?.groups?.length) {
+          JDWEL_CACHE.data = koooraData
+          JDWEL_CACHE.ts = Date.now()
+          JDWEL_CACHE.date = cacheDate
+          console.log(`[jdwel] ✓ (kooora fallback) ${koooraData.totalMatches} matches across ${koooraData.groups.length} competitions`)
+          return koooraData
+        }
+      } catch (kErr) {
+        diagLog('source_fail', { module: 'kooora.fallback', error: kErr.message })
+      }
       diagLog('empty', { module: 'jdwel', url, htmlSize: html ? html.length : 0 })
       return null
     }
@@ -11319,6 +11460,14 @@ async function fetchJdwelMatches(dateStr = null) {
     return data
   } catch (err) {
     diagLog('source_fail', { module: 'jdwel', error: err.message })
+    // last-resort: try Kooora before giving up
+    try {
+      const koooraData = await fetchKooraToday()
+      if (koooraData?.groups?.length) {
+        console.log(`[jdwel] ✓ (kooora last-resort) ${koooraData.totalMatches} matches`)
+        return koooraData
+      }
+    } catch (_) {}
     return null
   }
 }
@@ -21568,10 +21717,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (jdwelData?.groups?.length > 0) {
       // ── WC today filter: only World Cup groups when query is WC-specific ──
       const _wcGroupRe = /world.?cup|كأس.?العالم|مونديال|fifa/i
+      const _rawGroups = _dedupMatchGroups(jdwelData.groups || [])
       const _filteredGroups = _isWCTodayQuery
-        ? jdwelData.groups.filter(g => _wcGroupRe.test(g.name))
-        : jdwelData.groups
-      const _groupsToShow = _filteredGroups.length > 0 ? _filteredGroups : jdwelData.groups
+        ? _rawGroups.filter(g => _wcGroupRe.test(g.name))
+        : _rawGroups
+      const _groupsToShow = _filteredGroups.length > 0 ? _filteredGroups : _rawGroups
       const _ctxHeader = _isWCTodayQuery ? '🏆 مباريات كأس العالم 2026' : '🌍 الدوريات العالمية'
       console.log(`[DZ Agent] Global leagues — injecting ${jdwelData.totalMatches} matches (WCfilter=${_isWCTodayQuery}, groups=${_groupsToShow.length}) from jdwel.com`)
       const fetchTime = jdwelData.fetchedAt ? new Date(jdwelData.fetchedAt).toLocaleString('ar-DZ') : ''

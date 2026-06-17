@@ -8403,43 +8403,68 @@ const NATIONAL_TEAMS = [
   'اليابان','كوريا','الصين','بوليفيا','الولايات المتحدة','أمريكا'
 ]
 
+// ── كلمات السياق الزمني المشتركة (تُستخدم في كل أنماط الكشف) ──────────────────
+const _MATCH_LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
+const _MATCH_PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
+const _MATCH_UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
+// كلمات تدل على سياق رياضي/مباراة (واسعة النطاق)
+const _MATCH_CONTEXT_KW  = /(?:مباراة|مباريات|لقاء|لقاءات|مواجهة|مواجهات|نتيجة|نتائج|ماتش|match|منتخب|فريق|تاريخ|تاريخياً|سبق|كيف|متى|أين|ماذا|تكلم|أخبرني|هل لعب|يلعبان|يتواجهان|ضد|vs|تاريخ.*مباريات|WC|كأس\s*العالم|مونديال|كأس|بطولة|تصفيات|ودية)/i
+
+function _detectMatchTemporal(msg) {
+  if (_MATCH_LIVE_KW.test(msg))     return 'LIVE'
+  if (_MATCH_PAST_KW.test(msg))     return 'PAST'
+  if (_MATCH_UPCOMING_KW.test(msg)) return 'UPCOMING'
+  return 'UNKNOWN'
+}
+
+function _buildMatchVsResult(team1, team2, temporal = null) {
+  const t = temporal || _detectMatchTemporal('')
+  return {
+    isMatchVs: true, team1, team2, temporal: t,
+    searchQuery:  `${team1} ضد ${team2} مباراة نتيجة`,
+    fixtureQuery: `${team1} vs ${team2} match`,
+  }
+}
+
 function detectMatchVsQuery(msg) {
   if (!msg || msg.length < 4) return null
+  const temporal = _detectMatchTemporal(msg)
 
-  // نمط "فريق1 ضد فريق2" أو "فريق1 vs فريق2" أو "فريق1 × فريق2"
+  // ── النمط ①: "X ضد Y" / "X vs Y" / "X × Y" ─────────────────────────────
   const vsMatch = msg.match(
     /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:ضد|vs\.?|×|x)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
   )
-  if (vsMatch) {
-    const team1 = vsMatch[1].trim()
-    const team2 = vsMatch[2].trim()
+  if (vsMatch) return _buildMatchVsResult(vsMatch[1].trim(), vsMatch[2].trim(), temporal)
 
-    // تصنيف زمني
-    const LIVE_KW     = /(?:الآن|مباشر|مباشرة|جارية|درك|هذه\s+اللحظة|الوقت\s+الإضافي|الشوط|en\s+direct|live\s+now)/i
-    const PAST_KW     = /(?:لعبت|انتهت|انتهى|نتيجة|نتائج|فاز|ربح|هزم|كانت?|سجّل|آخر\s+مباراة|أمس|البارح|الأسبوع\s+(?:الماضي|الفارط)|الشهر\s+الماضي|في\s+\d{4}|مباراة\s+ال(?:أمس|بارح|ماضية)|أرشيف|تاريخ\s*المباراة|مباراة\s+(?:قديمة|سابقة)|كأس\s+\d{4}|مونديال\s+\d{4}|كان\s+\d{4})/i
-    const UPCOMING_KW = /(?:ستلعب|ستُقام|ستُجرى|القادمة?|غداً?|بعد\s+غد|الأسبوع\s+القادم|الشهر\s+القادم|موعد|متى\s+ست|برنامج|مقرر|المرتقبة?|(?:الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)\s+(?:القادم)?)/i
-
-    let temporal = 'UNKNOWN'
-    if (LIVE_KW.test(msg))          temporal = 'LIVE'
-    else if (PAST_KW.test(msg))     temporal = 'PAST'
-    else if (UPCOMING_KW.test(msg)) temporal = 'UPCOMING'
-
-    const searchQuery  = `${team1} ضد ${team2} مباراة نتيجة`
-    const fixtureQuery = `${team1} vs ${team2} match`
-    return { isMatchVs: true, team1, team2, temporal, searchQuery, fixtureQuery }
+  // ── النمط ②: "بين X وY" / "بين X والY" / "بين X و Y" ──────────────────
+  const betweenMatch = msg.match(
+    /بين\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×]{1,22})\s+و(ال)?([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×]{1,22})/iu
+  )
+  if (betweenMatch) {
+    const t1 = betweenMatch[1].trim()
+    const t2 = ((betweenMatch[2] || '') + betweenMatch[3]).trim()
+    return _buildMatchVsResult(t1, t2, temporal)
   }
 
-  // نمط "منتخب1 منتخب2" (اسمان وطنيان بجوار بعض بدون "ضد")
+  // ── النمط ③: "X أمام Y" / "X مقابل Y" / "X في مواجهة Y" / "X لقاء Y" / "X يواجه Y" ─
+  const faceMatch = msg.match(
+    /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:أمام|مقابل|في\s+مواجهة|لقاء|يواجه|تواجه|يلعب\s+(?:ضد|أمام|مع)|contre|face\s+to\s+face)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
+  )
+  if (faceMatch) return _buildMatchVsResult(faceMatch[1].trim(), faceMatch[2].trim(), temporal)
+
+  // ── النمط ④: منتخبان معروفان في نفس الجملة + سياق رياضي ────────────────
+  // (يغطي "الجزائر والأرجنتين" / "الجزائر مع الأرجنتين" / أي ذكر للاثنين معاً)
+  const hasMatchCtx = _MATCH_CONTEXT_KW.test(msg)
   for (let i = 0; i < NATIONAL_TEAMS.length; i++) {
+    if (!msg.includes(NATIONAL_TEAMS[i])) continue
     for (let j = 0; j < NATIONAL_TEAMS.length; j++) {
-      if (i === j) continue
+      if (i === j || !msg.includes(NATIONAL_TEAMS[j])) continue
       const t1 = NATIONAL_TEAMS[i], t2 = NATIONAL_TEAMS[j]
-      const pairRe = new RegExp(`${t1}\\s+${t2}`, 'i')
-      if (pairRe.test(msg)) {
-        const searchQuery  = `${t1} ضد ${t2} مباراة نتيجة`
-        const fixtureQuery = `${t1} vs ${t2} match`
-        return { isMatchVs: true, team1: t1, team2: t2, temporal: 'UNKNOWN', searchQuery, fixtureQuery }
-      }
+      // متجاوران مباشرةً (بدون/مع "و")
+      const adjacent = new RegExp(`${t1}\\s+(?:و(?:ال)?)?${t2}`, 'i')
+      if (adjacent.test(msg)) return _buildMatchVsResult(t1, t2, temporal)
+      // أو: مجرد ذكر الاثنين مع وجود كلمة رياضية
+      if (hasMatchCtx) return _buildMatchVsResult(t1, t2, temporal)
     }
   }
 

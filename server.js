@@ -15374,6 +15374,110 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════
   // ══════════════════════════════════════════════════════════════════════
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 🩺 ULTRA-EARLY HEALTH GUARDIAN — خط الدفاع الأول للصحة
+  // يعمل قبل كل شيء: قبل Tool Redirect, قبل Capability KB, قبل WC2026
+  // يضمن أن الوكيل الطبي يُجيب دائماً قبل LLM على أسئلة الأعراض
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _uhRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+    // Guard: لا نعترض طلبات الأدوات المتخصصة
+    const _uhToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
+    const _uhIsTool = ['jobs', 'cv', 'legal', 'chart', 'ocr'].includes(_uhToolReq)
+    if (!_uhIsTool && _uhRaw.length >= 4) {
+      try {
+        const _uhIntent = detectHealthIntent(_uhRaw)
+        if (_uhIntent.isHealthQuery && !_uhIntent.isDoctorSearch) {
+          console.log(`[DZHealth:UltraEarly] 🩺 ${_uhIntent.isEmergency ? '🚨 EMERGENCY' : 'HEALTH'} | symptoms=${_uhIntent.symptoms.join(',')} | query="${_uhRaw.slice(0,70)}"`)
+
+          // طوارئ → رد فوري
+          if (_uhIntent.isEmergency) {
+            return res.status(200).json({
+              content: '',
+              richType: 'health-analysis',
+              healthData: {
+                interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
+                possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
+                triage_level: 'HIGH',
+                triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
+                advice: ['📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)', 'لا تبقَ وحدك — اطلب المساعدة فوراً'],
+                medications_info: null,
+                suggest_doctor: true,
+                emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
+                disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
+                symptoms_found: _uhIntent.symptoms,
+                original_query: _uhRaw.slice(0, 120),
+              },
+              model: 'health-guardian-emergency',
+            })
+          }
+
+          // تحليل طبي — Groq أولاً ثم KB fallback
+          const _uhSysPrompt = buildHealthSystemPrompt(_uhIntent.symptoms, _uhIntent.hasDrugQuestion, false)
+          const _uhDzKb = getRelatedDZKnowledge(_uhIntent.symptoms)
+          const _uhKbNote = _uhDzKb
+            ? `\n\n[معلومة طبية جزائرية: "${_uhDzKb.name}" — ${_uhDzKb.prevalence}. أدوية متاحة: ${_uhDzKb.drugs.join(', ')}]`
+            : ''
+          const _uhMsgs = [
+            { role: 'system', content: _uhSysPrompt + _uhKbNote },
+            { role: 'user',   content: _uhRaw },
+          ]
+
+          let _uhContent = null
+          let _uhModel   = null
+
+          // محاولة Groq llama-3.3-70b
+          try {
+            const _uhGroq = await callGroqWithFallback({
+              model: 'llama-3.3-70b-versatile',
+              messages: _uhMsgs,
+              max_tokens: 1000,
+              temperature: 0.3,
+            })
+            if (_uhGroq.content && _uhGroq.content.trim().length > 20) {
+              _uhContent = _uhGroq.content
+              _uhModel   = 'groq:llama-3.3-70b-versatile'
+            }
+          } catch (_uhG1) { console.warn('[DZHealth:UltraEarly] Groq1:', _uhG1.message?.slice(0,60)) }
+
+          // محاولة Groq llama-3.1-8b إذا فشل الأول
+          if (!_uhContent) {
+            try {
+              const _uhGroq2 = await callGroqWithFallback({
+                model: 'llama-3.1-8b-instant',
+                messages: _uhMsgs,
+                max_tokens: 800,
+                temperature: 0.3,
+              })
+              if (_uhGroq2.content && _uhGroq2.content.trim().length > 20) {
+                _uhContent = _uhGroq2.content
+                _uhModel   = 'groq:llama-3.1-8b-instant'
+              }
+            } catch (_uhG2) { console.warn('[DZHealth:UltraEarly] Groq2:', _uhG2.message?.slice(0,60)) }
+          }
+
+          const _uhParsed = _uhContent
+            ? parseHealthResponse(_uhContent, _uhRaw, _uhIntent.symptoms)
+            : buildKBFallbackResponse(_uhIntent.symptoms, _uhIntent.hasDrugQuestion, _uhRaw)
+
+          _uhParsed.model_used = _uhModel || 'kb_local'
+          console.log(`[DZHealth:UltraEarly] ✅ triage=${_uhParsed.triage_level} | causes=${_uhParsed.possible_causes?.length} | src=${_uhParsed.model_used}`)
+
+          return res.status(200).json({
+            content: '',
+            richType: 'health-analysis',
+            healthData: _uhParsed,
+            model: _uhModel || 'kb_local',
+          })
+        }
+      } catch (_uhErr) {
+        console.error('[DZHealth:UltraEarly] ❌ error (non-fatal, continuing):', _uhErr.message?.slice(0,100))
+        // لا نُعيد خطأً — نتابع المسار العادي
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
+
   // ══ WC2026 SQUAD ULTRA-EARLY INTERCEPTOR — أولوية قصوى ══════════════════
   // يُطلَق قبل كل handler آخر — يمنع أي LLM من تجاوز قاعدة بيانات التشكيلات
   // الترتيب: ultra-early guardian → هذا الـ block → كل شيء آخر

@@ -177,7 +177,7 @@ import {
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { detectAgentMode, buildResearchBlockedResponse } from './lib/dz-agent-mode.js'
-import { detectHealthIntent, buildHealthSystemPrompt, parseHealthResponse, getRelatedDZKnowledge } from './lib/dz-health-agent.js'
+import { detectHealthIntent, buildHealthSystemPrompt, parseHealthResponse, buildKBFallbackResponse, getRelatedDZKnowledge } from './lib/dz-health-agent.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import {
@@ -16984,11 +16984,120 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     return res.status(200).json({ content: _earlyMod.replyIfBlocked })
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 🩺 DZ HEALTH AI AGENT — EARLY (قبل كل Fast-Paths)
+  // يعمل هنا لمنع Maps/Darija/Algeria-KS من اعتراض الأعراض الطبية
+  // مثال: "راسي يضرب" → صحة (ليس خريطة) | "كيفاش ناخذ الدواء" → صحة (ليس ترجمة)
+  // ══════════════════════════════════════════════════════════════════════
+  const _earlyToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
+  const _isDZToolReq_early = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq)
+  if (!_isDZToolReq_early) {
+    const _healthIntentEarly = detectHealthIntent(lastUserMessage)
+    if (_healthIntentEarly.isHealthQuery && !_healthIntentEarly.isDoctorSearch) {
+      console.log(`[DZHealth] 🩺 EARLY | symptoms=${_healthIntentEarly.symptoms.join(',')} | drug=${_healthIntentEarly.hasDrugQuestion} | emergency=${_healthIntentEarly.isEmergency}`)
+
+      // طوارئ → رد فوري بدون LLM
+      if (_healthIntentEarly.isEmergency) {
+        return res.status(200).json({
+          content: '',
+          richType: 'health-analysis',
+          healthData: {
+            interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
+            possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
+            triage_level: 'HIGH',
+            triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
+            advice: [
+              '📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)',
+              'لا تبقَ وحدك — اطلب المساعدة فوراً',
+              'لا تأكل ولا تشرب حتى تصل الرعاية الطبية',
+            ],
+            medications_info: null,
+            suggest_doctor: true,
+            emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
+            disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
+            symptoms_found: _healthIntentEarly.symptoms,
+            original_query: lastUserMessage.slice(0, 120),
+          },
+        })
+      }
+
+      // تحليل طبي عام — Groq مباشر أولاً ثم KB fallback
+      try {
+        const _eSysPrompt = buildHealthSystemPrompt(
+          _healthIntentEarly.symptoms,
+          _healthIntentEarly.hasDrugQuestion,
+          false,
+        )
+        const _eDzKb = getRelatedDZKnowledge(_healthIntentEarly.symptoms)
+        const _eDzKbNote = _eDzKb
+          ? `\n\n[معلومة من قاعدة البيانات الجزائرية: "${_eDzKb.name}" شائع في الجزائر — ${_eDzKb.prevalence}. أدوية متوفرة: ${_eDzKb.drugs.join(', ')}]`
+          : ''
+
+        const _eHealthMsgs = [
+          { role: 'system', content: _eSysPrompt + _eDzKbNote },
+          { role: 'user',   content: lastUserMessage },
+        ]
+
+        let _eContent = null
+        let _eModel   = null
+
+        // محاولة Groq مباشرة (أسرع وأنظف)
+        try {
+          const _eGroq = await callGroqWithFallback({
+            model: 'llama-3.3-70b-versatile',
+            messages: _eHealthMsgs,
+            max_tokens: 1000,
+            temperature: 0.3,
+          })
+          if (_eGroq.content && _eGroq.content.trim().length > 20) {
+            _eContent = _eGroq.content
+            _eModel   = 'groq:llama-3.3-70b-versatile'
+          }
+        } catch (_eg) { console.warn('[DZHealth:early] Groq:', _eg.message) }
+
+        // إذا فشل الأول → جرب نموذجاً ثانياً بسرعة
+        if (!_eContent) {
+          try {
+            const _eGroq2 = await callGroqWithFallback({
+              model: 'llama-3.1-8b-instant',
+              messages: _eHealthMsgs,
+              max_tokens: 800,
+              temperature: 0.3,
+            })
+            if (_eGroq2.content && _eGroq2.content.trim().length > 20) {
+              _eContent = _eGroq2.content
+              _eModel   = 'groq:llama-3.1-8b-instant'
+            }
+          } catch (_eg2) { console.warn('[DZHealth:early] Groq2:', _eg2.message) }
+        }
+        // كلا النموذجين فشلا → KB fallback فوري (لا انتظار)
+
+        const _eParsed = _eContent
+          ? parseHealthResponse(_eContent, lastUserMessage, _healthIntentEarly.symptoms)
+          : buildKBFallbackResponse(_healthIntentEarly.symptoms, _healthIntentEarly.hasDrugQuestion, lastUserMessage)
+
+        _eParsed.model_used = _eModel || 'kb_local'
+        console.log(`[DZHealth] ✅ EARLY | triage=${_eParsed.triage_level} | causes=${_eParsed.possible_causes.length} | src=${_eParsed.model_used}`)
+
+        return res.status(200).json({
+          content: '',
+          richType: 'health-analysis',
+          healthData: _eParsed,
+          model: _eModel || 'kb_local',
+        })
+      } catch (_eErr) {
+        console.error('[DZHealth:early] ❌ Error:', _eErr.message)
+        // لا نُعيد خطأً — نتابع المسار العادي للـ fallback
+      }
+    }
+  }
+  const _isHealthQuery_early = false // تحديث: الصحة تُعالَج أعلاه
+
   // ── DZ Maps EARLY Fast-Path ──────────────────────────────────────────────
   // يُطلَق قبل كل شيء: _isAgentMode، SearXNG، Algeria-KS، Person Query، Tool Redirect
   // يضمن أن "مسجد الفرقان في عنابة" دائماً تذهب للخريطة وليس لـ SearXNG
   // Guard: website-builder & map-website queries excluded (موقع مطعم = موقع ويب)
-  if (isMapQuery(lastUserMessage)
+  if (!_isHealthQuery_early && isMapQuery(lastUserMessage)
     && !detectWebsiteBuilderQuery(lastUserMessage)
     && !detectMapWebsiteQuery(lastUserMessage)
     && !isSportsAgentQuery(lastUserMessage)) {
@@ -17033,6 +17142,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     /(?:الجزائر|المنتخب\s+الجزائري).*(?:فاز|ربح|بطل|كأس\s+أمم|AFCON)/i.test(lastUserMessage) ||
     // BYPASS: Doctor / medical queries — handled by dedicated doctor search engine
     /(?:طبيب|دكتور|دكاترة|أطباء|طبيبة|عيادة|مستوصف|مركز صحي|عيادات|دبيب|دكتوره|دكترة|نقلب على طبيب|نحوس على طبيب|أسنان|سنان|ضروس|طب الأسنان|نسائية|ولادة|حمل|عيون|بصريات|جلدية|قلبي|أمراض القلب|عظام|كسور|أعصاب|مسالك|مسالك بولية|médecin|medecin|docteur|dentiste|cardiologue|ophtalmologue|dermatologue|généraliste|generaliste|gynécologue|pédiatre|pediatre|psychiatre|chirurgien|pneumologue|neurologue|urologue|oncologue)/i.test(lastUserMessage) ||
+    // BYPASS: Health / symptom queries — handled by DZ Health AI Agent
+    /(?:صداع|ألم|وجع|حمى|حرارة|سخونة|دوخة|دوار|تعب|إرهاق|غثيان|قيء|إسهال|إمساك|حرقة|برد|كحة|سعال|زكام|رشح|التهاب|تورم|طفح|حكة|ضيق.*تنفس|خفقان|نزيف|راسي.*يضرب|يدوخني|تعبان|مريض|حمة|سخنة|يوجعني|بطني.*يوجع|ظهري.*يوجع|ما نقدرش نتنفس|دواء|دوا|حبة|حبوب|مضاد.*حيوي|مسكن|باراسيتامول|إيبوبروفين|مرض|أمراض|أعراض|علاج|mal de tête|fièvre|douleur|toux|rhume|grippe|diarrhée|vertige|médicament|antibiotique|ضغط الدم|سكري|كوليسترول|ربو|أنيميا|فقر دم)/i.test(lastUserMessage) ||
     // BYPASS: YouTube / video search — handled by YouTube Insight engine
     /(?:فيديو|فيديوهات|فيديوها|يوتيوب|يوتيب|يوتيوبي|بالفيديو|شرحلي.*فيديو|جيبلي.*فيديو|شوفلي.*فيديو|إشرح.*بالفيديو|شرح.*بالفيديو|درس.*بالفيديو|tutorial|اغنية|أغنية|أغاني|اغاني|موسيقى|كليب|مقطع.*فيديو)/i.test(lastUserMessage) ||
     // BYPASS: Sports / football / league queries — handled by sports data system
@@ -18119,26 +18230,52 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user',   content: lastUserMessage },
         ]
 
-        const _healthResult = await safeGenerateAI({
-          messages: _healthMessages,
-          query: lastUserMessage,
-          max_tokens: 1000,
-          taskHint: 'health',
-        })
+        // استدعاء مباشر لـ Groq أولاً (أسرع، بدون HAL overhead)
+        let _healthContent = null
+        let _healthModel = null
+        try {
+          const _directResult = await callGroqWithFallback({
+            model: 'llama-3.3-70b-versatile',
+            messages: _healthMessages,
+            max_tokens: 1000,
+            temperature: 0.3,
+          })
+          if (_directResult.content && _directResult.content.trim().length > 20) {
+            _healthContent = _directResult.content
+            _healthModel = 'groq:llama-3.3-70b-versatile'
+            console.log(`[DZHealth] ✅ Groq direct — ${_healthContent.length} chars`)
+          }
+        } catch (_directErr) {
+          console.warn('[DZHealth] Groq direct failed:', _directErr.message)
+        }
 
-        const _healthParsed = parseHealthResponse(
-          _healthResult.content || '',
-          lastUserMessage,
-          _healthIntent.symptoms,
-        )
+        // إذا فشل Groq المباشر — جرب safeGenerateAI
+        if (!_healthContent) {
+          const _safeResult = await safeGenerateAI({
+            messages: _healthMessages,
+            query: lastUserMessage,
+            max_tokens: 1000,
+            taskHint: 'health',
+          })
+          if (_safeResult.content && _safeResult.content.trim().length > 20) {
+            _healthContent = _safeResult.content
+            _healthModel = _safeResult.model
+          }
+        }
 
-        console.log(`[DZHealth] ✅ triage=${_healthParsed.triage_level} | causes=${_healthParsed.possible_causes.length} | model=${_healthResult.model}`)
+        // إذا فشل كل شيء — استخدم KB fallback الذكي
+        const _healthParsed = _healthContent
+          ? parseHealthResponse(_healthContent, lastUserMessage, _healthIntent.symptoms)
+          : buildKBFallbackResponse(_healthIntent.symptoms, _healthIntent.hasDrugQuestion, lastUserMessage)
+
+        _healthParsed.model_used = _healthModel || 'kb_local'
+        console.log(`[DZHealth] ✅ triage=${_healthParsed.triage_level} | causes=${_healthParsed.possible_causes.length} | src=${_healthParsed.model_used}`)
 
         return res.status(200).json({
           content: '',
           richType: 'health-analysis',
           healthData: _healthParsed,
-          model: _healthResult.model,
+          model: _healthModel || 'kb_local',
         })
       } catch (_healthErr) {
         console.error('[DZHealth] ❌ Error:', _healthErr.message)

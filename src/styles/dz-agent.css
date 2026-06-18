@@ -12456,6 +12456,205 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   🩺 DZ Health AI Card — بطاقة الوكيل الطبي
+   ══════════════════════════════════════════════════════════════════════════ */
+.dz-health-card {
+  background: linear-gradient(135deg, rgba(6,78,59,0.15) 0%, rgba(10,20,15,0.9) 100%);
+  border: 1px solid rgba(16,185,129,0.3);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 10px;
+  max-width: 560px;
+  box-shadow: 0 4px 28px rgba(16,185,129,0.1);
+  direction: rtl;
+}
+.dz-health-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(16,185,129,0.15);
+}
+.dz-health-card__icon { font-size: 2rem; line-height: 1; flex-shrink: 0; }
+.dz-health-card__title-wrap { flex: 1; }
+.dz-health-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #6ee7b7;
+  margin-bottom: 3px;
+}
+.dz-health-card__subtitle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+}
+.dz-health-card__triage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid;
+  flex-shrink: 0;
+  text-align: center;
+}
+.dz-health-card__triage span { font-size: 10px; opacity: 0.75; }
+.dz-health-card__triage strong { font-size: 12px; font-weight: 700; }
+
+.dz-health-card__emergency {
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.4);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fca5a5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+  50%       { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+.dz-health-card__symptoms { margin-bottom: 14px; }
+.dz-health-card__section { margin-bottom: 14px; }
+.dz-health-card__section--meds {
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.dz-health-card__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.dz-health-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dz-health-card__chip {
+  display: inline-block;
+  background: rgba(16,185,129,0.12);
+  border: 1px solid rgba(16,185,129,0.25);
+  color: #6ee7b7;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dz-health-card__text {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.82);
+  line-height: 1.6;
+  margin: 0;
+}
+.dz-health-card__text--meds { color: #a5b4fc; font-size: 13px; }
+
+.dz-health-card__causes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.dz-health-card__causes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.5;
+}
+.dz-health-card__cause-num {
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.18);
+  color: #6ee7b7;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.dz-health-card__advice {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dz-health-card__advice li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+}
+.dz-health-card__check {
+  color: #6ee7b7;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.dz-health-card__doctor-suggest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.dz-health-card__doctor-icon { font-size: 1.5rem; flex-shrink: 0; }
+.dz-health-card__doctor-text {
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.65);
+  margin-bottom: 6px;
+}
+.dz-health-card__doctor-btn {
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.dz-health-card__doctor-btn:hover {
+  box-shadow: 0 3px 10px rgba(245,158,11,0.35);
+  transform: translateY(-1px);
+}
+.dz-health-card__disclaimer {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 10px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    ⚡ Confirmation Gate Card — بطاقة تأكيد العمليات التنفيذية
    ══════════════════════════════════════════════════════════════════════════ */
 .dz-confirm-gate {

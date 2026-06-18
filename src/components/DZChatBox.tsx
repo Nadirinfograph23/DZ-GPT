@@ -360,6 +360,7 @@ type RichType =
   | 'smart-repo-suggestion'
   | 'match-card'
   | 'confirm-gate'
+  | 'health-analysis'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -646,6 +647,19 @@ interface DZMessage {
     actionLabel: string; actionIcon: string; intentType: string;
     whatWillHappen: string; whyNote: string; changedResources: string[];
     originalQuery: string;
+  }
+  healthData?: {
+    interpretation: string;
+    possible_causes: string[];
+    triage_level: 'LOW' | 'MEDIUM' | 'HIGH';
+    triage_reason: string;
+    advice: string[];
+    medications_info: string | null;
+    suggest_doctor: boolean;
+    emergency_note: string | null;
+    disclaimer: string;
+    symptoms_found: string[];
+    original_query: string;
   }
   ghAgentRawText?: string
   smartRepoSuggestions?: Array<{ url: string; name: string; owner: string; category: string; descAr: string; install: { type: string; pkg: string }; starterFiles: Record<string, string>; score?: number }>
@@ -7527,7 +7541,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       }
 
       // Ensure content is never blank (skip for structured rich responses)
-      if (!data.richType && !data._needsConfirmation && (!data.content || (typeof data.content === 'string' && data.content.trim() === ''))) {
+      if (!data.richType && !data._needsConfirmation && data.richType !== 'health-analysis' && (!data.content || (typeof data.content === 'string' && data.content.trim() === ''))) {
         data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
       }
 
@@ -7538,6 +7552,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           content: tr.smartMessage || tr.message,
           richType: 'tool-redirect',
           toolRedirect: tr,
+        })
+        return
+      }
+
+      // ── DZ Health Analysis — بطاقة التحليل الطبي ────────────────────────
+      if (data.richType === 'health-analysis' && data.healthData) {
+        addAssistantMessage({
+          content: '',
+          richType: 'health-analysis',
+          healthData: data.healthData as DZMessage['healthData'],
+          model: data.model as string | undefined,
         })
         return
       }
@@ -8401,6 +8426,107 @@ ${rows}
                           )}
                         </>
                       )}
+
+                      {msg.richType === 'health-analysis' && msg.healthData && (() => {
+                        const h = msg.healthData!
+                        const triageColor = h.triage_level === 'HIGH' ? '#ef4444' : h.triage_level === 'MEDIUM' ? '#f59e0b' : '#22c55e'
+                        const triageLabel = h.triage_level === 'HIGH' ? '🔴 عالية' : h.triage_level === 'MEDIUM' ? '🟡 متوسطة' : '🟢 منخفضة'
+                        const triageBg    = h.triage_level === 'HIGH' ? 'rgba(239,68,68,0.1)' : h.triage_level === 'MEDIUM' ? 'rgba(245,158,11,0.1)' : 'rgba(34,197,94,0.1)'
+                        return (
+                          <div className="dz-health-card" dir="rtl">
+                            {/* Header */}
+                            <div className="dz-health-card__header">
+                              <span className="dz-health-card__icon">🩺</span>
+                              <div className="dz-health-card__title-wrap">
+                                <div className="dz-health-card__title">DZ Health AI</div>
+                                <div className="dz-health-card__subtitle">تحليل طبي مبدئي — ليس تشخيصاً نهائياً</div>
+                              </div>
+                              <div className="dz-health-card__triage" style={{ background: triageBg, borderColor: triageColor, color: triageColor }}>
+                                <span>الخطورة</span>
+                                <strong>{triageLabel}</strong>
+                              </div>
+                            </div>
+
+                            {/* Emergency banner */}
+                            {h.emergency_note && (
+                              <div className="dz-health-card__emergency">
+                                <span>🚨</span> {h.emergency_note}
+                              </div>
+                            )}
+
+                            {/* Symptoms found */}
+                            {h.symptoms_found?.length > 0 && (
+                              <div className="dz-health-card__symptoms">
+                                <div className="dz-health-card__section-label">الأعراض المُكتشفة</div>
+                                <div className="dz-health-card__chips">
+                                  {h.symptoms_found.map((s, i) => (
+                                    <span key={i} className="dz-health-card__chip">{s}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Interpretation */}
+                            <div className="dz-health-card__section">
+                              <div className="dz-health-card__section-label">🔍 التحليل</div>
+                              <p className="dz-health-card__text">{h.interpretation}</p>
+                            </div>
+
+                            {/* Possible causes */}
+                            {h.possible_causes?.length > 0 && (
+                              <div className="dz-health-card__section">
+                                <div className="dz-health-card__section-label">📊 الأسباب المحتملة</div>
+                                <ul className="dz-health-card__causes">
+                                  {h.possible_causes.map((c, i) => (
+                                    <li key={i}><span className="dz-health-card__cause-num">{i + 1}</span> {c}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Advice */}
+                            {h.advice?.length > 0 && (
+                              <div className="dz-health-card__section">
+                                <div className="dz-health-card__section-label">💡 النصائح</div>
+                                <ul className="dz-health-card__advice">
+                                  {h.advice.map((a, i) => (
+                                    <li key={i}><span className="dz-health-card__check">✓</span> {a}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Medications info */}
+                            {h.medications_info && (
+                              <div className="dz-health-card__section dz-health-card__section--meds">
+                                <div className="dz-health-card__section-label">💊 معلومات دوائية عامة</div>
+                                <p className="dz-health-card__text dz-health-card__text--meds">{h.medications_info}</p>
+                              </div>
+                            )}
+
+                            {/* Suggest doctor */}
+                            {h.suggest_doctor && (
+                              <div className="dz-health-card__doctor-suggest">
+                                <span className="dz-health-card__doctor-icon">👨‍⚕️</span>
+                                <div>
+                                  <div className="dz-health-card__doctor-text">قد تحتاج لاستشارة طبيب</div>
+                                  <button
+                                    className="dz-health-card__doctor-btn"
+                                    onClick={() => sendMessage('ابحث لي عن طبيب')}
+                                  >
+                                    البحث عن طبيب في الجزائر ←
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Disclaimer */}
+                            <div className="dz-health-card__disclaimer">
+                              ⚕️ {h.disclaimer}
+                            </div>
+                          </div>
+                        )
+                      })()}
                       {msg.richType === 'map' && (msg.mapHtml || msg.mapMeta) && (
                         (msg.mapMeta as Record<string, unknown>)?.needsGps
                           ? <GpsNearbyCard meta={msg.mapMeta as Record<string, unknown>} />

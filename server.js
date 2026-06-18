@@ -177,6 +177,7 @@ import {
 } from './lib/ai-router/index.js'
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { detectAgentMode, buildResearchBlockedResponse } from './lib/dz-agent-mode.js'
+import { detectHealthIntent, buildHealthSystemPrompt, parseHealthResponse, getRelatedDZKnowledge } from './lib/dz-health-agent.js'
 import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import {
@@ -18064,6 +18065,91 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       return res.status(500).json({ content: '⚠️ خطأ في الاتصال بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى.' })
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🩺 DZ HEALTH AI AGENT — وكيل الصحة الجزائري
+  // يعالج الاستفسارات الطبية قبل الدخول إلى الـ routing العام
+  // قاعدة: لا تداخل مع Doctor Finder (isDoctorQuery → skip)
+  // ══════════════════════════════════════════════════════════════════════
+  if (!isDZToolRequest) {
+    const _healthIntent = detectHealthIntent(lastUserMessage)
+    if (_healthIntent.isHealthQuery && !_healthIntent.isDoctorSearch) {
+      console.log(`[DZHealth] 🩺 Health query | symptoms=${_healthIntent.symptoms.join(',')} | emergency=${_healthIntent.isEmergency}`)
+
+      // ── طوارئ فورية → رد مباشر بدون LLM ────────────────────────────────
+      if (_healthIntent.isEmergency) {
+        const _dzKb = getRelatedDZKnowledge(_healthIntent.symptoms)
+        return res.status(200).json({
+          content: '',
+          richType: 'health-analysis',
+          healthData: {
+            interpretation: 'تم الكشف عن أعراض طارئة — يرجى الاتصال فوراً بالإسعاف',
+            possible_causes: ['حالة طارئة تستدعي تدخلاً فورياً'],
+            triage_level: 'HIGH',
+            triage_reason: 'أعراض خطيرة تستوجب رعاية طبية فورية',
+            advice: [
+              '📞 اتصل بالإسعاف: 14 (الجزائر) أو 115 (SAMU)',
+              'لا تبقَ وحدك — اطلب المساعدة فوراً',
+              'لا تأكل ولا تشرب حتى تصل الرعاية الطبية',
+            ],
+            medications_info: null,
+            suggest_doctor: true,
+            emergency_note: '🚨 هذه حالة طوارئ — اتصل بـ 14 أو 115 فوراً',
+            disclaimer: 'هذا ليس تشخيصاً طبياً — اتصل بالإسعاف الآن',
+            symptoms_found: _healthIntent.symptoms,
+            original_query: lastUserMessage.slice(0, 120),
+          },
+        })
+      }
+
+      // ── تحليل طبي عام — نبني الـ system prompt ونرسل للنموذج ───────────
+      try {
+        const _healthSysPrompt = buildHealthSystemPrompt(
+          _healthIntent.symptoms,
+          _healthIntent.hasDrugQuestion,
+          false,
+        )
+        const _dzKb = getRelatedDZKnowledge(_healthIntent.symptoms)
+        const _dzKbNote = _dzKb
+          ? `\n\n[معلومة من قاعدة البيانات الجزائرية: "${_dzKb.name}" شائع في الجزائر — ${_dzKb.prevalence}. أدوية متوفرة: ${_dzKb.drugs.join(', ')}]`
+          : ''
+
+        const _healthMessages = [
+          { role: 'system', content: _healthSysPrompt + _dzKbNote },
+          { role: 'user',   content: lastUserMessage },
+        ]
+
+        const _healthResult = await safeGenerateAI({
+          messages: _healthMessages,
+          query: lastUserMessage,
+          max_tokens: 1000,
+          taskHint: 'health',
+        })
+
+        const _healthParsed = parseHealthResponse(
+          _healthResult.content || '',
+          lastUserMessage,
+          _healthIntent.symptoms,
+        )
+
+        console.log(`[DZHealth] ✅ triage=${_healthParsed.triage_level} | causes=${_healthParsed.possible_causes.length} | model=${_healthResult.model}`)
+
+        return res.status(200).json({
+          content: '',
+          richType: 'health-analysis',
+          healthData: _healthParsed,
+          model: _healthResult.model,
+        })
+      } catch (_healthErr) {
+        console.error('[DZHealth] ❌ Error:', _healthErr.message)
+        return res.status(200).json({
+          content: '⚠️ حدث خطأ في تحليل الأعراض. يرجى وصف حالتك مجدداً أو استشارة طبيب.',
+          richType: 'text',
+        })
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════
 
   // ── Algeria Citizen Knowledge System ─────────────────────────────────────
   // Guard: YouTube/Map/Doctor queries must not be intercepted by Algeria routing.

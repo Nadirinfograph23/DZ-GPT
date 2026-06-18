@@ -243,7 +243,7 @@ import {
   isUnknownWilayaQuery, isDarijaContextPronouns,
 } from './lib/dz-knowledge.js'
 import { getPlayerCurrentClub, buildPlayerClubResponse, detectPlayerNameInQuery, fuzzyDetectPlayer, universalPlayerSearch } from './lib/sports-lookup.js'
-import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES } from './lib/sports-agent.js'
+import { runSportsAgent, classifySportsQuery, isSportsAgentQuery, searchMatchAcrossDates, buildMatchDetailedBlock, runWC2026TodayAgent, runWC2026StandingsAgent, buildStrictNoDataResponse, validateMatchBeforeDisplay, SPORTS_AGENT_STRICT_RULES, fetchLeagueTopScorers, extractLeagueName } from './lib/sports-agent.js'
 import { WORLD_CUP_2026, ALGERIA_MATCHES_HISTORY, buildWorldCup2026AlgeriaContext, buildWC2026GroupTableData, extractWC2026GroupFromQuery, findWC2026TeamGroup as _findWC2026TeamGroup, detectWC2026TodayQuery, detectWC2026StandingsQuery, buildWC2026FullContext, WC2026_FULL_FIXTURES, findWC2026FixtureBetweenTeams, buildWC2026MatchVsResponse, detectAndBuildWC2026MatchVs, WC2026_ALGERIA_SQUAD, buildAlgeriaWC2026SquadResponse, isWC2026AllGroupsQuery, buildWC2026AllGroupsStandings, WC2026_ALL_SQUADS, WC2026_SQUAD_ALIASES, isWC2026SquadQuery, detectWC2026SquadTeam, buildWC2026SquadResponse } from './lib/dz-sports-knowledge.js'
 import { pushMsg as dbPushMsg, getMessages as dbGetMessages, deleteMsg as dbDeleteMsg, setPinned as dbSetPinned, getPinned as dbGetPinned, react as dbReact, getReactions as dbGetReactions } from './lib/chat-store.js'
 import { searchMemories, buildMemoryContext, storeMemory, storeExecutionResult, storeErrorFix, MEM_TYPE } from './lib/mem/dz-mem0.js'
@@ -21177,12 +21177,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   const weatherKeywords = [
-    'الطقس', 'حالة الجو', 'الجو', 'درجة الحرارة', 'الحرارة', 'البرودة', 'الحر',
+    'الطقس', 'حالة الجو', 'درجة الحرارة', 'الحرارة', 'البرودة', 'الحر',
     'ممطر', 'مطر', 'عواصف', 'رياح', 'ضباب', 'سحاب', 'غيوم', 'شمس', 'مشمس',
     'weather', 'météo', 'température', 'temp', 'forecast', 'humidity',
     'كيف الطقس', 'ما طقس', 'طقس اليوم', 'الطقس اليوم', 'طقس', 'الجو اليوم',
   ]
-  const isWeatherQuery = weatherKeywords.some(k => lowerMsg.includes(k))
+  // Guard: "الجو" كلمة مستقلة فقط — لا تطابق داخل "الجولة" أو "الجوي" أو "الجوهري"
+  const _alJawAlone = /(?:^|\s|[.،!؟])الجو(?:\s|$|[.،!؟])/.test(lowerMsg)
+  const isWeatherQuery = _alJawAlone || weatherKeywords.some(k => lowerMsg.includes(k))
   // ── Intent Detection: detect ALL data needs up front (Task 12) ─────────────
   const hasWeatherPriority = dashboardContext?.priority === 'weather' || lowerMsg.includes('context: weather_priority') || isWeatherQuery
 
@@ -22113,6 +22115,70 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
       globalLeaguesContext = _globalFallbackCtx ||
         `\n\n--- 🌍 الدوريات العالمية ---\nتعذّر جلب بيانات المباريات حالياً. تابع على [jdwel.com/today](https://jdwel.com/today/) أو [livescore.com](https://www.livescore.com)\n---`
+    }
+  }
+
+  // ══ ⚡ LEAGUE TOP SCORER BYPASS — هداف الدوري — مسار أولوية قبل GLOBAL ════
+  // يُطلَق عند: "هداف الدوري الإسباني" / "ترتيب الهدافين في البريميرليغ" / ...
+  // يمنع SPORTS DIRECT BYPASS من إعادة مباريات jdwel.com بدلاً من الهدافين
+  if (!_isAgentMode && !isDZToolRequest && !_isYouTubeQuery_pre && !_isMatchVsQuery) {
+    const _ltsCls = classifySportsQuery(lastUserMessage)
+    if (_ltsCls.type === 'LEAGUE_TOP_SCORER' && _ltsCls.league) {
+      console.log(`[LeagueTopScorer] 🥅 Intercept: league="${_ltsCls.league}" query="${lastUserMessage.slice(0,60)}"`)
+      try {
+        const _scorers = await Promise.race([
+          fetchLeagueTopScorers(_ltsCls.league),
+          new Promise(r => setTimeout(() => r(null), 12000)),
+        ])
+
+        if (_scorers && _scorers.length > 0) {
+          const _scLines = [
+            `## 🥅 هدافو ${_ltsCls.league} — موسم ${new Date().getFullYear()}`,
+            ``,
+            `| # | اللاعب | النادي | الأهداف |`,
+            `|---|--------|--------|---------|`,
+            ..._scorers.slice(0, 10).map((s, i) =>
+              `| ${i + 1} | ${s.name} | ${s.flag || ''}${s.club} | **${s.goals}** ⚽ |`
+            ),
+            ``,
+            `> 📊 *المصدر: 365scores.com — محدَّث تلقائياً*`,
+          ]
+          console.log(`[LeagueTopScorer] ✅ ${_scorers.length} scorers returned for ${_ltsCls.league}`)
+          return res.status(200).json({
+            content: _scLines.join('\n'),
+            model: 'league-top-scorer',
+            _sportsAgent: true,
+            _bypassLLM: true,
+            found: true,
+            type: 'LEAGUE_TOP_SCORER',
+          })
+        }
+
+        // 365scores فشل → fallback: SofaScore link
+        const _sfLink = _ltsCls.league === 'Champions League'
+          ? 'https://www.sofascore.com/tournament/football/europe/champions-league/7#standings:top-scorers'
+          : `https://www.sofascore.com/sport/football#top-scorers`
+        const _fbLines = [
+          `## 🥅 هدافو ${_ltsCls.league}`,
+          ``,
+          `> ⚠️ تعذّر جلب بيانات الهدافين مباشرةً الآن.`,
+          ``,
+          `**تابع الهدافين من المصادر الرسمية:**`,
+          `• [SofaScore — الهدافين](${_sfLink})`,
+          `• [365scores — الهدافين](https://www.365scores.com/ar/football)`,
+          `• [Transfermarkt — الهدافين](https://www.transfermarkt.com)`,
+        ]
+        return res.status(200).json({
+          content: _fbLines.join('\n'),
+          model: 'league-top-scorer-fallback',
+          _sportsAgent: true,
+          _bypassLLM: true,
+          found: false,
+          type: 'LEAGUE_TOP_SCORER',
+        })
+      } catch (_ltsErr) {
+        console.warn('[LeagueTopScorer] Error:', _ltsErr.message)
+      }
     }
   }
 

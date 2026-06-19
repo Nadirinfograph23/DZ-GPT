@@ -1,8 +1,8 @@
 {
-  "commit": "8e6f0f5e6f53f7a77526afd140666c6bde25d44b",
-  "commitShort": "8e6f0f5e",
+  "commit": "b0fb06727e1906074f1b14308315d6129301338b",
+  "commitShort": "b0fb0672",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: entity question routing — prevent 'من هو الرئيس؟' from going to News/Search agent",
-  "deployedAt": "2026-06-19T19:33:42.390796Z",
+  "message": "fix: DZTools health agent — early bypass before sports guards, fix Pollinations model, fix _earlyToolReq duplicate var",
+  "deployedAt": "2026-06-19T20:11:51.568686Z",
   "deployedBy": "scripts/deploy.py"
 }

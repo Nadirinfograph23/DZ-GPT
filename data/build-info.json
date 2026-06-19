@@ -1,8 +1,8 @@
 {
-  "commit": "a0270086a493a029f5202c71537dcf39ae157ca4",
-  "commitShort": "a0270086",
+  "commit": "58eadce0efd0fa72bb0b47606b38dfd8a7c57f7f",
+  "commitShort": "58eadce0",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: build-info.json auto-update per deploy + /api/version reads it + versionChecker 2min polling",
-  "deployedAt": "2026-06-19T11:11:02.774524Z",
+  "message": "fix: TS build error (dashboardContext) + build-info.json system + versionChecker 2min + temporal KB",
+  "deployedAt": "2026-06-19T11:18:18.437767Z",
   "deployedBy": "scripts/deploy.py"
 }

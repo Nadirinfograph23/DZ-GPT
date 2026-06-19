@@ -1,1 +1,8 @@
-{"commit":"init","commitShort":"init-000","branch":"devin/1774405518-init-dz-gpt","message":"initial","deployedAt":"2026-06-19T00:00:00Z","deployedBy":"manual"}
+{
+  "commit": "a0270086a493a029f5202c71537dcf39ae157ca4",
+  "commitShort": "a0270086",
+  "branch": "devin/1774405518-init-dz-gpt",
+  "message": "fix: build-info.json auto-update per deploy + /api/version reads it + versionChecker 2min polling",
+  "deployedAt": "2026-06-19T11:11:02.774524Z",
+  "deployedBy": "scripts/deploy.py"
+}

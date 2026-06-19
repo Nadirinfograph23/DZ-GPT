@@ -231,6 +231,7 @@ import {
 } from './lib/search-decision-tree.js'
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
+import { isEntityDefinitionQuery, isExplicitNewsQuery } from './lib/entity-question-guard.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
@@ -7215,6 +7216,17 @@ function detectQueryIntent(msg) {
     // فرنسية
     'actuellement','dernières nouvelles','en ce moment','cette semaine',
   ]
+  // ── Entity Definition Guard ───────────────────────────────────────────────
+  // "من هو الرئيس الأمريكي الحالي؟" → isTemporal=false حتى لو احتوى مؤشرات زمنية
+  // الأولوية: نوع السؤال (تعريف) > الكلمات الزمنية
+  if (isEntityDefinitionQuery(msg)) {
+    // "من هو الرئيس الأمريكي الحالي؟" → isTemporal=false حتى لو احتوى مؤشرات زمنية
+    // أزل 'politics'/'news' من detected لأن "وزير/رئيس" هنا في سياق تعريف وليس أخبار
+    const filteredDetected = detected.filter(d => !['politics','news'].includes(d))
+    return { primary: filteredDetected[0] || 'general', all: filteredDetected, isTemporal: false, isArabic, isEntityDefinition: true }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const isTemporal = temporalMarkers.some(m => lower.includes(m.toLowerCase())) || /\b(20[2-9]\d)\b/.test(msg)
     || detected.includes('celebrities') || detected.includes('incidents')
     || isTimeSensitiveQuery(msg)
@@ -23888,8 +23900,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _intentAction === 'lookup-wikidata-wikipedia'  ? 'PUBLIC_FIGURE' :
       classifyQuery(lastUserMessage)
     )
-    // إذا كان Intent Router يُشير لـ Wiki → لا نستخدم isRealtimeQuery
-    const _isRealtime = _isWikiIntent ? false : isRealtimeQuery(lastUserMessage)
+    // إذا كان Intent Router يُشير لـ Wiki، أو كان السؤال تعريف كيان → لا نستخدم isRealtimeQuery
+    const _isRealtime = (_isWikiIntent || isEntityDefinitionQuery(lastUserMessage)) ? false : isRealtimeQuery(lastUserMessage)
 
     // Decision Tree: شخصيات عامة/تاريخية/أحداث → يستخدم الـ chain الكامل
     if (['HISTORICAL_FIGURE', 'PUBLIC_FIGURE', 'HISTORICAL_EVENT', 'CURRENT_NEWS',
@@ -24859,7 +24871,8 @@ app.post('/api/dz-agent-stream', async (req, res) => {
       }
 
       // فحص إضافي: isRealtimeQuery — استعلامات الحياة الآنية التي فاتت التصنيف
-      if (isRealtimeQuery(lastUserMessage)) {
+      // ⚠️ استثناء: أسئلة تعريف الكيان (من هو/ما هو + منصب) لا تُعاد توجيهها حتى لو تطابقت
+      if (isRealtimeQuery(lastUserMessage) && !isEntityDefinitionQuery(lastUserMessage)) {
         console.log(`[Stream→RealtimeRedirect] 🔄 ROUTE=full | isRealtime=true intent=${_sIntentName} | "${lastUserMessage.slice(0, 70)}"`)
         _streamSSEHeaders(res)
         res.write(`data: ${JSON.stringify({ redirect: 'full' })}\n\n`)

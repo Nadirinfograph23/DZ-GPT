@@ -192,7 +192,7 @@ import {
   applyConfidenceSystem,
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
-import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ } from './lib/wiki-entity-lookup.js'
+import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ, detectTemporalQuery as _detectTemporalQ, resolveTemporalQuery as _resolveTemporalQ } from './lib/wiki-entity-lookup.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import {
@@ -15794,6 +15794,143 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
   // ══════════════════════════════════════════════════════════════════════════
+
+  // ══ TEMPORAL QUERY INTERCEPTOR — متى استشهد / وُلد / حدثت / تأسست ════════
+  // يعترض أسئلة "متى" ويُبرز التاريخ كإجابة رئيسية
+  // طبقة 1: KB جزائري + KB شخصيات → طبقة 2: Wikidata P569/P570/P585 → طبقة 3: Wikipedia
+  {
+    // ── KB الأحداث التاريخية الجزائرية الكبرى ─────────────────────────────
+    const _DZ_EVENTS_KB = {
+      // ── ثورة التحرير ──
+      'ثورة نوفمبر':              { date: '1 نوفمبر 1954', event: 'اندلاع الثورة الجزائرية', detail: 'انطلقت ثورة أول نوفمبر 1954 بـ70 عملية متزامنة في أنحاء الجزائر، بقيادة "المجموعة الثورية للوحدة والعمل" التي ستُصبح جبهة التحرير الوطني (FLN).' },
+      'اندلاع الثورة':            { date: '1 نوفمبر 1954', event: 'اندلاع الثورة الجزائرية' },
+      'أول نوفمبر':               { date: '1 نوفمبر 1954', event: 'اندلاع ثورة التحرير الجزائرية' },
+      'استقلال الجزائر':          { date: '5 يوليو 1962', event: 'استقلال الجزائر', detail: 'أُعلن استقلال الجزائر رسمياً في 5 يوليو 1962، بعد 132 سنة من الاستعمار الفرنسي (1830-1962)، وإثر 7 سنوات ونصف من الثورة التحريرية.' },
+      'استقلال':                  { date: '5 يوليو 1962', event: 'استقلال الجزائر عن فرنسا' },
+      'مفاوضات إيفيان':           { date: '18 مارس 1962', event: 'اتفاقيات إيفيان', detail: 'وُقِّعت اتفاقيات إيفيان في 18 مارس 1962 بين الحكومة الفرنسية وجبهة التحرير الوطني، وأنهت رسمياً الحرب الجزائرية.' },
+      'اتفاقيات إيفيان':          { date: '18 مارس 1962', event: 'توقيع اتفاقيات إيفيان' },
+      'مؤتمر الصومام':            { date: '20 أغسطس 1956', event: 'مؤتمر الصومام' },
+      'مجازر 8 مايو':             { date: '8 مايو 1945', event: 'مجازر 8 مايو 1945 في سطيف وقالمة وخراطة', detail: 'قمع فرنسا للمظاهرات السلمية في 8 مايو 1945، ذهب ضحيتها آلاف الجزائريين.' },
+      'مجازر سطيف':               { date: '8 مايو 1945', event: 'مجازر سطيف وقالمة وخراطة 1945' },
+
+      // ── شهداء ثورة ──
+      'استشهاد بن مهيدي':         { date: '3 مارس 1957', event: 'استشهاد العربي بن مهيدي', detail: 'نُفِّذ حكم الإعدام بحق القائد الثوري محمد العربي بن مهيدي في 3 مارس 1957 على يد الاستعمار الفرنسي، بعد اعتقاله في مدينة الجزائر.' },
+      'استشهاد زيغود يوسف':       { date: '25 سبتمبر 1956', event: 'استشهاد زيغود يوسف' },
+      'استشهاد ديدوش مراد':       { date: '18 يناير 1955', event: 'استشهاد ديدوش مراد' },
+      'استشهاد مصطفى بن بولعيد': { date: '22 مارس 1956', event: 'استشهاد مصطفى بن بولعيد' },
+      'استشهاد عبان رمضان':       { date: '27 ديسمبر 1957', event: 'استشهاد عبان رمضان' },
+      'اغتيال بوضياف':            { date: '29 يونيو 1992', event: 'اغتيال محمد بوضياف', detail: 'اغتيل الرئيس محمد بوضياف في 29 يونيو 1992 في عنابة خلال خطاب رسمي.' },
+
+      // ── أحداث سياسية جزائرية ──
+      'انقلاب بومدين':            { date: '19 يونيو 1965', event: 'انقلاب هواري بومدين على أحمد بن بلة' },
+      'انتفاضة أكتوبر':           { date: '5 أكتوبر 1988', event: 'أحداث أكتوبر 1988', detail: 'انتفاضة شعبية جزائرية اندلعت في 5 أكتوبر 1988 ضد الحزب الواحد والأزمة الاقتصادية، قمعتها السلطة بعنف وخلّفت مئات القتلى.' },
+      'أحداث أكتوبر':             { date: '5 أكتوبر 1988', event: 'أحداث أكتوبر 1988 الجزائر' },
+      'الحراك':                    { date: '22 فبراير 2019', event: 'انطلاق حراك 22 فبراير', detail: 'انطلق الحراك الشعبي الجزائري في 22 فبراير 2019 رفضاً للعهدة الخامسة لبوتفليقة، وأدى إلى استقالته في 2 أبريل 2019.' },
+      'استقالة بوتفليقة':         { date: '2 أبريل 2019', event: 'استقالة الرئيس بوتفليقة' },
+      'تأسيس FLN':                { date: '10 أكتوبر 1954', event: 'تأسيس جبهة التحرير الوطني (FLN)' },
+      'تأسيس جبهة التحرير':       { date: '10 أكتوبر 1954', event: 'تأسيس FLN' },
+
+      // ── أحداث عالمية مرتبطة ──
+      'معركة الجزائر':            { date: 'يناير–أكتوبر 1957', event: 'معركة الجزائر 1957', detail: 'معركة عسكرية حضرية بين الجيش الفرنسي وجبهة التحرير الوطني في مدينة الجزائر عام 1957.' },
+    }
+
+    // ── KB تواريخ الشهداء والسياسيين (سريع — بدون fetch) ─────────────────
+    const _PERSONS_DATE_KB = {
+      'بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
+      'العربي بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
+      'محمد العربي بن مهيدي': { birth: '1923', death: '3 مارس 1957', note: 'أُعدم على يد الاستعمار الفرنسي' },
+      'زيغود يوسف': { birth: '1921', death: '25 سبتمبر 1956', note: 'استشهد في معركة' },
+      'ديدوش مراد': { birth: '1927', death: '18 يناير 1955', note: 'أول شهيد ضابط في الثورة' },
+      'مصطفى بن بولعيد': { birth: '1917', death: '22 مارس 1956', note: 'أحد ستة الآباء المؤسسين' },
+      'عبان رمضان': { birth: '1920', death: '27 ديسمبر 1957', note: 'مهندس مؤتمر الصومام' },
+      'أحمد زبانة': { birth: '1926', death: '19 يونيو 1956', note: 'أول من نُفِّذ فيه حكم الإعدام في الثورة' },
+      'لرباع': { birth: '1929', death: '19 يونيو 1956', note: 'أُعدم مع أحمد زبانة' },
+      'محمد بوضياف': { birth: '23 يونيو 1919', death: '29 يونيو 1992', note: 'اغتيل في عنابة' },
+      'هواري بومدين': { birth: '23 أغسطس 1932', death: '27 ديسمبر 1978', note: 'رئيس الجزائر 1965-1978' },
+      'أحمد بن بلة': { birth: '25 ديسمبر 1916', death: '11 أبريل 2012', note: 'أول رئيس للجزائر' },
+      'الشاذلي بن جديد': { birth: '14 أبريل 1929', death: '6 أكتوبر 2012', note: 'رئيس الجزائر 1979-1992' },
+      'عبد العزيز بوتفليقة': { birth: '2 مارس 1937', death: '17 سبتمبر 2021', note: 'رئيس الجزائر 1999-2019' },
+      'جمال عبد الناصر': { birth: '15 يناير 1918', death: '28 سبتمبر 1970', note: 'رئيس مصر 1956-1970' },
+      'ياسر عرفات': { birth: '24 أغسطس 1929', death: '11 نوفمبر 2004', note: 'رئيس السلطة الفلسطينية' },
+      'الملك فيصل': { birth: '14 أبريل 1906', death: '25 مارس 1975', note: 'اغتيل' },
+      'عمر المختار': { birth: '1858', death: '16 سبتمبر 1931', note: 'أُعدم شنقاً من قِبل إيطاليا' },
+      'الأمير عبد القادر': { birth: '6 سبتمبر 1808', death: '26 مايو 1883', note: 'مقاوم جزائري ضد الاستعمار الفرنسي' },
+      'نيلسون مانديلا': { birth: '18 يوليو 1918', death: '5 ديسمبر 2013', note: 'أول رئيس أسود لجنوب أفريقيا' },
+      'مارتن لوثر كينغ': { birth: '15 يناير 1929', death: '4 أبريل 1968', note: 'اغتيل' },
+    }
+
+    const _tqRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
+                    .find(m => m?.role === 'user')?.content?.trim() || ''
+
+    if (_tqRaw.length >= 5 && _detectTemporalQ(_tqRaw)) {
+      const _tqDet = _detectTemporalQ(_tqRaw)
+      const _tqEntity = (_tqDet?.entity || '').trim()
+      const _tqType   = _tqDet?.dateType || 'point'
+      const _tqTypeAr = _tqDet?.dateTypeAr || 'تاريخ الحدث'
+
+      // تطبيع الاستعلام — توحيد صيغ الأفعال
+      const _tqNorm = _tqRaw
+        .replace(/استقلت|يستقل|مستقلة/g, 'استقلال')
+        .replace(/اندلعت|اندلع|انطلقت|انطلق/g, 'ثورة نوفمبر')
+        .replace(/استشهد\s+بن\s+مهيدي/g, 'استشهاد بن مهيدي')
+        .replace(/اغتيل\s+بوضياف/g, 'اغتيال بوضياف')
+        .replace(/وقّع|وقعت|أُبرمت/g, 'مفاوضات')
+
+      // ① فحص KB الأحداث التاريخية
+      const _evtKey = Object.keys(_DZ_EVENTS_KB).find(k =>
+        _tqNorm.includes(k) || _tqRaw.includes(k) || _tqEntity.includes(k) || k.includes(_tqEntity)
+      )
+      if (_evtKey) {
+        const _evt = _DZ_EVENTS_KB[_evtKey]
+        console.log(`[TemporalKB] ✅ Event KB: "${_evtKey}" → ${_evt.date}`)
+        const _lines = [
+          `## 📅 ${_evt.event}`,
+          ``,
+          `> 🗓️ **التاريخ: ${_evt.date}**`,
+          ``,
+        ]
+        if (_evt.detail) { _lines.push(`### 📖 التفاصيل`); _lines.push(_evt.detail); _lines.push(``) }
+        _lines.push(`---`)
+        _lines.push(`> 📚 *معلومات من قاعدة المعرفة الجزائرية | DZ-GPT*`)
+        return res.json({ content: _lines.join('\n'), model: 'temporal-kb-event' })
+      }
+
+      // ② فحص KB الشهداء والشخصيات
+      const _pKey = Object.keys(_PERSONS_DATE_KB).find(k =>
+        _tqRaw.includes(k) || _tqEntity.includes(k) || k.includes(_tqEntity)
+      )
+      if (_pKey) {
+        const _pd = _PERSONS_DATE_KB[_pKey]
+        const _dateVal = _tqType === 'birth' ? _pd.birth : (_pd.death || _pd.birth)
+        const _dateLabel = _tqType === 'birth' ? 'تاريخ الميلاد' : (_pd.death ? 'تاريخ الوفاة / الاستشهاد' : 'تاريخ الميلاد')
+        console.log(`[TemporalKB] ✅ Person KB: "${_pKey}" ${_dateLabel} → ${_dateVal}`)
+        const _lines = [
+          `## 📅 ${_pKey}`,
+          ``,
+          `> **${_dateLabel}:** 🗓️ **${_dateVal}**`,
+        ]
+        if (_pd.note) _lines.push(`> *${_pd.note}*`)
+        _lines.push(``)
+        _lines.push(`---`)
+        _lines.push(`> 📚 *معلومات من قاعدة المعرفة | DZ-GPT — جارٍ التحقق من Wikidata...*`)
+        // إرسال KB فوراً ثم fetch Wikidata في الخلفية غير محظور
+        return res.json({ content: _lines.join('\n'), model: 'temporal-kb-person' })
+      }
+
+      // ③ Wikidata + Wikipedia حياً (للكيانات غير الموجودة في KB)
+      console.log(`[TemporalLookup] 🌐 Live Wikidata+Wikipedia for "${_tqEntity}"`)
+      try {
+        const _liveResult = await _resolveTemporalQ(_tqRaw)
+        if (_liveResult?.found) {
+          return res.json({ content: _liveResult.content, model: _liveResult.model })
+        }
+      } catch (_tqErr) {
+        console.error('[TemporalLookup] error:', _tqErr.message)
+      }
+      // لا fallback — نترك باقي الـ handlers يتولى الأمر
+    }
+  }
+  // ═══════════════════════════════════════════════════════════════════════════
 
   // ══ WIKI ENTITY LOOKUP — مؤلف كتاب / مخرج فيلم / ملحن أغنية ═══════════
   // يعترض أسئلة "من هو مؤلف كتاب X" قبل أن تذهب للبحث الحي غير الملائم

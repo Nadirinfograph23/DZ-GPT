@@ -1201,23 +1201,46 @@ app.use('/api', createGitHubRouter({ githubLimiter }))
 
 // ── /api/version — معلومات الإصدار الحالي والـ deploy ──────────────────────
 const _SERVER_START = Date.now()
+
+// قراءة build-info.json (يُحدَّث تلقائياً في كل deploy بـ scripts/deploy.py)
+let _BUILD_INFO = null
+try {
+  const _biPath = new URL('./data/build-info.json', import.meta.url)
+  const _biRaw  = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
+  if (_biRaw) _BUILD_INFO = JSON.parse(_biRaw)
+} catch {}
+
 app.get('/api/version', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.setHeader('Pragma', 'no-cache')
   res.setHeader('Expires', '0')
-  const commit  = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'dev-local'
-  const branch  = process.env.VERCEL_GIT_BRANCH || 'local'
-  const message = process.env.VERCEL_GIT_COMMIT_MESSAGE || ''
+
+  // الأولوية: build-info.json (دقيق) ← VERCEL env vars ← fallback
+  const commit  = _BUILD_INFO?.commitShort
+               || (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 8)
+               || 'dev-local'
+  const branch  = _BUILD_INFO?.branch
+               || process.env.VERCEL_GIT_BRANCH
+               || 'local'
+  const message = _BUILD_INFO?.message
+               || process.env.VERCEL_GIT_COMMIT_MESSAGE
+               || ''
+  const deployedAt = _BUILD_INFO?.deployedAt
+                  || process.env.VERCEL_GIT_COMMIT_DATE
+                  || new Date().toISOString()
+
   res.json({
-    version: `1.0.0-${commit}`,
+    version:    `1.0.0-${commit}`,
     commit,
     branch,
-    message: message.slice(0, 120),
-    deployedAt: process.env.VERCEL_GIT_COMMIT_DATE || new Date().toISOString(),
+    message:    message.slice(0, 120),
+    deployedAt,
     serverTime: new Date().toISOString(),
-    uptime: Math.floor((Date.now() - _SERVER_START) / 1000),
-    env: process.env.NODE_ENV || 'development',
-    status: 'ok',
+    uptime:     Math.floor((Date.now() - _SERVER_START) / 1000),
+    env:        process.env.NODE_ENV || 'development',
+    region:     process.env.VERCEL_REGION || process.env.VERCEL_DEPLOYMENT_ID?.slice(0,6) || 'replit',
+    status:     'ok',
+    _source:    _BUILD_INFO ? 'build-info.json' : 'env-vars',
   })
 })
 // ═══════════════════════════════════════════════════════════════

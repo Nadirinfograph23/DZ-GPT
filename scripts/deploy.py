@@ -123,7 +123,7 @@ def deploy(commit_msg, files):
     base_tree = get_commit_tree(head_sha)
     print(f'📌 HEAD: {head_sha[:12]} | tree: {base_tree[:12]}')
 
-    # 2. رفع الملفات كـ blobs (بالتوازي قدر الإمكان)
+    # 2. رفع الملفات كـ blobs
     file_blobs = []
     for path in files:
         if not os.path.exists(path):
@@ -140,20 +140,51 @@ def deploy(commit_msg, files):
         print('❌ لا ملفات للرفع')
         sys.exit(1)
 
-    # 3. إنشاء tree جديد
-    print(f'\n🌲 إنشاء tree...', end=' ', flush=True)
-    new_tree = create_tree(base_tree, file_blobs)
-    print(f'✓ {new_tree[:12]}')
+    # 3. إنشاء tree جديد (مؤقت — بدون build-info بعد)
+    print(f'\n🌲 إنشاء tree (مرحلة أولى)...', end=' ', flush=True)
+    temp_tree = create_tree(base_tree, file_blobs)
+    print(f'✓ {temp_tree[:12]}')
 
-    # 4. إنشاء commit
+    # 4. إنشاء commit أولي لمعرفة الـ SHA
     print(f'📝 إنشاء commit...', end=' ', flush=True)
-    new_commit = create_commit(head_sha, new_tree, commit_msg)
+    new_commit = create_commit(head_sha, temp_tree, commit_msg)
     print(f'✓ {new_commit[:12]}')
 
-    # 5. تحديث مؤشر الفرع
+    # 4b. إنشاء build-info.json بـ SHA الصحيح وإضافته إلى tree نهائي
+    import datetime
+    build_info = json.dumps({
+        'commit':      new_commit,
+        'commitShort': new_commit[:8],
+        'branch':      BRANCH,
+        'message':     commit_msg,
+        'deployedAt':  datetime.datetime.utcnow().isoformat() + 'Z',
+        'deployedBy':  'scripts/deploy.py',
+    }, ensure_ascii=False, indent=2)
+    print(f'🔖 إنشاء build-info.json...', end=' ', flush=True)
+    bi_blob = create_blob(build_info.encode('utf-8'))
+    print(f'✓ {bi_blob[:12]}')
+
+    # كتابة build-info محلياً أيضاً (للاستخدام الفوري)
+    os.makedirs('data', exist_ok=True)
+    open('data/build-info.json', 'w').write(build_info)
+
+    # tree نهائي يتضمن build-info.json
+    print(f'🌲 إنشاء tree نهائي مع build-info...', end=' ', flush=True)
+    final_tree = create_tree(temp_tree, [('data/build-info.json', bi_blob)])
+    print(f'✓ {final_tree[:12]}')
+
+    # commit نهائي يشمل build-info
+    print(f'📝 commit نهائي + build-info...', end=' ', flush=True)
+    final_commit = create_commit(new_commit, final_tree, commit_msg + '\n\n[build-info updated]')
+    print(f'✓ {final_commit[:12]}')
+
+    # 5. تحديث مؤشر الفرع للـ commit النهائي
     print(f'🔗 تحديث {BRANCH}...', end=' ', flush=True)
-    update_ref(new_commit)
+    update_ref(final_commit)
     print('✓')
+
+    # تحديث new_commit للإشارة للنهائي
+    new_commit = final_commit
 
     print(f'\n✅ GitHub: https://github.com/{REPO}/commit/{new_commit[:12]}')
 

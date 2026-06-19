@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen, Globe, ExternalLink, Search, Zap, Cpu } from 'lucide-react'
+import { Code2, Github, ChevronDown, ChevronUp, Terminal, GitBranch, CheckCircle2, Loader2, X, AlertTriangle, Plus, FolderOpen, Globe, ExternalLink } from 'lucide-react'
 import '../styles/agent-mode-bar.css'
 
 export interface AgentModeState {
@@ -308,34 +308,6 @@ export default function AgentModeBar({ state, onChange, githubUser, onCommandSel
             </button>
           </>
         )}
-
-        {/* Query Mode Toggle — Research / Auto / Execution */}
-        <div className="amb-query-mode-group">
-          <button
-            className={`amb-qmode-btn ${(state.queryMode || 'auto') === 'research' ? 'amb-qmode-btn--active amb-qmode-btn--research' : ''}`}
-            onClick={() => onChange({ ...state, queryMode: 'research' })}
-            title="وضع البحث — معلومات وتحليل فقط، بدون تنفيذ"
-          >
-            <Search size={11} />
-            <span>بحث</span>
-          </button>
-          <button
-            className={`amb-qmode-btn ${(state.queryMode || 'auto') === 'auto' || !state.queryMode ? 'amb-qmode-btn--active amb-qmode-btn--auto' : ''}`}
-            onClick={() => onChange({ ...state, queryMode: 'auto' })}
-            title="الوضع التلقائي — يحدد الوكيل النوع تلقائياً"
-          >
-            <Cpu size={11} />
-            <span>تلقائي</span>
-          </button>
-          <button
-            className={`amb-qmode-btn ${(state.queryMode || 'auto') === 'execution' ? 'amb-qmode-btn--active amb-qmode-btn--execution' : ''}`}
-            onClick={() => onChange({ ...state, queryMode: 'execution' })}
-            title="وضع التنفيذ — يسمح بالعمليات البرمجية بعد التأكيد"
-          >
-            <Zap size={11} />
-            <span>تنفيذ</span>
-          </button>
-        </div>
 
         {/* Status badge */}
         {!state.active && !expanded && (githubUser || state.githubToken) && (

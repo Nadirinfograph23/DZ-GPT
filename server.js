@@ -193,6 +193,7 @@ import {
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
 import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ, detectTemporalQuery as _detectTemporalQ, resolveTemporalQuery as _resolveTemporalQ } from './lib/wiki-entity-lookup.js'
+import { resolveKnowledgeEntity, classifyEntityIntent, extractEntity, ENTITY_INTENT, ENTITY_ROUTING_POLICY, getCacheStats as _getEntityCacheStats } from './lib/dz-knowledge-entity-agent.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
 import {
@@ -15954,6 +15955,52 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
   // ═══════════════════════════════════════════════════════════════════════════
+
+  // ══ DZ KNOWLEDGE ENTITY AGENT — نظام التعرف على الكيانات (محسّن) ════════
+  // WHO / WHAT → Wikidata → Wikipedia → DBpedia (مع فصل صارم عن Search/Maps/Service)
+  // يمنع هلوسة LLM ويضمن المصادر الموثوقة — عتبة الثقة 85%
+  {
+    const _keaRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
+                      .find(m => m?.role === 'user')?.content?.trim() || ''
+    if (_keaRaw.length >= 3) {
+      const _keaClass = classifyEntityIntent(_keaRaw)
+      if (_keaClass.shouldHandle) {
+        console.log(`[KnowledgeEntityAgent] 🎯 Handling: "${_keaRaw.slice(0,60)}"`)
+        try {
+          const _keaResult = await resolveKnowledgeEntity(_keaRaw)
+          if (_keaResult?.found && _keaResult.content) {
+            console.log(`[KnowledgeEntityAgent] ✅ model="${_keaResult.model}" conf=${(_keaResult.confidence*100).toFixed(0)}%`)
+            return res.status(200).json({
+              content: _keaResult.content,
+              model: _keaResult.model,
+              found: true,
+              confidence: _keaResult.confidence,
+              sources: _keaResult.sources,
+              entityType: _keaResult.entityType,
+              _bypassLLM: true,
+              _fromCache: _keaResult._fromCache || false,
+            })
+          }
+          // درجة ثقة منخفضة — نرسل رابط مصادر
+          if (_keaResult && !_keaResult.found && _keaResult.content) {
+            return res.status(200).json({
+              content: _keaResult.content,
+              model: _keaResult.model,
+              found: false,
+              _bypassLLM: true,
+            })
+          }
+        } catch (_keaErr) {
+          console.error('[KnowledgeEntityAgent] ❌', _keaErr.message?.slice(0, 100))
+        }
+        // fallback — نتابع pipeline العادي إذا فشل الوكيل
+      } else if (_keaClass.redirectTo && _keaClass.intent !== ENTITY_INTENT.UNRELATED) {
+        console.log(`[KnowledgeEntityAgent] 🔀 Redirect: "${_keaClass.intent}" → ${_keaClass.redirectTo}`)
+        // لا نوقف هنا — نسمح للوكلاء الأخرى بالمعالجة
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════════
 
   // ══ WIKI ENTITY LOOKUP — مؤلف كتاب / مخرج فيلم / ملحن أغنية ═══════════
   // يعترض أسئلة "من هو مؤلف كتاب X" قبل أن تذهب للبحث الحي غير الملائم

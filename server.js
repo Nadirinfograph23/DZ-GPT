@@ -15616,6 +15616,86 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  // 🏥 DZTOOLS EARLY BYPASS — قبل كل شيء بما فيه Sports Guardians
+  // طلبات tool='health' يجب أن تصل مباشرةً لوكيل الصحة دون المرور
+  // بأي guard رياضي قد يُخطئ في تفسير النص الطبي (مصادر→مصر / المريض→المغرب)
+  // ══════════════════════════════════════════════════════════════════════
+  const _earlyToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
+  const _isEarlyDZTool = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq)
+  if (_isEarlyDZTool && _earlyToolReq === 'health') {
+    // ── معالجة فورية لوكيل الصحة (DZTools) ──────────────────────────────────
+    // DZTools يُرسل قالب [TOOL:SYMPTOM_ANALYZER] ويتوقع ردًّا markdown مُهيكلاً
+    // نستخدم system prompt بسيط يتوافق مع القالب (لا JSON لأن الـ frontend يعرض markdown)
+    const _earlyLastMsg = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+    const _earlySymLine = _earlyLastMsg.match(/\*\*الأعراض المُدخلة:\*\*\s*(.+)/u)
+    const _earlyRawSym  = _earlySymLine?.[1]?.trim() || _earlyLastMsg
+    const _earlyKb      = getRelatedDZKnowledge(detectHealthIntent(_earlyRawSym).symptoms.length ? detectHealthIntent(_earlyRawSym).symptoms : ['ألم'])
+    const _earlyKbNote  = _earlyKb ? `\n\n[معلومة طبية جزائرية: "${_earlyKb.name}" — ${_earlyKb.prevalence}. أدوية: ${_earlyKb.drugs.join(', ')}]` : ''
+    // System prompt بسيط يشجع LLM على ملء الأقسام الـ markdown (لا JSON)
+    const _earlyMedSys = `أنت طبيب مساعد ذكي مدرَّب على مصادر طبية معتمدة. أجب دائماً بالعربية الفصحى الواضحة.
+قاعدة أساسية: ردّك يجب أن يملأ الأقسام المطلوبة في رسالة المستخدم بشكل مفصّل ومفيد.
+لا تقدم تشخيصاً نهائياً — هذا تقييم استرشادي فقط. أضف تحذير "يرجى استشارة طبيب" في النهاية.${_earlyKbNote}`
+    const _earlyMsgs = [
+      { role: 'system', content: _earlyMedSys },
+      { role: 'user',   content: _earlyLastMsg },
+    ]
+    console.log(`[DZTools:Health:Early] 🩺 symptoms="${_earlyRawSym.slice(0,60)}" | kb=${_earlyKb?.name||'—'}`)
+    try {
+      // محاولة Groq 70b أولاً
+      const _earlyGroq = await callGroqWithFallback({
+        model: 'llama-3.3-70b-versatile',
+        messages: _earlyMsgs,
+        max_tokens: 2000,
+        temperature: 0.4,
+      })
+      if (_earlyGroq?.content && _earlyGroq.content.trim().length > 30) {
+        console.log(`[DZTools:Health:Early] ✅ Groq70b — ${_earlyGroq.content.length} chars`)
+        return res.status(200).json({ content: _earlyGroq.content, model: _earlyGroq.model })
+      }
+      // Groq fallback: 8b-instant
+      const _earlyGroq2 = await callGroqWithFallback({
+        model: 'llama-3.1-8b-instant',
+        messages: _earlyMsgs,
+        max_tokens: 1500,
+        temperature: 0.4,
+      })
+      if (_earlyGroq2?.content && _earlyGroq2.content.trim().length > 30) {
+        console.log(`[DZTools:Health:Early] ✅ Groq8b — ${_earlyGroq2.content.length} chars`)
+        return res.status(200).json({ content: _earlyGroq2.content, model: _earlyGroq2.model })
+      }
+      // Fallback 1: callAIRouter مباشرةً (يتجاوز aiSemaphore/aiDeduplicator)
+      try {
+        const _earlyRouter = await callAIRouter(_earlyMsgs, { max_tokens: 2000, taskHint: 'general' })
+        if (_earlyRouter?.content && _earlyRouter.content.trim().length > 30) {
+          console.log(`[DZTools:Health:Early] ✅ AIRouter — ${_earlyRouter.content.length} chars model=${_earlyRouter.model}`)
+          return res.status(200).json({ content: _earlyRouter.content, model: _earlyRouter.model })
+        }
+      } catch (_rErr) { console.warn('[DZTools:Health:Early] Router failed:', _rErr.message) }
+      // Fallback 2: Pollinations.ai (لا API key — دائماً متاح)
+      try {
+        const _polRes = await fetch('https://text.pollinations.ai/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'openai-fast', messages: _earlyMsgs, seed: Math.floor(Math.random() * 999999), private: true }),
+          signal: AbortSignal.timeout(22000),
+        })
+        if (_polRes.ok) {
+          const _polData = await _polRes.json()
+          const _polContent = _polData.choices?.[0]?.message?.content || null
+          if (_polContent && _polContent.trim().length > 30) {
+            console.log(`[DZTools:Health:Early] ✅ Pollinations — ${_polContent.length} chars`)
+            return res.status(200).json({ content: _polContent.trim(), model: 'pollinations/openai-large' })
+          }
+        }
+      } catch (_polErr) { console.warn('[DZTools:Health:Early] Pollinations failed:', _polErr.message) }
+      return res.status(200).json({ content: '⚠️ تعذّر توليد تحليل الأعراض. يرجى المحاولة مرة أخرى.', model: null })
+    } catch (_earlyErr) {
+      console.error('[DZTools:Health:Early] ❌', _earlyErr.message)
+      return res.status(200).json({ content: '⚠️ خطأ مؤقت في وكيل الصحة. يرجى المحاولة مرة أخرى.', model: null })
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   // 🛡️ ULTRA-EARLY SPORTS GUARDIAN — أول خط دفاع — قبل correctQuery وقبل أي شيء
   // يضمن أن لا LLM يجيب على أسئلة "فريق ضد فريق" أبداً
   // ══════════════════════════════════════════════════════════════════════
@@ -15674,8 +15754,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   {
     const _uhRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
     // Guard: لا نعترض طلبات الأدوات المتخصصة
+    // 'health' مستثنى هنا لأن DZTools تتوقع ردًّا نصيًّا بسيطاً لا بطاقة health-analysis غنية
+    // معالجة DZTools health تتم في isDZToolRequest fast-path بعد ذلك
     const _uhToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-    const _uhIsTool = ['jobs', 'cv', 'legal', 'chart', 'ocr'].includes(_uhToolReq)
+    const _uhIsTool = ['jobs', 'cv', 'legal', 'chart', 'ocr', 'health'].includes(_uhToolReq)
     if (!_uhIsTool && _uhRaw.length >= 4) {
       try {
         const _uhIntent = detectHealthIntent(_uhRaw)
@@ -17711,8 +17793,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // يعمل هنا لمنع Maps/Darija/Algeria-KS من اعتراض الأعراض الطبية
   // مثال: "راسي يضرب" → صحة (ليس خريطة) | "كيفاش ناخذ الدواء" → صحة (ليس ترجمة)
   // ══════════════════════════════════════════════════════════════════════
-  const _earlyToolReq = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
-  const _isDZToolReq_early = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq)
+  const _earlyToolReq2 = typeof req.body.tool === 'string' ? req.body.tool.toLowerCase() : ''
+  const _isDZToolReq_early = ['jobs', 'health', 'cv', 'legal', 'chart', 'ocr', 'doctor'].includes(_earlyToolReq2)
   if (!_isDZToolReq_early) {
     const _healthIntentEarly = detectHealthIntent(lastUserMessage)
     if (_healthIntentEarly.isHealthQuery && !_healthIntentEarly.isDoctorSearch) {
@@ -18892,6 +18974,50 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // When tool='health'|'cv'|'legal'|etc., the prompt is pre-structured by the tool.
   // Skip maps, places, YouTube, web-reader, doctor routing — all irrelevant.
   if (isDZToolRequest) {
+    // ── وكيل الصحة من DZTools ─────────────────────────────────────────────
+    // استخدم Groq مع system prompt طبي متخصص بدل safeGenerateAI العام
+    // سبب التخصيص: القالب [TOOL:SYMPTOM_ANALYZER] يحتاج LLM طبي لا عاماً
+    if (_dzToolRequest === 'health') {
+      try {
+        // استخراج الأعراض من القالب البنيوي
+        const _dtSymLine = lastUserMessage.match(/\*\*الأعراض المُدخلة:\*\*\s*(.+)/u)
+        const _dtRawSymptoms = _dtSymLine?.[1]?.trim() || lastUserMessage
+        const _dtHealthIntent = detectHealthIntent(_dtRawSymptoms)
+        const _dtSymptoms = _dtHealthIntent.symptoms.length ? _dtHealthIntent.symptoms : ['ألم عام']
+        const _dtSysPrompt = buildHealthSystemPrompt(_dtSymptoms, _dtHealthIntent.hasDrugQuestion, false)
+        const _dtDzKb = getRelatedDZKnowledge(_dtSymptoms)
+        const _dtKbNote = _dtDzKb
+          ? `\n\n[معلومة طبية جزائرية: "${_dtDzKb.name}" — ${_dtDzKb.prevalence}. أدوية متاحة: ${_dtDzKb.drugs.join(', ')}]`
+          : ''
+        // أرسل القالب كاملاً كـ user message ليملأ LLM الأقسام الـ structured
+        const _dtMsgs = [
+          { role: 'system', content: _dtSysPrompt + _dtKbNote },
+          { role: 'user',   content: lastUserMessage },
+        ]
+        console.log(`[DZTools:Health] 🩺 symptoms="${_dtRawSymptoms.slice(0,60)}" | kb=${_dtDzKb?.name||'—'}`)
+        // محاولة Groq أولاً (النموذج الأسرع والأدق للعربية الطبية)
+        const _dtGroq = await callGroqWithFallback({
+          model: 'llama-3.3-70b-versatile',
+          messages: _dtMsgs,
+          max_tokens: 2000,
+          temperature: 0.3,
+        })
+        if (_dtGroq?.content && _dtGroq.content.trim().length > 20) {
+          console.log(`[DZTools:Health] ✅ Groq response — ${_dtGroq.content.length} chars`)
+          return res.status(200).json({ content: _dtGroq.content, model: _dtGroq.model })
+        }
+        // Fallback: safeGenerateAI مع نفس الـ messages الطبية
+        const _dtFallback = await safeGenerateAI({ messages: _dtMsgs, query: _dtRawSymptoms, max_tokens: 2000, taskHint: 'general' })
+        return res.status(200).json({
+          content: _dtFallback.content || '⚠️ تعذّر توليد تحليل الأعراض. يرجى المحاولة مرة أخرى.',
+          model: _dtFallback.model,
+        })
+      } catch (_dtErr) {
+        console.error('[DZTools:Health] ❌ error:', _dtErr.message)
+        return res.status(200).json({ content: '⚠️ خطأ في الاتصال بالذكاء الاصطناعي الطبي. يرجى المحاولة مرة أخرى.' })
+      }
+    }
+    // ── أدوات أخرى (cv, legal, jobs, chart, ocr, doctor) ───────────────────
     try {
       const toolResult = await safeGenerateAI({ messages, query: lastUserMessage, max_tokens: 2000, taskHint: 'general' })
       return res.status(200).json({ content: toolResult.content || '⚠️ فشل التحليل. يرجى المحاولة مرة أخرى.', model: toolResult.model })

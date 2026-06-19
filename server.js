@@ -15665,6 +15665,67 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
   // ══════════════════════════════════════════════════════════════════════
 
+  // ══ PLAYER CURRENT CLUB INTERCEPTOR — قبل WC2026 squad ══════════════════
+  // يعترض أسئلة "مع من يلعب X" / "أين يلعب X" / "ما نادي X" ويُجيب بنادي اللاعب الحالي
+  {
+    const _pccRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
+                     .find(m => m?.role === 'user')?.content?.trim() || ''
+    const _pccClubQ = /(?:مع\s+من\s+يلعب|أين\s+يلعب|في\s+أي\s+نادي|ما\s+نادي|نادي\s+(?:من|هو|ه)|يلعب\s+(?:مع|في|حالياً|الآن|عند)|(?:club|team|plays?\s+for))/i.test(_pccRaw)
+    if (_pccClubQ) {
+      const _PLAYER_CLUBS = {
+        'ميسي':        { name:'ليونيل ميسي',       club:'إنتر ميامي 🇺🇸',      flag:'🇦🇷', emoji:'⭐' },
+        'messi':       { name:'ليونيل ميسي',       club:'إنتر ميامي 🇺🇸',      flag:'🇦🇷', emoji:'⭐' },
+        'رونالدو':     { name:'كريستيانو رونالدو', club:'النصر 🇸🇦',            flag:'🇵🇹', emoji:'🌟' },
+        'ronaldo':     { name:'كريستيانو رونالدو', club:'النصر 🇸🇦',            flag:'🇵🇹', emoji:'🌟' },
+        'مبابي':       { name:'كيليان مبابي',      club:'ريال مدريد 🇪🇸',       flag:'🇫🇷', emoji:'⚡' },
+        'mbappe':      { name:'كيليان مبابي',      club:'ريال مدريد 🇪🇸',       flag:'🇫🇷', emoji:'⚡' },
+        'هالاند':      { name:'إيرلينغ هالاند',   club:'مانشستر سيتي 🏴󠁧󠁢󠁥󠁮󠁧󠁿', flag:'🇳🇴', emoji:'💥' },
+        'haaland':     { name:'إيرلينغ هالاند',   club:'مانشستر سيتي 🏴󠁧󠁢󠁥󠁮󠁧󠁿', flag:'🇳🇴', emoji:'💥' },
+        'صلاح':        { name:'محمد صلاح',         club:'ليفربول 🏴󠁧󠁢󠁥󠁮󠁧󠁿',        flag:'🇪🇬', emoji:'🔴' },
+        'salah':       { name:'محمد صلاح',         club:'ليفربول 🏴󠁧󠁢󠁥󠁮󠁧󠁿',        flag:'🇪🇬', emoji:'🔴' },
+        'محرز':        { name:'رياض محرز',         club:'الأهلي 🇸🇦',           flag:'🇩🇿', emoji:'🟢' },
+        'mahrez':      { name:'رياض محرز',         club:'الأهلي 🇸🇦',           flag:'🇩🇿', emoji:'🟢' },
+        'بنزيمة':      { name:'كريم بنزيمة',       club:'الاتحاد 🇸🇦',          flag:'🇫🇷', emoji:'🏆' },
+        'benzema':     { name:'كريم بنزيمة',       club:'الاتحاد 🇸🇦',          flag:'🇫🇷', emoji:'🏆' },
+        'نيمار':       { name:'نيمار جونيور',      club:'سانتوس 🇧🇷',           flag:'🇧🇷', emoji:'🎭' },
+        'neymar':      { name:'نيمار جونيور',      club:'سانتوس 🇧🇷',           flag:'🇧🇷', emoji:'🎭' },
+        'فينيسيوس':    { name:'فينيسيوس جونيور',  club:'ريال مدريد 🇪🇸',       flag:'🇧🇷', emoji:'🔥' },
+        'vinicius':    { name:'فينيسيوس جونيور',  club:'ريال مدريد 🇪🇸',       flag:'🇧🇷', emoji:'🔥' },
+        'بيللينغهام':  { name:'جود بيلينغهام',    club:'ريال مدريد 🇪🇸',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', emoji:'💫' },
+        'bellingham':  { name:'جود بيلينغهام',    club:'ريال مدريد 🇪🇸',       flag:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', emoji:'💫' },
+        'بن جديد':     { name:'أمين بن جديد',     club:'الاتحاد 🇸🇦',          flag:'🇩🇿', emoji:'🟢' },
+        'بن ناصر':     { name:'عدنان بن ناصر',    club:'باشاك شهير 🇹🇷',       flag:'🇩🇿', emoji:'🟢' },
+        'سليماني':     { name:'إسلام سليماني',    club:'بيراميدز 🇪🇬',         flag:'🇩🇿', emoji:'🟢' },
+        'بوفال':       { name:'سفيان بوفال',      club:'مارسيليا 🇫🇷',         flag:'🇲🇦', emoji:'🔴' },
+        'لامين يمال':  { name:'لامين يمال',        club:'برشلونة 🇪🇸',          flag:'🇪🇸', emoji:'⚡' },
+        'yamal':       { name:'لامين يمال',        club:'برشلونة 🇪🇸',          flag:'🇪🇸', emoji:'⚡' },
+      }
+      const _pccKey = Object.keys(_PLAYER_CLUBS).find(k => _pccRaw.toLowerCase().includes(k.toLowerCase()))
+      if (_pccKey) {
+        const _pccInfo = _PLAYER_CLUBS[_pccKey]
+        console.log(`[PlayerClub] ⚽ Intercepted club query for "${_pccInfo.name}" → ${_pccInfo.club}`)
+        return res.status(200).json({
+          content: [
+            `## ${_pccInfo.emoji} ${_pccInfo.name} ${_pccInfo.flag}`,
+            ``,
+            `> **يلعب حالياً مع:** **${_pccInfo.club}**`,
+            ``,
+            `| التفصيل | القيمة |`,
+            `|---------|--------|`,
+            `| 🏟️ **النادي الحالي** | ${_pccInfo.club} |`,
+            `| 🌍 **الجنسية** | ${_pccInfo.flag} |`,
+            ``,
+            `> 📅 *المعلومات محدّثة — يونيو 2026*`,
+          ].join('\n'),
+          model: 'player-club-kb',
+          found: true,
+          _bypassLLM: true,
+        })
+      }
+    }
+  }
+  // ══════════════════════════════════════════════════════════════════════════
+
   // ══ WC2026 SQUAD ULTRA-EARLY INTERCEPTOR — أولوية قصوى ══════════════════
   // يُطلَق قبل كل handler آخر — يمنع أي LLM من تجاوز قاعدة بيانات التشكيلات
   // الترتيب: ultra-early guardian → هذا الـ block → كل شيء آخر

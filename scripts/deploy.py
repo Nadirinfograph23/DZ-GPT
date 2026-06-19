@@ -99,13 +99,59 @@ def update_ref(commit_sha):
        method='PATCH', data={'sha': commit_sha, 'force': False})
 
 
-def trigger_vercel():
-    """إطلاق Vercel deploy hook."""
-    if not VERCEL_TOK and not VERCEL_HOOK:
+VERCEL_PROJECT_ID = 'prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5'
+VERCEL_REPO_ID    = 1191199822
+
+def trigger_vercel(commit_sha=None):
+    """
+    إطلاق Vercel deployment من الـ commit الصحيح على الفرع.
+    يستخدم /v13/deployments API أولاً (يضمن أحدث كود) → deploy hook fallback.
+    """
+    if not VERCEL_TOK:
         return None
-    req = urllib.request.Request(VERCEL_HOOK, headers={'User-Agent': 'DZ-Agent/1.0'})
-    r = json.loads(urllib.request.urlopen(req).read())
-    return r.get('job', {}).get('id')
+
+    # ── الطريقة المثلى: v13/deployments من الـ commit الصحيح ─────────────
+    if commit_sha:
+        try:
+            body = json.dumps({
+                'name':    'dz-gpt',
+                'project': VERCEL_PROJECT_ID,
+                'target':  'production',
+                'gitSource': {
+                    'type':   'github',
+                    'ref':    BRANCH,
+                    'sha':    commit_sha,
+                    'repoId': VERCEL_REPO_ID,
+                },
+            }).encode('utf-8')
+            req = urllib.request.Request(
+                'https://api.vercel.com/v13/deployments',
+                data=body,
+                headers={
+                    'Authorization': f'Bearer {VERCEL_TOK}',
+                    'Content-Type':  'application/json',
+                    'User-Agent':    'DZ-Agent/1.0',
+                },
+                method='POST',
+            )
+            r = json.loads(urllib.request.urlopen(req).read())
+            dep_id  = r.get('id', '')
+            dep_url = r.get('url', '')
+            if dep_id:
+                print(f'\n   deployment id: {dep_id}')
+                print(f'   preview: https://{dep_url}')
+                return dep_id
+        except Exception as e:
+            print(f'\n⚠️  v13/deployments فشل ({e}) — جارٍ تجربة deploy hook...')
+
+    # ── Fallback: deploy hook ─────────────────────────────────────────────
+    try:
+        req = urllib.request.Request(VERCEL_HOOK, headers={'User-Agent': 'DZ-Agent/1.0'})
+        r = json.loads(urllib.request.urlopen(req).read())
+        return r.get('job', {}).get('id')
+    except Exception as e:
+        print(f'⚠️  deploy hook فشل أيضاً: {e}')
+        return None
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -190,7 +236,7 @@ def deploy(commit_msg, files):
 
     # 6. إطلاق Vercel
     print(f'🌐 إطلاق Vercel deploy hook...', end=' ', flush=True)
-    job_id = trigger_vercel()
+    job_id = trigger_vercel(new_commit)
     if job_id:
         print(f'✓ job: {job_id}')
         print(f'   https://dz-gpt.vercel.app ← يتحدث خلال ~2 دقيقة')

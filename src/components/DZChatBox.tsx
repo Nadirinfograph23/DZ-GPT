@@ -9166,7 +9166,7 @@ ${rows}
                                       agentActive: agentMode.active || undefined,
                                       agentQueryMode: 'execution',
                                       confirmed: true,
-                                      dashboardContext,
+                                      dashboardContext: undefined,
                                     }),
                                     signal: ctrl.signal,
                                   })

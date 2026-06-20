@@ -1,8 +1,8 @@
 {
-  "commit": "4eb4d4649cd8216dee0dfc2bc30cc464e10b1a0e",
-  "commitShort": "4eb4d464",
+  "commit": "03d4509e9ce556b32c3dd69df564b94949d738ee",
+  "commitShort": "03d4509e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add DZ Agent Benchmark Suite — 20 acceptance tests covering intent routing, medical, code, RAG, anti-hallucination, multi-agent",
-  "deployedAt": "2026-06-20T21:53:37.883093Z",
+  "message": "feat: إضافة صفحة DZ Agent Benchmark — 20 اختبار قبول تفاعلي",
+  "deployedAt": "2026-06-20T22:42:47.043944Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -824,6 +824,60 @@ function _srcFaviconUrl(domain: string): string {
   return `https://www.google.com/s2/favicons?domain=${base}&sz=32`
 }
 
+/**
+ * يُزيل أسطر "المصادر" النصية من نهاية ماركداون الإجابة
+ * (مثل: 📡 **المصادر:** [FIFA](url) · ...)
+ * لأن هذه تُعرض كأيقونات في شريط المصادر أسفل الرسالة بدلاً من النص
+ */
+function stripSourceFooters(content: string): string {
+  if (!content) return content
+  const lines = content.split('\n')
+  const filtered = lines.filter(line => {
+    const l = line.trim()
+    // أسطر المصادر في نهاية الردود الرياضية وغيرها
+    if (/^(📡|📊|🔗|🔴)\s*\*{0,2}(المصادر|نتائج\s*حية|متابعة\s*مباشرة|بيانات\s*موثوقة)[:\s*]/i.test(l)) return false
+    if (/^_?📡\s*المصدر[:：]/i.test(l)) return false
+    if (/^>\s*(📌|📡)\s*_?المصادر?[:：]/i.test(l)) return false
+    return true
+  })
+  // إزالة أسطر --- الزائدة في النهاية
+  while (filtered.length > 0 && filtered[filtered.length - 1].trim() === '---') {
+    filtered.pop()
+  }
+  return filtered.join('\n').trimEnd()
+}
+
+/**
+ * يستخرج روابط المصادر من أسطر footer المصادر داخل الماركداون
+ * ليُضيفها لأيقونات المصادر
+ */
+function extractSourceLinksFromContent(content: string): Array<{domain: string, url: string, label: string}> {
+  if (!content) return []
+  const results: Array<{domain: string, url: string, label: string}> = []
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g
+  const lines = content.split('\n')
+  for (const line of lines) {
+    const l = line.trim()
+    const isSourceLine = (
+      /^(📡|📊|🔗|🔴)\s*\*{0,2}(المصادر|نتائج\s*حية|متابعة\s*مباشرة|بيانات\s*موثوقة)/i.test(l) ||
+      /^_?📡\s*المصدر[:：]/i.test(l) ||
+      /^>\s*(📌|📡)\s*_?المصادر?[:：]/i.test(l)
+    )
+    if (!isSourceLine) continue
+    let m: RegExpExecArray | null
+    linkRe.lastIndex = 0
+    while ((m = linkRe.exec(line)) !== null) {
+      const label = m[1]
+      const url   = m[2]
+      try {
+        const d = new URL(url).hostname.replace(/^www\./, '')
+        results.push({ domain: d, url, label })
+      } catch { /* skip */ }
+    }
+  }
+  return results
+}
+
 /** يستخرج كل مصادر الرسالة ويُعيدها كقائمة أيقونات (بدون تكرار) */
 function extractAllSourceIcons(msg: DZMessage): _SourceIcon[] {
   const seen = new Set<string>()
@@ -886,7 +940,13 @@ function extractAllSourceIcons(msg: DZMessage): _SourceIcon[] {
     add('openlibrary.org', 'https://openlibrary.org', 'Open Library')
   }
 
-  // ③ تحليل نص الماركداون — أنماط "المصدر: ..."
+  // ③ استخراج روابط مصادر من أسطر footer المصادر (📡 المصادر: ... / 🔗 نتائج حية: ...)
+  const footerLinks = extractSourceLinksFromContent(content)
+  for (const fl of footerLinks) {
+    add(fl.domain, fl.url, fl.label)
+  }
+
+  // ④ تحليل نص الماركداون — أنماط "المصدر: ..."
   const srcRx = [
     /[مM]صدر[:\s*]+([^\n\|\u060C،,\u200f]{3,60})/g,
     /[Ss]ource[:\s*]+([^\n\|\u060C،,]{3,60})/g,
@@ -8308,7 +8368,7 @@ ${rows}
                             th({ children }) { return <th dir="auto">{children}</th> },
                             td({ children }) { return <td dir="auto">{children}</td> },
                           }}
-                        >{msg.content}</ReactMarkdown>
+                        >{stripSourceFooters(msg.content)}</ReactMarkdown>
                       )}
                       {msg.richType === 'text' && msg.executionCode && (
                         <CodeExecutionPreview code={msg.executionCode} lang={msg.executionLang || 'python'} />

@@ -191,11 +191,14 @@ export default function DZBenchmark() {
       const res = await fetch('/api/dz-agent-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: test.q, sessionId: `benchmark-${test.id}` }),
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: test.q }],
+          sessionId: `benchmark-${test.id}`,
+        }),
         signal: AbortSignal.timeout(45000),
       })
       const data = await res.json()
-      const content: string = data.reply || data.response || data.message || data.content || JSON.stringify(data)
+      const content: string = data.content || data.reply || data.response || data.message || JSON.stringify(data)
       const checks = evalChecks(test.id, content)
       const score = checks.length > 0 ? Math.round((checks.filter(c => c.pass).length / checks.length) * 100) : 0
       const result: TestResult = {

@@ -1290,11 +1290,13 @@
   unicode-bidi: plaintext;
   /* Constrain width so table wrappers inside are bounded to the chat bubble.
      Without this, RTL quirks on Android Chrome can let .dz-message-text
-     grow wider than its parent, making the table appear to overflow the chat. */
+     grow wider than its parent, making the table appear to overflow the chat.
+     NOTE: overflow-x must be visible (not hidden) so that absolutely positioned
+     scroll buttons inside .dz-table-outer are not clipped by this element. */
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: hidden;
+  overflow-x: visible;
   box-sizing: border-box;
 }
 

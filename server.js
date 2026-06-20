@@ -15616,6 +15616,22 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  // 🔒 DEVELOPER / OWNER IDENTITY — أول فحص مطلق — يعيد DEVELOPER_RESPONSE فوراً
+  // يجب أن يكون قبل كل شيء: sports guardian، health، clarification، إلخ
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _devRaw = [...messages].reverse().find(m => m?.role === 'user')?.content || ''
+    if (isDeveloperOrOwnerQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 👨‍💻 Developer question detected — returning DEVELOPER_RESPONSE`)
+      return res.status(200).json(DEVELOPER_RESPONSE)
+    }
+    if (isCapabilitiesQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 🎯 Capabilities question detected — returning CAPABILITIES_RESPONSE`)
+      return res.status(200).json(CAPABILITIES_RESPONSE)
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   // 🏥 DZTOOLS EARLY BYPASS — قبل كل شيء بما فيه Sports Guardians
   // طلبات tool='health' يجب أن تصل مباشرةً لوكيل الصحة دون المرور
   // بأي guard رياضي قد يُخطئ في تفسير النص الطبي (مصادر→مصر / المريض→المغرب)

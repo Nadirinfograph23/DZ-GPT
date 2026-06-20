@@ -1,8 +1,8 @@
 {
-  "commit": "9f53fa499e37c67b058c2460484a948f1cf1dd2b",
-  "commitShort": "9f53fa49",
+  "commit": "fe72083dcba75ac9c8e103af1d0b18f50dfd310e",
+  "commitShort": "fe72083d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: تصحيح format الطلب في Benchmark — messages array + content field",
-  "deployedAt": "2026-06-20T23:04:36.435473Z",
+  "message": "fix: ضبط حساسية وكيل المعرفة — CAPITALS_MAP ثابت + MIN_CONFIDENCE_GEO=0.48 للكيانات الجغرافية",
+  "deployedAt": "2026-06-20T23:12:30.848151Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "ec8ab8903c37fa8a000be935669f1e53d943f601",
-  "commitShort": "ec8ab890",
+  "commit": "84f1044fda477c77af9f1daa56ae26a13a18e24d",
+  "commitShort": "84f1044f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: add isDeveloperOrOwnerQuestion early check to /api/dz-agent-chat route — شكون خدمك now returns DEVELOPER_RESPONSE instantly",
-  "deployedAt": "2026-06-20T21:37:37.216867Z",
+  "message": "fix: overflow-x visible on .dz-message-text — root cause of scroll buttons not appearing (clipped by parent overflow)",
+  "deployedAt": "2026-06-20T21:46:43.774161Z",
   "deployedBy": "scripts/deploy.py"
 }

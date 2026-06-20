@@ -1,8 +1,8 @@
 {
-  "commit": "b0fb06727e1906074f1b14308315d6129301338b",
-  "commitShort": "b0fb0672",
+  "commit": "bf0c900c240146e36bee525f98c7d6789fff89ec",
+  "commitShort": "bf0c900c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: DZTools health agent — early bypass before sports guards, fix Pollinations model, fix _earlyToolReq duplicate var",
-  "deployedAt": "2026-06-19T20:11:51.568686Z",
+  "message": "fix: WC2026 standings via ESPN live API + transparent table buttons + strip source footers from markdown (icons only)",
+  "deployedAt": "2026-06-20T00:08:19.820182Z",
   "deployedBy": "scripts/deploy.py"
 }

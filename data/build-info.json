@@ -1,8 +1,8 @@
 {
-  "commit": "c94a4e67525098dfb1a0c4d617f216600f6ff1b5",
-  "commitShort": "c94a4e67",
+  "commit": "4dfa7f8ffe0ecbe7f102a56750bbe7931316b60b",
+  "commitShort": "4dfa7f8f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add qualification status column to WC2026 standings table (green/yellow/red + Kooora link)",
-  "deployedAt": "2026-06-20T02:54:33.644585Z",
+  "message": "fix: table scroll buttons now appear with blink intro animation, CSS-only opacity no inline styles, reliable sync via multi-timeout",
+  "deployedAt": "2026-06-20T03:02:22.544179Z",
   "deployedBy": "scripts/deploy.py"
 }

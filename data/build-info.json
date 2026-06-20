@@ -1,8 +1,8 @@
 {
-  "commit": "bf0c900c240146e36bee525f98c7d6789fff89ec",
-  "commitShort": "bf0c900c",
+  "commit": "29359d7782bd1d854166e5a173d3ea6100812b66",
+  "commitShort": "29359d77",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: WC2026 standings via ESPN live API + transparent table buttons + strip source footers from markdown (icons only)",
-  "deployedAt": "2026-06-20T00:08:19.820182Z",
+  "message": "fix: ESPN stats correct abbr (P/F/A/D), table scroll buttons as side overlays no-useState, glass transparent style",
+  "deployedAt": "2026-06-20T02:51:24.259126Z",
   "deployedBy": "scripts/deploy.py"
 }

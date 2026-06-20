@@ -2714,17 +2714,10 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const l   = el.scrollLeft
     const max = el.scrollWidth - el.clientWidth
     const isOver = max > 4
+    // CSS handles opacity via .dz-table-outer--overflow — only toggle class + disabled
     if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
-    if (btnLRef.current) {
-      const disabled = l <= 2
-      btnLRef.current.disabled = disabled
-      btnLRef.current.style.opacity = disabled ? '0.15' : '1'
-    }
-    if (btnRRef.current) {
-      const disabled = !isOver || l >= max - 2
-      btnRRef.current.disabled = disabled
-      btnRRef.current.style.opacity = disabled ? '0.15' : '1'
-    }
+    if (btnLRef.current)  btnLRef.current.disabled  = l <= 2
+    if (btnRRef.current)  btnRRef.current.disabled  = !isOver || l >= max - 2
   }, [])
 
   const nudge = useCallback((dir: 'l' | 'r') => {
@@ -2743,6 +2736,11 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       }
       sync()
     }))
+
+    // Extra syncs — guarantee buttons appear even if rAF fires before layout
+    const _t0 = setTimeout(sync, 80)
+    const _t1 = setTimeout(sync, 300)
+    const _t2 = setTimeout(sync, 900)
 
     el.addEventListener('scroll', sync, { passive: true })
 
@@ -2766,6 +2764,7 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     el.addEventListener('touchstart', onStart, { passive: true })
     el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
+      clearTimeout(_t0); clearTimeout(_t1); clearTimeout(_t2)
       el.removeEventListener('scroll',     sync)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
@@ -2778,23 +2777,21 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       <div className="v5-md-table-scroll" ref={scrollRef}>
         {children}
       </div>
-      {/* Right overlay button → scroll right/to-start (RTL first column) */}
+      {/* Right overlay — scroll right/to-start (RTL first column) */}
       <button
         ref={btnRRef}
         className="dz-tscroll-btn dz-tscroll-btn--right"
         onClick={() => nudge('r')}
         aria-label="تمرير يمين"
         tabIndex={-1}
-        style={{ opacity: 0.15 }}
       >›</button>
-      {/* Left overlay button → scroll left (see more columns) */}
+      {/* Left overlay — scroll left (see more columns) */}
       <button
         ref={btnLRef}
         className="dz-tscroll-btn dz-tscroll-btn--left"
         onClick={() => nudge('l')}
         aria-label="تمرير يسار"
         tabIndex={-1}
-        style={{ opacity: 0.15 }}
       >‹</button>
     </div>
   )

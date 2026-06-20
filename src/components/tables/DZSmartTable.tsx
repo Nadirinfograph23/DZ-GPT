@@ -411,18 +411,10 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const l   = el.scrollLeft
     const max = el.scrollWidth - el.clientWidth
     const isOver = max > 4
-    // Direct DOM updates — no setState, no re-render
+    // CSS handles opacity via .dz-table-outer--overflow — only toggle class + disabled
     if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
-    if (btnLRef.current) {
-      const disabled = l <= 2
-      btnLRef.current.disabled = disabled
-      btnLRef.current.style.opacity = disabled ? '0.15' : '1'
-    }
-    if (btnRRef.current) {
-      const disabled = !isOver || l >= max - 2
-      btnRRef.current.disabled = disabled
-      btnRRef.current.style.opacity = disabled ? '0.15' : '1'
-    }
+    if (btnLRef.current)  btnLRef.current.disabled  = l <= 2
+    if (btnRRef.current)  btnRRef.current.disabled  = !isOver || l >= max - 2
     el.dataset.scrollLeft  = l > 1 ? 'true' : 'false'
     el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
   }, [])
@@ -444,9 +436,10 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       sync()
     }))
 
-    // Extra syncs for streaming content
-    const _t1 = setTimeout(sync, 350)
-    const _t2 = setTimeout(sync, 1200)
+    // Extra syncs — guarantee buttons appear even if rAF fires before layout
+    const _t0 = setTimeout(sync, 80)
+    const _t1 = setTimeout(sync, 300)
+    const _t2 = setTimeout(sync, 900)
 
     const onScroll = () => {
       _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
@@ -461,10 +454,9 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     if (innerTable) ro.observe(innerTable)
 
     return () => {
+      clearTimeout(_t0); clearTimeout(_t1); clearTimeout(_t2)
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
-      clearTimeout(_t1)
-      clearTimeout(_t2)
     }
   }, [sync])
 
@@ -473,23 +465,21 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
         {children}
       </div>
-      {/* Right button — goes to right/start (RTL first column) */}
+      {/* Right — goes to right/start (RTL first column) */}
       <button
         ref={btnRRef}
         className="dz-tscroll-btn dz-tscroll-btn--right"
         onClick={() => nudge('r')}
         aria-label="تمرير يمين"
         tabIndex={-1}
-        style={{ opacity: 0.15 }}
       >›</button>
-      {/* Left button — goes to left (more columns) */}
+      {/* Left — goes to left (see more columns) */}
       <button
         ref={btnLRef}
         className="dz-tscroll-btn dz-tscroll-btn--left"
         onClick={() => nudge('l')}
         aria-label="تمرير يسار"
         tabIndex={-1}
-        style={{ opacity: 0.15 }}
       >‹</button>
     </div>
   )

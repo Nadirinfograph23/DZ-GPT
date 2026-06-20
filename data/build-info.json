@@ -1,8 +1,8 @@
 {
-  "commit": "29359d7782bd1d854166e5a173d3ea6100812b66",
-  "commitShort": "29359d77",
+  "commit": "c94a4e67525098dfb1a0c4d617f216600f6ff1b5",
+  "commitShort": "c94a4e67",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: ESPN stats correct abbr (P/F/A/D), table scroll buttons as side overlays no-useState, glass transparent style",
-  "deployedAt": "2026-06-20T02:51:24.259126Z",
+  "message": "feat: add qualification status column to WC2026 standings table (green/yellow/red + Kooora link)",
+  "deployedAt": "2026-06-20T02:54:33.644585Z",
   "deployedBy": "scripts/deploy.py"
 }

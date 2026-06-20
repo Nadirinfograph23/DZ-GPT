@@ -1,8 +1,8 @@
 {
-  "commit": "4dfa7f8ffe0ecbe7f102a56750bbe7931316b60b",
-  "commitShort": "4dfa7f8f",
+  "commit": "ec8ab8903c37fa8a000be935669f1e53d943f601",
+  "commitShort": "ec8ab890",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: table scroll buttons now appear with blink intro animation, CSS-only opacity no inline styles, reliable sync via multi-timeout",
-  "deployedAt": "2026-06-20T03:02:22.544179Z",
+  "message": "fix: add isDeveloperOrOwnerQuestion early check to /api/dz-agent-chat route — شكون خدمك now returns DEVELOPER_RESPONSE instantly",
+  "deployedAt": "2026-06-20T21:37:37.216867Z",
   "deployedBy": "scripts/deploy.py"
 }

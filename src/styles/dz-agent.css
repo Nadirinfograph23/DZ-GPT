@@ -1815,7 +1815,58 @@
   margin: 6px 0;
 }
 
-/* ── Floating side-button overlay — sits over left/right edges of scroll area ── */
+/* ── Transparent glass scroll buttons — absolute overlay on left/right edges ── */
+.dz-tscroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 8;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(16,163,127,0.18);
+  background: rgba(0,0,0,0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(16,163,127,0.95);
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, border-color .15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: all;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.1);
+  padding: 0;
+}
+.dz-tscroll-btn--left  { left:  3px; }
+.dz-tscroll-btn--right { right: 3px; }
+.dz-tscroll-btn:not(:disabled):hover {
+  background: rgba(16,163,127,0.15);
+  border-color: rgba(16,163,127,0.6);
+}
+.dz-tscroll-btn:not(:disabled):active {
+  transform: translateY(-50%) scale(0.9);
+  background: rgba(16,163,127,0.25);
+}
+.dz-tscroll-btn:disabled {
+  cursor: default;
+  pointer-events: none;
+}
+/* Hide when no overflow */
+.dz-table-outer:not(.dz-table-outer--overflow) .dz-tscroll-btn {
+  display: none;
+}
+/* Mobile — slightly larger */
+@media (max-width: 640px) {
+  .dz-tscroll-btn { width: 36px; height: 36px; font-size: 20px; }
+}
+
+/* ── Keep old dz-tnav-bar for DZSmartTable full component ── */
 .dz-tnav-bar {
   position: absolute;
   inset: 0;
@@ -1825,11 +1876,9 @@
   pointer-events: none;
   z-index: 6;
 }
-.dz-tnav-bar--hidden {
-  display: none;
-}
+.dz-tnav-bar--hidden { display: none; }
 
-/* ── Nav buttons — floating transparent glass on each side ── */
+/* ── dz-tnav (used by DZSmartTable full component) ── */
 .dz-tnav {
   pointer-events: all;
   display: flex;
@@ -1857,28 +1906,9 @@
   background: rgba(16,163,127,0.22);
   border-color: rgba(16,163,127,0.85);
   transform: scale(1.1);
-  box-shadow: 0 4px 18px rgba(16,163,127,0.25);
 }
-.dz-tnav:not(:disabled):active {
-  background: rgba(16,163,127,0.38);
-  transform: scale(0.95);
-}
-.dz-tnav:disabled {
-  opacity: 0.12;
-  cursor: default;
-  pointer-events: none;
-}
-
-/* Mobile — larger touch targets */
-@media (max-width: 640px) {
-  .dz-tnav {
-    width: 44px;
-    height: 44px;
-    font-size: 24px;
-    margin: 0 2px;
-    background: rgba(16,163,127,0.07);
-  }
-}
+.dz-tnav:not(:disabled):active { background: rgba(16,163,127,0.38); transform: scale(0.95); }
+.dz-tnav:disabled { opacity: 0.12; cursor: default; pointer-events: none; }
 
 /* Relative wrapper for DZSmartTable scroll region — anchors floating side buttons */
 .dzt-scroll-region {

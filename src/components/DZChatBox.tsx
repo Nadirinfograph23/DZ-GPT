@@ -2697,56 +2697,57 @@ function YouTubePanel({
   return null
 }
 
-// ===== TABLE SCROLL WRAPPER — RTL-aware horizontal scroll for Arabic tables =====
-// 1. On mount: scrolls to the rightmost position so the FIRST Arabic column is
-//    visible (RTL tables have first col on the right; LTR containers start at left).
-// 2. Touch handler: non-passive touchmove prevents the parent chat from stealing
-//    horizontal swipe events; only calls preventDefault when the element can
-//    actually scroll in that direction (avoids blocking vertical page scroll).
+// ===== TABLE SCROLL WRAPPER — RTL-aware horizontal scroll with side buttons =====
+// Uses useRef for all scroll state (no useState) to avoid re-renders on scroll
+// events that were causing the apparent "scroll reset" bug.
+// Buttons are absolute-positioned overlays on left/right edges — always visible.
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
-  const ref     = useRef<HTMLDivElement>(null)
-  const [canL,  setCanL]  = useState(false)
-  const [canR,  setCanR]  = useState(false)
-  const [over,  setOver]  = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const outerRef  = useRef<HTMLDivElement>(null)
+  const btnLRef   = useRef<HTMLButtonElement>(null)
+  const btnRRef   = useRef<HTMLButtonElement>(null)
 
-  const sync = () => {
-    const el = ref.current
+  const sync = useCallback(() => {
+    const el = scrollRef.current
     if (!el) return
-    const l = el.scrollLeft
+    const l   = el.scrollLeft
     const max = el.scrollWidth - el.clientWidth
-    setCanL(l > 2)
-    setCanR(l < max - 2)
-    setOver(max > 4)
-  }
+    const isOver = max > 4
+    if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
+    if (btnLRef.current) {
+      const disabled = l <= 2
+      btnLRef.current.disabled = disabled
+      btnLRef.current.style.opacity = disabled ? '0.15' : '1'
+    }
+    if (btnRRef.current) {
+      const disabled = !isOver || l >= max - 2
+      btnRRef.current.disabled = disabled
+      btnRRef.current.style.opacity = disabled ? '0.15' : '1'
+    }
+  }, [])
 
-  const nudge = (dir: 'l' | 'r') => {
-    const el = ref.current
-    if (el) el.scrollBy({ left: dir === 'l' ? -140 : 140, behavior: 'smooth' })
-  }
+  const nudge = useCallback((dir: 'l' | 'r') => {
+    const el = scrollRef.current
+    if (el) el.scrollBy({ left: dir === 'l' ? -160 : 160, behavior: 'smooth' })
+  }, [])
 
   useEffect(() => {
-    const el = ref.current
+    const el = scrollRef.current
     if (!el) return
 
-    const initScroll = () => {
+    // Init: scroll to rightmost so RTL first column is visible
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (el.scrollWidth > el.clientWidth) {
         el.scrollLeft = el.scrollWidth - el.clientWidth
       }
       sync()
-    }
-
-    requestAnimationFrame(() => { requestAnimationFrame(initScroll) })
+    }))
 
     el.addEventListener('scroll', sync, { passive: true })
 
-    const ro = new ResizeObserver(() => {
-      const max = el.scrollWidth - el.clientWidth
-      if (max > 4 && el.scrollLeft === 0) {
-        el.scrollLeft = max
-      }
-      sync()
-    })
+    // ResizeObserver: sync buttons only — NEVER resets scrollLeft
+    const ro = new ResizeObserver(sync)
     ro.observe(el)
 
     let startX = 0, startY = 0, isH: boolean | null = null
@@ -2770,18 +2771,31 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
       el.removeEventListener('touchmove',  onMove)
       ro.disconnect()
     }
-  }, [])
+  }, [sync])
 
   return (
-    <div className="dz-table-outer">
-      <div className={`dz-tnav-bar${over ? '' : ' dz-tnav-bar--hidden'}`}>
-        <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="تمرير يمين">›</button>
-        <span className="dz-tnav-label">تمرير الجدول</span>
-        <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="تمرير يسار">‹</button>
-      </div>
-      <div className="v5-md-table-scroll" ref={ref}>
+    <div ref={outerRef} className="dz-table-outer">
+      <div className="v5-md-table-scroll" ref={scrollRef}>
         {children}
       </div>
+      {/* Right overlay button → scroll right/to-start (RTL first column) */}
+      <button
+        ref={btnRRef}
+        className="dz-tscroll-btn dz-tscroll-btn--right"
+        onClick={() => nudge('r')}
+        aria-label="تمرير يمين"
+        tabIndex={-1}
+        style={{ opacity: 0.15 }}
+      >›</button>
+      {/* Left overlay button → scroll left (see more columns) */}
+      <button
+        ref={btnLRef}
+        className="dz-tscroll-btn dz-tscroll-btn--left"
+        onClick={() => nudge('l')}
+        aria-label="تمرير يسار"
+        tabIndex={-1}
+        style={{ opacity: 0.15 }}
+      >‹</button>
     </div>
   )
 }

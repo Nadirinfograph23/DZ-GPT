@@ -387,53 +387,56 @@ function _tableKey(el: HTMLDivElement): string {
   return (el.textContent ?? '').slice(0, 80).trim()
 }
 
-// Scroll wrapper: forces LTR scroll origin so scrollLeft=0 is always the left
-// edge, then positions the view at the rightmost side so the first RTL column
-// is immediately visible.
+// ── TableScrollWrapper ─────────────────────────────────────────────────────
+// RTL-aware horizontal scroll with two floating side buttons.
 //
-// SCROLL STRATEGY — Native browser scroll (touch-action: pan-x):
-//   The previous approach used touch-action:none + manual Pointer Events.
-//   That caused the "spring-back" bug: setPointerCapture does NOT intercept
-//   native scrollbar-thumb drag gestures. The browser applies the scroll
-//   momentarily, then the manual JS handler has no control over the thumb,
-//   so the position reverts.
-//
-//   Fix: touch-action:pan-x lets the browser handle all horizontal swipes
-//   and scrollbar-thumb drags natively — no JS scroll manipulation needed.
-//   overscroll-behavior-x:contain prevents the parent from stealing the swipe.
-//
-//   Additional bug fixes:
-//   * Key now uses <thead> text only — stable across streaming updates.
-//   * saved !== undefined (not saved > 0) — correctly restores scrollLeft=0
-//     when the user has scrolled all the way to the left (valid position).
-//   * Double rAF — ensures layout is complete before measuring scrollWidth.
+// Design decisions:
+//  • Uses useRef (never useState) for button/overflow state — avoids
+//    re-renders on every scroll event, which was causing apparent scroll reset.
+//  • Buttons are absolute-positioned overlays on left/right edges of the
+//    table, not a separate bar above — they always stay visible over the table.
+//  • touch-action: pan-x + overscroll-behavior-x: contain — browser handles
+//    native scroll natively, no pointer-capture tricks that cause spring-back.
+//  • ResizeObserver only syncs button opacity; never resets scrollLeft.
+//  • _tableScrollPositions preserves position across streaming re-mounts.
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
-  const ref    = useRef<HTMLDivElement>(null)
-  const [canL, setCanL] = useState(false)
-  const [canR, setCanR] = useState(false)
-  const [over, setOver] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const outerRef  = useRef<HTMLDivElement>(null)
+  const btnLRef   = useRef<HTMLButtonElement>(null)
+  const btnRRef   = useRef<HTMLButtonElement>(null)
 
   const sync = useCallback(() => {
-    const el = ref.current
+    const el = scrollRef.current
     if (!el) return
     const l   = el.scrollLeft
     const max = el.scrollWidth - el.clientWidth
-    setCanL(l > 2)
-    setCanR(l < max - 2)
-    setOver(max > 4)
+    const isOver = max > 4
+    // Direct DOM updates — no setState, no re-render
+    if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
+    if (btnLRef.current) {
+      const disabled = l <= 2
+      btnLRef.current.disabled = disabled
+      btnLRef.current.style.opacity = disabled ? '0.15' : '1'
+    }
+    if (btnRRef.current) {
+      const disabled = !isOver || l >= max - 2
+      btnRRef.current.disabled = disabled
+      btnRRef.current.style.opacity = disabled ? '0.15' : '1'
+    }
     el.dataset.scrollLeft  = l > 1 ? 'true' : 'false'
     el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
   }, [])
 
   const nudge = useCallback((dir: 'l' | 'r') => {
-    const el = ref.current
-    if (el) el.scrollBy({ left: dir === 'l' ? -140 : 140, behavior: 'smooth' })
+    const el = scrollRef.current
+    if (el) el.scrollBy({ left: dir === 'l' ? -160 : 160, behavior: 'smooth' })
   }, [])
 
   useEffect(() => {
-    const el = ref.current
+    const el = scrollRef.current
     if (!el) return
 
+    // Restore saved position or start at rightmost (RTL first column)
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
@@ -441,7 +444,7 @@ function TableScrollWrapper({ className, children }: { className: string; childr
       sync()
     }))
 
-    // Fallback syncs: content may stream in after initial mount
+    // Extra syncs for streaming content
     const _t1 = setTimeout(sync, 350)
     const _t2 = setTimeout(sync, 1200)
 
@@ -451,9 +454,9 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     }
     el.addEventListener('scroll', onScroll, { passive: true })
 
+    // ResizeObserver: sync buttons only — never resets scrollLeft
     const ro = new ResizeObserver(sync)
     ro.observe(el)
-    // Also observe the inner table so streaming rows trigger re-sync
     const innerTable = el.querySelector('table')
     if (innerTable) ro.observe(innerTable)
 
@@ -466,14 +469,28 @@ function TableScrollWrapper({ className, children }: { className: string; childr
   }, [sync])
 
   return (
-    <div className="dz-table-outer">
-      <div ref={ref} className={`dzt-simple-scroll ${className}`} dir="ltr">
+    <div ref={outerRef} className="dz-table-outer">
+      <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
         {children}
       </div>
-      <div className={`dz-tnav-bar${over ? '' : ' dz-tnav-bar--hidden'}`} aria-label="تمرير الجدول">
-        <button className="dz-tnav" disabled={!canL} onClick={() => nudge('l')} aria-label="تمرير يمين">›</button>
-        <button className="dz-tnav" disabled={!canR} onClick={() => nudge('r')} aria-label="تمرير يسار">‹</button>
-      </div>
+      {/* Right button — goes to right/start (RTL first column) */}
+      <button
+        ref={btnRRef}
+        className="dz-tscroll-btn dz-tscroll-btn--right"
+        onClick={() => nudge('r')}
+        aria-label="تمرير يمين"
+        tabIndex={-1}
+        style={{ opacity: 0.15 }}
+      >›</button>
+      {/* Left button — goes to left (more columns) */}
+      <button
+        ref={btnLRef}
+        className="dz-tscroll-btn dz-tscroll-btn--left"
+        onClick={() => nudge('l')}
+        aria-label="تمرير يسار"
+        tabIndex={-1}
+        style={{ opacity: 0.15 }}
+      >‹</button>
     </div>
   )
 }

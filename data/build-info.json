@@ -1,8 +1,8 @@
 {
-  "commit": "03d4509e9ce556b32c3dd69df564b94949d738ee",
-  "commitShort": "03d4509e",
+  "commit": "9f53fa499e37c67b058c2460484a948f1cf1dd2b",
+  "commitShort": "9f53fa49",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إضافة صفحة DZ Agent Benchmark — 20 اختبار قبول تفاعلي",
-  "deployedAt": "2026-06-20T22:42:47.043944Z",
+  "message": "fix: تصحيح format الطلب في Benchmark — messages array + content field",
+  "deployedAt": "2026-06-20T23:04:36.435473Z",
   "deployedBy": "scripts/deploy.py"
 }

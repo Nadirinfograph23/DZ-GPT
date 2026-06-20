@@ -1,8 +1,8 @@
 {
-  "commit": "84f1044fda477c77af9f1daa56ae26a13a18e24d",
-  "commitShort": "84f1044f",
+  "commit": "4eb4d4649cd8216dee0dfc2bc30cc464e10b1a0e",
+  "commitShort": "4eb4d464",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: overflow-x visible on .dz-message-text — root cause of scroll buttons not appearing (clipped by parent overflow)",
-  "deployedAt": "2026-06-20T21:46:43.774161Z",
+  "message": "feat: add DZ Agent Benchmark Suite — 20 acceptance tests covering intent routing, medical, code, RAG, anti-hallucination, multi-agent",
+  "deployedAt": "2026-06-20T21:53:37.883093Z",
   "deployedBy": "scripts/deploy.py"
 }

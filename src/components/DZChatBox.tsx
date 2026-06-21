@@ -2718,6 +2718,9 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
     if (btnLRef.current)  btnLRef.current.disabled  = l <= 2
     if (btnRRef.current)  btnRRef.current.disabled  = !isOver || l >= max - 2
+    // data attrs control ::before/::after gradients — show only when content exists beyond edge
+    el.dataset.scrollLeft  = l > 1       ? 'true' : 'false'
+    el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
   }, [])
 
   const nudge = useCallback((dir: 'l' | 'r') => {

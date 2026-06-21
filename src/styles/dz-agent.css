@@ -1779,18 +1779,21 @@
   white-space: nowrap;
   text-align: right;
 }
-/* LEFT-side gradient: hints that more content is to the left (user started at right) */
+/* LEFT-side gradient: shown only when content is scrolled right (data-scroll-left="true") */
 .v5-md-table-scroll::before {
   content: '';
   position: absolute;
   top: 0; left: 0;
   width: 32px; height: calc(100% - 8px);
-  background: linear-gradient(to right, rgba(18,18,28,0.75) 0%, transparent 100%);
+  background: linear-gradient(to right, rgba(18,18,28,0.60) 0%, transparent 100%);
   pointer-events: none;
   border-radius: 8px 0 0 8px;
   z-index: 1;
-  transition: opacity 0.2s;
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
+/* يظهر فقط عند وجود محتوى يسار غير مرئي */
+.v5-md-table-scroll[data-scroll-left="true"]::before { opacity: 1; }
 .v5-md-table-scroll::-webkit-scrollbar { height: 8px; }
 .v5-md-table-scroll::-webkit-scrollbar-track {
   background: rgba(255,255,255,0.06);
@@ -1870,9 +1873,11 @@
 /* ── ظاهر: الجدول أوسع من المساحة ── */
 .dz-table-outer--overflow .dz-tscroll-btn {
   width: 28px;
-  opacity: 0.65;
+  opacity: 0.85;
   pointer-events: all;
-  border: 1px solid rgba(16,163,127,0.3);
+  border: 1px solid rgba(16,163,127,0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   animation: dz-tscroll-intro 1.2s ease-out;
 }
 

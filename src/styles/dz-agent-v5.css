@@ -769,18 +769,20 @@
   white-space: nowrap;
   text-align: right;
 }
-/* LEFT gradient hints more content is to the left (JS starts scroll at right) */
+/* LEFT gradient hints more content is to the left — hidden by default, shown via data attr */
 .v5-md-table-scroll::before {
   content: '';
   position: absolute;
   top: 0; left: 0;
   width: 28px; height: calc(100% - 5px);
-  background: linear-gradient(to right, rgba(18,18,28,0.7) 0%, transparent 100%);
+  background: linear-gradient(to right, rgba(18,18,28,0.55) 0%, transparent 100%);
   pointer-events: none;
   border-radius: 6px 0 0 6px;
-  transition: opacity 0.2s;
+  opacity: 0;
+  transition: opacity 0.25s ease;
   z-index: 1;
 }
+.v5-md-table-scroll[data-scroll-left="true"]::before { opacity: 1; }
 
 /* ── Simple table (≤20 rows) — no virtual scroll, no overlap ─ */
 table.dzt-simple-table {

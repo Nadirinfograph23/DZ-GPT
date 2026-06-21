@@ -532,6 +532,8 @@ export default function DZChat() {
           m.id === msgId ? { ...m, text, timestamp: Date.now() } : m
         ))
       }
+    } else if (data.type === 'app_update') {
+      import('../utils/versionChecker').then(m => m.triggerUpdateBanner?.())
     }
   }, [addMessages])
 

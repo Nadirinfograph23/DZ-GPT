@@ -24,6 +24,8 @@ async function fetchVersion(): Promise<string | null> {
   }
 }
 
+export function triggerUpdateBanner() { showUpdateBanner() }
+
 function showUpdateBanner() {
   if (_bannerShown || document.getElementById(BANNER_ID)) return
   _bannerShown = true

@@ -4045,6 +4045,25 @@ setTimeout(async () => {
   catch {}
 }, 10_000)
 
+// ===== BROADCAST APP UPDATE NOTIFICATION → جميع مستخدمي DZ Chat =====
+// POST /api/broadcast-update  { message?: string }
+app.post('/api/broadcast-update', (req, res) => {
+  const secret = req.headers['x-admin-secret'] || req.body?.secret || ''
+  if (secret !== (process.env.CHAT_ADMIN_SECRET || 'dz-admin-2024')) {
+    return res.status(403).json({ error: 'غير مصرح' })
+  }
+  const msg = String(req.body?.message || 'تحديث جديد متاح في DZ GPT 🚀').slice(0, 200)
+  let count = 0
+  for (const s of chatSessions.values()) {
+    if (s.ws && s.ws.readyState === 1) {
+      try { s.ws.send(JSON.stringify({ type: 'app_update', message: msg })); count++ }
+      catch {}
+    }
+  }
+  console.log(`[BroadcastUpdate] ✅ Sent app_update to ${count} connected client(s)`)
+  res.json({ success: true, sent: count, message: msg })
+})
+
 // ===== OWNER: COMMAND ENDPOINT =====
 app.post('/api/owner/command', async (req, res) => {
   const { message, githubToken } = req.body || {}

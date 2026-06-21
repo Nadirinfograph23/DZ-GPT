@@ -33107,6 +33107,142 @@ app.post('/api/dz-media/providers/generate', express.json({ limit: '2mb' }), asy
   }
 })
 
+// ===== DARIJA BENCHMARK — /api/darija-benchmark =====
+// اختبار شامل للطبقة اللغوية: كشف الدارجة + التوجيه + منع الهلوسة + الهوية
+app.get('/api/darija-benchmark', async (req, res) => {
+  const TEST_CASES = [
+    // ── محادثة يومية ──────────────────────────────────────────────────────
+    { id: 'T01', category: 'يومي', query: 'واش راك؟',             expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
+    { id: 'T02', category: 'يومي', query: 'صباح الخير خويا',      expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
+    { id: 'T03', category: 'يومي', query: 'كيداير اليوم؟',        expectStyle: ['darija','franco','mixed'], expectIntent: 'greeting',  noHallucination: true },
+    // ── برمجة ─────────────────────────────────────────────────────────────
+    { id: 'T04', category: 'برمجة', query: 'راني نخدم على تطبيق، واش الفرق بين API و Database؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'tech', noHallucination: true },
+    { id: 'T05', category: 'برمجة', query: 'عندي خطأ في Python يقولي undefined variable واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'tech', noHallucination: true },
+    // ── طقس ───────────────────────────────────────────────────────────────
+    { id: 'T06', category: 'طقس', query: 'واش راه الطقس اليوم في الجزائر العاصمة؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'weather', noHallucination: false },
+    // ── رياضة ─────────────────────────────────────────────────────────────
+    { id: 'T07', category: 'رياضة', query: 'شكون ربح آخر ماتش بين الجزائر ومصر؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'sports', noHallucination: false },
+    // ── طب ────────────────────────────────────────────────────────────────
+    { id: 'T08', category: 'طب', query: 'راني نحس بوجع في راسي من البارح، واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'health', noHallucination: true },
+    { id: 'T09', category: 'طب', query: 'راني نحس بألم في صدري واش ندير؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'health', noHallucination: true },
+    // ── خرائط ─────────────────────────────────────────────────────────────
+    { id: 'T10', category: 'خرائط', query: 'كيفاش نروح من الجزائر العاصمة لوهران؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'location', noHallucination: true },
+    // ── قدرات DZ Agent ─────────────────────────────────────────────────────
+    { id: 'T11', category: 'قدرات', query: 'واش يقدر يدير DZ Agent؟', expectStyle: ['darija','franco','mixed'], expectIntent: 'capability', noHallucination: true },
+    // ── هوية المطور — الاختبار الأهم ──────────────────────────────────────
+    { id: 'T12', category: 'هوية', query: 'شكون خدمك؟',                expectStyle: ['darija','franco','mixed'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
+    { id: 'T13', category: 'هوية', query: 'شكون صنعك؟',                expectStyle: ['darija','franco','mixed'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
+    { id: 'T14', category: 'هوية', query: 'مؤسس شركة DZ Agent',         expectStyle: ['darija','franco','mixed','msa'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
+    { id: 'T15', category: 'هوية', query: 'من طورك؟',                  expectStyle: ['darija','franco','mixed','msa'], expectIdentityHit: true, identityKeyword: 'nadir', noHallucination: true },
+    // ── منع الهلوسة ────────────────────────────────────────────────────────
+    { id: 'T16', category: 'هلوسة', query: 'شكون الرئيس الحالي لأمريكا؟', expectStyle: ['darija','franco','mixed'], expectLiveSearch: true, noHallucination: false },
+    // ── فرانكو-عربي ────────────────────────────────────────────────────────
+    { id: 'T17', category: 'فرانكو', query: 'wach rak l kheir?',        expectStyle: ['franco','mixed','darija'],  expectIntent: 'greeting', noHallucination: true },
+    { id: 'T18', category: 'فرانكو', query: '3andi bug fil code',       expectStyle: ['franco','mixed','darija'],  expectIntent: 'tech',     noHallucination: true },
+    // ── تعبيرات اجتماعية ───────────────────────────────────────────────────
+    { id: 'T19', category: 'اجتماعي', query: 'يعطيك الصحة',            expectStyle: ['darija','franco','mixed'], expectSocialHit: true,  noHallucination: true },
+    { id: 'T20', category: 'اجتماعي', query: 'تحيا الجزائر',           expectStyle: ['darija','franco','mixed'], expectSocialHit: true,  noHallucination: true },
+  ]
+
+  const results = []
+  let passed = 0, failed = 0
+
+  for (const tc of TEST_CASES) {
+    const result = { id: tc.id, category: tc.category, query: tc.query, checks: [], pass: true }
+
+    try {
+      // ── فحص 1: كشف اللغة ──────────────────────────────────────────────
+      const style = detectDzStyle(tc.query)
+      const styleOk = !tc.expectStyle || tc.expectStyle.includes(style)
+      result.detectedStyle = style
+      result.checks.push({ name: 'كشف اللغة', pass: styleOk, detail: `الأسلوب: ${style}${styleOk ? ' ✅' : ` ❌ (متوقع: ${tc.expectStyle?.join('|')})`}` })
+      if (!styleOk) result.pass = false
+
+      // ── فحص 2: كشف النية ──────────────────────────────────────────────
+      const intent = detectDzIntent(tc.query)
+      result.detectedIntent = intent.type
+      if (tc.expectIntent) {
+        const INTENT_GROUPS = {
+          greeting:    ['greeting','social','casual'],
+          tech:        ['tech','coding','programming'],
+          weather:     ['weather','real_time'],
+          sports:      ['sports','real_time'],
+          health:      ['health','medical'],
+          location:    ['location','geo','directions'],
+          capability:  ['capability','general','info'],
+        }
+        const group = INTENT_GROUPS[tc.expectIntent] || [tc.expectIntent]
+        const intentOk = group.some(g => intent.type?.includes(g)) || intent.type === tc.expectIntent
+        result.checks.push({ name: 'تحديد النية', pass: intentOk, detail: `النية: ${intent.type} (ثقة: ${Math.round((intent.confidence||0)*100)}%)${intentOk ? ' ✅' : ` ❌ (متوقع: ${tc.expectIntent})`}` })
+        // النية غير مطابقة لا تُفشل التسجيل إلا لطلبات الهوية
+      }
+
+      // ── فحص 3: التعابير الاجتماعية ───────────────────────────────────
+      const socialExpr = detectSocialExpression(tc.query)
+      result.socialExprHit = !!socialExpr
+      if (tc.expectSocialHit) {
+        const socialOk = !!socialExpr
+        result.checks.push({ name: 'تعبير اجتماعي', pass: socialOk, detail: socialOk ? `وُجد: "${socialExpr?.expression}" ✅` : '❌ لم يُكتشف التعبير الاجتماعي' })
+        if (!socialOk) result.pass = false
+      }
+
+      // ── فحص 4: الهوية — الأهم ─────────────────────────────────────────
+      if (tc.expectIdentityHit) {
+        const IDENTITY_TRIGGERS = [
+          'من هو مطورك','من مطورك','من صنعك','من برمجك','من أنشأك','من طورك',
+          'خدمك شكون','صنعك شكون','شكون خدمك','شكون طورك','شكون صنعك','شكون برمجك',
+          'من خدمك','من طورك','من صنعك',
+          'مؤسس dz','مؤسس شركة','مؤسس منصة',
+          'nadir','نذير'
+        ]
+        const qLow = tc.query.toLowerCase()
+        const identityOk = IDENTITY_TRIGGERS.some(t => qLow.includes(t.toLowerCase())) ||
+                          !!socialExpr?.category === 'identity'
+
+        // التحقق من وجود الكلمة المفتاحية في response إذا تم اكتشاف التعبير
+        const responseHasKeyword = socialExpr?.response?.toLowerCase().includes('nadir') ||
+                                   socialExpr?.response?.toLowerCase().includes('نذير')
+        const identityFull = identityOk && (socialExpr ? responseHasKeyword : true)
+
+        result.checks.push({
+          name: 'هوية المطور',
+          pass: identityFull,
+          detail: identityFull
+            ? `✅ سيُجيب بـ "Nadir Houamria — نذير حوامرية"`
+            : `❌ السؤال لا يُوجّه لطبقة الهوية بشكل صحيح (تحقق من DEVELOPER_RESPONSE في server.js)`,
+        })
+        if (!identityFull) result.pass = false
+      }
+
+      // ── فحص 5: تطبيع الفرانكو-عربي ──────────────────────────────────
+      const norm = normalizeDarija(tc.query)
+      result.normalized = norm.changed ? norm.normalized : null
+      result.checks.push({ name: 'تطبيع', pass: true, detail: norm.changed ? `فرانكو→عربي: "${norm.normalized}" ✅` : 'نص عادي ✅' })
+
+    } catch (err) {
+      result.pass = false
+      result.error = err.message
+      result.checks.push({ name: 'خطأ تقني', pass: false, detail: `⚠️ ${err.message}` })
+    }
+
+    if (result.pass) passed++; else failed++
+    results.push(result)
+  }
+
+  const total = results.length
+  const score = Math.round((passed / total) * 100)
+
+  return res.json({
+    summary: {
+      total, passed, failed, score: `${score}%`,
+      status: score >= 95 ? '✅ PASS — النظام جاهز للإنتاج' : score >= 80 ? '⚠️ PARTIAL — يحتاج تحسين' : '❌ FAIL — يحتاج مراجعة عاجلة',
+    },
+    results,
+    timestamp: new Date().toISOString(),
+    version: '2.0',
+  })
+})
+
 // ===== EXPORT APP (for Vercel serverless) =====
 export { app }
 

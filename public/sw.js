@@ -1,9 +1,9 @@
-// DZ GPT — Service Worker v3.1
+// DZ GPT — Service Worker v4.0
 // يدعم: PWA install، offline caching، push notifications، auto-update versioning
-const SHELL_CACHE   = 'dz-gpt-shell-v9'   // ← رُفع الإصدار لمسح كاش قديم
+const SHELL_CACHE   = 'dz-gpt-shell-v10'  // ← رُفع الإصدار لمسح كاش قديم
 const AUDIO_CACHE   = 'dz-tube-audio-v1'
 const ALL_CACHES    = [SHELL_CACHE, AUDIO_CACHE]
-const VERSION_CHECK_INTERVAL = 5 * 60 * 1000  // 5 دقائق
+const VERSION_CHECK_INTERVAL = 2 * 60 * 1000  // 2 دقائق — أسرع كشف
 
 let _lastCommit = null
 

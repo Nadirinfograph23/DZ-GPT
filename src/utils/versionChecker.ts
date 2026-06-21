@@ -48,12 +48,19 @@ function showUpdateBanner() {
   document.head.appendChild(style)
 
   banner.innerHTML = `
-    <span>✨ <strong>إصدار جديد</strong> من DZ GPT متاح!</span>
-    <button onclick="window.location.reload(true)" style="
+    <span>🆕 <strong>توجد نسخة جديدة من DZ Agent</strong> — جاهزة الآن!</span>
+    <button id="dz-update-btn" onclick="(function(){
+      var btn=document.getElementById('dz-update-btn');
+      if(btn){btn.textContent='جارٍ التحديث...';btn.disabled=true;}
+      if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
+      }
+      setTimeout(function(){ window.location.reload(true); }, 400);
+    })()" style="
       background:#fff;color:#7b2ff7;border:none;
       padding:5px 16px;border-radius:20px;cursor:pointer;
       font-weight:bold;font-size:13px;white-space:nowrap;
-    ">تحديث الآن 🚀</button>
+    ">اضغط تحديث 🚀</button>
     <button onclick="document.getElementById('${BANNER_ID}')?.remove()" style="
       background:transparent;color:#fff;
       border:1px solid rgba(255,255,255,.5);

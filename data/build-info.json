@@ -1,8 +1,8 @@
 {
-  "commit": "8ee0e3adb84d0fdbd86fc7d183acfd49267207d6",
-  "commitShort": "8ee0e3ad",
+  "commit": "1ddd6aed0c1ac723b7e877cc8bf0329e8273b026",
+  "commitShort": "1ddd6aed",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: table scroll buttons — gradient hidden by default (data-scroll-left), opacity 0.85 + backdrop-filter, data attrs in DZChatBox sync()",
-  "deployedAt": "2026-06-21T22:56:23.472370Z",
+  "message": "feat: table scroll — add right-side ::after gradient (data-scroll-right) matching left-side behavior",
+  "deployedAt": "2026-06-21T23:07:16.979159Z",
   "deployedBy": "scripts/deploy.py"
 }

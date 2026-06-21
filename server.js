@@ -8953,6 +8953,9 @@ function extractNewsSubject(msg) {
 
   // Strip Arabic preposition patterns (order matters: longest first)
   const arPrefixes = [
+    // ✅ FIX: "ما هي أبرز/أهم/أحدث أخبار X" — فيه كلمة وصفية في الوسط
+    /^(ما هي |ما هو |ما |هل )?(أبرز|أهم|أحدث|آخر|أحدث)\s+(أخبار|خبر)\s+/i,
+    /^(أعطني |اعطني |اريد |أريد )?(أبرز|أهم|أحدث|آخر)\s+(أخبار|خبر)\s+/i,
     /^(ما هي |ما هو |ما |هل )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل|الخاصة ب|المتعلقة ب)\s+/i,
     /^(أعطني |اعطني |اريد |أريد |أخبرني عن |قدم لي |قدملي )?(آخر الأخبار|أحدث الأخبار|آخر أخبار|أخبار|خبر) (عن|حول|بخصوص|بشأن|ل)\s+/i,
     /^(ما آخر|ما أخبار|آخر) أخبار\s+/i,
@@ -8978,6 +8981,9 @@ function extractNewsSubject(msg) {
 
   // If nothing was stripped, the subject is ambiguous — don't return it
   if (s.toLowerCase() === msg.trim().toLowerCase()) return null
+
+  // Strip trailing temporal suffixes: "هذا الأسبوع", "هذا الشهر", "اليوم", "الآن", "الأخيرة"
+  s = s.replace(/\s+(هذا\s+(الأسبوع|الشهر|العام|اليوم)|الأسبوع\s+الماضي|الشهر\s+الماضي|اليوم|الآن|الأخيرة|الأخير|مؤخراً|حديثاً|this\s+week|this\s+month|today|recently|lately)\s*$/i, '').trim()
 
   // Strip trailing punctuation / question marks
   s = s.replace(/[\u061F?!،,\.]+$/, '').trim()
@@ -23542,11 +23548,42 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     let feedsToFetch = []
     const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     const _isIntlNewsQ = isInternationalNewsQuery(lastUserMessage)
+    // ✅ FIX: تحقق من _isTechAIQuery قبل newsQueryType==='news' حتى تقنية الذكاء الاصطناعي
+    //         تستخدم TECH_FEEDS_DASHBOARD (ذكاء اصطناعي + تكنولوجيا) بدلاً من الصحف الجزائرية العامة
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
     else if (_isIntlNewsQ) feedsToFetch = [...INTERNATIONAL_RSS_FEEDS, ...RSS_FEEDS.national.slice(-5)]
+    else if (_isTechAIQuery) feedsToFetch = [...TECH_FEEDS_DASHBOARD, ...RSS_FEEDS.national.slice(0, 3)]
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
-    else if (_isTechAIQuery) feedsToFetch = [...RSS_FEEDS.national]
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
+
+    // ✅ FIX: إذا لم يُستخرج newsSubject ولكن هذا استعلام تقني/ذكاء اصطناعي → اجعل الموضوع ضمنياً
+    if (_isTechAIQuery && !newsSubject) {
+      const _aiSubjectMatch = lastUserMessage.match(/(?:ذكاء\s*اصطناعي|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama)/i)
+      const _techForcedSubject = _aiSubjectMatch ? _aiSubjectMatch[0].trim() : 'ذكاء اصطناعي'
+      // جلب موجّه من Google News لموضوع الذكاء الاصطناعي تحديداً (إذا لم يكن targeted search أُطلق بالفعل)
+      try {
+        const _techLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
+        const _techRssUrl = buildFreshGNRssUrl(_techForcedSubject, _techLang, 30)
+        const _techArticles = await searchGoogleNewsRSS(_techRssUrl)
+        if (_techArticles.length > 0) {
+          const _techDate = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+          let _techCtx = `\n\n--- 🎯 أخبار ${_techForcedSubject} — ${_techDate} ---\n`
+          for (const art of _techArticles.slice(0, 15)) {
+            const title = art.title || art.headline || ''
+            const url = art.link || art.url
+            const src = art.source || 'المصدر'
+            _techCtx += `• ${title}`
+            if (url) _techCtx += ` — [${src}](${url})`
+            _techCtx += '\n'
+          }
+          _techCtx += '\n---\n'
+          rssContext = _techCtx
+          console.log(`[DZ Agent] Tech/AI targeted GN-RSS (forced): ${_techArticles.length} articles for "${_techForcedSubject}"`)
+        }
+      } catch (err) {
+        console.warn('[DZ Agent] Tech/AI forced GN-RSS failed:', err.message)
+      }
+    }
 
     // ── إذا كان استعلاماً دولياً: أضف بحثاً GN-RSS مستهدفاً للأحداث الدولية ──
     if (_isIntlNewsQ && !newsSubject) {

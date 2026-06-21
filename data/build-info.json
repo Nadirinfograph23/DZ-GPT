@@ -1,8 +1,8 @@
 {
-  "commit": "29fc51f2b1e386ebeb8810f7cc9cbad49899985a",
-  "commitShort": "29fc51f2",
+  "commit": "d182355e10a6a2fddf46b5ba8d7ee70b2ce26dd8",
+  "commitShort": "d182355e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إشعار التحديث الفوري — /api/broadcast-update + app_update WS handler + triggerUpdateBanner export",
-  "deployedAt": "2026-06-21T15:31:57.429747Z",
+  "message": "fix: أخبار الذكاء الاصطناعي — إصلاح 3 أسباب جذرية (extractNewsSubject + feedsToFetch order + forced tech GN-RSS)",
+  "deployedAt": "2026-06-21T15:42:20.839026Z",
   "deployedBy": "scripts/deploy.py"
 }

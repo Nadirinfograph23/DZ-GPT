@@ -1,8 +1,8 @@
 {
-  "commit": "70953172480a98cba50c2cfd739229f34eb14dfc",
-  "commitShort": "70953172",
+  "commit": "01b0dced7fffd91efdea25b4ed0401489fefeeff",
+  "commitShort": "01b0dced",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: entity-question-guard — أضف أنماط أخبار الذكاء الاصطناعي لمنع اعتراض Wikipedia على استعلامات الأخبار",
-  "deployedAt": "2026-06-21T15:43:35.588955Z",
+  "message": "fix: LIVE_SEARCH_TRIGGERS — أضف أنماط أبرز أخبار/هذا الأسبوع لمنع اعتراض Knowledge Agent على استعلامات الأخبار",
+  "deployedAt": "2026-06-21T15:45:51.791859Z",
   "deployedBy": "scripts/deploy.py"
 }

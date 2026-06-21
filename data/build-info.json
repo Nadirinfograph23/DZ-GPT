@@ -1,8 +1,8 @@
 {
-  "commit": "a1ce0d70ab77d0a61a20f84d49518da8eecc770c",
-  "commitShort": "a1ce0d70",
+  "commit": "29fc51f2b1e386ebeb8810f7cc9cbad49899985a",
+  "commitShort": "29fc51f2",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح نهائي لأزرار scroll الجدول — flex layout بدلاً من position:absolute (لا z-index، لا clipping)",
-  "deployedAt": "2026-06-21T13:37:20.447621Z",
+  "message": "feat: إشعار التحديث الفوري — /api/broadcast-update + app_update WS handler + triggerUpdateBanner export",
+  "deployedAt": "2026-06-21T15:31:57.429747Z",
   "deployedBy": "scripts/deploy.py"
 }

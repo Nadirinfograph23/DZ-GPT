@@ -1,8 +1,8 @@
 {
-  "commit": "01b0dced7fffd91efdea25b4ed0401489fefeeff",
-  "commitShort": "01b0dced",
+  "commit": "2e123e2bf21c9e7247d44d3a96e0c2bbb768a0da",
+  "commitShort": "2e123e2b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: LIVE_SEARCH_TRIGGERS — أضف أنماط أبرز أخبار/هذا الأسبوع لمنع اعتراض Knowledge Agent على استعلامات الأخبار",
-  "deployedAt": "2026-06-21T15:45:51.791859Z",
+  "message": "feat: darija v2 — identity phrases + benchmark endpoint + PWA v4 update banner with SKIP_WAITING + sw cache v10",
+  "deployedAt": "2026-06-21T22:51:06.424329Z",
   "deployedBy": "scripts/deploy.py"
 }

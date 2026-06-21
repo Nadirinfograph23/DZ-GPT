@@ -1,8 +1,8 @@
 {
-  "commit": "6a0d4913c153ec4e45a4dd71104e1944be338f4d",
-  "commitShort": "6a0d4913",
+  "commit": "8ee0e3adb84d0fdbd86fc7d183acfd49267207d6",
+  "commitShort": "8ee0e3ad",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: darija detect v2 — add كيداير/يعطيك/تحيا to DARIJA_HINTS_AR for 100% benchmark pass",
-  "deployedAt": "2026-06-21T22:52:59.697663Z",
+  "message": "fix: table scroll buttons — gradient hidden by default (data-scroll-left), opacity 0.85 + backdrop-filter, data attrs in DZChatBox sync()",
+  "deployedAt": "2026-06-21T22:56:23.472370Z",
   "deployedBy": "scripts/deploy.py"
 }

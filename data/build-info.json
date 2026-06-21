@@ -1,8 +1,8 @@
 {
-  "commit": "bb60ef5263a1471c9dd7a85d949a46b37ef649f6",
-  "commitShort": "bb60ef52",
+  "commit": "a1ce0d70ab77d0a61a20f84d49518da8eecc770c",
+  "commitShort": "a1ce0d70",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: حل مشكلة الكاش — SW v9 + no-cache HTML headers + no-cache JS/CSS + polling كل 45ث",
-  "deployedAt": "2026-06-21T12:00:02.150189Z",
+  "message": "fix: إصلاح نهائي لأزرار scroll الجدول — flex layout بدلاً من position:absolute (لا z-index، لا clipping)",
+  "deployedAt": "2026-06-21T13:37:20.447621Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1794,6 +1794,22 @@
 }
 /* يظهر فقط عند وجود محتوى يسار غير مرئي */
 .v5-md-table-scroll[data-scroll-left="true"]::before { opacity: 1; }
+
+/* RIGHT-side gradient: shown when content is hidden to the right */
+.v5-md-table-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 32px; height: calc(100% - 8px);
+  background: linear-gradient(to left, rgba(18,18,28,0.60) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: 0 8px 8px 0;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+/* يظهر فقط عند وجود محتوى يمين غير مرئي */
+.v5-md-table-scroll[data-scroll-right="true"]::after { opacity: 1; }
 .v5-md-table-scroll::-webkit-scrollbar { height: 8px; }
 .v5-md-table-scroll::-webkit-scrollbar-track {
   background: rgba(255,255,255,0.06);

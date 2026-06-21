@@ -1,8 +1,8 @@
 {
-  "commit": "d182355e10a6a2fddf46b5ba8d7ee70b2ce26dd8",
-  "commitShort": "d182355e",
+  "commit": "70953172480a98cba50c2cfd739229f34eb14dfc",
+  "commitShort": "70953172",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: أخبار الذكاء الاصطناعي — إصلاح 3 أسباب جذرية (extractNewsSubject + feedsToFetch order + forced tech GN-RSS)",
-  "deployedAt": "2026-06-21T15:42:20.839026Z",
+  "message": "fix: entity-question-guard — أضف أنماط أخبار الذكاء الاصطناعي لمنع اعتراض Wikipedia على استعلامات الأخبار",
+  "deployedAt": "2026-06-21T15:43:35.588955Z",
   "deployedBy": "scripts/deploy.py"
 }

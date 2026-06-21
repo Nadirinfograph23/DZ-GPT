@@ -1,6 +1,6 @@
-// DZ GPT — Service Worker v3.0
+// DZ GPT — Service Worker v3.1
 // يدعم: PWA install، offline caching، push notifications، auto-update versioning
-const SHELL_CACHE   = 'dz-gpt-shell-v8'
+const SHELL_CACHE   = 'dz-gpt-shell-v9'   // ← رُفع الإصدار لمسح كاش قديم
 const AUDIO_CACHE   = 'dz-tube-audio-v1'
 const ALL_CACHES    = [SHELL_CACHE, AUDIO_CACHE]
 const VERSION_CHECK_INTERVAL = 5 * 60 * 1000  // 5 دقائق
@@ -20,20 +20,26 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// ── Activate: clean old caches + notify clients ────────────────────────────
+// ── Activate: clean old caches + force-reload all clients ─────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => !ALL_CACHES.includes(k)).map(k => caches.delete(k))
+        keys.filter(k => !ALL_CACHES.includes(k)).map(k => {
+          console.log(`[SW] 🗑️ Deleting old cache: ${k}`)
+          return caches.delete(k)
+        })
       ))
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({ type: 'window' }))
-      .then(cs => cs.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
-      .then(() => {
-        // بدء فحص الإصدار بعد التفعيل
-        checkVersionPeriodically()
+      .then(cs => {
+        cs.forEach(c => {
+          c.postMessage({ type: 'SW_UPDATED' })
+          // إجبار المتصفح على إعادة التحميل لاستخدام الكاش الجديد
+          c.navigate(c.url).catch(() => {})
+        })
       })
+      .then(() => checkVersionPeriodically())
   )
 })
 
@@ -105,7 +111,19 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Static assets — network-first
+  // JS/CSS/HTML — لا كاش أبداً — network فقط
+  if (
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.includes('/assets/')
+  ) {
+    event.respondWith(fetch(request, { cache: 'no-store' }))
+    return
+  }
+
+  // Static assets — network-first, cache fallback (صور، خطوط...)
   event.respondWith(
     fetch(request, { cache: 'no-store' }).catch(() => caches.match(request))
   )

@@ -3,7 +3,7 @@
  * يعمل بطريقتين: polling مباشر من الصفحة + استقبال رسائل Service Worker
  */
 
-const POLL_INTERVAL_MS  = 2 * 60 * 1000  // كل 2 دقيقة
+const POLL_INTERVAL_MS  = 45 * 1000  // كل 45 ثانية — أسرع للكشف عن تحديثات
 const BANNER_ID         = 'dz-update-banner'
 
 let _lastCommit: string | null = null

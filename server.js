@@ -34174,6 +34174,10 @@ app.post('/api/dz-agent-v4/img2video', express.json({ limit: '30mb' }), async (r
     app.use(express.static(distDir, { index: false, fallthrough: true }))
     app.get('*', async (_req, res) => {
       try {
+        // منع أي كاش على ملف HTML — يضمن دائماً أحدث إصدار
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        res.setHeader('Pragma', 'no-cache')
+        res.setHeader('Expires', '0')
         const html = await readFile(indexHtmlPath, 'utf8')
         res.type('html').send(html)
       } catch {

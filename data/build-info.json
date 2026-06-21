@@ -1,8 +1,8 @@
 {
-  "commit": "2e123e2bf21c9e7247d44d3a96e0c2bbb768a0da",
-  "commitShort": "2e123e2b",
+  "commit": "6a0d4913c153ec4e45a4dd71104e1944be338f4d",
+  "commitShort": "6a0d4913",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: darija v2 — identity phrases + benchmark endpoint + PWA v4 update banner with SKIP_WAITING + sw cache v10",
-  "deployedAt": "2026-06-21T22:51:06.424329Z",
+  "message": "fix: darija detect v2 — add كيداير/يعطيك/تحيا to DARIJA_HINTS_AR for 100% benchmark pass",
+  "deployedAt": "2026-06-21T22:52:59.697663Z",
   "deployedBy": "scripts/deploy.py"
 }

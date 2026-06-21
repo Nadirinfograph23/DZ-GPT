@@ -1811,39 +1811,49 @@
   .v5-md-table-scroll::-webkit-scrollbar { height: 10px; }
 }
 /* ── Table nav outer wrapper ── */
+/* ── Table outer: flex row — زر | جدول | زر (لا absolute positioning) ── */
 .dz-table-outer {
-  position: relative;
+  display: flex;
+  direction: ltr;
+  align-items: center;
+  gap: 2px;
   width: 100%;
   margin: 6px 0;
 }
 
-/* ── Transparent glass scroll buttons — absolute overlay on left/right edges ── */
-
-/* Intro blink: plays once when buttons first appear */
-@keyframes dz-tscroll-intro {
-  0%   { opacity: 0;    transform: translateY(-50%) scale(0.5); }
-  20%  { opacity: 0.75; transform: translateY(-50%) scale(1.04); }
-  38%  { opacity: 0.12; transform: translateY(-50%) scale(1.0);  }
-  56%  { opacity: 0.65; transform: translateY(-50%) scale(1.0);  }
-  72%  { opacity: 0.12; transform: translateY(-50%) scale(1.0);  }
-  88%  { opacity: 0.55; transform: translateY(-50%) scale(1.0);  }
-  100% { opacity: 0.5;  transform: translateY(-50%) scale(1.0);  }
+/* الجدول يأخذ كل المساحة المتبقية */
+.dz-table-outer > .dzt-simple-scroll,
+.dz-table-outer > .v5-md-table-scroll {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  margin: 0;
 }
 
+/* Intro blink keyframes (بدون translateY — الأزرار ليست absolute) */
+@keyframes dz-tscroll-intro {
+  0%   { opacity: 0;   transform: scale(0.5); }
+  20%  { opacity: 0.8; transform: scale(1.1); }
+  40%  { opacity: 0.1; transform: scale(1.0); }
+  60%  { opacity: 0.7; transform: scale(1.0); }
+  80%  { opacity: 0.1; transform: scale(1.0); }
+  100% { opacity: 0.6; transform: scale(1.0); }
+}
+
+/* ── أزرار التمرير — flex items، لا position:absolute ── */
 .dz-tscroll-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 8;
-  width: 28px;
+  flex-shrink: 0;
+  /* مخفي بشكل افتراضي: عرض صفري لا يحتل مساحة */
+  width: 0;
   height: 28px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
   border-radius: 50%;
-  border: 1px solid rgba(16,163,127,0.15);
-  background: rgba(0,0,0,0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border: none;
+  background: rgba(16,163,127,0.12);
   color: rgba(16,163,127,0.95);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   line-height: 1;
   cursor: pointer;
@@ -1853,42 +1863,39 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
-  /* Hidden by default — shown when dz-table-outer--overflow class is added */
-  opacity: 0;
-  pointer-events: none;
-  transition: background .12s, border-color .12s, opacity .1s;
+  transition: width 0.18s ease, opacity 0.18s ease, background 0.12s;
+  white-space: nowrap;
 }
 
-/* ── Shown state: table has overflow ── */
+/* ── ظاهر: الجدول أوسع من المساحة ── */
 .dz-table-outer--overflow .dz-tscroll-btn {
-  opacity: 0.5;
+  width: 28px;
+  opacity: 0.65;
   pointer-events: all;
-  animation: dz-tscroll-intro 1.4s ease-out;
+  border: 1px solid rgba(16,163,127,0.3);
+  animation: dz-tscroll-intro 1.2s ease-out;
 }
-.dz-table-outer--overflow .dz-tscroll-btn--right { animation-delay: 0s;     }
-.dz-table-outer--overflow .dz-tscroll-btn--left  { animation-delay: 0.12s;  }
 
-.dz-tscroll-btn--left  { left:  3px; }
-.dz-tscroll-btn--right { right: 3px; }
+.dz-table-outer--overflow .dz-tscroll-btn--right { animation-delay: 0s;    }
+.dz-table-outer--overflow .dz-tscroll-btn--left  { animation-delay: 0.1s;  }
 
 .dz-table-outer--overflow .dz-tscroll-btn:not(:disabled):hover {
   opacity: 1;
-  background: rgba(16,163,127,0.18);
-  border-color: rgba(16,163,127,0.55);
+  background: rgba(16,163,127,0.22);
 }
 .dz-table-outer--overflow .dz-tscroll-btn:not(:disabled):active {
-  transform: translateY(-50%) scale(0.88);
+  transform: scale(0.88);
   opacity: 0.85;
 }
 .dz-table-outer--overflow .dz-tscroll-btn:disabled {
-  opacity: 0.08;
+  opacity: 0.1;
   cursor: default;
   pointer-events: none;
 }
 
-/* Mobile — slightly larger touch target */
+/* Mobile — هدف لمس أكبر */
 @media (max-width: 640px) {
-  .dz-tscroll-btn { width: 34px; height: 34px; font-size: 18px; }
+  .dz-table-outer--overflow .dz-tscroll-btn { width: 32px; height: 32px; font-size: 20px; }
 }
 
 /* ── Keep old dz-tnav-bar for DZSmartTable full component ── */

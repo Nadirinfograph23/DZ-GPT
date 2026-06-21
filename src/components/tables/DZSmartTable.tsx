@@ -462,10 +462,7 @@ function TableScrollWrapper({ className, children }: { className: string; childr
 
   return (
     <div ref={outerRef} className="dz-table-outer">
-      <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
-        {children}
-      </div>
-      {/* Right — goes to right/start (RTL first column) */}
+      {/* زر يمين أولاً (flex LTR) — يتمرر نحو بداية الجدول */}
       <button
         ref={btnRRef}
         className="dz-tscroll-btn dz-tscroll-btn--right"
@@ -473,7 +470,10 @@ function TableScrollWrapper({ className, children }: { className: string; childr
         aria-label="تمرير يمين"
         tabIndex={-1}
       >›</button>
-      {/* Left — goes to left (see more columns) */}
+      <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
+        {children}
+      </div>
+      {/* زر يسار أخيراً — يتمرر نحو الأعمدة الإضافية */}
       <button
         ref={btnLRef}
         className="dz-tscroll-btn dz-tscroll-btn--left"

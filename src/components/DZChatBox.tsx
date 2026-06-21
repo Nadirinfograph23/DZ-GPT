@@ -2774,10 +2774,7 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <div ref={outerRef} className="dz-table-outer">
-      <div className="v5-md-table-scroll" ref={scrollRef}>
-        {children}
-      </div>
-      {/* Right overlay — scroll right/to-start (RTL first column) */}
+      {/* زر يمين أولاً (flex LTR) — يتمرر نحو بداية الجدول */}
       <button
         ref={btnRRef}
         className="dz-tscroll-btn dz-tscroll-btn--right"
@@ -2785,7 +2782,10 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
         aria-label="تمرير يمين"
         tabIndex={-1}
       >›</button>
-      {/* Left overlay — scroll left (see more columns) */}
+      <div className="v5-md-table-scroll" ref={scrollRef}>
+        {children}
+      </div>
+      {/* زر يسار أخيراً — يتمرر نحو الأعمدة الإضافية */}
       <button
         ref={btnLRef}
         className="dz-tscroll-btn dz-tscroll-btn--left"

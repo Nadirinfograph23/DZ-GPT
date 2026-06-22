@@ -1,8 +1,8 @@
 {
-  "commit": "a93c440a5128f2916f34999218cff0a1e4cbdec9",
-  "commitShort": "a93c440a",
+  "commit": "7338eee1cd44bdd1e868c6aea979c0d50c5d690f",
+  "commitShort": "7338eee1",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: stable scroll key (useRef not content) + banner suppress after update (sessionStorage)",
-  "deployedAt": "2026-06-22T00:30:49.117762Z",
+  "message": "feat: fullscreen table modal on mobile (⛶ عرض الجدول كاملاً) + fix scroll stable key + banner suppress",
+  "deployedAt": "2026-06-22T00:40:04.653221Z",
   "deployedBy": "scripts/deploy.py"
 }

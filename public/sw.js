@@ -1,6 +1,6 @@
-// DZ GPT — Service Worker v4.0
+// DZ GPT — Service Worker v5.0
 // يدعم: PWA install، offline caching، push notifications، auto-update versioning
-const SHELL_CACHE   = 'dz-gpt-shell-v10'  // ← رُفع الإصدار لمسح كاش قديم
+const SHELL_CACHE   = 'dz-gpt-shell-v11'  // ← رُفع لمسح كاش قديم + إصلاح force-update
 const AUDIO_CACHE   = 'dz-tube-audio-v1'
 const ALL_CACHES    = [SHELL_CACHE, AUDIO_CACHE]
 const VERSION_CHECK_INTERVAL = 2 * 60 * 1000  // 2 دقائق — أسرع كشف
@@ -33,11 +33,8 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({ type: 'window' }))
       .then(cs => {
-        cs.forEach(c => {
-          c.postMessage({ type: 'SW_UPDATED' })
-          // إجبار المتصفح على إعادة التحميل لاستخدام الكاش الجديد
-          c.navigate(c.url).catch(() => {})
-        })
+        // أرسل SW_UPDATED فقط — الـ versionChecker يتولى الـ reload
+        cs.forEach(c => c.postMessage({ type: 'SW_UPDATED' }))
       })
       .then(() => checkVersionPeriodically())
   )

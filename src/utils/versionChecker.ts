@@ -1,10 +1,13 @@
 /**
  * versionChecker.ts — نظام الكشف عن الإصدار الجديد وإخطار المستخدم
- * يعمل بطريقتين: polling مباشر من الصفحة + استقبال رسائل Service Worker
+ * يعمل بثلاث طرق:
+ *  1. polling /api/version كل 45 ثانية
+ *  2. استقبال رسائل Service Worker (NEW_VERSION / SW_UPDATED)
+ *  3. registration.updatefound — يكشف SW جديد فور بدء تحميله
  */
 
-const POLL_INTERVAL_MS  = 45 * 1000  // كل 45 ثانية — أسرع للكشف عن تحديثات
-const BANNER_ID         = 'dz-update-banner'
+const POLL_INTERVAL_MS = 45 * 1000
+const BANNER_ID        = 'dz-update-banner'
 
 let _lastCommit: string | null = null
 let _pollTimer: ReturnType<typeof setInterval> | null = null
@@ -36,11 +39,11 @@ function showUpdateBanner() {
   banner.style.cssText = [
     'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:99999',
     'background:linear-gradient(90deg,#00d2ff,#7b2ff7)',
-    'color:#fff', 'text-align:center', 'padding:10px 16px',
+    'color:#fff', 'text-align:center', 'padding:12px 16px',
     'font-family:sans-serif', 'font-size:14px',
     'display:flex', 'align-items:center', 'justify-content:center', 'gap:12px',
-    'box-shadow:0 2px 16px rgba(0,0,0,.4)',
-    'animation:slideDown .3s ease',
+    'box-shadow:0 2px 16px rgba(0,0,0,.5)',
+    'animation:slideDown .35s ease',
   ].join(';')
 
   const style = document.createElement('style')
@@ -48,26 +51,66 @@ function showUpdateBanner() {
   document.head.appendChild(style)
 
   banner.innerHTML = `
-    <span>🆕 <strong>توجد نسخة جديدة من DZ Agent</strong> — جاهزة الآن!</span>
-    <button id="dz-update-btn" onclick="(function(){
-      var btn=document.getElementById('dz-update-btn');
-      if(btn){btn.textContent='جارٍ التحديث...';btn.disabled=true;}
-      if(navigator.serviceWorker&&navigator.serviceWorker.controller){
-        navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
-      }
-      setTimeout(function(){ window.location.reload(true); }, 400);
-    })()" style="
+    <span>🆕 <strong>نسخة جديدة من DZ Agent جاهزة</strong> — اضغط لتحميلها الآن</span>
+    <button id="dz-update-btn" style="
       background:#fff;color:#7b2ff7;border:none;
-      padding:5px 16px;border-radius:20px;cursor:pointer;
+      padding:6px 18px;border-radius:20px;cursor:pointer;
       font-weight:bold;font-size:13px;white-space:nowrap;
-    ">اضغط تحديث 🚀</button>
-    <button onclick="document.getElementById('${BANNER_ID}')?.remove()" style="
+    ">🚀 تحديث الآن</button>
+    <button id="dz-update-later" style="
       background:transparent;color:#fff;
       border:1px solid rgba(255,255,255,.5);
       padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;
     ">لاحقاً</button>
   `
   document.body.prepend(banner)
+
+  document.getElementById('dz-update-btn')?.addEventListener('click', forceUpdate)
+  document.getElementById('dz-update-later')?.addEventListener('click', () => {
+    document.getElementById(BANNER_ID)?.remove()
+  })
+}
+
+/**
+ * forceUpdate — ترغم التحديث الكامل:
+ *  1. إرسال SKIP_WAITING للـ SW الجديد
+ *  2. مسح جميع الكاش
+ *  3. إلغاء تسجيل الـ SW القديم
+ *  4. التنقل بـ cache-bust query لتجاوز CDN
+ */
+async function forceUpdate() {
+  const btn = document.getElementById('dz-update-btn') as HTMLButtonElement | null
+  if (btn) { btn.textContent = '⏳ جارٍ التحديث...'; btn.disabled = true }
+
+  try {
+    // 1. أرسل SKIP_WAITING للـ SW الحالي والمنتظر
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (reg?.waiting)    reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      if (reg?.installing) reg.installing.postMessage({ type: 'SKIP_WAITING' })
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })
+      }
+    }
+
+    // 2. امسح كل الكاش
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map(k => caches.delete(k)))
+    }
+
+    // 3. ألغ تسجيل الـ SW (سيُعاد تلقائياً عند الـ reload)
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map(r => r.unregister()))
+    }
+  } catch (e) {
+    console.warn('[VersionChecker] cleanup error:', e)
+  }
+
+  // 4. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
+  const base = window.location.href.split('?')[0].split('#')[0]
+  window.location.replace(base + '?v=' + Date.now())
 }
 
 async function checkForUpdate() {
@@ -88,23 +131,40 @@ async function checkForUpdate() {
 export function startVersionChecker() {
   if (typeof window === 'undefined') return
 
-  // جلب الإصدار الأولي
   checkForUpdate()
-
-  // polling دوري
   _pollTimer = setInterval(checkForUpdate, POLL_INTERVAL_MS)
 
-  // استقبال رسائل Service Worker
   if ('serviceWorker' in navigator) {
+    // رسائل من SW النشط
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'NEW_VERSION') {
-        console.log('[VersionChecker] SW → new version detected:', event.data.version)
-        showUpdateBanner()
-      }
-      if (event.data?.type === 'SW_UPDATED') {
+      if (event.data?.type === 'NEW_VERSION' || event.data?.type === 'SW_UPDATED') {
+        console.log('[VersionChecker] SW message:', event.data.type)
         showUpdateBanner()
       }
     })
+
+    // updatefound: يظهر البانر فور اكتشاف SW جديد يتحمّل
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (!reg) return
+
+      // إذا كان هناك SW منتظر بالفعل (المستخدم فتح التبويب بعد تحديث)
+      if (reg.waiting) {
+        console.log('[VersionChecker] SW waiting on load → show banner')
+        showUpdateBanner()
+      }
+
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing
+        if (!newSW) return
+        console.log('[VersionChecker] updatefound — new SW installing')
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[VersionChecker] new SW installed → show banner')
+            showUpdateBanner()
+          }
+        })
+      })
+    }).catch(() => {})
   }
 }
 

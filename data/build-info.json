@@ -1,8 +1,8 @@
 {
-  "commit": "7338eee1cd44bdd1e868c6aea979c0d50c5d690f",
-  "commitShort": "7338eee1",
+  "commit": "edd17536558aa16ec52fd33ee95001296bb1794d",
+  "commitShort": "edd17536",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: fullscreen table modal on mobile (⛶ عرض الجدول كاملاً) + fix scroll stable key + banner suppress",
-  "deployedAt": "2026-06-22T00:40:04.653221Z",
+  "message": "fix: darija behavior — رد طبيعي بالدارجة لا شرح (few-shot + anti-explain rules)",
+  "deployedAt": "2026-06-22T01:00:04.512959Z",
   "deployedBy": "scripts/deploy.py"
 }

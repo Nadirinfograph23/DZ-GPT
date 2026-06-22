@@ -1,8 +1,8 @@
 {
-  "commit": "1ddd6aed0c1ac723b7e877cc8bf0329e8273b026",
-  "commitShort": "1ddd6aed",
+  "commit": "ffce8b7d108305c1011a3fcdc676f91d1e76aae3",
+  "commitShort": "ffce8b7d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: table scroll — add right-side ::after gradient (data-scroll-right) matching left-side behavior",
-  "deployedAt": "2026-06-21T23:07:16.979159Z",
+  "message": "fix: force-update PWA v5 — clear all caches + unregister SW + cache-bust nav, remove c.navigate(), add updatefound listener",
+  "deployedAt": "2026-06-22T00:00:56.648439Z",
   "deployedBy": "scripts/deploy.py"
 }

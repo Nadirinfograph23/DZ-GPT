@@ -453,10 +453,46 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const innerTable = el.querySelector('table')
     if (innerTable) ro.observe(innerTable)
 
+    // MutationObserver — iOS Safari يعيد scrollLeft=0 عند تغيير DOM داخل الحاوية
+    // نستعيد الموضع المحفوظ فوراً بعد كل تغيير (streaming)
+    const mo = new MutationObserver(() => {
+      const key = _tableKey(el)
+      const saved = _tableScrollPositions.get(key)
+      if (saved !== undefined && Math.abs(el.scrollLeft - saved) > 3) {
+        el.scrollLeft = saved
+      }
+      sync()
+    })
+    mo.observe(el, { childList: true, subtree: true })
+
+    // Touch handling — منع iOS snap-back عند التمرير الأفقي
+    let tStartX = 0, tStartY = 0, tIsH: boolean | null = null
+    const onTouchStart = (e: TouchEvent) => {
+      tStartX = e.touches[0].clientX
+      tStartY = e.touches[0].clientY
+      tIsH = null
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const dx = Math.abs(e.touches[0].clientX - tStartX)
+      const dy = Math.abs(e.touches[0].clientY - tStartY)
+      if (tIsH === null && (dx > 4 || dy > 4)) tIsH = dx > dy
+      if (!tIsH) return
+      e.stopPropagation()
+      const atL = el.scrollLeft <= 0
+      const atR = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1
+      if ((atL && e.touches[0].clientX > tStartX) || (atR && e.touches[0].clientX < tStartX)) return
+      e.preventDefault()
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+
     return () => {
       clearTimeout(_t0); clearTimeout(_t1); clearTimeout(_t2)
-      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('scroll',     onScroll)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
       ro.disconnect()
+      mo.disconnect()
     }
   }, [sync])
 

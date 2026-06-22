@@ -50,8 +50,9 @@ function showUpdateBanner() {
   style.textContent = `@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}`
   document.head.appendChild(style)
 
+  let countdown = 15
   banner.innerHTML = `
-    <span>🆕 <strong>نسخة جديدة من DZ Agent جاهزة</strong> — اضغط لتحميلها الآن</span>
+    <span>🆕 <strong>نسخة جديدة من DZ Agent جاهزة</strong> — يتحدث تلقائياً خلال <b id="dz-cdwn">${countdown}</b>ث</span>
     <button id="dz-update-btn" style="
       background:#fff;color:#7b2ff7;border:none;
       padding:6px 18px;border-radius:20px;cursor:pointer;
@@ -61,13 +62,24 @@ function showUpdateBanner() {
       background:transparent;color:#fff;
       border:1px solid rgba(255,255,255,.5);
       padding:4px 12px;border-radius:20px;cursor:pointer;font-size:12px;
-    ">لاحقاً</button>
+    ">✕</button>
   `
   document.body.prepend(banner)
 
-  document.getElementById('dz-update-btn')?.addEventListener('click', forceUpdate)
+  // عداد تنازلي — يُطلق التحديث تلقائياً بعد 15 ثانية
+  const cdEl = () => document.getElementById('dz-cdwn')
+  const timer = setInterval(() => {
+    countdown--
+    const el = cdEl()
+    if (el) el.textContent = String(countdown)
+    if (countdown <= 0) { clearInterval(timer); forceUpdate() }
+  }, 1000)
+
+  document.getElementById('dz-update-btn')?.addEventListener('click', () => { clearInterval(timer); forceUpdate() })
   document.getElementById('dz-update-later')?.addEventListener('click', () => {
+    clearInterval(timer)
     document.getElementById(BANNER_ID)?.remove()
+    _bannerShown = false   // يسمح بظهور البانر مرة أخرى لاحقاً
   })
 }
 

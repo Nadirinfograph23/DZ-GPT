@@ -1829,50 +1829,45 @@
   }
   .v5-md-table-scroll::-webkit-scrollbar { height: 10px; }
 }
-/* ── Table nav outer wrapper ── */
-/* ── Table outer: flex row — زر | جدول | زر (لا absolute positioning) ── */
+/* ── Table outer: position:relative — الأزرار تعلو على الجدول ── */
 .dz-table-outer {
-  display: flex;
-  direction: ltr;
-  align-items: center;
-  gap: 2px;
+  position: relative;   /* يحتوي الأزرار المطلقة */
   width: 100%;
   margin: 6px 0;
 }
 
-/* الجدول يأخذ كل المساحة المتبقية */
+/* الجدول يأخذ كل المساحة — الأزرار تعلو فوقه */
 .dz-table-outer > .dzt-simple-scroll,
 .dz-table-outer > .v5-md-table-scroll {
-  flex: 1;
-  min-width: 0;
-  width: auto;
+  width: 100%;
   margin: 0;
 }
 
-/* Intro blink keyframes (بدون translateY — الأزرار ليست absolute) */
+/* Intro blink — يشمل translateY لأن الأزرار absolute */
 @keyframes dz-tscroll-intro {
-  0%   { opacity: 0;   transform: scale(0.5); }
-  20%  { opacity: 0.8; transform: scale(1.1); }
-  40%  { opacity: 0.1; transform: scale(1.0); }
-  60%  { opacity: 0.7; transform: scale(1.0); }
-  80%  { opacity: 0.1; transform: scale(1.0); }
-  100% { opacity: 0.6; transform: scale(1.0); }
+  0%   { opacity: 0;   transform: translateY(-50%) scale(0.5); }
+  20%  { opacity: 0.8; transform: translateY(-50%) scale(1.1); }
+  40%  { opacity: 0.1; transform: translateY(-50%) scale(1.0); }
+  60%  { opacity: 0.7; transform: translateY(-50%) scale(1.0); }
+  80%  { opacity: 0.1; transform: translateY(-50%) scale(1.0); }
+  100% { opacity: 0.6; transform: translateY(-50%) scale(1.0); }
 }
 
-/* ── أزرار التمرير — flex items، لا position:absolute ── */
+/* ── أزرار التمرير — مطلقة على حافتي الجدول، دائماً في DOM ── */
 .dz-tscroll-btn {
-  flex-shrink: 0;
-  /* مخفي بشكل افتراضي: عرض صفري لا يحتل مساحة */
-  width: 0;
-  height: 28px;
-  overflow: hidden;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 32px;
+  height: 32px;
   opacity: 0;
   pointer-events: none;
   border-radius: 50%;
   border: none;
-  background: rgba(16,163,127,0.12);
+  background: rgba(16,163,127,0.15);
   color: rgba(16,163,127,0.95);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: bold;
   line-height: 1;
   cursor: pointer;
@@ -1882,41 +1877,43 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   padding: 0;
-  transition: width 0.18s ease, opacity 0.18s ease, background 0.12s;
+  transition: opacity 0.18s ease, background 0.12s;
   white-space: nowrap;
 }
 
-/* ── ظاهر: الجدول أوسع من المساحة ── */
+.dz-tscroll-btn--right { right: 2px; }
+.dz-tscroll-btn--left  { left:  2px; }
+
+/* ── ظاهر: الجدول أوسع من الشاشة ── */
 .dz-table-outer--overflow .dz-tscroll-btn {
-  width: 28px;
   opacity: 0.85;
   pointer-events: all;
   border: 1px solid rgba(16,163,127,0.35);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: dz-tscroll-intro 1.2s ease-out;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: dz-tscroll-intro 1.2s ease-out forwards;
 }
 
-.dz-table-outer--overflow .dz-tscroll-btn--right { animation-delay: 0s;    }
-.dz-table-outer--overflow .dz-tscroll-btn--left  { animation-delay: 0.1s;  }
+.dz-table-outer--overflow .dz-tscroll-btn--right { animation-delay: 0s;   }
+.dz-table-outer--overflow .dz-tscroll-btn--left  { animation-delay: 0.1s; }
 
 .dz-table-outer--overflow .dz-tscroll-btn:not(:disabled):hover {
   opacity: 1;
-  background: rgba(16,163,127,0.22);
+  background: rgba(16,163,127,0.28);
 }
 .dz-table-outer--overflow .dz-tscroll-btn:not(:disabled):active {
-  transform: scale(0.88);
+  transform: translateY(-50%) scale(0.88);
   opacity: 0.85;
 }
 .dz-table-outer--overflow .dz-tscroll-btn:disabled {
-  opacity: 0.1;
+  opacity: 0.08;
   cursor: default;
   pointer-events: none;
 }
 
-/* Mobile — هدف لمس أكبر */
+/* Mobile — هدف لمس أكبر (44px recommended) */
 @media (max-width: 640px) {
-  .dz-table-outer--overflow .dz-tscroll-btn { width: 32px; height: 32px; font-size: 20px; }
+  .dz-tscroll-btn { width: 38px; height: 38px; font-size: 22px; }
 }
 
 /* ── Keep old dz-tnav-bar for DZSmartTable full component ── */

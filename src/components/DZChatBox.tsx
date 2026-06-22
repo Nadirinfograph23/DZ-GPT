@@ -2698,9 +2698,13 @@ function YouTubePanel({
 }
 
 // ===== TABLE SCROLL WRAPPER — RTL-aware horizontal scroll with side buttons =====
-// Uses useRef for all scroll state (no useState) to avoid re-renders on scroll
-// events that were causing the apparent "scroll reset" bug.
-// Buttons are absolute-positioned overlays on left/right edges — always visible.
+// خريطة module-level تحفظ موضع التمرير عبر إعادة الرسم والـ streaming
+const _cbScrollPos = new Map<string, number>()
+function _cbKey(el: HTMLDivElement): string {
+  // مفتاح بسيط من أول خلية + عدد الأعمدة
+  const first = el.querySelector('th,td')
+  return (first?.textContent?.trim().slice(0, 30) ?? '') + '|' + (el.querySelectorAll('th').length)
+}
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -2732,11 +2736,10 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const el = scrollRef.current
     if (!el) return
 
-    // Init: scroll to rightmost so RTL first column is visible
+    // استعادة الموضع المحفوظ أو البداية من أقصى اليمين (RTL)
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (el.scrollWidth > el.clientWidth) {
-        el.scrollLeft = el.scrollWidth - el.clientWidth
-      }
+      const saved = _cbScrollPos.get(_cbKey(el))
+      el.scrollLeft = saved !== undefined ? saved : (el.scrollWidth - el.clientWidth)
       sync()
     }))
 
@@ -2745,11 +2748,25 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const _t1 = setTimeout(sync, 300)
     const _t2 = setTimeout(sync, 900)
 
-    el.addEventListener('scroll', sync, { passive: true })
+    const onScroll = () => {
+      _cbScrollPos.set(_cbKey(el), el.scrollLeft)
+      sync()
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
 
     // ResizeObserver: sync buttons only — NEVER resets scrollLeft
     const ro = new ResizeObserver(sync)
     ro.observe(el)
+
+    // MutationObserver — يصلح iOS snap-back عند streaming يغير DOM
+    const mo = new MutationObserver(() => {
+      const saved = _cbScrollPos.get(_cbKey(el))
+      if (saved !== undefined && Math.abs(el.scrollLeft - saved) > 3) {
+        el.scrollLeft = saved
+      }
+      sync()
+    })
+    mo.observe(el, { childList: true, subtree: true })
 
     let startX = 0, startY = 0, isH: boolean | null = null
     const onStart = (e: TouchEvent) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; isH = null }
@@ -2768,10 +2785,11 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     el.addEventListener('touchmove',  onMove,  { passive: false })
     return () => {
       clearTimeout(_t0); clearTimeout(_t1); clearTimeout(_t2)
-      el.removeEventListener('scroll',     sync)
+      el.removeEventListener('scroll',     onScroll)
       el.removeEventListener('touchstart', onStart)
       el.removeEventListener('touchmove',  onMove)
       ro.disconnect()
+      mo.disconnect()
     }
   }, [sync])
 

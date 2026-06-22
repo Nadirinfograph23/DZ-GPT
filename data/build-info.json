@@ -1,8 +1,8 @@
 {
-  "commit": "ffce8b7d108305c1011a3fcdc676f91d1e76aae3",
-  "commitShort": "ffce8b7d",
+  "commit": "51bf3d29c76b1119e2a71092f140dde542e02f80",
+  "commitShort": "51bf3d29",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: force-update PWA v5 — clear all caches + unregister SW + cache-bust nav, remove c.navigate(), add updatefound listener",
-  "deployedAt": "2026-06-22T00:00:56.648439Z",
+  "message": "feat: DZ Skills System v1.0 — 9 domain skills + smart router + benchmark API (100% pass)",
+  "deployedAt": "2026-06-22T00:11:35.838452Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -399,11 +399,15 @@ function _tableKey(el: HTMLDivElement): string {
 //    native scroll natively, no pointer-capture tricks that cause spring-back.
 //  • ResizeObserver only syncs button opacity; never resets scrollLeft.
 //  • _tableScrollPositions preserves position across streaming re-mounts.
+//  • stableKey (useRef) — generated once on mount, never changes during streaming.
+//    Content-based keys were broken: first-cell text changes mid-stream → key mismatch.
 function TableScrollWrapper({ className, children }: { className: string; children: React.ReactNode }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const outerRef  = useRef<HTMLDivElement>(null)
-  const btnLRef   = useRef<HTMLButtonElement>(null)
-  const btnRRef   = useRef<HTMLButtonElement>(null)
+  const scrollRef  = useRef<HTMLDivElement>(null)
+  const outerRef   = useRef<HTMLDivElement>(null)
+  const btnLRef    = useRef<HTMLButtonElement>(null)
+  const btnRRef    = useRef<HTMLButtonElement>(null)
+  // مفتاح ثابت — يُنشأ مرة واحدة ولا يتغير مهما تغيّر المحتوى خلال streaming
+  const stableKey  = useRef('dzt-' + Math.random().toString(36).slice(2, 9))
 
   const sync = useCallback(() => {
     const el = scrollRef.current
@@ -428,9 +432,10 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const el = scrollRef.current
     if (!el) return
 
+    const key = stableKey.current
+
     // Restore saved position or start at rightmost (RTL first column)
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
       el.scrollLeft = saved !== undefined ? saved : el.scrollWidth - el.clientWidth
       sync()
@@ -442,7 +447,7 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const _t2 = setTimeout(sync, 900)
 
     const onScroll = () => {
-      _tableScrollPositions.set(_tableKey(el), el.scrollLeft)
+      _tableScrollPositions.set(key, el.scrollLeft)
       sync()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -453,10 +458,9 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     const innerTable = el.querySelector('table')
     if (innerTable) ro.observe(innerTable)
 
-    // MutationObserver — iOS Safari يعيد scrollLeft=0 عند تغيير DOM داخل الحاوية
-    // نستعيد الموضع المحفوظ فوراً بعد كل تغيير (streaming)
+    // MutationObserver — يصلح iOS Safari: يعيد scrollLeft=0 عند تغيير DOM (streaming)
+    // المفتاح stableKey ثابت → لا يتغير مع تغيّر محتوى الخلايا خلال streaming
     const mo = new MutationObserver(() => {
-      const key = _tableKey(el)
       const saved = _tableScrollPositions.get(key)
       if (saved !== undefined && Math.abs(el.scrollLeft - saved) > 3) {
         el.scrollLeft = saved

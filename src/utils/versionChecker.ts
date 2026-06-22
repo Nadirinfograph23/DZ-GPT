@@ -29,7 +29,15 @@ async function fetchVersion(): Promise<string | null> {
 
 export function triggerUpdateBanner() { showUpdateBanner() }
 
+// مفتاح sessionStorage — يمنع إعادة ظهور البانر بعد التحديث مباشرة
+const JUST_UPDATED_KEY = 'dz-just-updated'
+const SUPPRESS_MS      = 90_000  // 90 ثانية كافية لاكتمال دورة الـ SW
+
 function showUpdateBanner() {
+  // لا تُظهر البانر إذا كان المستخدم قد حدّث للتو (خلال 90 ثانية)
+  const ts = sessionStorage.getItem(JUST_UPDATED_KEY)
+  if (ts && Date.now() - Number(ts) < SUPPRESS_MS) return
+
   if (_bannerShown || document.getElementById(BANNER_ID)) return
   _bannerShown = true
 
@@ -120,7 +128,10 @@ async function forceUpdate() {
     console.warn('[VersionChecker] cleanup error:', e)
   }
 
-  // 4. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
+  // 4. سجّل وقت التحديث لمنع ظهور البانر مجدداً بعد الـ reload
+  sessionStorage.setItem(JUST_UPDATED_KEY, String(Date.now()))
+
+  // 5. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
   const base = window.location.href.split('?')[0].split('#')[0]
   window.location.replace(base + '?v=' + Date.now())
 }

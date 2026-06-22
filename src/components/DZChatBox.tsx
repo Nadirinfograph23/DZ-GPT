@@ -2700,17 +2700,14 @@ function YouTubePanel({
 // ===== TABLE SCROLL WRAPPER — RTL-aware horizontal scroll with side buttons =====
 // خريطة module-level تحفظ موضع التمرير عبر إعادة الرسم والـ streaming
 const _cbScrollPos = new Map<string, number>()
-function _cbKey(el: HTMLDivElement): string {
-  // مفتاح بسيط من أول خلية + عدد الأعمدة
-  const first = el.querySelector('th,td')
-  return (first?.textContent?.trim().slice(0, 30) ?? '') + '|' + (el.querySelectorAll('th').length)
-}
 
 function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const outerRef  = useRef<HTMLDivElement>(null)
   const btnLRef   = useRef<HTMLButtonElement>(null)
   const btnRRef   = useRef<HTMLButtonElement>(null)
+  // مفتاح ثابت — يُنشأ مرة واحدة ولا يتغير مع تغيّر محتوى الخلايا خلال streaming
+  const stableKey = useRef('dzcb-' + Math.random().toString(36).slice(2, 9))
 
   const sync = useCallback(() => {
     const el = scrollRef.current
@@ -2736,9 +2733,11 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const el = scrollRef.current
     if (!el) return
 
+    const key = stableKey.current
+
     // استعادة الموضع المحفوظ أو البداية من أقصى اليمين (RTL)
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const saved = _cbScrollPos.get(_cbKey(el))
+      const saved = _cbScrollPos.get(key)
       el.scrollLeft = saved !== undefined ? saved : (el.scrollWidth - el.clientWidth)
       sync()
     }))
@@ -2749,7 +2748,7 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     const _t2 = setTimeout(sync, 900)
 
     const onScroll = () => {
-      _cbScrollPos.set(_cbKey(el), el.scrollLeft)
+      _cbScrollPos.set(key, el.scrollLeft)
       sync()
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -2759,8 +2758,9 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     ro.observe(el)
 
     // MutationObserver — يصلح iOS snap-back عند streaming يغير DOM
+    // stableKey ثابت → الموضع لا يضيع حتى لو تغيّر نص الخلية الأولى
     const mo = new MutationObserver(() => {
-      const saved = _cbScrollPos.get(_cbKey(el))
+      const saved = _cbScrollPos.get(key)
       if (saved !== undefined && Math.abs(el.scrollLeft - saved) > 3) {
         el.scrollLeft = saved
       }

@@ -2707,7 +2707,16 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   const btnLRef   = useRef<HTMLButtonElement>(null)
   const btnRRef   = useRef<HTMLButtonElement>(null)
   // مفتاح ثابت — يُنشأ مرة واحدة ولا يتغير مع تغيّر محتوى الخلايا خلال streaming
-  const stableKey = useRef('dzcb-' + Math.random().toString(36).slice(2, 9))
+  const stableKey    = useRef('dzcb-' + Math.random().toString(36).slice(2, 9))
+  const [isOverflow, setIsOverflow] = useState(false)
+  const [modalOpen, setModalOpen]   = useState(false)
+  const _overflowSet = useRef(false)
+
+  useEffect(() => {
+    if (modalOpen) { document.body.style.overflow = 'hidden' }
+    else           { document.body.style.overflow = ''       }
+    return () => { document.body.style.overflow = '' }
+  }, [modalOpen])
 
   const sync = useCallback(() => {
     const el = scrollRef.current
@@ -2719,9 +2728,12 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
     if (outerRef.current) outerRef.current.classList.toggle('dz-table-outer--overflow', isOver)
     if (btnLRef.current)  btnLRef.current.disabled  = l <= 2
     if (btnRRef.current)  btnRRef.current.disabled  = !isOver || l >= max - 2
-    // data attrs control ::before/::after gradients — show only when content exists beyond edge
     el.dataset.scrollLeft  = l > 1       ? 'true' : 'false'
     el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
+    if (isOver && !_overflowSet.current) {
+      _overflowSet.current = true
+      setIsOverflow(true)
+    }
   }, [])
 
   const nudge = useCallback((dir: 'l' | 'r') => {
@@ -2794,26 +2806,42 @@ function TableScrollWrapper({ children }: { children: React.ReactNode }) {
   }, [sync])
 
   return (
-    <div ref={outerRef} className="dz-table-outer">
-      {/* زر يمين أولاً (flex LTR) — يتمرر نحو بداية الجدول */}
-      <button
-        ref={btnRRef}
-        className="dz-tscroll-btn dz-tscroll-btn--right"
-        onClick={() => nudge('r')}
-        aria-label="تمرير يمين"
-        tabIndex={-1}
-      >›</button>
-      <div className="v5-md-table-scroll" ref={scrollRef}>
-        {children}
+    <div className="dz-table-wrap">
+      <div ref={outerRef} className="dz-table-outer">
+        <button ref={btnRRef} className="dz-tscroll-btn dz-tscroll-btn--right"
+          onClick={() => nudge('r')} aria-label="تمرير يمين" tabIndex={-1}>›</button>
+        <div className="v5-md-table-scroll" ref={scrollRef}>
+          {children}
+        </div>
+        <button ref={btnLRef} className="dz-tscroll-btn dz-tscroll-btn--left"
+          onClick={() => nudge('l')} aria-label="تمرير يسار" tabIndex={-1}>‹</button>
       </div>
-      {/* زر يسار أخيراً — يتمرر نحو الأعمدة الإضافية */}
-      <button
-        ref={btnLRef}
-        className="dz-tscroll-btn dz-tscroll-btn--left"
-        onClick={() => nudge('l')}
-        aria-label="تمرير يسار"
-        tabIndex={-1}
-      >‹</button>
+
+      {isOverflow && (
+        <button className="dz-table-fullscreen-btn" onClick={() => setModalOpen(true)}>
+          ⛶ عرض الجدول كاملاً
+        </button>
+      )}
+
+      {modalOpen && createPortal(
+        <div
+          className="dz-table-modal-overlay"
+          dir="rtl"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
+        >
+          <div className="dz-table-modal-inner">
+            <div className="dz-table-modal-header">
+              <span className="dz-table-modal-title">⛶ الجدول كاملاً</span>
+              <button className="dz-table-modal-close" onClick={() => setModalOpen(false)}
+                aria-label="إغلاق">✕</button>
+            </div>
+            <div className="dz-table-modal-body" dir="ltr">
+              {children}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

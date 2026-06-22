@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   useReactTable,
   getCoreRowModel,
@@ -407,7 +408,17 @@ function TableScrollWrapper({ className, children }: { className: string; childr
   const btnLRef    = useRef<HTMLButtonElement>(null)
   const btnRRef    = useRef<HTMLButtonElement>(null)
   // مفتاح ثابت — يُنشأ مرة واحدة ولا يتغير مهما تغيّر المحتوى خلال streaming
-  const stableKey  = useRef('dzt-' + Math.random().toString(36).slice(2, 9))
+  const stableKey     = useRef('dzt-' + Math.random().toString(36).slice(2, 9))
+  const [isOverflow, setIsOverflow] = useState(false)
+  const [modalOpen, setModalOpen]   = useState(false)
+  const _overflowSet  = useRef(false)
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (modalOpen) { document.body.style.overflow = 'hidden' }
+    else           { document.body.style.overflow = ''       }
+    return () => { document.body.style.overflow = '' }
+  }, [modalOpen])
 
   const sync = useCallback(() => {
     const el = scrollRef.current
@@ -421,6 +432,11 @@ function TableScrollWrapper({ className, children }: { className: string; childr
     if (btnRRef.current)  btnRRef.current.disabled  = !isOver || l >= max - 2
     el.dataset.scrollLeft  = l > 1 ? 'true' : 'false'
     el.dataset.scrollRight = l < max - 1 ? 'true' : 'false'
+    // Set overflow state once to show fullscreen button (avoids re-render on every scroll)
+    if (isOver && !_overflowSet.current) {
+      _overflowSet.current = true
+      setIsOverflow(true)
+    }
   }, [])
 
   const nudge = useCallback((dir: 'l' | 'r') => {
@@ -501,26 +517,44 @@ function TableScrollWrapper({ className, children }: { className: string; childr
   }, [sync])
 
   return (
-    <div ref={outerRef} className="dz-table-outer">
-      {/* زر يمين أولاً (flex LTR) — يتمرر نحو بداية الجدول */}
-      <button
-        ref={btnRRef}
-        className="dz-tscroll-btn dz-tscroll-btn--right"
-        onClick={() => nudge('r')}
-        aria-label="تمرير يمين"
-        tabIndex={-1}
-      >›</button>
-      <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
-        {children}
+    <div className="dz-table-wrap">
+      <div ref={outerRef} className="dz-table-outer">
+        <button ref={btnRRef} className="dz-tscroll-btn dz-tscroll-btn--right"
+          onClick={() => nudge('r')} aria-label="تمرير يمين" tabIndex={-1}>›</button>
+        <div ref={scrollRef} className={`dzt-simple-scroll ${className}`} dir="ltr">
+          {children}
+        </div>
+        <button ref={btnLRef} className="dz-tscroll-btn dz-tscroll-btn--left"
+          onClick={() => nudge('l')} aria-label="تمرير يسار" tabIndex={-1}>‹</button>
       </div>
-      {/* زر يسار أخيراً — يتمرر نحو الأعمدة الإضافية */}
-      <button
-        ref={btnLRef}
-        className="dz-tscroll-btn dz-tscroll-btn--left"
-        onClick={() => nudge('l')}
-        aria-label="تمرير يسار"
-        tabIndex={-1}
-      >‹</button>
+
+      {/* زر عرض الجدول كاملاً — يظهر فقط على الهاتف عند وجود overflow */}
+      {isOverflow && (
+        <button className="dz-table-fullscreen-btn" onClick={() => setModalOpen(true)}>
+          ⛶ عرض الجدول كاملاً
+        </button>
+      )}
+
+      {/* Modal — يعرض الجدول في نافذة مكبّرة */}
+      {modalOpen && createPortal(
+        <div
+          className="dz-table-modal-overlay"
+          dir="rtl"
+          onClick={(e) => { if (e.target === e.currentTarget) setModalOpen(false) }}
+        >
+          <div className="dz-table-modal-inner">
+            <div className="dz-table-modal-header">
+              <span className="dz-table-modal-title">⛶ الجدول كاملاً</span>
+              <button className="dz-table-modal-close" onClick={() => setModalOpen(false)}
+                aria-label="إغلاق">✕</button>
+            </div>
+            <div className="dz-table-modal-body" dir="ltr">
+              {children}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

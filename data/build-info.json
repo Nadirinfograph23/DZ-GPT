@@ -1,8 +1,8 @@
 {
-  "commit": "51bf3d29c76b1119e2a71092f140dde542e02f80",
-  "commitShort": "51bf3d29",
+  "commit": "765e7f10fc17ae10f7cee34b85a7e974f79cb08c",
+  "commitShort": "765e7f10",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: DZ Skills System v1.0 — 9 domain skills + smart router + benchmark API (100% pass)",
-  "deployedAt": "2026-06-22T00:11:35.838452Z",
+  "message": "fix: table scroll — absolute buttons + MutationObserver iOS fix + SW v12 force-update countdown",
+  "deployedAt": "2026-06-22T00:17:51.062002Z",
   "deployedBy": "scripts/deploy.py"
 }

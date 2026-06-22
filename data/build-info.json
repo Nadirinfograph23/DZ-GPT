@@ -1,8 +1,8 @@
 {
-  "commit": "765e7f10fc17ae10f7cee34b85a7e974f79cb08c",
-  "commitShort": "765e7f10",
+  "commit": "a93c440a5128f2916f34999218cff0a1e4cbdec9",
+  "commitShort": "a93c440a",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: table scroll — absolute buttons + MutationObserver iOS fix + SW v12 force-update countdown",
-  "deployedAt": "2026-06-22T00:17:51.062002Z",
+  "message": "fix: stable scroll key (useRef not content) + banner suppress after update (sessionStorage)",
+  "deployedAt": "2026-06-22T00:30:49.117762Z",
   "deployedBy": "scripts/deploy.py"
 }

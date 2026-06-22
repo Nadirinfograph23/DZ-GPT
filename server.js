@@ -131,6 +131,7 @@ import { mountDownloadV2 } from './services/download/mount.js'
 import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import { mountGitHubSkill } from './lib/skills/mount.js'
+import { mountDzSkills } from './lib/dz-skills/mount.js'
 import { generateAndroidProject, detectAndroidBuildQuery } from './lib/android-builder/index.js'
 import { mountMetaClaw, injectSkills as metaClawInject } from './lib/skills/dz-metaclaw-skill.js'
 import {
@@ -31286,6 +31287,7 @@ try {
 // New endpoints: /api/github-skill/{health,analyze,file/*,branch/*,pr/*,debug,auto-fix,sync/*,execute}
 try {
   mountGitHubSkill(app)
+  mountDzSkills(app)
   mountMemoryRouter(app)
 } catch (err) {
   console.warn('[github-skill] mount failed:', err.message)

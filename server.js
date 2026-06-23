@@ -1248,6 +1248,32 @@ app.get('/api/version', (_req, res) => {
 })
 // ═══════════════════════════════════════════════════════════════
 
+// ── /api/capabilities — تقرير القدرات الكامل من السجل الحقيقي ───────────
+app.get('/api/capabilities', async (_req, res) => {
+  try {
+    const { getCapabilitiesJSON } = await import('./lib/capability-registry.js')
+    const data = getCapabilitiesJSON()
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.json({ status: 'ok', ...data })
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message })
+  }
+})
+
+// ── /api/capabilities/report — تقرير Markdown قابل للعرض ─────────────────
+app.get('/api/capabilities/report', async (req, res) => {
+  try {
+    const { buildCapabilityReport } = await import('./lib/capability-registry.js')
+    const mode = req.query.mode === 'full' ? 'full' : 'short'
+    const report = buildCapabilityReport(mode)
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    res.send(report)
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message })
+  }
+})
+
 app.post('/api/dz-agent/ratings', (req, res) => {
   const { messageId, vote, query } = req.body || {}
   if (!messageId || !['up', 'down'].includes(vote)) {

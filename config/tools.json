@@ -1,0 +1,185 @@
+{
+  "total_tools": 18,
+  "tools": [
+    {
+      "id": "web_search",
+      "name": "بحث الويب الحي",
+      "function": "البحث في الإنترنت بوقت حقيقي",
+      "api_source": "SearXNG + Google CSE + Crawl4AI",
+      "latency_class": "medium",
+      "token_cost_estimate": "300-600 tokens",
+      "status": "active",
+      "limitations": ["Google CSE قد يكون مقيداً", "SearXNG fallback دائماً متاح"]
+    },
+    {
+      "id": "weather_api",
+      "name": "API الطقس",
+      "function": "أسعار الطقس الحي لأي مدينة",
+      "api_source": "Open-Meteo + OpenWeatherMap",
+      "latency_class": "fast",
+      "token_cost_estimate": "150-300 tokens",
+      "status": "active",
+      "limitations": []
+    },
+    {
+      "id": "currency_api",
+      "name": "API أسعار الصرف",
+      "function": "أسعار الصرف الحية — 15+ عملة",
+      "api_source": "ExchangeRate-API + realtime search",
+      "latency_class": "fast",
+      "token_cost_estimate": "100-200 tokens",
+      "status": "active",
+      "limitations": ["السوق الموازي تقريبي"]
+    },
+    {
+      "id": "github_api",
+      "name": "GitHub API",
+      "function": "قراءة/كتابة المستودعات · commit · deploy",
+      "api_source": "GitHub REST API v3 + Git Data API",
+      "latency_class": "slow",
+      "token_cost_estimate": "400-800 tokens",
+      "status": "active",
+      "limitations": ["يحتاج GITHUB_TOKEN", "rate limit: 5000 req/hour"]
+    },
+    {
+      "id": "image_generator",
+      "name": "مولّد الصور AI",
+      "function": "توليد صور من نص",
+      "api_source": "HuggingFace FLUX.1 + Stable Diffusion XL + Pollinations",
+      "latency_class": "slow",
+      "token_cost_estimate": "200-400 tokens + image generation time",
+      "status": "active",
+      "limitations": ["لا صور عنف/محتوى غير لائق", "دقة تعتمد على البرومبت"]
+    },
+    {
+      "id": "sports_data",
+      "name": "بيانات الرياضة الحية",
+      "function": "نتائج · مباريات · ترتيب · لاعبون",
+      "api_source": "365score + كووورة + FotMob + SofaScore",
+      "latency_class": "fast",
+      "token_cost_estimate": "300-700 tokens",
+      "status": "active",
+      "limitations": ["بعض الدوريات الصغيرة غير مغطاة"]
+    },
+    {
+      "id": "quran_api",
+      "name": "API القرآن الكريم",
+      "function": "عرض الآيات · تفسير · تلاوة · بحث",
+      "api_source": "AlQuran Cloud API + Local DB",
+      "latency_class": "fast",
+      "token_cost_estimate": "200-500 tokens",
+      "status": "active",
+      "limitations": []
+    },
+    {
+      "id": "rss_crawler",
+      "name": "محرك RSS الجزائري",
+      "function": "أخبار من 20+ مصدر جزائري موثوق",
+      "api_source": "APS · Echorouk · El Watan · TSA · Ennahar · Eddirasa",
+      "latency_class": "medium",
+      "token_cost_estimate": "400-800 tokens",
+      "status": "active",
+      "limitations": ["بعض المصادر قد تكون بطيئة"]
+    },
+    {
+      "id": "youtube_tool",
+      "name": "أداة يوتيوب",
+      "function": "تحليل فيديو · ملخص · نقاط رئيسية",
+      "api_source": "YouTube Data API v3 + transcript",
+      "latency_class": "slow",
+      "token_cost_estimate": "500-1500 tokens",
+      "status": "active",
+      "limitations": ["الفيديوهات المحمية غير متاحة"]
+    },
+    {
+      "id": "ocr_tool",
+      "name": "أداة OCR",
+      "function": "استخراج نص من صور و PDF",
+      "api_source": "Tesseract + Vision LLM",
+      "latency_class": "slow",
+      "token_cost_estimate": "600-2000 tokens",
+      "status": "active",
+      "limitations": ["الخط اليدوي دقته أقل", "PDF معقدة قد تأخذ وقتاً"]
+    },
+    {
+      "id": "dz_maps",
+      "name": "خرائط الجزائر",
+      "function": "بحث جغرافي · ولايات · أماكن · مسافات",
+      "api_source": "OpenStreetMap + Nominatim + dz-maps",
+      "latency_class": "fast",
+      "token_cost_estimate": "200-400 tokens",
+      "status": "active",
+      "limitations": ["مفصّل للجزائر أكثر من الدول الأخرى"]
+    },
+    {
+      "id": "code_executor",
+      "name": "محرك تنفيذ الكود",
+      "function": "كتابة + مراجعة + debugging الكود",
+      "api_source": "Groq LLM + specialized code prompts",
+      "latency_class": "medium",
+      "token_cost_estimate": "400-1500 tokens",
+      "status": "active",
+      "limitations": ["لا تنفيذ كود مباشر في sandbox"]
+    },
+    {
+      "id": "prayer_times",
+      "name": "مواقيت الصلاة",
+      "function": "مواقيت الصلاة لكل مدن الجزائر",
+      "api_source": "Aladhan API",
+      "latency_class": "fast",
+      "token_cost_estimate": "100-200 tokens",
+      "status": "active",
+      "limitations": []
+    },
+    {
+      "id": "vercel_deploy",
+      "name": "نشر Vercel",
+      "function": "نشر المشاريع على Vercel تلقائياً",
+      "api_source": "Vercel API + Deploy Hook",
+      "latency_class": "slow",
+      "token_cost_estimate": "200-400 tokens",
+      "status": "active",
+      "limitations": ["يحتاج VERCEL_TOKEN"]
+    },
+    {
+      "id": "dz_health_search",
+      "name": "بحث الأطباء والصحة",
+      "function": "بحث أطباء · CNAS · مستشفيات جزائرية",
+      "api_source": "searxng + dz-health-agent",
+      "latency_class": "medium",
+      "token_cost_estimate": "300-600 tokens",
+      "status": "active",
+      "limitations": ["معلومات عامة — ليست استشارة طبية"]
+    },
+    {
+      "id": "eddirasa_tool",
+      "name": "أداة Eddirasa التعليمية",
+      "function": "درجات · ملخصات · تمارين · بكالوريا",
+      "api_source": "eddirasa-index + rss-crawler",
+      "latency_class": "medium",
+      "token_cost_estimate": "300-700 tokens",
+      "status": "active",
+      "limitations": ["محتوى جزائري فقط"]
+    },
+    {
+      "id": "cv_generator",
+      "name": "مولّد السيرة الذاتية",
+      "function": "إنشاء CV احترافي عربي/فرنسي + رسالة تحفيزية",
+      "api_source": "LLM + PDF template",
+      "latency_class": "medium",
+      "token_cost_estimate": "500-1000 tokens",
+      "status": "active",
+      "limitations": []
+    },
+    {
+      "id": "darija_engine",
+      "name": "محرك الدارجة الجزائرية",
+      "function": "فهم + ترجمة + تطبيع الدارجة وفرانكو",
+      "api_source": "dz-dialect corpus + dz-understanding",
+      "latency_class": "fast",
+      "token_cost_estimate": "100-300 tokens",
+      "status": "active",
+      "limitations": ["تغطية شاملة للشرق — الغرب أقل"]
+    }
+  ]
+}

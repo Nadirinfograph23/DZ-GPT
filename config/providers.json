@@ -1,0 +1,136 @@
+{
+  "total_providers": 7,
+  "primary_provider": "groq",
+  "providers": [
+    {
+      "id": "groq",
+      "name": "Groq Cloud",
+      "type": "cloud-llm",
+      "models": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+      ],
+      "context_window": 32768,
+      "cost_level": "free",
+      "rate_limits": "30 req/min (free tier)",
+      "reliability_score": 9,
+      "strengths": ["سرعة عالية جداً", "Arabic support", "مجاني"],
+      "env_key": "AI_API_KEY",
+      "rotation": true,
+      "rotation_keys": "AI_API_KEY → AI_API_KEY_2 → ... → AI_API_KEY_10"
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "type": "cloud-llm",
+      "models": [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash-exp"
+      ],
+      "context_window": 1000000,
+      "cost_level": "free-tier",
+      "rate_limits": "حصة مجانية يومية",
+      "reliability_score": 8,
+      "strengths": ["context window ضخم", "multimodal", "vision"],
+      "env_key": "GEMINI_API_KEY"
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral AI",
+      "type": "cloud-llm",
+      "models": [
+        "mistral-large-latest",
+        "mistral-small-latest",
+        "open-mistral-nemo"
+      ],
+      "context_window": 32768,
+      "cost_level": "low",
+      "rate_limits": "حسب الخطة",
+      "reliability_score": 8,
+      "strengths": ["French language excellence", "Arabic decent", "سريع"],
+      "env_key": "MISTRAL_API_KEY"
+    },
+    {
+      "id": "nvidia_nim",
+      "name": "NVIDIA NIM",
+      "type": "cloud-llm",
+      "models": [
+        "meta/llama-3.1-70b-instruct",
+        "nvidia/llama-3.1-nemotron-70b-instruct"
+      ],
+      "context_window": 128000,
+      "cost_level": "free-tier",
+      "rate_limits": "حصة مجانية",
+      "reliability_score": 7,
+      "strengths": ["قدرة استدلال عالية", "context window كبير"],
+      "env_key": "NVIDIA_API_KEY"
+    },
+    {
+      "id": "cohere",
+      "name": "Cohere",
+      "type": "cloud-llm",
+      "models": [
+        "command-r-plus",
+        "command-r",
+        "command"
+      ],
+      "context_window": 128000,
+      "cost_level": "free-tier",
+      "rate_limits": "حصة مجانية",
+      "reliability_score": 7,
+      "strengths": ["RAG متميز", "document analysis"],
+      "env_key": "COHERE_API_KEY"
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "type": "api-gateway",
+      "models": [
+        "anthropic/claude-3.5-sonnet",
+        "openai/gpt-4o",
+        "google/gemini-pro",
+        "meta-llama/llama-3.1-405b"
+      ],
+      "context_window": 200000,
+      "cost_level": "medium",
+      "rate_limits": "حسب الرصيد",
+      "reliability_score": 8,
+      "strengths": ["وصول لـ 100+ نموذج", "fallback ذكي"],
+      "env_key": "OPENROUTER_API_KEY"
+    },
+    {
+      "id": "huggingface",
+      "name": "HuggingFace Inference",
+      "type": "cloud-inference",
+      "models": [
+        "black-forest-labs/FLUX.1-schnell",
+        "stabilityai/stable-diffusion-xl-base-1.0",
+        "mistralai/Mistral-7B-Instruct-v0.3"
+      ],
+      "context_window": 8192,
+      "cost_level": "free",
+      "rate_limits": "معتدل — حسب النموذج",
+      "reliability_score": 6,
+      "strengths": ["توليد صور مجاني", "نماذج مفتوحة المصدر"],
+      "env_key": "HF_TOKEN",
+      "primary_use": "image-generation"
+    }
+  ],
+  "circuit_breaker": {
+    "enabled": true,
+    "failure_threshold": 3,
+    "reset_timeout_ms": 60000,
+    "fallback_chain": ["groq", "gemini", "mistral", "nvidia_nim", "cohere", "openrouter"]
+  },
+  "token_limits": {
+    "max_input_tokens": 32768,
+    "max_output_tokens": 8192,
+    "average_response_tokens": 600,
+    "tool_overhead_tokens": 400,
+    "memory_budget_tokens": 2000,
+    "compression_strategy": "sliding-window + summarization عند تجاوز 80% من الحد"
+  }
+}

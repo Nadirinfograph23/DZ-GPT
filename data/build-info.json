@@ -1,8 +1,8 @@
 {
-  "commit": "690110b41992bcea9797cf8d6cdc3f4bdfb9da67",
-  "commitShort": "690110b4",
+  "commit": "4d9b9e01b90d3e8e515789bfc6aa0233f7a1132f",
+  "commitShort": "4d9b9e01",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: نظام الوعي الذاتي بالقدرات — Self-Awareness Mode v2.0 | أدوات+وكلاء+مهارات من السجل الحقيقي | /api/capabilities endpoint | 16 وكيل × 18 أداة × 39 مهارة × 7 مزودين",
-  "deployedAt": "2026-06-23T01:03:22.261185Z",
+  "message": "feat: DZAbout dashboard + CSP postimg fix + Home icon",
+  "deployedAt": "2026-06-23T01:35:16.749138Z",
   "deployedBy": "scripts/deploy.py"
 }

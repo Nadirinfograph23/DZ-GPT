@@ -1,8 +1,8 @@
 {
-  "commit": "4d9b9e01b90d3e8e515789bfc6aa0233f7a1132f",
-  "commitShort": "4d9b9e01",
+  "commit": "2c72a15c6451da0fa8276a933249344204f2d7c4",
+  "commitShort": "2c72a15c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: DZAbout dashboard + CSP postimg fix + Home icon",
-  "deployedAt": "2026-06-23T01:35:16.749138Z",
+  "message": "fix: mobile scroll + remove hallucination text + detailed descriptions for agents/tools/skills",
+  "deployedAt": "2026-06-23T01:48:40.322171Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "2c72a15c6451da0fa8276a933249344204f2d7c4",
-  "commitShort": "2c72a15c",
+  "commit": "3cc0870f94c7ad0a5ce917ad6602c2c76e6481fe",
+  "commitShort": "3cc0870f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: mobile scroll + remove hallucination text + detailed descriptions for agents/tools/skills",
-  "deployedAt": "2026-06-23T01:48:40.322171Z",
+  "message": "fix: mobile scroll — add dza-page to body overflow:auto exceptions in App.css",
+  "deployedAt": "2026-06-23T01:57:05.657020Z",
   "deployedBy": "scripts/deploy.py"
 }

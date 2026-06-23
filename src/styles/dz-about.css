@@ -1,10 +1,12 @@
 /* ===== DZ ABOUT — CAPABILITY DASHBOARD ===== */
 
-/* Fix mobile scroll: use overflow-x: clip instead of hidden to preserve vertical scroll */
-html, body {
-  scroll-behavior: smooth;
-}
-
+/*
+  Mobile scroll fix:
+  - body overflow is re-enabled via App.css body:has(.dza-page) rule
+  - .dza-page must NOT be a scroll container (no overflow-y) so the
+    browser native scroll works on iOS Safari / Android Chrome
+  - overflow-x: clip prevents horizontal bleed without blocking vertical scroll
+*/
 .dza-page {
   min-height: 100dvh;
   background: #0a0a0f;
@@ -13,8 +15,6 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow-x: clip;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* ── NAVBAR ── */

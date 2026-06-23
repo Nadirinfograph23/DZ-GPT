@@ -23,8 +23,10 @@ body {
 body:has(.dzt-app),
 body:has(.dz-home),
 body:has(.le3ba-root),
-body:has(.dms-root) {
+body:has(.dms-root),
+body:has(.dza-page) {
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app {

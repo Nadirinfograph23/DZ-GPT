@@ -1,8 +1,8 @@
 {
-  "commit": "edd17536558aa16ec52fd33ee95001296bb1794d",
-  "commitShort": "edd17536",
+  "commit": "690110b41992bcea9797cf8d6cdc3f4bdfb9da67",
+  "commitShort": "690110b4",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: darija behavior — رد طبيعي بالدارجة لا شرح (few-shot + anti-explain rules)",
-  "deployedAt": "2026-06-22T01:00:04.512959Z",
+  "message": "feat: نظام الوعي الذاتي بالقدرات — Self-Awareness Mode v2.0 | أدوات+وكلاء+مهارات من السجل الحقيقي | /api/capabilities endpoint | 16 وكيل × 18 أداة × 39 مهارة × 7 مزودين",
+  "deployedAt": "2026-06-23T01:03:22.261185Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -23,6 +23,7 @@ const DZRadio        = lazy(() => import('./pages/DZRadio.tsx'))
 const DZMyProjects   = lazy(() => import('./pages/DZMyProjects.tsx'))
 const DZMediaStudio  = lazy(() => import('./pages/DZMediaStudio.tsx'))
 const DZBenchmark    = lazy(() => import('./pages/DZBenchmark.tsx'))
+const DZAbout        = lazy(() => import('./pages/DZAbout.tsx'))
 
 // Loading fallback — dark-themed spinner
 function PageLoader() {
@@ -211,6 +212,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/media"        element={pb('DZ Media Studio', <DZMediaStudio />)} />
             <Route path="/dz-media"     element={<Navigate to="/media" replace />} />
             <Route path="/benchmark"    element={pb('DZ Benchmark',  <DZBenchmark />)} />
+            <Route path="/about"        element={pb('عن DZ Agent',   <DZAbout />)} />
+            <Route path="/about-dz-agent" element={<Navigate to="/about" replace />} />
             <Route path="*"             element={<Navigate to="/" replace />} />
           </Routes>
           </Suspense>

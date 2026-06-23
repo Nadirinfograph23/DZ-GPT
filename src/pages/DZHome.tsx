@@ -268,6 +268,25 @@ const SECTIONS = [
     ),
   },
   {
+    id: 'about-dz',
+    label: 'عن DZ Agent',
+    sublabel: 'لوحة القدرات والوكلاء',
+    path: '/about',
+    gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
+    bgGlow: 'rgba(99,102,241,0.22)',
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="18" stroke="currentColor" strokeWidth="2.5" />
+        <circle cx="24" cy="18" r="5" fill="currentColor" opacity="0.8" />
+        <path d="M15 36c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="36" cy="12" r="4" fill="currentColor" opacity="0.5" />
+        <path d="M34 12h4M36 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.35" />
+        <path d="M10 12h4M12 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.6" />
+      </svg>
+    ),
+  },
+  {
     id: 'certificate',
     label: 'Certificate',
     sublabel: 'شهادة DZ Agent',

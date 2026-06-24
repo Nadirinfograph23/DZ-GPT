@@ -132,7 +132,7 @@ import { mountYouTubeInsight } from './modules/youtube_insight_module/mount.js'
 import { mountCloneEngineV2 } from './modules/clone-engine/mount.js'
 import { mountGitHubSkill } from './lib/skills/mount.js'
 import { mountDzSkills } from './lib/dz-skills/mount.js'
-import { generateAndroidProject, detectAndroidBuildQuery } from './lib/android-builder/index.js'
+import { generateAndroidProject, detectAndroidBuildQuery, extractSiteUrl } from './lib/android-builder/index.js'
 import { mountMetaClaw, injectSkills as metaClawInject } from './lib/skills/dz-metaclaw-skill.js'
 import {
   deployGitHubPages,
@@ -26980,29 +26980,37 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
 
   const safeAppName = appName || task.slice(0, 40).trim() || 'DZ App'
   const safeRepo = (safeAppName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'dz-android-app') + '-android'
+  const detectedSiteUrl = extractSiteUrl(task)
 
   try {
-    // ── STEP 1: Generate web content with AI ────────────────────────────────
-    send({ type: 'step', step: 'web', status: 'running', detail: '🌐 توليد موقع الويب بالذكاء الاصطناعي...' })
-
+    // ── STEP 1: Generate web content OR use site URL directly ───────────────
     let htmlContent = ''
-    try {
-      const aiRes = await safeGenerateAI({
-        messages: [
-          { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
-          { role: 'user', content: `أنشئ تطبيق ويب احترافي لـ: "${task}"\nالنتيجة ستُحمَّل داخل WebView أندرويد — استخدم HTML/CSS/JS كامل في ملف واحد، بدون خطوط خارجية، بدون CDN خارجي، بدون روابط خارجية. كل الأنماط مضمّنة inline.` },
-        ],
-        query: task,
-        max_tokens: 8000,
-        taskHint: 'web-builder',
-      })
-      htmlContent = extractHtmlFromResponse(aiRes.content || '') || aiRes.content || ''
-      send({ type: 'detail', step: 'web', text: `✅ تم توليد الموقع (${Math.round(htmlContent.length / 1024)} KB)` })
-    } catch (aiErr) {
-      send({ type: 'detail', step: 'web', text: `⚠️ AI timeout — استخدام template افتراضي` })
-      htmlContent = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeAppName}</title><style>body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-align:center;padding:20px}h1{font-size:2rem;margin-bottom:1rem}p{opacity:.85}</style></head><body><h1>📱 ${safeAppName}</h1><p>تطبيق مُنشأ بواسطة DZ Agent</p></body></html>`
+    if (detectedSiteUrl) {
+      // وضع "تحويل موقع → تطبيق" — نستخدم الرابط مباشرةً في WebView
+      send({ type: 'step', step: 'web', status: 'running', detail: `🌐 رصد رابط الموقع: ${detectedSiteUrl}` })
+      send({ type: 'detail', step: 'web', text: `✅ التطبيق سيفتح: ${detectedSiteUrl} مباشرةً في WebView` })
+      send({ type: 'step', step: 'web', status: 'done' })
+    } else {
+      // وضع "إنشاء تطبيق جديد" — نولّد HTML بالذكاء الاصطناعي
+      send({ type: 'step', step: 'web', status: 'running', detail: '🌐 توليد موقع الويب بالذكاء الاصطناعي...' })
+      try {
+        const aiRes = await safeGenerateAI({
+          messages: [
+            { role: 'system', content: WEBSITE_BUILDER_SYSTEM_PROMPT },
+            { role: 'user', content: `أنشئ تطبيق ويب احترافي لـ: "${task}"\nالنتيجة ستُحمَّل داخل WebView أندرويد — استخدم HTML/CSS/JS كامل في ملف واحد، بدون خطوط خارجية، بدون CDN خارجي، بدون روابط خارجية. كل الأنماط مضمّنة inline.` },
+          ],
+          query: task,
+          max_tokens: 8000,
+          taskHint: 'web-builder',
+        })
+        htmlContent = extractHtmlFromResponse(aiRes.content || '') || aiRes.content || ''
+        send({ type: 'detail', step: 'web', text: `✅ تم توليد الموقع (${Math.round(htmlContent.length / 1024)} KB)` })
+      } catch (aiErr) {
+        send({ type: 'detail', step: 'web', text: `⚠️ AI timeout — استخدام template افتراضي` })
+        htmlContent = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeAppName}</title><style>body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-align:center;padding:20px}h1{font-size:2rem;margin-bottom:1rem}p{opacity:.85}</style></head><body><h1>📱 ${safeAppName}</h1><p>تطبيق مُنشأ بواسطة DZ Agent</p></body></html>`
+      }
+      send({ type: 'step', step: 'web', status: 'done' })
     }
-    send({ type: 'step', step: 'web', status: 'done' })
 
     // ── STEP 2: Generate Android project files ───────────────────────────────
     send({ type: 'step', step: 'android', status: 'running', detail: '🤖 توليد ملفات مشروع أندرويد...' })
@@ -27012,9 +27020,22 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
       packageName,
       htmlContent,
       themeColor: '#1a73e8',
+      siteUrl: detectedSiteUrl || '',
     })
     send({ type: 'detail', step: 'android', text: `✅ ${projectFiles.length} ملف مُولَّد (Gradle + AndroidManifest + WebView + GitHub Actions)` })
     send({ type: 'step', step: 'android', status: 'done' })
+
+    // ── STEP 2.5: Splash Screen + Icon ───────────────────────────────────────
+    send({ type: 'step', step: 'splash', status: 'running', detail: '🎨 توليد Splash Screen وأيقونة التطبيق...' })
+    const splashFiles = projectFiles.filter(f =>
+      f.path.includes('SplashActivity') ||
+      f.path.includes('activity_splash') ||
+      f.path.includes('ic_launcher') ||
+      f.path.includes('splash_icon_bg') ||
+      f.path.includes('SplashTheme')
+    )
+    send({ type: 'detail', step: 'splash', text: `✅ ${splashFiles.length} ملف للـ Splash Screen والأيقونة (Adaptive Icon + SplashActivity + Layout)` })
+    send({ type: 'step', step: 'splash', status: 'done' })
 
     // ── STEP 3: Create GitHub repo & push files ──────────────────────────────
     send({ type: 'step', step: 'push', status: 'running', detail: `📦 رفع المشروع على GitHub: ${repoOwner}/${safeRepo}...` })

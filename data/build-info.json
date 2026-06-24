@@ -1,8 +1,8 @@
 {
-  "commit": "2dff8c487b6f871bbcaf53f2e406db14476bcd0c",
-  "commitShort": "2dff8c48",
+  "commit": "1c10e5da02c7ef854f8855f4a88326d5446a352f",
+  "commitShort": "1c10e5da",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: Pinterest image search — bypass clarification + detect pinterest keyword + preferredSource routing",
-  "deployedAt": "2026-06-24T19:52:52.757036Z",
+  "message": "restore: DZAgent shows DZDashboard on home screen + HOME button + DZChatBox initialQuery prop",
+  "deployedAt": "2026-06-24T22:41:52.951842Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "3ea056fc66c11f25f5c346e464bf7d6d94b7e881",
-  "commitShort": "3ea056fc",
+  "commit": "d4f1e09c70e7fa09f894e5849c525412ea102137",
+  "commitShort": "d4f1e09c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: Multi-Task Build Engine — website/app builder splits into Blueprint→HTML→CSS→JS→Assembly steps for error-free generation",
-  "deployedAt": "2026-06-24T14:56:58.535449Z",
+  "message": "fix: translation fast-path + fix Pollinations API + update OpenRouter free models",
+  "deployedAt": "2026-06-24T19:49:56.795454Z",
   "deployedBy": "scripts/deploy.py"
 }

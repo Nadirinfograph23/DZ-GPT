@@ -1,8 +1,8 @@
 {
-  "commit": "530e4a8bdb83c3ff0401771168e4eacec11dc544",
-  "commitShort": "530e4a8b",
+  "commit": "09cf9ace4d965f165b5b291db7ac6f0de9108ad9",
+  "commitShort": "09cf9ace",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "restore: DZAgent original UI with DZChatBox welcome screen + BreakingNewsBanner",
-  "deployedAt": "2026-06-24T23:06:43.378042Z",
+  "message": "fix(versionChecker): show update banner on page open after new deploy (localStorage persist)",
+  "deployedAt": "2026-06-24T23:10:44.072500Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -7031,10 +7031,19 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       abortRef.current = new AbortController()
       const signal = abortRef.current.signal
 
-      // ── Image Web Search — شبكة 9 صور حقيقية من الإنترنت ──────────────────────
-      const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)|صورة\s*(?:ل[لـ]?|الـ|لـ|عن|من)|أعطني\s*صور|اعطني\s*صور|أرني\s*صور|ارني\s*صور|وريني\s*صور|عارضلي\s*صور|ابحث\s*عن\s*صور|بحث\s*عن\s*صور|جيبلي\s*صور|fetch\s*images?(?:\s*of)?|show\s*me\s*(?:some\s*)?images?(?:\s*of)?|search\s*(?:for\s*)?images?(?:\s*of)?)\s*\S/i
-      if (IMAGE_FETCH_RE.test(text) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
+      // ── Pinterest Image Search ────────────────────────────────────────────────
+      const PINTEREST_RE = /(?:pinterest|بينتريست|بنتريست)/i
+      const WIKIPEDIA_IMG_RE = /(?:wikipedia|ويكيبيديا|ويكيميديا|wikimedia)/i
+      const IMAGE_FETCH_RE = /(?:^|\s)(?:صور\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)|صورة\s*(?:ل[لـ]?|الـ|لـ|عن|من)|أعطني\s*صور|اعطني\s*صور|أرني\s*صور|ارني\s*صور|وريني\s*صور|عارضلي\s*صور|ابحث\s*عن\s*صور|بحث\s*عن\s*صور|جيبلي\s*صور|fetch\s*images?(?:\s*of)?|show\s*me\s*(?:some\s*)?images?(?:\s*of)?|search\s*(?:for\s*)?images?\s*(?:of)?)\s*\S/i
+      const isPinterestReq = PINTEREST_RE.test(text)
+      const isWikiImgReq   = WIKIPEDIA_IMG_RE.test(text)
+      const imgSource = isPinterestReq ? 'pinterest' : isWikiImgReq ? 'wikipedia' : 'auto'
+      const imgSourceLabel = isPinterestReq ? '📌 Pinterest' : isWikiImgReq ? '📖 Wikipedia' : '🔍 بحث الويب'
+
+      if ((IMAGE_FETCH_RE.test(text) || isPinterestReq) && !IMAGE_REQUEST_RE.test(text) && !dashboardContext) {
         const subject = text
+          .replace(/(?:pinterest|بينتريست|بنتريست)\s*/gi, '')
+          .replace(/(?:wikipedia|ويكيبيديا|ويكيميديا|wikimedia)\s*/gi, '')
           .replace(/^(?:أعطني|اعطني|أرني|ارني|وريني|عارضلي|جيبلي)\s*صور(?:ة)?\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)?\s*/i, '')
           .replace(/^(?:ابحث|بحث)\s*عن\s*صور\s*/i, '')
           .replace(/^(?:صور|صورة)\s*(?:ل[لـ]?|الـ|لـ|عن|من|حول)\s*/i, '')
@@ -7043,14 +7052,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         const loadingId = generateId()
         setMessages(prev => [...prev, {
           id: loadingId, role: 'assistant' as const,
-          content: `🔍 جاري البحث عن صور "${subject}"...`,
+          content: `${imgSourceLabel.split(' ')[0]} جاري البحث عن صور "${subject}" في ${imgSourceLabel}...`,
           richType: 'text' as const, isStreaming: true,
         }])
         try {
-          const imgFetchRes = await fetch(`/api/tools/image-search?q=${encodeURIComponent(subject)}`, { signal })
-          const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }> }
+          const apiUrl = isPinterestReq || isWikiImgReq
+            ? `/api/images/search?q=${encodeURIComponent(subject)}&source=${imgSource}&limit=12`
+            : `/api/tools/image-search?q=${encodeURIComponent(subject)}`
+          const imgFetchRes = await fetch(apiUrl, { signal })
+          const imgFetchData = await imgFetchRes.json() as { results?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }>; images?: Array<{ url: string; title: string; thumbnail?: string; source?: string; sourceUrl?: string; creator?: string }> }
           setMessages(prev => prev.filter(m => m.id !== loadingId))
-          const results = imgFetchData.results || []
+          const results = imgFetchData.results || imgFetchData.images || []
           if (results.length > 0) {
             const fullImgs = results.slice(0, 9).map(r => ({
               url: r.thumbnail || r.url,
@@ -7061,18 +7073,18 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
               creator: r.creator,
             })).filter(r => r.url)
             addAssistantMessage({
-              content: `🔍 **${results.length} صورة لـ "${subject}"** — اضغط للمعاينة`,
+              content: `${imgSourceLabel.split(' ')[0]} **${results.length} صورة لـ "${subject}"** من ${imgSourceLabel} — اضغط للمعاينة`,
               richType: 'imageGrid' as const,
               imageGrid: fullImgs.map(i => i.url),
               imageGridFull: fullImgs,
               imagePrompt: subject,
-              imageModel: 'بحث الويب',
+              imageModel: imgSourceLabel,
               imageStyle: 'web',
               quickSuggestions: [`صور أخرى لـ ${subject}`, `ارسم ${subject} بالذكاء الاصطناعي`, `معلومات عن ${subject}`],
             })
           } else {
             addAssistantMessage({
-              content: `⚠️ لم أجد صوراً لـ "${subject}" على الإنترنت.\nيمكنك توليد صورة بالذكاء الاصطناعي بدلاً من ذلك.`,
+              content: `⚠️ لم أجد صوراً لـ "${subject}" في ${imgSourceLabel}.\nيمكنك توليد صورة بالذكاء الاصطناعي بدلاً من ذلك.`,
               richType: 'text' as const,
               quickSuggestions: [`ارسم ${subject}`, `توليد صورة ${subject}`, `إنشاء صورة ${subject}`],
             })
@@ -9550,9 +9562,6 @@ ${rows}
                                     }}
                                     loading="lazy"
                                   />
-                                  <span className="dzc-source-name">
-                                    {src.label.length > 16 ? src.label.slice(0, 15) + '…' : src.label}
-                                  </span>
                                 </a>
                               ))}
                             </div>

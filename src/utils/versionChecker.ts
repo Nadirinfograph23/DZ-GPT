@@ -6,8 +6,9 @@
  *  3. registration.updatefound — يكشف SW جديد فور بدء تحميله
  */
 
-const POLL_INTERVAL_MS = 45 * 1000
-const BANNER_ID        = 'dz-update-banner'
+const POLL_INTERVAL_MS  = 45 * 1000
+const BANNER_ID         = 'dz-update-banner'
+const LAST_COMMIT_KEY   = 'dz-last-known-commit'
 
 let _lastCommit: string | null = null
 let _pollTimer: ReturnType<typeof setInterval> | null = null
@@ -131,6 +132,9 @@ async function forceUpdate() {
   // 4. سجّل وقت التحديث لمنع ظهور البانر مجدداً بعد الـ reload
   sessionStorage.setItem(JUST_UPDATED_KEY, String(Date.now()))
 
+  // 5. حدّث آخر commit معروف في localStorage حتى لا يظهر البانر مجدداً بعد الـ reload
+  if (_lastCommit) localStorage.setItem(LAST_COMMIT_KEY, _lastCommit)
+
   // 5. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
   const base = window.location.href.split('?')[0].split('#')[0]
   window.location.replace(base + '?v=' + Date.now())
@@ -141,7 +145,17 @@ async function checkForUpdate() {
   if (!commit) return
 
   if (_lastCommit === null) {
+    // أول استدعاء في هذه الجلسة — قارن مع آخر commit محفوظ بين الجلسات
     _lastCommit = commit
+    const stored = localStorage.getItem(LAST_COMMIT_KEY)
+    if (stored && stored !== commit) {
+      // فتح الصفحة بعد نشر جديد → أظهر البانر فوراً
+      console.log(`[VersionChecker] 🆕 New version since last session: ${stored} → ${commit}`)
+      showUpdateBanner()
+    } else if (!stored) {
+      // أول زيارة على الإطلاق — احفظ فقط
+      localStorage.setItem(LAST_COMMIT_KEY, commit)
+    }
     return
   }
 

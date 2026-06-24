@@ -1,8 +1,8 @@
 {
-  "commit": "09cf9ace4d965f165b5b291db7ac6f0de9108ad9",
-  "commitShort": "09cf9ace",
+  "commit": "7456f8007c73fb5f074da8e6f3df31336984e254",
+  "commitShort": "7456f800",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(versionChecker): show update banner on page open after new deploy (localStorage persist)",
-  "deployedAt": "2026-06-24T23:10:44.072500Z",
+  "message": "feat(ui): red blinking trash button on chat list items",
+  "deployedAt": "2026-06-24T23:11:43.558947Z",
   "deployedBy": "scripts/deploy.py"
 }

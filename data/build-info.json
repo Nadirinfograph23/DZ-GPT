@@ -1,8 +1,8 @@
 {
-  "commit": "d1cc0202ef7a740e8053f47c34de28c1fdd27fa7",
-  "commitShort": "d1cc0202",
+  "commit": "ad399ddc0428239a0dd53af0ad65bebeb86f534f",
+  "commitShort": "ad399ddc",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(ui): replace blue-tinted dark backgrounds with neutral dark gray (#111, #1a1a1a, #141414)",
-  "deployedAt": "2026-06-24T23:15:28.233412Z",
+  "message": "fix: source icons-only (no text) + Pinterest routing to /api/images/search + source chips CSS",
+  "deployedAt": "2026-06-24T23:58:18.738573Z",
   "deployedBy": "scripts/deploy.py"
 }

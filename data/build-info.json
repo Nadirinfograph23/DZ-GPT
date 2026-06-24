@@ -1,8 +1,8 @@
 {
-  "commit": "3c4226364caffc77f634b880e75d3d3749faa365",
-  "commitShort": "3c422636",
+  "commit": "530e4a8bdb83c3ff0401771168e4eacec11dc544",
+  "commitShort": "530e4a8b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(ui): square prayer cards, bug btn on mobile, BreakingNewsBanner, dashboard scroll",
-  "deployedAt": "2026-06-24T22:54:05.720106Z",
+  "message": "restore: DZAgent original UI with DZChatBox welcome screen + BreakingNewsBanner",
+  "deployedAt": "2026-06-24T23:06:43.378042Z",
   "deployedBy": "scripts/deploy.py"
 }

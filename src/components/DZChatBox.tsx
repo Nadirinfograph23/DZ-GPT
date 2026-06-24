@@ -32,6 +32,7 @@ import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
 import { trackFeatureUsage, withRetry } from '../utils/dzMemory'
 import AgentModeBar, { type AgentModeState } from './AgentModeBar'
+import '../styles/dz-chatbox.css'
 
 // ===== RATING PERSISTENCE =====
 // ===== THINKING TRACE TYPES =====

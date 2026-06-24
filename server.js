@@ -179,7 +179,7 @@ import {
 import { detectIntent as detectSmartIntent, getTaskRoutingHint } from './lib/intent.js'
 import { detectAgentMode, buildResearchBlockedResponse } from './lib/dz-agent-mode.js'
 import { detectHealthIntent, buildHealthSystemPrompt, parseHealthResponse, buildKBFallbackResponse, getRelatedDZKnowledge } from './lib/dz-health-agent.js'
-import { searchImages, isImageSearchQuery, formatImageSearchResponse } from './lib/image-search/index.js'
+import { searchImages, isImageSearchQuery, formatImageSearchResponse, classifyImageQuery } from './lib/image-search/index.js'
 import { detectAmbiguity, formatClarification, detectPersonAmbiguity, isSourceAttributionQuery } from './lib/smart-clarify.js'
 import {
   runVerificationChain,
@@ -31477,6 +31477,48 @@ try {
 // ══════════════════════════════════════════════════════════════════════
 // DZ TOOLS — IMAGE SEARCH & VISUAL AI ENDPOINTS (available on Vercel too)
 // ══════════════════════════════════════════════════════════════════════
+
+// ── GET /api/images/search — Pinterest + Wikipedia Smart Image Search ─────────
+// يستقبل: ?q=query&source=auto|pinterest|wikipedia|mixed&limit=10
+app.get('/api/images/search', async (req, res) => {
+  const q = sanitizeString(String(req.query.q || ''), 300).trim()
+  if (!q) return res.status(400).json({ error: 'query required', images: [] })
+
+  const rawSource = String(req.query.source || 'auto').toLowerCase()
+  const limit = Math.min(parseInt(req.query.limit || '10', 10) || 10, 30)
+
+  // تصنيف ذكي تلقائي إذا كان المصدر 'auto'
+  let preferredSource = null
+  let classification = null
+  if (rawSource === 'auto') {
+    classification = classifyImageQuery(q)
+    preferredSource = classification.source
+  } else if (['pinterest', 'wikipedia', 'mixed'].includes(rawSource)) {
+    preferredSource = rawSource
+  }
+
+  console.log(`[/api/images/search] q="${q.slice(0,60)}" source=${preferredSource} limit=${limit}`)
+
+  try {
+    const result = await searchImages({
+      query: q,
+      limit,
+      preferredSource,
+    })
+
+    return res.json({
+      images: result.images,
+      query: result.query,
+      originalQuery: result.originalQuery,
+      total: result.total,
+      preferredSource: result.preferredSource,
+      classification: classification || { source: preferredSource, category: rawSource, confidence: 100 },
+    })
+  } catch (err) {
+    console.error('[/api/images/search] Error:', err.message)
+    return res.status(500).json({ error: 'image search failed', images: [] })
+  }
+})
 
 // GET /api/tools/image-search?q=... — multi-source: Openverse + Wikimedia Commons fallback
 app.get('/api/tools/image-search', async (req, res) => {

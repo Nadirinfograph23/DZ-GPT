@@ -18051,6 +18051,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isHistoricalGovQuery(lastUserMessage) ||
     // BYPASS: Minister / president queries (current government)
     isMinisterQuery(lastUserMessage) ||
+    // BYPASS: Image search requests — always actionable, sent directly to search engine
+    isImageSearchQuery(lastUserMessage) ||
+    /(?:pinterest|بينتريست|بنتريست)\s*(?:صور|images?|photos?)?/i.test(lastUserMessage) ||
+    /(?:صور|images?|photos?)\s*(?:من|في|على|from|on)?\s*(?:pinterest|بينتريست)/i.test(lastUserMessage) ||
+    /(?:ابحث|بحث|جيب|دور|حوس|search|find|get|show)\s*.{0,20}(?:pinterest|بينتريست|بالصور|الصور)/i.test(lastUserMessage) ||
     // BYPASS: Translation requests — always actionable, sent directly to LLM
     /^(?:ترجم|ترجمة|translate|traduire|übersetzen|traducir)\b/i.test(lastUserMessage.trim()) ||
     /(?:ترجم(?:لي|لنا)?|ترجم\s+هذ|ترجم\s+الجملة|ترجم\s+النص|ترجم\s+إلى|ترجم\s+الى|translate\s+(?:to|this|the)|traduire\s+en|انقل\s+(?:هذا|هذه|النص)\s+(?:إلى|الى))/i.test(lastUserMessage) ||
@@ -19025,14 +19030,20 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ── Image Search Engine — بحث عن صور حقيقية (≠ توليد) ───────────────────
-  // يُفعَّل عند: جيبلي صورة / ابحث عن صورة / find photo / show me image...
+  // يُفعَّل عند: جيبلي صورة / ابحث عن صورة / find photo / show me image / pinterest...
   if (isImageSearchQuery(lastUserMessage)) {
-    console.log(`[ImageSearch] Detected: "${lastUserMessage.slice(0, 80)}"`)
+    // كشف المصدر المطلوب صراحةً (Pinterest / Wikipedia / auto)
+    const _isPinterestReq = /(?:pinterest|بينتريست|بنتريست)/i.test(lastUserMessage)
+    const _isWikiReq = /(?:ويكيبيديا|wikipedia|موسوعي|تاريخي|علمي)/i.test(lastUserMessage)
+    const _imgPreferredSource = _isPinterestReq ? 'pinterest' : _isWikiReq ? 'wikipedia' : 'auto'
+    const _imgSourceLabel = _isPinterestReq ? '📌 Pinterest' : _isWikiReq ? '📖 Wikipedia' : '🔍 Auto'
+    console.log(`[ImageSearch] Detected: "${lastUserMessage.slice(0, 80)}" | source=${_imgPreferredSource}`)
     try {
       const imgResult = await searchImages({
         query: lastUserMessage,
         aiGenerate: safeGenerateAI,
-        limit: 6,
+        limit: 8,
+        preferredSource: _imgPreferredSource,
       })
       const content = formatImageSearchResponse({
         images: imgResult.images,
@@ -19044,6 +19055,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
         content,
         mode: 'image-search',
         _imageSearch: true,
+        imageSource: _imgPreferredSource,
         images: imgResult.images,
         totalFound: imgResult.total,
       })

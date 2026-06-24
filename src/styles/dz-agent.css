@@ -1,0 +1,454 @@
+/* ═══════════════════════════════════════════════════════
+   DZ Agent — Main Layout Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* Layout */
+.dza-layout {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #0a0a0f;
+  color: #e8eaf6;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  position: relative;
+}
+
+.dza-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.dza-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+
+/* Header */
+.dz-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 15, 25, 0.95);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  gap: 0.75rem;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.dz-agent-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.dz-agent-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Logo */
+.dz-agent-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.dz-agent-logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.dz-agent-logo-icon--anim-pulse {
+  animation: dza-pulse 1.5s ease-in-out infinite;
+}
+
+.dz-agent-logo-icon--anim-spin {
+  animation: dza-spin 1s linear infinite;
+}
+
+@keyframes dza-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(99, 102, 241, 0.8); }
+}
+
+@keyframes dza-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.dz-agent-logo-flag {
+  font-size: 1.1rem;
+}
+
+.dz-agent-logo-spark {
+  color: #fbbf24;
+  animation: dza-pulse 2s ease-in-out infinite;
+}
+
+.dz-agent-logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.dz-agent-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e8eaf6;
+  letter-spacing: 0.02em;
+}
+
+.dz-agent-tagline {
+  font-size: 0.6rem;
+  color: #6366f1;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dz-agent-badge {
+  font-size: 0.6rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+/* Repo pill */
+.dz-agent-repo-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  max-width: 200px;
+  overflow: hidden;
+}
+
+.dz-agent-repo-dot {
+  color: #22c55e;
+  font-size: 0.6rem;
+  flex-shrink: 0;
+}
+
+.dz-agent-repo-name {
+  font-size: 0.7rem;
+  color: #a5b4fc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dz-agent-repo-name--scroll {
+  animation: dza-scroll 8s linear infinite;
+}
+
+@keyframes dza-scroll {
+  0%, 20% { transform: translateX(0); }
+  80%, 100% { transform: translateX(-60%); }
+}
+
+/* Sidebar */
+.dza-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.dza-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dza-sidebar-logo-flag {
+  font-size: 1.3rem;
+}
+
+.dza-sidebar-logo-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e8eaf6;
+}
+
+.dza-sidebar-logo-sub {
+  font-size: 0.6rem;
+  color: #6366f1;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dza-sidebar-spark {
+  color: #fbbf24;
+}
+
+.dza-sidebar-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s, background 0.2s;
+}
+
+.dza-sidebar-close:hover {
+  color: #e8eaf6;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Chat list */
+.dza-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dza-chat-list-empty {
+  text-align: center;
+  color: #475569;
+  font-size: 0.8rem;
+  padding: 2rem 1rem;
+}
+
+.dza-chat-item-icon {
+  flex-shrink: 0;
+  color: #6366f1;
+}
+
+.dza-chat-item-title {
+  flex: 1;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dza-chat-item-del {
+  background: transparent;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+/* Buttons */
+.dza-new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.dza-new-chat-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.dza-menu-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s, background 0.2s;
+}
+
+.dza-menu-btn:hover {
+  color: #e8eaf6;
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.dza-refresh-chat-btn {
+  background: transparent;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.dza-refresh-chat-btn:hover {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* Language selector */
+.dza-lang-selector {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.dza-lang-selector--row {
+  flex-direction: row;
+}
+
+.dza-lang-flag {
+  font-size: 0.9rem;
+}
+
+.dza-lang-code {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Report issue */
+.dza-report-issue-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.dza-report-issue-btn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.dza-report-issue-icon {
+  flex-shrink: 0;
+}
+
+/* Header bug button */
+.dza-header-bug-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dza-header-bug-btn:hover {
+  background: rgba(251, 191, 36, 0.08);
+}
+
+/* Theme */
+.dza-theme-section {
+  padding: 0.75rem 1rem;
+}
+
+.dza-theme-section-label {
+  font-size: 0.7rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.dza-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.dza-theme-color {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.dza-theme-color:hover {
+  transform: scale(1.05);
+}
+
+.dza-theme-name {
+  font-size: 0.65rem;
+  color: #64748b;
+  text-align: center;
+  margin-top: 0.2rem;
+}
+
+/* Notification header slot */
+.dzn-header-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Scrollbar */
+.dza-chat-list::-webkit-scrollbar {
+  width: 4px;
+}
+.dza-chat-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dza-chat-list::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 2px;
+}

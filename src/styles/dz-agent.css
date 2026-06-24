@@ -174,6 +174,71 @@
   80%, 100% { transform: translateX(-60%); }
 }
 
+/* ── SIDEBAR BASE ── */
+.dza-sidebar {
+  width: 240px;
+  background: #0d0d1a;
+  border-right: 1px solid rgba(99, 102, 241, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0 0.75rem;
+  flex-shrink: 0;
+  z-index: 50;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+
+/* On mobile the sidebar is a fixed drawer, hidden off-screen by default */
+@media (max-width: 768px) {
+  .dza-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+  .dza-sidebar--open {
+    transform: translateX(0);
+  }
+}
+
+/* ── SIDEBAR LOGO ICON ── */
+.dza-sidebar-logo-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1rem;
+  position: relative;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.dza-sidebar-logo-icon--anim-flip-out {
+  transform: rotateY(90deg);
+  transition: transform 0.25s ease-in;
+}
+.dza-sidebar-logo-icon--anim-flag {
+  transform: rotateY(0deg);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.4rem;
+}
+.dza-sidebar-logo-icon--anim-flip-in {
+  transform: rotateY(-90deg);
+  transition: transform 0.25s ease-in;
+}
+.dza-sidebar-logo-icon--anim-idle {
+  transform: rotateY(0deg);
+}
+
 /* Sidebar */
 .dza-sidebar-header {
   display: flex;
@@ -269,6 +334,71 @@
   transition: opacity 0.2s, color 0.2s;
   display: flex;
   align-items: center;
+}
+
+/* ── LANGUAGE BUTTONS ── */
+.dza-lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: transparent;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 7px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.dza-lang-btn--compact {
+  padding: 0.25rem 0.4rem;
+}
+.dza-lang-btn:hover {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.dza-lang-btn--active {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+/* ── THEME SWATCH ── */
+.dza-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0.2rem;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.dza-theme-swatch:hover { transform: scale(1.06); border-color: rgba(255,255,255,0.15); }
+.dza-theme-swatch--active { border-color: rgba(99, 102, 241, 0.6); }
+
+/* ── CHAT ITEMS ── */
+.dza-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+.dza-chat-item:hover {
+  background: rgba(99, 102, 241, 0.07);
+  border-color: rgba(99, 102, 241, 0.12);
+}
+.dza-chat-item:hover .dza-chat-item-del { opacity: 1; }
+.dza-chat-item--active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.2);
 }
 
 /* Buttons */
@@ -439,6 +569,92 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* ── RESPONSIVE — MOBILE ── */
+@media (max-width: 768px) {
+  /* Prevent horizontal scroll bleed on mobile */
+  .dza-layout { overflow-x: hidden; }
+
+  /* ---- Header ---- */
+  .dz-agent-header {
+    padding: 0.45rem 0.6rem;
+    gap: 0.3rem;
+    min-height: 50px;
+  }
+
+  /* Logo text: smaller, no tagline */
+  .dz-agent-name { font-size: 0.82rem; }
+  .dz-agent-tagline { display: none; }
+
+  /* Logo icon: smaller */
+  .dz-agent-logo-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+  }
+
+  /* Hide low-priority header items to reduce crowding */
+  .dz-agent-badge { display: none; }
+  .dza-header-bug-btn { display: none; }
+  .dz-refresh-chat-btn { display: none; }
+
+  /* Notifications: compact */
+  .dzn-header-slot { flex-shrink: 0; }
+
+  /* Repo pill: shorter on mobile */
+  .dz-agent-repo-pill {
+    max-width: 90px;
+    padding: 0.15rem 0.4rem;
+  }
+
+  /* ---- Sidebar drawer (mobile) ---- */
+  .dza-sidebar-header { padding: 0.7rem 0.75rem; }
+
+  .dza-lang-selector--row {
+    justify-content: center;
+    padding: 0 0.5rem;
+  }
+  .dza-lang-btn--compact { flex: 1; justify-content: center; }
+
+  .dza-theme-grid { gap: 0.25rem; }
+  .dza-theme-color { border-radius: 6px; }
+
+  .dza-report-issue-btn {
+    margin: 0 0.75rem;
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .dza-new-chat-btn {
+    margin: 0 0.75rem;
+    justify-content: center;
+  }
+
+  /* ---- Chat input area on mobile ---- */
+  .dz-input-area { padding: 0.4rem 0.5rem 0.3rem; }
+  .dz-disclaimer { font-size: 0.62rem; }
+
+  /* ---- Welcome screen on mobile ---- */
+  .dz-welcome { padding: 1rem 0.75rem 0.5rem; gap: 0.6rem; }
+  .dz-welcome-icon { width: 44px; height: 44px; border-radius: 12px; }
+  .dz-welcome-title { font-size: 1.1rem; }
+  .dz-welcome-sub { font-size: 0.78rem; }
+
+  /* Quick actions: 2 columns on mobile */
+  .dz-quick-actions {
+    grid-template-columns: 1fr 1fr;
+    display: grid;
+    gap: 0.4rem;
+  }
+  .dz-qa-btn { max-width: none; }
+
+  /* Messages on mobile */
+  .dz-messages { padding: 0.75rem 0.5rem 0.5rem; }
+  .dz-message--assistant .dz-message-body { max-width: 100%; }
+  .dz-message--user .dz-message-body { max-width: 92%; }
+  .dz-message-text { font-size: 0.85rem; padding: 0.55rem 0.7rem; }
+  .dz-avatar { width: 28px; height: 28px; }
 }
 
 /* Scrollbar */

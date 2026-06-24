@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, AlertTriangle, Home } from 'lucide-react'
+import { Sparkles, Bot, Plus, Trash2, MessageSquare, Menu, X, RefreshCw, AlertTriangle } from 'lucide-react'
 import DZChatBox from '../components/DZChatBox'
-import DZDashboard from '../components/DZDashboard'
 import DZNotifications from '../components/DZNotifications'
 import BugReportModal from '../components/BugReportModal'
 import BreakingNewsBanner from '../components/BreakingNewsBanner'
@@ -67,8 +65,8 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
 }
 
+
 export default function DZAgent() {
-  const navigate = useNavigate()
   const [logoAnim, setLogoAnim] = useState<'idle' | 'flip-out' | 'flag' | 'flip-in'>('idle')
   const [activeRepo, setActiveRepo] = useState<string>('')
   const [chats, setChats] = useState<DZChat[]>(() => {
@@ -92,7 +90,6 @@ export default function DZAgent() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [bugReportOpen, setBugReportOpen] = useState(false)
-  const [pendingQuery, setPendingQuery] = useState<string | null>(null)
 
   useEffect(() => {
     try { localStorage.setItem('dz-agent-chats', JSON.stringify(chats)) } catch {}
@@ -129,7 +126,6 @@ export default function DZAgent() {
     setChats(prev => [chat, ...prev])
     setActiveChatId(chat.id)
     setSidebarOpen(false)
-    setPendingQuery(null)
   }, [language])
 
   const deleteChat = useCallback((id: string, e: React.MouseEvent) => {
@@ -141,18 +137,6 @@ export default function DZAgent() {
 
   const handleTitleChange = useCallback((chatId: string, title: string) => {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c))
-  }, [])
-
-  const handleDashboardSend = useCallback((query: string) => {
-    const chat: DZChat = {
-      id: generateId(),
-      title: query.substring(0, 60),
-      createdAt: Date.now(),
-    }
-    setChats(prev => [chat, ...prev])
-    setActiveChatId(chat.id)
-    setPendingQuery(query)
-    setSidebarOpen(false)
   }, [])
 
   const labels = LABELS[language]
@@ -184,6 +168,20 @@ export default function DZAgent() {
             <X size={18} />
           </button>
         </div>
+
+        <button
+          className="dza-report-issue-btn"
+          onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
+          title="الإبلاغ عن مشكلة"
+        >
+          <AlertTriangle size={15} className="dza-report-issue-icon" />
+          <span>الإبلاغ عن مشكلة</span>
+        </button>
+
+        <button className="dza-new-chat-btn" onClick={createNewChat}>
+          <Plus size={16} />
+          <span>{labels.newChat}</span>
+        </button>
 
         <div className="dza-lang-selector dza-lang-selector--row">
           {LANGUAGES.map(lang => (
@@ -217,20 +215,6 @@ export default function DZAgent() {
           </div>
         </div>
 
-        <button className="dza-new-chat-btn" onClick={createNewChat}>
-          <Plus size={16} />
-          <span>{labels.newChat}</span>
-        </button>
-
-        <button
-          className="dza-report-issue-btn"
-          onClick={() => { setBugReportOpen(true); setSidebarOpen(false) }}
-          title="الإبلاغ عن مشكلة"
-        >
-          <AlertTriangle size={15} className="dza-report-issue-icon" />
-          <span>الإبلاغ عن مشكلة</span>
-        </button>
-
         <div className="dza-chat-list">
           {chats.length === 0 ? (
             <div className="dza-chat-list-empty">{labels.noChats}</div>
@@ -254,6 +238,8 @@ export default function DZAgent() {
             ))
           )}
         </div>
+
+
       </div>
 
       {sidebarOpen && <div className="dza-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -265,19 +251,7 @@ export default function DZAgent() {
             <button className="dza-menu-btn" onClick={() => setSidebarOpen(true)} title="Menu">
               <Menu size={18} />
             </button>
-            <button
-              className="dza-home-btn"
-              onClick={() => navigate('/')}
-              title="الرئيسية"
-              aria-label="الرئيسية"
-            >
-              <Home size={18} />
-            </button>
-            <button
-              className="dz-refresh-chat-btn"
-              onClick={() => setActiveChatId(null)}
-              title="لوحة التحكم"
-            >
+            <button className="dz-refresh-chat-btn" onClick={createNewChat} title={labels.newChat}>
               <RefreshCw size={18} />
             </button>
           </div>
@@ -324,20 +298,13 @@ export default function DZAgent() {
         </header>
 
         <div className="dz-agent-body">
-          {activeChatId ? (
-            <DZChatBox
-              key={activeChatId}
-              chatId={activeChatId}
-              language={language}
-              initialQuery={pendingQuery ?? undefined}
-              onTitleChange={(title) => handleTitleChange(activeChatId, title)}
-              onAgentModeChange={(s: AgentModeState) => setActiveRepo(s.active && s.selectedRepo ? s.selectedRepo : '')}
-            />
-          ) : (
-            <DZDashboard
-              onSend={handleDashboardSend}
-            />
-          )}
+          <DZChatBox
+            key={activeChatId || 'no-chat'}
+            chatId={activeChatId}
+            language={language}
+            onTitleChange={activeChatId ? (title) => handleTitleChange(activeChatId, title) : undefined}
+            onAgentModeChange={(s: AgentModeState) => setActiveRepo(s.active && s.selectedRepo ? s.selectedRepo : '')}
+          />
         </div>
       </div>
     </div>

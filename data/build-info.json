@@ -1,8 +1,8 @@
 {
-  "commit": "f315a2bd8b7b65faf5274fa415250ba67aaf3668",
-  "commitShort": "f315a2bd",
+  "commit": "4c43888251eec41fa41c19ec8e111f3b630e6b1f",
+  "commitShort": "4c438882",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add Splash Screen + Adaptive Icon to Android builder",
-  "deployedAt": "2026-06-24T11:02:05.753928Z",
+  "message": "feat: Multi-Intent Question Understanding Engine v1.2 — 100/100 tests passed, auto-answers ALL questions in multi-question messages",
+  "deployedAt": "2026-06-24T14:39:34.434946Z",
   "deployedBy": "scripts/deploy.py"
 }

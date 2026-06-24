@@ -5,6 +5,7 @@ import DZChatBox from '../components/DZChatBox'
 import DZDashboard from '../components/DZDashboard'
 import DZNotifications from '../components/DZNotifications'
 import BugReportModal from '../components/BugReportModal'
+import BreakingNewsBanner from '../components/BreakingNewsBanner'
 import type { AgentModeState } from '../components/AgentModeBar'
 import '../styles/dz-agent.css'
 import '../styles/dzc-youtube.css'
@@ -344,6 +345,8 @@ export default function DZAgent() {
       {bugReportOpen && (
         <BugReportModal theme={theme} onClose={() => setBugReportOpen(false)} />
       )}
+
+      <BreakingNewsBanner />
     </>
   )
 }

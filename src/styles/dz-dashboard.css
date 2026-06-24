@@ -447,11 +447,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: var(--dzd-card-bg);
   border: 1px solid var(--dzd-card-border);
   border-radius: 14px;
-  padding: 14px 6px;
+  padding: 10px 6px;
+  aspect-ratio: 1;
   text-align: center;
   transition: all .18s;
   cursor: default;

@@ -439,6 +439,23 @@
   background: rgba(99, 102, 241, 0.1);
 }
 
+.dza-home-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s, background 0.2s;
+}
+
+.dza-home-btn:hover {
+  color: #c8ff00;
+  background: rgba(200, 255, 0, 0.08);
+}
+
 .dza-refresh-chat-btn {
   background: transparent;
   border: 1px solid rgba(99, 102, 241, 0.2);

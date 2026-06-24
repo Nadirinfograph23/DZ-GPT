@@ -4000,6 +4000,7 @@ interface DZChatBoxProps {
   onTitleChange?: (title: string) => void
   onAgentModeChange?: (state: AgentModeState) => void
   cerebrasKey?: string
+  initialQuery?: string
 }
 
 type DashboardContext = { priority: 'weather'; city: string; cityAr?: string }
@@ -4193,7 +4194,7 @@ const TickerText = memo(function TickerText() {
   )
 })
 
-export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange, cerebrasKey }: DZChatBoxProps) {
+export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange, cerebrasKey, initialQuery }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
     if (!chatId) return []
@@ -8087,6 +8088,13 @@ ${rows}
       abortRef.current = null
     }
   }, [messages, isLoading, githubToken, addAssistantMessage])
+
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim()) {
+      const t = setTimeout(() => sendMessage(initialQuery.trim()), 120)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

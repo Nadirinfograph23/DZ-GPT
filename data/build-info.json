@@ -1,8 +1,8 @@
 {
-  "commit": "3cc0870f94c7ad0a5ce917ad6602c2c76e6481fe",
-  "commitShort": "3cc0870f",
+  "commit": "f315a2bd8b7b65faf5274fa415250ba67aaf3668",
+  "commitShort": "f315a2bd",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: mobile scroll — add dza-page to body overflow:auto exceptions in App.css",
-  "deployedAt": "2026-06-23T01:57:05.657020Z",
+  "message": "feat: add Splash Screen + Adaptive Icon to Android builder",
+  "deployedAt": "2026-06-24T11:02:05.753928Z",
   "deployedBy": "scripts/deploy.py"
 }

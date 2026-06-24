@@ -1,8 +1,8 @@
 {
-  "commit": "7456f8007c73fb5f074da8e6f3df31336984e254",
-  "commitShort": "7456f800",
+  "commit": "d1cc0202ef7a740e8053f47c34de28c1fdd27fa7",
+  "commitShort": "d1cc0202",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat(ui): red blinking trash button on chat list items",
-  "deployedAt": "2026-06-24T23:11:43.558947Z",
+  "message": "fix(ui): replace blue-tinted dark backgrounds with neutral dark gray (#111, #1a1a1a, #141414)",
+  "deployedAt": "2026-06-24T23:15:28.233412Z",
   "deployedBy": "scripts/deploy.py"
 }

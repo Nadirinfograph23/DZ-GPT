@@ -233,6 +233,7 @@ import {
 import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZClarification, mapDarijaIntent } from './lib/dz-intent-classifier.js'
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
 import { isEntityDefinitionQuery, isExplicitNewsQuery } from './lib/entity-question-guard.js'
+import { analyzeMultiIntent, buildMultiIntentSystemLayer, verifyCompleteness, buildRetryInstruction, logMultiIntentAnalysis } from './lib/multi-intent-engine.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
@@ -24193,6 +24194,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     ? `\n⚠️ قاعدة اللغة للاقتصاد والأخبار: أجب دائماً بالعربية — حتى لو السؤال بالفرنسية أو الإنجليزية.`
     : ''
 
+  // ══════════════════════════════════════════════════════════════════════
+  // 🧠 MULTI-INTENT ENGINE — تحليل النوايا المتعددة قبل استدعاء LLM
+  // يكتشف الأسئلة والمهام المتعددة في رسالة واحدة ويبني طبقة system prompt
+  // خاصة تضمن الإجابة عن كل سؤال بدون تجاهل أي منها
+  // ══════════════════════════════════════════════════════════════════════
+  const _multiIntentAnalysis = analyzeMultiIntent(lastUserMessage)
+  const _multiIntentLayer    = buildMultiIntentSystemLayer(_multiIntentAnalysis)
+  logMultiIntentAnalysis(_multiIntentAnalysis)
+  // ══════════════════════════════════════════════════════════════════════
+
   const systemPrompt = [
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
@@ -24450,6 +24461,8 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     _decisionTreeContext || '',
     // ── RETRY HINT — يُطبَّق فقط عند إعادة المحاولة ──────────────────────────
     _isRetry ? `\n🔄 RETRY MODE (seed=${_retrySeed}): المستخدم طلب إجابة مختلفة. قدّم نهجاً بديلاً أو معلومات تكميلية أو زاوية مغايرة عن إجابتك السابقة. لا تكرر نفس الإجابة. كن أكثر تفصيلاً أو ابدأ من منظور مختلف.` : '',
+    // ── MULTI-INTENT LAYER — حقن طبقة الأسئلة المتعددة عند الكشف عنها ────────
+    _multiIntentLayer || '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -24598,17 +24611,25 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // Smart token budget — avoid paying 3000 tokens for a simple greeting
   const _chatArabicN = (lastUserMessage.match(/[\u0600-\u06FF]/g) || []).length
   const _chatHasComplexKw = /شرح|اكتب|أنشئ|انشئ|برمجة|كود|خطة|حلّل|قارن|generate|create|write|code|موقع|website/.test(lastUserMessage)
-  const _chatTokens = (
-    _queryComplexity === 'multi_step' ? 4000 :
-    _queryComplexity === 'complex'    ? 3000 :
-    (_chatArabicN > 15 || _chatHasComplexKw || lastUserMessage.length > 80) ? 2000 :
-    lastUserMessage.length > 30 ? 1200 : 700
+  // ── رفع سقف الـ tokens تلقائياً عند وجود أسئلة متعددة ────────────────────
+  const _multiIntentTokenBoost = _multiIntentAnalysis.isMulti
+    ? Math.min(_multiIntentAnalysis.taskCount * 600, 3000)
+    : 0
+
+  const _chatTokens = Math.min(
+    (
+      _queryComplexity === 'multi_step' ? 4000 :
+      _queryComplexity === 'complex'    ? 3000 :
+      (_chatArabicN > 15 || _chatHasComplexKw || lastUserMessage.length > 80) ? 2000 :
+      lastUserMessage.length > 30 ? 1200 : 700
+    ) + _multiIntentTokenBoost,
+    6000  // الحد الأقصى المطلق
   )
 
   const aiResult = await safeGenerateAI({
     messages: _halMessages,
     query: lastUserMessage,
-    max_tokens: _isRetry ? Math.min(_chatTokens + 500, 4000) : _chatTokens,
+    max_tokens: _isRetry ? Math.min(_chatTokens + 500, 6000) : _chatTokens,
     taskHint: _taskHint,
     temperature: _isRetry ? 0.85 : undefined,
   })
@@ -24719,6 +24740,39 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
         console.warn('[HAL-L5] enrichment error (non-fatal):', _halErr.message)
       }
     }
+
+    // ── MULTI-INTENT VERIFICATION — تحقق من اكتمال الإجابة للأسئلة المتعددة ─
+    if (_multiIntentAnalysis.isMulti && _bestContent) {
+      const _verify = verifyCompleteness(_bestContent, _multiIntentAnalysis)
+      logMultiIntentAnalysis(_multiIntentAnalysis, _verify)
+
+      // إذا فشل التحقق → محاولة واحدة إضافية بـ retry instruction مدمج مع الإجابة الناقصة
+      if (!_verify.passed && !_isRetry) {
+        try {
+          const _retryHint = buildRetryInstruction(_verify, _multiIntentAnalysis)
+          const _retryMessages = [
+            ...reasonedMessages.slice(0, -1),  // كل الرسائل ما عدا الأخيرة
+            {
+              role: 'user',
+              content: `${lastUserMessage}\n\n${_retryHint}`,
+            },
+          ]
+          const _multiRetryResult = await safeGenerateAI({
+            messages: _retryMessages,
+            query: lastUserMessage,
+            max_tokens: Math.min(_chatTokens + 1000, 6000),
+            taskHint: 'multilingual',
+          })
+          if (_multiRetryResult?.content && _multiRetryResult.content.length > (_bestContent?.length || 0) + 50) {
+            _bestContent = _cleanRawUrls(_stripThinking(_multiRetryResult.content))
+            console.log(`[MultiIntent] ✅ Retry succeeded — أضفنا ${_verify.missingTasks.length} إجابات ناقصة`)
+          }
+        } catch (_mErr) {
+          console.warn('[MultiIntent] retry error (non-fatal):', _mErr.message)
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     _bestContent = applyReactLoop(_bestContent)
 

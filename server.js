@@ -234,6 +234,7 @@ import { isFollowUpQuery, resolveContextualQuery, detectDZAmbiguity, formatDZCla
 import { classifyIntent, buildIntentBlock, detectEntities, detectAmbiguousEntity as detectIRambiguousEntity, INTENTS as IR_INTENTS, INTENT_CLASSIFIER_POLICY } from './lib/dz-intent-router.js'
 import { isEntityDefinitionQuery, isExplicitNewsQuery } from './lib/entity-question-guard.js'
 import { analyzeMultiIntent, buildMultiIntentSystemLayer, verifyCompleteness, buildRetryInstruction, logMultiIntentAnalysis } from './lib/multi-intent-engine.js'
+import { isComplexBuildTask, buildWebsiteMultiTask, buildCodeMultiTask } from './lib/agent-build-engine.js'
 import { GITHUB_AGENT_LAYER, INTENT_SEPARATION_GUARD, PUBLIC_FIGURES_VERIFICATION_POLICY, SEARCH_KNOWLEDGE_ARCHITECTURE_POLICY, COGNITIVE_BEHAVIOR_RULES, SEVEN_STAGE_MANDATORY_PIPELINE, DEVELOPER_LOCK_LAYER, ADVANCED_INJECTION_GUARD, SERVICES_GUIDE_LAYER, SPORTS_AGENT_ORCHESTRATOR_POLICY } from './lib/prompts.js'
 import { lookupStaticFact, isStaticQuery } from './lib/static-facts.js'
 import { isTimeSensitiveQuery, detectTimeSensitiveIntent, buildEventSearchQuery } from './lib/dz-event-intent.js'
@@ -20498,6 +20499,46 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (execLang && !detectWebsiteBuilderQuery(lastUserMessage)) {
     console.log(`[Code Execution] Detected: lang=${execLang} query="${lastUserMessage.slice(0, 80)}"`)
 
+    // ── MULTI-TASK CODE ENGINE للطلبات البرمجية المعقدة ─────────────────────
+    // Spec → Core Implementation → Polish (3 خطوات متسلسلة)
+    const _isComplexCode = isComplexBuildTask(lastUserMessage, 'code')
+    if (_isComplexCode) {
+      console.log(`[Code Execution] 🏗️ MULTI-TASK CODE MODE for complex request`)
+      try {
+        const codeResult = await buildCodeMultiTask(
+          lastUserMessage,
+          (args) => safeGenerateAI(args),
+          ({ step, icon, name, status }) => console.log(`[AgentBuildEngine] ${icon} ${name}: ${status}`)
+        )
+        if (codeResult.success && codeResult.code.length > 50) {
+          const detectedL = execLang === 'python' || execLang === 'py' ? 'python' : 'javascript'
+          // If HTML in result: return as website
+          if (codeResult.code.includes('<html') && codeResult.code.includes('</html>')) {
+            const cssCode = extractCssFromHtml(codeResult.code)
+            const jsCode  = extractJsFromHtml(codeResult.code)
+            return res.status(200).json({
+              content: '✅ تم بناء التطبيق بنجاح عبر المحرك متعدد المهام!',
+              isWebsite: true,
+              htmlCode:  codeResult.code,
+              cssCode:   cssCode || '',
+              jsCode:    jsCode  || '',
+              webBuilderMeta: { type: 'code', style: 'modern', title: '💻 تطبيق', description: 'كود قابل للتشغيل', icon: '💻' },
+              _buildMode: 'multi-task',
+            })
+          }
+          return res.status(200).json({
+            content: '✅ **تم بناء الكود بنجاح!**\n\n🏗️ **MULTI-TASK CODE ENGINE**: Spec → Core → Polish',
+            isExecution:   true,
+            executionLang: detectedL,
+            executionCode: codeResult.code,
+            _buildMode:    'multi-task',
+          })
+        }
+      } catch (codeMultiErr) {
+        console.warn(`[Code Execution] Multi-task failed:`, codeMultiErr.message, '— fallback to single-shot')
+      }
+    }
+
     try {
       const execMessages = [
         { role: 'system', content: CODE_EXECUTION_SYSTEM_PROMPT },
@@ -21561,18 +21602,51 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     console.log(`[WEB_BUILDER_MODE] Activated: "${lastUserMessage.slice(0, 80)}"`)
     const wbMeta = extractWebBuilderMeta(lastUserMessage)
 
-    // ── Step 1: Search for real UI inspiration from CodePen, GitHub, Flowbite ──
-    // Skip inspiration search — build directly for immediate response (no deep analysis)
-    const inspirationBlock = ''
+    // ══════════════════════════════════════════════════════════════════════
+    // 🏗️ MULTI-TASK BUILD ENGINE — للمشاريع المعقدة (portfolio، dashboard...)
+    // يكسر الطلب إلى خطوات متسلسلة: Blueprint → HTML → CSS → JS → Assembly
+    // بدل طلب LLM واحد ضخم → جودة أعلى + أخطاء أقل
+    // ══════════════════════════════════════════════════════════════════════
+    const _isComplexWebsite = isComplexBuildTask(lastUserMessage, 'website')
+    if (_isComplexWebsite) {
+      console.log(`[WEB_BUILDER_MODE] 🏗️ MULTI-TASK MODE activated for complex build`)
+      try {
+        const multiResult = await buildWebsiteMultiTask(
+          lastUserMessage,
+          (args) => safeGenerateAI(args),
+          ({ step, icon, name, status }) => {
+            console.log(`[AgentBuildEngine] ${icon} ${name}: ${status}`)
+          }
+        )
 
-    // ── Step 2: Build enriched user message with metadata hints ──────────────
+        if (multiResult.success && multiResult.htmlCode.length > 500) {
+          const bp = multiResult.blueprint || {}
+          const siteTitle = bp.title || wbMeta.title || 'الموقع'
+          console.log(`[WEB_BUILDER_MODE] ✅ Multi-task success — ${multiResult.htmlCode.length} chars`)
+          return res.status(200).json({
+            content: `✅ **تم إنشاء ${siteTitle} بنجاح!**\n\n🏗️ **MULTI-TASK BUILD ENGINE** — 5 خطوات متسلسلة متخصصة\n🔍 Blueprint · 🏗️ HTML · 🎨 CSS · ⚡ JS · 🔧 Assembly\n\n▶️ انقر **"معاينة مباشرة"** لمشاهدته — أو استخدم **⬇ HTML** و **🗜 ZIP** للتحميل.`,
+            isWebsite:      true,
+            htmlCode:       multiResult.htmlCode,
+            cssCode:        multiResult.cssCode || '',
+            jsCode:         multiResult.jsCode  || '',
+            webBuilderMeta: { ...wbMeta, title: siteTitle },
+            _buildMode:     'multi-task',
+          })
+        }
+        console.warn(`[WEB_BUILDER_MODE] Multi-task incomplete (${multiResult.htmlCode?.length || 0}chars) — falling back to single-shot`)
+      } catch (multiErr) {
+        console.error(`[WEB_BUILDER_MODE] Multi-task error:`, multiErr.message, '— falling back to single-shot')
+      }
+    }
+
+    // ── Single-shot fallback (simple sites or multi-task failure) ─────────
+    const inspirationBlock = ''
     const enrichedUserMsg = [
       lastUserMessage,
       `\n[SITE TYPE: ${wbMeta.type} | STYLE: ${wbMeta.style} | TITLE: ${wbMeta.title}]`,
       `[Generate a complete, production-quality ${wbMeta.description}]`,
     ].join('\n')
 
-    // ── Step 3: Generate HTML with up to 2 attempts ───────────────────────────
     const MAX_WB_ATTEMPTS = 2
     let lastHtml = null
     let lastValidation = null
@@ -21590,7 +21664,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           { role: 'user', content: enrichedUserMsg },
         ]
 
-        // Try directWebBuilderGenerate first (bypasses circuit breakers), then safeGenerateAI as fallback
         let wbResult = await directWebBuilderGenerate(wbMessages, 8000)
         if (!wbResult.content) {
           console.warn(`[Website Builder v6] directWebBuilderGenerate returned null — falling back to safeGenerateAI`)

@@ -3494,8 +3494,8 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
       process.env.DEEPSEEK_API_KEY
         ? callDeepSeek(trimmed, { max_tokens, timeoutMs: 7000 }).then(c => validateAIContent(c, query) ? { content: c, model: 'deepseek-chat' } : null).catch(() => null)
         : null,
-      // Router — Gemini/Mistral/Cohere based on taskHint
-      callAIRouter(trimmed, { max_tokens, taskHint }).then(r => r?.content && validateAIContent(r.content, query) ? r : null).catch(() => null),
+      // Router — Gemini/Mistral/Cohere based on taskHint (ignore last-resort responses)
+      callAIRouter(trimmed, { max_tokens, taskHint }).then(r => r?.content && !r.isLastResort && r.model !== 'last-resort' && validateAIContent(r.content, query) ? r : null).catch(() => null),
     ].filter(Boolean)
 
     if (raceCandidates.length > 0) {
@@ -3511,28 +3511,48 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
   } catch { /* ignore — all parallel attempts failed */ }
 
   // ── Pollinations.ai free text (no API key — always available) ─────────────
+  // API الجديد يُرجع نصاً مباشراً (text/plain) وليس JSON
   try {
     const seed = Math.floor(Math.random() * 999999)
-    const polRes = await fetch('https://text.pollinations.ai/openai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'openai-large',
-        messages: trimmed,
-        seed,
-        private: true,
-      }),
-      signal: AbortSignal.timeout(22000),
+    const lastUserMsg = [...trimmed].reverse().find(m => m?.role === 'user')?.content || ''
+    const sysMsg = trimmed.find(m => m?.role === 'system')?.content || ''
+    // بناء prompt مباشر للـ GET API أو استخدام POST النصي
+    const polPrompt = sysMsg ? `${sysMsg}\n\n${lastUserMsg}` : lastUserMsg
+    const polRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(polPrompt)}?model=openai-large&seed=${seed}&private=true`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(25000),
     })
     if (polRes.ok) {
-      const polData = await polRes.json()
-      const content = polData.choices?.[0]?.message?.content || null
-      if (content && content.trim().length > 5) {
-        console.log('[AI] ✓ Pollinations text fallback')
+      const content = await polRes.text()
+      if (content && content.trim().length > 5 && !content.includes('"error"')) {
+        console.log('[AI] ✓ Pollinations text fallback (GET)')
         return { content: content.trim(), model: 'pollinations/openai-large' }
       }
     }
-  } catch (e) { console.warn('[AI] Pollinations text failed:', e.message) }
+  } catch (e) { console.warn('[AI] Pollinations GET failed:', e.message) }
+
+  // ── Pollinations POST (نص مباشر) ───────────────────────────────────────────
+  try {
+    const seed2 = Math.floor(Math.random() * 999999)
+    const polRes2 = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        messages: trimmed,
+        seed: seed2,
+        private: true,
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    if (polRes2.ok) {
+      const content = await polRes2.text()
+      if (content && content.trim().length > 5 && !content.includes('"error"')) {
+        console.log('[AI] ✓ Pollinations text fallback (POST)')
+        return { content: content.trim(), model: 'pollinations/openai' }
+      }
+    }
+  } catch (e) { console.warn('[AI] Pollinations POST failed:', e.message) }
 
   return { content: null, model: null }
 }
@@ -5934,25 +5954,22 @@ async function directWebBuilderGenerate(messages, maxTokens = 8000) {
     } catch (e) { console.warn('[DirectWebBuilder] Cohere failed:', e.message) }
   }
 
-  // 5. Pollinations.ai (no key needed)
-  for (const polModel of ['openai-large', 'mistral', 'claude-hybridspace']) {
-    try {
-      const res = await fetch('https://text.pollinations.ai/openai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: polModel, messages, private: true }),
-        signal: AbortSignal.timeout(30000),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const content = data.choices?.[0]?.message?.content || null
-        if (content && content.trim().length > 200) {
-          console.log(`[DirectWebBuilder] ✓ Pollinations ${polModel}`)
-          return { content, model: `pollinations:${polModel}` }
-        }
+  // 5. Pollinations.ai (no key needed) — new API returns plain text
+  try {
+    const polRes = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'openai', messages, private: true, seed: Math.floor(Math.random() * 999999) }),
+      signal: AbortSignal.timeout(30000),
+    })
+    if (polRes.ok) {
+      const content = await polRes.text()
+      if (content && content.trim().length > 200 && !content.includes('"error"')) {
+        console.log(`[DirectWebBuilder] ✓ Pollinations`)
+        return { content: content.trim(), model: 'pollinations:openai' }
       }
-    } catch (e) { console.warn(`[DirectWebBuilder] Pollinations ${polModel} failed:`, e.message) }
-  }
+    }
+  } catch (e) { console.warn(`[DirectWebBuilder] Pollinations failed:`, e.message) }
 
   // 6. Template-based HTML fallback (no AI needed — always works)
   const templateHtml = generateWebBuilderTemplate(messages)
@@ -15741,20 +15758,19 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           return res.status(200).json({ content: _earlyRouter.content, model: _earlyRouter.model })
         }
       } catch (_rErr) { console.warn('[DZTools:Health:Early] Router failed:', _rErr.message) }
-      // Fallback 2: Pollinations.ai (لا API key — دائماً متاح)
+      // Fallback 2: Pollinations.ai (لا API key — دائماً متاح) — new plain-text API
       try {
-        const _polRes = await fetch('https://text.pollinations.ai/openai', {
+        const _polRes = await fetch('https://text.pollinations.ai/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'openai-fast', messages: _earlyMsgs, seed: Math.floor(Math.random() * 999999), private: true }),
-          signal: AbortSignal.timeout(22000),
+          body: JSON.stringify({ model: 'openai', messages: _earlyMsgs, seed: Math.floor(Math.random() * 999999), private: true }),
+          signal: AbortSignal.timeout(25000),
         })
         if (_polRes.ok) {
-          const _polData = await _polRes.json()
-          const _polContent = _polData.choices?.[0]?.message?.content || null
-          if (_polContent && _polContent.trim().length > 30) {
+          const _polContent = await _polRes.text()
+          if (_polContent && _polContent.trim().length > 30 && !_polContent.includes('"error"')) {
             console.log(`[DZTools:Health:Early] ✅ Pollinations — ${_polContent.length} chars`)
-            return res.status(200).json({ content: _polContent.trim(), model: 'pollinations/openai-large' })
+            return res.status(200).json({ content: _polContent.trim(), model: 'pollinations/openai' })
           }
         }
       } catch (_polErr) { console.warn('[DZTools:Health:Early] Pollinations failed:', _polErr.message) }
@@ -18035,6 +18051,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     isHistoricalGovQuery(lastUserMessage) ||
     // BYPASS: Minister / president queries (current government)
     isMinisterQuery(lastUserMessage) ||
+    // BYPASS: Translation requests — always actionable, sent directly to LLM
+    /^(?:ترجم|ترجمة|translate|traduire|übersetzen|traducir)\b/i.test(lastUserMessage.trim()) ||
+    /(?:ترجم(?:لي|لنا)?|ترجم\s+هذ|ترجم\s+الجملة|ترجم\s+النص|ترجم\s+إلى|ترجم\s+الى|translate\s+(?:to|this|the)|traduire\s+en|انقل\s+(?:هذا|هذه|النص)\s+(?:إلى|الى))/i.test(lastUserMessage) ||
+    /(?:إلى\s+(?:الإنجليزية|الإنكليزية|الفرنسية|العربية|الإسبانية|الألمانية|الروسية|الصينية|الإيطالية|البرتغالية|الهولندية|التركية|الفارسية|english|french|arabic|spanish|german|russian|chinese|italian)\s*[:،:])/i.test(lastUserMessage) ||
+    /(?:to\s+(?:arabic|french|english|spanish|german|russian|chinese|italian|portuguese|turkish|persian|darija|dz)\b)/i.test(lastUserMessage) ||
     // BYPASS: اسم لاعب معروف — يذهب للمسار الرياضي مباشرة
     detectPlayerNameInQuery(lastUserMessage) !== null ||
     // BYPASS: اسم عربي مجرد قصير (2-4 كلمات) — universal player search يعالجه
@@ -18057,6 +18078,51 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       status: 'clarification_required',
       intent: _intentClassification.intent,
     })
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // 🔄 TRANSLATION FAST-PATH — ترجمة مباشرة عبر LLM (قبل كل مسارات أخرى)
+  // يعترض كل طلبات الترجمة ويوجهها مباشرة للـ LLM دون المرور بـ intent router
+  // ══════════════════════════════════════════════════════════════════════
+  const _isTranslationQuery = (
+    /^(?:ترجم|ترجمة|translate|traduire|übersetzen|traducir)\b/i.test(lastUserMessage.trim()) ||
+    /(?:ترجم(?:لي|لنا)?|ترجم\s+هذ|ترجم\s+الجملة|ترجم\s+النص|ترجم\s+إلى|ترجم\s+الى|ترجمه|ترجميه)/i.test(lastUserMessage) ||
+    /(?:translate\s+(?:to|this|the|into)|traduire\s+en|انقل\s+(?:هذا|هذه|النص)\s+(?:إلى|الى))/i.test(lastUserMessage) ||
+    /(?:إلى\s+(?:الإنجليزية|الإنكليزية|الفرنسية|العربية|الإسبانية|الألمانية|الروسية|الصينية|الإيطالية|البرتغالية|الهولندية|التركية|الفارسية))/i.test(lastUserMessage) ||
+    /(?:to\s+(?:arabic|french|english|spanish|german|russian|chinese|italian|portuguese|turkish|persian|darija)\b)/i.test(lastUserMessage)
+  )
+  if (!_isAgentMode && _isTranslationQuery) {
+    console.log(`[Translation] 🔄 Translation request detected — routing to LLM directly`)
+    try {
+      const _transSystemPrompt = `أنت مترجم احترافي متخصص يدعم اللغات التالية: العربية، الإنجليزية، الفرنسية، الإسبانية، الألمانية، الإيطالية، البرتغالية، الروسية، الصينية، التركية، الفارسية، والدارجة الجزائرية.
+
+قواعد الترجمة:
+• قدّم الترجمة المطلوبة مباشرةً دون مقدمات أو تفسيرات إضافية ما لم يُطلب منك ذلك.
+• إذا طُلبت عدة لغات، رتّب الترجمات بشكل واضح مع ذكر اسم اللغة قبل كل ترجمة.
+• احتفظ بالمعنى الدقيق وتجنّب الترجمة الحرفية المفرطة.
+• إذا كان النص دارجة جزائرية، أشر إلى ذلك بوضوح.
+• للنصوص الطويلة، قدّم ترجمة متكاملة دون اختصار.`
+      const _transResult = await safeGenerateAI({
+        messages: [
+          { role: 'system', content: _transSystemPrompt },
+          ...messages,
+        ],
+        query: 'translate',
+        max_tokens: 2000,
+        taskHint: 'general',
+      })
+      if (_transResult?.content) {
+        console.log(`[Translation] ✅ Translated successfully (${_transResult.content.length} chars)`)
+        return res.status(200).json({
+          content: _transResult.content,
+          mode: 'translation',
+          model: _transResult.model || 'groq',
+          status: 'ok',
+        })
+      }
+    } catch (_transErr) {
+      console.warn(`[Translation] ⚠ LLM failed, continuing fallback:`, _transErr.message)
+    }
   }
 
   // ── قاعدة الحكومات التاريخية — مسار مبكر مباشر (قبل AI وVerifyPolicy) ─────

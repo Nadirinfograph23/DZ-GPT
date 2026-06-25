@@ -1,8 +1,8 @@
 {
-  "commit": "1abb1d041e3ae43fff763c15dca77727d4842ffd",
-  "commitShort": "1abb1d04",
+  "commit": "5940658acba63bfdee40745e6a6c8b6229bee07f",
+  "commitShort": "5940658a",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "restore: DZAgent UI from deployment CWNWXF2AF + update banner on every session",
-  "deployedAt": "2026-06-25T00:08:48.590368Z",
+  "message": "fix: versionChecker — show banner only on real deployments, not every session",
+  "deployedAt": "2026-06-25T00:10:32.523467Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "5940658acba63bfdee40745e6a6c8b6229bee07f",
-  "commitShort": "5940658a",
+  "commit": "1aa8735355fba125eb959f1a876a15a3d2f80700",
+  "commitShort": "1aa87353",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: versionChecker — show banner only on real deployments, not every session",
-  "deployedAt": "2026-06-25T00:10:32.523467Z",
+  "message": "fix: dz-chatbox.css — green theme + uniform 4-col grid for quick-actions, transparent bg",
+  "deployedAt": "2026-06-25T00:24:18.931920Z",
   "deployedBy": "scripts/deploy.py"
 }

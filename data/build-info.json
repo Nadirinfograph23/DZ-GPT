@@ -1,8 +1,8 @@
 {
-  "commit": "db98accebb554776e82005959148aad4d9e38862",
-  "commitShort": "db98acce",
+  "commit": "932fee2d1075e9e831dd1117ba43c16eebe7c33a",
+  "commitShort": "932fee2d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: mobile ticker full-width row + suggestion chips on last AI reply only",
-  "deployedAt": "2026-06-25T00:44:43.116471Z",
+  "message": "fix: ticker single-line nowrap + ellipsis on overflow",
+  "deployedAt": "2026-06-25T00:45:44.678539Z",
   "deployedBy": "scripts/deploy.py"
 }

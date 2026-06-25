@@ -2441,18 +2441,18 @@
   flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
-  min-height: 36px;
-  max-height: 52px;
+  height: 28px;
   display: flex;
   align-items: center;
 }
 
 .dz-ticker-item {
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #d1d5db;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1;
   direction: rtl;
   text-align: right;
   width: 100%;
@@ -2823,11 +2823,7 @@
     width: 100%;
     flex: none;
     order: -1;
-    min-height: 34px;
-    max-height: 56px;
-  }
-  .dz-ticker-item {
-    font-size: 12px;
+    height: 28px;
   }
 }
 

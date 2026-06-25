@@ -4,11 +4,15 @@
  *  1. polling /api/version كل 45 ثانية
  *  2. استقبال رسائل Service Worker (NEW_VERSION / SW_UPDATED)
  *  3. registration.updatefound — يكشف SW جديد فور بدء تحميله
+ *
+ * ملاحظة: يستخدم sessionStorage بدلاً من localStorage
+ * → البانر يظهر في كل جلسة جديدة إذا كان هناك نسخة مختلفة
  */
 
 const POLL_INTERVAL_MS  = 45 * 1000
 const BANNER_ID         = 'dz-update-banner'
-const LAST_COMMIT_KEY   = 'dz-last-known-commit'
+// sessionStorage: يُمسح عند إغلاق التبويب → يظهر البانر في كل جلسة جديدة
+const SESSION_COMMIT_KEY = 'dz-session-commit'
 
 let _lastCommit: string | null = null
 let _pollTimer: ReturnType<typeof setInterval> | null = null
@@ -30,12 +34,12 @@ async function fetchVersion(): Promise<string | null> {
 
 export function triggerUpdateBanner() { showUpdateBanner() }
 
-// مفتاح sessionStorage — يمنع إعادة ظهور البانر بعد التحديث مباشرة
+// مفتاح sessionStorage — يمنع التكرار داخل نفس الجلسة فقط
 const JUST_UPDATED_KEY = 'dz-just-updated'
-const SUPPRESS_MS      = 90_000  // 90 ثانية كافية لاكتمال دورة الـ SW
+const SUPPRESS_MS      = 30_000  // 30 ثانية كافية (قُلِّصت من 90)
 
 function showUpdateBanner() {
-  // لا تُظهر البانر إذا كان المستخدم قد حدّث للتو (خلال 90 ثانية)
+  // لا تُظهر البانر إذا كان المستخدم قد حدّث للتو (خلال 30 ثانية)
   const ts = sessionStorage.getItem(JUST_UPDATED_KEY)
   if (ts && Date.now() - Number(ts) < SUPPRESS_MS) return
 
@@ -88,7 +92,7 @@ function showUpdateBanner() {
   document.getElementById('dz-update-later')?.addEventListener('click', () => {
     clearInterval(timer)
     document.getElementById(BANNER_ID)?.remove()
-    _bannerShown = false   // يسمح بظهور البانر مرة أخرى لاحقاً
+    _bannerShown = false   // يسمح بظهور البانر مرة أخرى في نفس الجلسة إذا تغيّرت النسخة
   })
 }
 
@@ -129,13 +133,13 @@ async function forceUpdate() {
     console.warn('[VersionChecker] cleanup error:', e)
   }
 
-  // 4. سجّل وقت التحديث لمنع ظهور البانر مجدداً بعد الـ reload
+  // 4. سجّل وقت التحديث في sessionStorage لمنع البانر المباشر بعد الـ reload
   sessionStorage.setItem(JUST_UPDATED_KEY, String(Date.now()))
 
-  // 5. حدّث آخر commit معروف في localStorage حتى لا يظهر البانر مجدداً بعد الـ reload
-  if (_lastCommit) localStorage.setItem(LAST_COMMIT_KEY, _lastCommit)
+  // 5. حدّث commit الجلسة الحالية حتى لا يظهر البانر مجدداً في نفس الجلسة
+  if (_lastCommit) sessionStorage.setItem(SESSION_COMMIT_KEY, _lastCommit)
 
-  // 5. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
+  // 6. انتقل بـ cache-bust لتجاوز CDN وكاش المتصفح
   const base = window.location.href.split('?')[0].split('#')[0]
   window.location.replace(base + '?v=' + Date.now())
 }
@@ -145,22 +149,26 @@ async function checkForUpdate() {
   if (!commit) return
 
   if (_lastCommit === null) {
-    // أول استدعاء في هذه الجلسة — قارن مع آخر commit محفوظ بين الجلسات
+    // أول استدعاء في هذه الجلسة
     _lastCommit = commit
-    const stored = localStorage.getItem(LAST_COMMIT_KEY)
-    if (stored && stored !== commit) {
-      // فتح الصفحة بعد نشر جديد → أظهر البانر فوراً
-      console.log(`[VersionChecker] 🆕 New version since last session: ${stored} → ${commit}`)
+    // قارن مع آخر commit رُصِد في هذه الجلسة (sessionStorage)
+    const sessionStored = sessionStorage.getItem(SESSION_COMMIT_KEY)
+    if (!sessionStored) {
+      // جلسة جديدة تماماً — احفظ الـ commit الحالي في sessionStorage
+      sessionStorage.setItem(SESSION_COMMIT_KEY, commit)
+      // أظهر البانر دائماً في كل جلسة جديدة (المستخدم فتح تبويباً جديداً)
       showUpdateBanner()
-    } else if (!stored) {
-      // أول زيارة على الإطلاق — احفظ فقط
-      localStorage.setItem(LAST_COMMIT_KEY, commit)
+    } else if (sessionStored !== commit) {
+      // تغيّرت النسخة داخل نفس الجلسة (نادر لكن ممكن)
+      console.log(`[VersionChecker] 🆕 Version changed in session: ${sessionStored} → ${commit}`)
+      showUpdateBanner()
     }
     return
   }
 
   if (commit !== _lastCommit) {
     console.log(`[VersionChecker] 🆕 New version: ${_lastCommit} → ${commit}`)
+    _lastCommit = commit
     showUpdateBanner()
   }
 }

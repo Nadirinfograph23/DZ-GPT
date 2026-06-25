@@ -1,8 +1,8 @@
 {
-  "commit": "ad399ddc0428239a0dd53af0ad65bebeb86f534f",
-  "commitShort": "ad399ddc",
+  "commit": "1abb1d041e3ae43fff763c15dca77727d4842ffd",
+  "commitShort": "1abb1d04",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: source icons-only (no text) + Pinterest routing to /api/images/search + source chips CSS",
-  "deployedAt": "2026-06-24T23:58:18.738573Z",
+  "message": "restore: DZAgent UI from deployment CWNWXF2AF + update banner on every session",
+  "deployedAt": "2026-06-25T00:08:48.590368Z",
   "deployedBy": "scripts/deploy.py"
 }

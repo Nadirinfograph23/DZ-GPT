@@ -2814,16 +2814,7 @@
 
 @media (max-width: 600px) {
   .dz-gh-bar {
-    padding: 4px 8px;
-    flex-wrap: wrap;
-    row-gap: 3px;
-    min-height: auto;
-  }
-  .dz-ticker-wrap {
-    width: 100%;
-    flex: none;
-    order: -1;
-    height: 28px;
+    padding: 3px 6px;
   }
 }
 

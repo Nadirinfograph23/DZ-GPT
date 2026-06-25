@@ -9568,7 +9568,7 @@ ${rows}
                           </div>
                         )
                       })()}
-                      {msg.quickSuggestions && msg.quickSuggestions.length > 0 && (
+                      {msg.quickSuggestions && msg.quickSuggestions.length > 0 && msg.id === messages.filter(m => m.role === 'assistant' && !m.isStreaming).slice(-1)[0]?.id && (
                         <div className="dzc-quick-suggestions">
                           <span className="dzc-qs-label">💡 اقتراحات:</span>
                           <div className="dzc-qs-chips">

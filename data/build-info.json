@@ -1,8 +1,8 @@
 {
-  "commit": "f71aa840554a16a8e344ee89f8973fade8ddc83e",
-  "commitShort": "f71aa840",
+  "commit": "db98accebb554776e82005959148aad4d9e38862",
+  "commitShort": "db98acce",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: ticker text wrap — allow 2 lines so long sentences stay visible",
-  "deployedAt": "2026-06-25T00:34:14.529748Z",
+  "message": "feat: mobile ticker full-width row + suggestion chips on last AI reply only",
+  "deployedAt": "2026-06-25T00:44:43.116471Z",
   "deployedBy": "scripts/deploy.py"
 }

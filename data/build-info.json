@@ -1,8 +1,8 @@
 {
-  "commit": "1aa8735355fba125eb959f1a876a15a3d2f80700",
-  "commitShort": "1aa87353",
+  "commit": "f71aa840554a16a8e344ee89f8973fade8ddc83e",
+  "commitShort": "f71aa840",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: dz-chatbox.css — green theme + uniform 4-col grid for quick-actions, transparent bg",
-  "deployedAt": "2026-06-25T00:24:18.931920Z",
+  "message": "fix: ticker text wrap — allow 2 lines so long sentences stay visible",
+  "deployedAt": "2026-06-25T00:34:14.529748Z",
   "deployedBy": "scripts/deploy.py"
 }

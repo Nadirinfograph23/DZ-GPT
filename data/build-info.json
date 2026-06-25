@@ -1,8 +1,8 @@
 {
-  "commit": "932fee2d1075e9e831dd1117ba43c16eebe7c33a",
-  "commitShort": "932fee2d",
+  "commit": "45b6e5cf191c561d2a3c6b94b1a7339278584e0d",
+  "commitShort": "45b6e5cf",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: ticker single-line nowrap + ellipsis on overflow",
-  "deployedAt": "2026-06-25T00:45:44.678539Z",
+  "message": "fix: revert ticker bar to slim single row + shorten ticker sentences",
+  "deployedAt": "2026-06-25T00:53:02.426288Z",
   "deployedBy": "scripts/deploy.py"
 }

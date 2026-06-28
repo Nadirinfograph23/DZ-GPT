@@ -1,8 +1,8 @@
 {
-  "commit": "fad0e716b330a4b1917a99455e04f3952c1f5f85",
-  "commitShort": "fad0e716",
+  "commit": "6c072f0d684b33c236d1b0f93131da9904580351",
+  "commitShort": "6c072f0d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: multi-intent bypass weather/LFP fast-paths + sources show domain name text",
-  "deployedAt": "2026-06-28T16:46:19.848521Z",
+  "message": "fix: detect multi-intent via و+question-word pattern (من هو X و من هو Y)",
+  "deployedAt": "2026-06-28T16:54:37.734673Z",
   "deployedBy": "scripts/deploy.py"
 }

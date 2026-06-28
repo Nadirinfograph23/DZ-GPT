@@ -2439,7 +2439,7 @@
 /* ===== TYPEWRITER TICKER ===== */
 .dz-ticker-wrap {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 80px;
   overflow: hidden;
   height: 28px;
   display: flex;
@@ -2449,12 +2449,11 @@
 .dz-ticker-item {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: #d1d5db;
   font-size: 12px;
   line-height: 1;
-  direction: rtl;
-  text-align: right;
+  direction: ltr;
+  text-align: left;
   width: 100%;
   display: block;
 }
@@ -2786,10 +2785,8 @@
   background: rgba(8,8,8,0.6);
   flex-wrap: nowrap;
   min-height: 32px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: hidden;
 }
-.dz-gh-bar::-webkit-scrollbar { display: none; }
 
 .dz-toolbar-spacer {
   flex: 0 0 6px;

@@ -1,8 +1,8 @@
 {
-  "commit": "29328429e8425dc73b20aec6f16877db4e3fb270",
-  "commitShort": "29328429",
+  "commit": "9dd6ad03043fb76d331a27564bac89856aa1fb5f",
+  "commitShort": "9dd6ad03",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: أسئلة متعددة + تنظيف TTS من الرموز — إصلاح شامل",
-  "deployedAt": "2026-06-28T00:58:49.020570Z",
+  "message": "fix: ticker text fully visible — direction ltr + overflow hidden on gh-bar",
+  "deployedAt": "2026-06-28T16:33:50.379694Z",
   "deployedBy": "scripts/deploy.py"
 }

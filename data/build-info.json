@@ -1,8 +1,8 @@
 {
-  "commit": "9dd6ad03043fb76d331a27564bac89856aa1fb5f",
-  "commitShort": "9dd6ad03",
+  "commit": "fad0e716b330a4b1917a99455e04f3952c1f5f85",
+  "commitShort": "fad0e716",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: ticker text fully visible — direction ltr + overflow hidden on gh-bar",
-  "deployedAt": "2026-06-28T16:33:50.379694Z",
+  "message": "fix: multi-intent bypass weather/LFP fast-paths + sources show domain name text",
+  "deployedAt": "2026-06-28T16:46:19.848521Z",
   "deployedBy": "scripts/deploy.py"
 }

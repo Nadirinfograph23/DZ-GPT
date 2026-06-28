@@ -1,8 +1,8 @@
 {
-  "commit": "f96b863e2484b8be782acb3caeb6c016eb10e0d5",
-  "commitShort": "f96b863e",
+  "commit": "29328429e8425dc73b20aec6f16877db4e3fb270",
+  "commitShort": "29328429",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إصلاح الإجابة عن الأسئلة المتعددة — دعم فاصل / ووكيل البرمجة V3",
-  "deployedAt": "2026-06-28T00:35:07.668510Z",
+  "message": "fix: أسئلة متعددة + تنظيف TTS من الرموز — إصلاح شامل",
+  "deployedAt": "2026-06-28T00:58:49.020570Z",
   "deployedBy": "scripts/deploy.py"
 }

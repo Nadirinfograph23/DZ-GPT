@@ -9551,6 +9551,7 @@ ${rows}
                                     }}
                                     loading="lazy"
                                   />
+                                  <span className="dzc-source-name">{src.label}</span>
                                 </a>
                               ))}
                             </div>

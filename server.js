@@ -24356,6 +24356,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════
 
   const systemPrompt = [
+    // ── LAYER -1: MULTI-INTENT OVERRIDE (يأتي أولاً لضمان الإجابة عن كل سؤال) ─
+    _multiIntentLayer || '',
     // ── LAYER 0: INTENT SEPARATION GUARD (mandatory — always first) ───────
     INTENT_SEPARATION_GUARD,
     // ── LAYER 0-A: DEVELOPER LOCK (حماية هوية المطور + هرمية التعليمات) ──
@@ -24612,8 +24614,6 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     _decisionTreeContext || '',
     // ── RETRY HINT — يُطبَّق فقط عند إعادة المحاولة ──────────────────────────
     _isRetry ? `\n🔄 RETRY MODE (seed=${_retrySeed}): المستخدم طلب إجابة مختلفة. قدّم نهجاً بديلاً أو معلومات تكميلية أو زاوية مغايرة عن إجابتك السابقة. لا تكرر نفس الإجابة. كن أكثر تفصيلاً أو ابدأ من منظور مختلف.` : '',
-    // ── MULTI-INTENT LAYER — حقن طبقة الأسئلة المتعددة عند الكشف عنها ────────
-    _multiIntentLayer || '',
   ].filter(Boolean).join('\n\n')
 
   const apiMessages = [
@@ -24631,7 +24631,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // ── Weather fast-path: return table directly — no AI needed ─────────────
   // When real weather data is available, skip AI entirely to avoid latency
   // and prevent the model from adding "شرح:" or unwanted preamble.
-  if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:')) {
+  if (hasWeatherPriority && weatherPriorityContext && !weatherPriorityContext.includes('fallback:') && !_multiIntentAnalysis.isMulti) {
     // ── "أريد طقس مدينة أخرى" chip → ask user for city name ────────────────
     const _isAskAnotherCity = /أريد طقس مدينة أخرى|🏙️ أريد طقس مدينة أخرى|بغيت طقس مدينة أخرى/i.test(lastUserMessage)
     if (_isAskAnotherCity) {
@@ -24674,7 +24674,7 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
   // ── LFP + Standings fast-path: return directly — no AI needed ───────────
   // lfpContext is now always populated when isLFPQuery or isStandingsQuery.
   // Return it directly to guarantee: source = lfp.dz only, no BBC/SofaScore.
-  if ((isLFPQuery || isStandingsQuery) && !webReaderContext && !_isAgentMode) {
+  if ((isLFPQuery || isStandingsQuery) && !webReaderContext && !_isAgentMode && !_multiIntentAnalysis.isMulti) {
     const parts = []
     if (lfpContext && lfpContext.length > 30) parts.push(lfpContext.trim())
     if (isStandingsQuery && standingsContext && standingsContext.length > 30) {

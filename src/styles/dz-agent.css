@@ -7619,14 +7619,14 @@
 }
 .dzc-sources-list::-webkit-scrollbar { display: none; }
 
-/* كل شريحة — favicon + نص الدومين */
+/* كل شريحة — أيقونة فقط */
 .dzc-source-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 8px 0 6px;
-  height: 26px;
-  border-radius: 20px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   border: 1px solid rgba(148,163,184,0.18);
   background: rgba(148,163,184,0.06);
   text-decoration: none;
@@ -7636,7 +7636,6 @@
   transition: background 0.15s ease, border-color 0.15s ease,
               transform 0.12s ease, box-shadow 0.15s ease;
   overflow: visible;
-  white-space: nowrap;
 }
 
 .dzc-source-chip:hover {
@@ -7690,19 +7689,8 @@
   display: block;
 }
 
-/* نص المصدر — اسم الدومين */
-.dzc-source-name {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-  max-width: 90px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: ltr;
-  text-align: left;
-}
+/* نص المصدر — مخفي (أيقونة فقط) */
+.dzc-source-name { display: none; }
 
 /* وضع فاتح */
 @media (prefers-color-scheme: light) {
@@ -7715,9 +7703,8 @@
 /* موبايل */
 @media (max-width: 520px) {
   .dzc-sources-bar   { gap: 5px; margin-top: 10px; }
-  .dzc-source-chip   { height: 24px; padding: 0 6px 0 5px; }
-  .dzc-source-favicon { width: 14px; height: 14px; }
-  .dzc-source-name   { font-size: 10px; max-width: 65px; }
+  .dzc-source-chip   { width: 26px; height: 26px; border-radius: 7px; }
+  .dzc-source-favicon { width: 16px; height: 16px; }
 }
 
 /* توافق عكسي — الكلاسات القديمة تُخفى */

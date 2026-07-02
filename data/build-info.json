@@ -1,8 +1,8 @@
 {
-  "commit": "60fb87b47c9643f9b459a9175104a35538b0cc8f",
-  "commitShort": "60fb87b4",
+  "commit": "d1feb9b09ed9f34f6c2e175f05753f0e6deb23c3",
+  "commitShort": "d1feb9b0",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: وعي عام 2026 + فصل السنة + تعلم الدارجة + تصحيح المالك فوري (موحّد بدون تنافس)",
-  "deployedAt": "2026-07-02T03:22:31.288625Z",
+  "message": "fix: إضافة أنماط التصحيح الصريح (صحح واحفظ / احفظ الإجابة الصحيحة)",
+  "deployedAt": "2026-07-02T03:34:04.230191Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "d1feb9b09ed9f34f6c2e175f05753f0e6deb23c3",
-  "commitShort": "d1feb9b0",
+  "commit": "661ebe4510fc39d95304fdda8b33a675badff6f2",
+  "commitShort": "661ebe45",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إضافة أنماط التصحيح الصريح (صحح واحفظ / احفظ الإجابة الصحيحة)",
-  "deployedAt": "2026-07-02T03:34:04.230191Z",
+  "message": "ui: أيقونات أكشن ChatGPT-style — بدون إطار/نص، سطر واحد + فاصل بين المجموعتين",
+  "deployedAt": "2026-07-02T10:46:30.587566Z",
   "deployedBy": "scripts/deploy.py"
 }

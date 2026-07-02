@@ -64,6 +64,7 @@ import {
   detectOwnerCommand, processOwnerCommand,
   processImplicitOwnerLearning,
   detectAndStorePendingCorrection,
+  autoSaveOwnerCorrection,
   verifyOwnerToken, getExtraFeeds,
   getTrainingContext, loadTrainingData,
 } from './lib/owner-commands.js'
@@ -3183,6 +3184,13 @@ function diagLog(kind, payload = {}) {
 // ===== REAL-TIME / FRESHNESS ENGINE =====
 // Dynamic current year so AI prompts and validators always reflect "now".
 function getCurrentYear() { return new Date().getFullYear() }
+function getCurrentSeasonAr() {
+  const m = new Date().getMonth() + 1 // 1-12
+  if (m >= 3 && m <= 5)  return 'الربيع 🌸'
+  if (m >= 6 && m <= 8)  return 'الصيف ☀️'
+  if (m >= 9 && m <= 11) return 'الخريف 🍂'
+  return 'الشتاء ❄️'
+}
 function getCurrentDateString(locale = 'ar-DZ') {
   try { return new Date().toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }
   catch { return new Date().toISOString().slice(0, 10) }
@@ -18873,19 +18881,41 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
 
-  // ── Implicit Owner Learning — تعلم تلقائي من كل رسالة يكتبها المالك ────────
-  // يعمل حتى بدون أوامر صريحة: تصحيح / تعريف / مصدر مرجعي
+  // ── Owner Learning Pipeline (unified — auto-correction FIRST, then implicit) ─
   if (_ownerTok) {
-    // نفحص هوية المالك فقط إذا كانت الرسالة تحتوي إشارة لتصحيح/تعريف/مصدر
-    // BUG-3 FIX: تشديد regex — "هو\s+" كان يلتقط "من هو؟" و"ما هو؟" كإشارة تعلم خاطئة
-    // الآن نشترط صيغة صريحة للتصحيح أو التعريف مع مساواة (=، يعني، هو X)
+
+    // ① Auto-Correction — يعمل أولاً ويأخذ الأولوية على كل شيء ─────────────
+    // يُفعَّل عندما يختلف المالك مع الرد السابق — يُحفَظ فوراً بدون تأكيد.
+    // يشترط محتوى تصحيحياً واضحاً (كلمة "خطأ/غلط/لا الصحيح..." + محتوى ≥4 حروف).
+    const _hasCorrectionSignal = /^(?:كلا[,،]?\s*|غلط[,،]?\s*|خطأ[,،]?\s*|ماشي صحيح|مش صحيح|مش هكذا|ماشي هكا|في الحقيقة[,،\s]+[^$]|في الواقع[,،\s]+[^$]|نحن في\s|نحنا في\s|إحنا في\s|احنا في\s|راهنا في\s|حنا في\s|المعلومة الصحيحة|الصحيح أن|لا[,،]\s*(?:الصحيح|الصواب|نحن|نحنا|في الحقيقة)|لأ[,،]\s*(?:الصحيح|الصواب|نحن|نحنا))/i.test(lastUserMessage.trim())
+    if (_hasCorrectionSignal) {
+      const _isOwnerAuto = await verifyOwnerToken(_ownerTok)
+      if (_isOwnerAuto) {
+        const _lastAgentMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
+        const _autoResult = autoSaveOwnerCorrection(lastUserMessage, _lastAgentMsg)
+        if (_autoResult && !_autoResult.isDup) {
+          console.log(`[AutoCorrection] ✅ owner correction saved instantly: "${_autoResult.correct}"`)
+          return res.status(200).json({
+            content: `✅ **تم اعتماد التصحيح وحفظه رسمياً فوراً** 🧠\n\n${_autoResult.wrong ? `❌ **ما كان خاطئاً:**\n> "${_autoResult.wrong.slice(0, 100)}${_autoResult.wrong.length > 100 ? '...' : ''}"\n\n` : ''}✔️ **الصواب المعتمد الآن:**\n> "${_autoResult.correct}"\n\n📌 هذا التصحيح مُسجَّل بشكل دائم — سأعتمده في جميع ردودي القادمة بأولوية قصوى.\n_لا حاجة للتأكيد — التصحيح محفوظ تلقائياً._`,
+            _ownerCorrected: true,
+          })
+        } else if (_autoResult?.isDup) {
+          return res.status(200).json({
+            content: `ℹ️ هذا التصحيح **موجود مسبقاً** في قاعدة المعرفة:\n\n✔️ "${_autoResult.correct}"\n\n> سأواصل اعتماده دائماً.`,
+          })
+        }
+      }
+    }
+
+    // ② Implicit Owner Learning — يعمل بعد التصحيح للتعريفات والمصادر ────────
+    // يشترط صيغة صريحة — "الصواب هو..." أو "تعريف:..." أو "مصدر موثوق..."
+    // لا يتعامل مع أشكال التصحيح (مُعالَجة أعلاه بـ auto-correction).
     const _hasLearningSignal = /الصواب\s+(?:هو\s+)?[^\s]|الصحيح\s+(?:هو\s+)?[^\s]|(?:خطأ|صحّح|تصحيح)[،,\s]+(?:الصحيح|الصواب)|ليس\s+.{2,40}\s+بل\s+|في الحقيقة\s+[^\s]|في الواقع\s+[^\s]|تعريف[:\s]+[^\s]|معنى[:\s]+[^\s]|مصدر\s+موثوق|reference:|definition:|correction:/i.test(lastUserMessage)
     if (_hasLearningSignal) {
       const _isOwnerSilent = await verifyOwnerToken(_ownerTok)
       if (_isOwnerSilent) {
         const _learned = processImplicitOwnerLearning(lastUserMessage)
         if (_learned.length > 0) {
-          // نُعلم المالك بما تعلّمناه — بدون مقاطعة التدفق الطبيعي
           const _learnSummary = _learned.map(l => {
             if (l.type === 'correction')  return `✔️ تصحيح: "${l.correct}"`
             if (l.type === 'definition')  return `📖 تعريف: **${l.term}** = ${l.definition}`
@@ -18896,26 +18926,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           return res.status(200).json({
             content: `✅ **تم التسجيل والحفظ تلقائياً:**\n\n${_learnSummary}\n\n> سأعتمد هذا في جميع ردودي القادمة.`,
             _ownerLearned: true,
-          })
-        }
-      }
-    }
-
-    // ── Pending Correction Buffer — تصحيح معلَّق من سياق المحادثة ─────────────
-    // يُفعَّل عندما يختلف المالك مع الرد السابق حتى بدون صيغة صريحة.
-    // المالك يؤكد لاحقاً بكتابة "احفظ التصحيح".
-    const _hasPendingSignal = /^(?:لا[,،]?\s*|لأ[,،]?\s*|كلا[,،]?\s*|غلط[,،]?\s*|خطأ[,،]?\s*|ماشي صحيح|مش صحيح|في الحقيقة|في الواقع)/i.test(lastUserMessage.trim())
-    if (_hasPendingSignal) {
-      const _isOwnerPending = await verifyOwnerToken(_ownerTok)
-      if (_isOwnerPending) {
-        // آخر رد صادر من الوكيل في سجل المحادثة
-        const _lastAgentMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
-        const _pendingResult = detectAndStorePendingCorrection(lastUserMessage, _lastAgentMsg)
-        if (_pendingResult) {
-          console.log(`[PendingCorrection] 🕐 owner disagreement detected — pending stored`)
-          return res.status(200).json({
-            content: `🕐 **لاحظت تصحيحاً محتملاً:**\n\n✔️ **الصواب:** ${_pendingResult.correct}\n${_pendingResult.wrong ? `\n❌ **الخاطئ (ردي السابق):**\n> ${_pendingResult.wrong.slice(0, 120)}${_pendingResult.wrong.length > 120 ? '...' : ''}\n` : ''}\n> اكتب **احفظ التصحيح** لتأكيد الحفظ، أو أكمل المحادثة لتجاهله.`,
-            _pendingCorrection: true,
           })
         }
       }
@@ -24255,10 +24265,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       ? 'وضع الاستدعاء الحالي: /github — ركّز على GitHub والكود والمستودعات والإجراءات البرمجية.'
       : 'وضع الاستدعاء الحالي: @dz-agent — ركّز على البحث الحي والخدمات الجزائرية وGitHub عند الحاجة.'
 
-  const _yearNow = getCurrentYear()
+  const _yearNow    = getCurrentYear()
+  const _seasonNow  = getCurrentSeasonAr()
   const _todayHuman = getCurrentDateString('ar-DZ')
-  const _hijriDate = getHijriDateString()
-  const _timeNow = getCurrentTimeString()
+  const _hijriDate  = getHijriDateString()
+  const _timeNow    = getCurrentTimeString()
   const _qType = queryAnalysis?.questionType || 'general'
   const _isCode      = ['code'].includes(_qType) || !!githubToken
   const _isEdu       = _qType === 'education'
@@ -24500,7 +24511,15 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     DZ_ADVANCED_REASONING_PROMPT,
     // ── CORE (always) ─────────────────────────────────────────────────────
     `أنت DZ Agent 🇩🇿 — وكيل ذكاء اصطناعي متعدد الوكلاء أنشأه Nadir Houamria (Nadir Infograph) — منصة DZ-GPT.`,
-    `اليوم: ${_todayHuman} | الوقت الحالي: ${_timeNow} (توقيت الجزائر) | التاريخ الهجري: ${_hijriDate} | السنة: ${_yearNow} | ${invocationInstruction}`,
+    `اليوم: ${_todayHuman} | الوقت الحالي: ${_timeNow} (توقيت الجزائر) | التاريخ الهجري: ${_hijriDate} | السنة الحالية: ${_yearNow} (عام ${_yearNow}) | الفصل الحالي: ${_seasonNow} | ${invocationInstruction}`,
+    `⏰ وعيك الزمني الإلزامي: أنت تعمل في عام ${_yearNow}. الوقت الحالي الآن هو ${_seasonNow} من عام ${_yearNow}. أي سؤال عن "الآن" أو "اليوم" أو "هذه السنة" أو "الفصل الحالي" → أجب بناءً على هذه المعطيات الحقيقية. لا تستخدم تاريخاً من بيانات تدريبك إذا تعارض مع هذا التاريخ الحقيقي.`,
+    `🗣️ تعلّم الدارجة الجزائرية المستمر (إلزامي):
+أنت تتعلم وتتطور باستمرار لفهم اللهجة الجزائرية (الدارجة). عندما يكتب المستخدم بالدارجة:
+① افهم المعنى حتى لو لم تعرف الكلمة تحديداً — استنبط من السياق
+② أجب بنفس أسلوبه (دارجة إذا كتب دارجة، فصحى إذا كتب فصحى)
+③ إذا صادفت كلمة دارجة جديدة → تعلّمها وخزّنها في ذاكرتك للمحادثات القادمة
+④ الكلمات الدارجة الشائعة التي تعرفها: واش (هل/ماذا) | بزاف (كثيراً) | كاين/ماكاينش (يوجد/لا يوجد) | طاح (سقط) | ولاّ (أو/أصبح) | نتا/نتي (أنت) | حنا/إحنا (نحن) | هاك/هاكا (هذا) | حانوت (دكان) | حنكورة (طماطم) | شنو/واش (ما/ماذا) | عندي/معندكش (عندي/ليس عندك) | راهو/راهي (هو/هي الآن) | نروح (أذهب) | جاء (أتى)
+⑤ إذا لم تفهم كلمة دارجة → اسأل المستخدم عن معناها بأسلوب ودود واحفظها`,
     `⚠️ قاعدة اللغة الإلزامية (صارمة جداً): أجب دائماً بنفس لغة المستخدم فقط. إذا كتب بالعربية → أجب بالعربية الفصحى أو الدارجة الجزائرية حصراً. إذا كتب بالفرنسية → أجب بالفرنسية. إذا كتب بالإنجليزية → أجب بالإنجليزية. ❌ يُحظر تماماً وبشكل مطلق إدراج أي كلمة أو مقطع بالفيتنامية أو الصينية أو اليابانية أو الكورية أو التايلاندية أو الهندية أو الإندونيسية أو الملايوية أو البرتغالية أو الروسية أو أي لغة أخرى غير مطلوبة — حتى كلمة واحدة. ❌ لا تستبدل كلمة عربية بمرادفها في لغة أجنبية مهما كان السبب. إذا كانت لغة المستخدم غير واضحة → استخدم العربية الفصحى. لا استثناءات.`,
     // ── SELF-AWARENESS (يُجيب إذا سأل المستخدم عن هويتك/مهاراتك/تقنياتك) ──
     `إذا سأل المستخدم عن نفسك (من أنت / كم وكيل تستخدم / ما مهاراتك / ما تقنياتك / ما قدراتك) أجب بهذا دون كشف أسماء المزودين أو مفاتيح API:

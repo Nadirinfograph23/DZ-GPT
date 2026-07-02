@@ -1,8 +1,8 @@
 {
-  "commit": "5656c5f4007b33c9f7cca7cb51dd2a7e4c0d375a",
-  "commitShort": "5656c5f4",
+  "commit": "ec4c15322cbed551775daf2542d804e8d680d5be",
+  "commitShort": "ec4c1532",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: أزرار الإجابة في سطر واحد + نسخ السؤال بالضغط المطوّل + عقيدة DZ Agent المسلم + مهارات التفكير المتخصصة (تفكير/تدقيق/بحث/علمي/أدبي/رياضي/تاريخي/برمجي)",
-  "deployedAt": "2026-07-02T03:07:09.963343Z",
+  "message": "fix: تشديد أنماط كشف الدين + إصلاح fallback نسخ السؤال + أزرار سطر واحد",
+  "deployedAt": "2026-07-02T03:08:55.506343Z",
   "deployedBy": "scripts/deploy.py"
 }

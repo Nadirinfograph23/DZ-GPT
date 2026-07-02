@@ -1,8 +1,8 @@
 {
-  "commit": "ec4c15322cbed551775daf2542d804e8d680d5be",
-  "commitShort": "ec4c1532",
+  "commit": "60fb87b47c9643f9b459a9175104a35538b0cc8f",
+  "commitShort": "60fb87b4",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: تشديد أنماط كشف الدين + إصلاح fallback نسخ السؤال + أزرار سطر واحد",
-  "deployedAt": "2026-07-02T03:08:55.506343Z",
+  "message": "feat: وعي عام 2026 + فصل السنة + تعلم الدارجة + تصحيح المالك فوري (موحّد بدون تنافس)",
+  "deployedAt": "2026-07-02T03:22:31.288625Z",
   "deployedBy": "scripts/deploy.py"
 }

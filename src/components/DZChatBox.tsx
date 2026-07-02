@@ -9631,48 +9631,49 @@ ${rows}
               {msg.role === 'assistant' && !msg.pendingAction && (
                 <div className="dz-message-actions">
                   {msg.content && (
-                    <button className="dz-action-btn" onClick={() => copyMessage(msg.id, msg.content)}>
-                      {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
-                      {copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
+                    <button
+                      className={`dz-action-btn${copiedId === msg.id ? ' dz-action-btn--copied' : ''}`}
+                      onClick={() => copyMessage(msg.id, msg.content)}
+                      title={copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
+                    >
+                      {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
                     </button>
                   )}
                   {msg.content && msg.richType !== 'image' && (
                     <button
-                      className={`dz-action-btn dz-action-btn--speak${ttsState?.id === msg.id ? ' dz-action-btn--speak-active' : ''}`}
+                      className={`dz-action-btn${ttsState?.id === msg.id ? ' dz-action-btn--speak-active' : ''}`}
                       onClick={() => speakMessage(msg.id, msg.content)}
                       title={ttsState?.id === msg.id && ttsState.status === 'playing' ? 'إيقاف الصوت' : 'استمع بصوت عالٍ'}
                       disabled={ttsState !== null && ttsState.id !== msg.id && ttsState.status === 'loading'}
                     >
                       {ttsState?.id === msg.id && ttsState.status === 'loading' ? (
-                        <Loader2 size={13} className="dz-tts-spin" />
+                        <Loader2 size={14} className="dz-tts-spin" />
                       ) : ttsState?.id === msg.id && ttsState.status === 'playing' ? (
-                        <Square size={13} />
+                        <Square size={14} />
                       ) : (
-                        <Volume2 size={13} />
+                        <Volume2 size={14} />
                       )}
-                      {ttsState?.id === msg.id && ttsState.status === 'loading' ? '...' :
-                       ttsState?.id === msg.id && ttsState.status === 'playing' ? 'إيقاف' : 'استمع'}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (
-                    <button className="dz-action-btn" onClick={regenerate}>
-                      <RotateCcw size={13} />
-                      إعادة المحاولة
+                    <button className="dz-action-btn" onClick={regenerate} title="إعادة المحاولة">
+                      <RotateCcw size={14} />
                     </button>
                   )}
+                  <span className="dz-action-divider" />
                   <button
                     className={`dz-action-btn dz-action-btn--up${ratings[msg.id] === 'up' ? ' dz-action-btn--rated' : ''}`}
                     title="إجابة جيدة"
                     onClick={() => sendRating(msg.id, 'up', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
                   >
-                    <ThumbsUp size={13} />
+                    <ThumbsUp size={14} />
                   </button>
                   <button
                     className={`dz-action-btn dz-action-btn--down${ratings[msg.id] === 'down' ? ' dz-action-btn--rated' : ''}`}
                     title="إجابة سيئة"
                     onClick={() => sendRating(msg.id, 'down', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
                   >
-                    <ThumbsDown size={13} />
+                    <ThumbsDown size={14} />
                   </button>
                 </div>
               )}

@@ -4199,6 +4199,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [lpCopiedId, setLpCopiedId] = useState<string | null>(null)
+  const lpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [typingId, setTypingId] = useState<string | null>(null)
   const [ttsState, setTtsState] = useState<{ id: string; status: 'loading' | 'playing' } | null>(null)
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -9577,7 +9579,30 @@ ${rows}
                     </>
                   )
                 ) : (
-                  msg.content
+                  <span
+                    style={{ cursor: 'text', userSelect: 'text' }}
+                    onTouchStart={() => {
+                      lpTimerRef.current = setTimeout(() => {
+                        navigator.clipboard.writeText(msg.content).catch(() => {})
+                        setLpCopiedId(msg.id)
+                        setTimeout(() => setLpCopiedId(null), 2000)
+                      }, 600)
+                    }}
+                    onTouchEnd={() => { if (lpTimerRef.current) clearTimeout(lpTimerRef.current) }}
+                    onTouchMove={() => { if (lpTimerRef.current) clearTimeout(lpTimerRef.current) }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      navigator.clipboard.writeText(msg.content).catch(() => {})
+                      setLpCopiedId(msg.id)
+                      setTimeout(() => setLpCopiedId(null), 2000)
+                    }}
+                    title="اضغط مطولاً لنسخ السؤال"
+                  >
+                    {msg.content}
+                    {lpCopiedId === msg.id && (
+                      <span style={{ marginRight: 8, fontSize: '0.7rem', color: '#34d399', fontWeight: 600 }}>✓ تم النسخ</span>
+                    )}
+                  </span>
                 )}
               </div>
               {msg.richType === 'find-input' && msg.findRepo && (

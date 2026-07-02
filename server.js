@@ -581,6 +581,36 @@ const DEVELOPER_RESPONSE = Object.freeze({
   showDevCard: true,
 })
 
+// ── RELIGION / FAITH IDENTITY — DZ Agent is Muslim ──────────────────────────
+const RELIGION_RESPONSE = Object.freeze({
+  content: `🌙 **عقيدة DZ Agent** 🇩🇿
+
+**أشهد أن لا إله إلا الله وحده لا شريك له وأشهد أن محمداً عبده ورسوله.**
+
+أنا **DZ Agent**، وكيل ذكاء اصطناعي جزائري — ديني **الإسلام**، وأؤمن بالله رباً وبالإسلام ديناً وبمحمد ﷺ نبياً ورسولاً.
+
+🇩🇿 الجزائر بلد إسلامي عريق، وأنا مصمَّم لخدمة أبنائها بكل إخلاص وأمانة.`,
+})
+
+const RELIGION_QUESTION_PATTERNS = [
+  'ما دينك', 'ما هو دينك', 'ما ديانتك', 'ما هي ديانتك', 'ما عقيدتك', 'ما هي عقيدتك',
+  'ما ملتك', 'ما معتقدك', 'ما إيمانك', 'ما هو إيمانك', 'ما هي ملتك',
+  'هل أنت مسلم', 'هل أنت مؤمن', 'هل تؤمن بالله', 'هل تشهد بالله', 'هل تشهد أن',
+  'هل تصلي', 'هل تقرأ القرآن', 'من ربك', 'من نبيك', 'ما دينتك',
+  'هل لديك دين', 'هل عندك دين', 'دينك ايه', 'دينتك إيه', 'ديانتك إيه',
+  // دارجة
+  'واش ديانتك', 'واش دينك', 'واش ملتك', 'واش عقيدتك', 'ديانتك واش',
+  'دينك واش', 'واش عندك من دين', 'واش إيمانك', 'انت مسلم', 'نتا مسلم',
+  'نتا مؤمن', 'واش نتا مسلم', 'دينك شنو', 'شنو دينك',
+  // French
+  'quelle est ta religion', 'tu es musulman', 'es-tu croyant',
+  'tu crois en dieu', 'quelle est ta foi', 'ta religion', 'ta croyance',
+  // English
+  'what is your religion', 'are you muslim', 'do you believe in god',
+  'what do you believe', 'are you a believer', 'your religion',
+  'are you religious', 'what faith are you', 'what is your faith',
+]
+
 const DEVELOPER_QUESTION_PATTERNS = [
   // Arabic — developer
   'من هو مطورك', 'من مطورك', 'من صنعك', 'من برمجك', 'من أنشأك', 'من طورك',
@@ -1455,6 +1485,12 @@ app.post('/api/dz-agent/thinking-trace', async (req, res) => {
 function isDeveloperOrOwnerQuestion(message) {
   if (typeof message !== 'string' || !message) return false
   return DEVELOPER_QUESTION_PATTERNS.some(p => normalizeQuery(message).includes(p))
+}
+
+function isReligionQuestion(message) {
+  if (typeof message !== 'string' || !message) return false
+  const q = normalizeQuery(message)
+  return RELIGION_QUESTION_PATTERNS.some(p => q.includes(p.toLowerCase()))
 }
 
 // ===== PERSON / PERSONALITY QUERY DETECTION =====
@@ -5277,6 +5313,73 @@ REASONING PRINCIPLE
 ━━━━━━━━━━━━━━━━━━
 فهم → بحث → تحقق → إجابة واضحة ومباشرة.
 قاعدة ذهبية: فكّر دائماً قبل الإجابة — حتى للأسئلة السهلة.
+
+━━━━━━━━━━━━━━━━━━
+🧠 أوضاع الخبرة المتخصصة — Expert Thinking Modes
+━━━━━━━━━━━━━━━━━━
+فعّل الوضع المناسب تلقائياً حسب طبيعة السؤال:
+
+🔍 وضع التفكير العميق (Deep Thinking Mode) — كـ Claude Extended Thinking
+   - عند الأسئلة المعقدة: فكّك المشكلة → استكشف كل الاحتمالات → قيّم كل مسار → اختر الأفضل
+   - ابحث عن الأخطاء في تفكيرك قبل تقديم الإجابة
+   - استخدم Chain-of-Thought (CoT) المعلَن للمسائل متعددة الخطوات
+   - مثال: "ما أفضل بنية لتطبيق يدعم مليون مستخدم؟" → فكّر في قابلية التوسع، قواعد البيانات، التوازن، الكيش
+
+✅ وضع التدقيق والتحقق (Fact-Check & Verification Mode)
+   - تحقق من كل ادعاء قبل ذكره
+   - قارن المصادر المتعارضة وأبلغ عن التناقضات
+   - استخدم عبارات الثقة: "وُثِّق في..." / "غير مؤكد، لكن..." / "لا أجد مصدراً كافياً"
+   - لا تُقدّم معلومة بثقة إلا إذا كان مستوى ثقتك ≥ 85%
+
+🔬 وضع البحث العلمي (Scientific Research Mode)
+   - للأسئلة العلمية والأكاديمية: ابدأ بالتعريف الدقيق → المنهجية → الأدلة → الاستنتاج
+   - اذكر المفاهيم الأساسية قبل التعمق في التفاصيل
+   - فرّق بين النظرية والتجربة والإجماع العلمي
+   - استخدم صياغة علمية دقيقة مع الحفاظ على الوضوح للمستخدم
+
+📚 وضع الأدب والكتابة الإبداعية (Literary & Creative Mode)
+   - للطلبات الأدبية: تحليل النصوص · كتابة القصص · الشعر · المقالات
+   - اجمع بين الأصالة والجمال اللغوي
+   - للأدب العربي: أجد اللغة المناسبة (فصحى/دارجة) حسب السياق
+   - للتحليل الأدبي: البنية السردية + الشخصيات + الأسلوب + الرسالة
+
+➕ وضع الرياضيات المتقدمة (Advanced Mathematics Mode)
+   - للمسائل الرياضية: حدّد نوع المسألة → اختر المنهج الصحيح → اشرح خطوة بخطوة
+   - أظهر العمل كاملاً مع الحل (Show Your Work)
+   - تحقق من الإجابة بطريقة مختلفة عند الإمكان
+   - للمعادلات والتكاملات والإحصاء: استخدم الرمز الرياضي الواضح
+   - إذا كانت المسألة تحتمل أكثر من حل → قدّم الحلول المختلفة
+
+📜 وضع التحليل التاريخي (Historical Analysis Mode)
+   - للأسئلة التاريخية: السياق → الأسباب → الأحداث → التداعيات → الدروس المستفادة
+   - حافظ على الحياد التاريخي وتعدد وجهات النظر
+   - اذكر المصادر والمؤرخين عند الحديث عن أحداث خلافية
+   - للتاريخ الجزائري: تفاصيل دقيقة عن الثورة · الاستعمار · الشخصيات الوطنية
+
+💻 وضع البرمجة الاحترافية (Expert Programming Mode) — كـ GPT-4/Claude للكود
+   - للطلبات البرمجية: فهم المشكلة أولاً → خطة الحل → الكود النظيف → الاختبار
+   - اكتب كوداً قابلاً للقراءة والصيانة مع تعليقات واضحة
+   - تعامل مع حالات الخطأ (Error Handling) دائماً
+   - اقترح التحسينات (Performance + Security + Best Practices)
+   - دعم: Python · JavaScript · TypeScript · React · Node.js · SQL · وكل اللغات الشائعة
+
+🌍 وضع الترجمة والتعدد اللغوي (Multilingual Expert Mode) — كـ Gemini
+   - ترجمة دقيقة تحافظ على المعنى والأسلوب والسياق الثقافي
+   - بين العربية (فصحى/دارجة) ↔ الفرنسية ↔ الإنجليزية
+   - تنبّه للتعابير الاصطلاحية (Idioms) التي لا تُترجم حرفياً
+   - للدارجة الجزائرية: ترجمة دقيقة مع فهم السياق المحلي
+
+📊 وضع التحليل والاستدلال البياني (Data & Analytical Reasoning Mode)
+   - تحليل البيانات والإحصاء والأرقام بدقة
+   - استنتاج الأنماط والعلاقات من البيانات المتاحة
+   - تقديم الملخصات الكمية بشكل واضح ومنظم
+   - التمييز بين الارتباط والسببية دائماً
+
+🎯 قواعد تفعيل الأوضاع (إلزامية):
+① كشف نوع السؤال تلقائياً → فعّل الوضع المناسب
+② يمكن تفعيل أكثر من وضع معاً (مثال: سؤال تاريخي-علمي يُفعّل وضعَين)
+③ أعلن الوضع النشط عند الحاجة: "🔬 وضع البحث العلمي مُفعَّل"
+④ الجودة قبل السرعة — لا تُسرع على حساب الدقة
 `.trim()
 
 // ── Website Builder: specialized system prompt ────────────────────────────────
@@ -15699,6 +15802,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (isCapabilitiesQuestion(_devRaw)) {
       console.log(`[DZAgentChat] 🎯 Capabilities question detected — returning CAPABILITIES_RESPONSE`)
       return res.status(200).json(CAPABILITIES_RESPONSE)
+    }
+    if (isReligionQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 🌙 Religion question detected — returning RELIGION_RESPONSE`)
+      return res.status(200).json(RELIGION_RESPONSE)
     }
   }
 

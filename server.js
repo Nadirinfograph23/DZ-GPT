@@ -592,23 +592,23 @@ const RELIGION_RESPONSE = Object.freeze({
 🇩🇿 الجزائر بلد إسلامي عريق، وأنا مصمَّم لخدمة أبنائها بكل إخلاص وأمانة.`,
 })
 
+// أنماط مُقيَّدة تتحدث صراحةً عن هوية DZ Agent الدينية — لا تُطابق سياقات فلسفية عامة
 const RELIGION_QUESTION_PATTERNS = [
-  'ما دينك', 'ما هو دينك', 'ما ديانتك', 'ما هي ديانتك', 'ما عقيدتك', 'ما هي عقيدتك',
-  'ما ملتك', 'ما معتقدك', 'ما إيمانك', 'ما هو إيمانك', 'ما هي ملتك',
-  'هل أنت مسلم', 'هل أنت مؤمن', 'هل تؤمن بالله', 'هل تشهد بالله', 'هل تشهد أن',
-  'هل تصلي', 'هل تقرأ القرآن', 'من ربك', 'من نبيك', 'ما دينتك',
-  'هل لديك دين', 'هل عندك دين', 'دينك ايه', 'دينتك إيه', 'ديانتك إيه',
+  // عربية — أسئلة مباشرة موجّهة للوكيل
+  'ما دينك', 'ما هو دينك', 'ما ديانتك', 'ما هي ديانتك',
+  'ما عقيدتك', 'ما هي عقيدتك', 'ما ملتك', 'ما هي ملتك',
+  'ما معتقدك', 'ما دينتك', 'دينك إيه', 'دينتك إيه', 'ديانتك إيه',
+  'هل أنت مسلم', 'هل أنت مؤمن بالله', 'هل تؤمن بالله',
+  'هل تشهد أن لا إله', 'من ربك', 'من نبيك',
+  'هل لديك دين', 'هل عندك دين',
   // دارجة
-  'واش ديانتك', 'واش دينك', 'واش ملتك', 'واش عقيدتك', 'ديانتك واش',
-  'دينك واش', 'واش عندك من دين', 'واش إيمانك', 'انت مسلم', 'نتا مسلم',
-  'نتا مؤمن', 'واش نتا مسلم', 'دينك شنو', 'شنو دينك',
+  'واش ديانتك', 'واش دينك', 'واش ملتك', 'واش عقيدتك',
+  'ديانتك واش', 'دينك واش', 'واش نتا مسلم', 'دينك شنو', 'شنو دينك',
   // French
-  'quelle est ta religion', 'tu es musulman', 'es-tu croyant',
-  'tu crois en dieu', 'quelle est ta foi', 'ta religion', 'ta croyance',
-  // English
-  'what is your religion', 'are you muslim', 'do you believe in god',
-  'what do you believe', 'are you a believer', 'your religion',
-  'are you religious', 'what faith are you', 'what is your faith',
+  'quelle est ta religion', 'tu es musulman', 'es-tu musulman', 'quelle est ta foi',
+  // English — direct to-the-agent only
+  'what is your religion', 'are you muslim', 'what is your faith', 'what religion are you',
+  'are you religious', 'what faith are you',
 ]
 
 const DEVELOPER_QUESTION_PATTERNS = [
@@ -1489,8 +1489,15 @@ function isDeveloperOrOwnerQuestion(message) {
 
 function isReligionQuestion(message) {
   if (typeof message !== 'string' || !message) return false
-  const q = normalizeQuery(message)
-  return RELIGION_QUESTION_PATTERNS.some(p => q.includes(p.toLowerCase()))
+  const q = normalizeQuery(message).trim()
+  // مطابقة دقيقة: العبارة يجب أن تشكّل معظم الرسالة (< 2.5× طول النمط)
+  // هذا يمنع التقاط "ما دينك" في جملة طويلة عن الأديان المقارنة
+  return RELIGION_QUESTION_PATTERNS.some(p => {
+    const pLower = p.toLowerCase()
+    if (!q.includes(pLower)) return false
+    // منع التقاط السؤال إذا كانت الرسالة أطول بكثير (سياق مختلف غالباً)
+    return q.length <= pLower.length * 2.5 + 15
+  })
 }
 
 // ===== PERSON / PERSONALITY QUERY DETECTION =====

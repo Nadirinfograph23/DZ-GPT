@@ -9591,10 +9591,14 @@ ${rows}
                     onTouchEnd={() => { if (lpTimerRef.current) clearTimeout(lpTimerRef.current) }}
                     onTouchMove={() => { if (lpTimerRef.current) clearTimeout(lpTimerRef.current) }}
                     onContextMenu={(e) => {
+                      if (!navigator.clipboard) return // السماح للقائمة الافتراضية إذا لم تتوفر الـ API
                       e.preventDefault()
-                      navigator.clipboard.writeText(msg.content).catch(() => {})
-                      setLpCopiedId(msg.id)
-                      setTimeout(() => setLpCopiedId(null), 2000)
+                      navigator.clipboard.writeText(msg.content)
+                        .then(() => {
+                          setLpCopiedId(msg.id)
+                          setTimeout(() => setLpCopiedId(null), 2000)
+                        })
+                        .catch(() => {/* فشل النسخ — لا نكسر التجربة */})
                     }}
                     title="اضغط مطولاً لنسخ السؤال"
                   >

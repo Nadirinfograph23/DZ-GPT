@@ -1,8 +1,8 @@
 {
-  "commit": "661ebe4510fc39d95304fdda8b33a675badff6f2",
-  "commitShort": "661ebe45",
+  "commit": "824c8597127cd04782057bc4a99633505ef391ec",
+  "commitShort": "824c8597",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "ui: أيقونات أكشن ChatGPT-style — بدون إطار/نص، سطر واحد + فاصل بين المجموعتين",
-  "deployedAt": "2026-07-02T10:46:30.587566Z",
+  "message": "feat: upgrade core infrastructure — enhanced cache/logger/resilience/intent-router/context-budget/response-guard/rate-limiters/perf-monitor",
+  "deployedAt": "2026-07-06T23:55:44.944041Z",
   "deployedBy": "scripts/deploy.py"
 }

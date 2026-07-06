@@ -28,6 +28,8 @@
  *   getRouterHealthSnapshot - () => object
  */
 import { Router } from 'express'
+import perfMonitor from '../lib/performance-monitor.js'
+import { cacheRegistry } from '../lib/cache.js'
 
 export function createHealthRouter(deps = {}) {
   const {
@@ -50,6 +52,41 @@ export function createHealthRouter(deps = {}) {
   // ── Simple uptime ping ────────────────────────────────────────
   router.get('/health', (_req, res) => {
     res.json({ ok: true, uptime: Math.floor(process.uptime()), ts: new Date().toISOString() })
+  })
+
+  // ── Performance dashboard (full snapshot) ─────────────────────
+  router.get('/perf', (_req, res) => {
+    try {
+      res.json(perfMonitor.snapshot())
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }) }
+  })
+
+  // ── Health summary (lean — for monitoring services) ──────────
+  router.get('/health/live', (_req, res) => {
+    try {
+      res.json({ ok: true, ...perfMonitor.healthSummary(), ts: new Date().toISOString() })
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }) }
+  })
+
+  // ── Cache stats ────────────────────────────────────────────────
+  router.get('/cache/stats', (_req, res) => {
+    try {
+      res.json({ caches: cacheRegistry.snapshot(), totalBytes: cacheRegistry.totalBytes() })
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }) }
+  })
+
+  // ── Cache invalidation (admin) ────────────────────────────────
+  router.post('/cache/invalidate', (req, res) => {
+    const { namespace, pattern } = req.body || {}
+    if (!namespace) return res.status(400).json({ error: 'namespace required' })
+    const cache = cacheRegistry.get(namespace)
+    if (!cache) return res.status(404).json({ error: `Cache "${namespace}" not found` })
+    if (pattern) {
+      const count = cache.invalidatePattern(new RegExp(pattern))
+      return res.json({ ok: true, invalidated: count, namespace, pattern })
+    }
+    cache.clear()
+    res.json({ ok: true, cleared: true, namespace })
   })
 
   // ── Message ratings ───────────────────────────────────────────

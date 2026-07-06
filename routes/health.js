@@ -75,16 +75,29 @@ export function createHealthRouter(deps = {}) {
     } catch (err) { res.status(500).json({ ok: false, error: err.message }) }
   })
 
-  // ── Cache invalidation (admin) ────────────────────────────────
+  // ── Cache invalidation (admin-only) ──────────────────────────
   router.post('/cache/invalidate', (req, res) => {
+    // Auth guard — require DEPLOY_ADMIN_TOKEN or X-Admin-Token header
+    const adminToken = process.env.DEPLOY_ADMIN_TOKEN || process.env.CHAT_ADMIN_SECRET
+    const provided = req.headers['x-admin-token'] || req.body?.adminToken
+    if (!adminToken || provided !== adminToken) {
+      return res.status(403).json({ error: 'Unauthorized — admin token required' })
+    }
+
     const { namespace, pattern } = req.body || {}
     if (!namespace) return res.status(400).json({ error: 'namespace required' })
     const cache = cacheRegistry.get(namespace)
     if (!cache) return res.status(404).json({ error: `Cache "${namespace}" not found` })
+
     if (pattern) {
-      const count = cache.invalidatePattern(new RegExp(pattern))
+      // Validate regex before use
+      let re
+      try { re = new RegExp(pattern) }
+      catch (err) { return res.status(400).json({ error: `Invalid pattern: ${err.message}` }) }
+      const count = cache.invalidatePattern(re)
       return res.json({ ok: true, invalidated: count, namespace, pattern })
     }
+
     cache.clear()
     res.json({ ok: true, cleared: true, namespace })
   })

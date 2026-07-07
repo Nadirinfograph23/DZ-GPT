@@ -1,8 +1,8 @@
 {
-  "commit": "c2faf2d53dc82757133ee4738ff63802947c6681",
-  "commitShort": "c2faf2d5",
+  "commit": "59ee7ef3cf0b5e73f41e5bc1eabf174ce2d88782",
+  "commitShort": "59ee7ef3",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "ui: lighten DZ Agent background to Replit-style dark gray\n\n- body: #0a0a0a → #1c1d1f\n- .dza-layout: #1e1e1e → #1e1f21\n- .dza-sidebar: #171717 → #1a1b1e\n- .sidebar (App.css): #111111 → #1a1b1e\n- header bg: rgba(10,10,10) → rgba(24,25,28)\n- toolbar/input area bg: rgba(14,14,14) → rgba(24,25,28)\n- input container: rgba(20,20,20) → rgba(34,35,39)\n- assistant message bg: rgba(15,15,15) → rgba(30,31,34)\n- all #252525/#2a2a2a/#2f2f2f/#171717 shifted to softer dark grays",
-  "deployedAt": "2026-07-07T00:54:17.593404Z",
+  "message": "ui: fix remaining near-black surfaces in DZ Agent\n\n- Theme override block: #212121/#171717 → #1e1f21/#1a1b1e (consistent with base)\n- App.css .main: #0a0a0a → #1c1d1f\n- App.css .header: rgba(10,10,10) → rgba(24,25,28)\n- App.css .input-area: #0a0a0a → #1c1d1f\n- dz-chatbox.css secondary panels: rgba(15,15,15,...) → rgba(28,29,32,...)",
+  "deployedAt": "2026-07-07T00:56:30.942815Z",
   "deployedBy": "scripts/deploy.py"
 }

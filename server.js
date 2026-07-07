@@ -8709,7 +8709,10 @@ function detectFootballQuery(msg) {
     'مباراة', 'مباريات', 'نتيجة', 'نتائج', 'هدف', 'أهداف', 'بطولة', 'ملعب', 'تصفيات',
     'كرة القدم', 'الكرة', 'لاعب', 'مدرب', 'فريق', 'فرق', 'كأس', 'رياضة كرة',
     // Arabic — competitions
-    'دوري أبطال', 'دوري الأبطال', 'تشامبيونز ليغ', 'يورو', 'كأس العالم', 'مونديال',
+    // ⚠️ لا تضف كلمة 'يورو' وحدها — ستطابق "اليورو" كعملة (سعر الدولار واليورو...)
+    // استخدم صيغاً محددة فقط
+    'دوري أبطال', 'دوري الأبطال', 'تشامبيونز ليغ', 'كأس العالم', 'مونديال',
+    'يورو 2024', 'يورو 2025', 'يورو 2026', 'بطولة يورو', 'يورو كأس', 'أمم أوروبا',
     'الدوري الإسباني', 'الليغا', 'الدوري الإنجليزي', 'البريميرليغ', 'بريميرليق',
     'الدوري الألماني', 'البوندسليغا', 'الدوري الإيطالي', 'السيريا', 'الدوري الفرنسي',
     'أمم أفريقيا', 'كان', 'أمم أوروبا', 'كاف', 'فيفا', 'يويفا',
@@ -22972,7 +22975,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   const isDZDialectFootballQuery = /(?:كاين\s*(?:ماتشات?|مقابلات?|في\s*الكورة|ماتش\b)|واش\s*(?:كاين|فيه)\s*(?:ماتش|في\s*الكورة|مقابلة)|شكون\s*(?:يلعب|راهم\s*يلعبو|يلعبو)|برنامج\s*(?:الماتشات|الكورة|المقابلات)|(?:ماتشات?|مقابلات?)\s*(?:اليوم|الليلة)|يلعبو?\s*(?:اليوم|الليلة)|(?:وين|فين)\s*(?:الكورة|الماتش)|الخضر\s*(?:ضد|مع|على\s*من|رايحة|تلعب)|آخر\s*ماتش\s*(?:للجزائر|الخضر)|رزنامة\s*المنتخب|برنامج\s*المنتخب|مع\s*من\s*رايحة\s*تلعب\s*الجزائر)/i.test(lastUserMessage)
 
   // ── Algeria-focused football query — فلترة على مباريات الجزائر ────────────
-  const isAlgeriaFocusedFootball = (isDZDialectFootballQuery || detectFootballQuery(lastUserMessage)) &&
+  // Guard: تجاهل تام إذا كان الاستعلام عملة (مثال: "الدينار الجزائري" → لا رياضة)
+  const isAlgeriaFocusedFootball = !isCurrencyQuery &&
+    (isDZDialectFootballQuery || detectFootballQuery(lastUserMessage)) &&
     /(?:الجزائر|المنتخب\s+الجزائري|منتخب\s+الجزائر|الخضر|الفنك|لالجيري|algeria\b|fennec)/i.test(lastUserMessage)
 
   // استفسار عام عن مباريات اليوم (حتى بدون تحديد دوري) — يشمل الدارجة الجزائرية
@@ -23781,7 +23786,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
   // Allow RSS for football NEWS queries (e.g. "أخبار المنتخب") — not just match-score queries
   // _isFootballNewsQuery is already defined earlier (before football context building)
-  if (newsQueryType && !isPrayerQuery && (!isFootballQuery || _isFootballNewsQuery)) {
+  // Guard: لا تحمّل feeds الأخبار لاستعلامات العملة — "سعر الدولار اليوم" يحتوي "اليوم"
+  // لكنه ليس خبراً ← العملة لها مسارها الخاص (currency fast-path)
+  if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
 
     // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────

@@ -1,8 +1,8 @@
 {
-  "commit": "c03a607b292218c9a12864301a044a3f2be46586",
-  "commitShort": "c03a607b",
+  "commit": "0ede021e29ae67310f065821cc63bfd621ae161b",
+  "commitShort": "0ede021e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: message action icons — bigger size (14→17), more spacing, always visible (remove opacity:0/hover)",
-  "deployedAt": "2026-07-07T00:02:30.456119Z",
+  "message": "fix: intent misclassification — currency queries ('سعر الدولار واليورو مقابل الدينار') were routed to sports/news\n\nBugs fixed:\n1. detectFootballQuery: removed bare 'يورو' keyword (matched Euro currency)\n   → replaced with specific patterns: 'يورو 2024', 'بطولة يورو', 'أمم أوروبا'\n2. isAlgeriaFocusedFootball: added !isCurrencyQuery guard\n   → 'الدينار الجزائري' was triggering Algeria football context\n3. RSS news fetch block: added !isCurrencyQuery guard\n   → 'اليوم' in newsKw was causing sports RSS feeds to be injected for currency queries",
+  "deployedAt": "2026-07-07T00:25:09.247919Z",
   "deployedBy": "scripts/deploy.py"
 }

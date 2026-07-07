@@ -22,7 +22,7 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.35rem 0.75rem;
-  background: rgba(14, 14, 14, 0.9);
+  background: rgba(24, 25, 28, 0.97);
   border-bottom: 1px solid rgba(16, 163, 127, 0.12);
   flex-shrink: 0;
   min-height: 38px;
@@ -203,7 +203,7 @@
 }
 
 .dz-message--assistant .dz-message-text {
-  background: rgba(15, 15, 15, 0.7);
+  background: rgba(30, 31, 34, 0.85);
   border-color: rgba(16, 163, 127, 0.1);
 }
 
@@ -559,7 +559,7 @@
 .dz-input-area {
   flex-shrink: 0;
   border-top: 1px solid rgba(16, 163, 127, 0.12);
-  background: rgba(14, 14, 14, 0.95);
+  background: rgba(24, 25, 28, 0.97);
   padding: 0.5rem 0.75rem 0.4rem;
   display: flex;
   flex-direction: column;
@@ -571,7 +571,7 @@
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  background: rgba(20, 20, 20, 0.8);
+  background: rgba(34, 35, 39, 0.9);
   border: 1px solid rgba(16, 163, 127, 0.18);
   border-radius: 12px;
   padding: 0.5rem 0.5rem 0.5rem 0.75rem;

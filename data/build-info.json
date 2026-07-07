@@ -1,8 +1,8 @@
 {
-  "commit": "8bada9eae4e8cb8f6585e3ad5b013d2f9f49c17f",
-  "commitShort": "8bada9ea",
+  "commit": "c03a607b292218c9a12864301a044a3f2be46586",
+  "commitShort": "c03a607b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: backward-compat invalidate() returns bool, auth guard on cache/invalidate, regex validation",
-  "deployedAt": "2026-07-06T23:58:03.062800Z",
+  "message": "fix: message action icons — bigger size (14→17), more spacing, always visible (remove opacity:0/hover)",
+  "deployedAt": "2026-07-07T00:02:30.456119Z",
   "deployedBy": "scripts/deploy.py"
 }

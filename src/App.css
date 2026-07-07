@@ -191,7 +191,7 @@ body:has(.dza-page) {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  background: #0a0a0a;
+  background: #1c1d1f;
 }
 
 /* ===== HEADER ===== */
@@ -200,8 +200,8 @@ body:has(.dza-page) {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid #1a1a1a;
-  background: rgba(10, 10, 10, 0.95);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(24, 25, 28, 0.97);
   backdrop-filter: blur(10px);
   flex-shrink: 0;
   z-index: 20;
@@ -679,7 +679,7 @@ body:has(.dza-page) {
 /* ===== INPUT ===== */
 .input-area {
   padding: 12px 20px 36px;
-  background: #0a0a0a;
+  background: #1c1d1f;
   flex-shrink: 0;
 }
 

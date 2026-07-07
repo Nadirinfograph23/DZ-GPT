@@ -10499,14 +10499,14 @@
    ChatGPT THEME OVERRIDE — Layout backgrounds & key surfaces
    ═══════════════════════════════════════════════════════════ */
 .dza-layout,
-.dz-agent-page { background: #212121 !important; }
+.dz-agent-page { background: #1e1f21 !important; }
 
-.dza-sidebar { background: #171717 !important; border-right: 1px solid rgba(255,255,255,0.08) !important; }
+.dza-sidebar { background: #1a1b1e !important; border-right: 1px solid rgba(255,255,255,0.07) !important; }
 .dza-sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.06) !important; }
 
 .dz-agent-header {
-  background: rgba(33,33,33,0.97) !important;
-  border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+  background: rgba(24,25,28,0.97) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
 }
 
 .dza-sidebar-logo-name {
@@ -10663,10 +10663,10 @@
    THEME: TEAL — explicit data-theme="teal"
    (matches the default block already defined)
    ═══════════════════════════════════════════ */
-.dza-layout[data-theme="teal"],
-.dza-layout[data-theme="teal"] .dz-agent-page { background: #212121 !important; }
-.dza-layout[data-theme="teal"] .dza-sidebar { background: #171717 !important; }
-.dza-layout[data-theme="teal"] .dz-agent-header { background: rgba(33,33,33,0.97) !important; }
+
+.dza-layout[data-theme="teal"] .dz-agent-page { background: #1e1f21 !important; }
+.dza-layout[data-theme="teal"] .dza-sidebar { background: #1a1b1e !important; }
+.dza-layout[data-theme="teal"] .dz-agent-header { background: rgba(24,25,28,0.97) !important; }
 .dza-layout[data-theme="teal"] .dza-sidebar-logo-name { background: linear-gradient(135deg,#10a37f,#0d9268) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; }
 .dza-layout[data-theme="teal"] .dza-sidebar-logo-icon { background: rgba(16,163,127,0.12) !important; border-color: rgba(16,163,127,0.28) !important; color: #10a37f !important; }
 .dza-layout[data-theme="teal"] .dza-sidebar-spark { color: #0d9268 !important; }

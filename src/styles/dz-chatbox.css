@@ -677,7 +677,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(15, 15, 15, 0.9);
+  background: rgba(28, 29, 32, 0.9);
   border: 1px solid rgba(16, 163, 127, 0.2);
   border-radius: 8px;
   padding: 0.4rem 0.65rem;
@@ -721,7 +721,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(15, 15, 15, 0.9);
+  background: rgba(28, 29, 32, 0.9);
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 8px;
   padding: 0.4rem 0.65rem;
@@ -810,7 +810,7 @@
 
 /* ── AGENT CONFIRMATION DIALOG ── */
 .amb-confirm-wrap {
-  background: rgba(15, 15, 15, 0.98);
+  background: rgba(26, 27, 30, 0.98);
   border: 1px solid rgba(16, 163, 127, 0.2);
   border-radius: 10px;
   padding: 0.75rem 1rem;
@@ -1162,7 +1162,7 @@
 
 /* ── BOOKS CARD ── */
 .dz-books-card {
-  background: rgba(15, 15, 15, 0.7);
+  background: rgba(28, 29, 32, 0.7);
   border: 1px solid rgba(16, 163, 127, 0.12);
   border-radius: 12px;
   overflow: hidden;
@@ -1210,7 +1210,7 @@
 
 /* ── ANDROID BUILD CARD ── */
 .dz-android-card {
-  background: rgba(15, 15, 15, 0.8);
+  background: rgba(28, 29, 32, 0.8);
   border: 1px solid rgba(52, 211, 153, 0.15);
   border-radius: 12px;
   overflow: hidden;
@@ -1262,7 +1262,7 @@
 
 /* ── CONFIRM GATE ── */
 .dz-confirm-gate {
-  background: rgba(15, 15, 15, 0.9);
+  background: rgba(28, 29, 32, 0.9);
   border: 1px solid rgba(251, 191, 36, 0.2);
   border-radius: 12px;
   overflow: hidden;
@@ -1344,7 +1344,7 @@
 .dz-gps-nearby-btn:hover { background: rgba(52, 211, 153, 0.18); }
 .dz-gps-nearby-btn--loading { opacity: 0.7; cursor: wait; }
 .dz-gps-nearby-card {
-  background: rgba(15, 15, 15, 0.8);
+  background: rgba(28, 29, 32, 0.8);
   border: 1px solid rgba(52, 211, 153, 0.12);
   border-radius: 10px;
   padding: 0.75rem;
@@ -1383,7 +1383,7 @@
 
 /* ── CLONE PROGRESS ── */
 .dz-clone-progress {
-  background: rgba(15, 15, 15, 0.8);
+  background: rgba(28, 29, 32, 0.8);
   border: 1px solid rgba(251, 191, 36, 0.15);
   border-radius: 12px;
   overflow: hidden;

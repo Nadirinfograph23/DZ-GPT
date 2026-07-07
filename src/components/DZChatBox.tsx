@@ -9636,7 +9636,7 @@ ${rows}
                       onClick={() => copyMessage(msg.id, msg.content)}
                       title={copiedId === msg.id ? 'تم النسخ' : 'نسخ'}
                     >
-                      {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedId === msg.id ? <Check size={17} /> : <Copy size={17} />}
                     </button>
                   )}
                   {msg.content && msg.richType !== 'image' && (
@@ -9647,17 +9647,17 @@ ${rows}
                       disabled={ttsState !== null && ttsState.id !== msg.id && ttsState.status === 'loading'}
                     >
                       {ttsState?.id === msg.id && ttsState.status === 'loading' ? (
-                        <Loader2 size={14} className="dz-tts-spin" />
+                        <Loader2 size={17} className="dz-tts-spin" />
                       ) : ttsState?.id === msg.id && ttsState.status === 'playing' ? (
-                        <Square size={14} />
+                        <Square size={17} />
                       ) : (
-                        <Volume2 size={14} />
+                        <Volume2 size={17} />
                       )}
                     </button>
                   )}
                   {msg.id === messages[messages.length - 1]?.id && msg.richType === 'text' && (
                     <button className="dz-action-btn" onClick={regenerate} title="إعادة المحاولة">
-                      <RotateCcw size={14} />
+                      <RotateCcw size={17} />
                     </button>
                   )}
                   <span className="dz-action-divider" />
@@ -9666,14 +9666,14 @@ ${rows}
                     title="إجابة جيدة"
                     onClick={() => sendRating(msg.id, 'up', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
                   >
-                    <ThumbsUp size={14} />
+                    <ThumbsUp size={17} />
                   </button>
                   <button
                     className={`dz-action-btn dz-action-btn--down${ratings[msg.id] === 'down' ? ' dz-action-btn--rated' : ''}`}
                     title="إجابة سيئة"
                     onClick={() => sendRating(msg.id, 'down', messages.find(m => m.role === 'user' && messages.indexOf(m) < messages.indexOf(msg))?.content || '')}
                   >
-                    <ThumbsDown size={14} />
+                    <ThumbsDown size={17} />
                   </button>
                 </div>
               )}

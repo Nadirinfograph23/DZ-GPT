@@ -2282,8 +2282,9 @@
 /* ===== MESSAGE ACTIONS ===== */
 .dz-message-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 10px;
+  opacity: 1;
 }
 
 .dz-action-btn {
@@ -2295,8 +2296,8 @@
   color: #555;
   cursor: pointer;
   font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 6px 9px;
+  border-radius: 7px;
   transition: all 0.2s;
 }
 

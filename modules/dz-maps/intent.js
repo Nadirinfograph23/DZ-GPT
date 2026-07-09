@@ -116,10 +116,12 @@ const POI_TYPES = {
   },
   government: {
     labels: [
-      'بلدية','ولاية','إدارة','مصلحة','وكالة','دائرة','قضاء','محكمة',
-      'تسجيل','وثيقة','شهادة','بطاقة تعريف','جواز سفر',
+      // Place/institution names only — document types deliberately excluded
+      // (وثيقة، شهادة، تسجيل، بطاقة تعريف، جواز سفر are document terms,
+      //  NOT location terms → they belong in NON_MAP_REGEXES, not here)
+      'بلدية','ولاية','إدارة','مصلحة','دائرة','قضاء','محكمة',
       'mairie','wilaya','administration','daïra','daira','tribunal','justice',
-      'service administratif','mairie','prefecture',
+      'service administratif','prefecture',
       'البلدية','الولاية','الدائرة','المكتب',
     ],
     osm: 'amenity~"townhall|government|public_building"', icon: '🏛️', nameAr: 'إدارة / بلدية',
@@ -298,6 +300,15 @@ const NON_MAP_REGEXES = [
   /(?:function|class\s+\w|variable|const\s+\w|let\s+\w|var\s+\w|import\s+|export\s+|async\s+|await\s+|fetch\(|npm\s+|pip\s+)/i,
   /(?:برمجة|خوارزمية|دالة|متغير|كلاس|مصفوفة|واجهة برمجية|فريمورك|مكتبة|ريبو|repository)/i,
   /\.(html?|css|js|ts|jsx|tsx|py|php|json|xml|yaml|sql|sh)\b/i,
+
+  // ── ADMINISTRATIVE DOCUMENTS — وثائق إدارية ─────────────────────────────
+  // "وثيقة شهادة ميلاد" / "شهادة الجنسية" / "استخراج جواز السفر" → NOT a map query
+  // The user wants document info, NOT "find me a government building on the map"
+  /(?:وثيقة|وثائق|شهادة|مستند|مستندات|ملف\s+إداري)\s+(?:ميلاد|الجنسية|إقامة|زواج|طلاق|وفاة|الحالة\s+المدنية|السكن|الملكية|التسجيل|الجامعية|الدراسية|عمل|الإقامة|الميلاد)/i,
+  /(?:استخراج|طلب|كيف\s+أستخرج|كيفاش\s+نستخرج|كيف\s+نحصل|كيف\s+أحصل)\s+(?:على\s+)?(?:وثيقة|شهادة|جواز\s+سفر|بطاقة\s+تعريف|رخصة|تأشيرة|visa|passeport|permis)/i,
+  /(?:شهادة|وثيقة)\s+(?:ميلاد|عمل|الحالة\s+المدنية|الإقامة|الجامعية|التخرج|البكالوريا|النجاح|الطبية|طبية|بطالة|صحية|الخبرة)/i,
+  /(?:الوثائق|الملفات|المستندات|الأوراق)\s+(?:المطلوبة|اللازمة|الضرورية|الإدارية|الرسمية)/i,
+  /(?:بطاقة\s+تعريف|جواز\s+سفر|رخصة\s+سياقة)\s+(?:منتهية|مفقودة|جديدة|تجديد|استخراج)/i,
 
   // Save / correction / training commands — NEVER a map query
   // e.g. "احفظ التصحيح" / "save correction" / "تذكر هذه المعلومة"

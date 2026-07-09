@@ -1,45 +1,107 @@
 {
-  "total_providers": 7,
+  "total_providers": 9,
   "primary_provider": "groq",
   "providers": [
     {
       "id": "groq",
       "name": "Groq Cloud",
+      "enabled": true,
+      "priority": 1,
       "type": "cloud-llm",
       "models": [
         "llama-3.3-70b-versatile",
         "llama-3.1-70b-versatile",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
+        "qwen-2.5-coder-32b",
+        "deepseek-r1-distill-llama-70b"
       ],
       "context_window": 32768,
       "cost_level": "free",
       "rate_limits": "30 req/min (free tier)",
       "reliability_score": 9,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
       "strengths": ["سرعة عالية جداً", "Arabic support", "مجاني"],
       "env_key": "AI_API_KEY",
       "rotation": true,
       "rotation_keys": "AI_API_KEY → AI_API_KEY_2 → ... → AI_API_KEY_10"
     },
     {
-      "id": "gemini",
-      "name": "Google Gemini",
+      "id": "dahl",
+      "name": "Dahl Inference",
+      "enabled": true,
+      "priority": 2,
       "type": "cloud-llm",
       "models": [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash-exp"
+        "dahl-fast",
+        "dahl-pro",
+        "dahl-vision"
+      ],
+      "context_window": 32768,
+      "cost_level": "paid",
+      "rate_limits": "حسب الخطة",
+      "reliability_score": 8,
+      "capabilities": {
+        "vision": true,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["fallback ذكي", "OpenAI-compatible", "نماذج متخصصة"],
+      "env_key": "DAHL_API_KEY",
+      "base_url_env": "DAHL_BASE_URL",
+      "base_url_default": "https://api.dahlcloud.com/v1",
+      "enabled_env": "DAHL_ENABLED",
+      "model_overrides": {
+        "realtime":     "DAHL_MODEL_REALTIME",
+        "general":      "DAHL_MODEL_GENERAL",
+        "reasoning":    "DAHL_MODEL_REASONING",
+        "code":         "DAHL_MODEL_CODE",
+        "vision":       "DAHL_MODEL_VISION",
+        "multilingual": "DAHL_MODEL_MULTILINGUAL",
+        "longcontext":  "DAHL_MODEL_LONGCONTEXT"
+      },
+      "health_check": {
+        "enabled": true,
+        "interval_ms": 300000,
+        "timeout_ms": 12000,
+        "endpoint": "/chat/completions"
+      }
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "enabled": true,
+      "priority": 3,
+      "type": "cloud-llm",
+      "models": [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
       ],
       "context_window": 1000000,
       "cost_level": "free-tier",
       "rate_limits": "حصة مجانية يومية",
       "reliability_score": 8,
+      "capabilities": {
+        "vision": true,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": true,
+        "image_generation": false
+      },
       "strengths": ["context window ضخم", "multimodal", "vision"],
       "env_key": "GEMINI_API_KEY"
     },
     {
       "id": "mistral",
       "name": "Mistral AI",
+      "enabled": true,
+      "priority": 4,
       "type": "cloud-llm",
       "models": [
         "mistral-large-latest",
@@ -50,12 +112,21 @@
       "cost_level": "low",
       "rate_limits": "حسب الخطة",
       "reliability_score": 8,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": true,
+        "long_context": false,
+        "image_generation": false
+      },
       "strengths": ["French language excellence", "Arabic decent", "سريع"],
       "env_key": "MISTRAL_API_KEY"
     },
     {
       "id": "nvidia_nim",
       "name": "NVIDIA NIM",
+      "enabled": true,
+      "priority": 5,
       "type": "cloud-llm",
       "models": [
         "meta/llama-3.1-70b-instruct",
@@ -65,15 +136,24 @@
       "cost_level": "free-tier",
       "rate_limits": "حصة مجانية",
       "reliability_score": 7,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": true,
+        "image_generation": false
+      },
       "strengths": ["قدرة استدلال عالية", "context window كبير"],
       "env_key": "NVIDIA_API_KEY"
     },
     {
       "id": "cohere",
       "name": "Cohere",
+      "enabled": true,
+      "priority": 6,
       "type": "cloud-llm",
       "models": [
-        "command-r-plus",
+        "command-r-plus-08-2024",
         "command-r",
         "command"
       ],
@@ -81,39 +161,83 @@
       "cost_level": "free-tier",
       "rate_limits": "حصة مجانية",
       "reliability_score": 7,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": true,
+        "long_context": true,
+        "image_generation": false
+      },
       "strengths": ["RAG متميز", "document analysis"],
       "env_key": "COHERE_API_KEY"
     },
     {
       "id": "openrouter",
       "name": "OpenRouter",
+      "enabled": true,
+      "priority": 7,
       "type": "api-gateway",
       "models": [
-        "anthropic/claude-3.5-sonnet",
-        "openai/gpt-4o",
-        "google/gemini-pro",
-        "meta-llama/llama-3.1-405b"
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free"
       ],
       "context_window": 200000,
-      "cost_level": "medium",
+      "cost_level": "free-tier",
       "rate_limits": "حسب الرصيد",
       "reliability_score": 8,
+      "capabilities": {
+        "vision": true,
+        "reasoning": true,
+        "tool_calling": true,
+        "long_context": true,
+        "image_generation": false
+      },
       "strengths": ["وصول لـ 100+ نموذج", "fallback ذكي"],
       "env_key": "OPENROUTER_API_KEY"
     },
     {
+      "id": "cerebras",
+      "name": "Cerebras",
+      "enabled": true,
+      "priority": 0,
+      "type": "cloud-llm",
+      "models": ["gpt-oss-120b"],
+      "context_window": 8192,
+      "cost_level": "free-tier",
+      "rate_limits": "معتدل",
+      "reliability_score": 9,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": false
+      },
+      "strengths": ["ultra-fast ~600 tok/s", "best for realtime"],
+      "env_key": "CEREBRAS_API_KEY"
+    },
+    {
       "id": "huggingface",
       "name": "HuggingFace Inference",
+      "enabled": true,
+      "priority": 8,
       "type": "cloud-inference",
       "models": [
-        "black-forest-labs/FLUX.1-schnell",
-        "stabilityai/stable-diffusion-xl-base-1.0",
-        "mistralai/Mistral-7B-Instruct-v0.3"
+        "Qwen/Qwen2.5-72B-Instruct",
+        "black-forest-labs/FLUX.1-schnell"
       ],
       "context_window": 8192,
       "cost_level": "free",
       "rate_limits": "معتدل — حسب النموذج",
       "reliability_score": 6,
+      "capabilities": {
+        "vision": false,
+        "reasoning": true,
+        "tool_calling": false,
+        "long_context": false,
+        "image_generation": true
+      },
       "strengths": ["توليد صور مجاني", "نماذج مفتوحة المصدر"],
       "env_key": "HF_TOKEN",
       "primary_use": "image-generation"
@@ -121,9 +245,9 @@
   ],
   "circuit_breaker": {
     "enabled": true,
-    "failure_threshold": 3,
-    "reset_timeout_ms": 60000,
-    "fallback_chain": ["groq", "gemini", "mistral", "nvidia_nim", "cohere", "openrouter"]
+    "failure_threshold": 4,
+    "reset_timeout_ms": 45000,
+    "fallback_chain": ["cerebras", "groq", "dahl", "gemini", "mistral", "nvidia_nim", "cohere", "openrouter"]
   },
   "token_limits": {
     "max_input_tokens": 32768,

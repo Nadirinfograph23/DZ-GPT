@@ -106,6 +106,9 @@ import {
   getOverloadMessage,
 } from './lib/resilience.js'
 
+// ── Dahl Inference Provider — smart fallback ──────────────────────────────────
+import { tryDahl, dahlHealthCheck, getDahlStatus, tryDahlVision } from './lib/dahl-provider.js'
+
 // ── Process-level crash prevention ──────────────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error('[CRASH GUARD] uncaughtException (server kept alive):', err?.stack || err?.message || err)
@@ -3842,6 +3845,26 @@ app.get('/api/ai-router/health', (_req, res) => {
       metrics: getRouterHealthSnapshot(),
       ts: new Date().toISOString(),
     })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// ===== DAHL INFERENCE STATUS API =====
+// Returns Dahl provider health, circuit state, and rolling metrics.
+// API key is NEVER included in the response.
+app.get('/api/dahl/status', (_req, res) => {
+  try {
+    res.json({ ok: true, ...getDahlStatus(), ts: new Date().toISOString() })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+app.post('/api/dahl/health-check', async (_req, res) => {
+  try {
+    const result = await dahlHealthCheck()
+    res.json({ ok: result.ok, ...result, ts: new Date().toISOString() })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }
@@ -33705,6 +33728,20 @@ export { app }
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 
 if (isMain) {
+  // ── Dahl Inference — background health monitoring (every 5 minutes) ───────
+  // Runs silently; keeps the circuit breaker informed without user impact.
+  // API key is never logged. Failures are caught and swallowed.
+  if (process.env.DAHL_API_KEY && process.env.DAHL_ENABLED !== 'false') {
+    scheduleOnce(async () => {
+      try {
+        const r = await dahlHealthCheck()
+        console.log(`[Dahl:Health] ${r.ok ? '✓' : '✗'} latency=${r.latencyMs ?? '?'}ms${r.error ? ' err=' + r.error : ''}`)
+      } catch (e) {
+        console.warn('[Dahl:Health] check failed (non-critical):', e.message?.slice(0, 80))
+      }
+    }, 5 * 60 * 1000, { label: 'dahl-health-check' })
+  }
+
   // ── Resilience: scheduleOnce prevents overlapping background jobs ─────────
   scheduleOnce(
     () => updateEddirasaIndex()

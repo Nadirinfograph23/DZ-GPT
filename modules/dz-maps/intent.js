@@ -116,13 +116,12 @@ const POI_TYPES = {
   },
   government: {
     labels: [
-      // Place/institution names only — document types deliberately excluded
-      // (وثيقة، شهادة، تسجيل، بطاقة تعريف، جواز سفر are document terms,
-      //  NOT location terms → they belong in NON_MAP_REGEXES, not here)
-      'بلدية','ولاية','إدارة','مصلحة','دائرة','قضاء','محكمة',
-      'mairie','wilaya','administration','daïra','daira','tribunal','justice',
-      'service administratif','prefecture',
-      'البلدية','الولاية','الدائرة','المكتب',
+      // Place/institution names ONLY — generic terms removed to avoid false POI matches.
+      // Removed: وثيقة، شهادة، تسجيل، بطاقة تعريف، جواز سفر (document terms, not places)
+      // Removed: مصلحة، المكتب (too generic — "مصلحة" appears in non-location admin queries)
+      'بلدية','ولاية','دائرة','قضاء','محكمة',
+      'mairie','wilaya','daïra','daira','tribunal','justice','prefecture',
+      'البلدية','الولاية','الدائرة',
     ],
     osm: 'amenity~"townhall|government|public_building"', icon: '🏛️', nameAr: 'إدارة / بلدية',
   },
@@ -304,11 +303,30 @@ const NON_MAP_REGEXES = [
   // ── ADMINISTRATIVE DOCUMENTS — وثائق إدارية ─────────────────────────────
   // "وثيقة شهادة ميلاد" / "شهادة الجنسية" / "استخراج جواز السفر" → NOT a map query
   // The user wants document info, NOT "find me a government building on the map"
+
+  // Pattern A: document noun + document type (شهادة ميلاد، وثيقة الجنسية…)
   /(?:وثيقة|وثائق|شهادة|مستند|مستندات|ملف\s+إداري)\s+(?:ميلاد|الجنسية|إقامة|زواج|طلاق|وفاة|الحالة\s+المدنية|السكن|الملكية|التسجيل|الجامعية|الدراسية|عمل|الإقامة|الميلاد)/i,
-  /(?:استخراج|طلب|كيف\s+أستخرج|كيفاش\s+نستخرج|كيف\s+نحصل|كيف\s+أحصل)\s+(?:على\s+)?(?:وثيقة|شهادة|جواز\s+سفر|بطاقة\s+تعريف|رخصة|تأشيرة|visa|passeport|permis)/i,
+
+  // Pattern B: extraction/request verb + document type (استخراج جواز السفر، كيف أستخرج شهادة…)
+  /(?:استخراج|طلب|تجديد|كيف\s+أستخرج|كيفاش\s+نستخرج|كيف\s+نحصل|كيف\s+أحصل|نبغي\s+نستخرج|باش\s+نستخرج)\s*(?:على\s+)?(?:وثيقة|شهادة|جواز\s+(?:السفر|سفر)|بطاقة\s+(?:التعريف|تعريف|الشناقي|الوطنية)|رخصة|تأشيرة|visa|passeport|permis)/i,
+
+  // Pattern C: شهادة/وثيقة + specific certificate type
   /(?:شهادة|وثيقة)\s+(?:ميلاد|عمل|الحالة\s+المدنية|الإقامة|الجامعية|التخرج|البكالوريا|النجاح|الطبية|طبية|بطالة|صحية|الخبرة)/i,
+
+  // Pattern D: "الوثائق/الملفات/الأوراق" + adjective (المطلوبة، اللازمة…)
   /(?:الوثائق|الملفات|المستندات|الأوراق)\s+(?:المطلوبة|اللازمة|الضرورية|الإدارية|الرسمية)/i,
-  /(?:بطاقة\s+تعريف|جواز\s+سفر|رخصة\s+سياقة)\s+(?:منتهية|مفقودة|جديدة|تجديد|استخراج)/i,
+
+  // Pattern E: document noun + institution (وثائق البلدية، ملف الدائرة…)
+  // KEY FIX: "وثائق البلدية" = documents FROM municipality, not "find municipality on map"
+  /(?:وثيقة|وثائق|شهادة|مستند|ملف|الأوراق|الملفات)\s+(?:ال)?(?:بلدية|ولاية|دائرة|مصلحة|إدارة|ديوان|قضاء|محكمة)/i,
+  /(?:ال)?(?:بلدية|ولاية|دائرة|مصلحة)\s+(?:وثيقة|وثائق|شهادة|مستند|ملف|الأوراق|الملفات|إجراءات|استخراج)/i,
+
+  // Pattern F: شروط/متطلبات + document (شروط استخراج الجواز، متطلبات البطاقة…)
+  /(?:شروط|متطلبات|إجراءات|خطوات|طريقة)\s+(?:استخراج|تجديد|الحصول\s+على|طلب)\s+(?:وثيقة|شهادة|جواز|بطاقة|رخصة|تأشيرة)/i,
+  /(?:شروط|متطلبات|إجراءات)\s+(?:ال)?(?:جواز|بطاقة\s+(?:التعريف|الوطنية)|رخصة\s+السياقة|تأشيرة|visa)/i,
+
+  // Pattern G: document status (منتهية، مفقودة، تجديد)
+  /(?:بطاقة\s+تعريف|جواز\s+سفر|رخصة\s+سياقة)\s+(?:منتهية|مفقودة|جديدة|تجديد|استخراج|فقدان)/i,
 
   // Save / correction / training commands — NEVER a map query
   // e.g. "احفظ التصحيح" / "save correction" / "تذكر هذه المعلومة"

@@ -3861,10 +3861,17 @@ app.get('/api/dahl/status', (_req, res) => {
   }
 })
 
-app.post('/api/dahl/health-check', async (_req, res) => {
+// POST /api/dahl/health-check — manual probe (admin/internal only)
+// Protected: requires SESSION_SECRET header or owner token to prevent abuse.
+app.post('/api/dahl/health-check', async (req, res) => {
+  const token = req.headers['x-admin-token'] || req.headers['authorization']?.replace('Bearer ', '')
+  const sessionSecret = process.env.SESSION_SECRET
+  if (!sessionSecret || token !== sessionSecret) {
+    return res.status(403).json({ ok: false, error: 'Forbidden' })
+  }
   try {
     const result = await dahlHealthCheck()
-    res.json({ ok: result.ok, ...result, ts: new Date().toISOString() })
+    res.json({ ok: result.ok, latencyMs: result.latencyMs, ts: new Date().toISOString() })
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message })
   }

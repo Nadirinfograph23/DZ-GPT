@@ -37,9 +37,9 @@
       "priority": 2,
       "type": "cloud-llm",
       "models": [
-        "dahl-fast",
-        "dahl-pro",
-        "dahl-vision"
+        "MiniMaxAI/MiniMax-M2.7",
+        "moonshotai/Kimi-K2.6",
+        "zai-org/GLM-5.2-FP8"
       ],
       "context_window": 32768,
       "cost_level": "paid",
@@ -55,7 +55,7 @@
       "strengths": ["fallback ذكي", "OpenAI-compatible", "نماذج متخصصة"],
       "env_key": "DAHL_API_KEY",
       "base_url_env": "DAHL_BASE_URL",
-      "base_url_default": "https://api.dahlcloud.com/v1",
+      "base_url_default": "https://inference.dahl.global/v1",
       "enabled_env": "DAHL_ENABLED",
       "model_overrides": {
         "realtime":     "DAHL_MODEL_REALTIME",

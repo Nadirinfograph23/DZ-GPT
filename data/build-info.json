@@ -1,8 +1,8 @@
 {
-  "commit": "1a3699dcdeabcbab103be483aa402716df304950",
-  "commitShort": "1a3699dc",
+  "commit": "578d591db8ebf76a5f8b4d9dd2ae00977d41535c",
+  "commitShort": "578d591d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: اعتراض أسئلة آخر تحديث لـ DZ Agent — isSelfUpdateQuestion — ردّ حقيقي ببيانات build-info بدل إرسالها لمحرك الأخبار",
-  "deployedAt": "2026-07-11T01:08:27.168425Z",
+  "message": "fix: إخفاء زر التنقل السريع العائم (QuickNav) عند فتح معاينة الصورة — يمنع تعارضه مع أسهم الاستعراض (كلاهما top:50% قرب الحافة اليمنى)",
+  "deployedAt": "2026-07-11T10:01:12.488716Z",
   "deployedBy": "scripts/deploy.py"
 }

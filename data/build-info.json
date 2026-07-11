@@ -1,8 +1,8 @@
 {
-  "commit": "845f5077356a48d1e4d4c1cbfeab039813db0ce3",
-  "commitShort": "845f5077",
+  "commit": "1a3699dcdeabcbab103be483aa402716df304950",
+  "commitShort": "1a3699dc",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "chore: sync latest state — eddirasa index + all pending changes",
-  "deployedAt": "2026-07-11T00:43:54.295407Z",
+  "message": "fix: اعتراض أسئلة آخر تحديث لـ DZ Agent — isSelfUpdateQuestion — ردّ حقيقي ببيانات build-info بدل إرسالها لمحرك الأخبار",
+  "deployedAt": "2026-07-11T01:08:27.168425Z",
   "deployedBy": "scripts/deploy.py"
 }

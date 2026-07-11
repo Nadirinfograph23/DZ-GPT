@@ -238,6 +238,14 @@
   letter-spacing: 0.5px;
 }
 
+/* ── إخفاء زر التنقل السريع العائم عند فتح معاينة الصورة (Lightbox) ──────
+   كلاهما بموضع top:50% قرب الحافة اليمنى فيتعارضان بصرياً مع أسهم الاستعراض ── */
+body.dz-lightbox-active .qnav-fab,
+body.dz-lightbox-active .qnav-drawer,
+body.dz-lightbox-active .qnav-backdrop {
+  display: none;
+}
+
 /* ── Mobile ───────────────────────────────────── */
 @media (max-width: 480px) {
   .qnav-fab {

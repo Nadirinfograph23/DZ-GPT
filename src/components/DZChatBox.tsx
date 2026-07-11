@@ -4236,6 +4236,13 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     prompt?: string
   } | null>(null)
 
+  // ── Lightbox open/close: toggle body class so global floating buttons
+  // (مثل زر التنقل السريع QuickNav) تختفي مؤقتاً ولا تتعارض مع أسهم الاستعراض ──
+  useEffect(() => {
+    document.body.classList.toggle('dz-lightbox-active', !!lightbox)
+    return () => { document.body.classList.remove('dz-lightbox-active') }
+  }, [lightbox])
+
   // ── Lightbox keyboard navigation ──────────────────────────────────────────
   useEffect(() => {
     if (!lightbox) return

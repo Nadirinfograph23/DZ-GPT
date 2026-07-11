@@ -1,8 +1,8 @@
 {
-  "commit": "38c37082cad3f2eefb0249cf7eda4b9aac120589",
-  "commitShort": "38c37082",
+  "commit": "6f46639944a67d5ff334588fbd0d08798c4414c8",
+  "commitShort": "6f466399",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: منع توجيه رسائل 'تحديث' إلى بحث القرآن — إضافة حدود كلمة عربية لـ حديث في intent.js وserver.js",
-  "deployedAt": "2026-07-11T00:24:24.360347Z",
+  "message": "feat: تفعيل Dahl Inference — inference.dahl.global/v1 — نماذج MiniMax-M2.7/Kimi-K2.6/GLM-5.2-FP8",
+  "deployedAt": "2026-07-11T00:34:13.698950Z",
   "deployedBy": "scripts/deploy.py"
 }

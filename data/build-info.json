@@ -1,8 +1,8 @@
 {
-  "commit": "6f46639944a67d5ff334588fbd0d08798c4414c8",
-  "commitShort": "6f466399",
+  "commit": "845f5077356a48d1e4d4c1cbfeab039813db0ce3",
+  "commitShort": "845f5077",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: تفعيل Dahl Inference — inference.dahl.global/v1 — نماذج MiniMax-M2.7/Kimi-K2.6/GLM-5.2-FP8",
-  "deployedAt": "2026-07-11T00:34:13.698950Z",
+  "message": "chore: sync latest state — eddirasa index + all pending changes",
+  "deployedAt": "2026-07-11T00:43:54.295407Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -9709,7 +9709,7 @@ function analyzeQuery(msg) {
   let timeframe = null
   if (/الآن|مباشر|live|en direct|right now|حالياً|هاذ الوقت/i.test(msg)) timeframe = 'live'
   else if (/اليوم|هذا الصباح|الليلة|today|aujourd'hui|ce soir|ليوم|النهار/i.test(msg)) timeframe = 'today'
-  else if (/هذا الأسبوع|آخر|حديث|أخير|this week|recent|derniers?|هاذ الجمعة/i.test(msg)) timeframe = 'recent'
+  else if (/هذا الأسبوع|آخر|(?<![\u0600-\u06FF])حديث(?![\u0600-\u06FF])|حديثاً|أخير|this week|recent|derniers?|هاذ الجمعة/i.test(msg)) timeframe = 'recent'
   else if (/\b(20[0-2][0-9])\b/.test(msg) || /تاريخ|قديم|سابق|منذ|historical|depuis/i.test(msg)) timeframe = 'historical'
 
   // ── 3. Entity Extraction ──────────────────────────────────────────────

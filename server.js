@@ -585,6 +585,100 @@ const DEVELOPER_RESPONSE = Object.freeze({
   showDevCard: true,
 })
 
+// ===== SELF-UPDATE QUESTION DETECTION =====
+// يكشف أسئلة المستخدم عن آخر تحديث / إصدار / تطوير لـ DZ Agent نفسه
+// ويُرجع رداً حقيقياً ببيانات build-info.json بدلاً من إرساله لمحرك الأخبار
+
+const SELF_UPDATE_QUESTION_PATTERNS = [
+  // عربية فصحى
+  'آخر تحديث لك', 'آخر تحديث لـdz', 'آخر تحديث لـ dz', 'آخر تحديث للوكيل',
+  'آخر تحديث للتطبيق', 'آخر تحديث للموقع', 'آخر تحديث لـ dz agent',
+  'ما هو آخر تحديث', 'ما اخر تحديث', 'ما هو اخر تحديث',
+  'ما الجديد فيك', 'ما الجديد في dz', 'ما الجديد في dz agent',
+  'ما الجديد في التطبيق', 'ماذا تحديث جديد', 'ما هي التحديثات',
+  'ما هي اخر التحديثات', 'ما هي آخر التحديثات', 'آخر التحديثات',
+  'ما هو الإصدار', 'ما هو إصدارك', 'ما إصدارك', 'ما نسختك', 'نسختك',
+  'ما هي نسختك', 'ما هي نسخة', 'ما هو إصدار', 'نسخة dz', 'إصدار dz',
+  'تحديثات dz agent', 'تحديثات dz', 'تحديثات التطبيق', 'تحديثاتك',
+  'متى آخر تحديث', 'متى تم التحديث', 'متى حدّثت',
+  // دارجة جزائرية
+  'واش عندك جديد', 'واش جديد فيك', 'واش كاين جديد فيك',
+  'واش تحدّثت', 'واش عندك update', 'واش دار تحديث',
+  'شو جديد فيك', 'شو جديد في التطبيق', 'واش صرا جديد',
+  'ايش جديد', 'أيش جديد فيك', 'واش راك جديد',
+  // English
+  'what is your latest update', 'what is your last update', 'your latest update',
+  'latest update', 'last update', 'what version are you', 'what is your version',
+  'what version is this', 'whats new in you', "what's new in you",
+  'what was updated', 'when were you last updated', 'what changed',
+  'your current version', 'current version',
+  // French
+  'quelle est ta version', 'quelle version', 'dernière mise à jour',
+  'derniere mise a jour', 'quoi de neuf', "qu'est ce qui est nouveau",
+  'mise à jour', 'mise a jour',
+]
+
+function isSelfUpdateQuestion(message) {
+  if (typeof message !== 'string' || !message) return false
+  const normalized = normalizeQuery(message)
+  // مطابقة الأنماط الصريحة أولاً
+  if (SELF_UPDATE_QUESTION_PATTERNS.some(p => normalized.includes(normalizeQuery(p)))) return true
+  // نمط عام: (آخر/اخر/latest/last) + (تحديث/update/إصدار/نسخة) + (لك/فيك/لـ dz/الوكيل)
+  if (/(?:آخر|اخر|latest|last|recent)\s+(?:تحديث|update|إصدار|نسخة|version)/i.test(message) &&
+      /(?:ك\b|فيك|لك|لـ?\s*dz|التطبيق|الموقع|الوكيل|agent)/i.test(message)) return true
+  // نمط: (ما الجديد/واش جديد) + (فيك/في التطبيق)
+  if (/(?:ما\s+الجديد|واش\s+(?:كاين\s+)?جديد|what.?s\s+new|quoi\s+de\s+neuf)/i.test(message) &&
+      /(?:فيك|في\s+(?:التطبيق|الموقع|dz)|in\s+you|toi)/i.test(message)) return true
+  return false
+}
+
+function buildSelfUpdateResponse() {
+  // تاريخ النشر من build-info.json
+  const deployedAt = _BUILD_INFO?.deployedAt
+  const commitMsg  = _BUILD_INFO?.message  || ''
+  const commitShort = _BUILD_INFO?.commitShort || 'dev-local'
+  const branch     = _BUILD_INFO?.branch   || 'main'
+
+  let dateStr = 'غير محدد'
+  if (deployedAt) {
+    try {
+      const d = new Date(deployedAt)
+      dateStr = d.toLocaleString('ar-DZ', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers',
+      })
+    } catch { dateStr = deployedAt }
+  }
+
+  // رسالة commit مُنظَّفة من البادئات التقنية
+  const changeLabel = commitMsg
+    .replace(/^(?:feat|fix|chore|refactor|perf|build|ci|docs|style|test)(?:\([^)]*\))?:\s*/i, '')
+    .trim() || 'تحديثات داخلية وتحسينات'
+
+  return {
+    content: [
+      '🔄 **آخر تحديث لـ DZ Agent** 🇩🇿',
+      '',
+      `📅 **تاريخ النشر:** ${dateStr}`,
+      `🏷️ **الإصدار:** \`1.0.0-${commitShort}\``,
+      `🌿 **الفرع:** \`${branch}\``,
+      '',
+      '## ✨ آخر التغييرات',
+      `> ${changeLabel}`,
+      '',
+      '## 🚀 المزايا الرئيسية الحالية',
+      '- 🤖 **16 وكيل ذكي** متخصص (أخبار · رياضة · طقس · صحة · قانون · ...)',
+      '- ⚡ **Dahl Inference** — منصة استنتاج مدعومة بـ MiniMax-M2.7 · Kimi-K2.6 · GLM-5.2-FP8',
+      '- 🔄 **Circuit Breaker** — تبديل تلقائي بين مزودي الذكاء الاصطناعي',
+      '- 🇩🇿 **دارجة جزائرية** — فهم كامل لجميع لهجات الجزائر',
+      '- 📡 **بيانات مباشرة** — أخبار · طقس · عملات · رياضة محدَّثة تلقائياً',
+      '- 🐙 **GitHub Agent** — commit · deploy · PR حقيقية من المحادثة',
+      '',
+      `🌐 [dz-gpt.vercel.app](https://dz-gpt.vercel.app) · GitHub: [\`${commitShort}\`](https://github.com/Nadirinfograph23/DZ-GPT/commit/${_BUILD_INFO?.commit || ''})`,
+    ].join('\n'),
+  }
+}
+
 // ── RELIGION / FAITH IDENTITY — DZ Agent is Muslim ──────────────────────────
 const RELIGION_RESPONSE = Object.freeze({
   content: `🌙 **عقيدة DZ Agent** 🇩🇿
@@ -15843,6 +15937,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // ══════════════════════════════════════════════════════════════════════
   {
     const _devRaw = [...messages].reverse().find(m => m?.role === 'user')?.content || ''
+    if (isSelfUpdateQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 🔄 Self-update question detected — returning build-info response`)
+      return res.status(200).json(buildSelfUpdateResponse())
+    }
     if (isDeveloperOrOwnerQuestion(_devRaw)) {
       console.log(`[DZAgentChat] 👨‍💻 Developer question detected — returning DEVELOPER_RESPONSE`)
       return res.status(200).json(DEVELOPER_RESPONSE)
@@ -19132,6 +19230,10 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   })()
 
   // ── Local knowledge base — unified developer/owner + capabilities intents ─
+  if (isSelfUpdateQuestion(lastUserMessage)) {
+    console.log(`[DZAgent] 🔄 Self-update question — returning build-info response`)
+    return res.status(200).json(buildSelfUpdateResponse())
+  }
   if (isDeveloperOrOwnerQuestion(lastUserMessage)) {
     return res.status(200).json(DEVELOPER_RESPONSE)
   }
@@ -25385,6 +25487,16 @@ app.post('/api/dz-agent-stream', async (req, res) => {
       res.write('data: [DONE]\n\n')
       return res.end()
     }
+  }
+
+  // ── Step 1b-update: Self-update question — answer directly (no redirect needed) ──
+  if (isSelfUpdateQuestion(lastUserMessage)) {
+    console.log(`[Stream→SelfUpdate] 🔄 self-update question — returning build-info`)
+    _streamSSEHeaders(res)
+    const _updResp = buildSelfUpdateResponse()
+    res.write(`data: ${JSON.stringify({ content: _updResp.content })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
   }
 
   // ── Step 1c: Developer / Owner identity — redirect to full endpoint for DeveloperCard ──

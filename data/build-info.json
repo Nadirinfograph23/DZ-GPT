@@ -1,8 +1,8 @@
 {
-  "commit": "59ee7ef3cf0b5e73f41e5bc1eabf174ce2d88782",
-  "commitShort": "59ee7ef3",
+  "commit": "38c37082cad3f2eefb0249cf7eda4b9aac120589",
+  "commitShort": "38c37082",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "ui: fix remaining near-black surfaces in DZ Agent\n\n- Theme override block: #212121/#171717 → #1e1f21/#1a1b1e (consistent with base)\n- App.css .main: #0a0a0a → #1c1d1f\n- App.css .header: rgba(10,10,10) → rgba(24,25,28)\n- App.css .input-area: #0a0a0a → #1c1d1f\n- dz-chatbox.css secondary panels: rgba(15,15,15,...) → rgba(28,29,32,...)",
-  "deployedAt": "2026-07-07T00:56:30.942815Z",
+  "message": "fix: منع توجيه رسائل 'تحديث' إلى بحث القرآن — إضافة حدود كلمة عربية لـ حديث في intent.js وserver.js",
+  "deployedAt": "2026-07-11T00:24:24.360347Z",
   "deployedBy": "scripts/deploy.py"
 }

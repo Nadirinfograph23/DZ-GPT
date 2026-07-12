@@ -1,8 +1,8 @@
 {
-  "commit": "578d591db8ebf76a5f8b4d9dd2ae00977d41535c",
-  "commitShort": "578d591d",
+  "commit": "67fc501e51bedf3a5fb3954dc3f6647ca17c5b7e",
+  "commitShort": "67fc501e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إخفاء زر التنقل السريع العائم (QuickNav) عند فتح معاينة الصورة — يمنع تعارضه مع أسهم الاستعراض (كلاهما top:50% قرب الحافة اليمنى)",
-  "deployedAt": "2026-07-11T10:01:12.488716Z",
+  "message": "feat: حذف زر القرآن الكريم من شريط أدوات DZ Agent ومنح زر سلة المهملات (أقصى اليسار) لوناً كهرمانياً مميزاً يتماشى مع هوية DZ Agent",
+  "deployedAt": "2026-07-12T11:57:11.466996Z",
   "deployedBy": "scripts/deploy.py"
 }

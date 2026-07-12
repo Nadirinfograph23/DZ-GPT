@@ -1,8 +1,8 @@
 {
-  "commit": "67fc501e51bedf3a5fb3954dc3f6647ca17c5b7e",
-  "commitShort": "67fc501e",
+  "commit": "dcd3610fcbb6a4cb8859e880a349bad71e0f7c67",
+  "commitShort": "dcd3610f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: حذف زر القرآن الكريم من شريط أدوات DZ Agent ومنح زر سلة المهملات (أقصى اليسار) لوناً كهرمانياً مميزاً يتماشى مع هوية DZ Agent",
-  "deployedAt": "2026-07-12T11:57:11.466996Z",
+  "message": "feat: عرض مصادر ويكيبيديا/ويكي بيانات/DBpedia كأيقونات متتالية أفقياً بدون نص في شريط المصادر، مع إزالة السطر النصي المكرر من الرسالة",
+  "deployedAt": "2026-07-12T12:02:55.761382Z",
   "deployedBy": "scripts/deploy.py"
 }

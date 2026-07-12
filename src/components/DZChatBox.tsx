@@ -8197,9 +8197,6 @@ ${rows}
               <Download size={13} />
             </button>
           )}
-          <button className="gh-log-toggle" onClick={() => window.open('/quran', '_blank')} title="القرآن الكريم">
-            <BookOpen size={13} />
-          </button>
           <button className="gh-log-toggle" onClick={() => window.open('/stats', '_blank')} title="إحصاءاتك">
             <BarChart2 size={13} />
           </button>

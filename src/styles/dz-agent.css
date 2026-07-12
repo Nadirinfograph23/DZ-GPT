@@ -3038,9 +3038,10 @@
   }
 }
 
-/* Clear button in toolbar */
+/* Clear button in toolbar — لون مميّز يتماشى مع هوية DZ Agent (كهرماني دافئ)
+   يميّزها بصرياً عن باقي أيقونات الشريط الرمادية بعد حذف زر القرآن الكريم */
 .dz-toolbar-clear-btn {
-  color: #3f3f4e !important;
+  color: #d99a3f !important;
   transition: color 0.15s, background 0.15s !important;
 }
 .dz-toolbar-clear-btn:hover {

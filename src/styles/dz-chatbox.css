@@ -1525,6 +1525,8 @@
   font-size: 0.85rem;
   line-height: 1;
 }
+/* نص المصدر — مخفي (أيقونة فقط، أفقياً متتالية) */
+.dzc-source-name { display: none; }
 
 /* ── SCROLLBAR GENERAL ── */
 .dz-chatbox *::-webkit-scrollbar { width: 5px; height: 5px; }

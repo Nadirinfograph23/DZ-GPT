@@ -839,6 +839,8 @@ function stripSourceFooters(content: string): string {
     if (/^(📡|📊|🔗|🔴)\s*\*{0,2}(المصادر|نتائج\s*حية|متابعة\s*مباشرة|بيانات\s*موثوقة)[:\s*]/i.test(l)) return false
     if (/^_?📡\s*المصدر[:：]/i.test(l)) return false
     if (/^>\s*(📌|📡)\s*_?المصادر?[:：]/i.test(l)) return false
+    // سطر مصادر ويكيبيديا/ويكي بيانات/دي بيديا (📚 **المصادر:** [Wikidata](...) | [Wikipedia](...))
+    if (/^📚\s*\*{0,2}(المصادر|المصدر)[:：]/i.test(l)) return false
     return true
   })
   // إزالة أسطر --- الزائدة في النهاية
@@ -864,7 +866,8 @@ function extractSourceLinksFromContent(content: string): Array<{domain: string, 
       /^_?📡\s*المصدر[:：]/i.test(l) ||
       /^>\s*(📌|📡)\s*_?المصادر?[:：]/i.test(l)
     )
-    if (!isSourceLine) continue
+    const isWikiFamilySourceLine = /^📚\s*\*{0,2}(المصادر|المصدر)[:：]/i.test(l)
+    if (!isSourceLine && !isWikiFamilySourceLine) continue
     let m: RegExpExecArray | null
     linkRe.lastIndex = 0
     while ((m = linkRe.exec(line)) !== null) {
@@ -928,9 +931,15 @@ function extractAllSourceIcons(msg: DZMessage): _SourceIcon[] {
     if (/fotmob/i.test(content)) add('fotmob.com', 'https://www.fotmob.com', 'FotMob')
     if (/365scores/i.test(content)) add('365scores.com', 'https://www.365scores.com', '365Scores')
   }
-  // ويكيبيديا
+  // ويكيبيديا / ويكي بيانات / دي بيديا — أيقونات متتالية أفقياً بدون نص
   if (/wikipedia|ويكيبيديا/i.test(content)) {
     add('wikipedia.org', 'https://ar.wikipedia.org', 'Wikipedia')
+  }
+  if (/wikidata|ويكي\s*بيانات/i.test(content)) {
+    add('wikidata.org', 'https://www.wikidata.org', 'Wikidata')
+  }
+  if (/dbpedia/i.test(content)) {
+    add('dbpedia.org', 'https://dbpedia.org', 'DBpedia')
   }
   // قرآن
   if (/quran\.com|القرآن.*الكريم.*API/i.test(content)) {

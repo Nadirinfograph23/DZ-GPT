@@ -1,8 +1,8 @@
 {
-  "commit": "af0431c6577c35f068420664e0e73fa16659365a",
-  "commitShort": "af0431c6",
+  "commit": "cfb2c5a0c1cba756d666ac4ab2b914079ef06414",
+  "commitShort": "cfb2c5a0",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: ✈️ تصحيح معلومات RedMed Group — مجمع خدمات بترولية بحاسي مسعود (طيران + لوجستيك + قاعدة حياة + تكوين) وليس شركة بحرية",
-  "deployedAt": "2026-07-14T02:11:00.758439Z",
+  "message": "ui: 🎨 مصادر ChatGPT style — أيقونات دائرية أفقية فقط بدون نصوص + كشف Wikipedia للبحث المعرفي",
+  "deployedAt": "2026-07-14T02:14:21.587249Z",
   "deployedBy": "scripts/deploy.py"
 }

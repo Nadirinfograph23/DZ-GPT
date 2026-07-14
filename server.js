@@ -198,6 +198,7 @@ import {
 } from './lib/verification-policy.js'
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
 import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ, detectTemporalQuery as _detectTemporalQ, resolveTemporalQuery as _resolveTemporalQ } from './lib/wiki-entity-lookup.js'
+import { detectAlgerianCompanyQuery as _detectDZCompany, resolveAlgerianCompanyQuery as _resolveDZCompany, lookupUnknownAlgerianCompany as _lookupUnknownDZCompany } from './lib/dz-companies.js'
 import { resolveKnowledgeEntity, classifyEntityIntent, extractEntity, ENTITY_INTENT, ENTITY_ROUTING_POLICY, getCacheStats as _getEntityCacheStats } from './lib/dz-knowledge-entity-agent.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
@@ -16318,6 +16319,36 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
     const _tqRaw = [...(Array.isArray(req.body.messages) ? req.body.messages : [])].reverse()
                     .find(m => m?.role === 'user')?.content?.trim() || ''
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 🏢 DZ COMPANIES EARLY BYPASS — شركات جزائرية
+    // يكشف استعلامات الشركات الجزائرية ويعيد ردًّا فورياً من KB + Wikipedia
+    // ══════════════════════════════════════════════════════════════════════
+    if (_tqRaw.length >= 3) {
+      const _dzCoDetected = _detectDZCompany(_tqRaw)
+      if (_dzCoDetected) {
+        console.log(`[DZCompanies] 🏢 Company query detected — resolving...`)
+        try {
+          const _dzCoRes = await _resolveDZCompany(_tqRaw)
+          if (_dzCoRes?.content) {
+            console.log(`[DZCompanies] ✅ model="${_dzCoRes.model}"`)
+            return res.status(200).json({ ..._dzCoRes, _bypassLLM: true })
+          }
+        } catch (_dzCoErr) {
+          console.warn('[DZCompanies] ⚠️ KB resolve failed:', _dzCoErr.message?.slice(0, 60))
+        }
+        // Fallback: Wikipedia live search إذا فشل KB
+        if (!_dzCoDetected.generalQuery) {
+          const _coName = _tqRaw.replace(/(?:شركة|مجمع|مؤسسة|entreprise|groupe|société|company|group|about)\s*/gi, '').trim()
+          try {
+            const _dzCoWiki = await _lookupUnknownDZCompany(_coName)
+            if (_dzCoWiki?.content) {
+              return res.status(200).json({ ..._dzCoWiki, _bypassLLM: true })
+            }
+          } catch {}
+        }
+      }
+    }
 
     if (_tqRaw.length >= 5 && _detectTemporalQ(_tqRaw)) {
       const _tqDet = _detectTemporalQ(_tqRaw)

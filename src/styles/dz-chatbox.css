@@ -1532,6 +1532,196 @@
 /* نص المصدر — مخفي دائماً */
 .dzc-source-name { display: none !important; }
 
+/* ══════════════════════════════════════════════════════════════
+   CurrencyWidget — بطاقة أسعار الصرف
+   ══════════════════════════════════════════════════════════════ */
+.dzc-currency-widget {
+  background: linear-gradient(135deg, #0f1117 0%, #141820 100%);
+  border: 1px solid rgba(16, 163, 127, 0.22);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+  max-width: 480px;
+  font-family: inherit;
+}
+
+/* ── رأس البطاقة ── */
+.dzc-currency-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 0.75rem;
+  background: rgba(16, 163, 127, 0.07);
+  border-bottom: 1px solid rgba(16, 163, 127, 0.12);
+}
+.dzc-currency-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.dzc-currency-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.dzc-currency-title-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.2;
+}
+.dzc-currency-subtitle {
+  font-size: 0.7rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+.dzc-currency-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.dzc-currency-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.dzc-currency-badge--live   { color: #10a37f; border-color: rgba(16,163,127,0.3); background: rgba(16,163,127,0.08); }
+.dzc-currency-badge--stale  { color: #f59e0b; border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.08); }
+.dzc-currency-date {
+  font-size: 0.6rem;
+  color: #475569;
+  text-align: end;
+}
+
+/* ── العملات الرئيسية (USD / EUR / GBP) ── */
+.dzc-currency-featured {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.25rem 0;
+}
+.dzc-currency-featured-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.14s;
+}
+.dzc-currency-featured-item:last-child { border-bottom: none; }
+.dzc-currency-featured-item:hover { background: rgba(16,163,127,0.06); }
+.dzc-currency-featured-flag { font-size: 1.3rem; line-height: 1; flex-shrink: 0; }
+.dzc-currency-featured-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.dzc-currency-featured-code {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #10a37f;
+  letter-spacing: 0.04em;
+}
+.dzc-currency-featured-name {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+.dzc-currency-featured-rate {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.dzc-currency-featured-dzd {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+.dzc-currency-featured-unit {
+  font-size: 0.65rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+/* ── جدول باقي العملات ── */
+.dzc-currency-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid rgba(16,163,127,0.10);
+}
+.dzc-currency-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  direction: rtl;
+}
+.dzc-currency-table thead tr {
+  background: rgba(255,255,255,0.03);
+}
+.dzc-currency-table th {
+  padding: 0.45rem 0.8rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: right;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.dzc-currency-th-rate { text-align: left; }
+.dzc-currency-table tbody tr {
+  transition: background 0.12s;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.dzc-currency-table tbody tr:last-child { border-bottom: none; }
+.dzc-currency-table tbody tr:hover { background: rgba(16,163,127,0.05); }
+.dzc-currency-td-code {
+  padding: 0.45rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.dzc-currency-flag  { font-size: 1rem; line-height: 1; }
+.dzc-currency-code  { font-weight: 700; color: #94a3b8; font-size: 0.72rem; letter-spacing: 0.03em; }
+.dzc-currency-td-name { padding: 0.45rem 0.8rem; color: #64748b; }
+.dzc-currency-td-rate {
+  padding: 0.45rem 0.8rem;
+  text-align: left;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.dzc-currency-dzd-label { color: #475569; font-size: 0.68rem; }
+
+/* ── تذييل ── */
+.dzc-currency-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0.55rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.dzc-currency-provider    { font-size: 0.62rem; color: #475569; }
+.dzc-currency-disclaimer  { font-size: 0.6rem;  color: #374151; font-style: italic; }
+
+/* موبايل */
+@media (max-width: 480px) {
+  .dzc-currency-widget { max-width: 100%; border-radius: 10px; }
+  .dzc-currency-featured-dzd { font-size: 0.95rem; }
+  .dzc-currency-table th, .dzc-currency-table td { padding: 0.4rem 0.6rem; }
+}
+
 /* ── SCROLLBAR GENERAL ── */
 .dz-chatbox *::-webkit-scrollbar { width: 5px; height: 5px; }
 .dz-chatbox *::-webkit-scrollbar-track { background: transparent; }

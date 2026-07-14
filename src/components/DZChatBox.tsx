@@ -32,6 +32,7 @@ import TaskPlanPanel from './TaskPlanPanel'
 import type { TaskPlan } from './TaskPlanPanel'
 import { trackFeatureUsage, withRetry } from '../utils/dzMemory'
 import AgentModeBar, { type AgentModeState } from './AgentModeBar'
+import { CurrencyWidget, type CurrencyWidgetData } from './CurrencyWidget'
 import '../styles/dz-chatbox.css'
 
 // ===== RATING PERSISTENCE =====
@@ -722,6 +723,7 @@ interface DZMessage {
   _sportsAgent?: boolean
   _nationalTeam?: boolean
   matches?: Array<Record<string, unknown>>
+  currencyData?: CurrencyWidgetData
   wcGroupData?: {
     groupLetter: string
     groupLabel: string
@@ -7972,6 +7974,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           _sportsAgent: !!(data._sportsAgent),
           _nationalTeam: !!(data._nationalTeam),
           matches: Array.isArray(data.matches) ? data.matches as Array<Record<string, unknown>> : undefined,
+          currencyData: data.currencyData as CurrencyWidgetData | undefined,
         })
 
         // Smart Repo Suggestion — if agent mode active and message describes a project
@@ -8393,7 +8396,11 @@ ${rows}
                           />
                         )
                       })()}
-                      {msg.content && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && !((msg as any)._sportsAgent && (msg as any).wc2026 && msg.matchVsMeta && /جزائر|Algeria/i.test((msg.matchVsMeta.team1 || '') + (msg.matchVsMeta.team2 || ''))) && (
+                      {/* ── CurrencyWidget — بطاقة أسعار الصرف ── */}
+                      {msg.currencyData && (
+                        <CurrencyWidget data={msg.currencyData} />
+                      )}
+                      {msg.content && !msg.currencyData && !((msg as any)._sportsAgent && Array.isArray((msg as any).matches) && (msg as any).matches.length > 0) && !((msg as any).wc2026?.nextMatch) && !((msg as any)._sportsAgent && (msg as any).wc2026 && msg.matchVsMeta && /جزائر|Algeria/i.test((msg.matchVsMeta.team1 || '') + (msg.matchVsMeta.team2 || ''))) && (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{

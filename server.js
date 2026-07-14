@@ -25015,46 +25015,43 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     }
   }
 
-  // ── Currency fast-path: return table directly when live data available ────
+  // ── Currency fast-path: return CurrencyWidget data directly ─────────────
   if (isCurrencyQuery && currencyContext && currencyContext.length > 50 && !_isAgentMode) {
-    console.log(`[Currency Fast-Path] Returning exchange rates directly without AI`)
-    const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    console.log(`[Currency Fast-Path] Returning exchange rates as CurrencyWidget`)
 
-    // Extract USD and EUR from the markdown table produced by buildCurrencyContext
-    // Table row format: | **USD** | دولار أمريكي 🇺🇸 | **134.50 دج** |
-    const _extractRate = (code) => {
+    // جلب البيانات الخام مرة أخرى (تكون مخزّنة في الكاش — لا API call إضافي)
+    const _cwRaw = currencyResult?.status === 'fulfilled' ? currencyResult.value : null
+
+    if (_cwRaw?.rates) {
+      // إرجاع البيانات المنظمة لـ CurrencyWidget في الـ frontend
+      return res.status(200).json({
+        content: '',   // الـ widget يُعرض بدل النص
+        currencyData: {
+          rates:       _cwRaw.rates,
+          status:      _cwRaw.status || 'live',
+          provider:    _cwRaw.provider || 'fawazahmed0/currency-api',
+          last_update: _cwRaw.last_update || new Date().toISOString(),
+        },
+        _bypassLLM: true,
+      })
+    }
+
+    // fallback نصي (إذا لم تتوفر البيانات الخام)
+    const today = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const _xr = (code) => {
       const m = currencyContext.match(new RegExp(`\\|\\s*\\*\\*${code}\\*\\*\\s*\\|[^|]*\\|\\s*\\*\\*([\\d.,]+)\\s*دج\\*\\*`))
       return m ? m[1] : null
     }
-    const usdRate = _extractRate('USD')
-    const eurRate = _extractRate('EUR')
-    const gbpRate = _extractRate('GBP')
-    const sarRate = _extractRate('SAR')
-    const aedRate = _extractRate('AED')
-
-    // Build prominent summary + full table
-    const summaryLines = ['## 💱 أسعار الصرف مقابل الدينار الجزائري', `📅 ${today}`, '']
-    if (usdRate) summaryLines.push(`> 🇺🇸 **1 دولار أمريكي = ${usdRate} دينار جزائري**`)
-    if (eurRate) summaryLines.push(`> 🇪🇺 **1 يورو = ${eurRate} دينار جزائري**`)
-    if (gbpRate) summaryLines.push(`> 🇬🇧 **1 جنيه إسترليني = ${gbpRate} دينار جزائري**`)
-    if (sarRate) summaryLines.push(`> 🇸🇦 **1 ريال سعودي = ${sarRate} دينار جزائري**`)
-    if (aedRate) summaryLines.push(`> 🇦🇪 **1 درهم إماراتي = ${aedRate} دينار جزائري**`)
-    summaryLines.push('')
-    summaryLines.push('---')
-    summaryLines.push('')
-    summaryLines.push('### 📊 جدول كامل لأسعار الصرف')
-    summaryLines.push('')
-    // Append the full markdown table from buildCurrencyContext (skip the header lines, keep table)
-    const tableLines = currencyContext.split('\n').filter(l =>
-      l.startsWith('|') || (l.startsWith('>') && l.includes('⚠️'))
-    )
-    summaryLines.push(...tableLines)
-    summaryLines.push('')
-    const srcMatch = currencyContext.match(/المصدر:\s*(.+)/)
-    if (srcMatch) summaryLines.push(`> 📡 ${srcMatch[0].trim()}`)
-    summaryLines.push(`> ℹ️ الأسعار تقريبية — يُنصح بمراجعة الصراف لأسعار السوق الموازية`)
-
-    return res.status(200).json({ content: summaryLines.join('\n') })
+    const fallbackLines = [`## 💱 أسعار الصرف مقابل الدينار الجزائري`, `📅 ${today}`, '']
+    const pairs = [['USD','🇺🇸','دولار أمريكي'],['EUR','🇪🇺','يورو'],['GBP','🇬🇧','جنيه إسترليني'],['SAR','🇸🇦','ريال سعودي'],['AED','🇦🇪','درهم إماراتي']]
+    pairs.forEach(([code, flag, name]) => {
+      const r = _xr(code)
+      if (r) fallbackLines.push(`> ${flag} **1 ${name} = ${r} دينار جزائري**`)
+    })
+    fallbackLines.push('', '---', '')
+    const tableLines = currencyContext.split('\n').filter(l => l.startsWith('|') || (l.startsWith('>') && l.includes('⚠️')))
+    fallbackLines.push(...tableLines, '', `> ℹ️ الأسعار تقريبية — يُنصح بمراجعة الصراف لأسعار السوق الموازية`)
+    return res.status(200).json({ content: fallbackLines.join('\n') })
   }
 
   // ── Autonomous Reasoning Layer ────────────────────────────────────────────

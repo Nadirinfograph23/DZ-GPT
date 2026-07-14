@@ -1,8 +1,8 @@
 {
-  "commit": "dcd3610fcbb6a4cb8859e880a349bad71e0f7c67",
-  "commitShort": "dcd3610f",
+  "commit": "a03728fbd9b6c734a361b35d7bcf94d8766d92af",
+  "commitShort": "a03728fb",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: عرض مصادر ويكيبيديا/ويكي بيانات/DBpedia كأيقونات متتالية أفقياً بدون نص في شريط المصادر، مع إزالة السطر النصي المكرر من الرسالة",
-  "deployedAt": "2026-07-12T12:02:55.761382Z",
+  "message": "feat: 🏢 إضافة وكيل الشركات الجزائرية — KB + Wikipedia + system prompt عربي لاتيني",
+  "deployedAt": "2026-07-14T01:40:42.731802Z",
   "deployedBy": "scripts/deploy.py"
 }

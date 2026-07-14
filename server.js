@@ -199,6 +199,7 @@ import {
 import { searchWikidata, verifyHistoricalEvent, generateNameVariants, normalizeArabicName as normalizeArabicNameWD, fetchWikidataEntityWithFacts } from './lib/wikidata.js'
 import { resolveEntityQuery as _resolveEntityQuery, detectEntityAttributeQuery as _detectEntityAttrQ, detectTemporalQuery as _detectTemporalQ, resolveTemporalQuery as _resolveTemporalQ } from './lib/wiki-entity-lookup.js'
 import { detectAlgerianCompanyQuery as _detectDZCompany, resolveAlgerianCompanyQuery as _resolveDZCompany, lookupUnknownAlgerianCompany as _lookupUnknownDZCompany } from './lib/dz-companies.js'
+import { isDefinitionQuery as _isDefinitionQ, fetchDefinitionContext as _fetchDefinitionCtx, extractTopicFromQuery as _extractTopicQ } from './lib/dz-definition-search.js'
 import { resolveKnowledgeEntity, classifyEntityIntent, extractEntity, ENTITY_INTENT, ENTITY_ROUTING_POLICY, getCacheStats as _getEntityCacheStats } from './lib/dz-knowledge-entity-agent.js'
 import { cleanSearchQuery as _cleanQuerySFP } from './lib/search-first-policy.js'
 import { extractContent, extractMultiple } from './lib/crawl4ai.js'
@@ -24603,6 +24604,31 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       if (_realtimeContext) console.log(`[RealtimeSearch] ✅ context injected (${_realtimeContext.length} chars)`)
     } else if (_isRealtime && _decisionTreeContext) {
       console.log(`[RealtimeSearch] ⏭ Skipped — Decision Tree already provided context`)
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // 📚 KNOWLEDGE SEARCH — البحث المعرفي التلقائي
+    // يُشغَّل عندما يسأل المستخدم عن مفهوم/نظام/موضوع لا يوجد في أي KB
+    // ولم يُعالَج بالبحث الحي أو Decision Tree.
+    // مثال: "ما هو نظام الطيبات" / "اشرح نظام البنوك" / "what is quantum computing"
+    // ══════════════════════════════════════════════════════════════════════
+    if (!_decisionTreeContext && !_realtimeContext && !_isGreetingIntent) {
+      const _needsKnowledge = _isDefinitionQ(lastUserMessage)
+      if (_needsKnowledge) {
+        const _kTopic = _extractTopicQ(lastUserMessage)
+        console.log(`[KnowledgeSearch] 📚 Auto-triggered | topic="${_kTopic}" | "${lastUserMessage.slice(0,60)}"`)
+        try {
+          const _kCtx = await _fetchDefinitionCtx(lastUserMessage)
+          if (_kCtx && _kCtx.length > 100) {
+            _realtimeContext = _kCtx
+            console.log(`[KnowledgeSearch] ✅ Wikipedia context injected (${_kCtx.length} chars)`)
+          } else {
+            console.log(`[KnowledgeSearch] ✗ No Wikipedia results for "${_kTopic}"`)
+          }
+        } catch (_ke) {
+          console.warn('[KnowledgeSearch] failed silently:', _ke.message?.slice(0, 80))
+        }
+      }
     }
     } // end else (_isGreetingIntent)
   } catch (_rse) {

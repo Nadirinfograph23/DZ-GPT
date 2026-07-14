@@ -1,8 +1,8 @@
 {
-  "commit": "cfb2c5a0c1cba756d666ac4ab2b914079ef06414",
-  "commitShort": "cfb2c5a0",
+  "commit": "0a20c39b8c4ef40737990b45585644c915767e27",
+  "commitShort": "0a20c39b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "ui: 🎨 مصادر ChatGPT style — أيقونات دائرية أفقية فقط بدون نصوص + كشف Wikipedia للبحث المعرفي",
-  "deployedAt": "2026-07-14T02:14:21.587249Z",
+  "message": "feat: 💱 CurrencyWidget — بطاقة أسعار الصرف الاحترافية (USD/EUR/GBP + جدول كامل) بدل markdown text",
+  "deployedAt": "2026-07-14T11:54:17.980653Z",
   "deployedBy": "scripts/deploy.py"
 }

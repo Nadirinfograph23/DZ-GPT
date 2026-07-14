@@ -1,8 +1,8 @@
 {
-  "commit": "ef9ec43a562acbf3fa6d5b2b4f5d10efec0c97f6",
-  "commitShort": "ef9ec43a",
+  "commit": "af0431c6577c35f068420664e0e73fa16659365a",
+  "commitShort": "af0431c6",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: 🔍 إصلاح البحث المعرفي التلقائي — Wikipedia fallback لاستعلامات التعريف + إصلاح تحيّز الأخبار في unified-search",
-  "deployedAt": "2026-07-14T01:46:51.272704Z",
+  "message": "fix: ✈️ تصحيح معلومات RedMed Group — مجمع خدمات بترولية بحاسي مسعود (طيران + لوجستيك + قاعدة حياة + تكوين) وليس شركة بحرية",
+  "deployedAt": "2026-07-14T02:11:00.758439Z",
   "deployedBy": "scripts/deploy.py"
 }

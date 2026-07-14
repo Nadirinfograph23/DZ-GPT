@@ -932,7 +932,8 @@ function extractAllSourceIcons(msg: DZMessage): _SourceIcon[] {
     if (/365scores/i.test(content)) add('365scores.com', 'https://www.365scores.com', '365Scores')
   }
   // ويكيبيديا / ويكي بيانات / دي بيديا — أيقونات متتالية أفقياً بدون نص
-  if (/wikipedia|ويكيبيديا/i.test(content)) {
+  // يشمل نتائج البحث المعرفي الجديد (📚 معلومات موسوعية)
+  if (/wikipedia|ويكيبيديا|معلومات موسوعية|📚.*مصدر|ar\.wikipedia|en\.wikipedia|fr\.wikipedia/i.test(content)) {
     add('wikipedia.org', 'https://ar.wikipedia.org', 'Wikipedia')
   }
   if (/wikidata|ويكي\s*بيانات/i.test(content)) {
@@ -9530,46 +9531,40 @@ ${rows}
                           }}
                         />
                       )}
-                      {/* ── شريط المصادر — أيقونات فقط (ChatGPT style) ── */}
+                      {/* ── شريط المصادر — أيقونات أفقية فقط (ChatGPT style) ── */}
                       {(() => {
                         const _icons = extractAllSourceIcons(msg)
                         if (!_icons.length) return null
                         return (
                           <div className="dzc-sources-bar">
-                            <span className="dzc-sources-label">المصادر</span>
-                            <div className="dzc-sources-list">
-                              {_icons.map((src, i) => (
-                                <a
-                                  key={i}
-                                  href={src.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="dzc-source-chip"
-                                  title={src.label}
-                                  aria-label={src.label}
-                                >
-                                  <img
-                                    src={src.faviconUrl}
-                                    alt=""
-                                    className="dzc-source-favicon"
-                                    width={16}
-                                    height={16}
-                                    onError={(e) => {
-                                      const el = e.target as HTMLImageElement
-                                      el.style.display = 'none'
-                                      if (!el.parentElement?.querySelector('.dzc-source-emoji')) {
-                                        const s = document.createElement('span')
-                                        s.className = 'dzc-source-emoji'
-                                        s.textContent = '🌐'
-                                        el.parentElement?.insertBefore(s, el.nextSibling)
-                                      }
-                                    }}
-                                    loading="lazy"
-                                  />
-                                  <span className="dzc-source-name">{src.label}</span>
-                                </a>
-                              ))}
-                            </div>
+                            {_icons.map((src, i) => (
+                              <a
+                                key={i}
+                                href={src.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="dzc-source-chip"
+                                title={src.label}
+                                aria-label={src.label}
+                              >
+                                <img
+                                  src={src.faviconUrl}
+                                  alt=""
+                                  className="dzc-source-favicon"
+                                  onError={(e) => {
+                                    const el = e.target as HTMLImageElement
+                                    el.style.display = 'none'
+                                    if (!el.parentElement?.querySelector('.dzc-source-emoji')) {
+                                      const s = document.createElement('span')
+                                      s.className = 'dzc-source-emoji'
+                                      s.textContent = '🌐'
+                                      el.parentElement?.insertBefore(s, el.nextSibling)
+                                    }
+                                  }}
+                                  loading="lazy"
+                                />
+                              </a>
+                            ))}
                           </div>
                         )
                       })()}

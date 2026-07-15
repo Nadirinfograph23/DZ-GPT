@@ -33,6 +33,7 @@ import type { TaskPlan } from './TaskPlanPanel'
 import { trackFeatureUsage, withRetry } from '../utils/dzMemory'
 import AgentModeBar, { type AgentModeState } from './AgentModeBar'
 import { CurrencyWidget, type CurrencyWidgetData } from './CurrencyWidget'
+import { saveProject as saveToMyProjects } from '../pages/DZMyProjects'
 import '../styles/dz-chatbox.css'
 
 // ===== RATING PERSISTENCE =====
@@ -2124,6 +2125,7 @@ function WebsitePreview({
   const [showTemplates, setShowTemplates] = useState(false)
   const [saving, setSaving]           = useState(false)
   const [saved, setSaved]             = useState(false)
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null)
 
   const cssCode = cssCodeProp || clientExtractCss(htmlCode)
   const jsCode  = jsCodeProp  || clientExtractJs(htmlCode)
@@ -2158,24 +2160,40 @@ function WebsitePreview({
   const handleSaveProject = async () => {
     setSaving(true)
     try {
-      const r = await fetch('/api/wb/save', {
+      const title   = webBuilderMeta?.title || 'مشروع بدون عنوان'
+      const siteType = webBuilderMeta?.type  || 'landing'
+      const style   = webBuilderMeta?.style  || 'minimal'
+
+      // ① حفظ في localStorage → يظهر فوراً في "مشاريع محفوظة" بـ Web Builder
+      const saved = saveToMyProjects({
+        title,
+        htmlCode:    previewSrc,
+        siteType,
+        stylePreset: style,
+        prompt:      webBuilderMeta?.description || title,
+      })
+      setSavedProjectId(saved.id)
+
+      // ② حفظ في السيرفر (نسخة احتياطية)
+      await fetch('/api/wb/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: webBuilderMeta?.title || 'مشروع بدون عنوان',
+          title,
           html: previewSrc,
-          css: editedCss,
-          js: editedJs,
-          type: webBuilderMeta?.type || 'landing',
+          css:  editedCss,
+          js:   editedJs,
+          type: siteType,
           icon: webBuilderMeta?.icon || '🌐',
         }),
-      })
-      if (r.ok) {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
-      }
-    } catch {}
-    finally { setSaving(false) }
+      }).catch(() => {/* server save optional */})
+
+      setSaved(true)
+    } catch (e) {
+      console.error('[SaveProject]', e)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDownloadHtml = () => {
@@ -2298,15 +2316,26 @@ function WebsitePreview({
             {zipping ? '⏳' : zipped ? <Check size={13} /> : '🗜'}
             {zipping ? 'جارٍ...' : zipped ? 'تم ✓' : 'ZIP'}
           </button>
-          <button
-            className={`dz-wp-btn dz-wp-btn--save${saved ? ' dz-wp-btn--ok' : ''}`}
-            onClick={handleSaveProject}
-            disabled={saving}
-            title="حفظ المشروع في السيرفر"
-          >
-            {saving ? '⏳' : saved ? <Check size={13} /> : '💾'}
-            {saving ? 'جارٍ...' : saved ? 'محفوظ ✓' : 'حفظ'}
-          </button>
+          {saved && savedProjectId ? (
+            <a
+              href="/my-projects"
+              className="dz-wp-btn dz-wp-btn--ok dz-wp-btn--open-projects"
+              title="فتح مشاريعي المحفوظة"
+            >
+              <Check size={13} />
+              محفوظ — فتح مشاريعي ↗
+            </a>
+          ) : (
+            <button
+              className="dz-wp-btn dz-wp-btn--save"
+              onClick={handleSaveProject}
+              disabled={saving}
+              title="حفظ المشروع في مشاريعي"
+            >
+              {saving ? '⏳' : '💾'}
+              {saving ? 'جارٍ...' : 'حفظ'}
+            </button>
+          )}
           {onInsertPrompt && (
             <button
               className={`dz-wp-btn dz-wp-btn--tpl${showTemplates ? ' dz-wp-btn--active' : ''}`}

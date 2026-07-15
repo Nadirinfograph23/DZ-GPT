@@ -1,8 +1,8 @@
 {
-  "commit": "d6836b0ccc8ba1125a4f280b510e42f8d0bccc14",
-  "commitShort": "d6836b0c",
+  "commit": "27f4757ef550b391fffab934faa0be1daf43b689",
+  "commitShort": "27f4757e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: 💾 حفظ مشاريع DZ Agent → مشاريع Web Builder المحفوظة (localStorage)",
-  "deployedAt": "2026-07-15T01:20:27.517908Z",
+  "message": "feat: 📱 Android Builder v2 — WebView/Capacitor/React Native/Flutter/Kotlin + كشف تلقائي للنوع + GitHub templates",
+  "deployedAt": "2026-07-15T01:27:56.187172Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "0a20c39b8c4ef40737990b45585644c915767e27",
-  "commitShort": "0a20c39b",
+  "commit": "d6836b0ccc8ba1125a4f280b510e42f8d0bccc14",
+  "commitShort": "d6836b0c",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: 💱 CurrencyWidget — بطاقة أسعار الصرف الاحترافية (USD/EUR/GBP + جدول كامل) بدل markdown text",
-  "deployedAt": "2026-07-14T11:54:17.980653Z",
+  "message": "feat: 💾 حفظ مشاريع DZ Agent → مشاريع Web Builder المحفوظة (localStorage)",
+  "deployedAt": "2026-07-15T01:20:27.517908Z",
   "deployedBy": "scripts/deploy.py"
 }

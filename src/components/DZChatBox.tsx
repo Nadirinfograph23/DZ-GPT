@@ -697,6 +697,10 @@ interface DZMessage {
     filesCount: number
     status: 'building' | 'done' | 'error'
     error?: string
+    appType?: string        // webview | capacitor | reactnative | flutter | kotlin
+    appTypeLabel?: string   // الاسم العربي للقالب
+    appTypeIcon?: string    // أيقونة القالب
+    buildTime?: string      // وقت البناء المتوقع
   }
   slides?: Array<{ title: string; bullets: string[]; icon: string; note?: string }>
   presentationTitle?: string
@@ -6762,7 +6766,16 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   }, [imgRegenLoading])
 
   // ─── Android APK Builder ─────────────────────────────────────────────────
-  const ANDROID_RE = /(?:تطبيق\s*(?:أندرويد|اندرويد|android)|apk|ملف\s*apk|تنزيل\s*تطبيق|تطبيق\s*(?:جوال|موبايل|للهاتف|للموبايل)|(?:اصنع|أنشئ|انشئ|ابني|اعمل|دير|صمم|بني|صنعلي|اصنعلي)\s+تطبيق|build\s+android|create\s+android\s+app|android\s+app|generate\s+apk|build\s+apk|make\s+apk|mobile\s+app|(?:حوّل|حول|تحويل|حوّله|حوله)\s+.{0,60}(?:تطبيق|app|apk)|(?:موقع|site|url|رابط)\s+.{0,40}(?:تطبيق|app|apk)|(?:تطبيق|app)\s+(?:من|من\s+)?(?:الموقع|الرابط|site|url)|(?:convert|turn)\s+(?:this\s+)?(?:site|website|url)\s+(?:to|into)\s+(?:an?\s+)?(?:app|apk|android)|https?:\/\/\S+\s+.{0,40}(?:تطبيق|app|apk)|(?:تطبيق|app|apk)\s+.{0,40}https?:\/\/)/i
+  const ANDROID_RE = /(?:تطبيق\s*(?:أندرويد|اندرويد|android)|apk|ملف\s*apk|تنزيل\s*تطبيق|تطبيق\s*(?:جوال|موبايل|للهاتف|للموبايل)|(?:اصنع|أنشئ|انشئ|ابني|اعمل|دير|صمم|بني|صنعلي|اصنعلي|ابنيلي|انشئلي|أنشئلي|اعمللي)\s+تطبيق|build\s+android|create\s+android\s+app|android\s+app|generate\s+apk|build\s+apk|make\s+apk|mobile\s+app|تطبيق\s*flutter|flutter\s*app|build\s*flutter|مشروع\s*flutter|تطبيق\s*فلاتر|react\s*native|react-native|تطبيق\s*react|expo\s*app|kotlin\s*app|تطبيق\s*kotlin|تطبيق\s*كوتلن|jetpack\s*compose|capacitor\s*app|ionic\s*app|(?:حوّل|حول|تحويل|حوّله|حوله|تحويل\s*الموقع)\s+.{0,60}(?:تطبيق|app|apk)|(?:موقع|site|url|رابط)\s+.{0,40}(?:تطبيق|app|apk)|(?:تطبيق|app)\s+(?:من|من\s+)?(?:الموقع|الرابط|site|url)|(?:convert|turn)\s+(?:this\s+)?(?:site|website|url)\s+(?:to|into)\s+(?:an?\s+)?(?:app|apk|android)|https?:\/\/\S+\s+.{0,40}(?:تطبيق|app|apk)|(?:تطبيق|app|apk)\s+.{0,40}https?:\/\/)/i
+
+  // خريطة appType → معلومات العرض
+  const ANDROID_TYPE_META: Record<string, { label: string; icon: string; buildTime: string }> = {
+    webview:     { label: 'WebView Android',   icon: '🌐', buildTime: '5-8 دقائق'   },
+    capacitor:   { label: 'Ionic Capacitor',   icon: '⚡', buildTime: '8-12 دقيقة'  },
+    reactnative: { label: 'React Native',      icon: '⚛️', buildTime: '10-15 دقيقة' },
+    flutter:     { label: 'Flutter',           icon: '🦋', buildTime: '12-18 دقيقة' },
+    kotlin:      { label: 'Kotlin Native',     icon: '🟣', buildTime: '8-12 دقيقة'  },
+  }
 
   const buildAndroidApp = async (task: string) => {
     const botId = generateId()
@@ -6803,14 +6816,20 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           if (!line) continue
           try {
             const ev = JSON.parse(line)
-            if (ev.type === 'step') {
+            if (ev.type === 'template') {
+              // عرض معلومات القالب المختار فوراً
+              const tm = ANDROID_TYPE_META[ev.appType] || ANDROID_TYPE_META.webview
+              updateMeta({ appType: ev.appType, appTypeIcon: tm.icon, appTypeLabel: tm.label, buildTime: tm.buildTime })
+              appendContent(`\n${tm.icon} **${tm.label}** — ${ev.refs || ''}`)
+            } else if (ev.type === 'step') {
               const stepIcon = ev.step === 'web' ? '🌐' : ev.step === 'android' ? '🤖' : ev.step === 'splash' ? '🎨' : ev.step === 'push' ? '📦' : '✅'
               appendContent(`\n**${stepIcon} ${ev.detail || ev.step}**`)
             } else if (ev.type === 'detail') {
               appendContent(`\n${ev.text}`)
             } else if (ev.type === 'result' && ev.data) {
-              updateMeta({ ...ev.data, status: 'done' })
-              appendContent(`\n\n✅ **تم بناء مشروع أندرويد بنجاح!** سيبدأ GitHub Actions بناء APK تلقائياً.`)
+              const tm = ANDROID_TYPE_META[ev.data.appType] || ANDROID_TYPE_META.webview
+              updateMeta({ ...ev.data, status: 'done', appTypeIcon: tm.icon, appTypeLabel: tm.label })
+              appendContent(`\n\n✅ **تم بناء مشروع ${tm.label} بنجاح!** سيبدأ GitHub Actions بناء APK تلقائياً خلال ${tm.buildTime}.`)
             } else if (ev.type === 'error') {
               updateMeta({ status: 'error', error: ev.message })
               appendContent(`\n\n❌ ${ev.message}`)
@@ -8759,14 +8778,27 @@ ${rows}
                       {msg.androidBuildMeta && (
                         <div className="dz-android-card">
                           <div className="dz-android-card__header">
-                            <span className="dz-android-card__icon">🤖</span>
-                            <div>
+                            <span className="dz-android-card__icon">
+                              {msg.androidBuildMeta.appTypeIcon || '🤖'}
+                            </span>
+                            <div style={{ flex: 1 }}>
                               <div className="dz-android-card__title">
-                                {msg.androidBuildMeta.status === 'building' ? '⏳ جاري بناء تطبيق أندرويد...' : msg.androidBuildMeta.status === 'error' ? '❌ فشل البناء' : `📱 ${msg.androidBuildMeta.appName}`}
+                                {msg.androidBuildMeta.status === 'building'
+                                  ? `⏳ جاري بناء ${msg.androidBuildMeta.appTypeLabel || 'تطبيق أندرويد'}...`
+                                  : msg.androidBuildMeta.status === 'error'
+                                  ? '❌ فشل البناء'
+                                  : `📱 ${msg.androidBuildMeta.appName}`}
                               </div>
-                              {msg.androidBuildMeta.packageName && (
-                                <div className="dz-android-card__pkg">{msg.androidBuildMeta.packageName}</div>
-                              )}
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                                {msg.androidBuildMeta.appTypeLabel && (
+                                  <span className="dz-android-card__type-badge">
+                                    {msg.androidBuildMeta.appTypeIcon} {msg.androidBuildMeta.appTypeLabel}
+                                  </span>
+                                )}
+                                {msg.androidBuildMeta.packageName && (
+                                  <div className="dz-android-card__pkg">{msg.androidBuildMeta.packageName}</div>
+                                )}
+                              </div>
                             </div>
                             {msg.androidBuildMeta.status === 'building' && (
                               <div className="dz-android-card__spinner" />
@@ -8777,6 +8809,9 @@ ${rows}
                               <div className="dz-android-card__info">
                                 <span>📁 {msg.androidBuildMeta.filesCount} ملف مرفوع</span>
                                 <span>⚙️ GitHub Actions يبني APK الآن</span>
+                                {msg.androidBuildMeta.buildTime && (
+                                  <span>⏱ {msg.androidBuildMeta.buildTime}</span>
+                                )}
                               </div>
                               <div className="dz-android-card__actions">
                                 <a href={msg.androidBuildMeta.releasesUrl} target="_blank" rel="noopener noreferrer" className="dz-android-btn dz-android-btn--primary">
@@ -8791,7 +8826,7 @@ ${rows}
                                 </a>
                               </div>
                               <div className="dz-android-card__note">
-                                ⚠️ سيستغرق البناء 5-10 دقائق — انقر "تحميل APK" بعد انتهاء Actions
+                                ⚠️ سيستغرق البناء {msg.androidBuildMeta.buildTime || '5-15 دقيقة'} — انقر "تحميل APK" بعد انتهاء Actions
                               </div>
                             </div>
                           )}

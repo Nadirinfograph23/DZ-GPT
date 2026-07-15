@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, ExternalLink, Cpu, Wrench, Zap, Server, AlertTriangle, Info } from 'lucide-react'
+import { ArrowRight, ExternalLink, Cpu, Wrench, Zap, Server, AlertTriangle, Info, Clock, Smartphone } from 'lucide-react'
 import '../styles/dz-about.css'
 
 const DEVELOPER = {
@@ -21,97 +21,53 @@ const DEVELOPER = {
   ],
 }
 
-const AGENTS = [
-  {
-    emoji: '🔎', name: 'وكيل البحث الحي', role: 'Live Search Agent', color: '#6366f1',
-    desc: 'يبحث على الإنترنت في الوقت الفعلي عبر Google وRSS وcrawl4ai، ويعطيك نتائج محدّثة بدل المعلومات القديمة.',
-  },
-  {
-    emoji: '📰', name: 'وكيل الأخبار', role: 'News Agent', color: '#f59e0b',
-    desc: 'يجمع الأخبار من أكثر من 20 مصدراً جزائرياً ودولياً، ويصنّفها حسب الموضوع ويلخّصها فور نشرها.',
-  },
-  {
-    emoji: '⚽', name: 'وكيل الرياضة', role: 'Sports Agent', color: '#10b981',
-    desc: 'يتابع مباريات الرابطة الجزائرية (LFP) والدوريات العالمية، ويقدّم النتائج والترتيب والأهداف لحظةً بلحظة.',
-  },
-  {
-    emoji: '🌤️', name: 'وكيل الطقس', role: 'Weather Agent', color: '#06b6d4',
-    desc: 'يوفّر بيانات الطقس الحية لجميع الـ 58 ولاية الجزائرية وأي مدينة في العالم، مع توقعات 7 أيام.',
-  },
-  {
-    emoji: '🗺️', name: 'وكيل الخرائط', role: 'Maps Agent', color: '#84cc16',
-    desc: 'يتعامل مع الجغرافيا الجزائرية التفصيلية: ولايات، بلديات، مواقع، مسافات، وأدلّة الأماكن.',
-  },
-  {
-    emoji: '🐙', name: 'وكيل GitHub', role: 'GitHub Agent', color: '#58a6ff',
-    desc: 'يُنشئ المستودعات ويُجري الـ commit والـ push ويفتح Pull Requests وينشر المواقع على GitHub Pages وVercel تلقائياً.',
-  },
-  {
-    emoji: '🌐', name: 'وكيل بناء المواقع', role: 'Web Builder Agent', color: '#a855f7',
-    desc: 'يُنشئ مواقع ويب كاملة بـ HTML/CSS/JS/React من وصف نصي فقط، مع نشر فوري على الإنترنت.',
-  },
-  {
-    emoji: '🧠', name: 'وكيل الذاكرة', role: 'Memory Agent', color: '#ec4899',
-    desc: 'يحتفظ بالمعلومات الشخصية التي تشاركها معه (اسمك، تفضيلاتك، مشاريعك) ليُخصّص ردوده في كل جلسة.',
-  },
-  {
-    emoji: '📖', name: 'وكيل القرآن', role: 'Quran Agent', color: '#0ea5e9',
-    desc: 'يبحث في 6236 آية قرآنية، ويُقدّم التفسير بالتفصيل، ومواقيت الصلاة، والاستماع للتلاوات الصوتية.',
-  },
-  {
-    emoji: '🏥', name: 'وكيل الصحة', role: 'Health Agent', color: '#ef4444',
-    desc: 'يُساعدك في البحث عن أطباء وعيادات، ويشرح حقوقك في CNAS/CHNAS، ويقدّم معلومات صحية موثوقة.',
-  },
-  {
-    emoji: '🎓', name: 'وكيل التعليم', role: 'Education Agent', color: '#f97316',
-    desc: 'يُغطّي منهج الدراسة الجزائري من ابتدائي إلى جامعي، ويربطك بمنصة Eddirasa ويُساعد في التحضير للبكالوريا.',
-  },
-  {
-    emoji: '⚖️', name: 'وكيل القانون', role: 'Legal Agent', color: '#8b5cf6',
-    desc: 'يُنشئ العقود القانونية الجزائرية، ويُحلّل الوثائق الرسمية بالـ OCR، ويُجيب على الأسئلة التشريعية.',
-  },
-  {
-    emoji: '🎬', name: 'وكيل يوتيوب', role: 'YouTube Agent', color: '#dc2626',
-    desc: 'يستخرج ملخّص أي فيديو يوتيوب، يُحوّل التعليقات إلى تحليل، ويُجيب عن أسئلتك حول محتواه.',
-  },
-  {
-    emoji: '🗣️', name: 'وكيل الدارجة', role: 'Darija Agent', color: '#16a34a',
-    desc: 'يفهم ويتحدّث جميع لهجات الدارجة الجزائرية بطلاقة، من القبائلية إلى الشاوية والتارقية والصحراوية.',
-  },
-  {
-    emoji: '💱', name: 'وكيل العملات', role: 'Currency Agent', color: '#eab308',
-    desc: 'يُقدّم أسعار صرف الدينار الجزائري (DZD) مقابل اليورو والدولار وجميع العملات الكبرى في الوقت الحقيقي.',
-  },
-  {
-    emoji: '🔬', name: 'وكيل التحليل', role: 'Analysis Agent', color: '#64748b',
-    desc: 'يُطبّق تقنيات التفكير المتقدم (CoT، ReAct، ToT) لتحليل المسائل المعقدة وإعطاء إجابات عميقة ومبرّرة.',
-  },
+/* ── Static fallback data (overridden by live /api/capabilities) ── */
+const AGENTS_STATIC = [
+  { emoji: '🔎', name: 'وكيل البحث الحي',      role: 'Live Search Agent',        color: '#6366f1', desc: 'يبحث على الإنترنت في الوقت الفعلي عبر Google وRSS وcrawl4ai.' },
+  { emoji: '📰', name: 'وكيل الأخبار',          role: 'News Agent',               color: '#f59e0b', desc: 'يجمع الأخبار من أكثر من 20 مصدراً جزائرياً ودولياً ويلخّصها.' },
+  { emoji: '⚽', name: 'وكيل الرياضة',          role: 'Sports Agent',             color: '#10b981', desc: 'يتابع LFP والدوريات العالمية، نتائج وترتيب وأهداف لحظةً بلحظة.' },
+  { emoji: '🌤️', name: 'وكيل الطقس',           role: 'Weather Agent',            color: '#06b6d4', desc: 'طقس حي لجميع الـ 58 ولاية الجزائرية وأي مدينة عالمية.' },
+  { emoji: '🗺️', name: 'وكيل الخرائط',         role: 'Maps Agent',               color: '#84cc16', desc: 'خرائط الجزائر التفصيلية: ولايات، بلديات، مواقع ومسافات.' },
+  { emoji: '🐙', name: 'وكيل GitHub',           role: 'GitHub Agent',             color: '#58a6ff', desc: 'ينشئ مستودعات، يُجري commit/push، ينشر على GitHub Pages وVercel.' },
+  { emoji: '🌐', name: 'وكيل بناء المواقع',     role: 'Web Builder Agent',        color: '#a855f7', desc: 'يُنشئ مواقع HTML/CSS/JS/React كاملة من وصف نصي مع نشر فوري.' },
+  { emoji: '📱', name: 'وكيل بناء التطبيقات',  role: 'Android App Builder',      color: '#f97316', desc: 'يبني تطبيقات أندرويد حقيقية: WebView، Capacitor، Flutter، React Native، Kotlin — مع رفع GitHub ومسار GitHub Actions للـ APK.', isNew: true },
+  { emoji: '🧠', name: 'وكيل الذاكرة',         role: 'Memory Agent',             color: '#ec4899', desc: 'يحتفظ بالمعلومات الشخصية ليُخصّص ردوده في كل جلسة.' },
+  { emoji: '📖', name: 'وكيل القرآن',           role: 'Quran Agent',              color: '#0ea5e9', desc: 'يبحث في 6236 آية، تفسير ابن كثير، تلاوات صوتية ومواقيت الصلاة.' },
+  { emoji: '🏥', name: 'وكيل الصحة',           role: 'Health Agent',             color: '#ef4444', desc: 'بحث أطباء وعيادات، شرح CNAS/CHNAS، معلومات صحية موثوقة.' },
+  { emoji: '🎓', name: 'وكيل التعليم',         role: 'Education Agent',          color: '#f97316', desc: 'المنهج الجزائري من الابتدائي للجامعي، Eddirasa، وتحضير البكالوريا.' },
+  { emoji: '⚖️', name: 'وكيل القانون',         role: 'Legal Agent',              color: '#8b5cf6', desc: 'عقود قانونية جزائرية، تحليل وثائق رسمية بالـ OCR.' },
+  { emoji: '🎬', name: 'وكيل يوتيوب',          role: 'YouTube Agent',            color: '#dc2626', desc: 'ملخّص أي فيديو يوتيوب، تحليل التعليقات، إجابة أسئلة حول المحتوى.' },
+  { emoji: '🗣️', name: 'وكيل الدارجة',         role: 'Darija Agent',             color: '#16a34a', desc: 'يفهم ويتحدّث جميع لهجات الدارجة الجزائرية بطلاقة.' },
+  { emoji: '💱', name: 'وكيل العملات',         role: 'Currency Agent',           color: '#eab308', desc: 'أسعار صرف DZD مقابل اليورو والدولار وجميع العملات الكبرى.' },
+  { emoji: '🔬', name: 'وكيل التحليل',         role: 'Analysis Agent',           color: '#64748b', desc: 'CoT، ReAct، ToT — تحليل المسائل المعقدة بتفكير عميق ومبرّر.' },
 ]
 
-const TOOLS = [
-  { emoji: '🔍', name: 'بحث Google الحي',    color: '#6366f1', desc: 'يُجري بحثاً مباشراً على Google ويُعيد النتائج الأحدث مع المصادر.' },
-  { emoji: '🌐', name: 'قارئ المواقع',        color: '#0ea5e9', desc: 'يفتح أي رابط ويستخرج محتواه النصي الكامل لمعالجته والإجابة عنه.' },
-  { emoji: '💻', name: 'مولّد الكود',          color: '#10b981', desc: 'يكتب كوداً برمجياً نظيفاً بلغات متعددة مع شرح كل سطر.' },
-  { emoji: '🐙', name: 'GitHub API',           color: '#58a6ff', desc: 'يدير المستودعات: إنشاء، commit، push، branch، pull request.' },
-  { emoji: '🖼️', name: 'توليد الصور AI',       color: '#a855f7', desc: 'يُنشئ صوراً واقعية أو فنية من نص، عبر FLUX.1 وPollinations وStability.' },
-  { emoji: '📷', name: 'OCR — قراءة الصور',    color: '#f59e0b', desc: 'يستخرج النصوص من صور الهوية والوثائق والـ PDF بدقة عالية.' },
-  { emoji: '🌤️', name: 'طقس OpenWeather',      color: '#06b6d4', desc: 'يُحضر بيانات الطقس الحية لأي مدينة أو ولاية جزائرية مع التوقعات.' },
-  { emoji: '💱', name: 'تحويل العملات',         color: '#eab308', desc: 'يُحوّل بين الدينار الجزائري وجميع العملات بأسعار لحظية.' },
-  { emoji: '🎬', name: 'تحليل يوتيوب',          color: '#dc2626', desc: 'يستخرج النص والملخّص والنقاط الرئيسية من أي فيديو يوتيوب.' },
-  { emoji: '📖', name: 'قرآن API',              color: '#16a34a', desc: 'يصل إلى 6236 آية مع التفسير الصوتي ومواقيت الصلاة لـ 58 ولاية.' },
-  { emoji: '🧠', name: 'الذاكرة الشخصية',       color: '#ec4899', desc: 'يحفظ تفضيلاتك ومعلوماتك لتجربة محادثة مُخصّصة في كل جلسة.' },
-  { emoji: '📰', name: 'رادار الأخبار',          color: '#f97316', desc: 'يجمع الأخبار من 20+ مصدراً عبر RSS/scraping ويُصنّفها تلقائياً.' },
-  { emoji: '📊', name: 'محرر Excel/CSV',         color: '#22c55e', desc: 'يُنشئ جداول البيانات ويعالجها ويُنسّقها ويولّد الرسوم البيانية.' },
-  { emoji: '🌐', name: 'Web Builder',            color: '#8b5cf6', desc: 'يُنشئ مواقع HTML/CSS/JS/React كاملة وينشرها على GitHub Pages.' },
-  { emoji: '📄', name: 'تحليل PDF',              color: '#94a3b8', desc: 'يقرأ ملفات PDF ويلخّصها ويُجيب عن أسئلتك حول محتواها.' },
-  { emoji: '🗣️', name: 'محرك الدارجة',           color: '#16a34a', desc: 'يُحلّل اللهجة الجزائرية ويُترجمها إلى فصحى وفرنسية وإنجليزية.' },
-  { emoji: '🗺️', name: 'خرائط الجزائر',          color: '#84cc16', desc: 'يُوفّر بيانات جغرافية تفصيلية لجميع الولايات والبلديات والأماكن.' },
-  { emoji: '🛡️', name: 'Circuit Breaker',        color: '#64748b', desc: 'يُراقب صحة جميع المزودين ويُحوّل تلقائياً عند أي عطل لضمان الاستمرارية.' },
+const TOOLS_STATIC = [
+  { emoji: '🔍', name: 'بحث Google الحي',      color: '#6366f1', desc: 'بحث مباشر على Google مع النتائج الأحدث والمصادر.' },
+  { emoji: '🌐', name: 'قارئ المواقع',          color: '#0ea5e9', desc: 'يفتح أي رابط ويستخرج محتواه النصي الكامل.' },
+  { emoji: '💻', name: 'مولّد الكود',            color: '#10b981', desc: 'كود نظيف بلغات متعددة مع شرح كل سطر.' },
+  { emoji: '🐙', name: 'GitHub API',             color: '#58a6ff', desc: 'إنشاء المستودعات، commit، push، branch، pull request.' },
+  { emoji: '📱', name: 'Android Builder',        color: '#f97316', desc: 'يولّد مشروع أندرويد كامل: WebView/Capacitor/Flutter/RN/Kotlin + GitHub Actions.', isNew: true },
+  { emoji: '🖼️', name: 'توليد الصور AI',         color: '#a855f7', desc: 'صور واقعية أو فنية من نص عبر FLUX.1 وPollinations وStability.' },
+  { emoji: '📷', name: 'OCR — قراءة الصور',      color: '#f59e0b', desc: 'استخراج النصوص من صور الهوية والوثائق والـ PDF بدقة عالية.' },
+  { emoji: '🌤️', name: 'طقس OpenWeather',        color: '#06b6d4', desc: 'بيانات الطقس الحية لأي مدينة أو ولاية جزائرية مع التوقعات.' },
+  { emoji: '💱', name: 'تحويل العملات',           color: '#eab308', desc: 'تحويل بين الدينار الجزائري وجميع العملات بأسعار لحظية.' },
+  { emoji: '🎬', name: 'تحليل يوتيوب',            color: '#dc2626', desc: 'استخراج النص والملخّص والنقاط الرئيسية من أي فيديو يوتيوب.' },
+  { emoji: '📖', name: 'قرآن API',                color: '#16a34a', desc: '6236 آية مع التفسير الصوتي ومواقيت الصلاة لـ 58 ولاية.' },
+  { emoji: '🧠', name: 'الذاكرة الشخصية',         color: '#ec4899', desc: 'يحفظ تفضيلاتك ومعلوماتك لتجربة محادثة مُخصّصة.' },
+  { emoji: '📰', name: 'رادار الأخبار',            color: '#f97316', desc: 'أخبار من 20+ مصدر عبر RSS/scraping مُصنّفة تلقائياً.' },
+  { emoji: '📊', name: 'محرر Excel/CSV',           color: '#22c55e', desc: 'جداول البيانات، معالجة، تنسيق، رسوم بيانية.' },
+  { emoji: '🌐', name: 'Web Builder',              color: '#8b5cf6', desc: 'مواقع HTML/CSS/JS/React كاملة ونشرها على GitHub Pages.' },
+  { emoji: '📄', name: 'تحليل PDF',                color: '#94a3b8', desc: 'قراءة ملفات PDF وتلخيصها والإجابة عن الأسئلة.' },
+  { emoji: '🗣️', name: 'محرك الدارجة',             color: '#16a34a', desc: 'تحليل اللهجة الجزائرية وترجمتها إلى فصحى وفرنسية.' },
+  { emoji: '🗺️', name: 'خرائط الجزائر',            color: '#84cc16', desc: 'بيانات جغرافية تفصيلية لجميع الولايات والبلديات.' },
+  { emoji: '🛡️', name: 'Circuit Breaker',          color: '#64748b', desc: 'يُراقب جميع المزودين ويُحوّل تلقائياً عند أي عطل.' },
+  { emoji: '🤖', name: 'Dahl Inference API',       color: '#a78bfa', desc: 'نماذج LLM متقدمة: MiniMax-M2.7 · Kimi-K2.6 · GLM-5.2 عبر inference.dahl.global.', isNew: true },
 ]
 
-const SKILLS = [
-  { emoji: '🔎', name: 'بحث الإنترنت الحي',      desc: 'البحث في الوقت الفعلي بدل الاعتماد على البيانات القديمة' },
-  { emoji: '📰', name: 'أخبار الجزائر',            desc: 'تجميع وتلخيص الأخبار من أكثر من 20 مصدراً جزائرياً' },
+const SKILLS_STATIC = [
+  { emoji: '🔎', name: 'بحث الإنترنت الحي',     desc: 'البحث في الوقت الفعلي بدل الاعتماد على البيانات القديمة' },
+  { emoji: '📰', name: 'أخبار الجزائر',           desc: 'تجميع وتلخيص الأخبار من أكثر من 20 مصدراً جزائرياً' },
   { emoji: '🌍', name: 'أخبار دولية',              desc: 'متابعة الأحداث العالمية وتقديمها بالعربية والفرنسية' },
   { emoji: '⚽', name: 'رياضة وLFP',              desc: 'نتائج مباريات الدوري الجزائري والدوريات العالمية حياً' },
   { emoji: '💱', name: 'عملات DZD حية',            desc: 'سعر الدينار الجزائري مقابل اليورو والدولار والعملات الكبرى' },
@@ -119,6 +75,11 @@ const SKILLS = [
   { emoji: '🕌', name: 'مواقيت الصلاة',            desc: 'أوقات الصلاة الدقيقة لكل بلدية جزائرية' },
   { emoji: '📖', name: 'قرآن كريم',                desc: 'بحث، تفسير، وتلاوة صوتية لكل آيات المصحف' },
   { emoji: '🧠', name: 'ذاكرة شخصية',              desc: 'تخزين معلوماتك وتفضيلاتك لتجربة مُخصّصة' },
+  { emoji: '📱', name: 'بناء تطبيق WebView',       desc: 'تحويل أي موقع إلى تطبيق أندرويد WebView مباشرةً', isNew: true },
+  { emoji: '⚡', name: 'Capacitor (PWA→APK)',      desc: 'تحويل PWA/موقع ويب لتطبيق أندرويد أصيل بـ Ionic', isNew: true },
+  { emoji: '🦋', name: 'Flutter App',              desc: 'بناء تطبيق Flutter بـ Dart وMaterial Design 3', isNew: true },
+  { emoji: '⚛️', name: 'React Native App',         desc: 'تطبيق أندرويد بـ React Native/Expo وTypeScript', isNew: true },
+  { emoji: '🟣', name: 'Kotlin Native',             desc: 'تطبيق أندرويد أصلي بـ Kotlin + Jetpack Compose', isNew: true },
   { emoji: '📄', name: 'كتابة السيرة الذاتية',      desc: 'توليد CV احترافي من معلوماتك بعدة تنسيقات' },
   { emoji: '📋', name: 'مخطط المشاريع',             desc: 'إنشاء خطط عمل تفصيلية لأي مشروع' },
   { emoji: '📑', name: 'وثائق تجارية',              desc: 'صياغة العروض التجارية وتقارير الأعمال' },
@@ -147,25 +108,34 @@ const SKILLS = [
   { emoji: '🎯', name: 'كاشف النوايا',               desc: 'يفهم قصدك بدقة حتى لو الجملة غير مكتملة أو بالدارجة' },
   { emoji: '🌐', name: 'قراءة المواقع',              desc: 'تصفح واستخراج محتوى أي موقع إلكتروني تلقائياً' },
   { emoji: '💻', name: 'كود وبرمجة',                desc: 'كتابة كود نظيف وتصحيح الأخطاء بعدة لغات برمجية' },
-  { emoji: '🗺️', name: 'خرائط جزائرية',             desc: 'بيانات جغرافية تفصيلية لكل بلدية وولاية ومنطقة' },
-  { emoji: '📊', name: 'Excel وجداول البيانات',      desc: 'معالجة البيانات وإنشاء الرسوم البيانية والتقارير' },
 ]
 
-const PROVIDERS = [
+const PROVIDERS_STATIC = [
   {
-    name: 'Groq Cloud', models: ['llama-3.3-70b', 'mixtral-8x7b'], ctx: '32K',
-    color: '#f97316', cost: 'مجاني', rel: 9,
-    desc: 'أسرع مزوّد في المنصة — يُعطي ردوداً في أقل من ثانية بفضل معالجات LPU المتخصصة.',
+    name: 'Cerebras', models: ['gpt-oss-120b'], ctx: '8K',
+    color: '#a78bfa', cost: 'مجاني', rel: 9,
+    desc: 'الأسرع على الإطلاق — ~600 token/s بفضل رقائق Wafer-Scale المتخصصة. مثالي للاستجابات الفورية.',
   },
   {
-    name: 'Google Gemini', models: ['gemini-1.5-flash', 'gemini-2.0-flash'], ctx: '1M',
+    name: 'Groq Cloud', models: ['llama-3.3-70b', 'qwen-2.5-coder-32b'], ctx: '32K',
+    color: '#f97316', cost: 'مجاني', rel: 9,
+    desc: 'أسرع مزوّد — ردود في أقل من ثانية بفضل معالجات LPU. يدعم العربية والدارجة بشكل ممتاز.',
+  },
+  {
+    name: 'Dahl Inference', models: ['MiniMax-M2.7', 'Kimi-K2.6', 'GLM-5.2-FP8'], ctx: '32K',
+    color: '#c8ff00', cost: 'مدفوع', rel: 8,
+    desc: 'بوابة inference.dahl.global — نماذج MiniMax وKimi وGLM. OpenAI-compatible مع قدرات vision ومعالجة متعددة اللغات.',
+    isNew: true,
+  },
+  {
+    name: 'Google Gemini', models: ['gemini-2.5-flash', 'gemini-2.0-flash'], ctx: '1M',
     color: '#4285f4', cost: 'مجاني', rel: 8,
-    desc: 'نافذة سياق مليون token — الأنسب للوثائق الطويلة والملفات الضخمة.',
+    desc: 'نافذة سياق مليون token — الأنسب للوثائق الطويلة. يدعم Vision بشكل ممتاز.',
   },
   {
     name: 'Mistral AI', models: ['mistral-large', 'mistral-small'], ctx: '32K',
     color: '#ff7000', cost: 'منخفض', rel: 8,
-    desc: 'نموذج فرنسي-أوروبي ممتاز للمحتوى باللغتين الفرنسية والعربية.',
+    desc: 'نموذج فرنسي-أوروبي ممتاز للمحتوى بالفرنسية والعربية مع tool calling.',
   },
   {
     name: 'NVIDIA NIM', models: ['llama-3.1-70b', 'nemotron-70b'], ctx: '128K',
@@ -180,7 +150,7 @@ const PROVIDERS = [
   {
     name: 'OpenRouter', models: ['claude-3.5-sonnet', 'gpt-4o'], ctx: '200K',
     color: '#7c3aed', cost: 'متوسط', rel: 8,
-    desc: 'بوابة موحّدة لأقوى النماذج: Claude من Anthropic وGPT-4o من OpenAI.',
+    desc: 'بوابة موحّدة لأقوى النماذج: Claude من Anthropic وGPT-4o من OpenAI وأكثر من 100 نموذج.',
   },
   {
     name: 'HuggingFace', models: ['FLUX.1-schnell', 'SDXL'], ctx: 'صور',
@@ -189,11 +159,12 @@ const PROVIDERS = [
   },
 ]
 
-const STATS = [
-  { value: '16', label: 'وكيل متخصص', icon: <Cpu size={22} />, color: '#6366f1' },
-  { value: '18', label: 'أداة مدمجة',  icon: <Wrench size={22} />, color: '#10b981' },
-  { value: '39', label: 'مهارة',        icon: <Zap size={22} />, color: '#f59e0b' },
-  { value: '7',  label: 'مزودو AI',     icon: <Server size={22} />, color: '#ec4899' },
+const ANDROID_TYPES = [
+  { icon: '🌐', name: 'WebView',    desc: 'تحميل URL مباشرةً داخل WebView — أسرع طريقة لتحويل موقع لتطبيق', time: '5-8 دق', ref: 'bapspatil/WebViewApp' },
+  { icon: '⚡', name: 'Capacitor',  desc: 'HTML/CSS/JS → تطبيق أصيل مع الوصول لميزات الهاتف (Ionic)', time: '8-12 دق', ref: 'ionic-team/capacitor' },
+  { icon: '⚛️', name: 'React Native', desc: 'تطبيق JavaScript/TypeScript بأداء يقارب التطبيقات الأصلية', time: '10-15 دق', ref: 'infinitered/ignite' },
+  { icon: '🦋', name: 'Flutter',    desc: 'واجهات جميلة بـ Dart وMaterial Design 3 — أداء ممتاز', time: '12-18 دق', ref: 'flutter/flutter' },
+  { icon: '🟣', name: 'Kotlin',     desc: 'تطبيق أندرويد أصلي بـ Kotlin + Jetpack Compose + MVVM', time: '8-12 دق', ref: 'android/architecture-samples' },
 ]
 
 const LIMITATIONS = [
@@ -201,6 +172,52 @@ const LIMITATIONS = [
   'لا وصول لملفاتك المحلية على جهازك',
   'لا ذاكرة دائمة بين الجلسات المختلفة',
   'لا إرسال رسائل بالنيابة عنك بدون إذن',
+]
+
+// ── Changelog entries (auto-populated from /api/capabilities live) ──────────
+const CHANGELOG_STATIC = [
+  {
+    date: '2026-07',
+    tag: 'جديد',
+    tagColor: '#c8ff00',
+    title: 'وكيل بناء التطبيقات 📱',
+    desc: 'إضافة وكيل كامل لبناء تطبيقات أندرويد (WebView/Capacitor/Flutter/RN/Kotlin) مع رفع GitHub Actions للـ APK.',
+  },
+  {
+    date: '2026-07',
+    tag: 'جديد',
+    tagColor: '#c8ff00',
+    title: 'Dahl Inference API 🤖',
+    desc: 'دمج inference.dahl.global كمزوّد جديد: MiniMax-M2.7، Kimi-K2.6، GLM-5.2-FP8 كـ fallback ذكي.',
+  },
+  {
+    date: '2026-07',
+    tag: 'تحديث',
+    tagColor: '#60a5fa',
+    title: 'صفحة "عن DZ Agent" ديناميكية',
+    desc: 'الصفحة تتحدّث تلقائياً من /api/capabilities — الإحصاءات والمزودون والمهارات كلها حية.',
+  },
+  {
+    date: '2026-06',
+    tag: 'تحديث',
+    tagColor: '#60a5fa',
+    title: 'Android Builder v2 — كشف تلقائي للنوع',
+    desc: 'كشف تلقائي لنوع التطبيق (WebView/Capacitor/RN/Flutter/Kotlin) من النص. دعم تحويل أي رابط URL.',
+  },
+  {
+    date: '2026-05',
+    tag: 'تحديث',
+    tagColor: '#60a5fa',
+    title: 'DZ Agent v5 — Cerebras + Multi-Provider',
+    desc: 'إضافة Cerebras كمزوّد أول (600 tok/s)، تحسين fallback chain، دعم Vision لـ Gemini وOpenRouter.',
+  },
+  {
+    date: '2026-04',
+    tag: 'ميزة',
+    tagColor: '#10b981',
+    title: 'GitHub Agent — Smart Push + Vercel',
+    desc: 'نشر تلقائي على Vercel بعد كل commit، دعم فتح Pull Requests وإدارة الفروع.',
+  },
 ]
 
 function openFacebook() {
@@ -225,19 +242,76 @@ function Stars({ score }: { score: number }) {
   )
 }
 
-type Tab = 'agents' | 'tools' | 'skills' | 'providers' | 'limits'
+function NewBadge() {
+  return <span className="dza-new-badge">جديد</span>
+}
+
+type Tab = 'agents' | 'tools' | 'skills' | 'android' | 'providers' | 'changelog' | 'limits'
+
+interface LiveCapabilities {
+  timestamp: string
+  overview?: {
+    total_agents?: number
+    total_tools?: number
+    total_skills?: number
+    total_providers?: number
+    version?: string
+  }
+  token_limits?: {
+    max_input_tokens?: number
+    max_output_tokens?: number
+    average_response_tokens?: number
+    tool_overhead_tokens?: number
+  }
+  circuit_breaker?: {
+    fallback_chain?: string[]
+  }
+}
 
 export default function DZAbout() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>('agents')
-  const [capabilities, setCapabilities] = useState<null | { timestamp: string }>(null)
+  const [live, setLive] = useState<LiveCapabilities | null>(null)
+  const [dahlModels, setDahlModels] = useState<string[]>([])
 
   useEffect(() => {
+    // Fetch live capabilities
     fetch('/api/capabilities', { headers: { 'User-Agent': 'DZAboutPage/1.0' } })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.timestamp) setCapabilities(d) })
+      .then(d => { if (d?.timestamp) setLive(d) })
+      .catch(() => {})
+
+    // Fetch Dahl models via server-side proxy (avoids browser CSP)
+    fetch('/api/dahl/models', { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.models?.length) {
+          setDahlModels(d.models.slice(0, 4).map((m: { id: string }) => m.id.split('/').pop() || m.id))
+        }
+      })
       .catch(() => {})
   }, [])
+
+  const totalAgents   = live?.overview?.total_agents   ?? AGENTS_STATIC.length
+  const totalTools    = live?.overview?.total_tools    ?? TOOLS_STATIC.length
+  const totalSkills   = live?.overview?.total_skills   ?? SKILLS_STATIC.length
+  const totalProviders = live?.overview?.total_providers ?? PROVIDERS_STATIC.length
+  const version        = live?.overview?.version ?? '5.1.0'
+
+  const tokenIn   = live?.token_limits?.max_input_tokens      ?? 32768
+  const tokenOut  = live?.token_limits?.max_output_tokens     ?? 8192
+  const tokenAvg  = live?.token_limits?.average_response_tokens ?? 600
+  const tokenTool = live?.token_limits?.tool_overhead_tokens   ?? 400
+
+  const fallbackChain = live?.circuit_breaker?.fallback_chain
+    ?? ['Cerebras', 'Groq', 'Dahl', 'Gemini', 'Mistral', 'NVIDIA', 'Cohere', 'OpenRouter']
+
+  const STATS = [
+    { value: String(totalAgents),   label: 'وكيل متخصص', icon: <Cpu size={22} />,       color: '#6366f1' },
+    { value: String(totalTools),    label: 'أداة مدمجة',  icon: <Wrench size={22} />,    color: '#10b981' },
+    { value: String(totalSkills),   label: 'مهارة',        icon: <Zap size={22} />,       color: '#f59e0b' },
+    { value: String(totalProviders),label: 'مزودو AI',    icon: <Server size={22} />,    color: '#ec4899' },
+  ]
 
   return (
     <div className="dza-page" dir="rtl">
@@ -250,9 +324,9 @@ export default function DZAbout() {
         </button>
         <div className="dza-nav-title">
           <span className="dza-nav-logo">DZ Agent</span>
-          <span className="dza-nav-badge">لوحة القدرات</span>
+          <span className="dza-nav-badge">v{version}</span>
         </div>
-        {capabilities && (
+        {live && (
           <span className="dza-live-badge">
             <span className="dza-live-dot" />
             Live
@@ -332,18 +406,21 @@ export default function DZAbout() {
           <div className="dza-tabs-wrap">
             <div className="dza-tabs">
               {([
-                { key: 'agents',    label: '🧠 الوكلاء',   count: 16 },
-                { key: 'tools',     label: '🔧 الأدوات',    count: 18 },
-                { key: 'skills',    label: '⚡ المهارات',   count: 39 },
-                { key: 'providers', label: '☁️ المزودون',   count: 7  },
-                { key: 'limits',    label: '🔒 الحدود',     count: null },
-              ] as { key: Tab; label: string; count: number | null }[]).map(t => (
+                { key: 'agents',    label: '🧠 الوكلاء',    count: totalAgents },
+                { key: 'tools',     label: '🔧 الأدوات',     count: totalTools },
+                { key: 'skills',    label: '⚡ المهارات',    count: totalSkills },
+                { key: 'android',   label: '📱 التطبيقات',   count: null, badge: 'جديد' },
+                { key: 'providers', label: '☁️ المزودون',    count: totalProviders },
+                { key: 'changelog', label: '📋 التحديثات',   count: null },
+                { key: 'limits',    label: '🔒 الحدود',      count: null },
+              ] as { key: Tab; label: string; count: number | null; badge?: string }[]).map(t => (
                 <button
                   key={t.key}
                   className={`dza-tab ${activeTab === t.key ? 'active' : ''}`}
                   onClick={() => setActiveTab(t.key)}
                 >
                   {t.label}{t.count ? ` (${t.count})` : ''}
+                  {t.badge && <span className="dza-tab-new">{t.badge}</span>}
                 </button>
               ))}
             </div>
@@ -352,11 +429,11 @@ export default function DZAbout() {
           {/* ── AGENTS TAB ── */}
           {activeTab === 'agents' && (
             <div className="dza-list">
-              {AGENTS.map(a => (
+              {AGENTS_STATIC.map(a => (
                 <div key={a.name} className="dza-list-card" style={{ '--card-color': a.color } as React.CSSProperties}>
                   <div className="dza-list-emoji">{a.emoji}</div>
                   <div className="dza-list-body">
-                    <div className="dza-list-name">{a.name}</div>
+                    <div className="dza-list-name">{a.name} {a.isNew && <NewBadge />}</div>
                     <div className="dza-list-role" style={{ color: a.color }}>{a.role}</div>
                     <div className="dza-list-desc">{a.desc}</div>
                   </div>
@@ -369,11 +446,11 @@ export default function DZAbout() {
           {/* ── TOOLS TAB ── */}
           {activeTab === 'tools' && (
             <div className="dza-list">
-              {TOOLS.map(t => (
+              {TOOLS_STATIC.map(t => (
                 <div key={t.name} className="dza-list-card" style={{ '--card-color': t.color } as React.CSSProperties}>
                   <div className="dza-list-emoji">{t.emoji}</div>
                   <div className="dza-list-body">
-                    <div className="dza-list-name">{t.name}</div>
+                    <div className="dza-list-name">{t.name} {t.isNew && <NewBadge />}</div>
                     <div className="dza-list-desc">{t.desc}</div>
                   </div>
                   <div className="dza-list-dot" style={{ background: t.color }} />
@@ -385,11 +462,11 @@ export default function DZAbout() {
           {/* ── SKILLS TAB ── */}
           {activeTab === 'skills' && (
             <div className="dza-list">
-              {SKILLS.map(s => (
+              {SKILLS_STATIC.map(s => (
                 <div key={s.name} className="dza-list-card dza-list-card--skill">
                   <div className="dza-list-emoji">{s.emoji}</div>
                   <div className="dza-list-body">
-                    <div className="dza-list-name">{s.name}</div>
+                    <div className="dza-list-name">{s.name} {s.isNew && <NewBadge />}</div>
                     <div className="dza-list-desc">{s.desc}</div>
                   </div>
                 </div>
@@ -397,21 +474,74 @@ export default function DZAbout() {
             </div>
           )}
 
+          {/* ── ANDROID TAB ── */}
+          {activeTab === 'android' && (
+            <div className="dza-android-section">
+              <div className="dza-android-hero">
+                <Smartphone size={36} className="dza-android-icon" />
+                <div>
+                  <h3 className="dza-android-title">بناء تطبيقات أندرويد من الصفر</h3>
+                  <p className="dza-android-sub">DZ Agent يولّد مشروع كامل ويرفعه على GitHub مع workflow بناء APK تلقائياً</p>
+                </div>
+              </div>
+              <div className="dza-android-grid">
+                {ANDROID_TYPES.map(a => (
+                  <div key={a.name} className="dza-android-card">
+                    <div className="dza-android-card-header">
+                      <span className="dza-android-card-icon">{a.icon}</span>
+                      <span className="dza-android-card-name">{a.name}</span>
+                      <span className="dza-android-card-time">⏱ {a.time}</span>
+                    </div>
+                    <p className="dza-android-card-desc">{a.desc}</p>
+                    <a
+                      href={'https://github.com/' + a.ref}
+                      target="_blank" rel="noopener noreferrer"
+                      className="dza-android-card-ref"
+                    >
+                      🐙 {a.ref}
+                    </a>
+                  </div>
+                ))}
+              </div>
+              <div className="dza-android-how">
+                <div className="dza-android-how-title">🔄 كيف يعمل</div>
+                <div className="dza-android-steps">
+                  {[
+                    { n: '1', t: 'أرسل طلبك', d: 'اكتب "ابنِ تطبيق أندرويد لـ..." أو "حوّل موقع [رابط] إلى تطبيق"' },
+                    { n: '2', t: 'DZ Agent يولّد الكود', d: 'يُنشئ مشروعاً كاملاً حسب النوع المكتشف تلقائياً' },
+                    { n: '3', t: 'رفع GitHub', d: 'يُنشئ مستودعاً ويرفع كل الملفات + workflow GitHub Actions' },
+                    { n: '4', t: 'APK جاهز', d: 'بعد 5-18 دقيقة، APK قابل للتحميل من قسم Releases في GitHub' },
+                  ].map(s => (
+                    <div key={s.n} className="dza-android-step">
+                      <span className="dza-android-step-num">{s.n}</span>
+                      <div>
+                        <div className="dza-android-step-title">{s.t}</div>
+                        <div className="dza-android-step-desc">{s.d}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── PROVIDERS TAB ── */}
           {activeTab === 'providers' && (
             <div className="dza-prov-list">
-              {PROVIDERS.map(p => (
+              {PROVIDERS_STATIC.map(p => (
                 <div key={p.name} className="dza-prov-card2" style={{ '--prov-color': p.color } as React.CSSProperties}>
                   <div className="dza-prov2-header">
                     <span className="dza-prov-dot" style={{ background: p.color }} />
-                    <span className="dza-prov-name">{p.name}</span>
+                    <span className="dza-prov-name">{p.name} {p.isNew && <NewBadge />}</span>
                     <span className="dza-prov-cost">{p.cost}</span>
                     <Stars score={p.rel} />
                   </div>
                   <div className="dza-prov2-desc">{p.desc}</div>
                   <div className="dza-prov2-footer">
                     <div className="dza-prov-models">
-                      {p.models.map(m => <span key={m} className="dza-prov-model">{m}</span>)}
+                      {(p.name === 'Dahl Inference' && dahlModels.length > 0 ? dahlModels : p.models).map(m => (
+                        <span key={m} className="dza-prov-model">{m}</span>
+                      ))}
                     </div>
                     <span className="dza-prov-ctx">🗂 {p.ctx} tokens</span>
                   </div>
@@ -419,16 +549,16 @@ export default function DZAbout() {
               ))}
 
               <div className="dza-tokens-box">
-                <div className="dza-tokens-title"><Info size={15} /> حدود الـ Tokens والسلاسل</div>
+                <div className="dza-tokens-title"><Info size={15} /> حدود الـ Tokens {live && <span className="dza-tokens-live">● حي</span>}</div>
                 <div className="dza-tokens-grid">
-                  <div><span>المدخلات</span><strong>32,768</strong></div>
-                  <div><span>المخرجات</span><strong>8,192</strong></div>
-                  <div><span>متوسط الرد</span><strong>~600</strong></div>
-                  <div><span>تكلفة الأدوات</span><strong>~400</strong></div>
+                  <div><span>المدخلات</span><strong>{tokenIn.toLocaleString()}</strong></div>
+                  <div><span>المخرجات</span><strong>{tokenOut.toLocaleString()}</strong></div>
+                  <div><span>متوسط الرد</span><strong>~{tokenAvg}</strong></div>
+                  <div><span>تكلفة الأدوات</span><strong>~{tokenTool}</strong></div>
                 </div>
                 <div className="dza-fallback-chain">
                   <span>سلسلة Fallback:</span>
-                  {['Groq', 'Gemini', 'Mistral', 'NVIDIA', 'Cohere', 'OpenRouter'].map((p, i, arr) => (
+                  {fallbackChain.map((p, i, arr) => (
                     <span key={p}>
                       <span className="dza-chain-item">{p}</span>
                       {i < arr.length - 1 && <span className="dza-chain-arrow">→</span>}
@@ -436,6 +566,47 @@ export default function DZAbout() {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── CHANGELOG TAB ── */}
+          {activeTab === 'changelog' && (
+            <div className="dza-changelog">
+              <div className="dza-changelog-header">
+                <Clock size={16} />
+                <span>سجل التحديثات — يتحدّث تلقائياً مع كل نشر جديد</span>
+                {live && (
+                  <span className="dza-changelog-ts">
+                    آخر تحديث: {new Date(live.timestamp).toLocaleString('ar-DZ', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+              <div className="dza-changelog-list">
+                {CHANGELOG_STATIC.map((c, i) => (
+                  <div key={i} className="dza-changelog-item">
+                    <div className="dza-changelog-meta">
+                      <span className="dza-changelog-tag" style={{ background: c.tagColor + '22', color: c.tagColor, borderColor: c.tagColor + '44' }}>{c.tag}</span>
+                      <span className="dza-changelog-date">{c.date}</span>
+                    </div>
+                    <div className="dza-changelog-title">{c.title}</div>
+                    <div className="dza-changelog-desc">{c.desc}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Live capabilities summary */}
+              {live && (
+                <div className="dza-changelog-live-summary">
+                  <div className="dza-clive-title">📊 الحالة الحية الآن</div>
+                  <div className="dza-clive-grid">
+                    <div><span>الوكلاء</span><strong>{totalAgents}</strong></div>
+                    <div><span>الأدوات</span><strong>{totalTools}</strong></div>
+                    <div><span>المهارات</span><strong>{totalSkills}</strong></div>
+                    <div><span>المزودون</span><strong>{totalProviders}</strong></div>
+                    <div><span>الإصدار</span><strong>{version}</strong></div>
+                    <div><span>Context</span><strong>{tokenIn.toLocaleString()}</strong></div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -472,6 +643,11 @@ export default function DZAbout() {
                     <a href="/api/version" target="_blank" className="dza-api-path">/api/version</a>
                     <span className="dza-api-desc">إصدار النظام</span>
                   </div>
+                  <div className="dza-api-row">
+                    <span className="dza-api-method">GET</span>
+                    <a href="/api/dahl/status" target="_blank" className="dza-api-path">/api/dahl/status</a>
+                    <span className="dza-api-desc">حالة Dahl</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -493,9 +669,9 @@ export default function DZAbout() {
       </main>
 
       <footer className="dza-footer">
-        <p>DZ Agent v5.0 · تطوير نذير حوامرية 2026 🇩🇿</p>
-        {capabilities && (
-          <p className="dza-footer-ts">آخر تحديث: {new Date(capabilities.timestamp).toLocaleString('ar-DZ')}</p>
+        <p>DZ Agent v{version} · تطوير نذير حوامرية 2026 🇩🇿</p>
+        {live && (
+          <p className="dza-footer-ts">آخر تحديث: {new Date(live.timestamp).toLocaleString('ar-DZ')}</p>
         )}
       </footer>
     </div>

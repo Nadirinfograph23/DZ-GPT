@@ -1,8 +1,8 @@
 {
   "system": "DZ Agent Multi-Agent System",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "architecture": "multi-agent-orchestration",
-  "total_agents": 16,
+  "total_agents": 17,
   "agents": [
     {
       "id": "search_agent",
@@ -94,6 +94,19 @@
       "latency_class": "slow",
       "limitations": ["لا يدعم backend databases مستقل", "معاينة محلية فقط"],
       "trigger_patterns": ["ابنِ موقع", "اصنع موقع", "landing page", "تطبيق ويب", "website"]
+    },
+    {
+      "id": "android_agent",
+      "name": "وكيل بناء التطبيقات",
+      "emoji": "📱",
+      "role": "Android & Mobile App Builder",
+      "responsibility": "بناء تطبيقات أندرويد حقيقية: WebView · Capacitor · React Native · Flutter · Kotlin — ورفعها GitHub + APK جاهز",
+      "input_types": ["natural-language", "url", "html-content", "design-requirements"],
+      "output_types": ["android-project", "apk-ready-repo", "github-actions-workflow", "build-instructions"],
+      "dependencies": ["android-builder", "github-api", "GITHUB_TOKEN"],
+      "latency_class": "slow",
+      "limitations": ["يحتاج GITHUB_TOKEN للنشر", "APK يُبنى عبر GitHub Actions (~10 دقائق)", "لا يُنشئ APK مباشرة"],
+      "trigger_patterns": ["تطبيق أندرويد", "apk", "app android", "flutter", "react native", "kotlin", "حوّل موقع لتطبيق", "تطبيق جوال"]
     },
     {
       "id": "memory_agent",

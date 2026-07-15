@@ -1,5 +1,5 @@
 {
-  "total_tools": 18,
+  "total_tools": 20,
   "tools": [
     {
       "id": "web_search",
@@ -50,6 +50,16 @@
       "token_cost_estimate": "200-400 tokens + image generation time",
       "status": "active",
       "limitations": ["لا صور عنف/محتوى غير لائق", "دقة تعتمد على البرومبت"]
+    },
+    {
+      "id": "android_builder",
+      "name": "📱 بناء تطبيقات أندرويد",
+      "function": "توليد مشروع أندرويد كامل: WebView / Capacitor / Flutter / RN / Kotlin",
+      "api_source": "android-builder engine + GitHub Actions + github.com repos",
+      "latency_class": "slow",
+      "token_cost_estimate": "500-1200 tokens + GitHub push",
+      "status": "active",
+      "limitations": ["يحتاج GITHUB_TOKEN للرفع", "بناء APK عبر GitHub Actions يستغرق 5-18 دقيقة"]
     },
     {
       "id": "sports_data",
@@ -180,6 +190,16 @@
       "token_cost_estimate": "100-300 tokens",
       "status": "active",
       "limitations": ["تغطية شاملة للشرق — الغرب أقل"]
+    },
+    {
+      "id": "dahl_inference",
+      "name": "Dahl Inference API",
+      "function": "نماذج LLM متقدمة: MiniMax-M2.7 · Kimi-K2.6 · GLM-5.2",
+      "api_source": "https://inference.dahl.global/v1",
+      "latency_class": "medium",
+      "token_cost_estimate": "400-1000 tokens",
+      "status": "active",
+      "limitations": ["يحتاج DAHL_API_KEY", "fallback تلقائي عند عدم الإتاحة"]
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "total_skills": 39,
+  "total_skills": 42,
   "skills": [
     { "id": "live_search", "name": "🔎 بحث حي", "description": "بحث Google + RSS + crawl4ai", "trigger": "ابحث / search / أخبار", "agent": "search_agent", "performance": 9 },
     { "id": "web_read", "name": "🌐 قراءة مواقع", "description": "قراءة محتوى أي موقع وتلخيصه", "trigger": "اقرأ / افتح رابط / URL", "agent": "search_agent", "performance": 8 },
@@ -28,6 +28,11 @@
     { "id": "web_builder", "name": "🌐 بناء مواقع HTML", "description": "بناء مواقع كاملة HTML/CSS/JS/React", "trigger": "ابنِ موقع / website / landing page", "agent": "webbuilder_agent", "performance": 9 },
     { "id": "github_pages", "name": "🚀 نشر GitHub Pages", "description": "نشر مجاني على GitHub Pages", "trigger": "نشر / publish / github pages", "agent": "github_agent", "performance": 9 },
     { "id": "vercel_deploy", "name": "☁️ نشر Vercel", "description": "نشر احترافي على Vercel بأمر واحد", "trigger": "vercel / نشر احترافي", "agent": "github_agent", "performance": 9 },
+    { "id": "android_webview", "name": "📱 تطبيق WebView", "description": "تحويل أي موقع أو رابط إلى تطبيق أندرويد WebView", "trigger": "حوّل موقع لتطبيق / webview / apk موقع", "agent": "android_agent", "performance": 9 },
+    { "id": "android_capacitor", "name": "⚡ Capacitor (PWA→APK)", "description": "تحويل PWA/موقع ويب إلى تطبيق أندرويد أصيل بـ Ionic Capacitor", "trigger": "capacitor / ionic / تطبيق من موقع", "agent": "android_agent", "performance": 9 },
+    { "id": "android_flutter", "name": "🦋 Flutter App", "description": "بناء تطبيق Flutter بواجهة Material Design 3", "trigger": "flutter / فلاتر / dart", "agent": "android_agent", "performance": 8 },
+    { "id": "android_rn", "name": "⚛️ React Native App", "description": "تطبيق أندرويد بـ React Native/Expo", "trigger": "react native / expo / تطبيق react", "agent": "android_agent", "performance": 8 },
+    { "id": "android_kotlin", "name": "🟣 Kotlin Native", "description": "تطبيق أندرويد أصلي بـ Kotlin + Jetpack Compose", "trigger": "kotlin / كوتلن / native android", "agent": "android_agent", "performance": 8 },
     { "id": "youtube_skill", "name": "🎬 تحليل يوتيوب", "description": "تحليل وتلخيص فيديوهات يوتيوب", "trigger": "يوتيوب / youtube / فيديو", "agent": "youtube_agent", "performance": 8 },
     { "id": "ocr_skill", "name": "📷 OCR صور وPDF", "description": "استخراج نص من الصور والمستندات", "trigger": "OCR / صورة نص / PDF", "agent": "legal_agent", "performance": 7 },
     { "id": "dz_maps_skill", "name": "🗺️ خرائط جزائرية", "description": "خرائط ذكية وبحث جغرافي للجزائر", "trigger": "خريطة / أين / مكان / ولاية", "agent": "maps_agent", "performance": 8 },
@@ -38,7 +43,6 @@
     { "id": "cnas_skill", "name": "🩺 CNAS/CHNAS", "description": "معلومات التأمين الصحي والاجتماعي", "trigger": "CNAS / CHNAS / تأمين صحي", "agent": "health_agent", "performance": 7 },
     { "id": "multi_agent", "name": "🧩 multi-agent reasoning", "description": "تنسيق متعدد الوكلاء للمهام المعقدة", "trigger": "مهمة معقدة / multi-step", "agent": "analysis_agent", "performance": 9 },
     { "id": "websocket", "name": "🔗 WebSocket فوري", "description": "محادثة فورية عبر WebSocket", "trigger": "فوري / realtime / /ws/chat", "agent": "analysis_agent", "performance": 9 },
-    { "id": "circuit_breaker", "name": "🛡️ circuit breaker", "description": "حماية تلقائية من انهيار الخدمات", "trigger": "تلقائي — حماية النظام", "agent": "analysis_agent", "performance": 10 },
-    { "id": "intent_detector", "name": "🎯 كاشف النوايا", "description": "تصنيف نية المستخدم قبل كل رد", "trigger": "تلقائي — كل رسالة", "agent": "analysis_agent", "performance": 9 }
+    { "id": "circuit_breaker", "name": "🛡️ circuit breaker", "description": "حماية تلقائية من انهيار الخدمات", "trigger": "تلقائي — حماية النظام", "agent": "analysis_agent", "performance": 10 }
   ]
 }

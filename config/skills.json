@@ -1,5 +1,5 @@
 {
-  "total_skills": 42,
+  "total_skills": 43,
   "skills": [
     { "id": "live_search", "name": "🔎 بحث حي", "description": "بحث Google + RSS + crawl4ai", "trigger": "ابحث / search / أخبار", "agent": "search_agent", "performance": 9 },
     { "id": "web_read", "name": "🌐 قراءة مواقع", "description": "قراءة محتوى أي موقع وتلخيصه", "trigger": "اقرأ / افتح رابط / URL", "agent": "search_agent", "performance": 8 },

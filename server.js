@@ -27530,8 +27530,16 @@ app.post('/api/dz-agent/android/build', async (req, res) => {
   })
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
 
-  const { task, appType = 'webview', appName = '', repoOwner = 'Nadirinfograph23', htmlContent = '', detectedSiteUrl = '' } = req.body
+  const { task, appName = '', repoOwner = 'Nadirinfograph23', htmlContent = '', detectedSiteUrl = '' } = req.body
   if (!task) { send({ type: 'error', message: 'task مطلوب' }); return res.end() }
+
+  // ── Auto-detect app type from task text (caller's appType is a hint, not required) ──
+  const callerHint = req.body.appType || ''
+  const appType = (callerHint && callerHint !== 'webview')
+    ? callerHint
+    : (detectAndroidBuildQuery(task)?.appType || detectAppType(task) || 'webview')
+
+  send({ type: 'detail', step: 'detect', text: `🔍 نوع التطبيق المكتشف: ${appType}` })
 
   const tok = resolveGitHubToken()
   if (!tok) { send({ type: 'error', message: 'GITHUB_TOKEN غير مضبوط' }); return res.end() }

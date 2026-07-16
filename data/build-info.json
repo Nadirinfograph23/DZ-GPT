@@ -1,8 +1,8 @@
 {
-  "commit": "e7182244ef5d1781eddf12dfb8740c76a86473ea",
-  "commitShort": "e7182244",
+  "commit": "ae64a5ecfa9a3f563dbc8ba119dab9147c079c39",
+  "commitShort": "ae64a5ec",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: DZ Agent Role V2 — dialect engine upgrade + highest priority rules",
-  "deployedAt": "2026-07-16T01:38:51.663949Z",
+  "message": "feat: تعابير شعبية جزائرية أصيلة — Algerian dialect expressions v2",
+  "deployedAt": "2026-07-16T01:48:49.378416Z",
   "deployedBy": "scripts/deploy.py"
 }

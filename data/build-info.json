@@ -1,8 +1,8 @@
 {
-  "commit": "18b168fcd39077a4f714ee5ee6ddd0f265558296",
-  "commitShort": "18b168fc",
+  "commit": "e7182244ef5d1781eddf12dfb8740c76a86473ea",
+  "commitShort": "e7182244",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: DZ Search Router v2 — SEARCH/NO_SEARCH intelligent routing + topic extraction",
-  "deployedAt": "2026-07-16T01:26:35.335473Z",
+  "message": "feat: DZ Agent Role V2 — dialect engine upgrade + highest priority rules",
+  "deployedAt": "2026-07-16T01:38:51.663949Z",
   "deployedBy": "scripts/deploy.py"
 }

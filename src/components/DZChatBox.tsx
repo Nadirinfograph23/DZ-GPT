@@ -364,6 +364,7 @@ type RichType =
   | 'match-card'
   | 'confirm-gate'
   | 'health-analysis'
+  | 'weather-card'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -729,6 +730,7 @@ interface DZMessage {
   _nationalTeam?: boolean
   matches?: Array<Record<string, unknown>>
   currencyData?: CurrencyWidgetData
+  weatherCardData?: WeatherCardData
   wcGroupData?: {
     groupLetter: string
     groupLabel: string
@@ -752,6 +754,156 @@ interface ActionLogEntry {
   description: string
   status: 'success' | 'error' | 'pending'
   repo?: string
+}
+
+// ── Weather Card Types ─────────────────────────────────────────────────────
+interface WeatherCardData {
+  city: string
+  temp: number | null
+  feels_like: number | null
+  temp_min: number | null
+  temp_max: number | null
+  condition: string | null
+  icon: string | null
+  humidity: number | null
+  wind: number | null
+  wind_dir?: string | null
+  wind_gust?: number | null
+  pressure?: number | null
+  clouds?: number | null
+  visibility: number | null
+  sunrise?: string | null
+  sunset?: string | null
+  source?: string
+  fetchedAt?: string
+  status?: string
+  staleAgeMin?: number
+  error?: string
+}
+
+// ── WeatherTableCard: بطاقة الطقس القابلة للتمرير ─────────────────────────
+function WeatherTableCard({ data }: { data: WeatherCardData }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canLeft,  setCanLeft]  = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  const syncArrows = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const l = el.scrollLeft
+    const max = el.scrollWidth - el.clientWidth
+    setCanLeft(l > 2)
+    setCanRight(l < max - 2)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    // RTL: start at rightmost
+    requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth - el.clientWidth
+      syncArrows()
+    })
+    el.addEventListener('scroll', syncArrows, { passive: true })
+    const ro = new ResizeObserver(syncArrows)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', syncArrows); ro.disconnect() }
+  }, [syncArrows])
+
+  const nudge = (dir: 'l' | 'r') =>
+    scrollRef.current?.scrollBy({ left: dir === 'l' ? -160 : 160, behavior: 'smooth' })
+
+  const rows: { icon: string; label: string; value: string }[] = [
+    { icon: '🌡️', label: 'درجة الحرارة',       value: data.temp != null ? `${data.temp}°C` : '—' },
+    { icon: '🤔', label: 'تشعر بـ',             value: data.feels_like != null ? `${data.feels_like}°C` : '—' },
+    { icon: '📉', label: 'الحد الأدنى',         value: data.temp_min != null ? `${data.temp_min}°C` : '—' },
+    { icon: '📈', label: 'الحد الأقصى',         value: data.temp_max != null ? `${data.temp_max}°C` : '—' },
+    { icon: '☁️',  label: 'الحالة الجوية',       value: data.condition || '—' },
+    { icon: '💧', label: 'الرطوبة',             value: data.humidity != null ? `${data.humidity}%` : '—' },
+    ...(data.clouds != null        ? [{ icon: '🌫️', label: 'الغيوم',         value: `${data.clouds}%` }] : []),
+    { icon: '💨', label: 'سرعة الرياح',         value: data.wind != null ? `${data.wind} كم/س${data.wind_dir ? ` (${data.wind_dir})` : ''}${data.wind_gust ? ` — هبّات ${data.wind_gust} كم/س` : ''}` : '—' },
+    ...(data.pressure != null      ? [{ icon: '🔵', label: 'الضغط الجوي',   value: `${data.pressure} hPa` }] : []),
+    ...(data.visibility != null    ? [{ icon: '👁️', label: 'مدى الرؤية',    value: `${data.visibility} كم` }] : []),
+    ...(data.sunrise               ? [{ icon: '🌅', label: 'شروق الشمس',    value: data.sunrise! }] : []),
+    ...(data.sunset                ? [{ icon: '🌇', label: 'غروب الشمس',    value: data.sunset! }] : []),
+  ]
+
+  const getWeatherEmoji = (cond: string | null | undefined) => {
+    if (!cond) return '🌤️'
+    const c = cond.toLowerCase()
+    if (/صحو|clear|sunny/.test(c))                       return '☀️'
+    if (/غائم.*جزئي|partly|بعض.*سحب/.test(c))           return '⛅'
+    if (/غائم|cloudy|cloud/.test(c))                     return '☁️'
+    if (/عاصفة.*رعدية|thunderstorm|عواصف/.test(c))       return '⛈️'
+    if (/مطر.*خفيف|drizzle|رذاذ/.test(c))               return '🌦️'
+    if (/مطر|rain|أمطار/.test(c))                        return '🌧️'
+    if (/ثلج|snow/.test(c))                              return '❄️'
+    if (/ضباب|fog|mist/.test(c))                         return '🌫️'
+    if (/رياح.*قوية|windy/.test(c))                      return '🌬️'
+    return '🌤️'
+  }
+
+  const emoji = getWeatherEmoji(data.condition)
+  const fetchTime = data.fetchedAt
+    ? new Date(data.fetchedAt).toLocaleTimeString('ar-DZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Algiers' })
+    : null
+
+  return (
+    <div className="dzw-card" dir="rtl">
+      {/* ── Header ── */}
+      <div className="dzw-header">
+        <span className="dzw-emoji">{emoji}</span>
+        <div className="dzw-header-info">
+          <span className="dzw-city">🏙️ {data.city}</span>
+          {fetchTime && <span className="dzw-time">آخر تحديث: {fetchTime}</span>}
+        </div>
+        <div className="dzw-temp-big">
+          {data.temp != null ? `${data.temp}°` : '—'}
+          <span className="dzw-unit">C</span>
+        </div>
+      </div>
+
+      {/* ── Scroll wrapper ── */}
+      <div className="dzw-scroll-wrap">
+        {canLeft && (
+          <button className="dzw-arrow dzw-arrow--left"  onClick={() => nudge('l')} aria-label="يسار">‹</button>
+        )}
+        {canRight && (
+          <button className="dzw-arrow dzw-arrow--right" onClick={() => nudge('r')} aria-label="يمين">›</button>
+        )}
+        <div className="dzw-table-scroll" ref={scrollRef}>
+          <table className="dzw-table">
+            <thead>
+              <tr>
+                {rows.map((r, i) => (
+                  <th key={i}><span className="dzw-th-icon">{r.icon}</span>{r.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {rows.map((r, i) => (
+                  <td key={i}>{r.value}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="dzw-footer">
+        {data.status === 'stale' && data.staleAgeMin != null && (
+          <span className="dzw-stale">⚠️ بيانات مؤقتة — منذ {data.staleAgeMin} دقيقة</span>
+        )}
+        {data.source && (
+          <a href={`https://${data.source}`} target="_blank" rel="noopener noreferrer" className="dzw-source">
+            📡 {data.source}
+          </a>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ===== HELPERS =====
@@ -4306,6 +4458,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [searchStepsQuery, setSearchStepsQuery] = useState<string | null>(null)
   const [searchStepsMode, setSearchStepsMode] = useState<'person' | 'weather' | 'sports' | 'news'>('person')
   const [currentPath, setCurrentPath] = useState<string>('')
+  // ── Weather city prompt ──────────────────────────────────────────────────
+  const [awaitingWeatherCity, setAwaitingWeatherCity] = useState(false)
   // DZ GitHub Agent mode
   const [ghAgentRepo, setGhAgentRepo] = useState<string>('')
   const [ghAgentAutoExecute, setGhAgentAutoExecute] = useState(false)
@@ -6860,6 +7014,43 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     let text = (overrideInput ?? input).trim()
     if (!text || isLoading) return
 
+    // ── Weather city await: المستخدم أجاب على سؤال المدينة ──────────────────
+    if (awaitingWeatherCity) {
+      setAwaitingWeatherCity(false)
+      const cityName = text.trim()
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: cityName, richType: 'text' }])
+      setInput('')
+      setIsLoading(true)
+      setSearchStepsMode('weather')
+      setSearchStepsQuery(cityName)
+      try {
+        const res = await fetch(`/api/dz-agent/weather?city=${encodeURIComponent(cityName)}`)
+        const data: WeatherCardData = await res.json()
+        if (data.error || data.status === 'unavailable') {
+          addAssistantMessage({
+            content: `تعذّر جلب الطقس لمدينة **${cityName}** — تأكد من الاسم وحاول مرة أخرى.`,
+            richType: 'text',
+          })
+        } else {
+          addAssistantMessage({
+            content: '',
+            richType: 'weather-card',
+            weatherCardData: data,
+          })
+        }
+      } catch {
+        addAssistantMessage({
+          content: `❌ خطأ في جلب بيانات الطقس — حاول مرة أخرى.`,
+          richType: 'text',
+          isError: true,
+        })
+      } finally {
+        setIsLoading(false)
+        setSearchStepsQuery(null)
+      }
+      return
+    }
+
     // If a doctor-GPS session is pending, enrich the specialty query with GPS coords
     if (pendingDoctorGpsRef.current && !text.includes('[GPS:')) {
       const { lat, lon, city } = pendingDoctorGpsRef.current
@@ -8054,7 +8245,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
       setLiveReActSteps([])
       abortRef.current = null
     }
-  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, detectComplexQuery, generateAndShowPlan, runV5SSE, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
+  }, [input, isLoading, messages, githubToken, currentRepo, activeYouTubeVideo, awaitingWeatherCity, fetchRepos, fetchFiles, fetchFileContent, scanRepo, fetchBranches, fetchIssues, fetchPulls, fetchStats, addAssistantMessage, detectAutonomousQuery, detectComplexQuery, generateAndShowPlan, runV5SSE, runAutonomousSSE, runGithubReActSSE, runClaudeReActSSE])
 
   // Feature C — Export conversation as Markdown
   const exportAsMarkdown = useCallback(() => {
@@ -8333,7 +8524,17 @@ ${rows}
               <button
                 key={i}
                 className="dz-qa-btn"
-                onClick={() => sendMessage(a.cmd)}
+                onClick={() => {
+                  if (a.icon === '🌤️') {
+                    // أيقونة الطقس: اسأل عن المدينة أولاً
+                    setMessages(prev => [...prev, {
+                      id: generateId(), role: 'assistant', content: 'تريد الأحوال الجوية لأي مدينة؟ 🌤️', richType: 'text',
+                    }])
+                    setAwaitingWeatherCity(true)
+                    return
+                  }
+                  sendMessage(a.cmd)
+                }}
                 style={{ '--qa-color': a.color, '--qa-color-bg': a.color + '14', '--qa-color-border': a.color + '30' } as React.CSSProperties}
               >
                 <span className="dz-qa-icon-wrap">
@@ -8444,6 +8645,10 @@ ${rows}
                           />
                         )
                       })()}
+                      {/* ── WeatherTableCard — بطاقة الطقس ── */}
+                      {msg.richType === 'weather-card' && msg.weatherCardData && (
+                        <WeatherTableCard data={msg.weatherCardData} />
+                      )}
                       {/* ── CurrencyWidget — بطاقة أسعار الصرف ── */}
                       {msg.currencyData && (
                         <CurrencyWidget data={msg.currencyData} />

@@ -1,8 +1,8 @@
 {
-  "commit": "27f4757ef550b391fffab934faa0be1daf43b689",
-  "commitShort": "27f4757e",
+  "commit": "18b168fcd39077a4f714ee5ee6ddd0f265558296",
+  "commitShort": "18b168fc",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: 📱 Android Builder v2 — WebView/Capacitor/React Native/Flutter/Kotlin + كشف تلقائي للنوع + GitHub templates",
-  "deployedAt": "2026-07-15T01:27:56.187172Z",
+  "message": "feat: DZ Search Router v2 — SEARCH/NO_SEARCH intelligent routing + topic extraction",
+  "deployedAt": "2026-07-16T01:26:35.335473Z",
   "deployedBy": "scripts/deploy.py"
 }

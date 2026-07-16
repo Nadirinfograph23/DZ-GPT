@@ -70,6 +70,7 @@ import {
 import { buildDarijaPromptBlock, getDarijaColoringBlock } from './lib/darija-prompt.js'
 import { detectSocialExpression, buildSocialBehaviorPrompt } from './lib/darija-behavior.js'
 import { isRealtimeQuery, fetchRealtimeContext, searchPersonOnline } from './lib/realtime-search.js'
+import { dzSearchRouter } from './lib/dz-search-router.js'
 import { correctQuery, buildCorrectionNote } from './lib/dz-query-corrector.js'
 import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
 import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuery } from './lib/algeria-gov/historical-governments.js'
@@ -24591,8 +24592,26 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       _intentAction === 'lookup-wikidata-wikipedia'  ? 'PUBLIC_FIGURE' :
       classifyQuery(lastUserMessage)
     )
+    // ══════════════════════════════════════════════════════════════════════
+    // 🧭 DZ SEARCH ROUTER — قرار SEARCH/NO_SEARCH + استخراج موضوع البحث
+    // يجب استدعاؤه قبل isRealtimeQuery لأنه يُحسّن الاستعلام المُرسَل لـ SearXNG
+    // ══════════════════════════════════════════════════════════════════════
+    let _searchRouterResult = null
+    let _optimizedSearchQuery = lastUserMessage
+    if (!_isWikiIntent && !isEntityDefinitionQuery(lastUserMessage)) {
+      try {
+        _searchRouterResult = dzSearchRouter(lastUserMessage)
+        if (_searchRouterResult.decision === 'SEARCH') {
+          _optimizedSearchQuery = _searchRouterResult.searchQuery || lastUserMessage
+        }
+      } catch (_sre) {
+        console.warn('[SearchRouter] failed silently:', _sre.message)
+      }
+    }
+
     // إذا كان Intent Router يُشير لـ Wiki، أو كان السؤال تعريف كيان → لا نستخدم isRealtimeQuery
-    const _isRealtime = (_isWikiIntent || isEntityDefinitionQuery(lastUserMessage)) ? false : isRealtimeQuery(lastUserMessage)
+    const _isRealtime = (_isWikiIntent || isEntityDefinitionQuery(lastUserMessage)) ? false :
+      (_searchRouterResult?.decision === 'SEARCH') || isRealtimeQuery(lastUserMessage)
 
     // Decision Tree: شخصيات عامة/تاريخية/أحداث → يستخدم الـ chain الكامل
     if (['HISTORICAL_FIGURE', 'PUBLIC_FIGURE', 'HISTORICAL_EVENT', 'CURRENT_NEWS',
@@ -24616,9 +24635,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
 
     // Real-Time Search: للأخبار والمباريات والأحداث اللحظية
+    // يستخدم _optimizedSearchQuery (موضوع مستخرج) بدلاً من lastUserMessage الكامل
     if (_isRealtime && !_decisionTreeContext) {
-      console.log(`[RealtimeSearch] 🔍 triggered for: "${lastUserMessage.slice(0, 60)}"`)
-      _realtimeContext = await fetchRealtimeContext(lastUserMessage) || ''
+      const _routerCategory = _searchRouterResult?.category || 'news'
+      console.log(`[RealtimeSearch] 🔍 triggered | category=${_routerCategory} | topic="${_optimizedSearchQuery.slice(0, 60)}"`)
+      _realtimeContext = await fetchRealtimeContext(lastUserMessage, _optimizedSearchQuery) || ''
       if (_realtimeContext) console.log(`[RealtimeSearch] ✅ context injected (${_realtimeContext.length} chars)`)
     } else if (_isRealtime && _decisionTreeContext) {
       console.log(`[RealtimeSearch] ⏭ Skipped — Decision Tree already provided context`)

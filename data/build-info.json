@@ -1,8 +1,8 @@
 {
-  "commit": "dae24b9ddf2cc9b1272078a86848ee7171aedbbd",
-  "commitShort": "dae24b9d",
+  "commit": "27e97898424453d37d0b8c18c6076305fa7139e7",
+  "commitShort": "27e97898",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: استبدال مزيانة بمليحة في ردود الـ agent",
-  "deployedAt": "2026-07-16T01:58:57.422026Z",
+  "message": "feat: أيقونة الطقس — سؤال المدينة + جدول أفقي قابل للتمرير",
+  "deployedAt": "2026-07-16T02:19:34.872718Z",
   "deployedBy": "scripts/deploy.py"
 }

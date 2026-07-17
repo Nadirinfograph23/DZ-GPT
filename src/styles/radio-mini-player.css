@@ -206,3 +206,22 @@
   .rmp-label { display: none; }
   .rmp-center { width: 30px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   إصلاح: عند تشغيل الراديو تُرفع خانة الكتابة فوق الشريط
+   .rmp-active class يُضاف على body بواسطة RadioMiniPlayer
+═══════════════════════════════════════════════════════ */
+body.rmp-active .dz-agent-page,
+body.rmp-active .dz-chatbox-page {
+  padding-bottom: 52px;
+}
+
+/* DZAgent uses dz-chatbox inside dz-agent-body — نضيف المسافة للـ input area مباشرةً */
+body.rmp-active .dz-input-area {
+  padding-bottom: calc(20px + 52px);
+}
+
+/* منع تغطية آخر رسالة في نافذة المحادثة */
+body.rmp-active .dz-messages {
+  padding-bottom: 8px;
+}

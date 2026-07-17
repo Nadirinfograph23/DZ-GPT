@@ -39,9 +39,18 @@ export default function RadioMiniPlayer() {
     return () => clearInterval(id)
   }, [playing])
 
-  if (HIDE_ON.some(p => pathname.startsWith(p))) return null
-  if (!currentStation) return null
-  if (pathname === '/radio') return null
+  // إضافة class على body عند ظهور شريط الراديو لمنع تغطية خانة الكتابة
+  const isVisible = !!currentStation && !HIDE_ON.some(p => pathname.startsWith(p)) && pathname !== '/radio'
+  useEffect(() => {
+    if (isVisible) {
+      document.body.classList.add('rmp-active')
+    } else {
+      document.body.classList.remove('rmp-active')
+    }
+    return () => { document.body.classList.remove('rmp-active') }
+  }, [isVisible])
+
+  if (!isVisible) return null
 
   const emoji = getStationEmoji(currentStation)
 

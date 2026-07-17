@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
+import DZAnimatedLogo from './DZAnimatedLogo'
 import { useNavigate } from 'react-router-dom'
 import {
   Send, Bot, Copy, Check, RotateCcw, Sparkles, Github,
@@ -8485,9 +8486,7 @@ ${rows}
       {/* Welcome Screen OR Messages — mutually exclusive to avoid flex space split */}
       {messages.length === 0 && !isLoading && !showLog ? (
         <div className="dz-welcome">
-          <div className="dz-welcome-icon">
-            <Bot size={40} />
-          </div>
+          <DZAnimatedLogo />
           <h2 className="dz-welcome-title">DZ Agent</h2>
           <p className="dz-welcome-sub">
             أول نموذج ذكاء اصطناعي و وكيل جزائري

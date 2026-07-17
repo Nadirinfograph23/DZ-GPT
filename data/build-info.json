@@ -1,8 +1,8 @@
 {
-  "commit": "c07ac11940a6c31f6bbda9aa2180d17f26021251",
-  "commitShort": "c07ac119",
+  "commit": "3b59d496c0d333a7fcdae7942be98dcb7596ea8d",
+  "commitShort": "3b59d496",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح أخبار الذكاء الاصطناعي + رفع خانة الكتابة عند تشغيل الراديو",
-  "deployedAt": "2026-07-17T02:23:21.923568Z",
+  "message": "feat: لوغو متحرك يتوهج ويتحول إلى العلم الجزائري",
+  "deployedAt": "2026-07-17T03:06:17.705946Z",
   "deployedBy": "scripts/deploy.py"
 }

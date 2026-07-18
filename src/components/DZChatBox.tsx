@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { useDownload, getPlatformMeta } from '../context/DownloadContext'
+import { extractMedia, type MediaInfo } from '../lib/mediaExtractor'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
 import DZAnimatedLogo from './DZAnimatedLogo'
@@ -750,7 +751,7 @@ interface DZMessage {
     source: string
   }
   mediaDownload?: {
-    status: 'ready' | 'error' | 'pending'
+    status: 'ready' | 'error' | 'pending' | 'extracting'
     url: string | null
     title?: string
     thumbnail?: string
@@ -1670,33 +1671,41 @@ const QUALITY_BADGE: Record<QualityTier, { label: string; color: string; bg: str
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 📥 MEDIA DOWNLOAD CARD v2 — بطاقة اختيار الجودة + تحميل بشريط التقدم
+// 📥 MEDIA DOWNLOAD CARD v3
+// status flow: 'extracting' (browser runs API) → 'ready' → download
 // ══════════════════════════════════════════════════════════════════
-function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
-  const { startDownload } = useDownload()
-  const pm = getPlatformMeta(data.platform ?? null)
 
-  // selection state: { type: 'video'|'audio', index: number }
+/* inner "ready" card — shared by extracting→ready and any future server-provided ready state */
+function MediaDownloadCardReady({
+  info,
+  platform,
+  url,
+  pm,
+}: {
+  info: MediaInfo
+  platform: string | null
+  url: string | null
+  pm: { icon: string; label: string; color: string }
+}) {
+  const { startDownload } = useDownload()
   const [sel, setSel] = useState<{ type: 'video' | 'audio'; index: number } | null>(null)
 
-  // Build selectable format lists
   const videoFmts = useMemo(() =>
-    (data.video || [])
+    (info.video || [])
       .filter(v => v.hasAudio)
       .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
       .slice(0, 6),
-    [data.video],
+    [info.video],
   )
   const audioFmts = useMemo(() =>
-    (data.audio || [])
+    (info.audio || [])
       .filter(a => !a.muxed)
       .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
       .slice(0, 3)
-      .concat((data.audio || []).filter(a => a.muxed).slice(0, 1)),
-    [data.audio],
+      .concat((info.audio || []).filter(a => a.muxed).slice(0, 1)),
+    [info.audio],
   )
 
-  // Default selection: best video with audio
   useEffect(() => {
     if (videoFmts.length > 0) setSel({ type: 'video', index: 0 })
     else if (audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
@@ -1706,66 +1715,37 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
     if (!sel) return
     const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
     if (!fmt) return
-    const safeName = (data.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
-    startDownload({
-      cdnUrl: fmt.url,
-      filename: safeName,
-      ext: sel.type === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4'),
-      platform: data.platform ?? null,
-      size: fmt.size ?? null,
-    })
-  }
-
-  // ── Error state ────────────────────────────────────────────────
-  if (data.status === 'error') {
-    return (
-      <div className="dz-mdl dz-mdl--error">
-        <div className="dz-mdl__head">
-          <span className="dz-mdl__picon">{pm.icon}</span>
-          <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
-        </div>
-        <p className="dz-mdl__errmsg">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
-        {data.url && (
-          <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
-            🔗 فتح الرابط الأصلي
-          </a>
-        )}
-      </div>
-    )
+    const safeName = (info.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
+    startDownload({ cdnUrl: fmt.url, filename: safeName, ext: sel.type === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4'), platform, size: fmt.size ?? null })
   }
 
   const hasFormats = videoFmts.length > 0 || audioFmts.length > 0
 
   return (
     <div className="dz-mdl">
-      {/* ── Top: platform badge + title ── */}
+      {/* Platform badge */}
       <div className="dz-mdl__head">
         <span className="dz-mdl__picon">{pm.icon}</span>
-        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>
-          {pm.label}
-        </span>
+        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>{pm.label}</span>
       </div>
 
-      {/* ── Thumbnail + meta ── */}
+      {/* Thumbnail + meta */}
       <div className="dz-mdl__info">
-        {data.thumbnail && (
-          <img src={data.thumbnail} alt="" className="dz-mdl__thumb" loading="lazy" />
-        )}
+        {info.thumbnail && <img src={info.thumbnail} alt="" className="dz-mdl__thumb" loading="lazy" />}
         <div className="dz-mdl__meta">
-          <div className="dz-mdl__title">{data.title || 'بدون عنوان'}</div>
-          {data.uploader && <div className="dz-mdl__sub">👤 {data.uploader}</div>}
-          {!!data.duration && <div className="dz-mdl__sub">⏱ {_fmtDur(data.duration)}</div>}
+          <div className="dz-mdl__title">{info.title || 'بدون عنوان'}</div>
+          {info.uploader && <div className="dz-mdl__sub">👤 {info.uploader}</div>}
+          {!!info.duration && <div className="dz-mdl__sub">⏱ {_fmtDur(info.duration)}</div>}
         </div>
       </div>
 
-      {/* ── No formats warning ── */}
       {!hasFormats && (
         <p className="dz-mdl__errmsg" style={{ color: '#f59e0b' }}>
           ⚠️ لا توجد روابط قابلة للتحميل — قد يكون المحتوى محمياً أو خاصاً
         </p>
       )}
 
-      {/* ── Video quality selector ── */}
+      {/* Video quality selector */}
       {videoFmts.length > 0 && (
         <div className="dz-mdl__section">
           <div className="dz-mdl__section-hd">
@@ -1778,22 +1758,16 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
               const badge = QUALITY_BADGE[tier]
               const active = sel?.type === 'video' && sel.index === i
               return (
-                <button
-                  key={i}
+                <button key={i}
                   className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
                   style={active ? { borderColor: pm.color, background: `${pm.color}14` } : {}}
                   onClick={() => setSel({ type: 'video', index: i })}
                 >
-                  <span className="dz-mdl__radio">
-                    <span className="dz-mdl__radio-dot" style={active ? { background: pm.color } : {}} />
-                  </span>
-                  <span className="dz-mdl__opt-badge" style={{ background: badge.bg, color: badge.color }}>
-                    {badge.label}
-                  </span>
+                  <span className="dz-mdl__radio"><span className="dz-mdl__radio-dot" style={active ? { background: pm.color } : {}} /></span>
+                  <span className="dz-mdl__opt-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                  {v.quality && v.quality !== badge.label && <span className="dz-mdl__opt-ext">{v.quality}</span>}
                   <span className="dz-mdl__opt-ext">{v.ext?.toUpperCase()}</span>
-                  {_fmtSize(v.size) && (
-                    <span className="dz-mdl__opt-size">{_fmtSize(v.size)}</span>
-                  )}
+                  {_fmtSize(v.size) && <span className="dz-mdl__opt-size">{_fmtSize(v.size)}</span>}
                 </button>
               )
             })}
@@ -1801,7 +1775,7 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
         </div>
       )}
 
-      {/* ── Audio selector ── */}
+      {/* Audio selector */}
       {audioFmts.length > 0 && (
         <div className="dz-mdl__section">
           <div className="dz-mdl__section-hd">
@@ -1812,24 +1786,15 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
             {audioFmts.map((a, i) => {
               const active = sel?.type === 'audio' && sel.index === i
               return (
-                <button
-                  key={i}
+                <button key={i}
                   className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
                   style={active ? { borderColor: '#10a37f', background: 'rgba(16,163,127,.12)' } : {}}
                   onClick={() => setSel({ type: 'audio', index: i })}
                 >
-                  <span className="dz-mdl__radio">
-                    <span className="dz-mdl__radio-dot" style={active ? { background: '#10a37f' } : {}} />
-                  </span>
-                  <span className="dz-mdl__opt-badge" style={{ background: 'rgba(16,163,127,.15)', color: '#10a37f' }}>
-                    {a.ext?.toUpperCase() || 'AUDIO'}
-                  </span>
-                  {a.bitrate && (
-                    <span className="dz-mdl__opt-ext">{Math.round(a.bitrate)}kbps</span>
-                  )}
-                  {_fmtSize(a.size) && (
-                    <span className="dz-mdl__opt-size">{_fmtSize(a.size)}</span>
-                  )}
+                  <span className="dz-mdl__radio"><span className="dz-mdl__radio-dot" style={active ? { background: '#10a37f' } : {}} /></span>
+                  <span className="dz-mdl__opt-badge" style={{ background: 'rgba(16,163,127,.15)', color: '#10a37f' }}>{a.ext?.toUpperCase() || 'AUDIO'}</span>
+                  {a.bitrate && <span className="dz-mdl__opt-ext">{Math.round(a.bitrate)} kbps</span>}
+                  {_fmtSize(a.size) && <span className="dz-mdl__opt-size">{_fmtSize(a.size)}</span>}
                 </button>
               )
             })}
@@ -1837,7 +1802,6 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
         </div>
       )}
 
-      {/* ── Download button ── */}
       {hasFormats && (
         <button
           className="dz-mdl__dl-btn"
@@ -1847,24 +1811,117 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
         >
           <Download size={15} />
           تحميل {sel?.type === 'audio' ? 'الصوت' : 'الفيديو'}
-          {sel && (() => {
-            const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
-            if (!fmt) return null
-            const sz = _fmtSize(fmt.size)
-            if (!sz) return null
-            return <span className="dz-mdl__dl-size">({sz})</span>
-          })()}
+          {sel && (() => { const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]; const sz = fmt ? _fmtSize(fmt.size) : null; return sz ? <span className="dz-mdl__dl-size">({sz})</span> : null })()}
         </button>
       )}
 
-      {/* ── Original link ── */}
-      {data.url && (
-        <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
-          🔗 الرابط الأصلي
-        </a>
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 الرابط الأصلي</a>
       )}
     </div>
   )
+}
+
+/* outer wrapper that handles status transitions */
+function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
+  const pm = getPlatformMeta(data.platform ?? null)
+
+  // Internal extraction state (only used when server sends status:'extracting')
+  const [extractState, setExtractState] = useState<
+    | { phase: 'idle' }
+    | { phase: 'loading' }
+    | { phase: 'done'; info: MediaInfo }
+    | { phase: 'error'; message: string }
+  >({ phase: 'idle' })
+
+  // Kick off browser-side extraction when the card is first rendered in 'extracting' mode
+  useEffect(() => {
+    if (data.status !== 'extracting' || !data.url) return
+    const ctrl = new AbortController()
+    setExtractState({ phase: 'loading' })
+
+    extractMedia(data.url, data.platform ?? null, ctrl.signal)
+      .then(info => {
+        if (!ctrl.signal.aborted) setExtractState({ phase: 'done', info })
+      })
+      .catch(err => {
+        if (!ctrl.signal.aborted) setExtractState({ phase: 'error', message: err.message || 'فشل الاستخراج' })
+      })
+
+    return () => ctrl.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount
+
+  // ── Extracting / loading ───────────────────────────────────────
+  if (data.status === 'extracting') {
+    if (extractState.phase === 'loading' || extractState.phase === 'idle') {
+      return (
+        <div className="dz-mdl dz-mdl--extracting">
+          <div className="dz-mdl__head">
+            <span className="dz-mdl__picon">{pm.icon}</span>
+            <span className="dz-mdl__platform" style={{ color: pm.color }}>{pm.label}</span>
+          </div>
+          <div className="dz-mdl__extract-body">
+            <span className="dz-mdl__spinner" />
+            <span className="dz-mdl__extract-txt">جارٍ استخراج معلومات الوسائط...</span>
+          </div>
+          {data.url && (
+            <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 الرابط الأصلي</a>
+          )}
+        </div>
+      )
+    }
+
+    if (extractState.phase === 'error') {
+      return (
+        <div className="dz-mdl dz-mdl--error">
+          <div className="dz-mdl__head">
+            <span className="dz-mdl__picon">{pm.icon}</span>
+            <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
+          </div>
+          <p className="dz-mdl__errmsg">{extractState.message}</p>
+          {data.url && (
+            <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 فتح الرابط الأصلي</a>
+          )}
+        </div>
+      )
+    }
+
+    // extraction done — show quality card
+    if (extractState.phase === 'done') {
+      return <MediaDownloadCardReady info={extractState.info} platform={data.platform ?? null} url={data.url ?? null} pm={pm} />
+    }
+  }
+
+  // ── Error from server ──────────────────────────────────────────
+  if (data.status === 'error') {
+    return (
+      <div className="dz-mdl dz-mdl--error">
+        <div className="dz-mdl__head">
+          <span className="dz-mdl__picon">{pm.icon}</span>
+          <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
+        </div>
+        <p className="dz-mdl__errmsg">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
+        {data.url && <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 فتح الرابط الأصلي</a>}
+      </div>
+    )
+  }
+
+  // ── Server-provided ready state (legacy / future) ──────────────
+  if (data.status === 'ready') {
+    const info: MediaInfo = {
+      title: data.title ?? '',
+      thumbnail: data.thumbnail ?? '',
+      duration: data.duration ?? 0,
+      uploader: data.uploader ?? '',
+      video: (data.video ?? []).map(v => ({ ...v, mime: undefined })) as any,
+      audio: (data.audio ?? []).map(a => ({ ...a, mime: undefined })) as any,
+    }
+    return <MediaDownloadCardReady info={info} platform={data.platform ?? null} url={data.url ?? null} pm={pm} />
+  }
+
+  // fallback
+  return null
 }
 
 // ===== CODE BLOCK =====

@@ -15980,7 +15980,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // 📥 DOWNLOAD MEDIA GUARDIAN — كاشف نوايا تحميل الوسائط الاجتماعية
   // يعمل مباشرة بعد حراس الهوية، قبل Sports Guardian
   // يدعم: YouTube, Facebook, TikTok, Instagram, Pinterest, X/Twitter, Vimeo, Dailymotion
-  // الأولوية: Intent Detector → Media Extractor → yt-dlp → Response Generator
+  //
+  // ⚡ يُرجع status:'extracting' فوراً — المتصفح يستخرج التفاصيل بـ IP سكني
+  //    (IP الخادم محجوب من منصات التواصل الاجتماعي)
   // ══════════════════════════════════════════════════════════════════════
   {
     const _dlRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
@@ -15988,44 +15990,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (_dlIntent.intent === 'DOWNLOAD_MEDIA') {
       const _dlUrl = _dlRaw.match(/https?:\/\/[^\s<>"،,\u060C\u061B\u200c]+/)?.[0]?.replace(/[.,;!?'"،\u200c]+$/, '') || null
       if (_dlUrl && isValidMediaPlatformUrl(_dlUrl)) {
-        console.log(`[DownloadGuardian] 📥 platform=${_dlIntent.platform} conf=${_dlIntent.confidence} kw=${_dlIntent.detected_keywords.join(',')} url=${_dlUrl.slice(0, 60)}`)
-        try {
-          const _dlInfo = await extractMediaInfoAny(_dlUrl)
-          // Best formats: up to 4 video qualities with audio, up to 3 audio-only
-          const _bestVideo = (_dlInfo.video || []).filter(v => v.hasAudio).slice(0, 4)
-            .concat((_dlInfo.video || []).filter(v => !v.hasAudio).slice(0, 1))
-          const _bestAudio = (_dlInfo.audio || []).filter(a => !a.muxed).slice(0, 2)
-            .concat((_dlInfo.audio || []).filter(a => a.muxed).slice(0, 1))
-          return res.status(200).json({
-            richType: 'media-download',
-            content: `⬇️ **${_dlInfo.title || 'وسائط'}**`,
-            mediaDownload: {
-              status: 'ready',
-              url: _dlUrl,
-              title: _dlInfo.title,
-              thumbnail: _dlInfo.thumbnail,
-              duration: _dlInfo.duration,
-              uploader: _dlInfo.uploader,
-              platform: _dlIntent.platform,
-              audio: _bestAudio,
-              video: _bestVideo,
-            },
-            model: 'download-guardian',
-          })
-        } catch (_dlErr) {
-          console.warn('[DownloadGuardian] extraction failed:', _dlErr.message?.slice(0, 100))
-          return res.status(200).json({
-            richType: 'media-download',
-            content: `⚠️ تعذّر استخراج الرابط من هذه المنصة.`,
-            mediaDownload: {
-              status: 'error',
-              url: _dlUrl,
-              platform: _dlIntent.platform,
-              error: _dlErr.message?.slice(0, 200),
-            },
-            model: 'download-guardian',
-          })
-        }
+        console.log(`[DownloadGuardian] 📥 platform=${_dlIntent.platform} conf=${_dlIntent.confidence} url=${_dlUrl.slice(0, 70)}`)
+        // Return immediately — browser-side extractor handles the heavy lifting
+        return res.status(200).json({
+          richType: 'media-download',
+          content: `⬇️ جارٍ استخراج معلومات الوسائط...`,
+          mediaDownload: {
+            status: 'extracting',
+            url: _dlUrl,
+            platform: _dlIntent.platform,
+          },
+          model: 'download-guardian',
+        })
       } else if (!_dlUrl && _dlIntent.confidence >= 0.75) {
         // Has download keywords but no recognized URL — ask for the link
         return res.status(200).json({

@@ -1752,6 +1752,34 @@
 }
 .dz-mdl--error { border-color: rgba(239,68,68,.35); }
 
+/* ── Extracting / loading state ── */
+.dz-mdl--extracting { border-color: rgba(96,165,250,.3); }
+.dz-mdl__extract-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 0 14px;
+}
+.dz-mdl__extract-txt {
+  font-size: 13px;
+  color: var(--dz-text-muted, #94a3b8);
+  font-style: italic;
+}
+/* Spinner ring */
+.dz-mdl__spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(96,165,250,.25);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: dz-spin 0.8s linear infinite;
+}
+@keyframes dz-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Head */
 .dz-mdl__head {
   display: flex;

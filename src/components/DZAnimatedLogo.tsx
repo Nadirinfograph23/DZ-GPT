@@ -2,44 +2,86 @@ import { useEffect, useRef } from 'react'
 import '../styles/dz-animated-logo.css'
 
 /* ═══════════════════════════════════════════════════════════════════
-   DZ Animated Logo
-   مراحل الحركة (دورة 9 ثانية):
-   0 → 3.5s  : لوغو دائري متوهج مع جسيمات الذكاء الاصطناعي
-   3.5 → 5.5s : تحوّل — الدائرة تمتد لتصبح مستطيل العلم
-   5.5 → 8s  : العلم الجزائري الكامل (أخضر + أبيض + هلال + نجمة)
-   8 → 9s    : تقلّص العلم عودةً للدائرة ← يتكرر
+   DZ Animated Logo — دورة واحدة ثم يستقر
+   0 → 3.5s  : لوغو دائري DZ متوهج + جسيمات
+   3.5 → 5.5s : تحوّل الدائرة → علم كبير
+   5.5 → 8s  : العلم الجزائري الكامل
+   8 → 10s   : العلم يتصغّر ويتحوّل → روبوت + علم صغير يرفرف
+   10s+       : الروبوت ثابت، العلم الصغير يرفرف إلى الأبد
 ═══════════════════════════════════════════════════════════════════ */
 
 const NUM_PARTICLES = 12
-const NUM_SPARKS = 6
+const NUM_SPARKS    = 6
+
+/* ── نقاط النجمة الخماسية: مركز (328, 200) ── */
+function starPoints(cx: number, cy: number, R: number, r: number) {
+  const pts: string[] = []
+  for (let i = 0; i < 10; i++) {
+    const rad    = (i * Math.PI) / 5 - Math.PI / 2
+    const radius = i % 2 === 0 ? R : r
+    pts.push(`${(cx + Math.cos(rad) * radius).toFixed(1)},${(cy + Math.sin(rad) * radius).toFixed(1)}`)
+  }
+  return pts.join(' ')
+}
+
+/* ── محتوى SVG للعلم (يُعاد استخدامه للعلم الكبير والصغير) ── */
+function AlgeriaFlag({ id }: { id: string }) {
+  return (
+    <>
+      <defs>
+        <filter id={`gr-${id}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <clipPath id={`fc-${id}`}>
+          <rect x="0" y="0" width="600" height="400" rx="10" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#fc-${id})`}>
+        <rect x="0"   y="0" width="300" height="400" fill="#006233" />
+        <rect x="300" y="0" width="300" height="400" fill="#FFFFFF" />
+        <g filter={`url(#gr-${id})`} className="dzl-flag-emblem">
+          {/* الهلال */}
+          <path
+            d="M268 200 m0-84 a84 84 0 1 0 0 168 a84 84 0 1 0 0-168 Z
+               M300 200 m0-68 a68 68 0 1 1 0 136 a68 68 0 1 1 0-136 Z"
+            fill="#D21034" fillRule="evenodd"
+          />
+          {/* النجمة */}
+          <polygon points={starPoints(328, 200, 38, 16)} fill="#D21034" />
+        </g>
+      </g>
+    </>
+  )
+}
 
 export default function DZAnimatedLogo() {
-  const svgRef = useRef<SVGSVGElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
-  /* ── تحريك جسيمات الدائرة بـ JS للحصول على توهج عشوائي ── */
   useEffect(() => {
-    const particles = svgRef.current?.querySelectorAll('.dzl-particle')
-    if (!particles) return
-    particles.forEach((p, i) => {
-      const angle = (i / NUM_PARTICLES) * 360
-      ;(p as SVGElement).style.setProperty('--angle', `${angle}deg`)
-      ;(p as SVGElement).style.setProperty('--delay', `${(i * 0.18).toFixed(2)}s`)
-      ;(p as SVGElement).style.setProperty('--size', `${3 + Math.random() * 3}px`)
-      ;(p as SVGElement).style.setProperty('--r', `${58 + Math.random() * 8}px`)
+    const particles = wrapRef.current?.querySelectorAll('.dzl-particle')
+    particles?.forEach((p, i) => {
+      const el = p as HTMLElement
+      el.style.setProperty('--angle', `${(i / NUM_PARTICLES) * 360}deg`)
+      el.style.setProperty('--delay',  `${(i * 0.18).toFixed(2)}s`)
+      el.style.setProperty('--size',   `${3 + Math.random() * 3}px`)
+      el.style.setProperty('--r',      `${58 + Math.random() * 8}px`)
     })
-    const sparks = svgRef.current?.querySelectorAll('.dzl-spark')
+    const sparks = wrapRef.current?.querySelectorAll('.dzl-spark')
     sparks?.forEach((s, i) => {
-      ;(s as SVGElement).style.setProperty('--spark-angle', `${i * 60 + 30}deg`)
-      ;(s as SVGElement).style.setProperty('--spark-delay', `${(i * 0.3).toFixed(2)}s`)
+      const el = s as HTMLElement
+      el.style.setProperty('--spark-angle', `${i * 60 + 30}deg`)
+      el.style.setProperty('--spark-delay', `${(i * 0.3).toFixed(2)}s`)
     })
   }, [])
 
   return (
-    <div className="dzl-wrapper" aria-label="DZ Agent Logo">
-      {/* ── طبقة وهج خلفي ── */}
+    <div className="dzl-wrapper" ref={wrapRef} aria-label="DZ Agent Logo">
+
+      {/* ── وهج خلفي ── */}
       <div className="dzl-glow-bg" />
 
-      {/* ── الجسيمات الدائرية ── */}
+      {/* ── جسيمات دائرية ── */}
       <div className="dzl-particles">
         {Array.from({ length: NUM_PARTICLES }).map((_, i) => (
           <div key={i} className="dzl-particle" />
@@ -53,173 +95,106 @@ export default function DZAnimatedLogo() {
         ))}
       </div>
 
-      {/* ── المحتوى الرئيسي: اللوغو + العلم ── */}
       <div className="dzl-stage">
 
-        {/* ── لوغو الدائرة (ظاهر في مرحلة logo) ── */}
+        {/* ══ مرحلة 1: لوغو الدائرة DZ ══ */}
         <div className="dzl-circle-logo">
-          {/* حلقات نبض الذكاء الاصطناعي */}
           <div className="dzl-ring dzl-ring-1" />
           <div className="dzl-ring dzl-ring-2" />
           <div className="dzl-ring dzl-ring-3" />
-          {/* الدائرة الرئيسية */}
           <div className="dzl-core">
-            {/* هلال صغير في الوسط */}
-            <svg className="dzl-core-svg" viewBox="0 0 80 80" fill="none">
-              {/* النجمة */}
-              <polygon
-                className="dzl-core-star"
-                points="40,10 43.5,30 63,28 48,40 54,60 40,48 26,60 32,40 17,28 36.5,30"
-                fill="#D21034"
-                opacity="0.9"
-              />
-              {/* هلال */}
-              <path
-                className="dzl-core-crescent"
-                d="M40 18 A22 22 0 1 1 40 62 A15 15 0 1 0 40 18 Z"
-                fill="none"
-                stroke="#D21034"
-                strokeWidth="0"
-              />
-            </svg>
-            {/* نص DZ */}
             <span className="dzl-dz-text">DZ</span>
           </div>
         </div>
 
-        {/* ── العلم الجزائري (ظاهر في مرحلة flag) ── */}
+        {/* ══ مرحلة 2-3: العلم الكبير ══ */}
         <div className="dzl-flag-wrap">
           <div className="dzl-flag-glow" />
-          <svg
-            ref={svgRef}
-            className="dzl-flag-svg"
-            viewBox="0 0 600 400"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* ── تعريف الفلاتر ── */}
-            <defs>
-              {/* وهج أخضر */}
-              <filter id="glow-green" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="8" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              {/* وهج أحمر للهلال */}
-              <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              {/* تدرج لوهج الحافة */}
-              <linearGradient id="flag-border-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#00ff88" stopOpacity="0.8" />
-                <stop offset="50%" stopColor="#ffffff" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#00cc66" stopOpacity="0.8" />
-              </linearGradient>
-              {/* clip path للعلم */}
-              <clipPath id="flag-clip">
-                <rect x="0" y="0" width="600" height="400" rx="12" />
-              </clipPath>
-            </defs>
-
-            <g clipPath="url(#flag-clip)">
-              {/* ── نصف أخضر (يسار) ── */}
-              <rect x="0" y="0" width="300" height="400" fill="#006233" />
-              {/* ── نصف أبيض (يمين) ── */}
-              <rect x="300" y="0" width="300" height="400" fill="#FFFFFF" />
-
-              {/* ── خط وهج فاصل ── */}
-              <line
-                x1="300" y1="0" x2="300" y2="400"
-                stroke="rgba(255,255,255,0.3)"
-                strokeWidth="2"
-              />
-
-              {/* ── الهلال والنجمة ── */}
-              <g filter="url(#glow-red)" className="dzl-flag-emblem">
-                {/* الهلال: دائرة خارجية - دائرة داخلية = هلال */}
-                <path
-                  d="M 268 200
-                     m -88 0
-                     a 88 88 0 1 0 176 0
-                     a 88 88 0 1 0 -176 0
-                     M 268 200
-                     m -68 -22
-                     a 72 72 0 1 1 136 0
-                     a 72 72 0 1 1 -136 0"
-                  fill="none"
-                />
-                {/* هلال احمر صحيح */}
-                <circle cx="268" cy="200" r="88" fill="#D21034" />
-                <circle cx="305" cy="200" r="74" fill="#FFFFFF" />
-                {/* الجزء الأبيض يُخفي الجانب الأيمن من الدائرة الكبيرة — لكن نريد اللون الصحيح */}
-                {/* نُعيد رسم الخلفية فوقه */}
-                <rect x="300" y="112" width="80" height="176" fill="#FFFFFF" />
-                <rect x="0" y="112" width="300" height="176" fill="#006233" />
-                {/* الهلال الصحيح: دائرة كبيرة ناقص دائرة داخلية منزاحة */}
-                <path
-                  className="dzl-crescent-path"
-                  d={`M 268 200
-                     m 0 -84
-                     a 84 84 0 1 0 0 168
-                     a 84 84 0 1 0 0 -168
-                     Z
-                     M 300 200
-                     m 0 -68
-                     a 68 68 0 1 1 0 136
-                     a 68 68 0 1 1 0 -136
-                     Z`}
-                  fill="#D21034"
-                  fillRule="evenodd"
-                />
-
-                {/* النجمة ذات الخمس رؤوس */}
-                <polygon
-                  className="dzl-star-path"
-                  points={
-                    /* نحسب نقاط النجمة: مركز (328, 200)، R_خارجي=38، R_داخلي=16 */
-                    (() => {
-                      const cx = 328, cy = 200, R = 38, r = 16, n = 5
-                      const pts: string[] = []
-                      for (let i = 0; i < n * 2; i++) {
-                        const rad = (i * Math.PI) / n - Math.PI / 2
-                        const radius = i % 2 === 0 ? R : r
-                        pts.push(`${(cx + Math.cos(rad) * radius).toFixed(1)},${(cy + Math.sin(rad) * radius).toFixed(1)}`)
-                      }
-                      return pts.join(' ')
-                    })()
-                  }
-                  fill="#D21034"
-                />
-              </g>
-            </g>
-
-            {/* ── إطار وهج العلم ── */}
-            <rect
-              x="1" y="1" width="598" height="398" rx="12"
-              fill="none"
-              stroke="url(#flag-border-grad)"
-              strokeWidth="2.5"
+          <svg className="dzl-flag-svg" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+            <AlgeriaFlag id="big" />
+            <rect x="1" y="1" width="598" height="398" rx="10" fill="none"
+              stroke="url(#flag-border-grad-big)" strokeWidth="2.5"
               className="dzl-flag-border"
             />
+            <defs>
+              <linearGradient id="flag-border-grad-big" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%"   stopColor="#00ff88" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#00cc66" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
           </svg>
+        </div>
 
-          {/* نجوم لامعة فوق العلم */}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="dzl-flag-star"
-              style={{
-                '--fs-x': `${10 + i * 12}%`,
-                '--fs-y': `${15 + (i % 3) * 30}%`,
-                '--fs-delay': `${i * 0.2}s`,
-              } as React.CSSProperties}
-            />
-          ))}
+        {/* ══ الحالة النهائية: روبوت + علم صغير يرفرف ══ */}
+        <div className="dzl-final-state">
+
+          {/* العلم الصغير فوق الرأس */}
+          <div className="dzl-small-flag-area">
+            {/* العمود */}
+            <div className="dzl-pole" />
+            {/* العلم المرفرف */}
+            <svg className="dzl-small-flag-svg" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+              <AlgeriaFlag id="small" />
+            </svg>
+          </div>
+
+          {/* الروبوت */}
+          <div className="dzl-robot-wrap">
+            <svg className="dzl-robot-svg" viewBox="0 0 80 80" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+
+              {/* هوائي */}
+              <line x1="40" y1="2" x2="40" y2="13"
+                stroke="#00ff88" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="40" cy="2" r="2.5" fill="#00ff88" className="dzl-ant-tip" />
+
+              {/* الرأس */}
+              <rect x="12" y="13" width="56" height="34" rx="9"
+                fill="#0a2e1a" stroke="#00cc66" strokeWidth="1.5" />
+
+              {/* العيون — خلفية */}
+              <circle cx="27" cy="30" r="6.5" fill="#001208" />
+              <circle cx="53" cy="30" r="6.5" fill="#001208" />
+              {/* العيون — توهج */}
+              <circle cx="27" cy="30" r="3.8" fill="#00ff88" className="dzl-eye" />
+              <circle cx="53" cy="30" r="3.8" fill="#00ff88" className="dzl-eye" />
+              {/* بريق العيون */}
+              <circle cx="28.8" cy="28.2" r="1.2" fill="white" opacity="0.9" />
+              <circle cx="54.8" cy="28.2" r="1.2" fill="white" opacity="0.9" />
+
+              {/* الفم / مكبر الصوت */}
+              <rect x="21" y="38" width="38" height="5.5" rx="2.8" fill="#001208" />
+              <line x1="29" y1="38" x2="29" y2="43.5" stroke="#00aa44" strokeWidth="0.8" />
+              <line x1="37" y1="38" x2="37" y2="43.5" stroke="#00aa44" strokeWidth="0.8" />
+              <line x1="45" y1="38" x2="45" y2="43.5" stroke="#00aa44" strokeWidth="0.8" />
+              <line x1="53" y1="38" x2="53" y2="43.5" stroke="#00aa44" strokeWidth="0.8" />
+
+              {/* رقبة */}
+              <rect x="32" y="47" width="16" height="5" rx="2.5" fill="#071f12" />
+
+              {/* الجسم */}
+              <rect x="14" y="52" width="52" height="24" rx="7"
+                fill="#0a2e1a" stroke="#00cc66" strokeWidth="1.5" />
+
+              {/* نص DZ على الجسم */}
+              <text x="40" y="68" textAnchor="middle"
+                fill="#00ff88" fontSize="11" fontWeight="900"
+                fontFamily="Cairo, sans-serif" letterSpacing="1.5">DZ</text>
+
+              {/* نقاط حالة على الجسم */}
+              <circle cx="20" cy="60" r="2.2" fill="#00cc44" className="dzl-status-dot" />
+              <circle cx="60" cy="60" r="2.2" fill="#00cc44" className="dzl-status-dot" />
+
+              {/* الذراعان */}
+              <rect x="2"  y="53" width="11" height="9" rx="4.5"
+                fill="#0a2e1a" stroke="#00cc66" strokeWidth="1.5" />
+              <rect x="67" y="53" width="11" height="9" rx="4.5"
+                fill="#0a2e1a" stroke="#00cc66" strokeWidth="1.5" />
+            </svg>
+
+            {/* وهج الروبوت */}
+            <div className="dzl-robot-glow" />
+          </div>
         </div>
 
       </div>{/* dzl-stage */}

@@ -1,8 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════
-   DZ Animated Logo — Logo ⟶ Algerian Flag ⟶ Logo (9s loop)
+   DZ Animated Logo — دورة واحدة ثم استقرار
+   10s animation, plays once, fills forward → robot + waving mini-flag
 ═══════════════════════════════════════════════════════════════════ */
 
-/* ── المغلّف الرئيسي ── */
+/* ────────────────────────────────────────
+   المغلّف الرئيسي
+──────────────────────────────────────── */
 .dzl-wrapper {
   position: relative;
   width: 130px;
@@ -14,103 +17,92 @@
   margin-bottom: 4px;
 }
 
-/* ══════════════════════════════════
-   وهج الخلفية
-══════════════════════════════════ */
+/* ────────────────────────────────────────
+   وهج الخلفية (يتلاشى بعد مرحلة اللوغو)
+──────────────────────────────────────── */
 .dzl-glow-bg {
   position: absolute;
   inset: -20px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(0,98,51,0.25) 0%, rgba(0,98,51,0.08) 50%, transparent 70%);
-  animation: dzl-glow-pulse 9s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(0,98,51,.25) 0%, rgba(0,98,51,.08) 50%, transparent 70%);
+  animation: dzl-glow-pulse 10s ease 1 forwards;
   pointer-events: none;
 }
-
 @keyframes dzl-glow-pulse {
   0%,30%  { opacity: 1; transform: scale(1); }
-  50%,80% { opacity: 0.4; transform: scale(1.6); background: radial-gradient(circle, rgba(0,98,51,0.15) 0%, rgba(210,16,52,0.08) 50%, transparent 70%); }
-  100%    { opacity: 1; transform: scale(1); }
+  50%,80% { opacity: .4; transform: scale(1.6); }
+  100%    { opacity: .15; transform: scale(1); }
 }
 
-/* ══════════════════════════════════
+/* ────────────────────────────────────────
    جسيمات الدائرة المدارية
-══════════════════════════════════ */
+──────────────────────────────────────── */
 .dzl-particles {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  animation: dzl-particles-phase 9s ease-in-out infinite;
+  animation: dzl-particles-phase 10s ease 1 forwards;
 }
-
 @keyframes dzl-particles-phase {
   0%,35%  { opacity: 1; transform: rotate(0deg) scale(1); }
-  40%,75% { opacity: 0; transform: rotate(180deg) scale(0.3); }
-  85%     { opacity: 0; }
-  100%    { opacity: 1; transform: rotate(360deg) scale(1); }
+  42%     { opacity: 0; transform: rotate(180deg) scale(.3); }
+  100%    { opacity: 0; }
 }
 
 .dzl-particle {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 50%; left: 50%;
   width: var(--size, 4px);
   height: var(--size, 4px);
   border-radius: 50%;
   background: #00ff88;
-  box-shadow: 0 0 6px 2px rgba(0,255,136,0.7);
+  box-shadow: 0 0 6px 2px rgba(0,255,136,.7);
   transform:
     rotate(var(--angle, 0deg))
     translateX(var(--r, 58px))
-    translateX(-50%)
-    translateY(-50%);
+    translateX(-50%) translateY(-50%);
   animation: dzl-particle-blink 1.8s ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
-
 @keyframes dzl-particle-blink {
-  0%,100% { opacity: 0.9; transform: rotate(var(--angle,0deg)) translateX(var(--r,58px)) translateX(-50%) translateY(-50%) scale(1); }
-  50%     { opacity: 0.2; transform: rotate(var(--angle,0deg)) translateX(calc(var(--r,58px) - 5px)) translateX(-50%) translateY(-50%) scale(0.5); }
+  0%,100% { opacity: .9; }
+  50%     { opacity: .2; }
 }
 
-/* ══════════════════════════════════
+/* ────────────────────────────────────────
    شرارات خارجية
-══════════════════════════════════ */
+──────────────────────────────────────── */
 .dzl-sparks {
   position: absolute;
   inset: -10px;
-  animation: dzl-sparks-phase 9s ease-in-out infinite;
+  animation: dzl-sparks-phase 10s ease 1 forwards;
 }
-
 @keyframes dzl-sparks-phase {
   0%,30%  { opacity: 1; }
-  38%,80% { opacity: 0; }
-  92%     { opacity: 0; }
-  100%    { opacity: 1; }
+  38%     { opacity: 0; }
+  100%    { opacity: 0; }
 }
 
 .dzl-spark {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 2px;
-  height: 14px;
+  top: 50%; left: 50%;
+  width: 2px; height: 14px;
   border-radius: 2px;
   background: linear-gradient(to top, transparent, #00cc55);
   transform-origin: bottom center;
-  transform: rotate(var(--spark-angle, 0deg)) translateY(calc(-62px - 50%));
+  transform: rotate(var(--spark-angle,0deg)) translateY(calc(-62px - 50%));
   animation: dzl-spark-shoot 1.4s ease-out infinite;
   animation-delay: var(--spark-delay, 0s);
 }
-
 @keyframes dzl-spark-shoot {
   0%   { opacity: 0; transform: rotate(var(--spark-angle,0deg)) translateY(calc(-62px - 50%)) scaleY(0); }
   30%  { opacity: 1; transform: rotate(var(--spark-angle,0deg)) translateY(calc(-80px - 50%)) scaleY(1); }
-  100% { opacity: 0; transform: rotate(var(--spark-angle,0deg)) translateY(calc(-100px - 50%)) scaleY(0.3); }
+  100% { opacity: 0; transform: rotate(var(--spark-angle,0deg)) translateY(calc(-100px - 50%)) scaleY(.3); }
 }
 
-/* ══════════════════════════════════
-   المنصة (stage) — تحتوي اللوغو والعلم
-══════════════════════════════════ */
+/* ────────────────────────────────────────
+   المنصة
+──────────────────────────────────────── */
 .dzl-stage {
   position: relative;
   width: 110px;
@@ -120,9 +112,9 @@
   justify-content: center;
 }
 
-/* ══════════════════════════════════
-   اللوغو الدائري
-══════════════════════════════════ */
+/* ════════════════════════════════════════
+   مرحلة 1: اللوغو الدائري DZ
+════════════════════════════════════════ */
 .dzl-circle-logo {
   position: absolute;
   inset: 0;
@@ -130,22 +122,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: dzl-logo-lifecycle 9s cubic-bezier(0.4,0,0.2,1) infinite;
+  animation: dzl-logo-lifecycle 10s cubic-bezier(.4,0,.2,1) 1 forwards;
 }
-
 @keyframes dzl-logo-lifecycle {
-  /* ظهور + وهج */
-  0%   { opacity: 0; transform: scale(0.4) rotate(-20deg); }
-  5%   { opacity: 1; transform: scale(1) rotate(0deg); }
-  /* ثبات */
-  28%  { opacity: 1; transform: scale(1) rotate(0deg); }
-  /* تحوّل إلى العلم */
-  40%  { opacity: 0; transform: scale(0.2) rotate(15deg); }
-  /* مخفي أثناء العلم */
-  78%  { opacity: 0; transform: scale(0.2) rotate(-15deg); }
-  /* عودة */
-  90%  { opacity: 0; transform: scale(0.2) rotate(0deg); }
-  100% { opacity: 0; transform: scale(0.4) rotate(-20deg); }
+  0%   { opacity: 0; transform: scale(.4) rotate(-20deg); }
+  5%   { opacity: 1; transform: scale(1)  rotate(0deg); }
+  28%  { opacity: 1; transform: scale(1)  rotate(0deg); }
+  40%  { opacity: 0; transform: scale(.2) rotate(15deg); }
+  100% { opacity: 0; }
 }
 
 /* حلقات النبض */
@@ -153,188 +137,241 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1.5px solid rgba(0,255,136,0.5);
+  border: 1.5px solid rgba(0,255,136,.5);
   animation: dzl-ring-pulse 2s ease-out infinite;
 }
 .dzl-ring-1 { animation-delay: 0s; }
-.dzl-ring-2 { animation-delay: 0.6s; }
+.dzl-ring-2 { animation-delay: .6s; }
 .dzl-ring-3 { animation-delay: 1.2s; }
-
 @keyframes dzl-ring-pulse {
-  0%   { transform: scale(1); opacity: 0.8; border-color: rgba(0,255,136,0.6); }
-  100% { transform: scale(1.5); opacity: 0; border-color: rgba(0,200,100,0); }
+  0%   { transform: scale(1);   opacity: .8; border-color: rgba(0,255,136,.6); }
+  100% { transform: scale(1.5); opacity: 0;  border-color: rgba(0,200,100,0); }
 }
 
 /* النواة الدائرية */
 .dzl-core {
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 80px; height: 80px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%,
-    #0d4a2a 0%,
-    #063420 40%,
-    #021a10 100%
-  );
-  border: 2px solid rgba(0,255,136,0.4);
-  box-shadow:
-    0 0 20px rgba(0,200,100,0.5),
-    0 0 40px rgba(0,150,75,0.3),
-    inset 0 0 20px rgba(0,80,40,0.5);
+  background: radial-gradient(circle at 35% 35%, #0d4a2a 0%, #063420 40%, #021a10 100%);
+  border: 2px solid rgba(0,255,136,.4);
+  box-shadow: 0 0 20px rgba(0,200,100,.5), 0 0 40px rgba(0,150,75,.3), inset 0 0 20px rgba(0,80,40,.5);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   animation: dzl-core-glow 3s ease-in-out infinite alternate;
 }
-
 @keyframes dzl-core-glow {
-  from { box-shadow: 0 0 15px rgba(0,200,100,0.5), 0 0 35px rgba(0,150,75,0.25), inset 0 0 15px rgba(0,80,40,0.4); border-color: rgba(0,255,136,0.4); }
-  to   { box-shadow: 0 0 30px rgba(0,255,136,0.8), 0 0 60px rgba(0,200,100,0.5), inset 0 0 25px rgba(0,120,60,0.6); border-color: rgba(0,255,136,0.8); }
+  from { box-shadow: 0 0 15px rgba(0,200,100,.5), 0 0 35px rgba(0,150,75,.25), inset 0 0 15px rgba(0,80,40,.4); border-color: rgba(0,255,136,.4); }
+  to   { box-shadow: 0 0 30px rgba(0,255,136,.8), 0 0 60px rgba(0,200,100,.5), inset 0 0 25px rgba(0,120,60,.6); border-color: rgba(0,255,136,.8); }
 }
 
 /* نص DZ */
 .dzl-dz-text {
   position: absolute;
-  font-family: 'Cairo', 'Segoe UI', sans-serif;
+  font-family: 'Cairo','Segoe UI',sans-serif;
   font-size: 24px;
   font-weight: 900;
   letter-spacing: 2px;
   color: transparent;
-  background: linear-gradient(135deg, #00ff88 0%, #00cc55 50%, #ffffff 100%);
+  background: linear-gradient(135deg, #00ff88 0%, #00cc55 50%, #fff 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(0 0 8px rgba(0,255,136,0.9));
+  filter: drop-shadow(0 0 8px rgba(0,255,136,.9));
   animation: dzl-text-shimmer 2.5s ease-in-out infinite alternate;
 }
-
 @keyframes dzl-text-shimmer {
-  from { filter: drop-shadow(0 0 6px rgba(0,255,136,0.7)); letter-spacing: 2px; }
-  to   { filter: drop-shadow(0 0 12px rgba(0,255,136,1)) drop-shadow(0 0 20px rgba(0,200,100,0.5)); letter-spacing: 3px; }
+  from { filter: drop-shadow(0 0 6px rgba(0,255,136,.7)); letter-spacing: 2px; }
+  to   { filter: drop-shadow(0 0 12px rgba(0,255,136,1)) drop-shadow(0 0 20px rgba(0,200,100,.5)); letter-spacing: 3px; }
 }
 
-/* SVG الهلال داخل النواة */
-.dzl-core-svg {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  opacity: 0.15;
-}
-
-/* ══════════════════════════════════
-   العلم الجزائري
-══════════════════════════════════ */
+/* ════════════════════════════════════════
+   مرحلة 2-3: العلم الجزائري الكبير
+════════════════════════════════════════ */
 .dzl-flag-wrap {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: dzl-flag-lifecycle 9s cubic-bezier(0.4,0,0.2,1) infinite;
+  animation: dzl-flag-lifecycle 10s cubic-bezier(.4,0,.2,1) 1 forwards;
   transform-origin: center center;
 }
-
 @keyframes dzl-flag-lifecycle {
-  /* مخفي في البداية */
   0%,35% { opacity: 0; transform: scale(0) rotate(10deg); clip-path: circle(0% at 50% 50%); }
-  /* ظهور مثير: ينكشف دائرياً ثم يمتد */
-  42%    { opacity: 1; transform: scale(0.6) rotate(0deg); clip-path: circle(50% at 50% 50%); }
-  50%    { opacity: 1; transform: scale(1) rotate(0deg); clip-path: circle(75% at 50% 50%); }
-  55%    { opacity: 1; transform: scale(1) rotate(0deg); clip-path: inset(0% round 12px); }
-  /* ثبات */
-  72%    { opacity: 1; transform: scale(1) rotate(0deg); clip-path: inset(0% round 12px); }
-  /* اختفاء */
-  82%    { opacity: 0; transform: scale(0.5) rotate(-5deg); clip-path: circle(0% at 50% 50%); }
-  100%   { opacity: 0; transform: scale(0) rotate(10deg); clip-path: circle(0% at 50% 50%); }
+  42%    { opacity: 1; transform: scale(.6) rotate(0deg); clip-path: circle(50% at 50% 50%); }
+  52%    { opacity: 1; transform: scale(1) rotate(0deg);  clip-path: inset(0% round 12px); }
+  72%    { opacity: 1; transform: scale(1) rotate(0deg);  clip-path: inset(0% round 12px); }
+  82%    { opacity: 0; transform: scale(.3) rotate(-5deg); clip-path: circle(0% at 50% 50%); }
+  100%   { opacity: 0; transform: scale(0); clip-path: circle(0% at 50% 50%); }
 }
 
 .dzl-flag-glow {
   position: absolute;
   inset: -12px;
   border-radius: 16px;
-  background: transparent;
-  box-shadow:
-    0 0 30px rgba(0,98,51,0.7),
-    0 0 60px rgba(0,98,51,0.4),
-    0 0 90px rgba(0,98,51,0.2);
+  box-shadow: 0 0 30px rgba(0,98,51,.7), 0 0 60px rgba(0,98,51,.4), 0 0 90px rgba(0,98,51,.2);
   animation: dzl-flag-glow-pulse 1.5s ease-in-out infinite alternate;
   pointer-events: none;
 }
-
 @keyframes dzl-flag-glow-pulse {
-  from { box-shadow: 0 0 25px rgba(0,98,51,0.6), 0 0 50px rgba(0,98,51,0.3), 0 0 80px rgba(210,16,52,0.15); }
-  to   { box-shadow: 0 0 40px rgba(0,200,100,0.9), 0 0 80px rgba(0,150,75,0.6), 0 0 120px rgba(210,16,52,0.3); }
+  from { box-shadow: 0 0 25px rgba(0,98,51,.6), 0 0 50px rgba(0,98,51,.3); }
+  to   { box-shadow: 0 0 40px rgba(0,200,100,.9), 0 0 80px rgba(0,150,75,.6), 0 0 120px rgba(210,16,52,.3); }
 }
 
 .dzl-flag-svg {
-  width: 170px;
-  height: 113px;
+  width: 170px; height: 113px;
   border-radius: 12px;
   display: block;
-  filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 4px 20px rgba(0,0,0,.5));
 }
 
-/* هلال ونجمة متوهجان */
-.dzl-crescent-path {
-  animation: dzl-emblem-glow 1.5s ease-in-out infinite alternate;
-}
-.dzl-star-path {
-  animation: dzl-emblem-glow 1.5s ease-in-out infinite alternate;
-  animation-delay: 0.3s;
-}
-
+.dzl-flag-emblem { animation: dzl-emblem-glow 1.5s ease-in-out infinite alternate; }
 @keyframes dzl-emblem-glow {
-  from { filter: drop-shadow(0 0 4px rgba(210,16,52,0.8)); }
-  to   { filter: drop-shadow(0 0 12px rgba(255,60,80,1)) drop-shadow(0 0 20px rgba(210,16,52,0.6)); }
+  from { filter: drop-shadow(0 0 4px rgba(210,16,52,.8)); }
+  to   { filter: drop-shadow(0 0 12px rgba(255,60,80,1)) drop-shadow(0 0 20px rgba(210,16,52,.6)); }
 }
 
-/* إطار العلم المتوهج */
 .dzl-flag-border {
   animation: dzl-border-glow 2s ease-in-out infinite alternate;
 }
-
 @keyframes dzl-border-glow {
-  from { stroke-opacity: 0.6; filter: drop-shadow(0 0 3px rgba(0,255,136,0.5)); }
-  to   { stroke-opacity: 1; filter: drop-shadow(0 0 8px rgba(0,255,136,0.9)); }
+  from { stroke-opacity: .6; }
+  to   { stroke-opacity: 1; filter: drop-shadow(0 0 8px rgba(0,255,136,.9)); }
 }
 
-/* نجيمات لامعة فوق العلم */
-.dzl-flag-star {
+/* ════════════════════════════════════════
+   الحالة النهائية: روبوت + علم صغير
+════════════════════════════════════════ */
+.dzl-final-state {
   position: absolute;
-  left: var(--fs-x, 50%);
-  top: var(--fs-y, 50%);
-  width: 3px;
-  height: 3px;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0px;
+  opacity: 0;
+  animation: dzl-final-lifecycle 10s cubic-bezier(.4,0,.2,1) 1 forwards;
+}
+@keyframes dzl-final-lifecycle {
+  0%,78% { opacity: 0; transform: scale(.5) translateY(8px); }
+  87%    { opacity: 1; transform: scale(1.04) translateY(-2px); }
+  93%    { opacity: 1; transform: scale(.98) translateY(1px); }
+  100%   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── العلم الصغير فوق رأس الروبوت ── */
+.dzl-small-flag-area {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: -2px;
+  /* عمود العلم + العلم جنباً إلى جنب */
+}
+
+.dzl-pole {
+  width: 2px;
+  height: 32px;
+  background: linear-gradient(to bottom, #aaaaaa, #666666);
+  border-radius: 1px;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+/* العلم المرفرف */
+.dzl-small-flag-svg {
+  width: 44px;
+  height: 29px;
+  border-radius: 3px;
+  display: block;
+  margin-top: 2px;
+  filter: drop-shadow(0 1px 5px rgba(0,0,0,.45));
+  transform-origin: left center;
+  /* يرفرف إلى الأبد بمجرد ظهوره */
+  animation: dzl-flag-wave 1.8s ease-in-out infinite;
+}
+@keyframes dzl-flag-wave {
+  0%,100% { transform: perspective(120px) rotateY(0deg) skewY(0deg); }
+  20%     { transform: perspective(120px) rotateY(14deg) skewY(-1deg) scaleX(.96); }
+  50%     { transform: perspective(120px) rotateY(2deg) skewY(.5deg); }
+  75%     { transform: perspective(120px) rotateY(-8deg) skewY(1deg) scaleX(.98); }
+}
+
+/* ── الروبوت ── */
+.dzl-robot-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dzl-robot-svg {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.4));
+}
+
+/* وهج الروبوت (يظهر بعد انتهاء الانيميشن) */
+.dzl-robot-glow {
+  position: absolute;
+  inset: -8px;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 0 6px 3px rgba(255,255,255,0.8);
-  animation: dzl-flag-star-twinkle 0.8s ease-in-out infinite alternate;
-  animation-delay: var(--fs-delay, 0s);
+  background: radial-gradient(circle, rgba(0,200,100,.12) 0%, transparent 70%);
+  animation: dzl-robot-glow-pulse 2.5s ease-in-out infinite alternate;
   pointer-events: none;
 }
-
-@keyframes dzl-flag-star-twinkle {
-  from { opacity: 0.2; transform: scale(0.5); }
-  to   { opacity: 1; transform: scale(1.4); }
+@keyframes dzl-robot-glow-pulse {
+  from { opacity: .6; transform: scale(.95); }
+  to   { opacity: 1; transform: scale(1.1); }
 }
 
-/* ══════════════════════════════════
-   Dark/Light mode
-══════════════════════════════════ */
+/* عيون الروبوت — تومض */
+.dzl-eye {
+  animation: dzl-eye-blink 5s ease-in-out infinite;
+}
+@keyframes dzl-eye-blink {
+  0%,88%,100% { transform: scaleY(1);   opacity: 1; }
+  92%,96%     { transform: scaleY(.08); opacity: .3; }
+}
+
+/* طرف الهوائي — ينبض */
+.dzl-ant-tip {
+  animation: dzl-ant-pulse 1.6s ease-in-out infinite alternate;
+}
+@keyframes dzl-ant-pulse {
+  from { opacity: .7; filter: drop-shadow(0 0 2px #00ff88); }
+  to   { opacity: 1;  filter: drop-shadow(0 0 6px #00ff88) drop-shadow(0 0 10px #00cc55); }
+}
+
+/* نقاط الحالة على الجسم */
+.dzl-status-dot {
+  animation: dzl-status-blink 2s ease-in-out infinite;
+}
+.dzl-status-dot:nth-of-type(2) { animation-delay: 1s; }
+@keyframes dzl-status-blink {
+  0%,100% { opacity: .6; }
+  50%     { opacity: 1; filter: drop-shadow(0 0 4px #00cc44); }
+}
+
+/* ════════════════════════════════════════
+   Dark / Light mode
+════════════════════════════════════════ */
 @media (prefers-color-scheme: light) {
   .dzl-core {
     background: radial-gradient(circle at 35% 35%, #0a5c33 0%, #064a28 40%, #032015 100%);
   }
-  .dzl-glow-bg {
-    background: radial-gradient(circle, rgba(0,98,51,0.2) 0%, transparent 70%);
-  }
 }
 
-/* ══════════════════════════════════
-   Reduced motion
-══════════════════════════════════ */
+/* ════════════════════════════════════════
+   Reduced motion — يُظهر الحالة النهائية مباشرة
+════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
-  .dzl-wrapper * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
-  .dzl-flag-wrap { animation: none; opacity: 1; transform: scale(1); clip-path: inset(0% round 12px); }
-  .dzl-circle-logo { animation: none; opacity: 0; }
+  .dzl-wrapper * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .dzl-circle-logo { opacity: 0 !important; }
+  .dzl-flag-wrap   { opacity: 0 !important; }
+  .dzl-final-state { opacity: 1 !important; transform: none !important; }
+  .dzl-small-flag-svg { animation: none !important; }
 }

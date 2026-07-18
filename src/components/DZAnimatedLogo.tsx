@@ -13,7 +13,7 @@ import '../styles/dz-animated-logo.css'
 const NUM_PARTICLES = 12
 const NUM_SPARKS    = 6
 
-/* ── نقاط النجمة الخماسية: مركز (328, 200) ── */
+/* ── نقاط النجمة الخماسية ── */
 function starPoints(cx: number, cy: number, R: number, r: number) {
   const pts: string[] = []
   for (let i = 0; i < 10; i++) {
@@ -24,31 +24,54 @@ function starPoints(cx: number, cy: number, R: number, r: number) {
   return pts.join(' ')
 }
 
-/* ── محتوى SVG للعلم (يُعاد استخدامه للعلم الكبير والصغير) ── */
-function AlgeriaFlag({ id }: { id: string }) {
+/* ══════════════════════════════════════════════════════════════
+   العلم الجزائري الصحيح رياضياً
+   ─────────────────────────────────────────────────────────────
+   الهلال: دائرة خارجية مركز (268,200) r=88 + دائرة داخلية مركز
+   (305,200) r=74.  نقطتا التقاطع المحسوبتان: (317,127) و(317,273)
+   المسار:  M 317 127  → قوس خارجي كبير عكس عقارب → (317,273)
+             → قوس داخلي كبير مع عقارب → (317,127) ← هلال صحيح
+   النجمة: مركز (333,200) R=36 r=15
+══════════════════════════════════════════════════════════════ */
+function AlgeriaFlag({ id, glow = false }: { id: string; glow?: boolean }) {
+  const emblemFilter = glow ? `url(#gf-${id})` : undefined
+
   return (
     <>
       <defs>
-        <filter id={`gr-${id}`} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="b" />
-          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
+        {/* وهج خفيف للعلم الكبير المتحرك فقط */}
+        {glow && (
+          <filter id={`gf-${id}`} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        )}
         <clipPath id={`fc-${id}`}>
           <rect x="0" y="0" width="600" height="400" rx="10" />
         </clipPath>
       </defs>
+
       <g clipPath={`url(#fc-${id})`}>
+        {/* ── النصف الأخضر (يسار) ── */}
         <rect x="0"   y="0" width="300" height="400" fill="#006233" />
+        {/* ── النصف الأبيض (يمين) ── */}
         <rect x="300" y="0" width="300" height="400" fill="#FFFFFF" />
-        <g filter={`url(#gr-${id})`} className="dzl-flag-emblem">
-          {/* الهلال */}
-          <path
-            d="M268 200 m0-84 a84 84 0 1 0 0 168 a84 84 0 1 0 0-168 Z
-               M300 200 m0-68 a68 68 0 1 1 0 136 a68 68 0 1 1 0-136 Z"
-            fill="#D21034" fillRule="evenodd"
-          />
-          {/* النجمة */}
-          <polygon points={starPoints(328, 200, 38, 16)} fill="#D21034" />
+
+        {/* ── الشعار: هلال + نجمة ── */}
+        <g fill="#D21034" filter={emblemFilter} className={glow ? 'dzl-flag-emblem' : undefined}>
+          {/*
+            الهلال الصحيح:
+            قوس خارجي (r=88) من (317,127) إلى (317,273) عكس عقارب الساعة
+            يعود بقوس داخلي (r=74) من (317,273) إلى (317,127) مع عقارب الساعة
+            ← يُنشئ شكل هلال يفتح نحو اليمين تماماً كالعلم 🇩🇿
+          */}
+          <path d="M 317 127 A 88 88 0 1 0 317 273 A 74 74 0 1 1 317 127 Z" />
+
+          {/* النجمة الخماسية — داخل فتحة الهلال */}
+          <polygon points={starPoints(333, 200, 36, 15)} />
         </g>
       </g>
     </>
@@ -111,7 +134,7 @@ export default function DZAnimatedLogo() {
         <div className="dzl-flag-wrap">
           <div className="dzl-flag-glow" />
           <svg className="dzl-flag-svg" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
-            <AlgeriaFlag id="big" />
+            <AlgeriaFlag id="big" glow />
             <rect x="1" y="1" width="598" height="398" rx="10" fill="none"
               stroke="url(#flag-border-grad-big)" strokeWidth="2.5"
               className="dzl-flag-border"

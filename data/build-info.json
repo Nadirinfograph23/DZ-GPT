@@ -1,8 +1,8 @@
 {
-  "commit": "a681d1c9741425b8f37bac1c8eb866ea70a0378e",
-  "commitShort": "a681d1c9",
+  "commit": "eb462fd63e73469be70bfae7b7673f959cd29fbc",
+  "commitShort": "eb462fd6",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إضافة مهارة تحميل الوسائط من منصات التواصل الاجتماعي — Download Intent Detector + MediaDownloadCard + /api/dz-agent/download",
-  "deployedAt": "2026-07-18T01:33:35.066508Z",
+  "message": "feat: إعادة تصميم بطاقة تحميل الوسائط — اختيار الجودة + شريط تحميل عالمي + إصلاح كشف كلمة تحميل + proxy endpoint",
+  "deployedAt": "2026-07-18T01:51:15.615862Z",
   "deployedBy": "scripts/deploy.py"
 }

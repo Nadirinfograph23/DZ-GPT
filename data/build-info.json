@@ -1,8 +1,8 @@
 {
-  "commit": "04145d93285a1d3f9a7784f56e3995a99d033719",
-  "commitShort": "04145d93",
+  "commit": "9b0317557bcfca6a1044958d44529637502c9fea",
+  "commitShort": "9b031755",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: لوغو يستقر على روبوت + علم صغير يرفرف",
-  "deployedAt": "2026-07-18T00:58:01.529448Z",
+  "message": "fix: هلال الجزائر صحيح رياضياً — قوس مزدوج بدل evenodd",
+  "deployedAt": "2026-07-18T01:05:31.832446Z",
   "deployedBy": "scripts/deploy.py"
 }

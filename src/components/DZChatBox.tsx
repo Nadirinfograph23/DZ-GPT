@@ -366,6 +366,7 @@ type RichType =
   | 'confirm-gate'
   | 'health-analysis'
   | 'weather-card'
+  | 'media-download'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -746,6 +747,18 @@ interface DZMessage {
     }> | null
     competition: string
     source: string
+  }
+  mediaDownload?: {
+    status: 'ready' | 'error' | 'pending'
+    url: string | null
+    title?: string
+    thumbnail?: string
+    duration?: number
+    uploader?: string
+    platform?: string | null
+    audio?: Array<{ url: string; ext: string; bitrate: number | null; size: number | null; mime: string | null; muxed?: boolean }>
+    video?: Array<{ url: string; quality: string | null; height: number | null; ext: string; size: number | null; mime: string | null; hasAudio: boolean }>
+    error?: string
   }
 }
 
@@ -1615,6 +1628,122 @@ function CodeAnalysisPanel({
 
       {data.issues.length === 0 && data.improvements.length === 0 && (
         <div className="ca-clean"><CheckCircle2 size={18} /> الكود نظيف — لا مشاكل مكتشفة</div>
+      )}
+    </div>
+  )
+}
+
+// ===== MEDIA DOWNLOAD CARD ================================================
+function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
+  const fmtSize = (b: number | null) => {
+    if (!b) return null
+    if (b > 1e9) return `${(b / 1e9).toFixed(1)} GB`
+    if (b > 1e6) return `${(b / 1e6).toFixed(1)} MB`
+    return `${(b / 1e3).toFixed(0)} KB`
+  }
+  const fmtDur = (s: number) => {
+    const h = Math.floor(s / 3600)
+    const m = Math.floor((s % 3600) / 60)
+    const sec = Math.floor(s % 60)
+    return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`
+  }
+  const PLATFORM_META: Record<string, { icon: string; color: string; label: string }> = {
+    youtube:    { icon: '📺', color: '#ff0000', label: 'YouTube' },
+    facebook:   { icon: '📘', color: '#1877f2', label: 'Facebook' },
+    tiktok:     { icon: '🎵', color: '#69c9d0', label: 'TikTok' },
+    instagram:  { icon: '📸', color: '#e1306c', label: 'Instagram' },
+    twitter:    { icon: '🐦', color: '#1d9bf0', label: 'Twitter/X' },
+    pinterest:  { icon: '📌', color: '#e60023', label: 'Pinterest' },
+    vimeo:      { icon: '🎬', color: '#1ab7ea', label: 'Vimeo' },
+    dailymotion:{ icon: '🎥', color: '#0066dc', label: 'Dailymotion' },
+  }
+  const pm = PLATFORM_META[data.platform || ''] || { icon: '⬇️', color: '#10a37f', label: 'وسائط' }
+
+  if (data.status === 'error') {
+    return (
+      <div className="dz-media-dl" style={{ borderColor: '#ef4444' }}>
+        <div className="dz-media-dl__head">
+          <span style={{ fontSize: 18 }}>{pm.icon}</span>
+          <span className="dz-media-dl__title" style={{ color: '#ef4444' }}>فشل استخراج الرابط</span>
+        </div>
+        <p className="dz-media-dl__error">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
+        {data.url && (
+          <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-media-dl__orig-link">
+            🔗 فتح الرابط الأصلي
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  const audioFmts = (data.audio || []).filter(a => !a.muxed).slice(0, 2).concat((data.audio || []).filter(a => a.muxed).slice(0, 1))
+  const videoFmts = (data.video || []).filter(v => v.hasAudio).slice(0, 4)
+
+  return (
+    <div className="dz-media-dl">
+      {/* Header */}
+      <div className="dz-media-dl__head">
+        <span style={{ fontSize: 18 }}>{pm.icon}</span>
+        <span className="dz-media-dl__platform" style={{ background: `${pm.color}22`, color: pm.color }}>
+          {pm.label}
+        </span>
+      </div>
+
+      {/* Thumbnail + meta */}
+      <div className="dz-media-dl__info">
+        {data.thumbnail && (
+          <img src={data.thumbnail} alt={data.title} className="dz-media-dl__thumb" loading="lazy" />
+        )}
+        <div className="dz-media-dl__meta">
+          <div className="dz-media-dl__title">{data.title || 'بدون عنوان'}</div>
+          {data.uploader && <div className="dz-media-dl__sub">👤 {data.uploader}</div>}
+          {data.duration ? <div className="dz-media-dl__sub">⏱️ {fmtDur(data.duration)}</div> : null}
+        </div>
+      </div>
+
+      {/* Audio formats */}
+      {audioFmts.length > 0 && (
+        <div className="dz-media-dl__section">
+          <div className="dz-media-dl__section-label">🎵 صوت (MP3)</div>
+          <div className="dz-media-dl__btns">
+            {audioFmts.map((a, i) => (
+              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+                className="dz-media-dl__btn dz-media-dl__btn--audio">
+                ⬇ {a.ext?.toUpperCase() || 'AUDIO'}
+                {a.bitrate ? ` · ${Math.round(a.bitrate)}kbps` : ''}
+                {fmtSize(a.size) ? ` · ${fmtSize(a.size)}` : ''}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Video formats */}
+      {videoFmts.length > 0 && (
+        <div className="dz-media-dl__section">
+          <div className="dz-media-dl__section-label">🎬 فيديو</div>
+          <div className="dz-media-dl__btns">
+            {videoFmts.map((v, i) => (
+              <a key={i} href={v.url} target="_blank" rel="noopener noreferrer"
+                className="dz-media-dl__btn dz-media-dl__btn--video">
+                ⬇ {v.quality || (v.height ? `${v.height}p` : v.ext?.toUpperCase())}
+                {fmtSize(v.size) ? ` · ${fmtSize(v.size)}` : ''}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {audioFmts.length === 0 && videoFmts.length === 0 && (
+        <p className="dz-media-dl__error" style={{ color: '#f59e0b' }}>
+          ⚠️ لم يتم العثور على روابط قابلة للتحميل — قد يكون المحتوى محمياً
+        </p>
+      )}
+
+      {data.url && (
+        <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-media-dl__orig-link">
+          🔗 الرابط الأصلي
+        </a>
       )}
     </div>
   )
@@ -7941,6 +8070,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
+      // ── Media Download Card — بطاقة تحميل الوسائط الاجتماعية ────────────
+      if (data.richType === 'media-download' && data.mediaDownload) {
+        addAssistantMessage({
+          content: (data.content as string) || '⬇️ جاهز للتحميل',
+          richType: 'media-download',
+          mediaDownload: data.mediaDownload as DZMessage['mediaDownload'],
+          model: data.model as string | undefined,
+        })
+        return
+      }
+
       // ── DZ Health Analysis — بطاقة التحليل الطبي ────────────────────────
       if (data.richType === 'health-analysis' && data.healthData) {
         addAssistantMessage({
@@ -9181,6 +9321,11 @@ ${rows}
                           </div>
                         </div>
                       )}
+                      {/* ── Media Download Card ──────────────────────── */}
+                      {msg.richType === 'media-download' && msg.mediaDownload && (
+                        <MediaDownloadCard data={msg.mediaDownload} />
+                      )}
+
                       {msg.richType === 'image' && msg.videoUrl && (
                         <div className="dz-video-card">
                           <video

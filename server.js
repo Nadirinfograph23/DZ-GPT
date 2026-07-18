@@ -15977,6 +15977,66 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  // 📥 DOWNLOAD MEDIA GUARDIAN — كاشف نوايا تحميل الوسائط الاجتماعية
+  // يعمل مباشرة بعد حراس الهوية، قبل Sports Guardian
+  // يدعم: YouTube, Facebook, TikTok, Instagram, Pinterest, X/Twitter, Vimeo, Dailymotion
+  // الأولوية: Intent Detector → Media Extractor → yt-dlp → Response Generator
+  // ══════════════════════════════════════════════════════════════════════
+  {
+    const _dlRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+    const _dlIntent = detectDownloadIntent(_dlRaw)
+    if (_dlIntent.intent === 'DOWNLOAD_MEDIA') {
+      const _dlUrl = _dlRaw.match(/https?:\/\/[^\s<>"،,\u060C\u061B\u200c]+/)?.[0]?.replace(/[.,;!?'"،\u200c]+$/, '') || null
+      if (_dlUrl && isValidMediaPlatformUrl(_dlUrl)) {
+        console.log(`[DownloadGuardian] 📥 platform=${_dlIntent.platform} conf=${_dlIntent.confidence} kw=${_dlIntent.detected_keywords.join(',')} url=${_dlUrl.slice(0, 60)}`)
+        try {
+          const _dlInfo = await extractMediaInfoAny(_dlUrl)
+          // Best formats: up to 4 video qualities with audio, up to 3 audio-only
+          const _bestVideo = (_dlInfo.video || []).filter(v => v.hasAudio).slice(0, 4)
+            .concat((_dlInfo.video || []).filter(v => !v.hasAudio).slice(0, 1))
+          const _bestAudio = (_dlInfo.audio || []).filter(a => !a.muxed).slice(0, 2)
+            .concat((_dlInfo.audio || []).filter(a => a.muxed).slice(0, 1))
+          return res.status(200).json({
+            richType: 'media-download',
+            content: `⬇️ **${_dlInfo.title || 'وسائط'}**`,
+            mediaDownload: {
+              status: 'ready',
+              url: _dlUrl,
+              title: _dlInfo.title,
+              thumbnail: _dlInfo.thumbnail,
+              duration: _dlInfo.duration,
+              uploader: _dlInfo.uploader,
+              platform: _dlIntent.platform,
+              audio: _bestAudio,
+              video: _bestVideo,
+            },
+            model: 'download-guardian',
+          })
+        } catch (_dlErr) {
+          console.warn('[DownloadGuardian] extraction failed:', _dlErr.message?.slice(0, 100))
+          return res.status(200).json({
+            richType: 'media-download',
+            content: `⚠️ تعذّر استخراج الرابط من هذه المنصة.`,
+            mediaDownload: {
+              status: 'error',
+              url: _dlUrl,
+              platform: _dlIntent.platform,
+              error: _dlErr.message?.slice(0, 200),
+            },
+            model: 'download-guardian',
+          })
+        }
+      } else if (!_dlUrl && _dlIntent.confidence >= 0.75) {
+        // Has download keywords but no recognized URL — ask for the link
+        return res.status(200).json({
+          content: `📥 **تحميل الوسائط** — أرسل لي الرابط الذي تريد تحميله:\n\n| المنصة | مثال |\n|--------|------|\n| 📺 YouTube | \`https://youtube.com/watch?v=...\` |\n| 📘 Facebook | \`https://facebook.com/...\` |\n| 🎵 TikTok | \`https://tiktok.com/...\` |\n| 📸 Instagram | \`https://instagram.com/...\` |\n| 🐦 Twitter/X | \`https://x.com/...\` |\n| 🎬 Vimeo | \`https://vimeo.com/...\` |\n| 🎥 Dailymotion | \`https://dailymotion.com/...\` |`,
+          model: 'download-guardian',
+        })
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   // 🏥 DZTOOLS EARLY BYPASS — قبل كل شيء بما فيه Sports Guardians
   // طلبات tool='health' يجب أن تصل مباشرةً لوكيل الصحة دون المرور
   // بأي guard رياضي قد يُخطئ في تفسير النص الطبي (مصادر→مصر / المريض→المغرب)
@@ -28637,6 +28697,81 @@ function isValidYouTubeUrl(u) {
   } catch { return false }
 }
 
+// ── Social media platform URL validator (all yt-dlp supported platforms) ──────
+function isValidMediaPlatformUrl(u) {
+  if (typeof u !== 'string' || u.length > 2048) return false
+  try {
+    const host = new URL(u).hostname.replace(/^(www\.|m\.|l\.|vm\.)/i, '')
+    return /^(youtube\.com|youtu\.be|music\.youtube\.com|facebook\.com|fb\.watch|tiktok\.com|instagram\.com|pinterest\.com|x\.com|twitter\.com|vimeo\.com|dailymotion\.com)$/i.test(host)
+  } catch { return false }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 📥 DOWNLOAD INTENT DETECTOR — كاشف نوايا تحميل الوسائط الاجتماعية
+// Spec: DOWNLOAD_MEDIA | NORMAL_CHAT + confidence + platform + detected_keywords
+// ══════════════════════════════════════════════════════════════════════════════
+function detectDownloadIntent(text) {
+  const empty = { intent: 'NORMAL_CHAT', confidence: 0, platform: null, detected_keywords: [] }
+  if (!text || typeof text !== 'string') return empty
+  const t = text.trim()
+
+  // ── Detect platform from URL ──────────────────────────────────────────────
+  let platform = null
+  const urlRe = /https?:\/\/[^\s<>"،,\u060C\u061B\u200c]+/
+  const urlMatch = t.match(urlRe)
+  if (urlMatch) {
+    try {
+      const host = new URL(urlMatch[0]).hostname.replace(/^(www\.|m\.|vm\.|l\.)/i, '')
+      if (/youtu\.?be/.test(host))                   platform = 'youtube'
+      else if (/facebook\.com|fb\.watch/.test(host)) platform = 'facebook'
+      else if (/tiktok\.com/.test(host))             platform = 'tiktok'
+      else if (/instagram\.com/.test(host))          platform = 'instagram'
+      else if (/pinterest\.com/.test(host))          platform = 'pinterest'
+      else if (/x\.com|twitter\.com/.test(host))     platform = 'twitter'
+      else if (/vimeo\.com/.test(host))              platform = 'vimeo'
+      else if (/dailymotion\.com/.test(host))        platform = 'dailymotion'
+    } catch {}
+  }
+
+  const detected_keywords = []
+
+  // ── Arabic keywords ───────────────────────────────────────────────────────
+  const arKws = [
+    [/حمّ?ل/i, 'حمّل'], [/نزّ?ل/i, 'نزّل'], [/هبط(?!ة|ات)/i, 'هبط'],
+    [/هبطلي/i, 'هبطلي'], [/نزّ?للي/i, 'نزّللي'],
+    [/جيبلي\s+الفيديو/i, 'جيبلي الفيديو'], [/جيبلي\s+الصوت/i, 'جيبلي الصوت'],
+    [/دير\s+تحميل/i, 'دير تحميل'], [/استخرج\s+الصوت/i, 'استخرج الصوت'],
+    [/حول\s+إلى\s+mp3/i, 'حول إلى mp3'], [/حولو?\s+ل\s*mp3/i, 'حول إلى mp3'],
+    [/ابعثلي\s+الفيديو/i, 'ابعثلي الفيديو'], [/عطيني\s+الفيديو/i, 'عطيني الفيديو'],
+    [/خرجلي\s+الأغنية/i, 'خرجلي الأغنية'],
+  ]
+  for (const [re, kw] of arKws) { if (re.test(t)) detected_keywords.push(kw) }
+
+  // ── French keywords ───────────────────────────────────────────────────────
+  const frKws = [
+    [/télécharg/i, 'télécharger'], [/récupère\s+la\s+vidéo/i, 'récupère la vidéo'],
+    [/récupère\s+l.audio/i, "récupère l'audio"], [/convertis\s+en\s+mp3/i, 'convertis en mp3'],
+  ]
+  for (const [re, kw] of frKws) { if (re.test(t)) detected_keywords.push(kw) }
+
+  // ── English keywords ──────────────────────────────────────────────────────
+  const enKws = [
+    [/\bdownload\b/i, 'download'], [/save\s+video/i, 'save video'],
+    [/save\s+audio/i, 'save audio'], [/\bmp3\b/i, 'mp3'],
+    [/extract\s+audio/i, 'extract audio'], [/get\s+video/i, 'get video'],
+  ]
+  for (const [re, kw] of enKws) { if (re.test(t)) detected_keywords.push(kw) }
+
+  if (detected_keywords.length === 0) return { intent: 'NORMAL_CHAT', confidence: 0, platform, detected_keywords }
+
+  // Condition 1: supported URL + download keyword → high confidence
+  if (platform && detected_keywords.length > 0) {
+    return { intent: 'DOWNLOAD_MEDIA', confidence: 0.97, platform, detected_keywords }
+  }
+  // Condition 2-4: keywords only (no URL) → still DOWNLOAD_MEDIA, lower confidence
+  return { intent: 'DOWNLOAD_MEDIA', confidence: 0.82, platform: null, detected_keywords }
+}
+
 function extractYouTubeVideoId(u) {
   try {
     const url = new URL(u)
@@ -28901,6 +29036,20 @@ async function extractWithYtDlp(url) {
     thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
     uploader: data.uploader || data.channel || '',
     formats: data.formats || [],
+  }
+}
+
+// Multi-platform media info extraction — uses yt-dlp which supports all social platforms
+async function extractMediaInfoAny(url) {
+  const raw = await extractWithYtDlp(url)
+  const { audio, video } = processFormats(raw.formats)
+  return {
+    title: raw.title,
+    duration: raw.duration,
+    thumbnail: raw.thumbnail,
+    uploader: raw.uploader,
+    audio,
+    video,
   }
 }
 
@@ -29393,6 +29542,26 @@ app.post('/api/dz-github-agent/chat', aiLimiter, async (req, res) => {
 function antiBanDelay(maxMs = 800) {
   return new Promise(r => setTimeout(r, Math.floor(Math.random() * maxMs)))
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 📥 /api/dz-agent/download — multi-platform media info endpoint
+// Frontend calls this directly to refresh/retry failed extractions
+// ══════════════════════════════════════════════════════════════════════════════
+app.get('/api/dz-agent/download', aiLimiter, async (req, res) => {
+  const url = String(req.query.url || '').trim()
+  if (!url) return res.status(400).json({ ok: false, error: 'Missing url parameter' })
+  if (!isValidMediaPlatformUrl(url)) return res.status(400).json({ ok: false, error: 'Unsupported platform URL' })
+  const cached = extractCacheGet(url)
+  if (cached) return res.json({ ok: true, ...cached, cached: true })
+  try {
+    const info = await extractMediaInfoAny(url)
+    extractCacheSet(url, info)
+    return res.json({ ok: true, ...info })
+  } catch (e) {
+    console.warn('[download-endpoint]', e.message?.slice(0, 100))
+    return res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
+  }
+})
 
 app.get('/api/extract', aiLimiter, async (req, res) => {
   const url = String(req.query.url || '').trim()

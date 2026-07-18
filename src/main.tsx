@@ -53,6 +53,7 @@ function PageLoader() {
 import { startVersionChecker } from './utils/versionChecker.ts'
 import { MiniPlayerProvider } from './context/MiniPlayerContext.tsx'
 import { RadioPlayerProvider } from './context/RadioPlayerContext.tsx'
+import { DownloadProvider } from './context/DownloadContext.tsx'
 import MiniPlayer from './components/MiniPlayer.tsx'
 import RadioMiniPlayer from './components/RadioMiniPlayer.tsx'
 import QuickNav from './components/QuickNav.tsx'
@@ -188,6 +189,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <BrowserRouter>
         <MiniPlayerProvider>
+          <DownloadProvider>
           <RadioPlayerProvider>
           <Suspense fallback={<PageLoader />}>
           <Routes>
@@ -222,6 +224,7 @@ createRoot(document.getElementById('root')!).render(
           <QuickNav />
           <GlobalRobot />
           </RadioPlayerProvider>
+          </DownloadProvider>
         </MiniPlayerProvider>
       </BrowserRouter>
     </ErrorBoundary>

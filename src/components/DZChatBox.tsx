@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
+import { useDownload, getPlatformMeta } from '../context/DownloadContext'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
 import DZAnimatedLogo from './DZAnimatedLogo'
@@ -1634,41 +1635,98 @@ function CodeAnalysisPanel({
 }
 
 // ===== MEDIA DOWNLOAD CARD ================================================
-function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
-  const fmtSize = (b: number | null) => {
-    if (!b) return null
-    if (b > 1e9) return `${(b / 1e9).toFixed(1)} GB`
-    if (b > 1e6) return `${(b / 1e6).toFixed(1)} MB`
-    return `${(b / 1e3).toFixed(0)} KB`
-  }
-  const fmtDur = (s: number) => {
-    const h = Math.floor(s / 3600)
-    const m = Math.floor((s % 3600) / 60)
-    const sec = Math.floor(s % 60)
-    return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : `${m}:${String(sec).padStart(2,'0')}`
-  }
-  const PLATFORM_META: Record<string, { icon: string; color: string; label: string }> = {
-    youtube:    { icon: '📺', color: '#ff0000', label: 'YouTube' },
-    facebook:   { icon: '📘', color: '#1877f2', label: 'Facebook' },
-    tiktok:     { icon: '🎵', color: '#69c9d0', label: 'TikTok' },
-    instagram:  { icon: '📸', color: '#e1306c', label: 'Instagram' },
-    twitter:    { icon: '🐦', color: '#1d9bf0', label: 'Twitter/X' },
-    pinterest:  { icon: '📌', color: '#e60023', label: 'Pinterest' },
-    vimeo:      { icon: '🎬', color: '#1ab7ea', label: 'Vimeo' },
-    dailymotion:{ icon: '🎥', color: '#0066dc', label: 'Dailymotion' },
-  }
-  const pm = PLATFORM_META[data.platform || ''] || { icon: '⬇️', color: '#10a37f', label: 'وسائط' }
+// ── Shared helpers ─────────────────────────────────────────────
+const _fmtSize = (b: number | null) => {
+  if (!b) return null
+  if (b > 1e9) return `${(b / 1e9).toFixed(1)} GB`
+  if (b > 1e6) return `${(b / 1e6).toFixed(1)} MB`
+  return `${(b / 1e3).toFixed(0)} KB`
+}
+const _fmtDur = (s: number) => {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = Math.floor(s % 60)
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${m}:${String(sec).padStart(2,'0')}`
+}
 
+// ── Quality badge helper ────────────────────────────────────────
+type QualityTier = '4k' | 'fhd' | 'hd' | 'sd' | 'ld'
+const qualityTier = (h: number | null): QualityTier => {
+  if (!h) return 'ld'
+  if (h >= 2160) return '4k'
+  if (h >= 1080) return 'fhd'
+  if (h >= 720)  return 'hd'
+  if (h >= 480)  return 'sd'
+  return 'ld'
+}
+const QUALITY_BADGE: Record<QualityTier, { label: string; color: string; bg: string }> = {
+  '4k':  { label: '4K',   color: '#fbbf24', bg: 'rgba(251,191,36,.15)' },
+  'fhd': { label: '1080p', color: '#34d399', bg: 'rgba(52,211,153,.12)' },
+  'hd':  { label: '720p',  color: '#60a5fa', bg: 'rgba(96,165,250,.12)' },
+  'sd':  { label: '480p',  color: '#a78bfa', bg: 'rgba(167,139,250,.12)' },
+  'ld':  { label: 'SD',    color: '#94a3b8', bg: 'rgba(148,163,184,.10)' },
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 📥 MEDIA DOWNLOAD CARD v2 — بطاقة اختيار الجودة + تحميل بشريط التقدم
+// ══════════════════════════════════════════════════════════════════
+function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
+  const { startDownload } = useDownload()
+  const pm = getPlatformMeta(data.platform ?? null)
+
+  // selection state: { type: 'video'|'audio', index: number }
+  const [sel, setSel] = useState<{ type: 'video' | 'audio'; index: number } | null>(null)
+
+  // Build selectable format lists
+  const videoFmts = useMemo(() =>
+    (data.video || [])
+      .filter(v => v.hasAudio)
+      .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
+      .slice(0, 6),
+    [data.video],
+  )
+  const audioFmts = useMemo(() =>
+    (data.audio || [])
+      .filter(a => !a.muxed)
+      .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
+      .slice(0, 3)
+      .concat((data.audio || []).filter(a => a.muxed).slice(0, 1)),
+    [data.audio],
+  )
+
+  // Default selection: best video with audio
+  useEffect(() => {
+    if (videoFmts.length > 0) setSel({ type: 'video', index: 0 })
+    else if (audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
+  }, [videoFmts.length, audioFmts.length])
+
+  const handleDownload = () => {
+    if (!sel) return
+    const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
+    if (!fmt) return
+    const safeName = (data.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
+    startDownload({
+      cdnUrl: fmt.url,
+      filename: safeName,
+      ext: sel.type === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4'),
+      platform: data.platform ?? null,
+      size: fmt.size ?? null,
+    })
+  }
+
+  // ── Error state ────────────────────────────────────────────────
   if (data.status === 'error') {
     return (
-      <div className="dz-media-dl" style={{ borderColor: '#ef4444' }}>
-        <div className="dz-media-dl__head">
-          <span style={{ fontSize: 18 }}>{pm.icon}</span>
-          <span className="dz-media-dl__title" style={{ color: '#ef4444' }}>فشل استخراج الرابط</span>
+      <div className="dz-mdl dz-mdl--error">
+        <div className="dz-mdl__head">
+          <span className="dz-mdl__picon">{pm.icon}</span>
+          <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
         </div>
-        <p className="dz-media-dl__error">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
+        <p className="dz-mdl__errmsg">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
         {data.url && (
-          <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-media-dl__orig-link">
+          <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
             🔗 فتح الرابط الأصلي
           </a>
         )}
@@ -1676,72 +1734,132 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
     )
   }
 
-  const audioFmts = (data.audio || []).filter(a => !a.muxed).slice(0, 2).concat((data.audio || []).filter(a => a.muxed).slice(0, 1))
-  const videoFmts = (data.video || []).filter(v => v.hasAudio).slice(0, 4)
+  const hasFormats = videoFmts.length > 0 || audioFmts.length > 0
 
   return (
-    <div className="dz-media-dl">
-      {/* Header */}
-      <div className="dz-media-dl__head">
-        <span style={{ fontSize: 18 }}>{pm.icon}</span>
-        <span className="dz-media-dl__platform" style={{ background: `${pm.color}22`, color: pm.color }}>
+    <div className="dz-mdl">
+      {/* ── Top: platform badge + title ── */}
+      <div className="dz-mdl__head">
+        <span className="dz-mdl__picon">{pm.icon}</span>
+        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>
           {pm.label}
         </span>
       </div>
 
-      {/* Thumbnail + meta */}
-      <div className="dz-media-dl__info">
+      {/* ── Thumbnail + meta ── */}
+      <div className="dz-mdl__info">
         {data.thumbnail && (
-          <img src={data.thumbnail} alt={data.title} className="dz-media-dl__thumb" loading="lazy" />
+          <img src={data.thumbnail} alt="" className="dz-mdl__thumb" loading="lazy" />
         )}
-        <div className="dz-media-dl__meta">
-          <div className="dz-media-dl__title">{data.title || 'بدون عنوان'}</div>
-          {data.uploader && <div className="dz-media-dl__sub">👤 {data.uploader}</div>}
-          {data.duration ? <div className="dz-media-dl__sub">⏱️ {fmtDur(data.duration)}</div> : null}
+        <div className="dz-mdl__meta">
+          <div className="dz-mdl__title">{data.title || 'بدون عنوان'}</div>
+          {data.uploader && <div className="dz-mdl__sub">👤 {data.uploader}</div>}
+          {!!data.duration && <div className="dz-mdl__sub">⏱ {_fmtDur(data.duration)}</div>}
         </div>
       </div>
 
-      {/* Audio formats */}
-      {audioFmts.length > 0 && (
-        <div className="dz-media-dl__section">
-          <div className="dz-media-dl__section-label">🎵 صوت (MP3)</div>
-          <div className="dz-media-dl__btns">
-            {audioFmts.map((a, i) => (
-              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
-                className="dz-media-dl__btn dz-media-dl__btn--audio">
-                ⬇ {a.ext?.toUpperCase() || 'AUDIO'}
-                {a.bitrate ? ` · ${Math.round(a.bitrate)}kbps` : ''}
-                {fmtSize(a.size) ? ` · ${fmtSize(a.size)}` : ''}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Video formats */}
-      {videoFmts.length > 0 && (
-        <div className="dz-media-dl__section">
-          <div className="dz-media-dl__section-label">🎬 فيديو</div>
-          <div className="dz-media-dl__btns">
-            {videoFmts.map((v, i) => (
-              <a key={i} href={v.url} target="_blank" rel="noopener noreferrer"
-                className="dz-media-dl__btn dz-media-dl__btn--video">
-                ⬇ {v.quality || (v.height ? `${v.height}p` : v.ext?.toUpperCase())}
-                {fmtSize(v.size) ? ` · ${fmtSize(v.size)}` : ''}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {audioFmts.length === 0 && videoFmts.length === 0 && (
-        <p className="dz-media-dl__error" style={{ color: '#f59e0b' }}>
-          ⚠️ لم يتم العثور على روابط قابلة للتحميل — قد يكون المحتوى محمياً
+      {/* ── No formats warning ── */}
+      {!hasFormats && (
+        <p className="dz-mdl__errmsg" style={{ color: '#f59e0b' }}>
+          ⚠️ لا توجد روابط قابلة للتحميل — قد يكون المحتوى محمياً أو خاصاً
         </p>
       )}
 
+      {/* ── Video quality selector ── */}
+      {videoFmts.length > 0 && (
+        <div className="dz-mdl__section">
+          <div className="dz-mdl__section-hd">
+            <span className="dz-mdl__section-icon">🎬</span>
+            <span className="dz-mdl__section-label">جودة الفيديو</span>
+          </div>
+          <div className="dz-mdl__opts">
+            {videoFmts.map((v, i) => {
+              const tier = qualityTier(v.height)
+              const badge = QUALITY_BADGE[tier]
+              const active = sel?.type === 'video' && sel.index === i
+              return (
+                <button
+                  key={i}
+                  className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
+                  style={active ? { borderColor: pm.color, background: `${pm.color}14` } : {}}
+                  onClick={() => setSel({ type: 'video', index: i })}
+                >
+                  <span className="dz-mdl__radio">
+                    <span className="dz-mdl__radio-dot" style={active ? { background: pm.color } : {}} />
+                  </span>
+                  <span className="dz-mdl__opt-badge" style={{ background: badge.bg, color: badge.color }}>
+                    {badge.label}
+                  </span>
+                  <span className="dz-mdl__opt-ext">{v.ext?.toUpperCase()}</span>
+                  {_fmtSize(v.size) && (
+                    <span className="dz-mdl__opt-size">{_fmtSize(v.size)}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Audio selector ── */}
+      {audioFmts.length > 0 && (
+        <div className="dz-mdl__section">
+          <div className="dz-mdl__section-hd">
+            <span className="dz-mdl__section-icon">🎵</span>
+            <span className="dz-mdl__section-label">صوت فقط</span>
+          </div>
+          <div className="dz-mdl__opts">
+            {audioFmts.map((a, i) => {
+              const active = sel?.type === 'audio' && sel.index === i
+              return (
+                <button
+                  key={i}
+                  className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
+                  style={active ? { borderColor: '#10a37f', background: 'rgba(16,163,127,.12)' } : {}}
+                  onClick={() => setSel({ type: 'audio', index: i })}
+                >
+                  <span className="dz-mdl__radio">
+                    <span className="dz-mdl__radio-dot" style={active ? { background: '#10a37f' } : {}} />
+                  </span>
+                  <span className="dz-mdl__opt-badge" style={{ background: 'rgba(16,163,127,.15)', color: '#10a37f' }}>
+                    {a.ext?.toUpperCase() || 'AUDIO'}
+                  </span>
+                  {a.bitrate && (
+                    <span className="dz-mdl__opt-ext">{Math.round(a.bitrate)}kbps</span>
+                  )}
+                  {_fmtSize(a.size) && (
+                    <span className="dz-mdl__opt-size">{_fmtSize(a.size)}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Download button ── */}
+      {hasFormats && (
+        <button
+          className="dz-mdl__dl-btn"
+          style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}cc)` }}
+          onClick={handleDownload}
+          disabled={!sel}
+        >
+          <Download size={15} />
+          تحميل {sel?.type === 'audio' ? 'الصوت' : 'الفيديو'}
+          {sel && (() => {
+            const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
+            if (!fmt) return null
+            const sz = _fmtSize(fmt.size)
+            if (!sz) return null
+            return <span className="dz-mdl__dl-size">({sz})</span>
+          })()}
+        </button>
+      )}
+
+      {/* ── Original link ── */}
       {data.url && (
-        <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-media-dl__orig-link">
+        <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
           🔗 الرابط الأصلي
         </a>
       )}

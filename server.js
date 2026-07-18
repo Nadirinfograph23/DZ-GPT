@@ -28737,13 +28737,20 @@ function detectDownloadIntent(text) {
 
   // ── Arabic keywords ───────────────────────────────────────────────────────
   const arKws = [
+    // Verb forms
     [/حمّ?ل/i, 'حمّل'], [/نزّ?ل/i, 'نزّل'], [/هبط(?!ة|ات)/i, 'هبط'],
     [/هبطلي/i, 'هبطلي'], [/نزّ?للي/i, 'نزّللي'],
+    // Noun / gerund forms — الأشكال الاسمية
+    [/تحميل/i, 'تحميل'], [/تنزيل/i, 'تنزيل'], [/تهبيط/i, 'تهبيط'],
+    [/حمّ?له?ا?/i, 'تحميل'],
+    // Commands / requests
     [/جيبلي\s+الفيديو/i, 'جيبلي الفيديو'], [/جيبلي\s+الصوت/i, 'جيبلي الصوت'],
     [/دير\s+تحميل/i, 'دير تحميل'], [/استخرج\s+الصوت/i, 'استخرج الصوت'],
     [/حول\s+إلى\s+mp3/i, 'حول إلى mp3'], [/حولو?\s+ل\s*mp3/i, 'حول إلى mp3'],
     [/ابعثلي\s+الفيديو/i, 'ابعثلي الفيديو'], [/عطيني\s+الفيديو/i, 'عطيني الفيديو'],
     [/خرجلي\s+الأغنية/i, 'خرجلي الأغنية'],
+    // Darja shortcuts
+    [/حملو?لي/i, 'حمّللي'], [/نزلو?لي/i, 'نزّللي'],
   ]
   for (const [re, kw] of arKws) { if (re.test(t)) detected_keywords.push(kw) }
 
@@ -29542,6 +29549,70 @@ app.post('/api/dz-github-agent/chat', aiLimiter, async (req, res) => {
 function antiBanDelay(maxMs = 800) {
   return new Promise(r => setTimeout(r, Math.floor(Math.random() * maxMs)))
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// 📥 /api/dz-agent/download-proxy — تدفق الملف عبر الخادم مع Content-Length
+// يُتيح للمتصفح تتبع نسبة التحميل عبر ReadableStream
+// ══════════════════════════════════════════════════════════════════════════════
+app.get('/api/dz-agent/download-proxy', async (req, res) => {
+  const rawUrl  = String(req.query.url      || '').trim()
+  const rawName = String(req.query.filename || 'download').trim()
+  const ext     = String(req.query.ext      || 'mp4').trim().replace(/[^a-z0-9]/gi, '')
+  if (!rawUrl) return res.status(400).json({ ok: false, error: 'url required' })
+
+  // Build a safe filename (allow Arabic + latin + basic punctuation)
+  const safeName = rawName.replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 180) || 'download'
+
+  // Headers that mimic a real browser — needed for YouTube CDN
+  const upstreamHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Referer': 'https://www.youtube.com/',
+    'Origin': 'https://www.youtube.com',
+  }
+
+  let upstream
+  try {
+    upstream = await fetch(rawUrl, { headers: upstreamHeaders })
+    if (!upstream.ok) {
+      return res.status(502).json({ ok: false, error: `Upstream ${upstream.status} ${upstream.statusText}` })
+    }
+  } catch (e) {
+    return res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
+  }
+
+  const ct = upstream.headers.get('content-type') || `video/${ext}`
+  const cl = upstream.headers.get('content-length')
+  const cr = upstream.headers.get('content-range')
+
+  res.setHeader('Content-Type', ct)
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeName + '.' + ext)}`)
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  if (cl)  res.setHeader('Content-Length', cl)
+  if (cr)  res.setHeader('Content-Range', cr)
+
+  // Stream body to client
+  const reader = upstream.body.getReader()
+  req.on('close', () => { try { reader.cancel() } catch {} })
+
+  const pump = async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) { res.end(); return }
+        const ok = res.write(Buffer.from(value))
+        if (!ok) await new Promise(r => res.once('drain', r))
+      }
+    } catch (e) {
+      if (!res.headersSent) res.status(502).json({ ok: false, error: e.message?.slice(0, 200) })
+      else res.destroy()
+    }
+  }
+  pump()
+})
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 📥 /api/dz-agent/download — multi-platform media info endpoint

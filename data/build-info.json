@@ -1,8 +1,8 @@
 {
-  "commit": "eb462fd63e73469be70bfae7b7673f959cd29fbc",
-  "commitShort": "eb462fd6",
+  "commit": "09445f1705e794fffdda0857c7d92b9262986b42",
+  "commitShort": "09445f17",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إعادة تصميم بطاقة تحميل الوسائط — اختيار الجودة + شريط تحميل عالمي + إصلاح كشف كلمة تحميل + proxy endpoint",
-  "deployedAt": "2026-07-18T01:51:15.615862Z",
+  "message": "feat: browser-side media extraction (bypass server IP blocks)",
+  "deployedAt": "2026-07-18T02:09:06.959589Z",
   "deployedBy": "scripts/deploy.py"
 }

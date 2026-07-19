@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 
 // ══════════════════════════════════════════════════════════════════
 // 📥 GLOBAL DOWNLOAD CONTEXT — شريط التحميل العالمي
+// يظهر في كل الصفحات عبر createPortal على document.body
 // ══════════════════════════════════════════════════════════════════
 
 export interface DownloadJob {
@@ -11,7 +12,6 @@ export interface DownloadJob {
   ext: string
   platform: string | null
   platformIcon: string
-  proxyUrl: string
   progress: number    // 0–100
   speed: number       // bytes/sec
   eta: number         // seconds remaining
@@ -41,7 +41,7 @@ export function useDownload() {
   return c
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
+// ── Platform metadata ─────────────────────────────────────────────
 const PLATFORM_META: Record<string, { icon: string; color: string; label: string }> = {
   youtube:     { icon: '📺', color: '#ff0000', label: 'YouTube' },
   facebook:    { icon: '📘', color: '#1877f2', label: 'Facebook' },
@@ -68,7 +68,7 @@ function fmtEta(s: number) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// GlobalDownloadBar — يُعرض داخل Portal على body
+// GlobalDownloadBar — fixed bottom, visible on every page
 // ══════════════════════════════════════════════════════════════════
 function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (id: string) => void }) {
   if (jobs.length === 0) return null
@@ -100,6 +100,7 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
                         {job.total > 0 && <>{fmtBytes(job.loaded)} / {fmtBytes(job.total)} &nbsp;·&nbsp;</>}
                         {job.speed > 0 && <>{fmtBytes(job.speed)}/ث &nbsp;·&nbsp;</>}
                         {job.eta > 0 && <>متبقي {fmtEta(job.eta)}</>}
+                        {job.total === 0 && job.loaded > 0 && <>{fmtBytes(job.loaded)} مُحمَّل</>}
                       </>
                   }
                 </span>
@@ -109,9 +110,9 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
             {/* Progress bar */}
             <div className="gdl-bar-wrap">
               <div
-                className="gdl-bar-fill"
+                className={`gdl-bar-fill ${job.total === 0 && !isDone && !isErr ? 'gdl-bar-fill--indeterminate' : ''}`}
                 style={{
-                  width: `${isDone ? 100 : prog}%`,
+                  width: job.total === 0 && !isDone ? undefined : `${isDone ? 100 : prog}%`,
                   background: barColor,
                   boxShadow: !isDone && !isErr ? `0 0 8px ${barColor}80` : 'none',
                 }}
@@ -121,7 +122,7 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
             {/* Percent + dismiss */}
             <div className="gdl-right">
               <span className="gdl-pct" style={{ color: barColor }}>
-                {isErr ? '✕' : isDone ? '100%' : `${prog}%`}
+                {isErr ? '✕' : isDone ? '100%' : job.total > 0 ? `${prog}%` : '…'}
               </span>
               <button className="gdl-dismiss" onClick={() => dismiss(job.id)} title="إغلاق">✕</button>
             </div>
@@ -134,7 +135,10 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
 }
 
 // ══════════════════════════════════════════════════════════════════
-// DownloadProvider
+// DownloadProvider — manages download jobs
+// Strategy:
+//   1. Try DIRECT browser fetch (works for Vimeo CDN, TikTok CDN, Twitter CDN)
+//   2. Fall back to server proxy if CORS/error (Instagram, Facebook, Pinterest)
 // ══════════════════════════════════════════════════════════════════
 export function DownloadProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<DownloadJob[]>([])
@@ -155,26 +159,28 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   }) => {
     const id = `dl-${Date.now()}-${++counter.current}`
     const pm = getPlatformMeta(platform)
-    const job: DownloadJob = {
+    setJobs(prev => [...prev, {
       id, filename, ext, platform, platformIcon: pm.icon,
-      proxyUrl: cdnUrl,
       progress: 0, speed: 0, eta: 0, loaded: 0, total: size ?? 0,
       status: 'downloading',
-    }
-    setJobs(prev => [...prev, job])
+    }])
 
-    try {
-      const proxyUrl = `/api/dz-agent/download-proxy?url=${encodeURIComponent(cdnUrl)}&filename=${encodeURIComponent(filename)}&ext=${encodeURIComponent(ext)}`
-      const resp = await fetch(proxyUrl)
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => `HTTP ${resp.status}`)
-        throw new Error(text.slice(0, 200))
-      }
-
+    // ── shared streaming logic ──────────────────────────────────
+    const streamResponse = async (resp: Response) => {
       const contentLength = resp.headers.get('content-length')
       const total = contentLength ? parseInt(contentLength, 10) : (size ?? 0)
+      updateJob(id, { total })
 
-      const reader = resp.body!.getReader()
+      if (!resp.body) {
+        // No streaming body — just collect as blob
+        const blob = await resp.blob()
+        triggerDownload(blob)
+        updateJob(id, { progress: 100, loaded: blob.size, total: blob.size, status: 'done' })
+        setTimeout(() => setJobs(prev => prev.filter(j => j.id !== id)), 5000)
+        return
+      }
+
+      const reader = resp.body.getReader()
       const chunks: Uint8Array[] = []
       let loaded = 0
       let lastLoaded = 0
@@ -187,9 +193,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         loaded += value.byteLength
 
         const now = Date.now()
-        if (now - lastTime >= 250) {
+        if (now - lastTime >= 300) {
           const dt = (now - lastTime) / 1000
-          const speed = (loaded - lastLoaded) / dt
+          const speed = Math.round((loaded - lastLoaded) / dt)
           const progress = total > 0 ? Math.round((loaded / total) * 100) : 0
           const eta = speed > 0 && total > 0 ? Math.round((total - loaded) / speed) : 0
           updateJob(id, { loaded, total, progress, speed, eta })
@@ -198,8 +204,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Trigger browser download
       const blob = new Blob(chunks)
+      triggerDownload(blob)
+      updateJob(id, { progress: 100, loaded: total || loaded, total: total || loaded, status: 'done' })
+      setTimeout(() => setJobs(prev => prev.filter(j => j.id !== id)), 5000)
+    }
+
+    const triggerDownload = (blob: Blob) => {
       const blobUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = blobUrl
@@ -207,15 +218,37 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 8000)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+    }
 
-      updateJob(id, { progress: 100, loaded: total || loaded, status: 'done' })
-      setTimeout(() => setJobs(prev => prev.filter(j => j.id !== id)), 5000)
+    // ── Strategy 1: Direct browser fetch (residential IP, works for most CDNs) ──
+    try {
+      const resp = await fetch(cdnUrl, { mode: 'cors' })
+      if (resp.ok) {
+        await streamResponse(resp)
+        return
+      }
+      // non-OK response → fall through to proxy
+      console.warn('[Download] direct fetch non-OK:', resp.status, '— trying proxy')
+    } catch (directErr) {
+      // CORS error or network error → fall through to proxy
+      console.warn('[Download] direct fetch failed:', directErr, '— trying proxy')
+    }
+
+    // ── Strategy 2: Server proxy (bypasses some CDN restrictions) ──
+    try {
+      const proxyUrl = `/api/dz-agent/download-proxy?url=${encodeURIComponent(cdnUrl)}&filename=${encodeURIComponent(filename)}&ext=${encodeURIComponent(ext)}`
+      const resp = await fetch(proxyUrl)
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => `HTTP ${resp.status}`)
+        throw new Error(text.slice(0, 200))
+      }
+      await streamResponse(resp)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'خطأ غير معروف'
-      updateJob(id, { status: 'error', error: msg })
+      updateJob(id, { status: 'error', error: msg.slice(0, 120) })
     }
-  }, [updateJob])
+  }, [updateJob, setJobs])
 
   return (
     <Ctx.Provider value={{ jobs, startDownload, dismiss }}>

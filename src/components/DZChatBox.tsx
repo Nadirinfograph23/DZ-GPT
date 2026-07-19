@@ -1675,7 +1675,7 @@ const QUALITY_BADGE: Record<QualityTier, { label: string; color: string; bg: str
 // status flow: 'extracting' (browser runs API) → 'ready' → download
 // ══════════════════════════════════════════════════════════════════
 
-/* inner "ready" card — shared by extracting→ready and any future server-provided ready state */
+/* inner "ready" card — shows quality selector + download button */
 function MediaDownloadCardReady({
   info,
   platform,
@@ -1720,6 +1720,7 @@ function MediaDownloadCardReady({
   }
 
   const hasFormats = videoFmts.length > 0 || audioFmts.length > 0
+  const canStream  = info.canStream !== false
 
   return (
     <div className="dz-mdl">
@@ -1739,14 +1740,42 @@ function MediaDownloadCardReady({
         </div>
       </div>
 
-      {!hasFormats && (
+      {/* YouTube / canStream:false → cobalt redirect */}
+      {!canStream && (
+        <div className="dz-mdl__cobalt">
+          <div className="dz-mdl__cobalt-msg">
+            <span className="dz-mdl__cobalt-icon">ℹ️</span>
+            <span>خوادم DZ Agent مُقيَّدة بواسطة YouTube — استخدم cobalt.tools للتحميل مجاناً</span>
+          </div>
+          <div className="dz-mdl__cobalt-btns">
+            <a
+              href={info.cobaltUrl || `https://cobalt.tools/?u=${encodeURIComponent(url || '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="dz-mdl__cobalt-btn"
+              style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}bb)` }}
+            >
+              <Download size={14} />
+              فتح cobalt.tools
+            </a>
+            {url && (
+              <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
+                🔗 الرابط الأصلي
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* No formats (canStream but empty) */}
+      {canStream && !hasFormats && (
         <p className="dz-mdl__errmsg" style={{ color: '#f59e0b' }}>
           ⚠️ لا توجد روابط قابلة للتحميل — قد يكون المحتوى محمياً أو خاصاً
         </p>
       )}
 
       {/* Video quality selector */}
-      {videoFmts.length > 0 && (
+      {canStream && videoFmts.length > 0 && (
         <div className="dz-mdl__section">
           <div className="dz-mdl__section-hd">
             <span className="dz-mdl__section-icon">🎬</span>
@@ -1776,7 +1805,7 @@ function MediaDownloadCardReady({
       )}
 
       {/* Audio selector */}
-      {audioFmts.length > 0 && (
+      {canStream && audioFmts.length > 0 && (
         <div className="dz-mdl__section">
           <div className="dz-mdl__section-hd">
             <span className="dz-mdl__section-icon">🎵</span>
@@ -1802,7 +1831,8 @@ function MediaDownloadCardReady({
         </div>
       )}
 
-      {hasFormats && (
+      {/* Download button + original link */}
+      {canStream && hasFormats && (
         <button
           className="dz-mdl__dl-btn"
           style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}cc)` }}
@@ -1815,7 +1845,7 @@ function MediaDownloadCardReady({
         </button>
       )}
 
-      {url && (
+      {canStream && url && (
         <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 الرابط الأصلي</a>
       )}
     </div>

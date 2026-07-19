@@ -1752,6 +1752,39 @@
 }
 .dz-mdl--error { border-color: rgba(239,68,68,.35); }
 
+/* ── cobalt.tools redirect (YouTube / blocked platform) ── */
+.dz-mdl__cobalt {
+  margin: 4px 0 6px;
+  padding: 12px 14px;
+  background: rgba(255,165,0,.07);
+  border: 1px solid rgba(255,165,0,.2);
+  border-radius: 10px;
+}
+.dz-mdl__cobalt-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.dz-mdl__cobalt-icon { flex-shrink: 0; font-size: 14px; }
+.dz-mdl__cobalt-btns { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dz-mdl__cobalt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  transition: opacity .15s, transform .1s;
+}
+.dz-mdl__cobalt-btn:hover { opacity: .88; transform: translateY(-1px); }
+
 /* ── Extracting / loading state ── */
 .dz-mdl--extracting { border-color: rgba(96,165,250,.3); }
 .dz-mdl__extract-body {
@@ -2019,6 +2052,15 @@
   border-radius: 999px;
   transition: width .3s ease, background .3s;
   min-width: 2px;
+}
+/* Indeterminate (unknown file size) */
+.gdl-bar-fill--indeterminate {
+  width: 40% !important;
+  animation: gdl-slide 1.4s ease-in-out infinite;
+}
+@keyframes gdl-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
 }
 
 /* Right: percent + dismiss */

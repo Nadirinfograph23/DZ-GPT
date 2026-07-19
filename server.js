@@ -29591,6 +29591,129 @@ app.get('/api/dz-agent/download-proxy', async (req, res) => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 📺 /api/yt-stream — YouTube InnerTube proxy (browser calls this)
+// Tries multiple InnerTube clients; falls back to oEmbed metadata.
+// canStream:false when all stream clients fail (datacenter IP blocked).
+// ══════════════════════════════════════════════════════════════════════════════
+app.get('/api/yt-stream', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  const id = String(req.query.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '')
+  if (!id || id.length < 6 || id.length > 12) return res.status(400).json({ ok: false, error: 'invalid video id' })
+
+  const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player'
+
+  const tryClient = async (clientCfg) => {
+    const { clientName, clientVersion, ua, origin, extra = {} } = clientCfg
+    const body = {
+      videoId: id,
+      context: {
+        client: { clientName, clientVersion, hl: 'en', gl: 'US', ...extra },
+      },
+    }
+    const resp = await fetch(INNERTUBE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': ua,
+        'Origin': origin,
+        'Referer': origin + '/',
+        'X-YouTube-Client-Name': String(clientCfg.clientId || ''),
+        'X-YouTube-Client-Version': clientVersion,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    return await resp.json()
+  }
+
+  const CLIENTS = [
+    { clientId: 62, clientName: 'WEB_CREATOR',   clientVersion: '1.20240101.01.00', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', origin: 'https://studio.youtube.com' },
+    { clientId: 5,  clientName: 'IOS',            clientVersion: '19.09.3', ua: 'com.google.ios.youtube/19.09.3 (iPhone16,2; U; CPU iOS 17_1_2 like Mac OS X;)', origin: 'https://www.youtube.com', extra: { deviceModel: 'iPhone16,2' } },
+    { clientId: 3,  clientName: 'ANDROID',        clientVersion: '18.11.34', ua: 'com.google.android.youtube/18.11.34 (Linux; U; Android 11) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 30 } },
+    { clientId: 56, clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', ua: 'Mozilla/5.0 (SmartHub; SMART-TV; V8.0.0.0) AppleWebKit/538.1', origin: 'https://www.youtube.com' },
+  ]
+
+  // Get oEmbed metadata (almost always works)
+  const oembedPromise = fetch(
+    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
+    { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, signal: AbortSignal.timeout(8000) }
+  ).then(r => r.json()).catch(() => ({}))
+
+  // Try InnerTube clients in sequence (stop on first success with streams)
+  let streamData = null
+  for (const client of CLIENTS) {
+    try {
+      const d = await tryClient(client)
+      const ps = d?.playabilityStatus?.status
+      if (ps === 'ERROR' || ps === 'UNPLAYABLE') continue
+      const sd = d?.streamingData || {}
+      const allFmts = [...(sd.formats || []), ...(sd.adaptiveFormats || [])]
+      const videoFmts = allFmts.filter(f => f.mimeType?.startsWith('video') && f.url)
+      if (videoFmts.length > 0) {
+        streamData = { d, allFmts, sd }
+        break
+      }
+    } catch (e) {
+      console.warn(`[yt-stream] client ${client.clientName} failed:`, e.message?.slice(0, 60))
+    }
+  }
+
+  const oembed = await oembedPromise
+
+  if (!streamData) {
+    // Metadata-only response (canStream:false → card shows cobalt.tools redirect)
+    return res.json({
+      ok: true, canStream: false,
+      title: oembed.title || '',
+      thumbnail: oembed.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      duration: 0, uploader: oembed.author_name || '',
+      video: [], audio: [],
+    })
+  }
+
+  const { d, allFmts, sd } = streamData
+  const vd = d.videoDetails || {}
+  const thumb = (vd.thumbnail?.thumbnails || []).pop()?.url || oembed.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+
+  // Muxed formats (audio+video) are in sd.formats, adaptive are in sd.adaptiveFormats
+  const muxedItags = new Set((sd.formats || []).map(f => f.itag))
+  const videoFmts = allFmts
+    .filter(f => f.mimeType?.startsWith('video') && f.url)
+    .map(f => ({
+      url: f.url,
+      quality: f.qualityLabel || null,
+      height: f.height || null,
+      ext: f.mimeType?.includes('webm') ? 'webm' : 'mp4',
+      size: f.contentLength ? parseInt(f.contentLength) : null,
+      hasAudio: muxedItags.has(f.itag),
+    }))
+    .sort((a, b) => (b.height || 0) - (a.height || 0))
+    .slice(0, 6)
+
+  const audioFmts = allFmts
+    .filter(f => f.mimeType?.startsWith('audio') && f.url && !muxedItags.has(f.itag))
+    .map(f => ({
+      url: f.url,
+      ext: f.mimeType?.includes('opus') ? 'webm' : 'm4a',
+      bitrate: f.bitrate ? Math.round(f.bitrate / 1000) : null,
+      size: f.contentLength ? parseInt(f.contentLength) : null,
+      muxed: false,
+    }))
+    .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))
+    .slice(0, 3)
+
+  return res.json({
+    ok: true, canStream: true,
+    title: vd.title || oembed.title || '',
+    thumbnail: thumb,
+    duration: parseInt(vd.lengthSeconds || '0') || 0,
+    uploader: vd.author || oembed.author_name || '',
+    video: videoFmts, audio: audioFmts,
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 📥 /api/dz-agent/download — multi-platform media info endpoint
 // Frontend calls this directly to refresh/retry failed extractions
 // ══════════════════════════════════════════════════════════════════════════════

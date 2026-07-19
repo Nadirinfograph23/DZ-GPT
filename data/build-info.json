@@ -1,8 +1,8 @@
 {
-  "commit": "09445f1705e794fffdda0857c7d92b9262986b42",
-  "commitShort": "09445f17",
+  "commit": "a86dde4de4167007113e3644e9e9aa0623b04eac",
+  "commitShort": "a86dde4d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: browser-side media extraction (bypass server IP blocks)",
-  "deployedAt": "2026-07-18T02:09:06.959589Z",
+  "message": "feat: browser-side media extractor v2, yt-stream server proxy, download context direct-fetch+fallback, cobalt redirect for YouTube",
+  "deployedAt": "2026-07-19T01:43:33.983229Z",
   "deployedBy": "scripts/deploy.py"
 }

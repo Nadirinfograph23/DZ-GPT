@@ -24046,34 +24046,6 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // ── TARGETED SEARCH: if a specific subject is detected, search GN-RSS for it directly ──
-    if (newsSubject) {
-      try {
-        const isArabic = /[\u0600-\u06FF]/.test(newsSubject)
-        const lang = isArabic ? 'ar' : 'en'
-        // Use fresh URL with after: operator (30 days) for targeted subject search
-        const targetedRssUrl = buildFreshGNRssUrl(newsSubject, lang, 30)
-        const targetedArticles = await searchGoogleNewsRSS(targetedRssUrl)
-        if (targetedArticles.length > 0) {
-          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-          let targeted = `\n\n--- 🎯 أخبار خاصة بـ "${newsSubject}" — ${date} ---\n`
-          for (const art of targetedArticles.slice(0, 15)) {
-            const title = art.title || art.headline || ''
-            const url = art.link || art.url
-            const src = art.source || 'المصدر'
-            targeted += `• ${title}`
-            if (url) targeted += ` — [${src}](${url})`
-            targeted += '\n'
-          }
-          targeted += '\n---\n'
-          rssContext = targeted
-          console.log(`[DZ Agent] Targeted GN-RSS: ${targetedArticles.length} articles for "${newsSubject}"`)
-        }
-      } catch (err) {
-        console.error('[DZ Agent] Targeted GN-RSS search failed:', err.message)
-      }
-    }
-
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
     const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
@@ -24092,6 +24064,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     {
       const _parallelRssPromises = []
       const _parallelRssLabels  = []
+
+      // 0) Targeted subject search — ✅ FIX: كانت sequential await 9 ث → الآن داخل Promise.allSettled
+      // يشمل: "أخبار الجزائر" → newsSubject="الجزائر" / "ذكاء اصطناعي" → subject ضمني
+      if (newsSubject) {
+        const _tgIsArabic = /[\u0600-\u06FF]/.test(newsSubject)
+        const _tgLang = _tgIsArabic ? 'ar' : 'en'
+        const _tgRssUrl = buildFreshGNRssUrl(newsSubject, _tgLang, 30)
+        _parallelRssPromises.push(searchGoogleNewsRSS(_tgRssUrl))
+        _parallelRssLabels.push({ type: 'targeted', subject: newsSubject })
+      }
 
       // 1) Tech/AI targeted search (forced subject)
       if (_isTechAIQuery && !newsSubject) {
@@ -24133,7 +24115,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
           }
           const articles = r.value
 
-          if (lbl.type === 'tech-forced') {
+          // ✅ FIX: type='targeted' — نتيجة البحث المُدمَج من sequential إلى parallel
+          if (lbl.type === 'targeted') {
+            const _date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+            let ctx = `\n\n--- 🎯 أخبار خاصة بـ "${lbl.subject}" — ${_date} ---\n`
+            for (const art of articles.slice(0, 15)) {
+              const title = art.title || art.headline || ''
+              const url   = art.link || art.url
+              const src   = art.source || 'المصدر'
+              ctx += `• ${title}`
+              if (url) ctx += ` — [${src}](${url})`
+              ctx += '\n'
+            }
+            ctx += '\n---\n'
+            rssContext = ctx
+            console.log(`[DZ Agent] Targeted GN-RSS (parallel): ${articles.length} articles for "${lbl.subject}"`)
+
+          } else if (lbl.type === 'tech-forced') {
             let ctx = `\n\n--- 🎯 أخبار ${lbl.subject} — ${_dateLabel} ---\n`
             for (const art of articles.slice(0, 15)) {
               const title = art.title || art.headline || ''
@@ -24181,9 +24179,21 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    const feedResults = await fetchMultipleFeeds(feedsToFetch)
+    // ✅ FIX: fetchMultipleFeeds + fetchGNRSSArticles بالتوازي (كانا sequential)
+    // كلاهما I/O — لا مانع من تشغيلهما معاً في Promise.allSettled
+    const _queryLangFeed = detectQueryLanguage(lastUserMessage)
+    const _gnFeedsForAug  = (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both'))
+      ? (GN_RSS_FEEDS[_queryLangFeed] || GN_RSS_FEEDS.ar)
+      : null
+    if (_gnFeedsForAug) refreshGNRSSInBackground(_gnFeedsForAug) // background — لا ننتظرها
+
+    const [_feedsResult, _gnResult] = await Promise.allSettled([
+      feedsToFetch.length > 0 ? fetchMultipleFeeds(feedsToFetch) : Promise.resolve([]),
+      _gnFeedsForAug ? fetchGNRSSArticles(_gnFeedsForAug) : Promise.resolve([]),
+    ])
+
+    const feedResults = _feedsResult.status === 'fulfilled' ? _feedsResult.value : []
     if (feedResults.length > 0) {
-      // Pass newsSubject so buildRSSContext filters articles to only those mentioning the subject
       const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
       if (generalCtx) {
         rssContext = rssContext ? rssContext + generalCtx : generalCtx
@@ -24191,22 +24201,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // ── GN-RSS ADD-ON: augment with general Google News RSS only when no specific subject ──
-    if (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both')) {
-      try {
-        const queryLang = detectQueryLanguage(lastUserMessage)
-        const gnFeeds = GN_RSS_FEEDS[queryLang] || GN_RSS_FEEDS.ar
-        // Hybrid Mode: serve from cache immediately, refresh in background if stale
-        refreshGNRSSInBackground(gnFeeds)
-        const gnArticles = await fetchGNRSSArticles(gnFeeds)
-        if (gnArticles.length > 0) {
-          const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
-          rssContext = rssContext ? rssContext + gnCtx : gnCtx
-          console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${queryLang})`)
-        }
-      } catch (err) {
-        console.error('[GN-RSS] Chat augmentation failed:', err.message)
-      }
+    const gnArticles = _gnResult.status === 'fulfilled' ? _gnResult.value : []
+    if (gnArticles.length > 0) {
+      const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
+      rssContext = rssContext ? rssContext + gnCtx : gnCtx
+      console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${_queryLangFeed})`)
     }
   }
 
@@ -24238,7 +24237,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // Match-Vs: PAST/UNKNOWN/LIVE يحتاج SearXNG — لا يُخطَأ بالمعلومات من الذاكرة
   const _matchVsNeedsSearch = _isMatchVsQuery &&
     (_matchVsData?.temporal === 'PAST' || _matchVsData?.temporal === 'UNKNOWN' || _matchVsData?.temporal === 'LIVE')
-  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent && !_matchVsNeedsSearch) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage)
+  // ✅ FIX: تخطي البحث للأخبار العامة عندما يتوفر سياق RSS كافٍ — يوفّر 9 ثانية!
+  // الأخبار تأتي من RSS وليس CSE، والبحث يُضيف زمناً بلا قيمة مضافة
+  const _hasRichNewsCtx = !!newsQueryType && !_isTimeSensitiveEvent
+    && rssContext && rssContext.length > 300 && !newsQueryType.includes('sport')
+  const skipSearch = isPrayerQuery || (isFootballQuery && !isFootballNewsQuery && !msgIntent.isTemporal && !_isTimeSensitiveEvent && !_matchVsNeedsSearch) || isLFPQuery || isStandingsQuery || isSimpleGreeting || lastUserMessage.length < 6 || _isProgrammingTutorial || _isDirectCodeRequest || _isDirectFactual || isMapQuery(lastUserMessage) || _hasRichNewsCtx
+  if (_hasRichNewsCtx) console.log(`[News Fast-Path] ⚡ Skipping CSE/web search — RSS context is sufficient (${rssContext.length} chars)`)
 
   if (!skipSearch) {
     try {

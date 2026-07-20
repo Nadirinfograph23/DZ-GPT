@@ -1,8 +1,8 @@
 {
-  "commit": "d945662dacc96663766940ce0f948c85367acd82",
-  "commitShort": "d945662d",
+  "commit": "9def437fad05f4a418b86a9ef3c02d12965965b6",
+  "commitShort": "9def437f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(matches+hang): WC2026 season ended + stallGuard 35s→20s + stale re-search budget",
-  "deployedAt": "2026-07-20T16:09:41.263065Z",
+  "message": "perf(news): parallel targeted-RSS + skip search when rssCtx rich + parallel feedsMulti+gnRSS",
+  "deployedAt": "2026-07-20T16:22:07.670795Z",
   "deployedBy": "scripts/deploy.py"
 }

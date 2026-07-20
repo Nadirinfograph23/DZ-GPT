@@ -24086,86 +24086,97 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
 
     // ✅ FIX: إذا لم يُستخرج newsSubject ولكن هذا استعلام تقني/ذكاء اصطناعي → اجعل الموضوع ضمنياً
-    if (_isTechAIQuery && !newsSubject) {
-      const _aiSubjectMatch = lastUserMessage.match(/(?:ذكاء\s*اصطناعي|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama)/i)
-      const _techForcedSubject = _aiSubjectMatch ? _aiSubjectMatch[0].trim() : 'ذكاء اصطناعي'
-      // جلب موجّه من Google News لموضوع الذكاء الاصطناعي تحديداً (إذا لم يكن targeted search أُطلق بالفعل)
-      try {
+    // ══ Tech/AI + International GN-RSS — نجري جميع البحوث بالتوازي لتجنّب الانتظار المتسلسل ══
+    // ✅ FIX: كانت الطلبات متسلسلة (9+9 ثانية) → الآن متوازية (9 ثانية كحدّ أقصى للكل)
+    {
+      const _parallelRssPromises = []
+      const _parallelRssLabels  = []
+
+      // 1) Tech/AI targeted search (forced subject)
+      if (_isTechAIQuery && !newsSubject) {
+        const _aiSubjectMatch = lastUserMessage.match(/(?:ذكاء\s*اصطناعي|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama)/i)
+        const _techForcedSubject = _aiSubjectMatch ? _aiSubjectMatch[0].trim() : 'ذكاء اصطناعي'
         const _techLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
         const _techRssUrl = buildFreshGNRssUrl(_techForcedSubject, _techLang, 30)
-        const _techArticles = await searchGoogleNewsRSS(_techRssUrl)
-        if (_techArticles.length > 0) {
-          const _techDate = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-          let _techCtx = `\n\n--- 🎯 أخبار ${_techForcedSubject} — ${_techDate} ---\n`
-          for (const art of _techArticles.slice(0, 15)) {
-            const title = art.title || art.headline || ''
-            const url = art.link || art.url
-            const src = art.source || 'المصدر'
-            _techCtx += `• ${title}`
-            if (url) _techCtx += ` — [${src}](${url})`
-            _techCtx += '\n'
-          }
-          _techCtx += '\n---\n'
-          rssContext = _techCtx
-          console.log(`[DZ Agent] Tech/AI targeted GN-RSS (forced): ${_techArticles.length} articles for "${_techForcedSubject}"`)
-        }
-      } catch (err) {
-        console.warn('[DZ Agent] Tech/AI forced GN-RSS failed:', err.message)
+        _parallelRssPromises.push(searchGoogleNewsRSS(_techRssUrl))
+        _parallelRssLabels.push({ type: 'tech-forced', subject: _techForcedSubject })
       }
-    }
 
-    // ── إذا كان استعلاماً دولياً: أضف بحثاً GN-RSS مستهدفاً للأحداث الدولية ──
-    if (_isIntlNewsQ && !newsSubject) {
-      try {
-        const intlQuery = encodeURIComponent('أبرز الأحداث الدولية اليوم عاجل')
-        const intlRssUrl = `https://news.google.com/rss/search?q=${intlQuery}&hl=ar&gl=DZ&ceid=DZ:ar&sort=date`
-        const intlArticles = await searchGoogleNewsRSS(intlRssUrl)
-        if (intlArticles.length > 0) {
-          const dateLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-          let intlCtx = `\n\n--- 🌍 أبرز الأحداث الدولية — ${dateLabel} ---\n`
-          for (const art of intlArticles.slice(0, 20)) {
-            const title = art.title || ''
-            const url = art.link || art.url || ''
-            const src = art.source || ''
-            const rawDate = art.pubDate || art.date || ''
-            const ds = rawDate ? ` (${new Date(rawDate).toLocaleDateString('ar-DZ',{day:'numeric',month:'short'})})` : ''
-            intlCtx += `• ${title}${ds}`
-            if (url) intlCtx += ` — [${src||'المصدر'}](${url})`
-            intlCtx += '\n'
-          }
-          intlCtx += '\n---\n'
-          rssContext = intlCtx + (rssContext ? '\n' + rssContext : '')
-          console.log(`[DZ-Intl] International news GN-RSS: ${intlArticles.length} articles`)
-        }
-      } catch (err) {
-        console.warn('[DZ-Intl] International GN-RSS failed:', err.message)
-      }
-    }
-
-    // For tech/AI queries, augment with AI-specific Google News RSS
-    if (_isTechAIQuery) {
-      try {
+      // 2) AI-specific augmentation (general AI news)
+      if (_isTechAIQuery) {
         const aiNewsLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
         const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج 2026' : 'artificial intelligence AI news 2026'
         const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=${aiNewsLang === 'ar' ? 'DZ' : 'US'}&ceid=${aiNewsLang === 'ar' ? 'DZ:ar' : 'US:en'}`
-        const aiArticles = await searchGoogleNewsRSS(aiRssUrl)
-        if (aiArticles.length > 0) {
-          const date = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-          let aiCtx = `\n\n--- 🤖 أخبار الذكاء الاصطناعي والتقنية — ${date} ---\n`
-          for (const art of aiArticles.slice(0, 15)) {
-            const title = art.title || art.headline || ''
-            const url = art.link || art.url
-            const src = art.source || 'المصدر'
-            aiCtx += `• ${title}`
-            if (url) aiCtx += ` — [${src}](${url})`
-            aiCtx += '\n'
+        _parallelRssPromises.push(searchGoogleNewsRSS(aiRssUrl))
+        _parallelRssLabels.push({ type: 'ai-augment' })
+      }
+
+      // 3) International news
+      if (_isIntlNewsQ && !newsSubject) {
+        const intlQuery = encodeURIComponent('أبرز الأحداث الدولية اليوم عاجل')
+        const intlRssUrl = `https://news.google.com/rss/search?q=${intlQuery}&hl=ar&gl=DZ&ceid=DZ:ar&sort=date`
+        _parallelRssPromises.push(searchGoogleNewsRSS(intlRssUrl))
+        _parallelRssLabels.push({ type: 'intl' })
+      }
+
+      if (_parallelRssPromises.length > 0) {
+        const _rssSettled = await Promise.allSettled(_parallelRssPromises)
+        const _dateLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+        for (let i = 0; i < _rssSettled.length; i++) {
+          const r = _rssSettled[i]
+          const lbl = _parallelRssLabels[i]
+          if (r.status !== 'fulfilled' || !r.value?.length) {
+            if (r.status === 'rejected') console.warn(`[DZ Agent] GN-RSS parallel (${lbl.type}) failed:`, r.reason?.message)
+            continue
           }
-          aiCtx += '\n---\n'
-          rssContext = rssContext ? rssContext + aiCtx : aiCtx
-          console.log(`[DZ Agent] AI News RSS: ${aiArticles.length} articles`)
+          const articles = r.value
+
+          if (lbl.type === 'tech-forced') {
+            let ctx = `\n\n--- 🎯 أخبار ${lbl.subject} — ${_dateLabel} ---\n`
+            for (const art of articles.slice(0, 15)) {
+              const title = art.title || art.headline || ''
+              const url   = art.link || art.url
+              const src   = art.source || 'المصدر'
+              ctx += `• ${title}`
+              if (url) ctx += ` — [${src}](${url})`
+              ctx += '\n'
+            }
+            ctx += '\n---\n'
+            rssContext = ctx
+            console.log(`[DZ Agent] Tech/AI targeted GN-RSS: ${articles.length} articles for "${lbl.subject}"`)
+
+          } else if (lbl.type === 'ai-augment') {
+            let ctx = `\n\n--- 🤖 أخبار الذكاء الاصطناعي والتقنية — ${_dateLabel} ---\n`
+            for (const art of articles.slice(0, 15)) {
+              const title = art.title || art.headline || ''
+              const url   = art.link || art.url
+              const src   = art.source || 'المصدر'
+              ctx += `• ${title}`
+              if (url) ctx += ` — [${src}](${url})`
+              ctx += '\n'
+            }
+            ctx += '\n---\n'
+            rssContext = rssContext ? rssContext + ctx : ctx
+            console.log(`[DZ Agent] AI News RSS: ${articles.length} articles`)
+
+          } else if (lbl.type === 'intl') {
+            let ctx = `\n\n--- 🌍 أبرز الأحداث الدولية — ${_dateLabel} ---\n`
+            for (const art of articles.slice(0, 20)) {
+              const title   = art.title || ''
+              const url     = art.link || art.url || ''
+              const src     = art.source || ''
+              const rawDate = art.pubDate || art.date || ''
+              const ds      = rawDate ? ` (${new Date(rawDate).toLocaleDateString('ar-DZ',{day:'numeric',month:'short'})})` : ''
+              ctx += `• ${title}${ds}`
+              if (url) ctx += ` — [${src||'المصدر'}](${url})`
+              ctx += '\n'
+            }
+            ctx += '\n---\n'
+            rssContext = ctx + (rssContext ? '\n' + rssContext : '')
+            console.log(`[DZ-Intl] International news GN-RSS: ${articles.length} articles`)
+          }
         }
-      } catch (err) {
-        console.warn('[DZ Agent] AI News RSS failed:', err.message)
       }
     }
 
@@ -29022,18 +29033,96 @@ async function extractWithYtDlp(url) {
   }
 }
 
-// Multi-platform media info extraction — uses yt-dlp which supports all social platforms
-async function extractMediaInfoAny(url) {
-  const raw = await extractWithYtDlp(url)
-  const { audio, video } = processFormats(raw.formats)
-  return {
-    title: raw.title,
-    duration: raw.duration,
-    thumbnail: raw.thumbnail,
-    uploader: raw.uploader,
-    audio,
-    video,
+// ── Cobalt API engine — public instances fallback for social platforms ──────────
+// Spec: https://cobalt.tools — POST /  { url, downloadMode:'auto'|'audio' }
+// Returns { status:'stream'|'redirect'|'tunnel', url } or { status:'error', error }
+const COBALT_INSTANCES = [
+  'https://cobalt.tools',
+  'https://dwnld.nichijou.co',
+  'https://cobalt.api.timelessnesses.me',
+  'https://cobaltapi.0x7d.eu',
+]
+
+async function extractWithCobaltAPI(url) {
+  let lastErr = new Error('cobalt: no instances available')
+  for (const base of COBALT_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const tid = setTimeout(() => ctrl.abort(), 10000)
+      const resp = await fetch(`${base}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ url, downloadMode: 'auto', filenameStyle: 'basic' }),
+        signal: ctrl.signal,
+      })
+      clearTimeout(tid)
+      const j = await resp.json().catch(() => ({}))
+
+      if (!resp.ok || j.status === 'error') {
+        lastErr = new Error(j?.error?.code || j?.error || `cobalt ${resp.status}`)
+        continue
+      }
+
+      const dlUrl = j.url
+      if (!dlUrl) { lastErr = new Error('cobalt: no url in response'); continue }
+
+      // Cobalt gives us a single muxed stream URL — wrap into our standard shape
+      const isAudio = /audio/i.test(j.type || '')
+      const isVideo = !isAudio
+      const ext = /\.mp3/.test(dlUrl) ? 'mp3' : /\.m4a/.test(dlUrl) ? 'm4a' : /\.webm/.test(dlUrl) ? 'webm' : 'mp4'
+      console.log(`[extract:cobalt:ok] instance=${base} status=${j.status} type=${j.type||'?'}`)
+      return {
+        title: j.filename?.replace(/\.[^.]+$/, '') || url.split('/').pop()?.split('?')[0] || '',
+        duration: 0,
+        thumbnail: '',
+        uploader: '',
+        audio: isAudio ? [{ url: dlUrl, ext, bitrate: null, size: null, muxed: true }] : [],
+        video: isVideo ? [{ url: dlUrl, quality: null, height: null, ext, size: null, hasAudio: true }] : [],
+        source: 'cobalt',
+        cobaltInstance: base,
+      }
+    } catch (e) {
+      lastErr = e
+      // try next instance
+    }
   }
+  throw lastErr
+}
+
+// Multi-platform media info extraction — yt-dlp primary → Cobalt API fallback
+// ✅ FIX: أُضيف Cobalt fallback — كانت الدالة تُلقي الخطأ مباشرةً بدون محاولة بديلة
+async function extractMediaInfoAny(url) {
+  // 1) yt-dlp primary — supports all platforms when not blocked
+  try {
+    const raw = await extractWithYtDlp(url)
+    const { audio, video } = processFormats(raw.formats)
+    console.log(`[extract:yt-dlp:ok] audio=${audio.length} video=${video.length} url=${url.slice(0, 60)}`)
+    return {
+      title: raw.title,
+      duration: raw.duration,
+      thumbnail: raw.thumbnail,
+      uploader: raw.uploader,
+      audio,
+      video,
+      source: 'yt-dlp',
+    }
+  } catch (e1) {
+    console.warn('[extract:yt-dlp:fail]', e1.message?.slice(0, 120))
+  }
+
+  // 2) Cobalt API — public instances (YouTube, Facebook, Instagram, TikTok, Twitter, Vimeo…)
+  try {
+    const cobaltResult = await extractWithCobaltAPI(url)
+    return cobaltResult
+  } catch (e2) {
+    console.warn('[extract:cobalt:fail]', e2.message?.slice(0, 120))
+  }
+
+  // All engines failed
+  throw new Error('فشل استخراج الوسائط — جرب cobalt.tools مباشرةً أو تأكد من صحة الرابط')
 }
 
 // Piped fallback that returns the full structured shape (not just one URL).

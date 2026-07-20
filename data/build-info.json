@@ -1,8 +1,8 @@
 {
-  "commit": "a86dde4de4167007113e3644e9e9aa0623b04eac",
-  "commitShort": "a86dde4d",
+  "commit": "77b1a5dd7152037fd6c5df2823c82264ee55fe41",
+  "commitShort": "77b1a5dd",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: browser-side media extractor v2, yt-stream server proxy, download context direct-fetch+fallback, cobalt redirect for YouTube",
-  "deployedAt": "2026-07-19T01:43:33.983229Z",
+  "message": "fix(news+media): parallelize tech/AI RSS calls + add Cobalt fallback for downloads",
+  "deployedAt": "2026-07-20T15:58:22.541219Z",
   "deployedBy": "scripts/deploy.py"
 }

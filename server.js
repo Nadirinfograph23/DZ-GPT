@@ -3719,7 +3719,7 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          35_000,
+          20_000, // ✅ FIX: كان 35_000 (أطول من Vercel 30s limit) → 20_000 يترك هامش للبحث
           'safeGenerateAI'
         )
       )
@@ -17303,7 +17303,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // WC today handler: يعمل حتى عند _isRetry (البيانات الرياضية لا تتغير)
     // ── كشف موسم كأس العالم 2026 (11 يونيو – 19 يوليو 2026) ──────────────────────
     const _wcSeasonNow = Date.now()
-    const _isWCSeason  = _wcSeasonNow >= 1781136000000 && _wcSeasonNow <= 1784591999000
+    // ✅ FIX: WC2026 انتهى في 19 يوليو — الـ timestamp المُصحَّح 1784534399000 = 2026-07-19T23:59:59Z
+    const _isWCSeason  = _wcSeasonNow >= 1781136000000 && _wcSeasonNow <= 1784534399000
     // لا نُطلق handler المباريات إذا كان السؤال عن تشكيلة فريق
     const _isSquadQueryGuard = isWC2026SquadQuery(_rawLastMsg)
     const _isWCTodayEarly = !_isSquadQueryGuard && (
@@ -24276,6 +24277,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
 
       // Parallel: Google CSE + Google News RSS (always for temporal/news) + web fallback (always)
       // Note: searchWeb now includes Wikipedia API (free, no rate limits) + DDG — always useful
+      const _searchBlockStart = Date.now() // ✅ لقياس الوقت المُنقضي ومنع re-search إذا > 8 ث
       const [cseRes, gnRssRes, legacyRes] = await Promise.allSettled([
         searchGoogleCSE(cseQuery),
         (mustSearch || newsQueryType) ? searchGoogleNewsRSS(rssQuery) : Promise.resolve([]),
@@ -24314,7 +24316,9 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       })).sort((a, b) => b._score - a._score).slice(0, 8)
 
       // Staleness re-search: if mustSearch and ALL top results are > 14 days old, try broader query
-      if (mustSearch && scoredResults.length > 0) {
+      // ✅ FIX: نتخطى re-search إذا استغرق البحث الأولي > 8 ث (نحتاج الهامش للـ LLM)
+      const _searchElapsedMs = Date.now() - _searchBlockStart
+      if (mustSearch && scoredResults.length > 0 && _searchElapsedMs < 8000) {
         const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
         const allStale = scoredResults.every(r => {
           const d = r.date || r.pubDate || r.publishedDate

@@ -1,8 +1,8 @@
 {
-  "commit": "77b1a5dd7152037fd6c5df2823c82264ee55fe41",
-  "commitShort": "77b1a5dd",
+  "commit": "d945662dacc96663766940ce0f948c85367acd82",
+  "commitShort": "d945662d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(news+media): parallelize tech/AI RSS calls + add Cobalt fallback for downloads",
-  "deployedAt": "2026-07-20T15:58:22.541219Z",
+  "message": "fix(matches+hang): WC2026 season ended + stallGuard 35s→20s + stale re-search budget",
+  "deployedAt": "2026-07-20T16:09:41.263065Z",
   "deployedBy": "scripts/deploy.py"
 }

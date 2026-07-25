@@ -53,6 +53,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { WebSocketServer } from 'ws'
 import compression from 'compression'
+import { getIntegrationSecretStatus } from './lib/integration-secrets.js'
 
 // ── Autonomous Reasoning Engine (CoT, ReAct, ToT, Self-Reflection) ──────────
 import { applyReasoning, selfReflect } from './lib/reasoning/index.js'
@@ -1376,6 +1377,15 @@ app.get('/api/version', (_req, res) => {
     region:     process.env.VERCEL_REGION || process.env.VERCEL_DEPLOYMENT_ID?.slice(0,6) || 'replit',
     status:     'ok',
     _source:    _BUILD_INFO ? 'build-info.json' : 'env-vars',
+  })
+})
+
+// ── /api/integrations/status — حالة إعداد الأسرار بدون كشف قيمها ───────────
+app.get('/api/integrations/status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.json({
+    ok: true,
+    secrets: getIntegrationSecretStatus(),
   })
 })
 // ═══════════════════════════════════════════════════════════════
@@ -29637,13 +29647,31 @@ app.get('/api/dz-agent/download-proxy', async (req, res) => {
   // Build a safe filename (allow Arabic + latin + basic punctuation)
   const safeName = rawName.replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 180) || 'download'
 
-  // Headers that mimic a real browser — needed for YouTube CDN
+  let upstreamOrigin = 'https://www.youtube.com'
+  try {
+    const upstreamHost = new URL(rawUrl).hostname.toLowerCase()
+    if (upstreamHost.includes('fbcdn.net') || upstreamHost.endsWith('facebook.com')) {
+      upstreamOrigin = 'https://www.facebook.com'
+    } else if (upstreamHost.includes('tiktok')) {
+      upstreamOrigin = 'https://www.tiktok.com'
+    } else if (upstreamHost.includes('twimg.com') || upstreamHost.includes('x.com')) {
+      upstreamOrigin = 'https://x.com'
+    } else if (upstreamHost.includes('instagram')) {
+      upstreamOrigin = 'https://www.instagram.com'
+    } else if (upstreamHost.includes('pinimg.com') || upstreamHost.includes('pinterest')) {
+      upstreamOrigin = 'https://www.pinterest.com'
+    }
+  } catch {
+    return res.status(400).json({ ok: false, error: 'Invalid media URL' })
+  }
+
+  // Headers that mimic a real browser — needed for signed social CDNs.
   const upstreamHeaders = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
-    'Referer': 'https://www.youtube.com/',
-    'Origin': 'https://www.youtube.com',
+    'Referer': `${upstreamOrigin}/`,
+    'Origin': upstreamOrigin,
   }
 
   let upstream

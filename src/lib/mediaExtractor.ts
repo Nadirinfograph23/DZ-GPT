@@ -65,10 +65,28 @@ async function extractYouTube(url: string, signal?: AbortSignal): Promise<MediaI
   const id = extractYouTubeId(url)
   if (!id) throw new Error('رابط YouTube غير صالح')
 
-  const resp = await fetch(`/api/yt-stream?id=${encodeURIComponent(id)}`, { signal })
-  if (!resp.ok) throw new Error(`yt-stream HTTP ${resp.status}`)
-  const d = await resp.json()
-  if (!d.ok) throw new Error(d.error || 'فشل استخراج YouTube')
+  let d: any = null
+  try {
+    const resp = await fetch(`/api/yt-stream?id=${encodeURIComponent(id)}`, { signal })
+    if (resp.ok) d = await resp.json()
+  } catch (error) {
+    if (signal?.aborted) throw error
+  }
+
+  // The regular endpoint may have metadata but no stream when YouTube blocks
+  // the server IP. Try the universal extractor before showing the honest
+  // "restricted" state in the card.
+  if (!d?.video?.length && !d?.audio?.length) {
+    try {
+      const fallback = await fetch(`/api/extract?url=${encodeURIComponent(url)}`, { signal })
+      if (fallback.ok) d = await fallback.json()
+    } catch (error) {
+      if (signal?.aborted) throw error
+    }
+  }
+  if (!d?.ok && !d?.video?.length && !d?.audio?.length) {
+    throw new Error(d?.error || 'تعذّر استخراج YouTube من الخادم — قد يكون الفيديو محمياً أو محجوباً')
+  }
 
   return {
     title: d.title || '',

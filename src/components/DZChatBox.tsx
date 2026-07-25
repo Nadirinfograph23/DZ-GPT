@@ -1692,7 +1692,10 @@ function MediaDownloadCardReady({
 
   const videoFmts = useMemo(() =>
     (info.video || [])
-      .filter(v => v.hasAudio)
+      // Social platforms commonly expose DASH video and audio as separate
+      // streams. The download card can download either stream directly, so
+      // do not hide valid video-only MP4 formats.
+      .filter(v => !!v.url)
       .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
       .slice(0, 6),
     [info.video],
@@ -1795,6 +1798,7 @@ function MediaDownloadCardReady({
                   <span className="dz-mdl__radio"><span className="dz-mdl__radio-dot" style={active ? { background: pm.color } : {}} /></span>
                   <span className="dz-mdl__opt-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
                   {v.quality && v.quality !== badge.label && <span className="dz-mdl__opt-ext">{v.quality}</span>}
+                  {!v.hasAudio && <span className="dz-mdl__opt-ext">فيديو فقط</span>}
                   <span className="dz-mdl__opt-ext">{v.ext?.toUpperCase()}</span>
                   {_fmtSize(v.size) && <span className="dz-mdl__opt-size">{_fmtSize(v.size)}</span>}
                 </button>

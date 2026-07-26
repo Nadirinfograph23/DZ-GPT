@@ -28796,7 +28796,7 @@ function extractYouTubeVideoId(u) {
 }
 
 const PIPED_API_INSTANCES = [
-  // Refreshed 2026-05-12 (live-probed) — sorted fastest-first.
+  // Refreshed 2026-07 (live-probed) — sorted fastest-first, more instances for resilience.
   'https://pipedapi.kavin.rocks',
   'https://api.piped.private.coffee',
   'https://piapi.ggtyler.dev',
@@ -28804,6 +28804,14 @@ const PIPED_API_INSTANCES = [
   'https://api.piped.privacydev.net',
   'https://piped-api.garudalinux.org',
   'https://pipedapi.in.projectsegfau.lt',
+  'https://pipedapi.adminforge.de',
+  'https://piped-api.codespace.cz',
+  'https://api.piped.yt',
+  'https://pa.il.ax',
+  'https://pipedapi.moomoo.me',
+  'https://pipedapi.drgns.space',
+  'https://piped-api.privacy.com.de',
+  'https://piped.yt/api',
 ]
 
 // Invidious is a separate free YouTube proxy network. Unlike Piped, every
@@ -29059,6 +29067,9 @@ const COBALT_INSTANCES = [
   'https://dwnld.nichijou.co',
   'https://cobalt.api.timelessnesses.me',
   'https://cobaltapi.0x7d.eu',
+  'https://cobalt-api.ams3.digitaloceanspaces.com',
+  'https://cobalt.catto.moe',
+  'https://api.cobalt.best',
 ]
 
 async function extractWithCobaltAPI(url) {
@@ -29178,61 +29189,79 @@ async function extractMediaInfoAny(url) {
   throw new Error('فشل استخراج الوسائط — جرب cobalt.tools مباشرةً أو تأكد من صحة الرابط')
 }
 
-// Piped fallback that returns the full structured shape (not just one URL).
+// Piped fallback — races ALL instances in parallel, first valid response wins.
+// Much faster than sequential iteration: dead instances don't block live ones.
+function _parsePipedResponse(j, videoId, instance) {
+  const audio = (j.audioStreams || [])
+    .filter(a => a && a.url)
+    .map(a => ({
+      url: a.url,
+      ext: (a.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
+      bitrate: Number(a.bitrate) || null,
+      size: a.contentLength ? Number(a.contentLength) : null,
+      mime: a.mimeType || 'audio/mp4',
+      acodec: a.codec || null,
+    }))
+    .sort((x, y) => Number(y.bitrate || 0) - Number(x.bitrate || 0))
+  const video = (j.videoStreams || [])
+    .filter(v => v && v.url)
+    .map(v => ({
+      url: v.url,
+      quality: v.quality || (v.height ? `${v.height}p` : null),
+      height: v.height || null,
+      ext: (v.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
+      size: v.contentLength ? Number(v.contentLength) : null,
+      mime: v.mimeType || 'video/mp4',
+      vcodec: v.codec || null,
+      hasAudio: v.videoOnly === false,
+    }))
+    .sort((x, y) => Number(y.height || 0) - Number(x.height || 0))
+  if (!audio.length && !video.length) throw new Error('piped: no streams in response')
+  return {
+    title: j.title || '',
+    duration: Number(j.duration) || 0,
+    thumbnail: j.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    uploader: j.uploader || '',
+    audio,
+    video,
+    source: 'piped',
+    instance,
+  }
+}
+
 async function extractWithPipedFull(videoId) {
   if (!videoId) throw new Error('no videoId')
-  let lastErr
-  for (const base of PIPED_API_INSTANCES) {
-    try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 8000)
-      const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
-        signal: ctrl.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 DZ-GPT/1.0' },
-      })
-      clearTimeout(t)
-      if (!r.ok) { lastErr = new Error(`piped ${r.status}`); continue }
-      const j = await r.json()
-      const audio = (j.audioStreams || [])
-        .filter(a => a && a.url)
-        .map(a => ({
-          url: a.url,
-          ext: (a.format || '').toLowerCase().includes('webm') ? 'webm' : 'm4a',
-          bitrate: Number(a.bitrate) || null,
-          size: a.contentLength ? Number(a.contentLength) : null,
-          mime: a.mimeType || 'audio/mp4',
-          acodec: a.codec || null,
-        }))
-        .sort((x, y) => Number(y.bitrate || 0) - Number(x.bitrate || 0))
-      const video = (j.videoStreams || [])
-        .filter(v => v && v.url)
-        .map(v => ({
-          url: v.url,
-          quality: v.quality || (v.height ? `${v.height}p` : null),
-          height: v.height || null,
-          ext: (v.format || '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
-          size: v.contentLength ? Number(v.contentLength) : null,
-          mime: v.mimeType || 'video/mp4',
-          vcodec: v.codec || null,
-          hasAudio: v.videoOnly === false,
-        }))
-        .sort((x, y) => Number(y.height || 0) - Number(x.height || 0))
-      return {
-        title: j.title || '',
-        duration: Number(j.duration) || 0,
-        thumbnail: j.thumbnailUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        uploader: j.uploader || '',
-        audio,
-        video,
-        source: 'piped',
-        instance: base,
-      }
-    } catch (e) {
-      lastErr = e
-      // try next instance
-    }
+
+  // Race first half of instances (fastest ones) in parallel
+  const firstBatch = PIPED_API_INSTANCES.slice(0, 7)
+  const secondBatch = PIPED_API_INSTANCES.slice(7)
+
+  const tryInstance = async (base) => {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 9000)
+    const r = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
+    })
+    clearTimeout(t)
+    if (!r.ok) throw new Error(`piped:${base} status=${r.status}`)
+    const j = await r.json()
+    return _parsePipedResponse(j, videoId, base)
   }
-  throw lastErr || new Error('all piped instances failed')
+
+  // Try first batch in parallel
+  try {
+    return await Promise.any(firstBatch.map(b => tryInstance(b)))
+  } catch (_) {
+    // All first-batch failed → try second batch
+  }
+
+  // Try second batch in parallel
+  try {
+    return await Promise.any(secondBatch.map(b => tryInstance(b)))
+  } catch (e) {
+    throw new Error('all piped instances failed')
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

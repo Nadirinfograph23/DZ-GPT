@@ -29110,28 +29110,64 @@ async function extractWithCobaltAPI(url) {
   throw lastErr
 }
 
-// Multi-platform media info extraction — yt-dlp primary → Cobalt API fallback
-// ✅ FIX: أُضيف Cobalt fallback — كانت الدالة تُلقي الخطأ مباشرةً بدون محاولة بديلة
+// Multi-platform media info extraction
+// Strategy:
+//   YouTube  → Cobalt first (own infra, no datacenter-IP block) → yt-dlp fallback → Piped
+//   Others   → yt-dlp first → Cobalt fallback
+const _YT_HOSTNAME_RE = /(?:^|\.)(?:youtube\.com|youtu\.be|youtube-nocookie\.com|ytimg\.com)$/i
+
+function isYouTubeUrl(url) {
+  try { return _YT_HOSTNAME_RE.test(new URL(url).hostname) } catch { return false }
+}
+
 async function extractMediaInfoAny(url) {
-  // 1) yt-dlp primary — supports all platforms when not blocked
+  const isYT = isYouTubeUrl(url)
+
+  if (isYT) {
+    // ── YouTube: Cobalt first (bypasses datacenter-IP block) ──────────────
+    try {
+      const cobaltResult = await extractWithCobaltAPI(url)
+      console.log(`[extract:cobalt(yt):ok] url=${url.slice(0, 60)}`)
+      return cobaltResult
+    } catch (e0) {
+      console.warn('[extract:cobalt(yt):fail]', e0.message?.slice(0, 120))
+    }
+
+    // ── YouTube: yt-dlp fallback with best client rotation ────────────────
+    try {
+      const raw = await extractWithYtDlp(url)
+      const { audio, video } = processFormats(raw.formats)
+      console.log(`[extract:yt-dlp(yt):ok] audio=${audio.length} video=${video.length}`)
+      return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
+    } catch (e1) {
+      console.warn('[extract:yt-dlp(yt):fail]', e1.message?.slice(0, 120))
+    }
+
+    // ── YouTube: Piped full-structured fallback ────────────────────────────
+    try {
+      const ytId = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
+      if (ytId) {
+        const piped = await extractWithPipedFull(ytId)
+        console.log(`[extract:piped(yt):ok] video=${piped.video?.length} audio=${piped.audio?.length}`)
+        return piped
+      }
+    } catch (e2) {
+      console.warn('[extract:piped(yt):fail]', e2.message?.slice(0, 120))
+    }
+
+    throw new Error('تعذّر تحميل هذا الفيديو من YouTube — قد يكون محمياً أو محجوباً في منطقتك')
+  }
+
+  // ── Non-YouTube: yt-dlp primary → Cobalt fallback ─────────────────────
   try {
     const raw = await extractWithYtDlp(url)
     const { audio, video } = processFormats(raw.formats)
     console.log(`[extract:yt-dlp:ok] audio=${audio.length} video=${video.length} url=${url.slice(0, 60)}`)
-    return {
-      title: raw.title,
-      duration: raw.duration,
-      thumbnail: raw.thumbnail,
-      uploader: raw.uploader,
-      audio,
-      video,
-      source: 'yt-dlp',
-    }
+    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
   } catch (e1) {
     console.warn('[extract:yt-dlp:fail]', e1.message?.slice(0, 120))
   }
 
-  // 2) Cobalt API — public instances (YouTube, Facebook, Instagram, TikTok, Twitter, Vimeo…)
   try {
     const cobaltResult = await extractWithCobaltAPI(url)
     return cobaltResult
@@ -29139,7 +29175,6 @@ async function extractMediaInfoAny(url) {
     console.warn('[extract:cobalt:fail]', e2.message?.slice(0, 120))
   }
 
-  // All engines failed
   throw new Error('فشل استخراج الوسائط — جرب cobalt.tools مباشرةً أو تأكد من صحة الرابط')
 }
 

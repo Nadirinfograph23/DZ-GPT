@@ -65,39 +65,54 @@ async function extractYouTube(url: string, signal?: AbortSignal): Promise<MediaI
   const id = extractYouTubeId(url)
   if (!id) throw new Error('رابط YouTube غير صالح')
 
+  // ── Primary: universal extractor (Cobalt first → yt-dlp → Piped) ────────
+  // /api/dz-agent/download uses extractMediaInfoAny which tries Cobalt first
+  // for YouTube — bypasses datacenter-IP blocks that affect InnerTube.
+  try {
+    const resp = await fetch(`/api/dz-agent/download?url=${encodeURIComponent(url)}`, { signal })
+    if (resp.ok) {
+      const d = await resp.json()
+      if (d.video?.length || d.audio?.length) {
+        return {
+          title: d.title || '',
+          thumbnail: d.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          duration: d.duration || 0,
+          uploader: d.uploader || '',
+          video: (d.video || []) as VideoFormat[],
+          audio: (d.audio || []) as AudioFormat[],
+          canStream: true,
+          cobaltUrl: `https://cobalt.tools/?u=${encodeURIComponent(url)}`,
+        }
+      }
+    }
+  } catch (error) {
+    if ((error as any)?.name === 'AbortError') throw error
+  }
+
+  // ── Fallback: InnerTube direct (fast metadata, may have streams) ─────────
   let d: any = null
   try {
     const resp = await fetch(`/api/yt-stream?id=${encodeURIComponent(id)}`, { signal })
     if (resp.ok) d = await resp.json()
   } catch (error) {
-    if (signal?.aborted) throw error
+    if ((error as any)?.name === 'AbortError') throw error
   }
 
-  // The regular endpoint may have metadata but no stream when YouTube blocks
-  // the server IP. Try the universal extractor before showing the honest
-  // "restricted" state in the card.
-  if (!d?.video?.length && !d?.audio?.length) {
-    try {
-      const fallback = await fetch(`/api/extract?url=${encodeURIComponent(url)}`, { signal })
-      if (fallback.ok) d = await fallback.json()
-    } catch (error) {
-      if (signal?.aborted) throw error
+  if (d?.video?.length || d?.audio?.length) {
+    return {
+      title: d.title || '',
+      thumbnail: d.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      duration: d.duration || 0,
+      uploader: d.uploader || '',
+      video: (d.video || []) as VideoFormat[],
+      audio: (d.audio || []) as AudioFormat[],
+      canStream: true,
+      cobaltUrl: `https://cobalt.tools/?u=${encodeURIComponent(url)}`,
     }
   }
-  if (!d?.ok && !d?.video?.length && !d?.audio?.length) {
-    throw new Error(d?.error || 'تعذّر استخراج YouTube من الخادم — قد يكون الفيديو محمياً أو محجوباً')
-  }
 
-  return {
-    title: d.title || '',
-    thumbnail: d.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
-    duration: d.duration || 0,
-    uploader: d.uploader || '',
-    video: (d.video || []) as VideoFormat[],
-    audio: (d.audio || []) as AudioFormat[],
-    canStream: d.canStream !== false,
-    cobaltUrl: `https://cobalt.tools/?u=${encodeURIComponent(url)}`,
-  }
+  // ── All failed: honest error ──────────────────────────────────────────────
+  throw new Error('تعذّر استخراج YouTube — قد يكون الفيديو محمياً أو محجوباً')
 }
 
 // ══════════════════════════════════════════════════════════════════

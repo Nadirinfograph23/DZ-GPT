@@ -243,9 +243,29 @@ async function extractVimeo(url: string, signal?: AbortSignal): Promise<MediaInf
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Server fallback — Instagram / Facebook / Pinterest / Dailymotion
-// Calls our server-side yt-dlp endpoint
+// Social extractor — Facebook / Instagram / Pinterest + all others
+// Calls /api/social/extract (platform-specific APIs + Cobalt + yt-dlp)
+// Falls back to /api/dz-agent/download if social endpoint fails.
 // ══════════════════════════════════════════════════════════════════
+async function extractViaSocial(url: string, platform: string, signal?: AbortSignal): Promise<MediaInfo> {
+  const resp = await fetch(
+    `/api/social/extract?url=${encodeURIComponent(url)}&platform=${encodeURIComponent(platform)}`,
+    { signal }
+  )
+  const d = await resp.json()
+  if (!resp.ok || !d.ok) throw new Error(d.error ?? `Social extract HTTP ${resp.status}`)
+  return {
+    title: d.title ?? '',
+    thumbnail: d.thumbnail ?? '',
+    duration: d.duration ?? 0,
+    uploader: d.uploader ?? '',
+    video: (d.video ?? []) as VideoFormat[],
+    audio: (d.audio ?? []) as AudioFormat[],
+    canStream: true,
+  }
+}
+
+// ── Generic server fallback (yt-dlp) ──────────────────────────────
 async function extractViaServer(url: string, signal?: AbortSignal): Promise<MediaInfo> {
   const resp = await fetch(`/api/dz-agent/download?url=${encodeURIComponent(url)}`, { signal })
   const d = await resp.json()
@@ -261,19 +281,44 @@ async function extractViaServer(url: string, signal?: AbortSignal): Promise<Medi
   }
 }
 
+// ── Facebook ───────────────────────────────────────────────────────
+async function extractFacebook(url: string, signal?: AbortSignal): Promise<MediaInfo> {
+  try { return await extractViaSocial(url, 'facebook', signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+  return extractViaServer(url, signal)
+}
+
+// ── Instagram ──────────────────────────────────────────────────────
+async function extractInstagram(url: string, signal?: AbortSignal): Promise<MediaInfo> {
+  try { return await extractViaSocial(url, 'instagram', signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+  return extractViaServer(url, signal)
+}
+
+// ── Pinterest ──────────────────────────────────────────────────────
+async function extractPinterest(url: string, signal?: AbortSignal): Promise<MediaInfo> {
+  try { return await extractViaSocial(url, 'pinterest', signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+  return extractViaServer(url, signal)
+}
+
 // ══════════════════════════════════════════════════════════════════
 // Main entry point
 // ══════════════════════════════════════════════════════════════════
 export async function extractMedia(url: string, platform: string | null, signal?: AbortSignal): Promise<MediaInfo> {
   switch (platform) {
-    case 'youtube':    return extractYouTube(url, signal)
-    case 'tiktok':     return extractTikTok(url, signal)
-    case 'twitter':    return extractTwitter(url, signal)
-    case 'vimeo':      return extractVimeo(url, signal)
-    case 'instagram':
-    case 'facebook':
-    case 'pinterest':
+    case 'youtube':     return extractYouTube(url, signal)
+    case 'tiktok':      return extractTikTok(url, signal)
+    case 'twitter':     return extractTwitter(url, signal)
+    case 'vimeo':       return extractVimeo(url, signal)
+    case 'facebook':    return extractFacebook(url, signal)
+    case 'instagram':   return extractInstagram(url, signal)
+    case 'pinterest':   return extractPinterest(url, signal)
     case 'dailymotion':
-    default:           return extractViaServer(url, signal)
+    default:            return extractViaSocial(url, platform ?? 'other', signal)
+                          .catch(() => extractViaServer(url, signal))
   }
 }

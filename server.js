@@ -29922,6 +29922,277 @@ app.get('/api/dz-agent/download', aiLimiter, async (req, res) => {
   }
 })
 
+// ════════════════════════════════════════════════════════════════════════════
+// 📥 SOCIAL MEDIA EXTRACTORS — Facebook / Instagram / Pinterest / TikTok / X
+// Free public APIs used server-side to bypass browser CORS restrictions.
+// Order: platform-specific API → Cobalt universal → yt-dlp fallback
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Facebook → snapsave.app ──────────────────────────────────────────────
+async function _extractFacebookSnapsave(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const body = new URLSearchParams({ url, lang: 'en', v: 'a2' })
+    const resp = await fetch('https://snapsave.app/action.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://snapsave.app',
+        'Referer': 'https://snapsave.app/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      body: body.toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`snapsave HTTP ${resp.status}`)
+    const html = await resp.text()
+
+    // Extract mp4 URLs from anchor tags and inline patterns
+    const video = []
+    const seen = new Set()
+    // href="https://...fbcdn..."
+    const hrefRe = /href="(https:\/\/[^"]*(?:fbcdn|video)[^"]*\.mp4[^"]*)"/gi
+    let m
+    while ((m = hrefRe.exec(html)) !== null) {
+      const u = m[1].replace(/&amp;/g, '&')
+      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: video.length === 0 ? 'HD' : 'SD', height: video.length === 0 ? 720 : 480, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    // Fallback: any mp4 URL in HTML
+    const anyMp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
+    while ((m = anyMp4Re.exec(html)) !== null) {
+      const u = m[0].replace(/&amp;/g, '&').replace(/\\u0026/g, '&')
+      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'SD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    if (video.length === 0) throw new Error('snapsave: no video links found')
+    const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+    return { title: titleM?.[1]?.trim() || 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'snapsave' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Instagram → saveclip.app + ddinstagram fallback ──────────────────────
+async function _extractInstagramSaveclip(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const body = new URLSearchParams({ url })
+    const resp = await fetch('https://saveclip.app/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://saveclip.app',
+        'Referer': 'https://saveclip.app/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body.toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`saveclip HTTP ${resp.status}`)
+    const ct = resp.headers.get('content-type') || ''
+    let html = ''
+    let jsonData = null
+    if (ct.includes('json')) {
+      jsonData = await resp.json()
+    } else {
+      html = await resp.text()
+      try { jsonData = JSON.parse(html) } catch { /* HTML response */ }
+    }
+    if (jsonData) {
+      const dlUrl = jsonData.url || jsonData.download_url || jsonData.videoUrl
+      if (dlUrl) return { title: jsonData.title || 'Instagram Video', duration: jsonData.duration || 0, thumbnail: jsonData.thumbnail || jsonData.cover || '', uploader: jsonData.author || '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'saveclip' }
+      const items = jsonData.videos || jsonData.data || jsonData.links || []
+      if (items.length > 0) {
+        const video = items.map(v => ({ url: v.url || v.download_url || v.link, quality: v.quality || 'HD', height: null, ext: 'mp4', size: null, hasAudio: true })).filter(v => v.url)
+        if (video.length > 0) return { title: jsonData.title || 'Instagram Video', duration: 0, thumbnail: jsonData.thumbnail || '', uploader: '', audio: [], video, source: 'saveclip' }
+      }
+    }
+    // Parse HTML for mp4 links
+    const video = []
+    const seen = new Set()
+    const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
+    let m
+    while ((m = mp4Re.exec(html)) !== null) {
+      const u = m[0].replace(/&amp;/g, '&')
+      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    if (video.length === 0) throw new Error('saveclip: no video links found')
+    return { title: 'Instagram Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'saveclip' }
+  } finally { clearTimeout(t) }
+}
+
+// ── TikTok → tikwm.com (server-side backup) ──────────────────────────────
+async function _extractTikTokTikwm(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const body = new URLSearchParams({ url, hd: '1' })
+    const resp = await fetch('https://www.tikwm.com/api/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
+      body: body.toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`tikwm HTTP ${resp.status}`)
+    const d = await resp.json()
+    if (d.code !== 0 || !d.data) throw new Error(d.msg || 'tikwm: no data')
+    const dat = d.data
+    const video = []
+    if (dat.hdplay) video.push({ url: dat.hdplay, quality: 'HD (بدون علامة مائية)', height: null, ext: 'mp4', size: dat.hd_size ?? null, hasAudio: true })
+    if (dat.play)   video.push({ url: dat.play,   quality: 'SD (بدون علامة مائية)', height: null, ext: 'mp4', size: dat.size   ?? null, hasAudio: true })
+    if (video.length === 0) throw new Error('tikwm: no video URLs')
+    return { title: dat.title || dat.desc || 'TikTok Video', duration: dat.duration ?? 0, thumbnail: dat.cover || '', uploader: dat.author?.nickname || '', audio: dat.music ? [{ url: dat.music, ext: 'mp3', bitrate: 128, size: null, muxed: false }] : [], video, source: 'tikwm' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Twitter/X → fxtwitter + vxtwitter ────────────────────────────────────
+async function _extractTwitterFxtwitter(url) {
+  const m = url.match(/\/status\/(\d+)/)
+  if (!m) throw new Error('invalid Twitter/X URL')
+  const id = m[1]
+  let d = null
+  for (const base of ['https://api.fxtwitter.com', 'https://api.vxtwitter.com']) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 10000)
+      const r = await fetch(`${base}/i/status/${id}`, { signal: ctrl.signal, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' } })
+      clearTimeout(t)
+      if (!r.ok) continue
+      const raw = await r.json()
+      if (raw?.tweet || raw?.media_extended) { d = raw; break }
+    } catch {}
+  }
+  if (!d) throw new Error('fxtwitter: no response from any instance')
+  const tweet = d.tweet || {}
+  const media = tweet.media || {}
+  const videos = media.videos || []
+  const mediaExtended = d.media_extended || []
+  const video = []
+  for (const vid of videos) {
+    const variants = (vid.variants || []).filter(v => v.url && (v.content_type?.includes('video') || v.url?.endsWith('.mp4'))).sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
+    for (const v of variants) video.push({ url: v.url, quality: v.bitrate ? `${Math.round(v.bitrate / 1000)} kbps` : null, height: null, ext: 'mp4', size: null, hasAudio: true })
+  }
+  for (const me of mediaExtended) {
+    if (me.type === 'video' && me.url) {
+      const variants = (me.variants || [{ url: me.url, bitrate: 0 }]).sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
+      for (const v of variants) if (v.url) video.push({ url: v.url, quality: null, height: null, ext: 'mp4', size: null, hasAudio: true })
+    }
+  }
+  if (video.length === 0) throw new Error('fxtwitter: no video found in this tweet')
+  const thumb = media.videos?.[0]?.thumbnail_url || media.photos?.[0]?.url || mediaExtended[0]?.thumbnail_url || ''
+  return { title: (tweet.text || d.text || '').slice(0, 120) || 'Twitter/X Video', duration: 0, thumbnail: thumb, uploader: tweet.author?.name ?? tweet.author?.screen_name ?? '', audio: [], video, source: 'fxtwitter' }
+}
+
+// ── Pinterest → oEmbed + pindown.io fallback ──────────────────────────────
+async function _extractPinterestPindown(url) {
+  // 1) Pinterest oEmbed (free, no auth)
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 10000)
+    const r = await fetch(`https://www.pinterest.com/oembed/?url=${encodeURIComponent(url)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; DZ-GPT/2.0)' },
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (r.ok) {
+      const d = await r.json()
+      const html = d.html || ''
+      const srcM = html.match(/src="(https:\/\/[^"]+\.mp4[^"]*)"/)
+      if (srcM) return { title: d.title || 'Pinterest Video', duration: 0, thumbnail: d.thumbnail_url || '', uploader: d.author_name || '', audio: [], video: [{ url: srcM[1], quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'pinterest-oembed' }
+    }
+  } catch {}
+
+  // 2) pindown.io
+  const ctrl2 = new AbortController()
+  const t2 = setTimeout(() => ctrl2.abort(), 15000)
+  try {
+    const body = new URLSearchParams({ url })
+    const resp = await fetch('https://pindown.io/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://pindown.io', 'Referer': 'https://pindown.io/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      body: body.toString(),
+      signal: ctrl2.signal,
+    })
+    clearTimeout(t2)
+    if (resp.ok) {
+      const ct = resp.headers.get('content-type') || ''
+      if (ct.includes('json')) {
+        const d = await resp.json()
+        const dlUrl = d.url || d.download_url || d.video_url
+        if (dlUrl) return { title: d.title || 'Pinterest Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'pindown' }
+      }
+      const html = await resp.text()
+      const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
+      const urls = []
+      const seen = new Set()
+      let m
+      while ((m = mp4Re.exec(html)) !== null) {
+        const u = m[0].replace(/&amp;/g, '&')
+        if (!seen.has(u)) { seen.add(u); urls.push(u) }
+      }
+      if (urls.length > 0) return { title: 'Pinterest Video', duration: 0, thumbnail: '', uploader: '', audio: [], video: urls.map(u => ({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true })), source: 'pindown' }
+    }
+  } finally { clearTimeout(t2) }
+
+  throw new Error('Pinterest extraction failed — all methods exhausted')
+}
+
+// ── /api/social/extract ——— main social endpoint ──────────────────────────
+app.get('/api/social/extract', aiLimiter, async (req, res) => {
+  const url      = String(req.query.url || '').trim()
+  const platform = String(req.query.platform || '').toLowerCase()
+  if (!url) return res.status(400).json({ ok: false, error: 'Missing url parameter' })
+
+  console.log(`[SocialExtract] platform=${platform} url=${url.slice(0, 80)}`)
+  const cacheKey = `social:${url}`
+  const cached   = extractCacheGet(cacheKey)
+  if (cached) return res.json({ ok: true, ...cached, cached: true })
+
+  let lastErr = new Error('no extractor succeeded')
+
+  const tryAndReturn = async (fn, label) => {
+    try {
+      const info = await fn()
+      extractCacheSet(cacheKey, info, 10 * 60 * 1000)
+      console.log(`[SocialExtract:${label}] ✅ videos=${info.video?.length ?? 0}`)
+      return res.json({ ok: true, ...info })
+    } catch (e) {
+      lastErr = e
+      console.warn(`[SocialExtract:${label}:fail]`, e.message?.slice(0, 100))
+      return null
+    }
+  }
+
+  // Platform-specific first pass
+  if (platform === 'facebook') { const r = await tryAndReturn(() => _extractFacebookSnapsave(url), 'facebook:snapsave'); if (r) return }
+  if (platform === 'instagram') { const r = await tryAndReturn(() => _extractInstagramSaveclip(url), 'instagram:saveclip'); if (r) return }
+  if (platform === 'tiktok')   { const r = await tryAndReturn(() => _extractTikTokTikwm(url), 'tiktok:tikwm');         if (r) return }
+  if (platform === 'twitter')  { const r = await tryAndReturn(() => _extractTwitterFxtwitter(url), 'twitter:fxtwitter'); if (r) return }
+  if (platform === 'pinterest'){ const r = await tryAndReturn(() => _extractPinterestPindown(url), 'pinterest:pindown'); if (r) return }
+
+  // Universal Cobalt fallback
+  { const r = await tryAndReturn(() => extractWithCobaltAPI(url), 'cobalt'); if (r) return }
+
+  // yt-dlp final fallback
+  try {
+    const raw = await extractWithYtDlp(url)
+    const { audio, video } = processFormats(raw.formats)
+    const info = { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
+    extractCacheSet(cacheKey, info, 10 * 60 * 1000)
+    console.log(`[SocialExtract:yt-dlp] ✅ platform=${platform}`)
+    return res.json({ ok: true, ...info })
+  } catch (e) {
+    console.warn('[SocialExtract:yt-dlp:fail]', e.message?.slice(0, 100))
+  }
+
+  return res.status(502).json({ ok: false, error: lastErr.message?.slice(0, 200) || 'فشل استخراج الوسائط — حاول مرة أخرى' })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+
 app.get('/api/extract', aiLimiter, async (req, res) => {
   const url = String(req.query.url || '').trim()
   if (!url) return res.status(400).json({ error: 'Missing URL' })

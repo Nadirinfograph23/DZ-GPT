@@ -1,8 +1,8 @@
 {
-  "commit": "e7b661172742fca24e1a7ba31c85f80c68c1e07b",
-  "commitShort": "e7b66117",
+  "commit": "3f5f7cbee56a291374b4c643640faa396f41e580",
+  "commitShort": "3f5f7cbe",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح أخبار الذكاء الاصطناعي+الجزائر العالقة، سعر العملة، تحميل الفيديوهات 2026",
-  "deployedAt": "2026-07-28T06:35:35.456342Z",
+  "message": "fix: إصلاح بطاقة أخبار الذكاء الاصطناعي — مصادر عالمية + فلترة صحيحة + تخطي الجرائد المحلية",
+  "deployedAt": "2026-07-28T14:22:06.283563Z",
   "deployedBy": "scripts/deploy.py"
 }

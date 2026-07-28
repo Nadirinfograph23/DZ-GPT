@@ -9315,6 +9315,9 @@ function extractNewsSubject(msg) {
   const genericTerms = [
     'الجزائر','algeria','algérie','الاقتصاد','السياسة','الرياضة','اليوم','العالم',
     'economy','politics','sport','world','today','الأخبار','news',
+    // ✅ FIX: مصطلحات التقنية/الذكاء الاصطناعي عامة — تعامَل مع مسار _isTechAIQuery المخصص
+    'ذكاء اصطناعي','الذكاء الاصطناعي','الذكاء','تكنولوجيا','التكنولوجيا',
+    'تقنية','التقنية','ai','tech','technology','artificial intelligence',
   ]
   if (genericTerms.some(g => s.toLowerCase() === g.toLowerCase())) return null
 
@@ -9928,6 +9931,13 @@ function buildRSSContext(feedResults, queryType, subject = null, maxAgeDays = 14
   function itemMatchesSubject(item) {
     if (!subjectTokens || subjectTokens.length === 0) return true
     const haystack = ((item.title || '') + ' ' + (item.description || '')).toLowerCase()
+    // ✅ FIX: للموضوعات متعددة الكلمات → ابحث عن العبارة الكاملة أولاً، ثم كل الكلمات (AND)
+    // السابق: some (OR) → يمرّر مقالات تحتوي كلمة واحدة فقط من الموضوع
+    if (subjectTokens.length >= 2) {
+      const fullPhrase = subject ? subject.toLowerCase() : null
+      if (fullPhrase && haystack.includes(fullPhrase)) return true
+      return subjectTokens.every(tok => haystack.includes(tok))
+    }
     return subjectTokens.some(tok => haystack.includes(tok))
   }
 
@@ -10163,11 +10173,12 @@ const TECH_FEEDS_DASHBOARD = [
   // ── مصادر عربية متخصصة في التقنية ──────────────────────────────────────
   { name: 'تك عربي',            url: 'https://techarabi.com/feed/' },
   { name: 'Menabytes تقنية MENA', url: 'https://www.menabytes.com/feed/' },
-  // ── Google News عربي — ذكاء اصطناعي وتكنولوجيا ──────────────────────────
-  { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+AI+2025&hl=ar&gl=DZ&ceid=DZ:ar' },
-  { name: 'Google تحول رقمي',     url: 'https://news.google.com/rss/search?q=%D8%AA%D8%AD%D9%88%D9%84+%D8%B1%D9%82%D9%85%D9%8A+%D8%A7%D9%84%D8%AC%D8%B2%D8%A7%D8%A6%D8%B1&hl=ar&gl=DZ&ceid=DZ:ar' },
+  // ── Google News عالمي — ذكاء اصطناعي وتكنولوجيا ─────────────────────────
+  // ✅ FIX: gl=US&ceid=US:ar بدل DZ:ar — أخبار الذكاء الاصطناعي عالمية وليست جزائرية فقط
+  { name: 'Google ذكاء اصطناعي',  url: 'https://news.google.com/rss/search?q=%D8%B0%D9%83%D8%A7%D8%A1+%D8%A7%D8%B5%D8%B7%D9%86%D8%A7%D8%B9%D9%8A&hl=ar&gl=US&ceid=US:ar' },
+  { name: 'Google تكنولوجيا',     url: 'https://news.google.com/rss/search?q=%D8%AA%D9%83%D9%86%D9%88%D9%84%D9%88%D8%AC%D9%8A%D8%A7+%D8%A7%D9%84%D8%B0%D9%83%D8%A7%D8%A1&hl=ar&gl=US&ceid=US:ar' },
+  { name: 'Google ChatGPT Gemini', url: 'https://news.google.com/rss/search?q=ChatGPT+Gemini+Claude+AI+2026&hl=ar&gl=US&ceid=US:ar' },
+  { name: 'Google AI English',     url: 'https://news.google.com/rss/search?q=artificial+intelligence+AI+models+2026&hl=en&gl=US&ceid=US:en' },
 ]
 
 const TECH_CATEGORY_KEYWORDS = {
@@ -24077,7 +24088,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     //         تستخدم TECH_FEEDS_DASHBOARD (ذكاء اصطناعي + تكنولوجيا) بدلاً من الصحف الجزائرية العامة
     if (newsQueryType === 'sports') feedsToFetch = RSS_FEEDS.sports
     else if (_isIntlNewsQ) feedsToFetch = [...INTERNATIONAL_RSS_FEEDS, ...RSS_FEEDS.national.slice(-5)]
-    else if (_isTechAIQuery) feedsToFetch = [...TECH_FEEDS_DASHBOARD, ...RSS_FEEDS.national.slice(0, 3)]
+    // ✅ FIX: لا تُضف الجرائد الوطنية للاستعلامات التقنية — تلوّث النتائج بأخبار محلية
+    else if (_isTechAIQuery) feedsToFetch = TECH_FEEDS_DASHBOARD
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
 
@@ -24109,10 +24121,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
 
       // 2) AI-specific augmentation (general AI news)
+      // ✅ FIX: gl=US دائماً لأخبار الذكاء الاصطناعي عالمية — السابق: DZ يقيّدها بالجزائر فقط
       if (_isTechAIQuery) {
         const aiNewsLang = /[\u0600-\u06FF]/.test(lastUserMessage) ? 'ar' : 'en'
-        const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج 2026' : 'artificial intelligence AI news 2026'
-        const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=${aiNewsLang === 'ar' ? 'DZ' : 'US'}&ceid=${aiNewsLang === 'ar' ? 'DZ:ar' : 'US:en'}`
+        const aiQuery = aiNewsLang === 'ar' ? 'ذكاء اصطناعي نماذج أخبار 2026' : 'artificial intelligence AI models news 2026'
+        const aiRssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(aiQuery)}&hl=${aiNewsLang}&gl=US&ceid=${aiNewsLang === 'ar' ? 'US:ar' : 'US:en'}`
         _parallelRssPromises.push(searchGoogleNewsRSS(aiRssUrl))
         _parallelRssLabels.push({ type: 'ai-augment' })
       }

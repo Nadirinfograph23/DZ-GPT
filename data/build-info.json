@@ -1,8 +1,8 @@
 {
-  "commit": "9c1ac033c5b6b6bd33f9182bc88ed62decf47dfc",
-  "commitShort": "9c1ac033",
+  "commit": "e7b661172742fca24e1a7ba31c85f80c68c1e07b",
+  "commitShort": "e7b66117",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إضافة تحميل فيديوهات مواقع التواصل الاجتماعي (Facebook/Instagram/Pinterest/TikTok/X) عبر /api/social/extract",
-  "deployedAt": "2026-07-28T00:31:41.728559Z",
+  "message": "fix: إصلاح أخبار الذكاء الاصطناعي+الجزائر العالقة، سعر العملة، تحميل الفيديوهات 2026",
+  "deployedAt": "2026-07-28T06:35:35.456342Z",
   "deployedBy": "scripts/deploy.py"
 }

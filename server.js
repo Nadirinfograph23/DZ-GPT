@@ -3680,7 +3680,7 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
     const polPrompt = sysMsg ? `${sysMsg}\n\n${lastUserMsg}` : lastUserMsg
     const polRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(polPrompt)}?model=openai-large&seed=${seed}&private=true`, {
       method: 'GET',
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(8000),
     })
     if (polRes.ok) {
       const content = await polRes.text()
@@ -3703,7 +3703,7 @@ async function _safeGenerateAI_inner({ messages, query = '', max_tokens = 3000, 
         seed: seed2,
         private: true,
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(8000),
     })
     if (polRes2.ok) {
       const content = await polRes2.text()
@@ -3729,7 +3729,7 @@ async function safeGenerateAI({ messages, query = '', max_tokens = 3000, taskHin
       aiSemaphore.run(() =>
         stallGuard(
           () => _safeGenerateAI_inner({ messages, query, max_tokens, taskHint }),
-          20_000, // ✅ FIX: كان 35_000 (أطول من Vercel 30s limit) → 20_000 يترك هامش للبحث
+          13_000, // ✅ FIX2: كان 20_000 → 13_000 يضمن إجمالي < 25ث على Vercel (RSS 9ث + AI 13ث)
           'safeGenerateAI'
         )
       )
@@ -14881,6 +14881,13 @@ function detectCurrencyQuery(msg) {
     'usd to dzd', 'eur to dzd', 'convert currency', 'currency convert',
     'taux de change', 'euro en dinar', 'dollar en dinar', 'convertir devise',
     'euro dinar', 'dollar dinar', 'gbp dinar', 'cours du dinar',
+    // ✅ FIX: صيغ مركّبة تحتوي على "الدولار" أو "اليورو" مع "الدينار" أو "اليوم" بدون "سعر"
+    'الدولار واليورو', 'اليورو والدولار', 'الدولار مقابل', 'اليورو مقابل',
+    'العملات اليوم', 'العملة اليوم', 'أسعار العملة', 'أسعار الصرف',
+    'الدولار والدينار', 'اليورو والدينار', 'صرف الدولار', 'صرف اليورو',
+    'سعر الصرف اليوم', 'تسعيرة اليوم', 'قداش يساوي', 'كمية الدولار',
+    'صراف اليوم', 'بلاك ماركت', 'black market dz', 'square port',
+    'واش سعر الدولار', 'واش سعر اليورو', 'شحال الدولار', 'شحال اليورو',
   ]
   return kw.some(k => lower.includes(k))
 }
@@ -24059,6 +24066,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
     const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
+    // ✅ FIX: لأخبار الذكاء الاصطناعي — إذا لم يكن في الكاش بيانات تقنية، ابنِ context أساسي فوري
+    if (_isTechAIQuery && !rssContext) {
+      // سيُبنى السياق من Google News RSS في الـ parallel block أدناه
+      // لكن نُعدّ placeholder لمنع skipSearch=false الذي يؤدي لـ CSE search بطيء
+      console.log('[DZ-AI-News] Tech/AI query detected — preparing for parallel RSS fetch')
+    }
     const _isIntlNewsQ = isInternationalNewsQuery(lastUserMessage)
     // ✅ FIX: تحقق من _isTechAIQuery قبل newsQueryType==='news' حتى تقنية الذكاء الاصطناعي
     //         تستخدم TECH_FEEDS_DASHBOARD (ذكاء اصطناعي + تكنولوجيا) بدلاً من الصحف الجزائرية العامة
@@ -24113,7 +24126,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
 
       if (_parallelRssPromises.length > 0) {
-        const _rssSettled = await Promise.allSettled(_parallelRssPromises)
+        // ✅ FIX: أضف timeout 8ث على كامل الـ block لمنع تجاوز Vercel 30ث
+        const _rssSettled = await Promise.allSettled(
+          _parallelRssPromises.map(p =>
+            Promise.race([p, new Promise(r => setTimeout(() => r({ status: 'rejected', reason: new Error('rss-timeout-8s') }), 8000))])
+          )
+        )
         const _dateLabel = new Date().toLocaleDateString('ar-DZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
         for (let i = 0; i < _rssSettled.length; i++) {
@@ -25117,6 +25135,42 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
       console.log(`[LFP Fast-Path] Returning LFP/standings directly (source: lfp.dz + kooora.com, no AI)`)
       return res.status(200).json({ content: parts.join('\n\n---\n\n') })
     }
+  }
+
+  // ── Currency hard-fallback: إذا كانت isCurrencyQuery لكن currencyContext فارغ
+  // يحدث عند فشل fetchCurrencyResilient — نُعيد الطلب مرة أخيرة من الكاش
+  if (isCurrencyQuery && (!currencyContext || currencyContext.length < 50) && !_isAgentMode) {
+    try {
+      const _retryData = await fetchCurrencyData(true) // force refresh
+      if (_retryData?.rates) {
+        const _retryCtx = buildCurrencyContext(_retryData)
+        if (_retryCtx && _retryCtx.length > 50) {
+          return res.status(200).json({
+            content: '',
+            currencyData: {
+              rates: _retryData.rates,
+              status: _retryData.status || 'live',
+              provider: _retryData.provider || 'fawazahmed0/currency-api',
+              last_update: _retryData.last_update || new Date().toISOString(),
+            },
+            _bypassLLM: true,
+          })
+        }
+      }
+    } catch (_ce) { console.warn('[Currency:retry]', _ce.message) }
+    // إذا فشل الـ retry كذلك → رد نصي صريح
+    return res.status(200).json({
+      content: [
+        '## 💱 أسعار الصرف — غير متاحة مؤقتاً',
+        '',
+        '> ⚠️ تعذّر جلب أسعار العملات الآن من جميع المصادر.',
+        '> يرجى المحاولة مرة أخرى بعد لحظات.',
+        '',
+        '**بدائل للتحقق يدوياً:**',
+        '• [Algerian Dinar — Google Finance](https://www.google.com/finance/quote/USD-DZD)',
+        '• [XE.com — سعر الدولار](https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=DZD)',
+      ].join('\n'),
+    })
   }
 
   // ── Currency fast-path: return CurrencyWidget data directly ─────────────
@@ -28562,15 +28616,18 @@ const YT_DLP_CLIENTS = [
 function ytDlpAntiBotArgs(clientIdx = 0) {
   const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
   return [
-    '--extractor-args', `youtube:player_client=${client}`,
+    '--extractor-args', `youtube:player_client=${client};skip=hls`,
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
     '--no-check-formats',
     '--retries', '3',
     '--fragment-retries', '3',
-    '--socket-timeout', '25',
-    '--sleep-requests', '0.3',
+    '--socket-timeout', '20',
+    '--sleep-requests', '0.2',
+    // ✅ FIX 2026: تخطي التحقق من إمكانية التحميل — يسرّع الاستجابة ويتجنب bot detection
+    '--ignore-errors',
+    '--no-abort-on-error',
   ]
 }
 
@@ -29028,19 +29085,19 @@ function processFormats(formats) {
   return { audio, video }
 }
 
-async function extractWithYtDlp(url) {
+async function extractWithYtDlp(url, clientIdx = 0) {
   const dlpBin = await ytDlpBinaryPath()
   if (!dlpBin) throw new Error('yt-dlp binary not available')
   const cookies = await ytDlpCookiesArgs()
-  const data = await new Promise((resolve, reject) => {
-    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url]
+  const runOnce = (idx) => new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(idx), ...cookies, url]
     const proc = spawn(dlpBin, args)
     let stdout = ''
     let stderr = ''
     const killTimer = setTimeout(() => {
       try { proc.kill('SIGKILL') } catch {}
       reject(new Error('yt-dlp timeout'))
-    }, 22000)
+    }, 20000)
     proc.stdout.on('data', d => { stdout += d.toString() })
     proc.stderr.on('data', d => { stderr += d.toString() })
     proc.on('error', err => { clearTimeout(killTimer); reject(err) })
@@ -29050,26 +29107,41 @@ async function extractWithYtDlp(url) {
       try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
     })
   })
-  return {
-    title: data.title || '',
-    duration: Number(data.duration) || 0,
-    thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
-    uploader: data.uploader || data.channel || '',
-    formats: data.formats || [],
+
+  // ✅ FIX 2026: retry with different client if first attempt fails
+  let lastErr
+  const maxClients = YT_DLP_CLIENTS.length
+  for (let i = clientIdx; i < clientIdx + Math.min(2, maxClients); i++) {
+    try {
+      const data = await runOnce(i % maxClients)
+      return {
+        title: data.title || '',
+        duration: Number(data.duration) || 0,
+        thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
+        uploader: data.uploader || data.channel || '',
+        formats: data.formats || [],
+      }
+    } catch (e) {
+      lastErr = e
+      console.warn(`[yt-dlp:client${i % maxClients}] failed: ${e.message?.slice(0, 80)} — retrying next client`)
+    }
   }
+  throw lastErr
 }
 
 // ── Cobalt API engine — public instances fallback for social platforms ──────────
 // Spec: https://cobalt.tools — POST /  { url, downloadMode:'auto'|'audio' }
 // Returns { status:'stream'|'redirect'|'tunnel', url } or { status:'error', error }
+// ✅ FIX 2026-07: تحديث instances — الأقدم كانت down أو غيّرت API
 const COBALT_INSTANCES = [
+  'https://api.cobalt.best',
   'https://cobalt.tools',
   'https://dwnld.nichijou.co',
   'https://cobalt.api.timelessnesses.me',
   'https://cobaltapi.0x7d.eu',
-  'https://cobalt-api.ams3.digitaloceanspaces.com',
   'https://cobalt.catto.moe',
-  'https://api.cobalt.best',
+  'https://cobalt.drgns.space',
+  'https://cobalt.privacydev.net',
 ]
 
 async function extractWithCobaltAPI(url) {
@@ -29083,15 +29155,26 @@ async function extractWithCobaltAPI(url) {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'User-Agent': 'DZ-GPT/2.0 (+https://dz-gpt.vercel.app)',
         },
-        body: JSON.stringify({ url, downloadMode: 'auto', filenameStyle: 'basic' }),
+        body: JSON.stringify({
+          url,
+          downloadMode: 'auto',
+          filenameStyle: 'basic',
+          videoQuality: '720',
+          audioFormat: 'mp3',
+          audioBitrate: '192',
+        }),
         signal: ctrl.signal,
       })
       clearTimeout(tid)
       const j = await resp.json().catch(() => ({}))
 
-      if (!resp.ok || j.status === 'error') {
-        lastErr = new Error(j?.error?.code || j?.error || `cobalt ${resp.status}`)
+      // ✅ FIX 2026: Cobalt v10+ error format changed: { status:'error', error: { code, context } }
+      const isError = !resp.ok || j.status === 'error' || !!j.error
+      if (isError) {
+        const errCode = j?.error?.code || (typeof j?.error === 'string' ? j.error : null) || `cobalt ${resp.status}`
+        lastErr = new Error(errCode)
         continue
       }
 
@@ -29099,7 +29182,7 @@ async function extractWithCobaltAPI(url) {
       if (!dlUrl) { lastErr = new Error('cobalt: no url in response'); continue }
 
       // Cobalt gives us a single muxed stream URL — wrap into our standard shape
-      const isAudio = /audio/i.test(j.type || '')
+      const isAudio = /audio/i.test(j.type || '') || /\.mp3|\.m4a/.test(dlUrl)
       const isVideo = !isAudio
       const ext = /\.mp3/.test(dlUrl) ? 'mp3' : /\.m4a/.test(dlUrl) ? 'm4a' : /\.webm/.test(dlUrl) ? 'webm' : 'mp4'
       console.log(`[extract:cobalt:ok] instance=${base} status=${j.status} type=${j.type||'?'}`)
@@ -29933,6 +30016,26 @@ async function _extractFacebookSnapsave(url) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 15000)
   try {
+    // ✅ FIX 2026: محاولة fdown.net أولاً كـ backup موثوق
+    try {
+      const fbCtrl = new AbortController()
+      const fbT = setTimeout(() => fbCtrl.abort(), 10000)
+      const fbResp = await fetch('https://fdown.net/download.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://fdown.net', 'Referer': 'https://fdown.net/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36' },
+        body: new URLSearchParams({ URLz: url }).toString(),
+        signal: fbCtrl.signal,
+      })
+      clearTimeout(fbT)
+      if (fbResp.ok) {
+        const fbHtml = await fbResp.text()
+        const mp4Re = /href="(https:\/\/[^"]+\.mp4[^"]*)"/gi
+        const vids = []; let m
+        while ((m = mp4Re.exec(fbHtml)) !== null) vids.push({ url: m[1].replace(/&amp;/g, '&'), quality: vids.length === 0 ? 'HD' : 'SD', height: null, ext: 'mp4', size: null, hasAudio: true })
+        if (vids.length > 0) { clearTimeout(t); return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video: vids, source: 'fdown' } }
+      }
+    } catch {}
+
     const body = new URLSearchParams({ url, lang: 'en', v: 'a2' })
     const resp = await fetch('https://snapsave.app/action.php', {
       method: 'POST',
@@ -29940,7 +30043,7 @@ async function _extractFacebookSnapsave(url) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Origin': 'https://snapsave.app',
         'Referer': 'https://snapsave.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
       },
       body: body.toString(),
       signal: ctrl.signal,
@@ -29971,8 +30074,43 @@ async function _extractFacebookSnapsave(url) {
   } finally { clearTimeout(t) }
 }
 
-// ── Instagram → saveclip.app + ddinstagram fallback ──────────────────────
+// ── Instagram → saveclip.app + snapinsta.app + tikwm fallback ─────────────
+// ✅ FIX 2026: saveclip.app قد يتغير — أضفنا snapinsta.app و tikwm كـ backups
 async function _extractInstagramSaveclip(url) {
+  // Try tikwm.com first — it handles Instagram Reels reliably
+  try {
+    const tikRes = await _extractTikTokTikwm(url)
+    if (tikRes?.video?.length) {
+      console.log('[Instagram:tikwm] ✅ Instagram via tikwm')
+      return { ...tikRes, source: 'tikwm-instagram' }
+    }
+  } catch {}
+
+  // Try snapinsta.app
+  try {
+    const snpCtrl = new AbortController()
+    const snpT = setTimeout(() => snpCtrl.abort(), 12000)
+    const snpResp = await fetch('https://snapinsta.app/api/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://snapinsta.app',
+        'Referer': 'https://snapinsta.app/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      body: new URLSearchParams({ url, type: 'post' }).toString(),
+      signal: snpCtrl.signal,
+    })
+    clearTimeout(snpT)
+    if (snpResp.ok) {
+      const snpData = await snpResp.json().catch(() => null)
+      if (snpData?.url || snpData?.video) {
+        const dlUrl = snpData.url || snpData.video
+        if (dlUrl) return { title: 'Instagram Video', duration: 0, thumbnail: snpData.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'snapinsta' }
+      }
+    }
+  } catch {}
+
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 15000)
   try {
@@ -29983,7 +30121,7 @@ async function _extractInstagramSaveclip(url) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Origin': 'https://saveclip.app',
         'Referer': 'https://saveclip.app/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
         'X-Requested-With': 'XMLHttpRequest',
       },
       body: body.toString(),

@@ -9096,10 +9096,14 @@ function detectMatchVsQuery(msg) {
   }
 
   // ── النمط ③: "X أمام Y" / "X مقابل Y" / "X في مواجهة Y" / "X لقاء Y" / "X يواجه Y" ─
+  // ⚠️ حارس العملة: "اليورو مقابل الدينار" / "الدولار مقابل الدينار" ليست مباريات
+  const _CURRENCY_GUARD_RE = /(?:دولار|يورو|دينار|جنيه|ريال|درهم|فرنك|ليرة|ين|صرف|تحويل|عملة|USD|EUR|GBP|DZD|SAR|AED|TND|MAD|EGP)/i
   const faceMatch = msg.match(
     /([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})\s+(?:أمام|مقابل|في\s+مواجهة|لقاء|يواجه|تواجه|يلعب\s+(?:ضد|أمام|مع)|contre|face\s+to\s+face)\s+([\u0600-\u06FFa-zA-Z][^\s،,\-–()[\]؟?×x]{1,22})/iu
   )
-  if (faceMatch) return _buildMatchVsResult(faceMatch[1].trim(), faceMatch[2].trim(), temporal)
+  if (faceMatch && !_CURRENCY_GUARD_RE.test(faceMatch[1]) && !_CURRENCY_GUARD_RE.test(faceMatch[2])) {
+    return _buildMatchVsResult(faceMatch[1].trim(), faceMatch[2].trim(), temporal)
+  }
 
   // ── النمط ④: منتخبان معروفان في نفس الجملة + سياق رياضي ────────────────
   // (يغطي "الجزائر والأرجنتين" / "الجزائر مع الأرجنتين" / أي ذكر للاثنين معاً)
@@ -24093,10 +24097,18 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     else if (newsQueryType === 'news') feedsToFetch = RSS_FEEDS.national
     else feedsToFetch = [...RSS_FEEDS.national, ...RSS_FEEDS.sports]
 
+    // ── No-Key Cache Fast-Path ──────────────────────────────────────────────
+    // إذا الكاش جاهز ولا يوجد مفتاح Groq → تخطي جميع الجلبات الحية فوراً
+    // لا فائدة من جلب RSS إضافية إذا كان LLM لن يُعالجها على أي حال
+    const _noKeyRssSkip = (getGroqKeys().length === 0) && rssContext && rssContext.length > 500
+    if (_noKeyRssSkip) {
+      console.log(`[NoKey:RSS-Skip] No Groq key + cache ready (${rssContext.length}ch) — skipping live RSS fetches`)
+    }
+
     // ✅ FIX: إذا لم يُستخرج newsSubject ولكن هذا استعلام تقني/ذكاء اصطناعي → اجعل الموضوع ضمنياً
     // ══ Tech/AI + International GN-RSS — نجري جميع البحوث بالتوازي لتجنّب الانتظار المتسلسل ══
     // ✅ FIX: كانت الطلبات متسلسلة (9+9 ثانية) → الآن متوازية (9 ثانية كحدّ أقصى للكل)
-    {
+    if (!_noKeyRssSkip) {
       const _parallelRssPromises = []
       const _parallelRssLabels  = []
 
@@ -24220,34 +24232,62 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
-    // ✅ FIX: fetchMultipleFeeds + fetchGNRSSArticles بالتوازي (كانا sequential)
-    // كلاهما I/O — لا مانع من تشغيلهما معاً في Promise.allSettled
-    const _queryLangFeed = detectQueryLanguage(lastUserMessage)
-    const _gnFeedsForAug  = (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both'))
-      ? (GN_RSS_FEEDS[_queryLangFeed] || GN_RSS_FEEDS.ar)
-      : null
-    if (_gnFeedsForAug) refreshGNRSSInBackground(_gnFeedsForAug) // background — لا ننتظرها
+    if (!_noKeyRssSkip) {
+      // ✅ FIX: fetchMultipleFeeds + fetchGNRSSArticles بالتوازي (كانا sequential)
+      // كلاهما I/O — لا مانع من تشغيلهما معاً في Promise.allSettled
+      const _queryLangFeed = detectQueryLanguage(lastUserMessage)
+      const _gnFeedsForAug  = (!newsSubject && (newsQueryType === 'news' || newsQueryType === 'both'))
+        ? (GN_RSS_FEEDS[_queryLangFeed] || GN_RSS_FEEDS.ar)
+        : null
+      if (_gnFeedsForAug) refreshGNRSSInBackground(_gnFeedsForAug) // background — لا ننتظرها
 
-    const [_feedsResult, _gnResult] = await Promise.allSettled([
-      feedsToFetch.length > 0 ? fetchMultipleFeeds(feedsToFetch) : Promise.resolve([]),
-      _gnFeedsForAug ? fetchGNRSSArticles(_gnFeedsForAug) : Promise.resolve([]),
-    ])
+      const [_feedsResult, _gnResult] = await Promise.allSettled([
+        feedsToFetch.length > 0 ? fetchMultipleFeeds(feedsToFetch) : Promise.resolve([]),
+        _gnFeedsForAug ? fetchGNRSSArticles(_gnFeedsForAug) : Promise.resolve([]),
+      ])
 
-    const feedResults = _feedsResult.status === 'fulfilled' ? _feedsResult.value : []
-    if (feedResults.length > 0) {
-      const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
-      if (generalCtx) {
-        rssContext = rssContext ? rssContext + generalCtx : generalCtx
-        console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+      const feedResults = _feedsResult.status === 'fulfilled' ? _feedsResult.value : []
+      if (feedResults.length > 0) {
+        const generalCtx = buildRSSContext(feedResults, newsQueryType, newsSubject)
+        if (generalCtx) {
+          rssContext = rssContext ? rssContext + generalCtx : generalCtx
+          console.log(`[DZ Agent] RSS fetched: ${feedResults.length} sources, context length: ${rssContext.length}`)
+        }
+      }
+
+      const gnArticles = _gnResult.status === 'fulfilled' ? _gnResult.value : []
+      if (gnArticles.length > 0) {
+        const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
+        rssContext = rssContext ? rssContext + gnCtx : gnCtx
+        console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${_queryLangFeed})`)
       }
     }
+  }
 
-    const gnArticles = _gnResult.status === 'fulfilled' ? _gnResult.value : []
-    if (gnArticles.length > 0) {
-      const gnCtx = buildGNRSSContext(gnArticles, '🌐 Google News RSS — أخبار حية')
-      rssContext = rssContext ? rssContext + gnCtx : gnCtx
-      console.log(`[GN-RSS] Augmented context with ${gnArticles.length} articles (lang=${_queryLangFeed})`)
-    }
+  // ── Pre-retrieval direct responses ───────────────────────────────────────
+  // Avoid the expensive decision-tree/web-search stage when the specialized
+  // data path already has everything needed for the response.
+  if (isCurrencyQuery && !_isAgentMode && currencyResult?.status === 'fulfilled' && currencyResult.value?.rates) {
+    const _currencyDirect = currencyResult.value
+    console.log('[Currency Pre-Retrieval] Returning widget before web search')
+    return res.status(200).json({
+      content: '',
+      currencyData: {
+        rates: _currencyDirect.rates,
+        status: _currencyDirect.status || 'live',
+        provider: _currencyDirect.provider || 'fawazahmed0/currency-api',
+        last_update: _currencyDirect.last_update || new Date().toISOString(),
+      },
+      _bypassLLM: true,
+    })
+  }
+
+  if (!_isAgentMode && rssContext && rssContext.length > 200 && !isCurrencyQuery && getGroqKeys().length === 0) {
+    console.log(`[NoKey:RSS-PreRetrieval] Serving cached RSS directly (${rssContext.length} chars)`)
+    return res.status(200).json({
+      content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
+      status: 'rss_direct',
+    })
   }
 
   // ── Retrieval Engine: Google-First for all temporal/news/sports/economy queries ─
@@ -25273,6 +25313,21 @@ ${_lastKnownEntity ? `📌 كيان مذكور مسبقاً في هذه المح
     ) + _multiIntentTokenBoost,
     6000  // الحد الأقصى المطلق
   )
+
+  // ── No-Key RSS Fast-Path ─────────────────────────────────────────────────
+  // إذا لم يكن هناك مفتاح Groq API ويوجد محتوى RSS جاهز → رجوع فوري
+  // يمنع انتظار stallGuard (13 ثانية) بدون فائدة
+  // يُطبَّق على: أخبار / ذكاء اصطناعي / تقنية — لا يُطبَّق على: عملة / وكيل
+  {
+    const _groqAvail = getGroqKeys().length > 0
+    if (!_groqAvail && rssContext && rssContext.length > 200 && !isCurrencyQuery && !_isAgentMode) {
+      console.log(`[NoKey:RSS-FastPath] No Groq key — serving RSS context directly (${rssContext.length} chars)`)
+      return res.status(200).json({
+        content: `${rssContext}\n\n---\n> 💡 **ملاحظة:** لتلقي إجابات مُلخَّصة وأكثر ذكاءً، أضف مفتاح \`AI_API_KEY\` (Groq — مجاني) في إعدادات المشروع.`,
+        status: 'rss_direct',
+      })
+    }
+  }
 
   const aiResult = await safeGenerateAI({
     messages: _halMessages,

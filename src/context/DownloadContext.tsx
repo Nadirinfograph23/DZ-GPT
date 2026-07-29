@@ -124,7 +124,7 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
           const isDone  = job.status === 'done'
           const isErr   = job.status === 'error'
           const prog    = Math.min(100, Math.max(0, job.progress))
-          const barColor = isErr ? '#ef4444' : isDone ? '#22c55e' : pm.color
+          const barColor = isErr ? '#ef4444' : '#22c55e'
           const canPlay  = isDone && !!job.blobUrl
 
           return (

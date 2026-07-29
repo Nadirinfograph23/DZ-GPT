@@ -4801,6 +4801,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [socialDlFmt, setSocialDlFmt] = useState<'video' | 'audio'>('video')
   const [showFindDialog, setShowFindDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const { jobs: downloadJobs } = useDownload()
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
@@ -8828,7 +8829,7 @@ ${rows}
 
   // ===== RENDER =====
   return (
-    <div className="dz-chatbox" dir="rtl">
+    <div className="dz-chatbox" dir="rtl" style={{ paddingBottom: downloadJobs.length > 0 ? `${downloadJobs.length * 52}px` : undefined, transition: 'padding-bottom 0.3s ease' }}>
       {/* Compact icon-only toolbar */}
       <div className="dz-gh-bar">
         {/* Agent bar toggle button */}

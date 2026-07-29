@@ -29029,8 +29029,19 @@ function hasUsableMedia(info) {
 }
 
 function downloadProviderPlan(platform) {
+  // ── Facebook yt-dlp wrapper (used as first provider) ─────────────
+  const _ytDlpProvider = async url => {
+    const raw = await extractWithYtDlp(url)
+    const { audio, video } = processFormats(raw.formats)
+    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
+  }
+
   const specialized = {
+    // yt-dlp is FIRST for Facebook — the 5 scrapers all fail from datacenter IPs
+    // and each waits 12-15s, causing browser timeout before any result.
+    // yt-dlp works reliably and returns in ~5-8s for Facebook Reels/videos.
     facebook: [
+      ['yt-dlp',    _ytDlpProvider],
       ['snapsave',  _extractFacebookSnapsave],
       ['getmyfb',   _extractFacebookGetMyFB],
       ['ssvid',     _extractFacebookSSVid],

@@ -283,46 +283,66 @@ async function extractViaServer(url: string, signal?: AbortSignal): Promise<Medi
 
 // ── Facebook ───────────────────────────────────────────────────────
 // Strategy:
-//   1. Server-side orchestrator (snapsave → getmyfb → saveclip → y2down → cobalt → yt-dlp)
+//   1. Server-side orchestrator (cobalt → scrapers → yt-dlp-fast)
 //   2. Cobalt API directly from browser (residential IP — higher success rate than server)
 //   3. Server yt-dlp fallback
-//   4. Soft failure: return cobalt.tools + alt-site links so user can still download
+// ── Cobalt instances with known CORS support (updated 2026-07) ─────
 const FB_COBALT_INSTANCES = [
   'https://api.cobalt.best',
-  'https://cobalt.api.timelessnesses.me',
+  'https://cobalt.tools',
   'https://dwnld.nichijou.co',
+  'https://cobalt.api.timelessnesses.me',
+  'https://cobaltapi.0x7d.eu',
+  'https://cobalt.catto.moe',
+  'https://cobalt.drgns.space',
+  'https://cobalt.privacydev.net',
 ]
+
+async function _tryCobaltFromBrowser(url: string, signal?: AbortSignal): Promise<string | null> {
+  for (const base of FB_COBALT_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      // Also abort if parent signal fires
+      signal?.addEventListener('abort', () => { clearTimeout(t); ctrl.abort() })
+      const r = await fetch(`${base}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'DZ-GPT/2.0',
+        },
+        body: JSON.stringify({ url, downloadMode: 'auto', videoQuality: '720', filenameStyle: 'basic' }),
+        signal: ctrl.signal,
+      })
+      clearTimeout(t)
+      const d = await r.json().catch(() => ({}))
+      // Cobalt v10+: { status, url } or { status:'error', error:{code} }
+      if (d?.status === 'error' || !!d?.error) continue
+      const dlUrl: string = d?.url
+      if (dlUrl && /^https?:\/\//i.test(dlUrl)) return dlUrl
+    } catch { /* try next */ }
+  }
+  return null
+}
+
 async function extractFacebook(url: string, signal?: AbortSignal): Promise<MediaInfo> {
-  // 1 — Server-side (specialized scrapers)
+  // 1 — Server-side (cobalt → scrapers → yt-dlp-fast)
   try { return await extractViaSocial(url, 'facebook', signal) } catch (e) {
     if ((e as any)?.name === 'AbortError') throw e
   }
 
-  // 2 — Cobalt API from browser (residential IP bypasses Facebook's datacenter block)
-  for (const base of FB_COBALT_INSTANCES) {
-    try {
-      const ctrl2 = new AbortController()
-      const t2 = setTimeout(() => ctrl2.abort(), 10000)
-      const r = await fetch(`${base}/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ url, downloadMode: 'auto', videoQuality: '720', filenameStyle: 'basic' }),
-        signal: ctrl2.signal,
-      })
-      clearTimeout(t2)
-      const d = await r.json().catch(() => ({}))
-      const dlUrl = d?.url
-      if (dlUrl && /^https?:\/\//i.test(dlUrl)) {
-        const isAudio = /audio/i.test(d?.type || '') || /\.mp3|\.m4a/.test(dlUrl)
-        return {
-          title: d?.filename?.replace(/\.[^.]+$/, '') || 'Facebook Video',
-          thumbnail: '', duration: 0, uploader: '',
-          video: isAudio ? [] : [{ url: dlUrl, quality: '720p', height: 720, ext: 'mp4', size: null, hasAudio: true }],
-          audio: isAudio ? [{ url: dlUrl, ext: 'mp3', bitrate: 192, size: null, muxed: true }] : [],
-          canStream: true,
-        }
-      }
-    } catch {}
+  // 2 — Cobalt API directly from browser (residential IP)
+  const cobaltUrl = await _tryCobaltFromBrowser(url, signal).catch(() => null)
+  if (cobaltUrl) {
+    const isAudio = /\.mp3|\.m4a/.test(cobaltUrl)
+    return {
+      title: 'Facebook Video',
+      thumbnail: '', duration: 0, uploader: '',
+      video: isAudio ? [] : [{ url: cobaltUrl, quality: '720p', height: 720, ext: 'mp4', size: null, hasAudio: true }],
+      audio: isAudio ? [{ url: cobaltUrl, ext: 'mp3', bitrate: 192, size: null, muxed: true }] : [],
+      canStream: true,
+    }
   }
 
   // 3 — Server yt-dlp fallback
@@ -330,7 +350,7 @@ async function extractFacebook(url: string, signal?: AbortSignal): Promise<Media
     if ((e as any)?.name === 'AbortError') throw e
   }
 
-  // 4 — All methods failed: throw honest error (no external redirects)
+  // 4 — All methods failed
   throw new Error('تعذّر تحميل هذا الفيديو — المحتوى محمي أو مقيّد من المنصة')
 }
 
@@ -339,6 +359,17 @@ async function extractInstagram(url: string, signal?: AbortSignal): Promise<Medi
   try { return await extractViaSocial(url, 'instagram', signal) } catch (e) {
     if ((e as any)?.name === 'AbortError') throw e
   }
+  // Browser cobalt fallback for Instagram
+  const cobaltUrl = await _tryCobaltFromBrowser(url, signal).catch(() => null)
+  if (cobaltUrl) {
+    const isAudio = /\.mp3|\.m4a/.test(cobaltUrl)
+    return {
+      title: 'Instagram Video', thumbnail: '', duration: 0, uploader: '',
+      video: isAudio ? [] : [{ url: cobaltUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }],
+      audio: isAudio ? [{ url: cobaltUrl, ext: 'mp3', bitrate: 192, size: null, muxed: true }] : [],
+      canStream: true,
+    }
+  }
   return extractViaServer(url, signal)
 }
 
@@ -346,6 +377,43 @@ async function extractInstagram(url: string, signal?: AbortSignal): Promise<Medi
 async function extractPinterest(url: string, signal?: AbortSignal): Promise<MediaInfo> {
   try { return await extractViaSocial(url, 'pinterest', signal) } catch (e) {
     if ((e as any)?.name === 'AbortError') throw e
+  }
+  return extractViaServer(url, signal)
+}
+
+// ── Reddit ─────────────────────────────────────────────────────────
+async function extractReddit(url: string, signal?: AbortSignal): Promise<MediaInfo> {
+  // Try server first (cobalt + yt-dlp plan for reddit)
+  try { return await extractViaSocial(url, 'reddit', signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+  // Browser cobalt fallback
+  const cobaltUrl = await _tryCobaltFromBrowser(url, signal).catch(() => null)
+  if (cobaltUrl) {
+    return {
+      title: 'Reddit Video', thumbnail: '', duration: 0, uploader: '',
+      video: [{ url: cobaltUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }],
+      audio: [], canStream: true,
+    }
+  }
+  return extractViaServer(url, signal)
+}
+
+// ── Generic social (Vimeo, Dailymotion, Twitch, SoundCloud, etc.) ──
+async function extractGenericSocial(url: string, platform: string, signal?: AbortSignal): Promise<MediaInfo> {
+  try { return await extractViaSocial(url, platform, signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+  // Browser cobalt fallback for non-specific platforms
+  const cobaltUrl = await _tryCobaltFromBrowser(url, signal).catch(() => null)
+  if (cobaltUrl) {
+    const isAudio = /\.mp3|\.m4a/.test(cobaltUrl)
+    return {
+      title: 'Video', thumbnail: '', duration: 0, uploader: '',
+      video: isAudio ? [] : [{ url: cobaltUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }],
+      audio: isAudio ? [{ url: cobaltUrl, ext: 'mp3', bitrate: 192, size: null, muxed: true }] : [],
+      canStream: true,
+    }
   }
   return extractViaServer(url, signal)
 }
@@ -362,7 +430,10 @@ export async function extractMedia(url: string, platform: string | null, signal?
     case 'facebook':    return extractFacebook(url, signal)
     case 'instagram':   return extractInstagram(url, signal)
     case 'pinterest':   return extractPinterest(url, signal)
+    case 'reddit':      return extractReddit(url, signal)
     case 'dailymotion':
+    case 'twitch':
+    case 'soundcloud':  return extractGenericSocial(url, platform, signal)
     default:            return extractViaSocial(url, platform ?? 'other', signal)
                           .catch(() => extractViaServer(url, signal))
   }

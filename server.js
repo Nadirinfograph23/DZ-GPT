@@ -28757,6 +28757,22 @@ function ytDlpAntiBotArgs(clientIdx = 0) {
   ]
 }
 
+// Non-YouTube platforms: no YouTube-specific extractor args, shorter socket timeout
+function ytDlpNonYtArgs() {
+  return [
+    '--user-agent', _nextUA(),
+    '--geo-bypass',
+    '--no-check-certificate',
+    '--no-check-formats',
+    '--retries', '2',
+    '--fragment-retries', '2',
+    '--socket-timeout', '12',
+    '--sleep-requests', '0.1',
+    '--ignore-errors',
+    '--no-abort-on-error',
+  ]
+}
+
 // Resolve which yt-dlp binary to use. Prefers $YTDLP_BIN, then a bundled
 // binary at <projectRoot>/bin/yt-dlp (shipped to Vercel via includeFiles),
 // then any yt-dlp on PATH. Returns null if nothing works.
@@ -29029,35 +29045,65 @@ function hasUsableMedia(info) {
 }
 
 function downloadProviderPlan(platform) {
-  // ── Facebook yt-dlp wrapper (used as first provider) ─────────────
-  const _ytDlpProvider = async url => {
-    const raw = await extractWithYtDlp(url)
+  // ── Fast yt-dlp wrapper for non-YouTube platforms ─────────────────
+  const _ytDlpFastProvider = async url => {
+    const raw = await extractWithYtDlpFast(url)
     const { audio, video } = processFormats(raw.formats)
     return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
   }
 
   const specialized = {
-    // yt-dlp is FIRST for Facebook — the 5 scrapers all fail from datacenter IPs
-    // and each waits 12-15s, causing browser timeout before any result.
-    // yt-dlp works reliably and returns in ~5-8s for Facebook Reels/videos.
+    // ✅ FIX 2026-07: Facebook datacenter IPs now blocked for yt-dlp too.
+    // New order: cobalt (fastest, works from server) → scrapers → yt-dlp fast (last resort, 10s).
     facebook: [
-      ['yt-dlp',    _ytDlpProvider],
+      ['cobalt',    extractWithCobaltAPI],
       ['snapsave',  _extractFacebookSnapsave],
+      ['savefrom',  _extractFacebookSaveFrom],
       ['getmyfb',   _extractFacebookGetMyFB],
       ['ssvid',     _extractFacebookSSVid],
-      ['saveclip',  _extractFacebookSaveclip],
       ['y2down',    _extractFacebookY2Down],
+      ['saveclip',  _extractFacebookSaveclip],
+      ['yt-dlp',    _ytDlpFastProvider],
     ],
-    instagram: [['saveclip', _extractInstagramSaveclip]],
-    tiktok: [['tikwm', _extractTikTokTikwm]],
-    twitter: [['fxtwitter', _extractTwitterFxtwitter]],
-    pinterest: [['pinterest-oembed-pindown', _extractPinterestPindown]],
+    instagram: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['saveclip',  _extractInstagramSaveclip],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    tiktok: [
+      ['tikwm',     _extractTikTokTikwm],
+      ['cobalt',    extractWithCobaltAPI],
+    ],
+    twitter: [
+      ['fxtwitter', _extractTwitterFxtwitter],
+      ['cobalt',    extractWithCobaltAPI],
+    ],
+    pinterest: [
+      ['pinterest-oembed-pindown', _extractPinterestPindown],
+      ['cobalt', extractWithCobaltAPI],
+    ],
+    reddit: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    vimeo: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    twitch: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    dailymotion: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    soundcloud: [
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
   }
-  return [...(specialized[platform] || []), ['cobalt', extractWithCobaltAPI], ['yt-dlp', async url => {
-    const raw = await extractWithYtDlp(url)
-    const { audio, video } = processFormats(raw.formats)
-    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
-  }]]
+  return [...(specialized[platform] || []), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
 }
 
 async function orchestrateMediaDownload(url, platform) {
@@ -29373,6 +29419,38 @@ async function extractWithYtDlp(url, clientIdx = 0) {
     }
   }
   throw lastErr
+}
+
+// Fast yt-dlp for non-YouTube platforms (no YT-specific args, 10s timeout, 1 attempt only)
+async function extractWithYtDlpFast(url) {
+  const dlpBin = await ytDlpBinaryPath()
+  if (!dlpBin) throw new Error('yt-dlp binary not available')
+  const cookies = await ytDlpCookiesArgs()
+  const data = await new Promise((resolve, reject) => {
+    const args = ['-J', '--no-warnings', '--no-playlist', ...ytDlpNonYtArgs(), ...cookies, url]
+    const proc = spawn(dlpBin, args)
+    let stdout = ''
+    let stderr = ''
+    const killTimer = setTimeout(() => {
+      try { proc.kill('SIGKILL') } catch {}
+      reject(new Error('yt-dlp-fast timeout'))
+    }, 10000)
+    proc.stdout.on('data', d => { stdout += d.toString() })
+    proc.stderr.on('data', d => { stderr += d.toString() })
+    proc.on('error', err => { clearTimeout(killTimer); reject(err) })
+    proc.on('close', code => {
+      clearTimeout(killTimer)
+      if (code !== 0) return reject(new Error((stderr || `yt-dlp exited ${code}`).slice(0, 300)))
+      try { resolve(JSON.parse(stdout)) } catch (e) { reject(e) }
+    })
+  })
+  return {
+    title: data.title || '',
+    duration: Number(data.duration) || 0,
+    thumbnail: data.thumbnail || (Array.isArray(data.thumbnails) && data.thumbnails.length ? data.thumbnails[data.thumbnails.length - 1].url : ''),
+    uploader: data.uploader || data.channel || '',
+    formats: data.formats || [],
+  }
 }
 
 // ── Cobalt API engine — public instances fallback for social platforms ──────────
@@ -30459,6 +30537,57 @@ async function _extractFacebookY2Down(url) {
       .map(m => ({ url: m.url, quality: m.quality || m.resolution || 'HD', height: null, ext: m.extension || 'mp4', size: m.size || null, hasAudio: true }))
     if (!video.length) throw new Error('y2down: no video URLs')
     return { title: d.title || 'Facebook Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video, source: 'y2down' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → savefrom.net (reliable multi-platform scraper) ────────────
+async function _extractFacebookSaveFrom(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    // savefrom.net worker API — has worked reliably from datacenter IPs
+    const resp = await fetch('https://worker.sf-tools.com/savefrom.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://en.savefrom.net',
+        'Referer': 'https://en.savefrom.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+      },
+      body: new URLSearchParams({ sf_url: url, lang: 'en', _t: String(Date.now()) }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`savefrom HTTP ${resp.status}`)
+    const d = await resp.json().catch(() => null)
+    if (!d) throw new Error('savefrom: invalid JSON')
+    // Response: { url: [{url, quality, ext, ...}], meta: {title, image} }
+    const links = Array.isArray(d.url) ? d.url : []
+    if (!links.length) throw new Error('savefrom: no links')
+    const video = links
+      .filter(l => l?.url && /^https?:\/\//i.test(l.url) && !l.url.includes('.mp3'))
+      .map((l, i) => ({
+        url: l.url.replace(/\\u0026/g, '&').replace(/&amp;/g, '&'),
+        quality: l.quality || (i === 0 ? 'HD' : 'SD'),
+        height: null,
+        ext: l.ext || 'mp4',
+        size: l.size ? Number(l.size) : null,
+        hasAudio: true,
+      }))
+    const audio = links
+      .filter(l => l?.url && /\.mp3/i.test(l.url))
+      .map(l => ({ url: l.url, ext: 'mp3', bitrate: 128, size: null, muxed: false }))
+    if (!video.length && !audio.length) throw new Error('savefrom: no usable media URLs')
+    return {
+      title: d.meta?.title || d.title || 'Facebook Video',
+      duration: 0,
+      thumbnail: d.meta?.image || d.meta?.og?.image || '',
+      uploader: '',
+      audio,
+      video,
+      source: 'savefrom',
+    }
   } finally { clearTimeout(t) }
 }
 

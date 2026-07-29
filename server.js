@@ -16020,21 +16020,38 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     const _dlRaw = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
     const _dlIntent = detectDownloadIntent(_dlRaw)
     if (_dlIntent.intent === 'DOWNLOAD_MEDIA') {
-      const _dlUrl = _dlRaw.match(/https?:\/\/[^\s<>"،,\u060C\u061B\u200c]+/)?.[0]?.replace(/[.,;!?'"،\u200c]+$/, '') || null
-      if (_dlUrl && isValidMediaPlatformUrl(_dlUrl)) {
-        console.log(`[DownloadGuardian] 📥 platform=${_dlIntent.platform} conf=${_dlIntent.confidence} url=${_dlUrl.slice(0, 70)}`)
+      const _dlUrls = extractDownloadUrls(_dlRaw)
+      const _validDlJobs = _dlUrls.map(url => ({ url, platform: mediaPlatformForUrl(url) }))
+        .filter(job => job.platform && isValidMediaPlatformUrl(job.url))
+      if (_validDlJobs.length > 0) {
+        console.log(`[DownloadGuardian] 📥 jobs=${_validDlJobs.length} platforms=${_validDlJobs.map(j => j.platform).join(',')}`)
         // Return immediately — browser-side extractor handles the heavy lifting
+        const _jobs = _validDlJobs.map(job => ({
+          status: 'extracting',
+          url: job.url,
+          platform: job.platform,
+          format: _dlIntent.requestedFormat,
+        }))
+        if (_jobs.length > 1) {
+          return res.status(200).json({
+            richType: 'media-download-batch',
+            content: `⬇️ جارٍ استخراج ${_jobs.length} روابط بشكل مستقل...`,
+            mediaDownloads: _jobs,
+            model: 'download-guardian',
+          })
+        }
         return res.status(200).json({
           richType: 'media-download',
           content: `⬇️ جارٍ استخراج معلومات الوسائط...`,
           mediaDownload: {
             status: 'extracting',
-            url: _dlUrl,
-            platform: _dlIntent.platform,
+            url: _jobs[0].url,
+            platform: _jobs[0].platform,
+            format: _jobs[0].format,
           },
           model: 'download-guardian',
         })
-      } else if (!_dlUrl && _dlIntent.confidence >= 0.75) {
+      } else if (_dlUrls.length === 0 && _dlIntent.confidence >= 0.75) {
         // Has download keywords but no recognized URL — ask for the link
         return res.status(200).json({
           content: `📥 **تحميل الوسائط** — أرسل لي الرابط الذي تريد تحميله:\n\n| المنصة | مثال |\n|--------|------|\n| 📺 YouTube | \`https://youtube.com/watch?v=...\` |\n| 📘 Facebook | \`https://facebook.com/...\` |\n| 🎵 TikTok | \`https://tiktok.com/...\` |\n| 📸 Instagram | \`https://instagram.com/...\` |\n| 🐦 Twitter/X | \`https://x.com/...\` |\n| 🎬 Vimeo | \`https://vimeo.com/...\` |\n| 🎥 Dailymotion | \`https://dailymotion.com/...\` |`,
@@ -28874,7 +28891,7 @@ function isValidMediaPlatformUrl(u) {
   if (typeof u !== 'string' || u.length > 2048) return false
   try {
     const host = new URL(u).hostname.replace(/^(www\.|m\.|l\.|vm\.)/i, '')
-    return /^(youtube\.com|youtu\.be|music\.youtube\.com|facebook\.com|fb\.watch|tiktok\.com|instagram\.com|pinterest\.com|x\.com|twitter\.com|vimeo\.com|dailymotion\.com)$/i.test(host)
+    return /^(youtube\.com|youtu\.be|music\.youtube\.com|youtube-nocookie\.com|facebook\.com|fb\.watch|fb\.com|tiktok\.com|instagram\.com|pinterest\.com|x\.com|twitter\.com|reddit\.com|redd\.it|vimeo\.com|twitch\.tv|dailymotion\.com|soundcloud\.com)$/i.test(host)
   } catch { return false }
 }
 
@@ -28900,12 +28917,16 @@ function detectDownloadIntent(text) {
       else if (/instagram\.com/.test(host))          platform = 'instagram'
       else if (/pinterest\.com/.test(host))          platform = 'pinterest'
       else if (/x\.com|twitter\.com/.test(host))     platform = 'twitter'
+      else if (/reddit\.com|redd\.it/.test(host))    platform = 'reddit'
       else if (/vimeo\.com/.test(host))              platform = 'vimeo'
+      else if (/twitch\.tv/.test(host))              platform = 'twitch'
       else if (/dailymotion\.com/.test(host))        platform = 'dailymotion'
+      else if (/soundcloud\.com/.test(host))         platform = 'soundcloud'
     } catch {}
   }
 
   const detected_keywords = []
+  const requestedFormat = /mp3|audio\s*only|extract\s+audio|استخرج\s+(?:لي\s+)?الصوت|الصوت\s*فقط|حوّل?\s*(?:ه|ها)?\s*(?:إلى|ل)\s*mp3|convertis\s+en\s+mp3/i.test(t) ? 'audio' : 'video'
 
   // ── Arabic keywords ───────────────────────────────────────────────────────
   const arKws = [
@@ -28941,14 +28962,113 @@ function detectDownloadIntent(text) {
   ]
   for (const [re, kw] of enKws) { if (re.test(t)) detected_keywords.push(kw) }
 
-  if (detected_keywords.length === 0) return { intent: 'NORMAL_CHAT', confidence: 0, platform, detected_keywords }
+  if (detected_keywords.length === 0) return { intent: 'NORMAL_CHAT', confidence: 0, platform, detected_keywords, requestedFormat }
 
   // Condition 1: supported URL + download keyword → high confidence
   if (platform && detected_keywords.length > 0) {
-    return { intent: 'DOWNLOAD_MEDIA', confidence: 0.97, platform, detected_keywords }
+    return { intent: 'DOWNLOAD_MEDIA', confidence: 0.97, platform, detected_keywords, requestedFormat }
   }
   // Condition 2-4: keywords only (no URL) → still DOWNLOAD_MEDIA, lower confidence
-  return { intent: 'DOWNLOAD_MEDIA', confidence: 0.82, platform: null, detected_keywords }
+  return { intent: 'DOWNLOAD_MEDIA', confidence: 0.82, platform: null, detected_keywords, requestedFormat }
+}
+
+// ── Download orchestrator boundary ──────────────────────────────────────────
+// Keep this parser independent from the chat prompt. Downloaders only ever
+// receive a URL extracted from the user message, never the complete sentence.
+function extractDownloadUrls(text) {
+  if (typeof text !== 'string') return []
+  const found = text.match(/(?:https?:\/\/|www\.)[^\s<>"'،؟!؛\u060C\u061B]+/gi) || []
+  const seen = new Set()
+  const urls = []
+  for (const raw of found) {
+    let value = raw.trim().replace(/^www\./i, 'https://www.')
+    // Punctuation outside query/path is removed; URL query delimiters remain.
+    value = value.replace(/[.,;:!?'"،؛)\]}]+$/g, '')
+    try {
+      const u = new URL(value)
+      if (!/^https?:$/.test(u.protocol) || u.username || u.password || u.href.length > 2048) continue
+      const clean = u.href
+      if (!seen.has(clean)) { seen.add(clean); urls.push(clean) }
+    } catch {}
+  }
+  return urls
+}
+
+function mediaPlatformForUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^(www\.|m\.|mobile\.|vm\.|l\.)/, '')
+    if (/^(youtube\.com|youtu\.be|youtube-nocookie\.com|music\.youtube\.com)$/.test(host)) return 'youtube'
+    if (/^(facebook\.com|fb\.watch|fb\.com)$/.test(host)) return 'facebook'
+    if (/^tiktok\.com$|\.tiktok\.com$/.test(host)) return 'tiktok'
+    if (/^instagram\.com$|\.instagram\.com$/.test(host)) return 'instagram'
+    if (/^pinterest\.(com|co\.[a-z]{2})$|\.pinterest\./.test(host)) return 'pinterest'
+    if (/^(x\.com|twitter\.com)$/.test(host)) return 'twitter'
+    if (/^reddit\.com$|^redd\.it$|\.reddit\.com$/.test(host)) return 'reddit'
+    if (/^vimeo\.com$|\.vimeo\.com$/.test(host)) return 'vimeo'
+    if (/^twitch\.tv$|\.twitch\.tv$/.test(host)) return 'twitch'
+    if (/^dailymotion\.com$|\.dailymotion\.com$/.test(host)) return 'dailymotion'
+    if (/^soundcloud\.com$|\.soundcloud\.com$/.test(host)) return 'soundcloud'
+    return null
+  } catch { return null }
+}
+
+function classifyDownloadError(err) {
+  const m = String(err?.message || err || '').toLowerCase()
+  if (/login|sign.?in|private|privacy|auth|forbidden|401|403/.test(m)) return 'PRIVATE_CONTENT'
+  if (/rate|429|too many/.test(m)) return 'RATE_LIMITED'
+  if (/geo|region|country/.test(m)) return 'GEO_RESTRICTED'
+  if (/unsupported|not support/.test(m)) return 'UNSUPPORTED_PLATFORM'
+  if (/no video|no media|not found|no url|no stream/.test(m)) return 'MEDIA_NOT_FOUND'
+  if (/timeout|abort|network|fetch|econn|socket/.test(m)) return 'NETWORK_ERROR'
+  if (/format/.test(m)) return 'FORMAT_UNAVAILABLE'
+  return 'PROVIDER_ERROR'
+}
+
+function hasUsableMedia(info) {
+  const streams = [...(info?.video || []), ...(info?.audio || [])]
+  return streams.some(s => typeof s?.url === 'string' && /^https?:\/\//i.test(s.url))
+}
+
+function downloadProviderPlan(platform) {
+  const specialized = {
+    facebook: [['snapsave', _extractFacebookSnapsave]],
+    instagram: [['saveclip', _extractInstagramSaveclip]],
+    tiktok: [['tikwm', _extractTikTokTikwm]],
+    twitter: [['fxtwitter', _extractTwitterFxtwitter]],
+    pinterest: [['pinterest-oembed-pindown', _extractPinterestPindown]],
+  }
+  return [...(specialized[platform] || []), ['cobalt', extractWithCobaltAPI], ['yt-dlp', async url => {
+    const raw = await extractWithYtDlp(url)
+    const { audio, video } = processFormats(raw.formats)
+    return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
+  }]]
+}
+
+async function orchestrateMediaDownload(url, platform) {
+  const plan = downloadProviderPlan(platform)
+  const attempts = []
+  for (const [provider, extractor] of plan) {
+    const started = Date.now()
+    try {
+      const info = await extractor(url)
+      if (!hasUsableMedia(info)) throw new Error('media validation: no usable media URL')
+      const result = { ...info, provider, platform, fallbackAttempts: attempts.length }
+      console.log(`[DownloadOrchestrator] job=${url.slice(-24)} platform=${platform} provider=${provider} success duration=${Date.now() - started}ms`)
+      return result
+    } catch (err) {
+      const errorType = classifyDownloadError(err)
+      attempts.push({ provider, errorType })
+      console.warn(`[DownloadOrchestrator] platform=${platform} provider=${provider} failed type=${errorType}`)
+    }
+  }
+  const final = attempts[attempts.length - 1]?.errorType || 'UNKNOWN_ERROR'
+  const error = final === 'PRIVATE_CONTENT'
+    ? '❌ هذا المحتوى يتطلب تسجيل الدخول أو غير متاح للعامة.'
+    : '❌ تعذر تحميل الوسائط من المصادر المتاحة.'
+  const e = new Error(error)
+  e.errorType = final
+  e.attempts = attempts
+  throw e
 }
 
 function extractYouTubeVideoId(u) {
@@ -30390,9 +30510,13 @@ async function _extractPinterestPindown(url) {
 
 // ── /api/social/extract ——— main social endpoint ──────────────────────────
 app.get('/api/social/extract', aiLimiter, async (req, res) => {
-  const url      = String(req.query.url || '').trim()
-  const platform = String(req.query.platform || '').toLowerCase()
+  const rawUrl   = String(req.query.url || '').trim()
+  const url      = extractDownloadUrls(rawUrl)[0] || rawUrl
+  const platform = mediaPlatformForUrl(url) || String(req.query.platform || '').toLowerCase()
   if (!url) return res.status(400).json({ ok: false, error: 'Missing url parameter' })
+  if (!isValidMediaPlatformUrl(url) && !mediaPlatformForUrl(url)) {
+    return res.status(400).json({ ok: false, error: 'INVALID_URL', errorType: 'INVALID_URL' })
+  }
 
   console.log(`[SocialExtract] platform=${platform} url=${url.slice(0, 80)}`)
   const cacheKey = `social:${url}`
@@ -30400,6 +30524,25 @@ app.get('/api/social/extract', aiLimiter, async (req, res) => {
   if (cached) return res.json({ ok: true, ...cached, cached: true })
 
   let lastErr = new Error('no extractor succeeded')
+
+  // One guarded orchestration path: provider order is platform-aware and
+  // each successful response is validated before it reaches the client.
+  try {
+    const info = await orchestrateMediaDownload(url, platform)
+    extractCacheSet(cacheKey, info, 10 * 60 * 1000)
+    return res.json({ ok: true, ...info })
+  } catch (err) {
+    lastErr = err
+    console.warn(`[SocialExtract:orchestrator:fail] type=${err.errorType || classifyDownloadError(err)}`)
+    // The orchestrator already exhausted the complete platform-specific
+    // fallback plan. Do not silently repeat providers in the legacy path.
+    return res.status(502).json({
+      ok: false,
+      error: lastErr.message?.slice(0, 200) || 'فشل استخراج الوسائط',
+      errorType: lastErr.errorType || classifyDownloadError(lastErr),
+      attempts: lastErr.attempts || [],
+    })
+  }
 
   const tryAndReturn = async (fn, label) => {
     try {

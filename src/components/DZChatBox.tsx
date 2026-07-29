@@ -752,6 +752,7 @@ interface DZMessage {
   mediaDownload?: {
     status: 'ready' | 'error' | 'pending' | 'extracting'
     url: string | null
+    format?: 'audio' | 'video'
     title?: string
     thumbnail?: string
     duration?: number
@@ -761,6 +762,7 @@ interface DZMessage {
     video?: Array<{ url: string; quality: string | null; height: number | null; ext: string; size: number | null; mime: string | null; hasAudio: boolean }>
     error?: string
   }
+  mediaDownloads?: Array<NonNullable<DZMessage['mediaDownload']>>
 }
 
 interface ActionLogEntry {
@@ -1679,11 +1681,13 @@ function MediaDownloadCardReady({
   info,
   platform,
   url,
+  format,
   pm,
 }: {
   info: MediaInfo
   platform: string | null
   url: string | null
+  format?: 'audio' | 'video'
   pm: { icon: string; label: string; color: string }
 }) {
   const { startDownload } = useDownload()
@@ -1709,9 +1713,10 @@ function MediaDownloadCardReady({
   )
 
   useEffect(() => {
-    if (videoFmts.length > 0) setSel({ type: 'video', index: 0 })
+    if (format === 'audio' && audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
+    else if (videoFmts.length > 0) setSel({ type: 'video', index: 0 })
     else if (audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
-  }, [videoFmts.length, audioFmts.length])
+  }, [format, videoFmts.length, audioFmts.length])
 
   const handleDownload = () => {
     if (!sel) return
@@ -1922,7 +1927,7 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
 
     // extraction done — show quality card
     if (extractState.phase === 'done') {
-      return <MediaDownloadCardReady info={extractState.info} platform={data.platform ?? null} url={data.url ?? null} pm={pm} />
+      return <MediaDownloadCardReady info={extractState.info} platform={data.platform ?? null} url={data.url ?? null} format={data.format} pm={pm} />
     }
   }
 
@@ -1950,7 +1955,7 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
       video: (data.video ?? []).map(v => ({ ...v, mime: undefined })) as any,
       audio: (data.audio ?? []).map(a => ({ ...a, mime: undefined })) as any,
     }
-    return <MediaDownloadCardReady info={info} platform={data.platform ?? null} url={data.url ?? null} pm={pm} />
+    return <MediaDownloadCardReady info={info} platform={data.platform ?? null} url={data.url ?? null} format={data.format} pm={pm} />
   }
 
   // fallback
@@ -8286,6 +8291,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
           mediaDownload: data.mediaDownload as DZMessage['mediaDownload'],
           model: data.model as string | undefined,
         })
+        return
+      }
+      if (data.richType === 'media-download-batch' && Array.isArray(data.mediaDownloads)) {
+        for (const mediaDownload of data.mediaDownloads as NonNullable<DZMessage['mediaDownload']>[]) {
+          addAssistantMessage({
+            content: '',
+            richType: 'media-download',
+            mediaDownload,
+            model: data.model as string | undefined,
+          })
+        }
         return
       }
 

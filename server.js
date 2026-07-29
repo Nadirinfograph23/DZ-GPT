@@ -24042,6 +24042,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // لكنه ليس خبراً ← العملة لها مسارها الخاص (currency fast-path)
   if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
+    const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
+    const _noKeyNewsMode = getGroqKeys().length === 0 && !_isAgentMode
 
     // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────
     if (newsQueryType === 'news' || newsQueryType === 'both') {
@@ -24078,9 +24080,37 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       }
     }
 
+    // ── Cold-start news guard ───────────────────────────────────────────────
+    // Vercel instances have an empty in-memory cache on cold start. Without an
+    // AI key, never fall through to the multi-source/search pipeline: fetch a
+    // small, bounded RSS sample and return it (or a clear response) promptly.
+    if (_noKeyNewsMode && !rssContext) {
+      const _quickNewsPromise = _isTechAIQuery
+        ? fetchGNRSSArticles(TECH_FEEDS_DASHBOARD).then(items => {
+            if (items?.length) rssContext = buildGNRSSContext(items, '🤖 أخبار الذكاء الاصطناعي والتقنية')
+          })
+        : fetchDZPriorityNews({ force: true }).then(data => {
+            if (data?.items?.length) rssContext = buildDZNewsCachedContext(data)
+          })
+      await Promise.race([
+        _quickNewsPromise.catch(err => console.warn('[News Cold-Start]', err.message)),
+        new Promise(resolve => setTimeout(resolve, 3500)),
+      ])
+      if (rssContext) {
+        console.log(`[NoKey:News-ColdStart] Returning bounded RSS response (${rssContext.length} chars)`)
+        return res.status(200).json({
+          content: `${rssContext}\n\n---\n> ℹ️ تم جلب العناوين مباشرة من RSS لتفادي الانتظار.`,
+          status: 'rss_direct',
+        })
+      }
+      return res.status(200).json({
+        content: '## 📰 الأخبار\n\nتعذّر الوصول إلى مصادر الأخبار الآن. يرجى المحاولة بعد لحظات.',
+        status: 'news_unavailable',
+      })
+    }
+
     // ── GENERAL RSS FEEDS: fetch and filter by subject if one was detected ──
     let feedsToFetch = []
-    const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     // ✅ FIX: لأخبار الذكاء الاصطناعي — إذا لم يكن في الكاش بيانات تقنية، ابنِ context أساسي فوري
     if (_isTechAIQuery && !rssContext) {
       // سيُبنى السياق من Google News RSS في الـ parallel block أدناه

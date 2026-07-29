@@ -18,8 +18,8 @@ DZ-GPT — سكريبت النشر المثالي للملفات الكبيرة
 import sys, os, json, base64, urllib.request, urllib.error
 
 # ── Config ────────────────────────────────────────────────────────────────────
-TOKEN      = os.environ.get('GITHUB_TOKEN', '')
-VERCEL_TOK = os.environ.get('VERCEL_TOKEN', '')
+TOKEN      = os.environ.get('TOKEN_GITHUB', '') or os.environ.get('GITHUB_TOKEN', '')
+VERCEL_TOK = os.environ.get('TOKEN_VERCEL', '') or os.environ.get('VERCEL_TOKEN', '')
 REPO       = 'Nadirinfograph23/DZ-GPT'
 BRANCH     = 'devin/1774405518-init-dz-gpt'
 VERCEL_HOOK = 'https://api.vercel.com/v1/integrations/deploy/prj_HxCYjJS18MnAX0M9Qp57OhY0rfC5/ul5gBfG4Af'

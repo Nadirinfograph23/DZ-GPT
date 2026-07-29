@@ -76,6 +76,9 @@ import { correctQuery, buildCorrectionNote } from './lib/dz-query-corrector.js'
 import { fetchAlgeriaMinistersData, buildMinistersContext, isMinisterQuery, findGovPerson, ALGERIA_PRESIDENTS } from './lib/algeria-gov/ministers.js'
 import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuery } from './lib/algeria-gov/historical-governments.js'
 
+// ── Giststack Provider — PRIMARY social media downloader ─────────────────────
+import { giststackFetchInfo, isGiststackAvailable } from './lib/providers/giststack-provider.js'
+
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
 import { buildUnderstandingContext } from './lib/dz-understanding.js'
@@ -29059,6 +29062,14 @@ function hasUsableMedia(info) {
 }
 
 function downloadProviderPlan(platform) {
+  // ── Giststack PRIMARY wrapper ─────────────────────────────────────
+  // Powers https://giststack.com/tools/social-media-downloader via
+  // social-download-all-in-one RapidAPI. Requires RAPIDAPI_KEY secret.
+  const _giststackProvider = async url => {
+    const info = await giststackFetchInfo(url)
+    return { ...info, source: 'giststack' }
+  }
+
   // ── Fast yt-dlp wrapper for non-YouTube platforms ─────────────────
   const _ytDlpFastProvider = async url => {
     const raw = await extractWithYtDlpFast(url)
@@ -29066,10 +29077,13 @@ function downloadProviderPlan(platform) {
     return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
   }
 
+  // Build Giststack entry — only prepend if API key is configured
+  const gs = isGiststackAvailable() ? [['giststack', _giststackProvider]] : []
+
   const specialized = {
-    // ✅ FIX 2026-07: Facebook datacenter IPs now blocked for yt-dlp too.
-    // New order: cobalt (fastest, works from server) → scrapers → yt-dlp fast (last resort, 10s).
+    // Giststack PRIMARY → platform-specific scrapers → Cobalt → yt-dlp
     facebook: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['snapsave',  _extractFacebookSnapsave],
       ['savefrom',  _extractFacebookSaveFrom],
@@ -29080,44 +29094,58 @@ function downloadProviderPlan(platform) {
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     instagram: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['saveclip',  _extractInstagramSaveclip],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     tiktok: [
+      ...gs,
       ['tikwm',     _extractTikTokTikwm],
       ['cobalt',    extractWithCobaltAPI],
     ],
     twitter: [
+      ...gs,
       ['fxtwitter', _extractTwitterFxtwitter],
       ['cobalt',    extractWithCobaltAPI],
     ],
     pinterest: [
+      ...gs,
       ['pinterest-oembed-pindown', _extractPinterestPindown],
       ['cobalt', extractWithCobaltAPI],
     ],
     reddit: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     vimeo: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     twitch: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     dailymotion: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     soundcloud: [
+      ...gs,
+      ['cobalt',    extractWithCobaltAPI],
+      ['yt-dlp',    _ytDlpFastProvider],
+    ],
+    youtube: [
+      ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
   }
-  return [...(specialized[platform] || []), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
+  return [...(specialized[platform] || [...gs]), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
 }
 
 async function orchestrateMediaDownload(url, platform) {

@@ -124,11 +124,18 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
           const isDone  = job.status === 'done'
           const isErr   = job.status === 'error'
           const prog    = Math.min(100, Math.max(0, job.progress))
-          const barColor = isErr ? '#ef4444' : '#22c55e'
+          // لون الإطار/النص = لون المنصة (YouTube أحمر، TikTok أزرق مخضر، إلخ)
+          const barColor = isErr ? '#ef4444' : isDone ? '#22c55e' : pm.color
+          // لون شريط التقدم المتحرك = أخضر دائماً أثناء التحميل
+          const fillColor = isErr ? '#ef4444' : '#22c55e'
           const canPlay  = isDone && !!job.blobUrl
 
           return (
-            <div key={job.id} className={`gdl-job ${isDone ? 'gdl-job--done' : ''} ${isErr ? 'gdl-job--err' : ''}`}>
+            <div
+              key={job.id}
+              className={`gdl-job ${isDone ? 'gdl-job--done' : ''} ${isErr ? 'gdl-job--err' : ''}`}
+              style={{ borderTopColor: isErr ? 'rgba(239,68,68,.35)' : isDone ? 'rgba(34,197,94,.35)' : `${pm.color}40` }}
+            >
               {/* Platform icon + filename */}
               <div className="gdl-info">
                 <span className="gdl-icon">{pm.icon}</span>
@@ -154,14 +161,14 @@ function GlobalDownloadBar({ jobs, dismiss }: { jobs: DownloadJob[]; dismiss: (i
                 </div>
               </div>
 
-              {/* Progress bar */}
-              <div className="gdl-bar-wrap">
+              {/* Progress bar — الشريط الخارجي بلون المنصة، الملء الداخلي أخضر */}
+              <div className="gdl-bar-wrap" style={{ background: `${pm.color}22` }}>
                 <div
                   className={`gdl-bar-fill ${job.total === 0 && !isDone && !isErr ? 'gdl-bar-fill--indeterminate' : ''}`}
                   style={{
                     width: job.total === 0 && !isDone ? undefined : `${isDone ? 100 : prog}%`,
-                    background: barColor,
-                    boxShadow: !isDone && !isErr ? `0 0 8px ${barColor}80` : 'none',
+                    background: fillColor,
+                    boxShadow: !isDone && !isErr ? `0 0 8px #22c55e80` : 'none',
                   }}
                 />
               </div>

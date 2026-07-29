@@ -1,8 +1,8 @@
 {
-  "commit": "971ad9ea017b098a09940979e6fc546e152fe623",
-  "commitShort": "971ad9ea",
+  "commit": "996f92b44f3e6016d8e0e6f9f8b14ca1e0c2313e",
+  "commitShort": "996f92b4",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: Facebook/CORS extraction fallback — server download card when client-side fails",
-  "deployedAt": "2026-07-29T16:54:27.763310Z",
+  "message": "feat: شريط تحميل مواقع التواصل الاجتماعي في dz Agent مع رفع خانة الكتابة آلياً وألوان الثيم",
+  "deployedAt": "2026-07-29T21:48:05.529691Z",
   "deployedBy": "scripts/deploy.py"
 }

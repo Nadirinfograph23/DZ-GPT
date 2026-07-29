@@ -10378,9 +10378,7 @@ function buildGNRSSContext(articles, label = '🌐 Google News RSS') {
     ctx += `\n**${cat}:**\n`
     for (const item of items.slice(0, 4)) {
       ctx += `• ${item.title}`
-      if (item.link && item.source) ctx += ` — [${item.source}](${item.link})`
-      else if (item.link) ctx += ` — [المصدر](${item.link})`
-      else if (item.source) ctx += ` — ${item.source}`
+      if (item.source) ctx += ` — ${item.source}`
       if (item.pubDate) {
         try {
           const ageH = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
@@ -30131,10 +30129,16 @@ app.get('/api/yt-stream', async (req, res) => {
   }
 
   const CLIENTS = [
-    { clientId: 62, clientName: 'WEB_CREATOR',   clientVersion: '1.20240101.01.00', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', origin: 'https://studio.youtube.com' },
-    { clientId: 5,  clientName: 'IOS',            clientVersion: '19.09.3', ua: 'com.google.ios.youtube/19.09.3 (iPhone16,2; U; CPU iOS 17_1_2 like Mac OS X;)', origin: 'https://www.youtube.com', extra: { deviceModel: 'iPhone16,2' } },
-    { clientId: 3,  clientName: 'ANDROID',        clientVersion: '18.11.34', ua: 'com.google.android.youtube/18.11.34 (Linux; U; Android 11) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 30 } },
-    { clientId: 56, clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', ua: 'Mozilla/5.0 (SmartHub; SMART-TV; V8.0.0.0) AppleWebKit/538.1', origin: 'https://www.youtube.com' },
+    // ✅ 2026: IOS client — most reliable for datacenter IPs, returns signed HLS URLs
+    { clientId: 5,  clientName: 'IOS',            clientVersion: '19.29.1', ua: 'com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5 like Mac OS X;)', origin: 'https://www.youtube.com', extra: { deviceModel: 'iPhone16,2', osName: 'iPhone', osVersion: '17.5.1.21F90' } },
+    // ✅ 2026: ANDROID client — reliable for most videos
+    { clientId: 3,  clientName: 'ANDROID',        clientVersion: '19.29.37', ua: 'com.google.android.youtube/19.29.37(Linux; U; Android 14) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 34, osName: 'Android', osVersion: '14' } },
+    // ✅ TV embedded — bypasses some age/region restrictions
+    { clientId: 85, clientName: 'ANDROID_EMBEDDED_PLAYER', clientVersion: '19.29.37', ua: 'com.google.android.youtube/19.29.37(Linux; U; Android 14) gzip', origin: 'https://www.youtube.com', extra: { androidSdkVersion: 34, embedUrl: 'https://www.youtube.com' } },
+    // Web creator — different restrictions than regular web
+    { clientId: 62, clientName: 'WEB_CREATOR',   clientVersion: '1.20240101.01.00', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36', origin: 'https://studio.youtube.com' },
+    // TV embedded — last resort
+    { clientId: 56, clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER', clientVersion: '2.0', ua: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1', origin: 'https://www.youtube.com' },
   ]
 
   // Get oEmbed metadata (almost always works)

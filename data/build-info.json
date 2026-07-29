@@ -1,8 +1,8 @@
 {
-  "commit": "33378e1d73381e0bc2ef3a7e71ca70359e9741b7",
-  "commitShort": "33378e1d",
+  "commit": "971ad9ea017b098a09940979e6fc546e152fe623",
+  "commitShort": "971ad9ea",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: robust social media downloader — yt-dlp job queue + SSE progress + Cobalt fallback",
-  "deployedAt": "2026-07-29T16:28:39.422000Z",
+  "message": "fix: Facebook/CORS extraction fallback — server download card when client-side fails",
+  "deployedAt": "2026-07-29T16:54:27.763310Z",
   "deployedBy": "scripts/deploy.py"
 }

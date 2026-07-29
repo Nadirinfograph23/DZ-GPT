@@ -1852,6 +1852,55 @@ function MediaDownloadCardReady({
   )
 }
 
+// ── Server-side fallback card (client extraction failed, URL available) ──────
+// Shown when browser-side extraction fails (CORS / platform restriction) but
+// the original URL is known — lets the user trigger a yt-dlp server job.
+function MediaDownloadCardServerFallback({
+  url, platform, pm, errorMsg,
+}: { url: string; platform: string | null; pm: ReturnType<typeof getPlatformMeta>; errorMsg: string }) {
+  const { startServerJob } = useDownload()
+  const [launched, setLaunched] = useState(false)
+
+  const launch = (fmt: 'video' | 'audio') => {
+    startServerJob({ url, format: fmt, quality: 'best', platform, title: '', ext: fmt === 'audio' ? 'm4a' : 'mp4' })
+    setLaunched(true)
+  }
+
+  return (
+    <div className="dz-mdl">
+      <div className="dz-mdl__head">
+        <span className="dz-mdl__picon">{pm.icon}</span>
+        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>{pm.label}</span>
+      </div>
+
+      {/* Soft warning — not a fatal error */}
+      <p className="dz-mdl__errmsg" style={{ color: '#f59e0b', fontSize: 12, marginBottom: 10 }}>
+        ⚠️ تعذّر الاستخراج المباشر — سيتولى الخادم التحميل بدلاً عن ذلك
+      </p>
+
+      {launched ? (
+        <p style={{ color: '#10a37f', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>
+          ✅ بدأ التحميل — تابع التقدم في شريط التحميل
+        </p>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+          <button className="dz-mdl__dl-btn" onClick={() => launch('video')} style={{ flex: 1 }}>
+            <Download size={14} /> تحميل فيديو
+          </button>
+          <button className="dz-mdl__dl-btn" onClick={() => launch('audio')}
+            style={{ flex: 1, background: 'rgba(16,163,127,.15)', borderColor: '#10a37f', color: '#10a37f' }}>
+            <Download size={14} /> صوت فقط
+          </button>
+        </div>
+      )}
+
+      <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link" style={{ marginTop: 8 }}>
+        🔗 الرابط الأصلي
+      </a>
+    </div>
+  )
+}
+
 /* outer wrapper that handles status transitions */
 function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
   const pm = getPlatformMeta(data.platform ?? null)
@@ -1903,6 +1952,17 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
     }
 
     if (extractState.phase === 'error') {
+      // When client-side extraction fails (CORS / platform restriction) but we
+      // have the original URL, offer a direct server-side download via yt-dlp
+      // instead of a dead-end error card.
+      if (data.url) {
+        return <MediaDownloadCardServerFallback
+          url={data.url}
+          platform={data.platform ?? null}
+          pm={pm}
+          errorMsg={extractState.message}
+        />
+      }
       return (
         <div className="dz-mdl dz-mdl--error">
           <div className="dz-mdl__head">

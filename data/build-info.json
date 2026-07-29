@@ -1,8 +1,8 @@
 {
-  "commit": "fcf807dddf9859fdeee18c736833bdcc9ce3fce1",
-  "commitShort": "fcf807dd",
+  "commit": "823c3423e8d305a9ff68ea57c0430d1544abb738",
+  "commitShort": "823c3423",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: شريط تحميل أخضر + رفع خانة الكتابة آليا عند ظهور شريط التحميل في DZ Agent",
-  "deployedAt": "2026-07-29T22:27:08.891281Z",
+  "message": "fix: شريط التحميل — الإطار بلون المنصة + شريط التقدم الداخلي أخضر دائماً",
+  "deployedAt": "2026-07-29T22:30:47.129433Z",
   "deployedBy": "scripts/deploy.py"
 }

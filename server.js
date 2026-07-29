@@ -274,6 +274,7 @@ import { createOwnerRouter } from './routes/owner.js'
 import { createGitHubRouter } from './routes/github.js'
 import { router as voiceRouter } from './routes/voice.js'
 import { createFlightsRouter } from './routes/flights.js'
+import downloaderRouter from './routes/downloader.js'
 import { getCapabilityResponse, matchCapabilityQuery } from './lib/dz-agent-identity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -1334,6 +1335,7 @@ app.use('/api', createHealthRouter({
 }))
 app.use('/api', createOwnerRouter({ getRSSFeeds: () => RSS_FEEDS }))
 app.use('/api', createGitHubRouter({ githubLimiter }))
+app.use('/api/download', downloaderRouter)
 
 // ── /api/version — معلومات الإصدار الحالي والـ deploy ──────────────────────
 const _SERVER_START = Date.now()

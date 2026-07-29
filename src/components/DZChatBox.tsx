@@ -1690,7 +1690,7 @@ function MediaDownloadCardReady({
   format?: 'audio' | 'video'
   pm: { icon: string; label: string; color: string }
 }) {
-  const { startDownload } = useDownload()
+  const { startDownload, startServerJob } = useDownload()
   const [sel, setSel] = useState<{ type: 'video' | 'audio'; index: number } | null>(null)
 
   const videoFmts = useMemo(() =>
@@ -1722,8 +1722,27 @@ function MediaDownloadCardReady({
     if (!sel) return
     const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
     if (!fmt) return
-    const safeName = (info.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
-    startDownload({ cdnUrl: fmt.url, filename: safeName, ext: sel.type === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4'), platform, size: fmt.size ?? null })
+    const safeName  = (info.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
+    const dlFormat  = sel.type as 'video' | 'audio'
+    const dlExt     = dlFormat === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4')
+    // Map height → quality string for yt-dlp format selector
+    const videoH    = sel.type === 'video' ? ((fmt as import('../lib/mediaExtractor').VideoFormat).height ?? 0) : 0
+    const dlQuality = videoH >= 1080 ? '1080' : videoH >= 720 ? '720' : videoH >= 480 ? '480' : videoH >= 360 ? '360' : 'best'
+
+    if (url) {
+      // Primary: server-side job → yt-dlp with real progress + fallback chain
+      startServerJob({
+        url,
+        format: dlFormat,
+        quality: dlQuality,
+        platform,
+        title: safeName,
+        ext: dlExt,
+      })
+    } else {
+      // Fallback for legacy cards without original URL: direct CDN fetch
+      startDownload({ cdnUrl: fmt.url, filename: safeName, ext: dlExt, platform, size: fmt.size ?? null })
+    }
   }
 
   const hasFormats = videoFmts.length > 0 || audioFmts.length > 0

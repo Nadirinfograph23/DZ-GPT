@@ -24059,7 +24059,8 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   // لكنه ليس خبراً ← العملة لها مسارها الخاص (currency fast-path)
   if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
-    const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
+    // ✅ FIX: يدعم "ال" التعريف — "الذكاء الاصطناعي" / "أخبار الذكاء" / "أخبار التقنية"
+    const _isTechAIQuery = /(?:ال)?ذكاء\s*(?:ال)?اصطناعي|نموذج\s*(?:ال)?(?:ذكاء|لغوي)|أخبار\s*(?:ال)?(?:تقنية|تقني|تكنولوجيا|ذكاء)|تقنية\s*(?:ال)?ذكاء|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
     // News cards are data cards, not LLM tasks. Keep them independent from
     // provider availability so a bad/slow key can never leave the UI loading.
     const _directNewsMode = !_isAgentMode

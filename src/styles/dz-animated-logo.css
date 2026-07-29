@@ -198,32 +198,38 @@
   transform-origin: center center;
 }
 @keyframes dzl-flag-lifecycle {
-  0%,35% { opacity: 0; transform: scale(0) rotate(10deg); clip-path: circle(0% at 50% 50%); }
-  42%    { opacity: 1; transform: scale(.6) rotate(0deg); clip-path: circle(50% at 50% 50%); }
-  52%    { opacity: 1; transform: scale(1) rotate(0deg);  clip-path: inset(0% round 12px); }
-  72%    { opacity: 1; transform: scale(1) rotate(0deg);  clip-path: inset(0% round 12px); }
-  82%    { opacity: 0; transform: scale(.3) rotate(-5deg); clip-path: circle(0% at 50% 50%); }
-  100%   { opacity: 0; transform: scale(0); clip-path: circle(0% at 50% 50%); }
+  0%,35% { opacity: 0; transform: scale(0);          clip-path: circle(0%   at 50% 50%); }
+  44%    { opacity: 1; transform: scale(.75);         clip-path: circle(55%  at 50% 50%); }
+  54%    { opacity: 1; transform: scale(1);            clip-path: inset(0% round 10px); }
+  70%    { opacity: 1; transform: scale(1);            clip-path: inset(0% round 10px); }
+  80%    { opacity: 0; transform: scale(.35);          clip-path: circle(0%  at 50% 50%); }
+  100%   { opacity: 0; transform: scale(0);           clip-path: circle(0%   at 50% 50%); }
 }
 
 .dzl-flag-glow {
   position: absolute;
-  inset: -12px;
-  border-radius: 16px;
-  box-shadow: 0 0 30px rgba(0,98,51,.7), 0 0 60px rgba(0,98,51,.4), 0 0 90px rgba(0,98,51,.2);
-  animation: dzl-flag-glow-pulse 1.5s ease-in-out infinite alternate;
+  inset: -8px;
+  border-radius: 12px;
+  box-shadow: 0 0 18px rgba(0,98,51,.65), 0 0 36px rgba(0,98,51,.3);
+  animation: dzl-flag-glow-pulse 1.6s ease-in-out infinite alternate;
   pointer-events: none;
 }
 @keyframes dzl-flag-glow-pulse {
-  from { box-shadow: 0 0 25px rgba(0,98,51,.6), 0 0 50px rgba(0,98,51,.3); }
-  to   { box-shadow: 0 0 40px rgba(0,200,100,.9), 0 0 80px rgba(0,150,75,.6), 0 0 120px rgba(210,16,52,.3); }
+  from { box-shadow: 0 0 14px rgba(0,98,51,.55), 0 0 28px rgba(0,98,51,.25); }
+  to   { box-shadow: 0 0 24px rgba(0,200,100,.8), 0 0 48px rgba(0,150,75,.45), 0 0 64px rgba(210,16,52,.2); }
 }
 
+/* العلم: حجم مناسب يسع ضمن المغلّف 130px دون overflow */
 .dzl-flag-svg {
-  width: 170px; height: 113px;
-  border-radius: 12px;
+  width: 96px; height: 64px;
+  border-radius: 8px;
   display: block;
-  filter: drop-shadow(0 4px 20px rgba(0,0,0,.5));
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,.45));
+}
+
+/* شاشات صغيرة جداً */
+@media (max-width: 360px) {
+  .dzl-flag-svg { width: 80px; height: 53px; }
 }
 
 .dzl-flag-emblem { animation: dzl-emblem-glow 1.5s ease-in-out infinite alternate; }

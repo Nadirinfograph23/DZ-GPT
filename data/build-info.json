@@ -1,8 +1,8 @@
 {
-  "commit": "a672a0964f01e6924f5ec0783ab8c6b388ff0448",
-  "commitShort": "a672a096",
+  "commit": "5d7c9561ce983b26fb60681baab513804e7fbf5b",
+  "commitShort": "5d7c9561",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: تصغير العلم الجزائري في الأنيميشن + إصلاح توجيه أخبار الذكاء الاصطناعي",
-  "deployedAt": "2026-07-29T01:28:02.549086Z",
+  "message": "fix: تحسين تحميل الفيديو + مشغّل مدمج بعد التحميل + حذف روابط أخبار AI + إصلاح Vite optimizeDeps",
+  "deployedAt": "2026-07-29T02:33:33.434521Z",
   "deployedBy": "scripts/deploy.py"
 }

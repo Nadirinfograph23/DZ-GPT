@@ -4772,7 +4772,7 @@ const TickerText = memo(function TickerText() {
 })
 
 // ── Social platform URL detector ─────────────────────────────────────────────
-const SOCIAL_DL_RE = /https?:\/\/(?:(?:www\.|m\.)?(?:youtube\.com\/(?:watch|shorts|live|embed)|youtu\.be|tiktok\.com|vm\.tiktok\.com|instagram\.com\/(?:reel|p\/|tv\/|reels)|(?:www\.)?facebook\.com\/(?:watch|video|reel|share\/v)|fb\.watch|twitter\.com\/\S*?\/status|x\.com\/\S*?\/status|pinterest\.(?:com|co\.uk)\/pin|vimeo\.com\/\d|dailymotion\.com\/video))[^\s]*/i
+const SOCIAL_DL_RE = /https?:\/\/(?:(?:www\.|m\.)?(?:youtube\.com\/(?:watch|shorts|live|embed)|youtu\.be|tiktok\.com|vm\.tiktok\.com|instagram\.com\/(?:reel|p\/|tv\/|reels)|(?:www\.)?facebook\.com\/(?:watch|video|reel|share\/[rvp]|share(?:\/|$))|fb\.watch|twitter\.com\/\S*?\/status|x\.com\/\S*?\/status|pinterest\.(?:com|co\.uk)\/pin|vimeo\.com\/\d|dailymotion\.com\/video))[^\s]*/i
 
 function _detectSocialPlatform(url: string): string | null {
   const u = url.toLowerCase()

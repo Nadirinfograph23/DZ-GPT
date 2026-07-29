@@ -4771,6 +4771,22 @@ const TickerText = memo(function TickerText() {
   )
 })
 
+// ── Social platform URL detector ─────────────────────────────────────────────
+const SOCIAL_DL_RE = /https?:\/\/(?:(?:www\.|m\.)?(?:youtube\.com\/(?:watch|shorts|live|embed)|youtu\.be|tiktok\.com|vm\.tiktok\.com|instagram\.com\/(?:reel|p\/|tv\/|reels)|(?:www\.)?facebook\.com\/(?:watch|video|reel|share\/v)|fb\.watch|twitter\.com\/\S*?\/status|x\.com\/\S*?\/status|pinterest\.(?:com|co\.uk)\/pin|vimeo\.com\/\d|dailymotion\.com\/video))[^\s]*/i
+
+function _detectSocialPlatform(url: string): string | null {
+  const u = url.toLowerCase()
+  if (/youtu(?:be\.com|\.be)/.test(u)) return 'youtube'
+  if (/tiktok\.com/.test(u)) return 'tiktok'
+  if (/instagram\.com/.test(u)) return 'instagram'
+  if (/facebook\.com|fb\.watch/.test(u)) return 'facebook'
+  if (/(?:twitter|x)\.com/.test(u)) return 'twitter'
+  if (/pinterest\./.test(u)) return 'pinterest'
+  if (/vimeo\.com/.test(u)) return 'vimeo'
+  if (/dailymotion\.com/.test(u)) return 'dailymotion'
+  return null
+}
+
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange, cerebrasKey, initialQuery }: DZChatBoxProps) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<DZMessage[]>(() => {
@@ -4781,6 +4797,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     } catch { return [] }
   })
   const [input, setInput] = useState('')
+  const [socialDlBar, setSocialDlBar] = useState<{ url: string; platform: string | null } | null>(null)
+  const [socialDlFmt, setSocialDlFmt] = useState<'video' | 'audio'>('video')
   const [showFindDialog, setShowFindDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
@@ -7404,6 +7422,7 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const sendMessage = useCallback(async (overrideInput?: string, dashboardContext?: DashboardContext) => {
     let text = (overrideInput ?? input).trim()
     if (!text || isLoading) return
+    setSocialDlBar(null)
 
     // ── Weather city await: المستخدم أجاب على سؤال المدينة ──────────────────
     if (awaitingWeatherCity) {
@@ -10625,11 +10644,66 @@ ${rows}
             >✕</button>
           </div>
         )}
+        {/* ===== SOCIAL DOWNLOAD BAR ===== */}
+        {socialDlBar && (
+          <div className="dz-social-dl-bar">
+            <span className="dz-social-dl-icon">{getPlatformMeta(socialDlBar.platform).icon}</span>
+            <div className="dz-social-dl-info">
+              <span className="dz-social-dl-plat">{getPlatformMeta(socialDlBar.platform).label}</span>
+              <span className="dz-social-dl-url" dir="ltr">
+                {socialDlBar.url.length > 46 ? socialDlBar.url.slice(0, 46) + '…' : socialDlBar.url}
+              </span>
+            </div>
+            <div className="dz-social-dl-btns">
+              <button
+                className={`dz-social-dl-fmt${socialDlFmt === 'video' ? ' dz-social-dl-fmt--active' : ''}`}
+                onClick={() => setSocialDlFmt('video')}
+              >📹 فيديو</button>
+              <button
+                className={`dz-social-dl-fmt${socialDlFmt === 'audio' ? ' dz-social-dl-fmt--active' : ''}`}
+                onClick={() => setSocialDlFmt('audio')}
+              >🎵 صوت</button>
+              <button
+                className="dz-social-dl-start"
+                onClick={() => {
+                  const pm = getPlatformMeta(socialDlBar.platform)
+                  startServerJob({
+                    url: socialDlBar.url,
+                    format: socialDlFmt,
+                    quality: 'best',
+                    platform: socialDlBar.platform,
+                    title: pm.label + ' download',
+                    ext: socialDlFmt === 'audio' ? 'mp3' : 'mp4',
+                  })
+                  setSocialDlBar(null)
+                  setInput('')
+                }}
+              >
+                <Download size={13} /> تحميل
+              </button>
+            </div>
+            <button
+              className="dz-social-dl-close"
+              onClick={() => setSocialDlBar(null)}
+              title="إغلاق"
+            >✕</button>
+          </div>
+        )}
+
         <div className="dz-input-container">
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              const m = e.target.value.match(SOCIAL_DL_RE)
+              if (m) {
+                const plat = _detectSocialPlatform(m[0])
+                setSocialDlBar({ url: m[0], platform: plat })
+              } else {
+                setSocialDlBar(null)
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder={isGithubConnected
               ? (language === 'fr' ? 'Écrivez votre message... (GitHub connecté ✓)' : language === 'en' ? 'Type your message... (GitHub connected ✓)' : 'أكتب رسالتك... (GitHub متصل ✓)')

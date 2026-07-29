@@ -14518,3 +14518,47 @@
   .dzw-table-scroll { padding: 8px 10px 12px; }
   .dzw-arrow  { width: 26px; height: 42px; font-size: 1.3rem; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   🎨 SOCIAL DOWNLOAD BAR — ألوان الثيمات
+   ══════════════════════════════════════════════════════════════════ */
+/* teal */
+.dza-layout[data-theme="teal"] { --dl-accent: #10a37f; }
+.dza-layout[data-theme="teal"] .dz-social-dl-bar { background: rgba(16,163,127,0.07) !important; border-color: rgba(16,163,127,0.22) !important; }
+.dza-layout[data-theme="teal"] .dz-social-dl-fmt--active { background: rgba(16,163,127,0.15) !important; border-color: rgba(16,163,127,0.4) !important; color: #10a37f !important; }
+.dza-layout[data-theme="teal"] .dz-social-dl-start { background: #10a37f !important; box-shadow: 0 2px 8px rgba(16,163,127,0.35) !important; }
+
+/* gray */
+.dza-layout[data-theme="gray"] { --dl-accent: #94a3b8; }
+.dza-layout[data-theme="gray"] .dz-social-dl-bar { background: rgba(148,163,184,0.07) !important; border-color: rgba(148,163,184,0.22) !important; }
+.dza-layout[data-theme="gray"] .dz-social-dl-plat { color: #94a3b8 !important; }
+.dza-layout[data-theme="gray"] .dz-social-dl-fmt--active { background: rgba(148,163,184,0.15) !important; border-color: rgba(148,163,184,0.4) !important; color: #94a3b8 !important; }
+.dza-layout[data-theme="gray"] .dz-social-dl-start { background: #64748b !important; box-shadow: 0 2px 8px rgba(100,116,139,0.35) !important; }
+
+/* indigo */
+.dza-layout[data-theme="indigo"] { --dl-accent: #818cf8; }
+.dza-layout[data-theme="indigo"] .dz-social-dl-bar { background: rgba(129,140,248,0.07) !important; border-color: rgba(129,140,248,0.22) !important; }
+.dza-layout[data-theme="indigo"] .dz-social-dl-plat { color: #818cf8 !important; }
+.dza-layout[data-theme="indigo"] .dz-social-dl-fmt--active { background: rgba(129,140,248,0.15) !important; border-color: rgba(129,140,248,0.4) !important; color: #818cf8 !important; }
+.dza-layout[data-theme="indigo"] .dz-social-dl-start { background: #6366f1 !important; box-shadow: 0 2px 8px rgba(99,102,241,0.4) !important; }
+
+/* rose — لون الثيم وردي لكن نتجنب الأحمر */
+.dza-layout[data-theme="rose"] { --dl-accent: #fb7185; }
+.dza-layout[data-theme="rose"] .dz-social-dl-bar { background: rgba(251,113,133,0.07) !important; border-color: rgba(251,113,133,0.22) !important; }
+.dza-layout[data-theme="rose"] .dz-social-dl-plat { color: #fb7185 !important; }
+.dza-layout[data-theme="rose"] .dz-social-dl-fmt--active { background: rgba(251,113,133,0.15) !important; border-color: rgba(251,113,133,0.4) !important; color: #fb7185 !important; }
+.dza-layout[data-theme="rose"] .dz-social-dl-start { background: linear-gradient(135deg,#fb7185,#f43f5e) !important; box-shadow: 0 2px 8px rgba(244,63,94,0.35) !important; }
+
+/* amber */
+.dza-layout[data-theme="amber"] { --dl-accent: #fbbf24; }
+.dza-layout[data-theme="amber"] .dz-social-dl-bar { background: rgba(251,191,36,0.07) !important; border-color: rgba(251,191,36,0.22) !important; }
+.dza-layout[data-theme="amber"] .dz-social-dl-plat { color: #fbbf24 !important; }
+.dza-layout[data-theme="amber"] .dz-social-dl-fmt--active { background: rgba(251,191,36,0.15) !important; border-color: rgba(251,191,36,0.4) !important; color: #fbbf24 !important; }
+.dza-layout[data-theme="amber"] .dz-social-dl-start { background: linear-gradient(135deg,#fbbf24,#f59e0b) !important; box-shadow: 0 2px 8px rgba(245,158,11,0.35) !important; color: #1c1a10 !important; }
+
+/* sky */
+.dza-layout[data-theme="sky"] { --dl-accent: #38bdf8; }
+.dza-layout[data-theme="sky"] .dz-social-dl-bar { background: rgba(56,189,248,0.07) !important; border-color: rgba(56,189,248,0.22) !important; }
+.dza-layout[data-theme="sky"] .dz-social-dl-plat { color: #38bdf8 !important; }
+.dza-layout[data-theme="sky"] .dz-social-dl-fmt--active { background: rgba(56,189,248,0.15) !important; border-color: rgba(56,189,248,0.4) !important; color: #38bdf8 !important; }
+.dza-layout[data-theme="sky"] .dz-social-dl-start { background: linear-gradient(135deg,#38bdf8,#0ea5e9) !important; box-shadow: 0 2px 8px rgba(14,165,233,0.35) !important; }

@@ -2149,3 +2149,125 @@
   .dz-quick-actions { grid-template-columns: repeat(2, 1fr); gap: 7px; }
   .dz-qa-btn { padding: 10px 10px 8px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   🎬 SOCIAL DOWNLOAD BAR — شريط تحميل مواقع التواصل الاجتماعي
+   يظهر آليًا فوق خانة الكتابة عند رصد رابط وسائط اجتماعية
+   ══════════════════════════════════════════════════════════════════ */
+:root { --dl-accent: #10a37f; }
+
+.dz-social-dl-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  margin: 0 0 6px;
+  background: rgba(16,163,127,0.07);
+  border: 1px solid rgba(16,163,127,0.22);
+  border-radius: 12px;
+  animation: dlBarSlideIn .22s ease;
+  overflow: hidden;
+}
+@keyframes dlBarSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dz-social-dl-icon {
+  font-size: 1.35rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.dz-social-dl-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.dz-social-dl-plat {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--dl-accent);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.dz-social-dl-url {
+  font-size: 0.65rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+  direction: ltr;
+}
+
+.dz-social-dl-btns {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.dz-social-dl-fmt {
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #94a3b8;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.dz-social-dl-fmt:hover {
+  background: rgba(255,255,255,0.1);
+  color: #e2e8f0;
+}
+.dz-social-dl-fmt--active {
+  background: rgba(16,163,127,0.15) !important;
+  border-color: rgba(16,163,127,0.4) !important;
+  color: var(--dl-accent) !important;
+  font-weight: 600;
+}
+
+.dz-social-dl-start {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--dl-accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(16,163,127,0.3);
+}
+.dz-social-dl-start:hover  { opacity: .88; transform: translateY(-1px); }
+.dz-social-dl-start:active { opacity: 1;   transform: translateY(0); }
+
+.dz-social-dl-close {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 3px 5px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+.dz-social-dl-close:hover { color: #e2e8f0; background: rgba(255,255,255,.08); }
+
+@media (max-width: 600px) {
+  .dz-social-dl-bar { gap: 7px; padding: 8px 10px; }
+  .dz-social-dl-url { display: none; }
+  .dz-social-dl-fmt { padding: 3px 7px; }
+  .dz-social-dl-start { padding: 4px 9px; }
+}

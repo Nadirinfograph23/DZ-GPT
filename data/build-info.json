@@ -1,8 +1,8 @@
 {
-  "commit": "f09a021a37935094af392b0963d83fc62e03ebe6",
-  "commitShort": "f09a021a",
+  "commit": "33378e1d73381e0bc2ef3a7e71ca70359e9741b7",
+  "commitShort": "33378e1d",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: yt-dlp أولاً لـ Facebook — يحل مشكلة timeout بعد 86 ثانية من المستخرجات الفاشلة",
-  "deployedAt": "2026-07-29T12:52:37.443280Z",
+  "message": "feat: robust social media downloader — yt-dlp job queue + SSE progress + Cobalt fallback",
+  "deployedAt": "2026-07-29T16:28:39.422000Z",
   "deployedBy": "scripts/deploy.py"
 }

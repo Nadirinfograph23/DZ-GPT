@@ -1,6 +1,6 @@
 # DZ-GPT — حالة المشروع
 
-> **آخر تحديث:** 6 يونيو 2026
+> **آخر تحديث:** 29 يوليو 2026
 
 ---
 
@@ -130,3 +130,5 @@ DZ-GPT/
 - لا `main`، لا `git push` مباشر — `scripts/deploy.py` فقط
 - Node 20 | Python 3.11 | Port 5000
 - `npm run dev` ← يشغّل `node server.js`
+- إشعار التحديث على الموقع المباشر إلزامي بعد كل مهمة — يظهر تلقائياً عبر `/api/version` (polling كل 45 ثانية) بمجرد اكتمال deploy Vercel؛ المصدر الأول على Vercel: `VERCEL_GIT_COMMIT_SHA` (يتغير بكل deploy تلقائياً)
+- أسماء الأسرار في Replit: `TOKEN_GITHUB` و`TOKEN_VERCEL` (يقرأها `scripts/deploy.py`)

@@ -1339,31 +1339,43 @@ app.use('/api/download', downloaderRouter)
 
 // ── /api/version — معلومات الإصدار الحالي والـ deploy ──────────────────────
 const _SERVER_START = Date.now()
+const _biPath = new URL('./data/build-info.json', import.meta.url)
 
-// قراءة build-info.json (يُحدَّث تلقائياً في كل deploy بـ scripts/deploy.py)
+// قراءة build-info.json مرة أولى عند الـ bootstrap
 let _BUILD_INFO = null
 try {
-  const _biPath = new URL('./data/build-info.json', import.meta.url)
-  const _biRaw  = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
+  const _biRaw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
   if (_biRaw) _BUILD_INFO = JSON.parse(_biRaw)
 } catch {}
 
-app.get('/api/version', (_req, res) => {
+app.get('/api/version', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.setHeader('Pragma', 'no-cache')
   res.setHeader('Expires', '0')
 
-  // الأولوية: build-info.json (دقيق) ← VERCEL env vars ← fallback
-  const commit  = _BUILD_INFO?.commitShort
-               || (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 8)
+  // على Vercel: أعد قراءة build-info.json في كل طلب لضمان
+  // أن الـ warm instances تعكس آخر deploy فوراً
+  let buildInfo = _BUILD_INFO
+  if (process.env.VERCEL) {
+    try {
+      const raw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
+      if (raw) buildInfo = JSON.parse(raw)
+    } catch {}
+  }
+
+  // الأولوية على Vercel: VERCEL_GIT_COMMIT_SHA (مضمون التغيير بكل deploy)
+  //                   ← build-info.json ← fallback
+  const vercelSha = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 8)
+  const commit  = vercelSha
+               || buildInfo?.commitShort
                || 'dev-local'
-  const branch  = _BUILD_INFO?.branch
+  const branch  = buildInfo?.branch
                || process.env.VERCEL_GIT_BRANCH
                || 'local'
-  const message = _BUILD_INFO?.message
+  const message = buildInfo?.message
                || process.env.VERCEL_GIT_COMMIT_MESSAGE
                || ''
-  const deployedAt = _BUILD_INFO?.deployedAt
+  const deployedAt = buildInfo?.deployedAt
                   || process.env.VERCEL_GIT_COMMIT_DATE
                   || new Date().toISOString()
 
@@ -1378,7 +1390,7 @@ app.get('/api/version', (_req, res) => {
     env:        process.env.NODE_ENV || 'development',
     region:     process.env.VERCEL_REGION || process.env.VERCEL_DEPLOYMENT_ID?.slice(0,6) || 'replit',
     status:     'ok',
-    _source:    _BUILD_INFO ? 'build-info.json' : 'env-vars',
+    _source:    vercelSha ? 'vercel-env' : buildInfo ? 'build-info.json' : 'fallback',
   })
 })
 

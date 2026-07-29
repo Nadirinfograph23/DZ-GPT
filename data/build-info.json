@@ -1,8 +1,8 @@
 {
-  "commit": "3256c014b22bbde3c7019219de2e5b630d29cbf6",
-  "commitShort": "3256c014",
+  "commit": "f09a021a37935094af392b0963d83fc62e03ebe6",
+  "commitShort": "f09a021a",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: أزرار تحميل مباشر فقط — إزالة كل إعادة التوجيه لمواقع خارجية + 5 مستخرجين لـ Facebook",
-  "deployedAt": "2026-07-29T03:27:38.821647Z",
+  "message": "fix: yt-dlp أولاً لـ Facebook — يحل مشكلة timeout بعد 86 ثانية من المستخرجات الفاشلة",
+  "deployedAt": "2026-07-29T12:52:37.443280Z",
   "deployedBy": "scripts/deploy.py"
 }

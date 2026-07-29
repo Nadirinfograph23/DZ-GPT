@@ -330,15 +330,8 @@ async function extractFacebook(url: string, signal?: AbortSignal): Promise<Media
     if ((e as any)?.name === 'AbortError') throw e
   }
 
-  // 4 — Soft failure: provide direct links to download sites (always available)
-  const enc = encodeURIComponent(url)
-  return {
-    title: 'Facebook Video',
-    thumbnail: '', duration: 0, uploader: '',
-    video: [], audio: [],
-    canStream: false,
-    cobaltUrl: `https://fdown.net/?url=${enc}`,
-  }
+  // 4 — All methods failed: throw honest error (no external redirects)
+  throw new Error('تعذّر تحميل هذا الفيديو — المحتوى محمي أو مقيّد من المنصة')
 }
 
 // ── Instagram ──────────────────────────────────────────────────────

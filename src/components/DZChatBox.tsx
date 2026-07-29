@@ -1747,53 +1747,10 @@ function MediaDownloadCardReady({
         </div>
       </div>
 
-      {/* canStream:false → show alternative download links */}
-      {!canStream && (
-        <div className="dz-mdl__cobalt">
-          <div className="dz-mdl__cobalt-msg">
-            <span className="dz-mdl__cobalt-icon">ℹ️</span>
-            <span>
-              {platform === 'youtube'
-                ? 'خوادم DZ Agent مُقيَّدة بواسطة YouTube — استخدم أحد المواقع التالية للتحميل'
-                : 'تعذّر الاستخراج مباشرةً — استخدم أحد المواقع المجانية التالية للتحميل'}
-            </span>
-          </div>
-          <div className="dz-mdl__cobalt-btns">
-            <a
-              href={info.cobaltUrl || `https://cobalt.tools/?u=${encodeURIComponent(url || '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="dz-mdl__cobalt-btn"
-              style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}bb)` }}
-            >
-              <Download size={14} />
-              {platform === 'facebook' ? 'fdown.net' : 'cobalt.tools'}
-            </a>
-            {platform === 'facebook' && url && (
-              <a
-                href={`https://snapsave.app/?url=${encodeURIComponent(url)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="dz-mdl__cobalt-btn"
-                style={{ background: 'linear-gradient(135deg, #1877f2, #1260cc)' }}
-              >
-                <Download size={14} />
-                snapsave.app
-              </a>
-            )}
-            {url && (
-              <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
-                🔗 الرابط الأصلي
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* No formats (canStream but empty) */}
-      {canStream && !hasFormats && (
+      {/* canStream:false or no formats → error only, no external redirects */}
+      {(!canStream || !hasFormats) && (
         <p className="dz-mdl__errmsg" style={{ color: '#f59e0b' }}>
-          ⚠️ لا توجد روابط قابلة للتحميل — قد يكون المحتوى محمياً أو خاصاً
+          ⚠️ تعذّر تحميل هذا الفيديو مباشرةً — المحتوى محمي أو مقيّد من المنصة
         </p>
       )}
 
@@ -1931,12 +1888,9 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
         <div className="dz-mdl dz-mdl--error">
           <div className="dz-mdl__head">
             <span className="dz-mdl__picon">{pm.icon}</span>
-            <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
+            <span className="dz-mdl__platform" style={{ color: pm.color }}>تعذّر التحميل</span>
           </div>
           <p className="dz-mdl__errmsg">{extractState.message}</p>
-          {data.url && (
-            <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 فتح الرابط الأصلي</a>
-          )}
         </div>
       )
     }
@@ -1953,10 +1907,9 @@ function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownloa
       <div className="dz-mdl dz-mdl--error">
         <div className="dz-mdl__head">
           <span className="dz-mdl__picon">{pm.icon}</span>
-          <span className="dz-mdl__platform" style={{ color: pm.color }}>فشل استخراج الرابط</span>
+          <span className="dz-mdl__platform" style={{ color: pm.color }}>تعذّر التحميل</span>
         </div>
-        <p className="dz-mdl__errmsg">{data.error || 'خطأ غير معروف — حاول مرة أخرى'}</p>
-        {data.url && <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 فتح الرابط الأصلي</a>}
+        <p className="dz-mdl__errmsg">{data.error || 'تعذّر تحميل هذا الفيديو — المحتوى محمي أو مقيّد من المنصة'}</p>
       </div>
     )
   }

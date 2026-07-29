@@ -29033,6 +29033,7 @@ function downloadProviderPlan(platform) {
     facebook: [
       ['snapsave',  _extractFacebookSnapsave],
       ['getmyfb',   _extractFacebookGetMyFB],
+      ['ssvid',     _extractFacebookSSVid],
       ['saveclip',  _extractFacebookSaveclip],
       ['y2down',    _extractFacebookY2Down],
     ],
@@ -30385,6 +30386,40 @@ async function _extractFacebookSaveclip(url) {
     }
     if (!video.length) throw new Error('saveclip-fb: no video links found')
     return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'saveclip-fb' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → ssvid.net (reliable multi-platform scraper) ───────────────
+async function _extractFacebookSSVid(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const resp = await fetch('https://www.ssvid.net/api/get', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://www.ssvid.net',
+        'Referer': 'https://www.ssvid.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      body: new URLSearchParams({ url }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`ssvid HTTP ${resp.status}`)
+    const d = await resp.json().catch(() => null)
+    if (!d) throw new Error('ssvid: invalid JSON')
+    // Response: { url, hd_url, title, thumbnail }  OR  { links: [...] }
+    const video = []
+    if (d.hd_url) video.push({ url: d.hd_url, quality: 'HD', height: 720, ext: 'mp4', size: null, hasAudio: true })
+    if (d.url && d.url !== d.hd_url) video.push({ url: d.url, quality: 'SD', height: 480, ext: 'mp4', size: null, hasAudio: true })
+    if (d.links?.length) {
+      for (const l of d.links) {
+        if (l?.url) video.push({ url: l.url, quality: l.quality || l.label || 'SD', height: null, ext: 'mp4', size: null, hasAudio: true })
+      }
+    }
+    if (!video.length) throw new Error('ssvid: no video URLs')
+    return { title: d.title || 'Facebook Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video, source: 'ssvid' }
   } finally { clearTimeout(t) }
 }
 

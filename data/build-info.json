@@ -1,8 +1,8 @@
 {
-  "commit": "996f92b44f3e6016d8e0e6f9f8b14ca1e0c2313e",
-  "commitShort": "996f92b4",
+  "commit": "c85ffb7e76e3292e35abed74cb01d2c033a38304",
+  "commitShort": "c85ffb7e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: شريط تحميل مواقع التواصل الاجتماعي في dz Agent مع رفع خانة الكتابة آلياً وألوان الثيم",
-  "deployedAt": "2026-07-29T21:48:05.529691Z",
+  "message": "fix: دعم facebook.com/share/r/ في كاشف روابط التحميل",
+  "deployedAt": "2026-07-29T21:53:01.828140Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "c85ffb7e76e3292e35abed74cb01d2c033a38304",
-  "commitShort": "c85ffb7e",
+  "commit": "fcf807dddf9859fdeee18c736833bdcc9ce3fce1",
+  "commitShort": "fcf807dd",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: دعم facebook.com/share/r/ في كاشف روابط التحميل",
-  "deployedAt": "2026-07-29T21:53:01.828140Z",
+  "message": "feat: شريط تحميل أخضر + رفع خانة الكتابة آليا عند ظهور شريط التحميل في DZ Agent",
+  "deployedAt": "2026-07-29T22:27:08.891281Z",
   "deployedBy": "scripts/deploy.py"
 }

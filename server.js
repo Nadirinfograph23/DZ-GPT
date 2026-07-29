@@ -24043,10 +24043,12 @@ app.post('/api/dz-agent-chat', async (req, res) => {
   if (newsQueryType && !isPrayerQuery && !isCurrencyQuery && (!isFootballQuery || _isFootballNewsQuery)) {
     console.log(`[DZ Agent] News query detected: ${newsQueryType} (footballNews=${_isFootballNewsQuery})`)
     const _isTechAIQuery = /ذكاء\s*اصطناعي|نموذج\s*(?:ذكاء|لغوي)|أخبار\s*(?:تقنية|تقني|تكنولوجيا|ذكاء)|chatgpt|claude|gemini|openai|mistral|llm|gpt|llama|ai\s*news|artificial\s*intelligence/i.test(lastUserMessage)
-    const _noKeyNewsMode = getGroqKeys().length === 0 && !_isAgentMode
+    // News cards are data cards, not LLM tasks. Keep them independent from
+    // provider availability so a bad/slow key can never leave the UI loading.
+    const _directNewsMode = !_isAgentMode
 
     // ── 🇩🇿 أولوية: أخبار الجزائر من الكاش المحمّل مسبقاً (فوري وسريع) ─────────
-    if (newsQueryType === 'news' || newsQueryType === 'both') {
+    if ((newsQueryType === 'news' || newsQueryType === 'both') && !_isTechAIQuery) {
       try {
         // triggerBackground = true: نجلب من الكاش مباشرة، ونجدد في الخلفية إذا قارب على الانتهاء
         const dzCached = DZ_NEWS_CACHE.get('dz_priority_all')
@@ -24084,7 +24086,7 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     // Vercel instances have an empty in-memory cache on cold start. Without an
     // AI key, never fall through to the multi-source/search pipeline: fetch a
     // small, bounded RSS sample and return it (or a clear response) promptly.
-    if (_noKeyNewsMode && !rssContext) {
+    if (_directNewsMode && !rssContext) {
       const _quickNewsPromise = _isTechAIQuery
         ? fetchGNRSSArticles(TECH_FEEDS_DASHBOARD).then(items => {
             if (items?.length) rssContext = buildGNRSSContext(items, '🤖 أخبار الذكاء الاصطناعي والتقنية')
@@ -24106,6 +24108,16 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       return res.status(200).json({
         content: '## 📰 الأخبار\n\nتعذّر الوصول إلى مصادر الأخبار الآن. يرجى المحاولة بعد لحظات.',
         status: 'news_unavailable',
+      })
+    }
+
+    // A warm cache is already a complete answer. Return before the general
+    // RSS/search/LLM pipeline, which can block on third-party providers.
+    if (_directNewsMode && rssContext) {
+      console.log(`[News Direct-Path] Returning RSS card before search/LLM (${rssContext.length} chars)`)
+      return res.status(200).json({
+        content: `${rssContext}\n\n---\n> ℹ️ تم جلب العناوين مباشرة من RSS لتفادي الانتظار.`,
+        status: 'rss_direct',
       })
     }
 

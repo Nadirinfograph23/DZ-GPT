@@ -1,8 +1,8 @@
 {
-  "commit": "f604897cd573cfd093d306ada5d689c600f97151",
-  "commitShort": "f604897c",
+  "commit": "3256c014b22bbde3c7019219de2e5b630d29cbf6",
+  "commitShort": "3256c014",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح تحميل الفيديو من Facebook ومواقع التواصل — 4 مستخرجين جدد + fallback cobalt من browser",
-  "deployedAt": "2026-07-29T03:17:04.465386Z",
+  "message": "fix: أزرار تحميل مباشر فقط — إزالة كل إعادة التوجيه لمواقع خارجية + 5 مستخرجين لـ Facebook",
+  "deployedAt": "2026-07-29T03:27:38.821647Z",
   "deployedBy": "scripts/deploy.py"
 }

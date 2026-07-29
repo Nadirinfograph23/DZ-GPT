@@ -1,8 +1,8 @@
 {
-  "commit": "c3b16c37d08e213862db20ec80121fcc11fc68c3",
-  "commitShort": "c3b16c37",
+  "commit": "45436ab71377ea56b68d9c55102386a0f29bae36",
+  "commitShort": "45436ab7",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إشعار التحديث — VERCEL_GIT_COMMIT_SHA أولوية + قراءة build-info.json لكل طلب على Vercel",
-  "deployedAt": "2026-07-29T22:37:06.109550Z",
+  "message": "feat: Giststack Primary Provider — social_media_downloader MCP tool + download chain Giststack→yt-dlp→Cobalt",
+  "deployedAt": "2026-07-29T23:23:20.773373Z",
   "deployedBy": "scripts/deploy.py"
 }

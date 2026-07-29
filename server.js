@@ -29030,7 +29030,12 @@ function hasUsableMedia(info) {
 
 function downloadProviderPlan(platform) {
   const specialized = {
-    facebook: [['snapsave', _extractFacebookSnapsave]],
+    facebook: [
+      ['snapsave',  _extractFacebookSnapsave],
+      ['getmyfb',   _extractFacebookGetMyFB],
+      ['saveclip',  _extractFacebookSaveclip],
+      ['y2down',    _extractFacebookY2Down],
+    ],
     instagram: [['saveclip', _extractInstagramSaveclip]],
     tiktok: [['tikwm', _extractTikTokTikwm]],
     twitter: [['fxtwitter', _extractTwitterFxtwitter]],
@@ -30306,6 +30311,108 @@ async function _extractFacebookSnapsave(url) {
     if (video.length === 0) throw new Error('snapsave: no video links found')
     const titleM = html.match(/<title[^>]*>([^<]+)<\/title>/i)
     return { title: titleM?.[1]?.trim() || 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'snapsave' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → getmyfb.com (WordPress aio-dl plugin — JSON API) ──────────
+async function _extractFacebookGetMyFB(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const resp = await fetch('https://getmyfb.com/wp-json/aio-dl/video-data/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://getmyfb.com',
+        'Referer': 'https://getmyfb.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      body: new URLSearchParams({ url }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`getmyfb HTTP ${resp.status}`)
+    const d = await resp.json().catch(() => null)
+    if (!d) throw new Error('getmyfb: invalid JSON')
+    const links = d?.data?.links || d?.links || []
+    if (!links.length) throw new Error('getmyfb: no links')
+    const video = links
+      .filter(l => l?.url && typeof l.url === 'string' && /^https?:\/\//i.test(l.url))
+      .map((l, i) => ({ url: l.url, quality: l.text || l.resolution || (i === 0 ? 'HD' : 'SD'), height: null, ext: 'mp4', size: null, hasAudio: true }))
+    if (!video.length) throw new Error('getmyfb: no usable video URLs')
+    return { title: d?.data?.title || d?.title || 'Facebook Video', duration: 0, thumbnail: d?.data?.thumbnail || d?.thumbnail || '', uploader: '', audio: [], video, source: 'getmyfb' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → saveclip.app (also handles Facebook) ───────────────────────
+async function _extractFacebookSaveclip(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const resp = await fetch('https://saveclip.app/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://saveclip.app',
+        'Referer': 'https://saveclip.app/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ url }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`saveclip-fb HTTP ${resp.status}`)
+    const ct = resp.headers.get('content-type') || ''
+    let jsonData = null
+    let html = ''
+    if (ct.includes('json')) {
+      jsonData = await resp.json()
+    } else {
+      html = await resp.text()
+      try { jsonData = JSON.parse(html) } catch {}
+    }
+    if (jsonData) {
+      const dlUrl = jsonData.url || jsonData.download_url || jsonData.videoUrl
+      if (dlUrl) return { title: jsonData.title || 'Facebook Video', duration: 0, thumbnail: jsonData.thumbnail || '', uploader: '', audio: [], video: [{ url: dlUrl, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }], source: 'saveclip-fb' }
+    }
+    // Parse HTML for mp4 links
+    const mp4Re = /https:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/g
+    const seen = new Set(); const video = []; let m
+    while ((m = mp4Re.exec(html)) !== null) {
+      const u = m[0].replace(/&amp;/g, '&')
+      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    if (!video.length) throw new Error('saveclip-fb: no video links found')
+    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'saveclip-fb' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → y2down.cc (modern multi-platform downloader) ──────────────
+async function _extractFacebookY2Down(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const resp = await fetch('https://www.y2down.cc/api/download/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://www.y2down.cc',
+        'Referer': 'https://www.y2down.cc/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      body: new URLSearchParams({ url, format: 'video', quality: 'best' }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`y2down HTTP ${resp.status}`)
+    const d = await resp.json().catch(() => null)
+    if (!d?.status || !d?.medias?.length) throw new Error('y2down: no media found')
+    const video = d.medias
+      .filter(m => m?.url && m.type !== 'audio')
+      .map(m => ({ url: m.url, quality: m.quality || m.resolution || 'HD', height: null, ext: m.extension || 'mp4', size: m.size || null, hasAudio: true }))
+    if (!video.length) throw new Error('y2down: no video URLs')
+    return { title: d.title || 'Facebook Video', duration: 0, thumbnail: d.thumbnail || '', uploader: '', audio: [], video, source: 'y2down' }
   } finally { clearTimeout(t) }
 }
 

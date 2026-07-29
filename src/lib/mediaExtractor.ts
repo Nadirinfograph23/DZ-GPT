@@ -282,11 +282,63 @@ async function extractViaServer(url: string, signal?: AbortSignal): Promise<Medi
 }
 
 // ── Facebook ───────────────────────────────────────────────────────
+// Strategy:
+//   1. Server-side orchestrator (snapsave → getmyfb → saveclip → y2down → cobalt → yt-dlp)
+//   2. Cobalt API directly from browser (residential IP — higher success rate than server)
+//   3. Server yt-dlp fallback
+//   4. Soft failure: return cobalt.tools + alt-site links so user can still download
+const FB_COBALT_INSTANCES = [
+  'https://api.cobalt.best',
+  'https://cobalt.api.timelessnesses.me',
+  'https://dwnld.nichijou.co',
+]
 async function extractFacebook(url: string, signal?: AbortSignal): Promise<MediaInfo> {
+  // 1 — Server-side (specialized scrapers)
   try { return await extractViaSocial(url, 'facebook', signal) } catch (e) {
     if ((e as any)?.name === 'AbortError') throw e
   }
-  return extractViaServer(url, signal)
+
+  // 2 — Cobalt API from browser (residential IP bypasses Facebook's datacenter block)
+  for (const base of FB_COBALT_INSTANCES) {
+    try {
+      const ctrl2 = new AbortController()
+      const t2 = setTimeout(() => ctrl2.abort(), 10000)
+      const r = await fetch(`${base}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ url, downloadMode: 'auto', videoQuality: '720', filenameStyle: 'basic' }),
+        signal: ctrl2.signal,
+      })
+      clearTimeout(t2)
+      const d = await r.json().catch(() => ({}))
+      const dlUrl = d?.url
+      if (dlUrl && /^https?:\/\//i.test(dlUrl)) {
+        const isAudio = /audio/i.test(d?.type || '') || /\.mp3|\.m4a/.test(dlUrl)
+        return {
+          title: d?.filename?.replace(/\.[^.]+$/, '') || 'Facebook Video',
+          thumbnail: '', duration: 0, uploader: '',
+          video: isAudio ? [] : [{ url: dlUrl, quality: '720p', height: 720, ext: 'mp4', size: null, hasAudio: true }],
+          audio: isAudio ? [{ url: dlUrl, ext: 'mp3', bitrate: 192, size: null, muxed: true }] : [],
+          canStream: true,
+        }
+      }
+    } catch {}
+  }
+
+  // 3 — Server yt-dlp fallback
+  try { return await extractViaServer(url, signal) } catch (e) {
+    if ((e as any)?.name === 'AbortError') throw e
+  }
+
+  // 4 — Soft failure: provide direct links to download sites (always available)
+  const enc = encodeURIComponent(url)
+  return {
+    title: 'Facebook Video',
+    thumbnail: '', duration: 0, uploader: '',
+    video: [], audio: [],
+    canStream: false,
+    cobaltUrl: `https://fdown.net/?url=${enc}`,
+  }
 }
 
 // ── Instagram ──────────────────────────────────────────────────────

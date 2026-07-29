@@ -1747,12 +1747,16 @@ function MediaDownloadCardReady({
         </div>
       </div>
 
-      {/* YouTube / canStream:false → cobalt redirect */}
+      {/* canStream:false → show alternative download links */}
       {!canStream && (
         <div className="dz-mdl__cobalt">
           <div className="dz-mdl__cobalt-msg">
             <span className="dz-mdl__cobalt-icon">ℹ️</span>
-            <span>خوادم DZ Agent مُقيَّدة بواسطة YouTube — استخدم cobalt.tools للتحميل مجاناً</span>
+            <span>
+              {platform === 'youtube'
+                ? 'خوادم DZ Agent مُقيَّدة بواسطة YouTube — استخدم أحد المواقع التالية للتحميل'
+                : 'تعذّر الاستخراج مباشرةً — استخدم أحد المواقع المجانية التالية للتحميل'}
+            </span>
           </div>
           <div className="dz-mdl__cobalt-btns">
             <a
@@ -1763,8 +1767,20 @@ function MediaDownloadCardReady({
               style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}bb)` }}
             >
               <Download size={14} />
-              فتح cobalt.tools
+              {platform === 'facebook' ? 'fdown.net' : 'cobalt.tools'}
             </a>
+            {platform === 'facebook' && url && (
+              <a
+                href={`https://snapsave.app/?url=${encodeURIComponent(url)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="dz-mdl__cobalt-btn"
+                style={{ background: 'linear-gradient(135deg, #1877f2, #1260cc)' }}
+              >
+                <Download size={14} />
+                snapsave.app
+              </a>
+            )}
             {url && (
               <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">
                 🔗 الرابط الأصلي

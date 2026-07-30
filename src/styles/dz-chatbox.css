@@ -358,6 +358,8 @@
 .dz-action-btn--down:hover { color: #f87171; background: rgba(248,113,113,0.08); }
 .dz-action-btn--rated { color: #34d399; }
 .dz-action-btn--rated.dz-action-btn--down { color: #f87171; }
+.dz-action-btn--report:hover { color: #fb923c; background: rgba(251,146,60,0.10); }
+.dz-action-btn--report:active { color: #f97316; }
 
 .dz-action-divider {
   display: inline-block;

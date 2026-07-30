@@ -28744,22 +28744,26 @@ let _uaIdx = 0
 const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
 function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
 
-// Client rotation order for multi-attempt retry.
-// ios first — returns HLS m3u8 manifest (best for background audio + no SABR issues).
-// android second — reliable direct googlevideo URL.
-// web third — sometimes needs SABR workaround but ytdl-core handles it.
+// Client rotation order for multi-attempt retry — 2026 best practices.
+// mweb first: bypasses SABR requirement and works without PO tokens on datacenter IPs.
+// tv_embedded second: embedded client skips sign-in checks reliably.
+// web_creator third: has broader format access than web.
+// android fallback: reliable direct googlevideo URL.
+// ios last: often needs PO tokens in datacenter environments since 2025.
 const YT_DLP_CLIENTS = [
-  'ios',
-  'android,ios,web',
-  'tv_embedded',
   'mweb',
-  'web_embedded',
+  'tv_embedded',
+  'web_creator',
+  'android',
+  'ios',
 ]
 
 function ytDlpAntiBotArgs(clientIdx = 0) {
   const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
+  // mweb/tv_embedded don't need skip=hls; others benefit from it
+  const skipHls = (client === 'android' || client === 'ios') ? ';skip=hls' : ''
   return [
-    '--extractor-args', `youtube:player_client=${client};skip=hls`,
+    '--extractor-args', `youtube:player_client=${client}${skipHls}`,
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
@@ -32591,12 +32595,13 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
 
   // Download-specific antibot args: same as ytDlpAntiBotArgs but WITHOUT
-  // "skip=hls" so yt-dlp can pick up HLS streams when ffmpeg is available,
+  // "skip=hls" only for clients that produce HLS; mweb/tv_embedded return direct URLs.
   // and with --no-check-formats for faster format resolution.
   function buildDownloadAntiBotArgs(clientIdx) {
     const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
+    const skipHls = (client === 'android' || client === 'ios') ? ';skip=hls' : ''
     return [
-      '--extractor-args', `youtube:player_client=${client}`,
+      '--extractor-args', `youtube:player_client=${client}${skipHls}`,
       '--user-agent', _nextUA(),
       '--geo-bypass',
       '--no-check-certificate',

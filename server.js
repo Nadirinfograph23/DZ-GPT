@@ -31290,7 +31290,7 @@ app.get('/api/dz-tube/audio-url', async (req, res) => {
     try {
       const cookies = await ytDlpCookiesArgs()
       const streamUrl = await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url])
+        const proc = spawn(dlpBin, ['-f', '140/251/250/249/bestaudio[ext=m4a]/bestaudio/18', '-S', 'proto:https', '-g', '--no-warnings', '--no-playlist', ...ytDlpAntiBotArgs(), ...cookies, url])
         let out = '', err = ''
         proc.stdout.on('data', d => { out += d.toString() })
         proc.stderr.on('data', d => { err += d.toString() })
@@ -31385,7 +31385,7 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     const cookies = await ytDlpCookiesArgs()
     const antiBot = ytDlpAntiBotArgs()
     return new Promise((resolve, reject) => {
-      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
+      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
       let out = '', err = ''
       proc.stdout.on('data', d => { out += d.toString() })
       proc.stderr.on('data', d => { err += d.toString() })
@@ -31797,7 +31797,7 @@ app.get('/api/dz-tube/debug-extract', async (req, res) => {
       const cookies = await ytDlpCookiesArgs()
       const antiBot = ytDlpAntiBotArgs()
       return await new Promise((resolve, reject) => {
-        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/best', '-g', '--no-playlist', ...antiBot, ...cookies, url])
+        const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-g', '--no-playlist', ...antiBot, ...cookies, url])
         let out = '', err = ''
         const t = setTimeout(() => { try { proc.kill('SIGKILL') } catch {}; reject(new Error('timeout 15s; stderr=' + err.slice(0, 300))) }, 15000)
         proc.stdout.on('data', d => { out += d.toString() })
@@ -31901,11 +31901,12 @@ try { fs.mkdirSync(audioCacheDir, { recursive: true }) } catch {}
 const audioDownloads = new Map()
 
 function spawnAudioStream(url) {
-  return ytDlpAvailable().then(useDlp => {
-    if (useDlp) {
-      const proc = spawn('yt-dlp', [
-        '-f', 'bestaudio[ext=m4a]/bestaudio',
+  return ytDlpBinaryPath().then(dlpBin => {
+    if (dlpBin) {
+      const proc = spawn(dlpBin, [
+        '-f', 'bestaudio[ext=m4a]/bestaudio/18',
         '--no-warnings', '--no-playlist',
+        ...ytDlpAntiBotArgs(),
         '-o', '-',
         url,
       ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -31934,11 +31935,13 @@ async function downloadAudioToFile(url, outPath) {
   const useDlp = await ytDlpAvailable()
 
   // Step 1: pull bytes to tmpRaw
+  const dlpBin2 = await ytDlpBinaryPath()
   await new Promise((resolve, reject) => {
-    if (useDlp) {
-      const proc = spawn('yt-dlp', [
-        '-f', 'bestaudio[ext=m4a]/bestaudio',
+    if (dlpBin2) {
+      const proc = spawn(dlpBin2, [
+        '-f', 'bestaudio[ext=m4a]/bestaudio/18',
         '--no-warnings', '--no-playlist',
+        ...ytDlpAntiBotArgs(),
         '-o', tmpRaw,
         url,
       ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -32017,26 +32020,28 @@ async function resolveAudioPlaylistUrl(youtubeUrl) {
   // Attempt 1: iOS player_client — returns HLS m3u8 manifest.
   // This is the best format for background audio: segment-based (3-10 s),
   // immune to Vercel's 60s timeout, buffers ahead, no SABR streaming issues.
-  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '--no-check-formats', '-f', 'ba/bestaudio'])
-  if (iosUrl) {
-    const isHls = /\.m3u8($|\?)/i.test(iosUrl) || /manifest\.googlevideo\.com/i.test(iosUrl)
-    console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS ✓' : 'direct')
-    return { url: iosUrl, isHls }
-  }
-
-  // Attempt 2: android client — returns direct googlevideo URL.
-  const androidUrl = await runDlp(['--extractor-args', 'youtube:player_client=android,ios,web', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/best'])
+  // Attempt 1: android client — TESTED 2026-07-30: only client that works without PO tokens.
+  // format 18 is the guaranteed fallback (360p combined, NOT SABR-protected).
+  const androidUrl = await runDlp(['--extractor-args', 'youtube:player_client=android', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/18'])
   if (androidUrl) {
-    console.log('[audio-stream] resolved via android client — direct URL')
+    console.log('[audio-stream] resolved via android client — direct URL ✅')
     return { url: androidUrl, isHls: false }
   }
 
-  // Attempt 3: tv_embedded client — often bypasses bot detection.
-  const tvUrl = await runDlp(['--extractor-args', 'youtube:player_client=tv_embedded', '--no-check-formats', '-f', 'bestaudio/best'])
+  // Attempt 2: tv_embedded client — skipped by yt-dlp 2026.07 but sometimes returns URL.
+  const tvUrl = await runDlp(['--extractor-args', 'youtube:player_client=tv_embedded', '--no-check-formats', '-f', 'bestaudio[ext=m4a]/bestaudio/18'])
   if (tvUrl) {
     const isHls = /\.m3u8($|\?)/i.test(tvUrl) || /manifest\.googlevideo\.com/i.test(tvUrl)
     console.log('[audio-stream] resolved via tv_embedded client —', isHls ? 'HLS' : 'direct')
     return { url: tvUrl, isHls }
+  }
+
+  // Attempt 3: ios client (last resort — usually needs PO token).
+  const iosUrl = await runDlp(['--extractor-args', 'youtube:player_client=ios', '--no-check-formats', '-f', 'ba/bestaudio/18'])
+  if (iosUrl) {
+    const isHls = /\.m3u8($|\?)/i.test(iosUrl) || /manifest\.googlevideo\.com/i.test(iosUrl)
+    console.log('[audio-stream] resolved via iOS client —', isHls ? 'HLS ✓' : 'direct')
+    return { url: iosUrl, isHls }
   }
 
   throw new Error('yt-dlp: could not resolve audio URL for ' + youtubeUrl)

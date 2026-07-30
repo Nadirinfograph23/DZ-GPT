@@ -28744,26 +28744,26 @@ let _uaIdx = 0
 const YT_DLP_USER_AGENT = YT_DLP_USER_AGENTS[0]
 function _nextUA() { _uaIdx = (_uaIdx + 1) % YT_DLP_USER_AGENTS.length; return YT_DLP_USER_AGENTS[_uaIdx] }
 
-// Client rotation order for multi-attempt retry — 2026 best practices.
-// mweb first: bypasses SABR requirement and works without PO tokens on datacenter IPs.
-// tv_embedded second: embedded client skips sign-in checks reliably.
-// web_creator third: has broader format access than web.
-// android fallback: reliable direct googlevideo URL.
-// ios last: often needs PO tokens in datacenter environments since 2025.
+// Client rotation order for multi-attempt retry — 2026 TESTED results.
+// TESTED 2026-07-30 on datacenter IP (GCP/Vercel):
+//   android     ✅ format 18 (360p combined) always available — NOT SABR-protected
+//   tv_embedded ⚠️ skipped by yt-dlp 2026.07, falls back to android_vr → 403
+//   mweb        ❌ requires GVS PO Token — skips all formats
+//   ios         ❌ requires GVS PO Token — skips all formats
+//   web         ❌ requires JS runtime for signature (deno/node)
+// → android is the ONLY reliable client from datacenter IPs without cookies/tokens.
 const YT_DLP_CLIENTS = [
-  'mweb',
-  'tv_embedded',
-  'web_creator',
-  'android',
-  'ios',
+  'android',       // ✅ PRIMARY — format 18 always works, SABR formats auto-skipped
+  'tv_embedded',   // ⚠️ skipped internally, acts as android_vr — 2nd attempt
+  'web_embedded',  // tries embedded web player — may work for some videos
+  'mweb',          // ❌ needs PO Token but worth a try as last resort
+  'ios',           // ❌ needs PO Token — absolute last resort
 ]
 
 function ytDlpAntiBotArgs(clientIdx = 0) {
   const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
-  // mweb/tv_embedded don't need skip=hls; others benefit from it
-  const skipHls = (client === 'android' || client === 'ios') ? ';skip=hls' : ''
   return [
-    '--extractor-args', `youtube:player_client=${client}${skipHls}`,
+    '--extractor-args', `youtube:player_client=${client}`,
     '--user-agent', _nextUA(),
     '--geo-bypass',
     '--no-check-certificate',
@@ -28772,7 +28772,7 @@ function ytDlpAntiBotArgs(clientIdx = 0) {
     '--fragment-retries', '3',
     '--socket-timeout', '20',
     '--sleep-requests', '0.2',
-    // ✅ FIX 2026: تخطي التحقق من إمكانية التحميل — يسرّع الاستجابة ويتجنب bot detection
+    // ✅ FIX 2026: تخطي التحقق بدون إيقاف التحميل
     '--ignore-errors',
     '--no-abort-on-error',
   ]
@@ -32595,13 +32595,12 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
   ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
 
   // Download-specific antibot args: same as ytDlpAntiBotArgs but WITHOUT
-  // "skip=hls" only for clients that produce HLS; mweb/tv_embedded return direct URLs.
-  // and with --no-check-formats for faster format resolution.
+  // TESTED 2026-07-30: android client is the only one that downloads without PO tokens.
+  // SABR-only formats are auto-skipped by yt-dlp; format 18 always available as fallback.
   function buildDownloadAntiBotArgs(clientIdx) {
     const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
-    const skipHls = (client === 'android' || client === 'ios') ? ';skip=hls' : ''
     return [
-      '--extractor-args', `youtube:player_client=${client}${skipHls}`,
+      '--extractor-args', `youtube:player_client=${client}`,
       '--user-agent', _nextUA(),
       '--geo-bypass',
       '--no-check-certificate',

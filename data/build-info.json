@@ -1,8 +1,8 @@
 {
-  "commit": "c5c3fc37ac8b2473ebcc03478a7e8ad90716a821",
-  "commitShort": "c5c3fc37",
+  "commit": "dd5982a3c3b8933ff8d7ee3a08b9897e3df2972f",
+  "commitShort": "dd5982a3",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: add Viddari as download provider (no API key) + fallback chain + download bar CSS fix",
-  "deployedAt": "2026-07-30T00:05:49.284614Z",
+  "message": "fix: reliable update banner — /version.json static + always re-read build-info + poll 30s",
+  "deployedAt": "2026-07-30T00:45:53.390216Z",
   "deployedBy": "scripts/deploy.py"
 }

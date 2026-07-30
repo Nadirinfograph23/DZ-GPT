@@ -1,8 +1,8 @@
 {
-  "commit": "f89fc2eb0971967efd9cbeeea42fd0383b8c3f89",
-  "commitShort": "f89fc2eb",
+  "commit": "8fdebf08eacc5d95528427ee5f54dcaa45e27ebf",
+  "commitShort": "8fdebf08",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح تحميل DZTube + تقطع الصوت + زر الإبلاغ في DZAgent",
-  "deployedAt": "2026-07-30T16:58:13.092265Z",
+  "message": "fix: إصلاح نظام إشعار التحديث — timestamp بدل commit + cache-bust + SW v13",
+  "deployedAt": "2026-07-30T17:06:44.885778Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -2134,6 +2134,15 @@
   .gdl-player-modal { border-radius: 12px; }
 }
 
+/* ── When download bar active: push input up so it doesn't overlap ── */
+body.has-downloads .dz-input-area {
+  padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+}
+body.has-downloads .dza-input-row,
+body.has-downloads .agent-input-area {
+  margin-bottom: 58px;
+}
+
 /* ── SCROLLBAR GENERAL ── */
 .dz-chatbox *::-webkit-scrollbar { width: 5px; height: 5px; }
 .dz-chatbox *::-webkit-scrollbar-track { background: transparent; }

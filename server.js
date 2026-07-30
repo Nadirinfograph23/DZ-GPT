@@ -78,6 +78,7 @@ import { isHistoricalGovQuery, buildHistoricalGovContext, parseHistoricalGovQuer
 
 // ── Giststack Provider — PRIMARY social media downloader ─────────────────────
 import { giststackFetchInfo, isGiststackAvailable } from './lib/providers/giststack-provider.js'
+import { viddariResolve, viddariPickUrl, isViddariSupported } from './lib/providers/viddari-provider.js'
 
 // ── عقل الفهم — DZ Understanding Brain ───────────────────────────────────────
 // تحليل عميق: نوع السؤال بالدارجة + الحاجة الضمنية + السياق الجزائري
@@ -29062,6 +29063,14 @@ function hasUsableMedia(info) {
 }
 
 function downloadProviderPlan(platform) {
+  // ── Viddari FIRST wrapper (no API key needed) ─────────────────────
+  // Uses the public API powering https://viddari.com
+  // Supported: TikTok, Instagram, Reddit, X/Twitter, Pinterest, YouTube Shorts
+  const _viddariProvider = async url => {
+    const info = await viddariResolve(url)
+    return { ...info, source: 'viddari' }
+  }
+
   // ── Giststack PRIMARY wrapper ─────────────────────────────────────
   // Powers https://giststack.com/tools/social-media-downloader via
   // social-download-all-in-one RapidAPI. Requires RAPIDAPI_KEY secret.
@@ -29077,11 +29086,22 @@ function downloadProviderPlan(platform) {
     return { title: raw.title, duration: raw.duration, thumbnail: raw.thumbnail, uploader: raw.uploader, audio, video, source: 'yt-dlp' }
   }
 
+  // Build Viddari entry — only prepend if platform is supported
+  const vd = (url) => {
+    try { return isViddariSupported(url) ? [['viddari', _viddariProvider]] : [] } catch { return [] }
+  }
+
   // Build Giststack entry — only prepend if API key is configured
   const gs = isGiststackAvailable() ? [['giststack', _giststackProvider]] : []
 
+  // Viddari placeholder (evaluated per-call in specialized map below)
+  // We use a static check here since downloadProviderPlan receives platform not url
+  const vdStatic = ['tiktok','instagram','reddit','twitter','pinterest','youtube'].includes(platform)
+    ? [['viddari', _viddariProvider]]
+    : []
+
   const specialized = {
-    // Giststack PRIMARY → platform-specific scrapers → Cobalt → yt-dlp
+    // Viddari FIRST → Giststack → platform-specific scrapers → Cobalt → yt-dlp
     facebook: [
       ...gs,
       ['cobalt',    extractWithCobaltAPI],
@@ -29094,27 +29114,32 @@ function downloadProviderPlan(platform) {
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     instagram: [
+      ...vdStatic,
       ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['saveclip',  _extractInstagramSaveclip],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     tiktok: [
+      ...vdStatic,
       ...gs,
       ['tikwm',     _extractTikTokTikwm],
       ['cobalt',    extractWithCobaltAPI],
     ],
     twitter: [
+      ...vdStatic,
       ...gs,
       ['fxtwitter', _extractTwitterFxtwitter],
       ['cobalt',    extractWithCobaltAPI],
     ],
     pinterest: [
+      ...vdStatic,
       ...gs,
       ['pinterest-oembed-pindown', _extractPinterestPindown],
       ['cobalt', extractWithCobaltAPI],
     ],
     reddit: [
+      ...vdStatic,
       ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
@@ -29140,12 +29165,13 @@ function downloadProviderPlan(platform) {
       ['yt-dlp',    _ytDlpFastProvider],
     ],
     youtube: [
+      ...vdStatic,
       ...gs,
       ['cobalt',    extractWithCobaltAPI],
       ['yt-dlp',    _ytDlpFastProvider],
     ],
   }
-  return [...(specialized[platform] || [...gs]), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
+  return [...(specialized[platform] || [...vdStatic, ...gs]), ['cobalt', extractWithCobaltAPI], ['yt-dlp', _ytDlpFastProvider]]
 }
 
 async function orchestrateMediaDownload(url, platform) {

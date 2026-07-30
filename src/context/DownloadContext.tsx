@@ -211,6 +211,16 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const counter = useRef(0)
   const blobRevokeTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
+  // Add/remove body class so input areas can add bottom padding
+  // when the download bar is visible (prevents overlap)
+  const prevJobCount = useRef(0)
+  if (jobs.length > 0 && prevJobCount.current === 0) {
+    document.body.classList.add('has-downloads')
+  } else if (jobs.length === 0 && prevJobCount.current > 0) {
+    document.body.classList.remove('has-downloads')
+  }
+  prevJobCount.current = jobs.length
+
   const updateJob = useCallback((id: string, patch: Partial<DownloadJob>) => {
     setJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j))
   }, [])

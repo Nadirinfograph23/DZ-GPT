@@ -1,62 +1,63 @@
 /**
  * versionChecker.ts — نظام الكشف عن الإصدار الجديد وإخطار المستخدم
- * يعمل بأربع طرق:
- *  1. polling /version.json (ملف ثابت — لا middleware، لا bot-block) كل 30 ثانية
- *  2. polling /api/version كـ fallback
- *  3. استقبال رسائل Service Worker (NEW_VERSION / SW_UPDATED)
- *  4. registration.updatefound — يكشف SW جديد فور بدء تحميله
  *
- * البانر يظهر فقط عند وجود نشر جديد من Replit — ليس في كل جلسة
+ * المعيار: deployedAt timestamp (ليس commit) — يتغيّر في كل deploy حتماً.
+ * المصدر: /version.json?_=<timestamp> (cache-bust) + /api/version كـ fallback
+ * الـ SW يرسل NEW_VERSION / SW_UPDATED → يُطلق البانر فوراً
  */
 
-const POLL_INTERVAL_MS  = 30 * 1000   // كل 30 ثانية (كان 45)
-const BANNER_ID         = 'dz-update-banner'
-const LAST_COMMIT_KEY   = 'dz-last-known-commit'
+const POLL_INTERVAL_MS = 20 * 1000          // كل 20 ثانية
+const BANNER_ID        = 'dz-update-banner'
+const LAST_DEPLOY_KEY  = 'dz-last-deploy-ts' // timestamp آخر deploy شاهده المستخدم
+const JUST_UPDATED_KEY = 'dz-just-updated'
+const SUPPRESS_MS      = 30_000             // 30 ثانية بعد "تحديث الآن"
 
-let _lastCommit: string | null = null
+let _currentDeployTs: string | null = null
 let _pollTimer: ReturnType<typeof setInterval> | null = null
 let _bannerShown = false
 
-/** يجرب /version.json أولاً (أسرع + بدون middleware) ثم /api/version */
-async function fetchVersion(): Promise<string | null> {
-  // 1) ملف ثابت — يتجاوز anti-bot middleware تماماً
+// ── جلب معلومات الإصدار — يتجاوز كل الكاش بـ query param ──────────────────
+async function fetchVersion(): Promise<{ deployTs: string; label: string } | null> {
+  const bust = Date.now()
+
+  // 1) version.json — ملف ثابت، أسرع
   try {
-    const res = await fetch('/version.json', {
+    const res = await fetch(`/version.json?_=${bust}`, {
       cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache, no-store' },
+      headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
     })
     if (res.ok) {
-      const data = await res.json()
-      const commit = data.commit || data.commitShort || null
-      if (commit) return commit
+      const d = await res.json()
+      // deployedAt هو المعيار الأساسي — يتغيّر في كل deploy
+      const deployTs = d.deployedAt || d.buildAt || null
+      const label    = d.commitShort || d.commit || 'new'
+      if (deployTs) return { deployTs, label }
     }
   } catch { /* تجاهل */ }
 
-  // 2) fallback: /api/version
+  // 2) /api/version — fallback
   try {
-    const res = await fetch('/api/version', {
+    const res = await fetch(`/api/version?_=${bust}`, {
       cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' },
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
     })
     if (!res.ok) return null
-    const data = await res.json()
-    return data.commit || data.version || null
-  } catch {
-    return null
-  }
+    const d = await res.json()
+    const deployTs = d.deployedAt || d.serverTime || null
+    const label    = d.commit || d.version || 'new'
+    if (deployTs) return { deployTs, label }
+  } catch {}
+
+  return null
 }
 
+// ── عرض البانر ────────────────────────────────────────────────────────────
 export function triggerUpdateBanner() { showUpdateBanner() }
 
-// مفتاح sessionStorage — يمنع إعادة ظهور البانر بعد التحديث مباشرة
-const JUST_UPDATED_KEY = 'dz-just-updated'
-const SUPPRESS_MS      = 90_000  // 90 ثانية كافية لاكتمال دورة الـ SW
-
 function showUpdateBanner() {
-  // لا تُظهر البانر إذا كان المستخدم قد حدّث للتو (خلال 90 ثانية)
+  // لا تُعد الإظهار خلال 30 ثانية من آخر تحديث
   const ts = sessionStorage.getItem(JUST_UPDATED_KEY)
   if (ts && Date.now() - Number(ts) < SUPPRESS_MS) return
-
   if (_bannerShown || document.getElementById(BANNER_ID)) return
   _bannerShown = true
 
@@ -70,11 +71,11 @@ function showUpdateBanner() {
     'font-family:sans-serif', 'font-size:14px',
     'display:flex', 'align-items:center', 'justify-content:center', 'gap:12px',
     'box-shadow:0 2px 16px rgba(0,0,0,.5)',
-    'animation:slideDown .35s ease',
+    'animation:dzSlideDown .35s ease',
   ].join(';')
 
   const style = document.createElement('style')
-  style.textContent = `@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}`
+  style.textContent = `@keyframes dzSlideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}`
   document.head.appendChild(style)
 
   let countdown = 15
@@ -93,12 +94,10 @@ function showUpdateBanner() {
   `
   document.body.prepend(banner)
 
-  // عداد تنازلي — يُطلق التحديث تلقائياً بعد 15 ثانية
   const cdEl = () => document.getElementById('dz-cdwn')
   const timer = setInterval(() => {
     countdown--
-    const el = cdEl()
-    if (el) el.textContent = String(countdown)
+    const el = cdEl(); if (el) el.textContent = String(countdown)
     if (countdown <= 0) { clearInterval(timer); forceUpdate() }
   }, 1000)
 
@@ -107,16 +106,12 @@ function showUpdateBanner() {
     clearInterval(timer)
     document.getElementById(BANNER_ID)?.remove()
     _bannerShown = false
+    // حفظ deploy الحالي حتى لا يظهر البانر مجدداً عن نفس الـ deploy
+    if (_currentDeployTs) localStorage.setItem(LAST_DEPLOY_KEY, _currentDeployTs)
   })
 }
 
-/**
- * forceUpdate — ترغم التحديث الكامل:
- *  1. إرسال SKIP_WAITING للـ SW الجديد
- *  2. مسح جميع الكاش
- *  3. إلغاء تسجيل الـ SW القديم
- *  4. التنقل بـ cache-bust query لتجاوز CDN
- */
+// ── تحديث إجباري مع مسح الكاش ────────────────────────────────────────────
 async function forceUpdate() {
   const btn = document.getElementById('dz-update-btn') as HTMLButtonElement | null
   if (btn) { btn.textContent = '⏳ جارٍ التحديث...'; btn.disabled = true }
@@ -126,66 +121,72 @@ async function forceUpdate() {
       const reg = await navigator.serviceWorker.getRegistration()
       if (reg?.waiting)    reg.waiting.postMessage({ type: 'SKIP_WAITING' })
       if (reg?.installing) reg.installing.postMessage({ type: 'SKIP_WAITING' })
-      if (navigator.serviceWorker.controller) {
+      if (navigator.serviceWorker.controller)
         navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' })
-      }
     }
-
     if ('caches' in window) {
       const keys = await caches.keys()
       await Promise.all(keys.map(k => caches.delete(k)))
     }
-
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations()
       await Promise.all(regs.map(r => r.unregister()))
     }
-  } catch (e) {
-    console.warn('[VersionChecker] cleanup error:', e)
-  }
+  } catch (e) { console.warn('[VersionChecker] cleanup error:', e) }
 
-  // سجّل وقت التحديث لمنع ظهور البانر مجدداً فوراً بعد الـ reload
   sessionStorage.setItem(JUST_UPDATED_KEY, String(Date.now()))
-
-  // حدّث آخر commit معروف في localStorage حتى لا يظهر البانر مجدداً بعد الـ reload
-  if (_lastCommit) localStorage.setItem(LAST_COMMIT_KEY, _lastCommit)
+  if (_currentDeployTs) localStorage.setItem(LAST_DEPLOY_KEY, _currentDeployTs)
 
   const base = window.location.href.split('?')[0].split('#')[0]
   window.location.replace(base + '?v=' + Date.now())
 }
 
+// ── منطق المقارنة الرئيسي ─────────────────────────────────────────────────
 async function checkForUpdate() {
-  const commit = await fetchVersion()
-  if (!commit) return
+  const info = await fetchVersion()
+  if (!info) return
 
-  if (_lastCommit === null) {
-    // أول استدعاء في هذه الجلسة — قارن مع آخر commit محفوظ بين الجلسات
-    _lastCommit = commit
-    const stored = localStorage.getItem(LAST_COMMIT_KEY)
-    if (stored && stored !== commit) {
-      // فتح الصفحة بعد نشر جديد → أظهر البانر فوراً
-      console.log(`[VersionChecker] 🆕 New version since last session: ${stored} → ${commit}`)
+  const { deployTs, label } = info
+  _currentDeployTs = deployTs
+
+  // أول استدعاء في هذه الجلسة
+  if (_pollTimer === null) {
+    const stored = localStorage.getItem(LAST_DEPLOY_KEY)
+
+    if (!stored) {
+      // أول زيارة على الإطلاق — احفظ ولا تُزعج
+      localStorage.setItem(LAST_DEPLOY_KEY, deployTs)
+      console.log(`[VersionChecker] 🔖 First visit — stored deploy: ${deployTs} (${label})`)
+    } else if (stored !== deployTs) {
+      // زيارة بعد نشر جديد → بانر فوري
+      console.log(`[VersionChecker] 🆕 New deploy since last visit: ${stored} → ${deployTs} (${label})`)
       showUpdateBanner()
-    } else if (!stored) {
-      // أول زيارة على الإطلاق — احفظ فقط
-      localStorage.setItem(LAST_COMMIT_KEY, commit)
+    } else {
+      console.log(`[VersionChecker] ✓ Up-to-date: ${deployTs}`)
     }
     return
   }
 
-  if (commit !== _lastCommit) {
-    console.log(`[VersionChecker] 🆕 New version: ${_lastCommit} → ${commit}`)
-    _lastCommit = commit
+  // استدعاءات لاحقة (polling أثناء الجلسة)
+  const prev = localStorage.getItem(LAST_DEPLOY_KEY)
+  if (prev && prev !== deployTs) {
+    console.log(`[VersionChecker] 🆕 Hot deploy detected: ${prev} → ${deployTs} (${label})`)
+    _currentDeployTs = deployTs
     showUpdateBanner()
   }
 }
 
+// ── بدء المراقبة ──────────────────────────────────────────────────────────
 export function startVersionChecker() {
   if (typeof window === 'undefined') return
 
+  // فحص فوري عند التحميل
   checkForUpdate()
+
+  // polling دوري
   _pollTimer = setInterval(checkForUpdate, POLL_INTERVAL_MS)
 
+  // رسائل Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'NEW_VERSION' || event.data?.type === 'SW_UPDATED') {
@@ -196,16 +197,13 @@ export function startVersionChecker() {
 
     navigator.serviceWorker.getRegistration().then(reg => {
       if (!reg) return
-
       if (reg.waiting) {
         console.log('[VersionChecker] SW waiting on load → show banner')
         showUpdateBanner()
       }
-
       reg.addEventListener('updatefound', () => {
         const newSW = reg.installing
         if (!newSW) return
-        console.log('[VersionChecker] updatefound — new SW installing')
         newSW.addEventListener('statechange', () => {
           if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
             console.log('[VersionChecker] new SW installed → show banner')
@@ -215,6 +213,11 @@ export function startVersionChecker() {
       })
     }).catch(() => {})
   }
+
+  // فحص عند عودة التبويب للواجهة
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate()
+  })
 }
 
 export function stopVersionChecker() {

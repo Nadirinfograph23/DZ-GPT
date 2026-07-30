@@ -1,8 +1,8 @@
 {
-  "commit": "88978544a7ec10600d06e5223fbc902ccc42d9bc",
-  "commitShort": "88978544",
+  "commit": "c5beae2ff1ad2525f7ca44abfb47c0210311ff5b",
+  "commitShort": "c5beae2f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: Viddari integration + download bar notification + social-extract fix",
-  "deployedAt": "2026-07-30T13:48:26.202222Z",
+  "message": "feat: حذف قسم تحميل الوسائط الاجتماعية من DZ Agent + إصلاح تحميل DZ Tube بإضافة Cobalt fallback",
+  "deployedAt": "2026-07-30T16:03:07.789971Z",
   "deployedBy": "scripts/deploy.py"
 }

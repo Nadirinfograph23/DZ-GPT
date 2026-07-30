@@ -1,8 +1,8 @@
 {
-  "commit": "c5beae2ff1ad2525f7ca44abfb47c0210311ff5b",
-  "commitShort": "c5beae2f",
+  "commit": "f89fc2eb0971967efd9cbeeea42fd0383b8c3f89",
+  "commitShort": "f89fc2eb",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: حذف قسم تحميل الوسائط الاجتماعية من DZ Agent + إصلاح تحميل DZ Tube بإضافة Cobalt fallback",
-  "deployedAt": "2026-07-30T16:03:07.789971Z",
+  "message": "fix: إصلاح تحميل DZTube + تقطع الصوت + زر الإبلاغ في DZAgent",
+  "deployedAt": "2026-07-30T16:58:13.092265Z",
   "deployedBy": "scripts/deploy.py"
 }

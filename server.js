@@ -32409,6 +32409,42 @@ async function streamUpstreamToClient(req, res, upstreamUrl, mime, downloadName)
   }
 }
 
+// ── ytdl-core fallback: pure Node.js, no subprocess (works on Vercel) ─────────
+// Uses @distube/ytdl-core to get the direct googlevideo URL for format 18
+// (360p mp4 muxed — the only format available without PO Tokens from
+// datacenter IPs). Returns true if fully handled, false to try next fallback.
+async function tryYtdlCoreDownload(req, res, url, format) {
+  try {
+    const isAudio = format === 'mp3' || format === 'audio'
+    const info = await ytdl.getInfo(url)
+    const title = info.videoDetails?.title || 'video'
+    const safeName = title.replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || 'video'
+
+    // audioandvideo = format 18 (360p mp4, always available, no PO Token needed)
+    // audioonly requires PO Token on most datacenter IPs — skip it
+    let fmt
+    try {
+      fmt = ytdl.chooseFormat(info.formats, { quality: 'lowestvideo', filter: 'audioandvideo' })
+    } catch {
+      fmt = null
+    }
+    if (!fmt?.url) {
+      console.warn('[DZTube:ytdl-core] no audioandvideo format found')
+      return false
+    }
+
+    const mime = isAudio ? 'audio/mp4' : 'video/mp4'
+    const ext  = isAudio ? 'm4a' : 'mp4'
+    const downloadName = `${safeName}.${ext}`
+    console.log(`[DZTube:ytdl-core] ✓ format=${fmt.itag} q=${fmt.quality} → ${downloadName}`)
+    await streamUpstreamToClient(req, res, fmt.url, mime, downloadName)
+    return true
+  } catch (e) {
+    console.warn('[DZTube:ytdl-core] failed:', e.message?.slice(0, 120))
+    return false
+  }
+}
+
 // ─── ytdown.to + process4.me resolver ────────────────────────────────────────
 // Free public YouTube extraction service (same approach used by
 // nadir-downloader.vercel.app). Bypasses YouTube bot detection on
@@ -32749,7 +32785,14 @@ app.get('/api/dz-tube/download', async (req, res) => {
   const primaryOk = await tryYtdlpDownloadToClient(req, res, url, format, h)
   if (primaryOk) return
   if (res.headersSent) return  // partial write — nothing more we can do
-  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying external services')
+  console.warn('[DZTube:download] yt-dlp unavailable/failed — trying ytdl-core (Node.js, Vercel-safe)')
+
+  // ── SECONDARY: ytdl-core — pure Node.js, no subprocess, works on Vercel ───
+  // Gets format 18 (360p muxed mp4) which never requires PO Tokens.
+  const ytdlCoreOk = await tryYtdlCoreDownload(req, res, url, format)
+  if (ytdlCoreOk) return
+  if (res.headersSent) return
+  console.warn('[DZTube:download] ytdl-core failed — trying external services')
 
   // ── FALLBACK: Multi-source resolver ───────────────────────────────────
   // Capability matrix (refreshed 2026-04-24):

@@ -1,8 +1,8 @@
 {
-  "commit": "bf715384caebc289032e83c1e0e9c12c18f58b1b",
-  "commitShort": "bf715384",
+  "commit": "73517a0a4e6c2b2db88aed1cbf80eb8c4c0d7742",
+  "commitShort": "73517a0a",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(dztube): android client أولاً — الوحيد المُختبر بنجاح 100% بدون PO tokens على datacenter IPs (2026-07-30)",
-  "deployedAt": "2026-07-30T18:05:13.583269Z",
+  "message": "fix(dztube): إصلاح كامل لـ audio streaming — إضافة /18 fallback في كل format strings + android client أولاً (2026-07-30)",
+  "deployedAt": "2026-07-30T18:33:08.214562Z",
   "deployedBy": "scripts/deploy.py"
 }

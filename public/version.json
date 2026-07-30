@@ -1,8 +1,8 @@
 {
-  "commit": "1caf44c5798f67ada577fc230507795da5fa3574",
-  "commitShort": "1caf44c5",
+  "commit": "80778607ad128e10efa04dae5e67537000967281",
+  "commitShort": "80778607",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "--help",
-  "deployedAt": "2026-07-30T20:52:58.959765Z",
+  "message": "fix(dz-tube): android client first + format 18 fallback + ffmpeg audio extract — 100% download success from datacenter IPs",
+  "deployedAt": "2026-07-30T20:53:11.871219Z",
   "deployedBy": "scripts/deploy.py"
 }

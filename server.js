@@ -28753,6 +28753,7 @@ const YT_DLP_CLIENTS = [
   'android,ios,web',
   'tv_embedded',
   'mweb',
+  'web_embedded',
 ]
 
 function ytDlpAntiBotArgs(clientIdx = 0) {
@@ -31603,7 +31604,7 @@ function isDirectGoogleVideoUrl(url) {
 // This keeps every Vercel function invocation well under the 60s timeout.
 // The browser automatically requests the next chunk via a follow-up Range
 // request once it exhausts the current one.
-const MAX_PIPE_CHUNK = 1 * 1024 * 1024 // 1 MB
+const MAX_PIPE_CHUNK = 4 * 1024 * 1024 // 4 MB — larger chunks = fewer gaps in audio playback
 
 // Shared byte-pipe streaming helper used by both /audio-pipe and the
 // /audio-proxy path. ALWAYS responds 206 with a bounded chunk so that:
@@ -32589,8 +32590,28 @@ async function tryYtdlpDownloadToClient(req, res, url, format, h) {
     { headers: { 'User-Agent': YT_DLP_USER_AGENT }, signal: AbortSignal.timeout(6000) }
   ).then(r => r.ok ? r.json() : null).then(j => j?.title || null).catch(() => null)
 
+  // Download-specific antibot args: same as ytDlpAntiBotArgs but WITHOUT
+  // "skip=hls" so yt-dlp can pick up HLS streams when ffmpeg is available,
+  // and with --no-check-formats for faster format resolution.
+  function buildDownloadAntiBotArgs(clientIdx) {
+    const client = YT_DLP_CLIENTS[clientIdx % YT_DLP_CLIENTS.length]
+    return [
+      '--extractor-args', `youtube:player_client=${client}`,
+      '--user-agent', _nextUA(),
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--no-check-formats',
+      '--retries', '3',
+      '--fragment-retries', '3',
+      '--socket-timeout', '20',
+      '--sleep-requests', '0.2',
+      '--ignore-errors',
+      '--no-abort-on-error',
+    ]
+  }
+
   function buildArgs(clientIdx) {
-    const antiBot = ytDlpAntiBotArgs(clientIdx)
+    const antiBot = buildDownloadAntiBotArgs(clientIdx)
     let args, mime
     if (format === 'mp3' && hasFfmpeg) {
       args = ['-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/18', '-x', '--audio-format', 'mp3', '--audio-quality', '0',

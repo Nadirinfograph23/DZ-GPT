@@ -12,8 +12,9 @@ import {
   BookOpen, Pencil, Star, Activity, GitMerge, Search, Lock,
   BarChart2, Users, ExternalLink, MessageSquare, Tag, Clock,
   Download, ArrowRight, Loader2, Brain, MapPin, Monitor, Layers,
-  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, Square,
+  Globe, ThumbsUp, ThumbsDown, Hammer, Trash2, X, Volume2, Square, Flag,
 } from 'lucide-react'
+import BugReportModal from './BugReportModal'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import WC2026MatchCard from './WC2026MatchCard'
@@ -4396,6 +4397,9 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
+  const [bugReportOpen, setBugReportOpen] = useState(false)
+  const [socialDlBar, setSocialDlBar] = useState<null | unknown>(null)
+  void socialDlBar // used via setSocialDlBar(null) in sendMessage
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [lpCopiedId, setLpCopiedId] = useState<string | null>(null)
   const lpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -8398,6 +8402,7 @@ ${rows}
 
   // ===== RENDER =====
   return (
+    <>
     <div className="dz-chatbox" dir="rtl">
       {/* Compact icon-only toolbar */}
       <div className="dz-gh-bar">
@@ -9960,6 +9965,13 @@ ${rows}
                   >
                     <ThumbsDown size={17} />
                   </button>
+                  <button
+                    className="dz-action-btn dz-action-btn--report"
+                    title="الإبلاغ عن مشكلة"
+                    onClick={() => setBugReportOpen(true)}
+                  >
+                    <Flag size={17} />
+                  </button>
                 </div>
               )}
             </div>
@@ -10392,5 +10404,9 @@ ${rows}
         )
       })()}
     </div>
+    {bugReportOpen && (
+      <BugReportModal onClose={() => setBugReportOpen(false)} />
+    )}
+    </>
   )
 }

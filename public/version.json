@@ -1,8 +1,8 @@
 {
-  "commit": "73517a0a4e6c2b2db88aed1cbf80eb8c4c0d7742",
-  "commitShort": "73517a0a",
+  "commit": "1caf44c5798f67ada577fc230507795da5fa3574",
+  "commitShort": "1caf44c5",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix(dztube): إصلاح كامل لـ audio streaming — إضافة /18 fallback في كل format strings + android client أولاً (2026-07-30)",
-  "deployedAt": "2026-07-30T18:33:08.214562Z",
+  "message": "--help",
+  "deployedAt": "2026-07-30T20:52:58.959765Z",
   "deployedBy": "scripts/deploy.py"
 }

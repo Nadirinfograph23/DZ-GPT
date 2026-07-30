@@ -1,8 +1,8 @@
 {
-  "commit": "45436ab71377ea56b68d9c55102386a0f29bae36",
-  "commitShort": "45436ab7",
+  "commit": "c5c3fc37ac8b2473ebcc03478a7e8ad90716a821",
+  "commitShort": "c5c3fc37",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: Giststack Primary Provider — social_media_downloader MCP tool + download chain Giststack→yt-dlp→Cobalt",
-  "deployedAt": "2026-07-29T23:23:20.773373Z",
+  "message": "feat: add Viddari as download provider (no API key) + fallback chain + download bar CSS fix",
+  "deployedAt": "2026-07-30T00:05:49.284614Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,14 +1,15 @@
 /**
  * versionChecker.ts — نظام الكشف عن الإصدار الجديد وإخطار المستخدم
- * يعمل بثلاث طرق:
- *  1. polling /api/version كل 45 ثانية
- *  2. استقبال رسائل Service Worker (NEW_VERSION / SW_UPDATED)
- *  3. registration.updatefound — يكشف SW جديد فور بدء تحميله
+ * يعمل بأربع طرق:
+ *  1. polling /version.json (ملف ثابت — لا middleware، لا bot-block) كل 30 ثانية
+ *  2. polling /api/version كـ fallback
+ *  3. استقبال رسائل Service Worker (NEW_VERSION / SW_UPDATED)
+ *  4. registration.updatefound — يكشف SW جديد فور بدء تحميله
  *
  * البانر يظهر فقط عند وجود نشر جديد من Replit — ليس في كل جلسة
  */
 
-const POLL_INTERVAL_MS  = 45 * 1000
+const POLL_INTERVAL_MS  = 30 * 1000   // كل 30 ثانية (كان 45)
 const BANNER_ID         = 'dz-update-banner'
 const LAST_COMMIT_KEY   = 'dz-last-known-commit'
 
@@ -16,7 +17,22 @@ let _lastCommit: string | null = null
 let _pollTimer: ReturnType<typeof setInterval> | null = null
 let _bannerShown = false
 
+/** يجرب /version.json أولاً (أسرع + بدون middleware) ثم /api/version */
 async function fetchVersion(): Promise<string | null> {
+  // 1) ملف ثابت — يتجاوز anti-bot middleware تماماً
+  try {
+    const res = await fetch('/version.json', {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache, no-store' },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      const commit = data.commit || data.commitShort || null
+      if (commit) return commit
+    }
+  } catch { /* تجاهل */ }
+
+  // 2) fallback: /api/version
   try {
     const res = await fetch('/api/version', {
       cache: 'no-store',

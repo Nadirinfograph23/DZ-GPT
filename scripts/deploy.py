@@ -214,9 +214,19 @@ def deploy(commit_msg, files):
     os.makedirs('data', exist_ok=True)
     open('data/build-info.json', 'w').write(build_info)
 
-    # tree نهائي يتضمن build-info.json
+    # كتابة public/version.json — ملف ثابت يتجاوز anti-bot middleware
+    # يُستخدم بواسطة versionChecker.ts لاكتشاف التحديثات بشكل موثوق
+    os.makedirs('public', exist_ok=True)
+    open('public/version.json', 'w').write(build_info)
+    print(f'📄 public/version.json ← كُتب محلياً')
+    vj_blob = create_blob(build_info.encode('utf-8'))
+
+    # tree نهائي يتضمن build-info.json + public/version.json
     print(f'🌲 إنشاء tree نهائي مع build-info...', end=' ', flush=True)
-    final_tree = create_tree(temp_tree, [('data/build-info.json', bi_blob)])
+    final_tree = create_tree(temp_tree, [
+        ('data/build-info.json', bi_blob),
+        ('public/version.json',  vj_blob),
+    ])
     print(f'✓ {final_tree[:12]}')
 
     # commit نهائي يشمل build-info

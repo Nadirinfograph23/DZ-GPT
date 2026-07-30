@@ -1,0 +1,8 @@
+{
+  "commit": "c5c3fc37",
+  "commitShort": "c5c3fc37",
+  "branch": "devin/1774405518-init-dz-gpt",
+  "message": "feat: add Viddari as download provider (no API key) + fallback chain + download bar CSS fix",
+  "deployedAt": "2026-07-30T00:05:49.284614Z",
+  "deployedBy": "scripts/deploy.py"
+}

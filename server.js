@@ -1357,15 +1357,13 @@ app.get('/api/version', async (_req, res) => {
   res.setHeader('Pragma', 'no-cache')
   res.setHeader('Expires', '0')
 
-  // على Vercel: أعد قراءة build-info.json في كل طلب لضمان
-  // أن الـ warm instances تعكس آخر deploy فوراً
+  // أعد قراءة build-info.json في كل طلب (ليس فقط Vercel) —
+  // يضمن أن كل deploy جديد ينعكس فوراً بدون إعادة تشغيل السيرفر
   let buildInfo = _BUILD_INFO
-  if (process.env.VERCEL) {
-    try {
-      const raw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
-      if (raw) buildInfo = JSON.parse(raw)
-    } catch {}
-  }
+  try {
+    const raw = await import('fs').then(fs => fs.promises.readFile(_biPath, 'utf8').catch(() => null))
+    if (raw) buildInfo = JSON.parse(raw)
+  } catch {}
 
   // الأولوية على Vercel: VERCEL_GIT_COMMIT_SHA (مضمون التغيير بكل deploy)
   //                   ← build-info.json ← fallback

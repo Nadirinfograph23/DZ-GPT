@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
-import { useDownload, getPlatformMeta } from '../context/DownloadContext'
-import { extractMedia, type MediaInfo } from '../lib/mediaExtractor'
 import { createPortal } from 'react-dom'
 import DZToast, { type Toast } from './DZToast'
 import DZAnimatedLogo from './DZAnimatedLogo'
@@ -749,20 +747,6 @@ interface DZMessage {
     competition: string
     source: string
   }
-  mediaDownload?: {
-    status: 'ready' | 'error' | 'pending' | 'extracting'
-    url: string | null
-    format?: 'audio' | 'video'
-    title?: string
-    thumbnail?: string
-    duration?: number
-    uploader?: string
-    platform?: string | null
-    audio?: Array<{ url: string; ext: string; bitrate: number | null; size: number | null; mime: string | null; muxed?: boolean }>
-    video?: Array<{ url: string; quality: string | null; height: number | null; ext: string; size: number | null; mime: string | null; hasAudio: boolean }>
-    error?: string
-  }
-  mediaDownloads?: Array<NonNullable<DZMessage['mediaDownload']>>
 }
 
 interface ActionLogEntry {
@@ -1635,381 +1619,6 @@ function CodeAnalysisPanel({
     </div>
   )
 }
-
-// ===== MEDIA DOWNLOAD CARD ================================================
-// ── Shared helpers ─────────────────────────────────────────────
-const _fmtSize = (b: number | null) => {
-  if (!b) return null
-  if (b > 1e9) return `${(b / 1e9).toFixed(1)} GB`
-  if (b > 1e6) return `${(b / 1e6).toFixed(1)} MB`
-  return `${(b / 1e3).toFixed(0)} KB`
-}
-const _fmtDur = (s: number) => {
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = Math.floor(s % 60)
-  return h > 0
-    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-    : `${m}:${String(sec).padStart(2,'0')}`
-}
-
-// ── Quality badge helper ────────────────────────────────────────
-type QualityTier = '4k' | 'fhd' | 'hd' | 'sd' | 'ld'
-const qualityTier = (h: number | null): QualityTier => {
-  if (!h) return 'ld'
-  if (h >= 2160) return '4k'
-  if (h >= 1080) return 'fhd'
-  if (h >= 720)  return 'hd'
-  if (h >= 480)  return 'sd'
-  return 'ld'
-}
-const QUALITY_BADGE: Record<QualityTier, { label: string; color: string; bg: string }> = {
-  '4k':  { label: '4K',   color: '#fbbf24', bg: 'rgba(251,191,36,.15)' },
-  'fhd': { label: '1080p', color: '#34d399', bg: 'rgba(52,211,153,.12)' },
-  'hd':  { label: '720p',  color: '#60a5fa', bg: 'rgba(96,165,250,.12)' },
-  'sd':  { label: '480p',  color: '#a78bfa', bg: 'rgba(167,139,250,.12)' },
-  'ld':  { label: 'SD',    color: '#94a3b8', bg: 'rgba(148,163,184,.10)' },
-}
-
-// ══════════════════════════════════════════════════════════════════
-// 📥 MEDIA DOWNLOAD CARD v3
-// status flow: 'extracting' (browser runs API) → 'ready' → download
-// ══════════════════════════════════════════════════════════════════
-
-/* inner "ready" card — shows quality selector + download button */
-function MediaDownloadCardReady({
-  info,
-  platform,
-  url,
-  format,
-  pm,
-}: {
-  info: MediaInfo
-  platform: string | null
-  url: string | null
-  format?: 'audio' | 'video'
-  pm: { icon: string; label: string; color: string }
-}) {
-  const { startDownload, startServerJob } = useDownload()
-  const [sel, setSel] = useState<{ type: 'video' | 'audio'; index: number } | null>(null)
-
-  const videoFmts = useMemo(() =>
-    (info.video || [])
-      // Social platforms commonly expose DASH video and audio as separate
-      // streams. The download card can download either stream directly, so
-      // do not hide valid video-only MP4 formats.
-      .filter(v => !!v.url)
-      .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))
-      .slice(0, 6),
-    [info.video],
-  )
-  const audioFmts = useMemo(() =>
-    (info.audio || [])
-      .filter(a => !a.muxed)
-      .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-      .slice(0, 3)
-      .concat((info.audio || []).filter(a => a.muxed).slice(0, 1)),
-    [info.audio],
-  )
-
-  useEffect(() => {
-    if (format === 'audio' && audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
-    else if (videoFmts.length > 0) setSel({ type: 'video', index: 0 })
-    else if (audioFmts.length > 0) setSel({ type: 'audio', index: 0 })
-  }, [format, videoFmts.length, audioFmts.length])
-
-  const handleDownload = () => {
-    if (!sel) return
-    const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]
-    if (!fmt) return
-    const safeName  = (info.title || 'media').replace(/[^\w\u0600-\u06FF\s._-]/g, '_').slice(0, 160)
-    const dlFormat  = sel.type as 'video' | 'audio'
-    const dlExt     = dlFormat === 'audio' ? (fmt.ext || 'm4a') : (fmt.ext || 'mp4')
-    // Map height → quality string for yt-dlp format selector
-    const videoH    = sel.type === 'video' ? ((fmt as import('../lib/mediaExtractor').VideoFormat).height ?? 0) : 0
-    const dlQuality = videoH >= 1080 ? '1080' : videoH >= 720 ? '720' : videoH >= 480 ? '480' : videoH >= 360 ? '360' : 'best'
-
-    if (url) {
-      // Primary: server-side job → yt-dlp with real progress + fallback chain
-      startServerJob({
-        url,
-        format: dlFormat,
-        quality: dlQuality,
-        platform,
-        title: safeName,
-        ext: dlExt,
-      })
-    } else {
-      // Fallback for legacy cards without original URL: direct CDN fetch
-      startDownload({ cdnUrl: fmt.url, filename: safeName, ext: dlExt, platform, size: fmt.size ?? null })
-    }
-  }
-
-  const hasFormats = videoFmts.length > 0 || audioFmts.length > 0
-  const canStream  = info.canStream !== false
-
-  return (
-    <div className="dz-mdl">
-      {/* Platform badge */}
-      <div className="dz-mdl__head">
-        <span className="dz-mdl__picon">{pm.icon}</span>
-        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>{pm.label}</span>
-      </div>
-
-      {/* Thumbnail + meta */}
-      <div className="dz-mdl__info">
-        {info.thumbnail && <img src={info.thumbnail} alt="" className="dz-mdl__thumb" loading="lazy" />}
-        <div className="dz-mdl__meta">
-          <div className="dz-mdl__title">{info.title || 'بدون عنوان'}</div>
-          {info.uploader && <div className="dz-mdl__sub">👤 {info.uploader}</div>}
-          {!!info.duration && <div className="dz-mdl__sub">⏱ {_fmtDur(info.duration)}</div>}
-        </div>
-      </div>
-
-      {/* canStream:false or no formats → error only, no external redirects */}
-      {(!canStream || !hasFormats) && (
-        <p className="dz-mdl__errmsg" style={{ color: '#f59e0b' }}>
-          ⚠️ تعذّر تحميل هذا الفيديو مباشرةً — المحتوى محمي أو مقيّد من المنصة
-        </p>
-      )}
-
-      {/* Video quality selector */}
-      {canStream && videoFmts.length > 0 && (
-        <div className="dz-mdl__section">
-          <div className="dz-mdl__section-hd">
-            <span className="dz-mdl__section-icon">🎬</span>
-            <span className="dz-mdl__section-label">جودة الفيديو</span>
-          </div>
-          <div className="dz-mdl__opts">
-            {videoFmts.map((v, i) => {
-              const tier = qualityTier(v.height)
-              const badge = QUALITY_BADGE[tier]
-              const active = sel?.type === 'video' && sel.index === i
-              return (
-                <button key={i}
-                  className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
-                  style={active ? { borderColor: pm.color, background: `${pm.color}14` } : {}}
-                  onClick={() => setSel({ type: 'video', index: i })}
-                >
-                  <span className="dz-mdl__radio"><span className="dz-mdl__radio-dot" style={active ? { background: pm.color } : {}} /></span>
-                  <span className="dz-mdl__opt-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-                  {v.quality && v.quality !== badge.label && <span className="dz-mdl__opt-ext">{v.quality}</span>}
-                  {!v.hasAudio && <span className="dz-mdl__opt-ext">فيديو فقط</span>}
-                  <span className="dz-mdl__opt-ext">{v.ext?.toUpperCase()}</span>
-                  {_fmtSize(v.size) && <span className="dz-mdl__opt-size">{_fmtSize(v.size)}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Audio selector */}
-      {canStream && audioFmts.length > 0 && (
-        <div className="dz-mdl__section">
-          <div className="dz-mdl__section-hd">
-            <span className="dz-mdl__section-icon">🎵</span>
-            <span className="dz-mdl__section-label">صوت فقط</span>
-          </div>
-          <div className="dz-mdl__opts">
-            {audioFmts.map((a, i) => {
-              const active = sel?.type === 'audio' && sel.index === i
-              return (
-                <button key={i}
-                  className={`dz-mdl__opt ${active ? 'dz-mdl__opt--active' : ''}`}
-                  style={active ? { borderColor: '#10a37f', background: 'rgba(16,163,127,.12)' } : {}}
-                  onClick={() => setSel({ type: 'audio', index: i })}
-                >
-                  <span className="dz-mdl__radio"><span className="dz-mdl__radio-dot" style={active ? { background: '#10a37f' } : {}} /></span>
-                  <span className="dz-mdl__opt-badge" style={{ background: 'rgba(16,163,127,.15)', color: '#10a37f' }}>{a.ext?.toUpperCase() || 'AUDIO'}</span>
-                  {a.bitrate && <span className="dz-mdl__opt-ext">{Math.round(a.bitrate)} kbps</span>}
-                  {_fmtSize(a.size) && <span className="dz-mdl__opt-size">{_fmtSize(a.size)}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Download button + original link */}
-      {canStream && hasFormats && (
-        <button
-          className="dz-mdl__dl-btn"
-          style={{ background: `linear-gradient(135deg, ${pm.color}, ${pm.color}cc)` }}
-          onClick={handleDownload}
-          disabled={!sel}
-        >
-          <Download size={15} />
-          تحميل {sel?.type === 'audio' ? 'الصوت' : 'الفيديو'}
-          {sel && (() => { const fmt = sel.type === 'video' ? videoFmts[sel.index] : audioFmts[sel.index]; const sz = fmt ? _fmtSize(fmt.size) : null; return sz ? <span className="dz-mdl__dl-size">({sz})</span> : null })()}
-        </button>
-      )}
-
-      {canStream && url && (
-        <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 الرابط الأصلي</a>
-      )}
-    </div>
-  )
-}
-
-// ── Server-side fallback card (client extraction failed, URL available) ──────
-// Shown when browser-side extraction fails (CORS / platform restriction) but
-// the original URL is known — lets the user trigger a yt-dlp server job.
-function MediaDownloadCardServerFallback({
-  url, platform, pm, errorMsg,
-}: { url: string; platform: string | null; pm: ReturnType<typeof getPlatformMeta>; errorMsg: string }) {
-  const { startServerJob } = useDownload()
-  const [launched, setLaunched] = useState(false)
-
-  const launch = (fmt: 'video' | 'audio') => {
-    startServerJob({ url, format: fmt, quality: 'best', platform, title: '', ext: fmt === 'audio' ? 'm4a' : 'mp4' })
-    setLaunched(true)
-  }
-
-  return (
-    <div className="dz-mdl">
-      <div className="dz-mdl__head">
-        <span className="dz-mdl__picon">{pm.icon}</span>
-        <span className="dz-mdl__platform" style={{ background: `${pm.color}1a`, color: pm.color }}>{pm.label}</span>
-      </div>
-
-      {/* Soft warning — not a fatal error */}
-      <p className="dz-mdl__errmsg" style={{ color: '#f59e0b', fontSize: 12, marginBottom: 10 }}>
-        ⚠️ تعذّر الاستخراج المباشر — سيتولى الخادم التحميل بدلاً عن ذلك
-      </p>
-
-      {launched ? (
-        <p style={{ color: '#10a37f', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>
-          ✅ بدأ التحميل — تابع التقدم في شريط التحميل
-        </p>
-      ) : (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-          <button className="dz-mdl__dl-btn" onClick={() => launch('video')} style={{ flex: 1 }}>
-            <Download size={14} /> تحميل فيديو
-          </button>
-          <button className="dz-mdl__dl-btn" onClick={() => launch('audio')}
-            style={{ flex: 1, background: 'rgba(16,163,127,.15)', borderColor: '#10a37f', color: '#10a37f' }}>
-            <Download size={14} /> صوت فقط
-          </button>
-        </div>
-      )}
-
-      <a href={url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link" style={{ marginTop: 8 }}>
-        🔗 الرابط الأصلي
-      </a>
-    </div>
-  )
-}
-
-/* outer wrapper that handles status transitions */
-function MediaDownloadCard({ data }: { data: NonNullable<DZMessage['mediaDownload']> }) {
-  const pm = getPlatformMeta(data.platform ?? null)
-
-  // Internal extraction state (only used when server sends status:'extracting')
-  const [extractState, setExtractState] = useState<
-    | { phase: 'idle' }
-    | { phase: 'loading' }
-    | { phase: 'done'; info: MediaInfo }
-    | { phase: 'error'; message: string }
-  >({ phase: 'idle' })
-
-  // Kick off browser-side extraction when the card is first rendered in 'extracting' mode
-  useEffect(() => {
-    if (data.status !== 'extracting' || !data.url) return
-    const ctrl = new AbortController()
-    setExtractState({ phase: 'loading' })
-
-    extractMedia(data.url, data.platform ?? null, ctrl.signal)
-      .then(info => {
-        if (!ctrl.signal.aborted) setExtractState({ phase: 'done', info })
-      })
-      .catch(err => {
-        if (!ctrl.signal.aborted) setExtractState({ phase: 'error', message: err.message || 'فشل الاستخراج' })
-      })
-
-    return () => ctrl.abort()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // run once on mount
-
-  // ── Extracting / loading ───────────────────────────────────────
-  if (data.status === 'extracting') {
-    if (extractState.phase === 'loading' || extractState.phase === 'idle') {
-      return (
-        <div className="dz-mdl dz-mdl--extracting">
-          <div className="dz-mdl__head">
-            <span className="dz-mdl__picon">{pm.icon}</span>
-            <span className="dz-mdl__platform" style={{ color: pm.color }}>{pm.label}</span>
-          </div>
-          <div className="dz-mdl__extract-body">
-            <span className="dz-mdl__spinner" />
-            <span className="dz-mdl__extract-txt">جارٍ استخراج معلومات الوسائط...</span>
-          </div>
-          {data.url && (
-            <a href={data.url} target="_blank" rel="noopener noreferrer" className="dz-mdl__link">🔗 الرابط الأصلي</a>
-          )}
-        </div>
-      )
-    }
-
-    if (extractState.phase === 'error') {
-      // When client-side extraction fails (CORS / platform restriction) but we
-      // have the original URL, offer a direct server-side download via yt-dlp
-      // instead of a dead-end error card.
-      if (data.url) {
-        return <MediaDownloadCardServerFallback
-          url={data.url}
-          platform={data.platform ?? null}
-          pm={pm}
-          errorMsg={extractState.message}
-        />
-      }
-      return (
-        <div className="dz-mdl dz-mdl--error">
-          <div className="dz-mdl__head">
-            <span className="dz-mdl__picon">{pm.icon}</span>
-            <span className="dz-mdl__platform" style={{ color: pm.color }}>تعذّر التحميل</span>
-          </div>
-          <p className="dz-mdl__errmsg">{extractState.message}</p>
-        </div>
-      )
-    }
-
-    // extraction done — show quality card
-    if (extractState.phase === 'done') {
-      return <MediaDownloadCardReady info={extractState.info} platform={data.platform ?? null} url={data.url ?? null} format={data.format} pm={pm} />
-    }
-  }
-
-  // ── Error from server ──────────────────────────────────────────
-  if (data.status === 'error') {
-    return (
-      <div className="dz-mdl dz-mdl--error">
-        <div className="dz-mdl__head">
-          <span className="dz-mdl__picon">{pm.icon}</span>
-          <span className="dz-mdl__platform" style={{ color: pm.color }}>تعذّر التحميل</span>
-        </div>
-        <p className="dz-mdl__errmsg">{data.error || 'تعذّر تحميل هذا الفيديو — المحتوى محمي أو مقيّد من المنصة'}</p>
-      </div>
-    )
-  }
-
-  // ── Server-provided ready state (legacy / future) ──────────────
-  if (data.status === 'ready') {
-    const info: MediaInfo = {
-      title: data.title ?? '',
-      thumbnail: data.thumbnail ?? '',
-      duration: data.duration ?? 0,
-      uploader: data.uploader ?? '',
-      video: (data.video ?? []).map(v => ({ ...v, mime: undefined })) as any,
-      audio: (data.audio ?? []).map(a => ({ ...a, mime: undefined })) as any,
-    }
-    return <MediaDownloadCardReady info={info} platform={data.platform ?? null} url={data.url ?? null} format={data.format} pm={pm} />
-  }
-
-  // fallback
-  return null
-}
-
 // ===== CODE BLOCK =====
 // ── Web Reader Intent Badge ────────────────────────────────────────────────
 function WebReaderIntentBadge({ intent }: { intent: 'build' | 'reader' | 'update' | 'extract' }) {
@@ -4771,21 +4380,6 @@ const TickerText = memo(function TickerText() {
   )
 })
 
-// ── Social platform URL detector ─────────────────────────────────────────────
-const SOCIAL_DL_RE = /https?:\/\/(?:(?:www\.|m\.)?(?:youtube\.com\/(?:watch|shorts|live|embed)|youtu\.be|tiktok\.com|vm\.tiktok\.com|instagram\.com\/(?:reel|p\/|tv\/|reels)|(?:www\.)?facebook\.com\/(?:watch|video|reel|share\/[rvp]|share(?:\/|$))|fb\.watch|twitter\.com\/\S*?\/status|x\.com\/\S*?\/status|pinterest\.(?:com|co\.uk)\/pin|vimeo\.com\/\d|dailymotion\.com\/video))[^\s]*/i
-
-function _detectSocialPlatform(url: string): string | null {
-  const u = url.toLowerCase()
-  if (/youtu(?:be\.com|\.be)/.test(u)) return 'youtube'
-  if (/tiktok\.com/.test(u)) return 'tiktok'
-  if (/instagram\.com/.test(u)) return 'instagram'
-  if (/facebook\.com|fb\.watch/.test(u)) return 'facebook'
-  if (/(?:twitter|x)\.com/.test(u)) return 'twitter'
-  if (/pinterest\./.test(u)) return 'pinterest'
-  if (/vimeo\.com/.test(u)) return 'vimeo'
-  if (/dailymotion\.com/.test(u)) return 'dailymotion'
-  return null
-}
 
 export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAgentModeChange, cerebrasKey, initialQuery }: DZChatBoxProps) {
   const navigate = useNavigate()
@@ -4797,11 +4391,8 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
     } catch { return [] }
   })
   const [input, setInput] = useState('')
-  const [socialDlBar, setSocialDlBar] = useState<{ url: string; platform: string | null } | null>(null)
-  const [socialDlFmt, setSocialDlFmt] = useState<'video' | 'audio'>('video')
   const [showFindDialog, setShowFindDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const { jobs: downloadJobs, startServerJob } = useDownload()
   const [isAdvancedCloneLoading, setIsAdvancedCloneLoading] = useState(false)
   const [cloneProgress, setCloneProgress] = useState<CloneProgressState | null>(null)
   const [renderKey] = useState(0)
@@ -8351,28 +7942,6 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         return
       }
 
-      // ── Media Download Card — بطاقة تحميل الوسائط الاجتماعية ────────────
-      if (data.richType === 'media-download' && data.mediaDownload) {
-        addAssistantMessage({
-          content: (data.content as string) || '⬇️ جاهز للتحميل',
-          richType: 'media-download',
-          mediaDownload: data.mediaDownload as DZMessage['mediaDownload'],
-          model: data.model as string | undefined,
-        })
-        return
-      }
-      if (data.richType === 'media-download-batch' && Array.isArray(data.mediaDownloads)) {
-        for (const mediaDownload of data.mediaDownloads as NonNullable<DZMessage['mediaDownload']>[]) {
-          addAssistantMessage({
-            content: '',
-            richType: 'media-download',
-            mediaDownload,
-            model: data.model as string | undefined,
-          })
-        }
-        return
-      }
-
       // ── DZ Health Analysis — بطاقة التحليل الطبي ────────────────────────
       if (data.richType === 'health-analysis' && data.healthData) {
         addAssistantMessage({
@@ -8829,7 +8398,7 @@ ${rows}
 
   // ===== RENDER =====
   return (
-    <div className="dz-chatbox" dir="rtl" style={{ paddingBottom: downloadJobs.length > 0 ? `${downloadJobs.length * 52}px` : undefined, transition: 'padding-bottom 0.3s ease' }}>
+    <div className="dz-chatbox" dir="rtl">
       {/* Compact icon-only toolbar */}
       <div className="dz-gh-bar">
         {/* Agent bar toggle button */}
@@ -9613,9 +9182,6 @@ ${rows}
                         </div>
                       )}
                       {/* ── Media Download Card ──────────────────────── */}
-                      {msg.richType === 'media-download' && msg.mediaDownload && (
-                        <MediaDownloadCard data={msg.mediaDownload} />
-                      )}
 
                       {msg.richType === 'image' && msg.videoUrl && (
                         <div className="dz-video-card">
@@ -10645,51 +10211,6 @@ ${rows}
             >✕</button>
           </div>
         )}
-        {/* ===== SOCIAL DOWNLOAD BAR ===== */}
-        {socialDlBar && (
-          <div className="dz-social-dl-bar">
-            <span className="dz-social-dl-icon">{getPlatformMeta(socialDlBar.platform).icon}</span>
-            <div className="dz-social-dl-info">
-              <span className="dz-social-dl-plat">{getPlatformMeta(socialDlBar.platform).label}</span>
-              <span className="dz-social-dl-url" dir="ltr">
-                {socialDlBar.url.length > 46 ? socialDlBar.url.slice(0, 46) + '…' : socialDlBar.url}
-              </span>
-            </div>
-            <div className="dz-social-dl-btns">
-              <button
-                className={`dz-social-dl-fmt${socialDlFmt === 'video' ? ' dz-social-dl-fmt--active' : ''}`}
-                onClick={() => setSocialDlFmt('video')}
-              >📹 فيديو</button>
-              <button
-                className={`dz-social-dl-fmt${socialDlFmt === 'audio' ? ' dz-social-dl-fmt--active' : ''}`}
-                onClick={() => setSocialDlFmt('audio')}
-              >🎵 صوت</button>
-              <button
-                className="dz-social-dl-start"
-                onClick={() => {
-                  const pm = getPlatformMeta(socialDlBar.platform)
-                  startServerJob({
-                    url: socialDlBar.url,
-                    format: socialDlFmt,
-                    quality: 'best',
-                    platform: socialDlBar.platform,
-                    title: pm.label + ' download',
-                    ext: socialDlFmt === 'audio' ? 'mp3' : 'mp4',
-                  })
-                  setSocialDlBar(null)
-                  setInput('')
-                }}
-              >
-                <Download size={13} /> تحميل
-              </button>
-            </div>
-            <button
-              className="dz-social-dl-close"
-              onClick={() => setSocialDlBar(null)}
-              title="إغلاق"
-            >✕</button>
-          </div>
-        )}
 
         <div className="dz-input-container">
           <textarea
@@ -10697,13 +10218,6 @@ ${rows}
             value={input}
             onChange={(e) => {
               setInput(e.target.value)
-              const m = e.target.value.match(SOCIAL_DL_RE)
-              if (m) {
-                const plat = _detectSocialPlatform(m[0])
-                setSocialDlBar({ url: m[0], platform: plat })
-              } else {
-                setSocialDlBar(null)
-              }
             }}
             onKeyDown={handleKeyDown}
             placeholder={isGithubConnected

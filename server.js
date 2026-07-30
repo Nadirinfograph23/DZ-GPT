@@ -32530,6 +32530,44 @@ async function resolveYtdownDirectUrl(item) {
   return { url: polled.fileUrl, size: polled.fileSize || item.size }
 }
 
+// ── Cobalt.tools fetch helper for DZ Tube download ───────────────────────────
+// يستخدم نفس COBALT_INSTANCES المعرّفة أعلاه في قسم استخراج الوسائط الاجتماعية
+// يعيد { url, title, ext } أو null عند الفشل
+async function _cobaltFetchYouTube(videoUrl, format, height) {
+  const isAudio = format === 'mp3' || format === 'audio'
+  const downloadMode = isAudio ? 'audio' : 'auto'
+  const audioFormat  = format === 'mp3' ? 'mp3' : 'best'
+  const videoQuality = String(height || 720)
+
+  for (const base of COBALT_INSTANCES) {
+    try {
+      const ctrl = new AbortController()
+      const tid  = setTimeout(() => ctrl.abort(), 12000)
+      const resp = await fetch(`${base}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept':       'application/json',
+          'User-Agent':   'DZ-GPT/2.0 (+https://dz-gpt.vercel.app)',
+        },
+        body: JSON.stringify({ url: videoUrl, downloadMode, videoQuality, audioFormat, audioBitrate: '192', filenameStyle: 'basic' }),
+        signal: ctrl.signal,
+      })
+      clearTimeout(tid)
+      const j = await resp.json().catch(() => ({}))
+      if (!resp.ok || j.status === 'error' || j.error) continue
+      const dlUrl = j.url
+      if (!dlUrl) continue
+      const ext = isAudio
+        ? (/\.mp3/i.test(dlUrl) ? 'mp3' : 'm4a')
+        : 'mp4'
+      console.log(`[DZTube:cobalt] ✓ instance=${base}`)
+      return { url: dlUrl, title: j.filename?.replace(/\.[^.]+$/, '') || '', ext }
+    } catch { /* try next */ }
+  }
+  return null
+}
+
 // ── PRIMARY yt-dlp downloader ─────────────────────────────────────────────────
 // Downloads to a temp file via yt-dlp then streams it to the client.
 // Returns true  → response was fully handled (success or client disconnected).
@@ -32753,6 +32791,24 @@ app.get('/api/dz-tube/download', async (req, res) => {
     const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${winner.quality || h+'p'}.${dlExt}`
     console.log(`[DZTube:download] ${winner.source} hit → ${downloadName}`)
     return await streamUpstreamToClient(req, res, winner.url, dlMime, downloadName)
+  }
+
+  // ── COBALT FALLBACK: أموثوق fallback إضافي بعد ytdown+Invidious+Piped ────────
+  // cobalt.tools يدعم YouTube مباشرةً بدون PO-token أو bot-detection
+  if (!winner) {
+    try {
+      const cobaltResult = await _cobaltFetchYouTube(url, format, h)
+      if (cobaltResult?.url) {
+        const safe = (cobaltResult.title || vidId).replace(/[^\w\u0600-\u06FF\s.-]/g, '').slice(0, 80).trim().replace(/\s+/g, '_') || vidId
+        let dlExt, dlMime
+        if (format === 'mp3') { dlExt = 'mp3'; dlMime = 'audio/mpeg' }
+        else if (isAudio)     { dlExt = cobaltResult.ext || 'm4a'; dlMime = 'audio/mp4' }
+        else                  { dlExt = 'mp4'; dlMime = 'video/mp4' }
+        const downloadName = isAudio ? `${safe}.${dlExt}` : `${safe}_${h}p.${dlExt}`
+        console.log(`[DZTube:download] cobalt hit → ${downloadName}`)
+        return await streamUpstreamToClient(req, res, cobaltResult.url, dlMime, downloadName)
+      }
+    } catch (e) { console.warn('[DZTube:download] cobalt fallback failed:', e.message) }
   }
 
   // If ytdown returned an actionable error (private / live / unavailable),

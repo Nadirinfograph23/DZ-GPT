@@ -29099,17 +29099,29 @@ function downloadProviderPlan(platform) {
     : []
 
   const specialized = {
-    // Viddari FIRST → Giststack → platform-specific scrapers → Cobalt → yt-dlp
+    // ── Facebook: حلّ الرابط المختصر أولاً ثم تشغيل جميع المستخرجات بالتوازي ──
+    // share/r/ و fb.watch لا يعمل معها معظم المستخرجات → نتبع الـ redirect أولاً
+    // Promise.any: أول مستخرج ينجح يوقف البقية — يقلل الانتظار من 90s إلى <15s
     facebook: [
       ...gs,
-      ['cobalt',    extractWithCobaltAPI],
-      ['snapsave',  _extractFacebookSnapsave],
-      ['savefrom',  _extractFacebookSaveFrom],
-      ['getmyfb',   _extractFacebookGetMyFB],
-      ['ssvid',     _extractFacebookSSVid],
-      ['y2down',    _extractFacebookY2Down],
-      ['saveclip',  _extractFacebookSaveclip],
-      ['yt-dlp',    _ytDlpFastProvider],
+      ['facebook-parallel', async (url) => {
+        const resolved = await _resolveFacebookShareUrl(url)
+        console.log(`[FB:parallel] Starting 7 extractors in parallel for ${resolved.slice(-40)}`)
+        return await Promise.any([
+          _extractFacebookSnapsave(resolved),
+          _extractFacebookGetMyFB(resolved),
+          _extractFacebookSSVid(resolved),
+          _extractFacebookY2Down(resolved),
+          _extractFacebookSaveFrom(resolved),
+          _extractFacebookFdownloaderNet(resolved),
+          _extractFacebookSaveclip(resolved),
+        ].map(p => p.then(r => {
+          if (!r?.video?.length && !r?.audio?.length) throw new Error('no media in response')
+          return r
+        })))
+      }],
+      ['cobalt',   extractWithCobaltAPI],
+      ['yt-dlp',   _ytDlpFastProvider],
     ],
     instagram: [
       ...vdStatic,
@@ -30407,6 +30419,35 @@ app.get('/api/dz-agent/download', aiLimiter, async (req, res) => {
 // Order: platform-specific API → Cobalt universal → yt-dlp fallback
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Facebook: حلّ روابط share/r/ و fb.watch قبل إرسالها للمستخرجات ──────────
+// Facebook /share/r/ و fb.watch هي روابط قصيرة تُحوَّل إلى reel/VIDEO_ID
+// معظم المستخرجات لا تتبع الـ redirect — نحلّه هنا مرة واحدة للجميع
+async function _resolveFacebookShareUrl(url) {
+  if (!url.includes('/share/') && !url.includes('fb.watch') && !url.includes('share/reel')) return url
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 6000)
+    const resp = await fetch(url, {
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/html,application/xhtml+xml,*/*',
+      },
+    })
+    clearTimeout(t)
+    const resolved = resp.url
+    if (resolved && resolved !== url && resolved.includes('facebook.com')) {
+      console.log(`[FB:resolve] share → ${resolved.slice(0, 80)}`)
+      return resolved
+    }
+    return url
+  } catch (e) {
+    console.warn(`[FB:resolve] failed (${e.message?.slice(0, 60)}) — using original URL`)
+    return url
+  }
+}
+
 // ── Facebook → snapsave.app ──────────────────────────────────────────────
 async function _extractFacebookSnapsave(url) {
   const ctrl = new AbortController()
@@ -30654,6 +30695,85 @@ async function _extractFacebookSaveFrom(url) {
       video,
       source: 'savefrom',
     }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → fdownloader.net (موثوق — JSON API) ────────────────────────
+async function _extractFacebookFdownloaderNet(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const resp = await fetch('https://fdownloader.net/api/ajaxSearch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://fdownloader.net',
+        'Referer': 'https://fdownloader.net/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: new URLSearchParams({ url, lang: 'en', v: 'a2' }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`fdownloader HTTP ${resp.status}`)
+    const d = await resp.json().catch(() => null)
+    if (!d) throw new Error('fdownloader: invalid JSON')
+    // Response shape: { status: 'ok', data: '<html table with links>' }
+    const html = d.data || d.html || ''
+    if (!html) throw new Error('fdownloader: empty data')
+    const video = []
+    const seen = new Set()
+    const re = /href="(https:\/\/[^"]+\.mp4[^"]*)"/gi
+    let m
+    while ((m = re.exec(html)) !== null) {
+      const u = m[1].replace(/&amp;/g, '&')
+      if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: video.length === 0 ? 'HD' : 'SD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    if (!video.length) {
+      // fallback: any mp4 URL
+      const anyRe = /https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/gi
+      while ((m = anyRe.exec(html)) !== null) {
+        const u = m[0].replace(/&amp;/g, '&')
+        if (!seen.has(u)) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+      }
+    }
+    if (!video.length) throw new Error('fdownloader: no video URLs found')
+    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'fdownloader' }
+  } finally { clearTimeout(t) }
+}
+
+// ── Facebook → savefrom worker (الاحتياطي الأخير قبل cobalt) ──────────────
+// savevid.me يدعم روابط الـ Reels والـ share مباشرة
+async function _extractFacebookSaveVidMe(url) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), 12000)
+  try {
+    const resp = await fetch('https://www.savevid.com/api/convert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://www.savevid.com',
+        'Referer': 'https://www.savevid.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
+      },
+      body: new URLSearchParams({ url, btn: 'Download' }).toString(),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) throw new Error(`savevid HTTP ${resp.status}`)
+    const text = await resp.text()
+    const video = []
+    const seen = new Set()
+    const re = /(https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*)/gi
+    let m
+    while ((m = re.exec(text)) !== null) {
+      const u = m[1].replace(/&amp;/g, '&')
+      if (!seen.has(u) && u.length < 2000) { seen.add(u); video.push({ url: u, quality: 'HD', height: null, ext: 'mp4', size: null, hasAudio: true }) }
+    }
+    if (!video.length) throw new Error('savevid: no video URLs')
+    return { title: 'Facebook Video', duration: 0, thumbnail: '', uploader: '', audio: [], video, source: 'savevid' }
   } finally { clearTimeout(t) }
 }
 

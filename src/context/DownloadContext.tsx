@@ -294,6 +294,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
       updateJob(id, { progress: 100, loaded: blob.size, total: blob.size, status: 'done',
         blobUrl: isMedia ? blobUrl : undefined })
+      // إشعار اكتمال التحميل عبر نظام DZNotifications الموجود
+      window.dispatchEvent(new CustomEvent('dz:task-complete', {
+        detail: {
+          title: '✅ اكتمل تحميل الوسائط',
+          body: `${filename}.${ext}${isMedia ? ' — اضغط ▶ لمعاينته وتشغيله' : ''}`,
+        }
+      }))
       const t = setTimeout(() => {
         URL.revokeObjectURL(blobUrl); blobRevokeTimers.current.delete(id)
         setJobs(prev => prev.filter(j => j.id !== id))
@@ -454,6 +461,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
           status: 'done', ext: dlExt,
           blobUrl: canPlayback ? blobUrl : undefined,
         })
+        // إشعار اكتمال التحميل عبر نظام DZNotifications الموجود
+        window.dispatchEvent(new CustomEvent('dz:task-complete', {
+          detail: {
+            title: '✅ اكتمل تحميل الوسائط',
+            body: `${safeName}.${dlExt}${canPlayback ? ' — اضغط ▶ لمعاينته وتشغيله' : ''}`,
+          }
+        }))
 
         const delay = canPlayback ? 5 * 60 * 1000 : 8000
         const timer = setTimeout(() => {

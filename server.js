@@ -31385,7 +31385,9 @@ async function resolveDirectAudioUrl(youtubeUrl, opts = {}) {
     const cookies = await ytDlpCookiesArgs()
     const antiBot = ytDlpAntiBotArgs()
     return new Promise((resolve, reject) => {
-      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
+      // 2026: android client only returns format 18 (muxed 360p) from datacenter IPs.
+      // Chain: m4a audio-only → any bestaudio → format 18 → absolute best.
+      const proc = spawn(dlpBin, ['-f', 'bestaudio[ext=m4a]/bestaudio/18/best', '-g', '--no-playlist', ...antiBot, ...cookies, youtubeUrl])
       let out = '', err = ''
       proc.stdout.on('data', d => { out += d.toString() })
       proc.stderr.on('data', d => { err += d.toString() })

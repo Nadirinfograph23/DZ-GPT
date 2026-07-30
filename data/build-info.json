@@ -1,8 +1,8 @@
 {
-  "commit": "d1345602c39f7d0f0e3b2e41261235d6b4512076",
-  "commitShort": "d1345602",
+  "commit": "bf715384caebc289032e83c1e0e9c12c18f58b1b",
+  "commitShort": "bf715384",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: تحديث yt-dlp إلى 2026.07.04 وتحسين client rotation لتحميل DZ Tube + تمييز زر الإبلاغ عن مشكلة بلون برتقالي",
-  "deployedAt": "2026-07-30T17:52:54.572471Z",
+  "message": "fix(dztube): android client أولاً — الوحيد المُختبر بنجاح 100% بدون PO tokens على datacenter IPs (2026-07-30)",
+  "deployedAt": "2026-07-30T18:05:13.583269Z",
   "deployedBy": "scripts/deploy.py"
 }

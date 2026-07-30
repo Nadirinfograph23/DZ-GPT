@@ -1,8 +1,8 @@
 {
-  "commit": "d7cc94ebada0191805db4b8cf7d0b209fe787fe6",
-  "commitShort": "d7cc94eb",
+  "commit": "88978544a7ec10600d06e5223fbc902ccc42d9bc",
+  "commitShort": "88978544",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: Facebook download — parallel extractors + share/r redirect resolver + fbcdn headers + fdownloader.net extractor",
-  "deployedAt": "2026-07-30T02:14:05.921443Z",
+  "message": "feat: Viddari integration + download bar notification + social-extract fix",
+  "deployedAt": "2026-07-30T13:48:26.202222Z",
   "deployedBy": "scripts/deploy.py"
 }

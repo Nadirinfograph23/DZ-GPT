@@ -1,8 +1,8 @@
 {
-  "commit": "8fdebf08eacc5d95528427ee5f54dcaa45e27ebf",
-  "commitShort": "8fdebf08",
+  "commit": "d1345602c39f7d0f0e3b2e41261235d6b4512076",
+  "commitShort": "d1345602",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إصلاح نظام إشعار التحديث — timestamp بدل commit + cache-bust + SW v13",
-  "deployedAt": "2026-07-30T17:06:44.885778Z",
+  "message": "fix: تحديث yt-dlp إلى 2026.07.04 وتحسين client rotation لتحميل DZ Tube + تمييز زر الإبلاغ عن مشكلة بلون برتقالي",
+  "deployedAt": "2026-07-30T17:52:54.572471Z",
   "deployedBy": "scripts/deploy.py"
 }

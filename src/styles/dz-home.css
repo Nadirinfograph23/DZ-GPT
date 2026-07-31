@@ -1,8 +1,25 @@
-/* ===== DZ HOME — LANDING PAGE ===== */
+/* ===== DZ HOME — LANDING PAGE (Refined Slate Edition) ===== */
+
+:root {
+  --home-bg:          #0d1117;
+  --home-bg-2:        #111620;
+  --home-surface:     rgba(255,255,255,0.04);
+  --home-surface-h:   rgba(255,255,255,0.07);
+  --home-border:      rgba(255,255,255,0.08);
+  --home-border-h:    rgba(255,255,255,0.16);
+  --home-text:        #e2e8f0;
+  --home-text-muted:  #64748b;
+  --home-text-dim:    #475569;
+  --home-accent:      #60a5fa;
+  --home-accent-2:    #818cf8;
+}
 
 .dz-home {
   min-height: 100dvh;
-  background: #0a0a0f;
+  background: var(--home-bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(96,165,250,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 90%, rgba(129,140,248,0.05) 0%, transparent 55%);
   display: flex;
   flex-direction: column;
   font-family: 'Segoe UI', 'Tajawal', Arial, sans-serif;
@@ -17,10 +34,10 @@
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(10, 10, 20, 0.88);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(13,17,23,0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
 .dz-home-nav-inner {
@@ -54,7 +71,7 @@
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 1px;
-  background: linear-gradient(135deg, #c8ff00, #00d4aa);
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -68,9 +85,9 @@
 
 .dz-home-nav-badge {
   font-size: 13px;
-  color: #6b7280;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  color: #475569;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 999px;
   padding: 4px 12px;
 }
@@ -81,21 +98,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(24, 119, 242, 0.1);
-  border: 1px solid rgba(24, 119, 242, 0.28);
-  border-radius: 12px;
-  color: #5b9cf6;
+  width: 38px;
+  height: 38px;
+  background: rgba(24,119,242,0.08);
+  border: 1px solid rgba(24,119,242,0.2);
+  border-radius: 11px;
+  color: #60a5fa;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, transform 0.18s;
   flex-shrink: 0;
 }
 .dz-home-fb-btn:hover {
-  background: rgba(24, 119, 242, 0.22);
-  border-color: rgba(24, 119, 242, 0.5);
-  color: #93bbfa;
-  transform: scale(1.07);
+  background: rgba(24,119,242,0.16);
+  border-color: rgba(24,119,242,0.38);
+  transform: scale(1.06);
 }
 .dz-home-fb-btn:active { transform: scale(0.96); }
 
@@ -110,7 +126,7 @@
   background: linear-gradient(135deg, #ffe066 0%, #ffa500 40%, #FFD700 70%, #c8860a 100%);
   box-shadow:
     0 0 0 2px #c8860a,
-    0 0 10px 3px rgba(255,200,0,0.45),
+    0 0 10px 3px rgba(255,200,0,0.35),
     0 2px 8px rgba(0,0,0,0.3);
   text-decoration: none;
   font-size: 20px;
@@ -124,38 +140,29 @@
   animation: dz-medal-spin 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
   box-shadow:
     0 0 0 3px #c8860a,
-    0 0 20px 6px rgba(255,200,0,0.7),
+    0 0 20px 6px rgba(255,200,0,0.55),
     0 4px 16px rgba(0,0,0,0.4);
 }
 
 @keyframes dz-medal-pulse {
   0%, 100% {
-    box-shadow:
-      0 0 0 2px #c8860a,
-      0 0 10px 3px rgba(255,200,0,0.4),
-      0 2px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 0 0 2px #c8860a, 0 0 10px 3px rgba(255,200,0,0.32), 0 2px 8px rgba(0,0,0,0.3);
     transform: scale(1) rotate(0deg);
   }
   30% {
-    box-shadow:
-      0 0 0 3px #FFD700,
-      0 0 18px 6px rgba(255,200,0,0.65),
-      0 4px 12px rgba(0,0,0,0.35);
-    transform: scale(1.1) rotate(-8deg);
+    box-shadow: 0 0 0 3px #FFD700, 0 0 16px 5px rgba(255,200,0,0.52), 0 4px 12px rgba(0,0,0,0.35);
+    transform: scale(1.08) rotate(-7deg);
   }
   60% {
-    box-shadow:
-      0 0 0 2px #c8860a,
-      0 0 14px 4px rgba(255,200,0,0.5),
-      0 3px 10px rgba(0,0,0,0.3);
-    transform: scale(1.05) rotate(5deg);
+    box-shadow: 0 0 0 2px #c8860a, 0 0 12px 3px rgba(255,200,0,0.4), 0 3px 10px rgba(0,0,0,0.3);
+    transform: scale(1.04) rotate(4deg);
   }
 }
 
 @keyframes dz-medal-spin {
   0%   { transform: scale(1) rotate(0deg); }
-  50%  { transform: scale(1.2) rotate(180deg); }
-  100% { transform: scale(1.12) rotate(360deg); }
+  50%  { transform: scale(1.18) rotate(180deg); }
+  100% { transform: scale(1.1) rotate(360deg); }
 }
 
 /* ===== CHAT NOTIFICATION BUTTON ===== */
@@ -164,35 +171,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: rgba(99,102,241,0.12);
-  border: 1px solid rgba(99,102,241,0.28);
-  border-radius: 12px;
-  color: #a5b4fc;
+  width: 38px;
+  height: 38px;
+  background: rgba(99,102,241,0.09);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 11px;
+  color: #818cf8;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, transform 0.18s;
   flex-shrink: 0;
 }
 
 .dz-home-chat-btn:hover {
-  background: rgba(99,102,241,0.22);
-  border-color: rgba(99,102,241,0.5);
-  color: #c4b5fd;
-  transform: scale(1.07);
+  background: rgba(99,102,241,0.18);
+  border-color: rgba(99,102,241,0.38);
+  transform: scale(1.06);
 }
 
 .dz-home-chat-btn:active {
   transform: scale(0.96);
 }
 
-/* ─── Badge (دائرة حمراء بالرقم 1) ─── */
 .dz-home-chat-badge {
   position: absolute;
   top: -6px;
   left: -6px;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   background: #ef4444;
   border-radius: 50%;
   display: flex;
@@ -202,11 +207,10 @@
   font-weight: 800;
   color: #fff;
   line-height: 1;
-  box-shadow: 0 0 0 2px #0a0a0f;
+  box-shadow: 0 0 0 2px var(--home-bg);
   animation: badge-bounce 1.8s ease-in-out infinite;
 }
 
-/* ─── الحلقة المتموجة (pulse ring) ─── */
 .dz-home-chat-badge-ring {
   position: absolute;
   inset: -3px;
@@ -233,21 +237,21 @@
 /* ===== HERO ===== */
 .dz-home-hero {
   text-align: center;
-  padding: 48px 20px 20px;
+  padding: 52px 20px 22px;
   margin-top: 58px;
   direction: rtl;
 }
 
 .dz-home-hero-title {
-  font-size: clamp(22px, 5vw, 36px);
+  font-size: clamp(22px, 5vw, 34px);
   font-weight: 800;
-  color: #f1f5f9;
+  color: #e2e8f0;
   margin: 0 0 10px;
   line-height: 1.3;
 }
 
 .dz-home-hero-title span {
-  background: linear-gradient(135deg, #c8ff00, #00d4aa);
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -255,7 +259,7 @@
 
 .dz-home-hero-sub {
   font-size: 14px;
-  color: #64748b;
+  color: #475569;
   margin: 0;
   line-height: 1.6;
 }
@@ -280,7 +284,7 @@
 @keyframes card-slide-in {
   from {
     opacity: 0;
-    transform: translateY(28px) scale(0.93);
+    transform: translateY(24px) scale(0.95);
   }
   to {
     opacity: 1;
@@ -295,17 +299,30 @@
   align-items: center;
   gap: 10px;
   padding: 22px 12px 18px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--home-surface);
+  border: 1px solid var(--home-border);
   border-radius: 18px;
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease, background 0.2s ease;
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.25s ease, background 0.22s ease;
   text-align: center;
   overflow: hidden;
-  animation: card-slide-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--card-idx, 0) * 60ms);
+  animation: card-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--card-idx, 0) * 55ms);
 }
 
+/* subtle top-edge highlight */
+.dz-home-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.12) 50%, transparent 90%);
+  border-radius: 18px 18px 0 0;
+  opacity: 0;
+  transition: opacity 0.22s;
+}
+
+/* glow layer */
 .dz-home-card::before {
   content: '';
   position: absolute;
@@ -314,6 +331,7 @@
   background: var(--card-glow, transparent);
   opacity: 0;
   transition: opacity 0.25s ease;
+  pointer-events: none;
 }
 
 .dz-home-card:hover::before,
@@ -321,11 +339,19 @@
   opacity: 1;
 }
 
+.dz-home-card:hover::after,
+.dz-home-card:focus-visible::after {
+  opacity: 1;
+}
+
 .dz-home-card:hover,
 .dz-home-card:focus-visible {
-  transform: translateY(-4px) scale(1.03);
-  border-color: rgba(255,255,255,0.18);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+  transform: translateY(-4px) scale(1.025);
+  border-color: var(--home-border-h);
+  box-shadow:
+    0 10px 36px rgba(0,0,0,0.45),
+    0 1px 0 rgba(255,255,255,0.06) inset;
+  background: var(--home-surface-h);
   outline: none;
 }
 
@@ -333,42 +359,45 @@
   transform: translateY(-1px) scale(1.01);
 }
 
+/* ===== CARD ICON ===== */
 .dz-home-card-icon {
   position: relative;
-  width: 62px;
-  height: 62px;
-  border-radius: 16px;
+  width: 60px;
+  height: 60px;
+  border-radius: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  transition: box-shadow 0.25s ease;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  transition: box-shadow 0.25s ease, transform 0.22s ease;
 }
 
 .dz-home-card:hover .dz-home-card-icon {
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  transform: scale(1.06);
 }
 
 .dz-home-card-icon svg {
-  width: 32px;
-  height: 32px;
-  color: rgba(0,0,0,0.85);
+  width: 30px;
+  height: 30px;
+  color: rgba(255,255,255,0.92);
   position: relative;
 }
 
+/* ===== CARD TEXT ===== */
 .dz-home-card-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
-  color: #e2e8f0;
-  letter-spacing: 0.5px;
+  color: #cbd5e1;
+  letter-spacing: 0.4px;
   line-height: 1.2;
 }
 
 .dz-home-card-sub {
-  font-size: 10.5px;
-  color: #64748b;
-  line-height: 1.3;
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.35;
   direction: rtl;
 }
 
@@ -385,33 +414,33 @@
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  background: rgba(99,102,241,0.08);
-  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(99,102,241,0.06);
+  border: 1px solid rgba(99,102,241,0.15);
   border-radius: 10px;
   padding: 10px 14px;
   max-width: 480px;
   width: 100%;
   font-size: 12px;
-  color: #94a3b8;
+  color: #64748b;
   line-height: 1.55;
   direction: rtl;
   text-align: right;
 }
 
 .dz-home-privacy-icon {
-  color: #818cf8;
+  color: #6366f1;
   flex-shrink: 0;
   margin-top: 1px;
 }
 
 .dz-home-privacy strong {
-  color: #c7d2fe;
+  color: #a5b4fc;
   font-weight: 700;
 }
 
 .dz-home-copy {
   font-size: 12px;
-  color: #4b5563;
+  color: #334155;
   margin: 0;
   direction: rtl;
   text-align: center;
@@ -429,13 +458,13 @@
     padding: 18px 10px 14px;
   }
   .dz-home-card-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
   }
   .dz-home-card-icon svg {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
   }
   .dz-home-nav-badge {
     display: none;
@@ -457,18 +486,18 @@
     border-radius: 16px;
   }
   .dz-home-card-icon {
-    width: 58px;
-    height: 58px;
+    width: 56px;
+    height: 56px;
   }
   .dz-home-card-icon svg {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
   .dz-home-card-label {
-    font-size: 11.5px;
+    font-size: 11px;
   }
   .dz-home-card-sub {
-    font-size: 10px;
+    font-size: 9.5px;
   }
   .dz-home-grid-wrap {
     padding: 20px 16px 16px;
@@ -482,8 +511,8 @@
   left: 20px;
   width: 44px;
   height: 44px;
-  background: rgba(10,10,15,0.9);
-  border: 1px solid rgba(200,255,0,0.3);
+  background: rgba(13,17,23,0.92);
+  border: 1px solid rgba(96,165,250,0.25);
   border-radius: 50%;
   font-size: 22px;
   cursor: pointer;
@@ -493,14 +522,14 @@
   justify-content: center;
   backdrop-filter: blur(8px);
   transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
   line-height: 1;
   padding: 0;
 }
 .dz-home-show-robot:hover {
   transform: scale(1.1);
-  border-color: rgba(200,255,0,0.6);
-  box-shadow: 0 6px 20px rgba(200,255,0,0.15);
+  border-color: rgba(96,165,250,0.5);
+  box-shadow: 0 6px 20px rgba(96,165,250,0.12);
 }
 
 /* ===== VERY SMALL SCREENS ===== */

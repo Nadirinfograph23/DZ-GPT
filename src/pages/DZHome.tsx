@@ -67,15 +67,17 @@ const SECTIONS = [
     label: 'DZ AGENT',
     sublabel: 'وكيل الذكاء الاصطناعي',
     path: '/dz-agent',
-    gradient: 'linear-gradient(135deg, #c8ff00 0%, #7aff00 100%)',
-    bgGlow: 'rgba(200,255,0,0.18)',
+    gradient: 'linear-gradient(145deg, #3b6fd4 0%, #5b4fd4 100%)',
+    bgGlow: 'rgba(91,79,212,0.12)',
     icon: (
+      // Brain / AI circuit
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="24" cy="18" r="10" stroke="currentColor" strokeWidth="2.5" />
-        <circle cx="24" cy="18" r="4" fill="currentColor" opacity="0.7" />
-        <path d="M10 38c0-7.732 6.268-14 14-14s14 6.268 14 14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-        <circle cx="36" cy="12" r="3" fill="currentColor" opacity="0.5" />
-        <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.5" />
+        <path d="M16 10c-4.418 0-8 3.582-8 8 0 2.09.8 3.99 2.1 5.42C8.8 24.87 8 26.85 8 29c0 4.97 4.03 9 9 9h14c4.97 0 9-4.03 9-9 0-2.15-.8-4.13-2.1-5.58A7.965 7.965 0 0 0 40 18c0-4.418-3.582-8-8-8-1.8 0-3.47.595-4.82 1.595A7.963 7.963 0 0 0 24 11c-.75 0-1.48.1-2.18.285A7.96 7.96 0 0 0 16 10z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <circle cx="17" cy="22" r="2" fill="rgba(255,255,255,0.85)"/>
+        <circle cx="24" cy="20" r="2" fill="rgba(255,255,255,0.85)"/>
+        <circle cx="31" cy="22" r="2" fill="rgba(255,255,255,0.85)"/>
+        <path d="M17 22v6M24 20v8M31 22v6" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M17 28h14" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -84,14 +86,13 @@ const SECTIONS = [
     label: 'DZ TOOLS',
     sublabel: 'أدوات ذكية متعددة',
     path: '/tools',
-    gradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-    bgGlow: 'rgba(245,158,11,0.18)',
+    gradient: 'linear-gradient(145deg, #c2751a 0%, #b84a1f 100%)',
+    bgGlow: 'rgba(194,117,26,0.12)',
     icon: (
+      // Wrench + sparkle
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="8" y="8" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="27" y="8" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="8" y="27" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="27" y="27" width="13" height="13" rx="3" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M32 6c-4.418 0-8 3.582-8 8 0 .88.14 1.73.4 2.52L8 33a2 2 0 0 0 0 2.83l4.24 4.24a2 2 0 0 0 2.83 0l16.48-16.48c.79.26 1.63.4 2.51.4 4.42 0 8-3.58 8-8a8 8 0 0 0-1.3-4.38l-4.72 4.72-3.54-3.54 4.72-4.72A7.966 7.966 0 0 0 32 6z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <circle cx="11.5" cy="36.5" r="2" fill="rgba(255,255,255,0.7)"/>
       </svg>
     ),
   },
@@ -100,14 +101,19 @@ const SECTIONS = [
     label: 'القرآن الكريم',
     sublabel: 'بحث وتفسير آيات',
     path: '/quran',
-    gradient: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-    bgGlow: 'rgba(6,182,212,0.18)',
+    gradient: 'linear-gradient(145deg, #0d7a5a 0%, #0a6672 100%)',
+    bgGlow: 'rgba(13,122,90,0.12)',
     icon: (
+      // Open book with crescent
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 8h24a2 2 0 0 1 2 2v28a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M17 16h14M17 22h14M17 28h9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        <path d="M10 38h28" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-        <circle cx="24" cy="6" r="2" fill="currentColor" opacity="0.6" />
+        <path d="M24 10C20 10 14 12 10 14v24c4-2 10-4 14-4s10 2 14 4V14c-4-2-10-4-14-4z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <line x1="24" y1="10" x2="24" y2="34" stroke="rgba(255,255,255,0.5)" strokeWidth="1.8" strokeLinecap="round"/>
+        <path d="M14 19c2.5-1 5.5-1.5 8-1.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.6" strokeLinecap="round"/>
+        <path d="M14 24c2.5-1 5.5-1.5 8-1.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.6" strokeLinecap="round"/>
+        <path d="M34 19c-2.5-1-5.5-1.5-8-1.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.6" strokeLinecap="round"/>
+        <path d="M34 24c-2.5-1-5.5-1.5-8-1.5" stroke="rgba(255,255,255,0.65)" strokeWidth="1.6" strokeLinecap="round"/>
+        <path d="M38 8a4 4 0 1 1-5.66 5.66A5 5 0 1 0 38 8z" fill="rgba(255,255,255,0.8)"/>
+        <circle cx="39" cy="6" r="1.2" fill="rgba(255,255,255,0.75)"/>
       </svg>
     ),
   },
@@ -116,17 +122,19 @@ const SECTIONS = [
     label: 'WEB BUILDER',
     sublabel: 'أنشئ موقعك بالـ AI',
     path: '/web-builder',
-    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)',
-    bgGlow: 'rgba(139,92,246,0.18)',
+    gradient: 'linear-gradient(145deg, #5b35b8 0%, #8b2fa8 100%)',
+    bgGlow: 'rgba(91,53,184,0.12)',
     icon: (
+      // Browser + code tags
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="10" width="36" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M6 17h36" stroke="currentColor" strokeWidth="2.2" />
-        <circle cx="12" cy="13.5" r="1.5" fill="currentColor" opacity="0.7" />
-        <circle cx="18" cy="13.5" r="1.5" fill="currentColor" opacity="0.7" />
-        <circle cx="24" cy="13.5" r="1.5" fill="currentColor" opacity="0.7" />
-        <path d="M15 27l-5 4 5 4M33 27l5 4-5 4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M27 24l-6 14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <rect x="5" y="9" width="38" height="30" rx="3.5" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2"/>
+        <path d="M5 16h38" stroke="rgba(255,255,255,0.55)" strokeWidth="1.8"/>
+        <circle cx="11" cy="12.5" r="1.8" fill="rgba(255,255,255,0.7)"/>
+        <circle cx="17" cy="12.5" r="1.8" fill="rgba(255,255,255,0.5)"/>
+        <circle cx="23" cy="12.5" r="1.8" fill="rgba(255,255,255,0.35)"/>
+        <path d="M16 27l-5 3.5 5 3.5" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M32 27l5 3.5-5 3.5" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M26 24l-4 11" stroke="rgba(255,255,255,0.6)" strokeWidth="1.8" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -135,12 +143,16 @@ const SECTIONS = [
     label: 'DZ TUBE',
     sublabel: 'تحليل فيديوهات YouTube',
     path: '/dz-tube',
-    gradient: 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)',
-    bgGlow: 'rgba(239,68,68,0.18)',
+    gradient: 'linear-gradient(145deg, #c0281c 0%, #c45318 100%)',
+    bgGlow: 'rgba(192,40,28,0.12)',
     icon: (
+      // Play circle with sparkles
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="11" width="40" height="26" rx="5" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M20 17l12 7-12 7V17z" fill="currentColor" opacity="0.8" />
+        <circle cx="24" cy="24" r="17" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2"/>
+        <path d="M20 17.5l12 6.5-12 6.5V17.5z" fill="rgba(255,255,255,0.9)"/>
+        <circle cx="38" cy="10" r="1.5" fill="rgba(255,255,255,0.6)"/>
+        <circle cx="42" cy="14" r="1" fill="rgba(255,255,255,0.4)"/>
+        <circle cx="34" cy="7" r="1" fill="rgba(255,255,255,0.4)"/>
       </svg>
     ),
   },
@@ -149,14 +161,15 @@ const SECTIONS = [
     label: 'OCR DZ',
     sublabel: 'استخراج النصوص',
     path: '/ocr-dz',
-    gradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
-    bgGlow: 'rgba(16,185,129,0.18)',
+    gradient: 'linear-gradient(145deg, #0e6f8a 0%, #0b5e70 100%)',
+    bgGlow: 'rgba(14,111,138,0.12)',
     icon: (
+      // Camera scan
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M8 16h32M8 24h32M8 32h20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
-        <circle cx="37" cy="37" r="7" fill="#0a0a0f" stroke="currentColor" strokeWidth="2" />
-        <path d="M34 37l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8 17V12a3 3 0 0 1 3-3h5M36 9h5a3 3 0 0 1 3 3v5M44 31v5a3 3 0 0 1-3 3h-5M12 39H7a3 3 0 0 1-3-3v-5" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinecap="round"/>
+        <rect x="14" y="14" width="20" height="20" rx="2.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8"/>
+        <path d="M19 24h10M19 28h6" stroke="rgba(255,255,255,0.55)" strokeWidth="1.6" strokeLinecap="round"/>
+        <path d="M19 20h4" stroke="rgba(255,255,255,0.55)" strokeWidth="1.6" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -165,17 +178,18 @@ const SECTIONS = [
     label: 'DZ EXCEL',
     sublabel: 'محرر جداول ذكي + AI',
     path: '/excel',
-    gradient: 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
-    bgGlow: 'rgba(22,163,74,0.18)',
+    gradient: 'linear-gradient(145deg, #1a7a3c 0%, #157a2e 100%)',
+    bgGlow: 'rgba(26,122,60,0.12)',
     icon: (
+      // Spreadsheet with chart bar
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="6" width="36" height="36" rx="4" stroke="currentColor" strokeWidth="2.5"/>
-        <line x1="6" y1="18" x2="42" y2="18" stroke="currentColor" strokeWidth="2"/>
-        <line x1="6" y1="30" x2="42" y2="30" stroke="currentColor" strokeWidth="2"/>
-        <line x1="18" y1="6" x2="18" y2="42" stroke="currentColor" strokeWidth="2"/>
-        <path d="M10 24l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
-        <text x="22" y="28" fontSize="9" fontWeight="bold" fill="currentColor" opacity="0.9">Σ</text>
-        <text x="32" y="28" fontSize="7" fill="currentColor" opacity="0.7">AI</text>
+        <rect x="6" y="7" width="36" height="34" rx="3.5" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2"/>
+        <path d="M6 17h36" stroke="rgba(255,255,255,0.45)" strokeWidth="1.6"/>
+        <path d="M18 7v34" stroke="rgba(255,255,255,0.35)" strokeWidth="1.4"/>
+        <rect x="11" y="28" width="5" height="7" rx="1" fill="rgba(255,255,255,0.8)"/>
+        <rect x="20" y="23" width="5" height="12" rx="1" fill="rgba(255,255,255,0.65)"/>
+        <rect x="29" y="20" width="5" height="15" rx="1" fill="rgba(255,255,255,0.5)"/>
+        <path d="M10 12h6M20 12h12" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -184,11 +198,12 @@ const SECTIONS = [
     label: 'DZ GITHUB',
     sublabel: 'بناء ونشر المستودعات',
     path: '/github-agent',
-    gradient: 'linear-gradient(135deg, #58a6ff 0%, #3fb950 100%)',
-    bgGlow: 'rgba(88,166,255,0.18)',
+    gradient: 'linear-gradient(145deg, #2d3748 0%, #1a2332 100%)',
+    bgGlow: 'rgba(45,55,72,0.2)',
     icon: (
+      // GitHub octocat
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M24 4C12.954 4 4 12.954 4 24c0 8.836 5.73 16.327 13.678 18.971.999.184 1.364-.434 1.364-.964 0-.474-.018-2.04-.026-3.712-5.56 1.208-6.733-2.35-6.733-2.35-.909-2.31-2.218-2.925-2.218-2.925-1.813-1.238.137-1.213.137-1.213 2.004.14 3.059 2.059 3.059 2.059 1.78 3.05 4.672 2.17 5.812 1.659.18-1.29.696-2.171 1.267-2.669-4.438-.504-9.1-2.219-9.1-9.876 0-2.181.779-3.965 2.058-5.363-.207-.505-.892-2.538.194-5.29 0 0 1.678-.537 5.496 2.05A19.14 19.14 0 0 1 24 13.5c1.7.008 3.412.23 5.008.674 3.814-2.587 5.49-2.05 5.49-2.05 1.088 2.752.403 4.785.197 5.29 1.28 1.398 2.056 3.182 2.056 5.363 0 7.674-4.67 9.366-9.12 9.86.717.617 1.357 1.834 1.357 3.698 0 2.67-.024 4.822-.024 5.477 0 .534.36 1.157 1.374.962C38.276 40.322 44 32.833 44 24 44 12.954 35.046 4 24 4z" fill="currentColor" opacity="0.9" />
+        <path d="M24 4C12.954 4 4 12.954 4 24c0 8.836 5.73 16.327 13.678 18.971.999.184 1.364-.434 1.364-.964 0-.474-.018-2.04-.026-3.712-5.56 1.208-6.733-2.35-6.733-2.35-.909-2.31-2.218-2.925-2.218-2.925-1.813-1.238.137-1.213.137-1.213 2.004.14 3.059 2.059 3.059 2.059 1.78 3.05 4.672 2.17 5.812 1.659.18-1.29.696-2.171 1.267-2.669-4.438-.504-9.1-2.219-9.1-9.876 0-2.181.779-3.965 2.058-5.363-.207-.505-.892-2.538.194-5.29 0 0 1.678-.537 5.496 2.05A19.14 19.14 0 0 1 24 13.5c1.7.008 3.412.23 5.008.674 3.814-2.587 5.49-2.05 5.49-2.05 1.088 2.752.403 4.785.197 5.29 1.28 1.398 2.056 3.182 2.056 5.363 0 7.674-4.67 9.366-9.12 9.86.717.617 1.357 1.834 1.357 3.698 0 2.67-.024 4.822-.024 5.477 0 .534.36 1.157 1.374.962C38.276 40.322 44 32.833 44 24 44 12.954 35.046 4 24 4z" fill="rgba(255,255,255,0.9)"/>
       </svg>
     ),
   },
@@ -197,18 +212,16 @@ const SECTIONS = [
     label: 'DZ LE3BA',
     sublabel: 'ألعاب لغوية عربية',
     path: '/le3ba',
-    gradient: 'linear-gradient(135deg, #f43f5e 0%, #a855f7 100%)',
-    bgGlow: 'rgba(244,63,94,0.18)',
+    gradient: 'linear-gradient(145deg, #9d2551 0%, #7c2091 100%)',
+    bgGlow: 'rgba(157,37,81,0.12)',
     icon: (
+      // Game controller
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="6" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="26" y="6" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="6" y="26" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <rect x="26" y="26" width="16" height="16" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <text x="9" y="20" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ك</text>
-        <text x="29" y="20" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ل</text>
-        <text x="9" y="40" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">م</text>
-        <text x="29" y="40" fontSize="12" fontWeight="bold" fill="currentColor" opacity="0.9">ة</text>
+        <path d="M6 24c0-6.627 5.373-12 12-12h12c6.627 0 12 5.373 12 12 0 5.523-3.75 9.643-7.95 10.882-1.63.48-3.46-.04-4.76-1.09L28 33H20l-1.29 1.292c-1.3 1.05-3.13 1.57-4.76 1.09C9.75 33.642 6 29.522 6 24z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <path d="M18 22v4M16 24h4" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="30" cy="22" r="1.8" fill="rgba(255,255,255,0.85)"/>
+        <circle cx="34" cy="26" r="1.8" fill="rgba(255,255,255,0.6)"/>
+        <circle cx="26" cy="26" r="1.8" fill="rgba(255,255,255,0.6)"/>
       </svg>
     ),
   },
@@ -217,19 +230,17 @@ const SECTIONS = [
     label: 'DZ RADIO',
     sublabel: 'إذاعات جزائرية مباشرة',
     path: '/radio',
-    gradient: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)',
-    bgGlow: 'rgba(14,165,233,0.18)',
+    gradient: 'linear-gradient(145deg, #1453a0 0%, #3a3e9c 100%)',
+    bgGlow: 'rgba(20,83,160,0.12)',
     icon: (
+      // Radio waves + music note
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="20" width="36" height="22" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <circle cx="17" cy="31" r="5" stroke="currentColor" strokeWidth="2.2" />
-        <circle cx="17" cy="31" r="2" fill="currentColor" opacity="0.7" />
-        <line x1="27" y1="26" x2="36" y2="26" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <line x1="27" y1="31" x2="36" y2="31" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <line x1="27" y1="36" x2="33" y2="36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <path d="M15 14l-5-6M33 14l5-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.5" />
-        <path d="M20 12l-2-7M28 12l2-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
-        <path d="M24 10V20" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        <path d="M10 28c0-7.732 6.268-14 14-14s14 6.268 14 14" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round"/>
+        <path d="M16 28c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="24" cy="28" r="3.5" fill="rgba(255,255,255,0.9)"/>
+        <rect x="10" y="32" width="28" height="10" rx="3" stroke="rgba(255,255,255,0.75)" strokeWidth="1.8"/>
+        <circle cx="17" cy="37" r="2" stroke="rgba(255,255,255,0.65)" strokeWidth="1.5"/>
+        <path d="M25 36h8M25 39h5" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -238,13 +249,19 @@ const SECTIONS = [
     label: 'DZ MEDIA',
     sublabel: 'نص/صورة → صورة/فيديو',
     path: '/media',
-    gradient: 'linear-gradient(135deg, #e879f9 0%, #a855f7 50%, #6366f1 100%)',
-    bgGlow: 'rgba(232,121,249,0.18)',
+    gradient: 'linear-gradient(145deg, #7b2d8b 0%, #4a2a9a 100%)',
+    bgGlow: 'rgba(123,45,139,0.12)',
     icon: (
+      // Magic wand + stars
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="10" width="40" height="28" rx="4" stroke="currentColor" strokeWidth="2.5" />
-        <circle cx="16" cy="24" r="5" stroke="currentColor" strokeWidth="2" opacity="0.7" />
-        <path d="M29 18l10 6-10 6V18z" fill="currentColor" opacity="0.75" />
+        <path d="M10 38L28 20" stroke="rgba(255,255,255,0.9)" strokeWidth="2.5" strokeLinecap="round"/>
+        <path d="M28 20l2-8 2 4 4 2-8 2z" fill="rgba(255,255,255,0.85)" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinejoin="round"/>
+        <circle cx="38" cy="14" r="1.5" fill="rgba(255,255,255,0.7)"/>
+        <circle cx="34" cy="8"  r="1.2" fill="rgba(255,255,255,0.55)"/>
+        <circle cx="42" cy="20" r="1.2" fill="rgba(255,255,255,0.55)"/>
+        <path d="M14 26l1.5-3 1.5 3-3 0zM20 32l1-2 1 2-2 0z" fill="rgba(255,255,255,0.45)"/>
+        <rect x="5" y="36" width="10" height="6" rx="1.5" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5"/>
+        <path d="M8 39l3 1.5-3 1.5V39z" fill="rgba(255,255,255,0.55)"/>
       </svg>
     ),
   },
@@ -253,17 +270,13 @@ const SECTIONS = [
     label: 'مشاريعي',
     sublabel: 'مشاريع Web Builder المحفوظة',
     path: '/my-projects',
-    gradient: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-    bgGlow: 'rgba(139,92,246,0.18)',
+    gradient: 'linear-gradient(145deg, #2563a8 0%, #1e4a8a 100%)',
+    bgGlow: 'rgba(37,99,168,0.12)',
     icon: (
+      // Folder with star
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="10" width="36" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M6 17h36" stroke="currentColor" strokeWidth="2.2" />
-        <rect x="12" y="22" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="2" opacity="0.7"/>
-        <rect x="26" y="22" width="10" height="4" rx="1.5" fill="currentColor" opacity="0.5"/>
-        <rect x="26" y="29" width="7" height="3" rx="1.5" fill="currentColor" opacity="0.35"/>
-        <circle cx="38" cy="38" r="8" fill="#0a0a0f" stroke="currentColor" strokeWidth="2"/>
-        <path d="M35 38h6M38 35v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <path d="M6 14a3 3 0 0 1 3-3h10l4 4h16a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V14z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <path d="M24 22l1.5 3 3.5.5-2.5 2.5.6 3.5L24 30l-2.6 1.5.6-3.5L19.5 25.5l3.5-.5L24 22z" fill="rgba(255,255,255,0.85)"/>
       </svg>
     ),
   },
@@ -272,17 +285,14 @@ const SECTIONS = [
     label: 'عن DZ Agent',
     sublabel: 'لوحة القدرات والوكلاء',
     path: '/about',
-    gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
-    bgGlow: 'rgba(99,102,241,0.22)',
+    gradient: 'linear-gradient(145deg, #374151 0%, #1f2937 100%)',
+    bgGlow: 'rgba(55,65,81,0.18)',
     icon: (
+      // Info shield
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="24" cy="24" r="18" stroke="currentColor" strokeWidth="2.5" />
-        <circle cx="24" cy="18" r="5" fill="currentColor" opacity="0.8" />
-        <path d="M15 36c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-        <circle cx="36" cy="12" r="4" fill="currentColor" opacity="0.5" />
-        <path d="M34 12h4M36 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="12" cy="12" r="4" fill="currentColor" opacity="0.35" />
-        <path d="M10 12h4M12 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.6" />
+        <path d="M24 6l16 6v10c0 9-7 16.8-16 19C15 38.8 8 31 8 22V12l16-6z" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2" strokeLinejoin="round"/>
+        <circle cx="24" cy="20" r="2" fill="rgba(255,255,255,0.85)"/>
+        <path d="M24 24v8" stroke="rgba(255,255,255,0.85)" strokeWidth="2.5" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -292,16 +302,14 @@ const SECTIONS = [
     sublabel: 'شهادة DZ Agent',
     path: 'https://dz-gpt.vercel.app/dz-agent-certificate.html',
     external: true,
-    gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%)',
-    bgGlow: 'rgba(245,158,11,0.25)',
+    gradient: 'linear-gradient(145deg, #a06420 0%, #8c4e12 100%)',
+    bgGlow: 'rgba(160,100,32,0.12)',
     icon: (
+      // Ribbon medal
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="5" y="8" width="38" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
-        <path d="M13 18h22M13 24h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        <circle cx="34" cy="34" r="8" fill="#0a0a0f" stroke="currentColor" strokeWidth="2.2" />
-        <path d="M30.5 34l2.5 2.5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M28 42l6-3 6 3v-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
-        <circle cx="13" cy="13" r="2" fill="currentColor" opacity="0.5" />
+        <circle cx="24" cy="20" r="12" stroke="rgba(255,255,255,0.9)" strokeWidth="2.2"/>
+        <path d="M24 14l1.8 3.6 4 .6-2.9 2.8.68 3.98L24 23l-3.58 1.98.68-3.98-2.9-2.8 4-.6L24 14z" fill="rgba(255,255,255,0.85)"/>
+        <path d="M18 30l-4 12 10-5 10 5-4-12" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -323,8 +331,8 @@ export default function DZHome() {
                 <circle cx="16" cy="16" r="3" fill="url(#lg1)" />
                 <defs>
                   <linearGradient id="lg1" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#c8ff00" />
-                    <stop offset="1" stopColor="#00d4aa" />
+                    <stop stopColor="#60a5fa" />
+                    <stop offset="1" stopColor="#a78bfa" />
                   </linearGradient>
                 </defs>
               </svg>

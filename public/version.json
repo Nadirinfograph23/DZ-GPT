@@ -1,8 +1,8 @@
 {
-  "commit": "60a4a75f48824e55123b8be8641fef0a57c1636a",
-  "commitShort": "60a4a75f",
+  "commit": "bf36f80f54997e04f7c558e8fd7fcc60beef97be",
+  "commitShort": "bf36f80f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "security: move DZ Chat admin credentials to server-side secrets",
-  "deployedAt": "2026-07-31T05:14:59.501039Z",
+  "message": "fix: استبدال نموذج بمساعد في شعار DZ Agent الترحيبي",
+  "deployedAt": "2026-07-31T11:42:01.477507Z",
   "deployedBy": "scripts/deploy.py"
 }

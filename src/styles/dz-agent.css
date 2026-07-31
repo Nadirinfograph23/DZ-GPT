@@ -14562,3 +14562,325 @@
 .dza-layout[data-theme="sky"] .dz-social-dl-plat { color: #38bdf8 !important; }
 .dza-layout[data-theme="sky"] .dz-social-dl-fmt--active { background: rgba(56,189,248,0.15) !important; border-color: rgba(56,189,248,0.4) !important; color: #38bdf8 !important; }
 .dza-layout[data-theme="sky"] .dz-social-dl-start { background: linear-gradient(135deg,#38bdf8,#0ea5e9) !important; box-shadow: 0 2px 8px rgba(14,165,233,0.35) !important; }
+
+/* ══════════════════════════════════════════════════════════════════
+   DZ AGENT — CARBON SLATE THEME v1.0
+   خلفية كاربون داكنة · لوحة ألوان متناسقة · بسيط وعصري
+   ── يُطبَّق عبر !important ليتجاوز أي override سابق ──
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. متغيرات النظام ──────────────────────────────────────────── */
+.dza-layout {
+  --cs-bg:              #141414;
+  --cs-sidebar:         #101010;
+  --cs-surface:         #1c1c1c;
+  --cs-surface-raised:  #222222;
+  --cs-surface-deep:    #181818;
+  --cs-border-soft:     rgba(255,255,255,0.07);
+  --cs-border:          rgba(255,255,255,0.11);
+  --cs-border-hover:    rgba(255,255,255,0.18);
+  --cs-text:            #e3e3e3;
+  --cs-text-muted:      #888888;
+  --cs-text-dim:        #505050;
+  --cs-accent:          #10a37f;
+  --cs-accent-soft:     rgba(16,163,127,0.08);
+  --cs-accent-border:   rgba(16,163,127,0.22);
+  --cs-accent-glow:     rgba(16,163,127,0.12);
+  --cs-card-bg:         #191919;
+  --cs-shadow:          0 2px 16px rgba(0,0,0,0.4);
+}
+
+/* ── 2. الهيكل الرئيسي ──────────────────────────────────────────── */
+.dza-layout {
+  background: var(--cs-bg) !important;
+  color: var(--cs-text) !important;
+}
+
+.dza-sidebar {
+  background: var(--cs-sidebar) !important;
+  border-right-color: var(--cs-border-soft) !important;
+}
+
+.dza-sidebar-header,
+.dza-sidebar-footer {
+  border-color: var(--cs-border-soft) !important;
+}
+
+/* ── 3. الشعار والنص ────────────────────────────────────────────── */
+.dza-sidebar-logo-icon,
+.dz-agent-logo-icon,
+.dz-welcome-icon {
+  background: rgba(16,163,127,0.07) !important;
+  border-color: rgba(16,163,127,0.18) !important;
+  color: var(--cs-accent) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+}
+
+.dza-sidebar-logo-name,
+.dz-agent-name,
+.dz-welcome-title {
+  background: linear-gradient(135deg, #e8e8e8 0%, #a0a0a0 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.dza-sidebar-logo-sub,
+.dz-agent-tagline,
+.dz-welcome-sub {
+  color: var(--cs-text-dim) !important;
+}
+
+.dza-sidebar-spark,
+.dz-agent-logo-spark {
+  color: var(--cs-accent) !important;
+  opacity: 0.7 !important;
+}
+
+/* ── 4. الهيدر ──────────────────────────────────────────────────── */
+.dz-agent-header {
+  background: rgba(16,16,16,0.97) !important;
+  border-bottom-color: var(--cs-border-soft) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+.dz-agent-badge,
+.dz-agent-repo-pill {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-border) !important;
+  color: var(--cs-text-muted) !important;
+}
+
+.dz-agent-repo-dot { color: var(--cs-accent) !important; }
+
+/* ── 5. أزرار الهيدر ────────────────────────────────────────────── */
+.dz-home-btn,
+.dz-refresh-chat-btn {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-border-soft) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dz-home-btn:hover,
+.dz-refresh-chat-btn:hover {
+  background: var(--cs-surface-raised) !important;
+  border-color: var(--cs-accent-border) !important;
+  color: var(--cs-accent) !important;
+}
+
+/* ── 6. زر المحادثة الجديدة ─────────────────────────────────────── */
+.dza-new-chat-btn {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-border) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dza-new-chat-btn:hover {
+  background: var(--cs-surface-raised) !important;
+  border-color: var(--cs-accent-border) !important;
+  color: var(--cs-accent) !important;
+}
+
+/* ── 7. أزرار اللغة ──────────────────────────────────────────────── */
+.dza-lang-btn {
+  color: var(--cs-text-dim) !important;
+}
+.dza-lang-btn:hover {
+  background: var(--cs-surface-raised) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dza-lang-btn--active {
+  background: var(--cs-accent-soft) !important;
+  border-color: var(--cs-accent-border) !important;
+  color: var(--cs-accent) !important;
+}
+
+/* ── 8. قائمة المحادثات ──────────────────────────────────────────── */
+.dza-chat-list-empty { color: var(--cs-text-dim) !important; }
+
+.dza-chat-item:hover {
+  background: var(--cs-surface) !important;
+}
+.dza-chat-item--active {
+  background: var(--cs-surface-raised) !important;
+  border-color: var(--cs-border) !important;
+}
+.dza-chat-item--active .dza-chat-item-icon { color: var(--cs-accent) !important; }
+.dza-chat-item--active .dza-chat-item-title { color: var(--cs-text) !important; }
+.dza-chat-item-icon { color: var(--cs-text-dim) !important; }
+.dza-chat-item-title { color: var(--cs-text-muted) !important; }
+
+/* ── 9. أزرار القائمة الجانبية ──────────────────────────────────── */
+.dza-menu-btn { color: var(--cs-text-dim) !important; }
+.dza-menu-btn:hover {
+  background: var(--cs-surface) !important;
+  color: var(--cs-accent) !important;
+}
+.dza-sidebar-close { color: var(--cs-text-dim) !important; }
+.dza-sidebar-close:hover {
+  background: var(--cs-surface) !important;
+  color: var(--cs-text-muted) !important;
+}
+
+/* ── 10. منطقة الترحيب ───────────────────────────────────────────── */
+.dz-welcome-icon { animation-duration: 4s !important; }
+
+/* ── 11. كروت الاقتراحات السريعة ────────────────────────────────── */
+.dz-suggestion-btn {
+  background: var(--cs-surface-deep) !important;
+  border-color: var(--cs-border-soft) !important;
+  color: var(--cs-text-muted) !important;
+  box-shadow: none !important;
+}
+.dz-suggestion-btn:hover {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-accent-border) !important;
+  color: var(--cs-text) !important;
+  box-shadow: 0 0 12px var(--cs-accent-glow) !important;
+}
+
+/* ── 12. كروت الخدمات (dz-scard) ────────────────────────────────── */
+.dz-scard {
+  background: var(--cs-card-bg) !important;
+  border-color: var(--cs-border-soft) !important;
+  --card-color:  #10a37f !important;
+  --card-border: rgba(16,163,127,0.18) !important;
+  --card-glow:   rgba(16,163,127,0.06) !important;
+  box-shadow: none !important;
+}
+.dz-scard:hover {
+  border-color: var(--cs-border-hover) !important;
+  box-shadow: 0 0 20px rgba(0,0,0,0.35) !important;
+  transform: translateY(-2px) !important;
+}
+.dz-scard-category {
+  color: var(--cs-text) !important;
+  font-weight: 600 !important;
+}
+
+/* أيقونة الكارت — حاوية موحّدة مطفأة الألوان */
+.dz-scard-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  background: var(--cs-surface-raised) !important;
+  border-radius: 8px !important;
+  font-size: 16px !important;
+  filter: saturate(0.55) brightness(0.9) !important;
+  flex-shrink: 0 !important;
+}
+
+.dz-scard-chip {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-border-soft) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dz-scard-chip:hover {
+  background: var(--cs-surface-raised) !important;
+  border-color: var(--cs-border) !important;
+  color: var(--cs-text) !important;
+}
+.dz-scard-chip-arrow { color: var(--cs-text-dim) !important; opacity: 1 !important; }
+.dz-scard-chip:hover .dz-scard-chip-arrow { color: var(--cs-accent) !important; }
+
+/* ── 13. منطقة الإدخال ───────────────────────────────────────────── */
+.dz-input-container {
+  background: var(--cs-surface-deep) !important;
+  border-color: var(--cs-border) !important;
+  box-shadow: none !important;
+}
+.dz-input-container:focus-within {
+  border-color: rgba(16,163,127,0.35) !important;
+  box-shadow: 0 0 0 3px rgba(16,163,127,0.06), 0 4px 20px rgba(0,0,0,0.25) !important;
+}
+.dz-chat-input { color: var(--cs-text) !important; }
+.dz-chat-input::placeholder { color: var(--cs-text-dim) !important; }
+
+/* زر الإرسال */
+.dz-send-btn {
+  background: var(--cs-accent) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 12px rgba(16,163,127,0.25) !important;
+}
+.dz-send-btn:hover {
+  opacity: 0.9 !important;
+  box-shadow: 0 4px 18px rgba(16,163,127,0.35) !important;
+}
+.dz-send-btn:disabled {
+  background: var(--cs-surface-raised) !important;
+  color: var(--cs-text-dim) !important;
+  box-shadow: none !important;
+}
+
+/* زر الإيقاف */
+.dz-stop-btn {
+  background: var(--cs-surface) !important;
+  border-color: var(--cs-border) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dz-stop-btn:hover {
+  background: var(--cs-surface-raised) !important;
+  color: var(--cs-text) !important;
+}
+
+/* ── 14. التذييل والإخلاء ────────────────────────────────────────── */
+.dz-disclaimer,
+.dza-chat-list-empty {
+  color: var(--cs-text-dim) !important;
+}
+
+/* ── 15. الشاشات الجانبية (overlay) ──────────────────────────────── */
+.dza-layout .dz-panel-overlay,
+.dza-layout .dza-overlay {
+  background: rgba(0,0,0,0.7) !important;
+}
+
+/* ── 16. تبويبات التنقل ───────────────────────────────────────────── */
+.dz-tnav-bar {
+  background: var(--cs-surface-deep) !important;
+  border-color: var(--cs-border-soft) !important;
+}
+.dz-tnav {
+  color: var(--cs-text-dim) !important;
+  background: transparent !important;
+}
+.dz-tnav:hover {
+  background: var(--cs-surface) !important;
+  color: var(--cs-text-muted) !important;
+}
+.dz-tnav--active,
+.dz-tnav:not(:disabled):active {
+  background: var(--cs-accent-soft) !important;
+  color: var(--cs-accent) !important;
+  border-color: var(--cs-accent-border) !important;
+}
+
+/* ── 17. شريط الأدوات ────────────────────────────────────────────── */
+.dzt-toolbar {
+  background: var(--cs-surface-deep) !important;
+  border-color: var(--cs-border-soft) !important;
+}
+
+/* ── 18. الـ Scrollbar ──────────────────────────────────────────── */
+.dza-layout ::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1) !important;
+  border-radius: 4px !important;
+}
+.dza-layout ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.18) !important;
+}
+
+/* ── 19. مودال الإعدادات والبطاقات المنبثقة ──────────────────────── */
+.dza-layout [class*="modal"],
+.dza-layout [class*="panel"],
+.dza-layout [class*="popup"] {
+  background: var(--cs-surface-deep) !important;
+  border-color: var(--cs-border) !important;
+}
+
+/* ── 20. Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dza-layout {
+    --cs-bg: #121212 !important;
+  }
+}

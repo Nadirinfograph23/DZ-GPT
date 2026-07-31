@@ -60,6 +60,16 @@ export default function VisitorAnalyticsCard({ initialPeriod = 'today' }: { init
 
   useEffect(() => { fetchData(period) }, [period, fetchData])
 
+  // Heartbeat — يُعلم الخادم بأن هذه الجلسة لا تزال نشطة (كل 45 ثانية)
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      fetch('/api/analytics/heartbeat', { method: 'POST' }).catch(() => {})
+    }
+    sendHeartbeat() // فوري عند الفتح
+    const id = setInterval(sendHeartbeat, 45_000)
+    return () => clearInterval(id)
+  }, [])
+
   const maxWilaya = data?.wilayas?.[0]?.count || 1
   const maxCountry = data?.countries?.[0]?.count || 1
 

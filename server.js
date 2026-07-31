@@ -500,6 +500,24 @@ const _visitorsStore = { visits: /** @type {Array} */ ([]), knownSessions: new S
 const _VA_MAX_VISITS = 10000
 const _VA_MAX_SESSIONS = 5000
 
+// ─── Active-now tracker (heartbeat map) ──────────────────────────────────────
+// Maps sessionHash → lastSeenTs. Entries older than 3 min are considered gone.
+const _activeNow = new Map()
+const _ACTIVE_NOW_TTL = 3 * 60_000 // 3 minutes
+
+function _activeNowCount() {
+  const cutoff = Date.now() - _ACTIVE_NOW_TTL
+  let n = 0
+  for (const [, ts] of _activeNow) if (ts >= cutoff) n++
+  return n
+}
+
+// Purge stale entries every 2 minutes to keep memory tidy
+setInterval(() => {
+  const cutoff = Date.now() - _ACTIVE_NOW_TTL
+  for (const [k, ts] of _activeNow) if (ts < cutoff) _activeNow.delete(k)
+}, 2 * 60_000)
+
 // Simple deterministic hash (no crypto import needed)
 function _vaHash(str) {
   let h = 5381
@@ -650,6 +668,8 @@ app.use((req, res, next) => {
       _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
     }
     _visitorsStore._dirty = true
+    // Register as active-now on page load too
+    _activeNow.set(sessionHash, Date.now())
   } catch {}
   next()
 })
@@ -683,7 +703,7 @@ function _vaComputeStats(period) {
   const uniqueHashes    = new Set(filtered.map(v => v.session_hash))
   const prevUniqueCount = new Set(prevSlice.map(v => v.session_hash)).size
   const newVisitors     = filtered.filter(v => v.is_new).length
-  const activeVisitors  = _visitorsStore.visits.filter(v => v.ts >= now - 5 * 60_000).length
+  const activeVisitors  = _activeNowCount()
 
   // Wilayas
   const wilayaMap = {}
@@ -26516,10 +26536,28 @@ app.post('/api/analytics/track-visit', (req, res) => {
       _visitorsStore.visits = _visitorsStore.visits.slice(-(_VA_MAX_VISITS - 1000))
     }
     _visitorsStore._dirty = true
+    // Also mark as active-now
+    _activeNow.set(sessionHash, Date.now())
     console.log(`[VA] visit tracked — country=${country} wilaya=${wilaya||'—'} new=${isNew} session=${sessionHash}`)
     res.json({ ok: true, isNew })
   } catch (e) {
     console.warn('[VA] track-visit error:', e.message)
+    res.json({ ok: false })
+  }
+})
+
+// ─── Heartbeat — يُستدعى من الواجهة كل 45 ثانية للإبقاء على الجلسة "نشطة الآن"
+app.post('/api/analytics/heartbeat', (req, res) => {
+  try {
+    const rawIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
+      || req.headers['x-real-ip']
+      || req.socket?.remoteAddress
+      || 'anon'
+    const ua = (req.headers['user-agent'] || '').slice(0, 200)
+    const sessionHash = _vaHash(rawIp + ua)
+    _activeNow.set(sessionHash, Date.now())
+    res.json({ ok: true, activeNow: _activeNowCount() })
+  } catch {
     res.json({ ok: false })
   }
 })

@@ -1,8 +1,8 @@
 {
-  "commit": "bbd0b0bc26c442ed362287c2e63e764056c73949",
-  "commitShort": "bbd0b0bc",
+  "commit": "010d51aa095e3cdd6386d496b6a7b1ad32ce576e",
+  "commitShort": "010d51aa",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat(guards): ردود ثابتة لفلسطين/إسرائيل/الدين تتخطى LLM — عاصمة فلسطين القدس، إسرائيل ليست دولة، حماية الإسلام",
-  "deployedAt": "2026-07-31T01:32:11.165225Z",
+  "message": "security: تشفير كلمة سر المشرف بـ HMAC-SHA256 + إضافة كلمة تمويه في DZ Chat",
+  "deployedAt": "2026-07-31T03:44:08.060947Z",
   "deployedBy": "scripts/deploy.py"
 }

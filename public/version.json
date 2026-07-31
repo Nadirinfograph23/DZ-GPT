@@ -1,8 +1,8 @@
 {
-  "commit": "289c8a603a1b3212a360273b65e363de8a494b8a",
-  "commitShort": "289c8a60",
+  "commit": "5bad1d0b86c9bc23ecf2d25db0fc8e8110c9dea0",
+  "commitShort": "5bad1d0b",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: حفظ بيانات الزوار بشكل دائم عبر GitHub API — لا يُعاد الاحتساب من صفر بعد كل deployment",
-  "deployedAt": "2026-07-31T15:50:09.715092Z",
+  "message": "feat: شرح تفصيلي لأدوات DZ Agent مع زر التوجيه المباشر لكل خدمة",
+  "deployedAt": "2026-07-31T16:53:26.333475Z",
   "deployedBy": "scripts/deploy.py"
 }

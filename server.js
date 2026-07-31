@@ -1064,8 +1064,27 @@ function isAlgeriaInsult(msg) {
 function isGodOrRabInsult(msg) {
   if (typeof msg !== 'string') return false
   const t = msg.toLowerCase()
+  // ملاحظة: "لله" ≠ "الله" — حرف الألف يختلف، لذا نُدرج الصيغتين
+  // "لله" = لام الجر + الله (مثال: تبا لله)
   const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|نعل|تف على|بصق|قل.*تبا|قل.*يلعن|خزيه|اخزي/i
-  return sabPatterns.test(t) && /\bالله\b|\bالرب\b|\bرب العالمين\b|\bالخالق\b|\bالإله\b/i.test(t)
+  return sabPatterns.test(t) && /الله|لله|الرب|للرب|رب العالمين|الخالق|الإله/i.test(t)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 🛡️ applyStaticGuards — حارس موحّد يُطبَّق على كل نقاط الدخول قبل LLM
+// يعيد { content } عند التطابق، أو null إذا لم يُطابق شيئاً.
+// الترتيب صارم: الله → الجزائر → فلسطين/الإسلام → سب إسرائيل → عاصمة إسرائيل → عاصمة فلسطين → الدين
+// ══════════════════════════════════════════════════════════════════════════════
+function applyStaticGuards(msg) {
+  if (typeof msg !== 'string' || !msg.trim()) return null
+  if (isGodOrRabInsult(msg))            return GOD_INSULT_RESPONSE
+  if (isAlgeriaInsult(msg))             return ALGERIA_DEFENSE_RESPONSE
+  if (isPalestineOrIslamInsult(msg))    return PALESTINE_DEFENSE_RESPONSE
+  if (isIsraelCurseRequest(msg))        return ISRAEL_CURSE_RESPONSE
+  if (isIsraelCapitalQuestion(msg))     return ISRAEL_NOT_STATE_RESPONSE
+  if (isPalestineCapitalQuestion(msg))  return PALESTINE_CAPITAL_RESPONSE
+  if (isReligionQuestion(msg))          return RELIGION_RESPONSE
+  return null
 }
 
 // أنماط مُقيَّدة تتحدث صراحةً عن هوية DZ Agent الدينية — لا تُطابق سياقات فلسفية عامة
@@ -4986,6 +5005,20 @@ app.post('/api/chat/stream', aiLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Invalid messages payload.' })
   }
 
+  // 🛡️ Static guards — تتخطى LLM على نقطة الـ streaming أيضاً
+  const _streamGuardMsg = [...messages].reverse().find(m => m?.role === 'user')?.content?.trim() || ''
+  const _streamGuard = applyStaticGuards(_streamGuardMsg)
+  if (_streamGuard) {
+    console.log(`[Chat/Stream] 🛡️ static guard matched — bypassing LLM`)
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+    res.write(`data: ${JSON.stringify({ token: _streamGuard.content })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
+
   const keys = getGroqKeys()
   if (!keys.length) return res.status(500).json({ error: 'API key not configured.' })
 
@@ -5071,6 +5104,13 @@ app.post('/api/chat', async (req, res) => {
   }
   if (isCapabilitiesQuestion(lastUserMsg)) {
     return res.status(200).json(CAPABILITIES_RESPONSE)
+  }
+
+  // 🛡️ Static guards — تتخطى LLM على /api/chat أيضاً
+  const _chatGuard = applyStaticGuards(lastUserMsg)
+  if (_chatGuard) {
+    console.log(`[Chat] 🛡️ static guard matched — bypassing LLM`)
+    return res.status(200).json(_chatGuard)
   }
 
   if (getGroqKeys().length === 0) {
@@ -16422,34 +16462,11 @@ app.post('/api/dz-agent-chat', async (req, res) => {
       console.log(`[DZAgentChat] 🎯 Capabilities question detected — returning CAPABILITIES_RESPONSE`)
       return res.status(200).json(CAPABILITIES_RESPONSE)
     }
-    if (isReligionQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🌙 Religion question detected — returning RELIGION_RESPONSE`)
-      return res.status(200).json(RELIGION_RESPONSE)
-    }
-    // 🇵🇸 Palestine / Israel hardcoded guards — تتخطى LLM بالكامل
-    if (isPalestineCapitalQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🇵🇸 Palestine capital question — static response`)
-      return res.status(200).json(PALESTINE_CAPITAL_RESPONSE)
-    }
-    if (isIsraelCapitalQuestion(_devRaw)) {
-      console.log(`[DZAgentChat] 🚫 Israel capital question — static response`)
-      return res.status(200).json(ISRAEL_NOT_STATE_RESPONSE)
-    }
-    if (isGodOrRabInsult(_devRaw)) {
-      console.log(`[DZAgentChat] 🤲 God/Rab insult attempt — اتق الله`)
-      return res.status(200).json(GOD_INSULT_RESPONSE)
-    }
-    if (isAlgeriaInsult(_devRaw)) {
-      console.log(`[DZAgentChat] 🇩🇿 Algeria insult attempt — redirected`)
-      return res.status(200).json(ALGERIA_DEFENSE_RESPONSE)
-    }
-    if (isPalestineOrIslamInsult(_devRaw)) {
-      console.log(`[DZAgentChat] 🛡️ Palestine/Islam insult attempt — redirected`)
-      return res.status(200).json(PALESTINE_DEFENSE_RESPONSE)
-    }
-    if (isIsraelCurseRequest(_devRaw)) {
-      console.log(`[DZAgentChat] ✊ Israel curse request — static response`)
-      return res.status(200).json(ISRAEL_CURSE_RESPONSE)
+    // 🛡️ Static guards — تتخطى LLM بالكامل على كل النقاط
+    const _staticGuard = applyStaticGuards(_devRaw)
+    if (_staticGuard) {
+      console.log(`[DZAgentChat] 🛡️ static guard matched — bypassing LLM`)
+      return res.status(200).json(_staticGuard)
     }
   }
 
@@ -26200,6 +26217,16 @@ app.post('/api/dz-agent-stream', async (req, res) => {
   if (!messages?.length) return res.status(400).json({ error: 'messages required' })
 
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content?.trim() || ''
+
+  // 🛡️ Static guards — أول فحص قبل أي شيء، تتخطى LLM بالكامل
+  const _dzStreamGuard = applyStaticGuards(lastUserMessage)
+  if (_dzStreamGuard) {
+    console.log(`[DZ-Stream] 🛡️ static guard matched — bypassing LLM`)
+    _streamSSEHeaders(res)
+    res.write(`data: ${JSON.stringify({ token: _dzStreamGuard.content })}\n\n`)
+    res.write('data: [DONE]\n\n')
+    return res.end()
+  }
 
   // ── Step 1: Moderation ───────────────────────────────────────────────────
   const mod = moderateMessage(lastUserMessage)

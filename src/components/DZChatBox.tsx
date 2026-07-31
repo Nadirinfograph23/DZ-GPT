@@ -8508,7 +8508,7 @@ ${rows}
           <DZAnimatedLogo />
           <h2 className="dz-welcome-title">DZ Agent</h2>
           <p className="dz-welcome-sub">
-            أول نموذج ذكاء اصطناعي و وكيل جزائري
+            أول مساعد ذكاء اصطناعي و وكيل جزائري
           </p>
 
           {/* Live Dashboard Cards — top position, under logo */}

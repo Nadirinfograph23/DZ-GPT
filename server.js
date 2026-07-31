@@ -3578,6 +3578,57 @@ function detectToolRedirect(msg) {
   return null
 }
 
+// ── All Tools List — قائمة الأدوات الرئيسية مع روابطها ─────────────────────
+const ALL_TOOLS_LIST = [
+  { id: 'cv',           icon: '📄', name: 'مولّد السيرة الذاتية',     desc: 'CV احترافي بالعربية أو الفرنسية + PDF',         url: '/tools?tool=cv' },
+  { id: 'bizplan',      icon: '📊', name: 'Business Plan',             desc: 'خطة عمل كاملة للسوق الجزائري',                url: '/tools?tool=bizplan' },
+  { id: 'invoice',      icon: '🧾', name: 'مولّد الفواتير',            desc: 'فواتير جزائرية: TVA · HT · TTC · PDF',         url: '/tools?tool=invoice' },
+  { id: 'tax',          icon: '🧮', name: 'حاسبة الضرائب',             desc: 'IRG · IBS بالشرائح الجزائرية المحدَّثة',       url: '/tools?tool=tax' },
+  { id: 'pension',      icon: '🏦', name: 'حاسبة التقاعد CNAS',        desc: 'اشتراكاتك ومعاشك المتوقع عند التقاعد',        url: '/tools?tool=pension' },
+  { id: 'zakat',        icon: '☪️',  name: 'حاسبة الزكاة',             desc: 'زكاة المال · الذهب · التجارة بالدينار',        url: '/tools?tool=zakat' },
+  { id: 'bizcard',      icon: '🪪',  name: 'بطاقة العمل',              desc: 'بطاقة عمل احترافية قابلة للتخصيص',            url: '/tools?tool=bizcard' },
+  { id: 'qrcode',       icon: '🔲', name: 'QR Code',                   desc: 'توليد QR Code لأي رابط أو نص',                url: '/tools?tool=qrcode' },
+  { id: 'planner',      icon: '🗂️', name: 'مخطط المشاريع',            desc: 'جدول زمني وتنظيم مهام المشروع',               url: '/tools?tool=planner' },
+  { id: 'docs',         icon: '📋', name: 'وثائق الأعمال',             desc: 'عقود · مراسلات · وثائق رسمية',                url: '/tools?tool=docs' },
+  { id: 'darija',       icon: '🗣️', name: 'مترجم الدارجة',            desc: 'ترجمة بين الدارجة الجزائرية والعربية الفصحى',  url: '/tools?tool=darija' },
+  { id: 'hashtag',      icon: '#️⃣', name: 'مولّد الهاشتاغ',           desc: 'هاشتاغات مُحسَّنة لسوشيال ميديا',            url: '/tools?tool=hashtag' },
+  { id: 'tts',          icon: '🔊', name: 'نص إلى صوت TTS',            desc: 'تحويل أي نص لصوت بعدة لهجات',                url: '/tools?tool=tts' },
+  { id: 'imgproc',      icon: '🎨', name: 'استوديو الصور',             desc: 'تحرير الصور وإزالة الخلفية بالذكاء الاصطناعي', url: '/tools?tool=imgproc' },
+  { id: 'dataanalysis', icon: '📈', name: 'محلّل البيانات',            desc: 'رفع ملفات Excel/CSV وتحليلها ببيانات تفاعلية', url: '/tools?tool=dataanalysis' },
+  { id: 'ocr',          icon: '📷', name: 'OCR — قارئ الوثائق',        desc: 'استخراج نص من صور وملفات PDF',                 url: '/ocr-dz' },
+  { id: 'excel',        icon: '📊', name: 'محرِّر Excel',              desc: 'إنشاء وتعديل جداول Excel بالذكاء الاصطناعي',  url: '/excel' },
+  { id: 'webbuilder',   icon: '🌐', name: 'Web Builder',               desc: 'بناء مواقع HTML/CSS/JS كاملة ونشرها مجاناً',   url: '/web-builder' },
+  { id: 'github',       icon: '⚡', name: 'GitHub Agent',              desc: 'commit · PR · deploy · GitHub Pages',          url: '/github-agent' },
+  { id: 'radio',        icon: '📻', name: 'DZ Radio',                  desc: 'بث مباشر لأكثر من 200 محطة جزائرية',          url: '/radio' },
+  { id: 'dzchat',       icon: '💬', name: 'DZ Chat',                   desc: 'غرف محادثة جماعية مباشرة',                    url: '/dzchat' },
+  { id: 'quran',        icon: '📖', name: 'القرآن الكريم',             desc: 'تلاوات · تفسير · بحث في الآيات',              url: '/quran' },
+  { id: 'dztube',       icon: '🎬', name: 'DZ Tube',                   desc: 'بحث وتحليل وتلخيص فيديوهات يوتيوب',           url: '/dz-tube' },
+  { id: 'stats',        icon: '📊', name: 'DZ Stats',                  desc: 'إحصاءات الجزائر: اقتصاد · سكان · مؤشرات',    url: '/stats' },
+  { id: 'jobs',         icon: '💼', name: 'بحث وظيفي',                 desc: 'عروض عمل في الجزائر وكتابة رسائل التقدم',      url: '/tools?tool=jobs' },
+  { id: 'health',       icon: '🏥', name: 'وكيل الصحة',                desc: 'بحث أطباء · CNAS · استشارات صحية',            url: '/tools?tool=health' },
+  { id: 'fileupload',   icon: '☁️', name: 'رفع الملفات',               desc: 'رفع ومشاركة الملفات والصور مجاناً',            url: '/tools?tool=fileupload' },
+]
+
+/**
+ * detectAllToolsQuery — هل يسأل المستخدم عن قائمة أدوات DZ Agent؟
+ * يُعيد true عند كل صيغ الطلب بالعربية/الدارجة/الفرنسية/الإنجليزية
+ */
+function detectAllToolsQuery(msg) {
+  if (!msg || msg.length < 5) return false
+  const q = msg.trim()
+  return (
+    // عربية فصحى + دارجة
+    /(?:أحتاج|احتاج|عايز|بغيت|نبغي|نحب|نريد|أريد|نحتاج|محتاج)\s*(?:إلى\s*|الى\s*|لي\s*|كل\s*)?(?:أدوات|الأدوات)\s*(?:dz|dzagent|dz\s*agent)?/i.test(q)
+    || /(?:عطيني|اعطني|اعطيني|أعطني|أرني|ارني|وريني|ورني|show\s*me?)\s*(?:لي\s*)?(?:أدوات|الأدوات|tools)/i.test(q)
+    || /(?:ما|ماهي|ماهو|قائمة|list|أرسل|أرني|show)\s+(?:الأدوات|أدواتك|أدوات\s*dz|dz\s*agent\s*tools?)/i.test(q)
+    || /الأدوات\s*(?:المتوفرة|المتاحة|الخاصة|عندك|ديالك)/i.test(q)
+    || /أدوات\s*(?:dz\s*agent|dzagent|الوكيل)/i.test(q)
+    || /(?:واش|ما\s*هي)\s*(?:هي\s*)?(?:الأدوات|أدواتك)/i.test(q)
+    || /(?:tes\s*outils|liste.*outils|quels\s*outils)/i.test(q)
+    || /(?:your\s*tools|list.*tools|show.*tools|all\s*tools)/i.test(q)
+  )
+}
+
 // ── Smart Topic Change Detection ──────────────────────────────────────────
 // Returns true if the new message is about a completely different topic
 // from the recent conversation history — so we can trim context.
@@ -17641,6 +17692,17 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     }
   }
   // ══════════════════════════════════════════════════════════════════════
+
+  // ── All Tools Grid — عرض قائمة كل الأدوات مع أزرار التنقل ─────────────────
+  if (detectAllToolsQuery(_rawLastMsg)) {
+    console.log(`[AllToolsGrid] ✅ "${_rawLastMsg.slice(0,60)}" → قائمة الأدوات`)
+    return res.status(200).json({
+      content: `🛠️ **أدوات DZ Agent المتاحة** — اختر الأداة المناسبة:`,
+      model: 'tools-kb',
+      status: 'tools_grid',
+      _toolsList: ALL_TOOLS_LIST,
+    })
+  }
 
   // ── Capability KB — هل يسأل عن خدمة بعينها؟ (توليد صور، GitHub، CV...) ──
   // BYPASS: طلبات حقيقية تذهب للمعالجات المتخصصة ولا تُعترض بـ capability guide

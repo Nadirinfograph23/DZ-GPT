@@ -369,6 +369,7 @@ type RichType =
   | 'weather-card'
   | 'media-download'
   | 'visitor-analytics'
+  | 'tools-grid'
 
 type CodeActionType = 'fix_code' | 'explain_error' | 'improve_code' | 'apply_repo_fix' | 'rescan_repo'
 
@@ -722,6 +723,13 @@ interface DZMessage {
     id?: string
     stations?: Array<{ name: string; icon: string }>
   }
+  toolsList?: Array<{
+    id: string
+    icon: string
+    name: string
+    desc: string
+    url: string
+  }>
   actionButtons?: Array<{ label: string; cmd: string }>
   findRepo?: string
   matchVsMeta?: { team1: string; team2: string; temporal: string; date?: string | null; time?: string | null; competition?: string | null; venue?: string | null; city?: string | null; round?: string | null; kooraLink?: string | null; homeScore?: number | null; awayScore?: number | null }
@@ -7938,6 +7946,17 @@ export default function DZChatBox({ chatId, language = 'ar', onTitleChange, onAg
         data.content = '⚠️ DZ Agent لم يتمكن من توليد رد. يرجى المحاولة مرة أخرى.'
       }
 
+      // ── Tools Grid — عرض شبكة الأدوات عند سؤال "أحتاج إلى أدوات" ────────────
+      if (data._toolsList && Array.isArray(data._toolsList) && data._toolsList.length > 0) {
+        addAssistantMessage({
+          content: data.content as string || '🛠️ **أدوات DZ Agent المتاحة** — اختر الأداة المناسبة:',
+          richType: 'tools-grid',
+          toolsList: data._toolsList as DZMessage['toolsList'],
+          model: data.model as string | undefined,
+        })
+        return
+      }
+
       // ── Tool Redirect — show navigation card when a dedicated tool exists ──
       if (data._toolRedirect && typeof data._toolRedirect === 'object') {
         const tr = data._toolRedirect as { toolName: string; toolUrl: string; toolIcon: string; toolDesc: string; message: string; smartMessage?: string }
@@ -9691,6 +9710,22 @@ ${rows}
                             </button>
                           </div>
                         )
+                      )}
+
+                      {msg.richType === 'tools-grid' && msg.toolsList && msg.toolsList.length > 0 && (
+                        <div className="dz-tools-grid">
+                          {msg.toolsList.map((tool) => (
+                            <button
+                              key={tool.id}
+                              className="dz-tools-grid__item"
+                              onClick={(e) => { e.stopPropagation(); window.location.href = tool.url }}
+                            >
+                              <span className="dz-tools-grid__item-icon">{tool.icon}</span>
+                              <span className="dz-tools-grid__item-name">{tool.name}</span>
+                              <span className="dz-tools-grid__item-desc">{tool.desc}</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
 
                       {msg.richType === 'github-profile' && msg.githubProfile && (

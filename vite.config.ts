@@ -14,6 +14,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5000,
     allowedHosts: true,
+    hmr: { overlay: false },
     headers: {
       "Permissions-Policy": "microphone=(self), geolocation=(self), camera=(self), speaker-selection=(self), autoplay=(self), fullscreen=(self)",
       "Cross-Origin-Opener-Policy": "same-origin-allow-popups",

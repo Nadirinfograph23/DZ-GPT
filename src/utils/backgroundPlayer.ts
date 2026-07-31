@@ -18,19 +18,20 @@
 //   backgroundPlayer.seek(sec)
 //   backgroundPlayer.on('timeupdate', cb)
 
-import type Hls from 'hls.js'
-
 // Lazy-load HLS.js only in browser, only once, only when needed.
-let _hlsModule: typeof Hls | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _hlsModule: any = null
 let _hlsLoading = false
-let _hlsLoadCallbacks: Array<(Ctor: typeof Hls | null) => void> = []
-function loadHlsJs(): Promise<typeof Hls | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _hlsLoadCallbacks: Array<(Ctor: any) => void> = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadHlsJs(): Promise<any> {
   if (_hlsModule !== null) return Promise.resolve(_hlsModule)
   return new Promise(resolve => {
     _hlsLoadCallbacks.push(resolve)
     if (_hlsLoading) return
     _hlsLoading = true
-    import('hls.js')
+    import(/* @vite-ignore */ 'hls.js')
       .then(m => {
         _hlsModule = m.default as unknown as typeof Hls
         const cbs = _hlsLoadCallbacks.splice(0)

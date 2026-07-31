@@ -1,8 +1,8 @@
 {
-  "commit": "cc363734d6c6637a21514c1ccc91643ba50209de",
-  "commitShort": "cc363734",
+  "commit": "a3ed0344ecea0a5eeace8094d653233d5dfb1942",
+  "commitShort": "a3ed0344",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "security: إصلاح منطق التحقق من كلمة سر المشرف (_checkAdminSecret) — يقبل المتغير البيئي سواء كان نصاً أو هاشاً",
-  "deployedAt": "2026-07-31T03:52:23.892772Z",
+  "message": "decoy: تغيير كلمة التمويه إلى openit1979##",
+  "deployedAt": "2026-07-31T03:52:59.266315Z",
   "deployedBy": "scripts/deploy.py"
 }

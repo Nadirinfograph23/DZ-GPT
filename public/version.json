@@ -1,8 +1,8 @@
 {
-  "commit": "a3ed0344ecea0a5eeace8094d653233d5dfb1942",
-  "commitShort": "a3ed0344",
+  "commit": "60a4a75f48824e55123b8be8641fef0a57c1636a",
+  "commitShort": "60a4a75f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "security: admin credentials are server-side secrets",
-  "deployedAt": "2026-07-31T03:52:59.266315Z",
+  "message": "security: move DZ Chat admin credentials to server-side secrets",
+  "deployedAt": "2026-07-31T05:14:59.501039Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "a518c223c9fec130ab498eb43fc5cfcea5d9bbf2",
-  "commitShort": "a518c223",
+  "commit": "f61a0d897c036759a81eb81a9882a6c26df20a83",
+  "commitShort": "f61a0d89",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: توحيد واجهة DZ Agent بنظام ألوان محايد",
-  "deployedAt": "2026-07-31T14:40:41.489847Z",
+  "message": "fix: إزالة نظام الألوان المحايد (أسود/رمادي) من صفحة DZ Agent واستعادة الألوان الأصلية",
+  "deployedAt": "2026-07-31T15:28:46.857960Z",
   "deployedBy": "scripts/deploy.py"
 }

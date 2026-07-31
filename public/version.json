@@ -1,8 +1,8 @@
 {
-  "commit": "cb957f3e39a76bff5f56631e4e0e7661c5c8692a",
-  "commitShort": "cb957f3e",
+  "commit": "289c8a603a1b3212a360273b65e363de8a494b8a",
+  "commitShort": "289c8a60",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: ثيم Carbon Slate — خلفية رمادية داكنة، أيقونات موحّدة، تصميم عصري متناسق",
-  "deployedAt": "2026-07-31T15:42:09.908798Z",
+  "message": "feat: حفظ بيانات الزوار بشكل دائم عبر GitHub API — لا يُعاد الاحتساب من صفر بعد كل deployment",
+  "deployedAt": "2026-07-31T15:50:09.715092Z",
   "deployedBy": "scripts/deploy.py"
 }

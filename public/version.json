@@ -1,8 +1,8 @@
 {
-  "commit": "7881aec6c61d799b460b4bda03fed332e9e67dcd",
-  "commitShort": "7881aec6",
+  "commit": "fe44b75fdded7b19da3f69c45b2ec05e96295ee0",
+  "commitShort": "fe44b75f",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "design: واجهة رئيسية محترفة — ألوان هادئة slate + أيقونات خدمات محسّنة",
-  "deployedAt": "2026-07-31T17:14:23.947907Z",
+  "message": "fix: أدوات DZ Agent - اعتراض صحيح لاستعلامات الأدوات مع شبكة أزرار تفاعلية",
+  "deployedAt": "2026-07-31T18:40:05.815809Z",
   "deployedBy": "scripts/deploy.py"
 }

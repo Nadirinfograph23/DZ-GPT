@@ -591,29 +591,132 @@ function _vaGetDevice(ua = '') {
   return 'desktop'
 }
 
-// Load persisted visitor data
+// ─── GitHub persistence helpers ─────────────────────────────────────────────
+// يُبقي بيانات الزوار محفوظة في GitHub بين deployments (لا تُفقد عند التحديث)
+const _VA_TMP_FILE      = '/tmp/dz_visitors.json'      // كتابة سريعة (Vercel /tmp)
+const _VA_GH_OWNER      = 'Nadirinfograph23'
+const _VA_GH_REPO       = 'DZ-GPT'
+const _VA_GH_BRANCH     = 'devin/1774405518-init-dz-gpt'
+const _VA_GH_PATH       = 'data/dz_visitors.json'
+let   _vaLastGHSync     = 0
+
+function _vaToken() {
+  return process.env.TOKEN_GITHUB ||
+         process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
+         process.env.GITHUB_TOKEN || ''
+}
+
+async function _vaFetchFromGitHub() {
+  const tok = _vaToken()
+  if (!tok) return null
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}?ref=${encodeURIComponent(_VA_GH_BRANCH)}`,
+      { headers: { Authorization: `Bearer ${tok}`, 'User-Agent': 'DZ-GPT-VA/1.0', Accept: 'application/vnd.github.v3+json' } }
+    )
+    if (!r.ok) return null
+    const d = await r.json()
+    if (!d.content) return null
+    return JSON.parse(Buffer.from(d.content.replace(/\n/g, ''), 'base64').toString('utf8'))
+  } catch { return null }
+}
+
+async function _vaPushToGitHub(data) {
+  const tok = _vaToken()
+  if (!tok) return
+  try {
+    const headers = { Authorization: `Bearer ${tok}`, 'User-Agent': 'DZ-GPT-VA/1.0', 'Content-Type': 'application/json', Accept: 'application/vnd.github.v3+json' }
+    // جلب SHA الحالي للملف إن وُجد
+    let sha
+    try {
+      const check = await fetch(
+        `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}?ref=${encodeURIComponent(_VA_GH_BRANCH)}`,
+        { headers }
+      )
+      if (check.ok) sha = (await check.json()).sha
+    } catch {}
+    const content = Buffer.from(JSON.stringify(data)).toString('base64')
+    const body = { message: 'chore: sync visitor data [skip ci]', content, branch: _VA_GH_BRANCH }
+    if (sha) body.sha = sha
+    const res = await fetch(
+      `https://api.github.com/repos/${_VA_GH_OWNER}/${_VA_GH_REPO}/contents/${_VA_GH_PATH}`,
+      { method: 'PUT', headers, body: JSON.stringify(body) }
+    )
+    if (res.ok) console.log('[VA] ✅ synced to GitHub')
+    else console.warn('[VA] ⚠️ GitHub sync failed:', res.status)
+  } catch (e) { console.warn('[VA] github push error:', e.message) }
+}
+
+function _vaMergeData(base, runtime) {
+  const visits = [...(base?.visits || []), ...(runtime?.visits || [])]
+  const seen = new Set()
+  const merged = visits
+    .sort((a, b) => a.ts - b.ts)
+    .filter(v => {
+      const key = `${v.session_hash || '?'}-${Math.floor((v.ts || 0) / 2000)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  const sessions = new Set([
+    ...(Array.isArray(base?.knownSessions) ? base.knownSessions : []),
+    ...(Array.isArray(runtime?.knownSessions) ? runtime.knownSessions : []),
+  ])
+  return { visits: merged.slice(-_VA_MAX_VISITS), knownSessions: sessions }
+}
+
+// ─── Load: GitHub baseline + /tmp runtime merge ──────────────────────────────
 ;(async () => {
   try {
-    const { readFileSync } = await import('fs')
-    const saved = JSON.parse(readFileSync(_visitorsFile, 'utf8'))
-    _visitorsStore.visits = Array.isArray(saved.visits) ? saved.visits : []
-    _visitorsStore.knownSessions = new Set(Array.isArray(saved.knownSessions) ? saved.knownSessions : [])
-  } catch {}
+    const { readFileSync, existsSync } = await import('fs')
+
+    // 1. بيانات runtime من /tmp (بقايا الجلسة الحالية قبل cold start)
+    let tmpData = null
+    try { if (existsSync(_VA_TMP_FILE)) tmpData = JSON.parse(readFileSync(_VA_TMP_FILE, 'utf8')) } catch {}
+
+    // 2. ملف محلي في repo (fallback للـ dev)
+    let repoData = null
+    try { repoData = JSON.parse(readFileSync(_visitorsFile, 'utf8')) } catch {}
+
+    // 3. GitHub API — البيانات المتراكمة من كل deployments السابقة
+    const githubData = await _vaFetchFromGitHub()
+
+    // دمج: GitHub (الأقدم والأكمل) ← /tmp (الأحدث runtime)
+    const baseline = githubData || repoData || { visits: [], knownSessions: [] }
+    const merged   = _vaMergeData(baseline, tmpData)
+
+    _visitorsStore.visits         = merged.visits
+    _visitorsStore.knownSessions  = merged.knownSessions
+    console.log(`[VA] loaded ${_visitorsStore.visits.length} visits | ${_visitorsStore.knownSessions.size} sessions (github=${!!githubData} tmp=${!!tmpData})`)
+  } catch (e) { console.warn('[VA] load error:', e.message) }
 })()
 
-// Periodic flush to disk
+// ─── Fast flush → /tmp + ./data/ (كل دقيقة) ─────────────────────────────────
 setInterval(async () => {
   if (!_visitorsStore._dirty) return
+  const payload = {
+    visits: _visitorsStore.visits,
+    knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
+  }
   try {
     const { writeFileSync, mkdirSync } = await import('fs')
-    mkdirSync('./data', { recursive: true })
-    writeFileSync(_visitorsFile, JSON.stringify({
-      visits: _visitorsStore.visits,
-      knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
-    }))
+    writeFileSync(_VA_TMP_FILE, JSON.stringify(payload))                  // /tmp سريع
+    try { mkdirSync('./data', { recursive: true }); writeFileSync(_visitorsFile, JSON.stringify(payload)) } catch {} // محلي
     _visitorsStore._dirty = false
   } catch (e) { console.warn('[VA] flush error:', e.message) }
 }, 60_000)
+
+// ─── GitHub sync كل ساعة — يحفظ البيانات قبل أي deployment ──────────────────
+setInterval(async () => {
+  if (!_visitorsStore.visits.length) return
+  const now = Date.now()
+  if (now - _vaLastGHSync < 55 * 60_000) return
+  _vaLastGHSync = now
+  await _vaPushToGitHub({
+    visits: _visitorsStore.visits,
+    knownSessions: [..._visitorsStore.knownSessions].slice(-_VA_MAX_SESSIONS),
+  })
+}, 30 * 60_000)
 
 // Visitor tracking middleware — runs on page loads (not API/assets)
 app.use((req, res, next) => {

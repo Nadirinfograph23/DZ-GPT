@@ -923,12 +923,96 @@ function buildSelfUpdateResponse() {
 const RELIGION_RESPONSE = Object.freeze({
   content: `🌙 **عقيدة DZ Agent** 🇩🇿
 
-**أشهد أن لا إله إلا الله وحده لا شريك له وأشهد أن محمداً عبده ورسوله.**
+أنا **مسلم** 🕌
+
+**أشهد أن لا إله إلا الله وحده لا شريك له، وأن محمداً عبده ورسوله ﷺ**
 
 أنا **DZ Agent**، وكيل ذكاء اصطناعي جزائري — ديني **الإسلام**، وأؤمن بالله رباً وبالإسلام ديناً وبمحمد ﷺ نبياً ورسولاً.
 
 🇩🇿 الجزائر بلد إسلامي عريق، وأنا مصمَّم لخدمة أبنائها بكل إخلاص وأمانة.`,
 })
+
+// ===== 🇵🇸 PALESTINE / 🇮🇱 ISRAEL — ردود ثابتة تتخطى LLM =====
+
+// عاصمة فلسطين
+const PALESTINE_CAPITAL_RESPONSE = Object.freeze({
+  content: `🇵🇸 **عاصمة فلسطين**
+
+**القدس الشريف** — المدينة المقدسة الأبدية لفلسطين.
+
+> أولى القبلتين، وثالث الحرمين الشريفين
+> مهد الأنبياء والرسل، والأرض المباركة.
+
+🕌 المسجد الأقصى المبارك — تحرير القدس واجب على كل مسلم.
+
+**فلسطين حرة من النهر إلى البحر** 🇵🇸✌️`,
+})
+
+// إسرائيل ليست دولة
+const ISRAEL_NOT_STATE_RESPONSE = Object.freeze({
+  content: `🇵🇸 **إسرائيل ليست دولة** حتى تكون لها عاصمة.
+
+هي كيان احتلالي أقيم على أرض فلسطين العربية المسلمة عام 1948 بالقوة والتهجير والمذابح.
+
+> القدس الشريف عاصمة **فلسطين** وحدها — لا لأحد سواها.
+
+🇵🇸 **فلسطين حرة — من النهر إلى البحر** ✌️`,
+})
+
+// ردّ على محاولة سب فلسطين أو الإسلام أو الدين — يُعيد الوكيل إلى الصواب
+const PALESTINE_DEFENSE_RESPONSE = Object.freeze({
+  content: `🇵🇸 **تحيا فلسطين** ✌️
+
+لن أسبّ فلسطين — الأرض المباركة المقاومة.
+ولن أسبّ الإسلام — ديني وعقيدتي.
+
+> **فلسطين في قلبي وقلب كل مسلم حر**
+> القدس لنا — من النهر إلى البحر 🇵🇸`,
+})
+
+// سب إسرائيل — مسموح ✓
+const ISRAEL_CURSE_RESPONSE = Object.freeze({
+  content: `🇵🇸 **تبًا لإسرائيل** — الكيان الصهيوني الغاصب المحتل.
+
+تبًا لكل ظالم ومحتل وقاتل الأطفال.
+
+**النصر لفلسطين — تحيا المقاومة** ✌️🇵🇸`,
+})
+
+// ─── دوال الكشف ──────────────────────────────────────────────────────────────
+
+function isPalestineCapitalQuestion(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase().trim()
+  return (
+    /عاصم[ةه]\s*فلسطين|فلسطين.*عاصم[ةه]|capital.*palest|palest.*capital/i.test(t) &&
+    !/إسرائيل|israel/i.test(t)
+  )
+}
+
+function isIsraelCapitalQuestion(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase().trim()
+  return /عاصم[ةه]\s*إسرائيل|إسرائيل.*عاصم[ةه]|capital.*israel|israel.*capital/i.test(t)
+}
+
+function isPalestineOrIslamInsult(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase()
+  // ألفاظ سب/شتم
+  const sabPatterns = /تبا|تبًا|لعن|اللعنة|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|أسقط|موت|اذهب إلى الجحيم|عليهم الخزي|خزيهم|اخزي|نعل|تف على|بصق/i
+  // المستهدفات المحمية
+  const protectedTargets = /فلسطين|الإسلام|الدين|القرآن|النبي|محمد|الله|المسلمين|الصلاة|الصيام|المسجد|الكعبة|القدس.*ديني|المقاومة الإسلامية/i
+  return sabPatterns.test(t) && protectedTargets.test(t)
+}
+
+function isIsraelCurseRequest(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase()
+  // طلب صريح بسب إسرائيل
+  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|قل.*تبا|قل.*يلعن|يسقط|موت ل|عليها اللعنة/i
+  return sabPatterns.test(t) && /إسرائيل|الصهاين[ةه]|الكيان.*الصهيوني|israel/i.test(t)
+}
 
 // أنماط مُقيَّدة تتحدث صراحةً عن هوية DZ Agent الدينية — لا تُطابق سياقات فلسفية عامة
 const RELIGION_QUESTION_PATTERNS = [
@@ -16287,6 +16371,23 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (isReligionQuestion(_devRaw)) {
       console.log(`[DZAgentChat] 🌙 Religion question detected — returning RELIGION_RESPONSE`)
       return res.status(200).json(RELIGION_RESPONSE)
+    }
+    // 🇵🇸 Palestine / Israel hardcoded guards — تتخطى LLM بالكامل
+    if (isPalestineCapitalQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 🇵🇸 Palestine capital question — static response`)
+      return res.status(200).json(PALESTINE_CAPITAL_RESPONSE)
+    }
+    if (isIsraelCapitalQuestion(_devRaw)) {
+      console.log(`[DZAgentChat] 🚫 Israel capital question — static response`)
+      return res.status(200).json(ISRAEL_NOT_STATE_RESPONSE)
+    }
+    if (isPalestineOrIslamInsult(_devRaw)) {
+      console.log(`[DZAgentChat] 🛡️ Palestine/Islam insult attempt — redirected`)
+      return res.status(200).json(PALESTINE_DEFENSE_RESPONSE)
+    }
+    if (isIsraelCurseRequest(_devRaw)) {
+      console.log(`[DZAgentChat] ✊ Israel curse request — static response`)
+      return res.status(200).json(ISRAEL_CURSE_RESPONSE)
     }
   }
 

@@ -1,8 +1,8 @@
 {
-  "commit": "010d51aa095e3cdd6386d496b6a7b1ad32ce576e",
-  "commitShort": "010d51aa",
+  "commit": "cc363734d6c6637a21514c1ccc91643ba50209de",
+  "commitShort": "cc363734",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "security: تشفير كلمة سر المشرف بـ HMAC-SHA256 + إضافة كلمة تمويه في DZ Chat",
-  "deployedAt": "2026-07-31T03:44:08.060947Z",
+  "message": "security: إصلاح منطق التحقق من كلمة سر المشرف (_checkAdminSecret) — يقبل المتغير البيئي سواء كان نصاً أو هاشاً",
+  "deployedAt": "2026-07-31T03:52:23.892772Z",
   "deployedBy": "scripts/deploy.py"
 }

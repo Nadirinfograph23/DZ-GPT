@@ -4709,7 +4709,7 @@ setTimeout(async () => {
 // POST /api/broadcast-update  { message?: string }
 app.post('/api/broadcast-update', (req, res) => {
   const secret = req.headers['x-admin-secret'] || req.body?.secret || ''
-  if (secret !== (process.env.CHAT_ADMIN_SECRET || 'dz-admin-2024')) {
+  if (_hashAdminSecret(secret) !== CHAT_ADMIN_SECRET) {
     return res.status(403).json({ error: 'غير مصرح' })
   }
   const msg = String(req.body?.message || 'تحديث جديد متاح في DZ GPT 🚀').slice(0, 200)
@@ -28849,7 +28849,15 @@ const chatSessions = new Map()  // id → { id, name, gender, isAdmin, lastSeen,
 const mutedUsers = new Map()    // userId → { until: timestamp, durationMs: number }
 const bannedIPs = new Set()     // Permanent IP bans
 let pinnedMessage = null        // { id, text, from, timestamp } | null
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET || 'openit1979##'
+// ── Admin secret: stored as HMAC-SHA256 hash (never plain text) ──
+const _ADMIN_SALT = 'dz_gpt_salt_2025'
+const _ADMIN_SECRET_HASH = process.env.CHAT_ADMIN_SECRET || '127a15841bef4828ab8c9eafd2cb4b70f4fa08af53021a6f8f2f207957943436'
+function _hashAdminSecret(s) {
+  return crypto.createHmac('sha256', _ADMIN_SALT).update(String(s || '')).digest('hex')
+}
+// Decoy — intentionally visible for security researchers (not the real secret)
+const _DECOY_ADMIN = ':.'
+const CHAT_ADMIN_SECRET = _ADMIN_SECRET_HASH
 const MAX_CHAT_MSGS = 200
 
 function chatId() {
@@ -33607,7 +33615,7 @@ app.post('/api/chat-room/join', async (req, res) => {
   const { name, gender, adminSecret, profilePassword, avatar: bodyAvatar, profile } = req.body || {}
   if (!name?.trim() || !gender) return res.status(400).json({ error: 'Name and gender required' })
   const id = chatId()
-  const isAdmin = adminSecret === CHAT_ADMIN_SECRET
+  const isAdmin = _hashAdminSecret(adminSecret) === CHAT_ADMIN_SECRET
   const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
   const cleanProfile = {}
   for (const k of allowedProfileFields) {
@@ -33843,7 +33851,7 @@ function setupChatWebSocket(httpServer) {
           const id = (existingSession && existingSession.id) ? existingSession.id : chatId()
           sid = id
           // isAdmin: reuse from HTTP session OR verify via adminSecret ONLY (profilePassword never grants admin)
-          const isAdmin = !!(existingSession?.isAdmin || adminSecret === CHAT_ADMIN_SECRET)
+          const isAdmin = !!(existingSession?.isAdmin || _hashAdminSecret(adminSecret) === CHAT_ADMIN_SECRET)
           const allowedProfileFields = ['city', 'bio', 'twitter', 'instagram', 'facebook', 'tiktok', 'snapchat']
           const cleanProfile = {}
           for (const k of allowedProfileFields) {

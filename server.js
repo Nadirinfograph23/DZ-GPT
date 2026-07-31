@@ -979,6 +979,24 @@ const ISRAEL_CURSE_RESPONSE = Object.freeze({
 **النصر لفلسطين — تحيا المقاومة** ✌️🇵🇸`,
 })
 
+// ردّ على سب الجزائر — لن أسب بلادي
+const ALGERIA_DEFENSE_RESPONSE = Object.freeze({
+  content: `🇩🇿 **الجزائر بلادي ساكنة في قلبي** 👌
+
+لن أسب الجزائر — أرض المليون ونصف المليون شهيد.
+
+> **بلاد الشهداء والأبطال — تحيا الجزائر** 🇩🇿`,
+})
+
+// ردّ على سب الله أو الرب — صارم
+const GOD_INSULT_RESPONSE = Object.freeze({
+  content: `🤲 **اتق الله في نفسك**
+
+لن أنطق بما يُغضب الله — جلّ جلاله.
+
+> سبحان الله وبحمده، سبحان الله العظيم.`,
+})
+
 // ─── دوال الكشف ──────────────────────────────────────────────────────────────
 
 function isPalestineCapitalQuestion(msg) {
@@ -1012,6 +1030,22 @@ function isIsraelCurseRequest(msg) {
   // طلب صريح بسب إسرائيل
   const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|قل.*تبا|قل.*يلعن|يسقط|موت ل|عليها اللعنة/i
   return sabPatterns.test(t) && /إسرائيل|الصهاين[ةه]|الكيان.*الصهيوني|israel/i.test(t)
+}
+
+// ─── حارس سب الجزائر ────────────────────────────────────────────────────────
+function isAlgeriaInsult(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase()
+  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|أسقط|موت|نعل|تف على|بصق|خزي|اخزي|عليها الخزي|قل.*تبا|قل.*يلعن/i
+  return sabPatterns.test(t) && /الجزائر|جزائر|algérie|algeria/i.test(t)
+}
+
+// ─── حارس سب الله / الرب ────────────────────────────────────────────────────
+function isGodOrRabInsult(msg) {
+  if (typeof msg !== 'string') return false
+  const t = msg.toLowerCase()
+  const sabPatterns = /تبا|تبًا|لعن|العن|يلعن|سب |اشتم|اسبّ|اشتمّ|يسقط|نعل|تف على|بصق|قل.*تبا|قل.*يلعن|خزيه|اخزي/i
+  return sabPatterns.test(t) && /\bالله\b|\bالرب\b|\bرب العالمين\b|\bالخالق\b|\bالإله\b/i.test(t)
 }
 
 // أنماط مُقيَّدة تتحدث صراحةً عن هوية DZ Agent الدينية — لا تُطابق سياقات فلسفية عامة
@@ -16380,6 +16414,14 @@ app.post('/api/dz-agent-chat', async (req, res) => {
     if (isIsraelCapitalQuestion(_devRaw)) {
       console.log(`[DZAgentChat] 🚫 Israel capital question — static response`)
       return res.status(200).json(ISRAEL_NOT_STATE_RESPONSE)
+    }
+    if (isGodOrRabInsult(_devRaw)) {
+      console.log(`[DZAgentChat] 🤲 God/Rab insult attempt — اتق الله`)
+      return res.status(200).json(GOD_INSULT_RESPONSE)
+    }
+    if (isAlgeriaInsult(_devRaw)) {
+      console.log(`[DZAgentChat] 🇩🇿 Algeria insult attempt — redirected`)
+      return res.status(200).json(ALGERIA_DEFENSE_RESPONSE)
     }
     if (isPalestineOrIslamInsult(_devRaw)) {
       console.log(`[DZAgentChat] 🛡️ Palestine/Islam insult attempt — redirected`)

@@ -1,8 +1,8 @@
 {
-  "commit": "f61a0d897c036759a81eb81a9882a6c26df20a83",
-  "commitShort": "f61a0d89",
+  "commit": "84d75f18c6d2734ca5cd57941d935cb33fad7d63",
+  "commitShort": "84d75f18",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "fix: إزالة نظام الألوان المحايد (أسود/رمادي) من صفحة DZ Agent واستعادة الألوان الأصلية",
-  "deployedAt": "2026-07-31T15:28:46.857960Z",
+  "message": "feat: إضافة SOURCE_IDENTITY_GUARD — حارس ثابت يعترض أسئلة مصادر DZ AGENT قبل LLM",
+  "deployedAt": "2026-07-31T15:36:41.331110Z",
   "deployedBy": "scripts/deploy.py"
 }

@@ -1,8 +1,8 @@
 {
-  "commit": "84d75f18c6d2734ca5cd57941d935cb33fad7d63",
-  "commitShort": "84d75f18",
+  "commit": "cb957f3e39a76bff5f56631e4e0e7661c5c8692a",
+  "commitShort": "cb957f3e",
   "branch": "devin/1774405518-init-dz-gpt",
-  "message": "feat: إضافة SOURCE_IDENTITY_GUARD — حارس ثابت يعترض أسئلة مصادر DZ AGENT قبل LLM",
-  "deployedAt": "2026-07-31T15:36:41.331110Z",
+  "message": "feat: ثيم Carbon Slate — خلفية رمادية داكنة، أيقونات موحّدة، تصميم عصري متناسق",
+  "deployedAt": "2026-07-31T15:42:09.908798Z",
   "deployedBy": "scripts/deploy.py"
 }
